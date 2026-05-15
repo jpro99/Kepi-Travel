@@ -13,6 +13,9 @@ Use this checklist when implementing the next version of:
 - [ ] Keep app focused on trip logistics/execution
 - [ ] Do not add travel insurance content or workflows
 - [ ] Prioritize accuracy and missed-event prevention over cosmetic scope
+- [ ] Support static itinerary exports (PDF/Word/Excel)
+- [ ] Support optional "update only on Wi-Fi" sync policy
+- [ ] Support family sharing with per-person schedule views
 
 ## Phase 1: Preserve Existing Core Behaviors
 
@@ -145,6 +148,42 @@ Use this checklist when implementing the next version of:
   - [ ] call script content populates with reservation context
   - [ ] queue resolution updates live itinerary deterministically
 
+## Phase 9: Static Export, Sync Policy, and Family Collaboration
+
+### Static Exports
+
+- [ ] Add export actions for:
+  - [ ] PDF
+  - [ ] Word (DOCX)
+  - [ ] Excel (XLSX)
+- [ ] Add export scope selector:
+  - [ ] full trip
+  - [ ] selected person
+  - [ ] selected date range
+- [ ] Ensure exports include:
+  - [ ] timezone labels
+  - [ ] confirmation codes where relevant
+  - [ ] assigned person/owner
+  - [ ] generated-at timestamp and static-copy warning
+
+### Sync Policy Controls
+
+- [ ] Add settings toggle: "Update only on Wi-Fi"
+- [ ] Add sync status widget:
+  - [ ] last successful sync time
+  - [ ] pending updates count
+  - [ ] blocked reason when Wi-Fi-only mode is active on cellular
+- [ ] Queue trip updates locally when Wi-Fi-only mode blocks sync
+- [ ] Add manual "sync now once" override action
+
+### Family Sharing + Person Context
+
+- [ ] Add shared-trip member list and invite simulation
+- [ ] Add identity picker ("Who am I?")
+- [ ] Filter timeline/actions based on selected person
+- [ ] Support group-assigned and individual-assigned items
+- [ ] Surface conflicts where person-level schedules risk missing group-critical events
+
 ## Minimum Acceptance Gate (Must Pass)
 
 - [ ] Inbox import is demonstrably realistic (raw -> parsed -> route)
@@ -156,6 +195,9 @@ Use this checklist when implementing the next version of:
 - [ ] Time-critical cards cannot be confirmed with unresolved ambiguity
 - [ ] Timezone-aware countdowns and leave-by times pass fixture tests
 - [ ] Critical edit audit + undo flow works for timeline changes
+- [ ] PDF/Word/Excel exports are generated and accurate for selected scope
+- [ ] Wi-Fi-only mode blocks cellular sync and preserves queued updates
+- [ ] Person selector correctly personalizes itinerary without data bleed
 - [ ] No insurance references are present
 
 ## Suggested Demo Script (Optional but Recommended)

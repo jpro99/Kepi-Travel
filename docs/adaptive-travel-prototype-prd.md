@@ -30,6 +30,8 @@ Out of scope:
 2. Make the interface context-aware by trip stage and urgency
 3. Provide clear operational guidance, not generic travel inspiration
 4. Deliver a premium, easy-on-the-eyes visual experience
+5. Provide dependable static itinerary outputs for travelers and companions (PDF/Word/Excel)
+6. Support shared family coordination with person-specific schedule views
 
 ## 3) Target User
 
@@ -139,6 +141,64 @@ Recovery mode should include an actionable playbook:
 
 Recovery must prioritize immediate execution over information density.
 
+### E. Static Itinerary Export
+
+Users must be able to export itinerary views into shareable static formats:
+
+- PDF export:
+  - Print-ready trip summary with timeline, confirmations, contacts, and critical alerts
+- Word export (DOCX):
+  - Editable narrative itinerary suitable for manual customization
+- Excel export (XLSX):
+  - Structured schedule rows for flights/hotels/ground/events with time and owner columns
+
+Export requirements:
+
+- Include timezone labels on every time-based row
+- Include owner/person assignment for family/group items
+- Include generated-at timestamp and source-of-truth warning ("static copy may age")
+- Allow export scope selection:
+  - Entire trip
+  - Per person
+  - Selected date range
+
+### F. Connectivity and Sync Controls
+
+The app must support user-directed synchronization behavior:
+
+- Default behavior: normal sync policy
+- Optional mode: "Update only on Wi-Fi"
+- Visual sync state indicators:
+  - Last successful sync time
+  - Pending updates count
+  - Sync blocked reason (for example, cellular-only network while Wi-Fi-only is enabled)
+
+Behavioral requirements:
+
+- When Wi-Fi-only mode is enabled, critical timeline edits are queued locally until Wi-Fi is available
+- User can force a one-time manual sync override if needed
+- No silent data loss when transitions occur between offline/cellular/Wi-Fi states
+
+### G. Family Sharing and Per-Person Scheduling
+
+The app must support shared trips where family members can see aligned information but keep personalized views.
+
+Core requirements:
+
+- Trip sharing:
+  - Invite family members to a shared trip workspace
+  - Provide role-aware visibility (for example, organizer vs traveler)
+- Identity picker:
+  - In-app selector: "Who am I right now?"
+  - Instant switch of visible timeline/actions based on selected person
+- Assignment model:
+  - Every itinerary item can be assigned to one or more people
+  - Group items appear on all relevant timelines
+  - Individual items appear only on assigned people timelines
+- Coordination safeguards:
+  - Conflicts are surfaced when individual schedules diverge from group-critical moments
+  - Shared transport/meeting points include attendance visibility
+
 ## 7) Non-Functional Requirements
 
 - Premium visual hierarchy: legible typography, low eye strain, high contrast for critical actions
@@ -148,6 +208,8 @@ Recovery must prioritize immediate execution over information density.
 - Deterministic status calculations (no hidden/random transitions)
 - Timezone-safe scheduling and countdown logic
 - Defensive data handling for partial/ambiguous imports
+- Export generation must be deterministic and consistent with current visible trip state
+- Sync policy behavior must be explicit, testable, and user-visible
 
 ## 7.1) Accuracy and Reliability Requirements (Anti-Miss)
 
@@ -212,6 +274,13 @@ Required safeguards:
 - Countdown and leave-by recommendations are validated against timezone-aware test fixtures
 - Alert escalation behavior is deterministic and test-covered for green/yellow/red transitions
 - Critical timeline edits are logged and reversible (undo path verified)
+
+### Export / Sharing / Sync Gate
+
+- PDF/Word/Excel exports contain timezone labels, owner assignments, and generated-at timestamp
+- Per-person export matches the selected person's filtered itinerary exactly
+- Wi-Fi-only mode prevents background sync on cellular while preserving queued updates
+- Shared-trip person switch updates visible timeline/actions without cross-person data leakage
 
 ### Scope Guardrail
 
