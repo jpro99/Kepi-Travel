@@ -63,3 +63,38 @@ export async function runTravelUpdateBackgroundPass({
     runtimeReservationCount: runtimeState.reservations.length,
   };
 }
+
+export async function previewTravelUpdateBackgroundPass({
+  mode,
+  nowIso,
+  runtimeStatePath,
+  checkOptions,
+}: {
+  mode?: TravelUpdateMode;
+  nowIso?: string;
+  runtimeStatePath?: string;
+  checkOptions?: TravelUpdateCheckOptions;
+}): Promise<{
+  result: TravelUpdateCheckResult;
+  runtimeStateUpdatedAt: string;
+  runtimeReservationCount: number;
+}> {
+  const effectiveNowIso = nowIso ?? new Date().toISOString();
+  const runtimeState = await readTravelRuntimeState(runtimeStatePath);
+  if (runtimeState.reservations.length === 0) {
+    throw new RuntimeStateUnavailableError("No runtime reservations available for background pass.");
+  }
+
+  const result = await runTravelUpdateCheck({
+    mode: mode ?? runtimeState.mode,
+    reservations: runtimeState.reservations,
+    nowIso: effectiveNowIso,
+    options: checkOptions,
+  });
+
+  return {
+    result,
+    runtimeStateUpdatedAt: runtimeState.updatedAt,
+    runtimeReservationCount: runtimeState.reservations.length,
+  };
+}

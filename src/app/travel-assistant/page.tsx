@@ -641,7 +641,9 @@ export default function TravelAssistantPage() {
   const [opsError, setOpsError] = useState<string | null>(null);
   const [opsExpanded, setOpsExpanded] = useState(false);
   const [opsLoading, setOpsLoading] = useState(false);
-  const [opsActionPending, setOpsActionPending] = useState<"run-background-once" | "reset-circuits" | null>(
+  const [opsActionPending, setOpsActionPending] = useState<
+    "run-background-once" | "run-background-dry" | "reset-circuits" | null
+  >(
     null,
   );
   const recentAppliedUpdateKeysRef = useRef<Map<string, number>>(new Map());
@@ -1004,6 +1006,8 @@ export default function TravelAssistantPage() {
         runtimeSnapshotStaleMinutes: opsSnapshot?.runtime.staleMinutes ?? 0,
         backgroundRunActive: opsSnapshot?.backgroundState.activeRun !== null,
         backgroundRunLastStatus: opsSnapshot?.backgroundState.lastRun?.status ?? null,
+        backgroundWorkerHealth: opsSnapshot?.worker.health,
+        backgroundWorkerReason: opsSnapshot?.worker.reasons[0],
       }),
     [blockingIssueCount, opsSnapshot, unresolvedReadinessCount],
   );
@@ -1129,21 +1133,28 @@ export default function TravelAssistantPage() {
   }, []);
 
   const runOpsControlAction = useCallback(
-    async (action: "run-background-once" | "reset-circuits"): Promise<void> => {
-      setOpsActionPending(action);
+    async (
+      action: "run-background-once" | "reset-circuits",
+      options?: { dryRun?: boolean },
+    ): Promise<void> => {
+      const dryRun = options?.dryRun ?? false;
+      const pendingKey = action === "run-background-once" && dryRun ? "run-background-dry" : action;
+      setOpsActionPending(pendingKey);
+      const idempotencyKey = `${action}:${dryRun ? "dry" : "live"}:${Math.floor(Date.now() / 15000)}`;
       try {
         const response = await fetch("/api/travel-updates/ops/control", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body:
             action === "run-background-once"
-              ? JSON.stringify({ action, mode: updateMode, timeoutMs: 45000 })
-              : JSON.stringify({ action }),
+              ? JSON.stringify({ action, mode: updateMode, timeoutMs: 45000, dryRun, idempotencyKey })
+              : JSON.stringify({ action, idempotencyKey }),
         });
 
         const payload = (await response.json()) as {
           ok?: boolean;
           error?: string;
+          replayed?: boolean;
           backgroundRun?: { status?: string; result?: { audit?: { newUpdates?: number; duplicateUpdates?: number } } };
         };
         if (!response.ok || payload.ok === false) {
@@ -1151,11 +1162,17 @@ export default function TravelAssistantPage() {
         }
 
         if (action === "reset-circuits") {
-          setToast("Provider circuits reset. Next checks will re-evaluate upstream health.");
+          setToast(
+            payload.replayed
+              ? "Replayed prior circuit reset action (idempotent)."
+              : "Provider circuits reset. Next checks will re-evaluate upstream health.",
+          );
         } else {
           const newUpdates = payload.backgroundRun?.result?.audit?.newUpdates ?? 0;
           const duplicateUpdates = payload.backgroundRun?.result?.audit?.duplicateUpdates ?? 0;
-          setToast(`Background run completed (${newUpdates} new / ${duplicateUpdates} duplicate updates).`);
+          const modeLabel = dryRun ? "Dry-run background check" : "Background run";
+          const replayPrefix = payload.replayed ? "Replayed: " : "";
+          setToast(`${replayPrefix}${modeLabel} completed (${newUpdates} new / ${duplicateUpdates} duplicate updates).`);
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown ops control failure";
@@ -2107,7 +2124,7 @@ export default function TravelAssistantPage() {
                         {opsLoading ? "Refreshing..." : "Refresh ops"}
                       </button>
                     </div>
-                    <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="grid gap-2 sm:grid-cols-3">
                       <button
                         type="button"
                         onClick={() => {
@@ -2117,6 +2134,16 @@ export default function TravelAssistantPage() {
                         className="rounded border border-cyan-500/40 bg-cyan-500/10 px-2 py-1 text-[11px] text-cyan-100 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {opsActionPending === "run-background-once" ? "Running background..." : "Run background now"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void runOpsControlAction("run-background-once", { dryRun: true });
+                        }}
+                        disabled={opsActionPending !== null}
+                        className="rounded border border-indigo-500/40 bg-indigo-500/10 px-2 py-1 text-[11px] text-indigo-100 hover:bg-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {opsActionPending === "run-background-dry" ? "Dry-run in progress..." : "Dry-run background"}
                       </button>
                       <button
                         type="button"
@@ -2155,6 +2182,20 @@ export default function TravelAssistantPage() {
                               : ""}
                           </p>
                         ) : null}
+                        <p className="text-slate-300">
+                          Worker health: {opsSnapshot.worker.health} • consecutive failures{" "}
+                          {opsSnapshot.worker.consecutiveFailures}
+                          {opsSnapshot.worker.minutesSinceLastSuccess !== null
+                            ? ` • last success ${opsSnapshot.worker.minutesSinceLastSuccess}m ago`
+                            : " • no successful heartbeat yet"}
+                        </p>
+                        <ul className="space-y-1 text-[11px] text-slate-300">
+                          {opsSnapshot.worker.reasons.map((reason) => (
+                            <li key={`worker-${reason}`} className="rounded border border-slate-700 px-2 py-1">
+                              {reason}
+                            </li>
+                          ))}
+                        </ul>
                         {opsSnapshot.latestBackgroundRun ? (
                           <p className="text-slate-300">
                             Latest background run: {formatClock(opsSnapshot.latestBackgroundRun.checkedAt)} • new{" "}
@@ -2192,6 +2233,21 @@ export default function TravelAssistantPage() {
                             </ul>
                           ) : (
                             <p className="mt-1 text-emerald-200">No local blockers. Green can be granted.</p>
+                          )}
+                        </div>
+                        <div className="rounded border border-indigo-500/30 bg-indigo-500/10 px-2 py-1.5 text-[11px] text-indigo-100">
+                          <p className="font-semibold">Recent ops actions</p>
+                          {opsSnapshot.opsActions.recentActions.length > 0 ? (
+                            <ul className="mt-1 space-y-1">
+                              {opsSnapshot.opsActions.recentActions.slice(0, 5).map((entry) => (
+                                <li key={entry.id}>
+                                  {entry.action} • {entry.result} • {entry.actor}
+                                  {entry.replayed ? " • replayed" : ""} • {formatClock(entry.completedAt)}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="mt-1 text-indigo-100/80">No ops actions recorded yet.</p>
                           )}
                         </div>
                         <ul className="max-h-24 space-y-1 overflow-auto text-[11px] text-slate-300">

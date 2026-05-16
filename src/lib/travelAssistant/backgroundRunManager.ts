@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { runTravelUpdateBackgroundPass } from "@/lib/travelAssistant/backgroundOrchestrator";
+import {
+  previewTravelUpdateBackgroundPass,
+  runTravelUpdateBackgroundPass,
+} from "@/lib/travelAssistant/backgroundOrchestrator";
 import {
   acquireTravelBackgroundRunLock,
   BackgroundRunInProgressError,
@@ -34,6 +37,7 @@ export async function runManagedTravelUpdateBackgroundPass({
   checkOptions,
   timeoutMs = DEFAULT_BACKGROUND_TIMEOUT_MS,
   lockStaleMs,
+  dryRun = false,
 }: {
   mode?: TravelUpdateMode;
   nowIso?: string;
@@ -44,10 +48,30 @@ export async function runManagedTravelUpdateBackgroundPass({
   checkOptions?: TravelUpdateCheckOptions;
   timeoutMs?: number;
   lockStaleMs?: number;
+  dryRun?: boolean;
 }) {
   const runId = randomUUID();
   const startedAt = nowIso ?? new Date().toISOString();
   const effectiveTimeoutMs = Math.max(250, timeoutMs);
+
+  if (dryRun) {
+    const preview = await previewTravelUpdateBackgroundPass({
+      mode,
+      nowIso,
+      runtimeStatePath,
+      checkOptions,
+    });
+    const finishedAt = new Date().toISOString();
+    return {
+      runId,
+      startedAt,
+      finishedAt,
+      status: "success" as const,
+      durationMs: Math.max(0, Date.parse(finishedAt) - Date.parse(startedAt)),
+      dryRun: true,
+      ...preview,
+    };
+  }
 
   try {
     await acquireTravelBackgroundRunLock({

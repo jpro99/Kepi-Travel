@@ -104,9 +104,13 @@ test("ops health policy transitions green to yellow to red and back", () => {
     backgroundRunStartedAt: null,
     backgroundRunTimeoutMs: null,
     backgroundRunLastStatus: "success",
+    backgroundConsecutiveFailures: 0,
+    backgroundLastSuccessfulRunAt: "2026-06-21T10:03:00.000Z",
+    backgroundLastFailureAt: null,
     nowMs,
   });
   assert.equal(green.health, "green");
+  assert.equal(green.worker.health, "healthy");
 
   const yellow = evaluateTravelOpsHealthPolicy({
     runtimeReservationCount: 2,
@@ -118,9 +122,13 @@ test("ops health policy transitions green to yellow to red and back", () => {
     backgroundRunStartedAt: null,
     backgroundRunTimeoutMs: null,
     backgroundRunLastStatus: "success",
+    backgroundConsecutiveFailures: 1,
+    backgroundLastSuccessfulRunAt: "2026-06-21T09:54:00.000Z",
+    backgroundLastFailureAt: "2026-06-21T09:55:00.000Z",
     nowMs,
   });
   assert.equal(yellow.health, "yellow");
+  assert.equal(yellow.worker.health, "degraded");
 
   const red = evaluateTravelOpsHealthPolicy({
     runtimeReservationCount: 2,
@@ -132,9 +140,13 @@ test("ops health policy transitions green to yellow to red and back", () => {
     backgroundRunStartedAt: null,
     backgroundRunTimeoutMs: null,
     backgroundRunLastStatus: "timeout",
+    backgroundConsecutiveFailures: 4,
+    backgroundLastSuccessfulRunAt: "2026-06-21T08:30:00.000Z",
+    backgroundLastFailureAt: "2026-06-21T10:00:00.000Z",
     nowMs,
   });
   assert.equal(red.health, "red");
+  assert.equal(red.worker.health, "unhealthy");
 
   const recovered = evaluateTravelOpsHealthPolicy({
     runtimeReservationCount: 2,
@@ -146,7 +158,11 @@ test("ops health policy transitions green to yellow to red and back", () => {
     backgroundRunStartedAt: null,
     backgroundRunTimeoutMs: null,
     backgroundRunLastStatus: "success",
+    backgroundConsecutiveFailures: 0,
+    backgroundLastSuccessfulRunAt: "2026-06-21T10:04:00.000Z",
+    backgroundLastFailureAt: null,
     nowMs,
   });
   assert.equal(recovered.health, "green");
+  assert.equal(recovered.worker.health, "healthy");
 });

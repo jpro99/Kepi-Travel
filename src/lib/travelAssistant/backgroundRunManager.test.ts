@@ -85,6 +85,9 @@ test("managed background run prevents overlapping executions", async () => {
     const completed = await firstRun;
     assert.equal(completed.status, "success");
     assert.equal(completed.result.audit?.newUpdates, 0);
+    const stateAfterSuccess = await readTravelBackgroundRunState(statePath);
+    assert.equal(stateAfterSuccess.heartbeat.consecutiveFailures, 0);
+    assert.equal(stateAfterSuccess.heartbeat.lastSuccessfulRunAt !== null, true);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
@@ -139,6 +142,8 @@ test("managed background run records timeout and clears active state after compl
     const eventuallySettled = await readTravelBackgroundRunState(statePath);
     assert.equal(eventuallySettled.activeRun, null);
     assert.equal(eventuallySettled.lastRun?.status, "timeout");
+    assert.equal(eventuallySettled.heartbeat.consecutiveFailures, 1);
+    assert.equal(eventuallySettled.heartbeat.lastFailureAt !== null, true);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }

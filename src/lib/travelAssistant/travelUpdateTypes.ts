@@ -120,7 +120,8 @@ export interface TravelSafetyBlocker {
     | "required-readiness-incomplete"
     | "timeline-high-conflict"
     | "background-run-active"
-    | "background-run-failed";
+    | "background-run-failed"
+    | "background-worker-unhealthy";
   source: "runtime" | "checklist" | "timeline" | "background";
   minimumStatus: TravelExecutionStatus;
   reason: string;
@@ -139,6 +140,7 @@ export type TravelBackgroundRunStatus =
   | "failed"
   | "timeout"
   | "skipped-overlap";
+export type TravelBackgroundWorkerHealth = "healthy" | "degraded" | "unhealthy";
 
 export interface TravelBackgroundActiveRun {
   runId: string;
@@ -159,9 +161,47 @@ export interface TravelBackgroundLastRun {
   auditRequestId: string | null;
 }
 
+export interface TravelBackgroundRunHeartbeat {
+  lastSuccessfulRunAt: string | null;
+  lastFailureAt: string | null;
+  consecutiveFailures: number;
+  totalRuns: number;
+}
+
 export interface TravelBackgroundRunStateSnapshot {
   activeRun: TravelBackgroundActiveRun | null;
   lastRun: TravelBackgroundLastRun | null;
+  heartbeat: TravelBackgroundRunHeartbeat;
+}
+
+export interface TravelOpsWorkerStatus {
+  health: TravelBackgroundWorkerHealth;
+  reasons: string[];
+  lastSuccessfulRunAt: string | null;
+  lastFailureAt: string | null;
+  consecutiveFailures: number;
+  minutesSinceLastSuccess: number | null;
+  missedHeartbeat: boolean;
+}
+
+export type TravelOpsAction = "run-background-once" | "reset-circuits";
+export type TravelOpsActionResult = "success" | "error";
+
+export interface TravelOpsActionAuditEntry {
+  id: string;
+  action: TravelOpsAction;
+  requestedAt: string;
+  completedAt: string;
+  actor: string;
+  result: TravelOpsActionResult;
+  requestSummary: string;
+  responseSummary: string;
+  idempotencyKey: string | null;
+  replayed: boolean;
+}
+
+export interface TravelOpsActionAuditSnapshot {
+  recentActions: TravelOpsActionAuditEntry[];
 }
 
 export interface TravelOpsSnapshot {
@@ -179,6 +219,8 @@ export interface TravelOpsSnapshot {
   audit: TravelAuditReadSnapshot;
   latestBackgroundRun: TravelAuditTrailEntry | null;
   backgroundState: TravelBackgroundRunStateSnapshot;
+  worker: TravelOpsWorkerStatus;
+  opsActions: TravelOpsActionAuditSnapshot;
   provider: {
     recentErrorCount: number;
     circuitOpenCount: number;

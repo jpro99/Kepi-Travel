@@ -3,6 +3,7 @@ import { mkdir, open, readFile, unlink, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type {
   TravelBackgroundLastRun,
+  TravelBackgroundRunHeartbeat,
   TravelBackgroundRunStateSnapshot,
   TravelBackgroundRunStatus,
 } from "@/lib/travelAssistant/travelUpdateTypes";
@@ -46,6 +47,12 @@ function createEmptyState(): TravelBackgroundRunStateData {
     version: 1,
     activeRun: null,
     lastRun: null,
+    heartbeat: {
+      lastSuccessfulRunAt: null,
+      lastFailureAt: null,
+      consecutiveFailures: 0,
+      totalRuns: 0,
+    },
   };
 }
 
@@ -66,6 +73,7 @@ async function loadState(filePath: string): Promise<TravelBackgroundRunStateData
           ? parsed.activeRun
           : null,
       lastRun: normalizeLastRun(parsed.lastRun),
+      heartbeat: normalizeHeartbeat(parsed.heartbeat),
     };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
@@ -110,6 +118,23 @@ function normalizeLastRun(value: unknown): TravelBackgroundLastRun | null {
   };
 }
 
+function normalizeHeartbeat(value: unknown): TravelBackgroundRunHeartbeat {
+  if (!value || typeof value !== "object") {
+    return createEmptyState().heartbeat;
+  }
+  const parsed = value as Partial<TravelBackgroundRunHeartbeat>;
+  return {
+    lastSuccessfulRunAt:
+      typeof parsed.lastSuccessfulRunAt === "string" || parsed.lastSuccessfulRunAt === null
+        ? parsed.lastSuccessfulRunAt
+        : null,
+    lastFailureAt:
+      typeof parsed.lastFailureAt === "string" || parsed.lastFailureAt === null ? parsed.lastFailureAt : null,
+    consecutiveFailures: typeof parsed.consecutiveFailures === "number" ? Math.max(0, parsed.consecutiveFailures) : 0,
+    totalRuns: typeof parsed.totalRuns === "number" ? Math.max(0, parsed.totalRuns) : 0,
+  };
+}
+
 async function saveState(filePath: string, state: TravelBackgroundRunStateData): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true });
   await writeFile(filePath, JSON.stringify(state, null, 2), "utf8");
@@ -141,6 +166,7 @@ export async function readTravelBackgroundRunState(
   return {
     activeRun: state.activeRun,
     lastRun: state.lastRun,
+    heartbeat: state.heartbeat,
   };
 }
 
@@ -197,6 +223,14 @@ export async function finalizeTravelBackgroundRun({
   await mutateState(storagePath, (state) => {
     if (clearActive && state.activeRun?.runId === runId) {
       state.activeRun = null;
+    }
+    state.heartbeat.totalRuns += 1;
+    if (status === "success") {
+      state.heartbeat.lastSuccessfulRunAt = effectiveFinishedAt;
+      state.heartbeat.consecutiveFailures = 0;
+    } else if (status === "failed" || status === "timeout") {
+      state.heartbeat.lastFailureAt = effectiveFinishedAt;
+      state.heartbeat.consecutiveFailures += 1;
     }
     state.lastRun = {
       runId,

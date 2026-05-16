@@ -1,7 +1,9 @@
 import type {
+  TravelBackgroundWorkerHealth,
   TravelBackgroundRunStatus,
   TravelExecutionStatus,
   TravelOpsHealthStatus,
+  TravelOpsWorkerStatus,
   TravelSafetyBlocker,
   TravelStatusGovernance,
 } from "@/lib/travelAssistant/travelUpdateTypes";
@@ -13,6 +15,8 @@ interface TravelStatusGovernanceInput {
   runtimeSnapshotStaleMinutes: number;
   backgroundRunActive: boolean;
   backgroundRunLastStatus: TravelBackgroundRunStatus | null;
+  backgroundWorkerHealth?: TravelBackgroundWorkerHealth;
+  backgroundWorkerReason?: string;
 }
 
 interface TravelOpsHealthPolicyInput {
@@ -25,9 +29,14 @@ interface TravelOpsHealthPolicyInput {
   backgroundRunStartedAt: string | null;
   backgroundRunTimeoutMs: number | null;
   backgroundRunLastStatus: TravelBackgroundRunStatus | null;
+  backgroundConsecutiveFailures: number;
+  backgroundLastSuccessfulRunAt: string | null;
+  backgroundLastFailureAt: string | null;
   nowMs: number;
   staleMinutesYellow?: number;
   staleMinutesRed?: number;
+  workerDeadmanYellowMinutes?: number;
+  workerDeadmanRedMinutes?: number;
 }
 
 const STATUS_ORDER: Record<TravelExecutionStatus, number> = {
@@ -106,6 +115,16 @@ export function evaluateTravelStatusGovernance(input: TravelStatusGovernanceInpu
     });
   }
 
+  if (input.backgroundWorkerHealth === "unhealthy") {
+    addBlocker(blockers, {
+      code: "background-worker-unhealthy",
+      source: "background",
+      minimumStatus: "red",
+      reason: input.backgroundWorkerReason ?? "Background worker health is unhealthy.",
+      remediation: "Restore worker heartbeat with a successful managed background run.",
+    });
+  }
+
   const minimumStatus = pickMinimumStatus(blockers.map((item) => item.minimumStatus));
   return {
     greenAllowed: blockers.length === 0,
@@ -114,14 +133,116 @@ export function evaluateTravelStatusGovernance(input: TravelStatusGovernanceInpu
   };
 }
 
+export function evaluateBackgroundWorkerHealth({
+  backgroundRunActive,
+  backgroundRunStartedAt,
+  backgroundRunTimeoutMs,
+  backgroundRunLastStatus,
+  backgroundConsecutiveFailures,
+  backgroundLastSuccessfulRunAt,
+  backgroundLastFailureAt,
+  nowMs,
+  workerDeadmanYellowMinutes = 20,
+  workerDeadmanRedMinutes = 60,
+}: {
+  backgroundRunActive: boolean;
+  backgroundRunStartedAt: string | null;
+  backgroundRunTimeoutMs: number | null;
+  backgroundRunLastStatus: TravelBackgroundRunStatus | null;
+  backgroundConsecutiveFailures: number;
+  backgroundLastSuccessfulRunAt: string | null;
+  backgroundLastFailureAt: string | null;
+  nowMs: number;
+  workerDeadmanYellowMinutes?: number;
+  workerDeadmanRedMinutes?: number;
+}): TravelOpsWorkerStatus {
+  const reasons: string[] = [];
+  let health: TravelBackgroundWorkerHealth = "healthy";
+  const yellowMinutes = Math.max(1, workerDeadmanYellowMinutes);
+  const redMinutes = Math.max(yellowMinutes + 1, workerDeadmanRedMinutes);
+  const lastSuccessMs = backgroundLastSuccessfulRunAt ? Date.parse(backgroundLastSuccessfulRunAt) : Number.NaN;
+  const minutesSinceLastSuccess = Number.isNaN(lastSuccessMs)
+    ? null
+    : Math.max(0, Math.round((nowMs - lastSuccessMs) / 60000));
+  const missedHeartbeat = minutesSinceLastSuccess !== null && minutesSinceLastSuccess >= yellowMinutes;
+
+  if (backgroundRunActive) {
+    const startedAtMs = backgroundRunStartedAt ? Date.parse(backgroundRunStartedAt) : Number.NaN;
+    const runningMs = Number.isNaN(startedAtMs) ? 0 : nowMs - startedAtMs;
+    const timeoutMs = backgroundRunTimeoutMs ?? 0;
+    if (timeoutMs > 0 && runningMs > timeoutMs + 10_000) {
+      health = "unhealthy";
+      reasons.push("Background run appears stuck beyond configured timeout.");
+    } else if (health !== "unhealthy") {
+      health = "degraded";
+      reasons.push("Background run currently in progress.");
+    }
+  }
+
+  if (backgroundConsecutiveFailures >= 3) {
+    health = "unhealthy";
+    reasons.push(`Background worker has ${backgroundConsecutiveFailures} consecutive failures.`);
+  } else if (backgroundConsecutiveFailures > 0 && health === "healthy") {
+    health = "degraded";
+    reasons.push(`Background worker has ${backgroundConsecutiveFailures} consecutive failure(s).`);
+  }
+
+  if (minutesSinceLastSuccess === null) {
+    if (health !== "unhealthy") {
+      health = "degraded";
+    }
+    reasons.push("No successful background run heartbeat recorded yet.");
+  } else if (minutesSinceLastSuccess >= redMinutes) {
+    health = "unhealthy";
+    reasons.push(`Background worker heartbeat stale for ${minutesSinceLastSuccess} minutes.`);
+  } else if (minutesSinceLastSuccess >= yellowMinutes && health === "healthy") {
+    health = "degraded";
+    reasons.push(`Background worker heartbeat approaching stale threshold (${minutesSinceLastSuccess} minutes).`);
+  }
+
+  if (backgroundRunLastStatus === "timeout" || backgroundRunLastStatus === "failed") {
+    if (health === "healthy") {
+      health = "degraded";
+    }
+    reasons.push(`Last background run status: ${backgroundRunLastStatus}.`);
+  }
+
+  if (reasons.length === 0) {
+    reasons.push("Background worker healthy.");
+  }
+
+  return {
+    health,
+    reasons,
+    lastSuccessfulRunAt: backgroundLastSuccessfulRunAt,
+    lastFailureAt: backgroundLastFailureAt,
+    consecutiveFailures: backgroundConsecutiveFailures,
+    minutesSinceLastSuccess,
+    missedHeartbeat,
+  };
+}
+
 export function evaluateTravelOpsHealthPolicy(input: TravelOpsHealthPolicyInput): {
   health: TravelOpsHealthStatus;
   reasons: string[];
+  worker: TravelOpsWorkerStatus;
 } {
   const staleMinutesYellow = Math.max(1, input.staleMinutesYellow ?? 10);
   const staleMinutesRed = Math.max(staleMinutesYellow + 1, input.staleMinutesRed ?? 30);
   const reasons: string[] = [];
   let health: TravelOpsHealthStatus = "green";
+  const worker = evaluateBackgroundWorkerHealth({
+    backgroundRunActive: input.backgroundRunActive,
+    backgroundRunStartedAt: input.backgroundRunStartedAt,
+    backgroundRunTimeoutMs: input.backgroundRunTimeoutMs,
+    backgroundRunLastStatus: input.backgroundRunLastStatus,
+    backgroundConsecutiveFailures: input.backgroundConsecutiveFailures,
+    backgroundLastSuccessfulRunAt: input.backgroundLastSuccessfulRunAt,
+    backgroundLastFailureAt: input.backgroundLastFailureAt,
+    nowMs: input.nowMs,
+    workerDeadmanYellowMinutes: input.workerDeadmanYellowMinutes,
+    workerDeadmanRedMinutes: input.workerDeadmanRedMinutes,
+  });
 
   if (input.runtimeReservationCount === 0) {
     health = "red";
@@ -146,29 +267,19 @@ export function evaluateTravelOpsHealthPolicy(input: TravelOpsHealthPolicyInput)
     reasons.push(`Provider errors observed in ${input.recentErrorCount} recent run(s).`);
   }
 
-  if (input.backgroundRunActive) {
-    const startedAtMs = input.backgroundRunStartedAt ? Date.parse(input.backgroundRunStartedAt) : Number.NaN;
-    const runningMs = Number.isNaN(startedAtMs) ? 0 : input.nowMs - startedAtMs;
-    const timeoutMs = input.backgroundRunTimeoutMs ?? 0;
-    if (timeoutMs > 0 && runningMs > timeoutMs + 10_000) {
-      health = "red";
-      reasons.push("Background run appears stuck beyond configured timeout.");
-    } else if (health !== "red") {
-      health = "yellow";
-      reasons.push("Background run currently in progress.");
-    }
-  }
-
-  if (input.backgroundRunLastStatus === "failed" || input.backgroundRunLastStatus === "timeout") {
+  if (worker.health === "unhealthy") {
+    health = "red";
+    reasons.push(`Worker unhealthy: ${worker.reasons[0]}`);
+  } else if (worker.health === "degraded") {
     if (health !== "red") health = "yellow";
-    reasons.push(`Last background run status: ${input.backgroundRunLastStatus}.`);
+    reasons.push(`Worker degraded: ${worker.reasons[0]}`);
   }
 
   if (reasons.length === 0) {
     reasons.push("All checks healthy.");
   }
 
-  return { health, reasons };
+  return { health, reasons, worker };
 }
 
 export function enforceStatusFloor(
