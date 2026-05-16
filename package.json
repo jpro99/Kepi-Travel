@@ -10,7 +10,7 @@
     "lint": "eslint",
     "seed:generate": "node scripts/generate-city-seeds.mjs",
     "hotels:overpass": "node scripts/fetch-hotels-overpass.mjs",
-    "test:adapters": "node --import tsx --test src/lib/travelAssistant/updateAdapters.test.ts src/lib/travelAssistant/providers/providerMappings.test.ts src/lib/travelAssistant/updateAuditStore.test.ts src/lib/travelAssistant/updateRuntimeStateStore.test.ts src/lib/travelAssistant/backgroundOrchestrator.test.ts src/lib/travelAssistant/opsSnapshot.test.ts src/lib/travelAssistant/backgroundRunManager.test.ts src/lib/travelAssistant/safetyPolicy.test.ts src/lib/travelAssistant/opsActionAuditStore.test.ts src/lib/travelAssistant/reliabilityScenarios.test.ts src/lib/travelAssistant/opsAlertingOrchestrator.test.ts src/lib/travelAssistant/reservationIntegrity.test.ts"
+    "test:adapters": "node --import tsx --test src/lib/travelAssistant/updateAdapters.test.ts src/lib/travelAssistant/providers/providerMappings.test.ts src/lib/travelAssistant/updateAuditStore.test.ts src/lib/travelAssistant/updateRuntimeStateStore.test.ts src/lib/travelAssistant/backgroundOrchestrator.test.ts src/lib/travelAssistant/opsSnapshot.test.ts src/lib/travelAssistant/backgroundRunManager.test.ts src/lib/travelAssistant/safetyPolicy.test.ts src/lib/travelAssistant/opsActionAuditStore.test.ts src/lib/travelAssistant/reliabilityScenarios.test.ts src/lib/travelAssistant/opsAlertingOrchestrator.test.ts src/lib/travelAssistant/reservationIntegrity.test.ts src/app/api/travel-updates/ops/control/route.test.ts"
   },
   "dependencies": {
     "@turf/turf": "^7.3.5",

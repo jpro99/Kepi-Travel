@@ -111,6 +111,8 @@ test("ops health policy transitions green to yellow to red and back", () => {
   });
   assert.equal(green.health, "green");
   assert.equal(green.worker.health, "healthy");
+  assert.equal(green.worker.missedSchedule, false);
+  assert.equal(green.worker.expectedNextRunBy !== null, true);
 
   const yellow = evaluateTravelOpsHealthPolicy({
     runtimeReservationCount: 2,
@@ -129,6 +131,7 @@ test("ops health policy transitions green to yellow to red and back", () => {
   });
   assert.equal(yellow.health, "yellow");
   assert.equal(yellow.worker.health, "degraded");
+  assert.equal(yellow.worker.missedSchedule, true);
 
   const red = evaluateTravelOpsHealthPolicy({
     runtimeReservationCount: 2,
@@ -147,6 +150,7 @@ test("ops health policy transitions green to yellow to red and back", () => {
   });
   assert.equal(red.health, "red");
   assert.equal(red.worker.health, "unhealthy");
+  assert.equal(red.worker.missedSchedule, true);
 
   const recovered = evaluateTravelOpsHealthPolicy({
     runtimeReservationCount: 2,
