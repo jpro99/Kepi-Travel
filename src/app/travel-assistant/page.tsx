@@ -2186,7 +2186,7 @@ export default function TravelAssistantPage() {
                             <ul className="mt-1 space-y-1">
                               {statusGovernance.blockers.map((blocker) => (
                                 <li key={`ops-${blocker.code}-${blocker.reason}`}>
-                                  {blocker.reason} -> {blocker.remediation}
+                                  {blocker.reason} &rarr; {blocker.remediation}
                                 </li>
                               ))}
                             </ul>
