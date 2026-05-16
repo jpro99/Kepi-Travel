@@ -112,6 +112,26 @@ export interface TravelUpdateCheckResult {
 }
 
 export type TravelOpsHealthStatus = "green" | "yellow" | "red";
+export type TravelExecutionStatus = "green" | "yellow" | "red";
+
+export interface TravelSafetyBlocker {
+  code:
+    | "runtime-snapshot-stale"
+    | "required-readiness-incomplete"
+    | "timeline-high-conflict"
+    | "background-run-active"
+    | "background-run-failed";
+  source: "runtime" | "checklist" | "timeline" | "background";
+  minimumStatus: TravelExecutionStatus;
+  reason: string;
+  remediation: string;
+}
+
+export interface TravelStatusGovernance {
+  greenAllowed: boolean;
+  minimumStatus: TravelExecutionStatus;
+  blockers: TravelSafetyBlocker[];
+}
 
 export type TravelBackgroundRunStatus =
   | "in-progress"
@@ -148,6 +168,7 @@ export interface TravelOpsSnapshot {
   generatedAt: string;
   health: TravelOpsHealthStatus;
   reasons: string[];
+  governance: TravelStatusGovernance;
   runtime: {
     mode: TravelUpdateMode;
     updatedAt: string;

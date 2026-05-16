@@ -1,6 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  enforceStatusFloor,
+  evaluateTravelStatusGovernance,
+} from "@/lib/travelAssistant/safetyPolicy";
 import type {
   TravelOpsSnapshot,
   TravelUpdateAuditSummary,
@@ -991,6 +995,34 @@ export default function TravelAssistantPage() {
     return Math.max(0, Math.min(100, rawScore));
   }, [blockingIssueCount, smartEscalationDueCount, tripStatus, unresolvedReadinessCount, unresolvedReviewCount]);
 
+  const statusGovernance = useMemo(
+    () =>
+      evaluateTravelStatusGovernance({
+        unresolvedRequiredChecklistCount: unresolvedReadinessCount,
+        highSeverityTimelineIssueCount: blockingIssueCount,
+        runtimeSnapshotIsStale: opsSnapshot?.runtime.isStale ?? false,
+        runtimeSnapshotStaleMinutes: opsSnapshot?.runtime.staleMinutes ?? 0,
+        backgroundRunActive: opsSnapshot?.backgroundState.activeRun !== null,
+        backgroundRunLastStatus: opsSnapshot?.backgroundState.lastRun?.status ?? null,
+      }),
+    [blockingIssueCount, opsSnapshot, unresolvedReadinessCount],
+  );
+
+  const applyGovernedStatus = useCallback(
+    (desiredStatus: TripStatus, source: "manual" | "auto"): void => {
+      const enforcedStatus = enforceStatusFloor(desiredStatus, statusGovernance);
+      setTripStatus(enforcedStatus);
+      if (enforcedStatus !== desiredStatus) {
+        const primaryBlocker = statusGovernance.blockers[0];
+        const reason = primaryBlocker ? `${primaryBlocker.reason} ${primaryBlocker.remediation}` : "Governance floor active.";
+        setToast(`Cannot proceed with ${desiredStatus.toUpperCase()} status. ${reason}`);
+      } else if (source === "auto" && desiredStatus === "green") {
+        setToast("Trip status promoted to ON TIME by auto-evaluation.");
+      }
+    },
+    [statusGovernance],
+  );
+
   const applyProviderUpdates = useCallback((updates: TravelUpdateEvent[], providerName: string): number => {
     if (updates.length === 0) return 0;
 
@@ -1306,14 +1338,14 @@ export default function TravelAssistantPage() {
       unresolvedReadinessCount >= 2 ||
       blockingIssueCount > 0
     ) {
-      setTripStatus("red");
+      applyGovernedStatus("red", "auto");
       return;
     }
     if (minutesToDeparture <= 160 || unresolvedReadinessCount > 0) {
-      setTripStatus("yellow");
+      applyGovernedStatus("yellow", "auto");
       return;
     }
-    setTripStatus("green");
+    applyGovernedStatus("green", "auto");
   };
 
   const triggerReminderDispatch = (): void => {
@@ -1335,10 +1367,10 @@ export default function TravelAssistantPage() {
       return;
     }
     if (dueItems.some((item) => item.level === "critical")) {
-      setTripStatus("red");
+      applyGovernedStatus("red", "auto");
       setTripStage("airport");
     } else if (dueItems.some((item) => item.level === "high") && tripStatus === "green") {
-      setTripStatus("yellow");
+      applyGovernedStatus("yellow", "auto");
     }
     setLastReminderSentAt(new Date().toISOString());
     queueMutation(`Smart escalation pushed for ${dueItems.length} reservation checkpoints.`);
@@ -1349,18 +1381,18 @@ export default function TravelAssistantPage() {
     setTripStage("recovery");
 
     if (scenario === "missed-flight") {
-      setTripStatus("red");
+      applyGovernedStatus("red", "manual");
       setMinutesToDeparture(35);
       queueMutation("Simulation: missed flight recovery triggered.");
       return;
     }
     if (scenario === "train-delay") {
-      setTripStatus("yellow");
+      applyGovernedStatus("yellow", "manual");
       setMinutesToDeparture(85);
       queueMutation("Simulation: train delay recovery triggered.");
       return;
     }
-    setTripStatus("red");
+    applyGovernedStatus("red", "manual");
     setMinutesToDeparture(50);
     queueMutation("Simulation: ride no-show recovery triggered.");
   };
@@ -1767,7 +1799,7 @@ export default function TravelAssistantPage() {
                   <span className="mb-1 block text-slate-300">Trip status</span>
                   <select
                     value={tripStatus}
-                    onChange={(event) => setTripStatus(event.target.value as TripStatus)}
+                    onChange={(event) => applyGovernedStatus(event.target.value as TripStatus, "manual")}
                     className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"
                   >
                     {(["green", "yellow", "red"] as TripStatus[]).map((status) => (
@@ -1876,6 +1908,23 @@ export default function TravelAssistantPage() {
                 Critical cards cannot be considered fully safe if required details are unresolved. Leave-by time is
                 continuously recalculated from risk signals.
               </p>
+            </div>
+            <div className="mt-4 rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-sm">
+              <p className="font-semibold text-rose-100">Cannot proceed to GREEN unless blockers clear</p>
+              {statusGovernance.blockers.length > 0 ? (
+                <ul className="mt-2 space-y-2 text-xs text-rose-100">
+                  {statusGovernance.blockers.map((blocker) => (
+                    <li key={`${blocker.code}-${blocker.reason}`} className="rounded border border-rose-400/30 px-2 py-1.5">
+                      <p className="font-semibold">
+                        {blocker.reason} (minimum status: {blocker.minimumStatus.toUpperCase()})
+                      </p>
+                      <p className="text-rose-100/80">{blocker.remediation}</p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-1 text-xs text-emerald-200">No blockers active. Green status can be set.</p>
+              )}
             </div>
           </article>
 
@@ -2131,6 +2180,20 @@ export default function TravelAssistantPage() {
                             </li>
                           ))}
                         </ul>
+                        <div className="rounded border border-rose-500/30 bg-rose-500/10 px-2 py-1.5 text-[11px] text-rose-100">
+                          <p className="font-semibold">Green status governance</p>
+                          {statusGovernance.blockers.length > 0 ? (
+                            <ul className="mt-1 space-y-1">
+                              {statusGovernance.blockers.map((blocker) => (
+                                <li key={`ops-${blocker.code}-${blocker.reason}`}>
+                                  {blocker.reason} -> {blocker.remediation}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="mt-1 text-emerald-200">No local blockers. Green can be granted.</p>
+                          )}
+                        </div>
                         <ul className="max-h-24 space-y-1 overflow-auto text-[11px] text-slate-300">
                           {opsSnapshot.audit.recentAuditTrail.slice(0, 5).map((entry) => (
                             <li key={entry.requestId} className="rounded border border-slate-700 px-2 py-1">

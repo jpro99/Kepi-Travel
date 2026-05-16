@@ -1,7 +1,11 @@
 import { readTravelBackgroundRunState } from "@/lib/travelAssistant/backgroundRunStateStore";
+import {
+  evaluateTravelOpsHealthPolicy,
+  evaluateTravelStatusGovernance,
+} from "@/lib/travelAssistant/safetyPolicy";
 import { readTravelUpdateAuditSnapshot } from "@/lib/travelAssistant/updateAuditStore";
 import { readTravelRuntimeState } from "@/lib/travelAssistant/updateRuntimeStateStore";
-import type { TravelOpsHealthStatus, TravelOpsSnapshot } from "@/lib/travelAssistant/travelUpdateTypes";
+import type { TravelOpsSnapshot } from "@/lib/travelAssistant/travelUpdateTypes";
 
 const DEFAULT_STALE_MINUTES_YELLOW = 10;
 const DEFAULT_STALE_MINUTES_RED = 30;
@@ -38,54 +42,35 @@ export async function buildTravelOpsSnapshot({
   const recentErrorCount = audit.recentAuditTrail.filter((entry) => entry.providerError).length;
   const circuitOpenCount = audit.recentAuditTrail.filter((entry) => entry.circuitOpen).length;
   const latestBackgroundRun = audit.recentAuditTrail.find((entry) => entry.source === "background") ?? null;
-  const reasons: string[] = [];
+  const governance = evaluateTravelStatusGovernance({
+    unresolvedRequiredChecklistCount: 0,
+    highSeverityTimelineIssueCount: 0,
+    runtimeSnapshotIsStale: isStale,
+    runtimeSnapshotStaleMinutes: staleMinutes,
+    backgroundRunActive: backgroundState.activeRun !== null,
+    backgroundRunLastStatus: backgroundState.lastRun?.status ?? null,
+  });
 
-  let health: TravelOpsHealthStatus = "green";
-  if (runtime.reservations.length === 0) {
-    health = "red";
-    reasons.push("No runtime reservation snapshot available for background updates.");
-  }
-  if (audit.recentAuditTrail.length === 0) {
-    if (health !== "red") health = "yellow";
-    reasons.push("No recent audit runs recorded yet.");
-  }
-  if (staleMinutes >= DEFAULT_STALE_MINUTES_RED) {
-    health = "red";
-    reasons.push(`Runtime snapshot stale for ${staleMinutes} minutes.`);
-  } else if (staleMinutes >= DEFAULT_STALE_MINUTES_YELLOW) {
-    if (health !== "red") health = "yellow";
-    reasons.push(`Runtime snapshot approaching staleness (${staleMinutes} minutes).`);
-  }
-  if (circuitOpenCount > 0) {
-    health = "red";
-    reasons.push(`Provider circuit open detected in ${circuitOpenCount} recent run(s).`);
-  } else if (recentErrorCount > 0) {
-    if (health !== "red") health = "yellow";
-    reasons.push(`Provider errors observed in ${recentErrorCount} recent run(s).`);
-  }
-  if (backgroundState.activeRun) {
-    const startedAtMs = Date.parse(backgroundState.activeRun.startedAt);
-    const runningMs = Number.isNaN(startedAtMs) ? 0 : nowMs - startedAtMs;
-    if (runningMs > backgroundState.activeRun.timeoutMs + 10_000) {
-      health = "red";
-      reasons.push("Background run appears stuck beyond configured timeout.");
-    } else if (health !== "red") {
-      health = "yellow";
-      reasons.push("Background run currently in progress.");
-    }
-  }
-  if (backgroundState.lastRun?.status === "failed" || backgroundState.lastRun?.status === "timeout") {
-    if (health !== "red") health = "yellow";
-    reasons.push(`Last background run status: ${backgroundState.lastRun.status}.`);
-  }
-  if (reasons.length === 0) {
-    reasons.push("All checks healthy.");
-  }
+  const policy = evaluateTravelOpsHealthPolicy({
+    runtimeReservationCount: runtime.reservations.length,
+    auditTrailCount: audit.recentAuditTrail.length,
+    staleMinutes,
+    recentErrorCount,
+    circuitOpenCount,
+    backgroundRunActive: backgroundState.activeRun !== null,
+    backgroundRunStartedAt: backgroundState.activeRun?.startedAt ?? null,
+    backgroundRunTimeoutMs: backgroundState.activeRun?.timeoutMs ?? null,
+    backgroundRunLastStatus: backgroundState.lastRun?.status ?? null,
+    nowMs,
+    staleMinutesYellow: DEFAULT_STALE_MINUTES_YELLOW,
+    staleMinutesRed: DEFAULT_STALE_MINUTES_RED,
+  });
 
   return {
     generatedAt,
-    health,
-    reasons,
+    health: policy.health,
+    reasons: policy.reasons,
+    governance,
     runtime: {
       mode: runtime.mode,
       updatedAt: runtime.updatedAt,
