@@ -47,6 +47,7 @@ type NetworkMode = "wifi" | "cellular" | "offline";
 type ReservationType = "flight" | "hotel" | "train" | "ride" | "dinner";
 type Confidence = "high" | "medium" | "low";
 type GuidanceTone = "subtle" | "standard";
+type MobileViewPanel = "essentials" | "timeline" | "recovery" | "family" | "all";
 type VisibilityMode = "all-members" | "organizer-only";
 type DisruptionScenario = "none" | "missed-flight" | "train-delay" | "ride-no-show";
 
@@ -688,6 +689,9 @@ export default function TravelAssistantPage() {
   const [showFamilyMap, setShowFamilyMap] = useState(true);
   const [selectedFamilyMemberId, setSelectedFamilyMemberId] = useState("alex");
   const [personalTimelineOnly, setPersonalTimelineOnly] = useState(false);
+  const [mobileSimpleView, setMobileSimpleView] = useState(true);
+  const [mobileViewPanel, setMobileViewPanel] = useState<MobileViewPanel>("essentials");
+  const [isCompactViewport, setIsCompactViewport] = useState(false);
   const [activeScenario, setActiveScenario] = useState<DisruptionScenario>("none");
   const [minutesToDeparture, setMinutesToDeparture] = useState(165);
   const [offlineOutbox, setOfflineOutbox] = useState<OfflineOutboxSnapshot>(() =>
@@ -965,6 +969,24 @@ export default function TravelAssistantPage() {
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 30_000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    const update = (): void => {
+      const compact = media.matches;
+      setIsCompactViewport(compact);
+      setMobileSimpleView(compact);
+      setMobileViewPanel((previous) => {
+        if (compact) {
+          return previous === "all" ? "essentials" : previous;
+        }
+        return "all";
+      });
+    };
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
   }, []);
 
   useEffect(() => {
@@ -1373,6 +1395,15 @@ export default function TravelAssistantPage() {
     stage: tripStage,
     focusMode: stageFocusMode,
   });
+  const shouldRenderMobilePanel = useCallback(
+    (panel: Exclude<MobileViewPanel, "all">): boolean => {
+      if (!isCompactViewport || !mobileSimpleView) {
+        return true;
+      }
+      return mobileViewPanel === panel;
+    },
+    [isCompactViewport, mobileSimpleView, mobileViewPanel],
+  );
   const incidentAutopilotRecommendations = useMemo(
     () =>
       buildIncidentAutopilotPlan({
@@ -2687,7 +2718,7 @@ export default function TravelAssistantPage() {
               {stageFocusMode ? "Show all panels" : "Focus mode"}
             </button>
           </div>
-          <div className="mt-2 grid gap-2 rounded-xl border border-slate-700 bg-slate-950/60 p-2 md:grid-cols-[1.4fr_auto_auto_auto]">
+          <div className="mt-2 hidden gap-2 rounded-xl border border-slate-700 bg-slate-950/60 p-2 md:grid md:grid-cols-[1.4fr_auto_auto_auto]">
             <input
               type="text"
               value={quickAddText}
@@ -2743,9 +2774,79 @@ export default function TravelAssistantPage() {
               Undo ready: {undoStack.length}
             </p>
           </div>
+          <div className="mt-2 space-y-2 rounded-xl border border-slate-700 bg-slate-950/60 p-2 md:hidden">
+            <input
+              type="text"
+              value={quickAddText}
+              onChange={(event) => setQuickAddText(event.target.value)}
+              placeholder="Quick add: paste or type one update"
+              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={handleVoiceQuickCapture}
+                className="rounded-lg bg-violet-500/85 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-violet-400"
+              >
+                Voice
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickAdd("manual")}
+                className="rounded-lg bg-emerald-500/85 px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-emerald-400"
+              >
+                Add now
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-400">Simple mode keeps only key actions visible on phone.</p>
+          </div>
         </section>
 
-        <section className="grid gap-4 sm:gap-6 xl:grid-cols-[1.3fr_1fr]">
+        {isCompactViewport ? (
+          <section className="rounded-xl border border-slate-700 bg-slate-900/80 p-2 md:hidden">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[11px] font-semibold text-slate-200">Mobile view</p>
+              <button
+                type="button"
+                onClick={() => setMobileSimpleView((value) => !value)}
+                className="rounded-full bg-slate-800 px-2.5 py-1 text-[11px] font-semibold ring-1 ring-slate-700"
+              >
+                {mobileSimpleView ? "Show full app" : "Use simple view"}
+              </button>
+            </div>
+            {mobileSimpleView ? (
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {([
+                  ["essentials", "Essentials"],
+                  ["timeline", "Timeline"],
+                  ["recovery", "Recovery"],
+                  ["family", "Family"],
+                ] as const).map(([panel, label]) => (
+                  <button
+                    key={panel}
+                    type="button"
+                    onClick={() => setMobileViewPanel(panel)}
+                    className={`rounded-lg px-2 py-1.5 text-xs font-semibold ring-1 ${
+                      mobileViewPanel === panel
+                        ? "bg-cyan-500 text-slate-950 ring-cyan-300"
+                        : "bg-slate-800 text-slate-100 ring-slate-700"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <p className="mt-2 text-[11px] text-slate-400">
+              {mobileSimpleView
+                ? `Showing ${mobileViewPanel} only to reduce clutter.`
+                : "Full layout enabled on mobile."}
+            </p>
+          </section>
+        ) : null}
+
+        {shouldRenderMobilePanel("essentials") ? (
+          <section className="grid gap-4 sm:gap-6 xl:grid-cols-[1.3fr_1fr]">
           <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
@@ -2875,9 +2976,11 @@ export default function TravelAssistantPage() {
               ) : null}
             </div>
           </article>
-        </section>
+          </section>
+        ) : null}
 
-        <section className="grid gap-4 sm:gap-6 xl:grid-cols-[1.2fr_1fr_1fr]">
+        {shouldRenderMobilePanel("essentials") ? (
+          <section className="grid gap-4 sm:gap-6 xl:grid-cols-[1.2fr_1fr_1fr]">
           <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
             <h2 className="text-lg font-semibold">Adaptive stage actions</h2>
             <p className="text-xs text-slate-400">
@@ -3305,9 +3408,10 @@ export default function TravelAssistantPage() {
               )}
             </div>
           </article>
-        </section>
+          </section>
+        ) : null}
 
-        {showAntiMissSection ? (
+        {showAntiMissSection && shouldRenderMobilePanel("timeline") ? (
           <section className="grid gap-4 sm:gap-6 xl:grid-cols-[1.2fr_1fr]">
           <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
@@ -3450,11 +3554,12 @@ export default function TravelAssistantPage() {
           </section>
         ) : (
           <section className="rounded-2xl border border-slate-700 bg-slate-900/50 p-4 text-xs text-slate-400">
-            Anti-miss cockpit hidden by focus mode for this stage. Switch to &quot;Show all panels&quot; anytime.
+            Anti-miss cockpit is hidden by current focus or mobile view selection.
           </section>
         )}
 
-        <section className="grid gap-4 sm:gap-6 xl:grid-cols-[1.2fr_1fr]">
+        {shouldRenderMobilePanel("timeline") ? (
+          <section className="grid gap-4 sm:gap-6 xl:grid-cols-[1.2fr_1fr]">
           <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
@@ -3705,9 +3810,10 @@ export default function TravelAssistantPage() {
               </div>
             </div>
           </article>
-        </section>
+          </section>
+        ) : null}
 
-        {showCollaborationSection ? (
+        {showCollaborationSection && shouldRenderMobilePanel("family") ? (
           <section className="grid gap-4 sm:gap-6 xl:grid-cols-2">
           <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
             <h2 className="text-lg font-semibold">Static itinerary exports</h2>
@@ -3888,11 +3994,11 @@ export default function TravelAssistantPage() {
           </section>
         ) : (
           <section className="rounded-2xl border border-slate-700 bg-slate-900/50 p-4 text-xs text-slate-400">
-            Collaboration/export panels hidden in focus mode for this stage.
+            Collaboration/export panels are hidden by current focus or mobile view selection.
           </section>
         )}
 
-        {showRecoverySection ? (
+        {showRecoverySection && shouldRenderMobilePanel("recovery") ? (
           <section className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
           <h2 className="text-lg font-semibold">Missed-flight / disruption recovery panel</h2>
           <p className="text-xs text-slate-400">
@@ -4009,7 +4115,7 @@ export default function TravelAssistantPage() {
           </section>
         ) : (
           <section className="rounded-2xl border border-slate-700 bg-slate-900/50 p-4 text-xs text-slate-400">
-            Recovery playbook hidden in focus mode until recovery stage is active.
+            Recovery playbook is hidden by current focus or mobile view selection.
           </section>
         )}
       </div>
