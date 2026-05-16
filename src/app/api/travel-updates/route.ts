@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { runTravelUpdateCheck } from "@/lib/travelAssistant/updateAdapters";
+import { persistTravelUpdateAudit } from "@/lib/travelAssistant/updateAuditStore";
 
 const ReservationSchema = z.object({
   id: z.string().min(1),
@@ -40,5 +41,14 @@ export async function POST(req: Request) {
     nowIso: parsed.data.nowIso ?? new Date().toISOString(),
   });
 
-  return NextResponse.json(result);
+  const audit = await persistTravelUpdateAudit({
+    result,
+    checkedAt: new Date().toISOString(),
+  });
+
+  return NextResponse.json({
+    ...result,
+    updates: audit.freshUpdates,
+    audit: audit.summary,
+  });
 }

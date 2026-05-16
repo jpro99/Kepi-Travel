@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
+  TravelUpdateAuditSummary,
   TravelProviderReport,
   TravelUpdateCheckResult,
   TravelUpdateEvent,
@@ -628,6 +629,7 @@ export default function TravelAssistantPage() {
   const [queuedProviderUpdates, setQueuedProviderUpdates] = useState<TravelUpdateEvent[]>([]);
   const [updateFeed, setUpdateFeed] = useState<UpdateFeedItem[]>([]);
   const [providerReports, setProviderReports] = useState<TravelProviderReport[]>([]);
+  const [lastAuditSummary, setLastAuditSummary] = useState<TravelUpdateAuditSummary | null>(null);
   const recentAppliedUpdateKeysRef = useRef<Map<string, number>>(new Map());
 
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>(INITIAL_FAMILY);
@@ -1086,6 +1088,7 @@ export default function TravelAssistantPage() {
       setProviderCircuitOpen(result.circuitOpen);
       setLastProviderError(result.error);
       setProviderReports(result.providerReports);
+      setLastAuditSummary(result.audit ?? null);
 
       if (result.circuitOpen) {
         if (trigger === "manual") {
@@ -1102,7 +1105,13 @@ export default function TravelAssistantPage() {
 
       if (result.updates.length === 0) {
         if (trigger === "manual") {
-          setToast("No new transport updates right now.");
+          if (result.audit && result.audit.duplicateUpdates > 0) {
+            setToast(
+              `No net-new updates (${result.audit.duplicateUpdates} duplicate events suppressed by idempotency).`,
+            );
+          } else {
+            setToast("No new transport updates right now.");
+          }
         }
         return;
       }
@@ -1127,6 +1136,7 @@ export default function TravelAssistantPage() {
       setProviderCircuitOpen(false);
       setLastProviderError(message);
       setProviderReports([]);
+      setLastAuditSummary(null);
       if (trigger === "manual") {
         setToast(`Provider check failed: ${message}`);
       }
@@ -1847,6 +1857,12 @@ export default function TravelAssistantPage() {
                 <p className="text-xs text-slate-400">Queued provider updates: {queuedProviderUpdates.length}</p>
                 {lastProviderError ? (
                   <p className="text-xs text-red-200">Provider error: {lastProviderError}</p>
+                ) : null}
+                {lastAuditSummary ? (
+                  <p className="text-xs text-slate-400">
+                    Audit: {lastAuditSummary.newUpdates} new / {lastAuditSummary.duplicateUpdates} duplicate • known
+                    events {lastAuditSummary.totalKnownEvents}
+                  </p>
                 ) : null}
                 {providerReports.length > 0 ? (
                   <ul className="mt-2 space-y-1 text-[11px] text-slate-300">

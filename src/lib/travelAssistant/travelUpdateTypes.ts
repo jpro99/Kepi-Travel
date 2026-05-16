@@ -42,6 +42,17 @@ export interface TravelUpdateProvider {
   }): Promise<TravelUpdateEvent[]>;
 }
 
+export interface TravelUpdateAuditSummary {
+  requestId: string;
+  checkedAt: string;
+  mode: TravelUpdateMode;
+  provider: string | null;
+  incomingUpdates: number;
+  newUpdates: number;
+  duplicateUpdates: number;
+  totalKnownEvents: number;
+}
+
 export interface TravelProviderReport {
   provider: string;
   attempts: number;
@@ -58,4 +69,5 @@ export interface TravelUpdateCheckResult {
   circuitOpen: boolean;
   error: string | null;
   providerReports: TravelProviderReport[];
+  audit?: TravelUpdateAuditSummary;
 }

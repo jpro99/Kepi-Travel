@@ -10,7 +10,7 @@
     "lint": "eslint",
     "seed:generate": "node scripts/generate-city-seeds.mjs",
     "hotels:overpass": "node scripts/fetch-hotels-overpass.mjs",
-    "test:adapters": "node --import tsx --test src/lib/travelAssistant/updateAdapters.test.ts src/lib/travelAssistant/providers/providerMappings.test.ts"
+    "test:adapters": "node --import tsx --test src/lib/travelAssistant/updateAdapters.test.ts src/lib/travelAssistant/providers/providerMappings.test.ts src/lib/travelAssistant/updateAuditStore.test.ts"
   },
   "dependencies": {
     "@turf/turf": "^7.3.5",
