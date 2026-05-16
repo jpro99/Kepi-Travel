@@ -47,7 +47,7 @@ export async function runManagedTravelUpdateBackgroundPass({
 }) {
   const runId = randomUUID();
   const startedAt = nowIso ?? new Date().toISOString();
-  const effectiveTimeoutMs = Math.max(2_000, timeoutMs);
+  const effectiveTimeoutMs = Math.max(250, timeoutMs);
 
   try {
     await acquireTravelBackgroundRunLock({

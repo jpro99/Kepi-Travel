@@ -13,7 +13,7 @@ const BodySchema = z.discriminatedUnion("action", [
     action: z.literal("run-background-once"),
     mode: z.enum(["off", "mock", "auto"]).optional(),
     nowIso: z.string().datetime().optional(),
-    timeoutMs: z.number().int().min(2000).max(120000).optional(),
+    timeoutMs: z.number().int().min(250).max(120000).optional(),
   }),
   z.object({
     action: z.literal("reset-circuits"),

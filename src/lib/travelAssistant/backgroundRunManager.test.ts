@@ -101,7 +101,7 @@ test("managed background run records timeout and clears active state after compl
   const verySlowProvider: TravelUpdateProvider = {
     name: "very-slow-provider",
     async fetchUpdates() {
-      await sleep(180);
+      await sleep(400);
       return [];
     },
   };
@@ -121,7 +121,7 @@ test("managed background run records timeout and clears active state after compl
           auditPath,
           statePath,
           lockPath,
-          timeoutMs: 30,
+          timeoutMs: 250,
           checkOptions: {
             providerOverride: verySlowProvider,
             maxAttempts: 1,
@@ -135,7 +135,7 @@ test("managed background run records timeout and clears active state after compl
     assert.notEqual(whileTimedOut.activeRun, null);
     assert.equal(whileTimedOut.lastRun?.status, "timeout");
 
-    await sleep(250);
+    await sleep(500);
     const eventuallySettled = await readTravelBackgroundRunState(statePath);
     assert.equal(eventuallySettled.activeRun, null);
     assert.equal(eventuallySettled.lastRun?.status, "timeout");

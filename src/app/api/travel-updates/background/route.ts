@@ -12,7 +12,7 @@ import {
 const BodySchema = z.object({
   mode: z.enum(["off", "mock", "auto"]).optional(),
   nowIso: z.string().datetime().optional(),
-  timeoutMs: z.number().int().min(2000).max(120000).optional(),
+  timeoutMs: z.number().int().min(250).max(120000).optional(),
 });
 
 function isAuthorized(req: Request): boolean {
