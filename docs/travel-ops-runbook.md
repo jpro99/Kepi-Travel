@@ -63,6 +63,19 @@ Auth: same secret policy as background endpoint (`x-travel-cron-secret` or Beare
 - Clears in-memory provider circuit state.
 - Use after provider recovery confirmation.
 
+### Trigger alert sweep
+
+```json
+{
+  "action": "trigger-alert-sweep",
+  "force": true,
+  "idempotencyKey": "alert-sweep-2026-06-21T10-32"
+}
+```
+
+- Executes alert derivation/delivery immediately.
+- Use `force: true` to bypass cooldown when validating integrations.
+
 ## 3) Common incident playbooks
 
 ### A) Runtime snapshot stale
@@ -128,6 +141,7 @@ The app surfaces these as explicit blockers with remediation steps.
 - Background run state/heartbeat: `TRAVEL_UPDATE_BACKGROUND_STATE_PATH`
 - Ops action audit: `TRAVEL_UPDATE_OPS_AUDIT_PATH`
 - Alert cooldown state: `TRAVEL_UPDATE_ALERT_STATE_PATH`
+- Alert sweep audit: `TRAVEL_UPDATE_ALERT_AUDIT_PATH`
 
 Use these logs when investigating inconsistent trip status transitions or missed update windows.
 

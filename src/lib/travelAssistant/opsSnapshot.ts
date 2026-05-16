@@ -1,5 +1,6 @@
 import { readTravelBackgroundRunState } from "@/lib/travelAssistant/backgroundRunStateStore";
 import { readTravelOpsActionAuditSnapshot } from "@/lib/travelAssistant/opsActionAuditStore";
+import { readTravelOpsAlertAuditSnapshot } from "@/lib/travelAssistant/opsAlertAuditStore";
 import {
   evaluateTravelOpsHealthPolicy,
   evaluateTravelStatusGovernance,
@@ -29,6 +30,7 @@ export async function buildTravelOpsSnapshot({
   auditPath,
   backgroundStatePath,
   opsAuditPath,
+  alertAuditPath,
 }: {
   nowIso?: string;
   auditLimit?: number;
@@ -36,15 +38,17 @@ export async function buildTravelOpsSnapshot({
   auditPath?: string;
   backgroundStatePath?: string;
   opsAuditPath?: string;
+  alertAuditPath?: string;
 } = {}): Promise<TravelOpsSnapshot> {
   const generatedAt = nowIso ?? new Date().toISOString();
   const nowMs = Date.parse(generatedAt);
 
-  const [runtime, audit, backgroundState, opsActions] = await Promise.all([
+  const [runtime, audit, backgroundState, opsActions, alertAudit] = await Promise.all([
     readTravelRuntimeState(runtimeStatePath),
     readTravelUpdateAuditSnapshot({ limit: auditLimit, storagePath: auditPath }),
     readTravelBackgroundRunState(backgroundStatePath),
     readTravelOpsActionAuditSnapshot({ limit: auditLimit, storagePath: opsAuditPath }),
+    readTravelOpsAlertAuditSnapshot({ limit: auditLimit, storagePath: alertAuditPath }),
   ]);
 
   const runtimeUpdatedMs = Date.parse(runtime.updatedAt);
@@ -120,6 +124,7 @@ export async function buildTravelOpsSnapshot({
     backgroundState,
     worker: policy.worker,
     opsActions,
+    alertAudit,
     provider: {
       recentErrorCount,
       circuitOpenCount,

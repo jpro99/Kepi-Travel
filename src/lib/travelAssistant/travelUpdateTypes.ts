@@ -200,7 +200,22 @@ export interface TravelOpsAlertEvent {
   trigger: string;
 }
 
-export type TravelOpsAction = "run-background-once" | "reset-circuits";
+export interface TravelOpsAlertAuditEntry {
+  id: string;
+  evaluatedAt: string;
+  trigger: string;
+  totalAlerts: number;
+  sentAlerts: number;
+  suppressedAlerts: number;
+  deliveryErrors: number;
+  alerts: TravelOpsAlertEvent[];
+}
+
+export interface TravelOpsAlertAuditSnapshot {
+  recentSweeps: TravelOpsAlertAuditEntry[];
+}
+
+export type TravelOpsAction = "run-background-once" | "reset-circuits" | "trigger-alert-sweep";
 export type TravelOpsActionResult = "success" | "error";
 
 export interface TravelOpsActionAuditEntry {
@@ -237,6 +252,7 @@ export interface TravelOpsSnapshot {
   backgroundState: TravelBackgroundRunStateSnapshot;
   worker: TravelOpsWorkerStatus;
   opsActions: TravelOpsActionAuditSnapshot;
+  alertAudit: TravelOpsAlertAuditSnapshot;
   provider: {
     recentErrorCount: number;
     circuitOpenCount: number;

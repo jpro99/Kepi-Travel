@@ -27,6 +27,11 @@ const BodySchema = z.discriminatedUnion("action", [
     action: z.literal("reset-circuits"),
     idempotencyKey: z.string().min(8).max(128).optional(),
   }),
+  z.object({
+    action: z.literal("trigger-alert-sweep"),
+    force: z.boolean().optional(),
+    idempotencyKey: z.string().min(8).max(128).optional(),
+  }),
 ]);
 
 function isAuthorized(req: Request): boolean {
@@ -123,6 +128,36 @@ export async function POST(req: Request) {
     const alertSweep = await runAlertSweepSafe("ops-control-reset-circuits");
     return NextResponse.json(
       { ...responsePayload, actionAuditId: audit.id, replayed: false, alertSweep },
+      { status: statusCode },
+    );
+  }
+
+  if (parsed.data.action === "trigger-alert-sweep") {
+    const manualSweep = await runTravelOpsAlertSweep({
+      trigger: "ops-control-manual-alert-sweep",
+      force: parsed.data.force ?? false,
+    });
+    responsePayload = {
+      action: parsed.data.action,
+      ok: true,
+      force: parsed.data.force ?? false,
+      sweep: manualSweep,
+    };
+    responseSummary = `Alert sweep completed (${manualSweep.sentAlerts} sent / ${manualSweep.suppressedAlerts} suppressed).`;
+    const audit = await appendTravelOpsActionAuditEntry({
+      action: parsed.data.action,
+      actor,
+      result,
+      requestSummary: parsed.data.force ? "force alert sweep" : "normal alert sweep",
+      responseSummary,
+      responsePayload,
+      statusCode,
+      idempotencyKey,
+      replayed: false,
+      requestedAt,
+    });
+    return NextResponse.json(
+      { ...responsePayload, actionAuditId: audit.id, replayed: false, alertSweep: manualSweep },
       { status: statusCode },
     );
   }

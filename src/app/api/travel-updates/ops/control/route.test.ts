@@ -139,3 +139,72 @@ test("ops control run-background-once dryRun does not mutate background run stat
     await rm(tempDir, { recursive: true, force: true });
   }
 });
+
+test("ops control trigger-alert-sweep action supports replay semantics", async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), "travel-ops-control-route-test-"));
+  const opsAuditPath = join(tempDir, "ops-audit.json");
+  const alertStatePath = join(tempDir, "alert-state.json");
+  const alertAuditPath = join(tempDir, "alert-audit.json");
+
+  const previousOpsAuditPath = process.env.TRAVEL_UPDATE_OPS_AUDIT_PATH;
+  const previousAlertStatePath = process.env.TRAVEL_UPDATE_ALERT_STATE_PATH;
+  const previousAlertAuditPath = process.env.TRAVEL_UPDATE_ALERT_AUDIT_PATH;
+  const previousCronSecret = process.env.TRAVEL_UPDATE_CRON_SECRET;
+
+  process.env.TRAVEL_UPDATE_OPS_AUDIT_PATH = opsAuditPath;
+  process.env.TRAVEL_UPDATE_ALERT_STATE_PATH = alertStatePath;
+  process.env.TRAVEL_UPDATE_ALERT_AUDIT_PATH = alertAuditPath;
+  delete process.env.TRAVEL_UPDATE_CRON_SECRET;
+
+  try {
+    const first = await POST(
+      new Request(BASE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "trigger-alert-sweep",
+          force: true,
+          idempotencyKey: "alert-sweep-unique-key",
+        }),
+      }),
+    );
+    const firstBody = (await first.json()) as {
+      ok?: boolean;
+      replayed?: boolean;
+      actionAuditId?: string;
+      sweep?: { totalAlerts?: number };
+    };
+    assert.equal(first.status, 200);
+    assert.equal(firstBody.ok, true);
+    assert.equal(firstBody.replayed, false);
+
+    const second = await POST(
+      new Request(BASE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "trigger-alert-sweep",
+          force: true,
+          idempotencyKey: "alert-sweep-unique-key",
+        }),
+      }),
+    );
+    const secondBody = (await second.json()) as {
+      replayed?: boolean;
+      actionAuditId?: string;
+    };
+    assert.equal(second.status, 200);
+    assert.equal(secondBody.replayed, true);
+    assert.equal(secondBody.actionAuditId, firstBody.actionAuditId);
+  } finally {
+    if (previousOpsAuditPath === undefined) delete process.env.TRAVEL_UPDATE_OPS_AUDIT_PATH;
+    else process.env.TRAVEL_UPDATE_OPS_AUDIT_PATH = previousOpsAuditPath;
+    if (previousAlertStatePath === undefined) delete process.env.TRAVEL_UPDATE_ALERT_STATE_PATH;
+    else process.env.TRAVEL_UPDATE_ALERT_STATE_PATH = previousAlertStatePath;
+    if (previousAlertAuditPath === undefined) delete process.env.TRAVEL_UPDATE_ALERT_AUDIT_PATH;
+    else process.env.TRAVEL_UPDATE_ALERT_AUDIT_PATH = previousAlertAuditPath;
+    if (previousCronSecret === undefined) delete process.env.TRAVEL_UPDATE_CRON_SECRET;
+    else process.env.TRAVEL_UPDATE_CRON_SECRET = previousCronSecret;
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});

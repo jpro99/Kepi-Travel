@@ -1,4 +1,5 @@
 import { checkTravelOpsAlertEligibility, markTravelOpsAlertSent } from "@/lib/travelAssistant/opsAlertStateStore";
+import { appendTravelOpsAlertAuditEntry } from "@/lib/travelAssistant/opsAlertAuditStore";
 import { resolveTravelOpsNotifiersFromEnv, type TravelOpsNotifier } from "@/lib/travelAssistant/opsNotifiers";
 import { buildTravelOpsSnapshot } from "@/lib/travelAssistant/opsSnapshot";
 import type { TravelOpsAlertEvent, TravelOpsSnapshot } from "@/lib/travelAssistant/travelUpdateTypes";
@@ -64,6 +65,7 @@ export async function runTravelOpsAlertSweep({
   notifiers,
   force = false,
   alertStatePath,
+  alertAuditPath,
   snapshotOptions,
 }: {
   trigger: string;
@@ -72,6 +74,7 @@ export async function runTravelOpsAlertSweep({
   notifiers?: TravelOpsNotifier[];
   force?: boolean;
   alertStatePath?: string;
+  alertAuditPath?: string;
   snapshotOptions?: {
     runtimeStatePath?: string;
     auditPath?: string;
@@ -86,6 +89,7 @@ export async function runTravelOpsAlertSweep({
   suppressedAlerts: number;
   deliveryErrors: number;
   alerts: TravelOpsAlertEvent[];
+  sweepId: string;
 }> {
   const evaluatedAt = nowIso ?? new Date().toISOString();
   const snapshot = await buildTravelOpsSnapshot({ nowIso: evaluatedAt, ...snapshotOptions });
@@ -120,6 +124,17 @@ export async function runTravelOpsAlertSweep({
     }
   }
 
+  const audit = await appendTravelOpsAlertAuditEntry({
+    evaluatedAt,
+    trigger,
+    totalAlerts: alerts.length,
+    sentAlerts,
+    suppressedAlerts,
+    deliveryErrors,
+    alerts,
+    storagePath: alertAuditPath,
+  });
+
   return {
     evaluatedAt,
     totalAlerts: alerts.length,
@@ -127,5 +142,6 @@ export async function runTravelOpsAlertSweep({
     suppressedAlerts,
     deliveryErrors,
     alerts,
+    sweepId: audit.id,
   };
 }

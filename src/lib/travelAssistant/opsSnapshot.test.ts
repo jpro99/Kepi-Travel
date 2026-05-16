@@ -38,6 +38,7 @@ test("buildTravelOpsSnapshot returns green for fresh healthy state", async () =>
   const runtimeStatePath = join(tempDir, "runtime-state.json");
   const auditPath = join(tempDir, "audit.json");
   const backgroundStatePath = join(tempDir, "background-state.json");
+  const alertAuditPath = join(tempDir, "alert-audit.json");
 
   try {
     await persistTravelRuntimeState({
@@ -85,6 +86,7 @@ test("buildTravelOpsSnapshot returns green for fresh healthy state", async () =>
       runtimeStatePath,
       auditPath,
       backgroundStatePath,
+      alertAuditPath,
       auditLimit: 10,
     });
 
@@ -95,6 +97,7 @@ test("buildTravelOpsSnapshot returns green for fresh healthy state", async () =>
     assert.equal(snapshot.audit.recentAuditTrail.length, 1);
     assert.equal(snapshot.worker.health, "healthy");
     assert.equal(snapshot.opsActions.recentActions.length, 0);
+    assert.equal(snapshot.alertAudit.recentSweeps.length, 0);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
@@ -105,6 +108,7 @@ test("buildTravelOpsSnapshot returns red for stale snapshot and circuit errors",
   const runtimeStatePath = join(tempDir, "runtime-state.json");
   const auditPath = join(tempDir, "audit.json");
   const backgroundStatePath = join(tempDir, "background-state.json");
+  const alertAuditPath = join(tempDir, "alert-audit.json");
 
   try {
     await persistTravelRuntimeState({
@@ -164,6 +168,7 @@ test("buildTravelOpsSnapshot returns red for stale snapshot and circuit errors",
       runtimeStatePath,
       auditPath,
       backgroundStatePath,
+      alertAuditPath,
     });
 
     assert.equal(snapshot.health, "red");
@@ -173,6 +178,7 @@ test("buildTravelOpsSnapshot returns red for stale snapshot and circuit errors",
     assert.ok(snapshot.reasons.some((reason) => reason.includes("stale")));
     assert.ok(snapshot.reasons.some((reason) => reason.includes("circuit open")));
     assert.equal(snapshot.worker.health, "degraded");
+    assert.equal(snapshot.alertAudit.recentSweeps.length, 0);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }

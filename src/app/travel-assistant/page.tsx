@@ -643,7 +643,7 @@ export default function TravelAssistantPage() {
   const [opsExpanded, setOpsExpanded] = useState(false);
   const [opsLoading, setOpsLoading] = useState(false);
   const [opsActionPending, setOpsActionPending] = useState<
-    "run-background-once" | "run-background-dry" | "reset-circuits" | null
+    "run-background-once" | "run-background-dry" | "reset-circuits" | "trigger-alert-sweep" | null
   >(
     null,
   );
@@ -1135,7 +1135,7 @@ export default function TravelAssistantPage() {
 
   const runOpsControlAction = useCallback(
     async (
-      action: "run-background-once" | "reset-circuits",
+      action: "run-background-once" | "reset-circuits" | "trigger-alert-sweep",
       options?: { dryRun?: boolean },
     ): Promise<void> => {
       const dryRun = options?.dryRun ?? false;
@@ -1149,7 +1149,9 @@ export default function TravelAssistantPage() {
           body:
             action === "run-background-once"
               ? JSON.stringify({ action, mode: updateMode, timeoutMs: 45000, dryRun, idempotencyKey })
-              : JSON.stringify({ action, idempotencyKey }),
+              : action === "trigger-alert-sweep"
+                ? JSON.stringify({ action, force: true, idempotencyKey })
+                : JSON.stringify({ action, idempotencyKey }),
         });
 
         const payload = (await response.json()) as {
@@ -1168,6 +1170,8 @@ export default function TravelAssistantPage() {
               ? "Replayed prior circuit reset action (idempotent)."
               : "Provider circuits reset. Next checks will re-evaluate upstream health.",
           );
+        } else if (action === "trigger-alert-sweep") {
+          setToast(payload.replayed ? "Replayed prior alert sweep action." : "Manual alert sweep completed.");
         } else {
           const newUpdates = payload.backgroundRun?.result?.audit?.newUpdates ?? 0;
           const duplicateUpdates = payload.backgroundRun?.result?.audit?.duplicateUpdates ?? 0;
@@ -2206,7 +2210,7 @@ export default function TravelAssistantPage() {
                         {opsLoading ? "Refreshing..." : "Refresh ops"}
                       </button>
                     </div>
-                    <div className="grid gap-2 sm:grid-cols-3">
+                    <div className="grid gap-2 sm:grid-cols-4">
                       <button
                         type="button"
                         onClick={() => {
@@ -2236,6 +2240,16 @@ export default function TravelAssistantPage() {
                         className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-100 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {opsActionPending === "reset-circuits" ? "Resetting..." : "Reset provider circuits"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void runOpsControlAction("trigger-alert-sweep");
+                        }}
+                        disabled={opsActionPending !== null}
+                        className="rounded border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-[11px] text-rose-100 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {opsActionPending === "trigger-alert-sweep" ? "Sweeping alerts..." : "Trigger alert sweep"}
                       </button>
                     </div>
                     {opsError ? <p className="text-red-200">Ops read error: {opsError}</p> : null}
@@ -2335,6 +2349,21 @@ export default function TravelAssistantPage() {
                             </ul>
                           ) : (
                             <p className="mt-1 text-indigo-100/80">No ops actions recorded yet.</p>
+                          )}
+                        </div>
+                        <div className="rounded border border-fuchsia-500/30 bg-fuchsia-500/10 px-2 py-1.5 text-[11px] text-fuchsia-100">
+                          <p className="font-semibold">Recent alert sweeps</p>
+                          {opsSnapshot.alertAudit.recentSweeps.length > 0 ? (
+                            <ul className="mt-1 space-y-1">
+                              {opsSnapshot.alertAudit.recentSweeps.slice(0, 5).map((sweep) => (
+                                <li key={sweep.id}>
+                                  {formatClock(sweep.evaluatedAt)} • {sweep.trigger} • alerts {sweep.totalAlerts} • sent{" "}
+                                  {sweep.sentAlerts} • suppressed {sweep.suppressedAlerts}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="mt-1 text-fuchsia-100/80">No alert sweeps recorded yet.</p>
                           )}
                         </div>
                         <ul className="max-h-24 space-y-1 overflow-auto text-[11px] text-slate-300">
