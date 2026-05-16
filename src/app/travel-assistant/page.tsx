@@ -6,6 +6,12 @@ import {
   evaluateTravelStatusGovernance,
 } from "@/lib/travelAssistant/safetyPolicy";
 import { evaluateReservationIntegrity } from "@/lib/travelAssistant/reservationIntegrity";
+import {
+  nextTripStage,
+  shouldQuickAddGoToReview,
+  shouldShowFocusPanel,
+  type TripFlowStage,
+} from "@/lib/travelAssistant/tripFlowControls";
 import type {
   TravelOpsSnapshot,
   TravelUpdateAuditSummary,
@@ -18,7 +24,7 @@ import type {
   TravelUpdateSeverity,
 } from "@/lib/travelAssistant/travelUpdateTypes";
 
-type TripStage = "readiness" | "pre-departure" | "airport" | "arrival" | "recovery";
+type TripStage = TripFlowStage;
 type TripStatus = "green" | "yellow" | "red";
 type NetworkMode = "wifi" | "cellular" | "offline";
 type ReservationType = "flight" | "hotel" | "train" | "ride" | "dinner";
@@ -125,6 +131,25 @@ interface StageFlowCard {
   easiestInput: string;
   mustConfirm: string;
   exitCheck: string;
+}
+
+interface UndoSnapshot {
+  id: string;
+  label: string;
+  capturedAt: string;
+  tripStage: TripStage;
+  tripStatus: TripStatus;
+  minutesToDeparture: number;
+  activeScenario: DisruptionScenario;
+  reservations: Reservation[];
+  reviewQueue: ReviewItem[];
+  readinessItems: ReadinessItem[];
+}
+
+interface UndoAuditEntry {
+  id: string;
+  action: string;
+  undoneAt: string;
 }
 
 interface UpdateFeedItem {
@@ -697,6 +722,12 @@ export default function TravelAssistantPage() {
   const [activeDrawer, setActiveDrawer] = useState<DrawerState | null>(null);
   const [drawerDraft, setDrawerDraft] = useState<ReservationDraft>(EMPTY_DRAFT);
   const [mergeTargetByReview, setMergeTargetByReview] = useState<Record<string, string>>({});
+  const [stageFocusMode, setStageFocusMode] = useState(true);
+  const [quickAddText, setQuickAddText] = useState("");
+  const [quickAddType, setQuickAddType] = useState<ReservationType>("ride");
+  const [quickAddConfidence, setQuickAddConfidence] = useState<Confidence>("medium");
+  const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
+  const [undoAuditTrail, setUndoAuditTrail] = useState<UndoAuditEntry[]>([]);
   const [exportScope, setExportScope] = useState<"full-trip" | "selected-person">("full-trip");
   const [exportFrom, setExportFrom] = useState("");
   const [exportTo, setExportTo] = useState("");
@@ -710,6 +741,73 @@ export default function TravelAssistantPage() {
     () => EMAIL_SAMPLES.find((sample) => sample.id === selectedEmailId) ?? EMAIL_SAMPLES[0],
     [selectedEmailId],
   );
+
+  const cloneForUndo = useCallback(
+    <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T,
+    [],
+  );
+
+  const pushUndoSnapshot = useCallback(
+    (label: string): void => {
+      const snapshot: UndoSnapshot = {
+        id: nextId("undo"),
+        label,
+        capturedAt: new Date().toISOString(),
+        tripStage,
+        tripStatus,
+        minutesToDeparture,
+        activeScenario,
+        reservations: cloneForUndo(reservations),
+        reviewQueue: cloneForUndo(reviewQueue),
+        readinessItems: cloneForUndo(readinessItems),
+      };
+      setUndoStack((previous) => [snapshot, ...previous].slice(0, 25));
+    },
+    [
+      activeScenario,
+      cloneForUndo,
+      minutesToDeparture,
+      readinessItems,
+      reservations,
+      reviewQueue,
+      tripStage,
+      tripStatus,
+    ],
+  );
+
+  const restoreUndoSnapshot = useCallback(
+    (snapshot: UndoSnapshot): void => {
+      setTripStage(snapshot.tripStage);
+      setTripStatus(snapshot.tripStatus);
+      setMinutesToDeparture(snapshot.minutesToDeparture);
+      setActiveScenario(snapshot.activeScenario);
+      setReservations(cloneForUndo(snapshot.reservations));
+      setReviewQueue(cloneForUndo(snapshot.reviewQueue));
+      setReadinessItems(cloneForUndo(snapshot.readinessItems));
+      setUndoAuditTrail((previous) =>
+        [
+          {
+            id: nextId("undo-audit"),
+            action: snapshot.label,
+            undoneAt: new Date().toISOString(),
+          },
+          ...previous,
+        ].slice(0, 20),
+      );
+    },
+    [cloneForUndo],
+  );
+
+  const undoLastCriticalChange = useCallback((): void => {
+    const latest = undoStack[0];
+    if (!latest) {
+      setToastRaw("No critical changes to undo.");
+      return;
+    }
+    setUndoStack((previous) => previous.slice(1));
+    restoreUndoSnapshot(latest);
+    setToastRaw("Reverted the most recent critical change.");
+  }, [restoreUndoSnapshot, undoStack]);
 
   const providerEligibleReservations = useMemo(
     () =>
@@ -1143,6 +1241,27 @@ export default function TravelAssistantPage() {
     unresolvedReviewCount,
   ]);
 
+  const showOpsSection = shouldShowFocusPanel({
+    panel: "ops",
+    stage: tripStage,
+    focusMode: stageFocusMode,
+  });
+  const showAntiMissSection = shouldShowFocusPanel({
+    panel: "anti-miss",
+    stage: tripStage,
+    focusMode: stageFocusMode,
+  });
+  const showCollaborationSection = shouldShowFocusPanel({
+    panel: "collaboration",
+    stage: tripStage,
+    focusMode: stageFocusMode,
+  });
+  const showRecoverySection = shouldShowFocusPanel({
+    panel: "recovery",
+    stage: tripStage,
+    focusMode: stageFocusMode,
+  });
+
   const statusGovernance = useMemo(
     () =>
       evaluateTravelStatusGovernance({
@@ -1160,6 +1279,9 @@ export default function TravelAssistantPage() {
 
   const applyGovernedStatus = useCallback(
     (desiredStatus: TripStatus, source: "manual" | "auto"): void => {
+      if (source === "manual" && desiredStatus !== tripStatus) {
+        pushUndoSnapshot(`Status set to ${desiredStatus.toUpperCase()}`);
+      }
       const enforcedStatus = enforceStatusFloor(desiredStatus, statusGovernance);
       setTripStatus(enforcedStatus);
       if (enforcedStatus !== desiredStatus) {
@@ -1170,7 +1292,7 @@ export default function TravelAssistantPage() {
         setToast("Trip status promoted to ON TIME by auto-evaluation.");
       }
     },
-    [statusGovernance],
+    [pushUndoSnapshot, setToast, statusGovernance, tripStatus],
   );
 
   const applyProviderUpdates = useCallback((updates: TravelUpdateEvent[], providerName: string): number => {
@@ -1276,7 +1398,7 @@ export default function TravelAssistantPage() {
       setOpsLoading(false);
       opsFetchInFlightRef.current = false;
     }
-  }, []);
+  }, [setToast]);
 
   const runOpsControlAction = useCallback(
     async (
@@ -1332,7 +1454,7 @@ export default function TravelAssistantPage() {
         void fetchOpsSnapshot("manual");
       }
     },
-    [fetchOpsSnapshot, updateMode],
+    [fetchOpsSnapshot, setToast, updateMode],
   );
 
   const runProviderCheck = useCallback(async (trigger: "auto" | "manual"): Promise<void> => {
@@ -1431,6 +1553,7 @@ export default function TravelAssistantPage() {
     isProviderCheckRunning,
     nowMs,
     providerEligibleReservations,
+    setToast,
     updateMode,
   ]);
 
@@ -1515,6 +1638,17 @@ export default function TravelAssistantPage() {
     applyGovernedStatus("green", "auto");
   };
 
+  const advanceTripStage = (): void => {
+    const nextStage = nextTripStage(tripStage);
+    if (nextStage === tripStage) {
+      setToast("Trip already at final stage.");
+      return;
+    }
+    pushUndoSnapshot(`Stage advanced to ${nextStage}`);
+    setTripStage(nextStage);
+    setToast(`Moved to ${STAGE_LABEL[nextStage]} stage.`);
+  };
+
   const triggerReminderDispatch = (): void => {
     const dueCheckpoints = reminderLadder.filter((item) => item.state === "due" || item.state === "missed");
     if (dueCheckpoints.length === 0) {
@@ -1533,6 +1667,7 @@ export default function TravelAssistantPage() {
       setToast("Smart reminder engine found no due escalations.");
       return;
     }
+    pushUndoSnapshot("Smart escalation updates");
     if (dueItems.some((item) => item.level === "critical")) {
       applyGovernedStatus("red", "auto");
       setTripStage("airport");
@@ -1544,6 +1679,7 @@ export default function TravelAssistantPage() {
   };
 
   const simulateDisruption = (scenario: Exclude<DisruptionScenario, "none">): void => {
+    pushUndoSnapshot(`Disruption simulation (${scenario})`);
     setActiveScenario(scenario);
     setTripStage("recovery");
 
@@ -1565,6 +1701,9 @@ export default function TravelAssistantPage() {
   };
 
   const clearScenarioSimulation = (): void => {
+    if (activeScenario !== "none") {
+      pushUndoSnapshot("Clear disruption simulation");
+    }
     setActiveScenario("none");
     setToast("Disruption simulation cleared.");
   };
@@ -1584,10 +1723,11 @@ export default function TravelAssistantPage() {
       setReviewQueue((prev) => [queueItem, ...prev]);
       setToast("Unsafe reservation data quarantined to review queue.");
     },
-    [],
+    [setToast],
   );
 
   const handleVoiceQuickCapture = (): void => {
+    pushUndoSnapshot("Voice capture queued");
     const capturedAt = new Date().toISOString();
     const draft: ReservationDraft = {
       type: tripStage === "airport" ? "ride" : "dinner",
@@ -1622,8 +1762,59 @@ export default function TravelAssistantPage() {
     queueMutation("One-tap voice capture added to review queue.");
   };
 
+  const handleQuickAdd = (source: "email-paste" | "manual"): void => {
+    const normalizedText = quickAddText.trim();
+    if (!normalizedText) {
+      setToast("Add a quick note first so we can route it safely.");
+      return;
+    }
+    const draftConfidence =
+      source === "email-paste" && quickAddConfidence === "high" ? "medium" : quickAddConfidence;
+    const draft: ReservationDraft = {
+      type: quickAddType,
+      title: normalizedText.slice(0, 80),
+      provider: source === "email-paste" ? "Quick email intake" : "Quick manual add",
+      localTime: formatDateTimeLocal(nowMs + 2 * 60 * 60 * 1000),
+      timezone: tripStage === "arrival" ? "America/Los_Angeles" : "America/New_York",
+      location: "Confirm exact location",
+      confirmationCode: `${source === "email-paste" ? "EM" : "MAN"}-${Date.now().toString().slice(-6)}`,
+      assignedTo: [selectedFamilyMember.id],
+      stage: tripStage,
+      critical: tripStage === "airport" || tripStage === "recovery",
+      confidence: draftConfidence,
+      notes:
+        source === "email-paste"
+          ? "Quick add from pasted email text. Verify fields before relying on timeline."
+          : "Quick manual add created from universal input bar.",
+    };
+    const routeToReview = shouldQuickAddGoToReview({
+      confidence: draft.confidence,
+      inputText: normalizedText,
+    });
+    pushUndoSnapshot(routeToReview ? "Quick add routed to review queue" : "Quick add published to timeline");
+    if (routeToReview) {
+      setReviewQueue((prev) => [
+        {
+          id: nextId("review"),
+          reasons: ["Quick add needs verification before live publish."],
+          impact: "Potential timeline impact held safely in review queue.",
+          sourceEmailSubject: source === "email-paste" ? "Quick pasted email" : "Quick manual note",
+          draft,
+        },
+        ...prev,
+      ]);
+      setToast("Quick add captured and routed to review for safety.");
+      setQuickAddText("");
+      return;
+    }
+    setReservations((prev) => [{ ...draft, id: nextId("res"), source: "manual" }, ...prev]);
+    setQuickAddText("");
+    setToast("Quick add published to live timeline.");
+  };
+
   const handleImportAction = (target: "live" | "review"): void => {
     if (!selectedEmail) return;
+    pushUndoSnapshot(target === "live" ? "Import added to live trip" : "Import routed to review queue");
     if (target === "live") {
       const integrity = evaluateReservationIntegrity(selectedEmail.parsed);
       if (!integrity.safeForLive) {
@@ -1689,6 +1880,7 @@ export default function TravelAssistantPage() {
 
   const saveDrawer = (): void => {
     if (!activeDrawer) return;
+    pushUndoSnapshot(activeDrawer.kind === "reservation" ? "Reservation edited" : "Review draft edited");
     if (activeDrawer.kind === "reservation") {
       const integrity = evaluateReservationIntegrity(drawerDraft);
       if (!integrity.safeForLive) {
@@ -1746,6 +1938,7 @@ export default function TravelAssistantPage() {
       setToast("Cannot accept review item: integrity checks still failing.");
       return;
     }
+    pushUndoSnapshot("Review item accepted");
     const newReservation: Reservation = {
       ...target.draft,
       id: nextId("res"),
@@ -1757,11 +1950,13 @@ export default function TravelAssistantPage() {
   };
 
   const handleRejectReview = (reviewId: string): void => {
+    pushUndoSnapshot("Review item rejected");
     setReviewQueue((prev) => prev.filter((item) => item.id !== reviewId));
     queueMutation("Review item archived.");
   };
 
   const handleReparseReview = (reviewId: string): void => {
+    pushUndoSnapshot("Review item re-parsed");
     setReviewQueue((prev) =>
       prev.map((item) => {
         if (item.id !== reviewId) return item;
@@ -1806,6 +2001,7 @@ export default function TravelAssistantPage() {
       setToast("Cannot merge: review draft still fails integrity checks.");
       return;
     }
+    pushUndoSnapshot("Review item merged");
     setReservations((prev) =>
       prev.map((item) => {
         if (item.id !== targetReservationId) return item;
@@ -1822,6 +2018,7 @@ export default function TravelAssistantPage() {
   };
 
   const handleChecklistToggle = (id: string): void => {
+    pushUndoSnapshot("Readiness checklist changed");
     setReadinessItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, complete: !item.complete } : item)),
     );
@@ -2071,7 +2268,13 @@ export default function TravelAssistantPage() {
                   <span className="mb-1 block text-slate-300">Trip stage</span>
                   <select
                     value={tripStage}
-                    onChange={(event) => setTripStage(event.target.value as TripStage)}
+                    onChange={(event) => {
+                      const nextStage = event.target.value as TripStage;
+                      if (nextStage !== tripStage) {
+                        pushUndoSnapshot(`Stage manually changed to ${nextStage}`);
+                      }
+                      setTripStage(nextStage);
+                    }}
                     className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"
                   >
                     {STAGES.map((stage) => (
@@ -2170,6 +2373,83 @@ export default function TravelAssistantPage() {
             >
               {personalTimelineOnly ? "Show group timeline" : "Show my timeline"}
             </button>
+            <button
+              type="button"
+              onClick={advanceTripStage}
+              className="shrink-0 rounded-full bg-emerald-500/80 px-3 py-1.5 font-semibold text-slate-950 hover:bg-emerald-400"
+            >
+              Advance stage
+            </button>
+            <button
+              type="button"
+              onClick={undoLastCriticalChange}
+              className="shrink-0 rounded-full bg-rose-500/85 px-3 py-1.5 font-semibold text-slate-950 hover:bg-rose-400"
+            >
+              Undo critical change
+            </button>
+            <button
+              type="button"
+              onClick={() => setStageFocusMode((value) => !value)}
+              className="shrink-0 rounded-full bg-slate-800 px-3 py-1.5 font-semibold ring-1 ring-slate-700 hover:bg-slate-700"
+            >
+              {stageFocusMode ? "Show all panels" : "Focus mode"}
+            </button>
+          </div>
+          <div className="mt-2 grid gap-2 rounded-xl border border-slate-700 bg-slate-950/60 p-2 md:grid-cols-[1.4fr_auto_auto_auto]">
+            <input
+              type="text"
+              value={quickAddText}
+              onChange={(event) => setQuickAddText(event.target.value)}
+              placeholder="Universal quick add: paste email line or type a manual update"
+              className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100"
+            />
+            <select
+              value={quickAddType}
+              onChange={(event) => setQuickAddType(event.target.value as ReservationType)}
+              className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-xs"
+            >
+              {(Object.keys(RESERVATION_TYPE_LABEL) as ReservationType[]).map((type) => (
+                <option key={type} value={type}>
+                  {RESERVATION_TYPE_LABEL[type]}
+                </option>
+              ))}
+            </select>
+            <select
+              value={quickAddConfidence}
+              onChange={(event) => setQuickAddConfidence(event.target.value as Confidence)}
+              className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-xs"
+            >
+              <option value="high">High confidence</option>
+              <option value="medium">Medium confidence</option>
+              <option value="low">Low confidence</option>
+            </select>
+            <button
+              type="button"
+              onClick={handleVoiceQuickCapture}
+              className="rounded-lg bg-violet-500/85 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-violet-400"
+            >
+              Voice
+            </button>
+            <button
+              type="button"
+              onClick={() => handleQuickAdd("email-paste")}
+              className="rounded-lg bg-cyan-500/85 px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-cyan-400"
+            >
+              Add as email
+            </button>
+            <button
+              type="button"
+              onClick={() => handleQuickAdd("manual")}
+              className="rounded-lg bg-emerald-500/85 px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-emerald-400"
+            >
+              Add manual
+            </button>
+            <p className="self-center text-[11px] text-slate-400 md:col-span-2">
+              Low-confidence quick adds are automatically routed to review queue before live itinerary.
+            </p>
+            <p className="self-center text-[11px] text-slate-400">
+              Undo ready: {undoStack.length}
+            </p>
           </div>
         </section>
 
@@ -2191,7 +2471,12 @@ export default function TravelAssistantPage() {
                 <button
                   key={`flow-${stage}`}
                   type="button"
-                  onClick={() => setTripStage(stage)}
+                  onClick={() => {
+                    if (stage !== tripStage) {
+                      pushUndoSnapshot(`Stage selected from flow navigator: ${stage}`);
+                    }
+                    setTripStage(stage);
+                  }}
                   className={`rounded-full px-3 py-1.5 text-xs ring-1 transition ${
                     stage === tripStage
                       ? "bg-cyan-500 text-slate-950 ring-cyan-300"
@@ -2286,6 +2571,16 @@ export default function TravelAssistantPage() {
               <p className="mt-1">
                 Selected importer: {selectedEmail?.subject ?? "No email selected"} • Queue size {reviewQueue.length}
               </p>
+              <p className="mt-1">Undo stack: {undoStack.length} changes ready.</p>
+              {undoAuditTrail.length > 0 ? (
+                <ul className="mt-1 space-y-1 text-[11px] text-slate-400">
+                  {undoAuditTrail.slice(0, 3).map((entry) => (
+                    <li key={entry.id}>
+                      Undid: {entry.action} • {formatClock(entry.undoneAt)}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
           </article>
         </section>
@@ -2301,7 +2596,12 @@ export default function TravelAssistantPage() {
                 <button
                   key={stage}
                   type="button"
-                  onClick={() => setTripStage(stage)}
+                  onClick={() => {
+                    if (stage !== tripStage) {
+                      pushUndoSnapshot(`Stage selected from adaptive actions: ${stage}`);
+                    }
+                    setTripStage(stage);
+                  }}
                   className={`rounded-full px-3 py-1.5 text-sm ring-1 transition ${
                     stage === tripStage
                       ? "bg-cyan-500 text-slate-950 ring-cyan-300"
@@ -2484,25 +2784,26 @@ export default function TravelAssistantPage() {
                   )}
                 </ul>
               </div>
-              <div className="rounded-lg border border-slate-700 bg-slate-950/70 p-3">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setOpsExpanded((previous) => {
-                      const nextValue = !previous;
-                      if (nextValue && !opsSnapshot) {
-                        void fetchOpsSnapshot("auto");
-                      }
-                      return nextValue;
-                    })
-                  }
-                  className="flex w-full items-center justify-between text-left text-xs font-semibold text-slate-100"
-                >
-                  <span>Ops observability panel</span>
-                  <span className="text-slate-400">{opsExpanded ? "Hide" : "Show"}</span>
-                </button>
-                {opsExpanded ? (
-                  <div className="mt-3 space-y-2 text-xs">
+              {showOpsSection ? (
+                <div className="rounded-lg border border-slate-700 bg-slate-950/70 p-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOpsExpanded((previous) => {
+                        const nextValue = !previous;
+                        if (nextValue && !opsSnapshot) {
+                          void fetchOpsSnapshot("auto");
+                        }
+                        return nextValue;
+                      })
+                    }
+                    className="flex w-full items-center justify-between text-left text-xs font-semibold text-slate-100"
+                  >
+                    <span>Ops observability panel</span>
+                    <span className="text-slate-400">{opsExpanded ? "Hide" : "Show"}</span>
+                  </button>
+                  {opsExpanded ? (
+                    <div className="mt-3 space-y-2 text-xs">
                     <div className="flex items-center justify-between gap-2">
                       <span
                         className={`rounded-full px-2 py-1 ring-1 ${
@@ -2700,14 +3001,20 @@ export default function TravelAssistantPage() {
                     ) : (
                       <p className="text-slate-400">Loading ops status...</p>
                     )}
-                  </div>
-                ) : null}
-              </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-slate-700 bg-slate-950/50 p-3 text-xs text-slate-400">
+                  Ops panel hidden in focus mode for this stage.
+                </div>
+              )}
             </div>
           </article>
         </section>
 
-        <section className="grid gap-4 sm:gap-6 xl:grid-cols-[1.2fr_1fr]">
+        {showAntiMissSection ? (
+          <section className="grid gap-4 sm:gap-6 xl:grid-cols-[1.2fr_1fr]">
           <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
@@ -2846,7 +3153,12 @@ export default function TravelAssistantPage() {
               </ul>
             </div>
           </article>
-        </section>
+          </section>
+        ) : (
+          <section className="rounded-2xl border border-slate-700 bg-slate-900/50 p-4 text-xs text-slate-400">
+            Anti-miss cockpit hidden by focus mode for this stage. Switch to &quot;Show all panels&quot; anytime.
+          </section>
+        )}
 
         <section className="grid gap-4 sm:gap-6 xl:grid-cols-[1.2fr_1fr]">
           <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
@@ -3088,7 +3400,8 @@ export default function TravelAssistantPage() {
           </article>
         </section>
 
-        <section className="grid gap-4 sm:gap-6 xl:grid-cols-2">
+        {showCollaborationSection ? (
+          <section className="grid gap-4 sm:gap-6 xl:grid-cols-2">
           <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
             <h2 className="text-lg font-semibold">Static itinerary exports</h2>
             <p className="text-xs text-slate-400">
@@ -3265,9 +3578,15 @@ export default function TravelAssistantPage() {
               </p>
             )}
           </article>
-        </section>
+          </section>
+        ) : (
+          <section className="rounded-2xl border border-slate-700 bg-slate-900/50 p-4 text-xs text-slate-400">
+            Collaboration/export panels hidden in focus mode for this stage.
+          </section>
+        )}
 
-        <section className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
+        {showRecoverySection ? (
+          <section className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
           <h2 className="text-lg font-semibold">Missed-flight / disruption recovery panel</h2>
           <p className="text-xs text-slate-400">
             Who to call, what to say, and decision path guidance by urgency level.
@@ -3332,7 +3651,12 @@ export default function TravelAssistantPage() {
               </ol>
             </div>
           </div>
-        </section>
+          </section>
+        ) : (
+          <section className="rounded-2xl border border-slate-700 bg-slate-900/50 p-4 text-xs text-slate-400">
+            Recovery playbook hidden in focus mode until recovery stage is active.
+          </section>
+        )}
       </div>
 
       {activeDrawer ? (
