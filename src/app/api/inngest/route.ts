@@ -10,20 +10,20 @@ const handlers = serve({
   functions: [travelUpdatePass, reminderLadder],
 });
 
-export const GET = async (request: Request, ...args: unknown[]): Promise<Response> => {
+export const GET = async (request: Request, context: unknown): Promise<Response> => {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   logger.withContext({ requestId, route: "/api/inngest", method: "GET" }).info("Handling Inngest GET request.");
-  return handlers.GET(request, ...(args as []));
+  return handlers.GET(request, context as never);
 };
 
-export const POST = async (request: Request, ...args: unknown[]): Promise<Response> => {
+export const POST = async (request: Request, context: unknown): Promise<Response> => {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   logger.withContext({ requestId, route: "/api/inngest", method: "POST" }).info("Handling Inngest POST request.");
-  return handlers.POST(request, ...(args as []));
+  return handlers.POST(request, context as never);
 };
 
-export const PUT = async (request: Request, ...args: unknown[]): Promise<Response> => {
+export const PUT = async (request: Request, context: unknown): Promise<Response> => {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   logger.withContext({ requestId, route: "/api/inngest", method: "PUT" }).info("Handling Inngest PUT request.");
-  return handlers.PUT(request, ...(args as []));
+  return handlers.PUT(request, context as never);
 };
