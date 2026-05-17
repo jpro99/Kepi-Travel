@@ -1,10 +1,16 @@
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-/**
- * Avoid stale HTML that still points at old hashed `_next/static/chunks/*` after deploys.
- * (Chunk names change when client bundles change; cached HTML keeps loading old chunks.)
- */
-export function middleware() {
+const isProtectedRoute = createRouteMatcher([
+  "/travel-assistant(.*)",
+  "/api/travel-updates(.*)",
+]);
+
+export default clerkMiddleware(async (auth, req) => {
+  if (isProtectedRoute(req)) {
+    await auth.protect();
+  }
+
   const res = NextResponse.next();
   res.headers.set(
     "Cache-Control",
@@ -12,14 +18,11 @@ export function middleware() {
   );
   res.headers.set("Pragma", "no-cache");
   return res;
-}
+});
 
 export const config = {
   matcher: [
-    /*
-     * Match all paths except static assets, images, favicon, and API routes
-     * so HTML (e.g. `/`, `/city/venice`) is not cached with stale chunk URLs.
-     */
-    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    "/(api|trpc)(.*)",
   ],
 };

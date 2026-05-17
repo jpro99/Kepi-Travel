@@ -1,6 +1,7 @@
 import { kv } from "@vercel/kv";
 
-const KEPI_NAMESPACE_PREFIX = "kepi:";
+const KEPI_NAMESPACE_PREFIX = "kepi";
+const ANONYMOUS_NAMESPACE = "anonymous";
 const fallbackStore = new Map<string, unknown>();
 let missingEnvWarningLogged = false;
 
@@ -12,11 +13,28 @@ function cloneValue<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function toNamespacedKey(key: string): string {
+async function resolveUserNamespace(userId?: string): Promise<string> {
+  if (typeof userId === "string" && userId.trim().length > 0) {
+    return userId.trim();
+  }
+  try {
+    const clerkServerModule = await import("@clerk/nextjs/server");
+    const session = await clerkServerModule.auth();
+    if (typeof session.userId === "string" && session.userId.trim().length > 0) {
+      return session.userId.trim();
+    }
+  } catch {
+    // Ignore request-context errors in local scripts/tests and use shared fallback namespace.
+  }
+  return ANONYMOUS_NAMESPACE;
+}
+
+function toNamespacedKey(key: string, userNamespace: string): string {
   const normalized = key.startsWith(":") ? key.slice(1) : key;
-  return normalized.startsWith(KEPI_NAMESPACE_PREFIX)
+  const scopedPrefix = `${KEPI_NAMESPACE_PREFIX}:${userNamespace}:`;
+  return normalized.startsWith(scopedPrefix)
     ? normalized
-    : `${KEPI_NAMESPACE_PREFIX}${normalized}`;
+    : `${scopedPrefix}${normalized}`;
 }
 
 function warnMissingKvEnv(): void {
@@ -27,8 +45,12 @@ function warnMissingKvEnv(): void {
   );
 }
 
-export async function kvStoreGet<T>(key: string): Promise<T | null> {
-  const namespacedKey = toNamespacedKey(key);
+export async function kvStoreGet<T>(
+  key: string,
+  options?: { userId?: string },
+): Promise<T | null> {
+  const userNamespace = await resolveUserNamespace(options?.userId);
+  const namespacedKey = toNamespacedKey(key, userNamespace);
   if (!isKvConfigured()) {
     warnMissingKvEnv();
     if (!fallbackStore.has(namespacedKey)) return null;
@@ -37,8 +59,13 @@ export async function kvStoreGet<T>(key: string): Promise<T | null> {
   return (await kv.get<T>(namespacedKey)) ?? null;
 }
 
-export async function kvStoreSet<T>(key: string, value: T): Promise<void> {
-  const namespacedKey = toNamespacedKey(key);
+export async function kvStoreSet<T>(
+  key: string,
+  value: T,
+  options?: { userId?: string },
+): Promise<void> {
+  const userNamespace = await resolveUserNamespace(options?.userId);
+  const namespacedKey = toNamespacedKey(key, userNamespace);
   if (!isKvConfigured()) {
     warnMissingKvEnv();
     fallbackStore.set(namespacedKey, cloneValue(value));
@@ -47,8 +74,13 @@ export async function kvStoreSet<T>(key: string, value: T): Promise<void> {
   await kv.set(namespacedKey, value);
 }
 
-export async function kvStoreSetNx<T>(key: string, value: T): Promise<boolean> {
-  const namespacedKey = toNamespacedKey(key);
+export async function kvStoreSetNx<T>(
+  key: string,
+  value: T,
+  options?: { userId?: string },
+): Promise<boolean> {
+  const userNamespace = await resolveUserNamespace(options?.userId);
+  const namespacedKey = toNamespacedKey(key, userNamespace);
   if (!isKvConfigured()) {
     warnMissingKvEnv();
     if (fallbackStore.has(namespacedKey)) return false;
@@ -59,8 +91,9 @@ export async function kvStoreSetNx<T>(key: string, value: T): Promise<boolean> {
   return result === "OK";
 }
 
-export async function kvStoreDel(key: string): Promise<void> {
-  const namespacedKey = toNamespacedKey(key);
+export async function kvStoreDel(key: string, options?: { userId?: string }): Promise<void> {
+  const userNamespace = await resolveUserNamespace(options?.userId);
+  const namespacedKey = toNamespacedKey(key, userNamespace);
   if (!isKvConfigured()) {
     warnMissingKvEnv();
     fallbackStore.delete(namespacedKey);
@@ -71,9 +104,10 @@ export async function kvStoreDel(key: string): Promise<void> {
 
 export async function kvStoreList<T>(
   keyPrefix: string,
-  options?: { limit?: number },
+  options?: { limit?: number; userId?: string },
 ): Promise<Array<{ key: string; value: T | null }>> {
-  const namespacedPrefix = toNamespacedKey(keyPrefix);
+  const userNamespace = await resolveUserNamespace(options?.userId);
+  const namespacedPrefix = toNamespacedKey(keyPrefix, userNamespace);
   const matchPattern = `${namespacedPrefix}*`;
   const limit = Math.max(1, options?.limit ?? 100);
 

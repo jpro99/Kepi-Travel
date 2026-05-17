@@ -1,5 +1,7 @@
 "use client";
 
+import { UserButton } from "@clerk/nextjs";
+
 type TripStage = "readiness" | "pre-departure" | "airport" | "arrival" | "recovery";
 type TripStatus = "green" | "yellow" | "red";
 type GuidanceTone = "subtle" | "standard";
@@ -54,7 +56,12 @@ export function TravelAssistantTopControls({
     <section className="overflow-hidden rounded-3xl border border-slate-700/70 bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/40 shadow-2xl shadow-indigo-950/30">
       <div className="grid gap-5 p-5 sm:gap-6 sm:p-6 lg:grid-cols-[1.8fr_1fr]">
         <div className="space-y-4">
-          <p className="text-xs uppercase tracking-[0.24em] text-cyan-300">Adaptive Travel Assistant</p>
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-xs uppercase tracking-[0.24em] text-cyan-300">Adaptive Travel Assistant</p>
+            <div className="rounded-full border border-slate-700 bg-slate-900/70 p-1">
+              <UserButton />
+            </div>
+          </div>
           <h1 className="text-3xl font-semibold leading-tight md:text-4xl">
             Premium trip execution for families, with anti-miss safeguards.
           </h1>
