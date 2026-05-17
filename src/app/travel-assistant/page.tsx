@@ -799,6 +799,9 @@ export default function TravelAssistantPage() {
   const [quickAddConfidence, setQuickAddConfidence] = useState<Confidence>("medium");
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [undoAuditTrail, setUndoAuditTrail] = useState<UndoAuditEntry[]>([]);
+  const [lastAppliedAutopilotRecommendationTitle, setLastAppliedAutopilotRecommendationTitle] = useState<
+    string | null
+  >(null);
   const [exportScope, setExportScope] = useState<"full-trip" | "selected-person">("full-trip");
   const [exportFrom, setExportFrom] = useState("");
   const [exportTo, setExportTo] = useState("");
@@ -2332,6 +2335,7 @@ export default function TravelAssistantPage() {
     recommendation: IncidentAutopilotRecommendation,
   ): Promise<void> => {
     setAutopilotActionPending(recommendation.action);
+    setLastAppliedAutopilotRecommendationTitle(recommendation.title);
     try {
       switch (recommendation.action) {
         case "switch-recovery-stage":
@@ -3353,6 +3357,7 @@ export default function TravelAssistantPage() {
           incidentAutopilotRecommendations={incidentAutopilotRecommendations}
           autopilotActionPending={autopilotActionPending}
           onApplyIncidentAutopilotRecommendation={applyIncidentAutopilotRecommendation}
+          lastAppliedAutopilotRecommendationTitle={lastAppliedAutopilotRecommendationTitle}
           recoveryScript={recoveryScript}
           onCopyScript={copyScript}
           activeScenarioPlaybook={activeScenarioPlaybook}

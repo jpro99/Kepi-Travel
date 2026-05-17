@@ -1,5 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { isMockClerkAuthEnabled } from "@/lib/auth/mockClerkAuth";
 
 const isProtectedRoute = createRouteMatcher([
   "/travel-assistant(.*)",
@@ -7,7 +8,7 @@ const isProtectedRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
-  if (isProtectedRoute(req)) {
+  if (isProtectedRoute(req) && !isMockClerkAuthEnabled()) {
     await auth.protect();
   }
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { isAutomatedTestRuntime } from "@/lib/auth/mockClerkAuth";
 import {
   BackgroundRunTimeoutError,
   runManagedTravelUpdateBackgroundPass,
@@ -57,11 +58,7 @@ async function runAlertSweepSafe(trigger: string) {
 }
 
 async function resolveAuthenticatedUserId(): Promise<string | null> {
-  const isTestEnv =
-    process.env.NODE_ENV === "test" ||
-    Boolean(process.env.VITEST) ||
-    Boolean(process.env.JEST_WORKER_ID) ||
-    process.env.npm_lifecycle_event?.startsWith("test") === true;
+  const isTestEnv = isAutomatedTestRuntime();
   try {
     const clerkServer = await import("@clerk/nextjs/server");
     const session = await clerkServer.auth();

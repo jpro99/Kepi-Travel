@@ -17,6 +17,7 @@ interface DisruptionRecoveryProps {
   incidentAutopilotRecommendations: IncidentAutopilotRecommendation[];
   autopilotActionPending: IncidentAutopilotAction | null;
   onApplyIncidentAutopilotRecommendation: (recommendation: IncidentAutopilotRecommendation) => Promise<void>;
+  lastAppliedAutopilotRecommendationTitle: string | null;
   recoveryScript: string;
   onCopyScript: (script: string) => void;
   activeScenarioPlaybook: ActiveScenarioPlaybook;
@@ -29,6 +30,7 @@ export function DisruptionRecovery({
   incidentAutopilotRecommendations,
   autopilotActionPending,
   onApplyIncidentAutopilotRecommendation,
+  lastAppliedAutopilotRecommendationTitle,
   recoveryScript,
   onCopyScript,
   activeScenarioPlaybook,
@@ -42,7 +44,7 @@ export function DisruptionRecovery({
   }
 
   return (
-    <section className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
+    <section data-testid="disruption-recovery-panel" className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
       <h2 className="text-lg font-semibold">Missed-flight / disruption recovery panel</h2>
       <p className="text-xs text-slate-400">Who to call, what to say, and decision path guidance by urgency level.</p>
       <div className="mt-3 flex flex-wrap gap-2">
@@ -80,11 +82,17 @@ export function DisruptionRecovery({
         <p className="text-xs text-violet-100/80">
           One-tap remediation plan based on live trip risk, queue pressure, sync state, and worker health.
         </p>
+        {lastAppliedAutopilotRecommendationTitle ? (
+          <p data-testid="autopilot-last-applied" className="mt-2 text-xs text-emerald-200">
+            Applied: {lastAppliedAutopilotRecommendationTitle}
+          </p>
+        ) : null}
         {incidentAutopilotRecommendations.length > 0 ? (
-          <ul className="mt-2 space-y-2 text-xs">
+          <ul data-testid="autopilot-recommendation-list" className="mt-2 space-y-2 text-xs">
             {incidentAutopilotRecommendations.map((recommendation) => (
               <li
                 key={recommendation.id}
+                data-testid="autopilot-recommendation-item"
                 className="rounded-lg border border-violet-400/30 bg-slate-950/70 px-3 py-2 text-slate-200"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -103,6 +111,7 @@ export function DisruptionRecovery({
                     <span className="font-semibold">{recommendation.title}</span>
                   </div>
                   <button
+                    data-testid={`autopilot-apply-${recommendation.id}`}
                     type="button"
                     onClick={() => {
                       void onApplyIncidentAutopilotRecommendation(recommendation);

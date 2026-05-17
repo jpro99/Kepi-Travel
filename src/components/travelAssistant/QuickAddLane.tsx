@@ -110,6 +110,7 @@ export function QuickAddLane({
       </div>
       <div className="mt-2 hidden gap-2 rounded-xl border border-slate-700 bg-slate-950/60 p-2 md:grid md:grid-cols-[1.4fr_auto_auto_auto]">
         <input
+          data-testid="quick-add-input-desktop"
           type="text"
           value={quickAddText}
           onChange={(event) => onQuickAddTextChange(event.target.value)}
@@ -151,6 +152,7 @@ export function QuickAddLane({
           Add as email
         </button>
         <button
+          data-testid="quick-add-manual-button-desktop"
           type="button"
           onClick={() => onQuickAdd("manual")}
           className="rounded-lg bg-emerald-500/85 px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-emerald-400"
@@ -164,6 +166,7 @@ export function QuickAddLane({
       </div>
       <div className="mt-2 space-y-2 rounded-xl border border-slate-700 bg-slate-950/60 p-2 md:hidden">
         <input
+          data-testid="quick-add-input-mobile"
           type="text"
           value={quickAddText}
           onChange={(event) => onQuickAddTextChange(event.target.value)}
@@ -179,6 +182,7 @@ export function QuickAddLane({
             Voice
           </button>
           <button
+          data-testid="quick-add-manual-button-mobile"
             type="button"
             onClick={() => onQuickAdd("manual")}
             className="rounded-lg bg-emerald-500/85 px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-emerald-400"

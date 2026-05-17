@@ -116,7 +116,9 @@ export function ConnectivityPanel({
           <p className="text-xs text-slate-300">{locationStatusMessage}</p>
           <p className="mt-1 text-xs text-slate-400">Last sync: {formatClock(lastSyncAt)}</p>
           <p className="text-xs text-slate-400">Pending updates: {pendingSyncCount}</p>
-          <p className="text-xs text-slate-400">Queued actions outbox: {pendingOutboxCount}</p>
+          <p data-testid="queued-actions-outbox-count" className="text-xs text-slate-400">
+            Queued actions outbox: {pendingOutboxCount}
+          </p>
           <p className="text-xs text-slate-400">Last outbox replay: {formatClock(lastOutboxReplayAt)}</p>
           <p className="text-xs text-slate-400">Provider mode: {updateMode}</p>
           <p className="text-xs text-slate-400">Last provider check: {formatClock(lastProviderCheckAt)}</p>
