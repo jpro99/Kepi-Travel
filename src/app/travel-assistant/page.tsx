@@ -1077,9 +1077,15 @@ export default function TravelAssistantPage() {
     () => pendingOutboxEntries.some((entry) => entry.reservationId === null),
     [pendingOutboxEntries],
   );
+  const reservationTypeById = useMemo(() => {
+    return new Map(reservations.map((reservation) => [reservation.id, reservation.type]));
+  }, [reservations]);
   const flightLiveStatusByReservationId = useMemo(() => {
     const statusMap = new Map<string, "on-time" | "delayed" | "cancelled">();
     updateFeed.forEach((entry) => {
+      if (reservationTypeById.get(entry.reservationId) !== "flight") {
+        return;
+      }
       if (statusMap.has(entry.reservationId)) {
         return;
       }
@@ -1096,7 +1102,30 @@ export default function TravelAssistantPage() {
       }
     });
     return statusMap;
-  }, [updateFeed]);
+  }, [reservationTypeById, updateFeed]);
+  const railLiveStatusByReservationId = useMemo(() => {
+    const statusMap = new Map<string, "on-time" | "delayed" | "cancelled">();
+    updateFeed.forEach((entry) => {
+      if (reservationTypeById.get(entry.reservationId) !== "train") {
+        return;
+      }
+      if (statusMap.has(entry.reservationId)) {
+        return;
+      }
+      if (entry.kind === "cancellation") {
+        statusMap.set(entry.reservationId, "cancelled");
+        return;
+      }
+      if (entry.kind === "delay") {
+        statusMap.set(entry.reservationId, "delayed");
+        return;
+      }
+      if (entry.kind === "on-time") {
+        statusMap.set(entry.reservationId, "on-time");
+      }
+    });
+    return statusMap;
+  }, [reservationTypeById, updateFeed]);
   const visibleReservations = useMemo(() => {
     const fromMs = parseDateInput(exportFrom);
     const toMs = parseDateInput(exportTo);
@@ -3250,6 +3279,7 @@ export default function TravelAssistantPage() {
             pendingOutboxByReservationId={pendingOutboxByReservationId}
             hasGlobalOutboxPending={hasGlobalOutboxPending}
             flightLiveStatusByReservationId={flightLiveStatusByReservationId}
+            railLiveStatusByReservationId={railLiveStatusByReservationId}
             onOpenReservationDrawer={(reservationId) => openDrawer("reservation", reservationId)}
             onCopyCallScript={copyScript}
             onCopyConfirmationCode={async (code) => {

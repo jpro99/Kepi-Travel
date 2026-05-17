@@ -32,6 +32,7 @@ interface ReservationListProps {
   pendingOutboxByReservationId: Map<string, number>;
   hasGlobalOutboxPending: boolean;
   flightLiveStatusByReservationId: Map<string, "on-time" | "delayed" | "cancelled">;
+  railLiveStatusByReservationId: Map<string, "on-time" | "delayed" | "cancelled">;
   onOpenReservationDrawer: (reservationId: string) => void;
   onCopyCallScript: (script: string) => void;
   onCopyConfirmationCode: (code: string) => Promise<void>;
@@ -47,6 +48,7 @@ export function ReservationList({
   pendingOutboxByReservationId,
   hasGlobalOutboxPending,
   flightLiveStatusByReservationId,
+  railLiveStatusByReservationId,
   onOpenReservationDrawer,
   onCopyCallScript,
   onCopyConfirmationCode,
@@ -78,18 +80,25 @@ export function ReservationList({
                   {reservationTypeLabelByType[reservation.type]} • {reservation.provider}
                 </p>
                 <p className="text-sm font-semibold">{reservation.title}</p>
-                {reservation.type === "flight" ? (
+                {reservation.type === "flight" || reservation.type === "train" ? (
                   <span
                     className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${
-                      (flightLiveStatusByReservationId.get(reservation.id) ?? "on-time") === "cancelled"
+                      ((reservation.type === "flight"
+                        ? flightLiveStatusByReservationId.get(reservation.id)
+                        : railLiveStatusByReservationId.get(reservation.id)) ?? "on-time") === "cancelled"
                         ? "bg-red-500/20 text-red-100 ring-red-400/40"
-                        : (flightLiveStatusByReservationId.get(reservation.id) ?? "on-time") === "delayed"
+                        : ((reservation.type === "flight"
+                              ? flightLiveStatusByReservationId.get(reservation.id)
+                              : railLiveStatusByReservationId.get(reservation.id)) ?? "on-time") === "delayed"
                           ? "bg-amber-500/20 text-amber-100 ring-amber-400/40"
                           : "bg-emerald-500/20 text-emerald-100 ring-emerald-400/40"
                     }`}
                   >
                     {(() => {
-                      const liveStatus = flightLiveStatusByReservationId.get(reservation.id) ?? "on-time";
+                      const liveStatus =
+                        (reservation.type === "flight"
+                          ? flightLiveStatusByReservationId.get(reservation.id)
+                          : railLiveStatusByReservationId.get(reservation.id)) ?? "on-time";
                       if (liveStatus === "cancelled") return "Live status: Cancelled";
                       if (liveStatus === "delayed") return "Live status: Delayed";
                       return "Live status: On Time";

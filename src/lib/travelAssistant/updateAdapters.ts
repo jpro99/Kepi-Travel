@@ -1,6 +1,7 @@
 import { createFlightStatusProviderFromEnv } from "@/lib/travelAssistant/providers/flightStatusProvider";
 import { createMockTravelUpdateProvider } from "@/lib/travelAssistant/providers/mockTransportProvider";
-import { createRailStatusProviderFromEnv } from "@/lib/travelAssistant/providers/railStatusProvider";
+import { createRailStatusProviderFromEnv } from "@/lib/travelAssistant/railStatusProvider";
+import { createRideStatusProviderFromEnv } from "@/lib/travelAssistant/rideStatusProvider";
 import type {
   TravelConflictResolutionSummary,
   TravelUpdateConflict,
@@ -41,6 +42,7 @@ const circuitStateByProvider = new Map<string, { consecutiveFailures: number; op
 const PROVIDER_PRIORITY: Record<string, number> = {
   "flight-status-provider": 100,
   "rail-status-provider": 95,
+  "ride-status-provider": 90,
   "mock-transport-adapter": 40,
 };
 
@@ -66,8 +68,10 @@ function resolveProviders(
   const providers: TravelUpdateProvider[] = [];
   const flightProvider = createFlightStatusProviderFromEnv();
   const railProvider = createRailStatusProviderFromEnv();
+  const rideProvider = createRideStatusProviderFromEnv();
   if (flightProvider) providers.push(flightProvider);
   if (railProvider) providers.push(railProvider);
+  if (rideProvider) providers.push(rideProvider);
 
   const includeMockFallback = options?.includeMockFallback ?? true;
   if (providers.length === 0 && includeMockFallback) {
