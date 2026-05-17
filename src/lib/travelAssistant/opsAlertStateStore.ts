@@ -1,4 +1,5 @@
 import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
+import { logger } from "@/lib/logger";
 
 interface OpsAlertStateData {
   version: 1;
@@ -33,7 +34,10 @@ async function loadStore(stateKey: string): Promise<OpsAlertStateData> {
       lastSentByKey: parsed.lastSentByKey,
     };
   } catch (error) {
-    console.warn("[travelAssistant/opsAlertStateStore] Failed to read alert state from KV:", error);
+    logger.warn("Failed to read alert state from KV.", {
+      scope: "travelAssistant/opsAlertStateStore",
+      error,
+    });
     return createEmptyStore();
   }
 }

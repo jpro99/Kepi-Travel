@@ -6,6 +6,7 @@ import type {
   TravelOpsActionResult,
 } from "@/lib/travelAssistant/travelUpdateTypes";
 import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
+import { logger } from "@/lib/logger";
 
 interface StoredOpsActionAuditEntry extends TravelOpsActionAuditEntry {
   statusCode: number;
@@ -61,7 +62,10 @@ async function loadStore(auditKey: string): Promise<OpsActionAuditStoreData> {
       }) as StoredOpsActionAuditEntry[],
     };
   } catch (error) {
-    console.warn("[travelAssistant/opsActionAuditStore] Failed to read ops audit store from KV:", error);
+    logger.warn("Failed to read ops audit store from KV.", {
+      scope: "travelAssistant/opsActionAuditStore",
+      error,
+    });
     return createEmptyStore();
   }
 }

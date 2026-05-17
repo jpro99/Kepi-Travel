@@ -5,6 +5,7 @@ import type {
   TravelOpsAlertEvent,
 } from "@/lib/travelAssistant/travelUpdateTypes";
 import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
+import { logger } from "@/lib/logger";
 
 interface OpsAlertAuditStoreData {
   version: 1;
@@ -52,7 +53,10 @@ async function loadStore(auditKey: string): Promise<OpsAlertAuditStoreData> {
       }) as TravelOpsAlertAuditEntry[],
     };
   } catch (error) {
-    console.warn("[travelAssistant/opsAlertAuditStore] Failed to read alert audit store from KV:", error);
+    logger.warn("Failed to read alert audit store from KV.", {
+      scope: "travelAssistant/opsAlertAuditStore",
+      error,
+    });
     return createEmptyStore();
   }
 }

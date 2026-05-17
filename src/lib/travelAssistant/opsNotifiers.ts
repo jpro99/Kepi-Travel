@@ -1,4 +1,5 @@
 import type { TravelOpsAlertEvent } from "@/lib/travelAssistant/travelUpdateTypes";
+import { logger } from "@/lib/logger";
 
 export interface TravelOpsNotifier {
   name: string;
@@ -60,8 +61,10 @@ function buildConsoleNotifier(): TravelOpsNotifier {
     name: "console",
     async send({ alert }) {
       const prefix = alert.severity === "critical" ? "[CRITICAL]" : "[WARN]";
-      // eslint-disable-next-line no-console
-      console.warn(`${prefix} Travel Ops alert: ${alert.title} :: ${alert.message}`);
+      logger.warn(`${prefix} Travel Ops alert: ${alert.title} :: ${alert.message}`, {
+        scope: "travelAssistant/opsNotifiers",
+        alert,
+      });
       return { ok: true, detail: "logged" };
     },
   };

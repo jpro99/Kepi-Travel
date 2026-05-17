@@ -1,5 +1,6 @@
 import { kv } from "@vercel/kv";
 import { getKvUserContextUserId } from "@/lib/travelAssistant/kvUserContext";
+import { logger } from "@/lib/logger";
 
 const KEPI_NAMESPACE_PREFIX = "kepi";
 const ANONYMOUS_NAMESPACE = "anonymous";
@@ -45,9 +46,9 @@ function toNamespacedKey(key: string, userNamespace: string): string {
 function warnMissingKvEnv(): void {
   if (missingEnvWarningLogged) return;
   missingEnvWarningLogged = true;
-  console.warn(
-    "[travelAssistant/kvStore] KV_REST_API_URL or KV_REST_API_TOKEN is not set. Falling back to in-memory local store.",
-  );
+  logger.warn("KV_REST_API_URL or KV_REST_API_TOKEN is not set. Falling back to in-memory local store.", {
+    scope: "travelAssistant/kvStore",
+  });
 }
 
 export async function kvStoreGet<T>(

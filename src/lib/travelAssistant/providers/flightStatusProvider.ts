@@ -12,6 +12,7 @@ import {
   normalizeProviderCode,
 } from "@/lib/travelAssistant/providers/providerUtils";
 import { createMockTravelUpdateProvider } from "@/lib/travelAssistant/providers/mockTransportProvider";
+import { logger } from "@/lib/logger";
 
 const AVIATIONSTACK_BASE_URL = "https://api.aviationstack.com/v1/flights";
 const AVIATIONSTACK_STATUSES = [
@@ -214,7 +215,9 @@ async function runMockFallback(args: {
   nowIso: string;
   reason: string;
 }): Promise<TravelUpdateEvent[]> {
-  console.warn(`[travelAssistant/flightStatusProvider] ${args.reason}; falling back to mock transport provider.`);
+  logger.warn(`${args.reason}; falling back to mock transport provider.`, {
+    scope: "travelAssistant/flightStatusProvider",
+  });
   const fallbackProvider = createMockTravelUpdateProvider();
   const fallbackUpdates = await fallbackProvider.fetchUpdates({
     reservations: args.reservations,

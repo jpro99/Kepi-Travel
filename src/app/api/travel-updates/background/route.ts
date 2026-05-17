@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isAutomatedTestRuntime } from "@/lib/auth/mockClerkAuth";
+import { logger } from "@/lib/logger";
 import { inngest } from "@/inngest/client";
 
 const BodySchema = z.object({
@@ -34,12 +36,21 @@ async function resolveAuthenticatedUserId(): Promise<string | null> {
 }
 
 export async function POST(req: Request) {
+  const requestId = req.headers.get("x-request-id")?.trim() || randomUUID();
   const userId = await resolveAuthenticatedUserId();
+  const routeLogger = logger.withContext({
+    requestId,
+    userId,
+    route: "/api/travel-updates/background",
+  });
+
   if (!userId) {
+    routeLogger.warn("Unauthorized background update request.");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   if (!isAuthorized(req)) {
+    routeLogger.warn("Rejected background update request due to invalid secret.");
     return NextResponse.json({ error: "Unauthorized background trigger" }, { status: 401 });
   }
 
@@ -52,6 +63,9 @@ export async function POST(req: Request) {
 
   const parsed = BodySchema.safeParse(payload);
   if (!parsed.success) {
+    routeLogger.warn("Background update payload validation failed.", {
+      issues: parsed.error.issues.length,
+    });
     return NextResponse.json(
       { error: "Validation failed", details: parsed.error.flatten() },
       { status: 422 },
@@ -69,6 +83,11 @@ export async function POST(req: Request) {
         trigger: "background-route",
       },
     });
+    routeLogger.info("Queued background update event.", {
+      mode: parsed.data.mode ?? null,
+      nowIso: parsed.data.nowIso ?? null,
+      timeoutMs: parsed.data.timeoutMs ?? null,
+    });
     return NextResponse.json(
       {
         queued: true,
@@ -77,6 +96,9 @@ export async function POST(req: Request) {
       { status: 202 },
     );
   } catch (error) {
+    routeLogger.error("Failed to dispatch background update event.", error instanceof Error ? error : undefined, {
+      errorType: error instanceof Error ? error.name : typeof error,
+    });
     const message = error instanceof Error ? error.message : "Failed to dispatch background update event.";
     return NextResponse.json(
       { error: message, queued: false },

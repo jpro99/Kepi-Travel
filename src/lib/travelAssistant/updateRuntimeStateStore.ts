@@ -3,6 +3,7 @@ import type {
   UpdatableReservation,
 } from "@/lib/travelAssistant/travelUpdateTypes";
 import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
+import { logger } from "@/lib/logger";
 
 interface RuntimeStateData {
   version: 1;
@@ -48,7 +49,10 @@ async function loadState(stateKey: string): Promise<RuntimeStateData> {
       reservations: parsed.reservations,
     };
   } catch (error) {
-    console.warn("[travelAssistant/updateRuntimeStateStore] Failed to read runtime state from KV:", error);
+    logger.warn("Failed to read runtime state from KV.", {
+      scope: "travelAssistant/updateRuntimeStateStore",
+      error,
+    });
     return createEmptyState();
   }
 }

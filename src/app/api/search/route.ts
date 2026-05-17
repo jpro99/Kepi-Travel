@@ -1,7 +1,9 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { Feature, Polygon } from "geojson";
 import { defaultCityId, getCityCatalog } from "@/data/cities/registry";
+import { logger } from "@/lib/logger";
 import { enrichHitsWithWalking } from "@/lib/search/enrichWithWalking";
 import type { RoutingProvider } from "@/lib/search/types";
 import { searchHotelsInPolygon } from "@/lib/search/scoreAndFilter";
@@ -28,15 +30,25 @@ const BodySchema = z.object({
 });
 
 export async function POST(req: Request) {
+  const requestId = req.headers.get("x-request-id")?.trim() || randomUUID();
+  const routeLogger = logger.withContext({
+    requestId,
+    route: "/api/search",
+  });
+
   let json: unknown;
   try {
     json = await req.json();
   } catch {
+    routeLogger.warn("Search request rejected due to invalid JSON body.");
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
   const parsed = BodySchema.safeParse(json);
   if (!parsed.success) {
+    routeLogger.warn("Search request payload validation failed.", {
+      issues: parsed.error.issues.length,
+    });
     return NextResponse.json(
       { error: "Validation failed", details: parsed.error.flatten() },
       { status: 422 },
@@ -46,6 +58,7 @@ export async function POST(req: Request) {
   const cityId = parsed.data.cityId ?? defaultCityId;
   const catalog = getCityCatalog(cityId);
   if (!catalog) {
+    routeLogger.warn("Search request referenced unknown city.", { cityId });
     return NextResponse.json(
       { error: `Unknown cityId: ${cityId}` },
       { status: 404 },
@@ -86,6 +99,12 @@ export async function POST(req: Request) {
     routingNote =
       "No hotels matched the polygon. Walking times appear once matches exist.";
   }
+
+  routeLogger.info("Completed hotel search request.", {
+    cityId: catalog.id,
+    hotelCount: hotels.length,
+    routingEngine: engine,
+  });
 
   return NextResponse.json({
     hotels,

@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isAutomatedTestRuntime } from "@/lib/auth/mockClerkAuth";
+import { logger } from "@/lib/logger";
 import { runTravelUpdateCheck } from "@/lib/travelAssistant/updateAdapters";
 import { persistTravelUpdateAudit } from "@/lib/travelAssistant/updateAuditStore";
 import { persistTravelRuntimeState } from "@/lib/travelAssistant/updateRuntimeStateStore";
@@ -36,8 +38,16 @@ async function resolveAuthenticatedUserId(): Promise<string | null> {
 }
 
 export async function POST(req: Request) {
+  const requestId = req.headers.get("x-request-id")?.trim() || randomUUID();
   const userId = await resolveAuthenticatedUserId();
+  const routeLogger = logger.withContext({
+    requestId,
+    userId,
+    route: "/api/travel-updates",
+  });
+
   if (!userId) {
+    routeLogger.warn("Unauthorized travel update request.");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -45,11 +55,15 @@ export async function POST(req: Request) {
   try {
     payload = await req.json();
   } catch {
+    routeLogger.warn("Rejected travel update request due to invalid JSON body.");
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
   const parsed = BodySchema.safeParse(payload);
   if (!parsed.success) {
+    routeLogger.warn("Travel update payload validation failed.", {
+      issues: parsed.error.issues.length,
+    });
     return NextResponse.json(
       { error: "Validation failed", details: parsed.error.flatten() },
       { status: 422 },
@@ -73,6 +87,14 @@ export async function POST(req: Request) {
     result,
     checkedAt: effectiveNowIso,
     source: "interactive",
+  });
+
+  routeLogger.info("Travel update check completed.", {
+    mode: parsed.data.mode,
+    reservationCount: parsed.data.reservations.length,
+    incomingUpdates: result.updates.length,
+    freshUpdates: audit.freshUpdates.length,
+    duplicateUpdates: audit.duplicateUpdates,
   });
 
   return NextResponse.json({

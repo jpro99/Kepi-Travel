@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isAutomatedTestRuntime } from "@/lib/auth/mockClerkAuth";
+import { logger } from "@/lib/logger";
 import {
   BackgroundRunTimeoutError,
   runManagedTravelUpdateBackgroundPass,
@@ -72,12 +74,23 @@ async function resolveAuthenticatedUserId(): Promise<string | null> {
 }
 
 export async function POST(req: Request) {
+  const requestId = req.headers.get("x-request-id")?.trim() || randomUUID();
   const userId = await resolveAuthenticatedUserId();
+  const actor = resolveActor(req);
+  const routeLogger = logger.withContext({
+    requestId,
+    userId,
+    actor,
+    route: "/api/travel-updates/ops/control",
+  });
+
   if (!userId) {
+    routeLogger.warn("Unauthorized ops control request.");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   if (!isAuthorized(req)) {
+    routeLogger.warn("Rejected ops control request due to invalid secret.");
     return NextResponse.json({ error: "Unauthorized ops control action" }, { status: 401 });
   }
 
@@ -90,13 +103,19 @@ export async function POST(req: Request) {
 
   const parsed = BodySchema.safeParse(payload);
   if (!parsed.success) {
+    routeLogger.warn("Ops control payload validation failed.", {
+      issues: parsed.error.issues.length,
+    });
     return NextResponse.json(
       { error: "Validation failed", details: parsed.error.flatten() },
       { status: 422 },
     );
   }
 
-  const actor = resolveActor(req);
+  routeLogger.info("Processing ops control action.", {
+    action: parsed.data.action,
+  });
+
   const idempotencyKey = parsed.data.idempotencyKey ?? null;
   const requestedAt = new Date().toISOString();
 
@@ -107,6 +126,10 @@ export async function POST(req: Request) {
     });
     if (replay) {
       const alertSweep = await runAlertSweepSafe(`ops-control-replay-${parsed.data.action}`);
+      routeLogger.info("Returning replayed ops control response.", {
+        action: parsed.data.action,
+        actionAuditId: replay.id,
+      });
       return NextResponse.json(
         {
           ...(replay.responsePayload as Record<string, unknown>),
@@ -146,6 +169,9 @@ export async function POST(req: Request) {
       requestedAt,
     });
     const alertSweep = await runAlertSweepSafe("ops-control-reset-circuits");
+    routeLogger.info("Reset circuits action completed.", {
+      actionAuditId: audit.id,
+    });
     return NextResponse.json(
       { ...responsePayload, actionAuditId: audit.id, replayed: false, alertSweep },
       { status: statusCode },
@@ -176,6 +202,11 @@ export async function POST(req: Request) {
       replayed: false,
       requestedAt,
     });
+    routeLogger.info("Trigger alert sweep action completed.", {
+      actionAuditId: audit.id,
+      sentAlerts: manualSweep.sentAlerts,
+      suppressedAlerts: manualSweep.suppressedAlerts,
+    });
     return NextResponse.json(
       { ...responsePayload, actionAuditId: audit.id, replayed: false, alertSweep: manualSweep },
       { status: statusCode },
@@ -203,6 +234,10 @@ export async function POST(req: Request) {
     if (error instanceof BackgroundRunInProgressError) {
       statusCode = 409;
       result = "error";
+      routeLogger.warn("Background run request rejected because another run is active.", {
+        activeRunId: error.activeRunId,
+        activeStartedAt: error.startedAt,
+      });
       responsePayload = {
         action: parsed.data.action,
         ok: false,
@@ -214,6 +249,7 @@ export async function POST(req: Request) {
     } else if (error instanceof RuntimeStateUnavailableError) {
       statusCode = 409;
       result = "error";
+      routeLogger.warn("Background run request rejected due to missing runtime state.");
       responsePayload = {
         action: parsed.data.action,
         ok: false,
@@ -223,6 +259,10 @@ export async function POST(req: Request) {
     } else if (error instanceof BackgroundRunTimeoutError) {
       statusCode = 504;
       result = "error";
+      routeLogger.warn("Background run request timed out.", {
+        runId: error.runId,
+        timeoutMs: error.timeoutMs,
+      });
       responsePayload = {
         action: parsed.data.action,
         ok: false,
@@ -232,6 +272,11 @@ export async function POST(req: Request) {
       };
       responseSummary = "Managed background run timed out.";
     } else {
+      routeLogger.error(
+        "Unhandled ops control action failure.",
+        error instanceof Error ? error : undefined,
+        { action: parsed.data.action },
+      );
       throw error;
     }
   }
@@ -255,6 +300,12 @@ export async function POST(req: Request) {
   const alertSweep = await runAlertSweepSafe(
     parsed.data.dryRun ? "ops-control-run-background-dry" : "ops-control-run-background-live",
   );
+  routeLogger.info("Run-background action completed.", {
+    result,
+    statusCode,
+    actionAuditId: audit.id,
+    alertSweepSent: alertSweep?.sentAlerts ?? 0,
+  });
   return NextResponse.json(
     { ...responsePayload, actionAuditId: audit.id, replayed: false, alertSweep },
     { status: statusCode },

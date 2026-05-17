@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isAutomatedTestRuntime } from "@/lib/auth/mockClerkAuth";
+import { logger } from "@/lib/logger";
 import { buildTravelOpsSnapshot } from "@/lib/travelAssistant/opsSnapshot";
 
 const QuerySchema = z.object({
@@ -22,8 +24,16 @@ async function resolveAuthenticatedUserId(): Promise<string | null> {
 }
 
 export async function GET(req: Request) {
+  const requestId = req.headers.get("x-request-id")?.trim() || randomUUID();
   const userId = await resolveAuthenticatedUserId();
+  const routeLogger = logger.withContext({
+    requestId,
+    userId,
+    route: "/api/travel-updates/ops",
+  });
+
   if (!userId) {
+    routeLogger.warn("Unauthorized ops snapshot request.");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -32,6 +42,9 @@ export async function GET(req: Request) {
     limit: url.searchParams.get("limit") ?? undefined,
   });
   if (!parsed.success) {
+    routeLogger.warn("Ops snapshot query validation failed.", {
+      issues: parsed.error.issues.length,
+    });
     return NextResponse.json(
       { error: "Validation failed", details: parsed.error.flatten() },
       { status: 422 },
@@ -39,6 +52,9 @@ export async function GET(req: Request) {
   }
 
   const snapshot = await buildTravelOpsSnapshot({
+    auditLimit: parsed.data.limit ?? 20,
+  });
+  routeLogger.info("Returned travel ops snapshot.", {
     auditLimit: parsed.data.limit ?? 20,
   });
   return NextResponse.json(snapshot);

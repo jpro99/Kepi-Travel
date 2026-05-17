@@ -6,6 +6,7 @@ import type {
   TravelBackgroundRunStatus,
 } from "@/lib/travelAssistant/travelUpdateTypes";
 import { kvStoreDel, kvStoreGet, kvStoreSet, kvStoreSetNx } from "@/lib/travelAssistant/kvStore";
+import { logger } from "@/lib/logger";
 
 interface TravelBackgroundRunStateData extends TravelBackgroundRunStateSnapshot {
   version: 1;
@@ -77,7 +78,10 @@ async function loadState(stateKey: string): Promise<TravelBackgroundRunStateData
       heartbeat: normalizeHeartbeat(parsed.heartbeat),
     };
   } catch (error) {
-    console.warn("[travelAssistant/backgroundRunStateStore] Failed to read background state from KV:", error);
+    logger.warn("Failed to read background state from KV.", {
+      scope: "travelAssistant/backgroundRunStateStore",
+      error,
+    });
     return createEmptyState();
   }
 }
@@ -270,7 +274,10 @@ async function readLock(lockKey: string): Promise<BackgroundRunLockData | null> 
     }
     return { runId: parsed.runId, startedAt: parsed.startedAt };
   } catch (error) {
-    console.warn("[travelAssistant/backgroundRunStateStore] Failed to read background lock from KV:", error);
+    logger.warn("Failed to read background lock from KV.", {
+      scope: "travelAssistant/backgroundRunStateStore",
+      error,
+    });
     return null;
   }
 }

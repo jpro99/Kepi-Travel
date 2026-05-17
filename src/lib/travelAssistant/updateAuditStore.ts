@@ -7,6 +7,7 @@ import type {
   TravelUpdateEvent,
 } from "@/lib/travelAssistant/travelUpdateTypes";
 import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
+import { logger } from "@/lib/logger";
 
 interface StoredUpdateRecord {
   idempotencyKey: string;
@@ -74,7 +75,10 @@ async function loadStore(auditKey: string): Promise<UpdateAuditStoreData> {
       auditTrail: normalizedAuditTrail,
     };
   } catch (error) {
-    console.warn("[travelAssistant/updateAuditStore] Failed to read audit store from KV:", error);
+    logger.warn("Failed to read audit store from KV.", {
+      scope: "travelAssistant/updateAuditStore",
+      error,
+    });
     return createEmptyStore();
   }
 }
