@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isAutomatedTestRuntime } from "@/lib/auth/mockClerkAuth";
+import { enforceRateLimit } from "@/lib/rateLimit";
 import { logger } from "@/lib/logger";
 import { buildTravelOpsSnapshot } from "@/lib/travelAssistant/opsSnapshot";
 
@@ -35,6 +36,19 @@ export async function GET(req: Request) {
   if (!userId) {
     routeLogger.warn("Unauthorized ops snapshot request.");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const rateLimit = await enforceRateLimit({
+    policyName: "travel-updates-general",
+    identifier: userId,
+    route: "/api/travel-updates/ops",
+    requestId,
+  });
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please retry shortly." },
+      { status: 429, headers: rateLimit.headers },
+    );
   }
 
   const url = new URL(req.url);

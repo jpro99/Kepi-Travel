@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isAutomatedTestRuntime } from "@/lib/auth/mockClerkAuth";
 import { logger } from "@/lib/logger";
+import { enforceRateLimit } from "@/lib/rateLimit";
 import { subscribeUser } from "@/lib/travelAssistant/pushNotificationService";
 
 const PushSubscriptionSchema = z.object({
@@ -62,6 +63,19 @@ export async function POST(req: Request) {
   if (!userId) {
     routeLogger.warn("Unauthorized push subscribe request.");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const rateLimit = await enforceRateLimit({
+    policyName: "push-subscribe",
+    identifier: userId,
+    route: "/api/push/subscribe",
+    requestId,
+  });
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please retry shortly." },
+      { status: 429, headers: rateLimit.headers },
+    );
   }
 
   let payload: unknown = {};

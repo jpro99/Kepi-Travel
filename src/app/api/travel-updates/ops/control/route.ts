@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isAutomatedTestRuntime } from "@/lib/auth/mockClerkAuth";
+import { enforceRateLimit } from "@/lib/rateLimit";
 import { logger } from "@/lib/logger";
 import {
   BackgroundRunTimeoutError,
@@ -87,6 +88,19 @@ export async function POST(req: Request) {
   if (!userId) {
     routeLogger.warn("Unauthorized ops control request.");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const rateLimit = await enforceRateLimit({
+    policyName: "travel-updates-general",
+    identifier: userId,
+    route: "/api/travel-updates/ops/control",
+    requestId,
+  });
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please retry shortly." },
+      { status: 429, headers: rateLimit.headers },
+    );
   }
 
   if (!isAuthorized(req)) {

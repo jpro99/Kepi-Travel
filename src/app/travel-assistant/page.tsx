@@ -2493,33 +2493,36 @@ export default function TravelAssistantPage() {
     });
   };
 
-  const openDrawer = (kind: "reservation" | "review", id: string): void => {
-    if (kind === "reservation") {
-      const reservation = reservations.find((item) => item.id === id);
-      if (reservation) {
-        setDrawerDraft({
-          type: reservation.type,
-          title: reservation.title,
-          provider: reservation.provider,
-          localTime: reservation.localTime,
-          timezone: reservation.timezone,
-          location: reservation.location,
-          confirmationCode: reservation.confirmationCode,
-          assignedTo: reservation.assignedTo,
-          stage: reservation.stage,
-          critical: reservation.critical,
-          confidence: reservation.confidence,
-          notes: reservation.notes,
-        });
+  const openDrawer = useCallback(
+    (kind: "reservation" | "review", id: string): void => {
+      if (kind === "reservation") {
+        const reservation = reservations.find((item) => item.id === id);
+        if (reservation) {
+          setDrawerDraft({
+            type: reservation.type,
+            title: reservation.title,
+            provider: reservation.provider,
+            localTime: reservation.localTime,
+            timezone: reservation.timezone,
+            location: reservation.location,
+            confirmationCode: reservation.confirmationCode,
+            assignedTo: reservation.assignedTo,
+            stage: reservation.stage,
+            critical: reservation.critical,
+            confidence: reservation.confidence,
+            notes: reservation.notes,
+          });
+        }
+      } else {
+        const reviewItem = reviewQueue.find((item) => item.id === id);
+        if (reviewItem) {
+          setDrawerDraft(reviewItem.draft);
+        }
       }
-    } else {
-      const reviewItem = reviewQueue.find((item) => item.id === id);
-      if (reviewItem) {
-        setDrawerDraft(reviewItem.draft);
-      }
-    }
-    setActiveDrawer({ kind, id });
-  };
+      setActiveDrawer({ kind, id });
+    },
+    [reservations, reviewQueue],
+  );
 
   const closeDrawer = useCallback((): void => {
     setActiveDrawer(null);

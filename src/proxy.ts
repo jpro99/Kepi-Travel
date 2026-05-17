@@ -12,13 +12,13 @@ export default clerkMiddleware(async (auth, req) => {
     await auth.protect();
   }
 
-  const res = NextResponse.next();
-  res.headers.set(
+  const response = NextResponse.next();
+  response.headers.set(
     "Cache-Control",
     "private, no-cache, no-store, max-age=0, must-revalidate",
   );
-  res.headers.set("Pragma", "no-cache");
-  return res;
+  response.headers.set("Pragma", "no-cache");
+  return response;
 });
 
 export const config = {

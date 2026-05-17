@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isAutomatedTestRuntime } from "@/lib/auth/mockClerkAuth";
+import { enforceRateLimit } from "@/lib/rateLimit";
 import { logger } from "@/lib/logger";
 import { importGmailParsedReservations } from "@/lib/travelAssistant/gmailImportProvider";
 
@@ -35,6 +36,32 @@ export async function POST(req: Request) {
   if (!userId) {
     routeLogger.warn("Unauthorized Gmail import request.");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const baseRateLimit = await enforceRateLimit({
+    policyName: "travel-updates-general",
+    identifier: userId,
+    route: "/api/travel-updates/gmail-import",
+    requestId,
+  });
+  if (!baseRateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please retry shortly." },
+      { status: 429, headers: baseRateLimit.headers },
+    );
+  }
+
+  const gmailRateLimit = await enforceRateLimit({
+    policyName: "travel-updates-gmail-import",
+    identifier: userId,
+    route: "/api/travel-updates/gmail-import",
+    requestId,
+  });
+  if (!gmailRateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many Gmail import requests. Please retry shortly." },
+      { status: 429, headers: gmailRateLimit.headers },
+    );
   }
 
   let payload: unknown = {};
