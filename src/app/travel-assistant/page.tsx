@@ -40,6 +40,14 @@ import type {
   TravelUpdateMode,
   TravelUpdateSeverity,
 } from "@/lib/travelAssistant/travelUpdateTypes";
+import { ConnectivityPanel } from "@/components/travelAssistant/ConnectivityPanel";
+import { DisruptionRecovery } from "@/components/travelAssistant/DisruptionRecovery";
+import { FamilyPanel } from "@/components/travelAssistant/FamilyPanel";
+import { OpsPanel } from "@/components/travelAssistant/OpsPanel";
+import { QuickAddLane } from "@/components/travelAssistant/QuickAddLane";
+import { ReservationList } from "@/components/travelAssistant/ReservationList";
+import { ReviewQueue } from "@/components/travelAssistant/ReviewQueue";
+import { TripOrientationCard } from "@/components/travelAssistant/TripOrientationCard";
 import { JourneyFlowPanel } from "./components/JourneyFlowPanel";
 import { TravelAssistantTopControls } from "./components/TravelAssistantTopControls";
 
@@ -2767,6 +2775,9 @@ export default function TravelAssistantPage() {
           minutesToDeparture={minutesToDeparture}
           onMinutesToDepartureChange={setMinutesToDeparture}
           onEvaluateStatus={evaluateStatus}
+        />
+        <QuickAddLane
+          onEvaluateStatus={evaluateStatus}
           onRunSmartEscalation={runSmartEscalation}
           onTriggerReminderDispatch={triggerReminderDispatch}
           onFlushPendingSync={flushPendingSync}
@@ -2786,13 +2797,19 @@ export default function TravelAssistantPage() {
           onVoiceQuickCapture={handleVoiceQuickCapture}
           onQuickAdd={handleQuickAdd}
           undoStackLength={undoStack.length}
-          nextBestFlowAction={nextBestFlowAction}
+        />
+        <TripOrientationCard
+          tripStage={tripStage}
           nextStage={nextStage}
+          stageLabelByTripStage={STAGE_LABEL}
+          nextBestFlowAction={nextBestFlowAction}
           nextStageAction={nextStageAction}
+          onAdvanceTripStage={advanceTripStage}
           lastDemoPresetAppliedAt={lastDemoPresetAppliedAt}
           lastDemoPresetId={lastDemoPresetId}
           demoPresets={DEMO_PRESETS}
           onApplyDemoPreset={applyDemoPreset}
+          formatClock={formatClock}
           isCompactViewport={isCompactViewport}
           mobileSimpleView={mobileSimpleView}
           mobileViewPanel={mobileViewPanel}
@@ -2911,346 +2928,74 @@ export default function TravelAssistantPage() {
             </div>
           </article>
 
-          <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
-            <h2 className="text-lg font-semibold">Sync & connectivity policy</h2>
-            <p className="text-xs text-slate-400">
-              Set Wi-Fi-only itinerary updates while optionally keeping location updates on cellular.
-            </p>
-            <div className="mt-3 space-y-3 text-sm">
-              <label className="block">
-                <span className="mb-1 block text-slate-300">Current network</span>
-                <select
-                  value={networkMode}
-                  onChange={(event) => handleNetworkModeChange(event.target.value as NetworkMode)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"
-                >
-                  <option value="wifi">Wi-Fi</option>
-                  <option value="cellular">Cellular</option>
-                  <option value="offline">Offline</option>
-                </select>
-              </label>
-              <label className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-900 px-3 py-2">
-                <span>Update itinerary only on Wi-Fi</span>
-                <input
-                  type="checkbox"
-                  checked={wifiOnlySync}
-                  onChange={(event) => handleWifiOnlySyncToggle(event.target.checked)}
-                />
-              </label>
-              <label className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-900 px-3 py-2">
-                <span>Allow location updates on cellular</span>
-                <input
-                  type="checkbox"
-                  checked={allowCellularLocationUpdates}
-                  onChange={(event) => setAllowCellularLocationUpdates(event.target.checked)}
-                />
-              </label>
-              <div className="rounded-lg border border-slate-700 bg-slate-950/70 p-3">
-                <p className="text-xs text-slate-300">{locationStatusMessage}</p>
-                <p className="mt-1 text-xs text-slate-400">Last sync: {formatClock(lastSyncAt)}</p>
-                <p className="text-xs text-slate-400">Pending updates: {pendingSyncCount}</p>
-                <p className="text-xs text-slate-400">Queued actions outbox: {pendingOutboxCount}</p>
-                <p className="text-xs text-slate-400">Last outbox replay: {formatClock(lastOutboxReplayAt)}</p>
-                <p className="text-xs text-slate-400">Provider mode: {updateMode}</p>
-                <p className="text-xs text-slate-400">Last provider check: {formatClock(lastProviderCheckAt)}</p>
-                <p className="text-xs text-slate-400">Provider attempts (last check): {lastProviderAttempts}</p>
-                <p className="text-xs text-slate-400">
-                  Circuit status: {providerCircuitOpen ? "Open (cooldown active)" : "Closed"}
-                </p>
-                <p className="text-xs text-slate-400">Queued provider updates: {queuedProviderUpdates.length}</p>
-                {lastProviderError ? (
-                  <p className="text-xs text-red-200">Provider error: {lastProviderError}</p>
-                ) : null}
-                {lastAuditSummary ? (
-                  <p className="text-xs text-slate-400">
-                    Audit: {lastAuditSummary.newUpdates} new / {lastAuditSummary.duplicateUpdates} duplicate • known
-                    events {lastAuditSummary.totalKnownEvents}
-                  </p>
-                ) : null}
-                {lastConflictSummary ? (
-                  <p className="text-xs text-slate-400">
-                    Conflict resolution: {lastConflictSummary.acceptedUpdates} accepted /{" "}
-                    {lastConflictSummary.suppressedUpdates} suppressed
-                  </p>
-                ) : null}
-                {providerReports.length > 0 ? (
-                  <ul className="mt-2 space-y-1 text-[11px] text-slate-300">
-                    {providerReports.map((report) => (
-                      <li key={report.provider} className="rounded border border-slate-700 px-2 py-1">
-                        <span className="font-medium">{report.provider}</span>: {report.updateCount} updates •{" "}
-                        {report.attempts} attempts {report.circuitOpen ? "• circuit open" : ""}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
-              <label className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-900 px-3 py-2">
-                <span>Auto transport updates</span>
-                <input
-                  type="checkbox"
-                  checked={autoTransportUpdates}
-                  onChange={(event) => setAutoTransportUpdates(event.target.checked)}
-                />
-              </label>
-              <button
-                type="button"
-                onClick={() => {
-                  void runProviderCheck("manual");
-                }}
-                disabled={isProviderCheckRunning}
-                className="w-full rounded-lg bg-cyan-500/90 px-3 py-2 font-semibold text-slate-900 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isProviderCheckRunning ? "Checking providers..." : "Check live delays now"}
-              </button>
-              <button
-                type="button"
-                onClick={flushPendingSync}
-                className="w-full rounded-lg bg-indigo-500/90 px-3 py-2 font-semibold hover:bg-indigo-400"
-              >
-                Sync now once
-              </button>
-              <div className="rounded-lg border border-slate-700 bg-slate-950/70 p-3">
-                <p className="text-xs font-semibold text-slate-200">Recent live updates</p>
-                <ul className="mt-2 max-h-24 space-y-1 overflow-auto text-xs text-slate-300">
-                  {updateFeed.length > 0 ? (
-                    updateFeed.slice(0, 4).map((feed) => (
-                      <li key={feed.id} className="rounded border border-slate-700 px-2 py-1">
-                        <p className="font-medium">{feed.summary}</p>
-                        <p className="text-[11px] text-slate-400">{formatClock(feed.appliedAt)}</p>
-                      </li>
-                    ))
-                  ) : (
-                    <li className="text-slate-400">No provider updates applied yet.</li>
-                  )}
-                </ul>
-              </div>
-              {showOpsSection ? (
-                <div className="rounded-lg border border-slate-700 bg-slate-950/70 p-3">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setOpsExpanded((previous) => {
-                        const nextValue = !previous;
-                        if (nextValue && !opsSnapshot) {
-                          void fetchOpsSnapshot("auto");
-                        }
-                        return nextValue;
-                      })
+          <ConnectivityPanel
+            networkMode={networkMode}
+            onNetworkModeChange={handleNetworkModeChange}
+            wifiOnlySync={wifiOnlySync}
+            onWifiOnlySyncToggle={handleWifiOnlySyncToggle}
+            allowCellularLocationUpdates={allowCellularLocationUpdates}
+            onAllowCellularLocationUpdatesChange={setAllowCellularLocationUpdates}
+            locationStatusMessage={locationStatusMessage}
+            lastSyncAt={lastSyncAt}
+            pendingSyncCount={pendingSyncCount}
+            pendingOutboxCount={pendingOutboxCount}
+            lastOutboxReplayAt={lastOutboxReplayAt}
+            updateMode={updateMode}
+            lastProviderCheckAt={lastProviderCheckAt}
+            lastProviderAttempts={lastProviderAttempts}
+            providerCircuitOpen={providerCircuitOpen}
+            queuedProviderUpdatesLength={queuedProviderUpdates.length}
+            lastProviderError={lastProviderError}
+            lastAuditSummary={lastAuditSummary}
+            lastConflictSummary={lastConflictSummary}
+            providerReports={providerReports}
+            autoTransportUpdates={autoTransportUpdates}
+            onAutoTransportUpdatesChange={setAutoTransportUpdates}
+            onRunProviderCheck={() => {
+              void runProviderCheck("manual");
+            }}
+            isProviderCheckRunning={isProviderCheckRunning}
+            onFlushPendingSync={flushPendingSync}
+            updateFeed={updateFeed}
+            formatClock={formatClock}
+            opsPanel={
+              <OpsPanel
+                showOpsSection={showOpsSection}
+                opsExpanded={opsExpanded}
+                onToggleExpanded={() =>
+                  setOpsExpanded((previous) => {
+                    const nextValue = !previous;
+                    if (nextValue && !opsSnapshot) {
+                      void fetchOpsSnapshot("auto");
                     }
-                    className="flex w-full items-center justify-between text-left text-xs font-semibold text-slate-100"
-                  >
-                    <span>Ops observability panel</span>
-                    <span className="text-slate-400">{opsExpanded ? "Hide" : "Show"}</span>
-                  </button>
-                  {opsExpanded ? (
-                    <div className="mt-3 space-y-2 text-xs">
-                    <div className="flex items-center justify-between gap-2">
-                      <span
-                        className={`rounded-full px-2 py-1 ring-1 ${
-                          opsSnapshot
-                            ? STATUS_BADGE[opsSnapshot.health]
-                            : "bg-slate-800 text-slate-200 ring-slate-700"
-                        }`}
-                      >
-                        {opsSnapshot ? `Health ${opsSnapshot.health.toUpperCase()}` : "Health unknown"}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void fetchOpsSnapshot("manual");
-                        }}
-                        className="rounded border border-slate-600 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-800"
-                        disabled={opsLoading}
-                      >
-                        {opsLoading ? "Refreshing..." : "Refresh ops"}
-                      </button>
-                    </div>
-                    <div className="grid gap-2 sm:grid-cols-4">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void runOpsControlAction("run-background-once");
-                        }}
-                        disabled={opsActionPending !== null}
-                        className="rounded border border-cyan-500/40 bg-cyan-500/10 px-2 py-1 text-[11px] text-cyan-100 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {opsActionPending === "run-background-once" ? "Running background..." : "Run background now"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void runOpsControlAction("run-background-once", { dryRun: true });
-                        }}
-                        disabled={opsActionPending !== null}
-                        className="rounded border border-indigo-500/40 bg-indigo-500/10 px-2 py-1 text-[11px] text-indigo-100 hover:bg-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {opsActionPending === "run-background-dry" ? "Dry-run in progress..." : "Dry-run background"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void runOpsControlAction("reset-circuits");
-                        }}
-                        disabled={opsActionPending !== null}
-                        className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-100 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {opsActionPending === "reset-circuits" ? "Resetting..." : "Reset provider circuits"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void runOpsControlAction("trigger-alert-sweep");
-                        }}
-                        disabled={opsActionPending !== null}
-                        className="rounded border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-[11px] text-rose-100 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {opsActionPending === "trigger-alert-sweep" ? "Sweeping alerts..." : "Trigger alert sweep"}
-                      </button>
-                    </div>
-                    {opsError ? <p className="text-red-200">Ops read error: {opsError}</p> : null}
-                    {opsSnapshot ? (
-                      <>
-                        <p className="text-slate-300">
-                          Snapshot {formatClock(opsSnapshot.generatedAt)} • runtime updated{" "}
-                          {formatClock(opsSnapshot.runtime.updatedAt)}
-                        </p>
-                        <p className="text-slate-300">
-                          Runtime reservations {opsSnapshot.runtime.reservationCount} • stale{" "}
-                          {opsSnapshot.runtime.staleMinutes} minutes
-                        </p>
-                        {opsSnapshot.backgroundState.activeRun ? (
-                          <p className="text-amber-200">
-                            Active background run: {formatClock(opsSnapshot.backgroundState.activeRun.startedAt)} •
-                            timeout {Math.round(opsSnapshot.backgroundState.activeRun.timeoutMs / 1000)}s
-                          </p>
-                        ) : null}
-                        {opsSnapshot.backgroundState.lastRun ? (
-                          <p className="text-slate-300">
-                            Last managed background status: {opsSnapshot.backgroundState.lastRun.status} • duration{" "}
-                            {Math.round(opsSnapshot.backgroundState.lastRun.durationMs / 1000)}s
-                            {opsSnapshot.backgroundState.lastRun.error
-                              ? ` • ${opsSnapshot.backgroundState.lastRun.error}`
-                              : ""}
-                          </p>
-                        ) : null}
-                        <p className="text-slate-300">
-                          Worker health: {opsSnapshot.worker.health} • consecutive failures{" "}
-                          {opsSnapshot.worker.consecutiveFailures}
-                          {opsSnapshot.worker.minutesSinceLastSuccess !== null
-                            ? ` • last success ${opsSnapshot.worker.minutesSinceLastSuccess}m ago`
-                            : " • no successful heartbeat yet"}
-                        </p>
-                        <p className="text-slate-300">
-                          Expected next run by: {formatClock(opsSnapshot.worker.expectedNextRunBy)} • cadence{" "}
-                          {opsSnapshot.worker.scheduleIntervalMinutes}m ± {opsSnapshot.worker.scheduleJitterMinutes}m
-                          {opsSnapshot.worker.missedSchedule ? " • schedule missed" : ""}
-                        </p>
-                        <ul className="space-y-1 text-[11px] text-slate-300">
-                          {opsSnapshot.worker.reasons.map((reason) => (
-                            <li key={`worker-${reason}`} className="rounded border border-slate-700 px-2 py-1">
-                              {reason}
-                            </li>
-                          ))}
-                        </ul>
-                        {opsSnapshot.latestBackgroundRun ? (
-                          <p className="text-slate-300">
-                            Latest background run: {formatClock(opsSnapshot.latestBackgroundRun.checkedAt)} • new{" "}
-                            {opsSnapshot.latestBackgroundRun.newUpdates} / dup{" "}
-                            {opsSnapshot.latestBackgroundRun.duplicateUpdates}
-                            {opsSnapshot.latestBackgroundRun.providerError
-                              ? ` • error ${opsSnapshot.latestBackgroundRun.providerError}`
-                              : ""}
-                          </p>
-                        ) : (
-                          <p className="text-amber-200">
-                            No background run recorded yet. Trigger /api/travel-updates/background to verify worker path.
-                          </p>
-                        )}
-                        <p className="text-slate-300">
-                          Provider degradations: {opsSnapshot.provider.recentErrorCount} errors /{" "}
-                          {opsSnapshot.provider.circuitOpenCount} circuit-open runs
-                        </p>
-                        <ul className="space-y-1 text-[11px] text-slate-300">
-                          {opsSnapshot.reasons.map((reason) => (
-                            <li key={reason} className="rounded border border-slate-700 px-2 py-1">
-                              {reason}
-                            </li>
-                          ))}
-                        </ul>
-                        <div className="rounded border border-rose-500/30 bg-rose-500/10 px-2 py-1.5 text-[11px] text-rose-100">
-                          <p className="font-semibold">Green status governance</p>
-                          {statusGovernance.blockers.length > 0 ? (
-                            <ul className="mt-1 space-y-1">
-                              {statusGovernance.blockers.map((blocker) => (
-                                <li key={`ops-${blocker.code}-${blocker.reason}`}>
-                                  {blocker.reason} &rarr; {blocker.remediation}
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="mt-1 text-emerald-200">No local blockers. Green can be granted.</p>
-                          )}
-                        </div>
-                        <div className="rounded border border-indigo-500/30 bg-indigo-500/10 px-2 py-1.5 text-[11px] text-indigo-100">
-                          <p className="font-semibold">Recent ops actions</p>
-                          {opsSnapshot.opsActions.recentActions.length > 0 ? (
-                            <ul className="mt-1 space-y-1">
-                              {opsSnapshot.opsActions.recentActions.slice(0, 5).map((entry) => (
-                                <li key={entry.id}>
-                                  {entry.action} • {entry.result} • {entry.actor}
-                                  {entry.replayed ? " • replayed" : ""} • {formatClock(entry.completedAt)}
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="mt-1 text-indigo-100/80">No ops actions recorded yet.</p>
-                          )}
-                        </div>
-                        <div className="rounded border border-fuchsia-500/30 bg-fuchsia-500/10 px-2 py-1.5 text-[11px] text-fuchsia-100">
-                          <p className="font-semibold">Recent alert sweeps</p>
-                          {opsSnapshot.alertAudit.recentSweeps.length > 0 ? (
-                            <ul className="mt-1 space-y-1">
-                              {opsSnapshot.alertAudit.recentSweeps.slice(0, 5).map((sweep) => (
-                                <li key={sweep.id}>
-                                  {formatClock(sweep.evaluatedAt)} • {sweep.trigger} • alerts {sweep.totalAlerts} • sent{" "}
-                                  {sweep.sentAlerts} • suppressed {sweep.suppressedAlerts}
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="mt-1 text-fuchsia-100/80">No alert sweeps recorded yet.</p>
-                          )}
-                        </div>
-                        <ul className="max-h-24 space-y-1 overflow-auto text-[11px] text-slate-300">
-                          {opsSnapshot.audit.recentAuditTrail.slice(0, 5).map((entry) => (
-                            <li key={entry.requestId} className="rounded border border-slate-700 px-2 py-1">
-                              <p className="font-medium">
-                                {formatClock(entry.checkedAt)} • {entry.mode}
-                              </p>
-                              <p className="text-slate-400">
-                                new {entry.newUpdates} / dup {entry.duplicateUpdates} / suppressed{" "}
-                                {entry.conflictSuppressed}
-                              </p>
-                              {entry.providerError ? (
-                                <p className="text-red-200">Error: {entry.providerError}</p>
-                              ) : null}
-                            </li>
-                          ))}
-                        </ul>
-                      </>
-                    ) : (
-                      <p className="text-slate-400">Loading ops status...</p>
-                    )}
-                    </div>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="rounded-lg border border-slate-700 bg-slate-950/50 p-3 text-xs text-slate-400">
-                  Ops panel hidden in focus mode for this stage.
-                </div>
-              )}
-            </div>
-          </article>
+                    return nextValue;
+                  })
+                }
+                opsSnapshot={opsSnapshot}
+                opsLoading={opsLoading}
+                opsError={opsError}
+                statusBadgeByTripStatus={STATUS_BADGE}
+                opsActionPending={opsActionPending}
+                onRefreshOps={() => {
+                  void fetchOpsSnapshot("manual");
+                }}
+                onRunBackgroundOnce={() => {
+                  void runOpsControlAction("run-background-once");
+                }}
+                onRunBackgroundDry={() => {
+                  void runOpsControlAction("run-background-once", { dryRun: true });
+                }}
+                onResetCircuits={() => {
+                  void runOpsControlAction("reset-circuits");
+                }}
+                onTriggerAlertSweep={() => {
+                  void runOpsControlAction("trigger-alert-sweep");
+                }}
+                formatClock={formatClock}
+                statusGovernanceBlockers={statusGovernance.blockers}
+              />
+            }
+          />
           </section>
         ) : null}
 
@@ -3403,106 +3148,26 @@ export default function TravelAssistantPage() {
 
         {shouldRenderMobilePanel("timeline") ? (
           <section className="grid gap-4 sm:gap-6 xl:grid-cols-[1.2fr_1fr]">
-          <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h2 className="text-lg font-semibold">Reservation cards</h2>
-                <p className="text-xs text-slate-400">
-                  Structured reservations with detail drawers, assignment controls, and operational quick actions.
-                </p>
-              </div>
-              <label className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs">
-                <input
-                  type="checkbox"
-                  checked={personalTimelineOnly}
-                  onChange={(event) => setPersonalTimelineOnly(event.target.checked)}
-                />
-                Personal schedule only ({selectedFamilyMember.name})
-              </label>
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {visibleReservations.map((reservation) => (
-                <div key={reservation.id} className="rounded-xl border border-slate-700 bg-slate-950/70 p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-slate-400">
-                        {RESERVATION_TYPE_LABEL[reservation.type]} • {reservation.provider}
-                      </p>
-                      <p className="text-sm font-semibold">{reservation.title}</p>
-                    </div>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                        reservation.confidence === "high"
-                          ? "bg-emerald-500/20 text-emerald-200"
-                          : reservation.confidence === "medium"
-                            ? "bg-amber-500/20 text-amber-200"
-                            : "bg-red-500/20 text-red-200"
-                      }`}
-                    >
-                      {reservation.confidence}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-300">
-                    {reservation.localTime} ({reservation.timezone})
-                  </p>
-                  <p className="text-xs text-slate-400">{reservation.location}</p>
-                  <p className="mt-1 text-xs text-slate-400">
-                    Assigned:{" "}
-                    {reservation.assignedTo
-                      .map((memberId) => familyMembers.find((member) => member.id === memberId)?.name ?? memberId)
-                      .join(", ")}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-400">
-                    Sync status:{" "}
-                    {(() => {
-                      const reservationPending = pendingOutboxByReservationId.get(reservation.id) ?? 0;
-                      if (reservationPending > 0) {
-                        return `${reservationPending} pending action${reservationPending > 1 ? "s" : ""}`;
-                      }
-                      if (reservation.critical && hasGlobalOutboxPending) {
-                        return "Partially synced (pending global actions)";
-                      }
-                      return "Synced";
-                    })()}
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => openDrawer("reservation", reservation.id)}
-                      className="rounded-md bg-slate-800 px-2 py-1 ring-1 ring-slate-700 hover:bg-slate-700"
-                    >
-                      Details
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        copyScript(
-                          `Call ${reservation.provider} and confirm ${reservation.title}. Confirmation code: ${reservation.confirmationCode}.`,
-                        )
-                      }
-                      className="rounded-md bg-slate-800 px-2 py-1 ring-1 ring-slate-700 hover:bg-slate-700"
-                    >
-                      Copy call script
-                    </button>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          await navigator.clipboard.writeText(reservation.confirmationCode);
-                          setToast("Confirmation code copied.");
-                        } catch {
-                          setToast("Clipboard unavailable.");
-                        }
-                      }}
-                      className="rounded-md bg-slate-800 px-2 py-1 ring-1 ring-slate-700 hover:bg-slate-700"
-                    >
-                      Copy code
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </article>
+          <ReservationList
+            visibleReservations={visibleReservations}
+            personalTimelineOnly={personalTimelineOnly}
+            onPersonalTimelineOnlyChange={setPersonalTimelineOnly}
+            selectedFamilyMemberName={selectedFamilyMember.name}
+            familyMembers={familyMembers}
+            reservationTypeLabelByType={RESERVATION_TYPE_LABEL}
+            pendingOutboxByReservationId={pendingOutboxByReservationId}
+            hasGlobalOutboxPending={hasGlobalOutboxPending}
+            onOpenReservationDrawer={(reservationId) => openDrawer("reservation", reservationId)}
+            onCopyCallScript={copyScript}
+            onCopyConfirmationCode={async (code) => {
+              try {
+                await navigator.clipboard.writeText(code);
+                setToast("Confirmation code copied.");
+              } catch {
+                setToast("Clipboard unavailable.");
+              }
+            }}
+          />
 
           <article className="space-y-6">
             <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
@@ -3574,84 +3239,19 @@ export default function TravelAssistantPage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
-              <h2 className="text-lg font-semibold">Intake review queue</h2>
-              <p className="text-xs text-slate-400">
-                Handle uncertain imports before they affect the active itinerary.
-              </p>
-              <div className="mt-3 space-y-3">
-                {reviewQueue.map((item) => (
-                  <div key={item.id} className="rounded-xl border border-slate-700 bg-slate-950/60 p-3">
-                    <p className="text-sm font-semibold">{item.draft.title}</p>
-                    <p className="text-xs text-slate-400">Source: {item.sourceEmailSubject}</p>
-                    <p className="mt-1 text-xs text-red-200">Impact: {item.impact}</p>
-                    <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-amber-200">
-                      {item.reasons.map((reason) => (
-                        <li key={reason}>{reason}</li>
-                      ))}
-                    </ul>
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => handleAcceptReview(item.id)}
-                        className="rounded-md bg-emerald-500/90 px-2 py-1 font-semibold text-slate-950 hover:bg-emerald-400"
-                      >
-                        Accept
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openDrawer("review", item.id)}
-                        className="rounded-md bg-slate-800 px-2 py-1 ring-1 ring-slate-700 hover:bg-slate-700"
-                      >
-                        Edit + accept
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRejectReview(item.id)}
-                        className="rounded-md bg-slate-800 px-2 py-1 ring-1 ring-slate-700 hover:bg-slate-700"
-                      >
-                        Reject
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleReparseReview(item.id)}
-                        className="rounded-md bg-slate-800 px-2 py-1 ring-1 ring-slate-700 hover:bg-slate-700"
-                      >
-                        Re-parse
-                      </button>
-                    </div>
-                    <div className="mt-2 flex gap-2 text-xs">
-                      <select
-                        value={mergeTargetByReview[item.id] ?? ""}
-                        onChange={(event) =>
-                          setMergeTargetByReview((prev) => ({ ...prev, [item.id]: event.target.value }))
-                        }
-                        className="flex-1 rounded-md border border-slate-700 bg-slate-900 px-2 py-1"
-                      >
-                        <option value="">Select merge target</option>
-                        {reservations.map((reservation) => (
-                          <option key={reservation.id} value={reservation.id}>
-                            {reservation.title}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => handleMergeReview(item.id)}
-                        className="rounded-md bg-indigo-500/90 px-2 py-1 font-semibold hover:bg-indigo-400"
-                      >
-                        Merge duplicate
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {reviewQueue.length === 0 ? (
-                  <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">
-                    Review queue clear. No unresolved import ambiguity.
-                  </p>
-                ) : null}
-              </div>
-            </div>
+            <ReviewQueue
+              reviewQueue={reviewQueue}
+              reservations={reservations.map((reservation) => ({ id: reservation.id, title: reservation.title }))}
+              mergeTargetByReview={mergeTargetByReview}
+              onMergeTargetChange={(reviewId, targetReservationId) =>
+                setMergeTargetByReview((prev) => ({ ...prev, [reviewId]: targetReservationId }))
+              }
+              onAcceptReview={handleAcceptReview}
+              onOpenReviewDrawer={(reviewId) => openDrawer("review", reviewId)}
+              onRejectReview={handleRejectReview}
+              onReparseReview={handleReparseReview}
+              onMergeReview={handleMergeReview}
+            />
           </article>
           </section>
         ) : null}
@@ -3724,116 +3324,21 @@ export default function TravelAssistantPage() {
             </p>
           </article>
 
-          <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h2 className="text-lg font-semibold">Family sharing and optional location map</h2>
-                <p className="text-xs text-slate-400">
-                  Consent-based location sharing with identity context and per-person timeline controls.
-                </p>
-              </div>
-              <label className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs">
-                <input
-                  type="checkbox"
-                  checked={showFamilyMap}
-                  onChange={(event) => setShowFamilyMap(event.target.checked)}
-                />
-                Show family map
-              </label>
-            </div>
-
-            <label className="mt-3 block text-sm">
-              <span className="mb-1 block text-slate-300">Who am I right now?</span>
-              <select
-                value={selectedFamilyMember.id}
-                onChange={(event) => setSelectedFamilyMemberId(event.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"
-              >
-                {familyMembers.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.name} ({member.role})
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <div className="mt-3 grid gap-2">
-              {familyMembers.map((member) => {
-                const isVisibleToViewer = canViewerSeeMember(selectedFamilyMember, member);
-                const updatedMs = Date.parse(member.location.updatedAt);
-                const stale = nowMs - updatedMs > 5 * 60_000 || !canSendLocationNow;
-                return (
-                  <div key={member.id} className="rounded-lg border border-slate-700 bg-slate-950/60 p-3 text-sm">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="inline-block h-2.5 w-2.5 rounded-full"
-                          style={{ backgroundColor: member.color }}
-                        />
-                        <span className="font-medium">{member.name}</span>
-                        <span className="text-xs text-slate-400">({member.role})</span>
-                      </div>
-                      <span className="text-xs text-slate-400">
-                        {isVisibleToViewer ? (stale ? "Stale" : "Live") : "Hidden"}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-slate-400">Last update: {formatClock(member.location.updatedAt)}</p>
-                    <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => toggleMemberSharing(member.id)}
-                        className="rounded-md bg-slate-800 px-2 py-1 ring-1 ring-slate-700 hover:bg-slate-700"
-                      >
-                        Sharing: {member.sharingEnabled ? "On" : "Off"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => toggleMemberVisibility(member.id)}
-                        className="rounded-md bg-slate-800 px-2 py-1 ring-1 ring-slate-700 hover:bg-slate-700"
-                      >
-                        Visible to: {member.visibility === "all-members" ? "All" : "Organizer only"}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {showFamilyMap ? (
-              <div className="relative mt-4 h-64 overflow-hidden rounded-xl border border-slate-700 bg-gradient-to-br from-slate-950 via-indigo-950/40 to-slate-950">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(56,189,248,0.08),transparent_55%)]" />
-                {visibleFamilyMarkers.map(({ member, x, y }) => {
-                  const stale = nowMs - Date.parse(member.location.updatedAt) > 5 * 60_000 || !canSendLocationNow;
-                  return (
-                    <div
-                      key={member.id}
-                      className="absolute -translate-x-1/2 -translate-y-1/2 text-center"
-                      style={{ left: `${x}%`, top: `${y}%` }}
-                    >
-                      <span
-                        className={`mx-auto block h-4 w-4 rounded-full ring-2 ring-slate-900 ${
-                          stale ? "opacity-55" : ""
-                        }`}
-                        style={{ backgroundColor: member.color }}
-                      />
-                      <span className="mt-1 block rounded bg-slate-900/80 px-1.5 py-0.5 text-[11px] text-slate-100">
-                        {member.name}
-                      </span>
-                    </div>
-                  );
-                })}
-                {visibleFamilyMarkers.length === 0 ? (
-                  <p className="absolute inset-0 flex items-center justify-center text-sm text-slate-400">
-                    No visible shared locations yet.
-                  </p>
-                ) : null}
-              </div>
-            ) : (
-              <p className="mt-4 rounded-lg border border-slate-700 bg-slate-950/60 p-3 text-xs text-slate-400">
-                Family map is optional and currently hidden.
-              </p>
-            )}
-          </article>
+          <FamilyPanel
+            showFamilyMap={showFamilyMap}
+            onShowFamilyMapChange={setShowFamilyMap}
+            selectedFamilyMemberId={selectedFamilyMember.id}
+            onSelectedFamilyMemberIdChange={setSelectedFamilyMemberId}
+            selectedFamilyMember={selectedFamilyMember}
+            familyMembers={familyMembers}
+            canViewerSeeMember={canViewerSeeMember}
+            nowMs={nowMs}
+            canSendLocationNow={canSendLocationNow}
+            onToggleMemberSharing={toggleMemberSharing}
+            onToggleMemberVisibility={toggleMemberVisibility}
+            visibleFamilyMarkers={visibleFamilyMarkers}
+            formatClock={formatClock}
+          />
           </section>
         ) : (
           <section className="rounded-2xl border border-slate-700 bg-slate-900/50 p-4 text-xs text-slate-400">
@@ -3841,126 +3346,17 @@ export default function TravelAssistantPage() {
           </section>
         )}
 
-        {showRecoverySection && shouldRenderMobilePanel("recovery") ? (
-          <section className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
-          <h2 className="text-lg font-semibold">Missed-flight / disruption recovery panel</h2>
-          <p className="text-xs text-slate-400">
-            Who to call, what to say, and decision path guidance by urgency level.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => simulateDisruption("missed-flight")}
-              className="rounded-lg bg-red-500/90 px-3 py-1.5 text-xs font-semibold text-slate-100 hover:bg-red-400"
-            >
-              Simulate missed flight
-            </button>
-            <button
-              type="button"
-              onClick={() => simulateDisruption("train-delay")}
-              className="rounded-lg bg-amber-500/90 px-3 py-1.5 text-xs font-semibold text-slate-900 hover:bg-amber-400"
-            >
-              Simulate train delay
-            </button>
-            <button
-              type="button"
-              onClick={() => simulateDisruption("ride-no-show")}
-              className="rounded-lg bg-red-500/70 px-3 py-1.5 text-xs font-semibold text-slate-100 hover:bg-red-400"
-            >
-              Simulate ride no-show
-            </button>
-            <button
-              type="button"
-              onClick={clearScenarioSimulation}
-              className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold ring-1 ring-slate-700 hover:bg-slate-700"
-            >
-              Clear simulation
-            </button>
-          </div>
-          <div className="mt-3 rounded-xl border border-violet-500/30 bg-violet-500/10 p-3">
-            <p className="text-sm font-semibold text-violet-100">Incident autopilot recommendations</p>
-            <p className="text-xs text-violet-100/80">
-              One-tap remediation plan based on live trip risk, queue pressure, sync state, and worker health.
-            </p>
-            {incidentAutopilotRecommendations.length > 0 ? (
-              <ul className="mt-2 space-y-2 text-xs">
-                {incidentAutopilotRecommendations.map((recommendation) => (
-                  <li
-                    key={recommendation.id}
-                    className="rounded-lg border border-violet-400/30 bg-slate-950/70 px-3 py-2 text-slate-200"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                            recommendation.priority === "critical"
-                              ? "bg-red-500/20 text-red-100"
-                              : recommendation.priority === "high"
-                                ? "bg-amber-500/20 text-amber-100"
-                                : "bg-cyan-500/20 text-cyan-100"
-                          }`}
-                        >
-                          {recommendation.priority.toUpperCase()}
-                        </span>
-                        <span className="font-semibold">{recommendation.title}</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void applyIncidentAutopilotRecommendation(recommendation);
-                        }}
-                        disabled={autopilotActionPending !== null}
-                        className="rounded-md bg-violet-500/80 px-2.5 py-1 text-[11px] font-semibold text-slate-100 hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {autopilotActionPending === recommendation.action ? "Applying..." : "Apply now"}
-                      </button>
-                    </div>
-                    <p className="mt-1 text-[11px] text-slate-300">{recommendation.rationale}</p>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-2 rounded-md border border-emerald-400/40 bg-emerald-500/10 px-2 py-1.5 text-xs text-emerald-100">
-                Autopilot sees no immediate incidents requiring intervention.
-              </p>
-            )}
-          </div>
-          <div className="mt-3 grid gap-4 lg:grid-cols-3">
-            <div className="rounded-xl border border-slate-700 bg-slate-950/70 p-3">
-              <p className="text-sm font-semibold text-slate-100">Who to call now</p>
-              <ul className="mt-2 space-y-2 text-sm text-slate-300">
-                <li>1) Airline priority desk</li>
-                <li>2) Hotel front desk (late arrival hold)</li>
-                <li>3) Transfer provider</li>
-                <li>4) Family coordinator</li>
-              </ul>
-            </div>
-            <div className="rounded-xl border border-slate-700 bg-slate-950/70 p-3">
-              <p className="text-sm font-semibold text-slate-100">What to say (script)</p>
-              <p className="mt-2 text-xs text-slate-300">{recoveryScript}</p>
-              <button
-                type="button"
-                onClick={() => copyScript(recoveryScript)}
-                className="mt-3 rounded-md bg-slate-800 px-2.5 py-1.5 text-xs ring-1 ring-slate-700 hover:bg-slate-700"
-              >
-                Copy script
-              </button>
-            </div>
-            <div className="rounded-xl border border-slate-700 bg-slate-950/70 p-3">
-              <p className={`text-sm font-semibold ${activeScenarioPlaybook.tone}`}>{activeScenarioPlaybook.title}</p>
-              <ol className="mt-2 list-decimal space-y-1 pl-4 text-xs text-slate-300">
-                {activeScenarioPlaybook.steps.map((step) => (
-                  <li key={step}>{step}</li>
-                ))}
-              </ol>
-            </div>
-          </div>
-          </section>
-        ) : (
-          <section className="rounded-2xl border border-slate-700 bg-slate-900/50 p-4 text-xs text-slate-400">
-            Recovery playbook is hidden by current focus or mobile view selection.
-          </section>
-        )}
+        <DisruptionRecovery
+          showRecoverySection={showRecoverySection && shouldRenderMobilePanel("recovery")}
+          onSimulateDisruption={simulateDisruption}
+          onClearSimulation={clearScenarioSimulation}
+          incidentAutopilotRecommendations={incidentAutopilotRecommendations}
+          autopilotActionPending={autopilotActionPending}
+          onApplyIncidentAutopilotRecommendation={applyIncidentAutopilotRecommendation}
+          recoveryScript={recoveryScript}
+          onCopyScript={copyScript}
+          activeScenarioPlaybook={activeScenarioPlaybook}
+        />
       </div>
 
       {activeDrawer ? (
