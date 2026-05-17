@@ -59,13 +59,15 @@ export function OpsPanel({
       <button
         type="button"
         onClick={onToggleExpanded}
+        aria-expanded={opsExpanded}
+        aria-controls="ops-observability-content"
         className="flex w-full items-center justify-between text-left text-xs font-semibold text-slate-100"
       >
         <span>Ops observability panel</span>
         <span className="text-slate-400">{opsExpanded ? "Hide" : "Show"}</span>
       </button>
       {opsExpanded ? (
-        <div className="mt-3 space-y-2 text-xs">
+        <div id="ops-observability-content" className="mt-3 space-y-2 text-xs">
           <div className="flex items-center justify-between gap-2">
             <span
               className={`rounded-full px-2 py-1 ring-1 ${

@@ -101,7 +101,11 @@ export function ReviewQueue({
               </button>
             </div>
             <div className="mt-2 flex gap-2 text-xs">
+              <label htmlFor={`merge-target-${item.id}`} className="sr-only">
+                Merge target reservation
+              </label>
               <select
+                id={`merge-target-${item.id}`}
                 value={mergeTargetByReview[item.id] ?? ""}
                 onChange={(event) => onMergeTargetChange(item.id, event.target.value)}
                 className="flex-1 rounded-md border border-slate-700 bg-slate-900 px-2 py-1"

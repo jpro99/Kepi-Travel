@@ -774,6 +774,9 @@ export default function TravelAssistantPage() {
   const recentAppliedUpdateKeysRef = useRef<Map<string, number>>(new Map());
   const opsFetchInFlightRef = useRef(false);
   const sessionHydratedRef = useRef(false);
+  const drawerContainerRef = useRef<HTMLDivElement | null>(null);
+  const drawerCloseButtonRef = useRef<HTMLButtonElement | null>(null);
+  const lastFocusedElementBeforeDrawerRef = useRef<HTMLElement | null>(null);
   const toastPolicyRef = useRef<{
     tone: GuidanceTone;
     lastMessage: string | null;
@@ -2327,9 +2330,71 @@ export default function TravelAssistantPage() {
     setActiveDrawer({ kind, id });
   };
 
-  const closeDrawer = (): void => {
+  const closeDrawer = useCallback((): void => {
     setActiveDrawer(null);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!activeDrawer) {
+      return;
+    }
+
+    lastFocusedElementBeforeDrawerRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    const focusableSelector =
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+    const focusFirstElement = (): void => {
+      const container = drawerContainerRef.current;
+      if (!container) return;
+      const focusable = Array.from(container.querySelectorAll<HTMLElement>(focusableSelector));
+      const target = drawerCloseButtonRef.current ?? focusable[0];
+      target?.focus();
+    };
+
+    focusFirstElement();
+
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeDrawer();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const container = drawerContainerRef.current;
+      if (!container) return;
+      const focusable = Array.from(container.querySelectorAll<HTMLElement>(focusableSelector));
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+      if (event.shiftKey) {
+        if (!activeElement || activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else if (activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      const lastFocused = lastFocusedElementBeforeDrawerRef.current;
+      if (lastFocused) {
+        lastFocused.focus();
+      }
+    };
+  }, [activeDrawer, closeDrawer]);
 
   const applyIncidentAutopilotRecommendation = async (
     recommendation: IncidentAutopilotRecommendation,
@@ -2759,27 +2824,29 @@ export default function TravelAssistantPage() {
     <main className="relative min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_10%,rgba(56,189,248,0.14),transparent_45%),radial-gradient(circle_at_85%_25%,rgba(129,140,248,0.18),transparent_42%),radial-gradient(circle_at_50%_100%,rgba(34,197,94,0.08),transparent_45%)]" />
       <div className="relative z-10 mx-auto max-w-[1400px] space-y-5 px-3 py-5 sm:space-y-6 sm:px-4 sm:py-6 md:px-6">
-        <TravelAssistantTopControls
-          tripStatus={tripStatus}
-          statusBadgeByTripStatus={STATUS_BADGE}
-          statusLabelByTripStatus={STATUS_LABEL}
-          tripStage={tripStage}
-          stageLabelByTripStage={STAGE_LABEL}
-          leaveByMinutes={leaveByMinutes}
-          reviewQueueLength={reviewQueue.length}
-          operationalConfidenceScore={operationalConfidenceScore}
-          blockingIssueCount={blockingIssueCount}
-          guidanceTone={guidanceTone}
-          suppressedNudgeCount={suppressedNudgeCount}
-          lastSessionRestoreAt={lastSessionRestoreAt}
-          formatClock={formatClock}
-          onTripStageChange={handleTripStageEditorChange}
-          onTripStatusChange={handleTripStatusEditorChange}
-          onGuidanceToneChange={setGuidanceTone}
-          minutesToDeparture={minutesToDeparture}
-          onMinutesToDepartureChange={setMinutesToDeparture}
-          onEvaluateStatus={evaluateStatus}
-        />
+        <header>
+          <TravelAssistantTopControls
+            tripStatus={tripStatus}
+            statusBadgeByTripStatus={STATUS_BADGE}
+            statusLabelByTripStatus={STATUS_LABEL}
+            tripStage={tripStage}
+            stageLabelByTripStage={STAGE_LABEL}
+            leaveByMinutes={leaveByMinutes}
+            reviewQueueLength={reviewQueue.length}
+            operationalConfidenceScore={operationalConfidenceScore}
+            blockingIssueCount={blockingIssueCount}
+            guidanceTone={guidanceTone}
+            suppressedNudgeCount={suppressedNudgeCount}
+            lastSessionRestoreAt={lastSessionRestoreAt}
+            formatClock={formatClock}
+            onTripStageChange={handleTripStageEditorChange}
+            onTripStatusChange={handleTripStatusEditorChange}
+            onGuidanceToneChange={setGuidanceTone}
+            minutesToDeparture={minutesToDeparture}
+            onMinutesToDepartureChange={setMinutesToDeparture}
+            onEvaluateStatus={evaluateStatus}
+          />
+        </header>
         <QuickAddLane
           onEvaluateStatus={evaluateStatus}
           onRunSmartEscalation={runSmartEscalation}
@@ -2850,7 +2917,7 @@ export default function TravelAssistantPage() {
             <p className="text-xs text-slate-400">
               Primary buttons and guidance shift with stage and urgency level.
             </p>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <nav className="mt-4 flex flex-wrap gap-2" aria-label="Adaptive stage actions">
               {STAGES.map((stage) => (
                 <button
                   key={stage}
@@ -2861,6 +2928,7 @@ export default function TravelAssistantPage() {
                     }
                     setTripStage(stage);
                   }}
+                  aria-current={stage === tripStage ? "true" : undefined}
                   className={`rounded-full px-3 py-1.5 text-sm ring-1 transition ${
                     stage === tripStage
                       ? "bg-cyan-500 text-slate-950 ring-cyan-300"
@@ -2870,7 +2938,7 @@ export default function TravelAssistantPage() {
                   {STAGE_LABEL[stage]}
                 </button>
               ))}
-            </div>
+            </nav>
             <ul className="mt-4 space-y-2 text-sm">
               {primaryActions.map((action) => (
                 <li key={action} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2">
@@ -3366,14 +3434,23 @@ export default function TravelAssistantPage() {
 
       {activeDrawer ? (
         <div className="fixed inset-0 z-40 flex items-end justify-end bg-slate-950/80 p-3 md:p-6">
-          <div className="h-full w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-4 md:max-h-[92vh]">
+          <div
+            ref={drawerContainerRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="travel-assistant-drawer-title"
+            tabIndex={-1}
+            className="h-full w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-4 md:max-h-[92vh]"
+          >
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">
+              <h2 id="travel-assistant-drawer-title" className="text-lg font-semibold">
                 {activeDrawer.kind === "reservation" ? "Reservation details" : "Review item details"}
-              </h3>
+              </h2>
               <button
+                ref={drawerCloseButtonRef}
                 type="button"
                 onClick={closeDrawer}
+                aria-label="Close details drawer"
                 className="rounded-md bg-slate-800 px-2 py-1 text-sm ring-1 ring-slate-700 hover:bg-slate-700"
               >
                 Close
@@ -3504,8 +3581,18 @@ export default function TravelAssistantPage() {
         </div>
       ) : null}
 
+      <footer className="relative z-10 mx-auto mt-2 max-w-[1400px] px-3 pb-6 text-xs text-slate-300 sm:px-4 md:px-6">
+        Accessibility mode enabled: keyboard navigation, live status announcements, and screen-reader labels are active.
+      </footer>
+      <div aria-live="polite" aria-atomic="true" className="sr-only">
+        {toast ?? ""}
+      </div>
+
       {toast ? (
         <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
           className={`fixed bottom-4 right-4 z-50 max-w-sm rounded-lg px-3 py-2 text-sm shadow-xl ${
             guidanceTone === "subtle"
               ? "border border-slate-600 bg-slate-900/90 text-slate-100"

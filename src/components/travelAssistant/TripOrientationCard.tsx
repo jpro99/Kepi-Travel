@@ -67,7 +67,7 @@ export function TripOrientationCard({
         <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
           <div className="rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 text-slate-200">
             <p className="text-xs uppercase tracking-wide text-slate-400">Where you are</p>
-            <p data-testid="trip-current-stage" className="mt-1 font-semibold">
+            <p data-testid="trip-current-stage" role="status" className="mt-1 font-semibold">
               {stageLabelByTripStage[tripStage]}
             </p>
             <p className="mt-1 text-xs text-slate-300">{nextBestFlowAction}</p>
@@ -116,6 +116,7 @@ export function TripOrientationCard({
             <button
               type="button"
               onClick={onToggleMobileSimpleView}
+              aria-expanded={mobileSimpleView}
               className="rounded-full bg-slate-800 px-2.5 py-1 text-[11px] font-semibold ring-1 ring-slate-700"
             >
               {mobileSimpleView ? "Show full app" : "Use simple view"}

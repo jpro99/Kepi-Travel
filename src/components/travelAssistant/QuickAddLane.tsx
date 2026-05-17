@@ -75,6 +75,7 @@ export function QuickAddLane({
         <button
           type="button"
           onClick={onFlushPendingSync}
+          aria-label="Sync queued updates now"
           className="shrink-0 rounded-full bg-slate-800 px-3 py-1.5 font-semibold ring-1 ring-slate-700 hover:bg-slate-700"
         >
           Sync now
@@ -96,6 +97,7 @@ export function QuickAddLane({
         <button
           type="button"
           onClick={onUndoLastCriticalChange}
+          aria-label="Undo last critical change"
           className="shrink-0 rounded-full bg-rose-500/85 px-3 py-1.5 font-semibold text-slate-950 hover:bg-rose-400"
         >
           Undo critical change
@@ -109,7 +111,11 @@ export function QuickAddLane({
         </button>
       </div>
       <div className="mt-2 hidden gap-2 rounded-xl border border-slate-700 bg-slate-950/60 p-2 md:grid md:grid-cols-[1.4fr_auto_auto_auto]">
+        <label htmlFor="quick-add-input-desktop" className="sr-only">
+          Quick add text
+        </label>
         <input
+          id="quick-add-input-desktop"
           data-testid="quick-add-input-desktop"
           type="text"
           value={quickAddText}
@@ -117,7 +123,11 @@ export function QuickAddLane({
           placeholder="Universal quick add: paste email line or type a manual update"
           className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100"
         />
+        <label htmlFor="quick-add-type-desktop" className="sr-only">
+          Quick add reservation type
+        </label>
         <select
+          id="quick-add-type-desktop"
           value={quickAddType}
           onChange={(event) => onQuickAddTypeChange(event.target.value as ReservationType)}
           className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-xs"
@@ -128,7 +138,11 @@ export function QuickAddLane({
             </option>
           ))}
         </select>
+        <label htmlFor="quick-add-confidence-desktop" className="sr-only">
+          Quick add confidence
+        </label>
         <select
+          id="quick-add-confidence-desktop"
           value={quickAddConfidence}
           onChange={(event) => onQuickAddConfidenceChange(event.target.value as Confidence)}
           className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-xs"
@@ -165,7 +179,11 @@ export function QuickAddLane({
         <p className="self-center text-[11px] text-slate-400">Undo ready: {undoStackLength}</p>
       </div>
       <div className="mt-2 space-y-2 rounded-xl border border-slate-700 bg-slate-950/60 p-2 md:hidden">
+        <label htmlFor="quick-add-input-mobile" className="sr-only">
+          Quick add text
+        </label>
         <input
+          id="quick-add-input-mobile"
           data-testid="quick-add-input-mobile"
           type="text"
           value={quickAddText}

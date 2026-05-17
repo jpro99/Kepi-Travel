@@ -69,12 +69,13 @@ export function JourneyFlowPanel({
             Progress {Math.round(((stageIndex + 1) / stages.length) * 100)}%
           </span>
         </div>
-        <div className="mt-3 flex flex-wrap gap-2">
+        <nav className="mt-3 flex flex-wrap gap-2" aria-label="Trip stage progression">
           {stages.map((stage, index) => (
             <button
               key={`flow-${stage}`}
               type="button"
               onClick={() => onTripStageSelect(stage)}
+              aria-current={stage === tripStage ? "true" : undefined}
               className={`rounded-full px-3 py-1.5 text-xs ring-1 transition ${
                 stage === tripStage
                   ? "bg-cyan-500 text-slate-950 ring-cyan-300"
@@ -86,7 +87,7 @@ export function JourneyFlowPanel({
               {index + 1}. {stageLabelByTripStage[stage]}
             </button>
           ))}
-        </div>
+        </nav>
         <div className="mt-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-sm text-cyan-50">
           <p className="text-xs font-semibold uppercase tracking-wide text-cyan-200">Next best action</p>
           <p className="mt-1">{nextBestFlowAction}</p>
