@@ -1077,6 +1077,26 @@ export default function TravelAssistantPage() {
     () => pendingOutboxEntries.some((entry) => entry.reservationId === null),
     [pendingOutboxEntries],
   );
+  const flightLiveStatusByReservationId = useMemo(() => {
+    const statusMap = new Map<string, "on-time" | "delayed" | "cancelled">();
+    updateFeed.forEach((entry) => {
+      if (statusMap.has(entry.reservationId)) {
+        return;
+      }
+      if (entry.kind === "cancellation") {
+        statusMap.set(entry.reservationId, "cancelled");
+        return;
+      }
+      if (entry.kind === "delay") {
+        statusMap.set(entry.reservationId, "delayed");
+        return;
+      }
+      if (entry.kind === "on-time") {
+        statusMap.set(entry.reservationId, "on-time");
+      }
+    });
+    return statusMap;
+  }, [updateFeed]);
   const visibleReservations = useMemo(() => {
     const fromMs = parseDateInput(exportFrom);
     const toMs = parseDateInput(exportTo);
@@ -3229,6 +3249,7 @@ export default function TravelAssistantPage() {
             reservationTypeLabelByType={RESERVATION_TYPE_LABEL}
             pendingOutboxByReservationId={pendingOutboxByReservationId}
             hasGlobalOutboxPending={hasGlobalOutboxPending}
+            flightLiveStatusByReservationId={flightLiveStatusByReservationId}
             onOpenReservationDrawer={(reservationId) => openDrawer("reservation", reservationId)}
             onCopyCallScript={copyScript}
             onCopyConfirmationCode={async (code) => {
