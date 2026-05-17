@@ -1,23 +1,22 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
 import type {
   TravelOpsAlertAuditEntry,
   TravelOpsAlertAuditSnapshot,
   TravelOpsAlertEvent,
 } from "@/lib/travelAssistant/travelUpdateTypes";
+import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 
 interface OpsAlertAuditStoreData {
   version: 1;
   sweeps: TravelOpsAlertAuditEntry[];
 }
 
-const DEFAULT_OPS_ALERT_AUDIT_PATH = "/tmp/kepi-travel-alert-audit.json";
+const DEFAULT_OPS_ALERT_AUDIT_KEY = "travel/ops-alert-audit/default";
 const MAX_SWEEPS = 500;
 let writeQueue: Promise<void> = Promise.resolve();
 
-function resolveOpsAlertAuditPath(customPath?: string): string {
-  return customPath ?? process.env.TRAVEL_UPDATE_ALERT_AUDIT_PATH ?? DEFAULT_OPS_ALERT_AUDIT_PATH;
+function resolveOpsAlertAuditKey(customPath?: string): string {
+  return customPath ?? process.env.TRAVEL_UPDATE_ALERT_AUDIT_PATH ?? DEFAULT_OPS_ALERT_AUDIT_KEY;
 }
 
 function createEmptyStore(): OpsAlertAuditStoreData {
@@ -27,10 +26,12 @@ function createEmptyStore(): OpsAlertAuditStoreData {
   };
 }
 
-async function loadStore(filePath: string): Promise<OpsAlertAuditStoreData> {
+async function loadStore(auditKey: string): Promise<OpsAlertAuditStoreData> {
   try {
-    const raw = await readFile(filePath, "utf8");
-    const parsed = JSON.parse(raw) as Partial<OpsAlertAuditStoreData>;
+    const parsed = await kvStoreGet<Partial<OpsAlertAuditStoreData>>(auditKey);
+    if (!parsed) {
+      return createEmptyStore();
+    }
     if (parsed.version !== 1 || !Array.isArray(parsed.sweeps)) {
       return createEmptyStore();
     }
@@ -51,16 +52,13 @@ async function loadStore(filePath: string): Promise<OpsAlertAuditStoreData> {
       }) as TravelOpsAlertAuditEntry[],
     };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return createEmptyStore();
-    }
-    throw error;
+    console.warn("[travelAssistant/opsAlertAuditStore] Failed to read alert audit store from KV:", error);
+    return createEmptyStore();
   }
 }
 
-async function saveStore(filePath: string, store: OpsAlertAuditStoreData): Promise<void> {
-  await mkdir(dirname(filePath), { recursive: true });
-  await writeFile(filePath, JSON.stringify(store, null, 2), "utf8");
+async function saveStore(auditKey: string, store: OpsAlertAuditStoreData): Promise<void> {
+  await kvStoreSet(auditKey, store);
 }
 
 export async function appendTravelOpsAlertAuditEntry({
@@ -82,7 +80,7 @@ export async function appendTravelOpsAlertAuditEntry({
   alerts: TravelOpsAlertEvent[];
   storagePath?: string;
 }): Promise<TravelOpsAlertAuditEntry> {
-  const filePath = resolveOpsAlertAuditPath(storagePath);
+  const auditKey = resolveOpsAlertAuditKey(storagePath);
   const entry: TravelOpsAlertAuditEntry = {
     id: randomUUID(),
     evaluatedAt,
@@ -95,12 +93,12 @@ export async function appendTravelOpsAlertAuditEntry({
   };
 
   const run = async (): Promise<TravelOpsAlertAuditEntry> => {
-    const store = await loadStore(filePath);
+    const store = await loadStore(auditKey);
     store.sweeps.unshift(entry);
     if (store.sweeps.length > MAX_SWEEPS) {
       store.sweeps.length = MAX_SWEEPS;
     }
-    await saveStore(filePath, store);
+    await saveStore(auditKey, store);
     return entry;
   };
 
@@ -119,8 +117,8 @@ export async function readTravelOpsAlertAuditSnapshot({
   storagePath?: string;
   limit?: number;
 } = {}): Promise<TravelOpsAlertAuditSnapshot> {
-  const filePath = resolveOpsAlertAuditPath(storagePath);
-  const store = await loadStore(filePath);
+  const auditKey = resolveOpsAlertAuditKey(storagePath);
+  const store = await loadStore(auditKey);
   return {
     recentSweeps: store.sweeps.slice(0, Math.max(1, limit)),
   };

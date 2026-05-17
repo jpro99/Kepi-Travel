@@ -1,9 +1,8 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
 import type {
   TravelUpdateMode,
   UpdatableReservation,
 } from "@/lib/travelAssistant/travelUpdateTypes";
+import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 
 interface RuntimeStateData {
   version: 1;
@@ -12,11 +11,11 @@ interface RuntimeStateData {
   reservations: UpdatableReservation[];
 }
 
-const DEFAULT_RUNTIME_STATE_PATH = "/tmp/kepi-travel-runtime-state.json";
+const DEFAULT_RUNTIME_STATE_KEY = "travel/runtime-state/default";
 let writeQueue: Promise<void> = Promise.resolve();
 
-function resolveRuntimeStatePath(customPath?: string): string {
-  return customPath ?? process.env.TRAVEL_UPDATE_RUNTIME_STATE_PATH ?? DEFAULT_RUNTIME_STATE_PATH;
+function resolveRuntimeStateKey(customPath?: string): string {
+  return customPath ?? process.env.TRAVEL_UPDATE_RUNTIME_STATE_PATH ?? DEFAULT_RUNTIME_STATE_KEY;
 }
 
 function createEmptyState(): RuntimeStateData {
@@ -28,10 +27,12 @@ function createEmptyState(): RuntimeStateData {
   };
 }
 
-async function loadState(filePath: string): Promise<RuntimeStateData> {
+async function loadState(stateKey: string): Promise<RuntimeStateData> {
   try {
-    const raw = await readFile(filePath, "utf8");
-    const parsed = JSON.parse(raw) as Partial<RuntimeStateData>;
+    const parsed = await kvStoreGet<Partial<RuntimeStateData>>(stateKey);
+    if (!parsed) {
+      return createEmptyState();
+    }
     if (
       parsed.version !== 1 ||
       !Array.isArray(parsed.reservations) ||
@@ -47,16 +48,13 @@ async function loadState(filePath: string): Promise<RuntimeStateData> {
       reservations: parsed.reservations,
     };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return createEmptyState();
-    }
-    throw error;
+    console.warn("[travelAssistant/updateRuntimeStateStore] Failed to read runtime state from KV:", error);
+    return createEmptyState();
   }
 }
 
-async function saveState(filePath: string, data: RuntimeStateData): Promise<void> {
-  await mkdir(dirname(filePath), { recursive: true });
-  await writeFile(filePath, JSON.stringify(data, null, 2), "utf8");
+async function saveState(stateKey: string, data: RuntimeStateData): Promise<void> {
+  await kvStoreSet(stateKey, data);
 }
 
 export async function persistTravelRuntimeState({
@@ -70,7 +68,7 @@ export async function persistTravelRuntimeState({
   updatedAt?: string;
   storagePath?: string;
 }): Promise<void> {
-  const filePath = resolveRuntimeStatePath(storagePath);
+  const stateKey = resolveRuntimeStateKey(storagePath);
   const effectiveUpdatedAt = updatedAt ?? new Date().toISOString();
 
   const run = async (): Promise<void> => {
@@ -80,7 +78,7 @@ export async function persistTravelRuntimeState({
       updatedAt: effectiveUpdatedAt,
       reservations: [...reservations],
     };
-    await saveState(filePath, nextState);
+    await saveState(stateKey, nextState);
   };
 
   const task = writeQueue.then(run, run);
@@ -96,8 +94,8 @@ export async function readTravelRuntimeState(storagePath?: string): Promise<{
   updatedAt: string;
   reservations: UpdatableReservation[];
 }> {
-  const filePath = resolveRuntimeStatePath(storagePath);
-  const state = await loadState(filePath);
+  const stateKey = resolveRuntimeStateKey(storagePath);
+  const state = await loadState(stateKey);
   return {
     mode: state.mode,
     updatedAt: state.updatedAt,

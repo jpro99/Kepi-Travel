@@ -1,12 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, open, readFile, unlink, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
 import type {
   TravelBackgroundLastRun,
   TravelBackgroundRunHeartbeat,
   TravelBackgroundRunStateSnapshot,
   TravelBackgroundRunStatus,
 } from "@/lib/travelAssistant/travelUpdateTypes";
+import { kvStoreDel, kvStoreGet, kvStoreSet, kvStoreSetNx } from "@/lib/travelAssistant/kvStore";
 
 interface TravelBackgroundRunStateData extends TravelBackgroundRunStateSnapshot {
   version: 1;
@@ -17,8 +16,8 @@ interface BackgroundRunLockData {
   startedAt: string;
 }
 
-const DEFAULT_BACKGROUND_STATE_PATH = "/tmp/kepi-travel-background-state.json";
-const DEFAULT_BACKGROUND_LOCK_PATH = "/tmp/kepi-travel-background.lock";
+const DEFAULT_BACKGROUND_STATE_KEY = "travel/background-state/default";
+const DEFAULT_BACKGROUND_LOCK_KEY = "travel/background-lock/default";
 const DEFAULT_BACKGROUND_LOCK_STALE_MS = 15 * 60_000;
 let writeQueue: Promise<void> = Promise.resolve();
 
@@ -34,12 +33,12 @@ export class BackgroundRunInProgressError extends Error {
   }
 }
 
-function resolveBackgroundStatePath(customPath?: string): string {
-  return customPath ?? process.env.TRAVEL_UPDATE_BACKGROUND_STATE_PATH ?? DEFAULT_BACKGROUND_STATE_PATH;
+function resolveBackgroundStateKey(customPath?: string): string {
+  return customPath ?? process.env.TRAVEL_UPDATE_BACKGROUND_STATE_PATH ?? DEFAULT_BACKGROUND_STATE_KEY;
 }
 
-function resolveBackgroundLockPath(customPath?: string): string {
-  return customPath ?? process.env.TRAVEL_UPDATE_BACKGROUND_LOCK_PATH ?? DEFAULT_BACKGROUND_LOCK_PATH;
+function resolveBackgroundLockKey(customPath?: string): string {
+  return customPath ?? process.env.TRAVEL_UPDATE_BACKGROUND_LOCK_PATH ?? DEFAULT_BACKGROUND_LOCK_KEY;
 }
 
 function createEmptyState(): TravelBackgroundRunStateData {
@@ -56,10 +55,12 @@ function createEmptyState(): TravelBackgroundRunStateData {
   };
 }
 
-async function loadState(filePath: string): Promise<TravelBackgroundRunStateData> {
+async function loadState(stateKey: string): Promise<TravelBackgroundRunStateData> {
   try {
-    const raw = await readFile(filePath, "utf8");
-    const parsed = JSON.parse(raw) as Partial<TravelBackgroundRunStateData>;
+    const parsed = await kvStoreGet<Partial<TravelBackgroundRunStateData>>(stateKey);
+    if (!parsed) {
+      return createEmptyState();
+    }
     if (parsed.version !== 1) {
       return createEmptyState();
     }
@@ -76,10 +77,8 @@ async function loadState(filePath: string): Promise<TravelBackgroundRunStateData
       heartbeat: normalizeHeartbeat(parsed.heartbeat),
     };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return createEmptyState();
-    }
-    throw error;
+    console.warn("[travelAssistant/backgroundRunStateStore] Failed to read background state from KV:", error);
+    return createEmptyState();
   }
 }
 
@@ -135,20 +134,19 @@ function normalizeHeartbeat(value: unknown): TravelBackgroundRunHeartbeat {
   };
 }
 
-async function saveState(filePath: string, state: TravelBackgroundRunStateData): Promise<void> {
-  await mkdir(dirname(filePath), { recursive: true });
-  await writeFile(filePath, JSON.stringify(state, null, 2), "utf8");
+async function saveState(stateKey: string, state: TravelBackgroundRunStateData): Promise<void> {
+  await kvStoreSet(stateKey, state);
 }
 
 async function mutateState(
   storagePath: string | undefined,
   mutator: (state: TravelBackgroundRunStateData) => void,
 ): Promise<void> {
-  const statePath = resolveBackgroundStatePath(storagePath);
+  const stateKey = resolveBackgroundStateKey(storagePath);
   const run = async (): Promise<void> => {
-    const state = await loadState(statePath);
+    const state = await loadState(stateKey);
     mutator(state);
-    await saveState(statePath, state);
+    await saveState(stateKey, state);
   };
   const task = writeQueue.then(run, run);
   writeQueue = task.then(
@@ -161,8 +159,8 @@ async function mutateState(
 export async function readTravelBackgroundRunState(
   storagePath?: string,
 ): Promise<TravelBackgroundRunStateSnapshot> {
-  const statePath = resolveBackgroundStatePath(storagePath);
-  const state = await loadState(statePath);
+  const stateKey = resolveBackgroundStateKey(storagePath);
+  const state = await loadState(stateKey);
   return {
     activeRun: state.activeRun,
     lastRun: state.lastRun,
@@ -261,25 +259,18 @@ export async function clearTravelBackgroundRunActive({
   });
 }
 
-async function writeLock(lockPath: string, payload: BackgroundRunLockData): Promise<void> {
-  await mkdir(dirname(lockPath), { recursive: true });
-  const handle = await open(lockPath, "wx");
+async function readLock(lockKey: string): Promise<BackgroundRunLockData | null> {
   try {
-    await handle.writeFile(JSON.stringify(payload), "utf8");
-  } finally {
-    await handle.close();
-  }
-}
-
-async function readLock(lockPath: string): Promise<BackgroundRunLockData | null> {
-  try {
-    const raw = await readFile(lockPath, "utf8");
-    const parsed = JSON.parse(raw) as Partial<BackgroundRunLockData>;
+    const parsed = await kvStoreGet<Partial<BackgroundRunLockData>>(lockKey);
+    if (!parsed) {
+      return null;
+    }
     if (typeof parsed.runId !== "string" || typeof parsed.startedAt !== "string") {
       return null;
     }
     return { runId: parsed.runId, startedAt: parsed.startedAt };
-  } catch {
+  } catch (error) {
+    console.warn("[travelAssistant/backgroundRunStateStore] Failed to read background lock from KV:", error);
     return null;
   }
 }
@@ -295,25 +286,21 @@ export async function acquireTravelBackgroundRunLock({
   lockPath?: string;
   staleMs?: number;
 }): Promise<void> {
-  const resolvedLockPath = resolveBackgroundLockPath(lockPath);
-  try {
-    await writeLock(resolvedLockPath, { runId, startedAt });
+  const resolvedLockKey = resolveBackgroundLockKey(lockPath);
+  const created = await kvStoreSetNx(resolvedLockKey, { runId, startedAt });
+  if (created) {
     return;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
-      throw error;
-    }
   }
 
-  const existingLock = await readLock(resolvedLockPath);
+  const existingLock = await readLock(resolvedLockKey);
   const existingStartedAtMs = existingLock ? Date.parse(existingLock.startedAt) : Number.NaN;
   const stale =
     Number.isNaN(existingStartedAtMs) ||
     Date.now() - existingStartedAtMs > Math.max(30_000, staleMs);
 
   if (stale) {
-    await unlink(resolvedLockPath).catch(() => undefined);
-    await writeLock(resolvedLockPath, { runId, startedAt });
+    await kvStoreDel(resolvedLockKey);
+    await kvStoreSet(resolvedLockKey, { runId, startedAt });
     return;
   }
 
@@ -325,6 +312,6 @@ export async function acquireTravelBackgroundRunLock({
 }
 
 export async function releaseTravelBackgroundRunLock(lockPath?: string): Promise<void> {
-  const resolvedLockPath = resolveBackgroundLockPath(lockPath);
-  await unlink(resolvedLockPath).catch(() => undefined);
+  const resolvedLockKey = resolveBackgroundLockKey(lockPath);
+  await kvStoreDel(resolvedLockKey);
 }

@@ -1,6 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
 import type {
   TravelAuditReadSnapshot,
   TravelAuditTrailEntry,
@@ -8,6 +6,7 @@ import type {
   TravelUpdateCheckResult,
   TravelUpdateEvent,
 } from "@/lib/travelAssistant/travelUpdateTypes";
+import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 
 interface StoredUpdateRecord {
   idempotencyKey: string;
@@ -26,12 +25,12 @@ interface UpdateAuditStoreData {
   auditTrail: TravelAuditTrailEntry[];
 }
 
-const DEFAULT_AUDIT_PATH = "/tmp/kepi-travel-update-audit.json";
+const DEFAULT_AUDIT_KEY = "travel/update-audit/default";
 const MAX_AUDIT_TRAIL_ENTRIES = 1000;
 let writeQueue: Promise<void> = Promise.resolve();
 
-function resolveAuditPath(customPath?: string): string {
-  return customPath ?? process.env.TRAVEL_UPDATE_AUDIT_PATH ?? DEFAULT_AUDIT_PATH;
+function resolveAuditKey(customPath?: string): string {
+  return customPath ?? process.env.TRAVEL_UPDATE_AUDIT_PATH ?? DEFAULT_AUDIT_KEY;
 }
 
 function createEmptyStore(): UpdateAuditStoreData {
@@ -42,10 +41,12 @@ function createEmptyStore(): UpdateAuditStoreData {
   };
 }
 
-async function loadStore(filePath: string): Promise<UpdateAuditStoreData> {
+async function loadStore(auditKey: string): Promise<UpdateAuditStoreData> {
   try {
-    const raw = await readFile(filePath, "utf8");
-    const parsed = JSON.parse(raw) as Partial<UpdateAuditStoreData>;
+    const parsed = await kvStoreGet<Partial<UpdateAuditStoreData>>(auditKey);
+    if (!parsed) {
+      return createEmptyStore();
+    }
     if (parsed.version !== 1 || !parsed.eventsByKey || !Array.isArray(parsed.auditTrail)) {
       return createEmptyStore();
     }
@@ -73,16 +74,13 @@ async function loadStore(filePath: string): Promise<UpdateAuditStoreData> {
       auditTrail: normalizedAuditTrail,
     };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return createEmptyStore();
-    }
-    throw error;
+    console.warn("[travelAssistant/updateAuditStore] Failed to read audit store from KV:", error);
+    return createEmptyStore();
   }
 }
 
-async function saveStore(filePath: string, data: UpdateAuditStoreData): Promise<void> {
-  await mkdir(dirname(filePath), { recursive: true });
-  await writeFile(filePath, JSON.stringify(data, null, 2), "utf8");
+async function saveStore(auditKey: string, data: UpdateAuditStoreData): Promise<void> {
+  await kvStoreSet(auditKey, data);
 }
 
 function buildUpdateIdempotencyKey(update: TravelUpdateEvent): string {
@@ -115,14 +113,14 @@ export async function persistTravelUpdateAudit({
 }> {
   const effectiveCheckedAt = checkedAt ?? new Date().toISOString();
   const requestId = randomUUID();
-  const filePath = resolveAuditPath(storagePath);
+  const auditKey = resolveAuditKey(storagePath);
 
   const run = async (): Promise<{
     freshUpdates: TravelUpdateEvent[];
     duplicateUpdates: number;
     summary: TravelUpdateAuditSummary;
   }> => {
-    const store = await loadStore(filePath);
+    const store = await loadStore(auditKey);
     const freshUpdates: TravelUpdateEvent[] = [];
     let duplicateUpdates = 0;
 
@@ -178,7 +176,7 @@ export async function persistTravelUpdateAudit({
       store.auditTrail.length = MAX_AUDIT_TRAIL_ENTRIES;
     }
 
-    await saveStore(filePath, store);
+    await saveStore(auditKey, store);
     return { freshUpdates, duplicateUpdates, summary };
   };
 
@@ -197,8 +195,8 @@ export async function readTravelUpdateAuditSnapshot({
   storagePath?: string;
   limit?: number;
 } = {}): Promise<TravelAuditReadSnapshot> {
-  const filePath = resolveAuditPath(storagePath);
-  const store = await loadStore(filePath);
+  const auditKey = resolveAuditKey(storagePath);
+  const store = await loadStore(auditKey);
   return {
     totalKnownEvents: Object.keys(store.eventsByKey).length,
     recentAuditTrail: store.auditTrail.slice(0, Math.max(1, limit)),

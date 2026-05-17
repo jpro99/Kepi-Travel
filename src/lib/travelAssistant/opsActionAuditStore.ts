@@ -1,12 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
 import type {
   TravelOpsAction,
   TravelOpsActionAuditEntry,
   TravelOpsActionAuditSnapshot,
   TravelOpsActionResult,
 } from "@/lib/travelAssistant/travelUpdateTypes";
+import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 
 interface StoredOpsActionAuditEntry extends TravelOpsActionAuditEntry {
   statusCode: number;
@@ -18,12 +17,12 @@ interface OpsActionAuditStoreData {
   entries: StoredOpsActionAuditEntry[];
 }
 
-const DEFAULT_OPS_AUDIT_PATH = "/tmp/kepi-travel-ops-audit.json";
+const DEFAULT_OPS_AUDIT_KEY = "travel/ops-audit/default";
 const MAX_OPS_AUDIT_ENTRIES = 500;
 let writeQueue: Promise<void> = Promise.resolve();
 
-function resolveOpsAuditPath(customPath?: string): string {
-  return customPath ?? process.env.TRAVEL_UPDATE_OPS_AUDIT_PATH ?? DEFAULT_OPS_AUDIT_PATH;
+function resolveOpsAuditKey(customPath?: string): string {
+  return customPath ?? process.env.TRAVEL_UPDATE_OPS_AUDIT_PATH ?? DEFAULT_OPS_AUDIT_KEY;
 }
 
 function createEmptyStore(): OpsActionAuditStoreData {
@@ -33,10 +32,12 @@ function createEmptyStore(): OpsActionAuditStoreData {
   };
 }
 
-async function loadStore(filePath: string): Promise<OpsActionAuditStoreData> {
+async function loadStore(auditKey: string): Promise<OpsActionAuditStoreData> {
   try {
-    const raw = await readFile(filePath, "utf8");
-    const parsed = JSON.parse(raw) as Partial<OpsActionAuditStoreData>;
+    const parsed = await kvStoreGet<Partial<OpsActionAuditStoreData>>(auditKey);
+    if (!parsed) {
+      return createEmptyStore();
+    }
     if (parsed.version !== 1 || !Array.isArray(parsed.entries)) {
       return createEmptyStore();
     }
@@ -60,16 +61,13 @@ async function loadStore(filePath: string): Promise<OpsActionAuditStoreData> {
       }) as StoredOpsActionAuditEntry[],
     };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return createEmptyStore();
-    }
-    throw error;
+    console.warn("[travelAssistant/opsActionAuditStore] Failed to read ops audit store from KV:", error);
+    return createEmptyStore();
   }
 }
 
-async function saveStore(filePath: string, store: OpsActionAuditStoreData): Promise<void> {
-  await mkdir(dirname(filePath), { recursive: true });
-  await writeFile(filePath, JSON.stringify(store, null, 2), "utf8");
+async function saveStore(auditKey: string, store: OpsActionAuditStoreData): Promise<void> {
+  await kvStoreSet(auditKey, store);
 }
 
 export async function readTravelOpsActionAuditSnapshot({
@@ -79,8 +77,8 @@ export async function readTravelOpsActionAuditSnapshot({
   storagePath?: string;
   limit?: number;
 } = {}): Promise<TravelOpsActionAuditSnapshot> {
-  const filePath = resolveOpsAuditPath(storagePath);
-  const store = await loadStore(filePath);
+  const auditKey = resolveOpsAuditKey(storagePath);
+  const store = await loadStore(auditKey);
   return {
     recentActions: store.entries.slice(0, Math.max(1, limit)),
   };
@@ -95,8 +93,8 @@ export async function findTravelOpsActionReplay({
   idempotencyKey: string;
   storagePath?: string;
 }): Promise<StoredOpsActionAuditEntry | null> {
-  const filePath = resolveOpsAuditPath(storagePath);
-  const store = await loadStore(filePath);
+  const auditKey = resolveOpsAuditKey(storagePath);
+  const store = await loadStore(auditKey);
   return (
     store.entries.find((entry) => entry.action === action && entry.idempotencyKey === idempotencyKey) ?? null
   );
@@ -129,7 +127,7 @@ export async function appendTravelOpsActionAuditEntry({
   completedAt?: string;
   storagePath?: string;
 }): Promise<StoredOpsActionAuditEntry> {
-  const filePath = resolveOpsAuditPath(storagePath);
+  const auditKey = resolveOpsAuditKey(storagePath);
   const entry: StoredOpsActionAuditEntry = {
     id: randomUUID(),
     action,
@@ -146,12 +144,12 @@ export async function appendTravelOpsActionAuditEntry({
   };
 
   const run = async (): Promise<StoredOpsActionAuditEntry> => {
-    const store = await loadStore(filePath);
+    const store = await loadStore(auditKey);
     store.entries.unshift(entry);
     if (store.entries.length > MAX_OPS_AUDIT_ENTRIES) {
       store.entries.length = MAX_OPS_AUDIT_ENTRIES;
     }
-    await saveStore(filePath, store);
+    await saveStore(auditKey, store);
     return entry;
   };
 

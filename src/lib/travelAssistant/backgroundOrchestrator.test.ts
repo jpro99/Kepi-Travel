@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 import test from "node:test";
 import {
   RuntimeStateUnavailableError,
@@ -28,9 +26,8 @@ const SAMPLE_RESERVATIONS: UpdatableReservation[] = [
 
 test("background pass uses persisted runtime state and suppresses duplicates", async () => {
   resetTravelUpdateCircuitState();
-  const tempDir = await mkdtemp(join(tmpdir(), "travel-background-pass-test-"));
-  const statePath = join(tempDir, "runtime-state.json");
-  const auditPath = join(tempDir, "audit.json");
+  const statePath = `tests/background-pass/runtime/${randomUUID()}`;
+  const auditPath = `tests/background-pass/audit/${randomUUID()}`;
 
   const provider: TravelUpdateProvider = {
     name: "background-test-provider",
@@ -49,46 +46,37 @@ test("background pass uses persisted runtime state and suppresses duplicates", a
     },
   };
 
-  try {
-    await persistTravelRuntimeState({
-      reservations: SAMPLE_RESERVATIONS,
-      mode: "auto",
-      updatedAt: "2026-06-21T10:00:00.000Z",
-      storagePath: statePath,
-    });
+  await persistTravelRuntimeState({
+    reservations: SAMPLE_RESERVATIONS,
+    mode: "auto",
+    updatedAt: "2026-06-21T10:00:00.000Z",
+    storagePath: statePath,
+  });
 
-    const first = await runTravelUpdateBackgroundPass({
-      runtimeStatePath: statePath,
-      auditPath,
-      checkOptions: { providerOverride: provider, disableDelay: true },
-      nowIso: "2026-06-21T10:05:00.000Z",
-    });
-    assert.equal(first.runtimeReservationCount, 1);
-    assert.equal(first.result.updates.length, 1);
-    assert.equal(first.result.audit?.newUpdates, 1);
+  const first = await runTravelUpdateBackgroundPass({
+    runtimeStatePath: statePath,
+    auditPath,
+    checkOptions: { providerOverride: provider, disableDelay: true },
+    nowIso: "2026-06-21T10:05:00.000Z",
+  });
+  assert.equal(first.runtimeReservationCount, 1);
+  assert.equal(first.result.updates.length, 1);
+  assert.equal(first.result.audit?.newUpdates, 1);
 
-    const second = await runTravelUpdateBackgroundPass({
-      runtimeStatePath: statePath,
-      auditPath,
-      checkOptions: { providerOverride: provider, disableDelay: true },
-      nowIso: "2026-06-21T10:10:00.000Z",
-    });
-    assert.equal(second.result.updates.length, 0);
-    assert.equal(second.result.audit?.duplicateUpdates, 1);
-  } finally {
-    await rm(tempDir, { recursive: true, force: true });
-  }
+  const second = await runTravelUpdateBackgroundPass({
+    runtimeStatePath: statePath,
+    auditPath,
+    checkOptions: { providerOverride: provider, disableDelay: true },
+    nowIso: "2026-06-21T10:10:00.000Z",
+  });
+  assert.equal(second.result.updates.length, 0);
+  assert.equal(second.result.audit?.duplicateUpdates, 1);
 });
 
 test("background pass fails when runtime state has no reservations", async () => {
-  const tempDir = await mkdtemp(join(tmpdir(), "travel-background-pass-test-"));
-  const statePath = join(tempDir, "runtime-state.json");
-  try {
-    await assert.rejects(
-      () => runTravelUpdateBackgroundPass({ runtimeStatePath: statePath }),
-      RuntimeStateUnavailableError,
-    );
-  } finally {
-    await rm(tempDir, { recursive: true, force: true });
-  }
+  const statePath = `tests/background-pass/runtime/${randomUUID()}`;
+  await assert.rejects(
+    () => runTravelUpdateBackgroundPass({ runtimeStatePath: statePath }),
+    RuntimeStateUnavailableError,
+  );
 });

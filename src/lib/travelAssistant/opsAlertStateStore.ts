@@ -1,16 +1,15 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 
 interface OpsAlertStateData {
   version: 1;
   lastSentByKey: Record<string, string>;
 }
 
-const DEFAULT_OPS_ALERT_STATE_PATH = "/tmp/kepi-travel-alert-state.json";
+const DEFAULT_OPS_ALERT_STATE_KEY = "travel/ops-alert-state/default";
 let writeQueue: Promise<void> = Promise.resolve();
 
-function resolveAlertStatePath(customPath?: string): string {
-  return customPath ?? process.env.TRAVEL_UPDATE_ALERT_STATE_PATH ?? DEFAULT_OPS_ALERT_STATE_PATH;
+function resolveAlertStateKey(customPath?: string): string {
+  return customPath ?? process.env.TRAVEL_UPDATE_ALERT_STATE_PATH ?? DEFAULT_OPS_ALERT_STATE_KEY;
 }
 
 function createEmptyStore(): OpsAlertStateData {
@@ -20,10 +19,12 @@ function createEmptyStore(): OpsAlertStateData {
   };
 }
 
-async function loadStore(filePath: string): Promise<OpsAlertStateData> {
+async function loadStore(stateKey: string): Promise<OpsAlertStateData> {
   try {
-    const raw = await readFile(filePath, "utf8");
-    const parsed = JSON.parse(raw) as Partial<OpsAlertStateData>;
+    const parsed = await kvStoreGet<Partial<OpsAlertStateData>>(stateKey);
+    if (!parsed) {
+      return createEmptyStore();
+    }
     if (parsed.version !== 1 || !parsed.lastSentByKey || typeof parsed.lastSentByKey !== "object") {
       return createEmptyStore();
     }
@@ -32,16 +33,13 @@ async function loadStore(filePath: string): Promise<OpsAlertStateData> {
       lastSentByKey: parsed.lastSentByKey,
     };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return createEmptyStore();
-    }
-    throw error;
+    console.warn("[travelAssistant/opsAlertStateStore] Failed to read alert state from KV:", error);
+    return createEmptyStore();
   }
 }
 
-async function saveStore(filePath: string, state: OpsAlertStateData): Promise<void> {
-  await mkdir(dirname(filePath), { recursive: true });
-  await writeFile(filePath, JSON.stringify(state, null, 2), "utf8");
+async function saveStore(stateKey: string, state: OpsAlertStateData): Promise<void> {
+  await kvStoreSet(stateKey, state);
 }
 
 export async function checkTravelOpsAlertEligibility({
@@ -55,8 +53,8 @@ export async function checkTravelOpsAlertEligibility({
   cooldownMs: number;
   storagePath?: string;
 }): Promise<{ eligible: boolean; lastSentAt: string | null }> {
-  const filePath = resolveAlertStatePath(storagePath);
-  const state = await loadStore(filePath);
+  const stateKey = resolveAlertStateKey(storagePath);
+  const state = await loadStore(stateKey);
   const lastSentAt = state.lastSentByKey[alertKey] ?? null;
   if (!lastSentAt) {
     return { eligible: true, lastSentAt: null };
@@ -78,11 +76,11 @@ export async function markTravelOpsAlertSent({
   sentAt: string;
   storagePath?: string;
 }): Promise<void> {
-  const filePath = resolveAlertStatePath(storagePath);
+  const stateKey = resolveAlertStateKey(storagePath);
   const run = async (): Promise<void> => {
-    const state = await loadStore(filePath);
+    const state = await loadStore(stateKey);
     state.lastSentByKey[alertKey] = sentAt;
-    await saveStore(filePath, state);
+    await saveStore(stateKey, state);
   };
   const task = writeQueue.then(run, run);
   writeQueue = task.then(
