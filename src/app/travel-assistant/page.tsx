@@ -43,6 +43,8 @@ import type {
 import { ConnectivityPanel } from "@/components/travelAssistant/ConnectivityPanel";
 import { AISuggestionPanel } from "@/components/travelAssistant/AISuggestionPanel";
 import { InstallPrompt } from "@/components/InstallPrompt";
+import { OnboardingFlow } from "@/components/onboarding/OnboardingFlow";
+import type { TripSetupDraft } from "@/components/onboarding/TripSetupForm";
 import { QuickAddLane } from "@/components/travelAssistant/QuickAddLane";
 import { ReservationList } from "@/components/travelAssistant/ReservationList";
 import { ReviewQueue } from "@/components/travelAssistant/ReviewQueue";
@@ -1018,6 +1020,57 @@ export default function TravelAssistantPage() {
     policy.lastShownAtMs = now;
     setToastRaw(normalized);
   }, []);
+
+  const handleCreateOnboardingTrip = useCallback(
+    (tripDraft: TripSetupDraft): void => {
+      const tripName = tripDraft.tripName.trim();
+      const destination = tripDraft.destination.trim();
+      const departureDate = tripDraft.departureDate.trim();
+      if (!tripName || !destination || !departureDate) {
+        setToast("Trip setup is missing required fields.");
+        return;
+      }
+
+      pushUndoSnapshot("Onboarding trip added");
+      setTripStage("readiness");
+
+      const departureMs = Date.parse(`${departureDate}T09:00:00`);
+      if (!Number.isNaN(departureMs)) {
+        const minutesUntilDeparture = Math.round((departureMs - Date.now()) / 60000);
+        setMinutesToDeparture(Math.max(15, minutesUntilDeparture));
+      }
+
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      const noteFingerprint = `onboarding:${tripName.toLowerCase()}|${destination.toLowerCase()}|${departureDate}`;
+
+      setReservations((previous) => {
+        const alreadyCreated = previous.some((reservation) => reservation.notes.includes(noteFingerprint));
+        if (alreadyCreated) {
+          return previous;
+        }
+        const onboardingReservation: Reservation = {
+          id: nextId("res"),
+          type: "flight",
+          title: `${tripName} departure`,
+          provider: "Onboarding setup",
+          localTime: `${departureDate} 09:00`,
+          timezone,
+          location: destination,
+          confirmationCode: `TRIP-${Date.now().toString().slice(-6)}`,
+          assignedTo: [selectedFamilyMember.id],
+          stage: "readiness",
+          critical: true,
+          confidence: "medium",
+          notes: `Created during onboarding. ${noteFingerprint}`,
+          source: "manual",
+        };
+        return [onboardingReservation, ...previous];
+      });
+
+      setToast(`Trip "${tripName}" was added to your timeline.`);
+    },
+    [pushUndoSnapshot, selectedFamilyMember.id, setToast],
+  );
 
   useEffect(() => {
     if (!toast) return;
@@ -3897,6 +3950,7 @@ export default function TravelAssistantPage() {
         </div>
       ) : null}
       <InstallPrompt />
+      <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
     </main>
   );
 }
