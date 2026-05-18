@@ -6,9 +6,16 @@ const KEPI_NAMESPACE_PREFIX = "kepi";
 const ANONYMOUS_NAMESPACE = "anonymous";
 const fallbackStore = new Map<string, unknown>();
 let missingEnvWarningLogged = false;
+let startupValidationLogged = false;
+
+const KV_REQUIRED_ENV_KEYS = ["KV_REST_API_URL", "KV_REST_API_TOKEN"] as const;
 
 function isKvConfigured(): boolean {
   return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+}
+
+function missingKvEnvKeys(): string[] {
+  return KV_REQUIRED_ENV_KEYS.filter((key) => !process.env[key]?.trim());
 }
 
 function cloneValue<T>(value: T): T {
@@ -43,12 +50,37 @@ function toNamespacedKey(key: string, userNamespace: string): string {
     : `${scopedPrefix}${normalized}`;
 }
 
-function warnMissingKvEnv(): void {
+function warnMissingKvEnv(trigger: "startup" | "runtime"): void {
   if (missingEnvWarningLogged) return;
   missingEnvWarningLogged = true;
-  logger.warn("KV_REST_API_URL or KV_REST_API_TOKEN is not set. Falling back to in-memory local store.", {
-    scope: "travelAssistant/kvStore",
-  });
+  logger.warn(
+    "Vercel KV credentials are missing. Continuing with local in-memory fallback store (non-persistent).",
+    {
+      scope: "travelAssistant/kvStore",
+      trigger,
+      missingEnvKeys: missingKvEnvKeys(),
+    },
+  );
+}
+
+function validateKvConfigurationAtStartup(): void {
+  if (startupValidationLogged) return;
+  startupValidationLogged = true;
+  if (isKvConfigured()) return;
+  warnMissingKvEnv("startup");
+}
+
+export function getKvIntegrationHealth(): {
+  configured: boolean;
+  mode: "vercel-kv" | "memory-fallback";
+  missingEnvKeys: string[];
+} {
+  const configured = isKvConfigured();
+  return {
+    configured,
+    mode: configured ? "vercel-kv" : "memory-fallback",
+    missingEnvKeys: configured ? [] : missingKvEnvKeys(),
+  };
 }
 
 export async function kvStoreGet<T>(
@@ -58,7 +90,7 @@ export async function kvStoreGet<T>(
   const userNamespace = await resolveUserNamespace(options?.userId);
   const namespacedKey = toNamespacedKey(key, userNamespace);
   if (!isKvConfigured()) {
-    warnMissingKvEnv();
+    warnMissingKvEnv("runtime");
     if (!fallbackStore.has(namespacedKey)) return null;
     return cloneValue(fallbackStore.get(namespacedKey) as T);
   }
@@ -73,7 +105,7 @@ export async function kvStoreSet<T>(
   const userNamespace = await resolveUserNamespace(options?.userId);
   const namespacedKey = toNamespacedKey(key, userNamespace);
   if (!isKvConfigured()) {
-    warnMissingKvEnv();
+    warnMissingKvEnv("runtime");
     fallbackStore.set(namespacedKey, cloneValue(value));
     return;
   }
@@ -88,7 +120,7 @@ export async function kvStoreSetNx<T>(
   const userNamespace = await resolveUserNamespace(options?.userId);
   const namespacedKey = toNamespacedKey(key, userNamespace);
   if (!isKvConfigured()) {
-    warnMissingKvEnv();
+    warnMissingKvEnv("runtime");
     if (fallbackStore.has(namespacedKey)) return false;
     fallbackStore.set(namespacedKey, cloneValue(value));
     return true;
@@ -101,7 +133,7 @@ export async function kvStoreDel(key: string, options?: { userId?: string }): Pr
   const userNamespace = await resolveUserNamespace(options?.userId);
   const namespacedKey = toNamespacedKey(key, userNamespace);
   if (!isKvConfigured()) {
-    warnMissingKvEnv();
+    warnMissingKvEnv("runtime");
     fallbackStore.delete(namespacedKey);
     return;
   }
@@ -118,7 +150,7 @@ export async function kvStoreList<T>(
   const limit = Math.max(1, options?.limit ?? 100);
 
   if (!isKvConfigured()) {
-    warnMissingKvEnv();
+    warnMissingKvEnv("runtime");
     const entries = Array.from(fallbackStore.entries())
       .filter(([key]) => key.startsWith(namespacedPrefix))
       .slice(0, limit)
@@ -143,3 +175,5 @@ export async function kvStoreList<T>(
   );
   return values;
 }
+
+validateKvConfigurationAtStartup();

@@ -117,8 +117,15 @@ async function* streamClaudeSuggestion(args: {
 
   const client = clientFactory();
   if (!client) {
-    scopedLogger.warn("Anthropic API key missing. Using fallback AI guidance.");
-    yield sanitizeModelOutput(args.fallbackText);
+    scopedLogger.warn("Anthropic API key missing. Returning placeholder AI guidance.");
+    yield sanitizeModelOutput(
+      [
+        "AI suggestions are running in fallback mode because ANTHROPIC_API_KEY is not configured.",
+        "Add your Anthropic key in environment settings to enable live Claude responses.",
+        "",
+        args.fallbackText,
+      ].join("\n"),
+    );
     return;
   }
 

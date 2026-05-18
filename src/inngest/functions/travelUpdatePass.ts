@@ -62,6 +62,24 @@ async function dispatchPushAlerts(userId: string, updates: readonly TravelUpdate
   return sent;
 }
 
+function resolveEffectiveUpdateMode(requestedMode: "off" | "mock" | "auto" | undefined): {
+  mode: "off" | "mock" | "auto" | undefined;
+  usedMockFallback: boolean;
+  reason?: string;
+} {
+  if (requestedMode !== "auto") {
+    return { mode: requestedMode, usedMockFallback: false };
+  }
+  if (process.env.AVIATIONSTACK_API_KEY?.trim()) {
+    return { mode: requestedMode, usedMockFallback: false };
+  }
+  return {
+    mode: "mock",
+    usedMockFallback: true,
+    reason: "AVIATIONSTACK_API_KEY missing; background updates forced to mock mode.",
+  };
+}
+
 export const travelUpdatePass = inngest.createFunction(
   {
     id: "travel-update-pass",
@@ -83,8 +101,15 @@ export const travelUpdatePass = inngest.createFunction(
 
     return runWithKvUserContext(parsed.data.userId, async () => {
       try {
+        const modeResolution = resolveEffectiveUpdateMode(parsed.data.mode);
+        if (modeResolution.usedMockFallback) {
+          logger.info("Switching travel update pass to mock mode due to missing AviationStack key.", {
+            userId: parsed.data.userId,
+            requestedMode: parsed.data.mode,
+          });
+        }
         const backgroundRun = await runManagedTravelUpdateBackgroundPass({
-          mode: parsed.data.mode,
+          mode: modeResolution.mode,
           nowIso: parsed.data.nowIso,
           timeoutMs: parsed.data.timeoutMs,
         });
@@ -95,6 +120,9 @@ export const travelUpdatePass = inngest.createFunction(
         return {
           status: "success" as const,
           userId: parsed.data.userId,
+          requestedMode: parsed.data.mode ?? null,
+          effectiveMode: modeResolution.mode ?? parsed.data.mode ?? null,
+          modeFallbackReason: modeResolution.reason ?? null,
           backgroundRun,
           alertSweep,
           pushAlertsSent,
