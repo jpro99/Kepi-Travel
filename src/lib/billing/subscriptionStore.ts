@@ -4,6 +4,7 @@ import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 const SUBSCRIPTION_KEY = "subscription";
 const BILLING_SYSTEM_NAMESPACE = "__billing-system";
 const STRIPE_CUSTOMER_OWNER_PREFIX = "stripe-customer-owner";
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
 export interface BillingSubscriptionRecord {
   plan: BillingPlanId;
@@ -54,6 +55,29 @@ export async function getSubscriptionRecord(userId: string): Promise<BillingSubs
 
 export async function setSubscriptionRecord(userId: string, record: BillingSubscriptionRecord): Promise<void> {
   await kvStoreSet(SUBSCRIPTION_KEY, record, { userId });
+}
+
+export async function extendSubscriptionProAccess(userId: string, days: number): Promise<BillingSubscriptionRecord> {
+  const grantDays = Math.max(0, Math.round(days));
+  const existing = await getSubscriptionRecord(userId);
+  if (grantDays <= 0) {
+    return existing;
+  }
+
+  if (existing.plan === "pro" && existing.validUntil === null && Boolean(existing.stripeSubscriptionId)) {
+    return existing;
+  }
+
+  const nowMs = Date.now();
+  const parsedValidUntil = existing.validUntil ? Date.parse(existing.validUntil) : Number.NaN;
+  const baseMs = !Number.isNaN(parsedValidUntil) && parsedValidUntil > nowMs ? parsedValidUntil : nowMs;
+  const nextRecord: BillingSubscriptionRecord = {
+    ...existing,
+    plan: "pro",
+    validUntil: new Date(baseMs + grantDays * DAY_IN_MS).toISOString(),
+  };
+  await setSubscriptionRecord(userId, nextRecord);
+  return nextRecord;
 }
 
 export async function setStripeCustomerOwner(customerId: string, userId: string): Promise<void> {

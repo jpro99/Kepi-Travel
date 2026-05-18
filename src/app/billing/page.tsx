@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { BillingPlanDefinition, BillingPlanId, PlanFeature } from "@/lib/billing/plans";
+import { ReferralCard } from "@/components/referral/ReferralCard";
 import { BILLING_PLANS, PLAN_FEATURE_LABELS, formatPlanPrice } from "@/lib/billing/plans";
 
 type BillingStatusResponse = {
@@ -202,6 +203,8 @@ export default function BillingPage() {
           </div>
         )}
       </section>
+
+      <ReferralCard />
 
       {checkoutMessage ? (
         <p className="rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-2 text-sm text-cyan-900">{checkoutMessage}</p>

@@ -13,6 +13,10 @@ import {
   ReservationConfirmationEmail,
   type ReservationConfirmationTemplateProps,
 } from "@/lib/email/templates/reservationConfirmation";
+import {
+  ReferralRewardEmail,
+  type ReferralRewardTemplateProps,
+} from "@/lib/email/templates/referralReward";
 import { TripSummaryEmail, type TripSummaryReservationItem } from "@/lib/email/templates/tripSummary";
 import { WeeklyDigestEmail, type WeeklyDigestTripItem } from "@/lib/email/templates/weeklyDigest";
 import { kvStoreGet, kvStoreSet, kvStoreSetNx } from "@/lib/travelAssistant/kvStore";
@@ -23,6 +27,7 @@ const TRIP_SUMMARY_SENT_KEY_PREFIX = "email-sent/trip-summary";
 const DISRUPTION_ALERT_SENT_KEY_PREFIX = "email-sent/disruption";
 const RESERVATION_CONFIRMATION_SENT_KEY_PREFIX = "email-sent/reservation-confirmation";
 const WEEKLY_DIGEST_SENT_KEY_PREFIX = "email-sent/weekly-digest";
+const REFERRAL_REWARD_SENT_KEY_PREFIX = "email-sent/referral-reward";
 
 export interface EmailPreferences {
   unsubscribed: boolean;
@@ -47,6 +52,13 @@ export interface DisruptionEmailInput {
   detail: string;
   scenario?: "none" | "missed-flight" | "train-delay" | "ride-no-show";
   recommendations?: string[];
+}
+
+export interface ReferralRewardEmailInput {
+  role: "referrer" | "friend";
+  referralCode: string;
+  awardedDays: number;
+  totalDaysEarned?: number;
 }
 
 function resolveAppBaseUrl(): string {
@@ -498,4 +510,39 @@ export async function sendTripSummaryForUpcomingDeparture(
     }
   }
   return results;
+}
+
+export async function sendReferralRewardConfirmation(
+  userId: string,
+  payload: ReferralRewardEmailInput,
+): Promise<EmailSendResult> {
+  const dedupeKey = `${REFERRAL_REWARD_SENT_KEY_PREFIX}/${payload.role}/${payload.referralCode}/${payload.awardedDays}/${new Date().toISOString().slice(0, 10)}`;
+  const firstSend = await kvStoreSetNx(dedupeKey, new Date().toISOString(), { userId });
+  if (!firstSend) {
+    return { status: "skipped", reason: "already-sent-today" };
+  }
+  const appBase = resolveAppBaseUrl().replace(/\/$/u, "");
+  const templateProps: ReferralRewardTemplateProps = {
+    headline:
+      payload.role === "referrer"
+        ? "You earned more Kepi Pro time"
+        : "Welcome to Kepi Pro trial perks",
+    intro:
+      payload.role === "referrer"
+        ? "A friend joined Kepi with your referral code. Your account has been credited."
+        : "Your friend invited you to Kepi. Your account has been credited with free Pro time.",
+    awardedDays: payload.awardedDays,
+    totalDaysEarned: payload.totalDaysEarned,
+    referralCode: payload.referralCode,
+    appLink: `${appBase}/billing`,
+    unsubscribeLink: buildUnsubscribeLink(userId),
+  };
+  return sendEmail({
+    userId,
+    subject:
+      payload.role === "referrer"
+        ? `Referral reward: +${payload.awardedDays} Pro days`
+        : `Referral activated: +${payload.awardedDays} Pro days`,
+    react: createElement(ReferralRewardEmail, templateProps),
+  });
 }

@@ -173,6 +173,14 @@
     "welcomeBulletOne": "Controles por etapa para preparación, aeropuerto, llegada e interrupciones.",
     "welcomeBulletTwo": "Actualizaciones en vivo de transporte y guías de recuperación.",
     "welcomeBulletThree": "Ingreso rápido con importación de correo, captura por voz y acciones de un toque.",
+    "referralCodeLabel": "Código de referido (opcional)",
+    "referralCodePlaceholder": "AB12CD34",
+    "referralCodeHint": "Ingresa el código de un amigo para activar días gratis de Pro.",
+    "referralCodePrefilled": "Código de referido precargado desde tu enlace de invitación.",
+    "referralCodeRedeemed": "Código canjeado. Se agregaron {days} días gratis de Pro.",
+    "referralCodeAlreadyRedeemed": "Este referido ya fue aplicado a esta cuenta.",
+    "referralCodeInvalid": "Ese código no es válido. Verifícalo e inténtalo de nuevo.",
+    "redeemingReferralCode": "Canjeando...",
     "notificationsDescription": "Recibe alertas de cambios de puerta y retrasos para reaccionar antes de que se desordene el horario.",
     "requesting": "Solicitando...",
     "enableNotifications": "Activar notificaciones",
@@ -192,6 +200,18 @@
     "skip": "Omitir",
     "next": "Siguiente",
     "start": "Iniciar"
+  },
+  "ReferralLandingPage": {
+    "badge": "Invitación de un amigo",
+    "title": "Tu amigo te invitó a Kepi",
+    "subtitle": "Empieza con ejecución adaptable del viaje, barreras anti-errores y flujos premium de logística para viajes reales.",
+    "codeApplied": "Código de referido: {code}",
+    "featureOne": "Playbooks en vivo para interrupciones de vuelos, trenes y traslados.",
+    "featureTwo": "Vistas adaptables por etapa desde preparación hasta recuperación.",
+    "featureThree": "Captura rápida con un toque y controles de revisión.",
+    "featureFour": "Funciones Pro: importación de Gmail, guía de IA y alertas inteligentes.",
+    "cta": "Regístrate gratis",
+    "ctaHint": "Tu código de referido se precargará durante el onboarding."
   },
   "TripSetupForm": {
     "tripName": "Nombre del viaje",

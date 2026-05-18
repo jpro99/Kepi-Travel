@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
   EMPTY_TRIP_SETUP_DRAFT,
@@ -16,6 +17,8 @@ type OnboardingResponse = {
   complete: boolean;
   currentStep: number;
   tripDraft: TripSetupDraft;
+  referralCode: string;
+  referralRedeemedAt: string | null;
 };
 
 interface OnboardingFlowProps {
@@ -32,10 +35,13 @@ function createDefaultResponse(): OnboardingResponse {
     complete: false,
     currentStep: 1,
     tripDraft: EMPTY_TRIP_SETUP_DRAFT,
+    referralCode: "",
+    referralRedeemedAt: null,
   };
 }
 
 export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
+  const searchParams = useSearchParams();
   const t = useTranslations("OnboardingFlow");
   const tTripSetup = useTranslations("TripSetupForm");
   const [isLoading, setIsLoading] = useState(true);
@@ -44,11 +50,19 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [tripDraft, setTripDraft] = useState<TripSetupDraft>(EMPTY_TRIP_SETUP_DRAFT);
   const [tripErrors, setTripErrors] = useState<TripSetupValidationErrors>({});
+  const [referralCode, setReferralCode] = useState("");
+  const [referralRedeemedAt, setReferralRedeemedAt] = useState<string | null>(null);
+  const [referralBusy, setReferralBusy] = useState(false);
+  const [referralMessage, setReferralMessage] = useState<string | null>(null);
   const [notificationsMessage, setNotificationsMessage] = useState<string | null>(null);
   const [gmailMessage, setGmailMessage] = useState<string | null>(null);
 
   const [notificationsBusy, setNotificationsBusy] = useState(false);
   const [gmailBusy, setGmailBusy] = useState(false);
+  const referralCodeFromUrl = useMemo(() => {
+    const raw = searchParams.get("ref")?.trim().toUpperCase() ?? "";
+    return /^[A-Z0-9]{8}$/u.test(raw) ? raw : "";
+  }, [searchParams]);
 
   const localizeTripErrors = useCallback(
     (errors: TripSetupValidationErrors): TripSetupValidationErrors => {
@@ -91,15 +105,31 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
         ...EMPTY_TRIP_SETUP_DRAFT,
         ...(resolved.tripDraft ?? {}),
       });
+      const resolvedReferralCode =
+        (typeof resolved.referralCode === "string" ? resolved.referralCode.trim().toUpperCase() : "") || referralCodeFromUrl;
+      setReferralCode(resolvedReferralCode);
+      setReferralRedeemedAt(
+        typeof resolved.referralRedeemedAt === "string" && resolved.referralRedeemedAt.length > 0
+          ? resolved.referralRedeemedAt
+          : null,
+      );
+      if (resolvedReferralCode && !resolved.referralRedeemedAt) {
+        setReferralMessage(t("referralCodePrefilled"));
+      } else {
+        setReferralMessage(null);
+      }
       setIsVisible(true);
     } catch {
       setCurrentStep(1);
       setTripDraft(EMPTY_TRIP_SETUP_DRAFT);
+      setReferralCode(referralCodeFromUrl);
+      setReferralRedeemedAt(null);
+      setReferralMessage(referralCodeFromUrl ? t("referralCodePrefilled") : null);
       setIsVisible(true);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [referralCodeFromUrl, t]);
 
   useEffect(() => {
     let active = true;
@@ -114,7 +144,12 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
   }, [loadOnboardingState]);
 
   const persistProgress = useCallback(
-    async (nextStep: number, nextTripDraft: TripSetupDraft): Promise<void> => {
+    async (
+      nextStep: number,
+      nextTripDraft: TripSetupDraft,
+      nextReferralCode: string,
+      nextReferralRedeemedAt: string | null,
+    ): Promise<void> => {
       setIsSaving(true);
       try {
         await fetch("/api/travel-updates/onboarding", {
@@ -123,6 +158,8 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
           body: JSON.stringify({
             currentStep: clampStep(nextStep),
             tripDraft: nextTripDraft,
+            referralCode: nextReferralCode.trim().toUpperCase(),
+            referralRedeemedAt: nextReferralRedeemedAt,
           }),
         });
       } finally {
@@ -152,15 +189,15 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
     async (nextStep: number): Promise<void> => {
       const clamped = clampStep(nextStep);
       setCurrentStep(clamped);
-      await persistProgress(clamped, tripDraft);
+      await persistProgress(clamped, tripDraft, referralCode, referralRedeemedAt);
     },
-    [persistProgress, tripDraft],
+    [persistProgress, referralCode, referralRedeemedAt, tripDraft],
   );
 
   const handleClose = useCallback(async (): Promise<void> => {
-    await persistProgress(currentStep, tripDraft);
+    await persistProgress(currentStep, tripDraft, referralCode, referralRedeemedAt);
     setIsVisible(false);
-  }, [currentStep, persistProgress, tripDraft]);
+  }, [currentStep, persistProgress, referralCode, referralRedeemedAt, tripDraft]);
 
   const handleBack = useCallback(async (): Promise<void> => {
     if (currentStep <= 1) {
@@ -170,6 +207,44 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
   }, [currentStep, goToStep]);
 
   const handleNext = useCallback(async (): Promise<void> => {
+    if (currentStep === 1 && referralCode.trim() && !referralRedeemedAt) {
+      setReferralBusy(true);
+      setReferralMessage(null);
+      try {
+        const response = await fetch("/api/referral/redeem", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: referralCode.trim().toUpperCase() }),
+        });
+        const payload = (await response.json()) as {
+          ok?: boolean;
+          reason?: string;
+          error?: string;
+          awarded?: { newUserDays?: number };
+        };
+        if (!response.ok) {
+          if (payload.reason === "already-redeemed") {
+            const nowIso = new Date().toISOString();
+            setReferralRedeemedAt(nowIso);
+            setReferralMessage(t("referralCodeAlreadyRedeemed"));
+            await persistProgress(1, tripDraft, referralCode, nowIso);
+          } else {
+            setReferralMessage(payload.error ?? t("referralCodeInvalid"));
+            return;
+          }
+        } else {
+          const redeemedAtIso = new Date().toISOString();
+          setReferralRedeemedAt(redeemedAtIso);
+          setReferralMessage(
+            t("referralCodeRedeemed", { days: payload.awarded?.newUserDays ?? 14 }),
+          );
+          await persistProgress(1, tripDraft, referralCode, redeemedAtIso);
+        }
+      } finally {
+        setReferralBusy(false);
+      }
+    }
+
     if (currentStep === 2) {
       const errors = validateTripSetupDraft(tripDraft);
       setTripErrors(localizeTripErrors(errors));
@@ -183,7 +258,18 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
       return;
     }
     await goToStep(currentStep + 1);
-  }, [completeOnboarding, currentStep, goToStep, localizeTripErrors, onCreateFirstTrip, tripDraft]);
+  }, [
+    completeOnboarding,
+    currentStep,
+    goToStep,
+    localizeTripErrors,
+    onCreateFirstTrip,
+    persistProgress,
+    referralCode,
+    referralRedeemedAt,
+    t,
+    tripDraft,
+  ]);
 
   const handleSkip = useCallback(async (): Promise<void> => {
     await completeOnboarding();
@@ -294,6 +380,29 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
                 <li>{t("welcomeBulletTwo")}</li>
                 <li>{t("welcomeBulletThree")}</li>
               </ul>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  {t("referralCodeLabel")}
+                </span>
+                <input
+                  value={referralCode}
+                  onChange={(event) => {
+                    const nextCode = event.target.value.toUpperCase().replace(/[^A-Z0-9]/gu, "").slice(0, 8);
+                    const normalizedCurrent = referralCode.trim().toUpperCase();
+                    setReferralCode(nextCode);
+                    setReferralMessage(null);
+                    if (nextCode.length === 0 || nextCode !== normalizedCurrent) {
+                      setReferralRedeemedAt(null);
+                    }
+                  }}
+                  placeholder={t("referralCodePlaceholder")}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-cyan-300 transition focus-visible:ring-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("referralCodeHint")}</p>
+                {referralMessage ? (
+                  <p className="mt-1 text-xs text-cyan-700 dark:text-cyan-300">{referralMessage}</p>
+                ) : null}
+              </label>
             </div>
           ) : null}
 
@@ -361,7 +470,7 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
         <footer className="flex items-center justify-between gap-2 border-t border-slate-200 p-4 dark:border-slate-800">
           <button
             type="button"
-            disabled={currentStep === 1 || isSaving}
+            disabled={currentStep === 1 || isSaving || referralBusy}
             onClick={() => {
               void handleBack();
             }}
@@ -372,7 +481,7 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              disabled={isSaving}
+              disabled={isSaving || referralBusy}
               onClick={() => {
                 void handleSkip();
               }}
@@ -382,13 +491,13 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
             </button>
             <button
               type="button"
-              disabled={isSaving}
+              disabled={isSaving || referralBusy}
               onClick={() => {
                 void handleNext();
               }}
               className="rounded-md bg-cyan-500 px-3 py-1.5 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {currentStep === TOTAL_STEPS ? t("start") : t("next")}
+              {referralBusy ? t("redeemingReferralCode") : currentStep === TOTAL_STEPS ? t("start") : t("next")}
             </button>
           </div>
         </footer>

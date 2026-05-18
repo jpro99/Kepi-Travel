@@ -16,9 +16,13 @@ const TripDraftSchema = z.object({
   departureDate: z.string().max(20).default(""),
 });
 
+const ReferralCodeSchema = z.string().trim().toUpperCase().regex(/^[A-Z0-9]{8}$/u).or(z.literal(""));
+
 const OnboardingProgressSchema = z.object({
   currentStep: z.number().int().min(1).max(TOTAL_ONBOARDING_STEPS),
   tripDraft: TripDraftSchema,
+  referralCode: ReferralCodeSchema.default(""),
+  referralRedeemedAt: z.string().min(1).nullable().default(null),
   updatedAt: z.string(),
 });
 
@@ -26,6 +30,8 @@ const PutBodySchema = z.object({
   complete: z.boolean().optional(),
   currentStep: z.number().int().min(1).max(TOTAL_ONBOARDING_STEPS).optional(),
   tripDraft: TripDraftSchema.optional(),
+  referralCode: ReferralCodeSchema.optional(),
+  referralRedeemedAt: z.string().min(1).nullable().optional(),
 });
 
 function defaultTripDraft(): z.infer<typeof TripDraftSchema> {
@@ -70,6 +76,8 @@ export async function GET(req: Request) {
         complete: true,
         currentStep: TOTAL_ONBOARDING_STEPS,
         tripDraft: defaultTripDraft(),
+        referralCode: "",
+        referralRedeemedAt: null,
       },
       { headers: rateLimit.headers },
     );
@@ -83,6 +91,8 @@ export async function GET(req: Request) {
       complete: false,
       currentStep: parsedProgress.success ? parsedProgress.data.currentStep : 1,
       tripDraft: parsedProgress.success ? parsedProgress.data.tripDraft : defaultTripDraft(),
+      referralCode: parsedProgress.success ? parsedProgress.data.referralCode : "",
+      referralRedeemedAt: parsedProgress.success ? parsedProgress.data.referralRedeemedAt : null,
     },
     { headers: rateLimit.headers },
   );
@@ -143,6 +153,9 @@ export async function PUT(req: Request) {
   const progressPayload = {
     currentStep: parsedBody.data.currentStep ?? 1,
     tripDraft: parsedBody.data.tripDraft ?? defaultTripDraft(),
+    referralCode: parsedBody.data.referralCode ?? "",
+    referralRedeemedAt:
+      parsedBody.data.referralRedeemedAt === undefined ? null : parsedBody.data.referralRedeemedAt,
     updatedAt: new Date().toISOString(),
   };
 
@@ -158,6 +171,8 @@ export async function PUT(req: Request) {
       complete: false,
       currentStep: progressPayload.currentStep,
       tripDraft: progressPayload.tripDraft,
+      referralCode: progressPayload.referralCode,
+      referralRedeemedAt: progressPayload.referralRedeemedAt,
     },
     { headers: rateLimit.headers },
   );

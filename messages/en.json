@@ -173,6 +173,14 @@
     "welcomeBulletOne": "Stage-aware controls for readiness, airport, arrival, and disruptions.",
     "welcomeBulletTwo": "Live transport updates and guided recovery playbooks.",
     "welcomeBulletThree": "Fast input with email import, voice capture, and one-tap actions.",
+    "referralCodeLabel": "Referral code (optional)",
+    "referralCodePlaceholder": "AB12CD34",
+    "referralCodeHint": "Enter a friend referral code to unlock free Pro trial days.",
+    "referralCodePrefilled": "Referral code prefilled from your invite link.",
+    "referralCodeRedeemed": "Referral code redeemed. {days} free Pro days added.",
+    "referralCodeAlreadyRedeemed": "Referral already applied to this account.",
+    "referralCodeInvalid": "That referral code is invalid. Please verify and retry.",
+    "redeemingReferralCode": "Redeeming...",
     "notificationsDescription": "Get gate change and delay alerts so you can react before schedules slip.",
     "requesting": "Requesting...",
     "enableNotifications": "Enable notifications",
@@ -192,6 +200,18 @@
     "skip": "Skip",
     "next": "Next",
     "start": "Start"
+  },
+  "ReferralLandingPage": {
+    "badge": "Friend Invite",
+    "title": "Your friend invited you to Kepi",
+    "subtitle": "Start with adaptive trip execution, anti-miss safeguards, and premium logistics workflows built for real travel days.",
+    "codeApplied": "Referral code: {code}",
+    "featureOne": "Live disruption playbooks for flights, trains, and rides.",
+    "featureTwo": "Adaptive stage views from readiness through recovery.",
+    "featureThree": "One-tap quick capture with review safeguards.",
+    "featureFour": "Pro features for Gmail import, AI guidance, and smart alerts.",
+    "cta": "Sign up free",
+    "ctaHint": "Your referral code will be prefilled during onboarding."
   },
   "TripSetupForm": {
     "tripName": "Trip name",
