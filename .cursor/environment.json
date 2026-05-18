@@ -1,0 +1,5 @@
+{
+  "$schema": "https://www.cursor.com/schemas/environment.schema.json",
+  "install": "npm install && npx playwright install --with-deps chromium",
+  "start": "echo \"Kepi-Search cloud environment ready\""
+}
