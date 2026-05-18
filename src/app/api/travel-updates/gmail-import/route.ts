@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isAutomatedTestRuntime } from "@/lib/auth/mockClerkAuth";
+import { getUserPlan } from "@/lib/billing/planGate";
 import { enforceRateLimit } from "@/lib/rateLimit";
 import { logger } from "@/lib/logger";
 import { importGmailParsedReservations } from "@/lib/travelAssistant/gmailImportProvider";
@@ -36,6 +37,17 @@ export async function POST(req: Request) {
   if (!userId) {
     routeLogger.warn("Unauthorized Gmail import request.");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const plan = await getUserPlan(userId);
+  if (plan !== "pro") {
+    return NextResponse.json(
+      {
+        error: "Gmail import requires Pro.",
+        requiresProFeature: "gmail-import",
+      },
+      { status: 402 },
+    );
   }
 
   const baseRateLimit = await enforceRateLimit({

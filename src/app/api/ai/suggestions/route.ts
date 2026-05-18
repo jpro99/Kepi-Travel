@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
+import { getUserPlan } from "@/lib/billing/planGate";
 import { logger } from "@/lib/logger";
 import { enforceRateLimit } from "@/lib/rateLimit";
 import {
@@ -76,6 +77,17 @@ export async function POST(req: Request) {
   if (!userId) {
     routeLogger.warn("Unauthorized AI suggestions request.");
     return jsonError("Unauthorized", 401);
+  }
+
+  const plan = await getUserPlan(userId);
+  if (plan !== "pro") {
+    return NextResponse.json(
+      {
+        error: "AI itinerary guidance is available on Pro.",
+        requiresProFeature: "ai-suggestions",
+      },
+      { status: 402 },
+    );
   }
 
   const rateLimit = await enforceRateLimit({

@@ -64,6 +64,8 @@ interface ReviewQueueProps {
   onReparseReview: (reviewId: string) => void;
   onMergeReview: (reviewId: string) => void;
   onImportParsedReservations: (reservations: GmailImportedReservation[]) => void;
+  canUseGmailImport: boolean;
+  onRequestUpgradeForGmailImport: () => void;
 }
 
 export function ReviewQueue({
@@ -77,6 +79,8 @@ export function ReviewQueue({
   onReparseReview,
   onMergeReview,
   onImportParsedReservations,
+  canUseGmailImport,
+  onRequestUpgradeForGmailImport,
 }: ReviewQueueProps) {
   const [importInFlight, setImportInFlight] = useState(false);
   const [importMaxResults, setImportMaxResults] = useState(10);
@@ -133,14 +137,23 @@ export function ReviewQueue({
           <button
             type="button"
             onClick={() => {
+              if (!canUseGmailImport) {
+                onRequestUpgradeForGmailImport();
+                return;
+              }
               void handleGmailImport();
             }}
             disabled={importInFlight}
             className="rounded-md bg-cyan-500/90 px-2 py-1 text-xs font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {importInFlight ? "Importing..." : "Import Gmail"}
+            {importInFlight ? "Importing..." : canUseGmailImport ? "Import Gmail" : "Upgrade to import Gmail"}
           </button>
         </div>
+        {!canUseGmailImport ? (
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            Gmail reservation import is available on Pro.
+          </p>
+        ) : null}
         {importError ? <p className="mt-2 text-xs text-red-200">Import failed: {importError}</p> : null}
       </div>
       <div className="mt-3 space-y-3">

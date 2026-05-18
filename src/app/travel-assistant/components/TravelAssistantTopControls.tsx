@@ -88,6 +88,12 @@ export function TravelAssistantTopControls({
             <p className="text-xs uppercase tracking-[0.24em] text-cyan-700 dark:text-cyan-300">Adaptive Travel Assistant</p>
             <div className="flex items-center gap-2">
               <ThemeToggle />
+              <Link
+                href="/billing"
+                className="rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800/80 dark:text-slate-100 dark:hover:bg-slate-700"
+              >
+                Billing
+              </Link>
               {isAdmin ? (
                 <Link
                   href="/admin"

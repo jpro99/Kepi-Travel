@@ -29,6 +29,8 @@ interface AISuggestionPanelProps {
   reservations: ReservationContext[];
   activeScenario: DisruptionScenario;
   updateFeed: UpdateFeedContext[];
+  canUseSuggestions: boolean;
+  onRequestUpgrade: () => void;
 }
 
 interface LayoverContext {
@@ -104,7 +106,14 @@ function stageEmptyStateMessage(stage: TripStage): string {
   return "AI suggestions are available only for readiness, airport, and recovery moments.";
 }
 
-export function AISuggestionPanel({ tripStage, reservations, activeScenario, updateFeed }: AISuggestionPanelProps) {
+export function AISuggestionPanel({
+  tripStage,
+  reservations,
+  activeScenario,
+  updateFeed,
+  canUseSuggestions,
+  onRequestUpgrade,
+}: AISuggestionPanelProps) {
   const [selectedTypeOverride, setSelectedTypeOverride] = useState<SuggestionType | null>(null);
   const [suggestionText, setSuggestionText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -116,11 +125,12 @@ export function AISuggestionPanel({ tripStage, reservations, activeScenario, upd
   const streamDoneRef = useRef(false);
 
   const stageSupportsSuggestions = tripStage === "readiness" || tripStage === "airport" || tripStage === "recovery";
+  const canGenerateSuggestions = stageSupportsSuggestions && canUseSuggestions;
 
   const layoverContext = useMemo(() => detectLayoverContext(reservations), [reservations]);
 
   const availableSuggestions = useMemo<SuggestionOption[]>(() => {
-    if (!stageSupportsSuggestions) {
+    if (!canGenerateSuggestions) {
       return [];
     }
 
@@ -196,7 +206,7 @@ export function AISuggestionPanel({ tripStage, reservations, activeScenario, upd
     }
 
     return [];
-  }, [activeScenario, layoverContext, reservations, stageSupportsSuggestions, tripStage, updateFeed]);
+  }, [activeScenario, canGenerateSuggestions, layoverContext, reservations, tripStage, updateFeed]);
 
   const selectedType = useMemo<SuggestionType | null>(() => {
     if (availableSuggestions.length === 0) {
@@ -333,6 +343,27 @@ export function AISuggestionPanel({ tripStage, reservations, activeScenario, upd
 
   if (!stageSupportsSuggestions) {
     return null;
+  }
+
+  if (!canUseSuggestions) {
+    return (
+      <section
+        data-testid="ai-suggestion-panel"
+        className="rounded-2xl border border-violet-500/30 bg-violet-500/10 p-4 shadow-[0_0_0_1px_rgba(148,163,184,0.15)]"
+      >
+        <h2 className="text-sm font-semibold text-violet-100">AI itinerary guidance</h2>
+        <p className="mt-1 text-xs text-violet-100/80">
+          AI suggestions are available on Pro for real-time layover, packing, and disruption assistance.
+        </p>
+        <button
+          type="button"
+          onClick={onRequestUpgrade}
+          className="mt-3 rounded-md bg-violet-300/20 px-2.5 py-1 text-xs font-semibold text-violet-50 ring-1 ring-violet-300/40 transition hover:bg-violet-300/30"
+        >
+          Upgrade to Pro
+        </button>
+      </section>
+    );
   }
 
   return (

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { getUserPlan } from "@/lib/billing/planGate";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { logger } from "@/lib/logger";
 import { enforceRateLimit } from "@/lib/rateLimit";
@@ -159,6 +160,17 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: "Validation failed", details: parsed.error.flatten() },
       { status: 422, headers: auth.headers },
+    );
+  }
+
+  const [userPlan, trips] = await Promise.all([getUserPlan(auth.userId), listTrips(auth.userId)]);
+  if (userPlan === "free" && trips.length >= 1) {
+    return NextResponse.json(
+      {
+        error: "Free tier allows one trip. Upgrade to Pro to create additional trips.",
+        requiresProFeature: "multi-trip",
+      },
+      { status: 402, headers: auth.headers },
     );
   }
 

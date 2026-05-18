@@ -46,6 +46,8 @@ interface ConnectivityPanelProps {
   updateFeed: UpdateFeedItem[];
   formatClock: (value: string | null) => string;
   opsPanel: ReactNode;
+  canUsePushNotifications: boolean;
+  onRequestUpgradeForPush: () => void;
 }
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -88,6 +90,8 @@ export function ConnectivityPanel({
   updateFeed,
   formatClock,
   opsPanel,
+  canUsePushNotifications,
+  onRequestUpgradeForPush,
 }: ConnectivityPanelProps) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notificationsBusy, setNotificationsBusy] = useState(false);
@@ -216,22 +220,43 @@ export function ConnectivityPanel({
             <button
               type="button"
               onClick={() => {
+                if (!canUsePushNotifications) {
+                  onRequestUpgradeForPush();
+                  return;
+                }
                 void handleNotificationToggle();
               }}
-              disabled={!notificationsSupported || notificationsBusy}
+              disabled={notificationsBusy || (canUsePushNotifications && !notificationsSupported)}
               className={`rounded-md px-2 py-1 text-xs font-semibold ${
                 notificationsEnabled
                   ? "bg-emerald-500/90 text-slate-950 hover:bg-emerald-400"
                   : "bg-slate-200 text-slate-900 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
               } disabled:cursor-not-allowed disabled:opacity-60`}
             >
-              {notificationsBusy ? "Updating..." : notificationsEnabled ? "Disable" : "Enable"}
+              {notificationsBusy
+                ? "Updating..."
+                : !canUsePushNotifications
+                  ? "Upgrade"
+                  : notificationsEnabled
+                    ? "Disable"
+                    : "Enable"}
             </button>
           </div>
           <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
             Notification status:{" "}
-            {notificationsSupported ? (notificationsEnabled ? "enabled" : "disabled") : "disabled (unsupported)"}
+            {!canUsePushNotifications
+              ? "locked on Free plan"
+              : notificationsSupported
+                ? notificationsEnabled
+                  ? "enabled"
+                  : "disabled"
+                : "disabled (unsupported)"}
           </p>
+          {!canUsePushNotifications ? (
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+              Push alerts for delays and gate changes are available on Pro.
+            </p>
+          ) : null}
           {notificationsError ? <p className="mt-1 text-xs text-red-200">{notificationsError}</p> : null}
         </div>
         <div className="rounded-lg border border-slate-200 bg-slate-100/80 p-3 dark:border-slate-700 dark:bg-slate-950/70">

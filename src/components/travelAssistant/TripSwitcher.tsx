@@ -17,6 +17,9 @@ interface TripSwitcherProps {
   onSwitchTrip: (tripId: string) => Promise<void> | void;
   onCreateTrip: () => Promise<void> | void;
   disabled?: boolean;
+  canCreateTrip?: boolean;
+  onRequestUpgrade?: () => void;
+  createDisabledMessage?: string;
 }
 
 function formatTripDateRange(startDate: string, endDate: string): string {
@@ -31,6 +34,9 @@ export function TripSwitcher({
   onSwitchTrip,
   onCreateTrip,
   disabled = false,
+  canCreateTrip = true,
+  onRequestUpgrade,
+  createDisabledMessage,
 }: TripSwitcherProps) {
   const [open, setOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -101,13 +107,22 @@ export function TripSwitcher({
             <button
               type="button"
               onClick={async () => {
+                if (!canCreateTrip) {
+                  onRequestUpgrade?.();
+                  setOpen(false);
+                  return;
+                }
                 await onCreateTrip();
                 setOpen(false);
               }}
+              disabled={disabled}
               className="w-full rounded-lg bg-cyan-500 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-400"
             >
-              New Trip
+              {canCreateTrip ? "New Trip" : "Upgrade for additional trips"}
             </button>
+            {!canCreateTrip && createDisabledMessage ? (
+              <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">{createDisabledMessage}</p>
+            ) : null}
           </div>
         </div>
       ) : null}

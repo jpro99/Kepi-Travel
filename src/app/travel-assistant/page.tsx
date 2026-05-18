@@ -42,6 +42,7 @@ import type {
 } from "@/lib/travelAssistant/travelUpdateTypes";
 import { ConnectivityPanel } from "@/components/travelAssistant/ConnectivityPanel";
 import { AISuggestionPanel } from "@/components/travelAssistant/AISuggestionPanel";
+import { UpgradeModal, type UpgradeModalGateContext } from "@/components/billing/UpgradeModal";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { OnboardingFlow } from "@/components/onboarding/OnboardingFlow";
 import type { TripSetupDraft } from "@/components/onboarding/TripSetupForm";
@@ -51,6 +52,7 @@ import { ReviewQueue } from "@/components/travelAssistant/ReviewQueue";
 import { TripSearch, type TripSearchSelection } from "@/components/travelAssistant/TripSearch";
 import { TripSwitcher } from "@/components/travelAssistant/TripSwitcher";
 import { TripOrientationCard } from "@/components/travelAssistant/TripOrientationCard";
+import type { BillingPlanId, PlanFeature } from "@/lib/billing/plans";
 import { JourneyFlowPanel } from "./components/JourneyFlowPanel";
 import { TravelAssistantTopControls } from "./components/TravelAssistantTopControls";
 
@@ -248,6 +250,13 @@ interface ManagedTrip {
   reviewQueue: ReviewItem[];
   readinessItems: ReadinessItem[];
   updateFeed: UpdateFeedItem[];
+}
+
+interface BillingStatusResponse {
+  plan: BillingPlanId;
+  usage?: {
+    tripLimit?: number | null;
+  };
 }
 
 const fetchInitialOpsSnapshotCached = cache(async (): Promise<TravelOpsSnapshot> => {
@@ -817,6 +826,7 @@ function appendUniqueNote(existing: string, note: string): string {
 }
 
 const TRIP_API_ROUTE = "/api/trips";
+const BILLING_STATUS_API_ROUTE = "/api/billing/status";
 
 function normalizeManagedTrip(trip: unknown): ManagedTrip | null {
   if (!trip || typeof trip !== "object") {
@@ -917,6 +927,9 @@ export default function TravelAssistantPage() {
   const [trips, setTrips] = useState<ManagedTrip[]>([]);
   const [activeTripId, setActiveTripId] = useState<string | null>(null);
   const [tripsLoading, setTripsLoading] = useState(true);
+  const [billingPlan, setBillingPlan] = useState<BillingPlanId>("free");
+  const [billingTripLimit, setBillingTripLimit] = useState<number | null>(1);
+  const [upgradeModalGate, setUpgradeModalGate] = useState<UpgradeModalGateContext | null>(null);
   const [highlightedReservationId, setHighlightedReservationId] = useState<string | null>(null);
   const [tripStage, setTripStage] = useState<TripStage>("readiness");
   const [tripStatus, setTripStatus] = useState<TripStatus>("yellow");
@@ -1208,6 +1221,28 @@ export default function TravelAssistantPage() {
     return parsedTrips.length;
   }, [applyManagedTripToState]);
 
+  const refreshBillingStatus = useCallback(async (): Promise<void> => {
+    const response = await fetch(BILLING_STATUS_API_ROUTE, {
+      method: "GET",
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      throw new Error(`Billing status API returned ${response.status}`);
+    }
+    const payload = (await response.json()) as BillingStatusResponse;
+    const tripLimit = payload.usage?.tripLimit;
+    setBillingPlan(payload.plan === "pro" ? "pro" : "free");
+    setBillingTripLimit(typeof tripLimit === "number" || tripLimit === null ? tripLimit : 1);
+  }, []);
+
+  const openUpgradeModal = useCallback((feature: PlanFeature, detail?: string): void => {
+    setUpgradeModalGate({ feature, detail });
+  }, []);
+
+  const closeUpgradeModal = useCallback((): void => {
+    setUpgradeModalGate(null);
+  }, []);
+
   const ensureDefaultTripIfMissing = useCallback(async (): Promise<void> => {
     const response = await fetch(TRIP_API_ROUTE, {
       method: "POST",
@@ -1263,6 +1298,23 @@ export default function TravelAssistantPage() {
       cancelled = true;
     };
   }, [ensureDefaultTripIfMissing, refreshTripsFromServer, setToast]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadBilling = async (): Promise<void> => {
+      try {
+        await refreshBillingStatus();
+      } catch (error) {
+        if (cancelled) return;
+        const message = error instanceof Error ? error.message : "Unknown billing status error";
+        setToast(`Billing status unavailable: ${message}`);
+      }
+    };
+    void loadBilling();
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshBillingStatus, setToast]);
 
   useEffect(() => {
     if (!tripsHydratedRef.current) return;
@@ -1340,6 +1392,11 @@ export default function TravelAssistantPage() {
   );
 
   const handleCreateTrip = useCallback(async (): Promise<void> => {
+    const allowCreation = billingPlan === "pro" || billingTripLimit === null || trips.length < billingTripLimit;
+    if (!allowCreation) {
+      openUpgradeModal("multi-trip", "Free includes one trip. Upgrade to add and manage multiple trips.");
+      return;
+    }
     const nextTripNumber = trips.length + 1;
     const now = new Date();
     const startDate = now.toISOString().slice(0, 10);
@@ -1389,11 +1446,20 @@ export default function TravelAssistantPage() {
       }
       setActiveTripId(payload.activeTripId ?? createdTrip.id);
       applyManagedTripToState(createdTrip);
+      void refreshBillingStatus();
       setToast(`Created ${createdTrip.name}.`);
     } catch {
       setToast("Could not create a new trip.");
     }
-  }, [applyManagedTripToState, setToast, trips.length]);
+  }, [
+    applyManagedTripToState,
+    billingPlan,
+    billingTripLimit,
+    openUpgradeModal,
+    refreshBillingStatus,
+    setToast,
+    trips.length,
+  ]);
 
   const handleCreateOnboardingTrip = useCallback(
     (tripDraft: TripSetupDraft): void => {
@@ -1573,6 +1639,11 @@ export default function TravelAssistantPage() {
 
   const unresolvedReviewCount = reviewQueue.length;
   const unresolvedReadinessCount = readinessItems.filter((item) => item.required && !item.complete).length;
+  const hasProPlan = billingPlan === "pro";
+  const canUseGmailImport = hasProPlan;
+  const canUseAiSuggestions = hasProPlan;
+  const canUsePushNotifications = hasProPlan;
+  const canCreateAdditionalTrips = hasProPlan || billingTripLimit === null || trips.length < billingTripLimit;
   const pendingOutboxEntries = useMemo(() => listPendingOfflineOutboxEntries(offlineOutbox), [offlineOutbox]);
   const pendingOutboxCount = countPendingOfflineOutboxEntries(offlineOutbox);
   const pendingSyncCount = queuedProviderUpdates.length + pendingOutboxCount;
@@ -3554,6 +3625,11 @@ export default function TravelAssistantPage() {
               onSwitchTrip={handleSwitchTrip}
               onCreateTrip={handleCreateTrip}
               disabled={tripsLoading}
+              canCreateTrip={canCreateAdditionalTrips}
+              createDisabledMessage="Free plan supports one trip."
+              onRequestUpgrade={() =>
+                openUpgradeModal("multi-trip", "Upgrade to Pro to create and switch between multiple trips.")
+              }
             />
             <TripSearch
               trips={trips.map((trip) => ({
@@ -3642,6 +3718,10 @@ export default function TravelAssistantPage() {
             activeScenario={activeScenario}
             reservations={reservations}
             updateFeed={updateFeed}
+            canUseSuggestions={canUseAiSuggestions}
+            onRequestUpgrade={() =>
+              openUpgradeModal("ai-suggestions", "Upgrade to Pro to unlock stage-aware AI itinerary guidance.")
+            }
           />
         ) : null}
 
@@ -3787,6 +3867,10 @@ export default function TravelAssistantPage() {
             onFlushPendingSync={flushPendingSync}
             updateFeed={updateFeed}
             formatClock={formatClock}
+            canUsePushNotifications={canUsePushNotifications}
+            onRequestUpgradeForPush={() =>
+              openUpgradeModal("push-notifications", "Upgrade to Pro to enable gate and delay push alerts.")
+            }
             opsPanel={
               <Suspense fallback={<LazyPanelSkeleton label="Loading ops panel..." />}>
                 <OpsPanel
@@ -4086,6 +4170,10 @@ export default function TravelAssistantPage() {
               onReparseReview={handleReparseReview}
               onMergeReview={handleMergeReview}
               onImportParsedReservations={handleImportParsedReservations}
+              canUseGmailImport={canUseGmailImport}
+              onRequestUpgradeForGmailImport={() =>
+                openUpgradeModal("gmail-import", "Upgrade to Pro to import reservations directly from Gmail.")
+              }
             />
           </article>
           </section>
@@ -4373,6 +4461,7 @@ export default function TravelAssistantPage() {
           {toast}
         </div>
       ) : null}
+      <UpgradeModal open={Boolean(upgradeModalGate)} gate={upgradeModalGate} onClose={closeUpgradeModal} />
       <InstallPrompt />
       <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
     </main>

@@ -4,11 +4,15 @@ import { isMockClerkAuthEnabled } from "@/lib/auth/mockClerkAuth";
 
 const isProtectedRoute = createRouteMatcher([
   "/travel-assistant(.*)",
+  "/billing(.*)",
   "/admin(.*)",
   "/api/travel-updates(.*)",
   "/api/admin(.*)",
   "/api/ai(.*)",
   "/api/trips(.*)",
+  "/api/billing/checkout(.*)",
+  "/api/billing/portal(.*)",
+  "/api/billing/status(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

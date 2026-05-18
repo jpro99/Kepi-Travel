@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isAutomatedTestRuntime } from "@/lib/auth/mockClerkAuth";
+import { getUserPlan } from "@/lib/billing/planGate";
 import { logger } from "@/lib/logger";
 import { enforceRateLimit } from "@/lib/rateLimit";
 import { subscribeUser } from "@/lib/travelAssistant/pushNotificationService";
@@ -43,6 +44,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const plan = await getUserPlan(userId);
+  if (plan !== "pro") {
+    return NextResponse.json(
+      {
+        error: "Push notifications require Pro.",
+        requiresProFeature: "push-notifications",
+      },
+      { status: 402 },
+    );
+  }
+
   const publicKey = process.env.VAPID_PUBLIC_KEY?.trim();
   if (!publicKey) {
     routeLogger.warn("VAPID public key is missing.");
@@ -63,6 +75,17 @@ export async function POST(req: Request) {
   if (!userId) {
     routeLogger.warn("Unauthorized push subscribe request.");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const plan = await getUserPlan(userId);
+  if (plan !== "pro") {
+    return NextResponse.json(
+      {
+        error: "Push notifications require Pro.",
+        requiresProFeature: "push-notifications",
+      },
+      { status: 402 },
+    );
   }
 
   const rateLimit = await enforceRateLimit({
