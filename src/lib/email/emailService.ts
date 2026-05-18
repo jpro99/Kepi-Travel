@@ -10,6 +10,10 @@ import {
   type DisruptionAlertTemplateProps,
 } from "@/lib/email/templates/disruptionAlert";
 import {
+  DocumentExpiryAlertEmail,
+  type DocumentExpiryAlertTemplateItem,
+} from "@/lib/email/templates/documentExpiryAlert";
+import {
   ReservationConfirmationEmail,
   type ReservationConfirmationTemplateProps,
 } from "@/lib/email/templates/reservationConfirmation";
@@ -20,6 +24,7 @@ import {
 import { TripSummaryEmail, type TripSummaryReservationItem } from "@/lib/email/templates/tripSummary";
 import { WeeklyDigestEmail, type WeeklyDigestTripItem } from "@/lib/email/templates/weeklyDigest";
 import { kvStoreGet, kvStoreSet, kvStoreSetNx } from "@/lib/travelAssistant/kvStore";
+import type { TravelDocument } from "@/lib/travelAssistant/documentVault";
 import { getTrip, listTrips, type TravelTrip } from "@/lib/travelAssistant/tripStore";
 
 const EMAIL_PREFS_KEY = "email-prefs";
@@ -28,6 +33,7 @@ const DISRUPTION_ALERT_SENT_KEY_PREFIX = "email-sent/disruption";
 const RESERVATION_CONFIRMATION_SENT_KEY_PREFIX = "email-sent/reservation-confirmation";
 const WEEKLY_DIGEST_SENT_KEY_PREFIX = "email-sent/weekly-digest";
 const REFERRAL_REWARD_SENT_KEY_PREFIX = "email-sent/referral-reward";
+const DOCUMENT_EXPIRY_SENT_KEY_PREFIX = "email-sent/document-expiry";
 
 export interface EmailPreferences {
   unsubscribed: boolean;
@@ -544,5 +550,44 @@ export async function sendReferralRewardConfirmation(
         ? `Referral reward: +${payload.awardedDays} Pro days`
         : `Referral activated: +${payload.awardedDays} Pro days`,
     react: createElement(ReferralRewardEmail, templateProps),
+  });
+}
+
+export async function sendDocumentExpiryAlert(
+  userId: string,
+  documents: TravelDocument[],
+): Promise<EmailSendResult> {
+  const expiringDocuments = documents
+    .filter((document) => typeof document.expiresAt === "string" && document.expiresAt.length > 0)
+    .sort((left, right) => Date.parse(left.expiresAt ?? "") - Date.parse(right.expiresAt ?? ""));
+
+  if (expiringDocuments.length === 0) {
+    return { status: "skipped", reason: "no-expiring-documents" };
+  }
+
+  const dedupeKey = `${DOCUMENT_EXPIRY_SENT_KEY_PREFIX}/${new Date().toISOString().slice(0, 10)}`;
+  const firstSend = await kvStoreSetNx(dedupeKey, new Date().toISOString(), { userId });
+  if (!firstSend) {
+    return { status: "skipped", reason: "already-sent-today" };
+  }
+
+  const tripNameById = new Map((await listTrips(userId)).map((trip) => [trip.id, trip.name]));
+  const templateItems: DocumentExpiryAlertTemplateItem[] = expiringDocuments.slice(0, 12).map((document) => ({
+    id: document.id,
+    name: document.name,
+    type: document.type,
+    tripName: tripNameById.get(document.tripId) ?? "Active trip",
+    expiresAt: document.expiresAt ?? "",
+  }));
+
+  const appBase = resolveAppBaseUrl().replace(/\/$/u, "");
+  return sendEmail({
+    userId,
+    subject: `Kepi Alert: ${templateItems.length} document${templateItems.length === 1 ? "" : "s"} expiring soon`,
+    react: createElement(DocumentExpiryAlertEmail, {
+      documents: templateItems,
+      appLink: `${appBase}/travel-assistant`,
+      unsubscribeLink: buildUnsubscribeLink(userId),
+    }),
   });
 }

@@ -53,6 +53,8 @@ import { ReviewQueue } from "@/components/travelAssistant/ReviewQueue";
 import { TripSearch, type TripSearchSelection } from "@/components/travelAssistant/TripSearch";
 import { TripSwitcher } from "@/components/travelAssistant/TripSwitcher";
 import { TripOrientationCard } from "@/components/travelAssistant/TripOrientationCard";
+import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
+import { DocumentVault } from "@/components/travelAssistant/DocumentVault";
 import { trackEvent } from "@/lib/analytics/trackEvent";
 import type { BillingPlanId, PlanFeature } from "@/lib/billing/plans";
 import { JourneyFlowPanel } from "./components/JourneyFlowPanel";
@@ -81,6 +83,7 @@ type MobileViewPanel = "essentials" | "timeline" | "recovery" | "family" | "all"
 type DemoPresetId = "smooth-trip" | "moderate-delay" | "severe-disruption";
 type VisibilityMode = "all-members" | "organizer-only";
 type DisruptionScenario = "none" | "missed-flight" | "train-delay" | "ride-no-show";
+type TimelineSectionTab = "reservations" | "documents";
 
 interface LocationPoint {
   lat: number;
@@ -1025,6 +1028,7 @@ export default function TravelAssistantPage() {
   const [exportScope, setExportScope] = useState<"full-trip" | "selected-person">("full-trip");
   const [exportFrom, setExportFrom] = useState("");
   const [exportTo, setExportTo] = useState("");
+  const [timelineSectionTab, setTimelineSectionTab] = useState<TimelineSectionTab>("reservations");
 
   const selectedFamilyMember = useMemo(
     () => familyMembers.find((member) => member.id === selectedFamilyMemberId) ?? familyMembers[0],
@@ -4082,120 +4086,168 @@ export default function TravelAssistantPage() {
         )}
 
         {shouldRenderMobilePanel("timeline") ? (
-          <section className="grid gap-4 sm:gap-6 xl:grid-cols-[1.2fr_1fr]">
-          <ReservationList
-            visibleReservations={visibleReservations}
-            personalTimelineOnly={personalTimelineOnly}
-            onPersonalTimelineOnlyChange={setPersonalTimelineOnly}
-            selectedFamilyMemberName={selectedFamilyMember.name}
-            familyMembers={familyMembers}
-            reservationTypeLabelByType={RESERVATION_TYPE_LABEL}
-            pendingOutboxByReservationId={pendingOutboxByReservationId}
-            hasGlobalOutboxPending={hasGlobalOutboxPending}
-            flightLiveStatusByReservationId={flightLiveStatusByReservationId}
-            railLiveStatusByReservationId={railLiveStatusByReservationId}
-            highlightedReservationId={highlightedReservationId}
-            onOpenReservationDrawer={(reservationId) => openDrawer("reservation", reservationId)}
-            onCopyCallScript={copyScript}
-            onCopyConfirmationCode={async (code) => {
-              try {
-                await navigator.clipboard.writeText(code);
-                setToast("Confirmation code copied.");
-              } catch {
-                setToast("Clipboard unavailable.");
-              }
-            }}
-          />
-
-          <article className="space-y-6">
-            <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
-              <h2 className="text-lg font-semibold">Email import workflow</h2>
-              <p className="text-xs text-slate-400">
-                Raw email preview &rarr; parsed reservation object &rarr; live trip or review queue.
-              </p>
-              <label className="mt-3 block text-sm">
-                <span className="mb-1 block text-slate-300">Choose sample import</span>
-                <select
-                  value={selectedEmailId}
-                  onChange={(event) => setSelectedEmailId(event.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"
-                >
-                  {emailSamples.map((sample) => (
-                    <option key={sample.id} value={sample.id}>
-                      {sample.subject}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Raw email</p>
-                  <p className="mt-1 text-xs text-slate-300">
-                    {selectedEmail.sender} • {new Date(selectedEmail.receivedAt).toLocaleString()}
-                  </p>
-                  <p className="mt-2 text-sm font-medium">{selectedEmail.subject}</p>
-                  <pre className="mt-2 whitespace-pre-wrap text-xs text-slate-300">{selectedEmail.body}</pre>
+          <section className="space-y-4">
+            <article className="rounded-2xl border border-slate-700 bg-slate-900/60 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-slate-100">Trip execution workspace</p>
+                  <p className="text-xs text-slate-400">Switch between reservation operations and document vault.</p>
                 </div>
-                <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Parsed reservation object</p>
-                  <p className="mt-2 text-sm">{selectedEmail.parsed.title}</p>
-                  <p className="text-xs text-slate-300">{selectedEmail.parsed.provider}</p>
-                  <p className="text-xs text-slate-300">
-                    {selectedEmail.parsed.localTime} ({selectedEmail.parsed.timezone})
-                  </p>
-                  <p className="text-xs text-slate-300">{selectedEmail.parsed.location}</p>
-                  <p className="text-xs text-slate-300">Code: {selectedEmail.parsed.confirmationCode}</p>
-                  <p className="mt-2 text-xs text-slate-400">
-                    Confidence: <span className="font-semibold">{selectedEmail.confidence}</span>
-                  </p>
-                  {selectedEmail.issues.length > 0 ? (
-                    <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-amber-200">
-                      {selectedEmail.issues.map((issue) => (
-                        <li key={issue}>{issue}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="mt-2 text-xs text-emerald-200">No parser issues detected.</p>
-                  )}
+                <div className="inline-flex rounded-full border border-slate-700 bg-slate-950/60 p-1 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setTimelineSectionTab("reservations")}
+                    className={`rounded-full px-3 py-1.5 font-semibold transition ${
+                      timelineSectionTab === "reservations"
+                        ? "bg-cyan-500 text-slate-950"
+                        : "text-slate-300 hover:bg-slate-800"
+                    }`}
+                  >
+                    Reservations
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTimelineSectionTab("documents")}
+                    className={`rounded-full px-3 py-1.5 font-semibold transition ${
+                      timelineSectionTab === "documents"
+                        ? "bg-cyan-500 text-slate-950"
+                        : "text-slate-300 hover:bg-slate-800"
+                    }`}
+                  >
+                    Documents
+                  </button>
                 </div>
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleImportAction("live")}
-                  className="rounded-lg bg-emerald-500/90 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
-                >
-                  Add to live trip
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleImportAction("review")}
-                  className="rounded-lg bg-amber-500/90 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-amber-400"
-                >
-                  Send to review queue
-                </button>
-              </div>
-            </div>
+            </article>
 
-            <ReviewQueue
-              reviewQueue={reviewQueue}
-              reservations={reservations.map((reservation) => ({ id: reservation.id, title: reservation.title }))}
-              mergeTargetByReview={mergeTargetByReview}
-              onMergeTargetChange={(reviewId, targetReservationId) =>
-                setMergeTargetByReview((prev) => ({ ...prev, [reviewId]: targetReservationId }))
-              }
-              onAcceptReview={handleAcceptReview}
-              onOpenReviewDrawer={(reviewId) => openDrawer("review", reviewId)}
-              onRejectReview={handleRejectReview}
-              onReparseReview={handleReparseReview}
-              onMergeReview={handleMergeReview}
-              onImportParsedReservations={handleImportParsedReservations}
-              canUseGmailImport={canUseGmailImport}
-              onRequestUpgradeForGmailImport={() =>
-                openUpgradeModal("gmail-import", "Upgrade to Pro to import reservations directly from Gmail.")
-              }
-            />
-          </article>
+            {timelineSectionTab === "reservations" ? (
+              <section className="grid gap-4 sm:gap-6 xl:grid-cols-[1.2fr_1fr]">
+                <article className="space-y-4">
+                  <TripTimeline
+                    reservations={visibleReservations}
+                    nowMs={nowMs}
+                    flightLiveStatusByReservationId={flightLiveStatusByReservationId}
+                    railLiveStatusByReservationId={railLiveStatusByReservationId}
+                    onOpenReservationDrawer={(reservationId) => openDrawer("reservation", reservationId)}
+                  />
+                  <ReservationList
+                    visibleReservations={visibleReservations}
+                    personalTimelineOnly={personalTimelineOnly}
+                    onPersonalTimelineOnlyChange={setPersonalTimelineOnly}
+                    selectedFamilyMemberName={selectedFamilyMember.name}
+                    familyMembers={familyMembers}
+                    reservationTypeLabelByType={RESERVATION_TYPE_LABEL}
+                    pendingOutboxByReservationId={pendingOutboxByReservationId}
+                    hasGlobalOutboxPending={hasGlobalOutboxPending}
+                    flightLiveStatusByReservationId={flightLiveStatusByReservationId}
+                    railLiveStatusByReservationId={railLiveStatusByReservationId}
+                    highlightedReservationId={highlightedReservationId}
+                    onOpenReservationDrawer={(reservationId) => openDrawer("reservation", reservationId)}
+                    onCopyCallScript={copyScript}
+                    onCopyConfirmationCode={async (code) => {
+                      try {
+                        await navigator.clipboard.writeText(code);
+                        setToast("Confirmation code copied.");
+                      } catch {
+                        setToast("Clipboard unavailable.");
+                      }
+                    }}
+                  />
+                </article>
+
+                <article className="space-y-6">
+                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
+                    <h2 className="text-lg font-semibold">Email import workflow</h2>
+                    <p className="text-xs text-slate-400">
+                      Raw email preview &rarr; parsed reservation object &rarr; live trip or review queue.
+                    </p>
+                    <label className="mt-3 block text-sm">
+                      <span className="mb-1 block text-slate-300">Choose sample import</span>
+                      <select
+                        value={selectedEmailId}
+                        onChange={(event) => setSelectedEmailId(event.target.value)}
+                        className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"
+                      >
+                        {emailSamples.map((sample) => (
+                          <option key={sample.id} value={sample.id}>
+                            {sample.subject}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                      <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-3">
+                        <p className="text-xs uppercase tracking-wide text-slate-400">Raw email</p>
+                        <p className="mt-1 text-xs text-slate-300">
+                          {selectedEmail.sender} • {new Date(selectedEmail.receivedAt).toLocaleString()}
+                        </p>
+                        <p className="mt-2 text-sm font-medium">{selectedEmail.subject}</p>
+                        <pre className="mt-2 whitespace-pre-wrap text-xs text-slate-300">{selectedEmail.body}</pre>
+                      </div>
+                      <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-3">
+                        <p className="text-xs uppercase tracking-wide text-slate-400">Parsed reservation object</p>
+                        <p className="mt-2 text-sm">{selectedEmail.parsed.title}</p>
+                        <p className="text-xs text-slate-300">{selectedEmail.parsed.provider}</p>
+                        <p className="text-xs text-slate-300">
+                          {selectedEmail.parsed.localTime} ({selectedEmail.parsed.timezone})
+                        </p>
+                        <p className="text-xs text-slate-300">{selectedEmail.parsed.location}</p>
+                        <p className="text-xs text-slate-300">Code: {selectedEmail.parsed.confirmationCode}</p>
+                        <p className="mt-2 text-xs text-slate-400">
+                          Confidence: <span className="font-semibold">{selectedEmail.confidence}</span>
+                        </p>
+                        {selectedEmail.issues.length > 0 ? (
+                          <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-amber-200">
+                            {selectedEmail.issues.map((issue) => (
+                              <li key={issue}>{issue}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-2 text-xs text-emerald-200">No parser issues detected.</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleImportAction("live")}
+                        className="rounded-lg bg-emerald-500/90 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
+                      >
+                        Add to live trip
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleImportAction("review")}
+                        className="rounded-lg bg-amber-500/90 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-amber-400"
+                      >
+                        Send to review queue
+                      </button>
+                    </div>
+                  </div>
+
+                  <ReviewQueue
+                    reviewQueue={reviewQueue}
+                    reservations={reservations.map((reservation) => ({ id: reservation.id, title: reservation.title }))}
+                    mergeTargetByReview={mergeTargetByReview}
+                    onMergeTargetChange={(reviewId, targetReservationId) =>
+                      setMergeTargetByReview((prev) => ({ ...prev, [reviewId]: targetReservationId }))
+                    }
+                    onAcceptReview={handleAcceptReview}
+                    onOpenReviewDrawer={(reviewId) => openDrawer("review", reviewId)}
+                    onRejectReview={handleRejectReview}
+                    onReparseReview={handleReparseReview}
+                    onMergeReview={handleMergeReview}
+                    onImportParsedReservations={handleImportParsedReservations}
+                    canUseGmailImport={canUseGmailImport}
+                    onRequestUpgradeForGmailImport={() =>
+                      openUpgradeModal("gmail-import", "Upgrade to Pro to import reservations directly from Gmail.")
+                    }
+                  />
+                </article>
+              </section>
+            ) : (
+              <DocumentVault activeTripId={activeTripId} />
+            )}
           </section>
         ) : null}
 

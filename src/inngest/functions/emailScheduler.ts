@@ -1,9 +1,11 @@
 import { kv } from "@vercel/kv";
 import { inngest } from "@/inngest/client";
 import {
+  sendDocumentExpiryAlert,
   sendTripSummaryForUpcomingDeparture,
   sendWeeklyDigest,
 } from "@/lib/email/emailService";
+import { getExpiringDocuments } from "@/lib/travelAssistant/documentVault";
 
 const USER_NAMESPACE_KEY_PATTERN = /^kepi:([^:]+):/u;
 const DEFAULT_USER_SCAN_LIMIT = 1000;
@@ -45,6 +47,7 @@ export const emailScheduler = inngest.createFunction(
         discoveredUsers: 0,
         tripSummariesSent: 0,
         weeklyDigestsSent: 0,
+        documentExpiryAlertsSent: 0,
       };
     }
 
@@ -55,6 +58,7 @@ export const emailScheduler = inngest.createFunction(
         discoveredUsers: 0,
         tripSummariesSent: 0,
         weeklyDigestsSent: 0,
+        documentExpiryAlertsSent: 0,
       };
     }
 
@@ -64,6 +68,7 @@ export const emailScheduler = inngest.createFunction(
     const summary = await step.run("dispatch-transactional-emails", async () => {
       let tripSummariesSent = 0;
       let weeklyDigestsSent = 0;
+      let documentExpiryAlertsSent = 0;
 
       for (const userId of userIds) {
         const tripSummaryResults = await sendTripSummaryForUpcomingDeparture(userId, now.getTime());
@@ -75,9 +80,17 @@ export const emailScheduler = inngest.createFunction(
             weeklyDigestsSent += 1;
           }
         }
+
+        const expiringDocuments = await getExpiringDocuments(userId, 14, now.getTime());
+        if (expiringDocuments.length > 0) {
+          const documentAlertResult = await sendDocumentExpiryAlert(userId, expiringDocuments);
+          if (documentAlertResult.status === "sent") {
+            documentExpiryAlertsSent += 1;
+          }
+        }
       }
 
-      return { tripSummariesSent, weeklyDigestsSent };
+      return { tripSummariesSent, weeklyDigestsSent, documentExpiryAlertsSent };
     });
 
     return {
@@ -85,6 +98,7 @@ export const emailScheduler = inngest.createFunction(
       discoveredUsers: userIds.length,
       tripSummariesSent: summary.tripSummariesSent,
       weeklyDigestsSent: summary.weeklyDigestsSent,
+      documentExpiryAlertsSent: summary.documentExpiryAlertsSent,
       sundayDigestRun: isSunday,
     };
   },
