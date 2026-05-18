@@ -25,3 +25,8 @@ body {
   /* Use next/font Geist so preloaded woff2 files are applied immediately (avoids preload warnings). */
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
+
+:focus-visible {
+  outline: 2px solid #22d3ee;
+  outline-offset: 2px;
+}
