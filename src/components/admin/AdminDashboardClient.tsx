@@ -7,6 +7,7 @@ import { BackgroundJobsCard } from "@/components/admin/BackgroundJobsCard";
 import { InsightsCard } from "@/components/admin/InsightsCard";
 import { RecentAlertsCard } from "@/components/admin/RecentAlertsCard";
 import { SystemHealthCard } from "@/components/admin/SystemHealthCard";
+import { openSupportChat } from "@/components/support/SupportChat";
 import type { AdminHealthResponse, AdminStatsResponse } from "@/lib/admin/adminTypes";
 
 type AdminTab = "operations" | "insights";
@@ -71,28 +72,37 @@ export function AdminDashboardClient() {
 
   return (
     <div className="space-y-4">
-      <div className="inline-flex rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-900">
+          <button
+            type="button"
+            onClick={() => setActiveTab("operations")}
+            className={`rounded-md px-3 py-1.5 font-semibold transition ${
+              activeTab === "operations"
+                ? "bg-cyan-500 text-slate-950"
+                : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+            }`}
+          >
+            Operations
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("insights")}
+            className={`rounded-md px-3 py-1.5 font-semibold transition ${
+              activeTab === "insights"
+                ? "bg-cyan-500 text-slate-950"
+                : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+            }`}
+          >
+            Insights
+          </button>
+        </div>
         <button
           type="button"
-          onClick={() => setActiveTab("operations")}
-          className={`rounded-md px-3 py-1.5 font-semibold transition ${
-            activeTab === "operations"
-              ? "bg-cyan-500 text-slate-950"
-              : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-          }`}
+          onClick={() => openSupportChat()}
+          className="text-xs font-semibold text-cyan-700 underline decoration-cyan-400 underline-offset-2 hover:text-cyan-600 dark:text-cyan-300 dark:hover:text-cyan-200"
         >
-          Operations
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("insights")}
-          className={`rounded-md px-3 py-1.5 font-semibold transition ${
-            activeTab === "insights"
-              ? "bg-cyan-500 text-slate-950"
-              : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-          }`}
-        >
-          Insights
+          Talk to Support
         </button>
       </div>
 

@@ -6,6 +6,7 @@ import { getLocale, getMessages } from "next-intl/server";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { SplashTransition } from "@/components/native/SplashTransition";
+import { SupportChat } from "@/components/support/SupportChat";
 import { verifyEnvFromExampleAtBoot } from "../../scripts/verify-env";
 import "./globals.css";
 
@@ -52,6 +53,7 @@ export default async function RootLayout({
         <ClerkProvider>
           <NextIntlClientProvider locale={locale} messages={messages}>
             <SplashTransition>{children}</SplashTransition>
+            <SupportChat />
             <Analytics />
             <SpeedInsights />
           </NextIntlClientProvider>

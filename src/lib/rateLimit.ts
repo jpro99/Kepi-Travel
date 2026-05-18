@@ -6,7 +6,8 @@ type RateLimitPolicyName =
   | "travel-updates-general"
   | "travel-updates-gmail-import"
   | "push-subscribe"
-  | "ai-suggestions";
+  | "ai-suggestions"
+  | "support-chat";
 
 type RateLimitPolicy = {
   limit: number;
@@ -39,6 +40,11 @@ const RATE_LIMIT_POLICIES: Record<RateLimitPolicyName, RateLimitPolicy> = {
     limit: 10,
     windowSeconds: 60 * 60,
     prefix: "kepi:rl:ai-suggestions",
+  },
+  "support-chat": {
+    limit: 20,
+    windowSeconds: 60 * 60,
+    prefix: "kepi:rl:support-chat",
   },
 };
 
@@ -87,6 +93,14 @@ const upstashLimiterByPolicy: Partial<Record<RateLimitPolicyName, Ratelimit>> = 
           `${RATE_LIMIT_POLICIES["ai-suggestions"].windowSeconds} s`,
         ),
         prefix: RATE_LIMIT_POLICIES["ai-suggestions"].prefix,
+      }),
+      "support-chat": new Ratelimit({
+        redis: upstashRedis as Redis,
+        limiter: Ratelimit.slidingWindow(
+          RATE_LIMIT_POLICIES["support-chat"].limit,
+          `${RATE_LIMIT_POLICIES["support-chat"].windowSeconds} s`,
+        ),
+        prefix: RATE_LIMIT_POLICIES["support-chat"].prefix,
       }),
     }
   : {};
