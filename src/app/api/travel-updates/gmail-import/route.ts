@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { trackServerEvent } from "@/lib/analytics/trackServerEvent";
 import { isAutomatedTestRuntime } from "@/lib/auth/mockClerkAuth";
 import { getUserPlan } from "@/lib/billing/planGate";
 import { enforceRateLimit } from "@/lib/rateLimit";
@@ -93,6 +94,12 @@ export async function POST(req: Request) {
       { status: 422 },
     );
   }
+
+  void trackServerEvent({
+    type: "gmail_import_triggered",
+    userId,
+    maxResults: parsed.data.maxResults,
+  });
 
   const reservations = await importGmailParsedReservations({
     userId,

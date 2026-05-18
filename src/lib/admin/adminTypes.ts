@@ -47,6 +47,22 @@ export interface AdminTopUserStat {
   calls: number;
 }
 
+export interface AdminCountBreakdown {
+  label: string;
+  count: number;
+}
+
+export interface AdminInsightsStats {
+  totalUsers: number;
+  activeUsersLast7Days: number;
+  proSubscribers: number;
+  totalTrips: number;
+  averageReservationsPerTrip: number;
+  conversionRateFreeToPro: number;
+  topDestinations: AdminCountBreakdown[];
+  commonDisruptions: AdminCountBreakdown[];
+}
+
 export interface AdminStatsResponse {
   generatedAt: string;
   activeUsers: {
@@ -63,4 +79,5 @@ export interface AdminStatsResponse {
     endpointRateLimitHits: AdminEndpointHitStat[];
     topActiveUsers: AdminTopUserStat[];
   };
+  insights: AdminInsightsStats;
 }

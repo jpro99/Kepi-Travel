@@ -52,6 +52,7 @@ import { ReviewQueue } from "@/components/travelAssistant/ReviewQueue";
 import { TripSearch, type TripSearchSelection } from "@/components/travelAssistant/TripSearch";
 import { TripSwitcher } from "@/components/travelAssistant/TripSwitcher";
 import { TripOrientationCard } from "@/components/travelAssistant/TripOrientationCard";
+import { trackEvent } from "@/lib/analytics/trackEvent";
 import type { BillingPlanId, PlanFeature } from "@/lib/billing/plans";
 import { JourneyFlowPanel } from "./components/JourneyFlowPanel";
 import { TravelAssistantTopControls } from "./components/TravelAssistantTopControls";
@@ -3186,6 +3187,11 @@ export default function TravelAssistantPage() {
   ): Promise<void> => {
     setAutopilotActionPending(recommendation.action);
     setLastAppliedAutopilotRecommendationTitle(recommendation.title);
+    void trackEvent({
+      type: "autopilot_applied",
+      tripId: activeTripId,
+      recommendationTitle: recommendation.title,
+    });
     try {
       switch (recommendation.action) {
         case "switch-recovery-stage":

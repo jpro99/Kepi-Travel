@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
+import { trackServerEvent } from "@/lib/analytics/trackServerEvent";
 import { getStripeClient } from "@/lib/billing/stripeClient";
 import {
   getStripeCustomerOwner,
@@ -37,6 +38,11 @@ async function handleCheckoutCompleted(
   if (stripeCustomerId) {
     await setStripeCustomerOwner(stripeCustomerId, userId);
   }
+  await trackServerEvent({
+    type: "upgrade_completed",
+    userId,
+    newPlan: "pro",
+  });
   webhookLogger.info("Stripe checkout completion stored subscription state.", {
     userId,
     stripeCustomerId,

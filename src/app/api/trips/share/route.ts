@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { trackServerEvent } from "@/lib/analytics/trackServerEvent";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { logger } from "@/lib/logger";
 import { enforceRateLimit } from "@/lib/rateLimit";
@@ -97,6 +98,15 @@ export async function POST(req: Request) {
 
   try {
     const result = await createShareLink(auth.userId, parsed.data.tripId, parsed.data.options);
+    if (!result.existing) {
+      void trackServerEvent({
+        type: "share_link_created",
+        userId: auth.userId,
+        tripId: parsed.data.tripId,
+        readOnly: result.options.readOnly,
+        expiresInDays: result.options.expiresInDays,
+      });
+    }
     const url = new URL(req.url);
     const shareUrl = `${url.origin}/share/${result.token}`;
     return NextResponse.json(

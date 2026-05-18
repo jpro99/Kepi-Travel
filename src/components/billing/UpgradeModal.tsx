@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { trackEvent } from "@/lib/analytics/trackEvent";
 import type { PlanFeature } from "@/lib/billing/plans";
 
 export interface UpgradeModalGateContext {
@@ -41,6 +42,11 @@ export function UpgradeModal({ open, gate, onClose }: UpgradeModalProps) {
     }
     setBusy(true);
     setError(null);
+    void trackEvent({
+      type: "upgrade_clicked",
+      currentPlan: "free",
+      featureGated: gate.feature,
+    });
     try {
       const response = await fetch("/api/billing/checkout", {
         method: "POST",

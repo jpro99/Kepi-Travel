@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { trackServerEvent } from "@/lib/analytics/trackServerEvent";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { getUserPlan } from "@/lib/billing/planGate";
 import { logger } from "@/lib/logger";
@@ -174,6 +175,11 @@ export async function POST(req: Request) {
   }
 
   routeLogger.info("AI suggestion stream started.", {
+    suggestionType: parsedBody.data.type,
+  });
+  void trackServerEvent({
+    type: "ai_suggestion_requested",
+    userId,
     suggestionType: parsedBody.data.type,
   });
 

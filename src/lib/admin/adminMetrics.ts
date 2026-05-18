@@ -3,8 +3,10 @@ import { Redis } from "@upstash/redis";
 import { logger } from "@/lib/logger";
 import type {
   AdminBackgroundJobRun,
+  AdminCountBreakdown,
   AdminEndpointHitStat,
   AdminHealthResponse,
+  AdminInsightsStats,
   AdminRecentAlertEntry,
   AdminServiceStatus,
   AdminStatsResponse,
@@ -32,6 +34,18 @@ interface AlertAuditRecord {
       createdAt?: string;
     }>;
   }>;
+}
+
+interface SubscriptionRecord {
+  plan?: "free" | "pro";
+  validUntil?: string | null;
+}
+
+interface AnalyticsEventRecord {
+  type?: string;
+  createdAt?: string;
+  userId?: string | null;
+  properties?: Record<string, unknown>;
 }
 
 const KV_CONFIGURED = Boolean(process.env.KV_REST_API_URL?.trim() && process.env.KV_REST_API_TOKEN?.trim());
@@ -362,6 +376,139 @@ async function collectApiUsageStats(): Promise<AdminStatsResponse["apiUsage"]> {
   };
 }
 
+function incrementCount(map: Map<string, number>, key: string): void {
+  map.set(key, (map.get(key) ?? 0) + 1);
+}
+
+function toSortedBreakdown(map: Map<string, number>, limit: number): AdminCountBreakdown[] {
+  return [...map.entries()]
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .slice(0, limit)
+    .map(([label, count]) => ({ label, count }));
+}
+
+function normalizeLabel(label: string): string {
+  const trimmed = label.trim();
+  if (trimmed.length === 0) {
+    return "Unknown";
+  }
+  return trimmed
+    .split(/\s+/u)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+async function collectInsightsStats(
+  activeUsers: AdminStatsResponse["activeUsers"],
+): Promise<AdminInsightsStats> {
+  const [tripKeys, subscriptionKeys, analyticsEventKeys] = await Promise.all([
+    scanKvKeys("kepi:*:trips"),
+    scanKvKeys("kepi:*:subscription"),
+    scanKvKeys("kepi:__analytics:events/*", 20_000),
+  ]);
+
+  const totalUsers = new Set<string>();
+  const destinationCounts = new Map<string, number>();
+  const disruptionCounts = new Map<string, number>();
+  const activeUsersFromEvents = new Set<string>();
+  const sevenDaysAgoMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+  let totalTrips = 0;
+  let totalReservations = 0;
+  let proSubscribers = 0;
+
+  for (const key of tripKeys) {
+    const userId = extractUserIdFromKepiKey(key);
+    if (userId && !userId.startsWith("__")) {
+      totalUsers.add(userId);
+    }
+    try {
+      const value = await kv.get<unknown>(key);
+      if (!Array.isArray(value)) {
+        continue;
+      }
+      for (const trip of value) {
+        if (!trip || typeof trip !== "object") continue;
+        const candidate = trip as { destination?: unknown; reservations?: unknown[] };
+        totalTrips += 1;
+        if (typeof candidate.destination === "string") {
+          incrementCount(destinationCounts, normalizeLabel(candidate.destination));
+        }
+        totalReservations += Array.isArray(candidate.reservations) ? candidate.reservations.length : 0;
+      }
+    } catch (error) {
+      logger.warn("Failed to read trips while building admin insights.", {
+        scope: "admin/adminMetrics",
+        key,
+        error,
+      });
+    }
+  }
+
+  for (const key of subscriptionKeys) {
+    const userId = extractUserIdFromKepiKey(key);
+    if (userId && !userId.startsWith("__")) {
+      totalUsers.add(userId);
+    }
+    try {
+      const record = (await kv.get<SubscriptionRecord>(key)) ?? null;
+      if (record?.plan !== "pro") continue;
+      const validUntilMs = record.validUntil ? Date.parse(record.validUntil) : Number.NaN;
+      if (!record.validUntil || Number.isNaN(validUntilMs) || validUntilMs > Date.now()) {
+        proSubscribers += 1;
+      }
+    } catch (error) {
+      logger.warn("Failed to read subscriptions while building admin insights.", {
+        scope: "admin/adminMetrics",
+        key,
+        error,
+      });
+    }
+  }
+
+  for (const key of analyticsEventKeys) {
+    try {
+      const record = (await kv.get<AnalyticsEventRecord>(key)) ?? null;
+      if (!record || typeof record.createdAt !== "string") {
+        continue;
+      }
+      const createdAtMs = Date.parse(record.createdAt);
+      if (!Number.isNaN(createdAtMs) && createdAtMs >= sevenDaysAgoMs && typeof record.userId === "string") {
+        activeUsersFromEvents.add(record.userId);
+      }
+      if (record.type === "disruption_detected") {
+        const disruptionType = record.properties?.disruptionType;
+        if (typeof disruptionType === "string") {
+          incrementCount(disruptionCounts, normalizeLabel(disruptionType.replaceAll("-", " ")));
+        } else {
+          incrementCount(disruptionCounts, "Unknown");
+        }
+      }
+    } catch (error) {
+      logger.warn("Failed to read analytics event while building admin insights.", {
+        scope: "admin/adminMetrics",
+        key,
+        error,
+      });
+    }
+  }
+
+  const averageReservationsPerTrip = totalTrips === 0 ? 0 : Number((totalReservations / totalTrips).toFixed(2));
+  const conversionRateFreeToPro =
+    totalUsers.size === 0 ? 0 : Number(((proSubscribers / totalUsers.size) * 100).toFixed(1));
+
+  return {
+    totalUsers: totalUsers.size,
+    activeUsersLast7Days: Math.max(activeUsersFromEvents.size, activeUsers.activeSessionUsers),
+    proSubscribers,
+    totalTrips,
+    averageReservationsPerTrip,
+    conversionRateFreeToPro,
+    topDestinations: toSortedBreakdown(destinationCounts, 5),
+    commonDisruptions: toSortedBreakdown(disruptionCounts, 5),
+  };
+}
+
 export async function buildAdminHealthSnapshot(): Promise<AdminHealthResponse> {
   const [kvHealth, backgroundRuns, aviationStackHealth, sentryHealth] = await Promise.all([
     measureKvHealth(),
@@ -387,6 +534,7 @@ export async function buildAdminStatsSnapshot(): Promise<AdminStatsResponse> {
     collectBackgroundRuns(10),
     collectApiUsageStats(),
   ]);
+  const insights = await collectInsightsStats(activeUsers);
   return {
     generatedAt: new Date().toISOString(),
     activeUsers,
@@ -396,5 +544,6 @@ export async function buildAdminStatsSnapshot(): Promise<AdminStatsResponse> {
       dashboardUrl: process.env.INNGEST_DASHBOARD_URL?.trim() || "https://app.inngest.com/",
     },
     apiUsage,
+    insights,
   };
 }

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getUserPlan } from "@/lib/billing/planGate";
+import { trackServerEvent } from "@/lib/analytics/trackServerEvent";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { logger } from "@/lib/logger";
 import { enforceRateLimit } from "@/lib/rateLimit";
@@ -18,6 +19,13 @@ import {
 const TripStageSchema = z.enum(["readiness", "pre-departure", "airport", "arrival", "recovery"]);
 const TripStatusSchema = z.enum(["green", "yellow", "red"]);
 const TripScenarioSchema = z.enum(["none", "missed-flight", "train-delay", "ride-no-show"]);
+const STAGE_RANK: Record<z.infer<typeof TripStageSchema>, number> = {
+  readiness: 0,
+  "pre-departure": 1,
+  airport: 2,
+  arrival: 3,
+  recovery: 4,
+};
 
 const TripPayloadSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -182,6 +190,12 @@ export async function POST(req: Request) {
   auth.routeLogger.info("Trip created.", {
     tripId: created.id,
   });
+  void trackServerEvent({
+    type: "trip_created",
+    userId: auth.userId,
+    tripId: created.id,
+    plan: userPlan,
+  });
   return NextResponse.json(
     {
       trip: created,
@@ -227,10 +241,49 @@ export async function PUT(req: Request) {
     );
   }
 
+  const existingTrip = await getTrip(parsed.data.id, auth.userId);
   const updated = await updateTrip(parsed.data.id, parsed.data.patch, auth.userId);
   if (!updated) {
     return NextResponse.json({ error: "Trip not found" }, { status: 404, headers: auth.headers });
   }
+
+  if (existingTrip) {
+    const previousStageRank = STAGE_RANK[existingTrip.stage];
+    const nextStageRank = STAGE_RANK[updated.stage];
+    if (nextStageRank > previousStageRank) {
+      void trackServerEvent({
+        type: "stage_advanced",
+        userId: auth.userId,
+        tripId: updated.id,
+        newStage: updated.stage,
+      });
+    }
+
+    const previousReservationIds = new Set(existingTrip.reservations.map((reservation) => reservation.id));
+    const addedReservations = updated.reservations.filter((reservation) => !previousReservationIds.has(reservation.id));
+    for (const reservation of addedReservations) {
+      void trackServerEvent({
+        type: "reservation_added",
+        userId: auth.userId,
+        tripId: updated.id,
+        reservationType: reservation.type,
+      });
+    }
+
+    if (
+      updated.activeScenario &&
+      updated.activeScenario !== "none" &&
+      updated.activeScenario !== existingTrip.activeScenario
+    ) {
+      void trackServerEvent({
+        type: "disruption_detected",
+        userId: auth.userId,
+        tripId: updated.id,
+        disruptionType: updated.activeScenario,
+      });
+    }
+  }
+
   const [trips, activeTrip] = await Promise.all([listTrips(auth.userId), getActiveTrip(auth.userId)]);
   return NextResponse.json(
     {
