@@ -2,13 +2,8 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { loadStripe } from "@stripe/stripe-js";
 import type { PlanFeature } from "@/lib/billing/plans";
 import { PLAN_FEATURE_LABELS } from "@/lib/billing/plans";
-
-const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-  ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
-  : null;
 
 export interface UpgradeModalGateContext {
   feature: PlanFeature;
@@ -58,20 +53,6 @@ export function UpgradeModal({ open, gate, onClose }: UpgradeModalProps) {
       };
       if (!response.ok) {
         throw new Error(payload.error ?? `Checkout request failed (${response.status})`);
-      }
-
-      if (payload.checkoutSessionId && stripePromise) {
-        const stripe = await stripePromise;
-        if (!stripe) {
-          throw new Error("Stripe client could not be initialized.");
-        }
-        const result = await stripe.redirectToCheckout({
-          sessionId: payload.checkoutSessionId,
-        });
-        if (result.error) {
-          throw new Error(result.error.message);
-        }
-        return;
       }
 
       if (payload.url) {

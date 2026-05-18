@@ -14,7 +14,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 async function handleCheckoutCompleted(
-  stripe: Stripe,
+  _stripe: Stripe,
   session: Stripe.Checkout.Session,
   webhookLogger: ReturnType<typeof logger.withContext>,
 ): Promise<void> {
@@ -26,19 +26,7 @@ async function handleCheckoutCompleted(
 
   const stripeCustomerId = typeof session.customer === "string" ? session.customer : null;
   const stripeSubscriptionId = typeof session.subscription === "string" ? session.subscription : null;
-  let validUntil: string | null = null;
-
-  if (stripeSubscriptionId) {
-    try {
-      const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
-      validUntil = new Date(subscription.current_period_end * 1000).toISOString();
-    } catch (error) {
-      webhookLogger.warn("Unable to retrieve Stripe subscription period end.", {
-        stripeSubscriptionId,
-        error,
-      });
-    }
-  }
+  const validUntil = null;
 
   await setSubscriptionRecord(userId, {
     plan: "pro",
@@ -49,6 +37,11 @@ async function handleCheckoutCompleted(
   if (stripeCustomerId) {
     await setStripeCustomerOwner(stripeCustomerId, userId);
   }
+  webhookLogger.info("Stripe checkout completion stored subscription state.", {
+    userId,
+    stripeCustomerId,
+    stripeSubscriptionId,
+  });
 }
 
 async function handleSubscriptionDeleted(

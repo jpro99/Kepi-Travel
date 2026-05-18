@@ -163,8 +163,8 @@ export async function POST(req: Request) {
     );
   }
 
-  const [userPlan, trips] = await Promise.all([getUserPlan(auth.userId), listTrips(auth.userId)]);
-  if (userPlan === "free" && trips.length >= 1) {
+  const [userPlan, existingTrips] = await Promise.all([getUserPlan(auth.userId), listTrips(auth.userId)]);
+  if (userPlan === "free" && existingTrips.length >= 1) {
     return NextResponse.json(
       {
         error: "Free tier allows one trip. Upgrade to Pro to create additional trips.",

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import type { BillingPlanDefinition, BillingPlanId, PlanFeature } from "@/lib/billing/plans";
 import { BILLING_PLANS, PLAN_FEATURE_LABELS, formatPlanPrice } from "@/lib/billing/plans";
 
@@ -19,14 +18,10 @@ type BillingStatusResponse = {
 const FEATURE_ORDER: PlanFeature[] = ["gmail-import", "ai-suggestions", "push-notifications", "multi-trip"];
 
 export default function BillingPage() {
-  const searchParams = useSearchParams();
   const [status, setStatus] = useState<BillingStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const checkoutFlag = searchParams.get("checkout");
 
   const loadBillingStatus = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -46,19 +41,27 @@ export default function BillingPage() {
   }, []);
 
   useEffect(() => {
-    void loadBillingStatus();
+    const timeout = window.setTimeout(() => {
+      void loadBillingStatus();
+    }, 0);
+    return () => {
+      window.clearTimeout(timeout);
+    };
   }, [loadBillingStatus]);
 
-  useEffect(() => {
-    if (!checkoutFlag) {
-      return;
+  const checkoutMessage = useMemo(() => {
+    if (typeof window === "undefined") {
+      return null;
     }
+    const checkoutFlag = new URLSearchParams(window.location.search).get("checkout");
     if (checkoutFlag === "success") {
-      setMessage("Checkout complete. Plan details may take a moment to refresh.");
-    } else if (checkoutFlag === "cancelled") {
-      setMessage("Checkout was cancelled. You can continue on Free or retry later.");
+      return "Checkout complete. Plan details may take a moment to refresh.";
     }
-  }, [checkoutFlag]);
+    if (checkoutFlag === "cancelled") {
+      return "Checkout was cancelled. You can continue on Free or retry later.";
+    }
+    return null;
+  }, []);
 
   const activePlan = status?.plan ?? "free";
   const planDefinition = status?.definition ?? BILLING_PLANS.free;
@@ -200,7 +203,9 @@ export default function BillingPage() {
         )}
       </section>
 
-      {message ? <p className="rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-2 text-sm text-cyan-900">{message}</p> : null}
+      {checkoutMessage ? (
+        <p className="rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-2 text-sm text-cyan-900">{checkoutMessage}</p>
+      ) : null}
       {error ? <p className="rounded-lg border border-red-400/60 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</p> : null}
     </main>
   );
