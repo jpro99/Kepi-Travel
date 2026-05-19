@@ -1,4 +1,4 @@
-type PlanType = "free" | "pro";
+type PlanType = "free" | "pro" | "concierge";
 
 export type KepiAnalyticsEvent =
   | { type: "trip_created"; userId: string; tripId: string; plan: PlanType }
@@ -7,8 +7,8 @@ export type KepiAnalyticsEvent =
   | { type: "disruption_detected"; userId: string; tripId: string; disruptionType: string }
   | { type: "autopilot_applied"; tripId: string | null; recommendationTitle: string }
   | { type: "share_link_created"; userId: string; tripId: string; readOnly: boolean; expiresInDays: number }
-  | { type: "upgrade_clicked"; currentPlan: "free"; featureGated?: string }
-  | { type: "upgrade_completed"; userId: string; newPlan: "pro" }
+  | { type: "upgrade_clicked"; currentPlan: PlanType; featureGated?: string; targetPlan?: PlanType }
+  | { type: "upgrade_completed"; userId: string; newPlan: "pro" | "concierge" }
   | { type: "gmail_import_triggered"; userId: string; maxResults: number; tripId?: string }
   | { type: "ai_suggestion_requested"; userId: string; suggestionType: string; tripId?: string };
 

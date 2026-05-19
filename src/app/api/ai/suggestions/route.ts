@@ -81,7 +81,7 @@ export async function POST(req: Request) {
   }
 
   const plan = await getUserPlan(userId);
-  if (plan !== "pro") {
+  if (plan === "free") {
     return NextResponse.json(
       {
         error: "AI itinerary guidance is available on Pro.",

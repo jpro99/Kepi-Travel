@@ -27,10 +27,11 @@ async function handleCheckoutCompleted(
 
   const stripeCustomerId = typeof session.customer === "string" ? session.customer : null;
   const stripeSubscriptionId = typeof session.subscription === "string" ? session.subscription : null;
+  const subscribedPlan = session.metadata?.plan === "concierge" ? "concierge" : "pro";
   const validUntil = null;
 
   await setSubscriptionRecord(userId, {
-    plan: "pro",
+    plan: subscribedPlan,
     stripeCustomerId,
     stripeSubscriptionId,
     validUntil,
@@ -41,7 +42,7 @@ async function handleCheckoutCompleted(
   await trackServerEvent({
     type: "upgrade_completed",
     userId,
-    newPlan: "pro",
+    newPlan: subscribedPlan,
   });
   webhookLogger.info("Stripe checkout completion stored subscription state.", {
     userId,

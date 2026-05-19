@@ -4,12 +4,13 @@ import type { NextRequest } from "next/server";
 import { logger } from "@/lib/logger";
 import { reminderLadder } from "@/inngest/functions/reminderLadder";
 import { emailScheduler } from "@/inngest/functions/emailScheduler";
+import { proactiveMonitoringSweep } from "@/inngest/functions/proactiveMonitoringSweep";
 import { travelUpdatePass } from "@/inngest/functions/travelUpdatePass";
 import { inngest } from "@/inngest/client";
 
 const handlers = serve({
   client: inngest,
-  functions: [travelUpdatePass, reminderLadder, emailScheduler],
+  functions: [travelUpdatePass, reminderLadder, emailScheduler, proactiveMonitoringSweep],
 });
 
 export const GET = async (request: NextRequest, context: unknown): Promise<Response> => {

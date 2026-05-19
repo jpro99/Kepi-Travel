@@ -25,7 +25,7 @@ function sanitizeRecord(input: unknown): BillingSubscriptionRecord {
     return FREE_SUBSCRIPTION_RECORD;
   }
   const candidate = input as Partial<BillingSubscriptionRecord>;
-  const plan = candidate.plan === "pro" ? "pro" : "free";
+  const plan = candidate.plan === "concierge" ? "concierge" : candidate.plan === "pro" ? "pro" : "free";
   const stripeCustomerId = typeof candidate.stripeCustomerId === "string" ? candidate.stripeCustomerId : null;
   const stripeSubscriptionId =
     typeof candidate.stripeSubscriptionId === "string" ? candidate.stripeSubscriptionId : null;
@@ -39,7 +39,7 @@ function sanitizeRecord(input: unknown): BillingSubscriptionRecord {
 }
 
 export function isSubscriptionActive(record: BillingSubscriptionRecord): boolean {
-  if (record.plan !== "pro") {
+  if (record.plan === "free") {
     return false;
   }
   if (!record.validUntil) {
@@ -64,7 +64,7 @@ export async function extendSubscriptionProAccess(userId: string, days: number):
     return existing;
   }
 
-  if (existing.plan === "pro" && existing.validUntil === null && Boolean(existing.stripeSubscriptionId)) {
+  if ((existing.plan === "pro" || existing.plan === "concierge") && existing.validUntil === null && Boolean(existing.stripeSubscriptionId)) {
     return existing;
   }
 
@@ -73,7 +73,7 @@ export async function extendSubscriptionProAccess(userId: string, days: number):
   const baseMs = !Number.isNaN(parsedValidUntil) && parsedValidUntil > nowMs ? parsedValidUntil : nowMs;
   const nextRecord: BillingSubscriptionRecord = {
     ...existing,
-    plan: "pro",
+    plan: existing.plan === "concierge" ? "concierge" : "pro",
     validUntil: new Date(baseMs + grantDays * DAY_IN_MS).toISOString(),
   };
   await setSubscriptionRecord(userId, nextRecord);

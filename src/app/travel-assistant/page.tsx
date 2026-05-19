@@ -58,6 +58,7 @@ import { DocumentVault } from "@/components/travelAssistant/DocumentVault";
 import { PackingList } from "@/components/travelAssistant/PackingList";
 import { WeatherCard } from "@/components/travelAssistant/WeatherCard";
 import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntelligencePanel";
+import { ConciergePanel } from "@/components/travelAssistant/ConciergePanel";
 import { trackEvent } from "@/lib/analytics/trackEvent";
 import type { BillingPlanId, PlanFeature } from "@/lib/billing/plans";
 import { JourneyFlowPanel } from "./components/JourneyFlowPanel";
@@ -1277,7 +1278,7 @@ export default function TravelAssistantPage() {
     }
     const payload = (await response.json()) as BillingStatusResponse;
     const tripLimit = payload.usage?.tripLimit;
-    setBillingPlan(payload.plan === "pro" ? "pro" : "free");
+    setBillingPlan(payload.plan === "concierge" ? "concierge" : payload.plan === "pro" ? "pro" : "free");
     setBillingTripLimit(typeof tripLimit === "number" || tripLimit === null ? tripLimit : 1);
   }, []);
 
@@ -1438,7 +1439,7 @@ export default function TravelAssistantPage() {
   );
 
   const handleCreateTrip = useCallback(async (): Promise<void> => {
-    const allowCreation = billingPlan === "pro" || billingTripLimit === null || trips.length < billingTripLimit;
+    const allowCreation = billingPlan !== "free" || billingTripLimit === null || trips.length < billingTripLimit;
     if (!allowCreation) {
       openUpgradeModal("multi-trip", "Free includes one trip. Upgrade to add and manage multiple trips.");
       return;
@@ -1690,7 +1691,7 @@ export default function TravelAssistantPage() {
     requiredReadinessCount === 0
       ? 100
       : Math.round(((requiredReadinessCount - unresolvedReadinessCount) / requiredReadinessCount) * 100);
-  const hasProPlan = billingPlan === "pro";
+  const hasProPlan = billingPlan !== "free";
   const canUseGmailImport = hasProPlan;
   const canUseAiSuggestions = hasProPlan;
   const canUsePushNotifications = hasProPlan;
@@ -3813,6 +3814,21 @@ export default function TravelAssistantPage() {
             }
           />
         ) : null}
+        {shouldRenderMobilePanel("essentials") ? (
+          <ConciergePanel
+            tripId={activeTripId}
+            tripName={activeTrip?.name ?? "Current trip"}
+            destination={activeTrip?.destination ?? ""}
+            billingPlan={billingPlan}
+            reservations={reservations}
+            onRequestUpgrade={() =>
+              openUpgradeModal(
+                "concierge-monitoring",
+                "Upgrade to Concierge for proactive 5-minute monitoring and VIP recovery support.",
+              )
+            }
+          />
+        ) : null}
 
         {shouldRenderMobilePanel("essentials") ? (
           <JourneyFlowPanel
@@ -4616,7 +4632,12 @@ export default function TravelAssistantPage() {
           {toast}
         </div>
       ) : null}
-      <UpgradeModal open={Boolean(upgradeModalGate)} gate={upgradeModalGate} onClose={closeUpgradeModal} />
+      <UpgradeModal
+        open={Boolean(upgradeModalGate)}
+        gate={upgradeModalGate}
+        currentPlan={billingPlan}
+        onClose={closeUpgradeModal}
+      />
       <InstallPrompt />
       <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
     </main>

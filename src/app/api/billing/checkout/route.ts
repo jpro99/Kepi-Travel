@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getUserPlan } from "@/lib/billing/planGate";
+import type { BillingPlanId } from "@/lib/billing/plans";
 import { getStripeClient } from "@/lib/billing/stripeClient";
 import { getSubscriptionRecord } from "@/lib/billing/subscriptionStore";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
@@ -12,9 +13,26 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const CheckoutBodySchema = z.object({
+  targetPlan: z.enum(["pro", "concierge"]).default("pro"),
   successPath: z.string().trim().min(1).max(200).default("/billing?checkout=success"),
   cancelPath: z.string().trim().min(1).max(200).default("/billing?checkout=cancelled"),
 });
+
+function resolveStripePriceId(plan: "pro" | "concierge"): string | null {
+  if (plan === "concierge") {
+    const conciergePriceId = process.env.STRIPE_CONCIERGE_PRICE_ID?.trim();
+    return conciergePriceId || null;
+  }
+  const proPriceId = process.env.STRIPE_PRO_PRICE_ID?.trim();
+  return proPriceId || null;
+}
+
+function canUpgradeToPlan(currentPlan: BillingPlanId, targetPlan: "pro" | "concierge"): boolean {
+  if (targetPlan === "pro") {
+    return currentPlan === "free";
+  }
+  return currentPlan !== "concierge";
+}
 
 export async function POST(req: Request) {
   const requestId = req.headers.get("x-request-id")?.trim() || randomUUID();
@@ -44,23 +62,13 @@ export async function POST(req: Request) {
   }
 
   const stripe = getStripeClient();
-  const stripePriceId = process.env.STRIPE_PRO_PRICE_ID?.trim();
-  if (!stripe || !stripePriceId) {
+  if (!stripe) {
     routeLogger.warn("Stripe checkout unavailable due to missing configuration.", {
       stripeConfigured: Boolean(stripe),
-      hasPriceId: Boolean(stripePriceId),
     });
     return NextResponse.json(
       { error: "Billing is not configured yet. Please contact support." },
       { status: 503, headers: rateLimit.headers },
-    );
-  }
-
-  const currentPlan = await getUserPlan(userId);
-  if (currentPlan === "pro") {
-    return NextResponse.json(
-      { error: "Your account is already on Pro." },
-      { status: 409, headers: rateLimit.headers },
     );
   }
 
@@ -75,6 +83,23 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: "Validation failed", details: parsedBody.error.flatten() },
       { status: 422, headers: rateLimit.headers },
+    );
+  }
+  const targetPlan = parsedBody.data.targetPlan;
+  const stripePriceId = resolveStripePriceId(targetPlan);
+  if (!stripePriceId) {
+    routeLogger.warn("Stripe checkout unavailable due to missing plan price id.", { targetPlan });
+    return NextResponse.json(
+      { error: "Billing is not configured for this plan yet. Please contact support." },
+      { status: 503, headers: rateLimit.headers },
+    );
+  }
+
+  const currentPlan = await getUserPlan(userId);
+  if (!canUpgradeToPlan(currentPlan, targetPlan)) {
+    return NextResponse.json(
+      { error: targetPlan === "concierge" ? "Your account is already on Concierge." : "Your account is already paid." },
+      { status: 409, headers: rateLimit.headers },
     );
   }
 
@@ -94,12 +119,12 @@ export async function POST(req: Request) {
     allow_promotion_codes: true,
     metadata: {
       userId,
-      plan: "pro",
+      plan: targetPlan,
     },
     subscription_data: {
       metadata: {
         userId,
-        plan: "pro",
+        plan: targetPlan,
       },
     },
   });

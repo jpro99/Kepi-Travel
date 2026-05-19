@@ -37,7 +37,7 @@ interface AlertAuditRecord {
 }
 
 interface SubscriptionRecord {
-  plan?: "free" | "pro";
+  plan?: "free" | "pro" | "concierge";
   validUntil?: string | null;
 }
 
@@ -452,7 +452,7 @@ async function collectInsightsStats(
     }
     try {
       const record = (await kv.get<SubscriptionRecord>(key)) ?? null;
-      if (record?.plan !== "pro") continue;
+      if (!record || record.plan === "free") continue;
       const validUntilMs = record.validUntil ? Date.parse(record.validUntil) : Number.NaN;
       if (!record.validUntil || Number.isNaN(validUntilMs) || validUntilMs > Date.now()) {
         proSubscribers += 1;

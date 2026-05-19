@@ -8,12 +8,22 @@ import { BILLING_PLANS, PLAN_FEATURE_LABELS, formatPlanPrice } from "@/lib/billi
 type BillingStatusResponse = {
   plan: BillingPlanId;
   definition: BillingPlanDefinition;
+  features: Array<{
+    feature: PlanFeature;
+    label: string;
+    requiresPro: boolean;
+    enabled: boolean;
+  }>;
   usage: {
     tripCount: number;
     tripLimit: number | null;
     tripsRemaining: number | null;
   };
   stripeConfigured: boolean;
+  stripePlansConfigured?: {
+    pro: boolean;
+    concierge: boolean;
+  };
 };
 
 const FEATURE_ORDER: PlanFeature[] = ["gmail-import", "ai-suggestions", "push-notifications", "multi-trip"];
@@ -23,6 +33,7 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [targetPlan, setTargetPlan] = useState<"pro" | "concierge">("pro");
 
   const loadBillingStatus = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -67,6 +78,21 @@ export default function BillingPage() {
   const activePlan = status?.plan ?? "free";
   const planDefinition = status?.definition ?? BILLING_PLANS.free;
 
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      if (activePlan === "free") {
+        setTargetPlan("pro");
+        return;
+      }
+      if (activePlan === "pro") {
+        setTargetPlan("concierge");
+      }
+    }, 0);
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [activePlan]);
+
   const handleStartCheckout = useCallback(async (): Promise<void> => {
     if (busy) return;
     setBusy(true);
@@ -76,6 +102,7 @@ export default function BillingPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          targetPlan,
           successPath: "/billing?checkout=success",
           cancelPath: "/billing?checkout=cancelled",
         }),
@@ -89,7 +116,7 @@ export default function BillingPage() {
       setError(checkoutError instanceof Error ? checkoutError.message : "Could not start checkout.");
       setBusy(false);
     }
-  }, [busy]);
+  }, [busy, targetPlan]);
 
   const handleManageSubscription = useCallback(async (): Promise<void> => {
     if (busy) return;
@@ -149,7 +176,7 @@ export default function BillingPage() {
 
             <div className="grid gap-2 sm:grid-cols-2">
               {FEATURE_ORDER.map((feature) => {
-                const enabled = activePlan === "pro";
+                const enabled = status?.features.find((entry) => entry.feature === feature)?.enabled ?? false;
                 return (
                   <div
                     key={feature}
@@ -165,8 +192,49 @@ export default function BillingPage() {
               })}
             </div>
 
+            <div className="grid gap-2 sm:grid-cols-3">
+              {(["free", "pro", "concierge"] as const).map((planId) => {
+                const plan = BILLING_PLANS[planId];
+                const highlighted = activePlan === planId;
+                return (
+                  <article
+                    key={plan.id}
+                    className={`rounded-xl border p-3 text-sm ${
+                      highlighted
+                        ? "border-cyan-400 bg-cyan-500/10"
+                        : "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-950/70"
+                    }`}
+                  >
+                    <p className="font-semibold">{plan.name}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{formatPlanPrice(plan.monthlyPriceCents)}</p>
+                    <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{plan.tagline}</p>
+                    {highlighted ? (
+                      <p className="mt-2 text-[11px] font-semibold text-cyan-700 dark:text-cyan-300">Current plan</p>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+
+            {activePlan !== "concierge" ? (
+              <label className="block text-sm">
+                <span className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Upgrade target</span>
+                <select
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+                  value={targetPlan}
+                  onChange={(event) => {
+                    const next = event.target.value === "concierge" ? "concierge" : "pro";
+                    setTargetPlan(next);
+                  }}
+                >
+                  {activePlan === "free" ? <option value="pro">Pro — $9/month</option> : null}
+                  <option value="concierge">Concierge — $29/month</option>
+                </select>
+              </label>
+            ) : null}
+
             <div className="flex flex-wrap gap-2">
-              {activePlan === "pro" ? (
+              {activePlan !== "free" ? (
                 <button
                   type="button"
                   disabled={busy}
@@ -177,18 +245,28 @@ export default function BillingPage() {
                 >
                   {busy ? "Opening portal..." : "Manage subscription"}
                 </button>
-              ) : (
+              ) : null}
+              {activePlan !== "concierge" ? (
                 <button
                   type="button"
-                  disabled={busy || !status?.stripeConfigured}
+                  disabled={
+                    busy ||
+                    !status?.stripeConfigured ||
+                    (targetPlan === "pro" && !status?.stripePlansConfigured?.pro) ||
+                    (targetPlan === "concierge" && !status?.stripePlansConfigured?.concierge)
+                  }
                   onClick={() => {
                     void handleStartCheckout();
                   }}
                   className="rounded-lg bg-cyan-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {busy ? "Starting checkout..." : "Upgrade to Pro — $9/month"}
+                  {busy
+                    ? "Starting checkout..."
+                    : targetPlan === "concierge"
+                      ? "Upgrade to Concierge — $29/month"
+                      : "Upgrade to Pro — $9/month"}
                 </button>
-              )}
+              ) : null}
               <button
                 type="button"
                 disabled={loading}

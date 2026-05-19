@@ -11,7 +11,16 @@ import { listTrips } from "@/lib/travelAssistant/tripStore";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const FEATURES: PlanFeature[] = ["gmail-import", "ai-suggestions", "push-notifications", "multi-trip"];
+const FEATURES: PlanFeature[] = [
+  "gmail-import",
+  "ai-suggestions",
+  "push-notifications",
+  "multi-trip",
+  "concierge-monitoring",
+  "concierge-auto-rebook",
+  "concierge-priority-support",
+  "concierge-lounge-access",
+];
 
 export async function GET(req: Request) {
   const requestId = req.headers.get("x-request-id")?.trim() || randomUUID();
@@ -36,6 +45,8 @@ export async function GET(req: Request) {
   const tripLimit = definition.maxTrips;
   const tripCount = trips.length;
   const publishableKey = getStripePublishableKey();
+  const stripeProPriceConfigured = Boolean(process.env.STRIPE_PRO_PRICE_ID?.trim());
+  const stripeConciergePriceConfigured = Boolean(process.env.STRIPE_CONCIERGE_PRICE_ID?.trim());
 
   return NextResponse.json({
     plan,
@@ -49,9 +60,13 @@ export async function GET(req: Request) {
     features: FEATURES.map((feature) => ({
       feature,
       label: PLAN_FEATURE_LABELS[feature],
-      requiresPro: true,
-      enabled: plan === "pro",
+      requiresPro: !feature.startsWith("concierge-"),
+      enabled: definition.enabledFeatures.includes(feature),
     })),
-    stripeConfigured: Boolean(publishableKey && process.env.STRIPE_PRO_PRICE_ID?.trim()),
+    stripeConfigured: Boolean(publishableKey && (stripeProPriceConfigured || stripeConciergePriceConfigured)),
+    stripePlansConfigured: {
+      pro: stripeProPriceConfigured,
+      concierge: stripeConciergePriceConfigured,
+    },
   });
 }
