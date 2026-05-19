@@ -1047,7 +1047,7 @@ export default function TravelAssistantPage() {
   const [exportFrom, setExportFrom] = useState("");
   const [exportTo, setExportTo] = useState("");
   const [timelineSectionTab, setTimelineSectionTab] = useState<TimelineSectionTab>("reservations");
-  const [packingCompletionPercent, setPackingCompletionPercent] = useState(0);
+  const [, setPackingCompletionPercent] = useState(0);
   const [consumerTab, setConsumerTab] = useState<ConsumerTab>("trip");
   const [advancedModeEnabled, setAdvancedModeEnabled] = useState(false);
   const [advancedModeSaving, setAdvancedModeSaving] = useState(false);
@@ -1055,7 +1055,7 @@ export default function TravelAssistantPage() {
   const [consumerTripMenuOpen, setConsumerTripMenuOpen] = useState(false);
   const [consumerAvatarMenuOpen, setConsumerAvatarMenuOpen] = useState(false);
   const [showAdvancedShortcut, setShowAdvancedShortcut] = useState(false);
-  const advancedShortcutTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const advancedShortcutTimerRef = useRef<number | null>(null);
 
   const selectedFamilyMember = useMemo(
     () => familyMembers.find((member) => member.id === selectedFamilyMemberId) ?? familyMembers[0],
@@ -1779,11 +1779,6 @@ export default function TravelAssistantPage() {
 
   const unresolvedReviewCount = reviewQueue.length;
   const unresolvedReadinessCount = readinessItems.filter((item) => item.required && !item.complete).length;
-  const requiredReadinessCount = readinessItems.filter((item) => item.required).length;
-  const readinessCompletionPercent =
-    requiredReadinessCount === 0
-      ? 100
-      : Math.round(((requiredReadinessCount - unresolvedReadinessCount) / requiredReadinessCount) * 100);
   const hasProPlan = billingPlan !== "free";
   const canUseGmailImport = hasProPlan;
   const canUseAiSuggestions = hasProPlan;
@@ -3678,7 +3673,7 @@ export default function TravelAssistantPage() {
     openDrawer("review", reviewQueue[0].id);
   }, [openDrawer, reviewQueue, setToast]);
 
-  const consumerPrimaryAction = useMemo(() => {
+  const consumerPrimaryAction = (() => {
     if (tripStatus === "red" || activeScenario !== "none" || delayedFlight) {
       return {
         label: "Fix this for me",
@@ -3707,15 +3702,7 @@ export default function TravelAssistantPage() {
       };
     }
     return null;
-  }, [
-    activeScenario,
-    applyIncidentAutopilotRecommendation,
-    delayedFlight,
-    incidentAutopilotRecommendations,
-    tripStatus,
-    unresolvedReadinessCount,
-    unresolvedReviewCount,
-  ]);
+  })();
 
   if (!advancedWorkspaceEnabled) {
     return (
