@@ -296,7 +296,12 @@ export function PackingList({ tripId, onCompletionChange }: PackingListProps) {
         </div>
       </div>
 
-      {loading ? <p className="text-xs text-slate-400">Loading packing list...</p> : null}
+      {loading ? (
+        <div className="grid gap-2 md:grid-cols-2" aria-label="Packing list loading">
+          <div className="h-20 rounded-xl border border-slate-700 bg-slate-950/60" />
+          <div className="h-20 rounded-xl border border-slate-700 bg-slate-950/60" />
+        </div>
+      ) : null}
       {error ? <p className="text-xs text-red-300">{error}</p> : null}
       {shareMessage ? <p className="text-xs text-emerald-300">{shareMessage}</p> : null}
 

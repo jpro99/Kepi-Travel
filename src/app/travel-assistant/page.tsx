@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useClerk } from "@clerk/nextjs";
 import { cache, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   enforceStatusFloor,
@@ -45,8 +47,10 @@ import { ConnectivityPanel } from "@/components/travelAssistant/ConnectivityPane
 import { AISuggestionPanel } from "@/components/travelAssistant/AISuggestionPanel";
 import { UpgradeModal, type UpgradeModalGateContext } from "@/components/billing/UpgradeModal";
 import { InstallPrompt } from "@/components/InstallPrompt";
+import { LanguageToggle } from "@/components/LanguageToggle";
 import { OnboardingFlow } from "@/components/onboarding/OnboardingFlow";
 import type { TripSetupDraft } from "@/components/onboarding/TripSetupForm";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { QuickAddLane } from "@/components/travelAssistant/QuickAddLane";
 import { ReservationList } from "@/components/travelAssistant/ReservationList";
 import { ReviewQueue } from "@/components/travelAssistant/ReviewQueue";
@@ -61,6 +65,7 @@ import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntell
 import { ConciergePanel } from "@/components/travelAssistant/ConciergePanel";
 import { trackEvent } from "@/lib/analytics/trackEvent";
 import type { BillingPlanId, PlanFeature } from "@/lib/billing/plans";
+import { AdvancedModeToggle } from "@/components/ui/AdvancedModeToggle";
 import { JourneyFlowPanel } from "./components/JourneyFlowPanel";
 import { TravelAssistantTopControls } from "./components/TravelAssistantTopControls";
 
@@ -84,10 +89,10 @@ type ReservationType = "flight" | "hotel" | "train" | "ride" | "dinner";
 type Confidence = "high" | "medium" | "low";
 type GuidanceTone = "subtle" | "standard";
 type MobileViewPanel = "essentials" | "timeline" | "recovery" | "family" | "all";
-type DemoPresetId = "smooth-trip" | "moderate-delay" | "severe-disruption";
 type VisibilityMode = "all-members" | "organizer-only";
 type DisruptionScenario = "none" | "missed-flight" | "train-delay" | "ride-no-show";
 type TimelineSectionTab = "reservations" | "documents" | "packing";
+type ConsumerTab = "trip" | "reservations" | "packing" | "more";
 
 interface LocationPoint {
   lat: number;
@@ -227,12 +232,6 @@ interface UndoAuditEntry {
   undoneAt: string;
 }
 
-interface DemoPresetConfig {
-  id: DemoPresetId;
-  label: string;
-  summary: string;
-}
-
 interface UpdateFeedItem {
   id: string;
   reservationId: string;
@@ -281,8 +280,14 @@ const fetchInitialOpsSnapshotCached = cache(async (): Promise<TravelOpsSnapshot>
 
 function LazyPanelSkeleton({ label }: { label: string }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300">
-      {label}
+    <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/50">
+      <span className="sr-only">{label}</span>
+      <div className="h-4 w-32 rounded-full bg-slate-200 dark:bg-slate-800" />
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <div className="h-20 rounded-xl bg-slate-200/80 dark:bg-slate-800/80" />
+        <div className="h-20 rounded-xl bg-slate-200/70 dark:bg-slate-800/70" />
+        <div className="h-20 rounded-xl bg-slate-200/60 dark:bg-slate-800/60" />
+      </div>
     </section>
   );
 }
@@ -349,24 +354,6 @@ const TYPE_REMINDER_THRESHOLDS: Record<ReservationType, number[]> = {
 };
 const UPDATE_REPLAY_WINDOW_MS = 30 * 60_000;
 const SESSION_STORAGE_KEY = "travel-assistant-session-v1";
-const DEMO_PRESETS: DemoPresetConfig[] = [
-  {
-    id: "smooth-trip",
-    label: "Smooth trip",
-    summary: "Green status, clean queue, readiness complete.",
-  },
-  {
-    id: "moderate-delay",
-    label: "Moderate delay",
-    summary: "Yellow airport mode with manageable delay.",
-  },
-  {
-    id: "severe-disruption",
-    label: "Severe disruption",
-    summary: "Red recovery mode with urgent actions.",
-  },
-];
-
 const EMPTY_DRAFT: ReservationDraft = {
   type: "flight",
   title: "",
@@ -617,6 +604,41 @@ function parseDateInput(value: string): number {
   return Number.isNaN(parsed) ? Number.NaN : parsed;
 }
 
+function formatConsumerReservationTime(value: string): string {
+  const parsed = parseDateInput(value);
+  if (Number.isNaN(parsed)) {
+    return value || "Time not set";
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(parsed));
+}
+
+function getTripDaysAway(minutesToDeparture: number): number {
+  return Math.max(0, Math.ceil(minutesToDeparture / 1440));
+}
+
+function getReservationEmoji(type: ReservationType): string {
+  if (type === "flight") return "✈️";
+  if (type === "hotel") return "🏨";
+  if (type === "train") return "🚆";
+  if (type === "ride") return "🚗";
+  return "🍽️";
+}
+
+function getFriendlyReservationTitle(reservation: Reservation): string {
+  if (reservation.type === "flight") {
+    const flightNumber = reservation.title.match(/[A-Z]{2}\s?\d+/)?.[0];
+    return flightNumber ? `${reservation.provider} ${flightNumber}` : `${reservation.provider} flight`;
+  }
+  if (reservation.type === "hotel") {
+    return `${reservation.provider} check-in`;
+  }
+  return reservation.title;
+}
+
 function formatDateTimeLocal(valueMs: number): string {
   const value = new Date(valueMs);
   const year = value.getFullYear();
@@ -827,13 +849,6 @@ function normalizeCoordinates(members: FamilyMember[]): Array<{ member: FamilyMe
   });
 }
 
-function appendUniqueNote(existing: string, note: string): string {
-  if (existing.includes(note)) {
-    return existing;
-  }
-  return `${existing}\n${note}`.trim();
-}
-
 const TRIP_API_ROUTE = "/api/trips";
 const BILLING_STATUS_API_ROUTE = "/api/billing/status";
 
@@ -927,6 +942,7 @@ function defaultTripFromCurrentState(input: {
 }
 
 export default function TravelAssistantPage() {
+  const clerk = useClerk();
   const updateMode: TravelUpdateMode =
     (process.env.NEXT_PUBLIC_TRAVEL_UPDATES_MODE ?? "auto").toLowerCase() === "off"
       ? "off"
@@ -951,8 +967,6 @@ export default function TravelAssistantPage() {
   const [mobileSimpleView, setMobileSimpleView] = useState(true);
   const [mobileViewPanel, setMobileViewPanel] = useState<MobileViewPanel>("essentials");
   const [isCompactViewport, setIsCompactViewport] = useState(false);
-  const [lastDemoPresetAppliedAt, setLastDemoPresetAppliedAt] = useState<string | null>(null);
-  const [lastDemoPresetId, setLastDemoPresetId] = useState<DemoPresetId | null>(null);
   const [activeScenario, setActiveScenario] = useState<DisruptionScenario>("none");
   const [minutesToDeparture, setMinutesToDeparture] = useState(165);
   const [offlineOutbox, setOfflineOutbox] = useState<OfflineOutboxSnapshot>(() =>
@@ -1034,6 +1048,14 @@ export default function TravelAssistantPage() {
   const [exportTo, setExportTo] = useState("");
   const [timelineSectionTab, setTimelineSectionTab] = useState<TimelineSectionTab>("reservations");
   const [packingCompletionPercent, setPackingCompletionPercent] = useState(0);
+  const [consumerTab, setConsumerTab] = useState<ConsumerTab>("trip");
+  const [advancedModeEnabled, setAdvancedModeEnabled] = useState(false);
+  const [advancedModeSaving, setAdvancedModeSaving] = useState(false);
+  const [isAdminUser, setIsAdminUser] = useState(false);
+  const [consumerTripMenuOpen, setConsumerTripMenuOpen] = useState(false);
+  const [consumerAvatarMenuOpen, setConsumerAvatarMenuOpen] = useState(false);
+  const [showAdvancedShortcut, setShowAdvancedShortcut] = useState(false);
+  const advancedShortcutTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
 
   const selectedFamilyMember = useMemo(
     () => familyMembers.find((member) => member.id === selectedFamilyMemberId) ?? familyMembers[0],
@@ -1196,6 +1218,77 @@ export default function TravelAssistantPage() {
     policy.lastShownAtMs = now;
     setToastRaw(normalized);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadAdvancedModePreference = async (): Promise<void> => {
+      try {
+        const response = await fetch("/api/preferences/advanced-mode", {
+          method: "GET",
+          cache: "no-store",
+        });
+        if (!response.ok) return;
+        const payload = (await response.json()) as { enabled?: boolean };
+        if (!cancelled) {
+          setAdvancedModeEnabled(payload.enabled === true);
+        }
+      } catch {
+        // Preference loading is best-effort; default stays the simple consumer view.
+      }
+    };
+    void loadAdvancedModePreference();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const checkAdminAccess = async (): Promise<void> => {
+      try {
+        const response = await fetch("/api/admin/health?probe=1", {
+          method: "GET",
+          cache: "no-store",
+        });
+        if (!cancelled) {
+          setIsAdminUser(response.ok);
+        }
+      } catch {
+        if (!cancelled) {
+          setIsAdminUser(false);
+        }
+      }
+    };
+    void checkAdminAccess();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleAdvancedModeChange = useCallback(
+    (enabled: boolean): void => {
+      setAdvancedModeEnabled(enabled);
+      setAdvancedModeSaving(true);
+      void fetch("/api/preferences/advanced-mode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            throw new Error(`Advanced mode preference returned ${response.status}`);
+          }
+          const payload = (await response.json()) as { enabled?: boolean };
+          setAdvancedModeEnabled(payload.enabled === true);
+          setToast(enabled ? "Advanced Mode is on." : "Simple view is on.");
+        })
+        .catch(() => {
+          setToast("Advanced Mode preference could not be saved.");
+        })
+        .finally(() => setAdvancedModeSaving(false));
+    },
+    [setToast],
+  );
 
   const activeTripRuntimeSnapshot = useMemo(
     () => ({
@@ -2106,7 +2199,6 @@ export default function TravelAssistantPage() {
     unresolvedReadinessCount,
     unresolvedReviewCount,
   ]);
-  const nextStage = useMemo(() => nextTripStage(tripStage), [tripStage]);
   const nextStageAction = useMemo(() => {
     if (primaryActions.length === 0) {
       return nextBestFlowAction;
@@ -2188,6 +2280,61 @@ export default function TravelAssistantPage() {
     [blockingIssueCount, opsSnapshot, unresolvedReadinessCount],
   );
 
+  const advancedWorkspaceEnabled = advancedModeEnabled || isAdminUser;
+  const tripDaysAway = getTripDaysAway(minutesToDeparture);
+  const destinationWeatherLabel = "Expect 72°F and sunny ☀️";
+  const nextUpcomingReservations = useMemo(() => {
+    const reservationsWithTimes = reservations
+      .map((reservation) => ({ reservation, timeMs: parseDateInput(reservation.localTime) }))
+      .sort((left, right) => {
+        if (Number.isNaN(left.timeMs) && Number.isNaN(right.timeMs)) return 0;
+        if (Number.isNaN(left.timeMs)) return 1;
+        if (Number.isNaN(right.timeMs)) return -1;
+        return left.timeMs - right.timeMs;
+      });
+    const futureReservations = reservationsWithTimes.filter((item) => !Number.isNaN(item.timeMs) && item.timeMs >= nowMs);
+    return (futureReservations.length > 0 ? futureReservations : reservationsWithTimes)
+      .slice(0, 2)
+      .map((item) => item.reservation);
+  }, [nowMs, reservations]);
+  const delayedFlight = useMemo(
+    () =>
+      reservations.find(
+        (reservation) =>
+          reservation.type === "flight" &&
+          (flightLiveStatusByReservationId.get(reservation.id) === "delayed" ||
+            flightLiveStatusByReservationId.get(reservation.id) === "cancelled"),
+      ) ?? null,
+    [flightLiveStatusByReservationId, reservations],
+  );
+  const consumerStatus = useMemo(() => {
+    if (tripStatus === "red" || activeScenario !== "none" || delayedFlight) {
+      return {
+        title: "Flight delayed 🔴",
+        detail: delayedFlight ? `${delayedFlight.provider} needs attention.` : "Something changed. Kepi can help fix it.",
+        tone: "border-red-200 bg-red-50 text-red-950 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-50",
+      };
+    }
+    if (unresolvedReviewCount > 0 || unresolvedReadinessCount > 0 || blockingIssueCount > 0 || tripStatus === "yellow") {
+      return {
+        title: "Action needed ⚠️",
+        detail: unresolvedReviewCount > 0 ? `${unresolvedReviewCount} email${unresolvedReviewCount === 1 ? "" : "s"} to review.` : "Getting ready 🟡",
+        tone: "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-50",
+      };
+    }
+    return {
+      title: "You're ready ✅",
+      detail: "Everything important looks set.",
+      tone: "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-50",
+    };
+  }, [
+    activeScenario,
+    blockingIssueCount,
+    delayedFlight,
+    tripStatus,
+    unresolvedReadinessCount,
+    unresolvedReviewCount,
+  ]);
   const applyGovernedStatus = useCallback(
     (desiredStatus: TripStatus, source: "manual" | "auto"): void => {
       if (source === "manual" && desiredStatus !== tripStatus) {
@@ -2654,151 +2801,6 @@ export default function TravelAssistantPage() {
     setTripStage(nextStage);
     void triggerHaptic("light");
     setToast(`Moved to ${STAGE_LABEL[nextStage]} stage.`);
-  };
-
-  const applyDemoPreset = (preset: DemoPresetId): void => {
-    pushUndoSnapshot(`Applied demo preset: ${preset}`);
-    const appliedAt = new Date().toISOString();
-    setLastDemoPresetAppliedAt(appliedAt);
-    setLastDemoPresetId(preset);
-
-    if (preset === "smooth-trip") {
-      setTripStage("pre-departure");
-      setTripStatus("green");
-      setActiveScenario("none");
-      setMinutesToDeparture(180);
-      setNetworkMode("wifi");
-      setWifiOnlySync(false);
-      setAllowCellularLocationUpdates(true);
-      setReadinessItems((previous) =>
-        previous.map((item) => (item.required ? { ...item, complete: true } : item)),
-      );
-      setReviewQueue([]);
-      setReservations((previous) =>
-        previous.map((reservation) =>
-          reservation.critical
-            ? {
-                ...reservation,
-                confidence: "high",
-                notes: appendUniqueNote(reservation.notes, "[Demo] Smooth trip confirmation complete."),
-              }
-            : reservation,
-        ),
-      );
-      setToast("Demo preset applied: smooth trip.");
-      return;
-    }
-
-    if (preset === "moderate-delay") {
-      setTripStage("airport");
-      setTripStatus("yellow");
-      setActiveScenario("train-delay");
-      setMinutesToDeparture(95);
-      setNetworkMode("cellular");
-      setWifiOnlySync(true);
-      setAllowCellularLocationUpdates(true);
-      setReservations((previous) => {
-        const targetIndex = previous.findIndex(
-          (reservation) =>
-            reservation.type === "flight" || reservation.type === "train" || reservation.type === "ride",
-        );
-        return previous.map((reservation, index) => {
-          if (index !== targetIndex) {
-            return reservation;
-          }
-          const baseMs = parseDateInput(reservation.localTime);
-          return {
-            ...reservation,
-            localTime: Number.isNaN(baseMs) ? reservation.localTime : formatDateTimeLocal(baseMs + 40 * 60_000),
-            confidence: "medium",
-            notes: appendUniqueNote(
-              reservation.notes,
-              "[Demo] Moderate delay simulated. Confirm transfer and meeting times.",
-            ),
-          };
-        });
-      });
-      setReviewQueue((previous) => {
-        if (previous.length > 0) {
-          return previous;
-        }
-        return [
-          {
-            id: nextId("review"),
-            reasons: ["Delay caused uncertainty in transfer handoff timing."],
-            impact: "Transfer and dinner windows might shift by 20-40 minutes.",
-            sourceEmailSubject: "Demo preset: moderate delay",
-            draft: {
-              type: "ride",
-              title: "Airport transfer timing check",
-              provider: "Rideshare",
-              localTime: formatDateTimeLocal(Date.now() + 2 * 60 * 60_000),
-              timezone: "America/Los_Angeles",
-              location: "Airport pickup zone",
-              confirmationCode: "DMO-4021",
-              assignedTo: [selectedFamilyMember.id],
-              stage: "arrival",
-              critical: true,
-              confidence: "medium",
-              notes: "Verify updated pickup estimate after arrival delay.",
-            },
-          },
-        ];
-      });
-      setToast("Demo preset applied: moderate delay scenario.");
-      return;
-    }
-
-    setTripStage("recovery");
-    setTripStatus("red");
-    setActiveScenario("missed-flight");
-    setMinutesToDeparture(30);
-    setNetworkMode("offline");
-    setWifiOnlySync(true);
-    setAllowCellularLocationUpdates(false);
-    setReadinessItems((previous) =>
-      previous.map((item, index) => (item.required && index < 2 ? { ...item, complete: false } : item)),
-    );
-    setReviewQueue((previous) => {
-      if (previous.length >= 2) {
-        return previous;
-      }
-      return [
-        {
-          id: nextId("review"),
-          reasons: ["Missed-flight recovery requires confirmation of rebooked segment details."],
-          impact: "Incorrect rebook timing can propagate to hotel and transfer misses.",
-          sourceEmailSubject: "Demo preset: severe disruption rebook",
-          draft: {
-            type: "flight",
-            title: "Rebooked flight pending confirmation",
-            provider: "Airline desk",
-            localTime: formatDateTimeLocal(Date.now() + 4 * 60 * 60_000),
-            timezone: "America/Los_Angeles",
-            location: "Updated gate pending",
-            confirmationCode: "DMO-RBK1",
-            assignedTo: [selectedFamilyMember.id],
-            stage: "recovery",
-            critical: true,
-            confidence: "low",
-            notes: "Validate final departure and arrival before publishing live.",
-          },
-        },
-        ...previous,
-      ];
-    });
-    setReservations((previous) =>
-      previous.map((reservation) =>
-        reservation.critical
-          ? {
-              ...reservation,
-              confidence: "high",
-              notes: appendUniqueNote(reservation.notes, "[Demo] Severe disruption protocol active."),
-            }
-          : reservation,
-      ),
-    );
-    setToast("Demo preset applied: severe disruption scenario.");
   };
 
   const triggerReminderDispatch = (): void => {
@@ -3676,6 +3678,341 @@ export default function TravelAssistantPage() {
     openDrawer("review", reviewQueue[0].id);
   }, [openDrawer, reviewQueue, setToast]);
 
+  const consumerPrimaryAction = useMemo(() => {
+    if (tripStatus === "red" || activeScenario !== "none" || delayedFlight) {
+      return {
+        label: "Fix this for me",
+        onClick: () => {
+          const recommendation = incidentAutopilotRecommendations[0];
+          if (recommendation) {
+            void applyIncidentAutopilotRecommendation(recommendation);
+            return;
+          }
+          setConsumerTab("reservations");
+        },
+      };
+    }
+    if (unresolvedReviewCount > 0) {
+      return {
+        label: unresolvedReviewCount === 1 ? "Review 1 email" : `Review ${unresolvedReviewCount} emails`,
+        onClick: () => {
+          setConsumerTab("more");
+        },
+      };
+    }
+    if (unresolvedReadinessCount > 0) {
+      return {
+        label: "Show what to finish",
+        onClick: () => setConsumerTab("more"),
+      };
+    }
+    return null;
+  }, [
+    activeScenario,
+    applyIncidentAutopilotRecommendation,
+    delayedFlight,
+    incidentAutopilotRecommendations,
+    tripStatus,
+    unresolvedReadinessCount,
+    unresolvedReviewCount,
+  ]);
+
+  if (!advancedWorkspaceEnabled) {
+    return (
+      <main className="relative min-h-screen overflow-x-hidden bg-slate-50 pb-24 text-slate-950 dark:bg-slate-950 dark:text-slate-100">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(14,165,233,0.12),transparent_38%),radial-gradient(circle_at_80%_10%,rgba(34,197,94,0.10),transparent_35%)]" />
+        <div className="relative z-10 mx-auto max-w-3xl space-y-4 px-4 py-4 sm:py-6">
+          <header className="sticky top-0 z-30 -mx-4 border-b border-slate-200/70 bg-slate-50/90 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
+            <div className="flex items-center justify-between gap-3">
+              <div className="relative min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setConsumerTripMenuOpen((value) => !value)}
+                  onPointerDown={() => {
+                    advancedShortcutTimerRef.current = window.setTimeout(() => setShowAdvancedShortcut(true), 900);
+                  }}
+                  onPointerUp={() => {
+                    if (advancedShortcutTimerRef.current) {
+                      window.clearTimeout(advancedShortcutTimerRef.current);
+                      advancedShortcutTimerRef.current = null;
+                    }
+                  }}
+                  onPointerLeave={() => {
+                    if (advancedShortcutTimerRef.current) {
+                      window.clearTimeout(advancedShortcutTimerRef.current);
+                      advancedShortcutTimerRef.current = null;
+                    }
+                  }}
+                  className="block max-w-[13rem] truncate rounded-full px-1 py-1 text-left text-lg font-semibold sm:max-w-sm"
+                  aria-label="Switch trips"
+                >
+                  {activeTrip?.name ?? "My trip"} <span aria-hidden>⌄</span>
+                </button>
+                {consumerTripMenuOpen ? (
+                  <div className="absolute left-0 top-[calc(100%+0.5rem)] z-40 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                    <ul className="max-h-72 overflow-auto p-2">
+                      {trips.map((trip) => (
+                        <li key={trip.id}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void handleSwitchTrip(trip.id);
+                              setConsumerTripMenuOpen(false);
+                            }}
+                            className={`w-full rounded-xl px-3 py-2 text-left text-sm ${
+                              trip.id === activeTripId
+                                ? "bg-cyan-50 font-semibold text-cyan-900 dark:bg-cyan-500/15 dark:text-cyan-100"
+                                : "hover:bg-slate-100 dark:hover:bg-slate-800"
+                            }`}
+                          >
+                            <span className="block truncate">{trip.name}</span>
+                            <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{trip.destination}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleCreateTrip();
+                        setConsumerTripMenuOpen(false);
+                      }}
+                      className="w-full border-t border-slate-200 px-3 py-3 text-left text-sm font-semibold text-cyan-700 hover:bg-slate-50 dark:border-slate-800 dark:text-cyan-200 dark:hover:bg-slate-800"
+                    >
+                      Add trip
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setConsumerAvatarMenuOpen((value) => !value)}
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-cyan-500 text-base font-bold text-slate-950 shadow-sm ring-1 ring-cyan-300"
+                  aria-label="Open account menu"
+                >
+                  {selectedFamilyMember.name.slice(0, 1).toUpperCase()}
+                </button>
+                {consumerAvatarMenuOpen ? (
+                  <div className="absolute right-0 top-[calc(100%+0.5rem)] z-40 w-72 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        clerk.openUserProfile();
+                        setConsumerAvatarMenuOpen(false);
+                      }}
+                      className="w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+                    >
+                      Account
+                    </button>
+                    <Link
+                      href="/billing"
+                      className="block rounded-xl px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+                      onClick={() => setConsumerAvatarMenuOpen(false)}
+                    >
+                      Billing
+                    </Link>
+                    <div className="mt-2 rounded-xl bg-slate-100 p-2 dark:bg-slate-950">
+                      <p className="mb-2 px-1 text-xs font-semibold text-slate-500 dark:text-slate-400">Language</p>
+                      <LanguageToggle />
+                    </div>
+                    <div className="mt-2 flex items-center justify-between rounded-xl bg-slate-100 p-2 text-sm dark:bg-slate-950">
+                      <span>Theme</span>
+                      <ThemeToggle />
+                    </div>
+                    {showAdvancedShortcut ? (
+                      <div className="mt-2">
+                        <AdvancedModeToggle
+                          enabled={advancedModeEnabled}
+                          onChange={handleAdvancedModeChange}
+                          disabled={advancedModeSaving}
+                          description="Unlocked from the trip header."
+                        />
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void clerk.signOut();
+                      }}
+                      className="mt-2 w-full rounded-xl px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/10"
+                    >
+                      Sign out
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </header>
+
+          {tripsLoading ? (
+            <section className="space-y-4">
+              <div className="h-48 rounded-3xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800" />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="h-28 rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800" />
+                <div className="h-28 rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800" />
+              </div>
+            </section>
+          ) : consumerTab === "trip" ? (
+            <section className="space-y-4">
+              <TripOrientationCard
+                travelerName={selectedFamilyMember.name}
+                destination={activeTrip?.destination ?? "your trip"}
+                tripDaysAway={tripDaysAway}
+                statusTitle={consumerStatus.title}
+                statusDetail={consumerStatus.detail}
+                weatherLabel={destinationWeatherLabel}
+                nextActionLabel={consumerPrimaryAction?.label ?? "Enjoy your trip"}
+                onNextAction={consumerPrimaryAction?.onClick}
+                statusToneClassName={consumerStatus.tone}
+              />
+              <section className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-base font-semibold">Coming up</h2>
+                  {unresolvedReviewCount > 0 ? (
+                    <p className="text-sm text-amber-700 dark:text-amber-200">
+                      {unresolvedReviewCount} email{unresolvedReviewCount === 1 ? "" : "s"} to review
+                    </p>
+                  ) : null}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {nextUpcomingReservations.map((reservation) => (
+                    <button
+                      key={reservation.id}
+                      type="button"
+                      onClick={() => setConsumerTab("reservations")}
+                      className="rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-900"
+                    >
+                      <p className="text-2xl" aria-hidden>
+                        {getReservationEmoji(reservation.type)}
+                      </p>
+                      <p className="mt-2 text-sm font-semibold">{getFriendlyReservationTitle(reservation)}</p>
+                      <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                        {reservation.type === "hotel" ? "Check-in " : ""}
+                        {formatConsumerReservationTime(reservation.localTime)}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            </section>
+          ) : consumerTab === "reservations" ? (
+            <ReservationList
+              visibleReservations={visibleReservations}
+              personalTimelineOnly={personalTimelineOnly}
+              onPersonalTimelineOnlyChange={setPersonalTimelineOnly}
+              selectedFamilyMemberName={selectedFamilyMember.name}
+              familyMembers={familyMembers}
+              reservationTypeLabelByType={RESERVATION_TYPE_LABEL}
+              pendingOutboxByReservationId={pendingOutboxByReservationId}
+              hasGlobalOutboxPending={hasGlobalOutboxPending}
+              flightLiveStatusByReservationId={flightLiveStatusByReservationId}
+              railLiveStatusByReservationId={railLiveStatusByReservationId}
+              highlightedReservationId={highlightedReservationId}
+              onOpenReservationDrawer={(reservationId) => openDrawer("reservation", reservationId)}
+              onCopyCallScript={copyScript}
+              onCopyConfirmationCode={async (code) => {
+                try {
+                  await navigator.clipboard.writeText(code);
+                  setToast("Confirmation code copied.");
+                } catch {
+                  setToast("Clipboard unavailable.");
+                }
+              }}
+            />
+          ) : consumerTab === "packing" ? (
+            <PackingList tripId={activeTripId} onCompletionChange={(percent) => setPackingCompletionPercent(percent)} />
+          ) : (
+            <section className="space-y-3">
+              {reviewQueue.length > 0 ? (
+                <article className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-50">
+                  <p className="text-sm font-semibold">
+                    {reviewQueue.length} email{reviewQueue.length === 1 ? "" : "s"} to review
+                  </p>
+                  <p className="mt-1 text-sm opacity-80">Kepi found booking details that need a quick look.</p>
+                </article>
+              ) : null}
+              <Link href="/support" className="block rounded-2xl border border-slate-200 bg-white p-4 font-semibold shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                Support
+              </Link>
+              <button type="button" className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left font-semibold shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                Documents
+              </button>
+              <button type="button" className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left font-semibold shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                Family
+              </button>
+              <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <h2 className="font-semibold">Settings</h2>
+                <div className="mt-3">
+                  <AdvancedModeToggle
+                    enabled={advancedModeEnabled}
+                    onChange={handleAdvancedModeChange}
+                    disabled={advancedModeSaving}
+                    description="Turn this on only when you want the full travel operations workspace."
+                  />
+                </div>
+              </section>
+              <button
+                type="button"
+                onClick={() => {
+                  void clerk.signOut();
+                }}
+                className="w-full rounded-2xl border border-red-200 bg-white p-4 text-left font-semibold text-red-600 shadow-sm dark:border-red-500/30 dark:bg-slate-900 dark:text-red-300"
+              >
+                Sign out
+              </button>
+            </section>
+          )}
+        </div>
+
+        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-3 py-2 shadow-2xl backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 md:hidden">
+          <div className="mx-auto grid max-w-md grid-cols-4 gap-1 text-xs font-semibold">
+            {([
+              ["trip", "Trip"],
+              ["reservations", "Reservations"],
+              ["packing", "Packing"],
+              ["more", "More"],
+            ] as const).map(([tab, label]) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setConsumerTab(tab)}
+                className={`rounded-xl px-2 py-2 ${
+                  consumerTab === tab
+                    ? "bg-cyan-500 text-slate-950"
+                    : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </nav>
+        <div aria-live="polite" aria-atomic="true" className="sr-only">
+          {toast ?? ""}
+        </div>
+        {toast ? (
+          <div
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className="fixed bottom-20 right-4 z-50 max-w-sm rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-xl dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          >
+            {toast}
+          </div>
+        ) : null}
+        <UpgradeModal
+          open={Boolean(upgradeModalGate)}
+          gate={upgradeModalGate}
+          currentPlan={billingPlan}
+          onClose={closeUpgradeModal}
+        />
+        <InstallPrompt />
+        <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
+      </main>
+    );
+  }
+
   return (
     <main className="relative min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_10%,rgba(56,189,248,0.14),transparent_45%),radial-gradient(circle_at_85%_25%,rgba(129,140,248,0.18),transparent_42%),radial-gradient(circle_at_50%_100%,rgba(34,197,94,0.08),transparent_45%)]" />
@@ -3764,24 +4101,15 @@ export default function TravelAssistantPage() {
           undoStackLength={undoStack.length}
         />
         <TripOrientationCard
-          tripStage={tripStage}
-          nextStage={nextStage}
-          stageLabelByTripStage={STAGE_LABEL}
-          nextBestFlowAction={nextBestFlowAction}
-          nextStageAction={nextStageAction}
-          onAdvanceTripStage={advanceTripStage}
-          lastDemoPresetAppliedAt={lastDemoPresetAppliedAt}
-          lastDemoPresetId={lastDemoPresetId}
-          demoPresets={DEMO_PRESETS}
-          onApplyDemoPreset={applyDemoPreset}
-          formatClock={formatClock}
-          isCompactViewport={isCompactViewport}
-          mobileSimpleView={mobileSimpleView}
-          mobileViewPanel={mobileViewPanel}
-          onToggleMobileSimpleView={() => setMobileSimpleView((value) => !value)}
-          onMobileViewPanelChange={setMobileViewPanel}
-          readinessCompletionPercent={readinessCompletionPercent}
-          packingCompletionPercent={packingCompletionPercent}
+          travelerName={selectedFamilyMember.name}
+          destination={activeTrip?.destination ?? "your trip"}
+          tripDaysAway={tripDaysAway}
+          statusTitle={consumerStatus.title}
+          statusDetail={consumerStatus.detail}
+          weatherLabel={destinationWeatherLabel}
+          nextActionLabel={consumerPrimaryAction?.label ?? nextStageAction}
+          onNextAction={consumerPrimaryAction?.onClick ?? advanceTripStage}
+          statusToneClassName={consumerStatus.tone}
         />
         {shouldRenderMobilePanel("essentials") ? (
           <section className="grid gap-4 sm:gap-6 xl:grid-cols-2">
