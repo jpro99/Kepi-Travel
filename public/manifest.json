@@ -1,10 +1,12 @@
 {
-  "name": "Kepi Travel Assistant",
-  "short_name": "Kepi",
-  "description": "Premium adaptive travel execution assistant for trip logistics.",
+  "name": "kepi",
+  "short_name": "kepi",
+  "description": "Simple travel clarity from bookings to boarding.",
+  "id": "/travel-assistant",
   "start_url": "/travel-assistant",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#1a1a2e",
   "theme_color": "#1a1a2e",
   "icons": [

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Logo } from "@/components/ui/Logo";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -62,7 +63,10 @@ export function InstallPrompt() {
 
   return (
     <section className="fixed inset-x-3 bottom-3 z-[70] rounded-xl border border-slate-300 bg-white/95 p-3 shadow-xl dark:border-slate-700 dark:bg-slate-900/95 sm:inset-x-auto sm:right-4 sm:w-[22rem]">
-      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">Add Kepi to your home screen</p>
+      <div className="flex items-center gap-2">
+        <Logo size="sm" />
+        <p className="text-sm font-medium text-slate-900 dark:text-slate-100">Add to your home screen</p>
+      </div>
       <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
         Install for faster launch and better offline reliability while traveling.
       </p>

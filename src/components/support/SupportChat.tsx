@@ -2,6 +2,7 @@
 
 import { useAuth } from "@clerk/nextjs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Logo } from "@/components/ui/Logo";
 
 const SUPPORT_OPEN_EVENT = "kepi:support-chat-open";
 
@@ -173,7 +174,8 @@ export function SupportChat() {
           <div className="flex h-full w-full flex-col">
             <header className="flex items-center justify-between border-b border-slate-700 px-4 py-3">
               <div>
-                <p className="text-sm font-semibold text-slate-100">Kepi Support</p>
+                <Logo size="sm" className="[&>span:last-child]:text-slate-100" />
+                <p className="sr-only">Kepi Support</p>
                 <p className="text-[11px] text-slate-400">Fast help for trips, billing, and app workflows</p>
               </div>
               <button

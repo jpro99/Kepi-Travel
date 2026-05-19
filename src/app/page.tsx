@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Logo } from "@/components/ui/Logo";
 
 const featureCards = [
   {
@@ -137,7 +138,7 @@ export default function Home() {
     <main className="min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <section className="mx-auto grid w-full max-w-6xl gap-10 px-4 pb-16 pt-14 sm:px-8 lg:grid-cols-2 lg:items-center lg:gap-14 lg:pt-20">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-700 dark:text-cyan-300">Kepi Travel Assistant</p>
+          <Logo size="md" />
           <h1 className="mt-4 text-3xl font-semibold leading-tight sm:text-5xl">
             Never miss a flight. Never lose a reservation.
           </h1>

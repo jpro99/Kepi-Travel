@@ -10,6 +10,7 @@ import {
   type TripSetupValidationErrors,
   validateTripSetupDraft,
 } from "@/components/onboarding/TripSetupForm";
+import { Logo } from "@/components/ui/Logo";
 
 const TOTAL_STEPS = 5;
 
@@ -348,7 +349,14 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
                 {t("stepCounter", { currentStep, totalSteps: TOTAL_STEPS })}
               </p>
               <h2 id="onboarding-title" className="mt-1 text-lg font-semibold">
-                {stepTitle}
+                {currentStep === 1 ? (
+                  <span className="inline-flex flex-wrap items-center gap-2">
+                    <Logo size="sm" />
+                    <span>Welcome</span>
+                  </span>
+                ) : (
+                  stepTitle
+                )}
               </h2>
             </div>
             <button

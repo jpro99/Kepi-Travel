@@ -22,6 +22,7 @@ import {
   CitySearchCombobox,
   type CityListEntry,
 } from "@/components/CitySearchCombobox";
+import { Logo } from "@/components/ui/Logo";
 import type { CityCatalog } from "@/data/cities/types";
 import type { Chain, HotelSearchHit } from "@/lib/search/types";
 import {
@@ -937,9 +938,7 @@ function VeniceMapShell({
     <div className="flex h-[100dvh] min-h-0 flex-col bg-slate-950 text-slate-50">
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-cyan-900/50 bg-gradient-to-r from-slate-900 via-slate-900 to-cyan-950 px-3 py-2 shadow-lg">
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-sm font-bold tracking-tight text-cyan-300 sm:text-base">
-            Kepi Search
-          </h1>
+          <Logo size="sm" className="[&>span:last-child]:text-cyan-300" />
           <p className="truncate text-[11px] text-slate-400 sm:text-xs">
             {catalog.label} | Hyatt | Marriott | Hilton - draw area, then search
           </p>
