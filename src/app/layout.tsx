@@ -22,10 +22,79 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+function resolveSiteUrl(): URL {
+  const rawBaseUrl =
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    process.env.APP_URL?.trim() ||
+    process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+  const withProtocol = rawBaseUrl?.startsWith("http") ? rawBaseUrl : rawBaseUrl ? `https://${rawBaseUrl}` : null;
+  try {
+    return new URL(withProtocol ?? "https://kepi.travel");
+  } catch {
+    return new URL("https://kepi.travel");
+  }
+}
+
+const siteUrl = resolveSiteUrl();
+
 export const metadata: Metadata = {
-  title: "Kepi Search",
+  metadataBase: siteUrl,
+  title: {
+    default: "Kepi Travel Assistant",
+    template: "%s | Kepi Travel Assistant",
+  },
   description:
-    "Personal hotel map explorer (Hyatt, Marriott, Hilton) with city catalogs",
+    "Never miss a flight. Never lose a reservation. Kepi is your adaptive travel assistant from packing to landing.",
+  applicationName: "Kepi Travel Assistant",
+  keywords: [
+    "travel assistant",
+    "itinerary app",
+    "flight tracking",
+    "trip planning",
+    "travel automation",
+    "concierge travel app",
+  ],
+  authors: [{ name: "Kepi" }],
+  creator: "Kepi",
+  publisher: "Kepi",
+  alternates: {
+    canonical: "/",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+  openGraph: {
+    title: "Kepi Travel Assistant",
+    description:
+      "Never miss a flight. Never lose a reservation. Adaptive trip execution from packing to landing.",
+    url: "/",
+    siteName: "Kepi Travel Assistant",
+    locale: "en_US",
+    type: "website",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Kepi Travel Assistant — adaptive trip execution",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Kepi Travel Assistant",
+    description:
+      "Never miss a flight. Never lose a reservation. Adaptive trip execution from packing to landing.",
+    images: ["/og-image.png"],
+  },
 };
 
 export default async function RootLayout({

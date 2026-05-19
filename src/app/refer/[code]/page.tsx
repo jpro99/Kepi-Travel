@@ -1,8 +1,13 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
 type PageProps = {
   params: Promise<{ code: string }>;
+};
+
+export const metadata: Metadata = {
+  title: "Join Kepi — Your friend invited you",
 };
 
 function normalizeReferralCode(code: string): string {

@@ -1,7 +1,16 @@
+import type { Metadata } from "next";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { AdminDashboardClient } from "@/components/admin/AdminDashboardClient";
 import { isAdminUserId } from "@/lib/admin/adminAccess";
+
+export const metadata: Metadata = {
+  title: "Admin Dashboard",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default async function AdminPage() {
   const { userId } = await auth();

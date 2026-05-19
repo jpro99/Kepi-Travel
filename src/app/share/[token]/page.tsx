@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { getTranslations } from "next-intl/server";
 import { detectLocaleFromAcceptLanguage } from "@/i18n/locales";
@@ -7,6 +8,20 @@ import { getSharedTrip } from "@/lib/travelAssistant/tripShareStore";
 type PageProps = {
   params: Promise<{ token: string }>;
 };
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { token } = await params;
+  const shared = await getSharedTrip(token);
+  if (shared.status !== "ok") {
+    return {
+      title: "Shared Itinerary",
+    };
+  }
+  return {
+    title: `${shared.trip.name} — Shared Itinerary`,
+    description: `Shared trip to ${shared.trip.destination} from ${shared.trip.startDate} to ${shared.trip.endDate}.`,
+  };
+}
 
 function FriendlyError({
   title,
