@@ -29,6 +29,8 @@ interface TripOrientationCardProps {
   mobileViewPanel: MobileViewPanel;
   onToggleMobileSimpleView: () => void;
   onMobileViewPanelChange: (panel: Exclude<MobileViewPanel, "all">) => void;
+  readinessCompletionPercent: number;
+  packingCompletionPercent: number;
 }
 
 export function TripOrientationCard({
@@ -48,8 +50,11 @@ export function TripOrientationCard({
   mobileViewPanel,
   onToggleMobileSimpleView,
   onMobileViewPanelChange,
+  readinessCompletionPercent,
+  packingCompletionPercent,
 }: TripOrientationCardProps) {
   const t = useTranslations("TripOrientationCard");
+  const readinessScore = Math.round((readinessCompletionPercent + packingCompletionPercent) / 2);
 
   return (
     <>
@@ -75,6 +80,10 @@ export function TripOrientationCard({
               {stageLabelByTripStage[tripStage]}
             </p>
             <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{nextBestFlowAction}</p>
+            <p className="mt-1 text-[11px] text-cyan-700 dark:text-cyan-200">
+              Readiness score: {readinessScore}% (checklist {readinessCompletionPercent}% • packing{" "}
+              {packingCompletionPercent}%)
+            </p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-800 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-200">
             <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("whatIsNext")}</p>

@@ -180,6 +180,18 @@ export async function sendDepartureSoonAlert(
   });
 }
 
+export async function sendPackingReminderAlert(
+  userId: string,
+  tripName: string,
+  completionPercent: number,
+): Promise<boolean> {
+  return sendPushNotification(userId, {
+    title: `Packing reminder for ${tripName}`,
+    body: `Your packing list is ${completionPercent}% complete and departure is approaching. Finish packing essentials now.`,
+    url: "/travel-assistant",
+  });
+}
+
 export function setWebPushClientForTests(client: WebPushClient | null): void {
   webPushClient = client ?? webpush;
 }

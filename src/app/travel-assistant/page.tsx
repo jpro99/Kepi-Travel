@@ -55,6 +55,7 @@ import { TripSwitcher } from "@/components/travelAssistant/TripSwitcher";
 import { TripOrientationCard } from "@/components/travelAssistant/TripOrientationCard";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 import { DocumentVault } from "@/components/travelAssistant/DocumentVault";
+import { PackingList } from "@/components/travelAssistant/PackingList";
 import { WeatherCard } from "@/components/travelAssistant/WeatherCard";
 import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntelligencePanel";
 import { trackEvent } from "@/lib/analytics/trackEvent";
@@ -85,7 +86,7 @@ type MobileViewPanel = "essentials" | "timeline" | "recovery" | "family" | "all"
 type DemoPresetId = "smooth-trip" | "moderate-delay" | "severe-disruption";
 type VisibilityMode = "all-members" | "organizer-only";
 type DisruptionScenario = "none" | "missed-flight" | "train-delay" | "ride-no-show";
-type TimelineSectionTab = "reservations" | "documents";
+type TimelineSectionTab = "reservations" | "documents" | "packing";
 
 interface LocationPoint {
   lat: number;
@@ -1031,6 +1032,7 @@ export default function TravelAssistantPage() {
   const [exportFrom, setExportFrom] = useState("");
   const [exportTo, setExportTo] = useState("");
   const [timelineSectionTab, setTimelineSectionTab] = useState<TimelineSectionTab>("reservations");
+  const [packingCompletionPercent, setPackingCompletionPercent] = useState(0);
 
   const selectedFamilyMember = useMemo(
     () => familyMembers.find((member) => member.id === selectedFamilyMemberId) ?? familyMembers[0],
@@ -1047,6 +1049,35 @@ export default function TravelAssistantPage() {
     }
     return trips.find((trip) => trip.id === activeTripId) ?? null;
   }, [activeTripId, trips]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      if (!activeTripId) {
+        setPackingCompletionPercent(0);
+        return;
+      }
+      void fetch(`/api/travel-updates/packing?tripId=${encodeURIComponent(activeTripId)}`, {
+        method: "GET",
+        cache: "no-store",
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            setPackingCompletionPercent(0);
+            return;
+          }
+          const payload = (await response.json()) as { completionPercent?: number };
+          setPackingCompletionPercent(
+            typeof payload.completionPercent === "number" ? Math.max(0, Math.min(100, payload.completionPercent)) : 0,
+          );
+        })
+        .catch(() => {
+          setPackingCompletionPercent(0);
+        });
+    }, 0);
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [activeTripId]);
 
   const cloneForUndo = useCallback(
     <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T,
@@ -1654,6 +1685,11 @@ export default function TravelAssistantPage() {
 
   const unresolvedReviewCount = reviewQueue.length;
   const unresolvedReadinessCount = readinessItems.filter((item) => item.required && !item.complete).length;
+  const requiredReadinessCount = readinessItems.filter((item) => item.required).length;
+  const readinessCompletionPercent =
+    requiredReadinessCount === 0
+      ? 100
+      : Math.round(((requiredReadinessCount - unresolvedReadinessCount) / requiredReadinessCount) * 100);
   const hasProPlan = billingPlan === "pro";
   const canUseGmailImport = hasProPlan;
   const canUseAiSuggestions = hasProPlan;
@@ -3743,6 +3779,8 @@ export default function TravelAssistantPage() {
           mobileViewPanel={mobileViewPanel}
           onToggleMobileSimpleView={() => setMobileSimpleView((value) => !value)}
           onMobileViewPanelChange={setMobileViewPanel}
+          readinessCompletionPercent={readinessCompletionPercent}
+          packingCompletionPercent={packingCompletionPercent}
         />
         {shouldRenderMobilePanel("essentials") ? (
           <section className="grid gap-4 sm:gap-6 xl:grid-cols-2">
@@ -4118,7 +4156,9 @@ export default function TravelAssistantPage() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="text-sm font-semibold text-slate-100">Trip execution workspace</p>
-                  <p className="text-xs text-slate-400">Switch between reservation operations and document vault.</p>
+                  <p className="text-xs text-slate-400">
+                    Switch between reservation operations, document vault, and smart packing.
+                  </p>
                 </div>
                 <div className="inline-flex rounded-full border border-slate-700 bg-slate-950/60 p-1 text-xs">
                   <button
@@ -4142,6 +4182,17 @@ export default function TravelAssistantPage() {
                     }`}
                   >
                     Documents
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTimelineSectionTab("packing")}
+                    className={`rounded-full px-3 py-1.5 font-semibold transition ${
+                      timelineSectionTab === "packing"
+                        ? "bg-cyan-500 text-slate-950"
+                        : "text-slate-300 hover:bg-slate-800"
+                    }`}
+                  >
+                    Packing
                   </button>
                 </div>
               </div>
@@ -4272,8 +4323,13 @@ export default function TravelAssistantPage() {
                   />
                 </article>
               </section>
-            ) : (
+            ) : timelineSectionTab === "documents" ? (
               <DocumentVault activeTripId={activeTripId} />
+            ) : (
+              <PackingList
+                tripId={activeTripId}
+                onCompletionChange={(percent) => setPackingCompletionPercent(percent)}
+              />
             )}
           </section>
         ) : null}
