@@ -13,10 +13,43 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check Vercel deploy credentials
+        id: vercel_secrets
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          missing=()
+
+          if [ -z "$VERCEL_TOKEN" ]; then
+            missing+=("VERCEL_TOKEN")
+          fi
+          if [ -z "$VERCEL_ORG_ID" ]; then
+            missing+=("VERCEL_ORG_ID")
+          fi
+          if [ -z "$VERCEL_PROJECT_ID" ]; then
+            missing+=("VERCEL_PROJECT_ID")
+          fi
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Skipping Vercel production deploy. Missing secrets: ${missing[*]}"
+            exit 0
+          fi
+
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+
       - name: Deploy to Vercel production
+        if: steps.vercel_secrets.outputs.enabled == 'true'
         uses: amondnet/vercel-action@v25
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
           vercel-args: "--prod"
+
+      - name: Deploy skipped
+        if: steps.vercel_secrets.outputs.enabled != 'true'
+        run: echo "Deploy step skipped because Vercel secrets are not configured."

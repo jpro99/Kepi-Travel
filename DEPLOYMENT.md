@@ -8,7 +8,7 @@ This guide covers production deployment for the **Kepi premium adaptive travel e
 2. Import `jpro99/Kepi-Search`.
 3. Select the project root (`/`) and keep default Next.js framework detection.
 4. Confirm the build settings:
-   - Install command: `npm ci`
+   - Install command: `npm install`
    - Build command: `npm run build`
    - Dev command: `npm run dev`
 5. Save and deploy.
@@ -82,6 +82,10 @@ If you use `.github/workflows/deploy.yml`, configure these repository secrets:
 - `VERCEL_TOKEN` (Vercel account token)
 - `VERCEL_ORG_ID` (from Vercel project settings)
 - `VERCEL_PROJECT_ID` (from Vercel project settings)
+
+When these are missing, the workflow now skips the deploy step with a warning instead
+of failing the whole run. This keeps CI green while still surfacing configuration
+issues.
 
 ## 6) Run Playwright E2E tests against a Preview URL
 
