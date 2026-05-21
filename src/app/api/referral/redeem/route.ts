@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const BodySchema = z.object({
-  code: z.string().trim().min(1).max(120),
+  code: z.string().trim().regex(/^[A-Za-z0-9-]{1,50}$/u),
 });
 
 export async function POST(req: Request) {

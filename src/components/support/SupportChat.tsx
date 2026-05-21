@@ -170,7 +170,7 @@ export function SupportChat() {
   return (
     <>
       {isOpen ? (
-        <section className="fixed inset-0 z-[120] flex bg-slate-950/75 sm:inset-auto sm:bottom-6 sm:right-6 sm:h-[480px] sm:w-[320px] sm:rounded-2xl sm:border sm:border-slate-700 sm:bg-slate-950/95">
+        <section className="fixed inset-0 z-[120] flex bg-slate-950/75 sm:inset-auto sm:bottom-24 sm:right-6 sm:h-[480px] sm:w-[320px] sm:rounded-2xl sm:border sm:border-slate-700 sm:bg-slate-950/95">
           <div className="flex h-full w-full flex-col">
             <header className="flex items-center justify-between border-b border-slate-700 px-4 py-3">
               <div>
@@ -240,7 +240,7 @@ export function SupportChat() {
           setUnreadCount(0);
           setIsOpen(true);
         }}
-        className="fixed bottom-6 right-6 z-[110] inline-flex h-14 w-14 items-center justify-center rounded-full bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-900/30 transition hover:bg-cyan-400"
+        className="fixed bottom-24 right-6 z-[110] inline-flex h-14 w-14 items-center justify-center rounded-full bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-900/30 transition hover:bg-cyan-400"
       >
         <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.8">
           <path d="M4 6.5C4 5.12 5.12 4 6.5 4h11C18.88 4 20 5.12 20 6.5v7c0 1.38-1.12 2.5-2.5 2.5H10l-4.2 3.6c-.66.56-1.8.1-1.8-.77V6.5Z" />

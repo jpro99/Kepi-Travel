@@ -3,16 +3,12 @@
 import { useMemo, useState } from "react";
 import { SignUp } from "@clerk/nextjs";
 
-const MAX_REDEEM_CODE_LENGTH = 50;
-const INVITE_CODE_REGEX = /^KEPI-FRIEND-[A-Z0-9]{6,38}$/u;
+const ALPHANUMERIC_HYPHEN_CODE_REGEX = /^[A-Z0-9-]{1,50}$/u;
+const INVITE_CODE_REGEX = /^KEPI-FRIEND-[A-Z0-9-]{1,38}$/u;
 const REFERRAL_CODE_REGEX = /^[A-Z0-9]{8}$/u;
 
 function normalizeCode(value: string): string {
-  return value
-    .toUpperCase()
-    .replaceAll(/\s+/g, "")
-    .replaceAll(/[^A-Z0-9-]/g, "")
-    .slice(0, MAX_REDEEM_CODE_LENGTH);
+  return value.toUpperCase().replaceAll(/\s+/g, "").trim();
 }
 
 function isInviteCode(value: string): boolean {
@@ -30,7 +26,9 @@ export default function SignUpPage() {
 
   const normalizedInputCode = normalizeCode(inputCode);
   const isCodeFormatValid =
-    normalizedInputCode.length === 0 || isInviteCode(normalizedInputCode) || isReferralCode(normalizedInputCode);
+    normalizedInputCode.length === 0 ||
+    (ALPHANUMERIC_HYPHEN_CODE_REGEX.test(normalizedInputCode) &&
+      (isInviteCode(normalizedInputCode) || isReferralCode(normalizedInputCode)));
 
   const redirectUrl = useMemo(() => {
     if (isInviteCode(appliedCode)) {
@@ -53,14 +51,8 @@ export default function SignUpPage() {
           <input
             type="text"
             value={inputCode}
-            onChange={(event) => setInputCode(normalizeCode(event.target.value))}
-            onPaste={(event) => {
-              event.preventDefault();
-              const pasted = event.clipboardData.getData("text");
-              setInputCode(normalizeCode(pasted));
-            }}
+            onChange={(event) => setInputCode(event.target.value)}
             placeholder="KEPI-FRIEND-ABC123 or ABCD1234"
-            maxLength={MAX_REDEEM_CODE_LENGTH}
             className="w-full rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm uppercase tracking-wide text-slate-900 dark:border-emerald-700 dark:bg-slate-900 dark:text-slate-100"
           />
           <button
@@ -71,7 +63,10 @@ export default function SignUpPage() {
                 setCodeMessage("Code cleared.");
                 return;
               }
-              if (!isInviteCode(normalizedInputCode) && !isReferralCode(normalizedInputCode)) {
+              if (
+                !ALPHANUMERIC_HYPHEN_CODE_REGEX.test(normalizedInputCode) ||
+                (!isInviteCode(normalizedInputCode) && !isReferralCode(normalizedInputCode))
+              ) {
                 setCodeMessage("Code format is invalid. Use KEPI-FRIEND-XXXXXX or 8-character referral code.");
                 return;
               }

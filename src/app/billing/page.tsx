@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { BillingPlanDefinition, BillingPlanId, PlanFeature } from "@/lib/billing/plans";
 import { ReferralCard } from "@/components/referral/ReferralCard";
@@ -36,12 +36,12 @@ type BillingStatusResponse = {
 };
 
 const FEATURE_ORDER: PlanFeature[] = ["gmail-import", "ai-suggestions", "push-notifications", "multi-trip"];
-const MAX_REDEEM_CODE_LENGTH = 50;
-const INVITE_CODE_REGEX = /^KEPI-FRIEND-[A-Z0-9]{6,38}$/u;
+const ALPHANUMERIC_HYPHEN_CODE_REGEX = /^[A-Z0-9-]{1,50}$/u;
+const INVITE_CODE_REGEX = /^KEPI-FRIEND-[A-Z0-9-]{1,38}$/u;
 const REFERRAL_CODE_REGEX = /^[A-Z0-9]{8}$/u;
 
 function normalizeRedeemCode(value: string): string {
-  return value.toUpperCase().replaceAll(/\s+/g, "").trim().slice(0, MAX_REDEEM_CODE_LENGTH);
+  return value.toUpperCase().replaceAll(/\s+/g, "").trim();
 }
 
 export default function BillingPage() {
@@ -51,11 +51,10 @@ export default function BillingPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [targetPlan, setTargetPlan] = useState<"pro" | "concierge">("pro");
-  const [inviteCode, setInviteCode] = useState("");
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteMessage, setInviteMessage] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
-  const [prefillDismissed, setPrefillDismissed] = useState(false);
+  const redeemInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadBillingStatus = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -84,13 +83,9 @@ export default function BillingPage() {
   }, [loadBillingStatus]);
 
   const prefilledInviteCode = useMemo(() => {
-    if (prefillDismissed) {
-      return "";
-    }
     const fromQuery = searchParams.get("redeemCode") ?? "";
     return normalizeRedeemCode(fromQuery);
-  }, [prefillDismissed, searchParams]);
-  const activeInviteCode = inviteCode || prefilledInviteCode;
+  }, [searchParams]);
 
   const checkoutMessage = useMemo(() => {
     if (typeof window === "undefined") {
@@ -170,12 +165,18 @@ export default function BillingPage() {
   }, [busy]);
 
   const handleRedeemInviteCode = useCallback(async (): Promise<void> => {
-    if (inviteBusy || !activeInviteCode.trim()) return;
+    if (inviteBusy) return;
+    const rawInputValue = redeemInputRef.current?.value ?? "";
+    console.log("[billing][redeem] submitted code:", rawInputValue);
+    const normalizedCode = normalizeRedeemCode(rawInputValue);
+    if (!normalizedCode) return;
     setInviteBusy(true);
     setInviteMessage(null);
     setInviteError(null);
     try {
-      const normalizedCode = normalizeRedeemCode(activeInviteCode);
+      if (!ALPHANUMERIC_HYPHEN_CODE_REGEX.test(normalizedCode)) {
+        throw new Error("This code is invalid.");
+      }
       const isInviteCode = INVITE_CODE_REGEX.test(normalizedCode);
       const isReferralCode = REFERRAL_CODE_REGEX.test(normalizedCode);
       if (!isInviteCode && !isReferralCode) {
@@ -208,7 +209,9 @@ export default function BillingPage() {
                 : payload.error ?? `Code redemption failed (${response.status})`;
         throw new Error(mappedError);
       }
-      setInviteCode("");
+      if (redeemInputRef.current) {
+        redeemInputRef.current.value = "";
+      }
       if (isInviteCode) {
         setInviteMessage(
           payload.plan === "lifetime"
@@ -219,14 +222,13 @@ export default function BillingPage() {
         const awardedDays = payload.awarded?.newUserDays ?? 14;
         setInviteMessage(`Referral code applied. ${awardedDays} Pro days added to your account.`);
       }
-      setPrefillDismissed(true);
       await loadBillingStatus();
     } catch (redeemError) {
       setInviteError(redeemError instanceof Error ? redeemError.message : "Could not redeem invite code.");
     } finally {
       setInviteBusy(false);
     }
-  }, [activeInviteCode, inviteBusy, loadBillingStatus]);
+  }, [inviteBusy, loadBillingStatus]);
 
   const usageText = useMemo(() => {
     if (!status) {
@@ -254,35 +256,30 @@ export default function BillingPage() {
           Enter invite or referral code
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <input
-            type="text"
-            value={activeInviteCode}
-            onChange={(event) => {
-              setPrefillDismissed(true);
-              setInviteCode(normalizeRedeemCode(event.target.value));
-            }}
-            onPaste={(event) => {
+          <form
+            className="w-full space-y-2"
+            onSubmit={(event) => {
               event.preventDefault();
-              const pasted = event.clipboardData.getData("text");
-              setPrefillDismissed(true);
-              setInviteCode(normalizeRedeemCode(pasted));
-            }}
-            placeholder="KEPI-FRIEND-ABC123 or ABCD1234"
-            maxLength={MAX_REDEEM_CODE_LENGTH}
-            className="w-full rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm uppercase tracking-wide text-slate-900 dark:border-emerald-700 dark:bg-slate-900 dark:text-slate-100"
-          />
-          <button
-            type="button"
-            disabled={inviteBusy || !activeInviteCode.trim()}
-            onClick={() => {
               void handleRedeemInviteCode();
             }}
-            className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {inviteBusy ? "Redeeming..." : "Redeem"}
-          </button>
+            <input
+              ref={redeemInputRef}
+              type="text"
+              defaultValue={prefilledInviteCode}
+              placeholder="KEPI-FRIEND-ABC123 or ABCD1234"
+              className="w-full rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm uppercase tracking-wide text-slate-900 dark:border-emerald-700 dark:bg-slate-900 dark:text-slate-100"
+            />
+            <button
+              type="submit"
+              disabled={inviteBusy}
+              className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {inviteBusy ? "Redeeming..." : "Redeem"}
+            </button>
+          </form>
         </div>
-        {prefilledInviteCode ? (
+        {prefilledInviteCode.length > 0 ? (
           <p className="mt-2 text-xs text-emerald-900 dark:text-emerald-100">Code prefilled from sign-up. Tap Redeem to activate.</p>
         ) : null}
         {inviteMessage ? <p className="mt-2 text-sm text-emerald-900 dark:text-emerald-100">{inviteMessage}</p> : null}
