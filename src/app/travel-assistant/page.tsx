@@ -138,6 +138,15 @@ interface ReviewItem {
   impact: string;
   draft: ReservationDraft;
   sourceEmailSubject: string;
+  sourceChannel?: "email-forward" | "gmail-import" | "manual";
+  parseConfidenceScore?: number;
+  parsingStatus?: "auto-parsed" | "needs-review" | "needs-user-input";
+  missingFields?: Array<"type" | "title" | "provider" | "confirmationCode" | "localTime" | "timezone" | "location">;
+  originalEmailText?: string;
+  hasPdfAttachment?: boolean;
+  imageBasedEmail?: boolean;
+  reviewStatus?: "pending" | "incomplete";
+  parserNotes?: string[];
 }
 
 interface ReadinessItem {
@@ -3108,6 +3117,29 @@ export default function TravelAssistantPage() {
           confidence: item.reservation.confidence,
           notes: `Imported via Gmail API from message ${item.messageId}.`,
         },
+        sourceChannel: "gmail-import",
+        parseConfidenceScore:
+          item.reservation.confidence === "high" ? 85 : item.reservation.confidence === "medium" ? 55 : 30,
+        parsingStatus:
+          item.reservation.confidence === "high"
+            ? "auto-parsed"
+            : item.reservation.confidence === "medium"
+              ? "needs-review"
+              : "needs-user-input",
+        missingFields: item.reservation.issues
+          .map((issue) => {
+            const normalized = issue.toLowerCase();
+            if (normalized.includes("title")) return "title";
+            if (normalized.includes("provider")) return "provider";
+            if (normalized.includes("confirm")) return "confirmationCode";
+            if (normalized.includes("time")) return "localTime";
+            if (normalized.includes("timezone")) return "timezone";
+            if (normalized.includes("location") || normalized.includes("terminal")) return "location";
+            return null;
+          })
+          .filter((field): field is NonNullable<ReviewItem["missingFields"]>[number] => field !== null),
+        originalEmailText: item.body,
+        reviewStatus: item.reservation.confidence === "low" ? "incomplete" : "pending",
       }));
       setReviewQueue((prev) => [...queueItems, ...prev]);
       queueMutation("Imported reservations from Gmail API into review queue.", {
@@ -3497,16 +3529,20 @@ export default function TravelAssistantPage() {
     closeDrawer();
   };
 
-  const handleAcceptReview = (reviewId: string): void => {
+  const acceptReviewWithDraft = (reviewId: string, draftOverride?: ReservationDraft): void => {
     const target = reviewQueue.find((item) => item.id === reviewId);
     if (!target) return;
-    const integrity = evaluateReservationIntegrity(target.draft);
+    const draft = draftOverride ?? target.draft;
+    const integrity = evaluateReservationIntegrity(draft);
     if (!integrity.safeForLive) {
       setReviewQueue((prev) =>
         prev.map((item) =>
           item.id === reviewId
             ? {
                 ...item,
+                draft: item.id === reviewId ? draft : item.draft,
+                parsingStatus: "needs-user-input",
+                reviewStatus: "incomplete",
                 reasons: [
                   ...new Set([
                     ...item.reasons,
@@ -3523,7 +3559,7 @@ export default function TravelAssistantPage() {
     }
     pushUndoSnapshot("Review item accepted");
     const newReservation: Reservation = {
-      ...target.draft,
+      ...draft,
       id: nextId("res"),
       source: "review-accepted",
     };
@@ -3536,6 +3572,73 @@ export default function TravelAssistantPage() {
       reservationId: newReservation.id,
     });
     void syncReservationsToGoogleCalendar(nextReservations, "review-accept");
+  };
+
+  const handleAcceptReview = (reviewId: string): void => {
+    acceptReviewWithDraft(reviewId);
+  };
+
+  const handleConfirmIncompleteReview = (reviewId: string, updates: Partial<ReservationDraft>): void => {
+    const target = reviewQueue.find((item) => item.id === reviewId);
+    if (!target) return;
+    const nextDraft: ReservationDraft = {
+      ...target.draft,
+      ...updates,
+      title: (updates.title ?? target.draft.title).trim(),
+      provider: (updates.provider ?? target.draft.provider).trim(),
+      localTime: (updates.localTime ?? target.draft.localTime).trim(),
+      timezone: (updates.timezone ?? target.draft.timezone).trim(),
+      location: (updates.location ?? target.draft.location).trim(),
+      confirmationCode: (updates.confirmationCode ?? target.draft.confirmationCode).trim(),
+      notes: (updates.notes ?? target.draft.notes).trim(),
+    };
+    const missingFields = [
+      !nextDraft.title ? "title" : null,
+      !nextDraft.provider ? "provider" : null,
+      !nextDraft.confirmationCode ? "confirmationCode" : null,
+      !nextDraft.localTime ? "localTime" : null,
+      !nextDraft.timezone ? "timezone" : null,
+      !nextDraft.location ? "location" : null,
+    ].filter((field): field is NonNullable<ReviewItem["missingFields"]>[number] => field !== null);
+
+    if (missingFields.length > 0) {
+      setReviewQueue((prev) =>
+        prev.map((item) =>
+          item.id === reviewId
+            ? {
+                ...item,
+                draft: nextDraft,
+                missingFields,
+                parsingStatus: "needs-user-input",
+                reviewStatus: "incomplete",
+                reasons: [
+                  ...new Set([
+                    ...item.reasons,
+                    `Still missing: ${missingFields.join(", ")}.`,
+                  ]),
+                ],
+              }
+            : item,
+        ),
+      );
+      setToast("Please complete the highlighted fields before confirming.");
+      return;
+    }
+
+    setReviewQueue((prev) =>
+      prev.map((item) =>
+        item.id === reviewId
+          ? {
+              ...item,
+              draft: nextDraft,
+              missingFields: [],
+              parsingStatus: "needs-review",
+              reviewStatus: "pending",
+            }
+          : item,
+      ),
+    );
+    acceptReviewWithDraft(reviewId, nextDraft);
   };
 
   const handleRejectReview = (reviewId: string): void => {
@@ -3551,9 +3654,18 @@ export default function TravelAssistantPage() {
         if (item.id !== reviewId) return item;
         const nextConfidence: Confidence =
           item.draft.confidence === "low" ? "medium" : item.draft.confidence === "medium" ? "high" : "high";
+        const parseConfidenceScore = nextConfidence === "high" ? 82 : nextConfidence === "medium" ? 58 : 35;
         return {
           ...item,
           reasons: nextConfidence === "high" ? ["Parser confidence improved. Verify before accepting."] : item.reasons,
+          parseConfidenceScore,
+          parsingStatus:
+            nextConfidence === "high"
+              ? "auto-parsed"
+              : nextConfidence === "medium"
+                ? "needs-review"
+                : "needs-user-input",
+          reviewStatus: nextConfidence === "low" ? "incomplete" : "pending",
           draft: { ...item.draft, confidence: nextConfidence },
         };
       }),
@@ -4922,6 +5034,7 @@ export default function TravelAssistantPage() {
                     onRejectReview={handleRejectReview}
                     onReparseReview={handleReparseReview}
                     onMergeReview={handleMergeReview}
+                    onConfirmIncompleteReview={handleConfirmIncompleteReview}
                     onImportParsedReservations={handleImportParsedReservations}
                     canUseGmailImport={canUseGmailImport}
                     onRequestUpgradeForGmailImport={() =>

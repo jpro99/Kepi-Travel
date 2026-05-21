@@ -24,6 +24,15 @@ export interface SessionReviewItem {
   impact: string;
   sourceEmailSubject: string;
   draft: Omit<SessionReservation, "id" | "source">;
+  sourceChannel?: "email-forward" | "gmail-import" | "manual";
+  parseConfidenceScore?: number;
+  parsingStatus?: "auto-parsed" | "needs-review" | "needs-user-input";
+  missingFields?: Array<"type" | "title" | "provider" | "confirmationCode" | "localTime" | "timezone" | "location">;
+  originalEmailText?: string;
+  hasPdfAttachment?: boolean;
+  imageBasedEmail?: boolean;
+  reviewStatus?: "pending" | "incomplete";
+  parserNotes?: string[];
 }
 
 export interface SessionReadinessItem {
