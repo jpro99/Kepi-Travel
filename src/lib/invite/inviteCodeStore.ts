@@ -1,8 +1,11 @@
 import { randomBytes } from "node:crypto";
 import { kvStoreGet, kvStoreSet, kvStoreSetNx, kvStoreList } from "@/lib/travelAssistant/kvStore";
 
+// Invite Code store namespace: admin-generated friend/family redemption codes.
 const INVITE_SYSTEM_NAMESPACE = "__invite-system";
+// Database key: invite-code/<CODE> for Invite Code records only.
 const CODE_KEY_PREFIX = "invite-code";
+// Database key: user-invite-redemption/<USER_ID> to track consumed Invite Codes.
 const USER_REDEMPTION_KEY_PREFIX = "user-invite-redemption";
 const INVITE_CODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 const INVITE_CODE_RANDOM_LENGTH = 6;

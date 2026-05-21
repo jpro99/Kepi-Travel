@@ -49,9 +49,13 @@ export default function BillingPage() {
   const [error, setError] = useState<string | null>(null);
   const [targetPlan, setTargetPlan] = useState<"pro" | "concierge">("pro");
   const [inviteBusy, setInviteBusy] = useState(false);
+  const [referralBusy, setReferralBusy] = useState(false);
   const [inviteMessage, setInviteMessage] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
-  const redeemInputRef = useRef<HTMLInputElement | null>(null);
+  const [referralMessage, setReferralMessage] = useState<string | null>(null);
+  const [referralError, setReferralError] = useState<string | null>(null);
+  const inviteCodeInputRef = useRef<HTMLInputElement | null>(null);
+  const referralCodeInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadBillingStatus = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -79,9 +83,13 @@ export default function BillingPage() {
     };
   }, [loadBillingStatus]);
 
-  const prefilledInviteCode = useMemo(() => {
-    const fromQuery = searchParams.get("redeemCode") ?? "";
-    return normalizeRedeemCode(fromQuery);
+  const prefilledCodes = useMemo(() => {
+    const inviteFromQuery = searchParams.get("inviteCode") ?? searchParams.get("redeemCode") ?? "";
+    const referralFromQuery = searchParams.get("referralCode") ?? "";
+    return {
+      inviteCode: normalizeRedeemCode(inviteFromQuery),
+      referralCode: normalizeRedeemCode(referralFromQuery),
+    };
   }, [searchParams]);
 
   const checkoutMessage = useMemo(() => {
@@ -163,13 +171,16 @@ export default function BillingPage() {
 
   const handleRedeemInviteCode = useCallback(async (): Promise<void> => {
     if (inviteBusy) return;
-    const rawInputValue = redeemInputRef.current?.value ?? "";
+    const rawInputValue = inviteCodeInputRef.current?.value ?? "";
     const normalizedCode = normalizeRedeemCode(rawInputValue);
-    console.log("[billing][redeem] submitted code:", normalizedCode);
+    // Temporary debugging log requested by user for Invite Code submissions.
+    console.log("[billing][invite-code] submitted code:", normalizedCode);
     if (!normalizedCode) return;
     setInviteBusy(true);
     setInviteMessage(null);
     setInviteError(null);
+    setReferralMessage(null);
+    setReferralError(null);
     try {
       const inviteResponse = await fetch("/api/invite/redeem", {
         method: "POST",
@@ -187,66 +198,79 @@ export default function BillingPage() {
       };
 
       if (inviteResponse.ok) {
-        if (redeemInputRef.current) {
-          redeemInputRef.current.value = "";
+        if (inviteCodeInputRef.current) {
+          inviteCodeInputRef.current.value = "";
         }
         setInviteMessage(
           invitePayload.plan === "lifetime"
-            ? "Pro access activated"
-            : `Your 30-day free trial is active, expires ${invitePayload.trialExpiresAt ? new Date(invitePayload.trialExpiresAt).toLocaleDateString() : "in 30 days"}`,
+            ? "Invite Code applied. Pro access activated."
+            : `Invite Code applied. Your 30-day free trial is active, expires ${invitePayload.trialExpiresAt ? new Date(invitePayload.trialExpiresAt).toLocaleDateString() : "in 30 days"}.`,
         );
         await loadBillingStatus();
         return;
       }
+      const mappedInviteError =
+        invitePayload.reason === "code-revoked"
+          ? "This Invite Code has been revoked."
+          : invitePayload.reason === "already-redeemed" || invitePayload.reason === "code-used"
+            ? "This Invite Code has already been used."
+            : invitePayload.reason === "invalid-code"
+              ? "This Invite Code is invalid."
+              : invitePayload.error ?? `Invite Code redemption failed (${inviteResponse.status})`;
+      throw new Error(mappedInviteError);
+    } catch (redeemError) {
+      setInviteError(redeemError instanceof Error ? redeemError.message : "Could not redeem Invite Code.");
+    } finally {
+      setInviteBusy(false);
+    }
+  }, [inviteBusy, loadBillingStatus]);
 
-      const inviteRejectedAsInvalid =
-        invitePayload.reason === "invalid-code" || inviteResponse.status === 422 || invitePayload.error === "Validation failed";
-
-      if (!inviteRejectedAsInvalid) {
-        const mappedInviteError =
-          invitePayload.reason === "code-revoked"
-            ? "This code has been revoked."
-            : invitePayload.reason === "already-redeemed" || invitePayload.reason === "code-used"
-              ? "This code has already been used."
-              : invitePayload.error ?? `Code redemption failed (${inviteResponse.status})`;
-        throw new Error(mappedInviteError);
-      }
-
-      const referralResponse = await fetch("/api/referral/redeem", {
+  const handleRedeemReferralCode = useCallback(async (): Promise<void> => {
+    if (referralBusy) return;
+    const rawInputValue = referralCodeInputRef.current?.value ?? "";
+    const normalizedCode = normalizeRedeemCode(rawInputValue);
+    // Temporary debugging log requested by user for Referral Code submissions.
+    console.log("[billing][referral-code] submitted code:", normalizedCode);
+    if (!normalizedCode) return;
+    setReferralBusy(true);
+    setReferralMessage(null);
+    setReferralError(null);
+    setInviteMessage(null);
+    setInviteError(null);
+    try {
+      const response = await fetch("/api/referral/redeem", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: normalizedCode }),
       });
-      const referralPayload = (await referralResponse.json()) as {
+      const payload = (await response.json()) as {
         error?: string;
         reason?: string;
         awarded?: {
           newUserDays?: number;
         };
       };
-
-      if (!referralResponse.ok) {
-        const mappedReferralError =
-          referralPayload.reason === "already-redeemed"
-            ? "This code has already been used."
-            : referralPayload.reason === "invalid-code"
-              ? "This code is invalid."
-              : referralPayload.error ?? `Code redemption failed (${referralResponse.status})`;
-        throw new Error(mappedReferralError);
+      if (!response.ok) {
+        const mappedError =
+          payload.reason === "already-redeemed"
+            ? "This Referral Code has already been used."
+            : payload.reason === "invalid-code"
+              ? "This Referral Code is invalid."
+              : payload.error ?? `Referral Code redemption failed (${response.status})`;
+        throw new Error(mappedError);
       }
-
-      if (redeemInputRef.current) {
-        redeemInputRef.current.value = "";
+      if (referralCodeInputRef.current) {
+        referralCodeInputRef.current.value = "";
       }
-      const awardedDays = referralPayload.awarded?.newUserDays ?? 14;
-      setInviteMessage(`Referral code applied. ${awardedDays} Pro days added to your account.`);
+      const awardedDays = payload.awarded?.newUserDays ?? 30;
+      setReferralMessage(`Referral Code applied. Your ${awardedDays}-day free trial is active.`);
       await loadBillingStatus();
     } catch (redeemError) {
-      setInviteError(redeemError instanceof Error ? redeemError.message : "Could not redeem invite code.");
+      setReferralError(redeemError instanceof Error ? redeemError.message : "Could not redeem Referral Code.");
     } finally {
-      setInviteBusy(false);
+      setReferralBusy(false);
     }
-  }, [inviteBusy, loadBillingStatus]);
+  }, [referralBusy, loadBillingStatus]);
 
   const usageText = useMemo(() => {
     if (!status) {
@@ -269,11 +293,9 @@ export default function BillingPage() {
       </header>
 
       <section className="rounded-2xl border border-emerald-300 bg-emerald-50/80 p-5 shadow-sm dark:border-emerald-700/50 dark:bg-emerald-950/30">
-        <h2 className="text-lg font-semibold text-emerald-900 dark:text-emerald-100">Have an invite code?</h2>
-        <p className="mt-1 text-sm text-emerald-800 dark:text-emerald-200">
-          Enter invite or referral code
-        </p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        <h2 className="text-lg font-semibold text-emerald-900 dark:text-emerald-100">Code redemption</h2>
+        <p className="mt-1 text-sm text-emerald-800 dark:text-emerald-200">Use Invite Code or Referral Code below.</p>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
           <form
             className="w-full space-y-2"
             onSubmit={(event) => {
@@ -281,11 +303,14 @@ export default function BillingPage() {
               void handleRedeemInviteCode();
             }}
           >
+            <label className="block text-xs font-semibold uppercase tracking-wide text-emerald-900 dark:text-emerald-100">
+              Invite Code
+            </label>
             <input
-              ref={redeemInputRef}
+              ref={inviteCodeInputRef}
               type="text"
-              defaultValue={prefilledInviteCode}
-              placeholder="KEPI-FRIEND-ABC123 or ABCD1234"
+              defaultValue={prefilledCodes.inviteCode}
+              placeholder="KEPI-FRIEND-ABC123"
               className="w-full rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm uppercase tracking-wide text-slate-900 dark:border-emerald-700 dark:bg-slate-900 dark:text-slate-100"
             />
             <button
@@ -293,15 +318,44 @@ export default function BillingPage() {
               disabled={inviteBusy}
               className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {inviteBusy ? "Redeeming..." : "Redeem"}
+              {inviteBusy ? "Redeeming..." : "Redeem Invite Code"}
+            </button>
+          </form>
+          <form
+            className="w-full space-y-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleRedeemReferralCode();
+            }}
+          >
+            <label className="block text-xs font-semibold uppercase tracking-wide text-emerald-900 dark:text-emerald-100">
+              Referral Code
+            </label>
+            <input
+              ref={referralCodeInputRef}
+              type="text"
+              defaultValue={prefilledCodes.referralCode}
+              placeholder="ABCD1234"
+              className="w-full rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm uppercase tracking-wide text-slate-900 dark:border-emerald-700 dark:bg-slate-900 dark:text-slate-100"
+            />
+            <button
+              type="submit"
+              disabled={referralBusy}
+              className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {referralBusy ? "Redeeming..." : "Redeem Referral Code"}
             </button>
           </form>
         </div>
-        {prefilledInviteCode.length > 0 ? (
-          <p className="mt-2 text-xs text-emerald-900 dark:text-emerald-100">Code prefilled from sign-up. Tap Redeem to activate.</p>
+        {(prefilledCodes.inviteCode.length > 0 || prefilledCodes.referralCode.length > 0) ? (
+          <p className="mt-2 text-xs text-emerald-900 dark:text-emerald-100">
+            Code prefilled from onboarding. Tap the matching redeem button to activate.
+          </p>
         ) : null}
         {inviteMessage ? <p className="mt-2 text-sm text-emerald-900 dark:text-emerald-100">{inviteMessage}</p> : null}
         {inviteError ? <p className="mt-2 text-sm text-rose-700 dark:text-rose-300">{inviteError}</p> : null}
+        {referralMessage ? <p className="mt-2 text-sm text-emerald-900 dark:text-emerald-100">{referralMessage}</p> : null}
+        {referralError ? <p className="mt-2 text-sm text-rose-700 dark:text-rose-300">{referralError}</p> : null}
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
@@ -437,6 +491,11 @@ export default function BillingPage() {
                 Refresh status
               </button>
             </div>
+            {!lifetimePlanActive ? (
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Promo Code: enter your Promo Code in Stripe Checkout when redirected.
+              </p>
+            ) : null}
           </div>
         )}
       </section>

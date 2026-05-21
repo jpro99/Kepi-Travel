@@ -11,6 +11,7 @@ import { getReferralStats, redeemReferralCode } from "@/lib/referral/referralSto
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Referral Code: user-generated share code that rewards both referrer and new user.
 const BodySchema = z.object({
   code: z.string().trim().regex(/^[A-Za-z0-9-]{1,50}$/u),
 });
@@ -56,6 +57,7 @@ export async function POST(req: Request) {
     );
   }
 
+  // Referral Code normalization only (Invite Codes redeem via /api/invite/redeem).
   const normalizedCode = parsedBody.data.code.toUpperCase().replaceAll(/\s+/g, "");
   const redemption = await redeemReferralCode(normalizedCode, userId);
   if (!redemption.ok) {
@@ -65,10 +67,10 @@ export async function POST(req: Request) {
       {
         error:
           redemption.reason === "already-redeemed"
-            ? "Referral code already redeemed for this account."
+            ? "Referral Code already redeemed for this account."
             : redemption.reason === "self-referral"
-              ? "You cannot redeem your own referral code."
-              : "Referral code is invalid.",
+              ? "You cannot redeem your own Referral Code."
+              : "Referral Code is invalid.",
         reason: redemption.reason,
       },
       { status: statusCode, headers: rateLimit.headers },

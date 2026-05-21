@@ -122,7 +122,13 @@ export async function POST(req: Request) {
     customer: existingSubscription.stripeCustomerId ?? undefined,
     customer_creation: existingSubscription.stripeCustomerId ? undefined : "always",
     client_reference_id: userId,
+    // Promo Code: Stripe-hosted Checkout displays this as the promotion-code entry point.
     allow_promotion_codes: true,
+    custom_text: {
+      submit: {
+        message: "Have a Promo Code? Enter it in the Promo Code field during checkout.",
+      },
+    },
     metadata: {
       userId,
       plan: targetPlan,

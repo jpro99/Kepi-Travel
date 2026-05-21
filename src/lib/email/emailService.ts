@@ -516,7 +516,7 @@ export async function sendReferralRewardConfirmation(
         : "Welcome to Kepi Pro trial perks",
     intro:
       payload.role === "referrer"
-        ? "A friend joined Kepi with your referral code. Your account has been credited."
+        ? "A friend joined Kepi with your Referral Code. Your account has been credited."
         : "Your friend invited you to Kepi. Your account has been credited with free Pro time.",
     awardedDays: payload.awardedDays,
     totalDaysEarned: payload.totalDaysEarned,

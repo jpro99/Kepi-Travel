@@ -18,6 +18,8 @@ type OnboardingResponse = {
   complete: boolean;
   currentStep: number;
   tripDraft: TripSetupDraft;
+  inviteCode: string;
+  inviteRedeemedAt: string | null;
   referralCode: string;
   referralRedeemedAt: string | null;
 };
@@ -36,6 +38,8 @@ function createDefaultResponse(): OnboardingResponse {
     complete: false,
     currentStep: 1,
     tripDraft: EMPTY_TRIP_SETUP_DRAFT,
+    inviteCode: "",
+    inviteRedeemedAt: null,
     referralCode: "",
     referralRedeemedAt: null,
   };
@@ -51,6 +55,10 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [tripDraft, setTripDraft] = useState<TripSetupDraft>(EMPTY_TRIP_SETUP_DRAFT);
   const [tripErrors, setTripErrors] = useState<TripSetupValidationErrors>({});
+  const [inviteCode, setInviteCode] = useState("");
+  const [inviteRedeemedAt, setInviteRedeemedAt] = useState<string | null>(null);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteMessage, setInviteMessage] = useState<string | null>(null);
   const [referralCode, setReferralCode] = useState("");
   const [referralRedeemedAt, setReferralRedeemedAt] = useState<string | null>(null);
   const [referralBusy, setReferralBusy] = useState(false);
@@ -62,7 +70,7 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
   const [gmailBusy, setGmailBusy] = useState(false);
   const referralCodeFromUrl = useMemo(() => {
     const raw = searchParams.get("ref")?.trim().toUpperCase() ?? "";
-    return /^[A-Z0-9]{8}$/u.test(raw) ? raw : "";
+    return /^[A-Z0-9-]{1,50}$/u.test(raw) ? raw : "";
   }, [searchParams]);
 
   const localizeTripErrors = useCallback(
@@ -106,6 +114,14 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
         ...EMPTY_TRIP_SETUP_DRAFT,
         ...(resolved.tripDraft ?? {}),
       });
+      const resolvedInviteCode = typeof resolved.inviteCode === "string" ? resolved.inviteCode.trim().toUpperCase() : "";
+      setInviteCode(resolvedInviteCode);
+      setInviteRedeemedAt(
+        typeof resolved.inviteRedeemedAt === "string" && resolved.inviteRedeemedAt.length > 0
+          ? resolved.inviteRedeemedAt
+          : null,
+      );
+      setInviteMessage(resolvedInviteCode && !resolved.inviteRedeemedAt ? "Invite Code entered and ready to redeem." : null);
       const resolvedReferralCode =
         (typeof resolved.referralCode === "string" ? resolved.referralCode.trim().toUpperCase() : "") || referralCodeFromUrl;
       setReferralCode(resolvedReferralCode);
@@ -123,6 +139,9 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
     } catch {
       setCurrentStep(1);
       setTripDraft(EMPTY_TRIP_SETUP_DRAFT);
+      setInviteCode("");
+      setInviteRedeemedAt(null);
+      setInviteMessage(null);
       setReferralCode(referralCodeFromUrl);
       setReferralRedeemedAt(null);
       setReferralMessage(referralCodeFromUrl ? t("referralCodePrefilled") : null);
@@ -148,6 +167,8 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
     async (
       nextStep: number,
       nextTripDraft: TripSetupDraft,
+      nextInviteCode: string,
+      nextInviteRedeemedAt: string | null,
       nextReferralCode: string,
       nextReferralRedeemedAt: string | null,
     ): Promise<void> => {
@@ -159,6 +180,8 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
           body: JSON.stringify({
             currentStep: clampStep(nextStep),
             tripDraft: nextTripDraft,
+            inviteCode: nextInviteCode.trim().toUpperCase(),
+            inviteRedeemedAt: nextInviteRedeemedAt,
             referralCode: nextReferralCode.trim().toUpperCase(),
             referralRedeemedAt: nextReferralRedeemedAt,
           }),
@@ -190,15 +213,15 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
     async (nextStep: number): Promise<void> => {
       const clamped = clampStep(nextStep);
       setCurrentStep(clamped);
-      await persistProgress(clamped, tripDraft, referralCode, referralRedeemedAt);
+      await persistProgress(clamped, tripDraft, inviteCode, inviteRedeemedAt, referralCode, referralRedeemedAt);
     },
-    [persistProgress, referralCode, referralRedeemedAt, tripDraft],
+    [inviteCode, inviteRedeemedAt, persistProgress, referralCode, referralRedeemedAt, tripDraft],
   );
 
   const handleClose = useCallback(async (): Promise<void> => {
-    await persistProgress(currentStep, tripDraft, referralCode, referralRedeemedAt);
+    await persistProgress(currentStep, tripDraft, inviteCode, inviteRedeemedAt, referralCode, referralRedeemedAt);
     setIsVisible(false);
-  }, [currentStep, persistProgress, referralCode, referralRedeemedAt, tripDraft]);
+  }, [currentStep, inviteCode, inviteRedeemedAt, persistProgress, referralCode, referralRedeemedAt, tripDraft]);
 
   const handleBack = useCallback(async (): Promise<void> => {
     if (currentStep <= 1) {
@@ -208,6 +231,52 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
   }, [currentStep, goToStep]);
 
   const handleNext = useCallback(async (): Promise<void> => {
+    let nextInviteRedeemedAt = inviteRedeemedAt;
+    let nextReferralRedeemedAt = referralRedeemedAt;
+
+    if (currentStep === 1 && inviteCode.trim() && !inviteRedeemedAt) {
+      setInviteBusy(true);
+      setInviteMessage(null);
+      try {
+        const response = await fetch("/api/invite/redeem", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: inviteCode.trim().toUpperCase() }),
+        });
+        const payload = (await response.json()) as {
+          ok?: boolean;
+          reason?: string;
+          error?: string;
+          plan?: "lifetime" | "trial";
+          trialExpiresAt?: string | null;
+        };
+        if (!response.ok) {
+          if (payload.reason === "already-redeemed") {
+            const nowIso = new Date().toISOString();
+            setInviteRedeemedAt(nowIso);
+            nextInviteRedeemedAt = nowIso;
+            setInviteMessage("Invite Code already redeemed for this account.");
+            await persistProgress(1, tripDraft, inviteCode, nowIso, referralCode, nextReferralRedeemedAt);
+          } else {
+            setInviteMessage(payload.error ?? "Invite Code is invalid.");
+            return;
+          }
+        } else {
+          const redeemedAtIso = new Date().toISOString();
+          setInviteRedeemedAt(redeemedAtIso);
+          nextInviteRedeemedAt = redeemedAtIso;
+          setInviteMessage(
+            payload.plan === "lifetime"
+              ? "Invite Code redeemed. Lifetime Pro access activated."
+              : `Invite Code redeemed. 30-day free trial active${payload.trialExpiresAt ? ` through ${new Date(payload.trialExpiresAt).toLocaleDateString()}` : ""}.`,
+          );
+          await persistProgress(1, tripDraft, inviteCode, redeemedAtIso, referralCode, nextReferralRedeemedAt);
+        }
+      } finally {
+        setInviteBusy(false);
+      }
+    }
+
     if (currentStep === 1 && referralCode.trim() && !referralRedeemedAt) {
       setReferralBusy(true);
       setReferralMessage(null);
@@ -227,8 +296,9 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
           if (payload.reason === "already-redeemed") {
             const nowIso = new Date().toISOString();
             setReferralRedeemedAt(nowIso);
+            nextReferralRedeemedAt = nowIso;
             setReferralMessage(t("referralCodeAlreadyRedeemed"));
-            await persistProgress(1, tripDraft, referralCode, nowIso);
+            await persistProgress(1, tripDraft, inviteCode, nextInviteRedeemedAt, referralCode, nowIso);
           } else {
             setReferralMessage(payload.error ?? t("referralCodeInvalid"));
             return;
@@ -236,10 +306,9 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
         } else {
           const redeemedAtIso = new Date().toISOString();
           setReferralRedeemedAt(redeemedAtIso);
-          setReferralMessage(
-            t("referralCodeRedeemed", { days: payload.awarded?.newUserDays ?? 14 }),
-          );
-          await persistProgress(1, tripDraft, referralCode, redeemedAtIso);
+          nextReferralRedeemedAt = redeemedAtIso;
+          setReferralMessage(t("referralCodeRedeemed", { days: payload.awarded?.newUserDays ?? 30 }));
+          await persistProgress(1, tripDraft, inviteCode, nextInviteRedeemedAt, referralCode, redeemedAtIso);
         }
       } finally {
         setReferralBusy(false);
@@ -258,13 +327,16 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
       await completeOnboarding();
       return;
     }
-    await goToStep(currentStep + 1);
+    const nextStep = currentStep + 1;
+    setCurrentStep(nextStep);
+    await persistProgress(nextStep, tripDraft, inviteCode, nextInviteRedeemedAt, referralCode, nextReferralRedeemedAt);
   }, [
     completeOnboarding,
     currentStep,
-    goToStep,
     localizeTripErrors,
     onCreateFirstTrip,
+    inviteCode,
+    inviteRedeemedAt,
     persistProgress,
     referralCode,
     referralRedeemedAt,
@@ -390,12 +462,35 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
               </ul>
               <label className="block">
                 <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                  {t("referralCodeLabel")}
+                  Have an invite code?
+                </span>
+                <input
+                  value={inviteCode}
+                  onChange={(event) => {
+                    const nextCode = event.target.value.toUpperCase().replace(/[^A-Z0-9-]/gu, "").slice(0, 50);
+                    const normalizedCurrent = inviteCode.trim().toUpperCase();
+                    setInviteCode(nextCode);
+                    setInviteMessage(null);
+                    if (nextCode.length === 0 || nextCode !== normalizedCurrent) {
+                      setInviteRedeemedAt(null);
+                    }
+                  }}
+                  placeholder="KEPI-FRIEND-ABC123"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-cyan-300 transition focus-visible:ring-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Enter a code from a friend or family member</p>
+                {inviteMessage ? (
+                  <p className="mt-1 text-xs text-cyan-700 dark:text-cyan-300">{inviteMessage}</p>
+                ) : null}
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Have a referral code?
                 </span>
                 <input
                   value={referralCode}
                   onChange={(event) => {
-                    const nextCode = event.target.value.toUpperCase().replace(/[^A-Z0-9]/gu, "").slice(0, 8);
+                    const nextCode = event.target.value.toUpperCase().replace(/[^A-Z0-9-]/gu, "").slice(0, 50);
                     const normalizedCurrent = referralCode.trim().toUpperCase();
                     setReferralCode(nextCode);
                     setReferralMessage(null);
@@ -406,7 +501,7 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
                   placeholder={t("referralCodePlaceholder")}
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-cyan-300 transition focus-visible:ring-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                 />
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("referralCodeHint")}</p>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Enter a referral code to get 30 free days</p>
                 {referralMessage ? (
                   <p className="mt-1 text-xs text-cyan-700 dark:text-cyan-300">{referralMessage}</p>
                 ) : null}
@@ -478,7 +573,7 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
         <footer className="flex items-center justify-between gap-2 border-t border-slate-200 p-4 dark:border-slate-800">
           <button
             type="button"
-            disabled={currentStep === 1 || isSaving || referralBusy}
+            disabled={currentStep === 1 || isSaving || inviteBusy || referralBusy}
             onClick={() => {
               void handleBack();
             }}
@@ -489,7 +584,7 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              disabled={isSaving || referralBusy}
+              disabled={isSaving || inviteBusy || referralBusy}
               onClick={() => {
                 void handleSkip();
               }}
@@ -499,13 +594,13 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
             </button>
             <button
               type="button"
-              disabled={isSaving || referralBusy}
+              disabled={isSaving || inviteBusy || referralBusy}
               onClick={() => {
                 void handleNext();
               }}
               className="rounded-md bg-cyan-500 px-3 py-1.5 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {referralBusy ? t("redeemingReferralCode") : currentStep === TOTAL_STEPS ? t("start") : t("next")}
+              {inviteBusy || referralBusy ? "Applying code..." : currentStep === TOTAL_STEPS ? t("start") : t("next")}
             </button>
           </div>
         </footer>

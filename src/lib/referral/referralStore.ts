@@ -1,12 +1,15 @@
 import { randomBytes } from "node:crypto";
-import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
+import { kvStoreGet, kvStoreList, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 
+// Referral Code namespace: every user gets a personal shareable referral code.
 const REFERRAL_NAMESPACE_USER_ID = "referral";
+// Database key: user-code/<USER_ID> stores a user's own Referral Code.
 const USER_CODE_KEY_PREFIX = "user-code";
+// Database key: user-redemption/<USER_ID> stores which Referral Code was redeemed by a user.
 const USER_REDEMPTION_KEY_PREFIX = "user-redemption";
 const REFERRAL_CODE_LENGTH = 8;
 const REFERRAL_REFERRER_REWARD_DAYS = 30;
-const REFERRAL_REFEREE_REWARD_DAYS = 14;
+const REFERRAL_REFEREE_REWARD_DAYS = 30;
 const MAX_GENERATION_ATTEMPTS = 30;
 const REFERRAL_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
@@ -29,6 +32,15 @@ export interface ReferralStats {
   totalUses: number;
   successfulConversions: number;
   totalDaysEarned: number;
+}
+
+export interface ReferralCodeCatalogEntry {
+  code: string;
+  userId: string;
+  createdAt: string;
+  latestUsedBy: string | null;
+  latestUsedAt: string | null;
+  totalUses: number;
 }
 
 export type RedeemReferralResult =
@@ -99,6 +111,12 @@ function sanitizeCodeRecord(input: unknown): ReferralCodeRecord | null {
     createdAt: candidate.createdAt,
     uses,
   };
+}
+
+function extractCodeFromNamespacedKey(key: string): string | null {
+  const tail = key.split(":").at(-1) ?? "";
+  const normalized = normalizeCode(tail);
+  return /^[A-Z0-9]{8}$/u.test(normalized) ? normalized : null;
 }
 
 async function getReferralRecordByCode(code: string): Promise<ReferralCodeRecord | null> {
@@ -227,4 +245,30 @@ export async function getReferralStats(userId: string): Promise<ReferralStats> {
     successfulConversions,
     totalDaysEarned,
   };
+}
+
+export async function listReferralCodes(limit = 2000): Promise<ReferralCodeCatalogEntry[]> {
+  const entries = await kvStoreList<unknown>("", {
+    userId: REFERRAL_NAMESPACE_USER_ID,
+    limit,
+  });
+  return entries
+    .map((entry) => {
+      const code = extractCodeFromNamespacedKey(entry.key);
+      const record = sanitizeCodeRecord(entry.value);
+      if (!code || !record) {
+        return null;
+      }
+      const latestUse = [...record.uses].sort((a, b) => Date.parse(b.redeemedAt) - Date.parse(a.redeemedAt))[0] ?? null;
+      return {
+        code,
+        userId: record.userId,
+        createdAt: record.createdAt,
+        latestUsedBy: latestUse?.newUserId ?? null,
+        latestUsedAt: latestUse?.redeemedAt ?? null,
+        totalUses: record.uses.length,
+      } satisfies ReferralCodeCatalogEntry;
+    })
+    .filter((entry): entry is ReferralCodeCatalogEntry => entry !== null)
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }

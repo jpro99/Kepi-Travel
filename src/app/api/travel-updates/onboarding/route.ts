@@ -16,11 +16,16 @@ const TripDraftSchema = z.object({
   departureDate: z.string().max(20).default(""),
 });
 
-const ReferralCodeSchema = z.string().trim().toUpperCase().regex(/^[A-Z0-9]{8}$/u).or(z.literal(""));
+// Invite Code: admin-generated, friend/family code (supports hyphens).
+const InviteCodeSchema = z.string().trim().toUpperCase().regex(/^[A-Z0-9-]{1,50}$/u).or(z.literal(""));
+// Referral Code: user-shared referral identifier.
+const ReferralCodeSchema = z.string().trim().toUpperCase().regex(/^[A-Z0-9-]{1,50}$/u).or(z.literal(""));
 
 const OnboardingProgressSchema = z.object({
   currentStep: z.number().int().min(1).max(TOTAL_ONBOARDING_STEPS),
   tripDraft: TripDraftSchema,
+  inviteCode: InviteCodeSchema.default(""),
+  inviteRedeemedAt: z.string().min(1).nullable().default(null),
   referralCode: ReferralCodeSchema.default(""),
   referralRedeemedAt: z.string().min(1).nullable().default(null),
   updatedAt: z.string(),
@@ -30,6 +35,8 @@ const PutBodySchema = z.object({
   complete: z.boolean().optional(),
   currentStep: z.number().int().min(1).max(TOTAL_ONBOARDING_STEPS).optional(),
   tripDraft: TripDraftSchema.optional(),
+  inviteCode: InviteCodeSchema.optional(),
+  inviteRedeemedAt: z.string().min(1).nullable().optional(),
   referralCode: ReferralCodeSchema.optional(),
   referralRedeemedAt: z.string().min(1).nullable().optional(),
 });
@@ -76,6 +83,8 @@ export async function GET(req: Request) {
         complete: true,
         currentStep: TOTAL_ONBOARDING_STEPS,
         tripDraft: defaultTripDraft(),
+        inviteCode: "",
+        inviteRedeemedAt: null,
         referralCode: "",
         referralRedeemedAt: null,
       },
@@ -91,6 +100,8 @@ export async function GET(req: Request) {
       complete: false,
       currentStep: parsedProgress.success ? parsedProgress.data.currentStep : 1,
       tripDraft: parsedProgress.success ? parsedProgress.data.tripDraft : defaultTripDraft(),
+      inviteCode: parsedProgress.success ? parsedProgress.data.inviteCode : "",
+      inviteRedeemedAt: parsedProgress.success ? parsedProgress.data.inviteRedeemedAt : null,
       referralCode: parsedProgress.success ? parsedProgress.data.referralCode : "",
       referralRedeemedAt: parsedProgress.success ? parsedProgress.data.referralRedeemedAt : null,
     },
@@ -153,6 +164,8 @@ export async function PUT(req: Request) {
   const progressPayload = {
     currentStep: parsedBody.data.currentStep ?? 1,
     tripDraft: parsedBody.data.tripDraft ?? defaultTripDraft(),
+    inviteCode: parsedBody.data.inviteCode ?? "",
+    inviteRedeemedAt: parsedBody.data.inviteRedeemedAt === undefined ? null : parsedBody.data.inviteRedeemedAt,
     referralCode: parsedBody.data.referralCode ?? "",
     referralRedeemedAt:
       parsedBody.data.referralRedeemedAt === undefined ? null : parsedBody.data.referralRedeemedAt,
@@ -171,6 +184,8 @@ export async function PUT(req: Request) {
       complete: false,
       currentStep: progressPayload.currentStep,
       tripDraft: progressPayload.tripDraft,
+      inviteCode: progressPayload.inviteCode,
+      inviteRedeemedAt: progressPayload.inviteRedeemedAt,
       referralCode: progressPayload.referralCode,
       referralRedeemedAt: progressPayload.referralRedeemedAt,
     },

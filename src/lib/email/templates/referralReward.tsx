@@ -68,7 +68,7 @@ export function ReferralRewardEmail({
                     margin: "0 0 18px",
                   }}
                 >
-                  <p style={{ margin: 0, fontSize: "12px", color: "#475569" }}>Your referral code</p>
+                  <p style={{ margin: 0, fontSize: "12px", color: "#475569" }}>Your Referral Code</p>
                   <p style={{ margin: "6px 0 0", fontSize: "20px", letterSpacing: "0.12em", fontWeight: 700 }}>
                     {referralCode}
                   </p>

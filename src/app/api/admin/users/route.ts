@@ -13,7 +13,8 @@ interface AdminUserSummary {
   userId: string;
   email: string;
   signedUpAt: string | null;
-  signedUpVia: "organic" | "invite code" | "referral";
+  signedUpVia: "organic" | "invite-code" | "referral-code";
+  signedUpViaLabel: "Organic" | "Invite Code" | "Referral Code";
   codeUsed: string | null;
   currentPlan: "free" | "pro" | "concierge" | "lifetime" | "trial";
   trialExpiresAt: string | null;
@@ -107,8 +108,10 @@ export async function GET(req: Request) {
       const email = resolvePrimaryEmail(user);
       const signedUpAt = toIsoString(user.createdAt);
       const subscription = await getSubscriptionRecord(targetUserId);
+      // Invite Code = admin-generated friend/family redemption code.
       const inviteCode = await getInviteCodeRedeemedByUser(targetUserId);
       const inviteRecord = inviteCode ? await getInviteCodeRecord(inviteCode) : null;
+      // Referral Code = user-shared code redeemed by a new user.
       const referralCode = inviteCode ? null : await getRedeemedReferralCode(targetUserId);
 
       const hasActiveTrial =
@@ -132,7 +135,8 @@ export async function GET(req: Request) {
         userId: targetUserId,
         email,
         signedUpAt,
-        signedUpVia: inviteCode ? "invite code" : referralCode ? "referral" : "organic",
+        signedUpVia: inviteCode ? "invite-code" : referralCode ? "referral-code" : "organic",
+        signedUpViaLabel: inviteCode ? "Invite Code" : referralCode ? "Referral Code" : "Organic",
         codeUsed: inviteCode ?? referralCode,
         currentPlan,
         trialExpiresAt: hasActiveTrial ? subscription.trialExpiresAt : null,

@@ -16,7 +16,8 @@ interface AdminUserRow {
   userId: string;
   email: string;
   signedUpAt: string | null;
-  signedUpVia: "organic" | "invite code" | "referral";
+  signedUpVia: "organic" | "invite-code" | "referral-code";
+  signedUpViaLabel: "Organic" | "Invite Code" | "Referral Code";
   codeUsed: string | null;
   currentPlan: "free" | "pro" | "concierge" | "lifetime" | "trial";
   trialExpiresAt: string | null;
@@ -27,13 +28,19 @@ interface AdminUserRow {
 
 interface AdminInviteCodeRow {
   code: string;
-  type: "lifetime" | "trial-30";
+  type: "lifetime" | "trial-30" | "referral";
   createdBy: string;
   createdAt: string;
   usedBy: string | null;
   usedAt: string | null;
   status: "active" | "revoked" | "used";
   note: string | null;
+}
+
+function formatCodeTypeLabel(type: AdminInviteCodeRow["type"]): string {
+  if (type === "lifetime") return "Invite Code (Lifetime)";
+  if (type === "trial-30") return "Invite Code (30-day Trial)";
+  return "Referral Code";
 }
 
 export function AdminDashboardClient() {
@@ -157,11 +164,13 @@ export function AdminDashboardClient() {
         if (!response.ok) {
           throw new Error(payload.error ?? `Generate endpoint returned ${response.status}`);
         }
-        setAdminMessage(`Generated ${type} invite code: ${payload.code?.code ?? "unknown"}`);
+        setAdminMessage(
+          `Generated ${type === "lifetime" ? "Invite Code (Lifetime)" : "Invite Code (30-day Trial)"}: ${payload.code?.code ?? "unknown"}`,
+        );
         setInviteNote("");
         await loadInviteCodes();
       } catch (error) {
-        setAdminMessage(error instanceof Error ? error.message : "Failed to generate invite code.");
+        setAdminMessage(error instanceof Error ? error.message : "Failed to generate Invite Code.");
       } finally {
         setAdminBusy(false);
       }
@@ -184,10 +193,10 @@ export function AdminDashboardClient() {
         if (!response.ok) {
           throw new Error(payload.error ?? `Revoke endpoint returned ${response.status}`);
         }
-        setAdminMessage(`Revoked invite code ${payload.code ?? ""} and downgraded user.`);
+        setAdminMessage(`Revoked Invite Code ${payload.code ?? ""} and downgraded user.`);
         await Promise.all([loadUsers(), loadInviteCodes()]);
       } catch (error) {
-        setAdminMessage(error instanceof Error ? error.message : "Failed to revoke invite code.");
+        setAdminMessage(error instanceof Error ? error.message : "Failed to revoke Invite Code.");
       } finally {
         setAdminBusy(false);
       }
@@ -331,7 +340,7 @@ export function AdminDashboardClient() {
                   <tr key={user.userId} className="border-b border-slate-100 dark:border-slate-800">
                     <td className="px-2 py-2">{user.email}</td>
                     <td className="px-2 py-2">{user.signedUpAt ? new Date(user.signedUpAt).toLocaleDateString() : "-"}</td>
-                    <td className="px-2 py-2">{user.signedUpVia}</td>
+                    <td className="px-2 py-2">{user.signedUpViaLabel}</td>
                     <td className="px-2 py-2">{user.codeUsed ?? "-"}</td>
                     <td className="px-2 py-2">{user.currentPlan}</td>
                     <td className="px-2 py-2">
@@ -342,7 +351,7 @@ export function AdminDashboardClient() {
                     <td className="px-2 py-2">
                       <button
                         type="button"
-                        disabled={adminBusy || user.signedUpVia !== "invite code" || user.inviteCodeStatus === "revoked"}
+                        disabled={adminBusy || user.signedUpVia !== "invite-code" || user.inviteCodeStatus === "revoked"}
                         onClick={() => {
                           void handleRevokeInviteForUser(user.userId);
                         }}
@@ -365,7 +374,9 @@ export function AdminDashboardClient() {
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold">Invite Codes</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Generate lifetime or trial invite access codes.</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Generate Invite Codes and review Referral Code usage in one table.
+              </p>
             </div>
             <button
               type="button"
@@ -423,7 +434,7 @@ export function AdminDashboardClient() {
                 {inviteCodes.map((code) => (
                   <tr key={code.code} className="border-b border-slate-100 dark:border-slate-800">
                     <td className="px-2 py-2 font-semibold">{code.code}</td>
-                    <td className="px-2 py-2">{code.type}</td>
+                    <td className="px-2 py-2">{formatCodeTypeLabel(code.type)}</td>
                     <td className="px-2 py-2">{code.note ?? "-"}</td>
                     <td className="px-2 py-2">{code.status}</td>
                     <td className="px-2 py-2">{code.usedBy ?? "-"}</td>
@@ -434,7 +445,7 @@ export function AdminDashboardClient() {
               </tbody>
             </table>
           </div>
-          {loadingInviteCodes ? <p className="text-xs text-slate-500 dark:text-slate-400">Loading invite codes...</p> : null}
+          {loadingInviteCodes ? <p className="text-xs text-slate-500 dark:text-slate-400">Loading Invite Codes...</p> : null}
           {inviteCodesError ? <p className="text-xs text-rose-600 dark:text-rose-300">{inviteCodesError}</p> : null}
           {adminMessage ? <p className="text-xs text-cyan-700 dark:text-cyan-300">{adminMessage}</p> : null}
         </section>

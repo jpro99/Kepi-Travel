@@ -66,12 +66,12 @@ export async function POST(req: Request) {
     code = redeemedCode ?? "";
   }
   if (!code) {
-    return NextResponse.json({ error: "Invite code not provided." }, { status: 422, headers: rateLimit.headers });
+    return NextResponse.json({ error: "Invite Code not provided." }, { status: 422, headers: rateLimit.headers });
   }
 
   const revokedRecord = await revokeInviteCode(code);
   if (!revokedRecord) {
-    return NextResponse.json({ error: "Invite code not found." }, { status: 404, headers: rateLimit.headers });
+    return NextResponse.json({ error: "Invite Code not found." }, { status: 404, headers: rateLimit.headers });
   }
 
   const targetUserId = revokedRecord.usedBy ?? parsed.data.userId ?? null;
@@ -87,7 +87,7 @@ export async function POST(req: Request) {
     });
   }
 
-  routeLogger.info("Invite code revoked and user downgraded.", {
+  routeLogger.info("Invite Code revoked and user downgraded.", {
     inviteCode: revokedRecord.code,
     downgradedUserId: targetUserId,
   });

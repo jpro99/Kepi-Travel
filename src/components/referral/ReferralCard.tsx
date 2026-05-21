@@ -95,7 +95,7 @@ export function ReferralCard() {
           <p className="text-xs uppercase tracking-[0.2em] text-cyan-700 dark:text-cyan-300">Referrals</p>
           <h2 className="mt-1 text-xl font-semibold">Invite friends, earn Pro days</h2>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-            Each friend who signs up gives them 14 free Pro days and gives you 30 free Pro days.
+            Each friend who signs up gives them 30 free Pro days and gives you 30 free Pro days.
           </p>
         </div>
         <button
@@ -115,7 +115,7 @@ export function ReferralCard() {
       ) : (
         <div className="mt-4 space-y-3">
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/70">
-            <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Your referral code</p>
+            <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Your Referral Code</p>
             <p className="mt-1 text-2xl font-semibold tracking-[0.16em]">{data?.code ?? "--------"}</p>
           </div>
           <div className="grid gap-2 sm:grid-cols-3">
@@ -137,7 +137,7 @@ export function ReferralCard() {
               type="button"
               disabled={busy || !data?.code}
               onClick={() => {
-                void handleCopy(data?.code ?? "", "Referral code copied.");
+                void handleCopy(data?.code ?? "", "Referral Code copied.");
               }}
               className="rounded-lg bg-cyan-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
             >

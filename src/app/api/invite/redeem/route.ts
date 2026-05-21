@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
+// Invite Code: admin-generated code shared directly with a friend/family member.
 const BodySchema = z.object({
   code: z.string().trim().regex(/^[A-Za-z0-9-]{1,50}$/u),
 });
@@ -58,6 +59,7 @@ export async function POST(req: Request) {
     );
   }
 
+  // Invite Code normalization only (Referral Codes redeem via /api/referral/redeem).
   const normalizedCode = parsed.data.code.toUpperCase().trim();
   const redemption = await redeemInviteCode(normalizedCode, userId);
   if (!redemption.ok) {
@@ -73,12 +75,12 @@ export async function POST(req: Request) {
       {
         error:
           redemption.reason === "already-redeemed"
-            ? "An invite code has already been redeemed for this account."
+            ? "An Invite Code has already been redeemed for this account."
             : redemption.reason === "code-revoked"
-              ? "This invite code has been revoked."
+              ? "This Invite Code has been revoked."
               : redemption.reason === "code-used"
-                ? "This invite code has already been used."
-                : "Invite code is invalid.",
+                ? "This Invite Code has already been used."
+                : "Invite Code is invalid.",
         reason: redemption.reason,
       },
       { status: statusCode, headers: rateLimit.headers },
@@ -116,7 +118,7 @@ export async function POST(req: Request) {
     inviteType: redemption.record.type,
     inviteCode: redemption.record.code,
   });
-  routeLogger.info("Invite code redeemed.", {
+  routeLogger.info("Invite Code redeemed.", {
     inviteType: redemption.record.type,
     inviteCode: redemption.record.code,
     redeemedBy: userId,

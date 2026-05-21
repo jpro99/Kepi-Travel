@@ -10,6 +10,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const BodySchema = z.object({
+  // Invite Code type (admin-generated): lifetime or 30-day trial.
   type: z.union([z.literal("lifetime"), z.literal("trial-30")]),
   note: z.string().trim().max(120).optional(),
 });
@@ -64,7 +65,7 @@ export async function POST(req: Request) {
     note: parsed.data.note,
     createdBy: userId,
   });
-  routeLogger.info("Invite code generated.", {
+  routeLogger.info("Invite Code generated.", {
     inviteType: code.type,
     inviteCode: code.code,
   });
