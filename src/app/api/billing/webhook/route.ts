@@ -35,6 +35,8 @@ async function handleCheckoutCompleted(
     stripeCustomerId,
     stripeSubscriptionId,
     validUntil,
+    lifetimePlan: false,
+    trialExpiresAt: null,
   });
   if (stripeCustomerId) {
     await setStripeCustomerOwner(stripeCustomerId, userId);
@@ -68,6 +70,8 @@ async function handleSubscriptionDeleted(
     stripeCustomerId: stripeCustomerId ?? existingRecord.stripeCustomerId,
     stripeSubscriptionId: null,
     validUntil: null,
+    lifetimePlan: false,
+    trialExpiresAt: null,
   });
 }
 

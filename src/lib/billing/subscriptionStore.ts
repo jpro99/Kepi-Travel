@@ -1,4 +1,5 @@
 import type { BillingPlanId } from "@/lib/billing/plans";
+import { kv } from "@vercel/kv";
 import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 
 const SUBSCRIPTION_KEY = "subscription";
@@ -11,6 +12,8 @@ export interface BillingSubscriptionRecord {
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
   validUntil: string | null;
+  lifetimePlan: boolean;
+  trialExpiresAt: string | null;
 }
 
 const FREE_SUBSCRIPTION_RECORD: BillingSubscriptionRecord = {
@@ -18,6 +21,8 @@ const FREE_SUBSCRIPTION_RECORD: BillingSubscriptionRecord = {
   stripeCustomerId: null,
   stripeSubscriptionId: null,
   validUntil: null,
+  lifetimePlan: false,
+  trialExpiresAt: null,
 };
 
 function sanitizeRecord(input: unknown): BillingSubscriptionRecord {
@@ -30,15 +35,25 @@ function sanitizeRecord(input: unknown): BillingSubscriptionRecord {
   const stripeSubscriptionId =
     typeof candidate.stripeSubscriptionId === "string" ? candidate.stripeSubscriptionId : null;
   const validUntil = typeof candidate.validUntil === "string" ? candidate.validUntil : null;
+  const lifetimePlan = Boolean(candidate.lifetimePlan);
+  const trialExpiresAt = typeof candidate.trialExpiresAt === "string" ? candidate.trialExpiresAt : null;
   return {
     plan,
     stripeCustomerId,
     stripeSubscriptionId,
     validUntil,
+    lifetimePlan,
+    trialExpiresAt,
   };
 }
 
 export function isSubscriptionActive(record: BillingSubscriptionRecord): boolean {
+  if (record.lifetimePlan) {
+    return true;
+  }
+  if (record.trialExpiresAt) {
+    return Date.parse(record.trialExpiresAt) > Date.now();
+  }
   if (record.plan === "free") {
     return false;
   }
@@ -60,6 +75,9 @@ export async function setSubscriptionRecord(userId: string, record: BillingSubsc
 export async function extendSubscriptionProAccess(userId: string, days: number): Promise<BillingSubscriptionRecord> {
   const grantDays = Math.max(0, Math.round(days));
   const existing = await getSubscriptionRecord(userId);
+  if (existing.lifetimePlan) {
+    return existing;
+  }
   if (grantDays <= 0) {
     return existing;
   }
@@ -75,9 +93,54 @@ export async function extendSubscriptionProAccess(userId: string, days: number):
     ...existing,
     plan: existing.plan === "concierge" ? "concierge" : "pro",
     validUntil: new Date(baseMs + grantDays * DAY_IN_MS).toISOString(),
+    lifetimePlan: existing.lifetimePlan,
+    trialExpiresAt: existing.trialExpiresAt,
   };
   await setSubscriptionRecord(userId, nextRecord);
   return nextRecord;
+}
+
+function isKvConfigured(): boolean {
+  return Boolean(process.env.KV_REST_API_URL?.trim() && process.env.KV_REST_API_TOKEN?.trim());
+}
+
+function extractUserIdFromSubscriptionKey(key: string): string | null {
+  const parts = key.split(":");
+  if (parts.length < 3 || parts[0] !== "kepi") {
+    return null;
+  }
+  return parts[1] || null;
+}
+
+export async function listExpiredTrialUserIds(limit = 1000): Promise<string[]> {
+  if (!isKvConfigured()) {
+    return [];
+  }
+  const userIds: string[] = [];
+  const seen = new Set<string>();
+  const nowMs = Date.now();
+  for await (const key of kv.scanIterator({ match: "kepi:*:subscription" })) {
+    const keyString = String(key);
+    const userId = extractUserIdFromSubscriptionKey(keyString);
+    if (!userId || userId.startsWith("__") || seen.has(userId)) {
+      continue;
+    }
+    const stored = await kv.get<unknown>(keyString);
+    const record = sanitizeRecord(stored);
+    if (
+      record.plan === "pro" &&
+      !record.lifetimePlan &&
+      typeof record.trialExpiresAt === "string" &&
+      Date.parse(record.trialExpiresAt) <= nowMs
+    ) {
+      seen.add(userId);
+      userIds.push(userId);
+      if (userIds.length >= limit) {
+        break;
+      }
+    }
+  }
+  return userIds;
 }
 
 export async function setStripeCustomerOwner(customerId: string, userId: string): Promise<void> {

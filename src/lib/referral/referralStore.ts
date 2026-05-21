@@ -121,6 +121,13 @@ export async function getReferralCode(userId: string): Promise<string | null> {
   return normalized;
 }
 
+export async function getRedeemedReferralCode(userId: string): Promise<string | null> {
+  const stored = await kvStoreGet<string>(userRedemptionKey(userId), {
+    userId: REFERRAL_NAMESPACE_USER_ID,
+  });
+  return stored ? normalizeCode(stored) : null;
+}
+
 export async function createReferralCode(userId: string): Promise<string> {
   const existing = await getReferralCode(userId);
   if (existing) {

@@ -24,6 +24,14 @@ type BillingStatusResponse = {
     pro: boolean;
     concierge: boolean;
   };
+  subscription?: {
+    plan: BillingPlanId;
+    stripeCustomerId: string | null;
+    stripeSubscriptionId: string | null;
+    validUntil: string | null;
+    lifetimePlan: boolean;
+    trialExpiresAt: string | null;
+  };
 };
 
 const FEATURE_ORDER: PlanFeature[] = ["gmail-import", "ai-suggestions", "push-notifications", "multi-trip"];
@@ -34,6 +42,9 @@ export default function BillingPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [targetPlan, setTargetPlan] = useState<"pro" | "concierge">("pro");
+  const [inviteCode, setInviteCode] = useState("");
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteMessage, setInviteMessage] = useState<string | null>(null);
 
   const loadBillingStatus = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -77,6 +88,9 @@ export default function BillingPage() {
 
   const activePlan = status?.plan ?? "free";
   const planDefinition = status?.definition ?? BILLING_PLANS.free;
+  const lifetimePlanActive = Boolean(status?.subscription?.lifetimePlan);
+  const trialExpiresAt = status?.subscription?.trialExpiresAt ?? null;
+  const trialPlanActive = activePlan === "pro" && !lifetimePlanActive && Boolean(trialExpiresAt);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -135,6 +149,39 @@ export default function BillingPage() {
     }
   }, [busy]);
 
+  const handleRedeemInviteCode = useCallback(async (): Promise<void> => {
+    if (inviteBusy || !inviteCode.trim()) return;
+    setInviteBusy(true);
+    setInviteMessage(null);
+    setError(null);
+    try {
+      const response = await fetch("/api/invite/redeem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: inviteCode.trim() }),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        plan?: "lifetime" | "trial";
+        trialExpiresAt?: string | null;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error ?? `Invite redemption failed (${response.status})`);
+      }
+      setInviteCode("");
+      setInviteMessage(
+        payload.plan === "lifetime"
+          ? "Invite code redeemed: Lifetime Pro access is now active."
+          : `Invite code redeemed: Pro trial active until ${payload.trialExpiresAt ? new Date(payload.trialExpiresAt).toLocaleDateString() : "30 days from now"}.`,
+      );
+      await loadBillingStatus();
+    } catch (redeemError) {
+      setError(redeemError instanceof Error ? redeemError.message : "Could not redeem invite code.");
+    } finally {
+      setInviteBusy(false);
+    }
+  }, [inviteBusy, inviteCode, loadBillingStatus]);
+
   const usageText = useMemo(() => {
     if (!status) {
       return "Loading usage…";
@@ -167,6 +214,16 @@ export default function BillingPage() {
                 <p className="text-sm text-slate-600 dark:text-slate-300">
                   {formatPlanPrice(planDefinition.monthlyPriceCents)} • {planDefinition.tagline}
                 </p>
+                {lifetimePlanActive ? (
+                  <p className="mt-1 inline-flex rounded-full border border-cyan-400/60 bg-cyan-500/10 px-2 py-0.5 text-xs font-semibold text-cyan-700 dark:text-cyan-300">
+                    Lifetime Pro (invite)
+                  </p>
+                ) : null}
+                {trialPlanActive && trialExpiresAt ? (
+                  <p className="mt-1 text-xs text-cyan-700 dark:text-cyan-300">
+                    Trial Pro expires on {new Date(trialExpiresAt).toLocaleDateString()}.
+                  </p>
+                ) : null}
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-right dark:border-slate-700 dark:bg-slate-950/70">
                 <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Usage</p>
@@ -216,7 +273,7 @@ export default function BillingPage() {
               })}
             </div>
 
-            {activePlan !== "concierge" ? (
+            {activePlan !== "concierge" && !lifetimePlanActive ? (
               <label className="block text-sm">
                 <span className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Upgrade target</span>
                 <select
@@ -234,7 +291,7 @@ export default function BillingPage() {
             ) : null}
 
             <div className="flex flex-wrap gap-2">
-              {activePlan !== "free" ? (
+              {activePlan !== "free" && !lifetimePlanActive ? (
                 <button
                   type="button"
                   disabled={busy}
@@ -246,7 +303,7 @@ export default function BillingPage() {
                   {busy ? "Opening portal..." : "Manage subscription"}
                 </button>
               ) : null}
-              {activePlan !== "concierge" ? (
+              {activePlan !== "concierge" && !lifetimePlanActive ? (
                 <button
                   type="button"
                   disabled={
@@ -277,6 +334,32 @@ export default function BillingPage() {
               >
                 Refresh status
               </button>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/70">
+              <p className="text-sm font-semibold">Redeem invite code</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Lifetime codes grant permanent Pro access. Trial codes grant 30 days of Pro.
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={inviteCode}
+                  onChange={(event) => setInviteCode(event.target.value.toUpperCase())}
+                  placeholder="KEPI-FRIEND-ABC123"
+                  className="w-64 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs uppercase tracking-wide dark:border-slate-700 dark:bg-slate-900"
+                />
+                <button
+                  type="button"
+                  disabled={inviteBusy || !inviteCode.trim()}
+                  onClick={() => {
+                    void handleRedeemInviteCode();
+                  }}
+                  className="rounded-md bg-cyan-500/90 px-2 py-1 text-xs font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {inviteBusy ? "Redeeming..." : "Redeem code"}
+                </button>
+              </div>
+              {inviteMessage ? <p className="mt-2 text-xs text-cyan-700 dark:text-cyan-300">{inviteMessage}</p> : null}
             </div>
           </div>
         )}

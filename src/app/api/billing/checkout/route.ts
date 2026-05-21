@@ -107,6 +107,12 @@ export async function POST(req: Request) {
   const successUrl = new URL(parsedBody.data.successPath, requestUrl.origin).toString();
   const cancelUrl = new URL(parsedBody.data.cancelPath, requestUrl.origin).toString();
   const existingSubscription = await getSubscriptionRecord(userId);
+  if (existingSubscription.lifetimePlan) {
+    return NextResponse.json(
+      { error: "Lifetime Pro access is active for this account. Stripe checkout is disabled." },
+      { status: 409, headers: rateLimit.headers },
+    );
+  }
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
