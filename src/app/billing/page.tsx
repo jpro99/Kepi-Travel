@@ -36,6 +36,13 @@ type BillingStatusResponse = {
 };
 
 const FEATURE_ORDER: PlanFeature[] = ["gmail-import", "ai-suggestions", "push-notifications", "multi-trip"];
+const MAX_REDEEM_CODE_LENGTH = 50;
+const INVITE_CODE_REGEX = /^KEPI-FRIEND-[A-Z0-9]{6,38}$/u;
+const REFERRAL_CODE_REGEX = /^[A-Z0-9]{8}$/u;
+
+function normalizeRedeemCode(value: string): string {
+  return value.toUpperCase().replaceAll(/\s+/g, "").trim().slice(0, MAX_REDEEM_CODE_LENGTH);
+}
 
 export default function BillingPage() {
   const searchParams = useSearchParams();
@@ -80,7 +87,8 @@ export default function BillingPage() {
     if (prefillDismissed) {
       return "";
     }
-    return searchParams.get("redeemCode")?.trim().toUpperCase() ?? "";
+    const fromQuery = searchParams.get("redeemCode") ?? "";
+    return normalizeRedeemCode(fromQuery);
   }, [prefillDismissed, searchParams]);
   const activeInviteCode = inviteCode || prefilledInviteCode;
 
@@ -167,9 +175,9 @@ export default function BillingPage() {
     setInviteMessage(null);
     setInviteError(null);
     try {
-      const normalizedCode = activeInviteCode.trim().toUpperCase();
-      const isInviteCode = /^KEPI-FRIEND-[A-Z0-9]{6}$/u.test(normalizedCode);
-      const isReferralCode = /^[A-Z0-9]{8}$/u.test(normalizedCode);
+      const normalizedCode = normalizeRedeemCode(activeInviteCode);
+      const isInviteCode = INVITE_CODE_REGEX.test(normalizedCode);
+      const isReferralCode = REFERRAL_CODE_REGEX.test(normalizedCode);
       if (!isInviteCode && !isReferralCode) {
         throw new Error("This code is invalid.");
       }
@@ -251,10 +259,17 @@ export default function BillingPage() {
             value={activeInviteCode}
             onChange={(event) => {
               setPrefillDismissed(true);
-              setInviteCode(event.target.value.toUpperCase());
+              setInviteCode(normalizeRedeemCode(event.target.value));
+            }}
+            onPaste={(event) => {
+              event.preventDefault();
+              const pasted = event.clipboardData.getData("text");
+              setPrefillDismissed(true);
+              setInviteCode(normalizeRedeemCode(pasted));
             }}
             placeholder="KEPI-FRIEND-ABC123 or ABCD1234"
-            className="w-80 max-w-full rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm uppercase tracking-wide text-slate-900 dark:border-emerald-700 dark:bg-slate-900 dark:text-slate-100"
+            maxLength={MAX_REDEEM_CODE_LENGTH}
+            className="w-full rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm uppercase tracking-wide text-slate-900 dark:border-emerald-700 dark:bg-slate-900 dark:text-slate-100"
           />
           <button
             type="button"

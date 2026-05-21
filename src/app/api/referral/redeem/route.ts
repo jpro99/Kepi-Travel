@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const BodySchema = z.object({
-  code: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{8}$/u),
+  code: z.string().trim().min(1).max(120),
 });
 
 export async function POST(req: Request) {
@@ -56,7 +56,8 @@ export async function POST(req: Request) {
     );
   }
 
-  const redemption = await redeemReferralCode(parsedBody.data.code, userId);
+  const normalizedCode = parsedBody.data.code.toUpperCase().replaceAll(/\s+/g, "");
+  const redemption = await redeemReferralCode(normalizedCode, userId);
   if (!redemption.ok) {
     const statusCode =
       redemption.reason === "already-redeemed" ? 409 : redemption.reason === "self-referral" ? 403 : 404;

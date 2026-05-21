@@ -3,16 +3,24 @@
 import { useMemo, useState } from "react";
 import { SignUp } from "@clerk/nextjs";
 
+const MAX_REDEEM_CODE_LENGTH = 50;
+const INVITE_CODE_REGEX = /^KEPI-FRIEND-[A-Z0-9]{6,38}$/u;
+const REFERRAL_CODE_REGEX = /^[A-Z0-9]{8}$/u;
+
 function normalizeCode(value: string): string {
-  return value.trim().toUpperCase().replaceAll(/[^A-Z0-9-]/g, "");
+  return value
+    .toUpperCase()
+    .replaceAll(/\s+/g, "")
+    .replaceAll(/[^A-Z0-9-]/g, "")
+    .slice(0, MAX_REDEEM_CODE_LENGTH);
 }
 
 function isInviteCode(value: string): boolean {
-  return /^KEPI-FRIEND-[A-Z0-9]{6}$/u.test(value);
+  return INVITE_CODE_REGEX.test(value);
 }
 
 function isReferralCode(value: string): boolean {
-  return /^[A-Z0-9]{8}$/u.test(value);
+  return REFERRAL_CODE_REGEX.test(value);
 }
 
 export default function SignUpPage() {
@@ -45,9 +53,15 @@ export default function SignUpPage() {
           <input
             type="text"
             value={inputCode}
-            onChange={(event) => setInputCode(event.target.value.toUpperCase())}
+            onChange={(event) => setInputCode(normalizeCode(event.target.value))}
+            onPaste={(event) => {
+              event.preventDefault();
+              const pasted = event.clipboardData.getData("text");
+              setInputCode(normalizeCode(pasted));
+            }}
             placeholder="KEPI-FRIEND-ABC123 or ABCD1234"
-            className="min-w-[240px] flex-1 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm uppercase tracking-wide text-slate-900 dark:border-emerald-700 dark:bg-slate-900 dark:text-slate-100"
+            maxLength={MAX_REDEEM_CODE_LENGTH}
+            className="w-full rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm uppercase tracking-wide text-slate-900 dark:border-emerald-700 dark:bg-slate-900 dark:text-slate-100"
           />
           <button
             type="button"

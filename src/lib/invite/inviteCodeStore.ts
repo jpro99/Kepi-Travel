@@ -7,6 +7,13 @@ const USER_REDEMPTION_KEY_PREFIX = "user-invite-redemption";
 const INVITE_CODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 const INVITE_CODE_RANDOM_LENGTH = 6;
 const MAX_GENERATION_ATTEMPTS = 40;
+const INVITE_CODE_PREFIX = "KEPI-FRIEND-";
+const INVITE_CODE_MIN_SUFFIX_LENGTH = 6;
+const INVITE_CODE_MAX_SUFFIX_LENGTH = 38;
+const INVITE_CODE_REGEX = new RegExp(
+  `^${INVITE_CODE_PREFIX}[A-Z0-9]{${INVITE_CODE_MIN_SUFFIX_LENGTH},${INVITE_CODE_MAX_SUFFIX_LENGTH}}$`,
+  "u",
+);
 
 export type InviteCodeType = "lifetime" | "trial-30";
 export type InviteCodeStatus = "active" | "revoked" | "used";
@@ -92,7 +99,7 @@ export async function createInviteCode(args: {
 }): Promise<InviteCodeRecord> {
   for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt += 1) {
     const suffix = randomSuffix(INVITE_CODE_RANDOM_LENGTH);
-    const candidate = normalizeInviteCode(`KEPI-FRIEND-${suffix}`);
+    const candidate = normalizeInviteCode(`${INVITE_CODE_PREFIX}${suffix}`);
     const record: InviteCodeRecord = {
       code: candidate,
       type: args.type,
@@ -113,7 +120,7 @@ export async function createInviteCode(args: {
 
 export async function redeemInviteCode(rawCode: string, userId: string): Promise<RedeemInviteCodeResult> {
   const code = normalizeInviteCode(rawCode);
-  if (!/^KEPI-FRIEND-[A-Z0-9]{6}$/u.test(code)) {
+  if (!INVITE_CODE_REGEX.test(code)) {
     return { ok: false, reason: "invalid-code" };
   }
   const existingUserRedemption = await getInviteCodeRedeemedByUser(userId);

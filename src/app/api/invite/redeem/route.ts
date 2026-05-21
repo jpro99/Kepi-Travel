@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
 const BodySchema = z.object({
-  code: z.string().trim().min(1).max(64),
+  code: z.string().trim().min(1).max(120),
 });
 
 export async function POST(req: Request) {
