@@ -134,3 +134,92 @@ test("imports and parses Gmail message fixtures", async () => {
   assert.equal(reservations[0]?.reservation.type, "flight");
   assert.equal(reservations[1]?.reservation.type, "hotel");
 });
+
+test("applies lookback window to Gmail query", async () => {
+  let capturedQuery = "";
+  await importGmailParsedReservations({
+    userId: "test-user",
+    maxResults: 1,
+    lookbackDays: 180,
+    gmailClient: {
+      users: {
+        messages: {
+          async list(args) {
+            capturedQuery = args.q;
+            return { data: { messages: [] } };
+          },
+          async get() {
+            throw new Error("Should not be called");
+          },
+        },
+      },
+    },
+  });
+
+  assert.match(capturedQuery, /newer_than:180d/);
+});
+
+test("filters imported reservations by trip date scope", async () => {
+  const messagesById = new Map([
+    [
+      "m1",
+      {
+        headers: [
+          { name: "From", value: "reservations@delta.com" },
+          { name: "Subject", value: "Flight ticket confirmation DL407" },
+          { name: "Date", value: "2026-06-20T10:42:00.000Z" },
+        ],
+        body: base64UrlEncode("Flight DL 407\nFrom: JFK Terminal 4\nConfirmation: Y8Q4D2"),
+      },
+    ],
+    [
+      "m2",
+      {
+        headers: [
+          { name: "From", value: "bookings@hyatt.com" },
+          { name: "Subject", value: "Hotel booking confirmation" },
+          { name: "Date", value: "2026-06-24T14:30:00.000Z" },
+        ],
+        body: base64UrlEncode("Hotel stay confirmed\nLocation: 245 Market St\nReservation: HYT55670"),
+      },
+    ],
+  ]);
+
+  const reservations = await importGmailParsedReservations({
+    userId: "test-user",
+    maxResults: 10,
+    tripStartDate: "2026-06-22",
+    tripEndDate: "2026-06-26",
+    gmailClient: {
+      users: {
+        messages: {
+          async list() {
+            return {
+              data: {
+                messages: [{ id: "m1" }, { id: "m2" }],
+              },
+            };
+          },
+          async get(args) {
+            const message = messagesById.get(args.id);
+            if (!message) {
+              throw new Error("Unknown message id");
+            }
+            return {
+              data: {
+                payload: {
+                  headers: message.headers,
+                  mimeType: "text/plain",
+                  body: { data: message.body },
+                },
+              },
+            };
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(reservations.length, 1);
+  assert.equal(reservations[0]?.messageId, "m2");
+});

@@ -1,8 +1,10 @@
 import { google, type gmail_v1 } from "googleapis";
 import { logger } from "@/lib/logger";
 
-const GMAIL_IMPORT_QUERY =
-  "subject:(confirmation OR itinerary OR booking OR reservation OR ticket OR flight OR hotel OR train) newer_than:30d";
+const GMAIL_IMPORT_QUERY_KEYWORDS =
+  "subject:(confirmation OR itinerary OR booking OR reservation OR ticket OR flight OR hotel OR train)";
+
+const ALLOWED_LOOKBACK_DAYS = new Set([30, 60, 90, 180]);
 
 type ParsedReservationType = "flight" | "hotel" | "train" | "ride";
 type ParsedReservationConfidence = "high" | "medium" | "low";
@@ -13,6 +15,7 @@ export interface ParsedReservation {
   subject: string;
   receivedAt: string;
   body: string;
+  parsedTravelDateIso: string;
   reservation: {
     type: ParsedReservationType;
     title: string;
@@ -41,6 +44,18 @@ interface GmailApiClient {
       }): Promise<{ data: gmail_v1.Schema$Message }>;
     };
   };
+}
+
+function normalizeLookbackDays(value: number | undefined): number {
+  if (value && ALLOWED_LOOKBACK_DAYS.has(value)) {
+    return value;
+  }
+  return 90;
+}
+
+function buildGmailImportQuery(lookbackDays: number | undefined): string {
+  const normalized = normalizeLookbackDays(lookbackDays);
+  return `${GMAIL_IMPORT_QUERY_KEYWORDS} newer_than:${normalized}d`;
 }
 
 function sanitizeEnvNameSegment(value: string): string {
@@ -198,6 +213,39 @@ function extractDateIso(receivedAt: string, body: string): string {
   return new Date().toISOString();
 }
 
+function parseTripScopeDate(value: string | undefined, mode: "start" | "end"): number | null {
+  if (!value) return null;
+  const suffix = mode === "start" ? "T00:00:00.000Z" : "T23:59:59.999Z";
+  const parsed = Date.parse(`${value}${suffix}`);
+  if (Number.isNaN(parsed)) {
+    return null;
+  }
+  return parsed;
+}
+
+function isWithinTripDateScope(args: {
+  reservation: ParsedReservation;
+  tripStartDate?: string;
+  tripEndDate?: string;
+}): boolean {
+  if (!args.tripStartDate && !args.tripEndDate) {
+    return true;
+  }
+  const reservationMs = Date.parse(args.reservation.parsedTravelDateIso);
+  if (Number.isNaN(reservationMs)) {
+    return false;
+  }
+  const startMs = parseTripScopeDate(args.tripStartDate, "start");
+  const endMs = parseTripScopeDate(args.tripEndDate, "end");
+  if (startMs !== null && reservationMs < startMs) {
+    return false;
+  }
+  if (endMs !== null && reservationMs > endMs) {
+    return false;
+  }
+  return true;
+}
+
 function confidenceFromIssues(issues: string[]): ParsedReservationConfidence {
   if (issues.length === 0) return "high";
   if (issues.length <= 2) return "medium";
@@ -230,6 +278,7 @@ export function parseEmailToParsedReservation(args: {
     subject: args.subject,
     receivedAt: args.receivedAt,
     body: args.body,
+    parsedTravelDateIso: eventIso,
     reservation: {
       type,
       title: args.subject.trim() || `${provider} reservation`,
@@ -247,10 +296,13 @@ export function parseEmailToParsedReservation(args: {
 async function readMessages(args: {
   gmailClient: GmailApiClient;
   maxResults: number;
+  lookbackDays?: number;
+  tripStartDate?: string;
+  tripEndDate?: string;
 }): Promise<ParsedReservation[]> {
   const listResponse = await args.gmailClient.users.messages.list({
     userId: "me",
-    q: GMAIL_IMPORT_QUERY,
+    q: buildGmailImportQuery(args.lookbackDays),
     maxResults: Math.max(1, Math.min(50, args.maxResults)),
   });
 
@@ -275,15 +327,22 @@ async function readMessages(args: {
       headerValue(payload?.headers, "Date") ??
       (messageResponse.data.internalDate ? new Date(Number(messageResponse.data.internalDate)).toISOString() : new Date().toISOString());
     const body = extractPlainTextBody(payload);
-    parsedReservations.push(
-      parseEmailToParsedReservation({
-        messageId: id,
-        sender,
-        subject,
-        receivedAt,
-        body,
-      }),
-    );
+    const parsedReservation = parseEmailToParsedReservation({
+      messageId: id,
+      sender,
+      subject,
+      receivedAt,
+      body,
+    });
+    if (
+      isWithinTripDateScope({
+        reservation: parsedReservation,
+        tripStartDate: args.tripStartDate,
+        tripEndDate: args.tripEndDate,
+      })
+    ) {
+      parsedReservations.push(parsedReservation);
+    }
   }
 
   return parsedReservations;
@@ -292,6 +351,9 @@ async function readMessages(args: {
 export async function importGmailParsedReservations(args: {
   userId: string;
   maxResults?: number;
+  lookbackDays?: number;
+  tripStartDate?: string;
+  tripEndDate?: string;
   gmailClient?: GmailApiClient;
 }): Promise<ParsedReservation[]> {
   const maxResults = args.maxResults ?? 10;
@@ -308,6 +370,9 @@ export async function importGmailParsedReservations(args: {
     return await readMessages({
       gmailClient,
       maxResults,
+      lookbackDays: args.lookbackDays,
+      tripStartDate: args.tripStartDate,
+      tripEndDate: args.tripEndDate,
     });
   } catch (error) {
     logger.warn("Gmail API import failed, returning empty reservation list.", {

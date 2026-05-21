@@ -10,6 +10,20 @@ import { importGmailParsedReservations } from "@/lib/travelAssistant/gmailImport
 
 const BodySchema = z.object({
   maxResults: z.number().int().min(1).max(50).default(10),
+  lookbackDays: z.union([z.literal(30), z.literal(60), z.literal(90), z.literal(180)]).default(90),
+  tripStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  tripEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+}).superRefine((value, context) => {
+  if (!value.tripStartDate || !value.tripEndDate) {
+    return;
+  }
+  if (value.tripStartDate > value.tripEndDate) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["tripStartDate"],
+      message: "tripStartDate must be on or before tripEndDate.",
+    });
+  }
 });
 
 async function resolveAuthenticatedUserId(): Promise<string | null> {
@@ -99,14 +113,23 @@ export async function POST(req: Request) {
     type: "gmail_import_triggered",
     userId,
     maxResults: parsed.data.maxResults,
+    lookbackDays: parsed.data.lookbackDays,
+    tripStartDate: parsed.data.tripStartDate ?? null,
+    tripEndDate: parsed.data.tripEndDate ?? null,
   });
 
   const reservations = await importGmailParsedReservations({
     userId,
     maxResults: parsed.data.maxResults,
+    lookbackDays: parsed.data.lookbackDays,
+    tripStartDate: parsed.data.tripStartDate,
+    tripEndDate: parsed.data.tripEndDate,
   });
   routeLogger.info("Gmail import request completed.", {
     maxResults: parsed.data.maxResults,
+    lookbackDays: parsed.data.lookbackDays,
+    tripStartDate: parsed.data.tripStartDate ?? null,
+    tripEndDate: parsed.data.tripEndDate ?? null,
     importedCount: reservations.length,
   });
   return NextResponse.json({

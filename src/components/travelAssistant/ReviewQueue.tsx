@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { GmailImportScopeModal, type GmailImportScope } from "@/components/travelAssistant/GmailImportScopeModal";
 
 type TripStage = "readiness" | "pre-departure" | "airport" | "arrival" | "recovery";
 type ReservationType = "flight" | "hotel" | "train" | "ride" | "dinner";
@@ -87,8 +88,10 @@ export function ReviewQueue({
   const [importInFlight, setImportInFlight] = useState(false);
   const [importMaxResults, setImportMaxResults] = useState(10);
   const [importError, setImportError] = useState<string | null>(null);
+  const [scopeModalOpen, setScopeModalOpen] = useState(false);
+  const [scopeModalKey, setScopeModalKey] = useState(0);
 
-  const handleGmailImport = async (): Promise<void> => {
+  const handleGmailImport = async (scope: GmailImportScope): Promise<void> => {
     if (importInFlight) return;
     setImportInFlight(true);
     setImportError(null);
@@ -96,7 +99,12 @@ export function ReviewQueue({
       const response = await fetch("/api/travel-updates/gmail-import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ maxResults: importMaxResults }),
+        body: JSON.stringify({
+          maxResults: importMaxResults,
+          lookbackDays: scope.lookbackDays,
+          tripStartDate: scope.tripStartDate,
+          tripEndDate: scope.tripEndDate,
+        }),
       });
       if (!response.ok) {
         throw new Error(`Gmail import endpoint returned ${response.status}`);
@@ -143,7 +151,8 @@ export function ReviewQueue({
                 onRequestUpgradeForGmailImport();
                 return;
               }
-              void handleGmailImport();
+              setScopeModalKey((value) => value + 1);
+              setScopeModalOpen(true);
             }}
             disabled={importInFlight}
             className="rounded-md bg-cyan-500/90 px-2 py-1 text-xs font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
@@ -232,6 +241,20 @@ export function ReviewQueue({
           </p>
         ) : null}
       </div>
+      <GmailImportScopeModal
+        key={scopeModalKey}
+        open={scopeModalOpen}
+        isSubmitting={importInFlight}
+        onCancel={() => {
+          if (importInFlight) return;
+          setScopeModalOpen(false);
+        }}
+        onConfirm={(scope) => {
+          void handleGmailImport(scope).finally(() => {
+            setScopeModalOpen(false);
+          });
+        }}
+      />
     </div>
   );
 }
