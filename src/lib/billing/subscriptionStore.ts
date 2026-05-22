@@ -67,25 +67,36 @@ export function isSubscriptionActive(record: BillingSubscriptionRecord): boolean
 }
 
 export async function getSubscriptionRecord(userId: string): Promise<BillingSubscriptionRecord> {
-  const stored = await kvStoreGet<unknown>(SUBSCRIPTION_KEY, { userId });
+  const normalizedUserId = normalizeClerkUserIdForStorage(userId);
+  const stored = isKvConfigured()
+    ? await kv.get<unknown>(getSubscriptionStorageKey(normalizedUserId))
+    : await kvStoreGet<unknown>(SUBSCRIPTION_KEY, { userId: normalizedUserId });
   return sanitizeRecord(stored);
 }
 
 export async function setSubscriptionRecord(userId: string, record: BillingSubscriptionRecord): Promise<void> {
-  await Promise.all([kvStoreSet(SUBSCRIPTION_KEY, record, { userId }), setLifetimePlanMirrors(userId, record)]);
+  const normalizedUserId = normalizeClerkUserIdForStorage(userId);
+  if (isKvConfigured()) {
+    await Promise.all([kv.set(getSubscriptionStorageKey(normalizedUserId), record), setLifetimePlanMirrors(normalizedUserId, record)]);
+  } else {
+    await Promise.all([
+      kvStoreSet(SUBSCRIPTION_KEY, record, { userId: normalizedUserId }),
+      setLifetimePlanMirrors(normalizedUserId, record),
+    ]);
+  }
   invalidateCachedBillingStatus(userId);
 }
 
 export function getSubscriptionStorageKey(userId: string): string {
-  return `kepi:${userId.trim()}:subscription`;
+  return `kepi:${normalizeClerkUserIdForStorage(userId)}:subscription`;
 }
 
 export function getBillingPlanMirrorKey(userId: string): string {
-  return `${BILLING_PLAN_MIRROR_KEY_PREFIX}${userId.trim()}`;
+  return `${BILLING_PLAN_MIRROR_KEY_PREFIX}${normalizeClerkUserIdForStorage(userId)}`;
 }
 
 export function getUserLifetimeMirrorKey(userId: string): string {
-  return `${USER_LIFETIME_MIRROR_KEY_PREFIX}${userId.trim()}`;
+  return `${USER_LIFETIME_MIRROR_KEY_PREFIX}${normalizeClerkUserIdForStorage(userId)}`;
 }
 
 export async function getRawSubscriptionRecordForDebug(userId: string): Promise<unknown> {
@@ -154,6 +165,14 @@ export async function extendSubscriptionProAccess(userId: string, days: number):
 
 function isKvConfigured(): boolean {
   return Boolean(process.env.KV_REST_API_URL?.trim() && process.env.KV_REST_API_TOKEN?.trim());
+}
+
+function normalizeClerkUserIdForStorage(userId: string): string {
+  const normalized = userId.trim();
+  if (!normalized) {
+    return normalized;
+  }
+  return normalized.startsWith("user_") ? normalized : `user_${normalized}`;
 }
 
 function extractUserIdFromSubscriptionKey(key: string): string | null {

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { kv } from "@vercel/kv";
 import { trackServerEvent } from "@/lib/analytics/trackServerEvent";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import {
@@ -80,6 +81,7 @@ async function persistInviteDerivedSubscription(args: {
   usedAt: string | null;
 }): Promise<{ plan: "lifetime" | "trial"; trialExpiresAt: string | null; savedRecord: BillingSubscriptionRecord }> {
   if (args.inviteType === "lifetime") {
+    const redeemedAt = new Date().toISOString();
     const nextRecord: BillingSubscriptionRecord = {
       plan: "pro",
       stripeCustomerId: args.existingSubscription.stripeCustomerId,
@@ -89,6 +91,16 @@ async function persistInviteDerivedSubscription(args: {
       trialExpiresAt: null,
     };
     await setSubscriptionRecord(args.userId, nextRecord);
+    const subscriptionStorageKey = getSubscriptionStorageKey(args.userId);
+    try {
+      await kv.set(subscriptionStorageKey, {
+        plan: "lifetime",
+        lifetimePlan: true,
+        redeemedAt,
+      });
+    } catch {
+      // Best effort: setSubscriptionRecord already persists the canonical record.
+    }
     return { plan: "lifetime", trialExpiresAt: null, savedRecord: nextRecord };
   }
   const trialExpiresAt = trialExpiryFromInviteUsage(args.usedAt);
