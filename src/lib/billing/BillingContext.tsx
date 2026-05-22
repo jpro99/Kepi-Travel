@@ -9,6 +9,7 @@ import {
   type BillingStatusPlan,
   type PlanFeature,
 } from "@/lib/billing/plans";
+import { KEPI_PLAN_COOKIE_NAME, readCookieValue, isLifetimePlanCookieValue } from "@/lib/billing/planCookie";
 
 export interface BillingStatusPayload {
   plan: BillingStatusPlan;
@@ -97,16 +98,57 @@ function defaultFreeStatus(): BillingStatusPayload {
   };
 }
 
+function lifetimeCookieStatusFallback(): BillingStatusPayload {
+  const fallback = defaultFreeStatus();
+  return {
+    ...fallback,
+    plan: "lifetime",
+    basePlan: "pro",
+    definition: BILLING_PLANS.pro,
+    subscription: {
+      ...fallback.subscription,
+      plan: "pro",
+      lifetimePlan: true,
+      trialExpiresAt: null,
+      validUntil: null,
+    },
+    inviteAccess: {
+      lifetimePlanActive: true,
+      trialActive: false,
+      trialExpiresAt: null,
+    },
+    trialDaysRemaining: null,
+    nextBillingDate: null,
+    hasProAccess: true,
+  };
+}
+
+function hasLifetimePlanCookieInBrowser(): boolean {
+  if (typeof document === "undefined") {
+    return false;
+  }
+  const cookieValue = readCookieValue(document.cookie, KEPI_PLAN_COOKIE_NAME);
+  return isLifetimePlanCookieValue(cookieValue);
+}
+
 export function BillingProvider({ children }: { children: React.ReactNode }) {
   const { isLoaded, userId } = useAuth();
-  const [status, setStatus] = useState<BillingStatusPayload | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<BillingStatusPayload | null>(() =>
+    hasLifetimePlanCookieInBrowser() ? lifetimeCookieStatusFallback() : null,
+  );
+  const [loading, setLoading] = useState(() => !hasLifetimePlanCookieInBrowser());
   const [error, setError] = useState<string | null>(null);
   const fetchedForUserRef = useRef<string | null>(null);
 
   const refresh = useCallback(async (): Promise<void> => {
     if (!userId) {
       setStatus(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+    if (hasLifetimePlanCookieInBrowser()) {
+      setStatus((previous) => previous ?? lifetimeCookieStatusFallback());
       setError(null);
       setLoading(false);
       return;

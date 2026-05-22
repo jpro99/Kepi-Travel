@@ -13,6 +13,11 @@ import {
   getCachedBillingStatus,
   setCachedBillingStatus,
 } from "@/lib/billing/billingStatusCache";
+import {
+  KEPI_PLAN_COOKIE_MAX_AGE_SECONDS,
+  KEPI_PLAN_COOKIE_NAME,
+  KEPI_PLAN_LIFETIME_VALUE,
+} from "@/lib/billing/planCookie";
 import { getStripePublishableKey } from "@/lib/billing/stripeClient";
 import {
   getRawSubscriptionRecordForDebug,
@@ -70,6 +75,18 @@ interface BillingStatusPayload {
 }
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+function applyLifetimePlanCookie(response: NextResponse): void {
+  response.cookies.set({
+    name: KEPI_PLAN_COOKIE_NAME,
+    value: KEPI_PLAN_LIFETIME_VALUE,
+    httpOnly: false,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: KEPI_PLAN_COOKIE_MAX_AGE_SECONDS,
+  });
+}
 
 function resolveEffectivePlanStatus(
   subscriptionRecord: Awaited<ReturnType<typeof getSubscriptionRecord>>,
@@ -147,11 +164,15 @@ export async function GET(req: Request) {
 
   const cached = getCachedBillingStatus<BillingStatusPayload>(userId);
   if (cached) {
-    return NextResponse.json(cached, {
+    const response = NextResponse.json(cached, {
       headers: {
         "Cache-Control": "private, max-age=60",
       },
     });
+    if (cached.plan === "lifetime") {
+      applyLifetimePlanCookie(response);
+    }
+    return response;
   }
 
   const [subscriptionRecord, trips] = await Promise.all([getSubscriptionRecord(userId), listTrips(userId)]);
@@ -209,9 +230,13 @@ export async function GET(req: Request) {
   };
   setCachedBillingStatus(userId, payload);
 
-  return NextResponse.json(payload, {
+  const response = NextResponse.json(payload, {
     headers: {
       "Cache-Control": `private, max-age=${Math.floor(billingStatusCacheTtlMs() / 1000)}`,
     },
   });
+  if (payload.plan === "lifetime") {
+    applyLifetimePlanCookie(response);
+  }
+  return response;
 }

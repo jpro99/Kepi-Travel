@@ -9,6 +9,11 @@ import {
   setSubscriptionRecord,
   type BillingSubscriptionRecord,
 } from "@/lib/billing/subscriptionStore";
+import {
+  KEPI_PLAN_COOKIE_MAX_AGE_SECONDS,
+  KEPI_PLAN_COOKIE_NAME,
+  KEPI_PLAN_LIFETIME_VALUE,
+} from "@/lib/billing/planCookie";
 import { getInviteCodeRecord, getInviteCodeRedeemedByUser, redeemInviteCode } from "@/lib/invite/inviteCodeStore";
 import { logger } from "@/lib/logger";
 import { enforceRateLimit } from "@/lib/rateLimit";
@@ -27,6 +32,18 @@ function trialExpiryFromInviteUsage(usedAt: string | null): string {
   const usedAtMs = usedAt ? Date.parse(usedAt) : Number.NaN;
   const baseMs = Number.isNaN(usedAtMs) ? Date.now() : usedAtMs;
   return new Date(baseMs + 30 * DAY_IN_MS).toISOString();
+}
+
+function applyLifetimePlanCookie(response: NextResponse): void {
+  response.cookies.set({
+    name: KEPI_PLAN_COOKIE_NAME,
+    value: KEPI_PLAN_LIFETIME_VALUE,
+    httpOnly: false,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: KEPI_PLAN_COOKIE_MAX_AGE_SECONDS,
+  });
 }
 
 async function persistInviteDerivedSubscription(args: {
@@ -137,7 +154,7 @@ export async function POST(req: Request) {
           subscriptionStorageKey,
           persistedRecord: persisted.savedRecord,
         });
-        return NextResponse.json(
+        const response = NextResponse.json(
           {
             ok: true,
             restored: true,
@@ -148,6 +165,10 @@ export async function POST(req: Request) {
           },
           { headers: rateLimit.headers },
         );
+        if (persisted.plan === "lifetime") {
+          applyLifetimePlanCookie(response);
+        }
+        return response;
       }
     }
     const statusCode =
@@ -204,7 +225,7 @@ export async function POST(req: Request) {
     redeemedBy: userId,
   });
 
-  return NextResponse.json(
+  const response = NextResponse.json(
     {
       ok: true,
       code: redemption.record.code,
@@ -214,4 +235,8 @@ export async function POST(req: Request) {
     },
     { headers: rateLimit.headers },
   );
+  if (persisted.plan === "lifetime") {
+    applyLifetimePlanCookie(response);
+  }
+  return response;
 }
