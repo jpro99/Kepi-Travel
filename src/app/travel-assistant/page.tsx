@@ -1130,12 +1130,10 @@ export default function TravelAssistantPage() {
   const [advancedModeEnabled, setAdvancedModeEnabled] = useState(false);
   const [advancedModeSaving, setAdvancedModeSaving] = useState(false);
   const [isAdminUser, setIsAdminUser] = useState(false);
-  const [consumerTripMenuOpen, setConsumerTripMenuOpen] = useState(false);
   const [consumerAvatarMenuOpen, setConsumerAvatarMenuOpen] = useState(false);
-  const [showAdvancedShortcut, setShowAdvancedShortcut] = useState(false);
+  const [showAdvancedShortcut] = useState(false);
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [manualReservationModalOpen, setManualReservationModalOpen] = useState(false);
-  const advancedShortcutTimerRef = useRef<number | null>(null);
 
   const viewerDisplayName = useMemo(
     () => resolveViewerName(user?.firstName, user?.primaryEmailAddress?.emailAddress),
@@ -1972,36 +1970,6 @@ export default function TravelAssistantPage() {
   const trialExpiresAt = isTrial
     ? billingStatus?.inviteAccess?.trialExpiresAt ?? billingStatus?.subscription?.trialExpiresAt ?? null
     : null;
-  const consumerPlanBadge = useMemo(() => {
-    if (billingLoading) {
-      return {
-        label: "…",
-        className: "bg-slate-500/15 text-slate-500 ring-slate-300/40 dark:text-slate-300",
-      };
-    }
-    if (isLifetime) {
-      return {
-        label: "✨ Pro",
-        className: "bg-cyan-500/20 text-cyan-100 ring-cyan-400/40",
-      };
-    }
-    if (isTrial) {
-      return {
-        label: `Trial — ${trialDaysRemaining} day${trialDaysRemaining === 1 ? "" : "s"} left`,
-        className: "bg-amber-500/20 text-amber-100 ring-amber-400/40",
-      };
-    }
-    if (billingStatusPlan === "free") {
-      return {
-        label: "Free",
-        className: "bg-slate-500/15 text-slate-500 ring-slate-300/40 dark:text-slate-300",
-      };
-    }
-    return {
-      label: "Pro",
-      className: "bg-cyan-500/20 text-cyan-100 ring-cyan-400/40",
-    };
-  }, [billingLoading, billingStatusPlan, isLifetime, isTrial, trialDaysRemaining]);
   const pendingOutboxEntries = useMemo(() => listPendingOfflineOutboxEntries(offlineOutbox), [offlineOutbox]);
   const pendingOutboxCount = countPendingOfflineOutboxEntries(offlineOutbox);
   const pendingSyncCount = queuedProviderUpdates.length + pendingOutboxCount;
@@ -2495,7 +2463,6 @@ export default function TravelAssistantPage() {
 
   const advancedWorkspaceEnabled = advancedModeEnabled || isAdminUser;
   const tripDaysAway = getTripDaysAway(minutesToDeparture);
-  const destinationWeatherLabel = "Expect 72°F and sunny ☀️";
   const nextUpcomingReservations = useMemo(() => {
     const reservationsWithTimes = reservations
       .map((reservation) => ({ reservation, timeMs: parseDateInput(reservation.localTime) }))
@@ -4213,71 +4180,6 @@ export default function TravelAssistantPage() {
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
                 <Logo size="sm" showWordmark={false} className="shrink-0" />
-                <div className="relative min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => setConsumerTripMenuOpen((value) => !value)}
-                    onPointerDown={() => {
-                      advancedShortcutTimerRef.current = window.setTimeout(() => setShowAdvancedShortcut(true), 900);
-                    }}
-                    onPointerUp={() => {
-                      if (advancedShortcutTimerRef.current) {
-                        window.clearTimeout(advancedShortcutTimerRef.current);
-                        advancedShortcutTimerRef.current = null;
-                      }
-                    }}
-                    onPointerLeave={() => {
-                      if (advancedShortcutTimerRef.current) {
-                        window.clearTimeout(advancedShortcutTimerRef.current);
-                        advancedShortcutTimerRef.current = null;
-                      }
-                    }}
-                    className="block max-w-[13rem] truncate rounded-full px-1 py-1 text-left text-lg font-semibold sm:max-w-sm"
-                    aria-label="Switch trips"
-                  >
-                    {activeTrip?.name ?? "My trip"} <span aria-hidden>⌄</span>
-                  </button>
-                  <span
-                    className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${consumerPlanBadge.className}`}
-                  >
-                    {consumerPlanBadge.label}
-                  </span>
-                  {consumerTripMenuOpen ? (
-                    <div className="absolute left-0 top-[calc(100%+0.5rem)] z-40 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">
-                      <ul className="max-h-72 overflow-auto p-2">
-                        {trips.map((trip) => (
-                          <li key={trip.id}>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                void handleSwitchTrip(trip.id);
-                                setConsumerTripMenuOpen(false);
-                              }}
-                              className={`w-full rounded-xl px-3 py-2 text-left text-sm ${
-                                trip.id === activeTripId
-                                  ? "bg-cyan-50 font-semibold text-cyan-900 dark:bg-cyan-500/15 dark:text-cyan-100"
-                                  : "hover:bg-slate-100 dark:hover:bg-slate-800"
-                              }`}
-                            >
-                              <span className="block truncate">{trip.name}</span>
-                              <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{trip.destination}</span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void handleCreateTrip();
-                          setConsumerTripMenuOpen(false);
-                        }}
-                        className="w-full border-t border-slate-200 px-3 py-3 text-left text-sm font-semibold text-cyan-700 hover:bg-slate-50 dark:border-slate-800 dark:text-cyan-200 dark:hover:bg-slate-800"
-                      >
-                        Add trip
-                      </button>
-                    </div>
-                  ) : null}
-                  </div>
               </div>
               <div className="relative">
                 <button
@@ -4356,7 +4258,6 @@ export default function TravelAssistantPage() {
                 tripDaysAway={tripDaysAway}
                 statusTitle={consumerStatus.title}
                 statusDetail={consumerStatus.detail}
-                weatherLabel={destinationWeatherLabel}
                 nextActionLabel={consumerPrimaryAction?.label ?? "Enjoy your trip"}
                 onNextAction={consumerPrimaryAction?.onClick}
                 statusToneClassName={consumerStatus.tone}
@@ -4838,7 +4739,6 @@ export default function TravelAssistantPage() {
           tripDaysAway={tripDaysAway}
           statusTitle={consumerStatus.title}
           statusDetail={consumerStatus.detail}
-          weatherLabel={destinationWeatherLabel}
           nextActionLabel={consumerPrimaryAction?.label ?? nextStageAction}
           onNextAction={consumerPrimaryAction?.onClick ?? advanceTripStage}
           statusToneClassName={consumerStatus.tone}

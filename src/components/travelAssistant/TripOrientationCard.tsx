@@ -6,7 +6,7 @@ interface TripOrientationCardProps {
   tripDaysAway: number;
   statusTitle: string;
   statusDetail: string;
-  weatherLabel: string;
+  weatherLabel?: string;
   nextActionLabel: string;
   onNextAction?: () => void;
   statusToneClassName: string;
@@ -30,7 +30,7 @@ export function TripOrientationCard({
       <p className="mt-3 text-base">
         Your flight to {destination} is in {tripDaysAway === 1 ? "1 day" : `${tripDaysAway} days`}.
       </p>
-      <p className="mt-2 text-base">{weatherLabel}</p>
+      {weatherLabel ? <p className="mt-2 text-base">{weatherLabel}</p> : null}
       <p className="mt-4 rounded-2xl bg-white/60 p-3 text-sm font-medium text-slate-900 dark:bg-slate-950/40 dark:text-slate-100">
         {statusDetail}
       </p>
