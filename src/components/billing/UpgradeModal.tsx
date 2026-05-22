@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { trackEvent } from "@/lib/analytics/trackEvent";
-import type { BillingPlanId, PlanFeature } from "@/lib/billing/plans";
+import type { BillingPlanId, BillingStatusPlan, PlanFeature } from "@/lib/billing/plans";
 
 export interface UpgradeModalGateContext {
   feature: PlanFeature;
@@ -14,7 +14,7 @@ export interface UpgradeModalGateContext {
 interface UpgradeModalProps {
   open: boolean;
   gate: UpgradeModalGateContext | null;
-  currentPlan?: BillingPlanId;
+  currentPlan?: BillingStatusPlan;
   onClose: () => void;
 }
 
@@ -79,7 +79,7 @@ export function UpgradeModal({ open, gate, currentPlan = "free", onClose }: Upgr
     };
   }, [open, currentPlan]);
 
-  if (!open || !gate) {
+  if (!open || !gate || currentPlan !== "free") {
     return null;
   }
 
@@ -89,9 +89,11 @@ export function UpgradeModal({ open, gate, currentPlan = "free", onClose }: Upgr
     }
     setBusy(true);
     setError(null);
+    const analyticsCurrentPlan: BillingPlanId =
+      currentPlan === "concierge" ? "concierge" : currentPlan === "free" ? "free" : "pro";
     void trackEvent({
       type: "upgrade_clicked",
-      currentPlan,
+      currentPlan: analyticsCurrentPlan,
       featureGated: gate.feature,
       targetPlan,
     });

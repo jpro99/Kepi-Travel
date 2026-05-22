@@ -1,9 +1,25 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { BILLING_PLANS, PLAN_FEATURE_LABELS, type PlanFeature } from "@/lib/billing/plans";
-import { getUserPlan } from "@/lib/billing/planGate";
+import {
+  BILLING_PLANS,
+  PLAN_FEATURE_LABELS,
+  type BillingPlanDefinition,
+  type BillingPlanId,
+  type BillingStatusPlan,
+  type PlanFeature,
+} from "@/lib/billing/plans";
+import {
+  billingStatusCacheTtlMs,
+  getCachedBillingStatus,
+  setCachedBillingStatus,
+} from "@/lib/billing/billingStatusCache";
 import { getStripePublishableKey } from "@/lib/billing/stripeClient";
-import { getRawSubscriptionRecordForDebug, getSubscriptionRecord, getSubscriptionStorageKey } from "@/lib/billing/subscriptionStore";
+import {
+  getRawSubscriptionRecordForDebug,
+  getSubscriptionRecord,
+  getSubscriptionStorageKey,
+  isSubscriptionActive,
+} from "@/lib/billing/subscriptionStore";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { logger } from "@/lib/logger";
 import { listTrips } from "@/lib/travelAssistant/tripStore";
@@ -22,6 +38,99 @@ const FEATURES: PlanFeature[] = [
   "concierge-lounge-access",
 ];
 
+interface BillingStatusPayload {
+  plan: BillingStatusPlan;
+  basePlan: BillingPlanId;
+  definition: BillingPlanDefinition;
+  subscription: Awaited<ReturnType<typeof getSubscriptionRecord>>;
+  inviteAccess: {
+    lifetimePlanActive: boolean;
+    trialActive: boolean;
+    trialExpiresAt: string | null;
+  };
+  trialDaysRemaining: number | null;
+  nextBillingDate: string | null;
+  hasProAccess: boolean;
+  usage: {
+    tripCount: number;
+    tripLimit: number | null;
+    tripsRemaining: number | null;
+  };
+  features: Array<{
+    feature: PlanFeature;
+    label: string;
+    requiresPro: boolean;
+    enabled: boolean;
+  }>;
+  stripeConfigured: boolean;
+  stripePlansConfigured: {
+    pro: boolean;
+    concierge: boolean;
+  };
+}
+
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+function resolveEffectivePlanStatus(
+  subscriptionRecord: Awaited<ReturnType<typeof getSubscriptionRecord>>,
+  nowMs: number,
+): {
+  plan: BillingStatusPlan;
+  basePlan: BillingPlanId;
+  lifetimePlanActive: boolean;
+  trialActive: boolean;
+  trialDaysRemaining: number | null;
+  nextBillingDate: string | null;
+} {
+  const lifetimePlanActive = subscriptionRecord.lifetimePlan;
+  if (lifetimePlanActive) {
+    return {
+      plan: "lifetime",
+      basePlan: "pro",
+      lifetimePlanActive: true,
+      trialActive: false,
+      trialDaysRemaining: null,
+      nextBillingDate: null,
+    };
+  }
+
+  const trialExpiresAt = subscriptionRecord.trialExpiresAt;
+  const trialExpiresMs =
+    typeof trialExpiresAt === "string" && trialExpiresAt.length > 0 ? Date.parse(trialExpiresAt) : Number.NaN;
+  const trialActive = !Number.isNaN(trialExpiresMs) && trialExpiresMs > nowMs;
+  if (trialActive) {
+    return {
+      plan: "trial",
+      basePlan: "pro",
+      lifetimePlanActive: false,
+      trialActive: true,
+      trialDaysRemaining: Math.max(1, Math.ceil((trialExpiresMs - nowMs) / DAY_IN_MS)),
+      nextBillingDate: trialExpiresAt,
+    };
+  }
+
+  if (isSubscriptionActive(subscriptionRecord)) {
+    const paidPlan: BillingPlanId = subscriptionRecord.plan === "concierge" ? "concierge" : "pro";
+    return {
+      plan: paidPlan,
+      basePlan: paidPlan,
+      lifetimePlanActive: false,
+      trialActive: false,
+      trialDaysRemaining: null,
+      nextBillingDate: subscriptionRecord.validUntil,
+    };
+  }
+
+  return {
+    plan: "free",
+    basePlan: "free",
+    lifetimePlanActive: false,
+    trialActive: false,
+    trialDaysRemaining: null,
+    nextBillingDate: null,
+  };
+}
+
 export async function GET(req: Request) {
   const requestId = req.headers.get("x-request-id")?.trim() || randomUUID();
   const userId = await resolveAuthenticatedUserId();
@@ -36,11 +145,18 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [plan, subscriptionRecord, trips] = await Promise.all([
-    getUserPlan(userId),
-    getSubscriptionRecord(userId),
-    listTrips(userId),
-  ]);
+  const cached = getCachedBillingStatus<BillingStatusPayload>(userId);
+  if (cached) {
+    return NextResponse.json(cached, {
+      headers: {
+        "Cache-Control": "private, max-age=60",
+      },
+    });
+  }
+
+  const [subscriptionRecord, trips] = await Promise.all([getSubscriptionRecord(userId), listTrips(userId)]);
+  const nowMs = Date.now();
+  const planStatus = resolveEffectivePlanStatus(subscriptionRecord, nowMs);
   const subscriptionStorageKey = getSubscriptionStorageKey(userId);
   const rawSubscriptionRecord = await getRawSubscriptionRecordForDebug(userId);
   console.info("[billing/status] subscription lookup", {
@@ -52,29 +168,28 @@ export async function GET(req: Request) {
     subscriptionStorageKey,
     rawSubscriptionRecord,
   });
-  const definition = BILLING_PLANS[plan];
+
+  const definition = BILLING_PLANS[planStatus.basePlan];
   const tripLimit = definition.maxTrips;
   const tripCount = trips.length;
-  const lifetimePlanActive = subscriptionRecord.lifetimePlan;
   const trialExpiresAt = subscriptionRecord.trialExpiresAt;
-  const trialActive =
-    !lifetimePlanActive &&
-    typeof trialExpiresAt === "string" &&
-    trialExpiresAt.length > 0 &&
-    Date.parse(trialExpiresAt) > Date.now();
   const publishableKey = getStripePublishableKey();
   const stripeProPriceConfigured = Boolean(process.env.STRIPE_PRO_PRICE_ID?.trim());
   const stripeConciergePriceConfigured = Boolean(process.env.STRIPE_CONCIERGE_PRICE_ID?.trim());
 
-  return NextResponse.json({
-    plan,
+  const payload: BillingStatusPayload = {
+    plan: planStatus.plan,
+    basePlan: planStatus.basePlan,
     definition,
     subscription: subscriptionRecord,
     inviteAccess: {
-      lifetimePlanActive,
-      trialActive,
+      lifetimePlanActive: planStatus.lifetimePlanActive,
+      trialActive: planStatus.trialActive,
       trialExpiresAt,
     },
+    trialDaysRemaining: planStatus.trialDaysRemaining,
+    nextBillingDate: planStatus.nextBillingDate,
+    hasProAccess: planStatus.plan !== "free",
     usage: {
       tripCount,
       tripLimit,
@@ -90,6 +205,13 @@ export async function GET(req: Request) {
     stripePlansConfigured: {
       pro: stripeProPriceConfigured,
       concierge: stripeConciergePriceConfigured,
+    },
+  };
+  setCachedBillingStatus(userId, payload);
+
+  return NextResponse.json(payload, {
+    headers: {
+      "Cache-Control": `private, max-age=${Math.floor(billingStatusCacheTtlMs() / 1000)}`,
     },
   });
 }

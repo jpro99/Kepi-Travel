@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
+import { getSubscriptionRecord, isSubscriptionActive } from "@/lib/billing/subscriptionStore";
 import { Logo } from "@/components/ui/Logo";
 
 const featureCards = [
@@ -137,6 +138,13 @@ const faqs = [
 export default async function Home() {
   const { userId } = await auth();
   const authCtaHref = userId ? "/travel-assistant" : "/sign-up";
+  const subscriptionRecord = userId ? await getSubscriptionRecord(userId) : null;
+  const hasProAccess = Boolean(
+    subscriptionRecord &&
+      (subscriptionRecord.lifetimePlan ||
+        (isSubscriptionActive(subscriptionRecord) && subscriptionRecord.plan !== "free")),
+  );
+  const primaryCtaLabel = userId ? "Open my trips" : "Start free";
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
@@ -154,7 +162,7 @@ export default async function Home() {
               href={authCtaHref}
               className="inline-flex items-center justify-center rounded-xl bg-cyan-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
             >
-              Start free
+              {primaryCtaLabel}
             </Link>
             <a
               href="#features"
@@ -211,6 +219,7 @@ export default async function Home() {
         </div>
       </section>
 
+      {!hasProAccess ? (
       <section className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-8">
         <div className="mb-8">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-700 dark:text-cyan-300">Pricing</p>
@@ -275,6 +284,21 @@ export default async function Home() {
           </table>
         </div>
       </section>
+      ) : (
+      <section className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-8">
+        <div className="rounded-2xl border border-cyan-300 bg-cyan-50 p-6 text-cyan-950 dark:border-cyan-500/40 dark:bg-cyan-500/10 dark:text-cyan-50">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-80">Plan status</p>
+          <h2 className="mt-2 text-2xl font-semibold">Your Pro access is active</h2>
+          <p className="mt-2 text-sm opacity-90">Your account already includes paid features. Open your trip workspace to continue.</p>
+          <Link
+            href="/travel-assistant"
+            className="mt-4 inline-flex items-center justify-center rounded-xl bg-cyan-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+          >
+            Open my trips
+          </Link>
+        </div>
+      </section>
+      )}
 
       <section className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-8">
         <div className="mb-8">

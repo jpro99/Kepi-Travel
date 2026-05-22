@@ -1,4 +1,5 @@
 export type BillingPlanId = "free" | "pro" | "concierge";
+export type BillingStatusPlan = BillingPlanId | "lifetime" | "trial";
 
 export type PlanFeature =
   | "gmail-import"

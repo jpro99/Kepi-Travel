@@ -70,7 +70,8 @@ import { WeatherCard } from "@/components/travelAssistant/WeatherCard";
 import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntelligencePanel";
 import { ConciergePanel } from "@/components/travelAssistant/ConciergePanel";
 import { trackEvent } from "@/lib/analytics/trackEvent";
-import type { BillingPlanId, PlanFeature } from "@/lib/billing/plans";
+import { useBilling } from "@/lib/billing/BillingContext";
+import type { PlanFeature } from "@/lib/billing/plans";
 import { AdvancedModeToggle } from "@/components/ui/AdvancedModeToggle";
 import { Logo } from "@/components/ui/Logo";
 import { JourneyFlowPanel } from "./components/JourneyFlowPanel";
@@ -287,13 +288,6 @@ interface ManagedTrip {
   reviewQueue: ReviewItem[];
   readinessItems: ReadinessItem[];
   updateFeed: UpdateFeedItem[];
-}
-
-interface BillingStatusResponse {
-  plan: BillingPlanId;
-  usage?: {
-    tripLimit?: number | null;
-  };
 }
 
 const fetchInitialOpsSnapshotCached = cache(async (): Promise<TravelOpsSnapshot> => {
@@ -894,7 +888,6 @@ function normalizeCoordinates(members: FamilyMember[]): Array<{ member: FamilyMe
 }
 
 const TRIP_API_ROUTE = "/api/trips";
-const BILLING_STATUS_API_ROUTE = "/api/billing/status";
 
 function normalizeManagedTrip(trip: unknown): ManagedTrip | null {
   if (!trip || typeof trip !== "object") {
@@ -987,6 +980,16 @@ function defaultTripFromCurrentState(input: {
 
 export default function TravelAssistantPage() {
   const clerk = useClerk();
+  const {
+    status: billingStatus,
+    loading: billingLoading,
+    refresh: refreshGlobalBillingStatus,
+    plan: billingStatusPlan,
+    basePlan: billingBasePlan,
+    hasProAccess,
+    isLifetime,
+    isTrial,
+  } = useBilling();
   const updateMode: TravelUpdateMode =
     (process.env.NEXT_PUBLIC_TRAVEL_UPDATES_MODE ?? "auto").toLowerCase() === "off"
       ? "off"
@@ -996,8 +999,6 @@ export default function TravelAssistantPage() {
   const [trips, setTrips] = useState<ManagedTrip[]>([]);
   const [activeTripId, setActiveTripId] = useState<string | null>(null);
   const [tripsLoading, setTripsLoading] = useState(true);
-  const [billingPlan, setBillingPlan] = useState<BillingPlanId>("free");
-  const [billingTripLimit, setBillingTripLimit] = useState<number | null>(1);
   const [upgradeModalGate, setUpgradeModalGate] = useState<UpgradeModalGateContext | null>(null);
   const [highlightedReservationId, setHighlightedReservationId] = useState<string | null>(null);
   const [tripStage, setTripStage] = useState<TripStage>("readiness");
@@ -1532,23 +1533,12 @@ export default function TravelAssistantPage() {
     return parsedTrips.length;
   }, [applyManagedTripToState]);
 
-  const refreshBillingStatus = useCallback(async (): Promise<void> => {
-    const response = await fetch(BILLING_STATUS_API_ROUTE, {
-      method: "GET",
-      cache: "no-store",
-    });
-    if (!response.ok) {
-      throw new Error(`Billing status API returned ${response.status}`);
-    }
-    const payload = (await response.json()) as BillingStatusResponse;
-    const tripLimit = payload.usage?.tripLimit;
-    setBillingPlan(payload.plan === "concierge" ? "concierge" : payload.plan === "pro" ? "pro" : "free");
-    setBillingTripLimit(typeof tripLimit === "number" || tripLimit === null ? tripLimit : 1);
-  }, []);
-
   const openUpgradeModal = useCallback((feature: PlanFeature, detail?: string): void => {
+    if (billingLoading || billingStatusPlan !== "free") {
+      return;
+    }
     setUpgradeModalGate({ feature, detail });
-  }, []);
+  }, [billingLoading, billingStatusPlan]);
 
   const closeUpgradeModal = useCallback((): void => {
     setUpgradeModalGate(null);
@@ -1609,23 +1599,6 @@ export default function TravelAssistantPage() {
       cancelled = true;
     };
   }, [ensureDefaultTripIfMissing, refreshTripsFromServer, setToast]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadBilling = async (): Promise<void> => {
-      try {
-        await refreshBillingStatus();
-      } catch (error) {
-        if (cancelled) return;
-        const message = error instanceof Error ? error.message : "Unknown billing status error";
-        setToast(`Billing status unavailable: ${message}`);
-      }
-    };
-    void loadBilling();
-    return () => {
-      cancelled = true;
-    };
-  }, [refreshBillingStatus, setToast]);
 
   useEffect(() => {
     if (!tripsHydratedRef.current) return;
@@ -1703,7 +1676,8 @@ export default function TravelAssistantPage() {
   );
 
   const handleCreateTrip = useCallback(async (): Promise<void> => {
-    const allowCreation = billingPlan !== "free" || billingTripLimit === null || trips.length < billingTripLimit;
+    const tripLimit = billingStatus?.usage?.tripLimit ?? 1;
+    const allowCreation = hasProAccess || tripLimit === null || trips.length < tripLimit;
     if (!allowCreation) {
       openUpgradeModal("multi-trip", "Free includes one trip. Upgrade to add and manage multiple trips.");
       return;
@@ -1757,17 +1731,17 @@ export default function TravelAssistantPage() {
       }
       setActiveTripId(payload.activeTripId ?? createdTrip.id);
       applyManagedTripToState(createdTrip);
-      void refreshBillingStatus();
+      void refreshGlobalBillingStatus();
       setToast(`Created ${createdTrip.name}.`);
     } catch {
       setToast("Could not create a new trip.");
     }
   }, [
     applyManagedTripToState,
-    billingPlan,
-    billingTripLimit,
+    billingStatus?.usage?.tripLimit,
+    hasProAccess,
     openUpgradeModal,
-    refreshBillingStatus,
+    refreshGlobalBillingStatus,
     setToast,
     trips.length,
   ]);
@@ -1950,11 +1924,46 @@ export default function TravelAssistantPage() {
 
   const unresolvedReviewCount = reviewQueue.length;
   const unresolvedReadinessCount = readinessItems.filter((item) => item.required && !item.complete).length;
-  const hasProPlan = billingPlan !== "free";
+  const hasProPlan = billingLoading ? true : hasProAccess;
   const canUseGmailImport = hasProPlan;
   const canUseAiSuggestions = hasProPlan;
   const canUsePushNotifications = hasProPlan;
+  const billingTripLimit = billingStatus?.usage?.tripLimit ?? 1;
   const canCreateAdditionalTrips = hasProPlan || billingTripLimit === null || trips.length < billingTripLimit;
+  const trialDaysRemaining = isTrial ? Math.max(1, billingStatus?.trialDaysRemaining ?? 0) : 0;
+  const trialExpiresAt = isTrial
+    ? billingStatus?.inviteAccess?.trialExpiresAt ?? billingStatus?.subscription?.trialExpiresAt ?? null
+    : null;
+  const consumerPlanBadge = useMemo(() => {
+    if (billingLoading) {
+      return {
+        label: "…",
+        className: "bg-slate-500/15 text-slate-500 ring-slate-300/40 dark:text-slate-300",
+      };
+    }
+    if (isLifetime) {
+      return {
+        label: "✨ Pro",
+        className: "bg-cyan-500/20 text-cyan-100 ring-cyan-400/40",
+      };
+    }
+    if (isTrial) {
+      return {
+        label: `Trial — ${trialDaysRemaining} day${trialDaysRemaining === 1 ? "" : "s"} left`,
+        className: "bg-amber-500/20 text-amber-100 ring-amber-400/40",
+      };
+    }
+    if (billingStatusPlan === "free") {
+      return {
+        label: "Free",
+        className: "bg-slate-500/15 text-slate-500 ring-slate-300/40 dark:text-slate-300",
+      };
+    }
+    return {
+      label: "Pro",
+      className: "bg-cyan-500/20 text-cyan-100 ring-cyan-400/40",
+    };
+  }, [billingLoading, billingStatusPlan, isLifetime, isTrial, trialDaysRemaining]);
   const pendingOutboxEntries = useMemo(() => listPendingOfflineOutboxEntries(offlineOutbox), [offlineOutbox]);
   const pendingOutboxCount = countPendingOfflineOutboxEntries(offlineOutbox);
   const pendingSyncCount = queuedProviderUpdates.length + pendingOutboxCount;
@@ -4172,6 +4181,11 @@ export default function TravelAssistantPage() {
                   >
                     {activeTrip?.name ?? "My trip"} <span aria-hidden>⌄</span>
                   </button>
+                  <span
+                    className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${consumerPlanBadge.className}`}
+                  >
+                    {consumerPlanBadge.label}
+                  </span>
                   {consumerTripMenuOpen ? (
                     <div className="absolute left-0 top-[calc(100%+0.5rem)] z-40 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">
                       <ul className="max-h-72 overflow-auto p-2">
@@ -4358,6 +4372,56 @@ export default function TravelAssistantPage() {
             <PackingList tripId={activeTripId} onCompletionChange={(percent) => setPackingCompletionPercent(percent)} />
           ) : (
             <section className="space-y-3">
+              <article
+                className={`rounded-2xl border p-4 shadow-sm ${
+                  billingLoading
+                    ? "border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                    : isLifetime
+                    ? "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-500/50 dark:bg-amber-500/15 dark:text-amber-50"
+                    : isTrial
+                      ? "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-50"
+                      : billingStatusPlan === "free"
+                        ? "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
+                        : "border-cyan-200 bg-cyan-50 text-cyan-950 dark:border-cyan-500/40 dark:bg-cyan-500/15 dark:text-cyan-50"
+                }`}
+              >
+                {billingLoading ? (
+                  <>
+                    <p className="text-sm font-semibold">Loading plan status…</p>
+                    <p className="mt-1 text-xs opacity-90">Checking your latest billing access.</p>
+                  </>
+                ) : isLifetime ? (
+                  <>
+                    <p className="text-sm font-semibold">You have lifetime Pro access ✨</p>
+                    <p className="mt-1 text-xs opacity-90">No subscription is required for your Pro features.</p>
+                  </>
+                ) : isTrial ? (
+                  <>
+                    <p className="text-sm font-semibold">Your free trial is active — {trialDaysRemaining} day{trialDaysRemaining === 1 ? "" : "s"} remaining</p>
+                    <p className="mt-1 text-xs opacity-90">
+                      Expires {trialExpiresAt ? new Date(trialExpiresAt).toLocaleDateString() : "soon"}.
+                    </p>
+                  </>
+                ) : billingStatusPlan === "free" ? (
+                  <>
+                    <p className="text-sm font-semibold">You are on the Free plan</p>
+                    <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                      Upgrade to unlock full Pro automation across your trip workflow.
+                    </p>
+                    <Link
+                      href="/billing"
+                      className="mt-3 inline-flex rounded-lg bg-cyan-500 px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-cyan-400"
+                    >
+                      View upgrade options
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-semibold">Pro plan active</p>
+                    <p className="mt-1 text-xs opacity-90">All Pro features are currently enabled for this account.</p>
+                  </>
+                )}
+              </article>
               {reviewQueue.length > 0 ? (
                 <article className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-50">
                   <p className="text-sm font-semibold">
@@ -4580,7 +4644,7 @@ export default function TravelAssistantPage() {
         <UpgradeModal
           open={Boolean(upgradeModalGate)}
           gate={upgradeModalGate}
-          currentPlan={billingPlan}
+          currentPlan={billingStatusPlan}
           onClose={closeUpgradeModal}
         />
         {manualReservationModalOpen ? (
@@ -4759,7 +4823,8 @@ export default function TravelAssistantPage() {
             tripId={activeTripId}
             tripName={activeTrip?.name ?? "Current trip"}
             destination={activeTrip?.destination ?? ""}
-            billingPlan={billingPlan}
+            billingPlan={billingBasePlan}
+            showUpsellWhenUnavailable={!hasProAccess}
             reservations={reservations}
             onRequestUpgrade={() =>
               openUpgradeModal(
@@ -5576,7 +5641,7 @@ export default function TravelAssistantPage() {
       <UpgradeModal
         open={Boolean(upgradeModalGate)}
         gate={upgradeModalGate}
-        currentPlan={billingPlan}
+        currentPlan={billingStatusPlan}
         onClose={closeUpgradeModal}
       />
       <GmailImportScopeModal

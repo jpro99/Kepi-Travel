@@ -1,5 +1,6 @@
 import type { BillingPlanId } from "@/lib/billing/plans";
 import { kv } from "@vercel/kv";
+import { invalidateCachedBillingStatus } from "@/lib/billing/billingStatusCache";
 import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 
 const SUBSCRIPTION_KEY = "subscription";
@@ -70,6 +71,7 @@ export async function getSubscriptionRecord(userId: string): Promise<BillingSubs
 
 export async function setSubscriptionRecord(userId: string, record: BillingSubscriptionRecord): Promise<void> {
   await kvStoreSet(SUBSCRIPTION_KEY, record, { userId });
+  invalidateCachedBillingStatus(userId);
 }
 
 export function getSubscriptionStorageKey(userId: string): string {

@@ -2,43 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import type { BillingPlanDefinition, BillingPlanId, PlanFeature } from "@/lib/billing/plans";
+import type { PlanFeature } from "@/lib/billing/plans";
 import { ReferralCard } from "@/components/referral/ReferralCard";
 import { BILLING_PLANS, PLAN_FEATURE_LABELS, formatPlanPrice } from "@/lib/billing/plans";
-
-type BillingStatusResponse = {
-  plan: BillingPlanId;
-  definition: BillingPlanDefinition;
-  features: Array<{
-    feature: PlanFeature;
-    label: string;
-    requiresPro: boolean;
-    enabled: boolean;
-  }>;
-  usage: {
-    tripCount: number;
-    tripLimit: number | null;
-    tripsRemaining: number | null;
-  };
-  stripeConfigured: boolean;
-  stripePlansConfigured?: {
-    pro: boolean;
-    concierge: boolean;
-  };
-  subscription?: {
-    plan: BillingPlanId;
-    stripeCustomerId: string | null;
-    stripeSubscriptionId: string | null;
-    validUntil: string | null;
-    lifetimePlan: boolean;
-    trialExpiresAt: string | null;
-  };
-  inviteAccess?: {
-    lifetimePlanActive: boolean;
-    trialActive: boolean;
-    trialExpiresAt: string | null;
-  };
-};
+import { useBilling } from "@/lib/billing/BillingContext";
 
 const FEATURE_ORDER: PlanFeature[] = ["gmail-import", "ai-suggestions", "push-notifications", "multi-trip"];
 
@@ -48,10 +15,9 @@ function normalizeRedeemCode(value: string): string {
 
 export default function BillingPage() {
   const searchParams = useSearchParams();
-  const [status, setStatus] = useState<BillingStatusResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { status, loading, error: billingContextError, refresh: refreshBillingStatus, plan: billingStatusPlan } = useBilling();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [targetPlan, setTargetPlan] = useState<"pro" | "concierge">("pro");
   const [inviteBusy, setInviteBusy] = useState(false);
   const [referralBusy, setReferralBusy] = useState(false);
@@ -61,32 +27,6 @@ export default function BillingPage() {
   const [referralError, setReferralError] = useState<string | null>(null);
   const inviteCodeInputRef = useRef<HTMLInputElement | null>(null);
   const referralCodeInputRef = useRef<HTMLInputElement | null>(null);
-
-  const loadBillingStatus = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/billing/status", { method: "GET", cache: "no-store" });
-      const payload = (await response.json()) as BillingStatusResponse & { error?: string };
-      if (!response.ok) {
-        throw new Error(payload.error ?? `Billing status failed (${response.status})`);
-      }
-      setStatus(payload);
-    } catch (statusError) {
-      setError(statusError instanceof Error ? statusError.message : "Could not load billing status.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      void loadBillingStatus();
-    }, 0);
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [loadBillingStatus]);
 
   const prefilledCodes = useMemo(() => {
     const inviteFromQuery = searchParams.get("inviteCode") ?? searchParams.get("redeemCode") ?? "";
@@ -111,15 +51,14 @@ export default function BillingPage() {
     return null;
   }, []);
 
-  const activePlan = status?.plan ?? "free";
-  const planDefinition = status?.definition ?? BILLING_PLANS.free;
-  const lifetimePlanActive = Boolean(status?.inviteAccess?.lifetimePlanActive ?? status?.subscription?.lifetimePlan);
+  const activePlan = billingStatusPlan;
   const trialExpiresAt = status?.inviteAccess?.trialExpiresAt ?? status?.subscription?.trialExpiresAt ?? null;
-  const trialPlanActive = Boolean(
-    status?.inviteAccess?.trialActive ??
-      (activePlan === "pro" && !lifetimePlanActive && typeof trialExpiresAt === "string" && trialExpiresAt.length > 0),
-  );
-  const hideRedeemInputs = lifetimePlanActive || trialPlanActive;
+  const trialDaysRemaining = status?.trialDaysRemaining ?? null;
+  const lifetimePlanActive = activePlan === "lifetime";
+  const trialPlanActive = activePlan === "trial";
+  const paidProPlanActive = activePlan === "pro";
+  const conciergePlanActive = activePlan === "concierge";
+  const hideRedeemInputs = activePlan !== "free";
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -127,7 +66,7 @@ export default function BillingPage() {
         setTargetPlan("pro");
         return;
       }
-      if (activePlan === "pro") {
+      if (activePlan === "pro" || activePlan === "trial") {
         setTargetPlan("concierge");
       }
     }, 0);
@@ -139,7 +78,7 @@ export default function BillingPage() {
   const handleStartCheckout = useCallback(async (): Promise<void> => {
     if (busy) return;
     setBusy(true);
-    setError(null);
+    setActionError(null);
     try {
       const response = await fetch("/api/billing/checkout", {
         method: "POST",
@@ -156,7 +95,7 @@ export default function BillingPage() {
       }
       window.location.assign(payload.url);
     } catch (checkoutError) {
-      setError(checkoutError instanceof Error ? checkoutError.message : "Could not start checkout.");
+      setActionError(checkoutError instanceof Error ? checkoutError.message : "Could not start checkout.");
       setBusy(false);
     }
   }, [busy, targetPlan]);
@@ -164,7 +103,7 @@ export default function BillingPage() {
   const handleManageSubscription = useCallback(async (): Promise<void> => {
     if (busy) return;
     setBusy(true);
-    setError(null);
+    setActionError(null);
     try {
       const response = await fetch("/api/billing/portal", { method: "POST" });
       const payload = (await response.json()) as { error?: string; url?: string };
@@ -173,7 +112,7 @@ export default function BillingPage() {
       }
       window.location.assign(payload.url);
     } catch (portalError) {
-      setError(portalError instanceof Error ? portalError.message : "Could not open billing portal.");
+      setActionError(portalError instanceof Error ? portalError.message : "Could not open billing portal.");
       setBusy(false);
     }
   }, [busy]);
@@ -215,7 +154,7 @@ export default function BillingPage() {
             ? "Invite Code applied. Pro access activated."
             : `Invite Code applied. Your 30-day free trial is active, expires ${invitePayload.trialExpiresAt ? new Date(invitePayload.trialExpiresAt).toLocaleDateString() : "in 30 days"}.`,
         );
-        await loadBillingStatus();
+        await refreshBillingStatus();
         return;
       }
       const mappedInviteError =
@@ -232,7 +171,7 @@ export default function BillingPage() {
     } finally {
       setInviteBusy(false);
     }
-  }, [inviteBusy, loadBillingStatus]);
+  }, [inviteBusy, refreshBillingStatus]);
 
   const handleRedeemReferralCode = useCallback(async (): Promise<void> => {
     if (referralBusy) return;
@@ -273,13 +212,13 @@ export default function BillingPage() {
       }
       const awardedDays = payload.awarded?.newUserDays ?? 30;
       setReferralMessage(`Referral Code applied. Your ${awardedDays}-day free trial is active.`);
-      await loadBillingStatus();
+      await refreshBillingStatus();
     } catch (redeemError) {
       setReferralError(redeemError instanceof Error ? redeemError.message : "Could not redeem Referral Code.");
     } finally {
       setReferralBusy(false);
     }
-  }, [referralBusy, loadBillingStatus]);
+  }, [referralBusy, refreshBillingStatus]);
 
   const usageText = useMemo(() => {
     if (!status) {
@@ -291,6 +230,29 @@ export default function BillingPage() {
     return `${status.usage.tripCount}/${status.usage.tripLimit} trips used`;
   }, [status]);
 
+  const planStatusHeading = lifetimePlanActive
+    ? "Lifetime Pro — no subscription needed"
+    : trialPlanActive
+      ? "Free trial active"
+      : paidProPlanActive
+        ? "Pro plan active"
+        : conciergePlanActive
+          ? "Concierge plan active"
+          : "Free plan active";
+
+  const planStatusDetail = lifetimePlanActive
+    ? "You have permanent Pro access from an Invite Code."
+    : trialPlanActive
+      ? `Expires ${trialExpiresAt ? new Date(trialExpiresAt).toLocaleDateString() : "soon"}${
+          trialDaysRemaining ? ` — ${trialDaysRemaining} day${trialDaysRemaining === 1 ? "" : "s"} remaining` : ""
+        }. Upgrade to keep Pro after trial.`
+      : paidProPlanActive || conciergePlanActive
+        ? `Next billing ${status?.nextBillingDate ? new Date(status.nextBillingDate).toLocaleDateString() : "date unavailable"}.`
+        : "Upgrade to unlock Pro automation and email import.";
+
+  const canShowUpgradeOptions = activePlan === "free" || activePlan === "trial";
+  const canManageSubscription = activePlan === "pro" || activePlan === "concierge";
+
   return (
     <main className="mx-auto min-h-screen w-full max-w-4xl space-y-6 px-4 py-8 text-slate-900 dark:text-slate-100">
       <header className="space-y-2">
@@ -300,6 +262,22 @@ export default function BillingPage() {
           Manage your Kepi plan and unlock advanced travel automation features when needed.
         </p>
       </header>
+
+      <section
+        className={`rounded-2xl border p-5 shadow-sm ${
+          lifetimePlanActive
+            ? "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-500/50 dark:bg-amber-500/15 dark:text-amber-50"
+            : trialPlanActive
+              ? "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-50"
+              : paidProPlanActive || conciergePlanActive
+                ? "border-cyan-200 bg-cyan-50 text-cyan-950 dark:border-cyan-500/40 dark:bg-cyan-500/15 dark:text-cyan-50"
+                : "border-slate-200 bg-white text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+        }`}
+      >
+        <p className="text-xs uppercase tracking-[0.2em] opacity-80">Plan status</p>
+        <h2 className="mt-1 text-lg font-semibold">{planStatusHeading}</h2>
+        <p className="mt-1 text-sm opacity-90">{planStatusDetail}</p>
+      </section>
 
       <section className="rounded-2xl border border-emerald-300 bg-emerald-50/80 p-5 shadow-sm dark:border-emerald-700/50 dark:bg-emerald-950/30">
         <h2 className="text-lg font-semibold text-emerald-900 dark:text-emerald-100">Code redemption</h2>
@@ -392,20 +370,8 @@ export default function BillingPage() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Current plan</p>
-                <p className="text-2xl font-semibold">{planDefinition.name}</p>
-                <p className="text-sm text-slate-600 dark:text-slate-300">
-                  {formatPlanPrice(planDefinition.monthlyPriceCents)} • {planDefinition.tagline}
-                </p>
-                {lifetimePlanActive ? (
-                  <p className="mt-1 inline-flex rounded-full border border-cyan-400/60 bg-cyan-500/10 px-2 py-0.5 text-xs font-semibold text-cyan-700 dark:text-cyan-300">
-                    Lifetime Pro (invite)
-                  </p>
-                ) : null}
-                {trialPlanActive && trialExpiresAt ? (
-                  <p className="mt-1 text-xs text-cyan-700 dark:text-cyan-300">
-                    Trial Pro expires on {new Date(trialExpiresAt).toLocaleDateString()}.
-                  </p>
-                ) : null}
+                <p className="text-2xl font-semibold">{planStatusHeading}</p>
+                <p className="text-sm text-slate-600 dark:text-slate-300">{planStatusDetail}</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-right dark:border-slate-700 dark:bg-slate-950/70">
                 <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Usage</p>
@@ -431,31 +397,33 @@ export default function BillingPage() {
               })}
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-3">
-              {(["free", "pro", "concierge"] as const).map((planId) => {
-                const plan = BILLING_PLANS[planId];
-                const highlighted = activePlan === planId;
-                return (
-                  <article
-                    key={plan.id}
-                    className={`rounded-xl border p-3 text-sm ${
-                      highlighted
-                        ? "border-cyan-400 bg-cyan-500/10"
-                        : "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-950/70"
-                    }`}
-                  >
-                    <p className="font-semibold">{plan.name}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{formatPlanPrice(plan.monthlyPriceCents)}</p>
-                    <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{plan.tagline}</p>
-                    {highlighted ? (
-                      <p className="mt-2 text-[11px] font-semibold text-cyan-700 dark:text-cyan-300">Current plan</p>
-                    ) : null}
-                  </article>
-                );
-              })}
-            </div>
+            {canShowUpgradeOptions ? (
+              <div className="grid gap-2 sm:grid-cols-3">
+                {(["free", "pro", "concierge"] as const).map((planId) => {
+                  const plan = BILLING_PLANS[planId];
+                  const highlighted = activePlan === planId;
+                  return (
+                    <article
+                      key={plan.id}
+                      className={`rounded-xl border p-3 text-sm ${
+                        highlighted
+                          ? "border-cyan-400 bg-cyan-500/10"
+                          : "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-950/70"
+                      }`}
+                    >
+                      <p className="font-semibold">{plan.name}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{formatPlanPrice(plan.monthlyPriceCents)}</p>
+                      <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{plan.tagline}</p>
+                      {highlighted ? (
+                        <p className="mt-2 text-[11px] font-semibold text-cyan-700 dark:text-cyan-300">Current plan</p>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+            ) : null}
 
-            {activePlan !== "concierge" && !lifetimePlanActive ? (
+            {canShowUpgradeOptions ? (
               <label className="block text-sm">
                 <span className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Upgrade target</span>
                 <select
@@ -473,7 +441,7 @@ export default function BillingPage() {
             ) : null}
 
             <div className="flex flex-wrap gap-2">
-              {activePlan !== "free" && !lifetimePlanActive ? (
+              {canManageSubscription ? (
                 <button
                   type="button"
                   disabled={busy}
@@ -485,7 +453,7 @@ export default function BillingPage() {
                   {busy ? "Opening portal..." : "Manage subscription"}
                 </button>
               ) : null}
-              {activePlan !== "concierge" && !lifetimePlanActive ? (
+              {canShowUpgradeOptions ? (
                 <button
                   type="button"
                   disabled={
@@ -510,14 +478,14 @@ export default function BillingPage() {
                 type="button"
                 disabled={loading}
                 onClick={() => {
-                  void loadBillingStatus();
+                  void refreshBillingStatus();
                 }}
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-900"
               >
                 Refresh status
               </button>
             </div>
-            {!lifetimePlanActive ? (
+            {canShowUpgradeOptions ? (
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Promo Code: enter your Promo Code in Stripe Checkout when redirected.
               </p>
@@ -531,7 +499,10 @@ export default function BillingPage() {
       {checkoutMessage ? (
         <p className="rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-2 text-sm text-cyan-900">{checkoutMessage}</p>
       ) : null}
-      {error ? <p className="rounded-lg border border-red-400/60 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</p> : null}
+      {billingContextError ? (
+        <p className="rounded-lg border border-red-400/60 bg-red-500/10 px-3 py-2 text-sm text-red-200">{billingContextError}</p>
+      ) : null}
+      {actionError ? <p className="rounded-lg border border-red-400/60 bg-red-500/10 px-3 py-2 text-sm text-red-200">{actionError}</p> : null}
     </main>
   );
 }

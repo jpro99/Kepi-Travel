@@ -14,6 +14,7 @@ interface ConciergePanelProps {
   tripName: string;
   destination: string;
   billingPlan: BillingPlanId;
+  showUpsellWhenUnavailable?: boolean;
   reservations: ConciergePanelReservation[];
   onRequestUpgrade?: () => void;
 }
@@ -59,6 +60,7 @@ export function ConciergePanel({
   tripName,
   destination,
   billingPlan,
+  showUpsellWhenUnavailable = true,
   reservations,
   onRequestUpgrade,
 }: ConciergePanelProps) {
@@ -181,6 +183,9 @@ export function ConciergePanel({
   }
 
   if (!isConcierge) {
+    if (!showUpsellWhenUnavailable) {
+      return null;
+    }
     return (
       <section className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
         <h3 className="text-sm font-semibold text-amber-100">Concierge VIP automation</h3>
