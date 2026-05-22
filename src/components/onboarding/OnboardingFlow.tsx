@@ -26,7 +26,9 @@ type OnboardingResponse = {
 
 type EmailForwardSetupStatus = {
   forwardAddress: string | null;
-  gmailPromptSeen: boolean;
+  handle?: string | null;
+  canChangeHandle?: boolean;
+  nextHandleChangeAt?: string | null;
   gmailConnected: boolean;
 };
 
@@ -76,7 +78,11 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
   const [gmailBusy, setGmailBusy] = useState(false);
   const [gmailConnected, setGmailConnected] = useState(false);
   const [forwardAddress, setForwardAddress] = useState<string | null>(null);
-  const [gmailPromptSeen, setGmailPromptSeen] = useState(false);
+  const [forwardHandle, setForwardHandle] = useState<string | null>(null);
+  const [canChangeForwardHandle, setCanChangeForwardHandle] = useState(true);
+  const [nextForwardHandleChangeAt, setNextForwardHandleChangeAt] = useState<string | null>(null);
+  const [forwardHandleEditing, setForwardHandleEditing] = useState(false);
+  const [forwardHandleInput, setForwardHandleInput] = useState("");
   const referralCodeFromUrl = useMemo(() => {
     const raw = searchParams.get("ref")?.trim().toUpperCase() ?? "";
     return /^[A-Z0-9-]{1,50}$/u.test(raw) ? raw : "";
@@ -109,13 +115,29 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
         throw new Error(`Email forward setup API returned ${response.status}`);
       }
       const payload = (await response.json()) as Partial<EmailForwardSetupStatus>;
-      setForwardAddress(typeof payload.forwardAddress === "string" && payload.forwardAddress.trim().length > 0 ? payload.forwardAddress.trim() : null);
+      const normalizedAddress =
+        typeof payload.forwardAddress === "string" && payload.forwardAddress.trim().length > 0
+          ? payload.forwardAddress.trim()
+          : null;
+      const normalizedHandle =
+        typeof payload.handle === "string" && payload.handle.trim().length > 0 ? payload.handle.trim().toLowerCase() : null;
+      setForwardAddress(normalizedAddress);
+      setForwardHandle(normalizedHandle);
+      setForwardHandleInput(normalizedHandle ?? "");
+      setCanChangeForwardHandle(payload.canChangeHandle !== false);
+      setNextForwardHandleChangeAt(
+        typeof payload.nextHandleChangeAt === "string" && payload.nextHandleChangeAt.trim().length > 0
+          ? payload.nextHandleChangeAt
+          : null,
+      );
       setGmailConnected(Boolean(payload.gmailConnected));
-      setGmailPromptSeen(Boolean(payload.gmailPromptSeen));
     } catch {
       setForwardAddress(null);
+      setForwardHandle(null);
+      setForwardHandleInput("");
+      setCanChangeForwardHandle(true);
+      setNextForwardHandleChangeAt(null);
       setGmailConnected(false);
-      setGmailPromptSeen(false);
     }
   }, []);
 
@@ -356,18 +378,12 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
       await completeOnboarding();
       return;
     }
-    const nextStep =
-      currentStep === 3 && (gmailConnected || Boolean(forwardAddress) || gmailPromptSeen)
-        ? 5
-        : currentStep + 1;
+    const nextStep = currentStep + 1;
     setCurrentStep(nextStep);
     await persistProgress(nextStep, tripDraft, inviteCode, nextInviteRedeemedAt, referralCode, nextReferralRedeemedAt);
   }, [
     completeOnboarding,
     currentStep,
-    forwardAddress,
-    gmailConnected,
-    gmailPromptSeen,
     localizeTripErrors,
     onCreateFirstTrip,
     inviteCode,
@@ -425,48 +441,63 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
     }
   }, [gmailBusy]);
 
-  const handleSetupForwardAddress = useCallback(async (): Promise<void> => {
+  const handleCopyForwardAddress = useCallback(async (): Promise<void> => {
+    if (!forwardAddress) return;
+    try {
+      await navigator.clipboard.writeText(forwardAddress);
+      setGmailMessage("Forwarding address copied.");
+    } catch {
+      setGmailMessage("Clipboard unavailable.");
+    }
+  }, [forwardAddress]);
+
+  const handleSaveForwardHandle = useCallback(async (): Promise<void> => {
     if (gmailBusy) return;
+    const normalizedHandle = forwardHandleInput.trim().toLowerCase();
+    if (!normalizedHandle) {
+      setGmailMessage("Enter a forwarding handle first.");
+      return;
+    }
     setGmailBusy(true);
     try {
       const response = await fetch("/api/email-forward/setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "create-forward-address" }),
+        body: JSON.stringify({ action: "change-forward-handle", customHandle: normalizedHandle }),
       });
-      const payload = (await response.json()) as { forwardAddress?: string; error?: string };
+      const payload = (await response.json()) as {
+        error?: string;
+        forwardAddress?: string;
+        handle?: string;
+        canChangeHandle?: boolean;
+        nextHandleChangeAt?: string | null;
+      };
       if (!response.ok) {
-        throw new Error(payload.error ?? `Forward setup failed (${response.status})`);
+        throw new Error(payload.error ?? `Forward handle update failed (${response.status})`);
       }
-      const nextForwardAddress =
+      const nextAddress =
         typeof payload.forwardAddress === "string" && payload.forwardAddress.trim().length > 0
           ? payload.forwardAddress.trim()
           : null;
-      setForwardAddress(nextForwardAddress);
-      setGmailPromptSeen(true);
-      setGmailMessage(nextForwardAddress ? `Forwarding address ready: ${nextForwardAddress}` : "Forwarding address created.");
+      const nextHandle =
+        typeof payload.handle === "string" && payload.handle.trim().length > 0 ? payload.handle.trim().toLowerCase() : null;
+      setForwardAddress(nextAddress);
+      setForwardHandle(nextHandle);
+      setForwardHandleInput(nextHandle ?? "");
+      setCanChangeForwardHandle(payload.canChangeHandle !== false);
+      setNextForwardHandleChangeAt(
+        typeof payload.nextHandleChangeAt === "string" && payload.nextHandleChangeAt.trim().length > 0
+          ? payload.nextHandleChangeAt
+          : null,
+      );
+      setForwardHandleEditing(false);
+      setGmailMessage(nextAddress ? `Forwarding address updated: ${nextAddress}` : "Forwarding address updated.");
     } catch (error) {
-      setGmailMessage(error instanceof Error ? error.message : "Could not set up forwarding address.");
+      setGmailMessage(error instanceof Error ? error.message : "Could not update forwarding handle.");
     } finally {
       setGmailBusy(false);
     }
-  }, [gmailBusy]);
-
-  const handleDismissGmailPrompt = useCallback(async (): Promise<void> => {
-    if (gmailBusy) return;
-    setGmailBusy(true);
-    try {
-      await fetch("/api/email-forward/setup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "dismiss-gmail-prompt" }),
-      });
-      setGmailPromptSeen(true);
-      setGmailMessage("Got it — you can set this up later from the More tab.");
-    } finally {
-      setGmailBusy(false);
-    }
-  }, [gmailBusy]);
+  }, [forwardHandleInput, gmailBusy]);
 
   const stepTitle = useMemo(() => {
     if (currentStep === 1) return t("stepWelcome");
@@ -617,54 +648,97 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
 
           {currentStep === 4 ? (
             <div className="space-y-3 text-sm">
-              {gmailConnected || forwardAddress ? (
-                <p className="text-slate-700 dark:text-slate-300">
-                  Setup already complete. {gmailConnected ? "Gmail is connected." : null}
-                  {forwardAddress ? ` Forwarding address: ${forwardAddress}` : null}
-                </p>
-              ) : gmailPromptSeen ? (
-                <p className="text-slate-700 dark:text-slate-300">
-                  You can set up Gmail or forwarding later from the More tab.
-                </p>
-              ) : (
-                <>
+              {forwardAddress ? (
+                <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-3 dark:border-cyan-500/30 dark:bg-cyan-500/10">
                   <p className="text-slate-700 dark:text-slate-300">
-                    {t("gmailDescription")}
+                    Your forward address is <span className="font-semibold break-all">{forwardAddress}</span>
                   </p>
-                  <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleCopyForwardAddress();
+                    }}
+                    className="mt-3 w-full rounded-lg bg-cyan-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
+                  >
+                    Copy forward address
+                  </button>
+                  <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
+                    Forward any flight, hotel, or booking confirmation from any email app to this address.
+                  </p>
+                  {!forwardHandleEditing ? (
                     <button
                       type="button"
                       onClick={() => {
-                        void handleConnectGmail();
+                        setForwardHandleEditing(true);
+                        setGmailMessage(null);
                       }}
-                      disabled={gmailBusy}
-                      className="rounded-lg bg-cyan-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={!canChangeForwardHandle}
+                      className="mt-2 text-xs font-semibold text-cyan-700 underline underline-offset-4 disabled:cursor-not-allowed disabled:opacity-60 dark:text-cyan-300"
                     >
-                      {gmailBusy ? t("connecting") : t("connectGmail")}
+                      Change address
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void handleSetupForwardAddress();
-                      }}
-                      disabled={gmailBusy}
-                      className="rounded-lg border border-cyan-400 px-3 py-2 text-sm font-semibold text-cyan-700 hover:bg-cyan-50 disabled:cursor-not-allowed disabled:opacity-60 dark:text-cyan-300 dark:hover:bg-cyan-500/10"
-                    >
-                      Set up forwarding address
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void handleDismissGmailPrompt();
-                      }}
-                      disabled={gmailBusy}
-                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-900"
-                    >
-                      Not now
-                    </button>
-                  </div>
-                </>
+                  ) : (
+                    <div className="mt-3 rounded-lg border border-cyan-300 bg-white p-3 dark:border-cyan-500/40 dark:bg-slate-900">
+                      <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Custom handle
+                      </label>
+                      <input
+                        value={forwardHandleInput}
+                        onChange={(event) => {
+                          const normalized = event.target.value.toLowerCase().replace(/[^a-z0-9-]/gu, "").slice(0, 20);
+                          setForwardHandleInput(normalized);
+                        }}
+                        placeholder={forwardHandle ?? "yourname"}
+                        className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-cyan-300 transition focus-visible:ring-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                      />
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleSaveForwardHandle();
+                          }}
+                          disabled={gmailBusy}
+                          className="rounded-lg bg-cyan-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {gmailBusy ? "Saving..." : "Save"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForwardHandleEditing(false);
+                            setForwardHandleInput(forwardHandle ?? "");
+                          }}
+                          disabled={gmailBusy}
+                          className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-900"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {!canChangeForwardHandle && nextForwardHandleChangeAt ? (
+                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                      You can change this again on {new Date(nextForwardHandleChangeAt).toLocaleDateString()}.
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="text-slate-700 dark:text-slate-300">Assigning your forwarding address...</p>
               )}
+              <p className="text-slate-700 dark:text-slate-300">{t("gmailDescription")}</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (gmailConnected) return;
+                    void handleConnectGmail();
+                  }}
+                  disabled={gmailBusy || gmailConnected}
+                  className="rounded-lg bg-cyan-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {gmailConnected ? "Gmail connected" : gmailBusy ? t("connecting") : t("connectGmail")}
+                </button>
+              </div>
               {gmailMessage ? <p className="text-xs text-slate-600 dark:text-slate-400">{gmailMessage}</p> : null}
             </div>
           ) : null}

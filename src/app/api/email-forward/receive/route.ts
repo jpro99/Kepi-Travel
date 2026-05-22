@@ -4,6 +4,7 @@ import { z } from "zod";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { logger } from "@/lib/logger";
 import { parseForwardedEmail } from "@/lib/travelAssistant/emailForwardParser";
+import { resolveUserIdByForwardAddress } from "@/lib/travelAssistant/emailForwardSetupStore";
 import { sendPushNotification } from "@/lib/travelAssistant/pushNotificationService";
 import { getActiveTrip, getTrip, updateTrip } from "@/lib/travelAssistant/tripStore";
 
@@ -44,6 +45,16 @@ function buildPushBody(score: number): string {
   return "We need your help reading a forwarded email";
 }
 
+function extractRecipientCandidates(toValue?: string): string[] {
+  if (!toValue || toValue.trim().length === 0) {
+    return [];
+  }
+  return toValue
+    .split(/[;,]/u)
+    .map((candidate) => candidate.trim())
+    .filter((candidate) => candidate.length > 0);
+}
+
 export async function POST(req: Request) {
   const requestId = req.headers.get("x-request-id")?.trim() || randomUUID();
   const routeLogger = logger.withContext({
@@ -70,12 +81,26 @@ export async function POST(req: Request) {
 
   const authUserId = await resolveAuthenticatedUserId();
   const providedUserId = parsed.data.userId?.trim() || null;
-  const targetUserId = authUserId ?? providedUserId;
+  let addressedUserId: string | null = null;
+  for (const candidateAddress of extractRecipientCandidates(parsed.data.to)) {
+    const resolved = await resolveUserIdByForwardAddress(candidateAddress);
+    if (resolved) {
+      addressedUserId = resolved;
+      break;
+    }
+  }
+  const targetUserId = authUserId ?? providedUserId ?? addressedUserId;
   if (!targetUserId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   if (authUserId && providedUserId && authUserId !== providedUserId) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (authUserId && addressedUserId && authUserId !== addressedUserId) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!authUserId && providedUserId && addressedUserId && providedUserId !== addressedUserId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

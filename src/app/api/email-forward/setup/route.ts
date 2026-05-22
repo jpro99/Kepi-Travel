@@ -4,14 +4,15 @@ import { z } from "zod";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { enforceRateLimit } from "@/lib/rateLimit";
 import {
-  ensureForwardAddress,
+  changeForwardHandle,
   getEmailForwardSetupStatus,
   markGmailPromptSeen,
 } from "@/lib/travelAssistant/emailForwardSetupStore";
 import { getGmailConnectionStatus } from "@/lib/travelAssistant/gmailOAuthService";
 
 const BodySchema = z.object({
-  action: z.enum(["create-forward-address", "dismiss-gmail-prompt", "mark-gmail-prompt-seen"]),
+  action: z.enum(["create-forward-address", "dismiss-gmail-prompt", "mark-gmail-prompt-seen", "change-forward-handle"]),
+  customHandle: z.string().trim().max(40).optional(),
 });
 
 async function authorize(req: Request): Promise<
@@ -50,9 +51,7 @@ export async function GET(req: Request) {
   ]);
   return NextResponse.json(
     {
-      forwardAddress: setupStatus.forwardAddress,
-      gmailPromptSeen: setupStatus.gmailPromptSeen,
-      gmailPromptSeenAt: setupStatus.gmailPromptSeenAt,
+      ...setupStatus,
       gmailConnected: gmailStatus.connected,
     },
     { headers: auth.headers },
@@ -78,13 +77,13 @@ export async function POST(req: Request) {
   }
 
   if (parsed.data.action === "create-forward-address") {
-    const forwardAddress = await ensureForwardAddress(auth.userId);
+    const setupStatus = await getEmailForwardSetupStatus(auth.userId);
     await markGmailPromptSeen(auth.userId);
     const gmailStatus = await getGmailConnectionStatus(auth.userId);
     return NextResponse.json(
       {
         ok: true,
-        forwardAddress,
+        ...setupStatus,
         gmailPromptSeen: true,
         gmailConnected: gmailStatus.connected,
       },
@@ -92,15 +91,43 @@ export async function POST(req: Request) {
     );
   }
 
+  if (parsed.data.action === "change-forward-handle") {
+    const customHandle = parsed.data.customHandle?.trim() ?? "";
+    if (!customHandle) {
+      return NextResponse.json(
+        { error: "Custom handle is required." },
+        { status: 422, headers: auth.headers },
+      );
+    }
+    try {
+      const [setupStatus, gmailStatus] = await Promise.all([
+        changeForwardHandle(auth.userId, customHandle),
+        getGmailConnectionStatus(auth.userId),
+      ]);
+      await markGmailPromptSeen(auth.userId);
+      return NextResponse.json(
+        {
+          ok: true,
+          ...setupStatus,
+          gmailPromptSeen: true,
+          gmailConnected: gmailStatus.connected,
+        },
+        { headers: auth.headers },
+      );
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Could not update forwarding handle." },
+        { status: 400, headers: auth.headers },
+      );
+    }
+  }
+
   await markGmailPromptSeen(auth.userId);
-  const [setupStatus, gmailStatus] = await Promise.all([
-    getEmailForwardSetupStatus(auth.userId),
-    getGmailConnectionStatus(auth.userId),
-  ]);
+  const [setupStatus, gmailStatus] = await Promise.all([getEmailForwardSetupStatus(auth.userId), getGmailConnectionStatus(auth.userId)]);
   return NextResponse.json(
     {
       ok: true,
-      forwardAddress: setupStatus.forwardAddress,
+      ...setupStatus,
       gmailPromptSeen: true,
       gmailConnected: gmailStatus.connected,
     },
