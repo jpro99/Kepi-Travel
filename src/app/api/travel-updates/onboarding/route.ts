@@ -8,6 +8,7 @@ import { kvStoreDel, kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStor
 
 const ONBOARDING_COMPLETE_KEY = "onboarding-complete";
 const ONBOARDING_PROGRESS_KEY = "onboarding-progress";
+const ONBOARDING_NOTIFICATIONS_SEEN_KEY = "onboarding:notifications:seen";
 const TOTAL_ONBOARDING_STEPS = 5;
 
 const TripDraftSchema = z.object({
@@ -33,6 +34,7 @@ const OnboardingProgressSchema = z.object({
 
 const PutBodySchema = z.object({
   complete: z.boolean().optional(),
+  notificationsSeen: z.boolean().optional(),
   currentStep: z.number().int().min(1).max(TOTAL_ONBOARDING_STEPS).optional(),
   tripDraft: TripDraftSchema.optional(),
   inviteCode: InviteCodeSchema.optional(),
@@ -77,10 +79,13 @@ export async function GET(req: Request) {
   }
 
   const complete = await kvStoreGet<boolean>(ONBOARDING_COMPLETE_KEY, { userId });
+  const notificationsSeenRaw = await kvStoreGet<string | boolean | null>(ONBOARDING_NOTIFICATIONS_SEEN_KEY, { userId });
+  const notificationsSeen = Boolean(notificationsSeenRaw);
   if (complete === true) {
     return NextResponse.json(
       {
         complete: true,
+        notificationsSeen,
         currentStep: TOTAL_ONBOARDING_STEPS,
         tripDraft: defaultTripDraft(),
         inviteCode: "",
@@ -98,6 +103,7 @@ export async function GET(req: Request) {
   return NextResponse.json(
     {
       complete: false,
+      notificationsSeen,
       currentStep: parsedProgress.success ? parsedProgress.data.currentStep : 1,
       tripDraft: parsedProgress.success ? parsedProgress.data.tripDraft : defaultTripDraft(),
       inviteCode: parsedProgress.success ? parsedProgress.data.inviteCode : "",
@@ -155,25 +161,48 @@ export async function PUT(req: Request) {
   }
 
   if (parsedBody.data.complete === true) {
+    if (parsedBody.data.notificationsSeen === true) {
+      await kvStoreSet(ONBOARDING_NOTIFICATIONS_SEEN_KEY, new Date().toISOString(), { userId });
+    }
     await kvStoreSet<boolean>(ONBOARDING_COMPLETE_KEY, true, { userId });
     await kvStoreDel(ONBOARDING_PROGRESS_KEY, { userId });
     routeLogger.info("Onboarding marked complete.");
     return NextResponse.json({ ok: true, complete: true }, { headers: rateLimit.headers });
   }
 
+  if (parsedBody.data.notificationsSeen === true) {
+    await kvStoreSet(ONBOARDING_NOTIFICATIONS_SEEN_KEY, new Date().toISOString(), { userId });
+  }
+
+  const existingProgressRaw = await kvStoreGet<unknown>(ONBOARDING_PROGRESS_KEY, { userId });
+  const existingProgress = OnboardingProgressSchema.safeParse(existingProgressRaw);
+  const previous = existingProgress.success
+    ? existingProgress.data
+    : {
+        currentStep: 1,
+        tripDraft: defaultTripDraft(),
+        inviteCode: "",
+        inviteRedeemedAt: null as string | null,
+        referralCode: "",
+        referralRedeemedAt: null as string | null,
+      };
+
   const progressPayload = {
-    currentStep: parsedBody.data.currentStep ?? 1,
-    tripDraft: parsedBody.data.tripDraft ?? defaultTripDraft(),
-    inviteCode: parsedBody.data.inviteCode ?? "",
-    inviteRedeemedAt: parsedBody.data.inviteRedeemedAt === undefined ? null : parsedBody.data.inviteRedeemedAt,
-    referralCode: parsedBody.data.referralCode ?? "",
+    currentStep: parsedBody.data.currentStep ?? previous.currentStep,
+    tripDraft: parsedBody.data.tripDraft ?? previous.tripDraft,
+    inviteCode: parsedBody.data.inviteCode ?? previous.inviteCode,
+    inviteRedeemedAt: parsedBody.data.inviteRedeemedAt === undefined ? previous.inviteRedeemedAt : parsedBody.data.inviteRedeemedAt,
+    referralCode: parsedBody.data.referralCode ?? previous.referralCode,
     referralRedeemedAt:
-      parsedBody.data.referralRedeemedAt === undefined ? null : parsedBody.data.referralRedeemedAt,
+      parsedBody.data.referralRedeemedAt === undefined ? previous.referralRedeemedAt : parsedBody.data.referralRedeemedAt,
     updatedAt: new Date().toISOString(),
   };
 
   await kvStoreDel(ONBOARDING_COMPLETE_KEY, { userId });
   await kvStoreSet(ONBOARDING_PROGRESS_KEY, progressPayload, { userId });
+  const notificationsSeen = Boolean(
+    await kvStoreGet<string | boolean | null>(ONBOARDING_NOTIFICATIONS_SEEN_KEY, { userId }),
+  );
   routeLogger.info("Onboarding progress persisted.", {
     currentStep: progressPayload.currentStep,
   });
@@ -182,6 +211,7 @@ export async function PUT(req: Request) {
     {
       ok: true,
       complete: false,
+      notificationsSeen,
       currentStep: progressPayload.currentStep,
       tripDraft: progressPayload.tripDraft,
       inviteCode: progressPayload.inviteCode,

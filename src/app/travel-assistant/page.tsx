@@ -888,6 +888,9 @@ function normalizeCoordinates(members: FamilyMember[]): Array<{ member: FamilyMe
 }
 
 const TRIP_API_ROUTE = "/api/trips";
+const EMAIL_HANDLE_COOKIE_NAME = "kepi-email-handle";
+const EMAIL_FORWARD_DOMAIN = "trips.kepitravel.com";
+const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 
 function resolveViewerName(firstName: string | null | undefined, emailAddress: string | null | undefined): string {
   const normalizedFirstName = firstName?.trim();
@@ -899,6 +902,45 @@ function resolveViewerName(firstName: string | null | undefined, emailAddress: s
     return localPart;
   }
   return "Traveler";
+}
+
+function readCookieValue(name: string): string | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+  const parts = document.cookie.split(";");
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const [rawName, ...rawValueParts] = trimmed.split("=");
+    if (rawName !== name) continue;
+    return decodeURIComponent(rawValueParts.join("="));
+  }
+  return null;
+}
+
+function writeCookieValue(name: string, value: string, maxAgeSeconds: number): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${name}=${encodeURIComponent(value)}; Max-Age=${maxAgeSeconds}; Path=/; SameSite=Lax${secure}`;
+}
+
+function sanitizeEmailHandle(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  const normalized = value.trim().toLowerCase().replace(/[^a-z0-9-]/gu, "").slice(0, 20);
+  return normalized.length > 0 ? normalized : null;
+}
+
+function composeForwardAddress(handle: string): string {
+  return `${handle}@${EMAIL_FORWARD_DOMAIN}`;
+}
+
+function getEmailHandleFromCookie(): string | null {
+  return sanitizeEmailHandle(readCookieValue(EMAIL_HANDLE_COOKIE_NAME));
 }
 
 function normalizeManagedTrip(trip: unknown): ManagedTrip | null {
@@ -1069,6 +1111,7 @@ export default function TravelAssistantPage() {
   const sessionHydratedRef = useRef(false);
   const tripsHydratedRef = useRef(false);
   const applyingTripStateRef = useRef(false);
+  const readinessChecklistSectionRef = useRef<HTMLElement | null>(null);
   const drawerContainerRef = useRef<HTMLDivElement | null>(null);
   const drawerCloseButtonRef = useRef<HTMLButtonElement | null>(null);
   const lastFocusedElementBeforeDrawerRef = useRef<HTMLElement | null>(null);
@@ -1107,18 +1150,22 @@ export default function TravelAssistantPage() {
   const [timelineSectionTab, setTimelineSectionTab] = useState<TimelineSectionTab>("reservations");
   const [, setPackingCompletionPercent] = useState(0);
   const [consumerTab, setConsumerTab] = useState<ConsumerTab>("trip");
+  const [pendingMoreScrollTarget, setPendingMoreScrollTarget] = useState<"readiness-checklist" | null>(null);
   const [gmailConnection, setGmailConnection] = useState<GmailConnectionStatus>({
     connected: false,
     emailAddress: null,
     updatedAt: null,
   });
   const [gmailConnectionBusy, setGmailConnectionBusy] = useState(false);
-  const [emailForwardAddress, setEmailForwardAddress] = useState<string | null>(null);
-  const [emailForwardHandle, setEmailForwardHandle] = useState<string | null>(null);
+  const [emailForwardAddress, setEmailForwardAddress] = useState<string | null>(() => {
+    const handle = getEmailHandleFromCookie();
+    return handle ? composeForwardAddress(handle) : null;
+  });
+  const [emailForwardHandle, setEmailForwardHandle] = useState<string | null>(() => getEmailHandleFromCookie());
   const [canChangeEmailForwardHandle, setCanChangeEmailForwardHandle] = useState(true);
   const [nextForwardHandleChangeAt, setNextForwardHandleChangeAt] = useState<string | null>(null);
   const [emailForwardEditingHandle, setEmailForwardEditingHandle] = useState(false);
-  const [emailForwardCustomHandleInput, setEmailForwardCustomHandleInput] = useState("");
+  const [emailForwardCustomHandleInput, setEmailForwardCustomHandleInput] = useState(() => getEmailHandleFromCookie() ?? "");
   const [emailForwardSetupBusy, setEmailForwardSetupBusy] = useState(false);
   const [emailForwardSetupMessage, setEmailForwardSetupMessage] = useState<string | null>(null);
   const [gmailImportBusy, setGmailImportBusy] = useState(false);
@@ -1195,6 +1242,13 @@ export default function TravelAssistantPage() {
   }, []);
 
   const refreshEmailForwardSetup = useCallback(async (): Promise<void> => {
+    const handleFromCookie = getEmailHandleFromCookie();
+    if (handleFromCookie) {
+      const addressFromCookie = composeForwardAddress(handleFromCookie);
+      setEmailForwardHandle((previous) => previous ?? handleFromCookie);
+      setEmailForwardAddress((previous) => previous ?? addressFromCookie);
+      setEmailForwardCustomHandleInput((previous) => previous || handleFromCookie);
+    }
     try {
       const response = await fetch("/api/email-handle/mine", {
         method: "GET",
@@ -1204,13 +1258,18 @@ export default function TravelAssistantPage() {
       if (!response.ok) {
         throw new Error(payload.error ?? `Email handle lookup failed (${response.status})`);
       }
-      setEmailForwardAddress(
-        typeof payload.forwardAddress === "string" && payload.forwardAddress.trim().length > 0
-          ? payload.forwardAddress.trim()
-          : null,
-      );
       const normalizedHandle =
         typeof payload.handle === "string" && payload.handle.trim().length > 0 ? payload.handle.trim().toLowerCase() : null;
+      const normalizedAddress =
+        typeof payload.forwardAddress === "string" && payload.forwardAddress.trim().length > 0
+          ? payload.forwardAddress.trim()
+          : normalizedHandle
+            ? composeForwardAddress(normalizedHandle)
+            : null;
+      if (normalizedHandle) {
+        writeCookieValue(EMAIL_HANDLE_COOKIE_NAME, normalizedHandle, ONE_YEAR_SECONDS);
+      }
+      setEmailForwardAddress(normalizedAddress);
       setEmailForwardHandle(normalizedHandle);
       setEmailForwardCustomHandleInput(normalizedHandle ?? "");
       setCanChangeEmailForwardHandle(payload.canChangeHandle !== false);
@@ -1220,9 +1279,11 @@ export default function TravelAssistantPage() {
           : null,
       );
     } catch {
-      setEmailForwardAddress(null);
-      setEmailForwardHandle(null);
-      setEmailForwardCustomHandleInput("");
+      if (!handleFromCookie) {
+        setEmailForwardAddress(null);
+        setEmailForwardHandle(null);
+        setEmailForwardCustomHandleInput("");
+      }
       setCanChangeEmailForwardHandle(true);
       setNextForwardHandleChangeAt(null);
     }
@@ -3336,6 +3397,9 @@ export default function TravelAssistantPage() {
           : null;
       const updatedHandle =
         typeof payload.handle === "string" && payload.handle.trim().length > 0 ? payload.handle.trim().toLowerCase() : null;
+      if (updatedHandle) {
+        writeCookieValue(EMAIL_HANDLE_COOKIE_NAME, updatedHandle, ONE_YEAR_SECONDS);
+      }
       setEmailForwardAddress(updatedAddress);
       setEmailForwardHandle(updatedHandle);
       setEmailForwardCustomHandleInput(updatedHandle ?? "");
@@ -4137,6 +4201,27 @@ export default function TravelAssistantPage() {
     window.history.replaceState({}, "", nextUrl);
   }, []);
 
+  const openReadinessChecklistInMoreTab = useCallback((): void => {
+    setPendingMoreScrollTarget("readiness-checklist");
+    navigateToConsumerTab("more");
+  }, [navigateToConsumerTab]);
+
+  useEffect(() => {
+    if (consumerTab !== "more" || pendingMoreScrollTarget !== "readiness-checklist") {
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      readinessChecklistSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      setPendingMoreScrollTarget(null);
+    }, 140);
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [consumerTab, pendingMoreScrollTarget]);
+
   const consumerPrimaryAction = (() => {
     if (tripStatus === "red" || activeScenario !== "none" || delayedFlight) {
       return {
@@ -4165,7 +4250,7 @@ export default function TravelAssistantPage() {
           unresolvedReadinessCount === 1
             ? "Finish 1 checklist item"
             : `Finish ${unresolvedReadinessCount} checklist items`,
-        onClick: () => navigateToConsumerTab("more"),
+        onClick: () => openReadinessChecklistInMoreTab(),
       };
     }
     return null;
@@ -4387,6 +4472,43 @@ export default function TravelAssistantPage() {
                   <p className="mt-1 text-sm opacity-80">Kepi found booking details that need a quick look.</p>
                 </article>
               ) : null}
+              <section
+                id="readiness-checklist-section"
+                ref={readinessChecklistSectionRef}
+                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="font-semibold">Readiness checklist</h2>
+                  <span className="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900 dark:bg-amber-500/20 dark:text-amber-100">
+                    {unresolvedReadinessCount} pending
+                  </span>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {readinessItems.map((item) => (
+                    <label
+                      key={item.id}
+                      className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 ${
+                        item.complete
+                          ? "border-emerald-500/40 bg-emerald-500/10"
+                          : "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-950/60"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={item.complete}
+                        onChange={() => handleChecklistToggle(item.id)}
+                        className="mt-1"
+                      />
+                      <span className="flex-1">
+                        <span className="block text-sm font-medium">{item.title}</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">
+                          {item.category} {item.required ? "• Required" : "• Optional"}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </section>
               <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm dark:border-emerald-500/40 dark:bg-emerald-500/10">
                 <div className="flex items-start justify-between gap-3">
                   <div>

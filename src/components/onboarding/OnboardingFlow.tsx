@@ -16,6 +16,7 @@ const TOTAL_STEPS = 5;
 
 type OnboardingResponse = {
   complete: boolean;
+  notificationsSeen?: boolean;
   currentStep: number;
   tripDraft: TripSetupDraft;
   inviteCode: string;
@@ -34,6 +35,36 @@ type EmailForwardSetupStatus = {
 
 interface OnboardingFlowProps {
   onCreateFirstTrip: (trip: TripSetupDraft) => void;
+}
+
+const NOTIFICATIONS_SEEN_COOKIE_NAME = "kepi-onboarding-notifications-seen";
+const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
+
+function readCookieValue(name: string): string | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+  const parts = document.cookie.split(";");
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const [rawName, ...rawValueParts] = trimmed.split("=");
+    if (rawName !== name) continue;
+    return decodeURIComponent(rawValueParts.join("="));
+  }
+  return null;
+}
+
+function notificationsSeenCookiePresent(): boolean {
+  return readCookieValue(NOTIFICATIONS_SEEN_COOKIE_NAME) === "1";
+}
+
+function setNotificationsSeenCookie(): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${NOTIFICATIONS_SEEN_COOKIE_NAME}=1; Max-Age=${ONE_YEAR_SECONDS}; Path=/; SameSite=Lax${secure}`;
 }
 
 function clampStep(step: number): number {
@@ -75,6 +106,7 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
   const [gmailMessage, setGmailMessage] = useState<string | null>(null);
 
   const [notificationsBusy, setNotificationsBusy] = useState(false);
+  const [notificationsPromptSeen, setNotificationsPromptSeen] = useState<boolean>(() => notificationsSeenCookiePresent());
   const [gmailBusy, setGmailBusy] = useState(false);
   const [gmailConnected, setGmailConnected] = useState(false);
   const [forwardAddress, setForwardAddress] = useState<string | null>(null);
@@ -141,6 +173,22 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
     }
   }, []);
 
+  const markNotificationsPromptSeen = useCallback(async (): Promise<void> => {
+    setNotificationsPromptSeen(true);
+    setNotificationsSeenCookie();
+    try {
+      await fetch("/api/travel-updates/onboarding", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          notificationsSeen: true,
+        }),
+      });
+    } catch {
+      // Cookie fallback persists even if network/KV is delayed.
+    }
+  }, []);
+
   const loadOnboardingState = useCallback(async (): Promise<void> => {
     setIsLoading(true);
     try {
@@ -160,7 +208,13 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
         setIsVisible(false);
         return;
       }
-      setCurrentStep(clampStep(resolved.currentStep));
+      const notificationsSeen = Boolean(resolved.notificationsSeen) || notificationsSeenCookiePresent();
+      if (notificationsSeen) {
+        setNotificationsSeenCookie();
+      }
+      setNotificationsPromptSeen(notificationsSeen);
+      const resolvedStep = clampStep(resolved.currentStep);
+      setCurrentStep(notificationsSeen && resolvedStep === 3 ? 4 : resolvedStep);
       setTripDraft({
         ...EMPTY_TRIP_SETUP_DRAFT,
         ...(resolved.tripDraft ?? {}),
@@ -188,6 +242,7 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
       }
       setIsVisible(true);
     } catch {
+      setNotificationsPromptSeen(notificationsSeenCookiePresent());
       setCurrentStep(1);
       setTripDraft(EMPTY_TRIP_SETUP_DRAFT);
       setInviteCode("");
@@ -235,13 +290,14 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
             inviteRedeemedAt: nextInviteRedeemedAt,
             referralCode: nextReferralCode.trim().toUpperCase(),
             referralRedeemedAt: nextReferralRedeemedAt,
+            notificationsSeen: notificationsPromptSeen,
           }),
         });
       } finally {
         setIsSaving(false);
       }
     },
-    [],
+    [notificationsPromptSeen],
   );
 
   const completeOnboarding = useCallback(async (): Promise<void> => {
@@ -270,9 +326,22 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
   );
 
   const handleClose = useCallback(async (): Promise<void> => {
+    if (currentStep === 3 && !notificationsPromptSeen) {
+      await markNotificationsPromptSeen();
+    }
     await persistProgress(currentStep, tripDraft, inviteCode, inviteRedeemedAt, referralCode, referralRedeemedAt);
     setIsVisible(false);
-  }, [currentStep, inviteCode, inviteRedeemedAt, persistProgress, referralCode, referralRedeemedAt, tripDraft]);
+  }, [
+    currentStep,
+    inviteCode,
+    inviteRedeemedAt,
+    markNotificationsPromptSeen,
+    notificationsPromptSeen,
+    persistProgress,
+    referralCode,
+    referralRedeemedAt,
+    tripDraft,
+  ]);
 
   const handleBack = useCallback(async (): Promise<void> => {
     if (currentStep <= 1) {
@@ -374,6 +443,9 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
       }
       onCreateFirstTrip(tripDraft);
     }
+    if (currentStep === 3 && !notificationsPromptSeen) {
+      await markNotificationsPromptSeen();
+    }
     if (currentStep >= TOTAL_STEPS) {
       await completeOnboarding();
       return;
@@ -393,11 +465,16 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
     referralRedeemedAt,
     t,
     tripDraft,
+    markNotificationsPromptSeen,
+    notificationsPromptSeen,
   ]);
 
   const handleSkip = useCallback(async (): Promise<void> => {
+    if (currentStep === 3 && !notificationsPromptSeen) {
+      await markNotificationsPromptSeen();
+    }
     await completeOnboarding();
-  }, [completeOnboarding]);
+  }, [completeOnboarding, currentStep, markNotificationsPromptSeen, notificationsPromptSeen]);
 
   const handleEnableNotifications = useCallback(async (): Promise<void> => {
     if (notificationsBusy) return;
@@ -405,23 +482,27 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
     try {
       if (typeof window === "undefined" || !("Notification" in window)) {
         setNotificationsMessage(t("notificationsUnsupported"));
+        await markNotificationsPromptSeen();
         return;
       }
       const permission =
         Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
       if (permission === "granted") {
         setNotificationsMessage(t("notificationsEnabled"));
+        await markNotificationsPromptSeen();
         return;
       }
       if (permission === "denied") {
         setNotificationsMessage(t("notificationsDenied"));
+        await markNotificationsPromptSeen();
         return;
       }
       setNotificationsMessage(t("notificationsDismissed"));
+      await markNotificationsPromptSeen();
     } finally {
       setNotificationsBusy(false);
     }
-  }, [notificationsBusy, t]);
+  }, [markNotificationsPromptSeen, notificationsBusy, t]);
 
   const handleCopyForwardAddress = useCallback(async (): Promise<void> => {
     if (!forwardAddress) return;
@@ -611,19 +692,27 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
 
           {currentStep === 3 ? (
             <div className="space-y-3 text-sm">
-              <p className="text-slate-700 dark:text-slate-300">
-                {t("notificationsDescription")}
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  void handleEnableNotifications();
-                }}
-                disabled={notificationsBusy}
-                className="rounded-lg bg-cyan-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {notificationsBusy ? t("requesting") : t("enableNotifications")}
-              </button>
+              {notificationsPromptSeen ? (
+                <p className="text-slate-700 dark:text-slate-300">
+                  Notification preference already saved. You can manage alerts any time from settings.
+                </p>
+              ) : (
+                <>
+                  <p className="text-slate-700 dark:text-slate-300">
+                    {t("notificationsDescription")}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleEnableNotifications();
+                    }}
+                    disabled={notificationsBusy}
+                    className="rounded-lg bg-cyan-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {notificationsBusy ? t("requesting") : t("enableNotifications")}
+                  </button>
+                </>
+              )}
               {notificationsMessage ? <p className="text-xs text-slate-600 dark:text-slate-400">{notificationsMessage}</p> : null}
             </div>
           ) : null}
