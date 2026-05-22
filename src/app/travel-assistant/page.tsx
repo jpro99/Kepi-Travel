@@ -1148,7 +1148,7 @@ export default function TravelAssistantPage() {
         emailAddress: payload.emailAddress,
         updatedAt: payload.updatedAt,
       });
-    } catch (error) {
+    } catch {
       setGmailConnection({
         connected: false,
         emailAddress: null,
@@ -1231,7 +1231,10 @@ export default function TravelAssistantPage() {
     if (consumerTab !== "more") {
       return;
     }
-    void refreshEmailForwardSetup();
+    const timeout = window.setTimeout(() => {
+      void refreshEmailForwardSetup();
+    }, 0);
+    return () => window.clearTimeout(timeout);
   }, [consumerTab, refreshEmailForwardSetup]);
 
   const activeTrip = useMemo(() => {
