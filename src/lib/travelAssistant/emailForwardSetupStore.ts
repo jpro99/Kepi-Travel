@@ -41,6 +41,10 @@ function handleOwnerKey(handle: string): string {
   return `${HANDLE_OWNER_KEY_PREFIX}:${handle}`;
 }
 
+function handleOwnerRedisKey(handle: string): string {
+  return toSystemNamespaceKey(handleOwnerKey(handle));
+}
+
 function userHandleMetaKey(userId: string): string {
   return `${USER_HANDLE_META_KEY_PREFIX}:${userId}`;
 }
@@ -56,16 +60,25 @@ function getEmailForwardSystemRedis() {
   return getSafeRedisClient(EMAIL_FORWARD_LOG_SCOPE);
 }
 
-async function getHandleOwner(handle: string): Promise<string | null> {
+async function getHandleOwner(handle: string, context?: { caller?: string }): Promise<string | null> {
+  const redisReadKey = handleOwnerRedisKey(handle);
   const redis = getEmailForwardSystemRedis();
   if (redis) {
     try {
-      const owner = await redis.get<string>(toSystemNamespaceKey(handleOwnerKey(handle)));
+      logger.info("Reading email handle owner from Redis.", {
+        scope: EMAIL_FORWARD_LOG_SCOPE,
+        caller: context?.caller ?? "getHandleOwner",
+        handle,
+        redisReadKey,
+      });
+      const owner = await redis.get<string>(redisReadKey);
       return typeof owner === "string" && owner.trim().length > 0 ? owner : null;
     } catch (error) {
       logger.warn("Failed to read email handle owner from Redis, falling back to kvStore.", {
         scope: EMAIL_FORWARD_LOG_SCOPE,
+        caller: context?.caller ?? "getHandleOwner",
         handle,
+        redisReadKey,
         error: error instanceof Error ? error.message : "unknown",
       });
     }
@@ -77,7 +90,7 @@ async function getHandleOwner(handle: string): Promise<string | null> {
 async function setHandleOwner(handle: string, userId: string): Promise<void> {
   const redis = getEmailForwardSystemRedis();
   if (redis) {
-    const namespacedKey = toSystemNamespaceKey(handleOwnerKey(handle));
+    const namespacedKey = handleOwnerRedisKey(handle);
     await redis.set(namespacedKey, userId);
     const persistedOwner = await redis.get<string>(namespacedKey);
     if (persistedOwner !== userId) {
@@ -91,7 +104,7 @@ async function setHandleOwner(handle: string, userId: string): Promise<void> {
 async function setHandleOwnerIfAbsent(handle: string, userId: string): Promise<boolean> {
   const redis = getEmailForwardSystemRedis();
   if (redis) {
-    const namespacedKey = toSystemNamespaceKey(handleOwnerKey(handle));
+    const namespacedKey = handleOwnerRedisKey(handle);
     const claimResult = await redis.set(namespacedKey, userId, { nx: true });
     if (claimResult === "OK") {
       return true;
@@ -115,7 +128,7 @@ async function setHandleOwnerIfAbsent(handle: string, userId: string): Promise<b
 async function deleteHandleOwner(handle: string): Promise<void> {
   const redis = getEmailForwardSystemRedis();
   if (redis) {
-    await redis.del(toSystemNamespaceKey(handleOwnerKey(handle)));
+    await redis.del(handleOwnerRedisKey(handle));
     return;
   }
   await kvStoreDel(handleOwnerKey(handle), { userId: EMAIL_HANDLE_SYSTEM_NAMESPACE });
@@ -250,7 +263,7 @@ async function ensureForwardHandle(userId: string): Promise<string> {
     if (sanitized.length > 0) {
       const owner = await getHandleOwner(sanitized);
       if (!owner || owner === userId) {
-        const ownerMappingKey = toSystemNamespaceKey(handleOwnerKey(sanitized));
+        const ownerMappingKey = handleOwnerRedisKey(sanitized);
         logger.info("ensureForwardHandle writing owner mapping", {
           scope: EMAIL_FORWARD_LOG_SCOPE,
           userId,
@@ -293,7 +306,7 @@ async function ensureForwardHandle(userId: string): Promise<string> {
   const localPart = await resolvePrimaryEmailLocalPart(userId);
   const baseHandle = sanitizeAutoUsernamePart(localPart ?? "") || "traveler";
   const claimed = await claimHandleForUser(userId, baseHandle);
-  const ownerMappingKey = toSystemNamespaceKey(handleOwnerKey(claimed));
+  const ownerMappingKey = handleOwnerRedisKey(claimed);
   logger.info("ensureForwardHandle writing owner mapping", {
     scope: EMAIL_FORWARD_LOG_SCOPE,
     userId,
@@ -454,14 +467,16 @@ export async function resolveUserIdByForwardAddress(addressLike: string): Promis
     });
     return null;
   }
-  const ownerLookupKey = toSystemNamespaceKey(handleOwnerKey(handle));
+  const ownerLookupKey = handleOwnerRedisKey(handle);
   logger.info("resolveUserIdByForwardAddress owner lookup", {
     scope: EMAIL_FORWARD_LOG_SCOPE,
     addressLike,
     handle,
     ownerLookupKey,
+    expectedEnsureForwardHandleWriteKey: ownerLookupKey,
+    readWriteKeyDerivation: "handleOwnerRedisKey",
   });
-  const userId = await getHandleOwner(handle);
+  const userId = await getHandleOwner(handle, { caller: "resolveUserIdByForwardAddress" });
   logger.info("resolveUserIdByForwardAddress owner lookup result", {
     scope: EMAIL_FORWARD_LOG_SCOPE,
     handle,
