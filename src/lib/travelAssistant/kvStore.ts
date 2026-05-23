@@ -1,5 +1,5 @@
 import { kv } from "@vercel/kv";
-import { Redis } from "@upstash/redis";
+import { getSafeRedisClient } from "@/lib/redis";
 import { getKvUserContextUserId } from "@/lib/travelAssistant/kvUserContext";
 import { logger } from "@/lib/logger";
 
@@ -12,20 +12,7 @@ let startupValidationLogged = false;
 const KV_REQUIRED_ENV_KEYS = ["KV_REST_API_URL", "KV_REST_API_TOKEN"] as const;
 const UPSTASH_REQUIRED_ENV_KEYS = ["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"] as const;
 
-const upstashRedis = (() => {
-  if (!UPSTASH_REQUIRED_ENV_KEYS.every((key) => process.env[key]?.trim())) {
-    return null;
-  }
-  try {
-    return Redis.fromEnv();
-  } catch (error) {
-    logger.warn("Unable to initialize Upstash Redis via Redis.fromEnv().", {
-      scope: "travelAssistant/kvStore",
-      error: error instanceof Error ? error.message : "unknown",
-    });
-    return null;
-  }
-})();
+const upstashRedis = getSafeRedisClient("travelAssistant/kvStore");
 
 function isKvConfigured(): boolean {
   return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);

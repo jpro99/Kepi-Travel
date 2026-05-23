@@ -1,5 +1,5 @@
 import { kv } from "@vercel/kv";
-import { Redis } from "@upstash/redis";
+import { getSafeRedisClient } from "@/lib/redis";
 import { logger } from "@/lib/logger";
 import type {
   AdminBackgroundJobRun,
@@ -49,10 +49,7 @@ interface AnalyticsEventRecord {
 }
 
 const KV_CONFIGURED = Boolean(process.env.KV_REST_API_URL?.trim() && process.env.KV_REST_API_TOKEN?.trim());
-const USAGE_REDIS_CONFIGURED = Boolean(
-  process.env.UPSTASH_REDIS_REST_URL?.trim() && process.env.UPSTASH_REDIS_REST_TOKEN?.trim(),
-);
-const usageRedis = USAGE_REDIS_CONFIGURED ? Redis.fromEnv() : null;
+const usageRedis = getSafeRedisClient("admin/adminMetrics");
 
 function extractUserIdFromKepiKey(key: string): string | null {
   const parts = key.split(":");

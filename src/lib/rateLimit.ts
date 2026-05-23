@@ -1,5 +1,5 @@
 import { Ratelimit } from "@upstash/ratelimit";
-import { Redis } from "@upstash/redis";
+import { getSafeRedisClient } from "@/lib/redis";
 import { logger } from "@/lib/logger";
 
 type RateLimitPolicyName =
@@ -55,15 +55,11 @@ type MemoryRateLimitEntry = {
 
 const memoryRateLimitStore = new Map<string, MemoryRateLimitEntry>();
 
-const hasUpstashConfig = Boolean(
-  process.env.UPSTASH_REDIS_REST_URL?.trim() && process.env.UPSTASH_REDIS_REST_TOKEN?.trim(),
-);
-
-const upstashRedis = hasUpstashConfig ? Redis.fromEnv() : null;
-const upstashLimiterByPolicy: Partial<Record<RateLimitPolicyName, Ratelimit>> = hasUpstashConfig
+const upstashRedis = getSafeRedisClient("rateLimit");
+const upstashLimiterByPolicy: Partial<Record<RateLimitPolicyName, Ratelimit>> = upstashRedis
   ? {
       "travel-updates-general": new Ratelimit({
-        redis: upstashRedis as Redis,
+        redis: upstashRedis,
         limiter: Ratelimit.slidingWindow(
           RATE_LIMIT_POLICIES["travel-updates-general"].limit,
           `${RATE_LIMIT_POLICIES["travel-updates-general"].windowSeconds} s`,
@@ -71,7 +67,7 @@ const upstashLimiterByPolicy: Partial<Record<RateLimitPolicyName, Ratelimit>> = 
         prefix: RATE_LIMIT_POLICIES["travel-updates-general"].prefix,
       }),
       "travel-updates-gmail-import": new Ratelimit({
-        redis: upstashRedis as Redis,
+        redis: upstashRedis,
         limiter: Ratelimit.slidingWindow(
           RATE_LIMIT_POLICIES["travel-updates-gmail-import"].limit,
           `${RATE_LIMIT_POLICIES["travel-updates-gmail-import"].windowSeconds} s`,
@@ -79,7 +75,7 @@ const upstashLimiterByPolicy: Partial<Record<RateLimitPolicyName, Ratelimit>> = 
         prefix: RATE_LIMIT_POLICIES["travel-updates-gmail-import"].prefix,
       }),
       "push-subscribe": new Ratelimit({
-        redis: upstashRedis as Redis,
+        redis: upstashRedis,
         limiter: Ratelimit.slidingWindow(
           RATE_LIMIT_POLICIES["push-subscribe"].limit,
           `${RATE_LIMIT_POLICIES["push-subscribe"].windowSeconds} s`,
@@ -87,7 +83,7 @@ const upstashLimiterByPolicy: Partial<Record<RateLimitPolicyName, Ratelimit>> = 
         prefix: RATE_LIMIT_POLICIES["push-subscribe"].prefix,
       }),
       "ai-suggestions": new Ratelimit({
-        redis: upstashRedis as Redis,
+        redis: upstashRedis,
         limiter: Ratelimit.slidingWindow(
           RATE_LIMIT_POLICIES["ai-suggestions"].limit,
           `${RATE_LIMIT_POLICIES["ai-suggestions"].windowSeconds} s`,
@@ -95,7 +91,7 @@ const upstashLimiterByPolicy: Partial<Record<RateLimitPolicyName, Ratelimit>> = 
         prefix: RATE_LIMIT_POLICIES["ai-suggestions"].prefix,
       }),
       "support-chat": new Ratelimit({
-        redis: upstashRedis as Redis,
+        redis: upstashRedis,
         limiter: Ratelimit.slidingWindow(
           RATE_LIMIT_POLICIES["support-chat"].limit,
           `${RATE_LIMIT_POLICIES["support-chat"].windowSeconds} s`,
