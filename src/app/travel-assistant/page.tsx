@@ -4031,11 +4031,26 @@ export default function TravelAssistantPage() {
   };
 
   const handleChecklistToggle = (id: string): void => {
-    pushUndoSnapshot("Readiness checklist changed");
-    setReadinessItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, complete: !item.complete } : item)),
-    );
-    queueMutation("Readiness checklist updated.");
+    try {
+      // Always update local state first so checklist works offline.
+      pushUndoSnapshot("Readiness checklist changed");
+      setReadinessItems((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, complete: !item.complete } : item)),
+      );
+    } catch {
+      // Preserve interaction even if undo snapshotting fails unexpectedly.
+      setReadinessItems((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, complete: !item.complete } : item)),
+      );
+    }
+
+    window.setTimeout(() => {
+      try {
+        queueMutation("Readiness checklist updated.");
+      } catch {
+        setToast("Checklist updated locally. Changes will sync when storage is available.");
+      }
+    }, 0);
   };
 
   const copyScript = async (text: string): Promise<void> => {

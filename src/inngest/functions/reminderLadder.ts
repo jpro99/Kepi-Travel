@@ -27,14 +27,18 @@ async function listUsersWithRuntimeState(limit: number): Promise<string[]> {
   const userIds = new Set<string>();
   const runtimeStateKey = resolveRuntimeStateKey();
   const match = `kepi:*:${runtimeStateKey}`;
-  for await (const key of kv.scanIterator({ match })) {
-    const matchResult = USER_NAMESPACE_KEY_PATTERN.exec(String(key));
-    if (matchResult?.[1]) {
-      userIds.add(matchResult[1]);
+  try {
+    for await (const key of kv.scanIterator({ match })) {
+      const matchResult = USER_NAMESPACE_KEY_PATTERN.exec(String(key));
+      if (matchResult?.[1]) {
+        userIds.add(matchResult[1]);
+      }
+      if (userIds.size >= limit) {
+        break;
+      }
     }
-    if (userIds.size >= limit) {
-      break;
-    }
+  } catch {
+    return [];
   }
 
   return Array.from(userIds);

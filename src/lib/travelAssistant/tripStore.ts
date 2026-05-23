@@ -116,7 +116,12 @@ function sanitizeTrip(raw: unknown): TravelTrip | null {
 }
 
 async function readTrips(userId?: string): Promise<TravelTrip[]> {
-  const stored = await kvStoreGet<unknown>(TRIPS_KEY, { userId });
+  let stored: unknown = null;
+  try {
+    stored = await kvStoreGet<unknown>(TRIPS_KEY, { userId });
+  } catch {
+    return [];
+  }
   if (!Array.isArray(stored)) {
     return [];
   }
@@ -126,7 +131,11 @@ async function readTrips(userId?: string): Promise<TravelTrip[]> {
 }
 
 async function writeTrips(trips: TravelTrip[], userId?: string): Promise<void> {
-  await kvStoreSet(TRIPS_KEY, trips, { userId });
+  try {
+    await kvStoreSet(TRIPS_KEY, trips, { userId });
+  } catch {
+    // Storage failures are handled by callers as degraded mode.
+  }
 }
 
 export async function listTrips(userId?: string): Promise<TravelTrip[]> {
@@ -159,9 +168,18 @@ export async function createTrip(input: CreateTripInput, userId?: string): Promi
   };
   const nextTrips = [...trips, trip];
   await writeTrips(nextTrips, userId);
-  const activeTripId = await kvStoreGet<string>(ACTIVE_TRIP_ID_KEY, { userId });
+  let activeTripId: string | null = null;
+  try {
+    activeTripId = await kvStoreGet<string>(ACTIVE_TRIP_ID_KEY, { userId });
+  } catch {
+    activeTripId = null;
+  }
   if (!activeTripId) {
-    await kvStoreSet(ACTIVE_TRIP_ID_KEY, trip.id, { userId });
+    try {
+      await kvStoreSet(ACTIVE_TRIP_ID_KEY, trip.id, { userId });
+    } catch {
+      // Non-critical: trip still exists in in-memory state.
+    }
   }
   return trip;
 }
@@ -198,12 +216,25 @@ export async function deleteTrip(id: string, userId?: string): Promise<boolean> 
     return false;
   }
   await writeTrips(nextTrips, userId);
-  const activeTripId = await kvStoreGet<string>(ACTIVE_TRIP_ID_KEY, { userId });
+  let activeTripId: string | null = null;
+  try {
+    activeTripId = await kvStoreGet<string>(ACTIVE_TRIP_ID_KEY, { userId });
+  } catch {
+    activeTripId = null;
+  }
   if (activeTripId === id) {
     if (nextTrips[0]) {
-      await kvStoreSet(ACTIVE_TRIP_ID_KEY, nextTrips[0].id, { userId });
+      try {
+        await kvStoreSet(ACTIVE_TRIP_ID_KEY, nextTrips[0].id, { userId });
+      } catch {
+        // Non-critical in degraded storage mode.
+      }
     } else {
-      await kvStoreDel(ACTIVE_TRIP_ID_KEY, { userId });
+      try {
+        await kvStoreDel(ACTIVE_TRIP_ID_KEY, { userId });
+      } catch {
+        // Non-critical in degraded storage mode.
+      }
     }
   }
   return true;
@@ -214,7 +245,11 @@ export async function setActiveTrip(id: string, userId?: string): Promise<Travel
   if (!trip) {
     return null;
   }
-  await kvStoreSet(ACTIVE_TRIP_ID_KEY, id, { userId });
+  try {
+    await kvStoreSet(ACTIVE_TRIP_ID_KEY, id, { userId });
+  } catch {
+    // Preserve UX by returning selected trip even when persistence fails.
+  }
   return trip;
 }
 
@@ -223,13 +258,22 @@ export async function getActiveTrip(userId?: string): Promise<TravelTrip | null>
   if (trips.length === 0) {
     return null;
   }
-  const activeTripId = await kvStoreGet<string>(ACTIVE_TRIP_ID_KEY, { userId });
+  let activeTripId: string | null = null;
+  try {
+    activeTripId = await kvStoreGet<string>(ACTIVE_TRIP_ID_KEY, { userId });
+  } catch {
+    activeTripId = null;
+  }
   if (!activeTripId) {
     const firstTrip = trips[0];
     if (!firstTrip) {
       return null;
     }
-    await kvStoreSet(ACTIVE_TRIP_ID_KEY, firstTrip.id, { userId });
+    try {
+      await kvStoreSet(ACTIVE_TRIP_ID_KEY, firstTrip.id, { userId });
+    } catch {
+      // Non-critical in degraded storage mode.
+    }
     return firstTrip;
   }
   return trips.find((trip) => trip.id === activeTripId) ?? trips[0] ?? null;

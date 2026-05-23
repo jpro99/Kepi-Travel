@@ -342,38 +342,48 @@ async function collectApiUsageStats(): Promise<AdminStatsResponse["apiUsage"]> {
       topActiveUsers: [],
     };
   }
+  try {
+    const [endpointKeys, userKeys] = await Promise.all([
+      usageRedis.keys("kepi:api-usage:rate-limit-hit:*"),
+      usageRedis.keys("kepi:api-usage:user:*"),
+    ]);
 
-  const [endpointKeys, userKeys] = await Promise.all([
-    usageRedis.keys("kepi:api-usage:rate-limit-hit:*"),
-    usageRedis.keys("kepi:api-usage:user:*"),
-  ]);
+    const endpointStats: AdminEndpointHitStat[] = [];
+    for (const key of endpointKeys) {
+      const rawValue = await usageRedis.get<string | number>(key);
+      const hits = typeof rawValue === "number" ? rawValue : Number.parseInt(String(rawValue ?? "0"), 10);
+      const encodedEndpoint = key.replace("kepi:api-usage:rate-limit-hit:", "");
+      endpointStats.push({
+        endpoint: decodeURIComponent(encodedEndpoint),
+        hits: Number.isNaN(hits) ? 0 : hits,
+      });
+    }
 
-  const endpointStats: AdminEndpointHitStat[] = [];
-  for (const key of endpointKeys) {
-    const rawValue = await usageRedis.get<string | number>(key);
-    const hits = typeof rawValue === "number" ? rawValue : Number.parseInt(String(rawValue ?? "0"), 10);
-    const encodedEndpoint = key.replace("kepi:api-usage:rate-limit-hit:", "");
-    endpointStats.push({
-      endpoint: decodeURIComponent(encodedEndpoint),
-      hits: Number.isNaN(hits) ? 0 : hits,
+    const topUsers: AdminTopUserStat[] = [];
+    for (const key of userKeys) {
+      const rawValue = await usageRedis.get<string | number>(key);
+      const calls = typeof rawValue === "number" ? rawValue : Number.parseInt(String(rawValue ?? "0"), 10);
+      const encodedUser = key.replace("kepi:api-usage:user:", "");
+      topUsers.push({
+        userId: decodeURIComponent(encodedUser),
+        calls: Number.isNaN(calls) ? 0 : calls,
+      });
+    }
+
+    return {
+      endpointRateLimitHits: endpointStats.sort((a, b) => b.hits - a.hits),
+      topActiveUsers: topUsers.sort((a, b) => b.calls - a.calls).slice(0, 5),
+    };
+  } catch (error) {
+    logger.warn("Failed to collect API usage stats from Upstash.", {
+      scope: "admin/adminMetrics",
+      error,
     });
+    return {
+      endpointRateLimitHits: [],
+      topActiveUsers: [],
+    };
   }
-
-  const topUsers: AdminTopUserStat[] = [];
-  for (const key of userKeys) {
-    const rawValue = await usageRedis.get<string | number>(key);
-    const calls = typeof rawValue === "number" ? rawValue : Number.parseInt(String(rawValue ?? "0"), 10);
-    const encodedUser = key.replace("kepi:api-usage:user:", "");
-    topUsers.push({
-      userId: decodeURIComponent(encodedUser),
-      calls: Number.isNaN(calls) ? 0 : calls,
-    });
-  }
-
-  return {
-    endpointRateLimitHits: endpointStats.sort((a, b) => b.hits - a.hits),
-    topActiveUsers: topUsers.sort((a, b) => b.calls - a.calls).slice(0, 5),
-  };
 }
 
 function incrementCount(map: Map<string, number>, key: string): void {

@@ -13,15 +13,22 @@ async function listUserIdsWithMonitoring(): Promise<string[]> {
     return [];
   }
   const userIds = new Set<string>();
-  for await (const rawKey of kv.scanIterator({ match: "kepi:*:concierge-monitoring/*" })) {
-    const key = String(rawKey);
-    const userId = parseUserIdFromKey(key);
-    if (userId) {
-      userIds.add(userId);
+  try {
+    for await (const rawKey of kv.scanIterator({ match: "kepi:*:concierge-monitoring/*" })) {
+      const key = String(rawKey);
+      const userId = parseUserIdFromKey(key);
+      if (userId) {
+        userIds.add(userId);
+      }
+      if (userIds.size >= 500) {
+        break;
+      }
     }
-    if (userIds.size >= 500) {
-      break;
-    }
+  } catch (error) {
+    logger.warn("Failed to scan monitored users; running sweep with empty user list.", {
+      scope: "inngest/proactiveMonitoringSweep",
+      error,
+    });
   }
   return [...userIds];
 }

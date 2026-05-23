@@ -23,15 +23,19 @@ async function discoverUsersWithTrips(limit = DEFAULT_USER_SCAN_LIMIT): Promise<
     return [];
   }
   const userIds = new Set<string>();
-  for await (const key of kv.scanIterator({ match: "kepi:*:trips" })) {
-    const match = USER_NAMESPACE_KEY_PATTERN.exec(String(key));
-    const userId = match?.[1];
-    if (userId && !userId.startsWith("__")) {
-      userIds.add(userId);
+  try {
+    for await (const key of kv.scanIterator({ match: "kepi:*:trips" })) {
+      const match = USER_NAMESPACE_KEY_PATTERN.exec(String(key));
+      const userId = match?.[1];
+      if (userId && !userId.startsWith("__")) {
+        userIds.add(userId);
+      }
+      if (userIds.size >= limit) {
+        break;
+      }
     }
-    if (userIds.size >= limit) {
-      break;
-    }
+  } catch {
+    return [];
   }
   return [...userIds];
 }

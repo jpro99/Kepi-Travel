@@ -56,11 +56,27 @@ export async function GET(req: Request) {
     redeemedAt: new Date().toISOString(),
   } as const;
 
-  await Promise.all([
-    kv.set(subscriptionStorageKey, payload),
-    kv.set(billingPlanMirrorKey, "lifetime"),
-    kv.set(userLifetimeMirrorKey, true),
-  ]);
+  try {
+    await Promise.all([
+      kv.set(subscriptionStorageKey, payload),
+      kv.set(billingPlanMirrorKey, "lifetime"),
+      kv.set(userLifetimeMirrorKey, true),
+    ]);
+  } catch (error) {
+    routeLogger.error("Admin fix-my-plan failed to write KV records.", {
+      error: error instanceof Error ? error.message : "unknown",
+      subscriptionStorageKey,
+      billingPlanMirrorKey,
+      userLifetimeMirrorKey,
+    });
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "KV write failed. Please verify Redis credentials and retry.",
+      },
+      { status: 503, headers: rateLimit.headers },
+    );
+  }
   invalidateCachedBillingStatus(TARGET_USER_ID);
 
   routeLogger.info("Admin fix-my-plan applied.", {

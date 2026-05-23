@@ -1,6 +1,7 @@
 import type { BillingPlanId, BillingStatusPlan } from "@/lib/billing/plans";
 import { kv } from "@vercel/kv";
 import { invalidateCachedBillingStatus } from "@/lib/billing/billingStatusCache";
+import { logger } from "@/lib/logger";
 import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 
 const SUBSCRIPTION_KEY = "subscription";
@@ -68,16 +69,43 @@ export function isSubscriptionActive(record: BillingSubscriptionRecord): boolean
 
 export async function getSubscriptionRecord(userId: string): Promise<BillingSubscriptionRecord> {
   const normalizedUserId = normalizeClerkUserIdForStorage(userId);
-  const stored = isKvConfigured()
-    ? await kv.get<unknown>(getSubscriptionStorageKey(normalizedUserId))
-    : await kvStoreGet<unknown>(SUBSCRIPTION_KEY, { userId: normalizedUserId });
+  let stored: unknown = null;
+  if (isKvConfigured()) {
+    try {
+      stored = await kv.get<unknown>(getSubscriptionStorageKey(normalizedUserId));
+    } catch (error) {
+      logger.warn("Subscription KV get failed. Falling back to namespaced KV store.", {
+        scope: "billing/subscriptionStore",
+        userId: normalizedUserId,
+        error: error instanceof Error ? error.message : "unknown",
+      });
+      stored = await kvStoreGet<unknown>(SUBSCRIPTION_KEY, { userId: normalizedUserId });
+    }
+  } else {
+    stored = await kvStoreGet<unknown>(SUBSCRIPTION_KEY, { userId: normalizedUserId });
+  }
   return sanitizeRecord(stored);
 }
 
 export async function setSubscriptionRecord(userId: string, record: BillingSubscriptionRecord): Promise<void> {
   const normalizedUserId = normalizeClerkUserIdForStorage(userId);
   if (isKvConfigured()) {
-    await Promise.all([kv.set(getSubscriptionStorageKey(normalizedUserId), record), setLifetimePlanMirrors(normalizedUserId, record)]);
+    try {
+      await Promise.all([
+        kv.set(getSubscriptionStorageKey(normalizedUserId), record),
+        setLifetimePlanMirrors(normalizedUserId, record),
+      ]);
+    } catch (error) {
+      logger.warn("Subscription KV set failed. Falling back to namespaced KV store.", {
+        scope: "billing/subscriptionStore",
+        userId: normalizedUserId,
+        error: error instanceof Error ? error.message : "unknown",
+      });
+      await Promise.all([
+        kvStoreSet(SUBSCRIPTION_KEY, record, { userId: normalizedUserId }),
+        setLifetimePlanMirrors(normalizedUserId, record),
+      ]);
+    }
   } else {
     await Promise.all([
       kvStoreSet(SUBSCRIPTION_KEY, record, { userId: normalizedUserId }),
@@ -100,10 +128,20 @@ export function getUserLifetimeMirrorKey(userId: string): string {
 }
 
 export async function getRawSubscriptionRecordForDebug(userId: string): Promise<unknown> {
+  const normalizedUserId = normalizeClerkUserIdForStorage(userId);
   if (isKvConfigured()) {
-    return (await kv.get<unknown>(getSubscriptionStorageKey(userId))) ?? null;
+    try {
+      return (await kv.get<unknown>(getSubscriptionStorageKey(normalizedUserId))) ?? null;
+    } catch (error) {
+      logger.warn("Raw subscription KV get failed. Falling back to namespaced KV store.", {
+        scope: "billing/subscriptionStore",
+        userId: normalizedUserId,
+        error: error instanceof Error ? error.message : "unknown",
+      });
+      return await kvStoreGet<unknown>(SUBSCRIPTION_KEY, { userId: normalizedUserId });
+    }
   }
-  return await kvStoreGet<unknown>(SUBSCRIPTION_KEY, { userId });
+  return await kvStoreGet<unknown>(SUBSCRIPTION_KEY, { userId: normalizedUserId });
 }
 
 export async function getLifetimeMirrorStatus(userId: string): Promise<{
@@ -111,18 +149,27 @@ export async function getLifetimeMirrorStatus(userId: string): Promise<{
   userLifetimeMirrorRaw: unknown;
   hasLifetimeAccess: boolean;
 }> {
-  const billingPlanMirrorKey = getBillingPlanMirrorKey(userId);
-  const userLifetimeMirrorKey = getUserLifetimeMirrorKey(userId);
+  const normalizedUserId = normalizeClerkUserIdForStorage(userId);
+  const billingPlanMirrorKey = getBillingPlanMirrorKey(normalizedUserId);
+  const userLifetimeMirrorKey = getUserLifetimeMirrorKey(normalizedUserId);
   if (isKvConfigured()) {
-    const [billingPlanMirrorRaw, userLifetimeMirrorRaw] = await Promise.all([
-      kv.get<unknown>(billingPlanMirrorKey),
-      kv.get<unknown>(userLifetimeMirrorKey),
-    ]);
-    return {
-      billingPlanMirrorRaw: billingPlanMirrorRaw ?? null,
-      userLifetimeMirrorRaw: userLifetimeMirrorRaw ?? null,
-      hasLifetimeAccess: isLifetimeMirrorValue(billingPlanMirrorRaw, userLifetimeMirrorRaw),
-    };
+    try {
+      const [billingPlanMirrorRaw, userLifetimeMirrorRaw] = await Promise.all([
+        kv.get<unknown>(billingPlanMirrorKey),
+        kv.get<unknown>(userLifetimeMirrorKey),
+      ]);
+      return {
+        billingPlanMirrorRaw: billingPlanMirrorRaw ?? null,
+        userLifetimeMirrorRaw: userLifetimeMirrorRaw ?? null,
+        hasLifetimeAccess: isLifetimeMirrorValue(billingPlanMirrorRaw, userLifetimeMirrorRaw),
+      };
+    } catch (error) {
+      logger.warn("Lifetime mirror KV lookup failed. Falling back to namespaced KV store.", {
+        scope: "billing/subscriptionStore",
+        userId: normalizedUserId,
+        error: error instanceof Error ? error.message : "unknown",
+      });
+    }
   }
   const [billingPlanMirrorRaw, userLifetimeMirrorRaw] = await Promise.all([
     kvStoreGet<unknown>(billingPlanMirrorKey, { userId: BILLING_SYSTEM_NAMESPACE }),
@@ -187,31 +234,39 @@ export async function listExpiredTrialUserIds(limit = 1000): Promise<string[]> {
   if (!isKvConfigured()) {
     return [];
   }
-  const userIds: string[] = [];
-  const seen = new Set<string>();
-  const nowMs = Date.now();
-  for await (const key of kv.scanIterator({ match: "kepi:*:subscription" })) {
-    const keyString = String(key);
-    const userId = extractUserIdFromSubscriptionKey(keyString);
-    if (!userId || userId.startsWith("__") || seen.has(userId)) {
-      continue;
-    }
-    const stored = await kv.get<unknown>(keyString);
-    const record = sanitizeRecord(stored);
-    if (
-      record.plan === "pro" &&
-      !record.lifetimePlan &&
-      typeof record.trialExpiresAt === "string" &&
-      Date.parse(record.trialExpiresAt) <= nowMs
-    ) {
-      seen.add(userId);
-      userIds.push(userId);
-      if (userIds.length >= limit) {
-        break;
+  try {
+    const userIds: string[] = [];
+    const seen = new Set<string>();
+    const nowMs = Date.now();
+    for await (const key of kv.scanIterator({ match: "kepi:*:subscription" })) {
+      const keyString = String(key);
+      const userId = extractUserIdFromSubscriptionKey(keyString);
+      if (!userId || userId.startsWith("__") || seen.has(userId)) {
+        continue;
+      }
+      const stored = await kv.get<unknown>(keyString);
+      const record = sanitizeRecord(stored);
+      if (
+        record.plan === "pro" &&
+        !record.lifetimePlan &&
+        typeof record.trialExpiresAt === "string" &&
+        Date.parse(record.trialExpiresAt) <= nowMs
+      ) {
+        seen.add(userId);
+        userIds.push(userId);
+        if (userIds.length >= limit) {
+          break;
+        }
       }
     }
+    return userIds;
+  } catch (error) {
+    logger.warn("Expired trial scan failed; returning empty trial user list.", {
+      scope: "billing/subscriptionStore",
+      error: error instanceof Error ? error.message : "unknown",
+    });
+    return [];
   }
-  return userIds;
 }
 
 export async function setStripeCustomerOwner(customerId: string, userId: string): Promise<void> {
@@ -233,17 +288,26 @@ export async function getStripeCustomerOwner(customerId: string): Promise<string
 }
 
 async function setLifetimePlanMirrors(userId: string, record: BillingSubscriptionRecord): Promise<void> {
-  const billingPlanMirrorKey = getBillingPlanMirrorKey(userId);
-  const userLifetimeMirrorKey = getUserLifetimeMirrorKey(userId);
+  const normalizedUserId = normalizeClerkUserIdForStorage(userId);
+  const billingPlanMirrorKey = getBillingPlanMirrorKey(normalizedUserId);
+  const userLifetimeMirrorKey = getUserLifetimeMirrorKey(normalizedUserId);
   const nowMs = Date.now();
   const billingPlanMirrorValue = resolvePlanMirrorValue(record, nowMs);
   const userLifetimeMirrorValue = record.lifetimePlan;
   if (isKvConfigured()) {
-    await Promise.all([
-      kv.set(billingPlanMirrorKey, billingPlanMirrorValue),
-      kv.set(userLifetimeMirrorKey, userLifetimeMirrorValue),
-    ]);
-    return;
+    try {
+      await Promise.all([
+        kv.set(billingPlanMirrorKey, billingPlanMirrorValue),
+        kv.set(userLifetimeMirrorKey, userLifetimeMirrorValue),
+      ]);
+      return;
+    } catch (error) {
+      logger.warn("Lifetime mirror KV write failed. Falling back to namespaced KV store.", {
+        scope: "billing/subscriptionStore",
+        userId: normalizedUserId,
+        error: error instanceof Error ? error.message : "unknown",
+      });
+    }
   }
   await Promise.all([
     kvStoreSet(billingPlanMirrorKey, billingPlanMirrorValue, { userId: BILLING_SYSTEM_NAMESPACE }),

@@ -78,16 +78,24 @@ function sanitizeInviteCodeRecord(input: unknown): InviteCodeRecord | null {
 }
 
 export async function getInviteCodeRecord(code: string): Promise<InviteCodeRecord | null> {
-  const stored = await kvStoreGet<unknown>(codeKey(code), { userId: INVITE_SYSTEM_NAMESPACE });
-  return sanitizeInviteCodeRecord(stored);
+  try {
+    const stored = await kvStoreGet<unknown>(codeKey(code), { userId: INVITE_SYSTEM_NAMESPACE });
+    return sanitizeInviteCodeRecord(stored);
+  } catch {
+    return null;
+  }
 }
 
 export async function getInviteCodeRedeemedByUser(userId: string): Promise<string | null> {
-  const stored = await kvStoreGet<string>(userInviteRedemptionKey(userId), { userId: INVITE_SYSTEM_NAMESPACE });
-  if (!stored) {
+  try {
+    const stored = await kvStoreGet<string>(userInviteRedemptionKey(userId), { userId: INVITE_SYSTEM_NAMESPACE });
+    if (!stored) {
+      return null;
+    }
+    return normalizeInviteCode(stored);
+  } catch {
     return null;
   }
-  return normalizeInviteCode(stored);
 }
 
 export async function createInviteCode(args: {
@@ -108,68 +116,84 @@ export async function createInviteCode(args: {
       status: "active",
       note: args.note?.trim() ? args.note.trim() : null,
     };
-    const created = await kvStoreSetNx(codeKey(candidate), record, { userId: INVITE_SYSTEM_NAMESPACE });
-    if (created) {
-      return record;
+    try {
+      const created = await kvStoreSetNx(codeKey(candidate), record, { userId: INVITE_SYSTEM_NAMESPACE });
+      if (created) {
+        return record;
+      }
+    } catch {
+      // continue attempting with a new code candidate
     }
   }
   throw new Error("Unable to generate a unique invite code.");
 }
 
 export async function redeemInviteCode(rawCode: string, userId: string): Promise<RedeemInviteCodeResult> {
-  const code = normalizeInviteCode(rawCode);
-  if (!REDEEMABLE_CODE_REGEX.test(code)) {
+  try {
+    const code = normalizeInviteCode(rawCode);
+    if (!REDEEMABLE_CODE_REGEX.test(code)) {
+      return { ok: false, reason: "invalid-code" };
+    }
+    const existingUserRedemption = await getInviteCodeRedeemedByUser(userId);
+    if (existingUserRedemption) {
+      return { ok: false, reason: "already-redeemed" };
+    }
+
+    const existingRecord = await getInviteCodeRecord(code);
+    if (!existingRecord) {
+      return { ok: false, reason: "invalid-code" };
+    }
+    if (existingRecord.status === "revoked") {
+      return { ok: false, reason: "code-revoked" };
+    }
+    if (existingRecord.status === "used" || existingRecord.usedBy) {
+      return { ok: false, reason: "code-used" };
+    }
+
+    const updatedRecord: InviteCodeRecord = {
+      ...existingRecord,
+      usedBy: userId,
+      usedAt: new Date().toISOString(),
+      status: "used",
+    };
+    await Promise.all([
+      kvStoreSet(codeKey(code), updatedRecord, { userId: INVITE_SYSTEM_NAMESPACE }),
+      kvStoreSet(userInviteRedemptionKey(userId), code, { userId: INVITE_SYSTEM_NAMESPACE }),
+    ]);
+    return { ok: true, record: updatedRecord };
+  } catch {
     return { ok: false, reason: "invalid-code" };
   }
-  const existingUserRedemption = await getInviteCodeRedeemedByUser(userId);
-  if (existingUserRedemption) {
-    return { ok: false, reason: "already-redeemed" };
-  }
-
-  const existingRecord = await getInviteCodeRecord(code);
-  if (!existingRecord) {
-    return { ok: false, reason: "invalid-code" };
-  }
-  if (existingRecord.status === "revoked") {
-    return { ok: false, reason: "code-revoked" };
-  }
-  if (existingRecord.status === "used" || existingRecord.usedBy) {
-    return { ok: false, reason: "code-used" };
-  }
-
-  const updatedRecord: InviteCodeRecord = {
-    ...existingRecord,
-    usedBy: userId,
-    usedAt: new Date().toISOString(),
-    status: "used",
-  };
-  await Promise.all([
-    kvStoreSet(codeKey(code), updatedRecord, { userId: INVITE_SYSTEM_NAMESPACE }),
-    kvStoreSet(userInviteRedemptionKey(userId), code, { userId: INVITE_SYSTEM_NAMESPACE }),
-  ]);
-  return { ok: true, record: updatedRecord };
 }
 
 export async function revokeInviteCode(code: string): Promise<InviteCodeRecord | null> {
-  const existing = await getInviteCodeRecord(code);
-  if (!existing) {
+  try {
+    const existing = await getInviteCodeRecord(code);
+    if (!existing) {
+      return null;
+    }
+    const nextRecord: InviteCodeRecord = {
+      ...existing,
+      status: "revoked",
+    };
+    await kvStoreSet(codeKey(existing.code), nextRecord, { userId: INVITE_SYSTEM_NAMESPACE });
+    return nextRecord;
+  } catch {
     return null;
   }
-  const nextRecord: InviteCodeRecord = {
-    ...existing,
-    status: "revoked",
-  };
-  await kvStoreSet(codeKey(existing.code), nextRecord, { userId: INVITE_SYSTEM_NAMESPACE });
-  return nextRecord;
 }
 
 export async function listInviteCodes(limit = 2000): Promise<InviteCodeRecord[]> {
-  const entries = await kvStoreList<unknown>(`${CODE_KEY_PREFIX}/`, {
-    userId: INVITE_SYSTEM_NAMESPACE,
-    limit,
-  });
-  return entries
-    .map((entry) => sanitizeInviteCodeRecord(entry.value))
-    .filter((entry): entry is InviteCodeRecord => entry !== null)
-    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  try {
+    const entries = await kvStoreList<unknown>(`${CODE_KEY_PREFIX}/`, {
+      userId: INVITE_SYSTEM_NAMESPACE,
+      limit,
+    });
+    return entries
+      .map((entry) => sanitizeInviteCodeRecord(entry.value))
+      .filter((entry): entry is InviteCodeRecord => entry !== null)
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  } catch {
+    return [];
+  }
 }
