@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Webhook } from "svix";
 import { z } from "zod";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { logger } from "@/lib/logger";
@@ -64,7 +65,7 @@ function extractIncomingWebhookSignature(headers: Headers): string {
   );
 }
 
-function verifyResendWebhookSignature(headers: Headers, requestId: string): boolean {
+function verifyResendWebhookSignature(rawBody: string, headers: Headers, requestId: string): boolean {
   const expectedSecret = process.env.RESEND_WEBHOOK_SECRET?.trim() ?? "";
   const receivedSignature = extractIncomingWebhookSignature(headers);
   if (!expectedSecret) {
@@ -77,24 +78,34 @@ function verifyResendWebhookSignature(headers: Headers, requestId: string): bool
   console.info("[email-forward-webhook] Signature verification check.", {
     requestId,
     receivedSignature,
-    expectedSecret,
   });
-  if (!receivedSignature) {
+  const svixId = headers.get("svix-id")?.trim() ?? "";
+  const svixTimestamp = headers.get("svix-timestamp")?.trim() ?? "";
+  const svixSignature = headers.get("svix-signature")?.trim() ?? "";
+  if (!svixId || !svixTimestamp || !svixSignature) {
     console.error("[email-forward-webhook] Missing webhook signature header.", {
       requestId,
-      expectedSecret,
+      hasSvixId: Boolean(svixId),
+      hasSvixTimestamp: Boolean(svixTimestamp),
+      hasSvixSignature: Boolean(svixSignature),
+      receivedSignature,
     });
     return false;
   }
-  if (receivedSignature === expectedSecret || receivedSignature.includes(expectedSecret)) {
+
+  const svixHeaders = Object.fromEntries(headers.entries());
+  try {
+    const webhook = new Webhook(expectedSecret);
+    webhook.verify(rawBody, svixHeaders);
     return true;
+  } catch (error) {
+    console.error("[email-forward-webhook] Signature verification failed.", {
+      requestId,
+      error: error instanceof Error ? error.message : "unknown",
+      receivedSignature,
+    });
+    return false;
   }
-  console.error("[email-forward-webhook] Signature mismatch.", {
-    requestId,
-    receivedSignature,
-    expectedSecret,
-  });
-  return false;
 }
 
 async function processEmailForwardWebhook(req: Request, requestId: string): Promise<void> {
@@ -103,11 +114,10 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
     requestId,
   });
   try {
-    if (!verifyResendWebhookSignature(req.headers, requestId)) {
+    const rawBody = await req.text();
+    if (!verifyResendWebhookSignature(rawBody, req.headers, requestId)) {
       return;
     }
-
-    const rawBody = await req.text();
     let body: unknown = {};
     try {
       body = rawBody.trim().length > 0 ? (JSON.parse(rawBody) as unknown) : {};
