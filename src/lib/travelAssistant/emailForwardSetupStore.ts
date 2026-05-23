@@ -11,6 +11,7 @@ const DEFAULT_FORWARD_DOMAIN = "trips.kepitravel.com";
 const MAX_HANDLE_LENGTH = 20;
 const CUSTOM_HANDLE_CHANGE_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
 const SYSTEM_NAMESPACE_PREFIX = `kepi:${EMAIL_HANDLE_SYSTEM_NAMESPACE}:`;
+const EMAIL_FORWARD_LOG_SCOPE = "travelAssistant/emailForwardSetupStore";
 
 interface EmailHandleMetaRecord {
   createdAt: string;
@@ -52,7 +53,7 @@ function toSystemNamespaceKey(key: string): string {
 }
 
 function getEmailForwardSystemRedis() {
-  return getSafeRedisClient("travelAssistant/emailForwardSetupStore");
+  return getSafeRedisClient(EMAIL_FORWARD_LOG_SCOPE);
 }
 
 async function getHandleOwner(handle: string): Promise<string | null> {
@@ -63,7 +64,7 @@ async function getHandleOwner(handle: string): Promise<string | null> {
       return typeof owner === "string" && owner.trim().length > 0 ? owner : null;
     } catch (error) {
       logger.warn("Failed to read email handle owner from Redis, falling back to kvStore.", {
-        scope: "travelAssistant/emailForwardSetupStore",
+        scope: EMAIL_FORWARD_LOG_SCOPE,
         handle,
         error: error instanceof Error ? error.message : "unknown",
       });
@@ -239,15 +240,51 @@ async function ensureUserHandleMeta(userId: string, patch?: Partial<EmailHandleM
 }
 
 async function ensureForwardHandle(userId: string): Promise<string> {
+  logger.info("ensureForwardHandle called", {
+    scope: EMAIL_FORWARD_LOG_SCOPE,
+    userId,
+  });
   const existing = await kvStoreGet<string>(userHandleKey(userId), { userId: EMAIL_HANDLE_SYSTEM_NAMESPACE });
   if (typeof existing === "string" && existing.trim().length > 0) {
     const sanitized = sanitizeHandle(existing);
     if (sanitized.length > 0) {
       const owner = await getHandleOwner(sanitized);
       if (!owner || owner === userId) {
-        await setHandleOwner(sanitized, userId);
+        const ownerMappingKey = toSystemNamespaceKey(handleOwnerKey(sanitized));
+        logger.info("ensureForwardHandle writing owner mapping", {
+          scope: EMAIL_FORWARD_LOG_SCOPE,
+          userId,
+          handle: sanitized,
+          ownerMappingKey,
+        });
+        try {
+          await setHandleOwner(sanitized, userId);
+          logger.info("ensureForwardHandle owner mapping write result", {
+            scope: EMAIL_FORWARD_LOG_SCOPE,
+            userId,
+            handle: sanitized,
+            ownerMappingKey,
+            writeSucceeded: true,
+          });
+        } catch (error) {
+          logger.error("ensureForwardHandle owner mapping write result", {
+            scope: EMAIL_FORWARD_LOG_SCOPE,
+            userId,
+            handle: sanitized,
+            ownerMappingKey,
+            writeSucceeded: false,
+            error: error instanceof Error ? error.message : "unknown",
+          });
+          throw error;
+        }
         await kvStoreSet(userHandleKey(userId), sanitized, { userId: EMAIL_HANDLE_SYSTEM_NAMESPACE });
         await ensureUserHandleMeta(userId);
+        logger.info("ensureForwardHandle resolved handle", {
+          scope: EMAIL_FORWARD_LOG_SCOPE,
+          userId,
+          handle: sanitized,
+          source: "existing-user-handle",
+        });
         return sanitized;
       }
     }
@@ -256,9 +293,41 @@ async function ensureForwardHandle(userId: string): Promise<string> {
   const localPart = await resolvePrimaryEmailLocalPart(userId);
   const baseHandle = sanitizeAutoUsernamePart(localPart ?? "") || "traveler";
   const claimed = await claimHandleForUser(userId, baseHandle);
-  await setHandleOwner(claimed, userId);
+  const ownerMappingKey = toSystemNamespaceKey(handleOwnerKey(claimed));
+  logger.info("ensureForwardHandle writing owner mapping", {
+    scope: EMAIL_FORWARD_LOG_SCOPE,
+    userId,
+    handle: claimed,
+    ownerMappingKey,
+  });
+  try {
+    await setHandleOwner(claimed, userId);
+    logger.info("ensureForwardHandle owner mapping write result", {
+      scope: EMAIL_FORWARD_LOG_SCOPE,
+      userId,
+      handle: claimed,
+      ownerMappingKey,
+      writeSucceeded: true,
+    });
+  } catch (error) {
+    logger.error("ensureForwardHandle owner mapping write result", {
+      scope: EMAIL_FORWARD_LOG_SCOPE,
+      userId,
+      handle: claimed,
+      ownerMappingKey,
+      writeSucceeded: false,
+      error: error instanceof Error ? error.message : "unknown",
+    });
+    throw error;
+  }
   await kvStoreSet(userHandleKey(userId), claimed, { userId: EMAIL_HANDLE_SYSTEM_NAMESPACE });
   await ensureUserHandleMeta(userId, { lastCustomChangeAt: null });
+  logger.info("ensureForwardHandle resolved handle", {
+    scope: EMAIL_FORWARD_LOG_SCOPE,
+    userId,
+    handle: claimed,
+    source: "newly-claimed-handle",
+  });
   return claimed;
 }
 
@@ -379,13 +448,37 @@ async function repairHandleOwnerMapping(handle: string): Promise<string | null> 
 export async function resolveUserIdByForwardAddress(addressLike: string): Promise<string | null> {
   const handle = extractHandleFromForwardAddress(addressLike);
   if (!handle) {
+    logger.info("resolveUserIdByForwardAddress handle parse failed", {
+      scope: EMAIL_FORWARD_LOG_SCOPE,
+      addressLike,
+    });
     return null;
   }
+  const ownerLookupKey = toSystemNamespaceKey(handleOwnerKey(handle));
+  logger.info("resolveUserIdByForwardAddress owner lookup", {
+    scope: EMAIL_FORWARD_LOG_SCOPE,
+    addressLike,
+    handle,
+    ownerLookupKey,
+  });
   const userId = await getHandleOwner(handle);
+  logger.info("resolveUserIdByForwardAddress owner lookup result", {
+    scope: EMAIL_FORWARD_LOG_SCOPE,
+    handle,
+    ownerLookupKey,
+    foundUserId: userId,
+  });
   if (userId) {
     return userId;
   }
-  return await repairHandleOwnerMapping(handle);
+  const repairedUserId = await repairHandleOwnerMapping(handle);
+  logger.info("resolveUserIdByForwardAddress repair result", {
+    scope: EMAIL_FORWARD_LOG_SCOPE,
+    handle,
+    ownerLookupKey,
+    repairedUserId,
+  });
+  return repairedUserId;
 }
 
 export async function markGmailPromptSeen(userId: string): Promise<void> {
