@@ -30,13 +30,13 @@ function buildEnvBackedIntegrationHealth(args: {
 export async function GET() {
   const kv = getKvIntegrationHealth();
   const integrations = {
-    vercelKv: {
+    upstashRedis: {
       status: kv.configured ? "ok" : "degraded",
       configured: kv.configured,
       mode: kv.mode,
       message: kv.configured
-        ? "Vercel KV credentials are configured."
-        : "KV credentials missing; using in-memory fallback store.",
+        ? "Upstash Redis credentials are configured."
+        : "Upstash credentials missing; using in-memory fallback store.",
       missingEnvKeys: kv.missingEnvKeys,
     } satisfies IntegrationHealth,
     aviationStack: buildEnvBackedIntegrationHealth({

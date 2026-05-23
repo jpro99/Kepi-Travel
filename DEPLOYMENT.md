@@ -15,15 +15,15 @@ This guide covers production deployment for the **Kepi premium adaptive travel e
 
 > `vercel.json` in this repository also defines these commands for consistency.
 
-## 2) Create and link a Vercel KV store
+## 2) Create and link an Upstash Redis store
 
 1. In Vercel dashboard, open your project.
-2. Go to **Storage** → **Create Database** → **KV**.
-3. Create the KV instance in the same region group as your app.
-4. Click **Connect Project** and select this project.
+2. Go to **Storage / Marketplace** and install an **Upstash Redis** integration.
+3. Create the Redis instance in the same region group as your app.
+4. Connect the integration to this project.
 5. Copy the generated values into project environment variables:
-   - `KV_REST_API_URL`
-   - `KV_REST_API_TOKEN`
+   - `UPSTASH_REDIS_REST_URL`
+   - `UPSTASH_REDIS_REST_TOKEN`
 
 ## 3) Add environment variables from `.env.example`
 
@@ -105,5 +105,5 @@ PLAYWRIGHT_BASE_URL="https://kepi-search-git-<branch>-<team>.vercel.app" npm run
 - [ ] `npm run test:adapters`
 - [ ] `npm run build`
 - [ ] Vercel env vars configured
-- [ ] KV connected and keys set
+- [ ] Upstash Redis connected and keys set
 - [ ] Clerk/Inngest/AviationStack/Sentry keys configured

@@ -1,7 +1,7 @@
 import type { BillingPlanId, BillingStatusPlan } from "@/lib/billing/plans";
-import { kv } from "@vercel/kv";
 import { invalidateCachedBillingStatus } from "@/lib/billing/billingStatusCache";
 import { logger } from "@/lib/logger";
+import { getSafeRedisClient, hasRedisEnvConfig } from "@/lib/redis";
 import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 
 const SUBSCRIPTION_KEY = "subscription";
@@ -10,6 +10,10 @@ const STRIPE_CUSTOMER_OWNER_PREFIX = "stripe-customer-owner";
 const BILLING_PLAN_MIRROR_KEY_PREFIX = "billing:plan:clerk_";
 const USER_LIFETIME_MIRROR_KEY_PREFIX = "user:lifetime:";
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+function getBillingRedis() {
+  return getSafeRedisClient("billing/subscriptionStore");
+}
 
 export interface BillingSubscriptionRecord {
   plan: BillingPlanId;
@@ -69,10 +73,11 @@ export function isSubscriptionActive(record: BillingSubscriptionRecord): boolean
 
 export async function getSubscriptionRecord(userId: string): Promise<BillingSubscriptionRecord> {
   const normalizedUserId = normalizeClerkUserIdForStorage(userId);
+  const billingRedis = getBillingRedis();
   let stored: unknown = null;
-  if (isKvConfigured()) {
+  if (hasRedisEnvConfig() && billingRedis) {
     try {
-      stored = await kv.get<unknown>(getSubscriptionStorageKey(normalizedUserId));
+      stored = await billingRedis.get<unknown>(getSubscriptionStorageKey(normalizedUserId));
     } catch (error) {
       logger.warn("Subscription KV get failed. Falling back to namespaced KV store.", {
         scope: "billing/subscriptionStore",
@@ -89,10 +94,11 @@ export async function getSubscriptionRecord(userId: string): Promise<BillingSubs
 
 export async function setSubscriptionRecord(userId: string, record: BillingSubscriptionRecord): Promise<void> {
   const normalizedUserId = normalizeClerkUserIdForStorage(userId);
-  if (isKvConfigured()) {
+  const billingRedis = getBillingRedis();
+  if (hasRedisEnvConfig() && billingRedis) {
     try {
       await Promise.all([
-        kv.set(getSubscriptionStorageKey(normalizedUserId), record),
+        billingRedis.set(getSubscriptionStorageKey(normalizedUserId), record),
         setLifetimePlanMirrors(normalizedUserId, record),
       ]);
     } catch (error) {
@@ -129,9 +135,10 @@ export function getUserLifetimeMirrorKey(userId: string): string {
 
 export async function getRawSubscriptionRecordForDebug(userId: string): Promise<unknown> {
   const normalizedUserId = normalizeClerkUserIdForStorage(userId);
-  if (isKvConfigured()) {
+  const billingRedis = getBillingRedis();
+  if (hasRedisEnvConfig() && billingRedis) {
     try {
-      return (await kv.get<unknown>(getSubscriptionStorageKey(normalizedUserId))) ?? null;
+      return (await billingRedis.get<unknown>(getSubscriptionStorageKey(normalizedUserId))) ?? null;
     } catch (error) {
       logger.warn("Raw subscription KV get failed. Falling back to namespaced KV store.", {
         scope: "billing/subscriptionStore",
@@ -152,11 +159,12 @@ export async function getLifetimeMirrorStatus(userId: string): Promise<{
   const normalizedUserId = normalizeClerkUserIdForStorage(userId);
   const billingPlanMirrorKey = getBillingPlanMirrorKey(normalizedUserId);
   const userLifetimeMirrorKey = getUserLifetimeMirrorKey(normalizedUserId);
-  if (isKvConfigured()) {
+  const billingRedis = getBillingRedis();
+  if (hasRedisEnvConfig() && billingRedis) {
     try {
       const [billingPlanMirrorRaw, userLifetimeMirrorRaw] = await Promise.all([
-        kv.get<unknown>(billingPlanMirrorKey),
-        kv.get<unknown>(userLifetimeMirrorKey),
+        billingRedis.get<unknown>(billingPlanMirrorKey),
+        billingRedis.get<unknown>(userLifetimeMirrorKey),
       ]);
       return {
         billingPlanMirrorRaw: billingPlanMirrorRaw ?? null,
@@ -210,10 +218,6 @@ export async function extendSubscriptionProAccess(userId: string, days: number):
   return nextRecord;
 }
 
-function isKvConfigured(): boolean {
-  return Boolean(process.env.KV_REST_API_URL?.trim() && process.env.KV_REST_API_TOKEN?.trim());
-}
-
 function normalizeClerkUserIdForStorage(userId: string): string {
   const normalized = userId.trim();
   if (!normalized) {
@@ -231,20 +235,22 @@ function extractUserIdFromSubscriptionKey(key: string): string | null {
 }
 
 export async function listExpiredTrialUserIds(limit = 1000): Promise<string[]> {
-  if (!isKvConfigured()) {
+  const billingRedis = getBillingRedis();
+  if (!hasRedisEnvConfig() || !billingRedis) {
     return [];
   }
   try {
     const userIds: string[] = [];
     const seen = new Set<string>();
     const nowMs = Date.now();
-    for await (const key of kv.scanIterator({ match: "kepi:*:subscription" })) {
+    const keys = await billingRedis.keys("kepi:*:subscription");
+    for (const key of keys) {
       const keyString = String(key);
       const userId = extractUserIdFromSubscriptionKey(keyString);
       if (!userId || userId.startsWith("__") || seen.has(userId)) {
         continue;
       }
-      const stored = await kv.get<unknown>(keyString);
+      const stored = await billingRedis.get<unknown>(keyString);
       const record = sanitizeRecord(stored);
       if (
         record.plan === "pro" &&
@@ -294,11 +300,12 @@ async function setLifetimePlanMirrors(userId: string, record: BillingSubscriptio
   const nowMs = Date.now();
   const billingPlanMirrorValue = resolvePlanMirrorValue(record, nowMs);
   const userLifetimeMirrorValue = record.lifetimePlan;
-  if (isKvConfigured()) {
+  const billingRedis = getBillingRedis();
+  if (hasRedisEnvConfig() && billingRedis) {
     try {
       await Promise.all([
-        kv.set(billingPlanMirrorKey, billingPlanMirrorValue),
-        kv.set(userLifetimeMirrorKey, userLifetimeMirrorValue),
+        billingRedis.set(billingPlanMirrorKey, billingPlanMirrorValue),
+        billingRedis.set(userLifetimeMirrorKey, userLifetimeMirrorValue),
       ]);
       return;
     } catch (error) {

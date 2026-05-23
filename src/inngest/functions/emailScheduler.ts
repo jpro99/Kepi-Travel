@@ -1,5 +1,5 @@
-import { kv } from "@vercel/kv";
 import { inngest } from "@/inngest/client";
+import { getSafeRedisClient, hasRedisEnvConfig } from "@/lib/redis";
 import {
   sendDocumentExpiryAlert,
   sendTripSummaryForUpcomingDeparture,
@@ -15,16 +15,21 @@ const USER_NAMESPACE_KEY_PATTERN = /^kepi:([^:]+):/u;
 const DEFAULT_USER_SCAN_LIMIT = 1000;
 
 function isKvConfigured(): boolean {
-  return Boolean(process.env.KV_REST_API_URL?.trim() && process.env.KV_REST_API_TOKEN?.trim());
+  return hasRedisEnvConfig();
 }
 
 async function discoverUsersWithTrips(limit = DEFAULT_USER_SCAN_LIMIT): Promise<string[]> {
   if (!isKvConfigured()) {
     return [];
   }
+  const redis = getSafeRedisClient("inngest/emailScheduler");
+  if (!redis) {
+    return [];
+  }
   const userIds = new Set<string>();
   try {
-    for await (const key of kv.scanIterator({ match: "kepi:*:trips" })) {
+    const keys = await redis.keys("kepi:*:trips");
+    for (const key of keys) {
       const match = USER_NAMESPACE_KEY_PATTERN.exec(String(key));
       const userId = match?.[1];
       if (userId && !userId.startsWith("__")) {

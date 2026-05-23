@@ -1,4 +1,3 @@
-import { kv } from "@vercel/kv";
 import { getSafeRedisClient, hasRedisEnvConfig } from "@/lib/redis";
 import { getKvUserContextUserId } from "@/lib/travelAssistant/kvUserContext";
 import { logger } from "@/lib/logger";
@@ -9,28 +8,18 @@ const fallbackStore = new Map<string, unknown>();
 let missingEnvWarningLogged = false;
 let startupValidationLogged = false;
 
-const KV_REQUIRED_ENV_KEYS = ["KV_REST_API_URL", "KV_REST_API_TOKEN"] as const;
 const UPSTASH_REQUIRED_ENV_KEYS = ["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"] as const;
-
-function isKvConfigured(): boolean {
-  return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
-}
 
 function getUpstashRedis() {
   return getSafeRedisClient("travelAssistant/kvStore");
 }
 
 function hasAnyRedisConfig(): boolean {
-  return isKvConfigured() || hasRedisEnvConfig();
+  return hasRedisEnvConfig();
 }
 
 function missingKvEnvKeys(): string[] {
-  const missingKvKeys = KV_REQUIRED_ENV_KEYS.filter((key) => !process.env[key]?.trim());
-  const missingUpstashKeys = UPSTASH_REQUIRED_ENV_KEYS.filter((key) => !process.env[key]?.trim());
-  if (missingKvKeys.length === KV_REQUIRED_ENV_KEYS.length) {
-    return [...missingKvKeys, ...missingUpstashKeys];
-  }
-  return missingKvKeys;
+  return UPSTASH_REQUIRED_ENV_KEYS.filter((key) => !process.env[key]?.trim());
 }
 
 function cloneValue<T>(value: T): T {
@@ -87,15 +76,11 @@ function validateKvConfigurationAtStartup(): void {
 
 export function getKvIntegrationHealth(): {
   configured: boolean;
-  mode: "vercel-kv" | "upstash-redis" | "memory-fallback";
+  mode: "upstash-redis" | "memory-fallback";
   missingEnvKeys: string[];
 } {
-  const configured = hasAnyRedisConfig();
-  const mode: "vercel-kv" | "upstash-redis" | "memory-fallback" = getUpstashRedis()
-    ? "upstash-redis"
-    : isKvConfigured()
-      ? "vercel-kv"
-      : "memory-fallback";
+  const configured = Boolean(getUpstashRedis());
+  const mode: "upstash-redis" | "memory-fallback" = configured ? "upstash-redis" : "memory-fallback";
   return {
     configured,
     mode,
@@ -110,16 +95,13 @@ export async function kvStoreGet<T>(
   const upstashRedis = getUpstashRedis();
   const userNamespace = await resolveUserNamespace(options?.userId);
   const namespacedKey = toNamespacedKey(key, userNamespace);
-  if (!hasAnyRedisConfig()) {
+  if (!hasAnyRedisConfig() || !upstashRedis) {
     warnMissingKvEnv("runtime");
     if (!fallbackStore.has(namespacedKey)) return null;
     return cloneValue(fallbackStore.get(namespacedKey) as T);
   }
   try {
-    if (upstashRedis) {
-      return (await upstashRedis.get<T>(namespacedKey)) ?? null;
-    }
-    return (await kv.get<T>(namespacedKey)) ?? null;
+    return (await upstashRedis.get<T>(namespacedKey)) ?? null;
   } catch (error) {
     logger.warn("KV get failed. Falling back to in-memory snapshot when available.", {
       scope: "travelAssistant/kvStore",
@@ -141,17 +123,13 @@ export async function kvStoreSet<T>(
   const upstashRedis = getUpstashRedis();
   const userNamespace = await resolveUserNamespace(options?.userId);
   const namespacedKey = toNamespacedKey(key, userNamespace);
-  if (!hasAnyRedisConfig()) {
+  if (!hasAnyRedisConfig() || !upstashRedis) {
     warnMissingKvEnv("runtime");
     fallbackStore.set(namespacedKey, cloneValue(value));
     return;
   }
   try {
-    if (upstashRedis) {
-      await upstashRedis.set(namespacedKey, value);
-      return;
-    }
-    await kv.set(namespacedKey, value);
+    await upstashRedis.set(namespacedKey, value);
   } catch (error) {
     logger.warn("KV set failed. Persisting in-memory fallback value.", {
       scope: "travelAssistant/kvStore",
@@ -170,18 +148,14 @@ export async function kvStoreSetNx<T>(
   const upstashRedis = getUpstashRedis();
   const userNamespace = await resolveUserNamespace(options?.userId);
   const namespacedKey = toNamespacedKey(key, userNamespace);
-  if (!hasAnyRedisConfig()) {
+  if (!hasAnyRedisConfig() || !upstashRedis) {
     warnMissingKvEnv("runtime");
     if (fallbackStore.has(namespacedKey)) return false;
     fallbackStore.set(namespacedKey, cloneValue(value));
     return true;
   }
   try {
-    if (upstashRedis) {
-      const result = await upstashRedis.set(namespacedKey, value, { nx: true });
-      return result === "OK";
-    }
-    const result = await kv.set(namespacedKey, value, { nx: true });
+    const result = await upstashRedis.set(namespacedKey, value, { nx: true });
     return result === "OK";
   } catch (error) {
     logger.warn("KV setNX failed. Falling back to in-memory setNX.", {
@@ -199,17 +173,13 @@ export async function kvStoreDel(key: string, options?: { userId?: string }): Pr
   const upstashRedis = getUpstashRedis();
   const userNamespace = await resolveUserNamespace(options?.userId);
   const namespacedKey = toNamespacedKey(key, userNamespace);
-  if (!hasAnyRedisConfig()) {
+  if (!hasAnyRedisConfig() || !upstashRedis) {
     warnMissingKvEnv("runtime");
     fallbackStore.delete(namespacedKey);
     return;
   }
   try {
-    if (upstashRedis) {
-      await upstashRedis.del(namespacedKey);
-      return;
-    }
-    await kv.del(namespacedKey);
+    await upstashRedis.del(namespacedKey);
   } catch (error) {
     logger.warn("KV delete failed. Removing in-memory fallback value.", {
       scope: "travelAssistant/kvStore",
@@ -230,7 +200,7 @@ export async function kvStoreList<T>(
   const matchPattern = `${namespacedPrefix}*`;
   const limit = Math.max(1, options?.limit ?? 100);
 
-  if (!hasAnyRedisConfig()) {
+  if (!hasAnyRedisConfig() || !upstashRedis) {
     warnMissingKvEnv("runtime");
     const entries = Array.from(fallbackStore.entries())
       .filter(([key]) => key.startsWith(namespacedPrefix))
@@ -242,25 +212,11 @@ export async function kvStoreList<T>(
     return entries;
   }
   try {
-    if (upstashRedis) {
-      const keys = (await upstashRedis.keys(matchPattern)).slice(0, limit);
-      return await Promise.all(
-        keys.map(async (key) => ({
-          key,
-          value: (await upstashRedis.get<T>(key)) ?? null,
-        })),
-      );
-    }
-    const keys: string[] = [];
-    for await (const key of kv.scanIterator({ match: matchPattern })) {
-      keys.push(String(key));
-      if (keys.length >= limit) break;
-    }
-
+    const keys = (await upstashRedis.keys(matchPattern)).slice(0, limit);
     const values = await Promise.all(
       keys.map(async (key) => ({
         key,
-        value: (await kv.get<T>(key)) ?? null,
+        value: (await upstashRedis.get<T>(key)) ?? null,
       })),
     );
     return values;

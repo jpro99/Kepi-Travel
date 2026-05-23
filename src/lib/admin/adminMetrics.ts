@@ -1,5 +1,4 @@
-import { kv } from "@vercel/kv";
-import { getSafeRedisClient } from "@/lib/redis";
+import { getSafeRedisClient, hasRedisEnvConfig } from "@/lib/redis";
 import { logger } from "@/lib/logger";
 import type {
   AdminBackgroundJobRun,
@@ -48,7 +47,7 @@ interface AnalyticsEventRecord {
   properties?: Record<string, unknown>;
 }
 
-const KV_CONFIGURED = Boolean(process.env.KV_REST_API_URL?.trim() && process.env.KV_REST_API_TOKEN?.trim());
+const KV_CONFIGURED = hasRedisEnvConfig();
 
 function getUsageRedis() {
   return getSafeRedisClient("admin/adminMetrics");
@@ -66,14 +65,12 @@ async function scanKvKeys(match: string, limit = 5000): Promise<string[]> {
   if (!KV_CONFIGURED) {
     return [];
   }
-  const keys: string[] = [];
+  const usageRedis = getUsageRedis();
+  if (!usageRedis) {
+    return [];
+  }
   try {
-    for await (const key of kv.scanIterator({ match })) {
-      keys.push(String(key));
-      if (keys.length >= limit) {
-        break;
-      }
-    }
+    return (await usageRedis.keys(match)).slice(0, limit);
   } catch (error) {
     logger.warn("Failed to scan KV keys for admin metrics.", {
       scope: "admin/adminMetrics",
@@ -81,7 +78,7 @@ async function scanKvKeys(match: string, limit = 5000): Promise<string[]> {
       error,
     });
   }
-  return keys;
+  return [];
 }
 
 async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
@@ -99,10 +96,14 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
 
 async function collectBackgroundRuns(limit = 10): Promise<AdminBackgroundJobRun[]> {
   const stateKeys = await scanKvKeys("kepi:*:travel/background-state/default");
+  const usageRedis = getUsageRedis();
+  if (!usageRedis) {
+    return [];
+  }
   const runs: AdminBackgroundJobRun[] = [];
   for (const key of stateKeys) {
     try {
-      const value = (await kv.get<BackgroundStateRecord>(key)) ?? null;
+      const value = (await usageRedis.get<BackgroundStateRecord>(key)) ?? null;
       const lastRun = value?.lastRun;
       if (!lastRun?.runId || !lastRun.startedAt) {
         continue;
@@ -131,32 +132,33 @@ async function collectBackgroundRuns(limit = 10): Promise<AdminBackgroundJobRun[
 }
 
 async function measureKvHealth(): Promise<AdminHealthResponse["services"]["kv"]> {
-  if (!KV_CONFIGURED) {
+  const usageRedis = getUsageRedis();
+  if (!KV_CONFIGURED || !usageRedis) {
     return {
       status: "yellow",
       latencyMs: null,
-      detail: "KV is not configured in this environment.",
+      detail: "Upstash Redis is not configured in this environment.",
     };
   }
 
   const pingKey = `kepi:admin:health-ping:${Date.now()}`;
   const startedAtMs = Date.now();
   try {
-    await kv.set(pingKey, "ok");
-    await kv.get(pingKey);
-    await kv.del(pingKey);
+    await usageRedis.set(pingKey, "ok");
+    await usageRedis.get(pingKey);
+    await usageRedis.del(pingKey);
     const latencyMs = Math.max(1, Date.now() - startedAtMs);
     const status: AdminServiceStatus = latencyMs < 250 ? "green" : latencyMs < 1000 ? "yellow" : "red";
     return {
       status,
       latencyMs,
-      detail: `KV round-trip latency ${latencyMs}ms.`,
+      detail: `Upstash Redis round-trip latency ${latencyMs}ms.`,
     };
   } catch (error) {
     return {
       status: "red",
       latencyMs: null,
-      detail: `KV ping failed: ${error instanceof Error ? error.message : "unknown error"}`,
+      detail: `Upstash Redis ping failed: ${error instanceof Error ? error.message : "unknown error"}`,
     };
   }
 }
@@ -302,12 +304,16 @@ async function collectActiveUserStats(): Promise<AdminStatsResponse["activeUsers
 
 async function collectRecentAlerts(limit = 20): Promise<AdminRecentAlertEntry[]> {
   const alertAuditKeys = await scanKvKeys("kepi:*:travel/ops-alert-audit/default");
+  const usageRedis = getUsageRedis();
+  if (!usageRedis) {
+    return [];
+  }
   const entries: AdminRecentAlertEntry[] = [];
   for (const key of alertAuditKeys) {
     const userId = extractUserIdFromKepiKey(key);
     if (!userId) continue;
     try {
-      const value = (await kv.get<AlertAuditRecord>(key)) ?? null;
+      const value = (await usageRedis.get<AlertAuditRecord>(key)) ?? null;
       const sweeps = value?.sweeps ?? [];
       for (const sweep of sweeps) {
         const alerts = sweep.alerts ?? [];
@@ -423,6 +429,19 @@ async function collectInsightsStats(
   const disruptionCounts = new Map<string, number>();
   const activeUsersFromEvents = new Set<string>();
   const sevenDaysAgoMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const usageRedis = getUsageRedis();
+  if (!usageRedis) {
+    return {
+      totalUsers: 0,
+      activeUsersLast7Days: activeUsers.activeSessionUsers,
+      proSubscribers: 0,
+      totalTrips: 0,
+      averageReservationsPerTrip: 0,
+      conversionRateFreeToPro: 0,
+      topDestinations: [],
+      commonDisruptions: [],
+    };
+  }
 
   let totalTrips = 0;
   let totalReservations = 0;
@@ -434,7 +453,7 @@ async function collectInsightsStats(
       totalUsers.add(userId);
     }
     try {
-      const value = await kv.get<unknown>(key);
+      const value = await usageRedis.get<unknown>(key);
       if (!Array.isArray(value)) {
         continue;
       }
@@ -462,7 +481,7 @@ async function collectInsightsStats(
       totalUsers.add(userId);
     }
     try {
-      const record = (await kv.get<SubscriptionRecord>(key)) ?? null;
+      const record = (await usageRedis.get<SubscriptionRecord>(key)) ?? null;
       if (!record || record.plan === "free") continue;
       const validUntilMs = record.validUntil ? Date.parse(record.validUntil) : Number.NaN;
       if (!record.validUntil || Number.isNaN(validUntilMs) || validUntilMs > Date.now()) {
@@ -479,7 +498,7 @@ async function collectInsightsStats(
 
   for (const key of analyticsEventKeys) {
     try {
-      const record = (await kv.get<AnalyticsEventRecord>(key)) ?? null;
+      const record = (await usageRedis.get<AnalyticsEventRecord>(key)) ?? null;
       if (!record || typeof record.createdAt !== "string") {
         continue;
       }

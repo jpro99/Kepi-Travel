@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { kv } from "@vercel/kv";
 import { isAdminUserId, resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { invalidateCachedBillingStatus } from "@/lib/billing/billingStatusCache";
 import {
@@ -9,6 +8,7 @@ import {
 } from "@/lib/billing/subscriptionStore";
 import { logger } from "@/lib/logger";
 import { enforceRateLimit } from "@/lib/rateLimit";
+import { getSafeRedisClient } from "@/lib/redis";
 import { generateId } from "@/lib/utils/generateId";
 
 export const runtime = "nodejs";
@@ -55,12 +55,22 @@ export async function GET(req: Request) {
     lifetimePlan: true,
     redeemedAt: new Date().toISOString(),
   } as const;
+  const redis = getSafeRedisClient("api/admin/fix-my-plan");
+  if (!redis) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Redis is not configured. Please verify UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN.",
+      },
+      { status: 503, headers: rateLimit.headers },
+    );
+  }
 
   try {
     await Promise.all([
-      kv.set(subscriptionStorageKey, payload),
-      kv.set(billingPlanMirrorKey, "lifetime"),
-      kv.set(userLifetimeMirrorKey, true),
+      redis.set(subscriptionStorageKey, payload),
+      redis.set(billingPlanMirrorKey, "lifetime"),
+      redis.set(userLifetimeMirrorKey, true),
     ]);
   } catch (error) {
     routeLogger.error("Admin fix-my-plan failed to write KV records.", {

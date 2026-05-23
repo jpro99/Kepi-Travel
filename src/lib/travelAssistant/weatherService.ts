@@ -1,7 +1,7 @@
 import "server-only";
 
-import { kv } from "@vercel/kv";
 import { logger } from "@/lib/logger";
+import { getSafeRedisClient, hasRedisEnvConfig } from "@/lib/redis";
 
 const WEATHER_CACHE_TTL_SECONDS = 60 * 60 * 3;
 const WEATHER_FALLBACK: WeatherForecast = {
@@ -37,7 +37,7 @@ type CacheEnvelope = {
 const memoryCache = new Map<string, CacheEnvelope>();
 
 function isKvConfigured(): boolean {
-  return Boolean(process.env.KV_REST_API_URL?.trim() && process.env.KV_REST_API_TOKEN?.trim());
+  return hasRedisEnvConfig();
 }
 
 function normalizeCity(city: string): string {
@@ -115,9 +115,13 @@ async function getCachedWeather(cacheKey: string, nowMs = Date.now()): Promise<W
   if (!isKvConfigured()) {
     return null;
   }
+  const redis = getSafeRedisClient("travelAssistant/weatherService");
+  if (!redis) {
+    return null;
+  }
 
   try {
-    return (await kv.get<WeatherForecast>(cacheKey)) ?? null;
+    return (await redis.get<WeatherForecast>(cacheKey)) ?? null;
   } catch (error) {
     logger.warn("Weather cache read failed; falling back to live fetch.", {
       scope: "travelAssistant/weatherService",
@@ -134,8 +138,12 @@ async function setCachedWeather(cacheKey: string, value: WeatherForecast): Promi
   if (!isKvConfigured()) {
     return;
   }
+  const redis = getSafeRedisClient("travelAssistant/weatherService");
+  if (!redis) {
+    return;
+  }
   try {
-    await kv.set(cacheKey, value, { ex: WEATHER_CACHE_TTL_SECONDS });
+    await redis.set(cacheKey, value, { ex: WEATHER_CACHE_TTL_SECONDS });
   } catch (error) {
     logger.warn("Weather cache write failed.", {
       scope: "travelAssistant/weatherService",

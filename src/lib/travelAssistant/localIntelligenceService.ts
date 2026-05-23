@@ -1,8 +1,8 @@
 import "server-only";
 
 import Anthropic from "@anthropic-ai/sdk";
-import { kv } from "@vercel/kv";
 import { logger } from "@/lib/logger";
+import { getSafeRedisClient, hasRedisEnvConfig } from "@/lib/redis";
 
 const LOCAL_INTEL_CACHE_TTL_SECONDS = 60 * 60 * 24 * 7;
 const MODEL = "claude-sonnet-4-20250514";
@@ -39,7 +39,7 @@ type CacheEnvelope = {
 const memoryCache = new Map<string, CacheEnvelope>();
 
 function isKvConfigured(): boolean {
-  return Boolean(process.env.KV_REST_API_URL?.trim() && process.env.KV_REST_API_TOKEN?.trim());
+  return hasRedisEnvConfig();
 }
 
 function normalizeDestination(destination: string): string {
@@ -112,8 +112,12 @@ async function readCache(key: string, nowMs = Date.now()): Promise<LocalTips | n
   if (!isKvConfigured()) {
     return null;
   }
+  const redis = getSafeRedisClient("travelAssistant/localIntelligenceService");
+  if (!redis) {
+    return null;
+  }
   try {
-    return (await kv.get<LocalTips>(key)) ?? null;
+    return (await redis.get<LocalTips>(key)) ?? null;
   } catch (error) {
     logger.warn("Local intelligence cache read failed.", {
       scope: "travelAssistant/localIntelligenceService",
@@ -132,8 +136,12 @@ async function writeCache(key: string, value: LocalTips): Promise<void> {
   if (!isKvConfigured()) {
     return;
   }
+  const redis = getSafeRedisClient("travelAssistant/localIntelligenceService");
+  if (!redis) {
+    return;
+  }
   try {
-    await kv.set(key, value, { ex: LOCAL_INTEL_CACHE_TTL_SECONDS });
+    await redis.set(key, value, { ex: LOCAL_INTEL_CACHE_TTL_SECONDS });
   } catch (error) {
     logger.warn("Local intelligence cache write failed.", {
       scope: "travelAssistant/localIntelligenceService",

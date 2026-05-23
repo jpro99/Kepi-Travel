@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { kv } from "@vercel/kv";
 import { trackServerEvent } from "@/lib/analytics/trackServerEvent";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import {
@@ -18,6 +17,7 @@ import { CLERK_METADATA_LIFETIME_KEY, CLERK_METADATA_PLAN_KEY } from "@/lib/bill
 import { getInviteCodeRecord, getInviteCodeRedeemedByUser, redeemInviteCode } from "@/lib/invite/inviteCodeStore";
 import { logger } from "@/lib/logger";
 import { enforceRateLimit } from "@/lib/rateLimit";
+import { getSafeRedisClient } from "@/lib/redis";
 import { generateId } from "@/lib/utils/generateId";
 
 export const runtime = "nodejs";
@@ -92,12 +92,15 @@ async function persistInviteDerivedSubscription(args: {
     };
     await setSubscriptionRecord(args.userId, nextRecord);
     const subscriptionStorageKey = getSubscriptionStorageKey(args.userId);
+    const redis = getSafeRedisClient("api/invite/redeem");
     try {
-      await kv.set(subscriptionStorageKey, {
-        plan: "lifetime",
-        lifetimePlan: true,
-        redeemedAt,
-      });
+      if (redis) {
+        await redis.set(subscriptionStorageKey, {
+          plan: "lifetime",
+          lifetimePlan: true,
+          redeemedAt,
+        });
+      }
     } catch {
       // Best effort: setSubscriptionRecord already persists the canonical record.
     }

@@ -14,7 +14,7 @@ It focuses on logistics and trip execution with stage-aware UX (readiness, pre-d
 - React 19 + TypeScript
 - Tailwind CSS
 - Clerk (authentication)
-- Vercel KV (`@vercel/kv`) for persistent state
+- Upstash Redis (`@upstash/redis`) for persistent state
 - Inngest for durable background jobs
 - Playwright + Axe for E2E and accessibility checks
 - Zod for API validation

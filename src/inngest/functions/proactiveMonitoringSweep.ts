@@ -1,6 +1,6 @@
-import { kv } from "@vercel/kv";
 import { inngest } from "@/inngest/client";
 import { logger } from "@/lib/logger";
+import { getSafeRedisClient, hasRedisEnvConfig } from "@/lib/redis";
 import { runProactiveMonitoringPass } from "@/lib/travelAssistant/proactiveAlertService";
 
 function parseUserIdFromKey(key: string): string | null {
@@ -9,12 +9,17 @@ function parseUserIdFromKey(key: string): string | null {
 }
 
 async function listUserIdsWithMonitoring(): Promise<string[]> {
-  if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+  if (!hasRedisEnvConfig()) {
+    return [];
+  }
+  const redis = getSafeRedisClient("inngest/proactiveMonitoringSweep");
+  if (!redis) {
     return [];
   }
   const userIds = new Set<string>();
   try {
-    for await (const rawKey of kv.scanIterator({ match: "kepi:*:concierge-monitoring/*" })) {
+    const keys = await redis.keys("kepi:*:concierge-monitoring/*");
+    for (const rawKey of keys) {
       const key = String(rawKey);
       const userId = parseUserIdFromKey(key);
       if (userId) {

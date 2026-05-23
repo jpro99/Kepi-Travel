@@ -1,12 +1,12 @@
-import { kv } from "@vercel/kv";
 import { inngest } from "@/inngest/client";
+import { getSafeRedisClient, hasRedisEnvConfig } from "@/lib/redis";
 
 const DEFAULT_RUNTIME_STATE_KEY = "travel/runtime-state/default";
 const USER_NAMESPACE_KEY_PATTERN = /^kepi:([^:]+):/;
 const DEFAULT_USER_SCAN_LIMIT = 200;
 
 function isKvConfigured(): boolean {
-  return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+  return hasRedisEnvConfig();
 }
 
 function resolveRuntimeStateKey(): string {
@@ -23,12 +23,17 @@ async function listUsersWithRuntimeState(limit: number): Promise<string[]> {
   if (!isKvConfigured()) {
     return [];
   }
+  const redis = getSafeRedisClient("inngest/reminderLadder");
+  if (!redis) {
+    return [];
+  }
 
   const userIds = new Set<string>();
   const runtimeStateKey = resolveRuntimeStateKey();
   const match = `kepi:*:${runtimeStateKey}`;
   try {
-    for await (const key of kv.scanIterator({ match })) {
+    const keys = await redis.keys(match);
+    for (const key of keys) {
       const matchResult = USER_NAMESPACE_KEY_PATTERN.exec(String(key));
       if (matchResult?.[1]) {
         userIds.add(matchResult[1]);
