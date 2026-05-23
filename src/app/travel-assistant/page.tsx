@@ -764,7 +764,7 @@ function getReservationRouteLabel(reservation: Reservation): string {
 function isOnboardingPlaceholderReservation(reservation: Reservation): boolean {
   const provider = reservation.provider.trim().toLowerCase();
   const notes = reservation.notes.trim().toLowerCase();
-  return provider === "onboarding setup" || notes.includes("created during onboarding.");
+  return provider === "onboarding setup" || notes.includes("created during onboarding");
 }
 
 function isTripDestinationPlaceholder(destination: string | null | undefined): boolean {
@@ -2640,8 +2640,7 @@ export default function TravelAssistantPage() {
   const advancedWorkspaceEnabled = advancedModeEnabled;
   const tripDaysAway = getTripDaysAway(minutesToDeparture);
   const consumerDisplayReservations = useMemo(() => {
-    const nonPlaceholder = reservations.filter((reservation) => !isOnboardingPlaceholderReservation(reservation));
-    return nonPlaceholder.length > 0 ? nonPlaceholder : reservations;
+    return reservations.filter((reservation) => !isOnboardingPlaceholderReservation(reservation));
   }, [reservations]);
   const delayedFlight = useMemo(
     () =>
@@ -3603,12 +3602,13 @@ export default function TravelAssistantPage() {
     [familyMembers, queueMutation, setToast],
   );
 
-  const handleCopyForwardAddress = useCallback(async (): Promise<void> => {
-    if (!emailForwardAddress) {
+  const handleCopyForwardAddress = useCallback(async (address?: string): Promise<void> => {
+    const value = (address ?? emailForwardAddress)?.trim();
+    if (!value) {
       return;
     }
     try {
-      await navigator.clipboard.writeText(emailForwardAddress);
+      await navigator.clipboard.writeText(value);
       setEmailForwardSetupMessage("Forwarding address copied.");
     } catch {
       setEmailForwardSetupMessage("Clipboard unavailable.");
@@ -4913,10 +4913,34 @@ export default function TravelAssistantPage() {
               ) : null}
 
               {consumerReservationsSorted.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                  <p className="font-semibold text-slate-900 dark:text-slate-100">No reservations yet</p>
-                  <p className="mt-1">Forward any booking confirmation email to {emptyStateForwardAddress}</p>
-                  <p className="mt-1">Or tap + to add one manually</p>
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                  <p className="text-xl font-semibold text-slate-900 dark:text-slate-100">No reservations yet</p>
+                  <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-500/40 dark:bg-emerald-500/10">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <code className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
+                        {emptyStateForwardAddress}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void handleCopyForwardAddress(emptyStateForwardAddress);
+                        }}
+                        className="rounded-md border border-emerald-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-emerald-900 transition hover:bg-emerald-100 dark:border-emerald-500/50 dark:bg-slate-900 dark:text-emerald-100 dark:hover:bg-slate-800"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                  <p className="mt-3">
+                    Forward any flight, hotel or booking confirmation email here and it will appear automatically
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setManualReservationModalOpen(true)}
+                    className="mt-4 rounded-lg bg-emerald-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400"
+                  >
+                    Add manually
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-2">
