@@ -114,26 +114,36 @@ async function authorize(req: Request): Promise<
       response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     };
   }
-  const rateLimit = await enforceRateLimit({
-    policyName: "travel-updates-general",
-    identifier: userId,
-    route: "/api/trips",
-    requestId,
-  });
-  if (!rateLimit.allowed) {
+  const isReadOnlyRequest = req.method.toUpperCase() === "GET";
+  if (!isReadOnlyRequest) {
+    const rateLimit = await enforceRateLimit({
+      policyName: "trips-authenticated",
+      identifier: userId,
+      route: "/api/trips",
+      requestId,
+    });
+    if (!rateLimit.allowed) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          { error: "Too many trip requests. Please retry shortly." },
+          { status: 429, headers: rateLimit.headers },
+        ),
+      };
+    }
     return {
-      ok: false,
-      response: NextResponse.json(
-        { error: "Too many trip requests. Please retry shortly." },
-        { status: 429, headers: rateLimit.headers },
-      ),
+      ok: true,
+      userId,
+      requestId,
+      headers: rateLimit.headers,
+      routeLogger,
     };
   }
   return {
     ok: true,
     userId,
     requestId,
-    headers: rateLimit.headers,
+    headers: new Headers(),
     routeLogger,
   };
 }

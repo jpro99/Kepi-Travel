@@ -4,6 +4,7 @@ import { logger } from "@/lib/logger";
 
 type RateLimitPolicyName =
   | "travel-updates-general"
+  | "trips-authenticated"
   | "travel-updates-gmail-import"
   | "push-subscribe"
   | "ai-suggestions"
@@ -25,6 +26,11 @@ const RATE_LIMIT_POLICIES: Record<RateLimitPolicyName, RateLimitPolicy> = {
     limit: 10,
     windowSeconds: 10,
     prefix: "kepi:rl:travel-updates",
+  },
+  "trips-authenticated": {
+    limit: 120,
+    windowSeconds: 60,
+    prefix: "kepi:rl:trips-authenticated",
   },
   "travel-updates-gmail-import": {
     limit: 3,
@@ -78,6 +84,14 @@ function getUpstashLimiterByPolicy(): Partial<Record<RateLimitPolicyName, Rateli
         `${RATE_LIMIT_POLICIES["travel-updates-general"].windowSeconds} s`,
       ),
       prefix: RATE_LIMIT_POLICIES["travel-updates-general"].prefix,
+    }),
+    "trips-authenticated": new Ratelimit({
+      redis: upstashRedis,
+      limiter: Ratelimit.slidingWindow(
+        RATE_LIMIT_POLICIES["trips-authenticated"].limit,
+        `${RATE_LIMIT_POLICIES["trips-authenticated"].windowSeconds} s`,
+      ),
+      prefix: RATE_LIMIT_POLICIES["trips-authenticated"].prefix,
     }),
     "travel-updates-gmail-import": new Ratelimit({
       redis: upstashRedis,

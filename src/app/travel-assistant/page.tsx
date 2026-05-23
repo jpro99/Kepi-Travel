@@ -1816,6 +1816,7 @@ export default function TravelAssistantPage() {
     if (!tripsHydratedRef.current) return;
     if (!activeTripId) return;
     if (applyingTripStateRef.current) return;
+    // Debounce autosave writes to avoid trip PUT bursts.
     const timeout = window.setTimeout(() => {
       void fetch(TRIP_API_ROUTE, {
         method: "PUT",
@@ -1837,7 +1838,7 @@ export default function TravelAssistantPage() {
           setTrips(parsedTrips);
         }
       });
-    }, 500);
+    }, 10_000);
     return () => {
       window.clearTimeout(timeout);
     };
