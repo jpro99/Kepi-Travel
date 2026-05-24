@@ -4035,10 +4035,39 @@ export default function TravelAssistantPage() {
     closeDrawer();
   };
 
+  const normalizeDuplicateValue = (value: string): string => value.trim().toLowerCase();
+
+  const isDuplicateReservation = (reservation: Reservation, draft: ReservationDraft): boolean => {
+    const reservationCode = normalizeDuplicateValue(reservation.confirmationCode);
+    const draftCode = normalizeDuplicateValue(draft.confirmationCode);
+    if (reservationCode.length > 0 && draftCode.length > 0 && reservationCode === draftCode) {
+      return true;
+    }
+    return (
+      normalizeDuplicateValue(reservation.type) === normalizeDuplicateValue(draft.type) &&
+      normalizeDuplicateValue(reservation.provider) === normalizeDuplicateValue(draft.provider) &&
+      normalizeDuplicateValue(reservation.localTime) === normalizeDuplicateValue(draft.localTime) &&
+      normalizeDuplicateValue(reservation.location) === normalizeDuplicateValue(draft.location)
+    );
+  };
+
   const acceptReviewWithDraft = (reviewId: string, draftOverride?: ReservationDraft): void => {
     const target = reviewQueue.find((item) => item.id === reviewId);
     if (!target) return;
     const draft = draftOverride ?? target.draft;
+    const duplicateReservation = reservations.find((reservation) => isDuplicateReservation(reservation, draft));
+    if (duplicateReservation) {
+      pushUndoSnapshot("Duplicate review item skipped");
+      setReviewQueue((prev) => prev.filter((item) => item.id !== reviewId));
+      queueMutation("Duplicate review item skipped.", {
+        key: "review-duplicate-skip",
+        reservationId: duplicateReservation.id,
+      });
+      setToast(
+        `Possible duplicate found (${duplicateReservation.title || duplicateReservation.provider || "existing reservation"}) — skipped this review item.`,
+      );
+      return;
+    }
     const integrity = evaluateReservationIntegrity(draft);
     if (!integrity.safeForLive) {
       setReviewQueue((prev) =>
@@ -4759,6 +4788,18 @@ export default function TravelAssistantPage() {
               className="rounded-lg bg-emerald-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
             >
               Save + accept review
+            </button>
+          ) : null}
+          {activeDrawer.kind === "review" ? (
+            <button
+              type="button"
+              onClick={() => {
+                handleRejectReview(activeDrawer.id);
+                closeDrawer();
+              }}
+              className="rounded-lg bg-slate-700 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-600"
+            >
+              Skip review
             </button>
           ) : null}
         </div>
