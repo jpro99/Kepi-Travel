@@ -824,6 +824,77 @@ function formatBoardingPassClock(value: string): string {
   return timeMatch ?? "--:--";
 }
 
+function formatHotelDate(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "Not set";
+  }
+  const parsed = Date.parse(trimmed);
+  if (!Number.isNaN(parsed)) {
+    return new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(new Date(parsed));
+  }
+  return trimmed;
+}
+
+function resolveHotelCardData(reservation: Reservation): {
+  hotelName: string;
+  checkInDate: string;
+  checkOutDate: string;
+  roomType: string;
+} {
+  const reservationRecord = reservation as Reservation & Record<string, unknown>;
+  const extractString = (...values: unknown[]): string => {
+    for (const value of values) {
+      if (typeof value === "string" && value.trim().length > 0) {
+        return value.trim();
+      }
+    }
+    return "";
+  };
+  const checkOutCandidate = extractString(
+    reservationRecord.checkOutDate,
+    reservationRecord.check_out_date,
+    reservationRecord.checkoutDate,
+    reservationRecord.checkout_date,
+    reservationRecord.checkOut,
+    reservationRecord.check_out,
+    reservationRecord.checkout,
+    reservationRecord.endDate,
+  );
+  const roomTypeCandidate = extractString(
+    reservationRecord.roomType,
+    reservationRecord.room_type,
+    reservationRecord.room,
+    reservationRecord.roomCategory,
+    reservationRecord.room_category,
+  );
+  const roomTypeFromNotes = reservation.notes.match(/room(?:\s*type)?\s*[:\-]\s*([^\n|]+)/iu)?.[1]?.trim() ?? "";
+  return {
+    hotelName: reservation.provider.trim() || reservation.title.trim() || "Hotel",
+    checkInDate: formatHotelDate(reservation.localTime),
+    checkOutDate: formatHotelDate(checkOutCandidate || ""),
+    roomType: roomTypeCandidate || roomTypeFromNotes || "Not set",
+  };
+}
+
+function extractApiErrorMessage(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+  const candidate = payload as Record<string, unknown>;
+  if (typeof candidate.error === "string" && candidate.error.trim().length > 0) {
+    return candidate.error.trim();
+  }
+  if (typeof candidate.message === "string" && candidate.message.trim().length > 0) {
+    return candidate.message.trim();
+  }
+  return null;
+}
+
 function extractFlightLookupInput(reservation: Reservation): {
   flightNumber: string;
   airline: string;
@@ -4368,18 +4439,28 @@ export default function TravelAssistantPage() {
           .then(async (response) => {
             if (!response.ok) {
               let payload: unknown = null;
+              let rawErrorBody = "";
               try {
                 payload = await response.json();
               } catch {
                 payload = null;
+                try {
+                  rawErrorBody = await response.text();
+                } catch {
+                  rawErrorBody = "";
+                }
               }
+              const parsedErrorMessage = extractApiErrorMessage(payload);
+              const responseErrorMessage = parsedErrorMessage || rawErrorBody.trim() || `Request failed with ${response.status}`;
               console.log("[travel-assistant] Delete persistence request failed.", {
                 reservationId,
                 targetTripId,
                 status: response.status,
                 payload,
+                rawErrorBody: rawErrorBody || null,
+                responseErrorMessage,
               });
-              setToast("Failed to persist delete. Please refresh and retry.");
+              setToast(`Delete failed: ${responseErrorMessage}`);
               return;
             }
             const payload = (await response.json()) as {
@@ -6104,12 +6185,15 @@ export default function TravelAssistantPage() {
                             (typeof inlineFlightStatus?.delayMinutes === "number" && inlineFlightStatus.delayMinutes > 0)
                           ? "bg-rose-500/20 text-rose-100 ring-rose-300/60"
                           : "bg-emerald-500/20 text-emerald-100 ring-emerald-300/60";
+                    const hotelData = reservation.type === "hotel" ? resolveHotelCardData(reservation) : null;
                     return (
                       <article
                         key={reservation.id}
                         className={`overflow-hidden rounded-2xl border shadow-sm ${
                           reservation.type === "flight"
                             ? "border-slate-700 bg-slate-950 text-slate-100"
+                            : reservation.type === "hotel"
+                              ? "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-50"
                             : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
                         }`}
                       >
@@ -6170,6 +6254,51 @@ export default function TravelAssistantPage() {
                                 </p>
                               </div>
                             </div>
+                          ) : reservation.type === "hotel" && hotelData ? (
+                            <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-100 via-amber-50 to-white p-4 shadow-[0_12px_30px_-26px_rgba(120,53,15,0.6)] dark:border-amber-400/40 dark:from-amber-500/20 dark:via-amber-500/10 dark:to-slate-900">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="truncate text-lg font-semibold text-amber-950 dark:text-amber-100">
+                                    {hotelData.hotelName}
+                                  </p>
+                                  <p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-200">
+                                    Hotel stay
+                                  </p>
+                                </div>
+                                <span
+                                  className={`max-w-24 rounded-full px-2 py-1 text-center text-[11px] font-semibold leading-tight ${statusMeta.className}`}
+                                >
+                                  <span className="block truncate">{statusMeta.label}</span>
+                                </span>
+                              </div>
+                              <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                                <p className="rounded-lg border border-amber-200 bg-white/70 px-3 py-2 dark:border-amber-400/40 dark:bg-slate-950/50">
+                                  <span className="block uppercase tracking-[0.13em] text-amber-700 dark:text-amber-200">Check-in</span>
+                                  <span className="font-semibold text-amber-950 dark:text-amber-50">{hotelData.checkInDate}</span>
+                                </p>
+                                <p className="rounded-lg border border-amber-200 bg-white/70 px-3 py-2 dark:border-amber-400/40 dark:bg-slate-950/50">
+                                  <span className="block uppercase tracking-[0.13em] text-amber-700 dark:text-amber-200">Check-out</span>
+                                  <span className="font-semibold text-amber-950 dark:text-amber-50">{hotelData.checkOutDate}</span>
+                                </p>
+                              </div>
+                              <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                                <p className="truncate">
+                                  <span className="block uppercase tracking-[0.13em] text-amber-700 dark:text-amber-200">Room type</span>
+                                  <span className="font-semibold text-amber-950 dark:text-amber-50">{hotelData.roomType}</span>
+                                </p>
+                                <p className="truncate text-right">
+                                  <span className="block uppercase tracking-[0.13em] text-amber-700 dark:text-amber-200">
+                                    Confirmation
+                                  </span>
+                                  <span className="font-semibold text-amber-950 dark:text-amber-50">
+                                    {reservation.confirmationCode || "Not set"}
+                                  </span>
+                                </p>
+                              </div>
+                              <p className="mt-3 truncate text-xs text-amber-800 dark:text-amber-100">
+                                {reservation.location || "Location not set"}
+                              </p>
+                            </div>
                           ) : (
                             <div className="flex items-center justify-between gap-3">
                               <div className="min-w-0">
@@ -6193,6 +6322,8 @@ export default function TravelAssistantPage() {
                           className={`flex flex-wrap gap-2 border-t px-4 py-2 text-xs ${
                             reservation.type === "flight"
                               ? "border-slate-700 bg-slate-950/90"
+                              : reservation.type === "hotel"
+                                ? "border-amber-200 bg-amber-100/70 dark:border-amber-500/40 dark:bg-amber-500/5"
                               : "border-slate-200 dark:border-slate-800"
                           }`}
                         >
@@ -6229,6 +6360,8 @@ export default function TravelAssistantPage() {
                             className={`border-t px-4 py-2 text-xs ${
                               reservation.type === "flight"
                                 ? "border-slate-700 bg-slate-950 text-slate-200"
+                                : reservation.type === "hotel"
+                                  ? "border-amber-200 bg-amber-100/50 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100"
                                 : "border-slate-200 text-slate-700 dark:border-slate-800 dark:text-slate-200"
                             }`}
                           >
@@ -6273,6 +6406,8 @@ export default function TravelAssistantPage() {
                             className={`border-t px-4 py-3 text-sm ${
                               reservation.type === "flight"
                                 ? "border-slate-700 bg-slate-950 text-slate-200"
+                                : reservation.type === "hotel"
+                                  ? "border-amber-200 bg-amber-100/60 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100"
                                 : "border-slate-200 text-slate-700 dark:border-slate-800 dark:text-slate-200"
                             }`}
                           >

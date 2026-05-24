@@ -214,6 +214,38 @@ function isDuplicateReservation(
   );
 }
 
+function isDuplicateAgainstReviewQueue(
+  reviewQueue: unknown,
+  candidate: {
+    type?: string;
+    provider?: string;
+    localTime?: string;
+    location?: string;
+    confirmationCode?: string;
+  },
+): boolean {
+  if (!Array.isArray(reviewQueue)) {
+    return false;
+  }
+  return reviewQueue.some((item) => {
+    const reviewItem = asRecord(item);
+    const draft = asRecord(reviewItem?.draft);
+    if (!draft) {
+      return false;
+    }
+    return isDuplicateReservation(
+      {
+        type: typeof draft.type === "string" ? draft.type : "",
+        provider: typeof draft.provider === "string" ? draft.provider : "",
+        localTime: typeof draft.localTime === "string" ? draft.localTime : "",
+        location: typeof draft.location === "string" ? draft.location : "",
+        confirmationCode: typeof draft.confirmationCode === "string" ? draft.confirmationCode : "",
+      },
+      candidate,
+    );
+  });
+}
+
 function extractRecipientCandidates(toValue: unknown): string[] {
   if (typeof toValue === "undefined" || toValue === null) {
     return [];
@@ -573,13 +605,16 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
     const hasMatchingReservation = targetTrip.reservations.some((reservation) =>
       isDuplicateReservation(reservation, parsedReservation),
     );
-    if (hasMatchingReservation) {
+    const hasMatchingQueuedDraft = isDuplicateAgainstReviewQueue(targetTrip.reviewQueue, parsedReservation);
+    if (hasMatchingReservation || hasMatchingQueuedDraft) {
       routeLogger.info("Duplicate forwarded reservation dropped before review queue.", {
         userId: targetUserId,
         tripId: targetTrip.id,
         confirmationCode: parserConfirmationCode || null,
         provider: parserProvider || null,
         localTime: parserLocalTime || null,
+        matchedExistingReservation: hasMatchingReservation,
+        matchedQueuedDraft: hasMatchingQueuedDraft,
       });
       return {
         ok: true,
