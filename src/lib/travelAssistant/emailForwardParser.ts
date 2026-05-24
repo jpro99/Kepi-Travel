@@ -1,9 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { logger } from "@/lib/logger";
 
 const MODEL = "claude-sonnet-4-20250514";
 const HIGH_CONFIDENCE_THRESHOLD = 70;
 const LOW_CONFIDENCE_THRESHOLD = 40;
 const MIN_READABLE_TEXT_LENGTH = 100;
+const EMAIL_FORWARD_PARSER_SCOPE = "travelAssistant/emailForwardParser";
 
 const FIELD_WEIGHTS = {
   type: 15,
@@ -485,8 +487,27 @@ function buildRegexCandidates(input: {
 async function runAiFallback(rawEmailText: string): Promise<CandidateMap> {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) {
+    logger.warn("AI fallback skipped: ANTHROPIC_API_KEY is missing.", {
+      scope: EMAIL_FORWARD_PARSER_SCOPE,
+      rawEmailText,
+      rawEmailTextLength: rawEmailText.length,
+    });
     return {};
   }
+
+  const aiPrompt = [
+    "Extract flight/hotel/train/car reservation details from this email and return as JSON.",
+    "Use keys exactly: type, title, provider, confirmationCode, localTime, timezone, location, notes.",
+    "If unknown, return empty string for that key.",
+    "",
+    rawEmailText,
+  ].join("\n");
+  logger.info("AI fallback request started.", {
+    scope: EMAIL_FORWARD_PARSER_SCOPE,
+    rawEmailText,
+    rawEmailTextLength: rawEmailText.length,
+    aiPrompt,
+  });
 
   try {
     const client = new Anthropic({ apiKey });
@@ -499,13 +520,7 @@ async function runAiFallback(rawEmailText: string): Promise<CandidateMap> {
       messages: [
         {
           role: "user",
-          content: [
-            "Extract flight/hotel/train/car reservation details from this email and return as JSON.",
-            "Use keys exactly: type, title, provider, confirmationCode, localTime, timezone, location, notes.",
-            "If unknown, return empty string for that key.",
-            "",
-            rawEmailText,
-          ].join("\n"),
+          content: aiPrompt,
         },
       ],
     });
@@ -514,8 +529,19 @@ async function runAiFallback(rawEmailText: string): Promise<CandidateMap> {
       .map((block) => block.text)
       .join("\n")
       .trim();
+    logger.info("AI fallback raw response received.", {
+      scope: EMAIL_FORWARD_PARSER_SCOPE,
+      aiResponseRaw: text,
+      aiResponseLength: text.length,
+    });
     return parseAiResponse(text);
-  } catch {
+  } catch (error) {
+    logger.error("AI fallback call failed.", {
+      scope: EMAIL_FORWARD_PARSER_SCOPE,
+      error: error instanceof Error ? error.message : "unknown",
+      rawEmailText,
+      aiPrompt,
+    });
     return {};
   }
 }
@@ -562,6 +588,18 @@ function chooseBodyText(text: string, html: string): { parsedText: string; image
 }
 
 export async function parseForwardedEmail(input: ForwardedEmailParseInput): Promise<ForwardedEmailParseResult> {
+  const rawText = input.text ?? "";
+  const rawHtml = input.html ?? "";
+  logger.info("Email parser received raw input.", {
+    scope: EMAIL_FORWARD_PARSER_SCOPE,
+    rawSubject: input.subject ?? "",
+    rawFrom: input.from ?? "",
+    rawText,
+    rawHtml,
+    rawTextLength: rawText.length,
+    rawHtmlLength: rawHtml.length,
+  });
+
   const subject = normalizeWhitespace(input.subject ?? "");
   const from = normalizeWhitespace(input.from ?? "");
   const text = normalizeWhitespace(input.text ?? "");
@@ -585,13 +623,37 @@ export async function parseForwardedEmail(input: ForwardedEmailParseInput): Prom
   let usedAiFallback = false;
 
   if (!imageBasedEmail && score < HIGH_CONFIDENCE_THRESHOLD) {
+    logger.info("Email parser attempting AI fallback.", {
+      scope: EMAIL_FORWARD_PARSER_SCOPE,
+      scoreBeforeAiFallback: score,
+      threshold: HIGH_CONFIDENCE_THRESHOLD,
+      parsedText,
+      parsedTextLength: parsedText.length,
+    });
     const aiCandidates = await runAiFallback(parsedText);
     if (Object.keys(aiCandidates).length > 0) {
       usedAiFallback = true;
       candidates = mergeCandidates(candidates, aiCandidates);
       score = scoreCandidates(candidates);
       parserNotes.push("Applied AI fallback extraction for low-confidence fields.");
+      logger.info("AI fallback extracted fields.", {
+        scope: EMAIL_FORWARD_PARSER_SCOPE,
+        aiCandidates,
+        scoreAfterAiFallback: score,
+      });
+    } else {
+      logger.warn("AI fallback returned no extractable fields.", {
+        scope: EMAIL_FORWARD_PARSER_SCOPE,
+        scoreBeforeAiFallback: score,
+      });
     }
+  } else {
+    logger.info("AI fallback not attempted.", {
+      scope: EMAIL_FORWARD_PARSER_SCOPE,
+      imageBasedEmail,
+      scoreBeforeAiFallback: score,
+      threshold: HIGH_CONFIDENCE_THRESHOLD,
+    });
   }
 
   const draft = buildDraft(candidates, parserNotes);
@@ -600,6 +662,17 @@ export async function parseForwardedEmail(input: ForwardedEmailParseInput): Prom
   const boundedScore = imageBasedEmail ? Math.min(adjustedScore, 20) : adjustedScore;
   const parsingStatus = statusFromScore(boundedScore);
   const level = confidenceLevel(boundedScore);
+  logger.info("Email parser extracted result.", {
+    scope: EMAIL_FORWARD_PARSER_SCOPE,
+    extractedCandidates: candidates,
+    extractedDraft: draft,
+    missingFields,
+    parserNotes,
+    confidenceScore: boundedScore,
+    confidenceLevel: level,
+    parsingStatus,
+    usedAiFallback,
+  });
 
   return {
     draft,
