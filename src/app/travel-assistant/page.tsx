@@ -4182,6 +4182,25 @@ export default function TravelAssistantPage() {
     queueMutation("Review item archived.");
   };
 
+  const handleSkipReviewAndAdvance = (reviewId: string): void => {
+    const currentIndex = reviewQueue.findIndex((item) => item.id === reviewId);
+    if (currentIndex < 0) {
+      closeDrawer();
+      return;
+    }
+    const nextReview =
+      reviewQueue[currentIndex + 1] ??
+      reviewQueue[currentIndex - 1] ??
+      null;
+
+    handleRejectReview(reviewId);
+    if (nextReview) {
+      openDrawer("review", nextReview.id);
+      return;
+    }
+    closeDrawer();
+  };
+
   const handleReparseReview = (reviewId: string): void => {
     pushUndoSnapshot("Review item re-parsed");
     setReviewQueue((prev) =>
@@ -4794,8 +4813,7 @@ export default function TravelAssistantPage() {
             <button
               type="button"
               onClick={() => {
-                handleRejectReview(activeDrawer.id);
-                closeDrawer();
+                handleSkipReviewAndAdvance(activeDrawer.id);
               }}
               className="rounded-lg bg-slate-700 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-600"
             >

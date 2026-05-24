@@ -56,6 +56,39 @@ function buildPushBody(score: number): string {
   return "We need your help reading a forwarded email";
 }
 
+function normalizeDuplicateValue(value: unknown): string {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function isDuplicateReservation(
+  existing: {
+    type?: string;
+    provider?: string;
+    localTime?: string;
+    location?: string;
+    confirmationCode?: string;
+  },
+  candidate: {
+    type?: string;
+    provider?: string;
+    localTime?: string;
+    location?: string;
+    confirmationCode?: string;
+  },
+): boolean {
+  const existingCode = normalizeDuplicateValue(existing.confirmationCode);
+  const candidateCode = normalizeDuplicateValue(candidate.confirmationCode);
+  if (existingCode.length > 0 && candidateCode.length > 0 && existingCode === candidateCode) {
+    return true;
+  }
+  return (
+    normalizeDuplicateValue(existing.type) === normalizeDuplicateValue(candidate.type) &&
+    normalizeDuplicateValue(existing.provider) === normalizeDuplicateValue(candidate.provider) &&
+    normalizeDuplicateValue(existing.localTime) === normalizeDuplicateValue(candidate.localTime) &&
+    normalizeDuplicateValue(existing.location) === normalizeDuplicateValue(candidate.location)
+  );
+}
+
 function extractRecipientCandidates(toValue: unknown): string[] {
   if (typeof toValue === "undefined" || toValue === null) {
     return [];
@@ -359,15 +392,25 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       notes: parserNotesText,
       source: "imported" as const,
     };
-    const hasMatchingReservation = targetTrip.reservations.some((reservation) => {
-      return (
-        reservation.type === parsedReservation.type &&
-        reservation.title === parsedReservation.title &&
-        reservation.provider === parsedReservation.provider &&
-        reservation.localTime === parsedReservation.localTime &&
-        reservation.confirmationCode === parsedReservation.confirmationCode
-      );
-    });
+    const hasMatchingReservation = targetTrip.reservations.some((reservation) =>
+      isDuplicateReservation(reservation, parsedReservation),
+    );
+    if (hasMatchingReservation) {
+      routeLogger.info("Duplicate forwarded reservation dropped before review queue.", {
+        userId: targetUserId,
+        tripId: targetTrip.id,
+        confirmationCode: parserConfirmationCode || null,
+        provider: parserProvider || null,
+        localTime: parserLocalTime || null,
+      });
+      return {
+        ok: true,
+        status: 200,
+        message: "Duplicate reservation dropped.",
+        userId: targetUserId,
+        tripId: targetTrip.id,
+      };
+    }
     const nextReservations = hasMatchingReservation
       ? targetTrip.reservations
       : [parsedReservation, ...targetTrip.reservations];

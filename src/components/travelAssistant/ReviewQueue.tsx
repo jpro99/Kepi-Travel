@@ -301,8 +301,7 @@ export function ReviewQueue({
 
               {item.imageBasedEmail ? (
                 <p className="mt-2 rounded-md border border-red-500/60 bg-red-500/10 px-2 py-1 text-xs text-red-700 dark:text-red-200">
-                  Image-based email — we could not read this one. Please add this reservation manually or forward a text
-                  version.
+                  Image-based email — please fill in the details below
                 </p>
               ) : null}
 
