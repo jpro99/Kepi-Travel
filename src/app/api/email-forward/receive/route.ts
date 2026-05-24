@@ -298,27 +298,65 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       html: parsed.data.html,
       attachments: parsed.data.attachments,
     });
+    const parserDraftRecord =
+      parserResult?.draft && typeof parserResult.draft === "object"
+        ? (parserResult.draft as Record<string, unknown>)
+        : {};
+    const parserType =
+      parserDraftRecord.type === "flight" ||
+      parserDraftRecord.type === "hotel" ||
+      parserDraftRecord.type === "train" ||
+      parserDraftRecord.type === "ride"
+        ? parserDraftRecord.type
+        : "ride";
+    const parserTitle = typeof parserDraftRecord.title === "string" ? parserDraftRecord.title : "";
+    const parserProvider = typeof parserDraftRecord.provider === "string" ? parserDraftRecord.provider : "";
+    const parserLocalTime = typeof parserDraftRecord.localTime === "string" ? parserDraftRecord.localTime : "";
+    const parserTimezone = typeof parserDraftRecord.timezone === "string" ? parserDraftRecord.timezone : "Etc/UTC";
+    const parserLocation = typeof parserDraftRecord.location === "string" ? parserDraftRecord.location : "";
+    const parserConfirmationCode =
+      typeof parserDraftRecord.confirmationCode === "string" ? parserDraftRecord.confirmationCode : "";
+    const parserNotesText = typeof parserDraftRecord.notes === "string" ? parserDraftRecord.notes : "";
+    const parserAssignedToRaw = parserDraftRecord.assignedTo;
+    const parserAssignedTo = Array.isArray(parserAssignedToRaw)
+      ? parserAssignedToRaw.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+      : [];
+    const parserNotes = Array.isArray(parserResult?.parserNotes)
+      ? parserResult.parserNotes.filter((note): note is string => typeof note === "string" && note.trim().length > 0)
+      : [];
+    const parserMissingFields = Array.isArray(parserResult?.missingFields)
+      ? parserResult.missingFields.filter((field): field is string => typeof field === "string")
+      : [];
+    const parserConfidenceScore = Number.isFinite(parserResult?.confidenceScore) ? parserResult.confidenceScore : 0;
+    const parserParsingStatus =
+      parserResult?.parsingStatus === "auto-parsed" ||
+      parserResult?.parsingStatus === "needs-review" ||
+      parserResult?.parsingStatus === "needs-user-input"
+        ? parserResult.parsingStatus
+        : "needs-review";
+    const parserOriginalEmailText =
+      typeof parserResult?.originalEmailText === "string" ? parserResult.originalEmailText : "";
+    const parserHasPdfAttachment = Boolean(parserResult?.hasPdfAttachment);
+    const parserImageBasedEmail = Boolean(parserResult?.imageBasedEmail);
+    const parserUsedAiFallback = Boolean(parserResult?.usedAiFallback);
 
     const defaultAssignees = Array.from(
       new Set(targetTrip.reservations.flatMap((reservation) => reservation.assignedTo)),
     );
     const parsedReservation = {
       id: `res-email-${generateId()}`,
-      type: parserResult.draft.type,
-      title: parserResult.draft.title,
-      provider: parserResult.draft.provider,
-      localTime: parserResult.draft.localTime,
-      timezone: parserResult.draft.timezone || "Etc/UTC",
-      location: parserResult.draft.location,
-      confirmationCode: parserResult.draft.confirmationCode,
-      assignedTo: parserResult.draft.assignedTo.length > 0 ? parserResult.draft.assignedTo : defaultAssignees,
+      type: parserType,
+      title: parserTitle,
+      provider: parserProvider,
+      localTime: parserLocalTime,
+      timezone: parserTimezone || "Etc/UTC",
+      location: parserLocation,
+      confirmationCode: parserConfirmationCode,
+      assignedTo: parserAssignedTo.length > 0 ? parserAssignedTo : defaultAssignees,
       stage: targetTrip.stage,
-      critical:
-        parserResult.draft.type === "flight" ||
-        parserResult.draft.type === "train" ||
-        parserResult.draft.type === "ride",
-      confidence: confidenceToDraftValue(parserResult.confidenceScore),
-      notes: parserResult.draft.notes,
+      critical: parserType === "flight" || parserType === "train" || parserType === "ride",
+      confidence: confidenceToDraftValue(parserConfidenceScore),
+      notes: parserNotesText,
       source: "imported" as const,
     };
     const hasMatchingReservation = targetTrip.reservations.some((reservation) => {
@@ -337,42 +375,39 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
     const reviewItem = {
       id: `review-email-${generateId()}`,
       reasons:
-        parserResult.parserNotes.length > 0
-          ? parserResult.parserNotes
+        parserNotes.length > 0
+          ? parserNotes
           : ["Forwarded email parsed and queued for confirmation."],
       impact:
-        parserResult.parsingStatus === "needs-user-input"
+        parserParsingStatus === "needs-user-input"
           ? "We need your help with this one"
-          : parserResult.parsingStatus === "needs-review"
+          : parserParsingStatus === "needs-review"
             ? "A few fields need review before publish."
             : "Ready for quick confirmation.",
       sourceEmailSubject: sourceSubject,
       draft: {
-        type: parserResult.draft.type,
-        title: parserResult.draft.title,
-        provider: parserResult.draft.provider,
-        localTime: parserResult.draft.localTime,
-        timezone: parserResult.draft.timezone || "Etc/UTC",
-        location: parserResult.draft.location,
-        confirmationCode: parserResult.draft.confirmationCode,
+        type: parserType,
+        title: parserTitle,
+        provider: parserProvider,
+        localTime: parserLocalTime,
+        timezone: parserTimezone || "Etc/UTC",
+        location: parserLocation,
+        confirmationCode: parserConfirmationCode,
         assignedTo: defaultAssignees,
         stage: targetTrip.stage,
-        critical:
-          parserResult.draft.type === "flight" ||
-          parserResult.draft.type === "train" ||
-          parserResult.draft.type === "ride",
-        confidence: confidenceToDraftValue(parserResult.confidenceScore),
-        notes: parserResult.draft.notes,
+        critical: parserType === "flight" || parserType === "train" || parserType === "ride",
+        confidence: confidenceToDraftValue(parserConfidenceScore),
+        notes: parserNotesText,
       },
       sourceChannel: "email-forward",
-      parseConfidenceScore: parserResult.confidenceScore,
-      parsingStatus: parserResult.parsingStatus,
-      missingFields: parserResult.missingFields,
-      originalEmailText: parserResult.originalEmailText,
-      hasPdfAttachment: parserResult.hasPdfAttachment,
-      imageBasedEmail: parserResult.imageBasedEmail,
-      reviewStatus: parserResult.parsingStatus === "needs-user-input" ? "incomplete" : "pending",
-      parserNotes: parserResult.parserNotes,
+      parseConfidenceScore: parserConfidenceScore,
+      parsingStatus: parserParsingStatus,
+      missingFields: parserMissingFields,
+      originalEmailText: parserOriginalEmailText,
+      hasPdfAttachment: parserHasPdfAttachment,
+      imageBasedEmail: parserImageBasedEmail,
+      reviewStatus: parserParsingStatus === "needs-user-input" ? "incomplete" : "pending",
+      parserNotes,
     };
 
     const nextQueue = [reviewItem, ...(targetTrip.reviewQueue ?? [])];
@@ -395,16 +430,16 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
 
     const notificationSent = await sendPushNotification(targetUserId, {
       title: "Forwarded reservation received",
-      body: buildPushBody(parserResult.confidenceScore),
+      body: buildPushBody(parserConfidenceScore),
       url: `/travel-assistant?tripId=${encodeURIComponent(targetTrip.id)}`,
     });
 
     routeLogger.info("Forwarded email parsed into review queue.", {
       userId: targetUserId,
       tripId: targetTrip.id,
-      score: parserResult.confidenceScore,
-      status: parserResult.parsingStatus,
-      usedAiFallback: parserResult.usedAiFallback,
+      score: parserConfidenceScore,
+      status: parserParsingStatus,
+      usedAiFallback: parserUsedAiFallback,
       notificationSent,
     });
     return {
