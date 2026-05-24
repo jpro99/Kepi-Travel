@@ -19,6 +19,8 @@ const BodySchema = z.object({
   tripId: z.string().trim().min(1).optional(),
   from: z.string().trim().max(240).optional(),
   to: z.unknown().optional(),
+  cc: z.unknown().optional(),
+  envelope: z.unknown().optional(),
   subject: z.string().trim().max(300).optional(),
   text: z.string().max(200_000).optional(),
   html: z.string().max(800_000).optional(),
@@ -73,7 +75,27 @@ function extractRecipientCandidates(toValue: unknown): string[] {
   }
   if (typeof toValue === "object") {
     const candidate = toValue as Record<string, unknown>;
-    return ["email", "address", "mail", "text", "value", "raw"].flatMap((key) =>
+    return [
+      "email",
+      "address",
+      "mail",
+      "text",
+      "value",
+      "raw",
+      "to",
+      "cc",
+      "envelope",
+      "recipient",
+      "recipients",
+      "deliveredTo",
+      "delivered_to",
+      "originalTo",
+      "original_to",
+      "xOriginalTo",
+      "x_original_to",
+      "rcptTo",
+      "rcpt_to",
+    ].flatMap((key) =>
       extractRecipientCandidates(candidate[key]),
     );
   }
@@ -181,9 +203,23 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
     const authUserId = await resolveAuthenticatedUserId();
     const providedUserId = parsed.data.userId?.trim() || null;
     let addressedUserId: string | null = null;
-    const recipientCandidates = extractRecipientCandidates(parsed.data.to);
+    const recipientCandidates = Array.from(
+      new Set([
+        ...extractRecipientCandidates(parsed.data.to),
+        ...extractRecipientCandidates(parsed.data.cc),
+        ...extractRecipientCandidates(parsed.data.envelope),
+        ...extractRecipientCandidates(rawPayload?.to),
+        ...extractRecipientCandidates(rawPayload?.cc),
+        ...extractRecipientCandidates(rawPayload?.envelope),
+        ...extractRecipientCandidates(rawPayloadNestedData?.to),
+        ...extractRecipientCandidates(rawPayloadNestedData?.cc),
+        ...extractRecipientCandidates(rawPayloadNestedData?.envelope),
+      ]),
+    );
     routeLogger.info("Email forward recipient candidates extracted.", {
       parsedTo: parsed.data.to ?? null,
+      parsedCc: parsed.data.cc ?? null,
+      parsedEnvelope: parsed.data.envelope ?? null,
       recipientCandidates,
     });
     for (const candidateAddress of recipientCandidates) {
