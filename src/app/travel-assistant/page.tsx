@@ -4617,6 +4617,155 @@ export default function TravelAssistantPage() {
     [flightLiveStatusByReservationId],
   );
 
+  const activeDrawerPanel = activeDrawer ? (
+    <div className="fixed inset-0 z-[60] flex items-end justify-end bg-slate-950/80 p-3 md:p-6">
+      <div
+        ref={drawerContainerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="travel-assistant-drawer-title"
+        tabIndex={-1}
+        className="h-full w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-4 text-slate-100 md:max-h-[92vh]"
+      >
+        <div className="flex items-center justify-between">
+          <h2 id="travel-assistant-drawer-title" className="text-lg font-semibold">
+            {activeDrawer.kind === "reservation" ? "Reservation details" : "Review item details"}
+          </h2>
+          <button
+            ref={drawerCloseButtonRef}
+            type="button"
+            onClick={closeDrawer}
+            aria-label="Close details drawer"
+            className="rounded-md bg-slate-800 px-2 py-1 text-sm ring-1 ring-slate-700 hover:bg-slate-700"
+          >
+            Close
+          </button>
+        </div>
+        <div className="mt-4 space-y-3 text-sm">
+          <label className="block">
+            <span className="mb-1 block text-slate-300">Title</span>
+            <input
+              value={drawerDraft.title}
+              onChange={(event) => setDrawerDraft((prev) => ({ ...prev, title: event.target.value }))}
+              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
+            />
+          </label>
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-slate-300">Type</span>
+              <select
+                value={drawerDraft.type}
+                onChange={(event) =>
+                  setDrawerDraft((prev) => ({ ...prev, type: event.target.value as ReservationType }))
+                }
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
+              >
+                {(Object.keys(RESERVATION_TYPE_LABEL) as ReservationType[]).map((type) => (
+                  <option key={type} value={type}>
+                    {RESERVATION_TYPE_LABEL[type]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-slate-300">Provider</span>
+              <input
+                value={drawerDraft.provider}
+                onChange={(event) => setDrawerDraft((prev) => ({ ...prev, provider: event.target.value }))}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-slate-300">Local time</span>
+              <input
+                value={drawerDraft.localTime}
+                onChange={(event) => setDrawerDraft((prev) => ({ ...prev, localTime: event.target.value }))}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-slate-300">Timezone</span>
+              <input
+                value={drawerDraft.timezone}
+                onChange={(event) => setDrawerDraft((prev) => ({ ...prev, timezone: event.target.value }))}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
+              />
+            </label>
+          </div>
+          <label className="block">
+            <span className="mb-1 block text-slate-300">Location</span>
+            <input
+              value={drawerDraft.location}
+              onChange={(event) => setDrawerDraft((prev) => ({ ...prev, location: event.target.value }))}
+              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-slate-300">Confirmation code</span>
+            <input
+              value={drawerDraft.confirmationCode}
+              onChange={(event) =>
+                setDrawerDraft((prev) => ({ ...prev, confirmationCode: event.target.value }))
+              }
+              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-slate-300">Assigned people</span>
+            <div className="grid gap-2 rounded-lg border border-slate-700 bg-slate-950 p-3 text-xs">
+              {familyMembers.map((member) => (
+                <label key={member.id} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={drawerDraft.assignedTo.includes(member.id)}
+                    onChange={(event) =>
+                      setDrawerDraft((prev) => ({
+                        ...prev,
+                        assignedTo: event.target.checked
+                          ? [...prev.assignedTo, member.id]
+                          : prev.assignedTo.filter((id) => id !== member.id),
+                      }))
+                    }
+                  />
+                  {member.name}
+                </label>
+              ))}
+            </div>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-slate-300">Notes</span>
+            <textarea
+              value={drawerDraft.notes}
+              onChange={(event) => setDrawerDraft((prev) => ({ ...prev, notes: event.target.value }))}
+              className="h-24 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
+            />
+          </label>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={saveDrawer}
+            className="rounded-lg bg-cyan-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
+          >
+            Save changes
+          </button>
+          {activeDrawer.kind === "review" ? (
+            <button
+              type="button"
+              onClick={() => {
+                saveDrawer();
+                handleAcceptReview(activeDrawer.id);
+              }}
+              className="rounded-lg bg-emerald-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
+            >
+              Save + accept review
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   if (!advancedWorkspaceEnabled) {
     return (
       <main className="relative min-h-screen overflow-x-hidden bg-slate-50 pb-24 text-slate-950 dark:bg-slate-950 dark:text-slate-100">
@@ -5252,6 +5401,7 @@ export default function TravelAssistantPage() {
         <div aria-live="polite" aria-atomic="true" className="sr-only">
           {toast ?? ""}
         </div>
+        {activeDrawerPanel}
         {toast ? (
           <div
             role="status"
@@ -6090,154 +6240,7 @@ export default function TravelAssistantPage() {
         </Suspense>
       </div>
 
-      {activeDrawer ? (
-        <div className="fixed inset-0 z-40 flex items-end justify-end bg-slate-950/80 p-3 md:p-6">
-          <div
-            ref={drawerContainerRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="travel-assistant-drawer-title"
-            tabIndex={-1}
-            className="h-full w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-4 md:max-h-[92vh]"
-          >
-            <div className="flex items-center justify-between">
-              <h2 id="travel-assistant-drawer-title" className="text-lg font-semibold">
-                {activeDrawer.kind === "reservation" ? "Reservation details" : "Review item details"}
-              </h2>
-              <button
-                ref={drawerCloseButtonRef}
-                type="button"
-                onClick={closeDrawer}
-                aria-label="Close details drawer"
-                className="rounded-md bg-slate-800 px-2 py-1 text-sm ring-1 ring-slate-700 hover:bg-slate-700"
-              >
-                Close
-              </button>
-            </div>
-            <div className="mt-4 space-y-3 text-sm">
-              <label className="block">
-                <span className="mb-1 block text-slate-300">Title</span>
-                <input
-                  value={drawerDraft.title}
-                  onChange={(event) => setDrawerDraft((prev) => ({ ...prev, title: event.target.value }))}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
-                />
-              </label>
-              <div className="grid gap-3 md:grid-cols-2">
-                <label className="block">
-                  <span className="mb-1 block text-slate-300">Type</span>
-                  <select
-                    value={drawerDraft.type}
-                    onChange={(event) =>
-                      setDrawerDraft((prev) => ({ ...prev, type: event.target.value as ReservationType }))
-                    }
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
-                  >
-                    {(Object.keys(RESERVATION_TYPE_LABEL) as ReservationType[]).map((type) => (
-                      <option key={type} value={type}>
-                        {RESERVATION_TYPE_LABEL[type]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-slate-300">Provider</span>
-                  <input
-                    value={drawerDraft.provider}
-                    onChange={(event) => setDrawerDraft((prev) => ({ ...prev, provider: event.target.value }))}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-slate-300">Local time</span>
-                  <input
-                    value={drawerDraft.localTime}
-                    onChange={(event) => setDrawerDraft((prev) => ({ ...prev, localTime: event.target.value }))}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-slate-300">Timezone</span>
-                  <input
-                    value={drawerDraft.timezone}
-                    onChange={(event) => setDrawerDraft((prev) => ({ ...prev, timezone: event.target.value }))}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
-                  />
-                </label>
-              </div>
-              <label className="block">
-                <span className="mb-1 block text-slate-300">Location</span>
-                <input
-                  value={drawerDraft.location}
-                  onChange={(event) => setDrawerDraft((prev) => ({ ...prev, location: event.target.value }))}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-slate-300">Confirmation code</span>
-                <input
-                  value={drawerDraft.confirmationCode}
-                  onChange={(event) =>
-                    setDrawerDraft((prev) => ({ ...prev, confirmationCode: event.target.value }))
-                  }
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-slate-300">Assigned people</span>
-                <div className="grid gap-2 rounded-lg border border-slate-700 bg-slate-950 p-3 text-xs">
-                  {familyMembers.map((member) => (
-                    <label key={member.id} className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={drawerDraft.assignedTo.includes(member.id)}
-                        onChange={(event) =>
-                          setDrawerDraft((prev) => ({
-                            ...prev,
-                            assignedTo: event.target.checked
-                              ? [...prev.assignedTo, member.id]
-                              : prev.assignedTo.filter((id) => id !== member.id),
-                          }))
-                        }
-                      />
-                      {member.name}
-                    </label>
-                  ))}
-                </div>
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-slate-300">Notes</span>
-                <textarea
-                  value={drawerDraft.notes}
-                  onChange={(event) => setDrawerDraft((prev) => ({ ...prev, notes: event.target.value }))}
-                  className="h-24 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
-                />
-              </label>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={saveDrawer}
-                className="rounded-lg bg-cyan-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
-              >
-                Save changes
-              </button>
-              {activeDrawer.kind === "review" ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    saveDrawer();
-                    handleAcceptReview(activeDrawer.id);
-                  }}
-                  className="rounded-lg bg-emerald-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
-                >
-                  Save + accept review
-                </button>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {activeDrawerPanel}
 
       <footer className="relative z-10 mx-auto mt-2 max-w-[1400px] px-3 pb-6 text-xs text-slate-300 sm:px-4 md:px-6">
         Accessibility mode enabled: keyboard navigation, live status announcements, and screen-reader labels are active.
