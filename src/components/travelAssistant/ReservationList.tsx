@@ -47,6 +47,9 @@ interface ReservationListProps {
       flightStatus: string;
       delayMinutes: number | null;
       departureGate: string;
+      departureTerminal: string;
+      arrivalGate: string;
+      arrivalTerminal: string;
       onTime: boolean | null;
       checkedAt: string;
       busy: boolean;
@@ -174,12 +177,61 @@ export function ReservationList({
                     </div>
                   </div>
                   <span
-                    className={`shrink-0 rounded-full px-2.5 py-1 text-center text-[11px] font-semibold leading-tight ring-1 ${statusBadge.className}`}
+                    className={`max-w-28 shrink-0 rounded-full px-2.5 py-1 text-center text-[11px] font-semibold leading-tight ring-1 ${statusBadge.className}`}
                   >
-                    {statusBadge.label}
+                    <span className="block truncate">{statusBadge.label}</span>
                   </span>
                 </div>
               </button>
+              <div className="flex flex-wrap gap-2 border-t border-slate-200 px-4 py-2 text-xs dark:border-slate-800">
+                {reservation.type === "flight" ? (
+                  <button
+                    type="button"
+                    onClick={() => onCheckFlightStatus(reservation.id)}
+                    disabled={flightStatusCheck?.busy === true}
+                    className="rounded-md bg-cyan-200 px-2 py-1 ring-1 ring-cyan-300 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-cyan-500/20 dark:ring-cyan-400/40 dark:hover:bg-cyan-500/30"
+                  >
+                    {flightStatusCheck?.busy ? "Checking..." : "Check status"}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => onDeleteReservation(reservation.id)}
+                  className="rounded-md bg-rose-100 px-2 py-1 text-rose-800 ring-1 ring-rose-300 hover:bg-rose-200 dark:bg-rose-500/20 dark:text-rose-100 dark:ring-rose-400/40 dark:hover:bg-rose-500/30"
+                >
+                  Delete
+                </button>
+              </div>
+              {reservation.type === "flight" && flightStatusCheck ? (
+                <div className="border-t border-slate-200 px-4 py-2 text-xs text-slate-700 dark:border-slate-800 dark:text-slate-300">
+                  {flightStatusCheck.error ? (
+                    <p className="break-words text-rose-700 dark:text-rose-300">Status error: {flightStatusCheck.error}</p>
+                  ) : (
+                    <div className="grid gap-1 sm:grid-cols-2">
+                      <p className="break-words">
+                        <span className="font-semibold">Status:</span> {flightStatusCheck.flightStatus || "Unknown"}
+                      </p>
+                      <p className="break-words">
+                        <span className="font-semibold">Gate:</span> {flightStatusCheck.departureGate || "Not available"}
+                      </p>
+                      <p className="break-words">
+                        <span className="font-semibold">Terminal:</span>{" "}
+                        {flightStatusCheck.departureTerminal || "Not available"}
+                      </p>
+                      <p className="break-words">
+                        <span className="font-semibold">Delay:</span>{" "}
+                        {typeof flightStatusCheck.delayMinutes === "number"
+                          ? `${flightStatusCheck.delayMinutes} min`
+                          : "No delay data"}
+                      </p>
+                      <p className="break-words sm:col-span-2">
+                        <span className="font-semibold">On time:</span>{" "}
+                        {flightStatusCheck.onTime === null ? "Unknown" : flightStatusCheck.onTime ? "Yes" : "No"}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : null}
               {expanded ? (
                 <div className="border-t border-slate-200 px-4 pb-4 pt-3 text-sm dark:border-slate-800">
                   <div className="grid gap-2 text-xs text-slate-700 dark:text-slate-300">
@@ -214,44 +266,8 @@ export function ReservationList({
                         return "Saved";
                       })()}
                     </p>
-                    {reservation.type === "flight" && flightStatusCheck ? (
-                      <div className="rounded-md border border-slate-200 bg-slate-100/70 p-2 dark:border-slate-700 dark:bg-slate-900">
-                        {flightStatusCheck.error ? (
-                          <p className="break-words text-rose-700 dark:text-rose-300">Status error: {flightStatusCheck.error}</p>
-                        ) : (
-                          <>
-                            <p className="break-words">
-                              <span className="font-semibold">Flight status:</span> {flightStatusCheck.flightStatus || "Unknown"}
-                            </p>
-                            <p className="break-words">
-                              <span className="font-semibold">Gate:</span> {flightStatusCheck.departureGate || "Not available"}
-                            </p>
-                            <p className="break-words">
-                              <span className="font-semibold">Delay:</span>{" "}
-                              {typeof flightStatusCheck.delayMinutes === "number"
-                                ? `${flightStatusCheck.delayMinutes} min`
-                                : "No delay data"}
-                            </p>
-                            <p className="break-words">
-                              <span className="font-semibold">On time:</span>{" "}
-                              {flightStatusCheck.onTime === null ? "Unknown" : flightStatusCheck.onTime ? "Yes" : "No"}
-                            </p>
-                          </>
-                        )}
-                      </div>
-                    ) : null}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                    {reservation.type === "flight" ? (
-                      <button
-                        type="button"
-                        onClick={() => onCheckFlightStatus(reservation.id)}
-                        disabled={flightStatusCheck?.busy === true}
-                        className="rounded-md bg-cyan-200 px-2 py-1 ring-1 ring-cyan-300 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-cyan-500/20 dark:ring-cyan-400/40 dark:hover:bg-cyan-500/30"
-                      >
-                        {flightStatusCheck?.busy ? "Checking..." : "Check status"}
-                      </button>
-                    ) : null}
                     <button
                       type="button"
                       onClick={() => onOpenReservationDrawer(reservation.id)}
@@ -278,13 +294,6 @@ export function ReservationList({
                       className="rounded-md bg-slate-200 px-2 py-1 ring-1 ring-slate-300 hover:bg-slate-300 dark:bg-slate-800 dark:ring-slate-700 dark:hover:bg-slate-700"
                     >
                       Copy code
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDeleteReservation(reservation.id)}
-                      className="rounded-md bg-rose-100 px-2 py-1 text-rose-800 ring-1 ring-rose-300 hover:bg-rose-200 dark:bg-rose-500/20 dark:text-rose-100 dark:ring-rose-400/40 dark:hover:bg-rose-500/30"
-                    >
-                      Delete
                     </button>
                   </div>
                 </div>

@@ -43,6 +43,38 @@ const IANA_TIMEZONE_REGION_PREFIXES = new Set([
   "Pacific",
 ]);
 
+function isValidIanaTimezone(candidate: string): boolean {
+  const normalized = candidate.trim();
+  if (!normalized) {
+    return false;
+  }
+  const region = normalized.split("/")[0] ?? "";
+  if (!IANA_TIMEZONE_REGION_PREFIXES.has(region)) {
+    return false;
+  }
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: normalized });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function sanitizeTimezoneValue(raw: string): string {
+  const normalized = raw.trim();
+  if (!normalized) {
+    return "Etc/UTC";
+  }
+  const uppercase = normalized.toUpperCase();
+  if (TIMEZONE_ABBREVIATION_MAP[uppercase]) {
+    return TIMEZONE_ABBREVIATION_MAP[uppercase] ?? "Etc/UTC";
+  }
+  if (isValidIanaTimezone(normalized)) {
+    return normalized;
+  }
+  return "Etc/UTC";
+}
+
 const RESERVATION_TYPE_KEYWORDS: Array<{ type: ForwardedReservationType; pattern: RegExp; confidence: number }> = [
   { type: "flight", pattern: /\b(flight|airline|boarding|terminal|gate)\b/iu, confidence: 0.78 },
   { type: "hotel", pattern: /\b(hotel|check-?in|check out|room|suite|stay)\b/iu, confidence: 0.78 },
@@ -242,24 +274,14 @@ function parseDateCandidate(raw: string): string | null {
 function resolveTimezone(text: string): string {
   const abbrMatch = text.match(/\b(UTC|GMT|EST|EDT|CST|CDT|MST|MDT|PST|PDT)\b/u);
   if (abbrMatch) {
-    return TIMEZONE_ABBREVIATION_MAP[abbrMatch[1]] ?? "Etc/UTC";
+    return sanitizeTimezoneValue(abbrMatch[1]);
   }
 
   const ianaMatches = [...text.matchAll(/\b([A-Za-z_]+(?:\/[A-Za-z_+-]+)+)\b/gu)];
   for (const match of ianaMatches) {
     const candidate = match[1]?.trim();
-    if (!candidate) {
-      continue;
-    }
-    const region = candidate.split("/")[0] ?? "";
-    if (!IANA_TIMEZONE_REGION_PREFIXES.has(region)) {
-      continue;
-    }
-    try {
-      new Intl.DateTimeFormat("en-US", { timeZone: candidate });
+    if (candidate && isValidIanaTimezone(candidate)) {
       return candidate;
-    } catch {
-      continue;
     }
   }
   return "Etc/UTC";
@@ -311,7 +333,14 @@ function parseAiResponse(text: string): CandidateMap {
   setIfPresent("provider", candidate.provider, 0.76);
   setIfPresent("confirmationCode", candidate.confirmationCode, 0.8);
   setIfPresent("localTime", candidate.localTime, 0.74);
-  setIfPresent("timezone", candidate.timezone, 0.72);
+  if (typeof candidate.timezone === "string") {
+    const sanitizedTimezone = sanitizeTimezoneValue(candidate.timezone);
+    output.timezone = {
+      value: sanitizedTimezone,
+      confidence: sanitizedTimezone === "Etc/UTC" ? 0.5 : 0.72,
+      source: "ai",
+    };
+  }
   setIfPresent("location", candidate.location, 0.76);
   setIfPresent("notes", candidate.notes, 0.68);
   return output;
@@ -585,7 +614,7 @@ function buildDraft(candidates: CandidateMap, parserNotes: string[]): ForwardedR
     title: normalizeWhitespace(candidates.title?.value ?? ""),
     provider: normalizeWhitespace(candidates.provider?.value ?? ""),
     localTime: normalizeWhitespace(candidates.localTime?.value ?? ""),
-    timezone: normalizeWhitespace(candidates.timezone?.value ?? "Etc/UTC") || "Etc/UTC",
+    timezone: sanitizeTimezoneValue(candidates.timezone?.value ?? "Etc/UTC"),
     location: normalizeWhitespace(candidates.location?.value ?? ""),
     confirmationCode: normalizeConfirmationCode(candidates.confirmationCode?.value ?? ""),
     notes: notesSections.join(" "),

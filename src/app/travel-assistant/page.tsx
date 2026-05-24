@@ -285,6 +285,9 @@ interface FlightStatusCheckResult {
   flightStatus: string;
   delayMinutes: number | null;
   departureGate: string;
+  departureTerminal: string;
+  arrivalGate: string;
+  arrivalTerminal: string;
   onTime: boolean | null;
   checkedAt: string;
   busy: boolean;
@@ -4239,6 +4242,9 @@ export default function TravelAssistantPage() {
             flightStatus: prev[reservationId]?.flightStatus ?? reservation.flightStatus ?? "",
             delayMinutes: prev[reservationId]?.delayMinutes ?? reservation.flightDelayMinutes ?? null,
             departureGate: prev[reservationId]?.departureGate ?? reservation.flightDepartureGate ?? "",
+            departureTerminal: prev[reservationId]?.departureTerminal ?? reservation.flightDepartureTerminal ?? "",
+            arrivalGate: prev[reservationId]?.arrivalGate ?? reservation.flightArrivalGate ?? "",
+            arrivalTerminal: prev[reservationId]?.arrivalTerminal ?? reservation.flightArrivalTerminal ?? "",
             onTime: prev[reservationId]?.onTime ?? reservation.flightOnTime ?? null,
             checkedAt: new Date().toISOString(),
             busy: false,
@@ -4255,6 +4261,9 @@ export default function TravelAssistantPage() {
           flightStatus: prev[reservationId]?.flightStatus ?? reservation.flightStatus ?? "",
           delayMinutes: prev[reservationId]?.delayMinutes ?? reservation.flightDelayMinutes ?? null,
           departureGate: prev[reservationId]?.departureGate ?? reservation.flightDepartureGate ?? "",
+          departureTerminal: prev[reservationId]?.departureTerminal ?? reservation.flightDepartureTerminal ?? "",
+          arrivalGate: prev[reservationId]?.arrivalGate ?? reservation.flightArrivalGate ?? "",
+          arrivalTerminal: prev[reservationId]?.arrivalTerminal ?? reservation.flightArrivalTerminal ?? "",
           onTime: prev[reservationId]?.onTime ?? reservation.flightOnTime ?? null,
           checkedAt: new Date().toISOString(),
           busy: true,
@@ -4296,6 +4305,9 @@ export default function TravelAssistantPage() {
 
         const nextStatus = payload.flightStatus?.trim() || reservation.flightStatus || "unknown";
         const nextDepartureGate = payload.departureGate?.trim() ?? "";
+        const nextDepartureTerminal = payload.departureTerminal?.trim() ?? "";
+        const nextArrivalGate = payload.arrivalGate?.trim() ?? "";
+        const nextArrivalTerminal = payload.arrivalTerminal?.trim() ?? "";
         const nextDelayMinutes =
           typeof payload.delayMinutes === "number" && Number.isFinite(payload.delayMinutes)
             ? payload.delayMinutes
@@ -4308,6 +4320,9 @@ export default function TravelAssistantPage() {
             flightStatus: nextStatus,
             delayMinutes: nextDelayMinutes,
             departureGate: nextDepartureGate,
+            departureTerminal: nextDepartureTerminal,
+            arrivalGate: nextArrivalGate,
+            arrivalTerminal: nextArrivalTerminal,
             onTime: nextOnTime,
             checkedAt: new Date().toISOString(),
             busy: false,
@@ -4351,6 +4366,9 @@ export default function TravelAssistantPage() {
             flightStatus: prev[reservationId]?.flightStatus ?? reservation.flightStatus ?? "",
             delayMinutes: prev[reservationId]?.delayMinutes ?? reservation.flightDelayMinutes ?? null,
             departureGate: prev[reservationId]?.departureGate ?? reservation.flightDepartureGate ?? "",
+            departureTerminal: prev[reservationId]?.departureTerminal ?? reservation.flightDepartureTerminal ?? "",
+            arrivalGate: prev[reservationId]?.arrivalGate ?? reservation.flightArrivalGate ?? "",
+            arrivalTerminal: prev[reservationId]?.arrivalTerminal ?? reservation.flightArrivalTerminal ?? "",
             onTime: prev[reservationId]?.onTime ?? reservation.flightOnTime ?? null,
             checkedAt: new Date().toISOString(),
             busy: false,
@@ -5680,6 +5698,33 @@ export default function TravelAssistantPage() {
                     const expanded = expandedConsumerReservationId === reservation.id;
                     const statusMeta = getConsumerReservationStatus(reservation);
                     const flightStatusCheck = flightStatusCheckByReservationId[reservation.id] ?? null;
+                    const inlineFlightStatus =
+                      reservation.type === "flight"
+                        ? {
+                            flightStatus: flightStatusCheck?.flightStatus ?? reservation.flightStatus ?? "",
+                            departureGate: flightStatusCheck?.departureGate ?? reservation.flightDepartureGate ?? "",
+                            departureTerminal:
+                              flightStatusCheck?.departureTerminal ?? reservation.flightDepartureTerminal ?? "",
+                            delayMinutes:
+                              flightStatusCheck?.delayMinutes ??
+                              (typeof reservation.flightDelayMinutes === "number" ? reservation.flightDelayMinutes : null),
+                            onTime:
+                              flightStatusCheck?.onTime ??
+                              (typeof reservation.flightOnTime === "boolean" ? reservation.flightOnTime : null),
+                            busy: flightStatusCheck?.busy ?? false,
+                            error: flightStatusCheck?.error ?? null,
+                          }
+                        : null;
+                    const hasInlineFlightStatus =
+                      inlineFlightStatus !== null &&
+                      Boolean(
+                        inlineFlightStatus.error ||
+                          inlineFlightStatus.flightStatus ||
+                          inlineFlightStatus.departureGate ||
+                          inlineFlightStatus.departureTerminal ||
+                          typeof inlineFlightStatus.delayMinutes === "number" ||
+                          typeof inlineFlightStatus.onTime === "boolean",
+                      );
                     return (
                       <article
                         key={reservation.id}
@@ -5707,10 +5752,69 @@ export default function TravelAssistantPage() {
                             <span
                               className={`max-w-24 rounded-full px-2 py-1 text-center text-[11px] font-semibold leading-tight ${statusMeta.className}`}
                             >
-                              {statusMeta.label}
+                              <span className="block truncate">{statusMeta.label}</span>
                             </span>
                           </div>
                         </button>
+                        <div className="flex flex-wrap gap-2 border-t border-slate-200 px-4 py-2 text-xs dark:border-slate-800">
+                          {reservation.type === "flight" ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void handleCheckFlightStatus(reservation.id);
+                              }}
+                              disabled={inlineFlightStatus?.busy === true}
+                              className="rounded-lg bg-cyan-500 px-3 py-1.5 font-semibold text-white transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {inlineFlightStatus?.busy ? "Checking..." : "Check status"}
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteReservation(reservation.id)}
+                            className="rounded-lg bg-rose-500 px-3 py-1.5 font-semibold text-white transition hover:bg-rose-400"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                        {hasInlineFlightStatus && inlineFlightStatus ? (
+                          <div className="border-t border-slate-200 px-4 py-2 text-xs text-slate-700 dark:border-slate-800 dark:text-slate-200">
+                            {inlineFlightStatus.error ? (
+                              <p className="break-words text-rose-700 dark:text-rose-300">
+                                Status error: {inlineFlightStatus.error}
+                              </p>
+                            ) : (
+                              <div className="grid gap-1 sm:grid-cols-2">
+                                <p className="break-words">
+                                  <span className="font-semibold">Status:</span>{" "}
+                                  {inlineFlightStatus.flightStatus || "Unknown"}
+                                </p>
+                                <p className="break-words">
+                                  <span className="font-semibold">Gate:</span>{" "}
+                                  {inlineFlightStatus.departureGate || "Not available"}
+                                </p>
+                                <p className="break-words">
+                                  <span className="font-semibold">Terminal:</span>{" "}
+                                  {inlineFlightStatus.departureTerminal || "Not available"}
+                                </p>
+                                <p className="break-words">
+                                  <span className="font-semibold">Delay:</span>{" "}
+                                  {typeof inlineFlightStatus.delayMinutes === "number"
+                                    ? `${inlineFlightStatus.delayMinutes} min`
+                                    : "No delay data"}
+                                </p>
+                                <p className="break-words sm:col-span-2">
+                                  <span className="font-semibold">On time:</span>{" "}
+                                  {inlineFlightStatus.onTime === null
+                                    ? "Unknown"
+                                    : inlineFlightStatus.onTime
+                                      ? "Yes"
+                                      : "No"}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        ) : null}
                         {expanded ? (
                           <div className="border-t border-slate-200 px-4 py-3 text-sm text-slate-700 dark:border-slate-800 dark:text-slate-200">
                             <p className="break-words">
@@ -5743,6 +5847,10 @@ export default function TravelAssistantPage() {
                                       {flightStatusCheck.departureGate || "Not available"}
                                     </p>
                                     <p className="break-words">
+                                      <span className="font-semibold">Terminal:</span>{" "}
+                                      {flightStatusCheck.departureTerminal || "Not available"}
+                                    </p>
+                                    <p className="break-words">
                                       <span className="font-semibold">Delay:</span>{" "}
                                       {typeof flightStatusCheck.delayMinutes === "number"
                                         ? `${flightStatusCheck.delayMinutes} min`
@@ -5766,31 +5874,12 @@ export default function TravelAssistantPage() {
                               </p>
                             ) : null}
                             <div className="mt-3 flex flex-wrap gap-2">
-                              {reservation.type === "flight" ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    void handleCheckFlightStatus(reservation.id);
-                                  }}
-                                  disabled={flightStatusCheck?.busy === true}
-                                  className="rounded-lg bg-cyan-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                  {flightStatusCheck?.busy ? "Checking..." : "Check status"}
-                                </button>
-                              ) : null}
                               <button
                                 type="button"
                                 onClick={() => openDrawer("reservation", reservation.id)}
                                 className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-slate-200"
                               >
                                 Open full details
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteReservation(reservation.id)}
-                                className="rounded-lg bg-rose-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-rose-400"
-                              >
-                                Delete
                               </button>
                             </div>
                           </div>
