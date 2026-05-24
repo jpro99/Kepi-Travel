@@ -18,12 +18,20 @@ const BodySchema = z.object({
   userId: z.string().trim().min(1).optional(),
   tripId: z.string().trim().min(1).optional(),
   from: z.string().trim().max(240).optional(),
-  to: z.string().trim().max(240).optional(),
+  to: z.unknown().optional(),
   subject: z.string().trim().max(300).optional(),
   text: z.string().max(200_000).optional(),
   html: z.string().max(800_000).optional(),
   attachments: z.array(AttachmentSchema).default([]),
 });
+
+interface EmailForwardProcessResult {
+  ok: boolean;
+  status: number;
+  message: string;
+  userId?: string;
+  tripId?: string;
+}
 
 function confidenceLabel(score: number): "high" | "medium" | "low" {
   if (score >= 70) return "high";
@@ -46,14 +54,30 @@ function buildPushBody(score: number): string {
   return "We need your help reading a forwarded email";
 }
 
-function extractRecipientCandidates(toValue?: string): string[] {
-  if (!toValue || toValue.trim().length === 0) {
+function extractRecipientCandidates(toValue: unknown): string[] {
+  if (typeof toValue === "undefined" || toValue === null) {
     return [];
   }
-  return toValue
-    .split(/[;,]/u)
-    .map((candidate) => candidate.trim())
-    .filter((candidate) => candidate.length > 0);
+  if (typeof toValue === "string") {
+    const emailMatches = toValue.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/giu);
+    if (emailMatches && emailMatches.length > 0) {
+      return emailMatches.map((candidate) => candidate.trim().toLowerCase());
+    }
+    return toValue
+      .split(/[;,]/u)
+      .map((candidate) => candidate.trim())
+      .filter((candidate) => candidate.length > 0);
+  }
+  if (Array.isArray(toValue)) {
+    return toValue.flatMap((entry) => extractRecipientCandidates(entry));
+  }
+  if (typeof toValue === "object") {
+    const candidate = toValue as Record<string, unknown>;
+    return ["email", "address", "mail", "text", "value", "raw"].flatMap((key) =>
+      extractRecipientCandidates(candidate[key]),
+    );
+  }
+  return [];
 }
 
 function extractIncomingWebhookSignature(headers: Headers): string {
@@ -108,7 +132,7 @@ function verifyResendWebhookSignature(rawBody: string, headers: Headers, request
   }
 }
 
-async function processEmailForwardWebhook(req: Request, requestId: string): Promise<void> {
+async function processEmailForwardWebhook(req: Request, requestId: string): Promise<EmailForwardProcessResult> {
   const routeLogger = logger.withContext({
     route: "/api/email-forward/receive",
     requestId,
@@ -116,7 +140,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
   try {
     const rawBody = await req.text();
     if (!verifyResendWebhookSignature(rawBody, req.headers, requestId)) {
-      return;
+      return { ok: false, status: 401, message: "Invalid webhook signature." };
     }
     let body: unknown = {};
     try {
@@ -127,7 +151,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         error,
         rawBody,
       });
-      return;
+      return { ok: false, status: 400, message: "Invalid JSON body." };
     }
 
     const parsed = BodySchema.safeParse(body);
@@ -137,13 +161,17 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         details: parsed.error.flatten(),
         body,
       });
-      return;
+      return { ok: false, status: 422, message: "Webhook body validation failed." };
     }
 
     const authUserId = await resolveAuthenticatedUserId();
     const providedUserId = parsed.data.userId?.trim() || null;
     let addressedUserId: string | null = null;
-    for (const candidateAddress of extractRecipientCandidates(parsed.data.to)) {
+    const recipientCandidates = extractRecipientCandidates(parsed.data.to);
+    routeLogger.info("Email forward recipient candidates extracted.", {
+      recipientCandidates,
+    });
+    for (const candidateAddress of recipientCandidates) {
       const resolved = await resolveUserIdByForwardAddress(candidateAddress);
       if (resolved) {
         addressedUserId = resolved;
@@ -157,8 +185,9 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         authUserId,
         providedUserId,
         addressedUserId,
+        recipientCandidates,
       });
-      return;
+      return { ok: false, status: 404, message: "Unable to resolve target user." };
     }
 
     if (authUserId && providedUserId && authUserId !== providedUserId) {
@@ -167,7 +196,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         authUserId,
         providedUserId,
       });
-      return;
+      return { ok: false, status: 403, message: "Auth user and provided user mismatch." };
     }
     if (authUserId && addressedUserId && authUserId !== addressedUserId) {
       console.error("[email-forward-webhook] Auth user and addressed user mismatch.", {
@@ -175,7 +204,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         authUserId,
         addressedUserId,
       });
-      return;
+      return { ok: false, status: 403, message: "Auth user and addressed user mismatch." };
     }
     if (!authUserId && providedUserId && addressedUserId && providedUserId !== addressedUserId) {
       console.error("[email-forward-webhook] Provided user and addressed user mismatch.", {
@@ -183,7 +212,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         providedUserId,
         addressedUserId,
       });
-      return;
+      return { ok: false, status: 403, message: "Provided user and addressed user mismatch." };
     }
 
     const ingestSecret = process.env.EMAIL_FORWARD_INGEST_SECRET?.trim();
@@ -195,7 +224,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
           incomingSecret,
           ingestSecret,
         });
-        return;
+        return { ok: false, status: 401, message: "Email forward ingest secret mismatch." };
       }
     }
 
@@ -208,7 +237,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         userId: targetUserId,
         tripId: parsed.data.tripId ?? null,
       });
-      return;
+      return { ok: false, status: 404, message: "No active trip found for target user.", userId: targetUserId };
     }
 
     const parserResult = await parseForwardedEmail({
@@ -310,7 +339,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         tripId: targetTrip.id,
         userId: targetUserId,
       });
-      return;
+      return { ok: false, status: 500, message: "Trip update failed.", userId: targetUserId, tripId: targetTrip.id };
     }
 
     const notificationSent = await sendPushNotification(targetUserId, {
@@ -327,37 +356,49 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       usedAiFallback: parserResult.usedAiFallback,
       notificationSent,
     });
+    return {
+      ok: true,
+      status: 200,
+      message: "Forwarded email parsed into review queue.",
+      userId: targetUserId,
+      tripId: targetTrip.id,
+    };
   } catch (error) {
     console.error("[email-forward-webhook] Unhandled processing error.", {
       requestId,
       error,
     });
+    return { ok: false, status: 500, message: "Unhandled email forward processing error." };
   }
 }
 
 export async function POST(req: Request) {
-  const immediateResponse = NextResponse.json({
-    ok: true,
-    accepted: true,
-    message: "Email forward webhook accepted",
-  });
   try {
     const requestId = req.headers.get("x-request-id")?.trim() || generateId();
-    const requestClone = req.clone();
-    queueMicrotask(() => {
-      void processEmailForwardWebhook(requestClone, requestId).catch((error) => {
-        console.error("[email-forward-webhook] Background processor failed.", {
-          requestId,
-          error,
-        });
-      });
-    });
+    const result = await processEmailForwardWebhook(req, requestId);
+    return NextResponse.json(
+      {
+        ok: result.ok,
+        accepted: result.ok,
+        message: result.message,
+        userId: result.userId,
+        tripId: result.tripId,
+      },
+      { status: result.status },
+    );
   } catch (error) {
-    console.error("[email-forward-webhook] Failed to queue background processing.", {
+    console.error("[email-forward-webhook] Failed to process webhook.", {
       error,
     });
+    return NextResponse.json(
+      {
+        ok: false,
+        accepted: false,
+        message: "Email forward webhook failed",
+      },
+      { status: 500 },
+    );
   }
-  return immediateResponse;
 }
 
 export async function GET() {

@@ -8,7 +8,8 @@ const fallbackStore = new Map<string, unknown>();
 let missingEnvWarningLogged = false;
 let startupValidationLogged = false;
 
-const UPSTASH_REQUIRED_ENV_KEYS = ["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"] as const;
+const REDIS_URL_ENV_KEYS = ["UPSTASH_REDIS_REST_URL", "KV_REST_API_URL"] as const;
+const REDIS_TOKEN_ENV_KEYS = ["UPSTASH_REDIS_REST_TOKEN", "KV_REST_API_TOKEN"] as const;
 
 function getUpstashRedis() {
   return getSafeRedisClient("travelAssistant/kvStore");
@@ -19,7 +20,14 @@ function hasAnyRedisConfig(): boolean {
 }
 
 function missingKvEnvKeys(): string[] {
-  return UPSTASH_REQUIRED_ENV_KEYS.filter((key) => !process.env[key]?.trim());
+  const missing: string[] = [];
+  if (!REDIS_URL_ENV_KEYS.some((key) => Boolean(process.env[key]?.trim()))) {
+    missing.push("UPSTASH_REDIS_REST_URL or KV_REST_API_URL");
+  }
+  if (!REDIS_TOKEN_ENV_KEYS.some((key) => Boolean(process.env[key]?.trim()))) {
+    missing.push("UPSTASH_REDIS_REST_TOKEN or KV_REST_API_TOKEN");
+  }
+  return missing;
 }
 
 function cloneValue<T>(value: T): T {

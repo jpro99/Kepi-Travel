@@ -1,5 +1,5 @@
 import { logger } from "@/lib/logger";
-import { getSafeRedisClient } from "@/lib/redis";
+import { getSafeRawRedisClient, getSafeRedisClient } from "@/lib/redis";
 import { kvStoreDel, kvStoreGet, kvStoreList, kvStoreSet, kvStoreSetNx } from "@/lib/travelAssistant/kvStore";
 
 const EMAIL_HANDLE_SYSTEM_NAMESPACE = "__email-forward-system";
@@ -26,6 +26,17 @@ export interface EmailForwardSetupStatus {
   gmailPromptSeenAt: string | null;
   canChangeHandle: boolean;
   nextHandleChangeAt: string | null;
+}
+
+export interface EmailForwardHandleOwnerDebug {
+  handle: string;
+  ownerLookupKey: string;
+  redisConfigured: boolean;
+  rawRedisConfigured: boolean;
+  redisOwner: string | null;
+  rawRedisOwner: unknown;
+  kvStoreOwner: string | null;
+  errors: string[];
 }
 
 function normalizedForwardDomain(): string {
@@ -72,7 +83,7 @@ async function getHandleOwner(handle: string, context?: { caller?: string }): Pr
         redisReadKey,
       });
       const owner = await redis.get<string>(redisReadKey);
-      return typeof owner === "string" && owner.trim().length > 0 ? owner : null;
+      return normalizeOwnerValue(owner);
     } catch (error) {
       logger.warn("Failed to read email handle owner from Redis, falling back to kvStore.", {
         scope: EMAIL_FORWARD_LOG_SCOPE,
@@ -84,19 +95,28 @@ async function getHandleOwner(handle: string, context?: { caller?: string }): Pr
     }
   }
   const owner = await kvStoreGet<string>(handleOwnerKey(handle), { userId: EMAIL_HANDLE_SYSTEM_NAMESPACE });
-  return typeof owner === "string" && owner.trim().length > 0 ? owner : null;
+  return normalizeOwnerValue(owner);
 }
 
 async function setHandleOwner(handle: string, userId: string): Promise<void> {
   const redis = getEmailForwardSystemRedis();
   if (redis) {
     const namespacedKey = handleOwnerRedisKey(handle);
-    await redis.set(namespacedKey, userId);
-    const persistedOwner = await redis.get<string>(namespacedKey);
-    if (persistedOwner !== userId) {
-      throw new Error(`Unable to persist handle owner mapping for ${handle}.`);
+    try {
+      await redis.set(namespacedKey, userId);
+      const persistedOwner = await redis.get<string>(namespacedKey);
+      if (normalizeOwnerValue(persistedOwner) !== userId) {
+        throw new Error(`Unable to persist handle owner mapping for ${handle}.`);
+      }
+      return;
+    } catch (error) {
+      logger.warn("Failed to write email handle owner to Redis, falling back to kvStore.", {
+        scope: EMAIL_FORWARD_LOG_SCOPE,
+        handle,
+        namespacedKey,
+        error: error instanceof Error ? error.message : "unknown",
+      });
     }
-    return;
   }
   await kvStoreSet(handleOwnerKey(handle), userId, { userId: EMAIL_HANDLE_SYSTEM_NAMESPACE });
 }
@@ -105,12 +125,21 @@ async function setHandleOwnerIfAbsent(handle: string, userId: string): Promise<b
   const redis = getEmailForwardSystemRedis();
   if (redis) {
     const namespacedKey = handleOwnerRedisKey(handle);
-    const claimResult = await redis.set(namespacedKey, userId, { nx: true });
-    if (claimResult === "OK") {
-      return true;
+    try {
+      const claimResult = await redis.set(namespacedKey, userId, { nx: true });
+      if (claimResult === "OK") {
+        return true;
+      }
+      const existingOwner = await redis.get<string>(namespacedKey);
+      return normalizeOwnerValue(existingOwner) === userId;
+    } catch (error) {
+      logger.warn("Failed to claim email handle owner in Redis, falling back to kvStore.", {
+        scope: EMAIL_FORWARD_LOG_SCOPE,
+        handle,
+        namespacedKey,
+        error: error instanceof Error ? error.message : "unknown",
+      });
     }
-    const existingOwner = await redis.get<string>(namespacedKey);
-    return existingOwner === userId;
   }
 
   const ownerClaimed = await kvStoreSetNx(handleOwnerKey(handle), userId, {
@@ -122,14 +151,24 @@ async function setHandleOwnerIfAbsent(handle: string, userId: string): Promise<b
   const existingOwner = await kvStoreGet<string>(handleOwnerKey(handle), {
     userId: EMAIL_HANDLE_SYSTEM_NAMESPACE,
   });
-  return existingOwner === userId;
+  return normalizeOwnerValue(existingOwner) === userId;
 }
 
 async function deleteHandleOwner(handle: string): Promise<void> {
   const redis = getEmailForwardSystemRedis();
   if (redis) {
-    await redis.del(handleOwnerRedisKey(handle));
-    return;
+    const namespacedKey = handleOwnerRedisKey(handle);
+    try {
+      await redis.del(namespacedKey);
+      return;
+    } catch (error) {
+      logger.warn("Failed to delete email handle owner from Redis, falling back to kvStore.", {
+        scope: EMAIL_FORWARD_LOG_SCOPE,
+        handle,
+        namespacedKey,
+        error: error instanceof Error ? error.message : "unknown",
+      });
+    }
   }
   await kvStoreDel(handleOwnerKey(handle), { userId: EMAIL_HANDLE_SYSTEM_NAMESPACE });
 }
@@ -159,6 +198,33 @@ function sanitizePromptSeenAt(raw: unknown): string | null {
 
 function sanitizeHandle(raw: string): string {
   return raw.trim().toLowerCase().replace(/[^a-z0-9-]/gu, "").replace(/^-+|-+$/gu, "").slice(0, MAX_HANDLE_LENGTH);
+}
+
+function normalizeOwnerValue(raw: unknown): string | null {
+  if (typeof raw !== "string") {
+    return null;
+  }
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      return typeof parsed === "string" && parsed.trim().length > 0 ? parsed.trim() : null;
+    } catch {
+      return trimmed;
+    }
+  }
+  return trimmed;
+}
+
+export function getEmailForwardHandleOwnerKey(handleRaw: string): { handle: string; ownerLookupKey: string } {
+  const handle = sanitizeHandle(handleRaw);
+  return {
+    handle,
+    ownerLookupKey: handle.length > 0 ? handleOwnerRedisKey(handle) : "",
+  };
 }
 
 function sanitizeAutoUsernamePart(raw: string): string {
@@ -494,6 +560,64 @@ export async function resolveUserIdByForwardAddress(addressLike: string): Promis
     repairedUserId,
   });
   return repairedUserId;
+}
+
+export async function debugEmailForwardHandleOwner(handleRaw: string): Promise<EmailForwardHandleOwnerDebug> {
+  const { handle, ownerLookupKey } = getEmailForwardHandleOwnerKey(handleRaw);
+  const errors: string[] = [];
+  if (!handle) {
+    return {
+      handle,
+      ownerLookupKey,
+      redisConfigured: Boolean(getEmailForwardSystemRedis()),
+      rawRedisConfigured: Boolean(getSafeRawRedisClient(EMAIL_FORWARD_LOG_SCOPE)),
+      redisOwner: null,
+      rawRedisOwner: null,
+      kvStoreOwner: null,
+      errors: ["Invalid handle."],
+    };
+  }
+
+  const redis = getEmailForwardSystemRedis();
+  const rawRedis = getSafeRawRedisClient(EMAIL_FORWARD_LOG_SCOPE);
+  let redisOwner: string | null = null;
+  let rawRedisOwner: unknown = null;
+  let kvStoreOwner: string | null = null;
+
+  if (redis) {
+    try {
+      redisOwner = normalizeOwnerValue(await redis.get<string>(ownerLookupKey));
+    } catch (error) {
+      errors.push(`redis.get failed: ${error instanceof Error ? error.message : "unknown"}`);
+    }
+  }
+
+  if (rawRedis) {
+    try {
+      rawRedisOwner = await rawRedis.get(ownerLookupKey);
+    } catch (error) {
+      errors.push(`raw redis.get failed: ${error instanceof Error ? error.message : "unknown"}`);
+    }
+  }
+
+  try {
+    kvStoreOwner = normalizeOwnerValue(
+      await kvStoreGet<string>(handleOwnerKey(handle), { userId: EMAIL_HANDLE_SYSTEM_NAMESPACE }),
+    );
+  } catch (error) {
+    errors.push(`kvStoreGet failed: ${error instanceof Error ? error.message : "unknown"}`);
+  }
+
+  return {
+    handle,
+    ownerLookupKey,
+    redisConfigured: Boolean(redis),
+    rawRedisConfigured: Boolean(rawRedis),
+    redisOwner,
+    rawRedisOwner,
+    kvStoreOwner,
+    errors,
+  };
 }
 
 export async function markGmailPromptSeen(userId: string): Promise<void> {
