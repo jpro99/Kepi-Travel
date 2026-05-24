@@ -15,6 +15,7 @@ const FIELD_WEIGHTS = {
   localTime: 20,
   timezone: 8,
   location: 12,
+  flightNumber: 0,
 } as const;
 
 const TIMEZONE_ABBREVIATION_MAP: Record<string, string> = {
@@ -109,7 +110,8 @@ export type ForwardedReservationField =
   | "localTime"
   | "timezone"
   | "location"
-  | "notes";
+  | "notes"
+  | "flightNumber";
 export type ForwardedParsingStatus = "auto-parsed" | "needs-review" | "needs-user-input";
 export type ForwardedConfidenceLevel = "high" | "medium" | "low";
 
@@ -135,6 +137,7 @@ export interface ForwardedReservationDraft {
   location: string;
   confirmationCode: string;
   notes: string;
+  flightNumber?: string;
 }
 
 export interface ForwardedEmailParseResult {
@@ -329,6 +332,7 @@ function parseAiCandidate(candidate: Record<string, unknown>): CandidateMap {
   }
   setIfPresent("location", candidate.location, 0.76);
   setIfPresent("notes", candidate.notes, 0.68);
+  setIfPresent("flightNumber", candidate.flightNumber, 0.9);
   return output;
 }
 
@@ -444,6 +448,11 @@ function buildRegexCandidates(input: {
     candidates.title = {
       value: `${flightNumber} reservation`,
       confidence: 0.88,
+      source: "regex",
+    };
+    candidates.flightNumber = {
+      value: flightNumber.replace(/\s+/gu, "").toUpperCase(),
+      confidence: 0.95,
       source: "regex",
     };
   } else {
@@ -591,10 +600,11 @@ async function runAiFallback(rawEmailText: string): Promise<CandidateMap[]> {
   const aiPrompt = [
     "Extract every travel reservation found in this email.",
     "Return strict JSON only with this shape:",
-    '{ "reservations": [ { "type": "", "title": "", "provider": "", "confirmationCode": "", "localTime": "", "timezone": "", "location": "", "notes": "" } ] }',
+    '{ "reservations": [ { "type": "", "title": "", "provider": "", "confirmationCode": "", "localTime": "", "timezone": "", "location": "", "notes": "", "flightNumber": "" } ] }',
     "If there are multiple flights in one email, include one reservations[] object per flight.",
     "Use type values only: flight, hotel, train, ride.",
     "Use localTime in 'YYYY-MM-DD HH:mm' when possible.",
+    "For flights, set flightNumber to the IATA flight number e.g. AA123, UA456, JL001.",
     "If any field is unknown, return an empty string for that field.",
     "Do not include explanation text.",
     "",
@@ -614,7 +624,7 @@ async function runAiFallback(rawEmailText: string): Promise<CandidateMap[]> {
       max_tokens: 700,
       temperature: 0,
       system:
-        "Extract travel reservations from forwarded email text. Return strict JSON only in the shape { reservations: [{ type, title, provider, confirmationCode, localTime, timezone, location, notes }] }. For multi-flight emails, return every flight as a separate reservations[] item.",
+        "Extract travel reservations from forwarded email text. Return strict JSON only in the shape { reservations: [{ type, title, provider, confirmationCode, localTime, timezone, location, notes, flightNumber }] }. For flights, set flightNumber to the IATA code e.g. AA123. For multi-flight emails, return every flight as a separate reservations[] item.",
       messages: [
         {
           role: "user",
@@ -665,6 +675,10 @@ function buildDraft(candidates: CandidateMap, parserNotes: string[]): ForwardedR
     location: normalizeWhitespace(candidates.location?.value ?? ""),
     confirmationCode: normalizeConfirmationCode(candidates.confirmationCode?.value ?? ""),
     notes: notesSections.join(" "),
+    flightNumber:
+      typeValue === "flight"
+        ? (candidates.flightNumber?.value ?? "").replace(/[^A-Za-z0-9]/gu, "").toUpperCase()
+        : "",
   };
 }
 
