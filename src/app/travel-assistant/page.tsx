@@ -700,6 +700,27 @@ function formatConsumerReservationDate(value: string): string {
   }).format(new Date(parsed));
 }
 
+function isValidTimezoneForDisplay(value: string): boolean {
+  const normalized = value.trim();
+  if (!normalized) {
+    return false;
+  }
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: normalized });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function formatTimezoneForDisplay(value: string | null | undefined): string {
+  const normalized = (value ?? "").trim();
+  if (!normalized) {
+    return "Not set";
+  }
+  return isValidTimezoneForDisplay(normalized) ? normalized : "Not set";
+}
+
 function formatHotelArrivalDisplay(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -781,9 +802,13 @@ function extractFlightLookupInput(reservation: Reservation): {
     reservation.provider.match(/\b([A-Z0-9]{2,3}\s?\d{1,4}[A-Z]?)\b/u)?.[1] ||
     "";
   const flightNumber = inferredFlightNumber.replace(/\s+/gu, "").toUpperCase();
-  const airline = reservation.flightAirline?.trim() || reservation.provider.trim();
+  const airlineFromTitle = reservation.title
+    .replace(/\b([A-Z0-9]{2,3}\s?\d{1,4}[A-Z]?)\b/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+  const airline = reservation.flightAirline?.trim() || reservation.provider.trim() || airlineFromTitle || "Unknown Airline";
   const flightDate = reservation.flightDate?.trim() || extractDateFromReservationLocalTime(reservation.localTime) || "";
-  if (!flightNumber || !airline || !flightDate) {
+  if (!flightNumber || !flightDate) {
     return null;
   }
   return { flightNumber, airline, flightDate };
@@ -1370,6 +1395,15 @@ export default function TravelAssistantPage() {
   const [isAdminUser, setIsAdminUser] = useState(false);
   const [consumerAvatarMenuOpen, setConsumerAvatarMenuOpen] = useState(false);
   const [expandedConsumerReservationId, setExpandedConsumerReservationId] = useState<string | null>(null);
+  const [consumerReviewQueueSession, setConsumerReviewQueueSession] = useState<{
+    open: boolean;
+    processed: number;
+    total: number;
+  }>({
+    open: false,
+    processed: 0,
+    total: 0,
+  });
   const [flightStatusCheckByReservationId, setFlightStatusCheckByReservationId] = useState<
     Record<string, FlightStatusCheckResult>
   >({});
@@ -4865,10 +4899,38 @@ export default function TravelAssistantPage() {
         setToast("Review queue is already clear.");
         return;
       }
-      openDrawer("review", reviewQueue[0].id);
+      setConsumerReviewQueueSession({
+        open: true,
+        processed: 0,
+        total: reviewQueue.length,
+      });
     },
-    [openDrawer, reviewQueue, setToast],
+    [reviewQueue.length, setToast],
   );
+
+  const handleConsumerReviewQueueAction = (action: "accept" | "delete"): void => {
+    if (!consumerReviewQueueSession.open) {
+      return;
+    }
+    const currentItem = reviewQueue[0];
+    if (!currentItem) {
+      setConsumerReviewQueueSession({ open: false, processed: 0, total: 0 });
+      return;
+    }
+    if (action === "accept") {
+      handleAcceptReview(currentItem.id);
+    } else {
+      handleRejectReview(currentItem.id);
+    }
+    setConsumerReviewQueueSession((prev) =>
+      prev.open
+        ? {
+            ...prev,
+            processed: Math.min(prev.total, prev.processed + 1),
+          }
+        : prev,
+    );
+  };
 
   const navigateToConsumerTab = useCallback((nextTab: ConsumerTab): void => {
     setConsumerTab(nextTab);
@@ -4976,6 +5038,13 @@ export default function TravelAssistantPage() {
     }
     return null;
   })();
+  const activeConsumerReviewItem = consumerReviewQueueSession.open ? (reviewQueue[0] ?? null) : null;
+  const consumerReviewProgressLabel =
+    consumerReviewQueueSession.open && consumerReviewQueueSession.total > 0
+      ? `${Math.min(consumerReviewQueueSession.processed + 1, consumerReviewQueueSession.total)} of ${
+          consumerReviewQueueSession.total
+        }`
+      : null;
   const getConsumerReservationStatus = useCallback(
     (reservation: Reservation): { label: string; className: string } => {
       if (reservation.type === "flight") {
@@ -5108,8 +5177,9 @@ export default function TravelAssistantPage() {
             <label className="block">
               <span className="mb-1 block text-slate-300">Timezone</span>
               <input
-                value={drawerDraft.timezone}
+                value={formatTimezoneForDisplay(drawerDraft.timezone) === "Not set" ? "" : drawerDraft.timezone}
                 onChange={(event) => setDrawerDraft((prev) => ({ ...prev, timezone: event.target.value }))}
+                placeholder="Not set"
                 className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
               />
             </label>
@@ -5647,19 +5717,71 @@ export default function TravelAssistantPage() {
               </div>
 
               {reviewQueue.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => handleOpenConsumerReviewQueue()}
-                  onTouchEnd={(event) => {
-                    handleOpenConsumerReviewQueue(event);
-                  }}
-                  className="w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm text-amber-900 shadow-sm transition hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-100 dark:hover:bg-amber-500/20"
-                >
-                  <span className="block break-words">
-                    {reviewQueue.length} reservation{reviewQueue.length === 1 ? "" : "s"} are waiting in your review queue — tap to
-                    review now
-                  </span>
-                </button>
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenConsumerReviewQueue()}
+                    onTouchEnd={(event) => {
+                      handleOpenConsumerReviewQueue(event);
+                    }}
+                    className="w-full rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-left text-sm text-amber-900 shadow-sm transition hover:bg-amber-100 dark:border-amber-500/50 dark:bg-amber-500/15 dark:text-amber-100 dark:hover:bg-amber-500/20"
+                  >
+                    <div className="flex items-start gap-2">
+                      <span aria-hidden className="mt-0.5 text-base">
+                        ⚠️
+                      </span>
+                      <span className="block break-words leading-snug">
+                        {reviewQueue.length} reservation{reviewQueue.length === 1 ? "" : "s"} are waiting in your review queue —
+                        tap to review now
+                      </span>
+                    </div>
+                  </button>
+                  {consumerReviewQueueSession.open && activeConsumerReviewItem ? (
+                    <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-100">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-semibold">Review queue</p>
+                        <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-900 dark:bg-amber-500/20 dark:text-amber-100">
+                          {consumerReviewProgressLabel}
+                        </span>
+                      </div>
+                      <p className="mt-2 break-words text-sm font-semibold">
+                        {activeConsumerReviewItem.sourceEmailSubject || activeConsumerReviewItem.draft.title || "Queued reservation"}
+                      </p>
+                      <p className="mt-1 break-words text-xs text-amber-800 dark:text-amber-100/90">
+                        {activeConsumerReviewItem.draft.provider || "Provider pending"} •{" "}
+                        {activeConsumerReviewItem.draft.localTime || "Time pending"}
+                      </p>
+                      {activeConsumerReviewItem.reasons.length > 0 ? (
+                        <p className="mt-2 break-words text-xs text-amber-800 dark:text-amber-100/90">
+                          {activeConsumerReviewItem.reasons[0]}
+                        </p>
+                      ) : null}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleConsumerReviewQueueAction("accept")}
+                          className="rounded-lg bg-emerald-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-400"
+                        >
+                          Accept
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleConsumerReviewQueueAction("delete")}
+                          className="rounded-lg bg-rose-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-rose-400"
+                        >
+                          Delete
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openDrawer("review", activeConsumerReviewItem.id)}
+                          className="rounded-lg bg-amber-200 px-3 py-2 text-xs font-semibold text-amber-900 transition hover:bg-amber-300 dark:bg-amber-500/20 dark:text-amber-100 dark:hover:bg-amber-500/30"
+                        >
+                          Open details
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
 
               {consumerReservationsSorted.length === 0 ? (
@@ -5824,7 +5946,7 @@ export default function TravelAssistantPage() {
                               <span className="font-semibold">Location:</span> {reservation.location || "Not set"}
                             </p>
                             <p className="mt-1 break-words">
-                              <span className="font-semibold">Timezone:</span> {reservation.timezone || "Not set"}
+                              <span className="font-semibold">Timezone:</span> {formatTimezoneForDisplay(reservation.timezone)}
                             </p>
                             <p className="mt-1 break-words">
                               <span className="font-semibold">Confirmation:</span>{" "}
@@ -6709,7 +6831,7 @@ export default function TravelAssistantPage() {
                         <p className="mt-2 text-sm">{selectedEmail.parsed.title}</p>
                         <p className="text-xs text-slate-300">{selectedEmail.parsed.provider}</p>
                         <p className="text-xs text-slate-300">
-                          {selectedEmail.parsed.localTime} ({selectedEmail.parsed.timezone})
+                          {selectedEmail.parsed.localTime} ({formatTimezoneForDisplay(selectedEmail.parsed.timezone)})
                         </p>
                         <p className="text-xs text-slate-300">{selectedEmail.parsed.location}</p>
                         <p className="text-xs text-slate-300">Code: {selectedEmail.parsed.confirmationCode}</p>

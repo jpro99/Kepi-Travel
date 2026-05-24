@@ -79,6 +79,19 @@ export function ReservationList({
 }: ReservationListProps) {
   const [expandedReservationIds, setExpandedReservationIds] = useState<Record<string, boolean>>({});
 
+  const formatTimezoneForDisplay = (value: string): string => {
+    const normalized = value.trim();
+    if (!normalized) {
+      return "Not set";
+    }
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: normalized });
+      return normalized;
+    } catch {
+      return "Not set";
+    }
+  };
+
   const toggleExpanded = (reservationId: string): void => {
     setExpandedReservationIds((previous) => ({
       ...previous,
@@ -242,7 +255,7 @@ export function ReservationList({
                       <span className="font-semibold">Where:</span> {reservation.location}
                     </p>
                     <p className="break-words">
-                      <span className="font-semibold">Time zone:</span> {reservation.timezone}
+                      <span className="font-semibold">Time zone:</span> {formatTimezoneForDisplay(reservation.timezone)}
                     </p>
                     <p className="break-words">
                       <span className="font-semibold">People:</span>{" "}
