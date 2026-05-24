@@ -76,6 +76,22 @@ function sanitizeTimezoneValue(raw: string): string {
   return "Etc/UTC";
 }
 
+// ISO 3166-1 alpha-2 country codes that should NOT be treated as IATA airline codes.
+// Prevents postal codes like "JP 104-0061" from triggering flight detection.
+const COUNTRY_CODE_DENYLIST = new Set([
+  "AF", "AL", "AO", "AR", "AM", "AU", "AT", "AZ", "BE", "BZ",
+  "BR", "BG", "CA", "CL", "CN", "CO", "HR", "CU", "CY", "CZ",
+  "DK", "EG", "EE", "ET", "FI", "FR", "GE", "DE", "GH", "GR",
+  "GT", "HU", "IN", "ID", "IR", "IQ", "IE", "IL", "IT", "JP",
+  "JO", "KZ", "KE", "KW", "LV", "LB", "LY", "LI", "LT", "LU",
+  "MY", "MV", "ML", "MT", "MX", "MD", "MC", "MN", "ME", "MA",
+  "MM", "NA", "NP", "NL", "NZ", "NG", "MK", "NO", "OM", "PK",
+  "PA", "PY", "PE", "PH", "PL", "PT", "QA", "RO", "RU", "SA",
+  "SN", "RS", "SG", "SK", "SI", "SO", "ZA", "ES", "LK", "SE",
+  "CH", "SY", "TW", "TZ", "TH", "TT", "TN", "TR", "UA", "AE",
+  "GB", "UK", "US", "UY", "VE", "VN", "YE", "ZM", "ZW",
+]);
+
 const RESERVATION_TYPE_KEYWORDS: Array<{ type: ForwardedReservationType; pattern: RegExp; confidence: number }> = [
   { type: "flight", pattern: /\b(flight|airline|boarding|terminal|gate)\b/iu, confidence: 0.78 },
   { type: "hotel", pattern: /\b(hotel|check-?in|check out|room|suite|stay)\b/iu, confidence: 0.78 },
@@ -438,7 +454,7 @@ function buildRegexCandidates(input: {
   const candidates: CandidateMap = {};
 
   const flightNumberMatch = combined.match(/\b([A-Z]{2})\s?(\d{2,4})\b/u);
-  if (flightNumberMatch) {
+  if (flightNumberMatch && !COUNTRY_CODE_DENYLIST.has(flightNumberMatch[1] ?? "")) {
     const flightNumber = `${flightNumberMatch[1]} ${flightNumberMatch[2]}`;
     candidates.type = {
       value: "flight",
@@ -509,7 +525,7 @@ function buildRegexCandidates(input: {
   }
 
   const confirmationMatch = combined.match(
-    /(?:confirmation(?:\s*(?:number|code))?|booking\s*(?:ref(?:erence)?|code)|record locator|pnr)[^A-Za-z0-9]{0,20}([A-Za-z0-9-]{5,8})/iu,
+    /(?:confirmation(?:\s*(?:number|code|#))?|booking\s*(?:ref(?:erence)?|code|#|number)|record locator|pnr|itinerary\s*(?:number|#)?|reservation\s*(?:number|#)?)[^A-Za-z0-9]{0,20}([A-Za-z0-9-]{4,20})/iu,
   );
   if (confirmationMatch?.[1]) {
     candidates.confirmationCode = {
@@ -518,7 +534,7 @@ function buildRegexCandidates(input: {
       source: "regex",
     };
   } else {
-    const fallbackConfirmationMatch = combined.match(/\b([A-Z0-9]{5,8})\b/u);
+    const fallbackConfirmationMatch = combined.match(/\b([A-Z0-9]{5,12})\b/u);
     if (fallbackConfirmationMatch?.[1]) {
       candidates.confirmationCode = {
         value: normalizeConfirmationCode(fallbackConfirmationMatch[1]),

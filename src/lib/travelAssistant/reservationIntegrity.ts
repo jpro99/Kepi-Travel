@@ -6,6 +6,17 @@ export type ReservationIntegrityIssueCode =
   | "invalid-timezone"
   | "invalid-local-time";
 
+// Codes that block safeForLive. missing-confirmation is intentionally excluded:
+// confirmation codes are often missing from auto-parsed emails (different labels,
+// long numeric codes, etc.) and users can add them manually after accepting.
+const BLOCKING_ISSUE_CODES = new Set<ReservationIntegrityIssueCode>([
+  "missing-title",
+  "missing-provider",
+  "missing-location",
+  "invalid-timezone",
+  "invalid-local-time",
+]);
+
 export interface ReservationIntegrityIssue {
   code: ReservationIntegrityIssueCode;
   message: string;
@@ -109,7 +120,7 @@ export function evaluateReservationIntegrity(input: ReservationDraftLike): {
   }
 
   return {
-    safeForLive: issues.length === 0,
+    safeForLive: issues.filter((issue) => BLOCKING_ISSUE_CODES.has(issue.code)).length === 0,
     issues,
   };
 }
