@@ -200,7 +200,12 @@ export function ReservationList({
                 {reservation.type === "flight" ? (
                   <button
                     type="button"
-                    onClick={() => onCheckFlightStatus(reservation.id)}
+                    onClick={() => {
+                      console.log("[ReservationList] Check status button clicked.", {
+                        reservationId: reservation.id,
+                      });
+                      onCheckFlightStatus(reservation.id);
+                    }}
                     disabled={flightStatusCheck?.busy === true}
                     className="rounded-md bg-cyan-200 px-2 py-1 ring-1 ring-cyan-300 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-cyan-500/20 dark:ring-cyan-400/40 dark:hover:bg-cyan-500/30"
                   >
@@ -209,7 +214,12 @@ export function ReservationList({
                 ) : null}
                 <button
                   type="button"
-                  onClick={() => onDeleteReservation(reservation.id)}
+                  onClick={() => {
+                    console.log("[ReservationList] Delete button clicked.", {
+                      reservationId: reservation.id,
+                    });
+                    onDeleteReservation(reservation.id);
+                  }}
                   className="rounded-md bg-rose-100 px-2 py-1 text-rose-800 ring-1 ring-rose-300 hover:bg-rose-200 dark:bg-rose-500/20 dark:text-rose-100 dark:ring-rose-400/40 dark:hover:bg-rose-500/30"
                 >
                   Delete

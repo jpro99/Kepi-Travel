@@ -797,15 +797,21 @@ function extractFlightLookupInput(reservation: Reservation): {
   flightDate: string;
 } | null {
   const reservationRecord = reservation as Reservation & Record<string, unknown>;
+  const notesFlightNumber = reservation.notes.match(/\b([A-Z0-9]{2,3}\s?\d{1,4}[A-Z]?)\b/u)?.[1] ?? "";
   const inferredFlightNumber =
     (typeof reservationRecord.flightNumber === "string" ? reservationRecord.flightNumber : "") ||
     (typeof reservationRecord.flight_number === "string" ? reservationRecord.flight_number : "") ||
+    (typeof reservationRecord.flightNum === "string" ? reservationRecord.flightNum : "") ||
+    (typeof reservationRecord.flight_num === "string" ? reservationRecord.flight_num : "") ||
     (typeof reservationRecord.flightNo === "string" ? reservationRecord.flightNo : "") ||
     (typeof reservationRecord.flight_no === "string" ? reservationRecord.flight_no : "") ||
+    (typeof reservationRecord.flightCode === "string" ? reservationRecord.flightCode : "") ||
+    (typeof reservationRecord.flight_code === "string" ? reservationRecord.flight_code : "") ||
+    notesFlightNumber ||
     reservation.title.match(/\b([A-Z0-9]{2,3}\s?\d{1,4}[A-Z]?)\b/u)?.[1] ||
     reservation.provider.match(/\b([A-Z0-9]{2,3}\s?\d{1,4}[A-Z]?)\b/u)?.[1] ||
     "";
-  const flightNumber = inferredFlightNumber.replace(/\s+/gu, "").toUpperCase();
+  const flightNumber = inferredFlightNumber.replace(/[^A-Za-z0-9]/gu, "").toUpperCase();
   const airlineFromTitle = reservation.title
     .replace(/\b([A-Z0-9]{2,3}\s?\d{1,4}[A-Z]?)\b/gu, " ")
     .replace(/\s+/gu, " ")
@@ -813,6 +819,8 @@ function extractFlightLookupInput(reservation: Reservation): {
   const airline =
     (typeof reservationRecord.flightAirline === "string" ? reservationRecord.flightAirline : "") ||
     (typeof reservationRecord.flight_airline === "string" ? reservationRecord.flight_airline : "") ||
+    (typeof reservationRecord.airlineName === "string" ? reservationRecord.airlineName : "") ||
+    (typeof reservationRecord.airline_name === "string" ? reservationRecord.airline_name : "") ||
     (typeof reservationRecord.airline === "string" ? reservationRecord.airline : "") ||
     reservation.provider.trim() ||
     airlineFromTitle ||
@@ -820,10 +828,21 @@ function extractFlightLookupInput(reservation: Reservation): {
   const flightDateRaw =
     (typeof reservationRecord.flightDate === "string" ? reservationRecord.flightDate : "") ||
     (typeof reservationRecord.flight_date === "string" ? reservationRecord.flight_date : "") ||
+    (typeof reservationRecord.departureDate === "string" ? reservationRecord.departureDate : "") ||
+    (typeof reservationRecord.departure_date === "string" ? reservationRecord.departure_date : "") ||
+    (typeof reservationRecord.date === "string" ? reservationRecord.date : "") ||
     (typeof reservationRecord.localTime === "string" ? reservationRecord.localTime : "") ||
     (typeof reservationRecord.local_time === "string" ? reservationRecord.local_time : "");
   const flightDate =
     extractDateFromReservationLocalTime(flightDateRaw) || extractDateFromReservationLocalTime(reservation.localTime) || "";
+  console.log("[travel-assistant] Flight lookup input extraction.", {
+    reservationId: reservation.id,
+    inferredFlightNumber,
+    normalizedFlightNumber: flightNumber,
+    airline,
+    flightDateRaw,
+    flightDate,
+  });
   if (!flightNumber || !flightDate) {
     return null;
   }
@@ -868,12 +887,32 @@ function extractDestinationFromReservationLocation(location: string): string | n
 function extractDateFromReservationLocalTime(localTime: string): string | null {
   const trimmed = localTime.trim();
   if (!trimmed) return null;
-  const parsed = parseDateInput(trimmed);
+  const parsed = Date.parse(trimmed);
   if (!Number.isNaN(parsed)) {
     return new Date(parsed).toISOString().slice(0, 10);
   }
   const dateMatch = trimmed.match(/\d{4}-\d{2}-\d{2}/u);
-  return dateMatch?.[0] ?? null;
+  if (dateMatch?.[0]) {
+    return dateMatch[0];
+  }
+  const usDateMatch = trimmed.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/u);
+  if (usDateMatch) {
+    const month = usDateMatch[1]?.padStart(2, "0");
+    const day = usDateMatch[2]?.padStart(2, "0");
+    const yearRaw = usDateMatch[3] ?? "";
+    const year = yearRaw.length === 2 ? `20${yearRaw}` : yearRaw;
+    return `${year}-${month}-${day}`;
+  }
+  const verboseDateMatch = trimmed.match(
+    /\b((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?:,\s*\d{2,4})?)\b/iu,
+  );
+  if (verboseDateMatch?.[1]) {
+    const verboseParsed = Date.parse(verboseDateMatch[1]);
+    if (!Number.isNaN(verboseParsed)) {
+      return new Date(verboseParsed).toISOString().slice(0, 10);
+    }
+  }
+  return null;
 }
 
 function formatDateTimeLocal(valueMs: number): string {
@@ -4239,27 +4278,83 @@ export default function TravelAssistantPage() {
 
   const handleDeleteReservation = useCallback(
     (reservationId: string): void => {
+      console.log("[travel-assistant] Delete click received.", {
+        reservationId,
+        activeTripId,
+        tripCount: trips.length,
+      });
       const reservation = reservations.find((item) => item.id === reservationId);
       if (!reservation) {
+        console.log("[travel-assistant] Delete aborted: reservation not found in local state.", {
+          reservationId,
+          availableReservationIds: reservations.map((item) => item.id),
+        });
         setToast("Reservation not found.");
         return;
       }
       const nextReservations = reservations.filter((item) => item.id !== reservationId);
+      console.log("[travel-assistant] Delete local state update prepared.", {
+        reservationId,
+        beforeCount: reservations.length,
+        afterCount: nextReservations.length,
+      });
       pushUndoSnapshot("Reservation deleted");
       setReservations(nextReservations);
-      if (activeTripId) {
+      const targetTripId = activeTripId ?? trips[0]?.id ?? null;
+      if (targetTripId) {
+        console.log("[travel-assistant] Delete persistence request starting.", {
+          reservationId,
+          targetTripId,
+          reservationCount: nextReservations.length,
+        });
         void fetch(TRIP_API_ROUTE, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "update",
-            id: activeTripId,
+            id: targetTripId,
             patch: {
               reservations: nextReservations,
             },
           }),
-        }).catch(() => {
-          // Persist fallback is handled by existing autosave effect.
+        })
+          .then(async (response) => {
+            if (!response.ok) {
+              let payload: unknown = null;
+              try {
+                payload = await response.json();
+              } catch {
+                payload = null;
+              }
+              console.log("[travel-assistant] Delete persistence request failed.", {
+                reservationId,
+                targetTripId,
+                status: response.status,
+                payload,
+              });
+              return;
+            }
+            const payload = (await response.json()) as { trip?: { id?: string }; activeTripId?: string | null };
+            console.log("[travel-assistant] Delete persistence request succeeded.", {
+              reservationId,
+              targetTripId,
+              persistedTripId: payload.trip?.id ?? null,
+              activeTripId: payload.activeTripId ?? null,
+            });
+          })
+          .catch((error) => {
+            console.log("[travel-assistant] Delete persistence request threw.", {
+              reservationId,
+              targetTripId,
+              error: error instanceof Error ? error.message : "unknown",
+            });
+            // Persist fallback is handled by existing autosave effect.
+          });
+      } else {
+        console.log("[travel-assistant] Delete persistence skipped: no target trip id resolved.", {
+          reservationId,
+          activeTripId,
+          tripIds: trips.map((trip) => trip.id),
         });
       }
       setExpandedConsumerReservationId((prev) => (prev === reservationId ? null : prev));
@@ -4276,17 +4371,28 @@ export default function TravelAssistantPage() {
         key: "reservation-delete",
         reservationId,
       });
+      console.log("[travel-assistant] Delete flow finished.", {
+        reservationId,
+      });
     },
-    [activeTripId, pushUndoSnapshot, queueMutation, reservations, setToast],
+    [activeTripId, pushUndoSnapshot, queueMutation, reservations, setToast, trips],
   );
 
   const handleCheckFlightStatus = useCallback(
     async (reservationId: string): Promise<void> => {
+      console.log("[travel-assistant] Check status click received.", {
+        reservationId,
+      });
       const reservation = reservations.find((item) => item.id === reservationId);
       if (!reservation) {
+        console.log("[travel-assistant] Check status aborted: reservation not found.", {
+          reservationId,
+          availableReservationIds: reservations.map((item) => item.id),
+        });
         setToast("Reservation not found.");
         return;
       }
+      console.log("[travel-assistant] Check status full reservation object.", reservation);
       if (reservation.type !== "flight") {
         setToast("Status lookup is available for flight reservations only.");
         return;
@@ -4307,6 +4413,30 @@ export default function TravelAssistantPage() {
       });
       if (!lookupInput) {
         const errorMessage = "Add flight number, airline, and date before checking status.";
+        console.log("[travel-assistant] Check status lookup input missing.", {
+          reservationId,
+          reservationObject: reservation,
+          flightNumberCandidates: [
+            reservationRecord.flightNumber,
+            reservationRecord.flight_number,
+            reservationRecord.flightNo,
+            reservationRecord.flight_no,
+            reservation.title,
+            reservation.provider,
+          ],
+          airlineCandidates: [
+            reservationRecord.flightAirline,
+            reservationRecord.flight_airline,
+            reservationRecord.airline,
+            reservation.provider,
+          ],
+          dateCandidates: [
+            reservationRecord.flightDate,
+            reservationRecord.flight_date,
+            reservationRecord.localTime,
+            reservationRecord.local_time,
+          ],
+        });
         setFlightStatusCheckByReservationId((prev) => ({
           ...prev,
           [reservationId]: {
@@ -5920,6 +6050,9 @@ export default function TravelAssistantPage() {
                             <button
                               type="button"
                               onClick={() => {
+                                console.log("[travel-assistant] Check status button clicked.", {
+                                  reservationId: reservation.id,
+                                });
                                 void handleCheckFlightStatus(reservation.id);
                               }}
                               disabled={inlineFlightStatus?.busy === true}
@@ -5930,7 +6063,12 @@ export default function TravelAssistantPage() {
                           ) : null}
                           <button
                             type="button"
-                            onClick={() => handleDeleteReservation(reservation.id)}
+                            onClick={() => {
+                              console.log("[travel-assistant] Delete button clicked.", {
+                                reservationId: reservation.id,
+                              });
+                              handleDeleteReservation(reservation.id);
+                            }}
                             className="rounded-lg bg-rose-500 px-3 py-1.5 font-semibold text-white transition hover:bg-rose-400"
                           >
                             Delete

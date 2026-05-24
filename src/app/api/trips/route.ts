@@ -266,6 +266,10 @@ export async function PUT(req: Request) {
   }
   const parsed = PutBodySchema.safeParse(body);
   if (!parsed.success) {
+    console.log("[/api/trips] PUT validation failed.", {
+      body,
+      issues: parsed.error.issues,
+    });
     return NextResponse.json(
       { error: "Validation failed", details: parsed.error.flatten() },
       { status: 422, headers: auth.headers },
@@ -274,6 +278,10 @@ export async function PUT(req: Request) {
 
   try {
     if (parsed.data.action === "set-active") {
+      console.log("[/api/trips] PUT set-active received.", {
+        userId: auth.userId,
+        tripId: parsed.data.id,
+      });
       const activeTrip = await setActiveTrip(parsed.data.id, auth.userId);
       if (!activeTrip) {
         return NextResponse.json({ error: "Trip not found" }, { status: 404, headers: auth.headers });
@@ -290,10 +298,32 @@ export async function PUT(req: Request) {
     }
 
     const existingTrip = await getTrip(parsed.data.id, auth.userId);
+    const patchReservationCount = Array.isArray(parsed.data.patch.reservations) ? parsed.data.patch.reservations.length : null;
+    console.log("[/api/trips] PUT update received.", {
+      userId: auth.userId,
+      tripId: parsed.data.id,
+      existingTripFound: Boolean(existingTrip),
+      existingReservationCount: existingTrip?.reservations.length ?? null,
+      patchReservationCount,
+      patchKeys: Object.keys(parsed.data.patch),
+    });
     const updated = await updateTrip(parsed.data.id, parsed.data.patch, auth.userId);
     if (!updated) {
+      console.log("[/api/trips] PUT update failed: trip not found.", {
+        userId: auth.userId,
+        tripId: parsed.data.id,
+      });
       return NextResponse.json({ error: "Trip not found" }, { status: 404, headers: auth.headers });
     }
+    console.log("[/api/trips] PUT update persisted.", {
+      userId: auth.userId,
+      tripId: parsed.data.id,
+      updatedReservationCount: updated.reservations.length,
+      reservationDelta:
+        typeof patchReservationCount === "number" && typeof existingTrip?.reservations.length === "number"
+          ? patchReservationCount - existingTrip.reservations.length
+          : null,
+    });
 
     if (existingTrip) {
       const previousStageRank = STAGE_RANK[existingTrip.stage];
@@ -356,6 +386,9 @@ export async function PUT(req: Request) {
       { headers: auth.headers },
     );
   } catch (error) {
+    console.log("[/api/trips] PUT threw error.", {
+      error: error instanceof Error ? error.message : "unknown",
+    });
     auth.routeLogger.error("Trips PUT failed.", {
       error: error instanceof Error ? error.message : "unknown",
     });

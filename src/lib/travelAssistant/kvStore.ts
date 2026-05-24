@@ -131,13 +131,24 @@ export async function kvStoreSet<T>(
   const upstashRedis = getUpstashRedis();
   const userNamespace = await resolveUserNamespace(options?.userId);
   const namespacedKey = toNamespacedKey(key, userNamespace);
+  console.log("[kvStore] set called.", {
+    key: namespacedKey,
+    hasRedisConfig: hasAnyRedisConfig(),
+    hasRedisClient: Boolean(upstashRedis),
+  });
   if (!hasAnyRedisConfig() || !upstashRedis) {
     warnMissingKvEnv("runtime");
     fallbackStore.set(namespacedKey, cloneValue(value));
+    console.log("[kvStore] set stored in memory fallback.", {
+      key: namespacedKey,
+    });
     return;
   }
   try {
     await upstashRedis.set(namespacedKey, value);
+    console.log("[kvStore] set persisted to redis.", {
+      key: namespacedKey,
+    });
   } catch (error) {
     logger.warn("KV set failed. Persisting in-memory fallback value.", {
       scope: "travelAssistant/kvStore",
@@ -145,6 +156,10 @@ export async function kvStoreSet<T>(
       error: error instanceof Error ? error.message : "unknown",
     });
     fallbackStore.set(namespacedKey, cloneValue(value));
+    console.log("[kvStore] set failed in redis, wrote fallback.", {
+      key: namespacedKey,
+      error: error instanceof Error ? error.message : "unknown",
+    });
   }
 }
 
