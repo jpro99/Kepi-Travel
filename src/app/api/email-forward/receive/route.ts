@@ -154,6 +154,20 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       return { ok: false, status: 400, message: "Invalid JSON body." };
     }
 
+    const rawPayload = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
+    const rawPayloadNestedData =
+      rawPayload?.data && typeof rawPayload.data === "object"
+        ? (rawPayload.data as Record<string, unknown>)
+        : null;
+    routeLogger.info("Incoming webhook recipient payload fields.", {
+      rawTo: rawPayload?.to ?? null,
+      rawCc: rawPayload?.cc ?? null,
+      rawEnvelope: rawPayload?.envelope ?? null,
+      rawDataTo: rawPayloadNestedData?.to ?? null,
+      rawDataCc: rawPayloadNestedData?.cc ?? null,
+      rawDataEnvelope: rawPayloadNestedData?.envelope ?? null,
+    });
+
     const parsed = BodySchema.safeParse(body);
     if (!parsed.success) {
       console.error("[email-forward-webhook] Validation failed.", {
@@ -169,6 +183,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
     let addressedUserId: string | null = null;
     const recipientCandidates = extractRecipientCandidates(parsed.data.to);
     routeLogger.info("Email forward recipient candidates extracted.", {
+      parsedTo: parsed.data.to ?? null,
       recipientCandidates,
     });
     for (const candidateAddress of recipientCandidates) {
