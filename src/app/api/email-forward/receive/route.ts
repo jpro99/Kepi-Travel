@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Webhook } from "svix";
 import { z } from "zod";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
+import { getResendClient } from "@/lib/email/resendClient";
 import { logger } from "@/lib/logger";
 import { parseForwardedEmail } from "@/lib/travelAssistant/emailForwardParser";
 import { resolveUserIdByForwardAddress } from "@/lib/travelAssistant/emailForwardSetupStore";
@@ -14,9 +15,13 @@ const AttachmentSchema = z.object({
   contentType: z.string().trim().min(1).max(120).optional(),
 });
 
+type ParsedAttachment = z.infer<typeof AttachmentSchema>;
+
 const BodySchema = z.object({
   userId: z.string().trim().min(1).optional(),
   tripId: z.string().trim().min(1).optional(),
+  eventType: z.string().trim().min(1).max(120).optional(),
+  emailId: z.string().trim().min(1).max(160).optional(),
   from: z.string().trim().max(240).optional(),
   to: z.unknown().optional(),
   cc: z.unknown().optional(),
@@ -60,6 +65,106 @@ function normalizeDuplicateValue(value: unknown): string {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function firstDefined(...values: unknown[]): unknown {
+  for (const value of values) {
+    if (typeof value !== "undefined" && value !== null) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function firstNonEmptyString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value !== "string") {
+      continue;
+    }
+    const trimmed = value.trim();
+    if (trimmed.length > 0) {
+      return trimmed;
+    }
+  }
+  return undefined;
+}
+
+function normalizeAttachmentMetadata(rawAttachments: unknown): ParsedAttachment[] {
+  if (!Array.isArray(rawAttachments)) {
+    return [];
+  }
+  return rawAttachments.flatMap((rawAttachment) => {
+    const attachment = asRecord(rawAttachment);
+    if (!attachment) {
+      return [];
+    }
+    const filename = firstNonEmptyString(attachment.filename);
+    const contentType = firstNonEmptyString(attachment.contentType, attachment.content_type);
+    if (!filename && !contentType) {
+      return [];
+    }
+    return [
+      {
+        filename,
+        contentType,
+      },
+    ];
+  });
+}
+
+function normalizeIncomingWebhookBody(body: unknown): Record<string, unknown> {
+  const root = asRecord(body) ?? {};
+  const data = asRecord(root.data);
+  const nestedEmail = asRecord(data?.email);
+
+  const normalized: Record<string, unknown> = {};
+  normalized.userId = firstNonEmptyString(root.userId, data?.userId, nestedEmail?.userId);
+  normalized.tripId = firstNonEmptyString(root.tripId, data?.tripId, nestedEmail?.tripId);
+  normalized.eventType = firstNonEmptyString(root.type, data?.type);
+  normalized.emailId = firstNonEmptyString(
+    root.emailId,
+    root.email_id,
+    data?.emailId,
+    data?.email_id,
+    nestedEmail?.emailId,
+    nestedEmail?.email_id,
+    nestedEmail?.id,
+  );
+  normalized.from = firstNonEmptyString(root.from, data?.from, nestedEmail?.from);
+  normalized.to = firstDefined(root.to, data?.to, nestedEmail?.to);
+  normalized.cc = firstDefined(root.cc, data?.cc, nestedEmail?.cc);
+  normalized.envelope = firstDefined(root.envelope, data?.envelope, nestedEmail?.envelope);
+  normalized.subject = firstNonEmptyString(root.subject, data?.subject, nestedEmail?.subject);
+  normalized.text = firstNonEmptyString(
+    root.text,
+    data?.text,
+    nestedEmail?.text,
+    root.bodyText,
+    data?.bodyText,
+    nestedEmail?.bodyText,
+    root.plainText,
+    data?.plainText,
+    nestedEmail?.plainText,
+  );
+  normalized.html = firstNonEmptyString(
+    root.html,
+    data?.html,
+    nestedEmail?.html,
+    root.bodyHtml,
+    data?.bodyHtml,
+    nestedEmail?.bodyHtml,
+  );
+  normalized.attachments = normalizeAttachmentMetadata(
+    firstDefined(root.attachments, data?.attachments, nestedEmail?.attachments),
+  );
+  return normalized;
+}
+
 function isDuplicateReservation(
   existing: {
     type?: string;
@@ -81,11 +186,31 @@ function isDuplicateReservation(
   if (existingCode.length > 0 && candidateCode.length > 0 && existingCode === candidateCode) {
     return true;
   }
+  const existingType = normalizeDuplicateValue(existing.type);
+  const candidateType = normalizeDuplicateValue(candidate.type);
+  const existingProvider = normalizeDuplicateValue(existing.provider);
+  const candidateProvider = normalizeDuplicateValue(candidate.provider);
+  const existingLocalTime = normalizeDuplicateValue(existing.localTime);
+  const candidateLocalTime = normalizeDuplicateValue(candidate.localTime);
+  const existingLocation = normalizeDuplicateValue(existing.location);
+  const candidateLocation = normalizeDuplicateValue(candidate.location);
+  const hasFullCompositeSignal =
+    existingType.length > 0 &&
+    candidateType.length > 0 &&
+    existingProvider.length > 0 &&
+    candidateProvider.length > 0 &&
+    existingLocalTime.length > 0 &&
+    candidateLocalTime.length > 0 &&
+    existingLocation.length > 0 &&
+    candidateLocation.length > 0;
+  if (!hasFullCompositeSignal) {
+    return false;
+  }
   return (
-    normalizeDuplicateValue(existing.type) === normalizeDuplicateValue(candidate.type) &&
-    normalizeDuplicateValue(existing.provider) === normalizeDuplicateValue(candidate.provider) &&
-    normalizeDuplicateValue(existing.localTime) === normalizeDuplicateValue(candidate.localTime) &&
-    normalizeDuplicateValue(existing.location) === normalizeDuplicateValue(candidate.location)
+    existingType === candidateType &&
+    existingProvider === candidateProvider &&
+    existingLocalTime === candidateLocalTime &&
+    existingLocation === candidateLocation
   );
 }
 
@@ -214,6 +339,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       rawPayload?.data && typeof rawPayload.data === "object"
         ? (rawPayload.data as Record<string, unknown>)
         : null;
+    const normalizedBody = normalizeIncomingWebhookBody(body);
     routeLogger.info("Incoming webhook recipient payload fields.", {
       rawTo: rawPayload?.to ?? null,
       rawCc: rawPayload?.cc ?? null,
@@ -221,14 +347,20 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       rawDataTo: rawPayloadNestedData?.to ?? null,
       rawDataCc: rawPayloadNestedData?.cc ?? null,
       rawDataEnvelope: rawPayloadNestedData?.envelope ?? null,
+      rawDataFrom: rawPayloadNestedData?.from ?? null,
+      rawDataSubject: rawPayloadNestedData?.subject ?? null,
+      rawDataEmailId: rawPayloadNestedData?.email_id ?? null,
+      normalizedSubject: normalizedBody.subject ?? null,
+      normalizedFrom: normalizedBody.from ?? null,
+      normalizedEmailId: normalizedBody.emailId ?? null,
     });
 
-    const parsed = BodySchema.safeParse(body);
+    const parsed = BodySchema.safeParse(normalizedBody);
     if (!parsed.success) {
       console.error("[email-forward-webhook] Validation failed.", {
         requestId,
         details: parsed.error.flatten(),
-        body,
+        body: normalizedBody,
       });
       return { ok: false, status: 422, message: "Webhook body validation failed." };
     }
@@ -324,12 +456,58 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       return { ok: false, status: 404, message: "No active trip found for target user.", userId: targetUserId };
     }
 
+    let parserSubject = parsed.data.subject ?? "";
+    let parserFrom = parsed.data.from ?? "";
+    let parserText = parsed.data.text ?? "";
+    let parserHtml = parsed.data.html ?? "";
+    let parserAttachments = parsed.data.attachments;
+    const emailId = parsed.data.emailId?.trim() ?? "";
+    if (emailId && parserText.trim().length === 0 && parserHtml.trim().length === 0) {
+      const resendClient = getResendClient();
+      if (!resendClient) {
+        routeLogger.warn("Resend receiving lookup skipped because RESEND_API_KEY is missing.", {
+          emailId,
+        });
+      } else {
+        try {
+          const receivedEmailResponse = await resendClient.emails.receiving.get(emailId);
+          if (receivedEmailResponse.error || !receivedEmailResponse.data) {
+            routeLogger.error("Resend receiving lookup failed.", {
+              emailId,
+              error: receivedEmailResponse.error?.message ?? "unknown",
+            });
+          } else {
+            const receivedEmail = receivedEmailResponse.data;
+            parserSubject = parserSubject.trim() || receivedEmail.subject?.trim() || "";
+            parserFrom = parserFrom.trim() || receivedEmail.from?.trim() || "";
+            parserText = parserText.trim() || receivedEmail.text || "";
+            parserHtml = parserHtml.trim() || receivedEmail.html || "";
+            if (parserAttachments.length === 0) {
+              parserAttachments = normalizeAttachmentMetadata(receivedEmail.attachments);
+            }
+            routeLogger.info("Hydrated received email body from Resend API.", {
+              emailId,
+              parserTextLength: parserText.length,
+              parserHtmlLength: parserHtml.length,
+              parserSubjectLength: parserSubject.length,
+              parserFromLength: parserFrom.length,
+            });
+          }
+        } catch (error) {
+          routeLogger.error("Resend receiving lookup threw an exception.", {
+            emailId,
+            error: error instanceof Error ? error.message : "unknown",
+          });
+        }
+      }
+    }
+
     const parserResult = await parseForwardedEmail({
-      subject: parsed.data.subject,
-      from: parsed.data.from,
-      text: parsed.data.text,
-      html: parsed.data.html,
-      attachments: parsed.data.attachments,
+      subject: parserSubject,
+      from: parserFrom,
+      text: parserText,
+      html: parserHtml,
+      attachments: parserAttachments,
     });
     const parserDraftRecord =
       parserResult?.draft && typeof parserResult.draft === "object"
