@@ -8,7 +8,7 @@ import { enforceRateLimit } from "@/lib/rateLimit";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const routeLogger = logger.child({ route: "/api/trip-guidance" });
+const routeLogger = logger.withContext({ route: "/api/trip-guidance" });
 
 const RequestSchema = z.object({
   tripName: z.string().trim().max(200).default("My Trip"),
