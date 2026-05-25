@@ -412,13 +412,14 @@ export async function POST(req: Request) {
           "Read multilingual text including Japanese when present.",
           "Return strict JSON only.",
           "Use this exact shape:",
-          '{ "reservation": { "type": "", "provider": "", "title": "", "date": "", "time": "", "timezone": "", "confirmationCode": "", "location": "", "flightOrTrainNumber": "", "roomType": "", "checkOutDate": "", "notes": "" } }',
+          '{ "reservation": { "type": "", "provider": "", "title": "", "date": "", "time": "", "timezone": "", "confirmationCode": "", "departureAirport": "", "arrivalAirport": "", "location": "", "flightOrTrainNumber": "", "roomType": "", "checkOutDate": "", "notes": "" } }',
           "type must be one of: flight, hotel, train, ride, dinner.",
           "CRITICAL: Only extract what is explicitly visible in the image. NEVER guess, infer, or assume any field.",
           "If the year is not shown in the image, set date to empty string — do NOT assume the current year or any year.",
           "If any field is unclear or not visible, return empty string for that field.",
           "Use ISO date YYYY-MM-DD only when the full date including year is clearly visible. Use 24-hour HH:mm for time.",
           "Do not invent confirmation codes, dates, or any other fields.",
+          "For flights: departureAirport = the IATA code of the origin airport (e.g. HND, LAX, HNL). arrivalAirport = the IATA code of the destination airport. Extract from the ticket — they are always shown.",
         ].join(" "),
         messages: [
           {
@@ -478,6 +479,12 @@ export async function POST(req: Request) {
             : typeof reservationNode.trainNumber === "string"
               ? reservationNode.trainNumber.trim()
               : "";
+      const departureAirport = typeof reservationNode.departureAirport === "string"
+        ? reservationNode.departureAirport.trim().toUpperCase().slice(0, 4)
+        : "";
+      const arrivalAirport = typeof reservationNode.arrivalAirport === "string"
+        ? reservationNode.arrivalAirport.trim().toUpperCase().slice(0, 4)
+        : "";
       const localTime =
         typeof reservationNode.localTime === "string" && reservationNode.localTime.trim().length > 0
           ? reservationNode.localTime.trim()
@@ -508,6 +515,8 @@ export async function POST(req: Request) {
         flightNumber: scannedType === "flight" ? numberValue : "",
         flightAirline: scannedType === "flight" ? provider : "",
         flightDate: scannedType === "flight" ? date : "",
+        flightDepartureAirport: scannedType === "flight" ? departureAirport : "",
+        flightArrivalAirport: scannedType === "flight" ? arrivalAirport : "",
         checkOutDate: scannedType === "hotel" ? checkOutDate : "",
         roomType: scannedType === "hotel" ? roomType : "",
       };

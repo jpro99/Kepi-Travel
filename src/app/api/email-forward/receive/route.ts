@@ -649,6 +649,12 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         flightNumber: parserType === "flight" ? parserFlightNumber : "",
         flightAirline: resolvedAirline,
         flightDate: parserType === "flight" ? parserLocalTime.slice(0, 10) : "",
+        flightDepartureAirport: parserType === "flight"
+          ? (typeof parserDraftRecord.departureAirport === "string" ? parserDraftRecord.departureAirport.trim().toUpperCase().slice(0, 4) : "")
+          : "",
+        flightArrivalAirport: parserType === "flight"
+          ? (typeof parserDraftRecord.arrivalAirport === "string" ? parserDraftRecord.arrivalAirport.trim().toUpperCase().slice(0, 4) : "")
+          : "",
       };
 
       const hasMatchingReservation = nextReservations.some((reservation) =>
