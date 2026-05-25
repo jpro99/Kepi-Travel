@@ -3926,6 +3926,11 @@ export default function TravelAssistantPage() {
         confidence: "high",
         notes: [notesPrefix, value.notes.trim()].filter((entry) => entry.length > 0).join(" "),
         source: "manual",
+        checkOutDate: mappedType === "hotel" ? value.checkOutDate.trim() : undefined,
+        roomType: mappedType === "hotel" ? value.roomType.trim() : undefined,
+        flightNumber: mappedType === "flight" ? value.flightNumber.trim() : undefined,
+        flightAirline: mappedType === "flight" ? value.provider.trim() : undefined,
+        flightDate: mappedType === "flight" ? localTime.slice(0, 10) : undefined,
       };
       pushUndoSnapshot("Manual reservation added");
       setReservations((prev) => [reservation, ...prev]);

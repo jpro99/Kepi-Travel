@@ -13,6 +13,9 @@ export interface ManualReservationFormValue {
   confirmationCode: string;
   notes: string;
   assignedTo: string[];
+  checkOutDate: string;
+  roomType: string;
+  flightNumber: string;
 }
 
 interface FamilyMemberOption {
@@ -88,6 +91,9 @@ export function ManualReservationEntryModal({
   const [location, setLocation] = useState("");
   const [confirmationCode, setConfirmationCode] = useState("");
   const [notes, setNotes] = useState("");
+  const [checkOutDate, setCheckOutDate] = useState("");
+  const [roomType, setRoomType] = useState("");
+  const [flightNumber, setFlightNumber] = useState("");
   const [assignedTo, setAssignedTo] = useState<string[]>(defaultAssignees);
   const [formError, setFormError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -117,6 +123,9 @@ export function ManualReservationEntryModal({
           location?: string;
           confirmationCode?: string;
           notes?: string;
+          checkOutDate?: string;
+          roomType?: string;
+          flightNumber?: string;
         };
       };
       if (!response.ok || !payload.draft) {
@@ -131,6 +140,9 @@ export function ManualReservationEntryModal({
       if (d.location?.trim()) setLocation(d.location.trim());
       if (d.confirmationCode?.trim()) setConfirmationCode(d.confirmationCode.trim());
       if (d.notes?.trim()) setNotes(d.notes.trim());
+      if (d.checkOutDate?.trim()) setCheckOutDate(d.checkOutDate.trim());
+      if (d.roomType?.trim()) setRoomType(d.roomType.trim());
+      if (d.flightNumber?.trim()) setFlightNumber(d.flightNumber.trim());
       setScanMessage("✓ Fields filled from your photo — review and save.");
     } catch {
       setScanMessage("Scan failed — please fill in the fields manually.");
@@ -212,6 +224,9 @@ export function ManualReservationEntryModal({
                 confirmationCode: confirmationCode.trim(),
                 notes: notes.trim(),
                 assignedTo,
+                checkOutDate: checkOutDate.trim(),
+                roomType: roomType.trim(),
+                flightNumber: flightNumber.trim(),
               });
             }}
           >
@@ -269,6 +284,41 @@ export function ManualReservationEntryModal({
                 className="w-full rounded-xl border border-slate-300 px-3 py-3 text-base dark:border-slate-700 dark:bg-slate-950"
               />
             </label>
+            {reservationType === "hotel" ? (
+              <>
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">Check-out date</span>
+                  <input
+                    type="date"
+                    value={checkOutDate}
+                    onChange={(e) => setCheckOutDate(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-3 text-base dark:border-slate-700 dark:bg-slate-950"
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">Room type (optional)</span>
+                  <input
+                    value={roomType}
+                    onChange={(e) => setRoomType(e.target.value)}
+                    placeholder="e.g. King, Deluxe, Suite"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-3 text-base dark:border-slate-700 dark:bg-slate-950"
+                  />
+                </label>
+              </>
+            ) : null}
+            {reservationType === "flight" || reservationType === "train" ? (
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">
+                  {reservationType === "flight" ? "Flight number" : "Train number"}
+                </span>
+                <input
+                  value={flightNumber}
+                  onChange={(e) => setFlightNumber(e.target.value)}
+                  placeholder={reservationType === "flight" ? "e.g. VI3557" : "e.g. Nozomi 15"}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-3 text-base dark:border-slate-700 dark:bg-slate-950"
+                />
+              </label>
+            ) : null}
             <label className="block text-sm">
               <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">Notes (optional)</span>
               <textarea
