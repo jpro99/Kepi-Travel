@@ -6,7 +6,13 @@ import {
   sendWeeklyDigest,
 } from "@/lib/email/emailService";
 import { getExpiringDocuments } from "@/lib/travelAssistant/documentVault";
-import { sendPackingReminderAlert } from "@/lib/travelAssistant/pushNotificationService";
+import {
+  sendPackingReminderAlert,
+  sendTravelDayMorningAlert,
+  sendOnlineCheckInAlert,
+  sendPreFlightAlert,
+  sendHotelCheckoutAlert,
+} from "@/lib/travelAssistant/pushNotificationService";
 import { getPackingCompletionPercent, getPackingList } from "@/lib/travelAssistant/packingStore";
 import { kvStoreSetNx } from "@/lib/travelAssistant/kvStore";
 import { listTrips } from "@/lib/travelAssistant/tripStore";
@@ -141,6 +147,73 @@ export const emailScheduler = inngest.createFunction(
           const sent = await sendPackingReminderAlert(userId, trip.name, completionPercent);
           if (sent) {
             packingReminderPushesSent += 1;
+          }
+
+          // ── Smart travel-day notifications ──────────────────────────────
+          const flightReservations = trip.reservations
+            .filter((r) => r.type === "flight")
+            .map((r) => ({
+              ...r,
+              departureMs: (() => {
+                const t = (r.flightDepartureTime ?? r.localTime ?? "").replace(" ", "T");
+                return Date.parse(t);
+              })(),
+            }))
+            .filter((r) => !Number.isNaN(r.departureMs))
+            .sort((a, b) => a.departureMs - b.departureMs);
+
+          for (const flight of flightReservations) {
+            const hoursUntilFlight = (flight.departureMs - now.getTime()) / 3_600_000;
+            const flightNum = flight.flightNumber ?? flight.title ?? "your flight";
+            const depDate = new Date(flight.departureMs).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+            const depTime = new Date(flight.departureMs).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+            // Leave 3.5 hours before international flight
+            const leaveByMs = flight.departureMs - 3.5 * 3_600_000;
+            const leaveByTime = new Date(leaveByMs).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+
+            // Travel day morning alert (0–8 hrs before departure, send once)
+            if (hoursUntilFlight > 0 && hoursUntilFlight <= 8) {
+              const dedupeKey = `smart-push/travel-day-morning/${flight.id}/${depDate}`;
+              const firstSend = await kvStoreSetNx(dedupeKey, now.toISOString(), { userId });
+              if (firstSend) {
+                await sendTravelDayMorningAlert(userId, trip.name, flightNum, depTime, leaveByTime);
+              }
+            }
+
+            // 4-hour pre-flight alert
+            if (hoursUntilFlight > 3.5 && hoursUntilFlight <= 4.5) {
+              const dedupeKey = `smart-push/pre-flight-4h/${flight.id}/${depDate}`;
+              const firstSend = await kvStoreSetNx(dedupeKey, now.toISOString(), { userId });
+              if (firstSend) {
+                await sendPreFlightAlert(userId, flightNum, 4, leaveByTime);
+              }
+            }
+
+            // Online check-in opens ~24 hrs before
+            if (hoursUntilFlight > 23 && hoursUntilFlight <= 25) {
+              const dedupeKey = `smart-push/check-in-open/${flight.id}/${depDate}`;
+              const firstSend = await kvStoreSetNx(dedupeKey, now.toISOString(), { userId });
+              if (firstSend) {
+                await sendOnlineCheckInAlert(userId, flightNum, depDate);
+              }
+            }
+          }
+
+          // Hotel checkout reminder — morning of checkout day
+          const hotelReservations = trip.reservations.filter((r) => r.type === "hotel");
+          for (const hotel of hotelReservations) {
+            const checkoutDateStr = hotel.checkOutDate ?? "";
+            if (!checkoutDateStr) continue;
+            const checkoutMs = Date.parse(checkoutDateStr + "T11:00:00");
+            if (Number.isNaN(checkoutMs)) continue;
+            const hoursUntilCheckout = (checkoutMs - now.getTime()) / 3_600_000;
+            if (hoursUntilCheckout > 0 && hoursUntilCheckout <= 8) {
+              const dedupeKey = `smart-push/hotel-checkout/${hotel.id}/${checkoutDateStr}`;
+              const firstSend = await kvStoreSetNx(dedupeKey, now.toISOString(), { userId });
+              if (firstSend) {
+                await sendHotelCheckoutAlert(userId, hotel.provider ?? "Hotel", "11:00 AM");
+              }
+            }
           }
         }
       }

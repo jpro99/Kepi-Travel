@@ -451,11 +451,6 @@ export function TripTimeline({ reservations, tripName, tripStartDate, tripDaysAw
     return result;
   }, [reservations, tripStartDate]);
 
-  // Auto-expand today if it has events
-  const todayKey = useMemo(() => {
-    const n = new Date();
-    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
-  }, []);
 
   if (days.length === 0) return null;
 

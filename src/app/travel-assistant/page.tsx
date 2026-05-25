@@ -73,6 +73,8 @@ import {
 import { TripCalendarView } from "@/components/travelAssistant/TripCalendarView";
 import { NextUpCard } from "@/components/travelAssistant/NextUpCard";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
+import { GapAlerts } from "@/components/travelAssistant/GapAlerts";
+import { OnTrackButton } from "@/components/travelAssistant/OnTrackButton";
 import { TripSearch, type TripSearchSelection } from "@/components/travelAssistant/TripSearch";
 import { TripSwitcher } from "@/components/travelAssistant/TripSwitcher";
 import { TripOrientationCard } from "@/components/travelAssistant/TripOrientationCard";
@@ -1017,14 +1019,6 @@ function extractFlightLookupInput(reservation: Reservation): {
     (typeof reservationRecord.local_time === "string" ? reservationRecord.local_time : "");
   const flightDate =
     extractDateFromReservationLocalTime(flightDateRaw) || extractDateFromReservationLocalTime(reservation.localTime) || "";
-  console.log("[travel-assistant] Flight lookup input extraction.", {
-    reservationId: reservation.id,
-    inferredFlightNumber,
-    normalizedFlightNumber: flightNumber,
-    airline,
-    flightDateRaw,
-    flightDate,
-  });
   if (!flightNumber || !flightDate) {
     return null;
   }
@@ -3177,9 +3171,18 @@ export default function TravelAssistantPage() {
   }, [hotelArrivalDraft, setToast]);
   const earliestFlightReservation =
     consumerReservationsSorted.find((reservation) => reservation.type === "flight") ?? null;
-  const derivedTripDestination = earliestFlightReservation
-    ? extractDestinationFromReservationLocation(earliestFlightReservation.location)
-    : null;
+  // Destination = arrival airport city of first flight, or hotel city, or stored destination
+  const derivedTripDestination = useMemo(() => {
+    if (earliestFlightReservation?.flightArrivalAirport) {
+      return earliestFlightReservation.flightArrivalAirport;
+    }
+    if (earliestFlightReservation?.location) {
+      return extractDestinationFromReservationLocation(earliestFlightReservation.location);
+    }
+    const firstHotel = consumerReservationsSorted.find((r) => r.type === "hotel");
+    if (firstHotel?.provider) return firstHotel.provider;
+    return null;
+  }, [earliestFlightReservation, consumerReservationsSorted]);
   const derivedTripStartDate = earliestFlightReservation
     ? extractDateFromReservationLocalTime(earliestFlightReservation.localTime)
     : null;
@@ -4135,11 +4138,6 @@ export default function TravelAssistantPage() {
         return;
       }
       setTicketScanBusy(true);
-      console.log("[travel-assistant] Ticket scan upload started.", {
-        fileName: file.name,
-        fileType: file.type,
-        fileSize: file.size,
-      });
       try {
         const formData = new FormData();
         formData.append("image", file);
@@ -4153,10 +4151,6 @@ export default function TravelAssistantPage() {
           error?: string;
           draft?: ReservationDraft;
         };
-        console.log("[travel-assistant] Ticket scan API response.", {
-          status: response.status,
-          payload,
-        });
         if (!response.ok || !payload.draft) {
           throw new Error(payload.error ?? `Ticket scan failed (${response.status})`);
         }
@@ -4198,14 +4192,9 @@ export default function TravelAssistantPage() {
         setFlightLookupBusy(false);
         setActiveDrawer({ kind: "review", id: reviewItem.id });
         setConsumerTab("reservations");
-        console.log("[travel-assistant] Ticket scan queued review item.", {
-          reviewId: reviewItem.id,
-          reservationDraft: reviewItem.draft,
-        });
         setToast("Ticket scanned. Review and confirm before saving.");
       } catch (error) {
         const message = error instanceof Error ? error.message : "Ticket scan failed.";
-        console.error("[travel-assistant] Ticket scan failed.", { error: message });
         setToast(message);
       } finally {
         setTicketScanBusy(false);
@@ -4615,20 +4604,8 @@ export default function TravelAssistantPage() {
     (nextQueue: ReviewItem[], context: { reviewId: string; source: string }): void => {
       const targetTripId = activeTripId ?? trips[0]?.id ?? null;
       if (!targetTripId) {
-        console.log("[travel-assistant] Review delete persistence skipped: no target trip id.", {
-          reviewId: context.reviewId,
-          source: context.source,
-          activeTripId,
-          tripIds: trips.map((trip) => trip.id),
-        });
         return;
       }
-      console.log("[travel-assistant] Review delete API call sent.", {
-        reviewId: context.reviewId,
-        source: context.source,
-        targetTripId,
-        nextQueueLength: nextQueue.length,
-      });
       void fetch(TRIP_API_ROUTE, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -4656,26 +4633,10 @@ export default function TravelAssistantPage() {
             }
             const parsedErrorMessage = extractApiErrorMessage(payload);
             const responseErrorMessage = parsedErrorMessage || rawErrorBody.trim() || `Request failed with ${response.status}`;
-            console.log("[travel-assistant] Review delete API failed.", {
-              reviewId: context.reviewId,
-              source: context.source,
-              targetTripId,
-              status: response.status,
-              payload,
-              rawErrorBody: rawErrorBody || null,
-              responseErrorMessage,
-            });
             setToast(`Review delete failed: ${responseErrorMessage}`);
             return;
           }
           const payload = (await response.json()) as { trip?: ManagedTrip; trips?: unknown[]; activeTripId?: string | null };
-          console.log("[travel-assistant] Review delete API response received.", {
-            reviewId: context.reviewId,
-            source: context.source,
-            targetTripId,
-            persistedTripId: payload.trip?.id ?? null,
-            activeTripId: payload.activeTripId ?? null,
-          });
           if (Array.isArray(payload.trips)) {
             const parsedTrips = payload.trips
               .map((trip) => normalizeManagedTrip(trip))
@@ -4686,12 +4647,6 @@ export default function TravelAssistantPage() {
           }
         })
         .catch((error) => {
-          console.log("[travel-assistant] Review delete API threw.", {
-            reviewId: context.reviewId,
-            source: context.source,
-            targetTripId,
-            error: error instanceof Error ? error.message : "unknown",
-          });
           setToast("Network error while deleting review item.");
         });
     },
@@ -4700,26 +4655,12 @@ export default function TravelAssistantPage() {
 
   const handleDeleteReservation = useCallback(
     (reservationId: string): void => {
-      console.log("[travel-assistant] Delete click received.", {
-        reservationId,
-        activeTripId,
-        tripCount: trips.length,
-      });
       const reservation = reservations.find((item) => item.id === reservationId);
       if (!reservation) {
-        console.log("[travel-assistant] Delete aborted: reservation not found in local state.", {
-          reservationId,
-          availableReservationIds: reservations.map((item) => item.id),
-        });
         setToast("Reservation not found.");
         return;
       }
       const nextReservations = reservations.filter((item) => item.id !== reservationId);
-      console.log("[travel-assistant] Delete local state update prepared.", {
-        reservationId,
-        beforeCount: reservations.length,
-        afterCount: nextReservations.length,
-      });
       pushUndoSnapshot("Reservation deleted");
       setReservations(nextReservations);
       const targetTripId = activeTripId ?? trips[0]?.id ?? null;
@@ -4735,16 +4676,7 @@ export default function TravelAssistantPage() {
           ),
         );
       }
-      console.log("[travel-assistant] Delete UI updated immediately.", {
-        reservationId,
-        targetTripId,
-      });
       if (targetTripId) {
-        console.log("[travel-assistant] Delete API call sent.", {
-          reservationId,
-          targetTripId,
-          reservationCount: nextReservations.length,
-        });
         void fetch(TRIP_API_ROUTE, {
           method: "DELETE",
           credentials: "include",
@@ -4771,14 +4703,6 @@ export default function TravelAssistantPage() {
               }
               const parsedErrorMessage = extractApiErrorMessage(payload);
               const responseErrorMessage = parsedErrorMessage || rawErrorBody.trim() || `Request failed with ${response.status}`;
-              console.log("[travel-assistant] Delete persistence request failed.", {
-                reservationId,
-                targetTripId,
-                status: response.status,
-                payload,
-                rawErrorBody: rawErrorBody || null,
-                responseErrorMessage,
-              });
               setToast(`Delete failed: ${responseErrorMessage}`);
               return;
             }
@@ -4789,14 +4713,6 @@ export default function TravelAssistantPage() {
               activeTripId?: string | null;
               removedReservationId?: string;
             };
-            console.log("[travel-assistant] Delete API response received.", {
-              reservationId,
-              targetTripId,
-              action: payload.action ?? null,
-              persistedTripId: payload.trip?.id ?? null,
-              removedReservationId: payload.removedReservationId ?? null,
-              activeTripId: payload.activeTripId ?? null,
-            });
             if (Array.isArray(payload.trips)) {
               const parsedTrips = payload.trips
                 .map((trip) => normalizeManagedTrip(trip))
@@ -4807,19 +4723,9 @@ export default function TravelAssistantPage() {
             }
           })
           .catch((error) => {
-            console.log("[travel-assistant] Delete persistence request threw.", {
-              reservationId,
-              targetTripId,
-              error: error instanceof Error ? error.message : "unknown",
-            });
             setToast("Network error while deleting reservation.");
           });
       } else {
-        console.log("[travel-assistant] Delete persistence skipped: no target trip id resolved.", {
-          reservationId,
-          activeTripId,
-          tripIds: trips.map((trip) => trip.id),
-        });
       }
       setExpandedConsumerReservationId((prev) => (prev === reservationId ? null : prev));
       setHighlightedReservationId((prev) => (prev === reservationId ? null : prev));
@@ -4833,9 +4739,6 @@ export default function TravelAssistantPage() {
       });
       queueMutation("Reservation deleted.", {
         key: "reservation-delete",
-        reservationId,
-      });
-      console.log("[travel-assistant] Delete flow finished.", {
         reservationId,
       });
     },
@@ -4882,7 +4785,6 @@ export default function TravelAssistantPage() {
   );
 
   const requestDeleteConfirmation = useCallback((target: PendingDeleteConfirmation): void => {
-    console.log("[travel-assistant] Delete confirmation requested.", target);
     if (target.kind === "reservation") {
       setSwipeOffsetByReservationId((previous) => ({ ...previous, [target.id]: 0 }));
     } else {
@@ -4910,11 +4812,6 @@ export default function TravelAssistantPage() {
       } else {
         setSwipeOffsetByReservationId({});
       }
-      console.log("[travel-assistant] Swipe start.", {
-        kind,
-        id,
-        startingOffset,
-      });
     },
     [swipeOffsetByReservationId, swipeOffsetByReviewId],
   );
@@ -4967,30 +4864,16 @@ export default function TravelAssistantPage() {
         [gesture.id]: finalOffset,
       }));
     }
-    console.log("[travel-assistant] Swipe end.", {
-      kind: gesture.kind,
-      id: gesture.id,
-      currentOffset,
-      finalOffset,
-    });
     swipeGestureRef.current = null;
   }, [swipeOffsetByReservationId, swipeOffsetByReviewId]);
 
   const handleCheckFlightStatus = useCallback(
     async (reservationId: string): Promise<void> => {
-      console.log("[travel-assistant] Check status click received.", {
-        reservationId,
-      });
       const reservation = reservations.find((item) => item.id === reservationId);
       if (!reservation) {
-        console.log("[travel-assistant] Check status aborted: reservation not found.", {
-          reservationId,
-          availableReservationIds: reservations.map((item) => item.id),
-        });
         setToast("Reservation not found.");
         return;
       }
-      console.log("[travel-assistant] Check status full reservation object.", reservation);
       if (reservation.type === "hotel") {
         const hotelSummary = buildHotelCheckInStatusSummary(reservation);
         console.info("[travel-assistant] Hotel check status summary.", {
@@ -5036,43 +4919,6 @@ export default function TravelAssistantPage() {
       });
       if (!lookupInput) {
         const errorMessage = "Add flight number, airline, and date before checking status.";
-        console.log("[travel-assistant] Check status lookup input missing.", {
-          reservationId,
-          reservationObject: reservation,
-          flightNumberCandidates: [
-            reservationRecord.flightNumber,
-            reservationRecord.flight_number,
-            reservationRecord.flightNo,
-            reservationRecord.flight_no,
-            reservationRecord.operatingFlightNumber,
-            reservationRecord.operating_flight_number,
-            reservationRecord.marketingFlightNumber,
-            reservationRecord.marketing_flight_number,
-            reservation.title,
-            reservation.provider,
-          ],
-          airlineCandidates: [
-            reservationRecord.flightAirline,
-            reservationRecord.flight_airline,
-            reservationRecord.airline,
-            reservationRecord.carrier,
-            reservationRecord.carrier_name,
-            reservationRecord.operator,
-            reservation.provider,
-          ],
-          dateCandidates: [
-            reservationRecord.flightDate,
-            reservationRecord.flight_date,
-            reservationRecord.departureDate,
-            reservationRecord.departure_date,
-            reservationRecord.travelDate,
-            reservationRecord.travel_date,
-            reservationRecord.departureTime,
-            reservationRecord.departure_time,
-            reservationRecord.localTime,
-            reservationRecord.local_time,
-          ],
-        });
         setFlightStatusCheckByReservationId((prev) => ({
           ...prev,
           [reservationId]: {
@@ -5377,16 +5223,7 @@ export default function TravelAssistantPage() {
   const handleRejectReview = useCallback(
     (reviewId: string, options?: { source?: "review-card" | "review-drawer" | "skip-review" }): void => {
       const source = options?.source ?? "review-card";
-      console.log("[travel-assistant] Review delete requested.", {
-        reviewId,
-        source,
-      });
       if (!reviewQueue.some((item) => item.id === reviewId)) {
-        console.log("[travel-assistant] Review delete aborted: item not found.", {
-          reviewId,
-          source,
-          availableReviewIds: reviewQueue.map((item) => item.id),
-        });
         setToast("Review item not found.");
         return;
       }
@@ -5406,13 +5243,6 @@ export default function TravelAssistantPage() {
           ),
         );
       }
-      console.log("[travel-assistant] Review delete UI updated.", {
-        reviewId,
-        source,
-        targetTripId,
-        beforeCount: reviewQueue.length,
-        afterCount: nextQueue.length,
-      });
       persistReviewQueueToTrip(nextQueue, { reviewId, source });
       queueMutation("Review item archived.");
       if (activeDrawer?.kind === "review" && activeDrawer.id === reviewId) {
@@ -5445,7 +5275,6 @@ export default function TravelAssistantPage() {
     if (!pendingDeleteConfirmation) {
       return;
     }
-    console.log("[travel-assistant] Delete confirmation accepted.", pendingDeleteConfirmation);
     if (pendingDeleteConfirmation.kind === "reservation") {
       handleDeleteReservation(pendingDeleteConfirmation.id);
     } else {
@@ -5460,7 +5289,6 @@ export default function TravelAssistantPage() {
     if (!pendingDeleteConfirmation) {
       return;
     }
-    console.log("[travel-assistant] Delete confirmation cancelled.", pendingDeleteConfirmation);
     setPendingDeleteConfirmation(null);
   }, [pendingDeleteConfirmation]);
 
@@ -6276,9 +6104,6 @@ export default function TravelAssistantPage() {
             <button
               type="button"
               onClick={() => {
-                console.log("[travel-assistant] Review drawer delete button clicked.", {
-                  reviewId: activeDrawer.id,
-                });
                 requestDeleteConfirmation({
                   kind: "review",
                   id: activeDrawer.id,
@@ -6440,6 +6265,16 @@ export default function TravelAssistantPage() {
                 reservations={consumerReservationsSorted}
                 tripName={activeTrip?.name ?? "Your trip"}
                 onReservationTap={(id) => openDrawer("reservation", id)}
+              />
+
+              <OnTrackButton
+                reservations={consumerReservationsSorted}
+                tripName={activeTrip?.name ?? "Your trip"}
+              />
+
+              <GapAlerts
+                reservations={consumerReservationsSorted}
+                onActionTap={(tab) => navigateToConsumerTab(tab as ConsumerTab)}
               />
               <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -6818,9 +6653,6 @@ export default function TravelAssistantPage() {
                           <button
                             type="button"
                             onClick={() => {
-                              console.log("[travel-assistant] Swipe delete button clicked.", {
-                                reservationId: reservation.id,
-                              });
                               requestDeleteConfirmation({
                                 kind: "reservation",
                                 id: reservation.id,
@@ -7082,9 +6914,6 @@ export default function TravelAssistantPage() {
                             <button
                               type="button"
                               onClick={() => {
-                                console.log("[travel-assistant] Check status button clicked.", {
-                                  reservationId: reservation.id,
-                                });
                                 void handleCheckFlightStatus(reservation.id);
                               }}
                               disabled={inlineFlightStatus?.busy === true}
@@ -7096,9 +6925,6 @@ export default function TravelAssistantPage() {
                             <button
                               type="button"
                               onClick={() => {
-                                console.log("[travel-assistant] Hotel check status button clicked.", {
-                                  reservationId: reservation.id,
-                                });
                                 void handleCheckFlightStatus(reservation.id);
                               }}
                               className="rounded-lg bg-cyan-500 px-3 py-1.5 font-semibold text-white transition hover:bg-cyan-400"
@@ -7109,9 +6935,6 @@ export default function TravelAssistantPage() {
                           <button
                             type="button"
                             onClick={() => {
-                              console.log("[travel-assistant] Delete button clicked.", {
-                                reservationId: reservation.id,
-                              });
                               requestDeleteConfirmation({
                                 kind: "reservation",
                                 id: reservation.id,

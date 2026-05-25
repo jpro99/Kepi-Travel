@@ -14,6 +14,7 @@ const RequestSchema = z.object({
   tripName: z.string().trim().max(200).default("My Trip"),
   nowIso: z.string().trim().max(40),
   reservationContext: z.string().trim().max(4000),
+  mode: z.enum(["guidance", "on-track-check"]).default("guidance"),
 });
 
 const GuidanceResponseSchema = z.object({
@@ -21,6 +22,16 @@ const GuidanceResponseSchema = z.object({
   headline: z.string().trim().max(120),
   detail: z.string().trim().max(400),
 });
+
+const ON_TRACK_SYSTEM_PROMPT = [
+  "You are a travel execution assistant for the Kepi app.",
+  "The user tapped 'Am I on track?' — give them a fast, honest pass/fail assessment.",
+  "Look at all upcoming reservations and current time. Identify if there is ANYTHING they need to act on right now.",
+  "Respond with ONLY a JSON object — no prose, no markdown:",
+  '{ "urgency": "normal|warning|critical", "headline": "Pass or Fail summary max 6 words", "detail": "2-3 sentences — what is good, what needs attention right now", "action": "single most important next step if any" }',
+  "urgency=normal means all good, warning means something needs attention today, critical means act immediately.",
+  "Be direct and specific. No generic advice.",
+].join(" ");
 
 const SYSTEM_PROMPT = [
   "You are a precision travel execution assistant for the Kepi app.",
@@ -74,13 +85,16 @@ export async function POST(request: Request): Promise<NextResponse> {
   const client = new Anthropic();
 
   try {
+    const isOnTrackCheck = parsed.data.mode === "on-track-check";
     const message = await client.messages.create({
       model: "claude-sonnet-4-20250514",
       max_tokens: 300,
-      system: SYSTEM_PROMPT,
+      system: isOnTrackCheck ? ON_TRACK_SYSTEM_PROMPT : SYSTEM_PROMPT,
       messages: [{
         role: "user",
-        content: `Current time: ${nowIso}\nTrip: ${tripName}\n\nUpcoming reservations:\n${reservationContext}\n\nWhat does the traveler need to do right now to stay on track?`,
+        content: isOnTrackCheck
+          ? `Current time: ${nowIso}\nTrip: ${tripName}\n\nReservations:\n${reservationContext}\n\nAm I on track?`
+          : `Current time: ${nowIso}\nTrip: ${tripName}\n\nUpcoming reservations:\n${reservationContext}\n\nWhat does the traveler need to do right now to stay on track?`,
       }],
     });
 

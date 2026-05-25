@@ -195,3 +195,54 @@ export async function sendPackingReminderAlert(
 export function setWebPushClientForTests(client: WebPushClient | null): void {
   webPushClient = client ?? webpush;
 }
+
+export async function sendTravelDayMorningAlert(
+  userId: string,
+  tripName: string,
+  flightNumber: string,
+  departureTime: string,
+  leaveByTime: string,
+): Promise<boolean> {
+  return sendPushNotification(userId, {
+    title: `Travel day — ${tripName}`,
+    body: `${flightNumber} departs at ${departureTime}. Leave by ${leaveByTime} to reach the international terminal with time to spare.`,
+    url: "/travel-assistant",
+  });
+}
+
+export async function sendOnlineCheckInAlert(
+  userId: string,
+  flightNumber: string,
+  departureDate: string,
+): Promise<boolean> {
+  return sendPushNotification(userId, {
+    title: `Check in now — ${flightNumber}`,
+    body: `Online check-in is open for your ${departureDate} departure. Check in now to secure your seat.`,
+    url: "/travel-assistant",
+  });
+}
+
+export async function sendPreFlightAlert(
+  userId: string,
+  flightNumber: string,
+  hoursUntil: number,
+  leaveByTime: string,
+): Promise<boolean> {
+  return sendPushNotification(userId, {
+    title: `${hoursUntil}hrs to ${flightNumber}`,
+    body: `Head to the international terminal. Leave by ${leaveByTime} — allow 3 hours for check-in, security, and customs.`,
+    url: "/travel-assistant",
+  });
+}
+
+export async function sendHotelCheckoutAlert(
+  userId: string,
+  hotelName: string,
+  checkoutTime: string,
+): Promise<boolean> {
+  return sendPushNotification(userId, {
+    title: `Check out today — ${hotelName}`,
+    body: `Checkout is at ${checkoutTime}. Pack tonight, settle your bill early, and store luggage with the concierge if needed.`,
+    url: "/travel-assistant",
+  });
+}
