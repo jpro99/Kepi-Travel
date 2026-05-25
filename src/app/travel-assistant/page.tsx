@@ -70,6 +70,7 @@ import {
   ManualReservationEntryModal,
   type ManualReservationFormValue,
 } from "@/components/travelAssistant/ManualReservationEntryModal";
+import { TripCalendarView } from "@/components/travelAssistant/TripCalendarView";
 import { TripSearch, type TripSearchSelection } from "@/components/travelAssistant/TripSearch";
 import { TripSwitcher } from "@/components/travelAssistant/TripSwitcher";
 import { TripOrientationCard } from "@/components/travelAssistant/TripOrientationCard";
@@ -1656,6 +1657,7 @@ export default function TravelAssistantPage() {
   const [showAdvancedShortcut] = useState(false);
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [manualReservationModalOpen, setManualReservationModalOpen] = useState(false);
+  const [reservationsCalendarView, setReservationsCalendarView] = useState(false);
   const [reservationsRefreshing, setReservationsRefreshing] = useState(false);
   const [ticketScanBusy, setTicketScanBusy] = useState(false);
 
@@ -6664,7 +6666,20 @@ export default function TravelAssistantPage() {
                 </div>
               </div>
               <div className="flex items-center justify-between gap-2">
-                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">All reservations</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">All reservations</h2>
+                  <button
+                    type="button"
+                    onClick={() => setReservationsCalendarView((v) => !v)}
+                    className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                      reservationsCalendarView
+                        ? "bg-cyan-500 text-white"
+                        : "border border-slate-300 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                    }`}
+                  >
+                    {reservationsCalendarView ? "📅 Calendar" : "📅 Calendar"}
+                  </button>
+                </div>
                 <div className="flex items-center gap-2">
                   <input
                     ref={ticketScanInputRef}
@@ -6760,7 +6775,12 @@ export default function TravelAssistantPage() {
                 </div>
               ) : null}
 
-              {consumerReservationsSorted.length === 0 ? (
+              {reservationsCalendarView ? (
+                <TripCalendarView
+                  reservations={consumerReservationsSorted}
+                  onReservationTap={(id) => openDrawer("reservation", id)}
+                />
+              ) : consumerReservationsSorted.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
                   <p className="text-xl font-semibold text-slate-900 dark:text-slate-100">No reservations yet</p>
                   <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-500/40 dark:bg-emerald-500/10">
