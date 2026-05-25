@@ -574,10 +574,9 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       new Set(targetTrip.reservations.flatMap((reservation) => reservation.assignedTo)),
     );
     let nextReservations = [...targetTrip.reservations];
-    let nextQueue = [...(targetTrip.reviewQueue ?? [])];
+    const nextQueue = [...(targetTrip.reviewQueue ?? [])];
     let acceptedDraftCount = 0;
     let duplicateDraftCount = 0;
-    const sourceSubject = parsed.data.subject?.trim() || "Forwarded email";
     for (const parserDraftRecord of parserDraftRecords) {
       const parserType =
         parserDraftRecord.type === "flight" ||
@@ -605,6 +604,16 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
             ? parserDraftRecord.flight_number
             : "";
 
+      // Resolve the airline name — never use email provider names (Gmail, Yahoo, etc.)
+      // as the airline. Fall back to the 2-letter IATA prefix from the flight number.
+      const EMAIL_PROVIDER_NAMES = new Set(["gmail", "yahoo", "outlook", "hotmail", "icloud", "me", "aol"]);
+      const rawAirline = parserProvider.trim();
+      const isEmailProviderName = EMAIL_PROVIDER_NAMES.has(rawAirline.toLowerCase());
+      const iataPrefix = parserFlightNumber.slice(0, 2).toUpperCase();
+      const resolvedAirline = parserType === "flight"
+        ? (isEmailProviderName && iataPrefix.length === 2 ? `${iataPrefix} Airlines` : rawAirline || "Unknown Airline")
+        : "";
+
       const parsedReservation = {
         id: `res-email-${generateId()}`,
         type: parserType,
@@ -621,17 +630,18 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         notes: parserNotesText,
         source: "imported" as const,
         flightNumber: parserType === "flight" ? parserFlightNumber : "",
-        flightAirline: parserType === "flight" ? parserProvider : "",
+        flightAirline: resolvedAirline,
         flightDate: parserType === "flight" ? parserLocalTime.slice(0, 10) : "",
       };
 
       const hasMatchingReservation = nextReservations.some((reservation) =>
         isDuplicateReservation(reservation, parsedReservation),
       );
+      // Only check queue for duplicates (not adding to queue anymore, but keep for safety)
       const hasMatchingQueuedDraft = isDuplicateAgainstReviewQueue(nextQueue, parsedReservation);
       if (hasMatchingReservation || hasMatchingQueuedDraft) {
         duplicateDraftCount += 1;
-        routeLogger.info("Duplicate forwarded reservation dropped before review queue.", {
+        routeLogger.info("Duplicate forwarded reservation dropped.", {
           userId: targetUserId,
           tripId: targetTrip.id,
           confirmationCode: parserConfirmationCode || null,
@@ -643,48 +653,18 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         continue;
       }
 
+      // Auto-accept: add directly to reservations — no review queue.
+      // The user forwards their own emails, so the forward itself is the confirmation.
       nextReservations = [parsedReservation, ...nextReservations];
-      const reviewItem = {
-        id: `review-email-${generateId()}`,
-        reasons:
-          parserNotes.length > 0
-            ? parserNotes
-            : ["Forwarded email parsed and queued for confirmation."],
-        impact:
-          parserParsingStatus === "needs-user-input"
-            ? "We need your help with this one"
-            : parserParsingStatus === "needs-review"
-              ? "A few fields need review before publish."
-              : "Ready for quick confirmation.",
-        sourceEmailSubject: sourceSubject,
-        draft: {
-          type: parserType,
-          title: parserTitle,
-          provider: parserProvider,
-          localTime: parserLocalTime,
-          timezone: parserTimezone || "Etc/UTC",
-          location: parserLocation,
-          confirmationCode: parserConfirmationCode,
-          assignedTo: defaultAssignees,
-          stage: targetTrip.stage,
-          critical: parserType === "flight" || parserType === "train" || parserType === "ride",
-          confidence: confidenceToDraftValue(parserConfidenceScore),
-          notes: parserNotesText,
-          flightNumber: parserType === "flight" ? parserFlightNumber : "",
-          flightAirline: parserType === "flight" ? parserProvider : "",
-          flightDate: parserType === "flight" ? parserLocalTime.slice(0, 10) : "",
-        },
-        sourceChannel: "email-forward" as const,
-        parseConfidenceScore: parserConfidenceScore,
-        parsingStatus: parserParsingStatus,
-        missingFields: parserMissingFields,
-        originalEmailText: parserOriginalEmailText,
-        hasPdfAttachment: parserHasPdfAttachment,
-        imageBasedEmail: parserImageBasedEmail,
-        reviewStatus: parserParsingStatus === "needs-user-input" ? "incomplete" : "pending",
-        parserNotes,
-      };
-      nextQueue = [reviewItem, ...nextQueue];
+      routeLogger.info("Forwarded reservation auto-accepted.", {
+        userId: targetUserId,
+        tripId: targetTrip.id,
+        type: parserType,
+        provider: parserProvider,
+        flightNumber: parserFlightNumber || null,
+        localTime: parserLocalTime,
+        confirmationCode: parserConfirmationCode || null,
+      });
       acceptedDraftCount += 1;
     }
 

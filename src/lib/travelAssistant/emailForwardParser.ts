@@ -453,7 +453,13 @@ function buildRegexCandidates(input: {
   const combined = `${subject}\n${text}`.trim();
   const candidates: CandidateMap = {};
 
-  const flightNumberMatch = combined.match(/\b([A-Z]{2})\s?(\d{2,4})\b/u);
+  // Only treat a 2-letter+digit pattern as a flight number when the email
+  // also contains flight-specific keywords. This prevents hotel/other emails
+  // (which may contain room codes, postal codes, etc.) from being misclassified.
+  const FLIGHT_CONTEXT_RE = /\b(flight|airline|boarding\s*pass?|departs?|departure|arrives?|arrival|gate|terminal|aircraft|operated\s*by|confirmation\s*receipt|itinerary)\b/iu;
+  const hasFlightContext = FLIGHT_CONTEXT_RE.test(combined);
+
+  const flightNumberMatch = hasFlightContext ? combined.match(/\b([A-Z]{2})\s?(\d{2,4})\b/u) : null;
   if (flightNumberMatch && !COUNTRY_CODE_DENYLIST.has(flightNumberMatch[1] ?? "")) {
     const flightNumber = `${flightNumberMatch[1]} ${flightNumberMatch[2]}`;
     candidates.type = {

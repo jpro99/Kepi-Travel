@@ -4841,6 +4841,45 @@ export default function TravelAssistantPage() {
     [activeTripId, pushUndoSnapshot, queueMutation, reservations, setToast, trips],
   );
 
+  const handleMoveReservationToTrip = useCallback(
+    async (reservationId: string, targetTripId: string): Promise<void> => {
+      if (!activeTripId || targetTripId === activeTripId) return;
+      const reservation = reservations.find((item) => item.id === reservationId);
+      if (!reservation) { setToast("Reservation not found."); return; }
+      const targetTrip = trips.find((t) => t.id === targetTripId);
+      if (!targetTrip) { setToast("Target trip not found."); return; }
+      pushUndoSnapshot("Reservation moved to another trip");
+      // Remove from current trip locally
+      setReservations((prev) => prev.filter((item) => item.id !== reservationId));
+      closeDrawer();
+      try {
+        // Remove from current trip on server
+        await fetch(TRIP_API_ROUTE, {
+          method: "DELETE",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "delete-reservation", tripId: activeTripId, reservationId }),
+        });
+        // Add to target trip on server
+        await fetch(TRIP_API_ROUTE, {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "update",
+            id: targetTripId,
+            patch: { reservations: [{ ...reservation, id: `res-moved-${generateId()}` }, ...targetTrip.reservations] },
+          }),
+        });
+        await refreshTripsFromServer();
+        setToast(`Moved to "${targetTrip.name}".`);
+      } catch {
+        setToast("Move failed — please try again.");
+      }
+    },
+    [activeTripId, closeDrawer, pushUndoSnapshot, refreshTripsFromServer, reservations, setToast, trips],
+  );
+
   const requestDeleteConfirmation = useCallback((target: PendingDeleteConfirmation): void => {
     console.log("[travel-assistant] Delete confirmation requested.", target);
     if (target.kind === "reservation") {
@@ -6194,6 +6233,20 @@ export default function TravelAssistantPage() {
             >
               Delete reservation
             </button>
+          ) : null}
+          {activeDrawer.kind === "reservation" && trips.filter((t) => t.id !== activeTripId).length > 0 ? (
+            <select
+              defaultValue=""
+              onChange={(e) => {
+                if (e.target.value) void handleMoveReservationToTrip(activeDrawer.id, e.target.value);
+              }}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+            >
+              <option value="" disabled>Move to trip…</option>
+              {trips.filter((t) => t.id !== activeTripId).map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
           ) : null}
           {activeDrawer.kind === "review" ? (
             <button
