@@ -6450,7 +6450,6 @@ export default function TravelAssistantPage() {
                     ref={ticketScanInputRef}
                     type="file"
                     accept="image/*"
-                    capture="environment"
                     onChange={handleTicketScanFileSelected}
                     className="hidden"
                   />
