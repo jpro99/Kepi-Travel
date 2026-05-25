@@ -44,7 +44,7 @@ export interface SessionReviewItem {
   sourceChannel?: "email-forward" | "gmail-import" | "manual";
   parseConfidenceScore?: number;
   parsingStatus?: "auto-parsed" | "needs-review" | "needs-user-input";
-  missingFields?: Array<"type" | "title" | "provider" | "confirmationCode" | "localTime" | "timezone" | "location">;
+  missingFields?: Array<"type" | "title" | "provider" | "confirmationCode" | "localTime" | "timezone" | "location" | "notes" | "flightNumber">;
   originalEmailText?: string;
   hasPdfAttachment?: boolean;
   imageBasedEmail?: boolean;

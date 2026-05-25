@@ -52,12 +52,12 @@ const SYSTEM_PROMPT = [
 ].join(" ");
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const auth = await resolveAuthenticatedUserId(request);
-  if (!auth.userId) {
+  const auth = await resolveAuthenticatedUserId();
+  if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const rateLimit = await enforceRateLimit(auth.userId, {
+  const rateLimit = await enforceRateLimit(auth, {
     policyName: "trip-guidance",
     maxPerWindow: 30,
     windowSeconds: 3600,
@@ -67,8 +67,10 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   let body: unknown;
+  let rawBody: unknown;
   try {
-    body = await request.json();
+    rawBody = await request.json();
+    body = rawBody;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
@@ -80,7 +82,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const { tripName, nowIso, reservationContext } = parsed.data;
 
-  routeLogger.info("Trip guidance request.", { userId: auth.userId, nowIso });
+  routeLogger.info("Trip guidance request.", { userId: auth, nowIso });
 
   const client = new Anthropic();
 
@@ -112,11 +114,11 @@ export async function POST(request: Request): Promise<NextResponse> {
       };
     }
 
-    routeLogger.info("Trip guidance response.", { userId: auth.userId, urgency: guidance.urgency });
+    routeLogger.info("Trip guidance response.", { userId: auth, urgency: guidance.urgency });
     return NextResponse.json(guidance, { headers: rateLimit.headers });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Unknown error";
-    routeLogger.warn("Trip guidance failed.", { userId: auth.userId, error: msg });
+    routeLogger.warn("Trip guidance failed.", { userId: auth, error: msg });
     return NextResponse.json({ error: `Guidance unavailable: ${msg}` }, { status: 502 });
   }
 }
