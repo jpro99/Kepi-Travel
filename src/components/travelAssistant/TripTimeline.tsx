@@ -160,6 +160,16 @@ function isPast(dateKey: string): boolean {
 
 const EMAIL_PROVIDERS = new Set(["gmail", "yahoo", "outlook", "hotmail", "icloud", "aol", "me"]);
 
+const TYPE_DOT: Record<string, string> = {
+  flight:     "bg-violet-500",
+  hotel:      "bg-amber-500",
+  dinner:     "bg-rose-500",
+  train:      "bg-emerald-500",
+  ride:       "bg-sky-500",
+  tour:       "bg-teal-500",
+  experience: "bg-fuchsia-500",
+};
+
 function EventChip({ reservation, onTap }: { reservation: TimelineReservation; onTap: () => void }) {
   const cfg = typeConfig(reservation.type);
   let label: string;
@@ -320,27 +330,30 @@ interface DayEntry {
 function DayRow({
   day, index, onReservationTap,
 }: { day: DayEntry; index: number; onReservationTap: (id: string) => void }) {
-  const [expanded, setExpanded] = useState(false);
+  // Days with events default to expanded; today always expanded
+  const [expanded, setExpanded] = useState(day.reservations.length > 0);
   const { weekday, dateStr } = formatDayHeader(day.key);
   const today = isToday(day.key);
   const past = isPast(day.key);
   const hasEvents = day.reservations.length > 0;
 
   return (
-    <div className={`relative flex gap-0 transition-opacity ${past && !today ? "opacity-50" : ""}`}>
+    <div className={`relative flex gap-0 transition-opacity ${past && !today ? "opacity-60" : ""}`}>
       {/* Timeline spine */}
       <div className="relative flex w-14 shrink-0 flex-col items-center pt-1">
-        {/* Vertical line */}
-        <div className={`absolute left-1/2 top-0 h-full w-px -translate-x-1/2 ${index === 0 ? "top-5" : ""} bg-slate-200 dark:bg-slate-800`} />
+        {/* Vertical line — full height always visible */}
+        <div className={`absolute left-1/2 top-0 h-full w-0.5 -translate-x-1/2 ${
+          today ? "bg-cyan-400/60" : hasEvents ? "bg-slate-300 dark:bg-slate-700" : "bg-slate-200 dark:bg-slate-800/60"
+        }`} />
         {/* Day node */}
-        <div className={`relative z-10 flex h-10 w-10 flex-col items-center justify-center rounded-full border-2 text-center transition ${
+        <div className={`relative z-10 flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-full border-2 text-center transition ${
           today
             ? "border-cyan-400 bg-cyan-500 text-white shadow-[0_0_20px_rgba(6,182,212,0.4)]"
             : hasEvents
-              ? "border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-800"
-              : "border-dashed border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900/50"
+              ? "border-slate-300 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800"
+              : "border-dashed border-slate-200 bg-slate-50 dark:border-slate-700/60 dark:bg-transparent"
         }`}>
-          <span className={`text-[10px] font-black leading-none ${today ? "text-white" : "text-slate-500 dark:text-slate-400"}`}>
+          <span className={`text-[10px] font-black leading-none ${today ? "text-white" : "text-slate-600 dark:text-slate-300"}`}>
             {new Date(day.key + "T12:00:00").getDate()}
           </span>
           <span className={`text-[8px] font-bold uppercase leading-none ${today ? "text-cyan-100" : "text-slate-400 dark:text-slate-500"}`}>
@@ -350,39 +363,33 @@ function DayRow({
       </div>
 
       {/* Content */}
-      <div className="min-w-0 flex-1 pb-6 pl-2 pt-0.5">
-        {/* Day header */}
+      <div className="min-w-0 flex-1 pb-5 pl-3 pt-0.5">
+        {/* Day header — tap to collapse/expand */}
         <button
           type="button"
           onClick={() => hasEvents && setExpanded((v) => !v)}
           className="flex w-full items-center justify-between gap-2 text-left"
         >
-          <div>
+          <div className="flex items-center gap-2">
             <span className={`text-sm font-bold ${today ? "text-cyan-600 dark:text-cyan-400" : "text-slate-800 dark:text-slate-200"}`}>
               {weekday}
             </span>
-            <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">{dateStr}</span>
+            <span className="text-xs text-slate-400 dark:text-slate-500">{dateStr}</span>
+            {hasEvents ? (
+              <span className="flex gap-1">
+                {day.reservations.slice(0, 4).map((r) => (
+                  <span key={r.id} className={`h-1.5 w-1.5 rounded-full ${TYPE_DOT[r.type] ?? "bg-slate-400"}`} />
+                ))}
+              </span>
+            ) : null}
           </div>
           {hasEvents ? (
             <span className="text-[10px] text-slate-400 dark:text-slate-500">{expanded ? "▲" : "▼"}</span>
           ) : null}
         </button>
 
-        {/* Inline chips (always visible) */}
-        {hasEvents && !expanded ? (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {day.reservations.map((r) => (
-              <EventChip
-                key={r.id}
-                reservation={r}
-                onTap={() => onReservationTap(r.id)}
-              />
-            ))}
-          </div>
-        ) : null}
-
-        {/* Expanded cards */}
-        {expanded ? (
+        {/* Always-expanded reservation cards (no chip mode) */}
+        {hasEvents && expanded ? (
           <div className="mt-3 space-y-3">
             {day.reservations.map((r) => (
               <ReservationCard
@@ -392,6 +399,13 @@ function DayRow({
               />
             ))}
           </div>
+        ) : null}
+
+        {/* Collapsed summary — just dots and count */}
+        {hasEvents && !expanded ? (
+          <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
+            {day.reservations.length} reservation{day.reservations.length === 1 ? "" : "s"} — tap to expand
+          </p>
         ) : null}
 
         {/* Free day */}

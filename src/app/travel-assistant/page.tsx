@@ -3179,7 +3179,12 @@ export default function TravelAssistantPage() {
     const nowMs = new Date().getTime();
     return consumerReservationsSorted.find((r) => {
       if (r.type !== "flight") return false;
-      const depMs = parseDateInput((r as Reservation & { flightDepartureTime?: string }).flightDepartureTime ?? r.localTime ?? "");
+      const rr = r as Reservation & { flightDepartureTime?: string };
+      const fromFlightDate = r.flightDate ? parseDateInput(r.flightDate + " 23:59") : Number.NaN;
+      const fromDepTime = rr.flightDepartureTime ? parseDateInput(rr.flightDepartureTime) : Number.NaN;
+      const fromLocal = parseDateInput(r.localTime ?? "");
+      const candidates = [fromFlightDate, fromDepTime, fromLocal].filter(v => !Number.isNaN(v));
+      const depMs = candidates.length > 0 ? Math.max(...candidates) : Number.NaN;
       return !Number.isNaN(depMs) && depMs > nowMs - 4 * 3_600_000;
     }) ?? null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -5913,8 +5918,13 @@ export default function TravelAssistantPage() {
             className: "bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/30 dark:text-emerald-200",
           };
         }
-        // Past flight — departed more than 4 hours ago
-        const depMs = parseDateInput(reservation.flightDepartureTime ?? reservation.localTime ?? "");
+        // Past flight — use flightDate (most reliable) to avoid misclassifying future flights
+        const _depCandidates = [
+          reservation.flightDate ? parseDateInput(reservation.flightDate + " 23:59") : Number.NaN,
+          reservation.flightDepartureTime ? parseDateInput(reservation.flightDepartureTime) : Number.NaN,
+          parseDateInput(reservation.localTime ?? ""),
+        ].filter(v => !Number.isNaN(v));
+        const depMs = _depCandidates.length > 0 ? Math.max(..._depCandidates) : Number.NaN;
         if (!Number.isNaN(depMs) && Date.now() - depMs > 4 * 3_600_000) {
           return {
             label: "Completed",
@@ -6723,13 +6733,25 @@ export default function TravelAssistantPage() {
                 <div className="space-y-2">
                   {(() => {
                     const nowMs = new Date().getTime();
+                    const getFlightDepMs = (r: Reservation): number => {
+                      // Use flightDate (most reliable) > flightDepartureTime > localTime
+                      const rr = r as Reservation & { flightDepartureTime?: string };
+                      const fromFlightDate = r.flightDate ? parseDateInput(r.flightDate + " 23:59") : Number.NaN;
+                      const fromDepTime = rr.flightDepartureTime ? parseDateInput(rr.flightDepartureTime) : Number.NaN;
+                      const fromLocal = parseDateInput(r.localTime ?? "");
+                      // Pick the latest of the valid ones (most future = most correct)
+                      const candidates = [fromFlightDate, fromDepTime, fromLocal].filter(v => !Number.isNaN(v));
+                      return candidates.length > 0 ? Math.max(...candidates) : Number.NaN;
+                    };
                     const active = consumerReservationsSorted.filter((r) => {
-                      const depMs = parseDateInput((r as Reservation & { flightDepartureTime?: string }).flightDepartureTime ?? r.localTime ?? "");
-                      return !(r.type === "flight" && !Number.isNaN(depMs) && nowMs - depMs > 4 * 3_600_000);
+                      if (r.type !== "flight") return true;
+                      const depMs = getFlightDepMs(r);
+                      return Number.isNaN(depMs) || nowMs - depMs <= 4 * 3_600_000;
                     });
                     const completed = consumerReservationsSorted.filter((r) => {
-                      const depMs = parseDateInput((r as Reservation & { flightDepartureTime?: string }).flightDepartureTime ?? r.localTime ?? "");
-                      return r.type === "flight" && !Number.isNaN(depMs) && nowMs - depMs > 4 * 3_600_000;
+                      if (r.type !== "flight") return false;
+                      const depMs = getFlightDepMs(r);
+                      return !Number.isNaN(depMs) && nowMs - depMs > 4 * 3_600_000;
                     });
                     const visibleList = showCompletedFlights ? consumerReservationsSorted : active;
                     return (
@@ -6738,7 +6760,7 @@ export default function TravelAssistantPage() {
                           const expanded = expandedConsumerReservationId === reservation.id;
                           const statusMeta = getConsumerReservationStatus(reservation);
                           const flightStatusCheck = flightStatusCheckByReservationId[reservation.id] ?? null;
-                          const depMs = parseDateInput((reservation as Reservation & { flightDepartureTime?: string }).flightDepartureTime ?? reservation.localTime ?? "");
+                          const depMs = getFlightDepMs(reservation);
                           const isPastFlight = reservation.type === "flight" && !Number.isNaN(depMs) && new Date().getTime() - depMs > 4 * 3_600_000;
                     const inlineFlightStatus =
                       reservation.type === "flight"
