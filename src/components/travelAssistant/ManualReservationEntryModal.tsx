@@ -153,11 +153,11 @@ export function ManualReservationEntryModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-3 backdrop-blur-sm md:items-center">
-      <div className="flex max-h-[92dvh] w-full max-w-xl flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex max-h-[92dvh] w-full max-w-xl flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-[#161b22]">
         {/* ── Header (fixed, never scrolls away) ── */}
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-4 py-4 dark:border-slate-700">
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Add reservation</h2>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Add reservation</h2>
             <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
               Scan a photo to auto-fill, or enter details manually.
             </p>
@@ -231,11 +231,11 @@ export function ManualReservationEntryModal({
             }}
           >
             <label className="block text-sm">
-              <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">Reservation type</span>
+              <span className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">Reservation type</span>
               <select
                 value={reservationType}
                 onChange={(e) => setReservationType(e.target.value as ManualReservationType)}
-                className="w-full rounded-xl border border-slate-300 px-3 py-3 text-base dark:border-slate-700 dark:bg-slate-950"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-base text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               >
                 {RESERVATION_TYPE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -243,89 +243,89 @@ export function ManualReservationEntryModal({
               </select>
             </label>
             <label className="block text-sm">
-              <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">Title / reservation name</span>
+              <span className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">Title / reservation name</span>
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="AA 123 JFK→LAX, Hyatt Tokyo, Nobu dinner…"
-                className="w-full rounded-xl border border-slate-300 px-3 py-3 text-base dark:border-slate-700 dark:bg-slate-950"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-base text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               />
             </label>
             <label className="block text-sm">
-              <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">Provider / airline / restaurant</span>
+              <span className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">Provider / airline / restaurant</span>
               <input
                 value={provider}
                 onChange={(e) => setProvider(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-3 py-3 text-base dark:border-slate-700 dark:bg-slate-950"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-base text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               />
             </label>
             <label className="block text-sm">
-              <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">Date and time</span>
+              <span className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">Date and time</span>
               <input
                 type="datetime-local"
                 value={localDateTime}
                 onChange={(e) => setLocalDateTime(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-3 py-3 text-base dark:border-slate-700 dark:bg-slate-950"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-base text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               />
             </label>
             <label className="block text-sm">
-              <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">Location / address</span>
+              <span className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">Location / address</span>
               <input
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-3 py-3 text-base dark:border-slate-700 dark:bg-slate-950"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-base text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               />
             </label>
             <label className="block text-sm">
-              <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">Confirmation code (optional)</span>
+              <span className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">Confirmation code (optional)</span>
               <input
                 value={confirmationCode}
                 onChange={(e) => setConfirmationCode(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-3 py-3 text-base dark:border-slate-700 dark:bg-slate-950"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-base text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               />
             </label>
             {reservationType === "hotel" ? (
               <>
                 <label className="block text-sm">
-                  <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">Check-out date</span>
+                  <span className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">Check-out date</span>
                   <input
                     type="date"
                     value={checkOutDate}
                     onChange={(e) => setCheckOutDate(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-3 text-base dark:border-slate-700 dark:bg-slate-950"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-base text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                   />
                 </label>
                 <label className="block text-sm">
-                  <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">Room type (optional)</span>
+                  <span className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">Room type (optional)</span>
                   <input
                     value={roomType}
                     onChange={(e) => setRoomType(e.target.value)}
                     placeholder="e.g. King, Deluxe, Suite"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-3 text-base dark:border-slate-700 dark:bg-slate-950"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-base text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                   />
                 </label>
               </>
             ) : null}
             {reservationType === "flight" || reservationType === "train" ? (
               <label className="block text-sm">
-                <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">
+                <span className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">
                   {reservationType === "flight" ? "Flight number" : "Train number"}
                 </span>
                 <input
                   value={flightNumber}
                   onChange={(e) => setFlightNumber(e.target.value)}
                   placeholder={reservationType === "flight" ? "e.g. VI3557" : "e.g. Nozomi 15"}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-3 text-base dark:border-slate-700 dark:bg-slate-950"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-base text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                 />
               </label>
             ) : null}
             <label className="block text-sm">
-              <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">Notes (optional)</span>
+              <span className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">Notes (optional)</span>
               <textarea
                 rows={2}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-3 py-3 text-base dark:border-slate-700 dark:bg-slate-950"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-base text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               />
             </label>
             {familyMembers.length > 1 ? (
