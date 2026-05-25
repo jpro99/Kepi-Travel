@@ -415,6 +415,7 @@ export async function POST(req: Request) {
           '{ "reservation": { "type": "", "provider": "", "title": "", "date": "", "time": "", "timezone": "", "confirmationCode": "", "departureAirport": "", "arrivalAirport": "", "location": "", "flightOrTrainNumber": "", "roomType": "", "checkOutDate": "", "notes": "" } }',
           "type must be one of: flight, hotel, train, ride, dinner.",
           "CRITICAL: Only extract what is explicitly visible in the image. NEVER guess, infer, or assume any field.",
+          "For flights, time = DEPARTURE time (when plane leaves gate), NOT boarding time, NOT check-in time, NOT gate open time. Departure time is labeled Departs, Departure, or shown next to the origin airport code.",
           "If the year is not shown in the image, set date to empty string — do NOT assume the current year or any year.",
           "If any field is unclear or not visible, return empty string for that field.",
           "Use ISO date YYYY-MM-DD only when the full date including year is clearly visible. Use 24-hour HH:mm for time.",
