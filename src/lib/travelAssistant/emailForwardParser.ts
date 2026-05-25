@@ -454,9 +454,10 @@ function buildRegexCandidates(input: {
   const candidates: CandidateMap = {};
 
   // Only treat a 2-letter+digit pattern as a flight number when the email
-  // also contains flight-specific keywords. This prevents hotel/other emails
-  // (which may contain room codes, postal codes, etc.) from being misclassified.
-  const FLIGHT_CONTEXT_RE = /\b(flight|airline|boarding\s*pass?|departs?|departure|arrives?|arrival|gate|terminal|aircraft|operated\s*by|confirmation\s*receipt|itinerary)\b/iu;
+  // contains words that are EXCLUSIVELY flight-specific.
+  // "arrival", "departure", "gate", "terminal", "itinerary" all appear in
+  // hotel confirmation emails and must NOT be here.
+  const FLIGHT_CONTEXT_RE = /\b(flight|airline|boarding\s*pass|aircraft|operated\s*by)\b/iu;
   const hasFlightContext = FLIGHT_CONTEXT_RE.test(combined);
 
   const flightNumberMatch = hasFlightContext ? combined.match(/\b([A-Z]{2})\s?(\d{2,4})\b/u) : null;
@@ -646,7 +647,7 @@ async function runAiFallback(rawEmailText: string): Promise<CandidateMap[]> {
       max_tokens: 700,
       temperature: 0,
       system:
-        "Extract travel reservations from forwarded email text. Return strict JSON only in the shape { reservations: [{ type, title, provider, confirmationCode, localTime, timezone, location, notes, flightNumber }] }. For flights, set flightNumber to the IATA code e.g. AA123. For multi-flight emails, return every flight as a separate reservations[] item.",
+        "Extract travel reservations from forwarded email text. Return strict JSON only in the shape { reservations: [{ type, title, provider, confirmationCode, localTime, timezone, location, notes, flightNumber }] }. CRITICAL: type must be hotel for hotel/stay emails even if they mention arrival or departure dates. Only use type=flight when the email explicitly mentions a flight number, airline, or boarding pass. For flights, set flightNumber to the IATA code e.g. AA123. For multi-flight emails, return every flight as a separate reservations[] item.",
       messages: [
         {
           role: "user",
