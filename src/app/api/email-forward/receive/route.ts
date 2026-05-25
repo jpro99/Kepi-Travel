@@ -183,15 +183,32 @@ function isDuplicateReservation(
 ): boolean {
   const existingCode = normalizeDuplicateValue(existing.confirmationCode);
   const candidateCode = normalizeDuplicateValue(candidate.confirmationCode);
+  // Confirmation code match is always a duplicate
   if (existingCode.length > 0 && candidateCode.length > 0 && existingCode === candidateCode) {
     return true;
   }
   const existingType = normalizeDuplicateValue(existing.type);
   const candidateType = normalizeDuplicateValue(candidate.type);
-  const existingProvider = normalizeDuplicateValue(existing.provider);
-  const candidateProvider = normalizeDuplicateValue(candidate.provider);
+  if (existingType !== candidateType) {
+    return false;
+  }
   const existingLocalTime = normalizeDuplicateValue(existing.localTime);
   const candidateLocalTime = normalizeDuplicateValue(candidate.localTime);
+  // For hotels: match on check-in date (first 10 chars) + location
+  // Never match on provider since it's often "Gmail" or similar
+  if (existingType === "hotel") {
+    const existingDate = existingLocalTime.slice(0, 10);
+    const candidateDate = candidateLocalTime.slice(0, 10);
+    const existingLocation = normalizeDuplicateValue(existing.location);
+    const candidateLocation = normalizeDuplicateValue(candidate.location);
+    if (existingDate.length === 10 && candidateDate.length === 10 && existingDate === candidateDate &&
+        existingLocation.length > 0 && candidateLocation.length > 0 && existingLocation === candidateLocation) {
+      return true;
+    }
+    return false;
+  }
+  const existingProvider = normalizeDuplicateValue(existing.provider);
+  const candidateProvider = normalizeDuplicateValue(candidate.provider);
   const existingLocation = normalizeDuplicateValue(existing.location);
   const candidateLocation = normalizeDuplicateValue(candidate.location);
   const hasFullCompositeSignal =
