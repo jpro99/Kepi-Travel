@@ -128,7 +128,7 @@ function ReservationCard({
     <button
       type="button"
       onClick={onTap}
-      className={`group relative w-full overflow-hidden rounded-2xl border text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg ${cfg.card} ${isPast ? "opacity-50 grayscale-[30%]" : ""}`}
+      className={`group relative w-full overflow-hidden rounded-2xl border text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg ${cfg.card} ${isPast ? "opacity-70 grayscale-[20%]" : ""}`}
     >
       <div className={`h-0.5 w-full ${isPast ? "bg-slate-400" : cfg.dot}`} />
       <div className="p-4">
@@ -216,10 +216,11 @@ function ReservationCard({
 
 interface DayEntry { key: string; reservations: TimelineReservation[]; }
 
-function DayRow({ day, onReservationTap, showPastConfirmed }: {
+function DayRow({ day, onReservationTap, showPastConfirmed, dimPast }: {
   day: DayEntry;
   onReservationTap: (id: string) => void;
   showPastConfirmed: boolean;
+  dimPast: boolean;
 }) {
   const past = isPastDay(day.key) && !isToday(day.key);
   const hasEvents = day.reservations.length > 0;
@@ -228,7 +229,7 @@ function DayRow({ day, onReservationTap, showPastConfirmed }: {
   const today = isToday(day.key);
 
   return (
-    <div className={`relative flex gap-0 transition-opacity ${past && !showPastConfirmed ? "opacity-30" : past ? "opacity-60" : ""}`}>
+    <div className={`relative flex gap-0 transition-opacity ${past && dimPast && !showPastConfirmed ? "opacity-50" : past && dimPast ? "opacity-75" : ""}`}>
       {/* Spine */}
       <div className="relative flex w-14 shrink-0 flex-col items-center pt-1">
         <div className={`absolute left-1/2 top-0 h-full w-0.5 -translate-x-1/2 ${
@@ -316,6 +317,7 @@ function MidTripBanner({ pastCount, onConfirm }: { pastCount: number; onConfirm:
 
 export function TripTimeline({ reservations, tripName, tripStartDate, tripDaysAway, onReservationTap }: TripTimelineProps) {
   const [midTripConfirmed, setMidTripConfirmed] = useState(false);
+  const [dimPast, setDimPast] = useState(true);
 
   const days = useMemo((): DayEntry[] => {
     if (reservations.length === 0 && !tripStartDate) return [];
@@ -388,6 +390,19 @@ export function TripTimeline({ reservations, tripName, tripStartDate, tripDaysAw
               return has ? <span key={type} className={`h-2 w-2 rounded-full ${TYPE_DOT[type] ?? "bg-slate-400"}`} /> : null;
             })}
           </div>
+          {hasPastReservations ? (
+            <button
+              type="button"
+              onClick={() => setDimPast((v) => !v)}
+              className={`mt-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
+                dimPast
+                  ? "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+                  : "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300"
+              }`}
+            >
+              {dimPast ? "Show past" : "Dim past"}
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -399,6 +414,7 @@ export function TripTimeline({ reservations, tripName, tripStartDate, tripDaysAw
             day={day}
             onReservationTap={onReservationTap ?? (() => undefined)}
             showPastConfirmed={midTripConfirmed}
+            dimPast={dimPast}
           />
         ))}
       </div>
