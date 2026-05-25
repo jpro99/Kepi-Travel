@@ -71,6 +71,7 @@ import {
   type ManualReservationFormValue,
 } from "@/components/travelAssistant/ManualReservationEntryModal";
 import { TripCalendarView } from "@/components/travelAssistant/TripCalendarView";
+import { NextUpCard } from "@/components/travelAssistant/NextUpCard";
 import { TripSearch, type TripSearchSelection } from "@/components/travelAssistant/TripSearch";
 import { TripSwitcher } from "@/components/travelAssistant/TripSwitcher";
 import { TripOrientationCard } from "@/components/travelAssistant/TripOrientationCard";
@@ -6435,6 +6436,11 @@ export default function TravelAssistantPage() {
             </section>
           ) : consumerTab === "trip" ? (
             <section className="space-y-4">
+              <NextUpCard
+                reservations={consumerReservationsSorted}
+                tripName={activeTrip?.name ?? "Your trip"}
+                onReservationTap={(id) => openDrawer("reservation", id)}
+              />
               <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
