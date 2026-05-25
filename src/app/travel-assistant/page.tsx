@@ -6243,7 +6243,7 @@ export default function TravelAssistantPage() {
 
   if (!advancedWorkspaceEnabled) {
     return (
-      <main className="relative min-h-screen overflow-x-hidden bg-slate-50 pb-24 text-slate-950 dark:bg-slate-950 dark:text-slate-100">
+      <main className="relative min-h-screen overflow-x-hidden bg-[var(--bg-base)] pb-24 text-[var(--text-primary)]">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(14,165,233,0.12),transparent_38%),radial-gradient(circle_at_80%_10%,rgba(34,197,94,0.10),transparent_35%)]" />
         <div className="relative z-10 mx-auto max-w-3xl space-y-4 px-4 py-4 sm:py-6">
           <header className="sticky top-0 z-30 -mx-4 border-b border-slate-200/70 bg-slate-50/90 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
@@ -7340,7 +7340,7 @@ export default function TravelAssistantPage() {
           )}
         </div>
 
-        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-3 py-2 shadow-2xl backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 md:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--border-default)] bg-[var(--bg-card)]/95 px-3 py-2 shadow-2xl backdrop-blur md:hidden">
           <div className="mx-auto grid max-w-md grid-cols-4 gap-1 text-xs font-semibold">
             {([
               ["trip", "Trip"],
@@ -7413,7 +7413,7 @@ export default function TravelAssistantPage() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
+    <main className="relative min-h-screen overflow-x-hidden bg-[var(--bg-base)] text-[var(--text-primary)]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_10%,rgba(56,189,248,0.14),transparent_45%),radial-gradient(circle_at_85%_25%,rgba(129,140,248,0.18),transparent_42%),radial-gradient(circle_at_50%_100%,rgba(34,197,94,0.08),transparent_45%)]" />
       <div className="relative z-10 mx-auto max-w-[1400px] space-y-5 px-3 py-5 sm:space-y-6 sm:px-4 sm:py-6 md:px-6">
         <header className="space-y-3">
