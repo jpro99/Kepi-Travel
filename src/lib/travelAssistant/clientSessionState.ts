@@ -24,6 +24,15 @@ export interface SessionReservation {
   flightDepartureTime?: string;
   flightArrivalTime?: string;
   flightStatus?: string;
+  flightOnTime?: boolean;
+  flightDelayMinutes?: number;
+  flightDepartureGate?: string;
+  flightDepartureTerminal?: string;
+  flightArrivalGate?: string;
+  flightArrivalTerminal?: string;
+  checkOutDate?: string;
+  roomType?: string;
+  trainNumber?: string;
 }
 
 export interface SessionReviewItem {

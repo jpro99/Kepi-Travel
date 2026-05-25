@@ -3933,11 +3933,13 @@ export default function TravelAssistantPage() {
         flightDate: mappedType === "flight" ? localTime.slice(0, 10) : undefined,
       };
       pushUndoSnapshot("Manual reservation added");
-      setReservations((prev) => [reservation, ...prev]);
-      // Force immediate server write — don't rely on autosave debounce
+      // Build the new list first, then set state AND save in one step
+      const existingReservations = trips.find((t) => t.id === (activeTripId ?? trips[0]?.id))?.reservations ?? [];
+      const nextReservations = [reservation, ...existingReservations];
+      setReservations(nextReservations);
+      // Force immediate server write with the correct new list
       const targetTripId = activeTripId ?? trips[0]?.id ?? null;
       if (targetTripId) {
-        const currentReservations = [reservation, ...(trips.find((t) => t.id === targetTripId)?.reservations ?? [])];
         void fetch(TRIP_API_ROUTE, {
           method: "PUT",
           credentials: "include",
@@ -3945,7 +3947,7 @@ export default function TravelAssistantPage() {
           body: JSON.stringify({
             action: "update",
             id: targetTripId,
-            patch: { reservations: currentReservations },
+            patch: { reservations: nextReservations },
           }),
         }).then(async (res) => {
           if (!res.ok) return;
@@ -3963,7 +3965,7 @@ export default function TravelAssistantPage() {
         reservationId: reservation.id,
       });
       setManualReservationModalOpen(false);
-      setToast("Reservation added");
+      setToast("Reservation added ✓");
     },
     [activeTripId, pushUndoSnapshot, queueMutation, setToast, trips],
   );
