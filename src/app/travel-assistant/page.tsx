@@ -5964,14 +5964,14 @@ export default function TravelAssistantPage() {
   );
 
   const activeDrawerPanel = activeDrawer ? (
-    <div className="fixed inset-0 z-[140] flex items-end justify-end bg-slate-950/80 p-3 md:p-6">
+    <div className="fixed inset-0 z-[140] flex items-end justify-end bg-slate-950/70 p-3 md:p-6">
       <div
         ref={drawerContainerRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="travel-assistant-drawer-title"
         tabIndex={-1}
-        className="h-full w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-4 text-slate-100 md:max-h-[92vh]"
+        className="h-full w-full max-w-xl overflow-y-auto rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 text-[var(--text-primary)] md:max-h-[92vh]"
       >
         <div className="flex items-center justify-between">
           <h2 id="travel-assistant-drawer-title" className="text-lg font-semibold">
@@ -5982,7 +5982,7 @@ export default function TravelAssistantPage() {
             type="button"
             onClick={closeDrawer}
             aria-label="Close details drawer"
-            className="rounded-md bg-slate-800 px-2 py-1 text-sm ring-1 ring-slate-700 hover:bg-slate-700"
+            className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] px-2 py-1 text-sm hover:opacity-80"
           >
             Close
           </button>
@@ -5993,7 +5993,7 @@ export default function TravelAssistantPage() {
             <input
               value={drawerDraft.title}
               onChange={(event) => setDrawerDraft((prev) => ({ ...prev, title: event.target.value }))}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
+              className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
             />
           </label>
           <div className="grid gap-3 md:grid-cols-2">
@@ -6004,7 +6004,7 @@ export default function TravelAssistantPage() {
                 onChange={(event) =>
                   setDrawerDraft((prev) => ({ ...prev, type: event.target.value as ReservationType }))
                 }
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
+                className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
               >
                 {(Object.keys(RESERVATION_TYPE_LABEL) as ReservationType[]).map((type) => (
                   <option key={type} value={type}>
@@ -6018,7 +6018,7 @@ export default function TravelAssistantPage() {
               <input
                 value={drawerDraft.provider}
                 onChange={(event) => setDrawerDraft((prev) => ({ ...prev, provider: event.target.value }))}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
+                className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
               />
             </label>
             <label className="block">
@@ -6026,7 +6026,7 @@ export default function TravelAssistantPage() {
               <input
                 value={drawerDraft.localTime}
                 onChange={(event) => setDrawerDraft((prev) => ({ ...prev, localTime: event.target.value }))}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
+                className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
               />
             </label>
             <label className="block">
@@ -6035,7 +6035,7 @@ export default function TravelAssistantPage() {
                 value={formatTimezoneForDisplay(drawerDraft.timezone) === "Not set" ? "" : drawerDraft.timezone}
                 onChange={(event) => setDrawerDraft((prev) => ({ ...prev, timezone: event.target.value }))}
                 placeholder="Not set"
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
+                className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
               />
             </label>
           </div>
@@ -6044,7 +6044,7 @@ export default function TravelAssistantPage() {
             <input
               value={drawerDraft.location}
               onChange={(event) => setDrawerDraft((prev) => ({ ...prev, location: event.target.value }))}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
+              className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
             />
           </label>
           <label className="block">
@@ -6054,7 +6054,7 @@ export default function TravelAssistantPage() {
               onChange={(event) =>
                 setDrawerDraft((prev) => ({ ...prev, confirmationCode: event.target.value }))
               }
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
+              className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
             />
           </label>
           {activeDrawer.kind === "review" &&
@@ -6072,7 +6072,7 @@ export default function TravelAssistantPage() {
                       setDrawerDraft((prev) => ({ ...prev, flightNumber: event.target.value.trim().toUpperCase() }))
                     }
                     placeholder="AA123"
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)] text-sm"
                   />
                 </label>
                 <label className="block">
@@ -6083,7 +6083,7 @@ export default function TravelAssistantPage() {
                       setDrawerDraft((prev) => ({ ...prev, flightAirline: event.target.value }))
                     }
                     placeholder="American Airlines"
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)] text-sm"
                   />
                 </label>
                 <label className="block">
@@ -6094,7 +6094,7 @@ export default function TravelAssistantPage() {
                     onChange={(event) =>
                       setDrawerDraft((prev) => ({ ...prev, flightDate: event.target.value }))
                     }
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)] text-sm"
                   />
                 </label>
               </div>
@@ -6131,7 +6131,7 @@ export default function TravelAssistantPage() {
           ) : null}
           <label className="block">
             <span className="mb-1 block text-slate-300">Assigned people</span>
-            <div className="grid gap-2 rounded-lg border border-slate-700 bg-slate-950 p-3 text-xs">
+            <div className="grid gap-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-muted)] p-3 text-xs">
               {assignmentTravelerOptions.map((member) => (
                 <label key={member.id} className="flex items-center gap-2">
                   <input
@@ -6159,7 +6159,7 @@ export default function TravelAssistantPage() {
             <textarea
               value={drawerDraft.notes}
               onChange={(event) => setDrawerDraft((prev) => ({ ...prev, notes: event.target.value }))}
-              className="h-24 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
+              className="h-24 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
             />
           </label>
         </div>
@@ -6242,7 +6242,7 @@ export default function TravelAssistantPage() {
 
   const deleteConfirmationDialog = pendingDeleteConfirmation ? (
     <div className="fixed inset-0 z-[170] flex items-center justify-center bg-slate-950/70 px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-4 text-slate-100 shadow-2xl">
+      <div className="w-full max-w-sm rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 text-[var(--text-primary)] shadow-2xl">
         <h2 className="text-base font-semibold">Delete this reservation? This cannot be undone.</h2>
         <p className="mt-2 text-sm text-slate-300">
           {pendingDeleteConfirmation.kind === "review"
@@ -6851,7 +6851,7 @@ export default function TravelAssistantPage() {
                           <article
                             className={`overflow-hidden rounded-2xl border shadow-sm ${
                               reservation.type === "flight"
-                                ? "border-slate-700 bg-slate-950 text-slate-100"
+                                ? "border-slate-200 bg-slate-900 text-slate-100 dark:border-slate-700"
                                 : reservation.type === "hotel"
                                   ? "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-50"
                                 : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"

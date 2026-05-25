@@ -145,7 +145,7 @@ function ReservationCard({
           <>
             <div className="mt-3 flex items-center gap-3">
               <div className="min-w-0 flex-1">
-                <p className={`text-3xl font-black tracking-tight ${isPast ? "text-slate-400 dark:text-slate-500" : "text-slate-100"}`}>
+                <p className={`text-3xl font-black tracking-tight ${isPast ? "text-slate-400 dark:text-slate-500" : "text-slate-900 dark:text-slate-100"}`}>
                   {reservation.flightDepartureAirport || "DEP"}
                 </p>
                 <p className="mt-0.5 text-xs text-slate-400">{formatTime(reservation.flightDepartureTime ?? reservation.localTime)}</p>
@@ -163,7 +163,7 @@ function ReservationCard({
                 ) : null}
               </div>
               <div className="min-w-0 flex-1 text-right">
-                <p className={`text-3xl font-black tracking-tight ${isPast ? "text-slate-400 dark:text-slate-500" : "text-slate-100"}`}>
+                <p className={`text-3xl font-black tracking-tight ${isPast ? "text-slate-400 dark:text-slate-500" : "text-slate-900 dark:text-slate-100"}`}>
                   {reservation.flightArrivalAirport || "ARR"}
                 </p>
                 <p className="mt-0.5 text-xs text-slate-400">{formatTime(reservation.flightArrivalTime ?? "")}</p>
@@ -254,7 +254,7 @@ function DayRow({ day, onReservationTap, showPastConfirmed, dimPast }: {
       <div className="min-w-0 flex-1 pb-5 pl-3 pt-0.5">
         <button type="button" onClick={() => hasEvents && setExpanded((v) => !v)} className="flex w-full items-center justify-between gap-2 text-left">
           <div className="flex items-center gap-2">
-            <span className={`text-sm font-bold ${today ? "text-cyan-600 dark:text-cyan-400" : past ? "text-slate-400 dark:text-slate-500" : "text-slate-800 dark:text-slate-200"}`}>
+            <span className={`text-sm font-bold ${today ? "text-cyan-600 dark:text-cyan-400" : past ? "text-slate-400" : "text-[var(--text-primary)]"}`}>
               {weekday}
             </span>
             <span className="text-xs text-slate-400 dark:text-slate-500">{dateStr}</span>
@@ -293,11 +293,11 @@ function DayRow({ day, onReservationTap, showPastConfirmed, dimPast }: {
 
 function MidTripBanner({ pastCount, onConfirm }: { pastCount: number; onConfirm: () => void }) {
   return (
-    <div className="rounded-2xl border border-cyan-300/50 bg-cyan-500/10 p-4 dark:border-cyan-500/30">
-      <p className="text-sm font-bold text-cyan-800 dark:text-cyan-200">
+    <div className="rounded-2xl border border-cyan-300 bg-cyan-50 p-4 dark:border-cyan-500/30 dark:bg-cyan-500/10">
+      <p className="text-sm font-bold text-cyan-900 dark:text-cyan-200">
         👋 Looks like you&apos;re already mid-trip
       </p>
-      <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+      <p className="mt-1 text-xs text-slate-700 dark:text-slate-300">
         {pastCount} reservation{pastCount === 1 ? "" : "s"} from before today {pastCount === 1 ? "is" : "are"} shown above. Are you already at your destination?
       </p>
       <div className="mt-3 flex gap-2">
@@ -367,23 +367,23 @@ export function TripTimeline({ reservations, tripName, tripStartDate, tripDaysAw
   return (
     <div>
       {/* Stats bar */}
-      <div className="mb-5 flex items-center gap-4 rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className="mb-5 flex items-center gap-4 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] px-4 py-3 shadow-sm">
         <div className="text-center">
-          <p className="text-xl font-black text-slate-900 dark:text-slate-100">{totalDays}</p>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Days</p>
+          <p className="text-xl font-black text-[var(--text-primary)]">{totalDays}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">Days</p>
         </div>
-        <div className="h-8 w-px bg-slate-100 dark:bg-slate-800" />
+        <div className="h-8 w-px bg-[var(--border-default)]" />
         <div className="text-center">
-          <p className="text-xl font-black text-slate-900 dark:text-slate-100">{daysWithEvents}</p>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Planned</p>
+          <p className="text-xl font-black text-[var(--text-primary)]">{daysWithEvents}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">Planned</p>
         </div>
-        <div className="h-8 w-px bg-slate-100 dark:bg-slate-800" />
+        <div className="h-8 w-px bg-[var(--border-default)]" />
         <div className="text-center">
-          <p className="text-xl font-black text-slate-900 dark:text-slate-100">{tripDaysAway === 0 ? "NOW" : tripDaysAway}</p>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">{tripDaysAway === 0 ? "Happening" : "Days away"}</p>
+          <p className="text-xl font-black text-[var(--text-primary)]">{tripDaysAway === 0 ? "NOW" : tripDaysAway}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">{tripDaysAway === 0 ? "Happening" : "Days away"}</p>
         </div>
         <div className="ml-auto text-right">
-          <p className="truncate max-w-28 text-xs font-bold text-slate-700 dark:text-slate-300">{tripName}</p>
+          <p className="truncate max-w-28 text-xs font-bold text-[var(--text-primary)]">{tripName}</p>
           <div className="mt-1 flex items-center justify-end gap-1">
             {["flight","hotel","dinner","train","ride"].map((type) => {
               const has = reservations.some((r) => r.type === type);
