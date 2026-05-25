@@ -109,8 +109,15 @@ export default async function RootLayout({
     <html
       lang={locale}
       className={`${GeistSans.variable} ${GeistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <head>
+        {/* Inline script — runs before React hydration to prevent theme flash */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('kepi-theme');var dark=t==='dark'||(t===null&&window.matchMedia('(prefers-color-scheme:dark)').matches);if(dark)document.documentElement.classList.add('dark');}catch(e){}})();`,
+          }}
+        />
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#1a1a2e" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
