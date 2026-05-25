@@ -5776,8 +5776,12 @@ export default function TravelAssistantPage() {
   // Auto-close the review session card once all items have been processed.
   useEffect(() => {
     if (consumerReviewQueueSession.open && reviewQueue.length === 0) {
-      setConsumerReviewQueueSession({ open: false, processed: 0, total: 0 });
+      const timer = window.setTimeout(() => {
+        setConsumerReviewQueueSession({ open: false, processed: 0, total: 0 });
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
+    return undefined;
   }, [consumerReviewQueueSession.open, reviewQueue.length]);
 
   const navigateToConsumerTab = useCallback((nextTab: ConsumerTab): void => {

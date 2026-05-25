@@ -89,19 +89,6 @@ function pickDisruptionUpdate(updates: readonly TravelUpdateEvent[]): TravelUpda
   );
 }
 
-function normalizeLookupValue(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/gu, " ");
-}
-
-function normalizeFlightCode(value: string): string {
-  return value.trim().toUpperCase().replace(/[^A-Z0-9]/gu, "");
-}
-
-function parseDateMs(value: string | null | undefined): number {
-  if (!value) return Number.NaN;
-  return Date.parse(value);
-}
-
 function chooseBestFlight(
   flights: z.infer<typeof AeroDataBoxFlightSchema>[],
 ): z.infer<typeof AeroDataBoxFlightSchema> | null {
