@@ -6438,9 +6438,17 @@ export default function TravelAssistantPage() {
                 <button
                   type="button"
                   onClick={() => openDrawer("review", firstForwardedReviewItem.id)}
-                  className="w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm text-amber-900 shadow-sm transition hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-100 dark:hover:bg-amber-500/20"
+                  className="w-full rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-left shadow-sm transition hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-500/15 dark:hover:bg-amber-500/20"
                 >
-                  New reservation found — tap to review
+                  <p className="text-sm font-bold text-amber-900 dark:text-amber-100">
+                    ✋ We need your help with a reservation
+                  </p>
+                  <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-200">
+                    {firstForwardedReviewItem.reasons[0] ?? "Tap to review and confirm the details."}
+                  </p>
+                  <p className="mt-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                    Tap to fill in missing info →
+                  </p>
                 </button>
               ) : reviewQueue.length > 0 ? (
                 <button
@@ -6448,7 +6456,7 @@ export default function TravelAssistantPage() {
                   onClick={() => navigateToConsumerTab("reservations")}
                   className="w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm text-amber-900 shadow-sm transition hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-100 dark:hover:bg-amber-500/20"
                 >
-                  You have {reviewQueue.length} reservation{reviewQueue.length === 1 ? "" : "s"} waiting in your review queue — tap to review
+                  {reviewQueue.length} reservation{reviewQueue.length === 1 ? "" : "s"} need{reviewQueue.length === 1 ? "s" : ""} your input — tap to review
                 </button>
               ) : null}
 
@@ -6603,13 +6611,17 @@ export default function TravelAssistantPage() {
                     className="w-full rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-left text-sm text-amber-900 shadow-sm transition hover:bg-amber-100 dark:border-amber-500/50 dark:bg-amber-500/15 dark:text-amber-100 dark:hover:bg-amber-500/20"
                   >
                     <div className="flex items-start gap-2">
-                      <span aria-hidden className="mt-0.5 text-base">
-                        ⚠️
-                      </span>
-                      <span className="block break-words leading-snug">
-                        {reviewQueue.length} reservation{reviewQueue.length === 1 ? "" : "s"} are waiting in your review queue —
-                        tap to review now
-                      </span>
+                      <span aria-hidden className="mt-0.5 text-base">✋</span>
+                      <div>
+                        <p className="font-semibold leading-snug">
+                          {reviewQueue.length === 1 ? "A reservation needs your input" : `${reviewQueue.length} reservations need your input`}
+                        </p>
+                        {reviewQueue[0]?.reasons[0] ? (
+                          <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-200">
+                            {reviewQueue[0].reasons[0]}
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
                   </button>
                   {consumerReviewQueueSession.open && activeConsumerReviewItem ? (

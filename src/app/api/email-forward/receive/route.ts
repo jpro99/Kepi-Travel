@@ -670,18 +670,73 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         continue;
       }
 
-      // Auto-accept: add directly to reservations — no review queue.
-      // The user forwards their own emails, so the forward itself is the confirmation.
-      nextReservations = [parsedReservation, ...nextReservations];
-      routeLogger.info("Forwarded reservation auto-accepted.", {
-        userId: targetUserId,
-        tripId: targetTrip.id,
-        type: parserType,
-        provider: parserProvider,
-        flightNumber: parserFlightNumber || null,
-        localTime: parserLocalTime,
-        confirmationCode: parserConfirmationCode || null,
-      });
+      // Smart routing: high confidence = auto-accept. Low confidence or missing
+      // critical fields = review queue so user can fix the specific problem.
+      const isCriticalFieldMissing = !parserLocalTime.trim() ||
+        (parserType === "flight" && !parserFlightNumber.trim());
+      const needsReview = isCriticalFieldMissing ||
+        parserParsingStatus === "needs-user-input" ||
+        parserConfidenceScore < 40;
+
+      if (needsReview) {
+        const missingDesc = parserMissingFields.length > 0
+          ? `Could not read: ${parserMissingFields.join(", ")}. Please confirm these fields.`
+          : isCriticalFieldMissing
+            ? "We could not find the date or flight number. Please fill them in."
+            : "Please confirm this reservation looks correct.";
+        const reviewItem = {
+          id: `review-email-${generateId()}`,
+          reasons: [missingDesc],
+          impact: "Tap 'Open details' to fill in the missing info and save.",
+          sourceEmailSubject: parsed.data.subject?.trim() || "Forwarded email",
+          draft: {
+            type: parserType,
+            title: parserTitle,
+            provider: parserProvider,
+            localTime: parserLocalTime,
+            timezone: parserTimezone || "Etc/UTC",
+            location: parserLocation,
+            confirmationCode: parserConfirmationCode,
+            assignedTo: defaultAssignees,
+            stage: targetTrip.stage,
+            critical: parserType === "flight" || parserType === "train" || parserType === "ride",
+            confidence: confidenceToDraftValue(parserConfidenceScore),
+            notes: parserNotesText,
+            flightNumber: parserType === "flight" ? parserFlightNumber : "",
+            flightAirline: resolvedAirline,
+            flightDate: parserType === "flight" ? parserLocalTime.slice(0, 10) : "",
+          },
+          sourceChannel: "email-forward" as const,
+          parseConfidenceScore: parserConfidenceScore,
+          parsingStatus: parserParsingStatus,
+          missingFields: parserMissingFields,
+          originalEmailText: parserOriginalEmailText,
+          hasPdfAttachment: parserHasPdfAttachment,
+          imageBasedEmail: parserImageBasedEmail,
+          reviewStatus: "pending" as const,
+          parserNotes,
+        };
+        nextQueue = [reviewItem, ...nextQueue];
+        routeLogger.info("Forwarded reservation needs review.", {
+          userId: targetUserId,
+          tripId: targetTrip.id,
+          type: parserType,
+          confidenceScore: parserConfidenceScore,
+          missingFields: parserMissingFields,
+          isCriticalFieldMissing,
+        });
+      } else {
+        nextReservations = [parsedReservation, ...nextReservations];
+        routeLogger.info("Forwarded reservation auto-accepted.", {
+          userId: targetUserId,
+          tripId: targetTrip.id,
+          type: parserType,
+          provider: parserProvider,
+          flightNumber: parserFlightNumber || null,
+          localTime: parserLocalTime,
+          confirmationCode: parserConfirmationCode || null,
+        });
+      }
       acceptedDraftCount += 1;
     }
 
