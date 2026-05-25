@@ -591,7 +591,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       new Set(targetTrip.reservations.flatMap((reservation) => reservation.assignedTo)),
     );
     let nextReservations = [...targetTrip.reservations];
-    const nextQueue = [...(targetTrip.reviewQueue ?? [])];
+    let nextQueue = [...(targetTrip.reviewQueue ?? [])];
     let acceptedDraftCount = 0;
     let duplicateDraftCount = 0;
     for (const parserDraftRecord of parserDraftRecords) {
