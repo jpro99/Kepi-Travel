@@ -632,7 +632,7 @@ async function runAiFallback(rawEmailText: string): Promise<CandidateMap[]> {
     "Use type values only: flight, hotel, train, ride.",
     "CRITICAL for localTime: Use the actual FLIGHT DEPARTURE time, not the email send time, not check-in time, not boarding time. NEVER guess or infer a year — if the year is not explicitly in the email use the current year only if the date is clearly in the future, otherwise leave localTime empty.",
     "The departure time is the scheduled time the plane leaves the gate. Format: 'YYYY-MM-DD HH:mm' in 24-hour.",
-    "For flights, set flightNumber to the IATA flight number e.g. AA123, UA456, JL001, VI3557.",
+    "For flights, set flightNumber to airline code + number e.g. AS832, AS271, KE1121. Never use VISA card numbers (like VI3557) as flight numbers.",
     "For flights, set departureAirport to the IATA code of the origin airport and arrivalAirport to the IATA code of the destination. These are always in the email.",
     "For timezone: use the IATA timezone of the DEPARTURE airport city e.g. Pacific/Honolulu, America/New_York, Asia/Tokyo.",
     "For location: set to the departure airport name or city, NOT the hotel address.",
