@@ -3304,7 +3304,7 @@ export default function TravelAssistantPage() {
 
 
     // Auto-generate trip name from destination + departure month
-    const derivedTripName = derivedTripDestination && derivedTripStartDate
+    const derivedTripName = derivedTripStartDate
       ? (() => {
           const cityMap: Record<string, string> = {
             HNL: "Honolulu", NRT: "Tokyo", HND: "Tokyo", LAX: "Los Angeles",
@@ -3312,10 +3312,28 @@ export default function TravelAssistantPage() {
             SIN: "Singapore", HKG: "Hong Kong", GMP: "Seoul", ICN: "Seoul",
             ORD: "Chicago", MIA: "Miami", SFO: "San Francisco", DEN: "Denver",
             SEA: "Seattle", DFW: "Dallas", BOS: "Boston", LAS: "Las Vegas",
+            ONT: "Ontario", SNA: "Orange County", SAN: "San Diego",
           };
-          const city = cityMap[derivedTripDestination.toUpperCase()] ?? derivedTripDestination;
-          const month = new Date(derivedTripStartDate + "T12:00:00").toLocaleDateString("en-US", { month: "short" });
-          return `${city} · ${month}`;
+          // Get ALL flights sorted by date to understand the full itinerary
+          const allFlights = consumerReservationsSorted
+            .filter((r) => r.type === "flight")
+            .sort((a, b) => {
+              const aMs = Date.parse(((a as Reservation & { flightDate?: string }).flightDate ?? a.localTime) + "T00:00:00");
+              const bMs = Date.parse(((b as Reservation & { flightDate?: string }).flightDate ?? b.localTime) + "T00:00:00");
+              return aMs - bMs;
+            });
+          const firstFlight = allFlights[0];
+          const lastFlight = allFlights[allFlights.length - 1];
+          const origin = (firstFlight as Reservation & { flightDepartureAirport?: string })?.flightDepartureAirport ?? "";
+          const finalDest = (lastFlight as Reservation & { flightArrivalAirport?: string })?.flightArrivalAirport ?? derivedTripDestination ?? "";
+          const originCity = cityMap[origin.toUpperCase()] ?? origin;
+          const destCity = cityMap[finalDest.toUpperCase()] ?? finalDest;
+          const month = new Date(derivedTripStartDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+          // Multi-leg: show origin → final destination
+          if (originCity && destCity && originCity !== destCity && allFlights.length > 1) {
+            return `${originCity} → ${destCity} · ${month}`;
+          }
+          return destCity ? `${destCity} · ${month}` : `Trip · ${month}`;
         })()
       : null;
     const nameNeedsUpdate = Boolean(derivedTripName) &&

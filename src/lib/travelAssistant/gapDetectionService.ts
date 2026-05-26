@@ -28,6 +28,8 @@ interface GapReservation {
   confirmationCode?: string;
   flightDate?: string;
   notes?: string;
+  flightDepartureAirport?: string;
+  flightArrivalAirport?: string;
 }
 
 function extractCheckoutFromNotes(notes: string): string {
@@ -206,6 +208,46 @@ export function detectTripGaps(reservations: GapReservation[], nowMs = Date.now(
         title: "Online check-in due",
         detail: `${flight.provider && !["gmail","yahoo","outlook"].includes(flight.provider.toLowerCase()) ? flight.provider : "Your airline"} check-in ${hoursUntil < 2 ? "closes soon" : "is open now"}. Check in online to save time at the airport.`,
       });
+    }
+  }
+
+  // ── 5. Same-day connections — check minimum connection time ────────────────
+  const flightsByDate = new Map<string, typeof flights>();
+  for (const flight of flights) {
+    const day = flightDayKey(flight);
+    const arr = flightsByDate.get(day) ?? [];
+    arr.push(flight);
+    flightsByDate.set(day, arr);
+  }
+  for (const [, dayFlights] of flightsByDate.entries()) {
+    if (dayFlights.length < 2) continue;
+    const sorted = [...dayFlights].sort((a, b) => getReservationMs(a) - getReservationMs(b));
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const arriving = sorted[i];
+      const departing = sorted[i + 1];
+      const arrMs = getReservationMs(arriving);
+      const depMs = getReservationMs(departing);
+      const connectionMins = (depMs - arrMs) / 60_000;
+      const arrivalAirport = (arriving as GapReservation & { flightArrivalAirport?: string }).flightArrivalAirport ?? "";
+      // Hawaii from international = needs 90-120 min for customs/ag inspection
+      const isIntlToHawaii = arrivalAirport.toUpperCase() === "HNL" &&
+        ((arriving as GapReservation & { flightDepartureAirport?: string }).flightDepartureAirport ?? "").toUpperCase() !== "SEA" &&
+        ((arriving as GapReservation & { flightDepartureAirport?: string }).flightDepartureAirport ?? "").toUpperCase() !== "LAX" &&
+        ((arriving as GapReservation & { flightDepartureAirport?: string }).flightDepartureAirport ?? "").toUpperCase() !== "SFO";
+      const minConnection = isIntlToHawaii ? 150 : 60;
+      if (connectionMins > 0 && connectionMins < minConnection) {
+        gaps.push({
+          id: `tight-connection-${arriving.id}-${departing.id}`,
+          severity: connectionMins < minConnection * 0.6 ? "critical" : "warning",
+          emoji: isIntlToHawaii ? "🛂" : "⏱",
+          title: isIntlToHawaii
+            ? `Tight connection — US Customs required in Honolulu`
+            : `Tight connection — ${Math.round(connectionMins)} min`,
+          detail: isIntlToHawaii
+            ? `You must clear US Customs, collect bags, pass USDA agriculture inspection, re-check bags, and clear TSA again in Honolulu before your next flight. This typically takes 90-120 minutes. Your connection of ${Math.round(connectionMins)} min may not be enough — contact your airline.`
+            : `Only ${Math.round(connectionMins)} minutes between flights. Minimum recommended is ${minConnection} minutes. Contact your airline if you have checked bags.`,
+        });
+      }
     }
   }
 
