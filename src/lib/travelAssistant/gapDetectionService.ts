@@ -140,11 +140,16 @@ export function detectTripGaps(reservations: GapReservation[], nowMs = Date.now(
     if (nightBeforeKey < todayKey) continue; // already past
     const hasHotelCoveringNight = hotels.some((h) => {
       const checkInKey = parseDayKey(h.localTime);
-      // Use checkOutDate field, notes fallback, or default to flightDay
-      // (multi-night stays should use their actual checkout date)
-      // Only use confirmed data — no assumptions.
-      // If checkOutDate is missing, we cannot determine coverage and skip this hotel.
       const checkOutKey = h.checkOutDate?.slice(0, 10) || extractCheckoutFromNotes(h.notes ?? "");
+      console.log("[gap-debug] hotel check", {
+        provider: h.provider,
+        localTime: h.localTime,
+        checkInKey,
+        checkOutDate: h.checkOutDate,
+        checkOutKey,
+        nightBeforeKey,
+        covers: checkInKey <= nightBeforeKey && !!checkOutKey && checkOutKey > nightBeforeKey,
+      });
       if (!checkOutKey) return false;
       return checkInKey <= nightBeforeKey && checkOutKey > nightBeforeKey;
     });
