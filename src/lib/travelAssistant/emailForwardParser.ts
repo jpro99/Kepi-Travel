@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { logger } from "@/lib/logger";
 
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-5";
 const HIGH_CONFIDENCE_THRESHOLD = 70;
 const LOW_CONFIDENCE_THRESHOLD = 40;
 const MIN_READABLE_TEXT_LENGTH = 100;
