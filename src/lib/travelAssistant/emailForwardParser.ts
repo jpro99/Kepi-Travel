@@ -131,7 +131,8 @@ export type ForwardedReservationField =
   | "notes"
   | "flightNumber"
   | "departureAirport"
-  | "arrivalAirport";
+  | "arrivalAirport"
+  | "checkOutDate";
 export type ForwardedParsingStatus = "auto-parsed" | "needs-review" | "needs-user-input";
 export type ForwardedConfidenceLevel = "high" | "medium" | "low";
 
@@ -373,6 +374,7 @@ function parseAiCandidate(candidate: Record<string, unknown>): CandidateMap {
   setIfPresent("flightNumber", candidate.flightNumber, 0.9);
   setIfPresent("departureAirport", candidate.departureAirport, 0.9);
   setIfPresent("arrivalAirport", candidate.arrivalAirport, 0.9);
+  setIfPresent("checkOutDate", candidate.checkOutDate, 0.85);
   return output;
 }
 
