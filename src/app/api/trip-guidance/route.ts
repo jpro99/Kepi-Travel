@@ -18,11 +18,11 @@ const RequestSchema = z.object({
 });
 
 const GuidanceResponseSchema = z.object({
-  urgency: z.enum(["critical", "warning", "normal"]).default("normal"),
-  headline: z.string().trim().max(120),
-  detail: z.string().trim().max(600),
-  proactive_flag: z.string().trim().max(200).optional().default(""),
-  action: z.string().trim().max(200).optional().default(""),
+  urgency: z.enum(["critical", "warning", "normal"]).catch("normal"),
+  headline: z.string().trim().max(200).catch("Review your itinerary"),
+  detail: z.string().trim().max(800).catch(""),
+  proactive_flag: z.string().trim().max(300).optional().catch(""),
+  action: z.string().trim().max(300).optional().catch(""),
 });
 
 // ─── Master Kepi Concierge Prompt ─────────────────────────────────────────────
@@ -165,8 +165,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     let guidance: z.infer<typeof GuidanceResponseSchema>;
     try {
       guidance = GuidanceResponseSchema.parse(JSON.parse(clean));
-    } catch {
-      // Parsing failed — show a neutral fallback, never show raw JSON to user
+    } catch (parseError) {
+      // Parsing failed — log for debugging, show clean fallback to user
+      routeLogger.warn("Trip guidance JSON parse failed.", {
+        error: parseError instanceof Error ? parseError.message : String(parseError),
+        rawPreview: raw.slice(0, 200),
+        cleanPreview: clean.slice(0, 200),
+      });
       guidance = {
         urgency: "normal",
         headline: "Review your itinerary",
