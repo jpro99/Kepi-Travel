@@ -104,8 +104,8 @@ export function detectTripGaps(reservations: GapReservation[], nowMs = Date.now(
 
   // ── 2. No hotel night before a flight ───────────────────────────────────
   for (const flight of flights) {
-    const flightDayKey = flightDayKey(flight);
-    const nightBeforeKey = addDays(flightDayKey, -1);
+    const flightDay = flightDayKey(flight);
+    const nightBeforeKey = addDays(flightDay, -1);
     if (nightBeforeKey < todayKey) continue; // already past
     const hasHotelCoveringNight = hotels.some((h) => {
       const checkInKey = parseDayKey(h.localTime);
@@ -118,7 +118,7 @@ export function detectTripGaps(reservations: GapReservation[], nowMs = Date.now(
         severity: "warning",
         emoji: "🏨",
         title: "No hotel night before your flight",
-        detail: `No accommodation found for ${nightBeforeKey}. If you need a place to stay the night before your ${flightDayKey} flight, add it now.`,
+        detail: `No accommodation found for ${nightBeforeKey}. If you need a place to stay the night before your ${flightDay} flight, add it now.`,
         actionLabel: "Add hotel",
         actionTab: "reservations",
       });
@@ -130,12 +130,12 @@ export function detectTripGaps(reservations: GapReservation[], nowMs = Date.now(
     const landing = flights[i];
     const nextDeparture = flights[i + 1];
     const landingKey = flightDayKey(landing);
-    const nextKey = flightDayKey(nextDeparture);
-    const nights = nightsBetween(landingKey, nextKey);
+    const nextDeptKey = flightDayKey(nextDeparture);
+    const nights = nightsBetween(landingKey, nextDeptKey);
     if (nights > 1) {
       const hasHotel = hotels.some((h) => {
         const checkInKey = parseDayKey(h.localTime);
-        return checkInKey > landingKey && checkInKey < nextKey;
+        return checkInKey > landingKey && checkInKey < nextDeptKey;
       });
       if (!hasHotel) {
         gaps.push({
@@ -143,7 +143,7 @@ export function detectTripGaps(reservations: GapReservation[], nowMs = Date.now(
           severity: nights > 3 ? "warning" : "info",
           emoji: "🌙",
           title: `${nights} nights without accommodation`,
-          detail: `No hotel found between ${landingKey} and ${nextKey}. Forward your hotel confirmation or add it manually.`,
+          detail: `No hotel found between ${landingKey} and ${nextDeptKey}. Forward your hotel confirmation or add it manually.`,
           actionLabel: "Add hotel",
           actionTab: "reservations",
         });
