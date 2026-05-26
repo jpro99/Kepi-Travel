@@ -94,10 +94,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const rateLimit = await enforceRateLimit(auth, {
-    policyName: "trip-guidance",
-    maxPerWindow: 30,
-    windowSeconds: 3600,
+  const rateLimit = await enforceRateLimit({
+    policyName: "ai-suggestions",
+    identifier: auth,
+    route: "/api/trip-guidance",
+    requestId: `trip-guidance-${auth}-${Date.now()}`,
   });
   if (!rateLimit.allowed) {
     return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429, headers: rateLimit.headers });
