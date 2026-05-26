@@ -153,7 +153,7 @@ export function ManualReservationEntryModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-3 backdrop-blur-sm md:items-center">
-      <div className="flex max-h-[92dvh] w-full max-w-xl flex-col rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] shadow-2xl">
+      <div className="flex max-h-[92dvh] w-full max-w-xl flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
         {/* ── Header (fixed, never scrolls away) ── */}
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--border-default)] px-4 py-4">
           <div className="min-w-0">
@@ -207,8 +207,9 @@ export function ManualReservationEntryModal({
               const normalizedTitle = title.trim();
               const normalizedProvider = provider.trim();
               const normalizedLocation = location.trim();
-              if (!normalizedTitle || !normalizedProvider || !localDateTime.trim() || !normalizedLocation) {
-                setFormError("Title, provider, date/time, and location are required.");
+              const locationRequired = reservationType !== "flight" && reservationType !== "train";
+              if (!normalizedTitle || !normalizedProvider || !localDateTime.trim() || (locationRequired && !normalizedLocation)) {
+                setFormError("Title, provider, and date/time are required.");
                 return;
               }
               if (assignedTo.length === 0) {
@@ -231,11 +232,11 @@ export function ManualReservationEntryModal({
             }}
           >
             <label className="block text-sm">
-              <span className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">Reservation type</span>
+              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Reservation type</span>
               <select
                 value={reservationType}
                 onChange={(e) => setReservationType(e.target.value as ManualReservationType)}
-                className="w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-muted)] px-3 py-3 text-base text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-3 text-base font-medium text-slate-900 placeholder-slate-400 focus:border-cyan-400 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500"
               >
                 {RESERVATION_TYPE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -243,89 +244,89 @@ export function ManualReservationEntryModal({
               </select>
             </label>
             <label className="block text-sm">
-              <span className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">Title / reservation name</span>
+              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Title / reservation name</span>
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="AA 123 JFK→LAX, Hyatt Tokyo, Nobu dinner…"
-                className="w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-muted)] px-3 py-3 text-base text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-3 text-base font-medium text-slate-900 placeholder-slate-400 focus:border-cyan-400 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500"
               />
             </label>
             <label className="block text-sm">
-              <span className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">Provider / airline / restaurant</span>
+              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Provider / airline / restaurant</span>
               <input
                 value={provider}
                 onChange={(e) => setProvider(e.target.value)}
-                className="w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-muted)] px-3 py-3 text-base text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-3 text-base font-medium text-slate-900 placeholder-slate-400 focus:border-cyan-400 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500"
               />
             </label>
             <label className="block text-sm">
-              <span className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">Date and time</span>
+              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Date and time</span>
               <input
                 type="datetime-local"
                 value={localDateTime}
                 onChange={(e) => setLocalDateTime(e.target.value)}
-                className="w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-muted)] px-3 py-3 text-base text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-3 text-base font-medium text-slate-900 placeholder-slate-400 focus:border-cyan-400 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500"
               />
             </label>
             <label className="block text-sm">
-              <span className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">Location / address</span>
+              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Location / address</span>
               <input
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                className="w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-muted)] px-3 py-3 text-base text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-3 text-base font-medium text-slate-900 placeholder-slate-400 focus:border-cyan-400 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500"
               />
             </label>
             <label className="block text-sm">
-              <span className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">Confirmation code (optional)</span>
+              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Confirmation code (optional)</span>
               <input
                 value={confirmationCode}
                 onChange={(e) => setConfirmationCode(e.target.value)}
-                className="w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-muted)] px-3 py-3 text-base text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-3 text-base font-medium text-slate-900 placeholder-slate-400 focus:border-cyan-400 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500"
               />
             </label>
             {reservationType === "hotel" ? (
               <>
                 <label className="block text-sm">
-                  <span className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">Check-out date</span>
+                  <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Check-out date</span>
                   <input
                     type="date"
                     value={checkOutDate}
                     onChange={(e) => setCheckOutDate(e.target.value)}
-                    className="w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-muted)] px-3 py-3 text-base text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                    className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-3 text-base font-medium text-slate-900 placeholder-slate-400 focus:border-cyan-400 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500"
                   />
                 </label>
                 <label className="block text-sm">
-                  <span className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">Room type (optional)</span>
+                  <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Room type (optional)</span>
                   <input
                     value={roomType}
                     onChange={(e) => setRoomType(e.target.value)}
                     placeholder="e.g. King, Deluxe, Suite"
-                    className="w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-muted)] px-3 py-3 text-base text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                    className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-3 text-base font-medium text-slate-900 placeholder-slate-400 focus:border-cyan-400 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500"
                   />
                 </label>
               </>
             ) : null}
             {reservationType === "flight" || reservationType === "train" ? (
               <label className="block text-sm">
-                <span className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
                   {reservationType === "flight" ? "Flight number" : "Train number"}
                 </span>
                 <input
                   value={flightNumber}
                   onChange={(e) => setFlightNumber(e.target.value)}
                   placeholder={reservationType === "flight" ? "e.g. VI3557" : "e.g. Nozomi 15"}
-                  className="w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-muted)] px-3 py-3 text-base text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                  className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-3 text-base font-medium text-slate-900 placeholder-slate-400 focus:border-cyan-400 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500"
                 />
               </label>
             ) : null}
             <label className="block text-sm">
-              <span className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">Notes (optional)</span>
+              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Notes (optional)</span>
               <textarea
                 rows={2}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-muted)] px-3 py-3 text-base text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-3 text-base font-medium text-slate-900 placeholder-slate-400 focus:border-cyan-400 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500"
               />
             </label>
             {familyMembers.length > 1 ? (
