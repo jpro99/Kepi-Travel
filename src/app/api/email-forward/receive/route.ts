@@ -211,8 +211,6 @@ function isDuplicateReservation(
     // Non-flight: confirmation code match is a duplicate
     return true;
   }
-  const existingType = normalizeDuplicateValue(existing.type);
-  const candidateType = normalizeDuplicateValue(candidate.type);
   if (existingType !== candidateType) {
     return false;
   }
