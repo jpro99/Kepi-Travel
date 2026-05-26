@@ -142,10 +142,10 @@ export function detectTripGaps(reservations: GapReservation[], nowMs = Date.now(
       const checkInKey = parseDayKey(h.localTime);
       // Use checkOutDate field, notes fallback, or default to flightDay
       // (multi-night stays should use their actual checkout date)
-      const checkOutKey =
-        h.checkOutDate?.slice(0, 10) ||
-        extractCheckoutFromNotes(h.notes ?? "") ||
-        flightDay; // if no checkout date, assume at least through flight day
+      // Only use confirmed data — no assumptions.
+      // If checkOutDate is missing, we cannot determine coverage and skip this hotel.
+      const checkOutKey = h.checkOutDate?.slice(0, 10) || extractCheckoutFromNotes(h.notes ?? "");
+      if (!checkOutKey) return false;
       return checkInKey <= nightBeforeKey && checkOutKey > nightBeforeKey;
     });
     if (!hasHotelCoveringNight) {
@@ -170,7 +170,17 @@ export function detectTripGaps(reservations: GapReservation[], nowMs = Date.now(
     const nights = nightsBetween(landingKey, nextDeptKey);
     if (nights > 1) {
       const hasHotel = hotels.some((h) => {
+        // Only count hotel if check-in is confirmed between the two flights
+        // Do not assume duration — require explicit checkOutDate
         const checkInKey = parseDayKey(h.localTime);
+        const checkOutKey = h.checkOutDate?.slice(0, 10) || extractCheckoutFromNotes(h.notes ?? "");
+        if (!checkInKey) return false;
+        // Hotel covers the gap if it checks in before next departure
+        // and checks out after landing (or at minimum checks in during the gap)
+        if (checkOutKey) {
+          return checkInKey <= nextDeptKey && checkOutKey > landingKey;
+        }
+        // No checkout date — only count if check-in is within the gap
         return checkInKey > landingKey && checkInKey < nextDeptKey;
       });
       if (!hasHotel) {
