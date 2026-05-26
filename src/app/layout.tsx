@@ -115,7 +115,7 @@ export default async function RootLayout({
         {/* Inline script — runs before React hydration to prevent theme flash */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('kepi-theme');var dark=t==='dark'||(t===null&&window.matchMedia('(prefers-color-scheme:dark)').matches);if(dark)document.documentElement.classList.add('dark');}catch(e){}})();`,
+            __html: `(function(){try{var _ktheme=localStorage.getItem('kepi-theme');var _kdark=_ktheme==='dark'||(_ktheme===null&&window.matchMedia('(prefers-color-scheme:dark)').matches);if(_kdark)document.documentElement.classList.add('dark');}catch(e){}})();`,
           }}
         />
         <link rel="manifest" href="/manifest.json" />

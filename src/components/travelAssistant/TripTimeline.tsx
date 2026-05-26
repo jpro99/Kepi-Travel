@@ -111,9 +111,9 @@ function formatTime(localTime: string): string {
   return new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
-function todayKey(): string { return new Date().toISOString().slice(0, 10); }
-function isToday(dateKey: string): boolean { return dateKey === todayKey(); }
-function isPastDay(dateKey: string): boolean { return dateKey < todayKey(); }
+function getTodayKey(): string { return new Date().toISOString().slice(0, 10); }
+function isToday(dateKey: string): boolean { return dateKey === getTodayKey(); }
+function isPastDay(dateKey: string): boolean { return dateKey < getTodayKey(); }
 
 // ─── Reservation card ─────────────────────────────────────────────────────────
 
