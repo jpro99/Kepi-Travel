@@ -80,6 +80,7 @@ import { TripSwitcher } from "@/components/travelAssistant/TripSwitcher";
 import { TripOrientationCard } from "@/components/travelAssistant/TripOrientationCard";
 import { DocumentVault } from "@/components/travelAssistant/DocumentVault";
 import { PackingList } from "@/components/travelAssistant/PackingList";
+import { ShareTripCard } from "@/components/travelAssistant/ShareTripCard";
 import { WeatherCard } from "@/components/travelAssistant/WeatherCard";
 import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntelligencePanel";
 import { ConciergePanel } from "@/components/travelAssistant/ConciergePanel";
@@ -1100,6 +1101,16 @@ function isOnboardingPlaceholderReservation(reservation: Reservation): boolean {
   const provider = reservation.provider.trim().toLowerCase();
   const notes = reservation.notes.trim().toLowerCase();
   return provider === "onboarding setup" || notes.includes("created during onboarding");
+}
+
+function isTripNamePlaceholder(name: string | null | undefined): boolean {
+  if (!name) return true;
+  const normalized = name.trim().toLowerCase();
+  return normalized.length === 0 ||
+    normalized === "my first trip" ||
+    normalized === "my trip" ||
+    normalized === "new trip" ||
+    normalized === "untitled trip";
 }
 
 function isTripDestinationPlaceholder(destination: string | null | undefined): boolean {
@@ -3290,11 +3301,34 @@ export default function TravelAssistantPage() {
     const normalizedStartDate = activeTrip?.startDate?.trim() ?? "";
     const startDateNeedsUpdate = Boolean(derivedTripStartDate) && normalizedStartDate !== derivedTripStartDate;
 
-    if (!destinationNeedsUpdate && !startDateNeedsUpdate) {
+
+
+    // Auto-generate trip name from destination + departure month
+    const derivedTripName = derivedTripDestination && derivedTripStartDate
+      ? (() => {
+          const cityMap: Record<string, string> = {
+            HNL: "Honolulu", NRT: "Tokyo", HND: "Tokyo", LAX: "Los Angeles",
+            JFK: "New York", LHR: "London", CDG: "Paris", SYD: "Sydney",
+            SIN: "Singapore", HKG: "Hong Kong", GMP: "Seoul", ICN: "Seoul",
+            ORD: "Chicago", MIA: "Miami", SFO: "San Francisco", DEN: "Denver",
+            SEA: "Seattle", DFW: "Dallas", BOS: "Boston", LAS: "Las Vegas",
+          };
+          const city = cityMap[derivedTripDestination.toUpperCase()] ?? derivedTripDestination;
+          const month = new Date(derivedTripStartDate + "T12:00:00").toLocaleDateString("en-US", { month: "short" });
+          return `${city} · ${month}`;
+        })()
+      : null;
+    const nameNeedsUpdate = Boolean(derivedTripName) &&
+      isTripNamePlaceholder(activeTrip?.name);
+
+    if (!destinationNeedsUpdate && !startDateNeedsUpdate && !nameNeedsUpdate) {
       return;
     }
 
-    const patch: { destination?: string; startDate?: string } = {};
+    const patch: { name?: string; destination?: string; startDate?: string } = {};
+    if (nameNeedsUpdate && derivedTripName) {
+      patch.name = derivedTripName;
+    }
     if (destinationNeedsUpdate && derivedTripDestination) {
       patch.destination = derivedTripDestination;
     }
@@ -7310,6 +7344,8 @@ export default function TravelAssistantPage() {
             />
           ) : (
             <section className="space-y-3">
+              {/* Share trip */}
+              <ShareTripCard tripName={activeTrip?.name ?? "My Trip"} />
               <section
                 id="readiness-checklist-section"
                 ref={readinessChecklistSectionRef}

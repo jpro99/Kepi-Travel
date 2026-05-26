@@ -1,168 +1,112 @@
-import Link from "next/link";
-import type { Metadata } from "next";
-import { headers } from "next/headers";
-import { getTranslations } from "next-intl/server";
-import { detectLocaleFromAcceptLanguage } from "@/i18n/locales";
-import { getSharedTrip } from "@/lib/travelAssistant/tripShareStore";
+import { getSafeRedisClient } from "@/lib/redis";
+import { notFound } from "next/navigation";
 
-type PageProps = {
-  params: Promise<{ token: string }>;
+interface ShareReservation {
+  id: string; type: string; title: string; provider: string;
+  localTime: string; location: string; flightNumber: string;
+  flightDate: string; flightDepartureAirport: string;
+  flightArrivalAirport: string; checkOutDate: string;
+}
+
+interface ShareSnapshot {
+  tripName: string; destination: string; startDate: string;
+  reservations: ShareReservation[]; createdAt: string;
+}
+
+const TYPE_EMOJI: Record<string, string> = {
+  flight: "✈️", hotel: "🏨", dinner: "🍽", train: "🚆", ride: "🚗",
 };
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { token } = await params;
-  const shared = await getSharedTrip(token);
-  if (shared.status !== "ok") {
-    return {
-      title: "Shared Itinerary",
-    };
-  }
-  return {
-    title: `${shared.trip.name} — Shared Itinerary`,
-    description: `Shared trip to ${shared.trip.destination} from ${shared.trip.startDate} to ${shared.trip.endDate}.`,
-  };
+function formatDate(localTime: string): string {
+  const ms = Date.parse(localTime.replace(" ", "T"));
+  if (isNaN(ms)) return localTime;
+  return new Date(ms).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
-function FriendlyError({
-  title,
-  message,
-  ctaLabel,
-}: {
-  title: string;
-  message: string;
-  ctaLabel: string;
-}) {
-  return (
-    <main className="min-h-screen bg-slate-100 px-4 py-8 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <section className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white/90 p-6 dark:border-slate-700 dark:bg-slate-900/70">
-        <h1 className="text-2xl font-semibold">{title}</h1>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{message}</p>
-        <div className="mt-5">
-          <Link
-            href="/"
-            className="inline-flex items-center rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
-          >
-            {ctaLabel}
-          </Link>
-        </div>
-      </section>
-    </main>
+function formatTime(localTime: string): string {
+  const ms = Date.parse(localTime.replace(" ", "T"));
+  if (isNaN(ms)) return "";
+  return new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+export default async function SharePage({ params }: { params: { token: string } }) {
+  const raw = await getSafeRedisClient()?.get(`share:trip:${params.token}`);
+  if (!raw) notFound();
+
+  const trip = JSON.parse(typeof raw === "string" ? raw : JSON.stringify(raw)) as ShareSnapshot;
+  const sorted = [...trip.reservations].sort((a, b) =>
+    Date.parse((a.flightDate || a.localTime).replace(" ", "T")) -
+    Date.parse((b.flightDate || b.localTime).replace(" ", "T"))
   );
-}
-
-export default async function SharedTripPage({ params }: PageProps) {
-  const headerStore = await headers();
-  const locale = detectLocaleFromAcceptLanguage(headerStore.get("accept-language"));
-  const t = await getTranslations({ locale, namespace: "SharePage" });
-  const { token } = await params;
-  const shared = await getSharedTrip(token);
-
-  if (shared.status === "invalid" || shared.status === "missing-trip") {
-    return (
-      <FriendlyError
-        title={t("invalidTitle")}
-        message={t("invalidMessage")}
-        ctaLabel={t("friendlyErrorCta")}
-      />
-    );
-  }
-
-  if (shared.status === "expired") {
-    return (
-      <FriendlyError
-        title={t("expiredTitle")}
-        message={t("expiredMessage")}
-        ctaLabel={t("friendlyErrorCta")}
-      />
-    );
-  }
-
-  if (shared.status === "revoked") {
-    return (
-      <FriendlyError
-        title={t("revokedTitle")}
-        message={t("revokedMessage")}
-        ctaLabel={t("friendlyErrorCta")}
-      />
-    );
-  }
 
   return (
-    <main className="min-h-screen bg-slate-100 px-4 py-8 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <section className="mx-auto max-w-4xl rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
-        <p className="text-xs font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-300">
-          {t("sharedItineraryBadge")}
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold">{shared.trip.name}</h1>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-          {shared.trip.destination} • {shared.trip.startDate} - {shared.trip.endDate}
-        </p>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-          {t("accessExpires", { date: new Date(shared.expiresAt).toLocaleString() })}
-        </p>
+    <div style={{ minHeight: "100dvh", background: "#0d1117", color: "#e6edf3", fontFamily: "system-ui, sans-serif", padding: "24px 16px" }}>
+      <div style={{ maxWidth: 480, margin: "0 auto" }}>
+        {/* Header */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+            <div style={{ background: "#22d3ee", borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: "#0d1117", fontSize: 16 }}>K</div>
+            <span style={{ fontSize: 13, color: "#8b949e" }}>Shared via Kepi</span>
+          </div>
+          <h1 style={{ fontSize: 28, fontWeight: 900, margin: "8px 0 4px" }}>{trip.tripName}</h1>
+          {trip.destination && <p style={{ fontSize: 15, color: "#8b949e", margin: 0 }}>📍 {trip.destination}</p>}
+        </div>
 
-        <div className="mt-5 space-y-3">
-          {shared.trip.reservations.length > 0 ? (
-            shared.trip.reservations.map((reservation) => (
-              <article
-                key={reservation.id}
-                className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/70"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                      {reservation.type} • {reservation.provider}
-                    </p>
-                    <h2 className="text-sm font-semibold">{reservation.title}</h2>
+        {/* Reservations */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {sorted.map((r) => (
+            <div key={r.id} style={{
+              background: r.type === "flight" ? "linear-gradient(135deg, #1a1030, #0d1117)" : "#161b22",
+              border: `1px solid ${r.type === "flight" ? "#7c3aed40" : "#30363d"}`,
+              borderRadius: 16, padding: 16,
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                <span style={{
+                  fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
+                  background: r.type === "flight" ? "#7c3aed30" : "#21262d",
+                  color: r.type === "flight" ? "#a78bfa" : "#8b949e",
+                  padding: "3px 8px", borderRadius: 20,
+                }}>
+                  {TYPE_EMOJI[r.type] ?? "📌"} {r.type}
+                </span>
+                <span style={{ fontSize: 13, color: "#8b949e" }}>{formatDate(r.flightDate || r.localTime)}</span>
+              </div>
+              {r.type === "flight" ? (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "8px 0" }}>
+                    <div>
+                      <div style={{ fontSize: 32, fontWeight: 900, lineHeight: 1 }}>{r.flightDepartureAirport || "DEP"}</div>
+                      <div style={{ fontSize: 12, color: "#8b949e" }}>{formatTime(r.localTime)}</div>
+                    </div>
+                    <div style={{ flex: 1, textAlign: "center", color: "#7c3aed" }}>
+                      <div>──── ✈ ────</div>
+                      {r.flightNumber && <div style={{ fontSize: 11, color: "#a78bfa", marginTop: 4 }}>{r.flightNumber}</div>}
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 32, fontWeight: 900, lineHeight: 1 }}>{r.flightArrivalAirport || "ARR"}</div>
+                    </div>
                   </div>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                      reservation.critical
-                        ? "bg-red-500/20 text-red-200"
-                        : reservation.confidence === "high"
-                          ? "bg-emerald-500/20 text-emerald-200"
-                          : reservation.confidence === "medium"
-                            ? "bg-amber-500/20 text-amber-200"
-                            : "bg-red-500/20 text-red-200"
-                    }`}
-                  >
-                    {reservation.critical ? t("critical") : reservation.confidence}
-                  </span>
-                </div>
-                <p className="mt-2 text-xs text-slate-700 dark:text-slate-300">
-                  {reservation.localTime} ({reservation.timezone})
-                </p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">{reservation.location}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">
-                  {t("confirmation", { code: reservation.confirmationCode })}
-                </p>
-                {shared.options.showPersonalNotes && reservation.notes ? (
-                  <p className="mt-2 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                    {t("notes", { notes: reservation.notes })}
-                  </p>
-                ) : null}
-              </article>
-            ))
-          ) : (
-            <p className="rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
-              {t("noReservations")}
-            </p>
-          )}
+                  <div style={{ fontSize: 13, color: "#8b949e" }}>{r.provider}</div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 18, fontWeight: 700, margin: "4px 0" }}>{r.provider || r.title}</div>
+                  {r.type === "hotel" && r.checkOutDate && (
+                    <div style={{ fontSize: 13, color: "#8b949e" }}>
+                      Check-in {formatDate(r.localTime)} → Check-out {formatDate(r.checkOutDate)}
+                    </div>
+                  )}
+                  {r.location && <div style={{ fontSize: 12, color: "#6e7681", marginTop: 4 }}>📍 {r.location}</div>}
+                </>
+              )}
+            </div>
+          ))}
         </div>
 
-        <div className="mt-8 rounded-xl border border-cyan-400/30 bg-cyan-500/10 p-4">
-          <h3 className="text-sm font-semibold text-cyan-900 dark:text-cyan-100">{t("ctaTitle")}</h3>
-          <p className="mt-1 text-xs text-cyan-800 dark:text-cyan-200/90">
-            {t("ctaSubtitle")}
-          </p>
-          <Link
-            href="/"
-            className="mt-3 inline-flex items-center rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
-          >
-            {t("ctaButton")}
-          </Link>
+        <div style={{ textAlign: "center", marginTop: 32, fontSize: 13, color: "#6e7681" }}>
+          Shared read-only via <a href="https://kepi-search.vercel.app" style={{ color: "#22d3ee" }}>Kepi</a>
         </div>
-      </section>
-    </main>
+      </div>
+    </div>
   );
 }
