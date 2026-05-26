@@ -42,6 +42,35 @@ export default function ResetTripPage() {
         </button>
       </div>
       {msg && <p style={{ background: "#dcfce7", padding: 12, borderRadius: 8, marginBottom: 16 }}>{msg}</p>}
+
+      {data && data.reservations && data.reservations.filter((r: Reservation) => r.type === "flight").map((r: Reservation) => (
+        <div key={r.id} style={{ background: "#1e293b", color: "#e2e8f0", padding: 16, borderRadius: 8, marginBottom: 12 }}>
+          <p style={{ fontWeight: "bold", marginBottom: 8 }}>✈️ Flight: {r.provider} {r.flightNumber} — ID: {r.id}</p>
+          <p style={{ fontSize: 12, marginBottom: 8 }}>localTime: {r.localTime} | flightDate: {r.flightDate ?? "NOT SET"}</p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button onClick={async () => {
+              const res = await fetch("/api/admin/fix-flight", {
+                method: "PATCH",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  reservationId: r.id,
+                  flightDepartureTime: "2026-05-29 21:20",
+                  flightDepartureAirport: "HND",
+                  flightArrivalAirport: "HNL",
+                  flightNumber: "AS832",
+                  flightDate: "2026-05-29",
+                })
+              });
+              const j = await res.json() as { ok?: boolean };
+              setMsg(j.ok ? "✅ Fixed AS 832 HND→HNL 9:20 PM May 29" : "Error fixing flight");
+            }} style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>
+              Fix AS 832 → HND→HNL 9:20 PM May 29
+            </button>
+          </div>
+        </div>
+      ))}
+
       {data && (
         <div>
           <p><strong>Trip:</strong> {data.tripName} ({data.tripId})</p>
