@@ -629,7 +629,7 @@ async function runAiFallback(rawEmailText: string, subject = ""): Promise<Candid
     "Extract every travel reservation found in this email.",
     "Return strict JSON only with this shape:",
     '{ "reservations": [ { "type": "", "title": "", "provider": "", "confirmationCode": "", "localTime": "", "timezone": "", "location": "", "notes": "", "flightNumber": "", "departureAirport": "", "arrivalAirport": "" } ] }',
-    "If there are multiple flights in one email, include one reservations[] object per flight.",
+    "IMPORTANT: This may be a multi-leg itinerary. Scan for EVERY individual flight segment. For example HND→HNL→SEA→ONT has 3 flights — return 3 separate objects in reservations[]. Each object must have its own flightNumber, departureAirport, arrivalAirport, and localTime (departure time for that specific leg).",
     "Use type values only: flight, hotel, train, ride.",
     "CRITICAL for localTime: For flights, use the scheduled DEPARTURE time (not email send time, not boarding time). For hotels, use the check-in date and time if stated, otherwise just the check-in date at 15:00 local time. NEVER guess or infer a year — if the year is not explicitly in the email use the current year only if the date is clearly in the future, otherwise leave localTime empty.",
     "The departure time is the scheduled time the plane leaves the gate. Format: 'YYYY-MM-DD HH:mm' in 24-hour.",
@@ -653,10 +653,10 @@ async function runAiFallback(rawEmailText: string, subject = ""): Promise<Candid
     const client = new Anthropic({ apiKey });
     const response = await client.messages.create({
       model: MODEL,
-      max_tokens: 1500,
+      max_tokens: 4000,
       temperature: 0,
       system:
-        "Extract travel reservations from forwarded email text. Return strict JSON only. CRITICAL RULES: (1) type=hotel for hotel/stay emails even if they mention arrival/departure dates. type=flight ONLY when email has a flight number, airline, or boarding pass. (2) For flights, localTime MUST be the scheduled DEPARTURE time of the plane — not email send time, not check-in time, not boarding time. Use 24-hour YYYY-MM-DD HH:mm format. (3) timezone = IATA timezone of departure city e.g. Pacific/Honolulu, Asia/Tokyo. (4) location = departure airport name or city, not hotel address. (5) flightNumber = airline IATA code + number e.g. AS832, KE1121, UA456. Never use payment/card numbers. (6) IMPORTANT: For multi-flight itineraries you MUST return one separate object per flight leg — if the email has 2 flights return 2 objects, 3 flights return 3 objects. Do not merge legs.",
+        "You extract travel reservations from forwarded emails. Return ONLY a JSON object with a reservations array. CRITICAL RULES:\n(1) For FLIGHTS: scan the entire email for every individual flight segment. A 3-leg itinerary like HND→HNL→SEA→ONT has 3 separate flights — return 3 objects. NEVER merge segments into one. Each segment has its own flight number, departure airport, arrival airport, and departure time.\n(2) type=flight ONLY when a flight number or airline is present. type=hotel for hotels even if they mention arrival/departure dates.\n(3) localTime = scheduled DEPARTURE time of that specific flight leg in YYYY-MM-DD HH:mm 24-hour format. Not email send time, not boarding time.\n(4) flightNumber = IATA airline code + flight number e.g. AS815, AS272. Credit card numbers like VI3557 are NOT flight numbers.\n(5) departureAirport = IATA code of origin. arrivalAirport = IATA code of destination. Both must be set for every flight.\n(6) timezone = IANA timezone of the departure city e.g. Asia/Tokyo, Pacific/Honolulu, America/Los_Angeles.\n(7) location = departure city or airport name.\n(8) If a field is not in the email, use empty string. Never guess or invent values.",
       messages: [
         {
           role: "user",
