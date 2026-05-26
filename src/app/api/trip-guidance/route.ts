@@ -155,16 +155,22 @@ export async function POST(request: Request): Promise<NextResponse> {
     });
 
     const raw = message.content.find((b) => b.type === "text")?.text ?? "";
-    const clean = raw.replace(/```json|```/g, "").trim();
+    // Extract JSON robustly regardless of markdown fence style
+    const jsonStart = raw.indexOf("{");
+    const jsonEnd = raw.lastIndexOf("}");
+    const clean = jsonStart >= 0 && jsonEnd > jsonStart
+      ? raw.slice(jsonStart, jsonEnd + 1)
+      : raw.replace(/```json|```/g, "").trim();
 
     let guidance: z.infer<typeof GuidanceResponseSchema>;
     try {
       guidance = GuidanceResponseSchema.parse(JSON.parse(clean));
     } catch {
+      // Parsing failed — show a neutral fallback, never show raw JSON to user
       guidance = {
         urgency: "normal",
-        headline: "Check your itinerary",
-        detail: raw.slice(0, 300),
+        headline: "Review your itinerary",
+        detail: "Tap 'Am I on track?' for a full trip status check.",
       };
     }
 
