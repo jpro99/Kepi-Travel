@@ -13,8 +13,11 @@ interface OnTrackButtonProps {
     flightNumber?: string;
     flightDepartureAirport?: string;
     flightArrivalAirport?: string;
+    flightDepartureTime?: string;
+    flightArrivalTime?: string;
     checkOutDate?: string;
     confirmationCode?: string;
+    notes?: string;
   }[];
   tripName: string;
 }
@@ -56,9 +59,12 @@ function buildContext(reservations: OnTrackButtonProps["reservations"]): string 
         r.flightNumber ? `flight=${r.flightNumber}` : null,
         r.flightDepartureAirport && r.flightArrivalAirport
           ? `route=${r.flightDepartureAirport}→${r.flightArrivalAirport}` : null,
+        r.flightDepartureTime ? `departureTime="${r.flightDepartureTime}"` : null,
+        r.flightArrivalTime ? `arrivalTime="${r.flightArrivalTime}"` : null,
         r.location ? `location="${r.location}"` : null,
         r.confirmationCode ? `conf=${r.confirmationCode}` : null,
         r.checkOutDate ? `checkout=${r.checkOutDate}` : null,
+        r.notes ? `notes="${r.notes.slice(0, 120)}"` : null,
       ].filter(Boolean).join(" ");
     })
     .map((parts) => `[${parts}]`)

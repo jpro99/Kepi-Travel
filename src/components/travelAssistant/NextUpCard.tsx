@@ -110,9 +110,12 @@ function buildContextBlock(reservations: NextUpReservation[]): string {
         : r.localTime ? `time="${r.localTime}"` : null,
       r.flightDepartureAirport && r.flightArrivalAirport
         ? `route=${r.flightDepartureAirport}→${r.flightArrivalAirport}` : null,
+      r.flightDepartureTime ? `departureTime="${r.flightDepartureTime}"` : null,
+      r.flightArrivalTime ? `arrivalTime="${r.flightArrivalTime}"` : null,
       r.location ? `location="${r.location}"` : null,
       r.confirmationCode ? `conf=${r.confirmationCode}` : null,
       r.checkOutDate ? `hotelCheckout=${r.checkOutDate}` : null,
+      r.notes ? `notes="${r.notes.slice(0, 120)}"` : null,
     ].filter(Boolean);
     return `[${parts.join(" ")}]`;
   }).join("\n");
