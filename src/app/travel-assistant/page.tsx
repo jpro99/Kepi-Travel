@@ -4869,7 +4869,7 @@ export default function TravelAssistantPage() {
           body: JSON.stringify({
             action: "update",
             id: targetTripId,
-            patch: { reservations: [{ ...reservation, id: `res-moved-${generateId()}` }, ...targetTrip.reservations] },
+            patch: { reservations: [{ ...reservation, id: nextId("res-moved") }, ...targetTrip.reservations] },
           }),
         });
         await refreshTripsFromServer();
