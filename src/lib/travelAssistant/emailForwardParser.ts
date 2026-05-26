@@ -765,10 +765,19 @@ function chooseBodyText(text: string, html: string): { parsedText: string; image
 }
 
 function hasMultipleFlightMentions(text: string): boolean {
-  const matches = [...text.matchAll(/\b([A-Z]{2}\s?\d{2,4}[A-Z]?)\b/gu)]
+  // Match flight numbers like AS832, KE 1121, VI3557
+  const flightMatches = [...text.matchAll(/\b([A-Z]{2}\s?\d{2,4}[A-Z]?)\b/gu)]
     .map((match) => (match[1] ?? "").replace(/\s+/gu, "").toUpperCase())
     .filter((value) => value.length >= 4);
-  return new Set(matches).size > 1;
+  if (new Set(flightMatches).size > 1) return true;
+  // Match multiple IATA airport codes (3 uppercase letters)
+  const airportMatches = [...text.matchAll(/\b([A-Z]{3})\b/gu)]
+    .map((m) => m[1] ?? "")
+    .filter((code) => ["HND","HNL","SEA","ONT","LAX","JFK","SFO","NRT","ICN","LHR","CDG","SYD","SIN","ORD","MIA","DFW","DEN","BOS","LAS","SNA","SAN","GMP"].includes(code));
+  if (new Set(airportMatches).size > 2) return true;
+  // Detect "Segment X" or "Flight X of Y" patterns
+  if (/segment\s+\d|flight\s+\d\s+of\s+\d|\d\s+stop|connecting|layover/iu.test(text)) return true;
+  return false;
 }
 
 export async function parseForwardedEmail(input: ForwardedEmailParseInput): Promise<ForwardedEmailParseResult> {
@@ -808,7 +817,10 @@ export async function parseForwardedEmail(input: ForwardedEmailParseInput): Prom
   let score = scoreCandidates(candidates);
   let usedAiFallback = false;
   let aiCandidates: CandidateMap[] = [];
-  const shouldAttemptAiFallback = multiFlightDetected || (!imageBasedEmail && score < HIGH_CONFIDENCE_THRESHOLD);
+  // Always run AI for flight emails — regex only catches one flight,
+  // AI is needed to extract all legs from multi-segment confirmations
+  const likelyFlightEmail = /\bflight\b|\boarding\b|\bairport\b|\bdeparture\b|\barrival\b/iu.test(parsedText);
+  const shouldAttemptAiFallback = multiFlightDetected || likelyFlightEmail || (!imageBasedEmail && score < HIGH_CONFIDENCE_THRESHOLD);
 
   if (shouldAttemptAiFallback) {
     logger.info("Email parser attempting AI fallback.", {
