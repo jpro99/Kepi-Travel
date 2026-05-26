@@ -4776,7 +4776,7 @@ export default function TravelAssistantPage() {
           .filter((entry) => entry.length > 0)
           .join(" | "),
       }));
-      setToast("Flight details populated from AviationStack.");
+      setToast("Flight details populated from AeroDataBox.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to look up flight.";
       setFlightLookupError(message);
@@ -6906,7 +6906,9 @@ export default function TravelAssistantPage() {
                         : "";
                     const arrivalTimeLabel =
                       reservation.type === "flight"
-                        ? formatBoardingPassClock(reservation.flightArrivalTime ?? reservation.localTime)
+                        ? (reservation.flightArrivalTime
+                            ? formatBoardingPassClock(reservation.flightArrivalTime)
+                            : "")
                         : "";
                     const flightStatusLabel =
                       reservation.type === "flight"
