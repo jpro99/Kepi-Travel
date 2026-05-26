@@ -657,12 +657,40 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
           : "",
       };
 
-      const hasMatchingReservation = nextReservations.some((reservation) =>
+      const matchingReservationIndex = nextReservations.findIndex((reservation) =>
         isDuplicateReservation(reservation, parsedReservation),
       );
+      const hasMatchingReservation = matchingReservationIndex !== -1;
       // Only check queue for duplicates (not adding to queue anymore, but keep for safety)
       const hasMatchingQueuedDraft = isDuplicateAgainstReviewQueue(nextQueue, parsedReservation);
       if (hasMatchingReservation || hasMatchingQueuedDraft) {
+        // For hotels: merge new info into existing reservation rather than dropping
+        // This handles the case where user forwards the same email again with more info
+        if (hasMatchingReservation && parserType === "hotel") {
+          const existing = nextReservations[matchingReservationIndex];
+          const existingRecord = existing as typeof existing & Record<string, unknown>;
+          const hasCheckout = typeof existingRecord.checkOutDate === "string" && (existingRecord.checkOutDate as string).trim().length > 0;
+          const hasConfirmation = existing.confirmationCode.trim().length > 0;
+          if (!hasCheckout || !hasConfirmation) {
+            // Merge: fill in missing fields from the new parse
+            nextReservations = nextReservations.map((r, idx) => {
+              if (idx !== matchingReservationIndex) return r;
+              return {
+                ...r,
+                confirmationCode: r.confirmationCode.trim() || parserConfirmationCode,
+                notes: [r.notes, parserNotesText].filter(Boolean).join(" "),
+                ...(!hasCheckout && parserLocalTime ? {} : {}),
+              };
+            });
+            routeLogger.info("Duplicate hotel reservation merged with new info.", {
+              userId: targetUserId,
+              tripId: targetTrip.id,
+              provider: parserProvider || null,
+            });
+            acceptedDraftCount += 1;
+            continue;
+          }
+        }
         duplicateDraftCount += 1;
         routeLogger.info("Duplicate forwarded reservation dropped.", {
           userId: targetUserId,

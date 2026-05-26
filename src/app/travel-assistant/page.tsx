@@ -923,10 +923,21 @@ function parseCheckoutFromNotes(notes: string): string {
   for (const pattern of patterns) {
     const match = notes.match(pattern);
     if (match?.[1]) {
-      // Strip ordinal suffixes before parsing
       const cleaned = match[1].replace(/(\d+)(?:th|st|nd|rd)/gu, "$1").trim();
       const ms = Date.parse(cleaned);
       if (!Number.isNaN(ms)) return new Date(ms).toISOString().slice(0, 10);
+    }
+  }
+  // Handle ordinal-only: "the 29th", "29th", "on the 29" — infer current month/year
+  const ordinalOnly = notes.match(/(?:check[\s-]?out|checkout|checking out|depart)[^0-9]*(\d{1,2})(?:th|st|nd|rd)?(?:\s|$)/iu);
+  if (ordinalOnly?.[1]) {
+    const day = parseInt(ordinalOnly[1], 10);
+    if (day >= 1 && day <= 31) {
+      const now = new Date();
+      // Use current month, but if day has passed use next month
+      const candidate = new Date(now.getFullYear(), now.getMonth(), day);
+      if (candidate < now) candidate.setMonth(candidate.getMonth() + 1);
+      return candidate.toISOString().slice(0, 10);
     }
   }
   return "";
