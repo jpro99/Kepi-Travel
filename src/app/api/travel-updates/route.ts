@@ -403,7 +403,7 @@ export async function POST(req: Request) {
       const imageBase64 = Buffer.from(await image.arrayBuffer()).toString("base64");
       const client = new Anthropic({ apiKey: anthropicApiKey });
       const scanResponse = await client.messages.create({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-5",
         max_tokens: 900,
         temperature: 0,
         system: [
