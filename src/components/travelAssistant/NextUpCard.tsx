@@ -27,7 +27,7 @@ interface NextUpCardProps {
 type GuidanceState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "done"; text: string; urgency: "critical" | "warning" | "normal" }
+  | { status: "done"; text: string; urgency: "critical" | "warning" | "normal"; proactive_flag?: string; action?: string }
   | { status: "error" };
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -161,6 +161,8 @@ export function NextUpCard({ reservations, tripName, onReservationTap }: NextUpC
 ${data.detail ?? ""}`,
         urgency: (data.urgency === "critical" || data.urgency === "warning")
           ? data.urgency : "normal",
+        proactive_flag: typeof data.proactive_flag === "string" ? data.proactive_flag : "",
+        action: typeof data.action === "string" ? data.action : "",
       });
     } catch {
       setGuidance({ status: "error" });
@@ -272,6 +274,12 @@ ${data.detail ?? ""}`,
           <>
             <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{headline}</p>
             {detail ? <p className="mt-1.5 text-sm leading-relaxed text-slate-700 dark:text-slate-300">{detail}</p> : null}
+            {guidance.proactive_flag ? (
+              <div className="mt-2.5 flex items-start gap-2 rounded-xl bg-amber-500/10 px-3 py-2 dark:bg-amber-500/15">
+                <span className="shrink-0 text-sm">⚡</span>
+                <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-200">{guidance.proactive_flag}</p>
+              </div>
+            ) : null}
           </>
         ) : guidance.status === "error" ? (
           <p className="text-sm text-slate-500 dark:text-slate-400">
