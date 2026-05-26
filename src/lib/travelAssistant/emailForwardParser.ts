@@ -90,6 +90,8 @@ const COUNTRY_CODE_DENYLIST = new Set([
   "SN", "RS", "SG", "SK", "SI", "SO", "ZA", "ES", "LK", "SE",
   "CH", "SY", "TW", "TZ", "TH", "TT", "TN", "TR", "UA", "AE",
   "GB", "UK", "US", "UY", "VE", "VN", "YE", "ZM", "ZW",
+  // Credit card prefixes — never flight numbers
+  "VI", "MC", "AX", "DI", "DC",
 ]);
 
 const RESERVATION_TYPE_KEYWORDS: Array<{ type: ForwardedReservationType; pattern: RegExp; confidence: number }> = [
@@ -554,11 +556,14 @@ function buildRegexCandidates(input: {
   }
 
   const confirmationMatch = combined.match(
-    /(?:confirmation(?:\s*(?:number|code|#))?|booking\s*(?:ref(?:erence)?|code|#|number)|record locator|pnr|itinerary\s*(?:number|#)?|reservation\s*(?:number|#)?)[^A-Za-z0-9]{0,20}([A-Za-z0-9-]{4,20})/iu,
+    /(?:confirmation(?:\s*(?:number|code|#|receipt))?|booking\s*(?:ref(?:erence)?|code|#|number)|record locator|pnr|itinerary\s*(?:number|#)?|reservation\s*(?:number|#)?)[^A-Za-z0-9]{0,20}([A-Za-z0-9-]{4,20})/iu,
   );
-  if (confirmationMatch?.[1]) {
+  // Denylist common English words that regex may incorrectly grab as confirmation codes
+  const CONFIRMATION_CODE_WORD_DENYLIST = new Set(["RECEIPT", "CODE", "NUMBER", "DETAILS", "PENDING", "CONFIRMED", "RESERVED", "BOOKING", "TRAVEL", "FLIGHT", "HOTEL", "TICKET", "MANAGE", "VIEW"]);
+  const isValidConfirmationCode = confirmationMatch?.[1] && !CONFIRMATION_CODE_WORD_DENYLIST.has(confirmationMatch[1].toUpperCase());
+  if (isValidConfirmationCode) {
     candidates.confirmationCode = {
-      value: normalizeConfirmationCode(confirmationMatch[1]),
+      value: normalizeConfirmationCode(confirmationMatch![1]!),
       confidence: 0.92,
       source: "regex",
     };
