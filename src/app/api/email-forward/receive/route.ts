@@ -710,6 +710,9 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
           ? (typeof parserDraftRecord.arrivalAirport === "string" ? parserDraftRecord.arrivalAirport.trim().toUpperCase().slice(0, 4) : "")
           : "",
         flightDepartureTime: parserType === "flight" && parserLocalTime ? parserLocalTime : "",
+        checkOutDate: parserType === "hotel"
+          ? (typeof parserDraftRecord.checkOutDate === "string" ? parserDraftRecord.checkOutDate.trim().slice(0, 10) : "")
+          : "",
       };
 
       const matchingReservationIndex = nextReservations.findIndex((reservation) =>
