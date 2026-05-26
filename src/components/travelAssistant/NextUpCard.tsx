@@ -82,8 +82,8 @@ const EMAIL_PROVIDER_NAMES = new Set(["gmail", "yahoo", "outlook", "hotmail", "i
 
 function buildContextBlock(reservations: NextUpReservation[]): string {
   const upcoming = reservations
-    .filter((r) => hoursUntil(r.localTime) > -2)
-    .sort((a, b) => parseMs(a.localTime) - parseMs(b.localTime))
+    .filter((r) => (parseBestMs(r) - Date.now()) / 3_600_000 > -2)
+    .sort((a, b) => parseBestMs(a) - parseBestMs(b))
     .slice(0, 8);
 
   if (upcoming.length === 0) return "No upcoming reservations.";
@@ -117,11 +117,11 @@ export function NextUpCard({ reservations, tripName, onReservationTap }: NextUpC
 
   // Find the single most urgent upcoming reservation
   const nextReservation = reservations
-    .filter((r) => hoursUntil(r.localTime) > -2)
-    .sort((a, b) => parseMs(a.localTime) - parseMs(b.localTime))[0] ?? null;
+    .filter((r) => (parseBestMs(r) - Date.now()) / 3_600_000 > -2)
+    .sort((a, b) => parseBestMs(a) - parseBestMs(b))[0] ?? null;
 
   const fetchGuidance = useCallback(async () => {
-    if (reservations.filter((r) => hoursUntil(r.localTime) > -2).length === 0) return;
+    if (reservations.filter((r) => (parseBestMs(r) - Date.now()) / 3_600_000 > -2).length === 0) return;
     setGuidance({ status: "loading" });
     const contextBlock = buildContextBlock(reservations);
 

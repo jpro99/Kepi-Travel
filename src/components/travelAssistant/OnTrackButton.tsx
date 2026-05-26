@@ -27,22 +27,32 @@ type CheckState =
 const EMAIL_PROVIDERS = new Set(["gmail", "yahoo", "outlook", "hotmail", "icloud", "aol"]);
 
 function buildContext(reservations: OnTrackButtonProps["reservations"]): string {
+  const getMs = (r: OnTrackButtonProps["reservations"][0]): number => {
+    // Use flightDate for flights — localTime may be email receive time not departure
+    if (r.type === "flight") {
+      const fd = (r as typeof r & { flightDate?: string }).flightDate;
+      if (fd) return Date.parse(fd + "T23:59:00");
+    }
+    const s = r.localTime.trim().replace("T", " ").slice(0, 16);
+    const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(s);
+    if (!m) return Number.NaN;
+    return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime();
+  };
+
   return reservations
     .filter((r) => {
-      const s = r.localTime.trim().replace("T", " ").slice(0, 16);
-      const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(s);
-      if (!m) return false;
-      const ms = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime();
-      return ms > Date.now() - 86_400_000;
+      const ms = getMs(r);
+      return !Number.isNaN(ms) && ms > Date.now() - 86_400_000;
     })
-    .sort((a, b) => Date.parse(a.localTime) - Date.parse(b.localTime))
+    .sort((a, b) => getMs(a) - getMs(b))
     .slice(0, 8)
     .map((r) => {
+      const rr = r as typeof r & { flightDate?: string };
       const provider = r.provider && !EMAIL_PROVIDERS.has(r.provider.toLowerCase()) ? r.provider : null;
       return [
         `type=${r.type}`,
         provider ? `provider="${provider}"` : null,
-        `time="${r.localTime}"`,
+        rr.flightDate ? `flightDate="${rr.flightDate}"` : `time="${r.localTime}"`,
         r.flightNumber ? `flight=${r.flightNumber}` : null,
         r.flightDepartureAirport && r.flightArrivalAirport
           ? `route=${r.flightDepartureAirport}→${r.flightArrivalAirport}` : null,
