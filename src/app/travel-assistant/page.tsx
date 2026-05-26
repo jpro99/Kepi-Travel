@@ -806,14 +806,12 @@ function getFriendlyReservationTitle(reservation: Reservation): string {
 }
 
 function getFlightNumberLabel(reservation: Reservation): string {
-  const titleMatch = reservation.title.match(/\b([A-Z0-9]{2,3}\s?\d{1,4})\b/u)?.[1];
-  if (titleMatch) {
-    return titleMatch.replace(/\s+/gu, " ");
-  }
-  const providerMatch = reservation.provider.match(/\b([A-Z0-9]{2,3}\s?\d{1,4})\b/u)?.[1];
-  if (providerMatch) {
-    return providerMatch.replace(/\s+/gu, " ");
-  }
+  // Use the stored flightNumber field first (most reliable)
+  const stored = reservation.flightNumber?.trim();
+  if (stored && stored.length > 0) return stored.toUpperCase();
+  // Fall back to parsing title
+  const titleMatch = reservation.title.match(/\b([A-Z]{2}\s?\d{2,4})\b/u)?.[1];
+  if (titleMatch) return titleMatch.replace(/\s+/gu, "").toUpperCase();
   return "Flight # pending";
 }
 
