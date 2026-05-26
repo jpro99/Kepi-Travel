@@ -9,6 +9,7 @@ interface OnTrackButtonProps {
     provider: string;
     localTime: string;
     location: string;
+    flightDate?: string;
     flightNumber?: string;
     flightDepartureAirport?: string;
     flightArrivalAirport?: string;
@@ -22,16 +23,15 @@ type CheckState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "done"; pass: boolean; headline: string; detail: string; action?: string }
-  | { status: "error" };
+  | { status: "error"; message?: string };
 
 const EMAIL_PROVIDERS = new Set(["gmail", "yahoo", "outlook", "hotmail", "icloud", "aol"]);
 
 function buildContext(reservations: OnTrackButtonProps["reservations"]): string {
   const getMs = (r: OnTrackButtonProps["reservations"][0]): number => {
-    // Use flightDate for flights — localTime may be email receive time not departure
-    if (r.type === "flight") {
-      const fd = (r as typeof r & { flightDate?: string }).flightDate;
-      if (fd) return Date.parse(fd + "T23:59:00");
+    if (r.type === "flight" && r.flightDate) {
+      const fd = Date.parse(r.flightDate + "T23:59:00");
+      if (!Number.isNaN(fd)) return fd;
     }
     const s = r.localTime.trim().replace("T", " ").slice(0, 16);
     const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(s);
@@ -47,7 +47,7 @@ function buildContext(reservations: OnTrackButtonProps["reservations"]): string 
     .sort((a, b) => getMs(a) - getMs(b))
     .slice(0, 8)
     .map((r) => {
-      const rr = r as typeof r & { flightDate?: string };
+      const rr = r;
       const provider = r.provider && !EMAIL_PROVIDERS.has(r.provider.toLowerCase()) ? r.provider : null;
       return [
         `type=${r.type}`,
@@ -82,14 +82,23 @@ export function OnTrackButton({ reservations, tripName }: OnTrackButtonProps) {
           mode: "on-track-check",
         }),
       });
-      if (!res.ok) { setState({ status: "error" }); return; }
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({})) as { error?: string };
+        setState({ status: "error", message: errBody.error ?? `Server error ${res.status}` });
+        return;
+      }
       const data = (await res.json()) as {
         urgency?: string;
         headline?: string;
         detail?: string;
         pass?: boolean;
         action?: string;
+        error?: string;
       };
+      if (data.error) {
+        setState({ status: "error", message: data.error });
+        return;
+      }
       setState({
         status: "done",
         pass: data.urgency === "normal",
@@ -116,7 +125,9 @@ export function OnTrackButton({ reservations, tripName }: OnTrackButtonProps) {
           <div>
             <p className="text-sm font-bold text-slate-900 dark:text-slate-100">Am I on track?</p>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              {state.status === "error" ? "Tap to try again" : "Tap for an instant trip status check"}
+              {state.status === "error"
+                ? (state.message ? `Error: ${state.message}` : "Tap to try again")
+                : "Tap for an instant trip status check"}
             </p>
           </div>
           <span className="ml-auto text-slate-300 dark:text-slate-600">›</span>
