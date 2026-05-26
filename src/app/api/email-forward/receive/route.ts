@@ -655,6 +655,9 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         flightArrivalAirport: parserType === "flight"
           ? (typeof parserDraftRecord.arrivalAirport === "string" ? parserDraftRecord.arrivalAirport.trim().toUpperCase().slice(0, 4) : "")
           : "",
+        // Store departure time explicitly so AI context always has it
+        // localTime = actual departure time for flights (enforced by parser prompt)
+        flightDepartureTime: parserType === "flight" && parserLocalTime ? parserLocalTime : "",
       };
 
       const matchingReservationIndex = nextReservations.findIndex((reservation) =>
