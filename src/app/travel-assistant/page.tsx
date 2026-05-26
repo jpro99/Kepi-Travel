@@ -6184,7 +6184,7 @@ export default function TravelAssistantPage() {
               Delete reservation
             </button>
           ) : null}
-          {activeDrawer.kind === "reservation" && trips.filter((t) => t.id !== activeTripId).length > 0 ? (
+          {activeDrawer.kind === "reservation" && trips.filter((trip) => trip.id !== activeTripId).length > 0 ? (
             <select
               defaultValue=""
               onChange={(e) => {
@@ -6193,8 +6193,8 @@ export default function TravelAssistantPage() {
               className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
             >
               <option value="" disabled>Move to trip…</option>
-              {trips.filter((t) => t.id !== activeTripId).map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
+              {trips.filter((trip) => trip.id !== activeTripId).map((trip) => (
+                <option key={trip.id} value={trip.id}>{trip.name}</option>
               ))}
             </select>
           ) : null}

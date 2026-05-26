@@ -34,7 +34,7 @@ const contentSecurityPolicy = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
-  reactCompiler: true,
+  reactCompiler: false, // disabled — causes TDZ crash with Turbopack in Next 16.2.4
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -45,6 +45,7 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     optimizePackageImports: ["lucide-react", "recharts"],
+    clientTraceMetadata: [],
   },
   ...(isCapacitorBuild
     ? {}
