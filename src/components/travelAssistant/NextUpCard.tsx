@@ -50,6 +50,15 @@ function hoursUntil(localTime: string): number {
   return (ms - Date.now()) / 3_600_000;
 }
 
+function parseBestMs(r: NextUpReservation): number {
+  const rr = r as NextUpReservation & { flightDate?: string };
+  if (r.type === "flight" && rr.flightDate) {
+    const fd = Date.parse(rr.flightDate + "T23:59:00");
+    if (!Number.isNaN(fd)) return fd;
+  }
+  return parseMs(r.localTime ?? "");
+}
+
 function formatRelative(localTime: string): string {
   const h = hoursUntil(localTime);
   if (h < 0) return "now";
