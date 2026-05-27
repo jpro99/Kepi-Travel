@@ -62,14 +62,22 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
   const [newMemberRole, setNewMemberRole] = useState<"adult" | "teen" | "child">("adult");
   const [sharingLocation, setSharingLocation] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [groupRole, setGroupRole] = useState<"owner" | "member" | null>(null);
+  const [hasGroup, setHasGroup] = useState(false);
+  const [joiningGroup, setJoiningGroup] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
+  const [joinName, setJoinName] = useState("");
+  const [joinBusy, setJoinBusy] = useState(false);
   const watchIdRef = useRef<number | null>(null);
 
   const load = useCallback(async () => {
     try {
       const res = await fetch("/api/family", { cache: "no-store" });
-      const data = await res.json() as { group: FamilyGroup; locations: Record<string, LocationPoint> };
+      const data = await res.json() as { group: FamilyGroup; locations: Record<string, LocationPoint>; role?: "owner" | "member" };
       setGroup(data.group);
       setLocations(data.locations ?? {});
+      setGroupRole(data.role ?? "owner");
+      setHasGroup(true);
     } catch {
       setMessage("Could not load family group.");
     } finally {
@@ -81,6 +89,59 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
     if (!isPremium) { setLoading(false); return; }
     void load();
   }, [isPremium, load]);
+
+  const handleJoinGroup = useCallback(async () => {
+    if (!joinCode.trim()) { setMessage("Enter the invite code from the group organizer."); return; }
+    setJoinBusy(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/family", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "join-group",
+          inviteCode: joinCode.trim().toUpperCase(),
+          name: joinName.trim() || "Family Member",
+        }),
+      });
+      const data = await res.json() as { ok?: boolean; group?: FamilyGroup; error?: string; joined?: boolean; alreadyMember?: boolean };
+      if (!res.ok || !data.ok) {
+        setMessage(data.error ?? "Invalid invite code.");
+        setJoinBusy(false);
+        return;
+      }
+      if (data.group) setGroup(data.group);
+      setGroupRole("member");
+      setJoiningGroup(false);
+      setJoinCode("");
+      setMessage(data.alreadyMember ? "You're already in this group." : "✅ Joined the group! You can now share your location.");
+      await load();
+    } catch {
+      setMessage("Failed to join group.");
+    } finally {
+      setJoinBusy(false);
+    }
+  }, [joinCode, joinName, load]);
+
+  const handleLeaveGroup = useCallback(async () => {
+    if (!confirm("Leave this family group?")) return;
+    setBusy(true);
+    try {
+      await fetch("/api/family", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "leave-group" }),
+      });
+      setGroupRole("owner");
+      setGroup(null);
+      setMessage("You've left the group.");
+      await load();
+    } catch {
+      setMessage("Failed to leave group.");
+    } finally {
+      setBusy(false);
+    }
+  }, [load]);
 
   const shareLocation = useCallback(async () => {
     if (!navigator.geolocation) {
@@ -181,8 +242,8 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
     setTimeout(() => setCopiedCode(false), 2000);
   }, [group]);
 
-  // Premium gate
-  if (!isPremium) {
+  // Premium gate — only block if user has no group. Members of invited groups can always see.
+  if (!isPremium && !hasGroup) {
     return (
       <article className="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 to-white p-5 shadow-sm dark:border-sky-500/30 dark:from-sky-500/10 dark:to-slate-900">
         <div className="flex items-center gap-3">
@@ -206,7 +267,7 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
           onClick={onUpgrade}
           className="mt-4 w-full rounded-xl bg-sky-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-sky-500"
         >
-          Upgrade to Pro to unlock Family Tracker
+          Upgrade to Pro to create a Family group
         </button>
       </article>
     );
@@ -321,15 +382,38 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
         })}
       </div>
 
-      {/* Add member */}
-      {!addingMember ? (
+      {/* Join/Leave for non-owners */}
+      {groupRole === "member" && (
         <button
           type="button"
-          onClick={() => setAddingMember(true)}
-          className="w-full rounded-xl border border-dashed border-slate-300 py-2.5 text-sm font-semibold text-slate-500 hover:border-sky-400 hover:text-sky-600 dark:border-slate-700 dark:text-slate-400"
+          onClick={() => void handleLeaveGroup()}
+          disabled={busy}
+          className="w-full rounded-xl border border-dashed border-rose-300 py-2.5 text-sm font-semibold text-rose-500 hover:bg-rose-50 dark:border-rose-700 dark:text-rose-400"
         >
-          + Add family member
+          Leave this group
         </button>
+      )}
+
+      {/* Add member (owner only) */}
+      {groupRole === "owner" && !addingMember ? (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setAddingMember(true)}
+            className="flex-1 rounded-xl border border-dashed border-slate-300 py-2.5 text-sm font-semibold text-slate-500 hover:border-sky-400 hover:text-sky-600 dark:border-slate-700 dark:text-slate-400"
+          >
+            + Add family member
+          </button>
+          {!joiningGroup && (
+            <button
+              type="button"
+              onClick={() => setJoiningGroup(true)}
+              className="rounded-xl border border-dashed border-sky-300 px-3 py-2.5 text-sm font-semibold text-sky-600 hover:bg-sky-50 dark:border-sky-700 dark:text-sky-400"
+            >
+              Join a group
+            </button>
+          )}
+        </div>
       ) : (
         <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 space-y-2 dark:border-sky-500/30 dark:bg-sky-500/10">
           <p className="text-xs font-semibold text-sky-800 dark:text-sky-200">Add family member</p>
@@ -368,6 +452,43 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
             <button
               type="button"
               onClick={() => { setAddingMember(false); setNewMemberName(""); setNewMemberEmail(""); }}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {joiningGroup && (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 space-y-2 dark:border-sky-500/30 dark:bg-sky-500/10">
+          <p className="text-xs font-semibold text-sky-800 dark:text-sky-200">Join a family group</p>
+          <input
+            type="text"
+            value={joinName}
+            onChange={(e) => setJoinName(e.target.value)}
+            placeholder="Your name (e.g. Sarah)"
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+          />
+          <input
+            type="text"
+            value={joinCode}
+            onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+            placeholder="Group invite code (e.g. A1B2C3D4)"
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm uppercase tracking-widest dark:border-slate-700 dark:bg-slate-900"
+          />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => void handleJoinGroup()}
+              disabled={joinBusy || !joinCode.trim()}
+              className="flex-1 rounded-lg bg-sky-600 py-2 text-sm font-bold text-white hover:bg-sky-500 disabled:opacity-50"
+            >
+              {joinBusy ? "Joining..." : "Join group"}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setJoiningGroup(false); setJoinCode(""); setJoinName(""); }}
               className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
             >
               Cancel
