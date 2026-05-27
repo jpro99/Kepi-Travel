@@ -8,6 +8,7 @@ interface NextUpReservation {
   title: string;
   provider: string;
   localTime: string;
+  timezone?: string;
   location: string;
   confirmationCode: string;
   flightNumber?: string;
@@ -15,7 +16,10 @@ interface NextUpReservation {
   flightDate?: string;
   flightDepartureAirport?: string;
   flightArrivalAirport?: string;
+  flightDepartureTime?: string;
+  flightArrivalTime?: string;
   checkOutDate?: string;
+  notes?: string;
 }
 
 interface NextUpCardProps {
@@ -44,23 +48,44 @@ function parseMs(localTime: string): number {
   ).getTime();
 }
 
-function hoursUntil(localTime: string): number {
+function hoursUntil(localTime: string, timezone?: string): number {
+  const ms = toUtcMs(localTime, timezone ?? "");
+  const base = Number.isNaN(ms) ? parseMs(localTime) : ms;
+  if (Number.isNaN(base)) return Infinity;
+  return (base - Date.now()) / 3_600_000;
+}
+
+function toUtcMs(localTime: string, timezone?: string): number {
   const ms = parseMs(localTime);
-  if (Number.isNaN(ms)) return Infinity;
-  return (ms - Date.now()) / 3_600_000;
+  if (Number.isNaN(ms) || !timezone) return ms;
+  try {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    });
+    const d = new Date(ms);
+    const parts = Object.fromEntries(formatter.formatToParts(d).map(p => [p.type, p.value]));
+    const tzDate = new Date(`${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:00Z`);
+    const offset = tzDate.getTime() - d.getTime();
+    return d.getTime() - offset;
+  } catch {
+    return ms;
+  }
 }
 
 function parseBestMs(r: NextUpReservation): number {
-  const rr = r as NextUpReservation & { flightDate?: string };
-  if (r.type === "flight" && rr.flightDate) {
-    const fd = Date.parse(rr.flightDate + "T23:59:00");
-    if (!Number.isNaN(fd)) return fd;
+  // Convert local departure time + timezone to UTC for correct ordering across timezones
+  // HND 21:20 JST = 12:20 UTC, HNL 13:41 HST = 23:41 UTC — must sort correctly
+  if (r.localTime) {
+    const utc = toUtcMs(r.localTime, r.timezone);
+    if (!Number.isNaN(utc)) return utc;
   }
-  return parseMs(r.localTime ?? "");
+  return Number.NaN;
 }
 
-function formatRelative(localTime: string): string {
-  const h = hoursUntil(localTime);
+function formatRelative(localTime: string, timezone?: string): string {
+  const h = hoursUntil(localTime, timezone);
   if (h < 0) return "now";
   if (h < 1) return `${Math.round(h * 60)} min`;
   if (h < 24) return `${Math.round(h)} hr`;
@@ -132,6 +157,8 @@ export function NextUpCard({ reservations, tripName, onReservationTap }: NextUpC
   const nextReservation = reservations
     .filter((r) => (parseBestMs(r) - nowMs) / 3_600_000 > -2)
     .sort((a, b) => parseBestMs(a) - parseBestMs(b))[0] ?? null;
+  // Debug: log the next reservation for verification
+  // console.log("[NextUpCard] nextReservation:", nextReservation?.flightNumber, parseBestMs(nextReservation ?? reservations[0]));
 
   const fetchGuidance = useCallback(async () => {
     if (reservations.filter((r) => (parseBestMs(r) - Date.now()) / 3_600_000 > -2).length === 0) return;
@@ -201,7 +228,7 @@ ${data.detail ?? ""}`,
 
   if (!nextReservation) return null;
 
-  const hours = hoursUntil(nextReservation.localTime);
+  const hours = hoursUntil(nextReservation.localTime, nextReservation.timezone);
   const urgency = guidance.status === "done" ? guidance.urgency
     : hours < 4 ? "critical" : hours < 24 ? "warning" : "normal";
 
@@ -249,7 +276,7 @@ ${data.detail ?? ""}`,
           </p>
         </div>
         <p className={`text-xs font-semibold ${accentClass}`}>
-          {formatRelative(nextReservation.localTime)}
+          {formatRelative(nextReservation.localTime, nextReservation.timezone)}
         </p>
       </div>
 
