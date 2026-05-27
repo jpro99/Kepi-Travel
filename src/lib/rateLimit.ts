@@ -43,7 +43,7 @@ const RATE_LIMIT_POLICIES: Record<RateLimitPolicyName, RateLimitPolicy> = {
     prefix: "kepi:rl:push-subscribe",
   },
   "ai-suggestions": {
-    limit: 10,
+    limit: 50,
     windowSeconds: 60 * 60,
     prefix: "kepi:rl:ai-suggestions",
   },
