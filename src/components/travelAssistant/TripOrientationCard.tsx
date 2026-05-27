@@ -1,6 +1,6 @@
 "use client";
 
-type OnSwitchTab = "trip" | "reservations" | "packing" | "more";
+type OnSwitchTab = "trip" | "reservations" | "packing" | "family" | "more";
 
 interface TripOrientationCardProps {
   travelerName: string;
