@@ -1683,13 +1683,17 @@ export default function TravelAssistantPage() {
   const [reservations, setReservations] = useState<Reservation[]>(INITIAL_RESERVATIONS);
   const [reviewQueue, setReviewQueue] = useState<ReviewItem[]>(INITIAL_REVIEW_QUEUE);
   const [readinessItems, setReadinessItems] = useState<ReadinessItem[]>(INITIAL_CHECKLIST);
+  // Track readinessItems that came from server so we can pass as savedItems
+  const serverReadinessItemsRef = useRef<ReadinessItem[]>([]);
   // Auto-populate checklist based on reservations once loaded
-  // This runs once when reservations first load
+  // Only runs if server hasn't provided saved items yet
   const checklistInitialized = useRef(false);
   useEffect(() => {
     if (reservations.length > 0 && !checklistInitialized.current) {
       checklistInitialized.current = true;
-      setReadinessItems(buildChecklistFromReservations(reservations, undefined));
+      // Pass server-saved items so manual toggles are preserved
+      const saved = serverReadinessItemsRef.current.length > 0 ? serverReadinessItemsRef.current : undefined;
+      setReadinessItems(buildChecklistFromReservations(reservations, saved));
     }
   }, [reservations]);
   const [airportTransportChoice, setAirportTransportChoice] = useState<AirportTransportChoice | null>(null);
@@ -2145,6 +2149,11 @@ export default function TravelAssistantPage() {
     setReservations((previous) => (areSnapshotsEqual(previous, trip.reservations) ? previous : trip.reservations));
     setReviewQueue((previous) => (areSnapshotsEqual(previous, trip.reviewQueue) ? previous : trip.reviewQueue));
     setReadinessItems((previous) => (areSnapshotsEqual(previous, trip.readinessItems) ? previous : trip.readinessItems));
+    // Mark checklist as initialized from server — prevents useEffect from overwriting with auto-computed values
+    if (Array.isArray(trip.readinessItems) && trip.readinessItems.length > 0) {
+      checklistInitialized.current = true;
+      serverReadinessItemsRef.current = trip.readinessItems as ReadinessItem[];
+    }
     setUpdateFeed((previous) => (areSnapshotsEqual(previous, trip.updateFeed) ? previous : trip.updateFeed));
     setAirportTransportChoice((previous) =>
       previous === (trip.airportTransport ?? null) ? previous : (trip.airportTransport ?? null),
@@ -2320,7 +2329,7 @@ export default function TravelAssistantPage() {
           setTrips(parsedTrips);
         }
       });
-    }, 10_000);
+    }, 2_000);
     return () => {
       window.clearTimeout(timeout);
     };
@@ -5604,17 +5613,25 @@ export default function TravelAssistantPage() {
   };
 
   const handleChecklistToggle = (id: string): void => {
-    // Update local state immediately so UI responds instantly
     setReadinessItems((prev) => {
       const updated = prev.map((item) => (item.id === id ? { ...item, complete: !item.complete } : item));
-      // Save to trip in Redis after state update settles
-      window.setTimeout(() => {
-        try {
-          queueMutation("Readiness checklist updated.");
-        } catch {
-          // fail silently - state is updated locally
-        }
-      }, 100);
+      // Save directly to Redis after state settles — do not rely on queueMutation
+      // which doesn't include readinessItems in its payload
+      if (activeTripId) {
+        window.setTimeout(() => {
+          void fetch(TRIP_API_ROUTE, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "update",
+              id: activeTripId,
+              patch: { readinessItems: updated },
+            }),
+          }).catch(() => {
+            // fail silently - autosave will retry
+          });
+        }, 300);
+      }
       return updated;
     });
   };
