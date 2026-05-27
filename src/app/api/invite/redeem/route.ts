@@ -162,6 +162,33 @@ export async function POST(req: Request) {
 
   // Invite Code normalization only (Referral Codes redeem via /api/referral/redeem).
   const normalizedCode = parsed.data.code.toUpperCase().trim();
+
+  // If the code has an intended email, verify the signed-in user's email matches
+  const inviteRecord = await getInviteCodeRecord(normalizedCode);
+  if (inviteRecord?.intendedEmail) {
+    try {
+      const { clerkClient } = await import("@clerk/nextjs/server");
+      const client = await clerkClient();
+      const user = await client.users.getUser(userId);
+      const userEmails = user.emailAddresses.map((e) => e.emailAddress.toLowerCase());
+      if (!userEmails.includes(inviteRecord.intendedEmail.toLowerCase())) {
+        routeLogger.warn("Invite Code email mismatch.", {
+          intendedEmail: inviteRecord.intendedEmail,
+          userEmails,
+        });
+        return NextResponse.json(
+          { error: "This invite was sent to a different email address. Please sign in with that email to redeem." },
+          { status: 403, headers: rateLimit.headers },
+        );
+      }
+    } catch (error) {
+      routeLogger.warn("Could not verify email for invite redemption.", {
+        error: error instanceof Error ? error.message : "unknown",
+      });
+      // Fail open if Clerk is unavailable — don't block the user
+    }
+  }
+
   const redemption = await redeemInviteCode(normalizedCode, userId);
   if (!redemption.ok) {
     if (redemption.reason === "already-redeemed") {
