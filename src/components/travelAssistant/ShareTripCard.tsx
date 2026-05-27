@@ -40,7 +40,7 @@ export function ShareTripCard({ tripName }: ShareTripCardProps) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-500/15 text-xl">🔗</span>
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-xl">🔗</span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-slate-900 dark:text-slate-100">Share trip</p>
           <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
@@ -55,7 +55,7 @@ export function ShareTripCard({ tripName }: ShareTripCardProps) {
                 <button
                   type="button"
                   onClick={() => { void navigator.clipboard.writeText(shareUrl); setState("copied"); setTimeout(() => setState("idle"), 2000); }}
-                  className="flex-1 rounded-xl bg-violet-500 py-2 text-xs font-bold text-white transition hover:bg-violet-400"
+                  className="flex-1 rounded-xl bg-sky-600 py-2 text-xs font-bold text-white transition hover:bg-sky-500"
                 >
                   {state === "copied" ? "✓ Copied!" : "Copy link"}
                 </button>
@@ -73,7 +73,7 @@ export function ShareTripCard({ tripName }: ShareTripCardProps) {
               type="button"
               onClick={() => void createShare()}
               disabled={state === "loading"}
-              className="mt-3 w-full rounded-xl bg-violet-500 py-2.5 text-sm font-bold text-white transition hover:bg-violet-400 disabled:opacity-50"
+              className="mt-3 w-full rounded-xl bg-sky-600 py-2.5 text-sm font-bold text-white transition hover:bg-sky-500 disabled:opacity-50"
             >
               {state === "loading" ? "Creating link…" : state === "error" ? "Error — tap to retry" : `Share "${tripName}"`}
             </button>
