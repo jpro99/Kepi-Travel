@@ -103,3 +103,19 @@ These rules are mandatory for every coding session.
 - Fixed intendedEmail lock — invite codes tied to specific email, redeem verifies Clerk email
 - Replaced all violet/purple/fuchsia with enterprise blue palette across all UI components
 - Deployed to kepitravel.com — Cloudflare DNS auto-configured via Vercel
+
+### 2026-05-27 (Session 4)
+- Built /redeem page — branded invite landing page, redirects non-auth users to sign-up with code preserved, redeems on travel-assistant load
+- Updated OnboardingFlow to pre-populate invite code from ?redeem= or ?code= URL params
+- Added ShareModal wired into travel-assistant/page.tsx (was built but never wired)
+- Added Share Trip button in More tab opening ShareModal
+- Added push notification subscribe UI in More tab — handleEnablePush uses VAPID key from meta tag, registers service worker push sub, saves to /api/push/subscribe
+- Added flight alerts state (pushSubscribed, pushBusy, pushMessage) to page.tsx
+- Built Family Tracker backend API at /api/family — group management, location sharing, member roles, invite codes, all stored in Redis
+- Upgraded FamilyPanel to Life360-style — real GPS location sharing, member management, live/stale indicators, consent-based, premium gate for non-pro users
+- Added FamilyPanel and ReferralCard to More tab
+- Auto-polling flight status: useEffect polls handleCheckFlightStatus every 5 min for flights within 24h
+- Updated PWA manifest — Kepi Travel branding, sky-blue theme, app shortcuts, categories, screenshots
+- Updated layout.tsx — kepitravel.com fallback URL, VAPID meta tag, sky-blue theme-color, twitter @kepitravel
+- Landing page: navy gradient hero, invite-only badge, invite code entry box, nav bar, enterprise footer
+- Onboarding copy: warm human language replacing technical jargon
