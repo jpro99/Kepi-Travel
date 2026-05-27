@@ -484,6 +484,14 @@ export function AdminDashboardClient() {
                 Generate (no email)
               </button>
             </div>
+            {adminBusy && (
+              <p className="text-xs font-semibold text-sky-600 dark:text-sky-400 animate-pulse">Sending…</p>
+            )}
+            {adminMessage && !adminBusy && (
+              <p className={`text-xs font-semibold ${adminMessage.startsWith("✅") ? "text-emerald-700 dark:text-emerald-300" : adminMessage.startsWith("⚠") ? "text-amber-700 dark:text-amber-300" : "text-rose-700 dark:text-rose-300"}`}>
+                {adminMessage}
+              </p>
+            )}
             {inviteSendResult && (
               <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 dark:border-sky-500/30 dark:bg-sky-500/10">
                 <div className="flex items-center justify-between gap-2">
