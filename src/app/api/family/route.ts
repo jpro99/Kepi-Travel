@@ -130,7 +130,7 @@ export async function POST(request: Request) {
     }
     const location: z.infer<typeof LocationSchema> = {
       lat, lon,
-      accuracy: accuracy ?? null as unknown as number,
+      accuracy: accuracy ?? undefined,
       updatedAt: new Date().toISOString(),
       memberId: userId,
       label: label ?? undefined,
