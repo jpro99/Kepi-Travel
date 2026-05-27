@@ -140,6 +140,8 @@ export function NextUpCard({ reservations, tripName, onReservationTap }: NextUpC
 
     try {
       const nowIso = new Date().toISOString();
+      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const userLocalTime = new Date().toLocaleString("en-US", { timeZone: userTimezone, hour12: false });
       const res = await fetch("/api/trip-guidance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -147,6 +149,8 @@ export function NextUpCard({ reservations, tripName, onReservationTap }: NextUpC
         body: JSON.stringify({
           tripName,
           nowIso,
+          userTimezone,
+          userLocalTime,
           reservationContext: contextBlock,
         }),
       });
