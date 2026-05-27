@@ -38,13 +38,13 @@ interface TripTimelineProps {
 const TYPE_CONFIG: Record<string, {
   emoji: string; label: string; dot: string; chip: string; card: string; accent: string;
 }> = {
-  flight:     { emoji: "✈️",  label: "Flight",     dot: "bg-violet-500", chip: "bg-violet-500/15 text-violet-700 dark:text-violet-300", card: "border-violet-200/80 bg-gradient-to-br from-slate-950 via-violet-950/40 to-slate-900 dark:border-violet-500/30", accent: "text-violet-300" },
+  flight:     { emoji: "✈️",  label: "Flight",     dot: "bg-sky-500", chip: "bg-sky-500/15 text-sky-700 dark:text-sky-300", card: "border-sky-200/80 bg-gradient-to-br from-slate-950 via-sky-950/40 to-slate-900 dark:border-sky-500/30", accent: "text-sky-300" },
   hotel:      { emoji: "🏨",  label: "Hotel",      dot: "bg-amber-500",  chip: "bg-amber-500/15 text-amber-700 dark:text-amber-300",   card: "border-amber-200/80 bg-gradient-to-br from-amber-50 via-orange-50/50 to-white dark:border-amber-500/30 dark:from-amber-500/10 dark:via-orange-500/5 dark:to-slate-900", accent: "text-amber-600 dark:text-amber-400" },
   dinner:     { emoji: "🍽",  label: "Dinner",     dot: "bg-rose-500",   chip: "bg-rose-500/15 text-rose-700 dark:text-rose-300",       card: "border-rose-200/80 bg-gradient-to-br from-rose-50 to-white dark:border-rose-500/30 dark:from-rose-500/10 dark:to-slate-900", accent: "text-rose-600 dark:text-rose-400" },
   train:      { emoji: "🚆",  label: "Train",      dot: "bg-emerald-500",chip: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", card: "border-emerald-200/80 bg-gradient-to-br from-emerald-50 to-white dark:border-emerald-500/30 dark:from-emerald-500/10 dark:to-slate-900", accent: "text-emerald-600 dark:text-emerald-400" },
   ride:       { emoji: "🚗",  label: "Ride",       dot: "bg-sky-500",    chip: "bg-sky-500/15 text-sky-700 dark:text-sky-300",           card: "border-sky-200/80 bg-gradient-to-br from-sky-50 to-white dark:border-sky-500/30 dark:from-sky-500/10 dark:to-slate-900", accent: "text-sky-600 dark:text-sky-400" },
   tour:       { emoji: "🗺",  label: "Tour",       dot: "bg-teal-500",   chip: "bg-teal-500/15 text-teal-700 dark:text-teal-300",        card: "border-teal-200/80 bg-gradient-to-br from-teal-50 to-white dark:border-teal-500/30 dark:from-teal-500/10 dark:to-slate-900", accent: "text-teal-600 dark:text-teal-400" },
-  experience: { emoji: "🎟",  label: "Experience", dot: "bg-fuchsia-500",chip: "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300", card: "border-fuchsia-200/80 bg-gradient-to-br from-fuchsia-50 to-white dark:border-fuchsia-500/30 dark:from-fuchsia-500/10 dark:to-slate-900", accent: "text-fuchsia-600 dark:text-fuchsia-400" },
+  experience: { emoji: "🎟",  label: "Experience", dot: "bg-indigo-500",chip: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300", card: "border-indigo-200/80 bg-gradient-to-br from-indigo-50 to-white dark:border-indigo-500/30 dark:from-indigo-500/10 dark:to-slate-900", accent: "text-indigo-600 dark:text-indigo-400" },
 };
 
 const TYPE_DOT: Record<string, string> = Object.fromEntries(
@@ -181,12 +181,12 @@ function ReservationCard({
               </div>
               <div className="flex flex-col items-center gap-1">
                 <div className="flex items-center gap-1">
-                  <div className={`h-px w-8 ${isPast ? "bg-slate-600" : "bg-violet-400/60"}`} />
-                  <span className={isPast ? "text-slate-500" : "text-violet-300"}>✈</span>
-                  <div className={`h-px w-8 ${isPast ? "bg-slate-600" : "bg-violet-400/60"}`} />
+                  <div className={`h-px w-8 ${isPast ? "bg-slate-600" : "bg-sky-400/60"}`} />
+                  <span className={isPast ? "text-slate-500" : "text-sky-300"}>✈</span>
+                  <div className={`h-px w-8 ${isPast ? "bg-slate-600" : "bg-sky-400/60"}`} />
                 </div>
                 {reservation.flightNumber ? (
-                  <span className={`text-[10px] font-bold tracking-widest ${isPast ? "text-slate-500" : "text-violet-400"}`}>
+                  <span className={`text-[10px] font-bold tracking-widest ${isPast ? "text-slate-500" : "text-sky-400"}`}>
                     {reservation.flightNumber}
                   </span>
                 ) : null}
@@ -202,7 +202,7 @@ function ReservationCard({
               <span className="text-xs text-slate-400">
                 {reservation.provider && !EMAIL_PROVIDERS.has(reservation.provider.toLowerCase()) ? reservation.provider : reservation.flightNumber ?? "Airline"}
               </span>
-              {reservation.confirmationCode ? <span className="text-xs font-mono font-bold text-violet-300">{reservation.confirmationCode}</span> : null}
+              {reservation.confirmationCode ? <span className="text-xs font-mono font-bold text-sky-300">{reservation.confirmationCode}</span> : null}
               {isPast ? (
                 <span className="rounded-full bg-slate-500/20 px-2 py-0.5 text-[10px] font-bold text-slate-400">LANDED</span>
               ) : reservation.flightOnTime === true ? (
