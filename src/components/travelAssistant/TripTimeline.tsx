@@ -73,19 +73,27 @@ function parseLocalMs(localTime: string): number {
 }
 
 function toUtcMs(localTime: string, timezone?: string): number {
-  const ms = parseLocalMs(localTime);
-  if (Number.isNaN(ms) || !timezone) return ms;
+  const s = localTime.trim().replace("T", " ").slice(0, 16);
+  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(s);
+  if (!m) return Number.NaN;
+  if (!timezone) return Date.UTC(+m[1], +m[2]-1, +m[3], +m[4], +m[5]);
   try {
+    // Parse components as UTC reference point — avoids browser timezone pollution
+    const approxUtcMs = Date.UTC(+m[1], +m[2]-1, +m[3], +m[4], +m[5]);
+    // Format that reference in the target timezone to measure the offset
     const formatter = new Intl.DateTimeFormat("en-US", {
       timeZone: timezone,
       year: "numeric", month: "2-digit", day: "2-digit",
       hour: "2-digit", minute: "2-digit", hour12: false,
     });
-    const parts = Object.fromEntries(formatter.formatToParts(new Date(ms)).map(p => [p.type, p.value]));
-    const tzDate = new Date(`${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:00Z`);
-    return ms - (tzDate.getTime() - ms);
+    const parts = Object.fromEntries(
+      formatter.formatToParts(new Date(approxUtcMs)).map(p => [p.type, p.value])
+    );
+    const tzAsUtcMs = Date.UTC(+parts.year, +parts.month-1, +parts.day, +parts.hour, +parts.minute);
+    const offsetMs = tzAsUtcMs - approxUtcMs; // positive = ahead of UTC (e.g. JST +9h)
+    return approxUtcMs - offsetMs; // local - offset = UTC
   } catch {
-    return ms;
+    return Date.UTC(+m[1], +m[2]-1, +m[3], +m[4], +m[5]);
   }
 }
 
