@@ -1,4 +1,4 @@
-"use client";
+"use client"; // v2 - invite email
 
 import { useCallback, useEffect, useState } from "react";
 import { ActiveUsersCard } from "@/components/admin/ActiveUsersCard";
