@@ -7405,27 +7405,31 @@ export default function TravelAssistantPage() {
                 </div>
                 <div className="mt-3 space-y-2">
                   {readinessItems.map((item) => (
-                    <label
+                    <div
                       key={item.id}
+                      role="checkbox"
+                      aria-checked={item.complete}
+                      tabIndex={0}
+                      onClick={() => handleChecklistToggle(item.id)}
+                      onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); handleChecklistToggle(item.id); } }}
                       className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 ${
                         item.complete
                           ? "border-emerald-500/40 bg-emerald-500/10"
                           : "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-950/60"
                       }`}
                     >
-                      <input
-                        type="checkbox"
-                        checked={item.complete}
-                        onChange={() => handleChecklistToggle(item.id)}
-                        className="mt-1"
-                      />
+                      <div className={`mt-1 h-4 w-4 shrink-0 rounded border-2 flex items-center justify-center ${
+                        item.complete ? "border-emerald-500 bg-emerald-500" : "border-slate-400"
+                      }`}>
+                        {item.complete && <span className="text-white text-[10px] font-bold">✓</span>}
+                      </div>
                       <span className="flex-1">
                         <span className="block text-sm font-medium">{item.title}</span>
                         <span className="text-xs text-slate-500 dark:text-slate-400">
                           {item.category} {item.required ? "• Required" : "• Optional"}
                         </span>
                       </span>
-                    </label>
+                    </div>
                   ))}
                 </div>
               </section>
