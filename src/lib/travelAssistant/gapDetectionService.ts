@@ -137,7 +137,10 @@ export function detectTripGaps(reservations: GapReservation[], nowMs = Date.now(
     .sort((a, b) => getReservationMs(a) - getReservationMs(b));
 
   const flights = upcoming.filter((r) => r.type === "flight");
-  const hotels = upcoming.filter((r) => r.type === "hotel");
+
+  // Hotels use checkOutDate for coverage — include ALL hotels regardless of check-in date
+  // A hotel checked in days ago can still cover future nights
+  const hotels = reservations.filter((r) => r.type === "hotel");
 
   // ── 1. Flight tonight with no transport booked ───────────────────────────
   for (const flight of flights) {
