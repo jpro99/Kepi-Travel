@@ -82,7 +82,6 @@ import { DocumentVault } from "@/components/travelAssistant/DocumentVault";
 import { PackingList } from "@/components/travelAssistant/PackingList";
 import { ShareTripCard } from "@/components/travelAssistant/ShareTripCard";
 import { ShareModal } from "@/components/travelAssistant/ShareModal";
-import { FamilyPanel } from "@/components/travelAssistant/FamilyPanel";
 import { ReferralCard } from "@/components/referral/ReferralCard";
 import { WeatherCard } from "@/components/travelAssistant/WeatherCard";
 import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntelligencePanel";
@@ -7537,10 +7536,12 @@ export default function TravelAssistantPage() {
                 <p className="mt-1 text-xs text-sky-600 dark:text-sky-400">Create a read-only link so family can follow your itinerary in real time.</p>
               </button>
               {/* Life360-style family tracker */}
-              <FamilyPanel
-                isPremium={hasProAccess || isLifetime || isTrial}
-                onUpgrade={() => openUpgradeModal("multi-trip", "Upgrade to Pro to unlock Family Tracker — real-time location sharing for your whole group.")}
-              />
+              <Suspense fallback={<div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 animate-pulse">Loading Family Tracker...</div>}>
+                <FamilyPanel
+                  isPremium={hasProAccess || isLifetime || isTrial}
+                  onUpgrade={() => openUpgradeModal("multi-trip", "Upgrade to Pro to unlock Family Tracker — real-time location sharing for your whole group.")}
+                />
+              </Suspense>
               {/* Invite a friend */}
               <ReferralCard />
             </section>
