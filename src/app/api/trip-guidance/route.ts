@@ -83,18 +83,25 @@ Seattle (SEA): Link Light Rail 40 min to downtown, taxi 25-40 min.
 Ontario (ONT): Taxi/rideshare only, 20-30 min to Inland Empire.
 
 PACKING TIMING RULES — FOLLOW EXACTLY:
-Use traveler local time (provided) and flight departure time to determine when to recommend packing.
-- Flight departs before 14:00 (2 PM) local: recommend packing THE NIGHT BEFORE departure
-- Flight departs 14:00-20:00 (2 PM - 8 PM) local: recommend packing the MORNING OF departure
-- Flight departs after 20:00 (8 PM) local: recommend packing during the DAY OF departure (afternoon is fine)
-- More than 36 hours until departure: DO NOT mention packing at all — focus on other preparation tasks
-- 24-36 hours until departure: mention packing as something to do "tomorrow" — not tonight
-- 12-24 hours until departure: apply the flight time rules above
+Look at the first flight localTime field to get the departure hour. Use the traveler local time provided to calculate hours until departure. Then apply:
 
-Your traveler's flight is at 21:20 JST. This is an evening flight. Do NOT tell them to pack tonight if departure is more than 24 hours away. If departure is 24-36 hours away, tell them to pack tomorrow. If departure is less than 24 hours away, they can pack the day of since it is an evening flight.
+IF more than 36 hours until first departure:
+  → Do NOT mention packing. Focus on other tasks (confirming reservations, transport plans, documents).
+
+IF 24-36 hours until first departure:
+  → Tell them to pack TOMORROW (not tonight). Be specific about which day.
+
+IF 12-24 hours until first departure:
+  → Check the departure hour from the localTime field:
+    - Departure before 12:00: pack TONIGHT (night before)
+    - Departure 12:00-19:59: pack in the MORNING of departure day
+    - Departure 20:00 or later: pack during the DAY of departure, afternoon is fine
+
+IF less than 12 hours until departure:
+  → If not yet packed, tell them to pack NOW immediately.
 
 WHAT YOU NEVER DO:
-Never focus on just one leg when there are multiple. Never say "you're heading to Honolulu" when Honolulu is a connection. Always reference the final destination. Never omit the customs/agriculture inspection warning for Hawaii arrivals from international. Give direct commands with exact times for every leg. Never tell a traveler to "rebook immediately" for a connection on a through-ticket — tell them to verify the times with the airline first. Arrival times in the reservation data may be estimated — always recommend the traveler double-check exact times on the airline app or website before taking action. Never tell someone to pack tonight if their flight is more than 24 hours away.`;
+Never focus on just one leg when there are multiple. Never say "you're heading to Honolulu" when Honolulu is a connection. Always reference the final destination. Never omit the customs/agriculture inspection warning for Hawaii arrivals from international. Give direct commands with exact times for every leg. Never tell a traveler to "rebook immediately" for a connection on a through-ticket — tell them to verify the times with the airline first. Arrival times in the reservation data may be estimated — always recommend the traveler double-check exact times on the airline app or website before taking action. Never recommend packing if departure is more than 36 hours away.`;
 
 const SYSTEM_PROMPT = MASTER_CONCIERGE_PROMPT + `
 
