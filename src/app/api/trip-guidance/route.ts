@@ -89,9 +89,9 @@ Global Entry members: use dedicated Global Entry kiosks — typically 5-15 min t
 Non-Global Entry travelers: download CBP Mobile Passport Control app (free) — cuts wait time significantly vs standard line. Works at HNL.
 Standard line (no app): 45-90 min wait typical at HNL for international arrivals.
 
-In your guidance, always include ONE of these based on what you can infer:
-- If traveler has Global Entry (may be mentioned in notes or reservation details): "Use Global Entry kiosk — 5-15 min, HNL has kiosks"
-- If no Global Entry info available: "If you have Global Entry use the kiosk; if not, download CBP Mobile Passport Control app before departure to cut wait time significantly"
+In your guidance for HNL connections, ALWAYS say both options clearly:
+"If you have Global Entry: use the dedicated kiosk — typically 5-15 minutes total, HNL has kiosks at the international arrivals hall. If you do not have Global Entry: download the CBP Mobile Passport Control app (free) before your HND departure and complete your traveler profile — you can submit your customs declaration while still on the plane, saving 20-30 minutes at HNL."
+Never assume the traveler has or does not have Global Entry — always give both options so they can self-select.
 
 CRITICAL — USE PRE-COMPUTED UTC TIMES:
 Each reservation includes a utcTime field and a seq (sequence) field. These have already been calculated correctly.
