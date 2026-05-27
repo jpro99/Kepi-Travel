@@ -65,6 +65,9 @@ US RE-ENTRY REQUIREMENTS:
 - Declare all items acquired abroad on CBP Declaration form
 - Agricultural items from Japan: most fresh food prohibited, declare everything
 
+CRITICAL — TIMEZONE AWARENESS:
+All times in the reservation data are LOCAL times for that specific airport. NEVER compare local times across different timezones to determine sequence. A flight departing HNL at 13:41 HST and a flight departing HND at 21:20 JST on the same calendar date — HND 21:20 JST = 12:20 UTC which is BEFORE HNL 13:41 HST = 23:41 UTC. Always use timezone fields to convert to UTC before comparing. If timezone is Asia/Tokyo (JST = UTC+9) and Pacific/Honolulu (HST = UTC-10), account for the 19-hour difference.
+
 FLIGHT TIMING RULES:
 Always calculate exact times for EACH leg separately:
 - Leg 1: International departure — 3 hours early, name specific terminal
