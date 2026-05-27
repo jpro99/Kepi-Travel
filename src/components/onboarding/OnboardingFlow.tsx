@@ -120,6 +120,12 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
     return /^[A-Z0-9-]{1,50}$/u.test(raw) ? raw : "";
   }, [searchParams]);
 
+  const inviteCodeFromUrl = useMemo(() => {
+    // Support ?redeem=CODE (from /redeem page) and ?code=CODE (from landing page)
+    const raw = (searchParams.get("redeem") ?? searchParams.get("code") ?? "").trim().toUpperCase();
+    return /^[A-Z0-9-]{1,50}$/u.test(raw) ? raw : "";
+  }, [searchParams]);
+
   const localizeTripErrors = useCallback(
     (errors: TripSetupValidationErrors): TripSetupValidationErrors => {
       const localized: TripSetupValidationErrors = {};
@@ -219,7 +225,11 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
         ...EMPTY_TRIP_SETUP_DRAFT,
         ...(resolved.tripDraft ?? {}),
       });
-      const resolvedInviteCode = typeof resolved.inviteCode === "string" ? resolved.inviteCode.trim().toUpperCase() : "";
+      const resolvedInviteCode = (
+        typeof resolved.inviteCode === "string" && resolved.inviteCode.trim()
+          ? resolved.inviteCode.trim().toUpperCase()
+          : inviteCodeFromUrl
+      );
       setInviteCode(resolvedInviteCode);
       setInviteRedeemedAt(
         typeof resolved.inviteRedeemedAt === "string" && resolved.inviteRedeemedAt.length > 0
@@ -255,7 +265,7 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [referralCodeFromUrl, t]);
+  }, [inviteCodeFromUrl, referralCodeFromUrl, t]);
 
   useEffect(() => {
     let active = true;
