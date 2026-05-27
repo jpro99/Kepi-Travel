@@ -7,7 +7,7 @@ import { createInviteCode } from "@/lib/invite/inviteCodeStore";
 import { InviteEmail } from "@/lib/email/templates/inviteEmail";
 import { getResendClient, getResendFromEmail } from "@/lib/email/resendClient";
 import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { render } from "@react-email/render";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -60,20 +60,16 @@ export async function POST(request: Request): Promise<NextResponse> {
       });
     }
 
-    // Render React component to HTML string — Resend requires html: not react:
-    // unless @react-email packages are installed
     let html: string;
     try {
-      html = "<!DOCTYPE html>" + renderToStaticMarkup(
-        createElement(InviteEmail, {
-          recipientEmail: email,
-          inviteCode: record.code,
-          inviteType: type,
-          redeemUrl,
-        })
-      );
+      html = await render(createElement(InviteEmail, {
+        recipientEmail: email,
+        inviteCode: record.code,
+        inviteType: type,
+        redeemUrl,
+      }));
     } catch (err) {
-      return NextResponse.json({ error: "Failed to render email template: " + (err instanceof Error ? err.message : String(err)) }, { status: 500 });
+      return NextResponse.json({ error: "Failed to render email: " + (err instanceof Error ? err.message : String(err)) }, { status: 500 });
     }
 
     let emailSent = false;
