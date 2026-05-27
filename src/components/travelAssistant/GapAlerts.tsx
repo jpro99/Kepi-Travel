@@ -14,7 +14,11 @@ interface GapAlertsProps {
     flightDepartureAirport?: string;
     flightArrivalAirport?: string;
     checkOutDate?: string;
+    checkoutDate?: string;
+    checkout_date?: string;
+    endDate?: string;
     confirmationCode?: string;
+    notes?: string;
   }[];
   onActionTap?: (tab: string) => void;
 }
