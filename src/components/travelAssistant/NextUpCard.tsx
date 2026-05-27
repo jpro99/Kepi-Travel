@@ -114,6 +114,15 @@ function typeEmoji(type: string): string {
 // Build a compact summary of all upcoming reservations to pass to Claude
 const EMAIL_PROVIDER_NAMES = new Set(["gmail", "yahoo", "outlook", "hotmail", "icloud", "aol", "me"]);
 
+function utcIsoFromLocal(localTime: string, timezone: string): string {
+  const utcMs = toUtcMs(localTime, timezone);
+  if (Number.isNaN(utcMs)) return "";
+  // Format as "YYYY-MM-DD HH:mm UTC"
+  const d = new Date(utcMs);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC`;
+}
+
 function buildContextBlock(reservations: NextUpReservation[]): string {
   const upcoming = reservations
     .filter((r) => (parseBestMs(r) - Date.now()) / 3_600_000 > -2)
@@ -122,17 +131,20 @@ function buildContextBlock(reservations: NextUpReservation[]): string {
 
   if (upcoming.length === 0) return "No upcoming reservations.";
 
-  return upcoming.map((r) => {
+  // Pre-compute sequence numbers so AI knows exact order
+  const lines = upcoming.map((r, idx) => {
     const resolvedProvider = r.provider && !EMAIL_PROVIDER_NAMES.has(r.provider.toLowerCase())
       ? r.provider : null;
-    const tz = (r as NextUpReservation & { timezone?: string }).timezone || "";
+    const tz = r.timezone || "";
+    // Pre-compute UTC so AI never needs to do timezone math
+    const utcTime = tz && r.localTime ? utcIsoFromLocal(r.localTime, tz) : "";
     const parts = [
+      `seq=${idx + 1}`,
       `type=${r.type}`,
       resolvedProvider ? `provider="${resolvedProvider}"` : null,
       r.flightNumber ? `flightNumber=${r.flightNumber}` : null,
-      // Always include timezone so AI never compares local times across zones without context
-      r.localTime ? `localTime="${r.localTime}"` : null,
-      tz ? `timezone="${tz}"` : null,
+      r.localTime ? `localTime="${r.localTime} (${tz || "unknown tz"})"` : null,
+      utcTime ? `utcTime="${utcTime}"` : null,
       r.flightDepartureAirport && r.flightArrivalAirport
         ? `route=${r.flightDepartureAirport}→${r.flightArrivalAirport}` : null,
       r.flightDepartureTime ? `departureTime="${r.flightDepartureTime}"` : null,
@@ -143,7 +155,10 @@ function buildContextBlock(reservations: NextUpReservation[]): string {
       r.notes ? `notes="${r.notes.slice(0, 120)}"` : null,
     ].filter(Boolean);
     return `[${parts.join(" ")}]`;
-  }).join("\n");
+  });
+
+  return `RESERVATION SEQUENCE (sorted by UTC departure time — use seq field for order, use utcTime for all time comparisons):
+${lines.join("\n")}`;
 }
 
 // ── component ─────────────────────────────────────────────────────────────────
