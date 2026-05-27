@@ -1,3 +1,4 @@
+import "server-only";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isAdminUserId } from "@/lib/admin/adminAccess";
@@ -6,7 +7,6 @@ import { createInviteCode } from "@/lib/invite/inviteCodeStore";
 import { InviteEmail } from "@/lib/email/templates/inviteEmail";
 import { getResendClient, getResendFromEmail } from "@/lib/email/resendClient";
 import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,7 +35,6 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const { email, type, note } = parsed.data;
 
-  // Generate the invite code
   const record = await createInviteCode({
     type,
     createdBy: userId,
@@ -43,30 +42,16 @@ export async function POST(request: Request): Promise<NextResponse> {
     intendedEmail: email,
   });
 
-  // Build redemption URL
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://kepi-search.vercel.app";
   const redeemUrl = `${appUrl}/redeem?code=${encodeURIComponent(record.code)}`;
 
-  // Send the email via Resend
   const resend = getResendClient();
   if (!resend) {
     return NextResponse.json({
-      ok: true,
-      code: record.code,
-      redeemUrl,
-      emailSent: false,
+      ok: true, code: record.code, redeemUrl, emailSent: false,
       warning: "RESEND_API_KEY not configured — code generated but email not sent.",
     });
   }
-
-  const html = renderToStaticMarkup(
-    createElement(InviteEmail, {
-      recipientEmail: email,
-      inviteCode: record.code,
-      inviteType: type,
-      redeemUrl,
-    })
-  );
 
   const { error: sendError } = await resend.emails.send({
     from: getResendFromEmail(),
@@ -74,23 +59,20 @@ export async function POST(request: Request): Promise<NextResponse> {
     subject: type === "lifetime"
       ? "You're invited to Kepi — Lifetime Access"
       : "You're invited to Kepi — 30-Day Trial",
-    html,
+    react: createElement(InviteEmail, {
+      recipientEmail: email,
+      inviteCode: record.code,
+      inviteType: type,
+      redeemUrl,
+    }),
   });
 
   if (sendError) {
     return NextResponse.json({
-      ok: true,
-      code: record.code,
-      redeemUrl,
-      emailSent: false,
+      ok: true, code: record.code, redeemUrl, emailSent: false,
       warning: `Code generated but email failed: ${sendError.message}`,
     });
   }
 
-  return NextResponse.json({
-    ok: true,
-    code: record.code,
-    redeemUrl,
-    emailSent: true,
-  });
+  return NextResponse.json({ ok: true, code: record.code, redeemUrl, emailSent: true });
 }
