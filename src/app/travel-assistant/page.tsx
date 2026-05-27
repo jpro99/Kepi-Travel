@@ -8529,27 +8529,7 @@ export default function TravelAssistantPage() {
             </p>
           </article>
 
-          <Suspense fallback={<LazyPanelSkeleton label="Loading family panel..." />}>
-            <FamilyPanel
-              showFamilyMap={showFamilyMap}
-              onShowFamilyMapChange={setShowFamilyMap}
-              selectedFamilyMemberId={selectedFamilyMember.id}
-              onSelectedFamilyMemberIdChange={setSelectedFamilyMemberId}
-              selectedFamilyMember={selectedFamilyMember}
-              familyMembers={familyMembers}
-              canViewerSeeMember={canViewerSeeMember}
-              nowMs={nowMs}
-              canSendLocationNow={canSendLocationNow}
-              onToggleMemberSharing={toggleMemberSharing}
-              onToggleMemberVisibility={toggleMemberVisibility}
-              visibleFamilyMarkers={visibleFamilyMarkers}
-              formatClock={formatClock}
-              onSyncGoogleCalendar={handleManualCalendarSync}
-              calendarSyncInFlight={calendarSyncInFlight}
-              calendarSyncMessage={calendarSyncMessage}
-              calendarSyncTone={calendarSyncTone}
-            />
-          </Suspense>
+          {/* FamilyPanel now lives in the More tab with real location sharing */}
           </section>
         ) : (
           <section className="rounded-2xl border border-slate-700 bg-slate-900/50 p-4 text-xs text-slate-400">
