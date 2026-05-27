@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { Resend } from "resend";
 import { z } from "zod";
 import { isAdminUserId } from "@/lib/admin/adminAccess";
 import { auth } from "@clerk/nextjs/server";
 import { createInviteCode } from "@/lib/invite/inviteCodeStore";
 import { InviteEmail } from "@/lib/email/templates/inviteEmail";
+import { getResendClient, getResendFromEmail } from "@/lib/email/resendClient";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -47,9 +47,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   const redeemUrl = `${appUrl}/redeem?code=${encodeURIComponent(record.code)}`;
 
   // Send the email via Resend
-  const resendKey = process.env.RESEND_API_KEY ?? process.env.RESEND_WEBHOOK_SECRET;
-  if (!resendKey || !resendKey.startsWith("re_")) {
-    // Code was generated, just can't send email — return code for manual sharing
+  const resend = getResendClient();
+  if (!resend) {
     return NextResponse.json({
       ok: true,
       code: record.code,
@@ -58,8 +57,6 @@ export async function POST(request: Request): Promise<NextResponse> {
       warning: "RESEND_API_KEY not configured — code generated but email not sent.",
     });
   }
-
-  const resend = new Resend(resendKey);
 
   const html = renderToStaticMarkup(
     createElement(InviteEmail, {
@@ -71,7 +68,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   );
 
   const { error: sendError } = await resend.emails.send({
-    from: "Kepi Travel <noreply@kepitravel.com>",
+    from: getResendFromEmail(),
     to: email,
     subject: type === "lifetime"
       ? "You're invited to Kepi — Lifetime Access"
