@@ -24,7 +24,13 @@ interface GapReservation {
   flightDate?: string;
   flightDepartureAirport?: string;
   flightArrivalAirport?: string;
+  // All possible field names for checkout date across different storage formats
   checkOutDate?: string;
+  checkoutDate?: string;
+  checkout_date?: string;
+  check_out_date?: string;
+  checkOut?: string;
+  endDate?: string;
   confirmationCode?: string;
   notes?: string;
 }
@@ -140,16 +146,15 @@ export function detectTripGaps(reservations: GapReservation[], nowMs = Date.now(
     if (nightBeforeKey < todayKey) continue; // already past
     const hasHotelCoveringNight = hotels.some((h) => {
       const checkInKey = parseDayKey(h.localTime);
-      const checkOutKey = h.checkOutDate?.slice(0, 10) || extractCheckoutFromNotes(h.notes ?? "");
-      console.log("[gap-debug] hotel check", {
-        provider: h.provider,
-        localTime: h.localTime,
-        checkInKey,
-        checkOutDate: h.checkOutDate,
-        checkOutKey,
-        nightBeforeKey,
-        covers: checkInKey <= nightBeforeKey && !!checkOutKey && checkOutKey > nightBeforeKey,
-      });
+      const checkOutKey = (
+        h.checkOutDate?.slice(0, 10) ||
+        h.checkoutDate?.slice(0, 10) ||
+        h.checkout_date?.slice(0, 10) ||
+        h.check_out_date?.slice(0, 10) ||
+        h.checkOut?.slice(0, 10) ||
+        h.endDate?.slice(0, 10) ||
+        extractCheckoutFromNotes(h.notes ?? "")
+      );
       if (!checkOutKey) return false;
       return checkInKey <= nightBeforeKey && checkOutKey > nightBeforeKey;
     });
@@ -178,7 +183,15 @@ export function detectTripGaps(reservations: GapReservation[], nowMs = Date.now(
         // Only count hotel if check-in is confirmed between the two flights
         // Do not assume duration — require explicit checkOutDate
         const checkInKey = parseDayKey(h.localTime);
-        const checkOutKey = h.checkOutDate?.slice(0, 10) || extractCheckoutFromNotes(h.notes ?? "");
+        const checkOutKey = (
+          h.checkOutDate?.slice(0, 10) ||
+          h.checkoutDate?.slice(0, 10) ||
+          h.checkout_date?.slice(0, 10) ||
+          h.check_out_date?.slice(0, 10) ||
+          h.checkOut?.slice(0, 10) ||
+          h.endDate?.slice(0, 10) ||
+          extractCheckoutFromNotes(h.notes ?? "")
+        );
         if (!checkInKey) return false;
         // Hotel covers the gap if it checks in before next departure
         // and checks out after landing (or at minimum checks in during the gap)
