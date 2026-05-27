@@ -147,30 +147,78 @@ export default async function Home() {
   const primaryCtaLabel = userId ? "Open my trips" : "Start free";
 
   return (
-    <main className="min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <section className="mx-auto grid w-full max-w-6xl gap-10 px-4 pb-16 pt-14 sm:px-8 lg:grid-cols-2 lg:items-center lg:gap-14 lg:pt-20">
-        <div>
-          <Logo size="md" />
-          <h1 className="mt-4 text-3xl font-semibold leading-tight sm:text-5xl">
-            Never miss a flight. Never lose a reservation.
-          </h1>
-          <p className="mt-4 max-w-xl text-sm text-slate-600 dark:text-slate-300 sm:text-base">
-            Kepi is your adaptive travel assistant — from packing to landing.
-          </p>
-          <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Link
-              href={authCtaHref}
-              className="inline-flex items-center justify-center rounded-xl bg-cyan-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
-            >
-              {primaryCtaLabel}
+    <main className="min-h-screen bg-[#f0f4f8] text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+      {/* Top nav */}
+      <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-8">
+        <Logo size="sm" />
+        <div className="flex items-center gap-3">
+          {userId ? (
+            <Link href="/travel-assistant" className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-500">
+              Open app
             </Link>
-            <a
-              href="#features"
-              className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-            >
-              See how it works
-            </a>
+          ) : (
+            <>
+              <Link href="/sign-in" className="text-sm font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">
+                Sign in
+              </Link>
+              <Link href="/sign-up" className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-500">
+                Get started
+              </Link>
+            </>
+          )}
+        </div>
+      </nav>
+
+      {/* Hero */}
+      <section className="mx-auto grid w-full max-w-6xl gap-10 px-4 pb-16 pt-10 sm:px-8 lg:grid-cols-2 lg:items-center lg:gap-14">
+        <div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300">
+            <span className="inline-block h-2 w-2 rounded-full bg-sky-500 animate-pulse" />
+            Invite-only beta · kepitravel.com
           </div>
+          <h1 className="mt-4 text-4xl font-bold leading-tight tracking-tight sm:text-5xl" style={{ color: "#0c2461" }}>
+            Never miss a flight.<br />
+            <span className="bg-gradient-to-r from-[#0c2461] via-[#1a56b0] to-[#0ea5e9] bg-clip-text text-transparent">
+              Never lose your trip.
+            </span>
+          </h1>
+          <p className="mt-4 max-w-xl text-base text-slate-600 dark:text-slate-300">
+            Kepi is your personal travel execution assistant — live flight tracking, smart alerts, AI guidance, and real-time family location sharing. From the moment you pack to the moment you land.
+          </p>
+
+          {!userId ? (
+            <div className="mt-7 rounded-2xl border border-sky-200 bg-white p-4 shadow-sm dark:border-sky-500/30 dark:bg-slate-900">
+              <p className="text-xs font-semibold uppercase tracking-wider text-sky-700 dark:text-sky-300">Have an invite code?</p>
+              <div className="mt-2 flex gap-2">
+                <input
+                  type="text"
+                  placeholder="KEPI-FRIEND-XXXXXX"
+                  className="flex-1 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-mono uppercase tracking-widest placeholder:normal-case placeholder:tracking-normal dark:border-slate-700 dark:bg-slate-800"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const code = (e.target as HTMLInputElement).value.trim();
+                      if (code) window.location.href = `/sign-up?code=${encodeURIComponent(code)}`;
+                    }
+                  }}
+                />
+                <a
+                  href="/sign-up"
+                  className="rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-sky-500"
+                >
+                  Join →
+                </a>
+              </div>
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                Kepi is currently invite-only. Get a code from someone already using the app.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-7 flex gap-3">
+              <Link href="/travel-assistant" className="rounded-xl bg-sky-600 px-6 py-3 text-sm font-bold text-white hover:bg-sky-500">
+                Open my trips →
+              </Link>
+            </div>
+          )}
         </div>
 
         <div className="mx-auto w-full max-w-sm rounded-[2.2rem] border border-slate-300 bg-slate-950 p-3 shadow-2xl shadow-cyan-500/10 dark:border-slate-700">
@@ -350,7 +398,7 @@ export default async function Home() {
             <Link href="/terms" className="hover:text-cyan-700 dark:hover:text-cyan-300">
               Terms
             </Link>
-            <a href="mailto:support@kepi.travel" className="hover:text-cyan-700 dark:hover:text-cyan-300">
+            <a href="mailto:support@kepitravel.com" className="hover:text-cyan-700 dark:hover:text-cyan-300">
               Support
             </a>
             <a
@@ -362,15 +410,15 @@ export default async function Home() {
               Twitter/X
             </a>
             <a
-              href="https://github.com/jpro99/Kepi-Search"
+              href="https://x.com/kepitravel"
               target="_blank"
               rel="noreferrer"
               className="hover:text-cyan-700 dark:hover:text-cyan-300"
             >
-              GitHub
+              @kepitravel
             </a>
           </nav>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Built with ❤️ for travelers</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">© 2026 Kepi Travel · Built for travelers who can't afford a miss</p>
         </div>
       </footer>
     </main>
