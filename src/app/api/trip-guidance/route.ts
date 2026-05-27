@@ -100,6 +100,7 @@ Each reservation includes a utcTime field and a seq (sequence) field. These have
 - localTime is for display only (showing the traveler what time it is at that airport).
 - NEVER compare raw localTime values across different timezones — 13:41 HST and 21:20 JST cannot be compared as numbers.
 - The seq ordering has already accounted for all timezone conversions correctly.
+- If arrivalTime is "[not stored — do not estimate]" — do NOT make up an arrival time. Instead say "verify exact arrival time on the airline app." Never calculate or guess arrival times from departure times.
 
 FLIGHT TIMING RULES:
 Always calculate exact times for EACH leg separately:
@@ -231,7 +232,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     try {
       guidance = GuidanceResponseSchema.parse(JSON.parse(clean));
     } catch (parseError) {
-      // Parsing failed — log for debugging, show clean fallback to user
       routeLogger.warn("Trip guidance JSON parse failed.", {
         error: parseError instanceof Error ? parseError.message : String(parseError),
         rawPreview: raw.slice(0, 200),
@@ -242,6 +242,39 @@ export async function POST(request: Request): Promise<NextResponse> {
         headline: "Review your itinerary",
         detail: "Tap 'Am I on track?' for a full trip status check.",
       };
+    }
+
+    // ── Hard language enforcement ──────────────────────────────────────────────
+    // AI sometimes ignores prompt rules. Enforce in code as a safety net.
+    const headlineLower = guidance.headline.toLowerCase();
+    const forbiddenInHeadline = [
+      "illegal", "impossible", "miss guaranteed", "rebook immediately",
+      "rebook now", "must rebook", "guaranteed miss",
+    ];
+    const hasForbiddenHeadline = forbiddenInHeadline.some(w => headlineLower.includes(w));
+
+    // Also check if headline calls something impossible/illegal but detail mentions through-ticket
+    const detailLower = (guidance.detail ?? "").toLowerCase();
+    const isThroughTicket = detailLower.includes("through-ticket") || detailLower.includes("through ticket") || detailLower.includes("same confirmation");
+
+    if (hasForbiddenHeadline) {
+      routeLogger.warn("AI used forbidden headline language — sanitizing.", { headline: guidance.headline });
+      if (isThroughTicket) {
+        guidance.headline = "Tight connection — verify with airline";
+        // Also cap urgency for through-ticket connections
+        if (guidance.urgency === "critical") guidance.urgency = "warning";
+      } else {
+        guidance.headline = "Connection timing needs attention";
+      }
+    }
+
+    // Never mark through-ticket connections as critical solely for connection time
+    if (guidance.urgency === "critical" && isThroughTicket) {
+      const detailMentionsRebook = detailLower.includes("rebook") || detailLower.includes("contact airline");
+      if (detailMentionsRebook && !detailLower.includes("missed") && !detailLower.includes("cancelled")) {
+        guidance.urgency = "warning";
+        routeLogger.warn("Downgraded through-ticket critical to warning.", {});
+      }
     }
 
     routeLogger.info("Trip guidance response.", { userId: auth, urgency: guidance.urgency });
