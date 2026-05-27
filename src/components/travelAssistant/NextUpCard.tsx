@@ -100,14 +100,14 @@ function buildContextBlock(reservations: NextUpReservation[]): string {
   return upcoming.map((r) => {
     const resolvedProvider = r.provider && !EMAIL_PROVIDER_NAMES.has(r.provider.toLowerCase())
       ? r.provider : null;
+    const tz = (r as NextUpReservation & { timezone?: string }).timezone || "";
     const parts = [
       `type=${r.type}`,
       resolvedProvider ? `provider="${resolvedProvider}"` : null,
       r.flightNumber ? `flightNumber=${r.flightNumber}` : null,
-      // Use actual flight departure time if available, otherwise localTime
-      r.type === "flight" && (r as NextUpReservation & { flightDepartureTime?: string }).flightDepartureTime
-        ? `departureTime="${(r as NextUpReservation & { flightDepartureTime?: string }).flightDepartureTime}"`
-        : r.localTime ? `time="${r.localTime}"` : null,
+      // Always include timezone so AI never compares local times across zones without context
+      r.localTime ? `localTime="${r.localTime}"` : null,
+      tz ? `timezone="${tz}"` : null,
       r.flightDepartureAirport && r.flightArrivalAirport
         ? `route=${r.flightDepartureAirport}→${r.flightArrivalAirport}` : null,
       r.flightDepartureTime ? `departureTime="${r.flightDepartureTime}"` : null,
