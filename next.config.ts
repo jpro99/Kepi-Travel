@@ -1,3 +1,4 @@
+// build: invite-email-ui
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 import createBundleAnalyzer from "@next/bundle-analyzer";
