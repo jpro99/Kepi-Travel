@@ -120,7 +120,9 @@ export default async function RootLayout({
           }}
         />
         <link rel="manifest" href="/manifest.json" />
-        <meta name="vapid-public-key" content={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ""} />
+        {process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ? (
+          <meta name="vapid-public-key" content={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY} />
+        ) : null}
         <meta name="theme-color" content="#0ea5e9" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
