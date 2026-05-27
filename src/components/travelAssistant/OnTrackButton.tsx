@@ -8,6 +8,7 @@ interface OnTrackButtonProps {
     type: string;
     provider: string;
     localTime: string;
+    timezone?: string;
     location: string;
     flightDate?: string;
     flightNumber?: string;
@@ -30,45 +31,75 @@ type CheckState =
 
 const EMAIL_PROVIDERS = new Set(["gmail", "yahoo", "outlook", "hotmail", "icloud", "aol"]);
 
+function parseLocalMs(localTime: string): number {
+  const s = localTime.trim().replace("T", " ").slice(0, 16);
+  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(s);
+  if (!m) return Number.NaN;
+  return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime();
+}
+
+function toUtcMs(localTime: string, timezone: string): number {
+  const ms = parseLocalMs(localTime);
+  if (Number.isNaN(ms) || !timezone) return ms;
+  try {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    });
+    const parts = Object.fromEntries(formatter.formatToParts(new Date(ms)).map(p => [p.type, p.value]));
+    const tzDate = new Date(`${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:00Z`);
+    const offset = tzDate.getTime() - ms;
+    return ms - offset;
+  } catch {
+    return ms;
+  }
+}
+
+function utcLabel(localTime: string, timezone: string): string {
+  const utcMs = toUtcMs(localTime, timezone);
+  if (Number.isNaN(utcMs)) return "";
+  const d = new Date(utcMs);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;
+}
+
 function buildContext(reservations: OnTrackButtonProps["reservations"]): string {
   const getMs = (r: OnTrackButtonProps["reservations"][0]): number => {
-    if (r.type === "flight" && r.flightDate) {
-      const fd = Date.parse(r.flightDate + "T23:59:00");
-      if (!Number.isNaN(fd)) return fd;
-    }
-    const s = r.localTime.trim().replace("T", " ").slice(0, 16);
-    const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(s);
-    if (!m) return Number.NaN;
-    return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime();
+    return toUtcMs(r.localTime, r.timezone ?? "");
   };
 
-  return reservations
+  const sorted = reservations
     .filter((r) => {
       const ms = getMs(r);
       return !Number.isNaN(ms) && ms > Date.now() - 86_400_000;
     })
     .sort((a, b) => getMs(a) - getMs(b))
-    .slice(0, 8)
-    .map((r) => {
-      const rr = r;
-      const provider = r.provider && !EMAIL_PROVIDERS.has(r.provider.toLowerCase()) ? r.provider : null;
-      return [
-        `type=${r.type}`,
-        provider ? `provider="${provider}"` : null,
-        rr.flightDate ? `flightDate="${rr.flightDate}"` : `time="${r.localTime}"`,
-        r.flightNumber ? `flight=${r.flightNumber}` : null,
-        r.flightDepartureAirport && r.flightArrivalAirport
-          ? `route=${r.flightDepartureAirport}→${r.flightArrivalAirport}` : null,
-        r.flightDepartureTime ? `departureTime="${r.flightDepartureTime}"` : null,
-        r.flightArrivalTime ? `arrivalTime="${r.flightArrivalTime}"` : null,
-        r.location ? `location="${r.location}"` : null,
-        r.confirmationCode ? `conf=${r.confirmationCode}` : null,
-        r.checkOutDate ? `checkout=${r.checkOutDate}` : null,
-        r.notes ? `notes="${r.notes.slice(0, 120)}"` : null,
-      ].filter(Boolean).join(" ");
-    })
-    .map((parts) => `[${parts}]`)
-    .join("\n");
+    .slice(0, 8);
+
+  const lines = sorted.map((r, idx) => {
+    const provider = r.provider && !EMAIL_PROVIDERS.has(r.provider.toLowerCase()) ? r.provider : null;
+    const tz = r.timezone ?? "";
+    const utc = tz ? utcLabel(r.localTime, tz) : "";
+    return [
+      `seq=${idx + 1}`,
+      `type=${r.type}`,
+      provider ? `provider="${provider}"` : null,
+      r.flightNumber ? `flight=${r.flightNumber}` : null,
+      r.localTime ? `localTime="${r.localTime} (${tz || "unknown tz"})"` : null,
+      utc ? `utcTime="${utc}"` : null,
+      r.flightDepartureAirport && r.flightArrivalAirport
+        ? `route=${r.flightDepartureAirport}→${r.flightArrivalAirport}` : null,
+      r.flightDepartureTime ? `departureTime="${r.flightDepartureTime}"` : null,
+      r.flightArrivalTime ? `arrivalTime="${r.flightArrivalTime}"` : null,
+      r.location ? `location="${r.location}"` : null,
+      r.confirmationCode ? `conf=${r.confirmationCode}` : null,
+      r.checkOutDate ? `checkout=${r.checkOutDate}` : null,
+      r.notes ? `notes="${r.notes.slice(0, 120)}"` : null,
+    ].filter(Boolean).join(" ");
+  }).map(parts => `[${parts}]`);
+
+  return `RESERVATION SEQUENCE (sorted by UTC — use seq for order, utcTime for all time comparisons):\n${lines.join("\n")}`;
 }
 
 export function OnTrackButton({ reservations, tripName }: OnTrackButtonProps) {
@@ -84,6 +115,8 @@ export function OnTrackButton({ reservations, tripName }: OnTrackButtonProps) {
         body: JSON.stringify({
           tripName,
           nowIso: new Date().toISOString(),
+          userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          userLocalTime: new Date().toLocaleString("en-US", { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, hour12: false }),
           reservationContext: buildContext(reservations),
           mode: "on-track-check",
         }),
