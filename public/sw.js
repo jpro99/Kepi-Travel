@@ -1,4 +1,4 @@
-const CACHE_VERSION = "kepi-pwa-v1";
+const CACHE_VERSION = "kepi-pwa-v3";
 const APP_SHELL_CACHE = `${CACHE_VERSION}-app-shell`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
@@ -51,6 +51,24 @@ self.addEventListener("activate", (event) => {
       await self.clients.claim();
     })(),
   );
+});
+
+// Allow app to trigger a full cache clear (e.g. from Settings button)
+self.addEventListener("message", (event) => {
+  if (event.data === "CLEAR_ALL_CACHES") {
+    event.waitUntil(
+      caches.keys().then((keys) =>
+        Promise.all(keys.map((k) => caches.delete(k)))
+      ).then(() => {
+        self.clients.matchAll().then((clients) =>
+          clients.forEach((c) => c.postMessage("CACHES_CLEARED"))
+        );
+      })
+    );
+  }
+  if (event.data === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("fetch", (event) => {
