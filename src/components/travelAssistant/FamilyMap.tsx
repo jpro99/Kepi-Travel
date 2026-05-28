@@ -137,12 +137,6 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
 
     void (async () => {
       try {
-        const styleUrl = `https://api.maptiler.com/maps/streets-v2/style.json?key=${encodeURIComponent(maptilerKey)}`;
-
-        // No pre-validation fetch — it runs without Origin header and gets 403
-        // MapLibre fetches style directly from the browser WITH Origin header
-        // so it works correctly. Let MapLibre handle any key errors itself.
-
         if (cancelled || !mapEl.current) return;
 
         const ml = await import("maplibre-gl");
@@ -157,14 +151,41 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
           : [-118.2437, 34.0522];
         const zoom = knownLocs.length === 1 ? 14 : knownLocs.length > 1 ? 10 : 4;
 
-        const styleUrl2 = styleUrl;
+        // Inline raster style for Streets — tiles load as <img> fetches, no web-worker
+        // XHR needed. This is the same mechanism satellite uses. MapTiler serves 512px
+        // PNG streets tiles up to zoom 20.
+        const key = encodeURIComponent(maptilerKey);
+        const streetsRasterStyle = {
+          version: 8 as const,
+          sources: {
+            "streets-raster": {
+              type: "raster" as const,
+              tiles: [`https://api.maptiler.com/maps/streets/{z}/{x}/{y}.png?key=${key}`],
+              tileSize: 512,
+              maxzoom: 20,
+              attribution: "© MapTiler © OpenStreetMap contributors",
+            },
+          },
+          layers: [
+            {
+              id: "streets-raster-layer",
+              type: "raster" as const,
+              source: "streets-raster",
+              minzoom: 0,
+              maxzoom: 22,
+            },
+          ],
+        };
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const map = new (ml as any).Map({
           container: mapEl.current,
-          style: styleUrl2,
+          style: streetsRasterStyle,
           center,
           zoom,
+          maxZoom: 20,
+          // Match device pixel ratio so tiles render crisp on retina/high-DPI screens
+          pixelRatio: typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 1,
           attributionControl: false,
         });
 
@@ -243,13 +264,35 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
     if (mapRef.current && isLoaded) placeMarkers(mapRef.current);
   }, [placeMarkers, isLoaded]);
 
-  // Satellite toggle
+  // Satellite toggle — both styles are raster so no worker XHR needed
   useEffect(() => {
     if (!mapRef.current || !maptilerKey || !isLoaded) return;
-    const style = satellite
-      ? `https://api.maptiler.com/maps/hybrid/style.json?key=${encodeURIComponent(maptilerKey)}`
-      : `https://api.maptiler.com/maps/streets-v2/style.json?key=${encodeURIComponent(maptilerKey)}`;
-    mapRef.current.setStyle(style);
+    const key = encodeURIComponent(maptilerKey);
+    // Satellite: use MapTiler hybrid style.json (raster, already works)
+    // Streets: inline raster style object (same as init — avoids worker XHR)
+    const satelliteStyle = `https://api.maptiler.com/maps/hybrid/style.json?key=${key}`;
+    const streetsStyle = {
+      version: 8 as const,
+      sources: {
+        "streets-raster": {
+          type: "raster" as const,
+          tiles: [`https://api.maptiler.com/maps/streets/{z}/{x}/{y}.png?key=${key}`],
+          tileSize: 512,
+          maxzoom: 20,
+          attribution: "© MapTiler © OpenStreetMap contributors",
+        },
+      },
+      layers: [
+        {
+          id: "streets-raster-layer",
+          type: "raster" as const,
+          source: "streets-raster",
+          minzoom: 0,
+          maxzoom: 22,
+        },
+      ],
+    };
+    mapRef.current.setStyle(satellite ? satelliteStyle : streetsStyle);
     mapRef.current.once("styledata", () => {
       if (mapRef.current) placeMarkers(mapRef.current);
     });
