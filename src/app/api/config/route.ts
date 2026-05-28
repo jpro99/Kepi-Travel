@@ -5,12 +5,22 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  // Return map key server-side — works regardless of NEXT_PUBLIC_ build-time baking
-  // MapTiler keys are inherently public (appear in every tile request URL)
+  // Try every possible env var name the user might have set
   const maptilerKey =
-    process.env.NEXT_PUBLIC_MAPTILER_KEY ??
-    process.env.MAPTILER_KEY ??
+    process.env.NEXT_PUBLIC_MAPTILER_KEY ||
+    process.env.MAPTILER_KEY ||
+    process.env.NEXT_PUBLIC_MAPLIBRE_KEY ||
+    process.env.MAPTILER_API_KEY ||
     "";
 
-  return NextResponse.json({ maptilerKey });
+  return NextResponse.json(
+    { maptilerKey },
+    {
+      headers: {
+        // Never cache — must always be fresh so key changes take effect immediately
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+        "Pragma": "no-cache",
+      },
+    }
+  );
 }
