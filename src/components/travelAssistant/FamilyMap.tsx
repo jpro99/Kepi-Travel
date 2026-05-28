@@ -48,27 +48,26 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
   const [fullscreen, setFullscreen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [keyStatus, setKeyStatus] = useState<"unchecked" | "valid" | "invalid">("unchecked");
   const [ready, setReady] = useState(false);
+  const activeKeyRef = useRef<string>("");
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const createPinEl = useCallback((member: FamilyMember, loc: LocationPoint): HTMLElement => {
     const stale = isStale(loc.updatedAt);
     const wrap = document.createElement("div");
     wrap.style.cssText = "cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;";
-
     const av = document.createElement("div");
     av.style.cssText = `width:46px;height:46px;border-radius:50%;background:${stale ? "#64748b" : member.color};border:3px solid white;box-shadow:0 2px 10px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:800;color:white;font-family:system-ui,sans-serif;position:relative;`;
     av.textContent = member.name.charAt(0).toUpperCase();
-
     if (!stale) {
       const ring = document.createElement("div");
       ring.style.cssText = `position:absolute;inset:-6px;border-radius:50%;border:2px solid ${member.color};animation:kpulse 2s ease-out infinite;`;
       av.appendChild(ring);
     }
-
     const lbl = document.createElement("div");
     lbl.style.cssText = "background:white;border-radius:6px;padding:2px 7px;font-size:11px;font-weight:700;color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,0.15);white-space:nowrap;max-width:80px;overflow:hidden;text-overflow:ellipsis;";
     lbl.textContent = member.name;
-
     wrap.appendChild(av);
     wrap.appendChild(lbl);
     wrap.addEventListener("click", () => {
@@ -78,8 +77,9 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
     return wrap;
   }, [onMemberClick]);
 
-  const syncMarkers = useCallback(async () => {
-    if (!mapRef.current || !ready) return;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const syncMarkers = useCallback(async (map: any) => {
+    if (!map || !ready) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ml = await import("maplibre-gl") as any;
     markersRef.current.forEach((m: any) => m.remove());
@@ -88,85 +88,125 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
       const loc = locations[member.id];
       if (!loc) return;
       const el = createPinEl(member, loc);
-      const marker = new ml.Marker({ element: el, anchor: "bottom" })
+      new ml.Marker({ element: el, anchor: "bottom" })
         .setLngLat([loc.lon, loc.lat])
-        .addTo(mapRef.current);
-      markersRef.current.set(member.id, marker);
+        .addTo(map);
+      markersRef.current.set(member.id, map);
     });
   }, [members, locations, createPinEl, ready]);
 
-  // Init map - single instance, never move it
-  useEffect(() => {
+  const initMap = useCallback(async (key: string) => {
     const el = mapEl.current;
-    if (!el || mapRef.current) return;
-    // Allow empty string key - just try and show error if it fails
-    let cancelled = false;
+    if (!el) return;
 
-    void (async () => {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const ml = await import("maplibre-gl") as any;
-        if (cancelled || !mapEl.current) return;
-
-        const knownLocs = members.map(m => locations[m.id]).filter(Boolean);
-        const center: [number, number] = knownLocs.length > 0
-          ? [knownLocs.reduce((s: number, l: any) => s + l.lon, 0) / knownLocs.length,
-             knownLocs.reduce((s: number, l: any) => s + l.lat, 0) / knownLocs.length]
-          : [-118.2437, 34.0522];
-        const zoom = knownLocs.length === 1 ? 14 : knownLocs.length > 1 ? 10 : 4;
-
-        const styleUrl = maptilerKey
-          ? `https://api.maptiler.com/maps/streets-v2/style.json?key=${encodeURIComponent(maptilerKey)}`
-          : "https://demotiles.maplibre.org/style.json"; // free fallback
-
-        const map = new ml.Map({
-          container: mapEl.current,
-          style: styleUrl,
-          center,
-          zoom,
-          attributionControl: false,
-        });
-
-        map.addControl(new ml.NavigationControl({ showCompass: false }), "top-right");
-        map.addControl(new ml.AttributionControl({ compact: true }), "bottom-right");
-
-        map.on("load", () => {
-          if (!cancelled) { setReady(true); setMapError(null); }
-        });
-
-        map.on("error", (e: any) => {
-          const msg = String(e?.error?.message ?? e?.message ?? "");
-          if (msg.includes("401") || msg.includes("403") || msg.includes("Unauthorized")) {
-            setMapError("Map tiles failed to load — check NEXT_PUBLIC_MAPTILER_KEY in Vercel env vars.");
-          }
-        });
-
-        mapRef.current = map;
-      } catch (err) {
-        setMapError(`Map init failed: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      mapRef.current?.remove();
+    // Destroy old map instance if key changed
+    if (mapRef.current) {
+      mapRef.current.remove();
       mapRef.current = null;
       setReady(false);
+    }
+
+    setMapError(null);
+    activeKeyRef.current = key;
+
+    try {
+      // Pre-validate key by fetching style.json first (same as working VeniceMapClient)
+      const styleUrl = key
+        ? `https://api.maptiler.com/maps/streets-v2/style.json?key=${encodeURIComponent(key)}`
+        : "https://demotiles.maplibre.org/style.json";
+
+      if (key) {
+        const check = await fetch(styleUrl, { method: "GET", mode: "cors", cache: "no-store" });
+        if (!check.ok) {
+          setKeyStatus("invalid");
+          setMapError(
+            `Map key rejected (HTTP ${check.status}). ` +
+            (check.status === 401 || check.status === 403
+              ? "Go to cloud.maptiler.com → API Keys → edit key → remove any domain restrictions so kepitravel.com can access it. Then redeploy in Vercel."
+              : `Unexpected error from MapTiler.`)
+          );
+          return;
+        }
+        setKeyStatus("valid");
+      }
+
+      // Key is valid — build the map
+      if (activeKeyRef.current !== key) return; // key changed while we were fetching
+      if (!mapEl.current) return;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ml = await import("maplibre-gl") as any;
+      if (activeKeyRef.current !== key || !mapEl.current) return;
+
+      const knownLocs = members.map(m => locations[m.id]).filter(Boolean) as LocationPoint[];
+      const center: [number, number] = knownLocs.length > 0
+        ? [knownLocs.reduce((s, l) => s + l.lon, 0) / knownLocs.length,
+           knownLocs.reduce((s, l) => s + l.lat, 0) / knownLocs.length]
+        : [-118.2437, 34.0522];
+      const zoom = knownLocs.length === 1 ? 14 : knownLocs.length > 1 ? 10 : 4;
+
+      const map = new ml.Map({
+        container: mapEl.current,
+        style: styleUrl,
+        center,
+        zoom,
+        attributionControl: false,
+      });
+
+      map.addControl(new ml.NavigationControl({ showCompass: false }), "top-right");
+      map.addControl(new ml.AttributionControl({ compact: true }), "bottom-right");
+
+      map.on("load", () => {
+        if (activeKeyRef.current === key) {
+          setReady(true);
+          setMapError(null);
+          void syncMarkers(map);
+        }
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      map.on("error", (e: any) => {
+        const msg = String(e?.error?.message ?? e?.message ?? "");
+        if (msg && !msg.includes("abort") && !msg.includes("cancel")) {
+          console.error("[FamilyMap] MapLibre error:", msg);
+        }
+      });
+
+      mapRef.current = map;
+    } catch (err) {
+      setMapError(`Map failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, [members, locations, syncMarkers]);
+
+  // Re-init map when key changes
+  useEffect(() => {
+    void initMap(maptilerKey);
+    return () => {
+      activeKeyRef.current = "";
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+        setReady(false);
+      }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // init once only
+  }, [maptilerKey]); // re-init when key changes
 
-  // Sync markers after load and when locations change
-  useEffect(() => { void syncMarkers(); }, [syncMarkers]);
+  // Sync markers when locations change
+  useEffect(() => {
+    if (mapRef.current && ready) void syncMarkers(mapRef.current);
+  }, [syncMarkers, ready]);
 
-  // Satellite
+  // Satellite toggle
   useEffect(() => {
     if (!mapRef.current || !maptilerKey || !ready) return;
     const style = satellite
       ? `https://api.maptiler.com/maps/hybrid/style.json?key=${encodeURIComponent(maptilerKey)}`
       : `https://api.maptiler.com/maps/streets-v2/style.json?key=${encodeURIComponent(maptilerKey)}`;
     mapRef.current.setStyle(style);
-    mapRef.current.once("styledata", () => { void syncMarkers(); });
+    mapRef.current.once("styledata", () => {
+      if (mapRef.current) void syncMarkers(mapRef.current);
+    });
   }, [satellite, maptilerKey, syncMarkers, ready]);
 
   // Resize when fullscreen changes
@@ -189,35 +229,49 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
 
   const selMember = selected ? members.find(m => m.id === selected) : null;
   const selLoc = selected ? locations[selected] : null;
-
   const mapH = fullscreen ? "100dvh" : height;
 
   return (
     <>
       <style>{`@keyframes kpulse{0%{transform:scale(0.9);opacity:0.7}100%{transform:scale(1.9);opacity:0}}`}</style>
 
-      {/* Single map container - changes height for fullscreen */}
       <div
         className={fullscreen ? "fixed inset-0 z-[9000]" : "relative w-full"}
         style={{ height: mapH }}
       >
-        {/* The actual map div */}
-        <div
-          ref={mapEl}
-          className="absolute inset-0"
-          style={{ width: "100%", height: "100%" }}
-        />
+        <div ref={mapEl} className="absolute inset-0" style={{ width: "100%", height: "100%" }} />
 
-        {/* Error overlay */}
+        {/* Error overlay with actionable message */}
         {mapError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-slate-900/80 p-4 text-center z-10">
-            <p className="text-xs text-red-300 max-w-xs">{mapError}</p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/90 p-5 text-center z-10 gap-3">
+            <span className="text-3xl">🗺</span>
+            <p className="text-sm text-red-300 max-w-xs leading-relaxed">{mapError}</p>
+            {keyStatus === "invalid" && (
+              <a
+                href="https://cloud.maptiler.com/account/keys"
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-xl bg-sky-600 px-4 py-2 text-xs font-bold text-white"
+              >
+                Open MapTiler Keys →
+              </a>
+            )}
+          </div>
+        )}
+
+        {/* Loading state */}
+        {!mapError && !ready && (
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-900/60 z-10">
+            <div className="flex flex-col items-center gap-2">
+              <div className="h-8 w-8 rounded-full border-2 border-sky-500 border-t-transparent animate-spin" />
+              <p className="text-xs text-slate-400">Loading map...</p>
+            </div>
           </div>
         )}
 
         {/* Controls */}
         <div className="absolute top-3 left-3 z-10 flex flex-col gap-1.5">
-          {maptilerKey && (
+          {maptilerKey && keyStatus !== "invalid" && (
             <button
               type="button"
               onClick={() => setSatellite(v => !v)}
@@ -259,7 +313,6 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
         )}
       </div>
 
-      {/* Spacer so page doesn't collapse when fullscreen */}
       {fullscreen && <div style={{ height: 300 }} />}
     </>
   );
