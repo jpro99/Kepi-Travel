@@ -81,6 +81,7 @@ import { TripOrientationCard } from "@/components/travelAssistant/TripOrientatio
 import { DocumentVault } from "@/components/travelAssistant/DocumentVault";
 import { PackingList } from "@/components/travelAssistant/PackingList";
 import { ShareTripCard } from "@/components/travelAssistant/ShareTripCard";
+import { TravelDayView } from "@/components/travelAssistant/TravelDayView";
 import { ShareModal } from "@/components/travelAssistant/ShareModal";
 import { ReferralCard } from "@/components/referral/ReferralCard";
 import { WeatherCard } from "@/components/travelAssistant/WeatherCard";
@@ -1760,6 +1761,9 @@ export default function TravelAssistantPage() {
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [manualReservationModalOpen, setManualReservationModalOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [travelDayOpen, setTravelDayOpen] = useState(false);
+  // Reset transport choice when active trip changes so it's asked each departure
+  const lastTripIdRef = require("react").useRef<string | null>(null);
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushMessage, setPushMessage] = useState<string | null>(null);
@@ -6613,6 +6617,20 @@ export default function TravelAssistantPage() {
                 reservations={consumerReservationsSorted}
                 tripName={activeTrip?.name ?? "Your trip"}
               />
+              {tripDaysAway !== null && tripDaysAway <= 1 && (
+                <button
+                  type="button"
+                  onClick={() => setTravelDayOpen(true)}
+                  className="w-full rounded-2xl bg-gradient-to-r from-[#0c2461] via-[#1a56b0] to-[#0ea5e9] px-4 py-3.5 text-left shadow-lg shadow-blue-900/40 transition"
+                >
+                  <p className="text-xs font-bold uppercase tracking-widest text-sky-200">Today&apos;s travel plan</p>
+                  <div className="mt-1 flex items-center justify-between">
+                    <p className="text-lg font-bold text-white">Travel Day →</p>
+                    <span className="text-2xl">✈️</span>
+                  </div>
+                  <p className="text-xs text-sky-100 mt-0.5">Timeline · Leave by time · What to expect</p>
+                </button>
+              )}
 
               <GapAlerts
                 reservations={consumerReservationsSorted}
@@ -7750,6 +7768,37 @@ export default function TravelAssistantPage() {
           currentPlan={billingStatusPlan}
           onClose={closeUpgradeModal}
         />
+        {travelDayOpen && reservations.length > 0 && (
+          <TravelDayView
+            flights={reservations
+              .filter(r => r.type === "flight")
+              .sort((a, b) => {
+                const aMs = Date.parse((a as Record<string,unknown>).localTime as string ?? "");
+                const bMs = Date.parse((b as Record<string,unknown>).localTime as string ?? "");
+                return aMs - bMs;
+              })
+              .map(r => ({
+                id: r.id,
+                flightNumber: (r as Record<string,unknown>).flightNumber as string | undefined,
+                flightAirline: (r as Record<string,unknown>).flightAirline as string | undefined,
+                flightDepartureAirport: (r as Record<string,unknown>).flightDepartureAirport as string | undefined,
+                flightArrivalAirport: (r as Record<string,unknown>).flightArrivalAirport as string | undefined,
+                localTime: (r as Record<string,unknown>).localTime as string,
+                timezone: (r as Record<string,unknown>).timezone as string | undefined,
+                flightArrivalTime: (r as Record<string,unknown>).flightArrivalTime as string | undefined,
+                confirmationCode: (r as Record<string,unknown>).confirmationCode as string | undefined,
+                provider: (r as Record<string,unknown>).provider as string | undefined,
+              }))}
+            departureDate={activeTrip?.startDate ?? new Date().toISOString().slice(0, 10)}
+            tripName={activeTrip?.name ?? "My Trip"}
+            transport={airportTransportChoice}
+            onTransportChange={(t) => {
+              setAirportTransportChoice(t);
+              queueMutation("Airport transport updated.");
+            }}
+            onClose={() => setTravelDayOpen(false)}
+          />
+        )}
         {shareModalOpen && (
           <ShareModal
             open={shareModalOpen}
