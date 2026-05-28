@@ -5,7 +5,7 @@
   "scripts": {
     "postinstall": "patch-package && node scripts/patch-maplibre-dist.cjs && node scripts/copy-maplibre-worker.cjs",
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/copy-maplibre-worker.cjs && next build",
     "analyze": "ANALYZE=true npm run build",
     "start": "next start",
     "lint": "eslint",

@@ -42,6 +42,8 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
   const mapEl = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
+  // Ref-based loaded flag so the error handler closure always sees the current value
+  const isLoadedRef = useRef(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [satellite, setSatellite] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -120,6 +122,7 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
     if (!el) return;
 
     let cancelled = false;
+    isLoadedRef.current = false;
     setIsLoaded(false);
     setIsError(false);
     setStatusMsg("Loading map...");
@@ -174,6 +177,7 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
         // This is more reliable than "load" which waits for all tiles to render
         map.on("style.load", () => {
           if (cancelled) return;
+          isLoadedRef.current = true;
           setIsLoaded(true);
           setIsError(false);
           setStatusMsg("");
@@ -183,6 +187,7 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
         // Also handle "load" as a fallback (fires after tiles)
         map.on("load", () => {
           if (cancelled) return;
+          isLoadedRef.current = true;
           setIsLoaded(true);
           setIsError(false);
         });
@@ -194,11 +199,16 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
           placeMarkers(map);
         });
 
-        // Show ALL MapLibre errors on screen so we can diagnose what's blocking streets
+        // Show MapLibre errors on screen — BUT only for critical init failures.
+        // Tile-level fetch errors (status 0 / AJAXError) after the map has already
+        // loaded are transient network blips; showing the overlay would clobber a
+        // working map. Only show the overlay if the map hasn't loaded yet.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         map.on("error", (e: any) => {
           const msg = String(e?.error?.message ?? e?.error?.statusCode ?? e?.message ?? "unknown error");
           console.warn("[FamilyMap]", msg, e);
+          // Post-load tile errors (AJAXError / Failed to fetch) are non-fatal — log only
+          if (isLoadedRef.current) return;
           if (!cancelled) {
             setIsError(true);
             setStatusMsg(`Map error: ${msg}`);
@@ -222,6 +232,7 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
         mapRef.current.remove();
         mapRef.current = null;
       }
+      isLoadedRef.current = false;
       setIsLoaded(false);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
