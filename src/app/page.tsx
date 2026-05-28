@@ -201,12 +201,12 @@ export default async function Home() {
                     }
                   }}
                 />
-                <a
+                <Link
                   href="/sign-up"
                   className="rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-sky-500"
                 >
                   Join →
-                </a>
+                </Link>
               </div>
               <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                 Kepi is currently invite-only. Get a code from someone already using the app.
@@ -418,7 +418,7 @@ export default async function Home() {
               @kepitravel
             </a>
           </nav>
-          <p className="text-sm text-slate-500 dark:text-slate-400">© 2026 Kepi Travel · Built for travelers who can't afford a miss</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">&copy; 2026 Kepi Travel &middot; Built for travelers who can&apos;t afford a miss</p>
         </div>
       </footer>
     </main>
