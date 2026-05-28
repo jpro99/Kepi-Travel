@@ -1,4 +1,4 @@
-const CACHE_VERSION = "kepi-pwa-v3";
+const CACHE_VERSION = "kepi-pwa-v4";
 const APP_SHELL_CACHE = `${CACHE_VERSION}-app-shell`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
@@ -83,6 +83,11 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (isApiRequest(url)) {
+    // Never cache /api/config — it contains the map key which must always be fresh
+    if (url.pathname === "/api/config") {
+      event.respondWith(fetch(request));
+      return;
+    }
     event.respondWith(
       (async () => {
         const cache = await caches.open(API_CACHE);
