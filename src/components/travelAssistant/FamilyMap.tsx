@@ -160,7 +160,8 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
           sources: {
             "streets-raster": {
               type: "raster" as const,
-              tiles: [`https://api.maptiler.com/maps/streets/{z}/{x}/{y}.png?key=${key}`],
+              // @2x tiles = actual 512px PNGs — matches tileSize:512 exactly, no stretching
+              tiles: [`https://api.maptiler.com/maps/streets/{z}/{x}/{y}@2x.png?key=${key}`],
               tileSize: 512,
               maxzoom: 20,
               attribution: "© MapTiler © OpenStreetMap contributors",
@@ -270,13 +271,36 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
     const key = encodeURIComponent(maptilerKey);
     // Satellite: use MapTiler hybrid style.json (raster, already works)
     // Streets: inline raster style object (same as init — avoids worker XHR)
-    const satelliteStyle = `https://api.maptiler.com/maps/hybrid/style.json?key=${key}`;
+    // Both styles use @2x raster tiles (actual 512px images, no stretching)
+    const satelliteStyle = {
+      version: 8 as const,
+      sources: {
+        "satellite-raster": {
+          type: "raster" as const,
+          // @2x JPG = 512px satellite tiles — sharp on retina/high-DPI screens
+          tiles: [`https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}@2x.jpg?key=${key}`],
+          tileSize: 512,
+          maxzoom: 20,
+          attribution: "© MapTiler © OpenStreetMap contributors",
+        },
+      },
+      layers: [
+        {
+          id: "satellite-raster-layer",
+          type: "raster" as const,
+          source: "satellite-raster",
+          minzoom: 0,
+          maxzoom: 22,
+        },
+      ],
+    };
     const streetsStyle = {
       version: 8 as const,
       sources: {
         "streets-raster": {
           type: "raster" as const,
-          tiles: [`https://api.maptiler.com/maps/streets/{z}/{x}/{y}.png?key=${key}`],
+          // @2x PNG = 512px street tiles — sharp on retina/high-DPI screens
+          tiles: [`https://api.maptiler.com/maps/streets/{z}/{x}/{y}@2x.png?key=${key}`],
           tileSize: 512,
           maxzoom: 20,
           attribution: "© MapTiler © OpenStreetMap contributors",
