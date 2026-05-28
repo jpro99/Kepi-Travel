@@ -195,7 +195,24 @@ function ReservationCard({
                 <p className={`text-3xl font-black tracking-tight ${isPast ? "text-slate-400 dark:text-slate-500" : "text-slate-900 dark:text-slate-100"}`}>
                   {reservation.flightArrivalAirport || "ARR"}
                 </p>
-                <p className="mt-0.5 text-xs text-slate-400">{formatTime(reservation.flightArrivalTime ?? "")}</p>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  {(() => {
+                    const arrTime = reservation.flightArrivalTime ?? "";
+                    if (!arrTime) return "";
+                    const timeStr = formatTime(arrTime);
+                    const arrDate = arrTime.trim().slice(0, 10);
+                    const depDate = (reservation.flightDepartureTime ?? reservation.localTime ?? "").trim().slice(0, 10);
+                    if (arrDate && depDate && arrDate > depDate) {
+                      const diff = Math.round((Date.parse(arrDate + "T12:00:00") - Date.parse(depDate + "T12:00:00")) / 86_400_000);
+                      return `${timeStr} (+${diff}d)`;
+                    }
+                    if (arrDate && arrDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                      const d = new Date(arrDate + "T12:00:00");
+                      return `${timeStr} · ${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+                    }
+                    return timeStr;
+                  })()}
+                </p>
               </div>
             </div>
             <div className="mt-3 flex items-center justify-between gap-2 rounded-xl bg-white/5 px-3 py-2">
