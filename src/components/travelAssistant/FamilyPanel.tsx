@@ -329,8 +329,6 @@ export function FamilyPanel({ isPremium, onUpgrade, maptilerKey }: FamilyPanelPr
             members={group?.members ?? []}
             locations={locations}
             maptilerKey={maptilerKey ?? ""}
-            fullscreen={mapFullscreen}
-            onFullscreenToggle={() => setMapFullscreen(v => !v)}
             onMemberClick={setSelectedMemberId}
           />
         </Suspense>
