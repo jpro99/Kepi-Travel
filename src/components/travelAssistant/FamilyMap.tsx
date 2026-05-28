@@ -134,9 +134,7 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
 
     void (async () => {
       try {
-        const styleUrl = maptilerKey
-          ? `https://api.maptiler.com/maps/streets-v2/style.json?key=${encodeURIComponent(maptilerKey)}`
-          : "https://demotiles.maplibre.org/style.json";
+        const styleUrl = `https://api.maptiler.com/maps/streets-v2/style.json?key=${encodeURIComponent(maptilerKey)}`;
 
         // No pre-validation fetch — it runs without Origin header and gets 403
         // MapLibre fetches style directly from the browser WITH Origin header
@@ -156,9 +154,7 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
           : [-118.2437, 34.0522];
         const zoom = knownLocs.length === 1 ? 14 : knownLocs.length > 1 ? 10 : 4;
 
-        const styleUrl2 = maptilerKey
-          ? `https://api.maptiler.com/maps/streets-v2/style.json?key=${encodeURIComponent(maptilerKey)}`
-          : "https://demotiles.maplibre.org/style.json";
+        const styleUrl2 = styleUrl;
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const map = new (ml as any).Map({
