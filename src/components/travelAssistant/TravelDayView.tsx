@@ -13,6 +13,7 @@ interface TravelFlight {
   localTime: string;
   timezone?: string;
   flightArrivalTime?: string;
+  flightArrivalTimezone?: string;
   confirmationCode?: string;
   provider?: string;
 }
@@ -40,28 +41,47 @@ const TRANSPORT_OPTIONS: Array<{
 
 const US_POE = ["HNL","LAX","SFO","JFK","SEA","ORD","MIA","DFW","IAH","BOS","ATL","EWR","LAS","PHX","MSP"];
 
-function parseMinutes(localTime: string): number {
-  const t = localTime.trim().replace("T", " ").slice(11, 16);
-  const [h, m] = t.split(":").map(Number);
-  return (h ?? 0) * 60 + (m ?? 0);
+/** Parse "YYYY-MM-DD HH:MM" as UTC ms (date-aware, not just time-of-day) */
+function parseUtcMs(localTime: string, timezone?: string): number {
+  const s = localTime.trim().replace("T", " ").slice(0, 16); // "YYYY-MM-DD HH:MM"
+  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(s);
+  if (!m) return NaN;
+  // Use Date.UTC to avoid browser timezone pollution
+  const approxUtc = Date.UTC(+m[1], +m[2]-1, +m[3], +m[4], +m[5]);
+  if (!timezone) return approxUtc;
+  try {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone, year: "numeric", month: "2-digit",
+      day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false,
+    });
+    const parts = Object.fromEntries(formatter.formatToParts(new Date(approxUtc)).map(p => [p.type, p.value]));
+    const tzAsUtc = Date.UTC(+parts.year, +parts.month-1, +parts.day, +parts.hour, +parts.minute);
+    return approxUtc - (tzAsUtc - approxUtc);
+  } catch { return approxUtc; }
 }
 
-function fmt(min: number): string {
-  const norm = ((min % 1440) + 1440) % 1440;
-  const h = Math.floor(norm / 60);
-  const m = norm % 60;
+/** Format a UTC ms timestamp as local time HH:MM AM/PM */
+function fmtMs(utcMs: number, timezone?: string): string {
+  const tz = timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const d = new Date(utcMs);
+  const h = parseInt(new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", hour12: false }).format(d));
+  const min = parseInt(new Intl.DateTimeFormat("en-US", { timeZone: tz, minute: "2-digit" }).format(d));
   const ampm = h >= 12 ? "PM" : "AM";
-  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ampm}`;
+  return `${h % 12 || 12}:${String(min).padStart(2, "0")} ${ampm}`;
 }
 
-function fmtDiff(min: number): string {
+/** Format ms offset as "Xh Ym" */
+function fmtDiff(ms: number): string {
+  const min = Math.round(ms / 60_000);
   if (min < 60) return `${min}m`;
-  return `${Math.floor(min / 60)}h ${min % 60 > 0 ? `${min % 60}m` : ""}`.trim();
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
-function nowMinutes(): number {
-  const d = new Date();
-  return d.getHours() * 60 + d.getMinutes();
+/** Subtract minutes from a UTC ms timestamp */
+function subMin(utcMs: number, minutes: number): number {
+  return utcMs - minutes * 60_000;
 }
 
 type ReadinessStatus = "green" | "yellow" | "red";
@@ -87,17 +107,20 @@ export function TravelDayView({
   hotelCheckout, onTransportChange, onClose
 }: TravelDayViewProps) {
   const [askTransport, setAskTransport] = useState(!transport);
-  const [now, setNow] = useState(nowMinutes());
+  const [nowMs, setNowMs] = useState(Date.now());
 
-  // Update "now" every minute
+  // Update every minute
   useEffect(() => {
-    const t = setInterval(() => setNow(nowMinutes()), 60_000);
+    const t = setInterval(() => setNowMs(Date.now()), 60_000);
     return () => clearInterval(t);
   }, []);
 
   const transportOpt = TRANSPORT_OPTIONS.find(o => o.value === transport) ?? TRANSPORT_OPTIONS[0];
 
-  const firstFlight = flights.sort((a, b) => parseMinutes(a.localTime) - parseMinutes(b.localTime))[0];
+  const sortedFlights = [...flights].sort((a, b) => 
+    parseUtcMs(a.localTime, a.timezone) - parseUtcMs(b.localTime, b.timezone)
+  );
+  const firstFlight = sortedFlights[0];
   if (!firstFlight && !askTransport) {
     return (
       <div className="fixed inset-0 z-[8000] bg-slate-950 flex items-center justify-center">
@@ -106,57 +129,57 @@ export function TravelDayView({
     );
   }
 
-  const deptMin = firstFlight ? parseMinutes(firstFlight.localTime) : 0;
+  const deptMs = firstFlight ? parseUtcMs(firstFlight.localTime, firstFlight.timezone) : nowMs + 86_400_000;
+  const deptTz = firstFlight?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const isIntl = flights.some(f =>
     f.flightDepartureAirport && !["ONT","LAX","SFO","JFK","SEA","ORD","MIA","DFW","IAH","LAS","PHX","ATL","DEN","MSP","BOS","EWR"].includes(f.flightDepartureAirport)
   );
-  const airportCutoff = isIntl ? 180 : 90; // min before departure to arrive airport
-  const arriveAirportMin = deptMin - airportCutoff;
-  const leaveHotelMin = arriveAirportMin - transportOpt.driveMin - transportOpt.leadTime;
+  const airportCutoffMs = (isIntl ? 180 : 90) * 60_000;
+  const arriveAirportMs = deptMs - airportCutoffMs;
+  const leaveHotelMs = arriveAirportMs - transportOpt.driveMin * 60_000 - transportOpt.leadTime * 60_000;
 
-  // Hotel checkout
-  const checkoutMin = hotelCheckout ? (() => {
+  // Hotel checkout - treat as today's date with given HH:MM
+  const checkoutMs = hotelCheckout ? (() => {
     const parts = hotelCheckout.split(":");
-    return parseInt(parts[0] ?? "12") * 60 + parseInt(parts[1] ?? "0");
+    const h = parseInt(parts[0] ?? "12");
+    const m = parseInt(parts[1] ?? "0");
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    return d.getTime();
   })() : null;
-  const mustLeaveForCheckout = checkoutMin ?? null;
 
-  // Effective leave time
-  const effectiveLeaveMin = mustLeaveForCheckout
-    ? Math.min(leaveHotelMin, mustLeaveForCheckout)
-    : leaveHotelMin;
+  const effectiveLeaveMs = checkoutMs ? Math.min(leaveHotelMs, checkoutMs) : leaveHotelMs;
+  const msUntilLeave = effectiveLeaveMs - nowMs;
+  const msUntilFlight = deptMs - nowMs;
 
-  const minUntilLeave = effectiveLeaveMin - now;
-  const minUntilFlight = deptMin - now;
-
-  // Confidence score: what % of time buffer remains
-  const totalBuffer = deptMin - airportCutoff - transportOpt.driveMin - now;
-  const confidence = Math.max(0, Math.min(100, Math.round((totalBuffer / 60) * 20 + 50)));
+  // Confidence score
+  const totalBufferMs = deptMs - airportCutoffMs - transportOpt.driveMin * 60_000 - nowMs;
+  const confidence = Math.max(0, Math.min(100, Math.round((totalBufferMs / 3_600_000) * 20 + 50)));
   const confidenceStatus: ReadinessStatus = confidence >= 75 ? "green" : confidence >= 50 ? "yellow" : "red";
 
   // Readiness items
   const readinessItems: ReadinessItem[] = [
     {
       label: "Departure timing",
-      status: minUntilLeave > 90 ? "green" : minUntilLeave > 30 ? "yellow" : "red",
-      detail: minUntilLeave > 0
-        ? `Leave in ${fmtDiff(minUntilLeave)} — ${fmt(effectiveLeaveMin)}`
+      status: msUntilLeave > 90 * 60_000 ? "green" : msUntilLeave > 30 * 60_000 ? "yellow" : "red",
+      detail: msUntilLeave > 0
+        ? `Leave in ${fmtDiff(msUntilLeave)} — ${fmtMs(effectiveLeaveMs, deptTz)}`
         : `OVERDUE — leave immediately`,
     },
     {
       label: "Airport cutoff",
-      status: minUntilFlight > airportCutoff + 30 ? "green" : minUntilFlight > airportCutoff ? "yellow" : "red",
-      detail: `${airportCutoff} min cutoff · Arrive by ${fmt(arriveAirportMin)}`,
+      status: msUntilFlight > airportCutoffMs + 30 * 60_000 ? "green" : msUntilFlight > airportCutoffMs ? "yellow" : "red",
+      detail: `${isIntl ? 180 : 90} min cutoff · Arrive by ${fmtMs(arriveAirportMs, deptTz)}`,
     },
     {
       label: "Transport",
       status: transport ? "green" : "yellow",
       detail: transport ? `${transportOpt.icon} ${transportOpt.label}` : "Not set — tap to choose",
     },
-    ...(checkoutMin ? [{
+    ...(checkoutMs ? [{
       label: "Hotel checkout",
-      status: (now < checkoutMin - 30 ? "green" : now < checkoutMin ? "yellow" : "red") as ReadinessStatus,
-      detail: `Check out by ${fmt(checkoutMin)}`,
+      status: (nowMs < checkoutMs - 30 * 60_000 ? "green" : nowMs < checkoutMs ? "yellow" : "red") as ReadinessStatus,
+      detail: `Check out by ${fmtMs(checkoutMs, deptTz)}`,
     }] : []),
     {
       label: "Passport / Docs",
@@ -176,20 +199,20 @@ export function TravelDayView({
   // Timeline
   const timeline: TimelineStep[] = [];
 
-  if (checkoutMin) {
+  if (checkoutMs) {
     timeline.push({
       icon: "🏨", title: "Hotel checkout deadline",
-      time: fmt(checkoutMin), timeMinutes: checkoutMin,
+      time: fmtMs(checkoutMs, deptTz), timeMinutes: checkoutMs,
       detail: "Return key, collect receipt, pick up luggage",
-      type: now > checkoutMin - 30 ? "warning" : "normal",
-      countdown: checkoutMin - now,
+      type: nowMs > checkoutMs - 30 * 60_000 ? "warning" : "normal",
+      countdown: checkoutMs - nowMs,
     });
   }
 
   if (transport === "uber-lyft") {
     timeline.push({
       icon: "📱", title: "Book Uber / Lyft now",
-      time: fmt(effectiveLeaveMin - 15), timeMinutes: effectiveLeaveMin - 15,
+      time: fmtMs(effectiveLeaveMs - 15 * 60_000, deptTz), timeMinutes: effectiveLeaveMs - 15 * 60_000,
       detail: "Book 15 min before planned departure to avoid surge",
       type: "normal",
     });
@@ -197,7 +220,7 @@ export function TravelDayView({
   if (transport === "train-bus") {
     timeline.push({
       icon: "🚌", title: "Check transit schedule",
-      time: fmt(effectiveLeaveMin - 20), timeMinutes: effectiveLeaveMin - 20,
+      time: fmtMs(effectiveLeaveMs - 20 * 60_000, deptTz), timeMinutes: effectiveLeaveMs - 20 * 60_000,
       detail: "Confirm train/bus time. Have ticket ready.",
       type: "normal",
     });
@@ -205,15 +228,15 @@ export function TravelDayView({
 
   timeline.push({
     icon: transportOpt.icon, title: "Leave for airport",
-    time: fmt(effectiveLeaveMin), timeMinutes: effectiveLeaveMin,
-    detail: `${fmtDiff(transportOpt.driveMin)} to airport · ${fmtDiff(airportCutoff)} airport time needed`,
+    time: fmtMs(effectiveLeaveMs, deptTz), timeMinutes: effectiveLeaveMs,
+    detail: `~${transportOpt.driveMin} min to airport · ${isIntl ? "3 hr" : "90 min"} check-in time`,
     type: "highlight",
-    countdown: effectiveLeaveMin - now,
+    countdown: msUntilLeave,
   });
 
   timeline.push({
     icon: "🛫", title: `Arrive ${firstFlight?.flightDepartureAirport ?? "airport"} — check in`,
-    time: fmt(arriveAirportMin), timeMinutes: arriveAirportMin,
+    time: fmtMs(arriveAirportMs, deptTz), timeMinutes: arriveAirportMs,
     detail: isIntl
       ? "International: 3 hrs early · Passport + docs · Check bag"
       : "Domestic: 90 min early · Online check-in saves time",
@@ -223,59 +246,62 @@ export function TravelDayView({
   // Security / boarding
   timeline.push({
     icon: "🔒", title: "Clear security",
-    time: fmt(arriveAirportMin + 30), timeMinutes: arriveAirportMin + 30,
+    time: fmtMs(arriveAirportMs + 30 * 60_000, deptTz), timeMinutes: arriveAirportMs + 30 * 60_000,
     detail: "TSA PreCheck/Global Entry line if available",
     type: "normal",
   });
 
-  // Each flight
-  flights.forEach((flight, i) => {
-    const dMin = parseMinutes(flight.localTime);
+  // Each flight - using sortedFlights for correct UTC order
+  sortedFlights.forEach((flight, i) => {
+    const flightMs = parseUtcMs(flight.localTime, flight.timezone);
+    const flightTz = flight.timezone ?? deptTz;
     timeline.push({
       icon: "✈️",
       title: `${flight.flightNumber ?? "Flight"} ${flight.flightDepartureAirport ?? ""} → ${flight.flightArrivalAirport ?? ""}`,
-      time: fmt(dMin), timeMinutes: dMin,
+      time: fmtMs(flightMs, flightTz), timeMinutes: flightMs,
       detail: `${flight.provider ?? ""}${flight.confirmationCode ? ` · ${flight.confirmationCode}` : ""}`,
       type: "highlight",
-      countdown: dMin - now,
+      countdown: flightMs - nowMs,
     });
 
     if (flight.flightArrivalTime) {
-      const arrMin = parseMinutes(flight.flightArrivalTime);
-      const nextFlight = flights[i + 1];
+      const arrTz = flight.flightArrivalTimezone ?? flightTz;
+      const arrMs = parseUtcMs(flight.flightArrivalTime, arrTz);
+      const nextFlight = sortedFlights[i + 1];
       const isPoE = US_POE.includes(flight.flightArrivalAirport ?? "");
 
       if (nextFlight) {
-        const nextDept = parseMinutes(nextFlight.localTime);
-        const layover = nextDept - arrMin;
+        const nextDeptMs = parseUtcMs(nextFlight.localTime, nextFlight.timezone);
+        const layoverMs = nextDeptMs - arrMs;
+        const layoverMin = Math.round(layoverMs / 60_000);
         timeline.push({
           icon: "🛬", title: `Land ${flight.flightArrivalAirport ?? ""}`,
-          time: fmt(arrMin), timeMinutes: arrMin,
+          time: fmtMs(arrMs, arrTz), timeMinutes: arrMs,
           detail: isPoE
-            ? `US Port of Entry — CBP + bags + USDA + TSA (~90 min). ${fmtDiff(layover)} to next flight.`
-            : `${fmtDiff(layover)} layover`,
-          type: isPoE && layover < 210 ? "warning" : "normal",
+            ? `US Port of Entry — CBP + bags + USDA + TSA (~90 min). ${fmtDiff(layoverMs)} to next flight.`
+            : `${fmtDiff(layoverMs)} layover`,
+          type: isPoE && layoverMin < 210 ? "warning" : "normal",
         });
         if (isPoE) {
           timeline.push({
             icon: "🛃", title: "Customs · Bags · USDA · TSA",
-            time: `~${fmt(arrMin + 90)}`, timeMinutes: arrMin + 90,
-            detail: layover < 210
+            time: `~${fmtMs(arrMs + 90 * 60_000, arrTz)}`, timeMinutes: arrMs + 90 * 60_000,
+            detail: layoverMin < 210
               ? "⚠ Tight — Global Entry kiosk or CBP Mobile Passport. Move immediately on landing."
               : "Use Global Entry kiosk (5–15 min) or CBP Mobile Passport app.",
-            type: layover < 210 ? "warning" : "normal",
+            type: layoverMin < 210 ? "warning" : "normal",
           });
         }
       } else {
         timeline.push({
           icon: "🛬", title: `Land ${flight.flightArrivalAirport ?? ""} — final destination`,
-          time: fmt(arrMin), timeMinutes: arrMin,
+          time: fmtMs(arrMs, arrTz), timeMinutes: arrMs,
           detail: "Bag claim ~20 min",
           type: "highlight",
         });
         timeline.push({
           icon: "🏠", title: "Estimated home / hotel arrival",
-          time: fmt(arrMin + 75), timeMinutes: arrMin + 75,
+          time: fmtMs(arrMs + 75 * 60_000, arrTz), timeMinutes: arrMs + 75 * 60_000,
           detail: "Bag claim + transit (~75 min estimate)",
           type: "normal",
         });
@@ -283,7 +309,7 @@ export function TravelDayView({
     }
   });
 
-  // Sort by time
+  // Sort by UTC ms
   timeline.sort((a, b) => a.timeMinutes - b.timeMinutes);
 
   const statusColor: Record<ReadinessStatus, string> = {
@@ -336,7 +362,7 @@ export function TravelDayView({
                 <div className="text-right">
                   <p className="text-xs text-slate-500">Leave by ~</p>
                   <p className="text-sm font-bold text-sky-400">
-                    {firstFlight ? fmt(deptMin - airportCutoff - opt.driveMin - opt.leadTime) : "—"}
+                    {firstFlight ? fmtMs(deptMs - (isIntl ? 180 : 90) * 60_000 - opt.driveMin * 60_000 - opt.leadTime * 60_000, deptTz) : "—"}
                   </p>
                 </div>
               </div>
@@ -366,14 +392,14 @@ export function TravelDayView({
         <div className="mt-3 rounded-2xl bg-black/25 backdrop-blur-sm p-3.5 flex items-center gap-4">
           <div className="flex-1">
             <p className="text-xs font-bold uppercase tracking-wider text-sky-200">Leave by</p>
-            <p className="text-3xl font-black text-white leading-none mt-0.5">{fmt(effectiveLeaveMin)}</p>
+            <p className="text-3xl font-black text-white leading-none mt-0.5">{fmtMs(effectiveLeaveMs, deptTz)}</p>
             <p className="text-xs text-sky-100 mt-1">
-              {minUntilLeave > 0 ? `${fmtDiff(minUntilLeave)} from now` : "⚠ Leave immediately"}
+              {msUntilLeave > 0 ? `${fmtDiff(msUntilLeave)} from now` : "⚠ Leave immediately"}
             </p>
           </div>
           <div className="text-right">
             <p className="text-xs text-sky-200 font-semibold">Flight</p>
-            <p className="text-xl font-bold text-white">{fmt(deptMin)}</p>
+            <p className="text-xl font-bold text-white">{fmtMs(deptMs, deptTz)}</p>
             <p className="text-xs text-sky-100">{firstFlight?.flightNumber}</p>
           </div>
         </div>
@@ -444,8 +470,8 @@ export function TravelDayView({
           <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Your day</p>
           <div className="space-y-0">
             {timeline.map((step, i) => {
-              const isPast = step.timeMinutes < now - 5;
-              const isCurrent = step.timeMinutes >= now - 5 && step.timeMinutes <= now + 30;
+              const isPast = step.timeMinutes < nowMs - 5 * 60_000;
+              const isCurrent = step.timeMinutes >= nowMs - 5 * 60_000 && step.timeMinutes <= nowMs + 30 * 60_000;
               return (
                 <div key={i} className="flex gap-3">
                   <div className="flex flex-col items-center">
