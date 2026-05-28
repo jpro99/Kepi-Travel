@@ -891,6 +891,39 @@ function formatBoardingPassClock(value: string): string {
   return timeMatch ?? "--:--";
 }
 
+/** Format arrival time with +1 day indicator or full date if next/later day */
+function formatArrivalClock(arrivalTime: string, departureTime?: string): string {
+  const timeOnly = formatBoardingPassClock(arrivalTime);
+  if (!arrivalTime.trim() || timeOnly === "--:--") return timeOnly;
+
+  // Try to detect next-day arrival
+  const arrivalDate = arrivalTime.trim().slice(0, 10); // "YYYY-MM-DD"
+  const departureDate = (departureTime ?? "").trim().slice(0, 10);
+
+  if (arrivalDate && departureDate && arrivalDate > departureDate) {
+    const daysDiff = Math.round(
+      (Date.parse(arrivalDate + "T12:00:00") - Date.parse(departureDate + "T12:00:00")) / 86_400_000
+    );
+    const suffix = daysDiff === 1 ? " (+1 day)" :
+      daysDiff > 1 ? ` (+${daysDiff} days)` : "";
+    if (suffix) return timeOnly + suffix;
+  }
+
+  // If no departure to compare, show full date for context
+  if (arrivalDate && arrivalDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const arrMs = Date.parse(arrivalDate + "T12:00:00");
+    const todayMs = Date.parse(new Date().toISOString().slice(0, 10) + "T12:00:00");
+    if (!Number.isNaN(arrMs) && arrMs > todayMs + 86_400_000) {
+      // Future date - show month/day
+      const d = new Date(arrMs);
+      const monthDay = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      return `${timeOnly} · ${monthDay}`;
+    }
+  }
+
+  return timeOnly;
+}
+
 function formatHotelDate(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -7055,7 +7088,10 @@ export default function TravelAssistantPage() {
                     const arrivalTimeLabel =
                       reservation.type === "flight"
                         ? (reservation.flightArrivalTime
-                            ? formatBoardingPassClock(reservation.flightArrivalTime)
+                            ? formatArrivalClock(
+                                reservation.flightArrivalTime,
+                                reservation.flightDepartureTime ?? reservation.localTime
+                              )
                             : "")
                         : "";
                     const flightStatusLabel =
@@ -7165,6 +7201,37 @@ export default function TravelAssistantPage() {
                                   </span>
                                 </p>
                               </div>
+                              {/* Pickup details share button — shown when arrival airport is known */}
+                              {reservation.flightArrivalTime && flightAirports?.arrivalAirport && (() => {
+                                const arrLabel = formatArrivalClock(
+                                  reservation.flightArrivalTime,
+                                  reservation.flightDepartureTime ?? reservation.localTime
+                                );
+                                const pickupText = [
+                                  `✈️ Flight ${flightCode} — ${airlineLabel}`,
+                                  `📍 Arriving ${flightAirports.arrivalAirport} at ${arrLabel}`,
+                                  reservation.flightArrivalTime?.slice(0, 10)
+                                    ? `📅 Date: ${new Date(reservation.flightArrivalTime.slice(0, 10) + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}`
+                                    : null,
+                                  `🔢 Confirmation: ${reservation.confirmationCode || "N/A"}`,
+                                  `📞 Please pick up at arrivals — Terminal ${inlineFlightStatus?.arrivalTerminal || reservation.flightArrivalTerminal || "TBD"}`,
+                                ].filter(Boolean).join("\n");
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      void navigator.clipboard.writeText(pickupText).then(() =>
+                                        setToast("Pickup details copied — paste into a text or email 📋")
+                                      );
+                                    }}
+                                    className="mt-3 w-full rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2.5 text-left transition hover:bg-sky-500/20"
+                                  >
+                                    <p className="text-[11px] font-bold uppercase tracking-widest text-sky-300">Share pickup details</p>
+                                    <p className="mt-0.5 text-xs text-sky-200 leading-relaxed">{pickupText.split("\n").slice(0, 2).join(" · ")}</p>
+                                    <p className="mt-1.5 text-[10px] text-sky-400">Tap to copy — paste into a text or email →</p>
+                                  </button>
+                                );
+                              })()}
                             </div>
                           ) : reservation.type === "hotel" && hotelData ? (
                             <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-100 via-amber-50 to-white p-4 shadow-[0_12px_30px_-26px_rgba(120,53,15,0.6)] dark:border-amber-400/40 dark:from-amber-500/20 dark:via-amber-500/10 dark:to-slate-900">
