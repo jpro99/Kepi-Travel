@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, lazy, Suspense } from "react";
-
-const FamilyMap = lazy(() => import("@/components/travelAssistant/FamilyMap").then(m => ({ default: m.FamilyMap })));
+import { useCallback, useEffect, useRef, useState } from "react";
+import { FamilyMap } from "@/components/travelAssistant/FamilyMap";
 
 interface LocationPoint {
   lat: number;
@@ -323,21 +322,16 @@ export function FamilyPanel({ isPremium, onUpgrade, maptilerKey }: FamilyPanelPr
       </div>
 
       {/* Live map */}
-      {showMap && maptilerKey !== undefined && (
-        <Suspense fallback={<div className="h-64 w-full rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse" />}>
-          <FamilyMap
-            members={group?.members ?? []}
-            locations={locations}
-            maptilerKey={maptilerKey ?? ""}
-            onMemberClick={setSelectedMemberId}
-          />
-        </Suspense>
+      {showMap && (
+        <FamilyMap
+          members={group?.members ?? []}
+          locations={locations}
+          maptilerKey={maptilerKey ?? ""}
+          height={300}
+          onMemberClick={setSelectedMemberId}
+        />
       )}
-      {showMap && maptilerKey === undefined && Object.keys(locations).length > 0 && (
-        <div className="h-32 w-full rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-          <p className="text-xs text-slate-500">Map unavailable — MAPTILER key not configured</p>
-        </div>
-      )}
+
 
       {/* Invite code */}
       {group && (
