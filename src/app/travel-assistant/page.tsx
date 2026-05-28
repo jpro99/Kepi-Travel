@@ -7775,6 +7775,28 @@ export default function TravelAssistantPage() {
                 <p className="text-xs text-emerald-700 dark:text-emerald-300">{emailForwardSetupMessage}</p>
               ) : null}
 
+              {/* Clear cache */}
+              <button
+                type="button"
+                onClick={() => {
+                  const doReload = () => {
+                    setToast("Cache cleared — reloading...");
+                    setTimeout(() => window.location.reload(), 800);
+                  };
+                  if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+                    navigator.serviceWorker.controller.postMessage("CLEAR_ALL_CACHES");
+                    navigator.serviceWorker.onmessage = doReload;
+                    setTimeout(doReload, 1500); // fallback if no message reply
+                  } else {
+                    void window.caches?.keys().then(keys => Promise.all(keys.map(k => window.caches.delete(k)))).then(doReload).catch(doReload);
+                  }
+                }}
+                className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                🔄 Clear cache &amp; refresh
+                <p className="mt-0.5 text-xs font-normal text-slate-500 dark:text-slate-400">Fixes map issues, outdated screens, or loading problems</p>
+              </button>
+
               <button
                 type="button"
                 onClick={() => {
