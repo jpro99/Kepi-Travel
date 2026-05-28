@@ -334,7 +334,7 @@ export function FamilyPanel({ isPremium, onUpgrade, maptilerKey }: FamilyPanelPr
       </div>
 
       {/* Live map */}
-      {showMap && (
+      {showMap && (resolvedMapKey || maptilerKey) ? (
         <FamilyMap
           members={group?.members ?? []}
           locations={locations}
@@ -342,7 +342,14 @@ export function FamilyPanel({ isPremium, onUpgrade, maptilerKey }: FamilyPanelPr
           height={300}
           onMemberClick={setSelectedMemberId}
         />
-      )}
+      ) : showMap ? (
+        <div className="flex h-[300px] w-full items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800">
+          <div className="flex flex-col items-center gap-2">
+            <div className="h-6 w-6 rounded-full border-2 border-sky-500 border-t-transparent animate-spin" />
+            <p className="text-xs text-slate-500">Loading map...</p>
+          </div>
+        </div>
+      ) : null}
 
 
       {/* Invite code */}
