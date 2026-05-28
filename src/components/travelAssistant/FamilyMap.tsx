@@ -1,6 +1,7 @@
 "use client";
 
 import "maplibre-gl/dist/maplibre-gl.css";
+import "@/lib/maplibreCspWorker";
 import { useEffect, useRef, useCallback, useState } from "react";
 import type { Map as MapLibreMap, Marker } from "maplibre-gl";
 
