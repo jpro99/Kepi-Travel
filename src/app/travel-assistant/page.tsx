@@ -98,6 +98,7 @@ import { AdvancedModeToggle } from "@/components/ui/AdvancedModeToggle";
 import { Logo } from "@/components/ui/Logo";
 import { JourneyFlowPanel } from "./components/JourneyFlowPanel";
 import { TravelAssistantTopControls } from "./components/TravelAssistantTopControls";
+import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
 
 const OpsPanel = lazy(async () => {
   const loadedModule = await import("@/components/travelAssistant/OpsPanel");
@@ -1801,6 +1802,36 @@ export default function TravelAssistantPage() {
   const [travelDayOpen, setTravelDayOpen] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // ── Background GPS for location-aware AI guidance ─────────────────────────
+  // Low-accuracy, low-frequency — only used to tell the AI where the traveler is.
+  // Does NOT affect the map (LiveMapPage has its own higher-accuracy watch).
+  const [guidanceUserLat, setGuidanceUserLat] = useState<number | null>(null);
+  const [guidanceUserLon, setGuidanceUserLon] = useState<number | null>(null);
+  const guidanceGpsWatchRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    guidanceGpsWatchRef.current = navigator.geolocation.watchPosition(
+      pos => { setGuidanceUserLat(pos.coords.latitude); setGuidanceUserLon(pos.coords.longitude); },
+      () => null,
+      { enableHighAccuracy: false, maximumAge: 60_000, timeout: 30_000 },
+    );
+    return () => { if (guidanceGpsWatchRef.current !== null) navigator.geolocation.clearWatch(guidanceGpsWatchRef.current); };
+  }, []);
+
+  // Derive location status for AI guidance — uses the next departure airport
+  const guidanceLocationStatus = useMemo((): "away" | "at-airport" | "in-terminal" | "airborne" | "unknown" => {
+    const nextFlight = consumerReservationsSorted.find(r => r.type === "flight" && (Date.parse((r as unknown as Record<string,string>).localTime ?? "") - Date.now()) / 60_000 > -120);
+    const deptIata = (nextFlight as unknown as Record<string,string> | undefined)?.flightDepartureAirport;
+    const proximity = getAirportProximity(guidanceUserLat, guidanceUserLon, deptIata);
+    return proximity.status === "unknown" ? "unknown" : proximity.status;
+  }, [guidanceUserLat, guidanceUserLon, consumerReservationsSorted]);
+
+  const guidanceNearestAirport = useMemo(() => {
+    const proximity = getAirportProximity(guidanceUserLat, guidanceUserLon, undefined);
+    return proximity.airport?.iata ?? "";
+  }, [guidanceUserLat, guidanceUserLon]);
 
   // Auto-join family group if ?joinFamily=CODE in URL
   useEffect(() => {
@@ -6646,11 +6677,15 @@ export default function TravelAssistantPage() {
                 reservations={consumerReservationsSorted}
                 tripName={activeTrip?.name ?? "Your trip"}
                 onReservationTap={(id) => openDrawer("reservation", id)}
+                locationStatus={guidanceLocationStatus}
+                nearestAirport={guidanceNearestAirport}
               />
 
               <OnTrackButton
                 reservations={consumerReservationsSorted}
                 tripName={activeTrip?.name ?? "Your trip"}
+                locationStatus={guidanceLocationStatus}
+                nearestAirport={guidanceNearestAirport}
               />
               {tripDaysAway !== null && tripDaysAway <= 1 && (
                 <button

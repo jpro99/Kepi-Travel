@@ -26,6 +26,8 @@ interface NextUpCardProps {
   reservations: NextUpReservation[];
   tripName: string;
   onReservationTap?: (id: string) => void;
+  locationStatus?: "away" | "at-airport" | "in-terminal" | "airborne" | "unknown";
+  nearestAirport?: string;
 }
 
 type GuidanceState =
@@ -169,7 +171,7 @@ ${lines.join("\n")}`;
 
 // ── component ─────────────────────────────────────────────────────────────────
 
-export function NextUpCard({ reservations, tripName, onReservationTap }: NextUpCardProps) {
+export function NextUpCard({ reservations, tripName, onReservationTap, locationStatus = "unknown", nearestAirport = "" }: NextUpCardProps) {
   const [guidance, setGuidance] = useState<GuidanceState>({ status: "idle" });
   const [lastFetchKey, setLastFetchKey] = useState("");
 
@@ -200,6 +202,8 @@ export function NextUpCard({ reservations, tripName, onReservationTap }: NextUpC
           userTimezone,
           userLocalTime,
           reservationContext: contextBlock,
+          locationStatus,
+          nearestAirport,
         }),
       });
 

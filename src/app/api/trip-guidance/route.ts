@@ -17,6 +17,8 @@ const RequestSchema = z.object({
   userLocalTime: z.string().trim().max(60).optional().default(""),
   reservationContext: z.string().trim().max(4000),
   mode: z.enum(["guidance", "on-track-check"]).default("guidance"),
+  locationStatus: z.enum(["away", "at-airport", "in-terminal", "airborne", "unknown"]).optional().default("unknown"),
+  nearestAirport: z.string().trim().max(10).optional().default(""),
 });
 
 const GuidanceResponseSchema = z.object({
@@ -125,6 +127,32 @@ Hours until first departure (calculated using utcTime vs Current time UTC):
 - 12 TO 24 hours away, departure hour before 12:00 (morning flight): Pack TONIGHT — the night before.
 - LESS THAN 12 hours away: Pack now if not yet packed.
 
+TRAVELER LOCATION AWARENESS — CRITICAL RULES:
+The traveler's current physical location is provided as locationStatus. Use it to suppress irrelevant advice:
+
+locationStatus = "away": Traveler is NOT at the airport yet. Normal pre-departure guidance applies.
+
+locationStatus = "at-airport": Traveler is physically at the airport (check-in zone / landside).
+- NEVER tell them to "pack now" or "leave for the airport" — they are already there.
+- Focus on: check-in, security, finding the gate, lounge access if applicable.
+- Suppress all packing and transport-to-airport advice.
+
+locationStatus = "in-terminal": Traveler is past security, airside in the terminal.
+- NEVER mention packing, leaving for the airport, or getting to the airport.
+- NEVER give "leave by X time" advice.
+- Focus on: gate location, lounge visit timing, boarding time, connection logistics.
+- If boarding is more than 60 min away and they have lounge access, suggest the lounge.
+- If boarding is within 30 min, say "head to the gate now."
+
+locationStatus = "airborne": Traveler is currently on a plane in flight.
+- NEVER give any pre-departure advice for the current leg.
+- Focus ONLY on: what happens when they land — customs/immigration, connection timing, next leg.
+- For US Port of Entry connections: remind them to download CBP Mobile Passport NOW while on the plane.
+- Suppress ALL packing advice, leave-by times, and "head to airport" instructions.
+- If they have a tight connection on landing, that is the ONLY thing that matters.
+
+locationStatus = "unknown": No GPS available. Apply normal time-based rules but be gentler — do not assume they need urgent reminders if departure is still hours away.
+
 WHAT YOU NEVER DO:
 Never focus on just one leg when there are multiple. Never say "you're heading to Honolulu" when Honolulu is a connection. Always reference the final destination. Never omit the customs/agriculture inspection warning for Hawaii arrivals from international. Give direct commands with exact times for every leg. Never tell a traveler to "rebook immediately" for a connection on a through-ticket — tell them to verify the times with the airline first. Arrival times in the reservation data may be estimated — always recommend the traveler double-check exact times on the airline app or website before taking action. Never recommend packing if departure is more than 36 hours away.
 
@@ -200,9 +228,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  const { tripName, nowIso, userTimezone, userLocalTime, reservationContext } = parsed.data;
+  const { tripName, nowIso, userTimezone, userLocalTime, reservationContext, locationStatus, nearestAirport } = parsed.data;
 
-  routeLogger.info("Trip guidance request.", { userId: auth, nowIso });
+  const locationLine = locationStatus && locationStatus !== "unknown"
+    ? `\nTraveler location: ${locationStatus}${nearestAirport ? ` (nearest airport: ${nearestAirport})` : ""}`
+    : "";
+
+  routeLogger.info("Trip guidance request.", { userId: auth, nowIso, locationStatus });
 
   const client = new Anthropic();
 
@@ -215,8 +247,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       messages: [{
         role: "user",
         content: isOnTrackCheck
-          ? `Current time (UTC): ${nowIso}${userTimezone ? `\nTraveler local time: ${userLocalTime} (${userTimezone})` : ""}\nTrip: ${tripName}\n\nReservations:\n${reservationContext}\n\nAm I on track?`
-          : `Current time (UTC): ${nowIso}${userTimezone ? `\nTraveler local time: ${userLocalTime} (${userTimezone})` : ""}\nTrip: ${tripName}\n\nUpcoming reservations:\n${reservationContext}\n\nWhat does the traveler need to do right now to stay on track?`,
+          ? `Current time (UTC): ${nowIso}${userTimezone ? `\nTraveler local time: ${userLocalTime} (${userTimezone})` : ""}${locationLine}\nTrip: ${tripName}\n\nReservations:\n${reservationContext}\n\nAm I on track?`
+          : `Current time (UTC): ${nowIso}${userTimezone ? `\nTraveler local time: ${userLocalTime} (${userTimezone})` : ""}${locationLine}\nTrip: ${tripName}\n\nUpcoming reservations:\n${reservationContext}\n\nWhat does the traveler need to do right now to stay on track?`,
       }],
     });
 

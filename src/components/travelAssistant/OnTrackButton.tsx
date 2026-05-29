@@ -21,6 +21,8 @@ interface OnTrackButtonProps {
     notes?: string;
   }[];
   tripName: string;
+  locationStatus?: "away" | "at-airport" | "in-terminal" | "airborne" | "unknown";
+  nearestAirport?: string;
 }
 
 type CheckState =
@@ -102,7 +104,7 @@ function buildContext(reservations: OnTrackButtonProps["reservations"]): string 
   return `RESERVATION SEQUENCE (sorted by UTC — use seq for order, utcTime for all time comparisons):\n${lines.join("\n")}`;
 }
 
-export function OnTrackButton({ reservations, tripName }: OnTrackButtonProps) {
+export function OnTrackButton({ reservations, tripName, locationStatus = "unknown", nearestAirport = "" }: OnTrackButtonProps) {
   const [state, setState] = useState<CheckState>({ status: "idle" });
 
   const runCheck = async () => {
@@ -119,6 +121,8 @@ export function OnTrackButton({ reservations, tripName }: OnTrackButtonProps) {
           userLocalTime: new Date().toLocaleString("en-US", { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, hour12: false }),
           reservationContext: buildContext(reservations),
           mode: "on-track-check",
+          locationStatus,
+          nearestAirport,
         }),
       });
       if (!res.ok) {
