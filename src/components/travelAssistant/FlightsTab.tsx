@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { buildGateInstructions, getAirportNav } from "@/lib/travelAssistant/airportNavigation";
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -53,17 +53,50 @@ function fmtDate(t: string): string {
   return `${days[d.getDay()]} ${months[d.getMonth()]} ${d.getDate()}`;
 }
 
+function parseFlightTimeMs(timeStr: string, timezone?: string): number {
+  if (!timeStr) return NaN;
+  // Normalize to "YYYY-MM-DDTHH:MM" format
+  const normalized = timeStr.slice(0, 16).replace(" ", "T");
+  if (!normalized.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)) return NaN;
+
+  if (timezone) {
+    try {
+      // Parse as if in the given timezone using Intl
+      const [datePart, timePart] = normalized.split("T");
+      const [y, mo, d] = (datePart ?? "").split("-").map(Number);
+      const [h, mi] = (timePart ?? "").split(":").map(Number);
+      const localDate = new Date(y, (mo ?? 1) - 1, d, h ?? 0, mi ?? 0);
+      const fmt = new Intl.DateTimeFormat("en-US", {
+        timeZone: timezone,
+        year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", hour12: false,
+      });
+      const parts = Object.fromEntries(fmt.formatToParts(localDate).map(p => [p.type, p.value]));
+      const tzDate = new Date(`${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:00Z`);
+      return localDate.getTime() - (tzDate.getTime() - localDate.getTime());
+    } catch { /* fall through */ }
+  }
+  // No timezone — treat as UTC to avoid browser-timezone errors
+  return Date.parse(normalized + "Z");
+}
+
 function isCompleted(r: Reservation): boolean {
-  const arrMs = r.flightArrivalTime ? Date.parse(r.flightArrivalTime.replace(" ","T")) : NaN;
-  if (!isNaN(arrMs)) return Date.now() - arrMs > 3600_000;
-  const depMs = r.flightDepartureTime ? Date.parse(r.flightDepartureTime.replace(" ","T"))
-    : r.localTime ? Date.parse(r.localTime.replace(" ","T")) : NaN;
-  return !isNaN(depMs) && Date.now() - depMs > 18 * 3600_000;
+  // Use arrival time if available (most accurate signal the flight is done)
+  if (r.flightArrivalTime) {
+    const arrMs = parseFlightTimeMs(r.flightArrivalTime, r.timezone);
+    if (!isNaN(arrMs)) return Date.now() - arrMs > 3600_000; // 1h after arrival
+  }
+  // Fall back to departure + generous buffer
+  // Parse with timezone if available — critical for Japan flights shown in Hawaii time
+  const depStr = r.flightDepartureTime ?? r.localTime ?? "";
+  const depMs = parseFlightTimeMs(depStr, r.timezone);
+  if (!isNaN(depMs)) return Date.now() - depMs > 18 * 3600_000;
+  return false;
 }
 
 function minsUntilDep(r: Reservation): number {
-  const t = (r.flightDepartureTime ?? r.localTime ?? "").slice(0, 16);
-  const ms = Date.parse(t.replace(" ","T"));
+  const depStr = r.flightDepartureTime ?? r.localTime ?? "";
+  const ms = parseFlightTimeMs(depStr, r.timezone);
   return isNaN(ms) ? Infinity : (ms - Date.now()) / 60_000;
 }
 
@@ -121,8 +154,15 @@ function AirportGuideCard({
     [gate, terminal, iata]
   );
 
-  const isAtAirport = locationStatus === "at-airport" || locationStatus === "in-terminal";
+  // Auto-check on mount if gate not yet assigned
+  useEffect(() => {
+    if (!gate && !live?.busy && !live?.checkedAt) {
+      onCheckStatus(flight.id);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flight.id]);
   const isAirside = locationStatus === "in-terminal";
+  const isAtAirport = locationStatus === "at-airport" || locationStatus === "in-terminal";
   const delay = live?.delayMinutes ?? flight.flightDelayMinutes ?? 0;
   const status = (live?.flightStatus || flight.flightStatus || "").toLowerCase();
   const cancelled = status === "cancelled";
