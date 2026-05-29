@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getAirportProximity, type UserAirportStatus } from "@/lib/travelAssistant/airportGeo";
 import {
   AIRLINE_PROGRAMS,
+  HOTEL_PROGRAMS,
+  CAR_RENTAL_PROGRAMS,
   findProgram,
   findTier,
   getLoungesForAirport,
@@ -11,7 +13,7 @@ import {
   type AirlineLoungeInfo,
   type StatusTier,
 } from "@/lib/travelAssistant/airlineStatus";
-import type { TravelProfile } from "@/app/api/travel-profile/route";
+import { buildGateInstructions, getAirportNav } from "@/lib/travelAssistant/airportNavigation";
 
 /* ─── Types ──────────────────────────────────────────────────── */
 interface FlightReservation {
@@ -186,18 +188,27 @@ interface StatusSetupProps {
 
 function StatusSetupModal({ onSave, onSkip, existing }: StatusSetupProps) {
   const [airline, setAirline] = useState(existing?.airlineStatuses?.[0]?.airline ?? "");
-  const [tier, setTier] = useState(existing?.airlineStatuses?.[0]?.tier ?? "");
+  const [airlineTier, setAirlineTier] = useState(existing?.airlineStatuses?.[0]?.tier ?? "");
+  const [hotel, setHotel] = useState(existing?.hotelStatuses?.[0]?.chain ?? "");
+  const [hotelTier, setHotelTier] = useState(existing?.hotelStatuses?.[0]?.tier ?? "");
+  const [carCo, setCarCo] = useState(existing?.carRentalStatuses?.[0]?.company ?? "");
+  const [carTier, setCarTier] = useState(existing?.carRentalStatuses?.[0]?.tier ?? "");
   const [tsa, setTsa] = useState(existing?.tsa_precheck ?? false);
   const [ge, setGe] = useState(existing?.global_entry ?? false);
   const [clear, setClear] = useState(existing?.clear ?? false);
   const [saving, setSaving] = useState(false);
+  const [step, setStep] = useState<"airline" | "hotel" | "security" | "done">("airline");
 
   const matchedProgram = useMemo(() => airline ? findProgram(airline) : null, [airline]);
+  const matchedHotel = useMemo(() => hotel ? HOTEL_PROGRAMS.find(h => h.chain === hotel) : null, [hotel]);
+  const matchedCar = useMemo(() => carCo ? CAR_RENTAL_PROGRAMS.find(c => c.company === carCo) : null, [carCo]);
 
   const handleSave = async () => {
     setSaving(true);
     const profile: TravelProfile = {
-      airlineStatuses: airline && tier ? [{ airline, tier, iata: matchedProgram?.iata[0] }] : [],
+      airlineStatuses: airline && airlineTier ? [{ airline, tier: airlineTier, iata: matchedProgram?.iata[0] }] : [],
+      hotelStatuses: hotel && hotelTier ? [{ chain: hotel, tier: hotelTier }] : [],
+      carRentalStatuses: carCo && carTier ? [{ company: carCo, tier: carTier }] : [],
       tsa_precheck: tsa,
       global_entry: ge,
       clear,
@@ -209,115 +220,222 @@ function StatusSetupModal({ onSave, onSkip, existing }: StatusSetupProps) {
         body: JSON.stringify(profile),
       });
       onSave(profile);
-    } catch { onSave(profile); } // save locally even if API fails
+    } catch { onSave(profile); }
     finally { setSaving(false); }
   };
+
+  const steps = ["airline", "hotel", "security"] as const;
+  const stepIdx = steps.indexOf(step as typeof steps[number]);
+  const stepLabels = ["✈️ Airline", "🏨 Hotel", "🛡 Security"];
 
   return (
     <div className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 space-y-4 shadow-xl">
       <div>
-        <p className="font-bold text-slate-900 dark:text-slate-100 text-base">✈️ Your travel profile</p>
+        <p className="font-bold text-slate-900 dark:text-slate-100 text-base">Your travel profile</p>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-          Tell Kepi your status so it can route you through the airport correctly — lounge access, priority lanes, leave times.
+          Kepi uses this to route you through airports, unlock lounges, and give you the right leave time.
         </p>
       </div>
 
-      {/* Airline selection */}
-      <div>
-        <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Airline</label>
-        <select
-          value={airline}
-          onChange={e => { setAirline(e.target.value); setTier(""); }}
-          className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
-        >
-          <option value="">No status / not sure</option>
-          {AIRLINE_PROGRAMS.map(p => (
-            <option key={p.iata[0]} value={p.airline}>{p.airline} ({p.program})</option>
-          ))}
-        </select>
+      {/* Step indicators */}
+      <div className="flex gap-1">
+        {stepLabels.map((label, i) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => setStep(steps[i])}
+            className={`flex-1 rounded-lg py-1.5 text-xs font-semibold transition ${
+              i === stepIdx
+                ? "bg-sky-600 text-white"
+                : i < stepIdx
+                ? "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+                : "bg-slate-100 dark:bg-slate-800 text-slate-500"
+            }`}
+          >
+            {i < stepIdx ? "✓ " : ""}{label}
+          </button>
+        ))}
       </div>
 
-      {/* Status tier — only show if airline selected */}
-      {matchedProgram && matchedProgram.tiers.length > 0 && (
-        <div>
-          <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Status tier</label>
-          <div className="mt-1 flex flex-wrap gap-2">
-            {matchedProgram.tiers.map(t => (
-              <button
-                key={t.tier}
-                type="button"
-                onClick={() => setTier(t.tier)}
-                className={`rounded-xl px-3 py-1.5 text-xs font-bold border transition ${
-                  tier === t.tier
-                    ? "bg-sky-600 text-white border-sky-600"
-                    : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
-                }`}
-              >
-                {t.tier}
-                {t.loungeAccess && <span className="ml-1 opacity-60">🛋</span>}
-              </button>
-            ))}
+      {/* Step: Airline */}
+      {step === "airline" && (
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Airline</label>
+            <select
+              value={airline}
+              onChange={e => { setAirline(e.target.value); setAirlineTier(""); }}
+              className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
+            >
+              <option value="">No status / not sure</option>
+              {AIRLINE_PROGRAMS.map(p => (
+                <option key={p.iata[0]} value={p.airline}>{p.airline} ({p.program})</option>
+              ))}
+            </select>
           </div>
-          {tier && matchedProgram && (() => {
-            const t = findTier(matchedProgram, tier);
-            if (!t) return null;
-            return (
-              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                {t.loungeAccess ? "✅ Lounge access" : "❌ No lounge access"} ·{" "}
-                {t.priorityBoarding ? "Priority boarding" : "Standard boarding"} ·{" "}
-                {t.freeCheckedBags} free checked bag{t.freeCheckedBags !== 1 ? "s" : ""}
-              </p>
-            );
-          })()}
+          {matchedProgram && matchedProgram.tiers.length > 0 && (
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Status tier</label>
+              <div className="mt-1 flex flex-wrap gap-2">
+                {matchedProgram.tiers.map(t => (
+                  <button
+                    key={t.tier}
+                    type="button"
+                    onClick={() => setAirlineTier(t.tier)}
+                    className={`rounded-xl px-3 py-1.5 text-xs font-bold border transition ${
+                      airlineTier === t.tier
+                        ? "bg-sky-600 text-white border-sky-600"
+                        : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                    }`}
+                  >
+                    {t.tier}{t.loungeAccess ? " 🛋" : ""}
+                  </button>
+                ))}
+              </div>
+              {airlineTier && (() => {
+                const t = findTier(matchedProgram, airlineTier);
+                return t ? (
+                  <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+                    {t.loungeAccess ? "✅ Lounge" : "❌ No lounge"} · {t.priorityBoarding ? "Priority boarding" : "Standard"} · {t.freeCheckedBags} free bag{t.freeCheckedBags !== 1 ? "s" : ""}
+                  </p>
+                ) : null;
+              })()}
+            </div>
+          )}
+          <button type="button" onClick={() => setStep("hotel")} className="w-full rounded-xl bg-sky-600 py-2.5 text-sm font-bold text-white">
+            Next: Hotel status →
+          </button>
         </div>
       )}
 
-      {/* Security fast lanes */}
-      <div>
-        <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Security lanes</label>
-        <div className="mt-1 flex flex-wrap gap-2">
-          {[
-            { key: "tsa", label: "TSA PreCheck ✓", val: tsa, set: setTsa },
-            { key: "ge",  label: "Global Entry ✓",  val: ge,  set: setGe },
-            { key: "clear", label: "CLEAR ✓",      val: clear, set: setClear },
-          ].map(({ key, label, val, set }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => set(!val)}
-              className={`rounded-xl px-3 py-1.5 text-xs font-bold border transition ${
-                val
-                  ? "bg-emerald-600 text-white border-emerald-600"
-                  : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"
-              }`}
+      {/* Step: Hotel */}
+      {step === "hotel" && (
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Hotel chain</label>
+            <select
+              value={hotel}
+              onChange={e => { setHotel(e.target.value); setHotelTier(""); }}
+              className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
             >
-              {label}
-            </button>
-          ))}
+              <option value="">No status</option>
+              {HOTEL_PROGRAMS.map(h => (
+                <option key={h.chain} value={h.chain}>{h.chain} ({h.program})</option>
+              ))}
+            </select>
+          </div>
+          {matchedHotel && (
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Hotel tier</label>
+              <div className="mt-1 flex flex-wrap gap-2">
+                {matchedHotel.tiers.map(t => (
+                  <button
+                    key={t.tier}
+                    type="button"
+                    onClick={() => setHotelTier(t.tier)}
+                    className={`rounded-xl px-3 py-1.5 text-xs font-bold border transition ${
+                      hotelTier === t.tier
+                        ? "bg-sky-600 text-white border-sky-600"
+                        : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                    }`}
+                  >
+                    {t.tier}
+                  </button>
+                ))}
+              </div>
+              {hotelTier && matchedHotel.tiers.find(t => t.tier === hotelTier) && (
+                <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+                  {matchedHotel.tiers.find(t => t.tier === hotelTier)?.benefits.join(" · ")}
+                </p>
+              )}
+            </div>
+          )}
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Car rental</label>
+            <select
+              value={carCo}
+              onChange={e => { setCarCo(e.target.value); setCarTier(""); }}
+              className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
+            >
+              <option value="">No status</option>
+              {CAR_RENTAL_PROGRAMS.map(c => (
+                <option key={c.company} value={c.company}>{c.company}</option>
+              ))}
+            </select>
+            {matchedCar && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {matchedCar.tiers.map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setCarTier(t)}
+                    className={`rounded-xl px-3 py-1.5 text-xs font-bold border transition ${
+                      carTier === t
+                        ? "bg-sky-600 text-white border-sky-600"
+                        : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setStep("airline")} className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-500">← Back</button>
+            <button type="button" onClick={() => setStep("security")} className="flex-1 rounded-xl bg-sky-600 py-2.5 text-sm font-bold text-white">Next: Security →</button>
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => void handleSave()}
-          disabled={saving}
-          className="flex-1 rounded-xl bg-sky-600 py-2.5 text-sm font-bold text-white hover:bg-sky-500 disabled:opacity-50"
-        >
-          {saving ? "Saving…" : "Save my profile"}
-        </button>
-        <button
-          type="button"
-          onClick={onSkip}
-          className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"
-        >
-          Skip
-        </button>
-      </div>
+      {/* Step: Security */}
+      {step === "security" && (
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Security programs</label>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 mb-2">These affect your leave-by time and security lane guidance.</p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: "tsa", label: "TSA PreCheck ✓", val: tsa, set: setTsa, note: "Dedicated lane, no shoes/laptop removal" },
+                { key: "ge",  label: "Global Entry ✓",  val: ge,  set: setGe,  note: "Includes PreCheck + expedited customs" },
+                { key: "clear", label: "CLEAR ✓",      val: clear, set: setClear, note: "Biometric scan, skip to front of security" },
+              ].map(({ key, label, val, set, note }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => set(!val)}
+                  className={`rounded-xl px-3 py-2 text-xs font-bold border transition text-left ${
+                    val
+                      ? "bg-emerald-600 text-white border-emerald-600"
+                      : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"
+                  }`}
+                >
+                  <p>{label}</p>
+                  {!val && <p className="opacity-60 font-normal mt-0.5">{note}</p>}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setStep("hotel")} className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-500">← Back</button>
+            <button
+              type="button"
+              onClick={() => void handleSave()}
+              disabled={saving}
+              className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-bold text-white hover:bg-emerald-500 disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "✅ Save my profile"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <button type="button" onClick={onSkip} className="w-full text-center text-xs text-slate-400 hover:text-slate-600 py-1">
+        Skip for now
+      </button>
     </div>
   );
 }
-
 /* ─── Main component ──────────────────────────────────────────── */
 export function AirportMode({ reservations, onViewReservations }: AirportModeProps) {
   const [now, setNow] = useState(() => Date.now());
@@ -626,11 +744,15 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
         hasLoungeAccess={hasLoungeAccess}
         hasPrioritySecurity={hasPrioritySecurity}
         hasPrecheck={hasPrecheck}
+        hasGlobalEntry={Boolean(profile?.global_entry)}
         hasClear={Boolean(profile?.clear)}
         gate={f.flightDepartureGate}
         terminal={f.flightDepartureTerminal}
+        iata={f.flightDepartureAirport}
         lounges={lounges}
         tier={tier}
+        deptUtcMs={deptUtcMs}
+        now={now}
       />
 
       {/* Pre-flight checklist */}
@@ -711,24 +833,33 @@ function LoungeCard({ lounge, gate, terminal, deptUtcMs, now, hasPrecheck }: {
 
 /* ─── Airport walkthrough steps ──────────────────────────────── */
 function AirportWalkthrough({ phase, locationStatus, hasLoungeAccess, hasPrioritySecurity,
-  hasPrecheck, hasClear, gate, terminal, lounges, tier }: {
+  hasPrecheck, hasGlobalEntry, hasClear, gate, terminal, iata, lounges, tier, deptUtcMs, now }: {
   phase: LocationPhase;
   locationStatus: UserAirportStatus;
   hasLoungeAccess: boolean;
   hasPrioritySecurity: boolean;
   hasPrecheck: boolean;
+  hasGlobalEntry: boolean;
   hasClear: boolean;
   gate?: string;
   terminal?: string;
+  iata?: string;
   lounges: AirlineLoungeInfo[];
   tier: StatusTier | null;
+  deptUtcMs: number;
+  now: number;
 }) {
-  // Build the right step list based on where you are and your status
-  const steps = useMemo(() => {
-    const list: { icon: string; text: string; done: boolean }[] = [];
+  const airside = locationStatus === "in-terminal";
+  const atAirport = locationStatus === "at-airport" || airside;
+  const minUntilDept = (deptUtcMs - now) / 60_000;
 
-    const atAirport = locationStatus === "at-airport" || locationStatus === "in-terminal";
-    const airside = locationStatus === "in-terminal";
+  const { steps: navSteps, totalMinutes } = useMemo(() => {
+    if (!iata) return { steps: [], totalMinutes: 0 };
+    return buildGateInstructions(iata, gate, terminal, hasClear, hasPrecheck, hasGlobalEntry);
+  }, [iata, gate, terminal, hasClear, hasPrecheck, hasGlobalEntry]);
+
+  const allSteps = useMemo(() => {
+    const list: { icon: string; text: string; detail?: string; done: boolean; minutes?: number }[] = [];
 
     if (!atAirport) {
       list.push({ icon: "🚗", text: "Get to the airport", done: false });
@@ -736,67 +867,98 @@ function AirportWalkthrough({ phase, locationStatus, hasLoungeAccess, hasPriorit
 
     if (!airside) {
       if (tier?.freeCheckedBags) {
-        list.push({ icon: "🧳", text: `Check your bags — ${tier.freeCheckedBags} free with your status`, done: atAirport });
+        list.push({ icon: "🧳", text: `Check bags — ${tier.freeCheckedBags} free with your status`, done: atAirport });
       } else {
-        list.push({ icon: "🧳", text: "Drop checked bags at the counter", done: atAirport });
+        list.push({ icon: "🧳", text: "Drop checked bags if needed", done: atAirport });
       }
-      const secLabel = hasClear ? "CLEAR → TSA PreCheck lane (fastest)"
-        : hasPrecheck ? "TSA PreCheck lane (dedicated, no belt removal)"
-        : hasPrioritySecurity ? "Priority security lane"
-        : "Standard TSA security — allow extra time";
-      list.push({ icon: "🛡", text: secLabel, done: airside });
     }
 
-    if (hasLoungeAccess && lounges.length > 0) {
-      const lounge = lounges[0];
-      list.push({ icon: "🛋", text: `${lounge.name} — ${lounge.location}`, done: false });
-      if (lounge.gateProximityNote) {
-        list.push({ icon: "⏱", text: `From lounge to gate: ${lounge.gateProximityNote}`, done: false });
+    if (!airside && navSteps.length > 0) {
+      navSteps.forEach(step => {
+        list.push({ icon: step.icon, text: step.text, detail: step.detail, done: airside, minutes: step.minutes });
+      });
+    } else if (airside && iata && gate) {
+      const nav = getAirportNav(iata);
+      if (nav) {
+        const gatePrefix = gate.match(/^([A-Z]+)/)?.[1];
+        const route = nav.concourseRoutes.find(r =>
+          r.fromZone.toLowerCase() === "security" &&
+          r.toZone.toUpperCase() === gatePrefix?.toUpperCase()
+        );
+        if (route) {
+          route.steps.forEach(step => {
+            const icon = step.mode === "train" ? "🚇" : step.mode === "tram" ? "🚃" : step.mode === "shuttle" ? "🚌" : "🚶";
+            list.push({ icon, text: step.instruction, detail: step.detail ?? step.landmark, done: false, minutes: step.estimatedMinutes });
+          });
+        }
       }
+    }
+
+    if (hasLoungeAccess && lounges.length > 0 && minUntilDept > 50) {
+      const lounge = lounges[0];
+      list.push({ icon: "🛋", text: `${lounge.name} — ${lounge.location}`, detail: lounge.gateProximityNote ?? lounge.hours, done: false });
     }
 
     if (gate) {
-      const gateLabel = terminal ? `Gate ${gate} · Terminal ${terminal}` : `Gate ${gate}`;
-      list.push({ icon: "🚪", text: `Head to ${gateLabel}`, done: phase === "at-gate" || phase === "final-call" || phase === "departed" });
+      list.push({ icon: "🚪", text: terminal ? `Gate ${gate} · Terminal ${terminal}` : `Gate ${gate}`, detail: "Check boards for any last-minute changes", done: phase === "at-gate" || phase === "final-call" || phase === "departed" });
     } else {
-      list.push({ icon: "🚪", text: "Find your departure gate on the boards", done: false });
+      list.push({ icon: "🚪", text: "Check boards for your gate number", done: false });
     }
 
     if (tier?.priorityBoarding) {
-      list.push({ icon: "🎖", text: `Priority boarding — listen for your group call`, done: phase === "departed" });
+      list.push({ icon: "🎖", text: "Priority boarding — board when your group is called", done: phase === "departed" });
     } else {
       list.push({ icon: "🛫", text: "Board when your group is called", done: phase === "departed" });
     }
 
     return list;
-  }, [phase, locationStatus, hasLoungeAccess, hasPrioritySecurity, hasPrecheck, hasClear, gate, terminal, lounges, tier]);
+  }, [phase, airside, atAirport, hasLoungeAccess, gate, terminal, iata, lounges, tier, navSteps, minUntilDept]);
 
   if (phase === "off" || phase === "leave-soon") return null;
 
+  const hasNavData = Boolean(iata && getAirportNav(iata));
+
   return (
     <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-        <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Your airport path</p>
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+          {hasNavData ? `Step-by-step · ${iata}` : "Your airport path"}
+        </p>
+        {totalMinutes > 0 && !airside && (
+          <span className="text-xs text-slate-400">~{totalMinutes} min to gate</span>
+        )}
       </div>
       <div className="divide-y divide-slate-100 dark:divide-slate-800">
-        {steps.map((step, i) => (
-          <div key={i} className={`flex items-start gap-3 px-4 py-3 ${step.done ? "opacity-40" : ""}`}>
+        {allSteps.map((step, i) => (
+          <div key={i} className={`flex items-start gap-3 px-4 py-3 transition-opacity ${step.done ? "opacity-35" : ""}`}>
             <div className="flex flex-col items-center shrink-0 mt-0.5">
               <span className="text-base">{step.done ? "✅" : step.icon}</span>
-              {i < steps.length - 1 && (
+              {i < allSteps.length - 1 && (
                 <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mt-1" />
               )}
             </div>
-            <p className={`text-sm pt-0.5 ${step.done ? "line-through text-slate-400" : "text-slate-800 dark:text-slate-200"}`}>
-              {step.text}
-            </p>
+            <div className="flex-1 min-w-0 pt-0.5">
+              <p className={`text-sm leading-snug ${step.done ? "line-through text-slate-400" : "text-slate-800 dark:text-slate-200"}`}>
+                {step.text}
+              </p>
+              {step.detail && !step.done && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{step.detail}</p>
+              )}
+              {step.minutes !== undefined && step.minutes > 0 && !step.done && (
+                <p className="text-[11px] text-slate-400 mt-0.5">~{step.minutes} min</p>
+              )}
+            </div>
           </div>
         ))}
       </div>
+      {hasNavData && (
+        <div className="px-4 py-2 border-t border-slate-100 dark:border-slate-800">
+          <p className="text-[10px] text-slate-400">Routing based on {iata} layout · Always verify on airport boards</p>
+        </div>
+      )}
     </div>
   );
 }
-
 /* ─── Pre-flight checklist ───────────────────────────────────── */
 function PreFlightChecklist() {
   const [checked, setChecked] = useState<Set<number>>(new Set());

@@ -18,8 +18,21 @@ const AirlineStatusSchema = z.object({
   iata: z.string().max(4).optional(),
 });
 
+const HotelStatusSchema = z.object({
+  chain: z.string().min(1).max(60),
+  tier: z.string().min(1).max(60),
+  number: z.string().max(40).optional(),
+});
+
+const CarRentalStatusSchema = z.object({
+  company: z.string().min(1).max(60),
+  tier: z.string().min(1).max(60),
+});
+
 const TravelProfileSchema = z.object({
   airlineStatuses: z.array(AirlineStatusSchema).max(10),
+  hotelStatuses: z.array(HotelStatusSchema).max(10).optional(),
+  carRentalStatuses: z.array(CarRentalStatusSchema).max(5).optional(),
   tsa_precheck: z.boolean().optional(),
   global_entry: z.boolean().optional(),
   clear: z.boolean().optional(),

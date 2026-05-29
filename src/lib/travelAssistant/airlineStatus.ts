@@ -155,3 +155,69 @@ export function findTier(program: AirlineStatusProgram, statusHint: string): Sta
 export function getLoungesForAirport(program: AirlineStatusProgram, airportIata: string): AirlineLoungeInfo[] {
   return program.lounges.filter(l => l.airport.toUpperCase() === airportIata.toUpperCase());
 }
+
+/* ─── Hotel programs ─────────────────────────────────────────── */
+export interface HotelProgram {
+  chain: string;
+  program: string;
+  tiers: { tier: string; benefits: string[] }[];
+}
+
+export const HOTEL_PROGRAMS: HotelProgram[] = [
+  {
+    chain: "Marriott",
+    program: "Bonvoy",
+    tiers: [
+      { tier: "Silver Elite",   benefits: ["10% bonus points", "Late checkout request"] },
+      { tier: "Gold Elite",     benefits: ["25% bonus points", "Room upgrade", "Late checkout 2pm"] },
+      { tier: "Platinum Elite", benefits: ["50% bonus points", "Room upgrade", "Late checkout 4pm", "Lounge access"] },
+      { tier: "Titanium Elite", benefits: ["75% bonus points", "Suite upgrades", "Late checkout 4pm", "Guaranteed lounge"] },
+      { tier: "Ambassador",     benefits: ["All Titanium + dedicated ambassador", "Your24 check-in/out"] },
+    ],
+  },
+  {
+    chain: "Hilton",
+    program: "Honors",
+    tiers: [
+      { tier: "Silver",   benefits: ["20% bonus points", "5th night free on rewards"] },
+      { tier: "Gold",     benefits: ["80% bonus points", "Complimentary breakfast", "Room upgrade"] },
+      { tier: "Diamond",  benefits: ["100% bonus points", "Executive lounge", "Premium room upgrade", "Late checkout"] },
+    ],
+  },
+  {
+    chain: "Hyatt",
+    program: "World of Hyatt",
+    tiers: [
+      { tier: "Discoverist", benefits: ["10% bonus points", "Late checkout 2pm", "Room upgrade"] },
+      { tier: "Explorist",   benefits: ["20% bonus points", "Club lounge access", "Late checkout 4pm"] },
+      { tier: "Globalist",   benefits: ["30% bonus points", "Guaranteed suite upgrades", "Free breakfast", "Club lounge", "Late checkout 4pm"] },
+    ],
+  },
+  {
+    chain: "IHG",
+    program: "One Rewards",
+    tiers: [
+      { tier: "Silver",   benefits: ["10% bonus points"] },
+      { tier: "Gold",     benefits: ["20% bonus points", "Room upgrade", "Late checkout"] },
+      { tier: "Platinum", benefits: ["40% bonus points", "Room upgrade", "Complimentary breakfast", "Late checkout 4pm"] },
+      { tier: "Diamond",  benefits: ["100% bonus points", "Suite upgrades", "Guaranteed availability", "Lounge access"] },
+    ],
+  },
+  {
+    chain: "Wyndham",
+    program: "Rewards",
+    tiers: [
+      { tier: "Gold",     benefits: ["Bonus points", "Late checkout"] },
+      { tier: "Platinum", benefits: ["Bonus points", "Room upgrade", "Late checkout", "Welcome amenity"] },
+      { tier: "Diamond",  benefits: ["Bonus points", "Best upgrade", "Early check-in", "Late checkout"] },
+    ],
+  },
+];
+
+export const CAR_RENTAL_PROGRAMS = [
+  { company: "Hertz", tiers: ["Gold Plus Rewards", "Five Star", "Presidents Circle"] },
+  { company: "National", tiers: ["Emerald Club Executive", "Executive Elite"] },
+  { company: "Avis", tiers: ["Preferred", "Preferred Plus", "Chairman's Club"] },
+  { company: "Enterprise", tiers: ["Plus", "Executive"] },
+  { company: "Budget", tiers: ["Fastbreak"] },
+];
