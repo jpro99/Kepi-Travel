@@ -211,6 +211,21 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
         ...payload,
       };
       if (resolved.complete) {
+        // Onboarding already done — but if there's a fresh invite/referral code
+        // in the URL, redeem it silently without showing the onboarding UI.
+        if (inviteCodeFromUrl && !resolved.inviteRedeemedAt) {
+          void fetch("/api/invite/redeem", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: inviteCodeFromUrl }),
+          }).then(async (r) => {
+            const data = (await r.json()) as { ok?: boolean; plan?: string; error?: string; reason?: string };
+            if (data.ok) {
+              // Force billing context to refresh so Pro unlocks immediately
+              window.dispatchEvent(new CustomEvent("kepi:billing-refresh"));
+            }
+          }).catch(() => null);
+        }
         setIsVisible(false);
         return;
       }
