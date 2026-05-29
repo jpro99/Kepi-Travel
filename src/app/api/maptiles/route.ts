@@ -50,6 +50,10 @@ export async function GET(req: Request): Promise<Response> {
   const upstream = await fetch(target.toString(), {
     headers: {
       "Accept": req.headers.get("Accept") ?? "*/*",
+      // MapTiler checks Origin or Referer to validate against the allowlist.
+      // Vercel edge fetch sends neither by default — we must set them explicitly.
+      "Origin": "https://kepitravel.com",
+      "Referer": "https://kepitravel.com/",
     },
   });
 
