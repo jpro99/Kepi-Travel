@@ -1841,8 +1841,11 @@ export default function TravelAssistantPage() {
         imageUrl: user.imageUrl ?? null,
       }),
     }).then(r => r.json()).then((d: { ok?: boolean; error?: string }) => {
-      if (d.ok) { setToast("✅ Joined! Go to More → Family to share your location."); window.dispatchEvent(new CustomEvent("kepi:family-reload")); }
-      else setToast(d.error ?? "Could not join family group.");
+      if (d.ok) {
+        setToast("✅ Joined! Location sharing starting automatically…");
+        window.dispatchEvent(new CustomEvent("kepi:family-reload"));
+        window.dispatchEvent(new CustomEvent("kepi:family-start-sharing"));
+      } else setToast(d.error ?? "Could not join family group.");
     }).catch(() => setToast("Could not join family group."));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, user]);
