@@ -171,6 +171,7 @@ interface ReservationDraft {
   flightArrivalTerminal?: string;
   flightDelayMinutes?: number;
   flightOnTime?: boolean;
+  flightSeatNumber?: string;
   checkOutDate?: string;
   roomType?: string;
   trainNumber?: string;
@@ -4741,6 +4742,7 @@ export default function TravelAssistantPage() {
             flightArrivalTerminal: reservation.flightArrivalTerminal,
             flightDelayMinutes: reservation.flightDelayMinutes,
             flightOnTime: reservation.flightOnTime,
+            flightSeatNumber: reservation.flightSeatNumber,
             checkOutDate: reservation.checkOutDate,
             roomType: reservation.roomType,
             trainNumber: reservation.trainNumber,
@@ -6462,6 +6464,15 @@ export default function TravelAssistantPage() {
                     onChange={(event) => setDrawerDraft((prev) => ({ ...prev, flightDepartureTerminal: event.target.value.toUpperCase() }))}
                     placeholder="2"
                     className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)] text-sm"
+                  />
+                </label>
+                <label className="block col-span-2">
+                  <span className="mb-1 block text-xs text-sky-700 dark:text-sky-300">Seat number</span>
+                  <input
+                    value={drawerDraft.flightSeatNumber ?? ""}
+                    onChange={(event) => setDrawerDraft((prev) => ({ ...prev, flightSeatNumber: event.target.value.toUpperCase() }))}
+                    placeholder="14A"
+                    className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)] text-sm font-mono"
                   />
                 </label>
               </div>

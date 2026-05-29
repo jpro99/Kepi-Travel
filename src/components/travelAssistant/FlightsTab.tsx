@@ -154,9 +154,10 @@ function AirportGuideCard({
     [gate, terminal, iata]
   );
 
-  // Auto-check on mount if gate not yet assigned
+  // Auto-check status on mount — always get fresh gate/terminal/delay data
+  // Gate assignments change right up to departure so always fetch latest
   useEffect(() => {
-    if (!gate && !live?.busy && !live?.checkedAt) {
+    if (!live?.busy) {
       onCheckStatus(flight.id);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -186,13 +187,17 @@ function AirportGuideCard({
       {/* Gate · Terminal · Seat row */}
       <div className="mx-4 mb-4 grid grid-cols-3 gap-2">
         {[
-          { label: "GATE", value: gate || "—", highlight: Boolean(gate) },
+          { label: "GATE", value: gate || "—", highlight: Boolean(gate), loading: live?.busy && !gate },
           { label: "TERMINAL", value: terminal || "—", highlight: Boolean(terminal) },
           { label: "SEAT", value: flight.flightSeatNumber || "—", highlight: Boolean(flight.flightSeatNumber) },
-        ].map(({ label, value, highlight }) => (
+        ].map(({ label, value, highlight, loading }) => (
           <div key={label} className="rounded-2xl bg-white/10 p-3 text-center">
             <p className="text-[9px] font-bold uppercase tracking-widest text-sky-200/50">{label}</p>
-            <p className={`text-xl font-black mt-0.5 ${highlight ? "text-white" : "text-white/30"}`}>{value}</p>
+            {loading ? (
+              <p className="text-sm text-white/40 animate-pulse mt-1">…</p>
+            ) : (
+              <p className={`text-xl font-black mt-0.5 ${highlight ? "text-white" : "text-white/30"}`}>{value}</p>
+            )}
           </div>
         ))}
       </div>
@@ -298,13 +303,9 @@ export function FlightsTab({
 
   const shown = showPast ? [...upcoming, ...past] : upcoming;
 
-  // Show the airport guide card when at airport or airborne and there's a next flight within 4h
-  const showGuide = nextFlight && (
-    locationStatus === "at-airport" ||
-    locationStatus === "in-terminal" ||
-    (locationStatus === "airborne") ||
-    minsUntilDep(nextFlight) < 240
-  );
+  // Always show the airport guide card for the next upcoming flight
+  // It gives gate/terminal/seat at a glance and auto-checks live status
+  const showGuide = Boolean(nextFlight);
 
   return (
     <section className="space-y-4 pb-6">
