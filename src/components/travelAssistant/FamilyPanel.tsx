@@ -103,7 +103,12 @@ export function FamilyPanel({ isPremium, onUpgrade, maptilerKey }: FamilyPanelPr
   }, []);
 
   useEffect(() => {
-    if (!isPremium) { setLoading(false); return; }
+    if (!isPremium) {
+      // Defer the setState out of the render phase to avoid cascading-render lint error
+      const t = setTimeout(() => setLoading(false), 0);
+      return () => clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [isPremium, load]);
 
@@ -319,37 +324,12 @@ export function FamilyPanel({ isPremium, onUpgrade, maptilerKey }: FamilyPanelPr
         </button>
       </div>
 
-      {/* Map toggle */}
-      <div className="flex items-center justify-between">
+      {/* Live count — map now lives at /travel-assistant/live-map */}
+      {Object.keys(locations).length > 0 && (
         <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          {Object.keys(locations).length > 0 ? `${Object.keys(locations).length} location${Object.keys(locations).length !== 1 ? "s" : ""} live` : "No locations shared yet"}
+          {Object.keys(locations).length} location{Object.keys(locations).length !== 1 ? "s" : ""} live
         </p>
-        <button
-          type="button"
-          onClick={() => setShowMap(v => !v)}
-          className="text-xs font-semibold text-sky-600 hover:underline dark:text-sky-400"
-        >
-          {showMap ? "Hide map" : "Show map"}
-        </button>
-      </div>
-
-      {/* Live map */}
-      {showMap && (resolvedMapKey || maptilerKey) ? (
-        <FamilyMap
-          members={group?.members ?? []}
-          locations={locations}
-          maptilerKey={resolvedMapKey || maptilerKey || ""}
-          height={300}
-          onMemberClick={setSelectedMemberId}
-        />
-      ) : showMap ? (
-        <div className="flex h-[300px] w-full items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800">
-          <div className="flex flex-col items-center gap-2">
-            <div className="h-6 w-6 rounded-full border-2 border-sky-500 border-t-transparent animate-spin" />
-            <p className="text-xs text-slate-500">Loading map...</p>
-          </div>
-        </div>
-      ) : null}
+      )}
 
 
       {/* Invite code */}

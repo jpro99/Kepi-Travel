@@ -1697,6 +1697,9 @@ export default function TravelAssistantPage() {
   const lastFocusedElementBeforeDrawerRef = useRef<HTMLElement | null>(null);
   const readinessChecklistSectionRef = useRef<HTMLElement | null>(null);
   const reservationsPullStartYRef = useRef<number | null>(null);
+  // Stable ref so early useEffects can call this without a hoisting error
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleCheckFlightStatusRef = useRef<(id: string) => Promise<void>>(async () => { /* initialised below */ });
   const toastPolicyRef = useRef<{
     tone: GuidanceTone;
     lastMessage: string | null;
@@ -2361,7 +2364,7 @@ export default function TravelAssistantPage() {
     const pollFlight = async () => {
       for (const flight of upcomingFlights) {
         try {
-          await handleCheckFlightStatus(flight.id);
+          await handleCheckFlightStatusRef.current(flight.id);
         } catch {
           // Fail silently
         }
@@ -2370,8 +2373,9 @@ export default function TravelAssistantPage() {
     void pollFlight();
     const interval = window.setInterval(() => { void pollFlight(); }, 5 * 60_000);
     return () => window.clearInterval(interval);
+  // handleCheckFlightStatusRef is a stable ref — intentionally omitted from deps
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTripId, reservations.length]);
+  }, [activeTripId, reservations]);
 
   useEffect(() => {
     if (!tripsHydratedRef.current) return;
@@ -5440,6 +5444,11 @@ export default function TravelAssistantPage() {
     },
     [queueMutation, reservations, setToast],
   );
+  // Keep ref in sync so the flight-polling useEffect (declared above) can call it
+  // Must be done in useEffect to avoid "Cannot access refs during render" lint error
+  useEffect(() => {
+    handleCheckFlightStatusRef.current = handleCheckFlightStatus;
+  }, [handleCheckFlightStatus]);
 
   const normalizeDuplicateValue = (value: string): string => value.trim().toLowerCase();
 
@@ -7609,6 +7618,54 @@ export default function TravelAssistantPage() {
                 <h2 className="text-lg font-bold">Family</h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">Location sharing, trip sharing, and referrals</p>
               </div>
+
+              {/* Live Map — full-screen dedicated page */}
+              <a
+                href="/travel-assistant/live-map"
+                className="group relative block w-full overflow-hidden rounded-2xl bg-slate-900 shadow-xl"
+                style={{ height: 180 }}
+              >
+                {/* Map preview background */}
+                <div className="absolute inset-0 bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950">
+                  <div className="absolute inset-0 opacity-20"
+                    style={{ backgroundImage: "radial-gradient(circle at 40% 55%, #0ea5e9 0%, transparent 55%), radial-gradient(circle at 75% 30%, #6366f1 0%, transparent 50%)" }} />
+                  {/* Fake map grid lines */}
+                  <svg className="absolute inset-0 w-full h-full opacity-10" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                      <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse">
+                        <path d="M 36 0 L 0 0 0 36" fill="none" stroke="white" strokeWidth="0.5"/>
+                      </pattern>
+                    </defs>
+                    <rect width="100%" height="100%" fill="url(#grid)" />
+                  </svg>
+                  {/* Location dot */}
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                    <div className="relative h-5 w-5">
+                      <div className="absolute inset-0 rounded-full bg-sky-400 animate-ping opacity-60" />
+                      <div className="relative h-5 w-5 rounded-full bg-sky-400 border-2 border-white shadow-lg" />
+                    </div>
+                  </div>
+                </div>
+                {/* Overlay content */}
+                <div className="absolute inset-0 flex flex-col justify-between p-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-white font-bold text-base leading-tight drop-shadow">📍 Live Map</p>
+                      <p className="text-white/60 text-xs mt-0.5">Real-time family locations</p>
+                    </div>
+                    <span className="rounded-full bg-white/15 backdrop-blur px-2.5 py-1 text-[11px] font-semibold text-white border border-white/10">
+                      Open →
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 px-3 py-1.5 text-[11px] font-semibold text-emerald-300">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Full-screen · Streets &amp; Satellite
+                    </span>
+                  </div>
+                </div>
+              </a>
+
               {/* Share trip link */}
               <button
                 type="button"
@@ -7618,7 +7675,7 @@ export default function TravelAssistantPage() {
                 <p className="font-semibold text-sky-800 dark:text-sky-200">🔗 Share trip with family</p>
                 <p className="mt-1 text-xs text-sky-600 dark:text-sky-400">Create a read-only link so family can follow your itinerary in real time.</p>
               </button>
-              {/* Life360-style family tracker */}
+              {/* Family tracker (members list, invite, location share) */}
               <Suspense fallback={<div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 animate-pulse">Loading Family Tracker...</div>}>
                 <FamilyPanel
                   isPremium={hasProAccess || isLifetime || isTrial}
@@ -7709,7 +7766,7 @@ export default function TravelAssistantPage() {
                   )}
                 </div>
                 <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                  Get push alerts for gate changes, delays, and departure reminders — even when the app isn't open.
+                  Get push alerts for gate changes, delays, and departure reminders — even when the app isn&apos;t open.
                 </p>
                 {!pushSubscribed ? (
                   <button
