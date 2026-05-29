@@ -263,14 +263,31 @@ export function LiveMapPage() {
         const styleUrl = satellite ? satelliteStyleUrl(key) : streetsStyleUrl(key);
         const style = await loadProxiedStyle(styleUrl);
 
+        const origin = window.location.origin;
+
+        // transformRequest intercepts EVERY network request MapLibre makes.
+        // This catches tile URLs that come from tiles.json (which our style rewrite never sees).
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const transformRequest = (url: string, resourceType: string): { url: string } | undefined => {
+          if (!url.includes("api.maptiler.com")) return undefined;
+          const clean = url.replace(/[?&]key=[^&]*/g, "").replace(/\?$/, "");
+          const tokenMatch = clean.match(/^(.*?)(\{[^}]+\}.*)$/);
+          if (tokenMatch) {
+            const base = tokenMatch[1].replace(/\/$/, "");
+            const suffix = tokenMatch[2];
+            return { url: `${origin}/api/maptiles?url=${encodeURIComponent(base)}&suffix=${suffix}` };
+          }
+          return { url: `${origin}/api/maptiles?url=${encodeURIComponent(clean)}` };
+        };
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const map = new (ml as any).Map({
           container: mapEl.current,
           style,
           center, zoom,
           maxZoom: 20,
-          // Don't cap pixelRatio — let MapLibre decide; capping to 1 makes it blurry on Retina
           attributionControl: false,
+          transformRequest,
         });
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

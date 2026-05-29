@@ -192,6 +192,19 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
       const zoom = knownLocs.length === 1 ? 14 : knownLocs.length > 1 ? 10 : 4;
 
       const style = await loadStyle(streetsUrl);
+      const origin = window.location.origin;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const transformRequest = (url: string): { url: string } | undefined => {
+        if (!url.includes("api.maptiler.com")) return undefined;
+        const clean = url.replace(/[?&]key=[^&]*/g, "").replace(/\?$/, "");
+        const tokenMatch = clean.match(/^(.*?)(\{[^}]+\}.*)$/);
+        if (tokenMatch) {
+          const base = tokenMatch[1].replace(/\/$/, "");
+          const suffix = tokenMatch[2];
+          return { url: `${origin}/api/maptiles?url=${encodeURIComponent(base)}&suffix=${suffix}` };
+        }
+        return { url: `${origin}/api/maptiles?url=${encodeURIComponent(clean)}` };
+      };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const map = new (ml as any).Map({
         container: mapEl.current,
@@ -199,6 +212,7 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
         center, zoom,
         attributionControl: false,
         fadeDuration: 0,
+        transformRequest,
       });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       map.addControl(new (ml as any).NavigationControl({ showCompass: false }), "top-right");
