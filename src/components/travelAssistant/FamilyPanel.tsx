@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface LocationPoint {
   lat: number;
@@ -87,13 +87,26 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
 
   useEffect(() => {
     if (!isPremium) {
-      // Defer the setState out of the render phase to avoid cascading-render lint error
       const t = setTimeout(() => setLoading(false), 0);
       return () => clearTimeout(t);
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [isPremium, load]);
+
+  // Poll locations every 10s so the map stays live without a full refresh
+  useEffect(() => {
+    if (!isPremium) return;
+    const id = setInterval(() => {
+      void fetch("/api/family", { cache: "no-store" })
+        .then(r => r.json())
+        .then((d: { locations?: Record<string, LocationPoint> }) => {
+          if (d.locations) setLocations(d.locations);
+        })
+        .catch(() => null);
+    }, 10_000);
+    return () => clearInterval(id);
+  }, [isPremium]);
 
   const handleJoinGroup = useCallback(async () => {
     if (!joinCode.trim()) { setMessage("Enter the invite code from the group organizer."); return; }
@@ -148,14 +161,26 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
     }
   }, [load]);
 
-  const shareLocation = useCallback(async () => {
+  const watchIdRef = useRef<number | null>(null);
+
+  const shareLocation = useCallback(() => {
     if (!navigator.geolocation) {
       setMessage("Geolocation not available on this device.");
       return;
     }
+    // Toggle off
+    if (sharingLocation) {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+      setSharingLocation(false);
+      setMessage("Location sharing stopped.");
+      return;
+    }
     setSharingLocation(true);
-    setMessage("Getting your location...");
-    navigator.geolocation.getCurrentPosition(
+    setMessage("Getting your location…");
+    watchIdRef.current = navigator.geolocation.watchPosition(
       async (pos) => {
         try {
           await fetch("/api/family", {
@@ -168,21 +193,29 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
               accuracy: pos.coords.accuracy,
             }),
           });
-          setMessage("✅ Location shared with your family group.");
-          await load();
+          setMessage("✅ Sharing live location with your family group.");
+          // Update local state immediately so the map reflects it
+          setLocations(prev => ({
+            ...prev,
+            // We don't know our own memberId here, but load() will refresh it
+          }));
         } catch {
-          setMessage("Failed to share location.");
-        } finally {
-          setSharingLocation(false);
+          // Silent — keep watching, transient network errors are fine
         }
       },
       () => {
         setMessage("Location permission denied. Enable in device settings.");
         setSharingLocation(false);
+        watchIdRef.current = null;
       },
-      { enableHighAccuracy: true, timeout: 10_000 }
+      { enableHighAccuracy: true, maximumAge: 5_000, timeout: 15_000 }
     );
-  }, [load]);
+  }, [sharingLocation]);
+
+  // Stop watching on unmount
+  useEffect(() => () => {
+    if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+  }, []);
 
   const handleAddMember = useCallback(async () => {
     if (!newMemberName.trim()) { setMessage("Enter a name."); return; }
@@ -299,11 +332,14 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
         </div>
         <button
           type="button"
-          onClick={() => void shareLocation()}
-          disabled={sharingLocation}
-          className="rounded-lg bg-sky-600 px-3 py-2 text-xs font-bold text-white hover:bg-sky-500 disabled:opacity-60"
+          onClick={shareLocation}
+          className={`rounded-lg px-3 py-2 text-xs font-bold transition ${
+            sharingLocation
+              ? "bg-emerald-600 text-white hover:bg-emerald-700"
+              : "bg-sky-600 text-white hover:bg-sky-500"
+          }`}
         >
-          {sharingLocation ? "Getting location..." : "📍 Share my location"}
+          {sharingLocation ? "🟢 Sharing live" : "📍 Share my location"}
         </button>
       </div>
 

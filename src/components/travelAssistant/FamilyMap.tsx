@@ -2,7 +2,7 @@
 
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@/lib/maplibreCspWorker";
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 
 interface LocationPoint {
   lat: number;
@@ -48,34 +48,39 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
   const [selected, setSelected] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  const key = encodeURIComponent(maptilerKey);
-  const streetsUrl = `https://api.maptiler.com/maps/streets-v2/style.json?key=${key}`;
-  const hybridUrl = `https://api.maptiler.com/maps/hybrid/style.json?key=${key}`;
+  // Stable style URLs — only recompute when key changes
+  const streetsUrl = useMemo(() => `https://api.maptiler.com/maps/streets-v2/style.json?key=${encodeURIComponent(maptilerKey)}`, [maptilerKey]);
+  const hybridUrl  = useMemo(() => `https://api.maptiler.com/maps/hybrid/style.json?key=${encodeURIComponent(maptilerKey)}`, [maptilerKey]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const placeMarkers = useCallback((map: any) => {
+  // Place/move markers — update existing ones in place (no flicker)
+  const placeMarkers = useCallback((map: unknown) => {
     import("maplibre-gl").then((ml) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      map._kepiMarkers?.forEach((m: any) => m.remove());
-      map._kepiMarkers = [];
+      const existing: Record<string, any> = (map as any)._kepiMarkers ?? {};
+
       members.forEach(member => {
         const loc = locations[member.id];
         if (!loc) return;
         const stale = isStale(loc.updatedAt);
 
+        // Move existing marker instead of rebuilding
+        if (existing[member.id]) {
+          existing[member.id].setLngLat([loc.lon, loc.lat]);
+          return;
+        }
+
+        // Build new marker DOM
         const wrap = document.createElement("div");
         wrap.style.cssText = "cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;";
 
-        // Avatar — photo if available, else initial
         const av = document.createElement("div");
-        av.style.cssText = `
-          width:48px;height:48px;border-radius:50%;
-          border:3px solid ${stale ? "#94a3b8" : member.color};
-          box-shadow:0 2px 12px rgba(0,0,0,0.35);
-          overflow:hidden;position:relative;
-          background:${stale ? "#64748b" : member.color};
-          display:flex;align-items:center;justify-content:center;
-        `;
+        av.style.cssText = [
+          "width:44px;height:44px;border-radius:50%;",
+          `border:3px solid ${stale ? "#94a3b8" : member.color};`,
+          "box-shadow:0 2px 12px rgba(0,0,0,0.35);overflow:hidden;position:relative;",
+          `background:${stale ? "#64748b" : member.color};`,
+          "display:flex;align-items:center;justify-content:center;",
+        ].join("");
 
         if (member.imageUrl) {
           const img = document.createElement("img");
@@ -83,32 +88,31 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
           img.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:50%;";
           img.onerror = () => {
             img.style.display = "none";
-            av.textContent = member.name.charAt(0).toUpperCase();
-            av.style.cssText += "font-size:18px;font-weight:800;color:white;font-family:system-ui,sans-serif;";
+            const span = document.createElement("span");
+            span.textContent = member.name.charAt(0).toUpperCase();
+            span.style.cssText = "font-size:16px;font-weight:800;color:white;font-family:system-ui,sans-serif;";
+            av.appendChild(span);
           };
           av.appendChild(img);
         } else {
           const init = document.createElement("span");
           init.textContent = member.name.charAt(0).toUpperCase();
-          init.style.cssText = "font-size:18px;font-weight:800;color:white;font-family:system-ui,sans-serif;";
+          init.style.cssText = "font-size:16px;font-weight:800;color:white;font-family:system-ui,sans-serif;";
           av.appendChild(init);
         }
 
-        // Pulse ring for live location
         if (!stale) {
           const ring = document.createElement("div");
           ring.style.cssText = `position:absolute;inset:-7px;border-radius:50%;border:2.5px solid ${member.color};animation:kpulse 2s ease-out infinite;pointer-events:none;`;
           av.appendChild(ring);
         }
 
-        // Name label
         const lbl = document.createElement("div");
         lbl.style.cssText = "background:white;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:700;color:#0f172a;box-shadow:0 1px 5px rgba(0,0,0,0.18);white-space:nowrap;max-width:90px;overflow:hidden;text-overflow:ellipsis;";
         lbl.textContent = member.name;
 
         wrap.appendChild(av);
         wrap.appendChild(lbl);
-
         wrap.addEventListener("click", () => {
           setSelected(p => p === member.id ? null : member.id);
           onMemberClick?.(member.id);
@@ -117,13 +121,24 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const marker = new (ml as any).Marker({ element: wrap, anchor: "bottom" })
           .setLngLat([loc.lon, loc.lat])
-          .addTo(map);
-        map._kepiMarkers.push(marker);
+          .addTo(map as Parameters<typeof marker.addTo>[0]);
+        existing[member.id] = marker;
       });
+
+      // Remove markers for members no longer present
+      Object.keys(existing).forEach(id => {
+        if (!members.find(m => m.id === id)) {
+          existing[id].remove();
+          delete existing[id];
+        }
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (map as any)._kepiMarkers = existing;
     }).catch(console.error);
   }, [members, locations, onMemberClick]);
 
-  // Init map
+  // Init map — only when maptilerKey first arrives
   useEffect(() => {
     const el = mapEl.current;
     if (!el || !maptilerKey) return;
@@ -131,7 +146,8 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
 
     if (mapRef.current) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      mapRef.current._kepiMarkers?.forEach((m: any) => m.remove());
+      const old = mapRef.current._kepiMarkers as Record<string, any> | undefined;
+      if (old) Object.values(old).forEach((m: unknown) => (m as { remove(): void }).remove());
       mapRef.current.remove();
       mapRef.current = null;
       setIsLoaded(false);
@@ -166,9 +182,7 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
         placeMarkers(map);
       });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      map.on("error", (e: any) => {
-        console.warn("[FamilyMap]", e?.error?.message ?? e?.message);
-      });
+      map.on("error", (e: any) => { console.warn("[FamilyMap]", e?.error?.message ?? e?.message); });
       mapRef.current = map;
     })();
 
@@ -176,40 +190,40 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
       cancelled = true;
       if (mapRef.current) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        mapRef.current._kepiMarkers?.forEach((m: any) => m.remove());
-        mapRef.current.remove();
-        mapRef.current = null;
+        const old = mapRef.current._kepiMarkers as Record<string, any> | undefined;
+        if (old) Object.values(old).forEach((m: unknown) => (m as { remove(): void }).remove());
+        mapRef.current.remove(); mapRef.current = null;
       }
       setIsLoaded(false);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [maptilerKey]);
 
-  // Update markers when data changes
+  // Move/place markers when locations or members update
   useEffect(() => {
     if (mapRef.current && isLoaded) placeMarkers(mapRef.current);
   }, [placeMarkers, isLoaded]);
 
-  // Toggle satellite/streets
+  // Toggle satellite — swap style without reinitialising
   useEffect(() => {
     if (!mapRef.current || !isLoaded) return;
-    mapRef.current.setStyle(satellite ? hybridUrl : streetsUrl);
+    const style = satellite ? hybridUrl : streetsUrl;
+    mapRef.current.setStyle(style);
     mapRef.current.once("styledata", () => {
       if (mapRef.current) placeMarkers(mapRef.current);
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [satellite]);
+  }, [satellite, hybridUrl, streetsUrl, isLoaded, placeMarkers]);
 
-  // Resize on fullscreen
+  // Resize after fullscreen transition
   useEffect(() => {
-    const t = setTimeout(() => mapRef.current?.resize(), 100);
+    const t = setTimeout(() => mapRef.current?.resize(), 120);
     return () => clearTimeout(t);
   }, [fullscreen]);
 
   const fitAll = useCallback(() => {
     if (!mapRef.current) return;
     const locs = members.map(m => locations[m.id]).filter(Boolean) as LocationPoint[];
-    if (locs.length === 0) return;
+    if (!locs.length) return;
     if (locs.length === 1) { mapRef.current.flyTo({ center: [locs[0].lon, locs[0].lat], zoom: 14 }); return; }
     import("maplibre-gl").then(({ LngLatBounds }) => {
       const b = new LngLatBounds();
@@ -248,12 +262,11 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
           </button>
         </div>
 
-        {/* Member list overlay — bottom of map, scrollable */}
+        {/* Member tap bar */}
         <div className="absolute bottom-0 left-0 right-0 z-20 px-2 pb-2">
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
             {members.map(m => {
               const loc = locations[m.id];
-              const hasLoc = Boolean(loc);
               const stale = loc ? isStale(loc.updatedAt) : true;
               return (
                 <button
@@ -261,17 +274,12 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
                   type="button"
                   onClick={() => {
                     setSelected(p => p === m.id ? null : m.id);
-                    if (loc && mapRef.current) {
-                      mapRef.current.flyTo({ center: [loc.lon, loc.lat], zoom: 15, duration: 600 });
-                    }
+                    if (loc && mapRef.current) mapRef.current.flyTo({ center: [loc.lon, loc.lat], zoom: 15, duration: 600 });
                   }}
                   className={`flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-semibold shadow-md transition ${
-                    selected === m.id
-                      ? "bg-sky-600 text-white"
-                      : "bg-white/90 text-slate-800"
+                    selected === m.id ? "bg-sky-600 text-white" : "bg-white/90 text-slate-800"
                   }`}
                 >
-                  {/* Mini avatar */}
                   <div className="h-5 w-5 rounded-full overflow-hidden shrink-0 flex items-center justify-center text-[9px] font-black text-white"
                     style={{ background: m.color }}>
                     {m.imageUrl
@@ -280,17 +288,16 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
                     }
                   </div>
                   <span className="truncate max-w-[60px]">{m.name}</span>
-                  <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${!hasLoc ? "bg-slate-300" : stale ? "bg-amber-400" : "bg-emerald-400"}`} />
+                  <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${!loc ? "bg-slate-300" : stale ? "bg-amber-400" : "bg-emerald-400"}`} />
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* Selected member detail card */}
+        {/* Selected member card */}
         {selMember && selLoc && (
-          <div className="absolute top-3 right-3 left-3 z-20 rounded-2xl bg-white/95 p-3 shadow-xl dark:bg-slate-900/95 mx-auto max-w-[280px] ml-auto"
-            style={{ top: 3, right: 3, left: "auto" }}>
+          <div className="absolute top-3 right-3 z-20 rounded-2xl bg-white/95 p-3 shadow-xl dark:bg-slate-900/95 w-[220px]">
             <div className="flex items-center gap-2">
               <div className="h-10 w-10 shrink-0 rounded-full overflow-hidden border-2 flex items-center justify-center font-bold text-white text-sm"
                 style={{ background: selMember.color, borderColor: selMember.color }}>
