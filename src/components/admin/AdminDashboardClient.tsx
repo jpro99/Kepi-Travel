@@ -448,6 +448,10 @@ export function AdminDashboardClient() {
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
                 placeholder="recipient@email.com"
+                autoComplete="off"
+                autoCapitalize="none"
+                autoCorrect="off"
+                inputMode="email"
                 className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900"
               />
               <input
@@ -455,6 +459,7 @@ export function AdminDashboardClient() {
                 value={inviteNote}
                 onChange={(e) => setInviteNote(e.target.value)}
                 placeholder="Optional note"
+                autoComplete="off"
                 className="w-40 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900"
               />
             </div>

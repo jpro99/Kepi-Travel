@@ -25,6 +25,7 @@ const MemberSchema = z.object({
   joinedAt: z.string(),
 });
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const FamilyGroupSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -34,6 +35,7 @@ const FamilyGroupSchema = z.object({
   createdAt: z.string(),
 });
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const LocationSchema = z.object({
   lat: z.number().min(-90).max(90),
   lon: z.number().min(-180).max(180),

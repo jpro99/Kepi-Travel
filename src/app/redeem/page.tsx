@@ -32,7 +32,7 @@ export default async function RedeemPage({ searchParams }: Props) {
           {/* Header gradient */}
           <div className="bg-gradient-to-r from-[#0c2461] via-[#1a56b0] to-[#0ea5e9] px-8 py-8 text-center">
             <Logo size="sm" />
-            <h1 className="mt-4 text-2xl font-bold text-white">You're invited to Kepi</h1>
+            <h1 className="mt-4 text-2xl font-bold text-white">You&apos;re invited to Kepi</h1>
             <p className="mt-2 text-sm text-sky-100">
               Your invite code is ready to redeem
             </p>

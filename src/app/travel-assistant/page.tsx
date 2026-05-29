@@ -1141,6 +1141,7 @@ function extractFlightLookupInput(reservation: Reservation): {
   return { flightNumber, airline, flightDate };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function getReservationRouteLabel(reservation: Reservation): string {
   if (reservation.type === "flight" || reservation.type === "train" || reservation.type === "ride") {
     if (reservation.location.includes("→")) {
@@ -1672,9 +1673,6 @@ export default function TravelAssistantPage() {
   const [lastConflictSummary, setLastConflictSummary] = useState<TravelConflictResolutionSummary | null>(null);
   const [opsSnapshot, setOpsSnapshot] = useState<TravelOpsSnapshot | null>(null);
   const [opsError, setOpsError] = useState<string | null>(null);
-  const [calendarSyncInFlight, setCalendarSyncInFlight] = useState(false);
-  const [calendarSyncMessage, setCalendarSyncMessage] = useState<string | null>(null);
-  const [calendarSyncTone, setCalendarSyncTone] = useState<"neutral" | "success" | "error">("neutral");
   const [opsExpanded, setOpsExpanded] = useState(false);
   const [opsLoading, setOpsLoading] = useState(false);
   const [opsActionPending, setOpsActionPending] = useState<
@@ -1698,7 +1696,6 @@ export default function TravelAssistantPage() {
   const readinessChecklistSectionRef = useRef<HTMLElement | null>(null);
   const reservationsPullStartYRef = useRef<number | null>(null);
   // Stable ref so early useEffects can call this without a hoisting error
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleCheckFlightStatusRef = useRef<(id: string) => Promise<void>>(async () => { /* initialised below */ });
   const toastPolicyRef = useRef<{
     tone: GuidanceTone;
@@ -2374,7 +2371,6 @@ export default function TravelAssistantPage() {
     const interval = window.setInterval(() => { void pollFlight(); }, 5 * 60_000);
     return () => window.clearInterval(interval);
   // handleCheckFlightStatusRef is a stable ref — intentionally omitted from deps
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTripId, reservations]);
 
   useEffect(() => {
@@ -2822,7 +2818,7 @@ export default function TravelAssistantPage() {
       return true;
     });
   }, [exportFrom, exportTo, personalTimelineOnly, reservations, selectedFamilyMember.id]);
-
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const visibleFamilyMarkers = useMemo(() => {
     const viewer = selectedFamilyMember;
     const visibleMembers = familyMembers.filter((member) => canViewerSeeMember(viewer, member));
@@ -3350,7 +3346,6 @@ export default function TravelAssistantPage() {
       const depMs = candidates.length > 0 ? Math.max(...candidates) : Number.NaN;
       return !Number.isNaN(depMs) && depMs > nowMs - 4 * 3_600_000;
     }) ?? null;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [consumerReservationsSorted]);
 
   const forwardedReviewItems = useMemo(
@@ -3529,6 +3524,7 @@ export default function TravelAssistantPage() {
     return () => {
       window.clearTimeout(timeout);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     activeTrip?.destination,
     activeTrip?.startDate,
@@ -4620,7 +4616,7 @@ export default function TravelAssistantPage() {
     },
     [setToast],
   );
-
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleManualCalendarSync = useCallback((): void => {
     void syncReservationsToGoogleCalendar(reservations, "manual");
   }, [reservations, syncReservationsToGoogleCalendar]);
@@ -4956,6 +4952,7 @@ export default function TravelAssistantPage() {
   }, [activeDrawer, drawerDraft, setToast]);
 
   const persistReviewQueueToTrip = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     (nextQueue: ReviewItem[], context: { reviewId: string; source: string }): void => {
       const targetTripId = activeTripId ?? trips[0]?.id ?? null;
       if (!targetTripId) {
@@ -5848,7 +5845,7 @@ export default function TravelAssistantPage() {
     printWindow.print();
     setToast("PDF print dialog opened.");
   };
-
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const toggleMemberSharing = (memberId: string): void => {
     setFamilyMembers((prev) =>
       prev.map((member) =>
@@ -5857,7 +5854,7 @@ export default function TravelAssistantPage() {
     );
     queueMutation("Family location sharing preference updated.");
   };
-
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const toggleMemberVisibility = (memberId: string): void => {
     setFamilyMembers((prev) =>
       prev.map((member) =>
@@ -7680,7 +7677,6 @@ export default function TravelAssistantPage() {
                 <FamilyPanel
                   isPremium={hasProAccess || isLifetime || isTrial}
                   onUpgrade={() => openUpgradeModal("multi-trip", "Upgrade to Pro to unlock Family Tracker — real-time location sharing for your whole group.")}
-                  maptilerKey={process.env.NEXT_PUBLIC_MAPTILER_KEY ?? ""}
                 />
               </Suspense>
               {/* Invite a friend */}

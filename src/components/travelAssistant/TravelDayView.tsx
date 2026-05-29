@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 
 type TransportMode = "driving-myself" | "getting-dropped-off" | "uber-lyft" | "train-bus" | "other";
 
@@ -79,10 +79,6 @@ function fmtDiff(ms: number): string {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
-/** Subtract minutes from a UTC ms timestamp */
-function subMin(utcMs: number, minutes: number): number {
-  return utcMs - minutes * 60_000;
-}
 
 type ReadinessStatus = "green" | "yellow" | "red";
 
@@ -107,7 +103,7 @@ export function TravelDayView({
   hotelCheckout, onTransportChange, onClose
 }: TravelDayViewProps) {
   const [askTransport, setAskTransport] = useState(!transport);
-  const [nowMs, setNowMs] = useState(Date.now());
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   // Update every minute
   useEffect(() => {

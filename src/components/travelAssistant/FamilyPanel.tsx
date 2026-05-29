@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { FamilyMap } from "@/components/travelAssistant/FamilyMap";
+import { useCallback, useEffect, useState } from "react";
 
 interface LocationPoint {
   lat: number;
@@ -35,7 +34,6 @@ interface FamilyGroup {
 interface FamilyPanelProps {
   isPremium: boolean;
   onUpgrade: () => void;
-  maptilerKey?: string;
 }
 
 function timeAgo(iso: string): string {
@@ -52,7 +50,7 @@ function isStale(iso: string): boolean {
   return Date.now() - Date.parse(iso) > 10 * 60_000;
 }
 
-export function FamilyPanel({ isPremium, onUpgrade, maptilerKey }: FamilyPanelProps) {
+export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
   const [group, setGroup] = useState<FamilyGroup | null>(null);
   const [locations, setLocations] = useState<Record<string, LocationPoint>>({});
   const [loading, setLoading] = useState(true);
@@ -66,26 +64,10 @@ export function FamilyPanel({ isPremium, onUpgrade, maptilerKey }: FamilyPanelPr
   const [copiedCode, setCopiedCode] = useState(false);
   const [groupRole, setGroupRole] = useState<"owner" | "member" | null>(null);
   const [hasGroup, setHasGroup] = useState(false);
-  const [resolvedMapKey, setResolvedMapKey] = useState<string>("");
-  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
-  const [showMap, setShowMap] = useState(true);
-  const [mapFullscreen, setMapFullscreen] = useState(false);
   const [joiningGroup, setJoiningGroup] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [joinName, setJoinName] = useState("");
   const [joinBusy, setJoinBusy] = useState(false);
-  const watchIdRef = useRef<number | null>(null);
-
-  // Always fetch map key from server on mount — never rely on build-time baking
-  // cache: no-store ensures we get the latest key even if previously empty
-  useEffect(() => {
-    void fetch("/api/config", { cache: "no-store" })
-      .then(r => r.json())
-      .then((d: { maptilerKey?: string }) => {
-        if (d.maptilerKey) setResolvedMapKey(d.maptilerKey);
-      })
-      .catch(() => null);
-  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -445,13 +427,19 @@ export function FamilyPanel({ isPremium, onUpgrade, maptilerKey }: FamilyPanelPr
           )}
         </div>
       ) : (
-        <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 space-y-2 dark:border-sky-500/30 dark:bg-sky-500/10">
+        <form
+          action="#"
+          onSubmit={(e) => { e.preventDefault(); void handleAddMember(); }}
+          className="rounded-xl border border-sky-200 bg-sky-50 p-3 space-y-2 dark:border-sky-500/30 dark:bg-sky-500/10"
+        >
           <p className="text-xs font-semibold text-sky-800 dark:text-sky-200">Add family member</p>
           <input
             type="text"
             value={newMemberName}
             onChange={(e) => setNewMemberName(e.target.value)}
             placeholder="Name (e.g. Sarah)"
+            autoComplete="name"
+            autoCapitalize="words"
             className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
           />
           <input
@@ -459,6 +447,10 @@ export function FamilyPanel({ isPremium, onUpgrade, maptilerKey }: FamilyPanelPr
             value={newMemberEmail}
             onChange={(e) => setNewMemberEmail(e.target.value)}
             placeholder="Email (optional — for invite)"
+            autoComplete="email"
+            autoCapitalize="none"
+            autoCorrect="off"
+            inputMode="email"
             className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
           />
           <select
@@ -472,8 +464,7 @@ export function FamilyPanel({ isPremium, onUpgrade, maptilerKey }: FamilyPanelPr
           </select>
           <div className="flex gap-2">
             <button
-              type="button"
-              onClick={() => void handleAddMember()}
+              type="submit"
               disabled={busy || !newMemberName.trim()}
               className="flex-1 rounded-lg bg-sky-600 py-2 text-sm font-bold text-white hover:bg-sky-500 disabled:opacity-50"
             >
@@ -487,17 +478,23 @@ export function FamilyPanel({ isPremium, onUpgrade, maptilerKey }: FamilyPanelPr
               Cancel
             </button>
           </div>
-        </div>
+        </form>
       )}
 
       {joiningGroup && (
-        <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 space-y-2 dark:border-sky-500/30 dark:bg-sky-500/10">
+        <form
+          action="#"
+          onSubmit={(e) => { e.preventDefault(); void handleJoinGroup(); }}
+          className="rounded-xl border border-sky-200 bg-sky-50 p-3 space-y-2 dark:border-sky-500/30 dark:bg-sky-500/10"
+        >
           <p className="text-xs font-semibold text-sky-800 dark:text-sky-200">Join a family group</p>
           <input
             type="text"
             value={joinName}
             onChange={(e) => setJoinName(e.target.value)}
             placeholder="Your name (e.g. Sarah)"
+            autoComplete="name"
+            autoCapitalize="words"
             className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
           />
           <input
@@ -505,12 +502,15 @@ export function FamilyPanel({ isPremium, onUpgrade, maptilerKey }: FamilyPanelPr
             value={joinCode}
             onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
             placeholder="Group invite code (e.g. A1B2C3D4)"
+            autoComplete="off"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
             className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm uppercase tracking-widest dark:border-slate-700 dark:bg-slate-900"
           />
           <div className="flex gap-2">
             <button
-              type="button"
-              onClick={() => void handleJoinGroup()}
+              type="submit"
               disabled={joinBusy || !joinCode.trim()}
               className="flex-1 rounded-lg bg-sky-600 py-2 text-sm font-bold text-white hover:bg-sky-500 disabled:opacity-50"
             >
@@ -524,7 +524,7 @@ export function FamilyPanel({ isPremium, onUpgrade, maptilerKey }: FamilyPanelPr
               Cancel
             </button>
           </div>
-        </div>
+        </form>
       )}
 
       {message && (
