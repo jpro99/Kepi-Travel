@@ -6974,6 +6974,9 @@ export default function TravelAssistantPage() {
           ) : consumerTab === "flights" ? (
             <FlightsTab
               reservations={consumerReservationsSorted.filter(r => r.type === "flight")}
+              liveStatus={flightStatusCheckByReservationId}
+              locationStatus={guidanceLocationStatus}
+              nearestAirport={guidanceNearestAirport}
               onReservationTap={(id) => openDrawer("reservation", id)}
               onCheckStatus={(id) => void handleCheckFlightStatus(id)}
               onDelete={(id) => void handleDeleteReservation(id)}
