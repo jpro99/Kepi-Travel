@@ -277,8 +277,7 @@ export async function PUT(req: Request) {
   }
   const parsed = PutBodySchema.safeParse(body);
   if (!parsed.success) {
-    console.log("[/api/trips] PUT validation failed.", {
-      body,
+    auth.routeLogger.warn("[/api/trips] PUT validation failed.", {
       issues: parsed.error.issues,
     });
     return NextResponse.json(
@@ -289,7 +288,7 @@ export async function PUT(req: Request) {
 
   try {
     if (parsed.data.action === "set-active") {
-      console.log("[/api/trips] PUT set-active received.", {
+      auth.routeLogger.info("[/api/trips] PUT set-active received.", {
         userId: auth.userId,
         tripId: parsed.data.id,
       });
@@ -310,7 +309,7 @@ export async function PUT(req: Request) {
 
     const existingTrip = await getTrip(parsed.data.id, auth.userId);
     const patchReservationCount = Array.isArray(parsed.data.patch.reservations) ? parsed.data.patch.reservations.length : null;
-    console.log("[/api/trips] PUT update received.", {
+    auth.routeLogger.info("[/api/trips] PUT update received.", {
       userId: auth.userId,
       tripId: parsed.data.id,
       existingTripFound: Boolean(existingTrip),
@@ -320,13 +319,13 @@ export async function PUT(req: Request) {
     });
     const updated = await updateTrip(parsed.data.id, parsed.data.patch, auth.userId);
     if (!updated) {
-      console.log("[/api/trips] PUT update failed: trip not found.", {
+      auth.routeLogger.warn("[/api/trips] PUT update failed: trip not found.", {
         userId: auth.userId,
         tripId: parsed.data.id,
       });
       return NextResponse.json({ error: "Trip not found" }, { status: 404, headers: auth.headers });
     }
-    console.log("[/api/trips] PUT update persisted.", {
+    auth.routeLogger.info("[/api/trips] PUT update persisted.", {
       userId: auth.userId,
       tripId: parsed.data.id,
       updatedReservationCount: updated.reservations.length,
@@ -397,9 +396,6 @@ export async function PUT(req: Request) {
       { headers: auth.headers },
     );
   } catch (error) {
-    console.log("[/api/trips] PUT threw error.", {
-      error: error instanceof Error ? error.message : "unknown",
-    });
     auth.routeLogger.error("Trips PUT failed.", {
       error: error instanceof Error ? error.message : "unknown",
     });
@@ -422,8 +418,7 @@ export async function DELETE(req: Request) {
   }
   const parsed = DeleteBodySchema.safeParse(body);
   if (!parsed.success) {
-    console.log("[/api/trips] DELETE validation failed.", {
-      body,
+    auth.routeLogger.warn("[/api/trips] DELETE validation failed.", {
       issues: parsed.error.issues,
     });
     return NextResponse.json(
@@ -433,7 +428,7 @@ export async function DELETE(req: Request) {
   }
 
   try {
-    console.log("[/api/trips] DELETE handler received.", {
+    auth.routeLogger.info("[/api/trips] DELETE handler received.", {
       userId: auth.userId,
       payload: parsed.data,
     });
@@ -464,7 +459,7 @@ export async function DELETE(req: Request) {
         return NextResponse.json({ error: "Trip not found" }, { status: 404, headers: auth.headers });
       }
       const [trips, activeTrip] = await Promise.all([listTrips(auth.userId), getActiveTrip(auth.userId)]);
-      console.log("[/api/trips] DELETE reservation response sent.", {
+      auth.routeLogger.info("[/api/trips] DELETE reservation response sent.", {
         userId: auth.userId,
         tripId: updatedTrip.id,
         beforeCount: targetTrip.reservations.length,
@@ -490,7 +485,7 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: "Trip not found" }, { status: 404, headers: auth.headers });
     }
     const [trips, activeTrip] = await Promise.all([listTrips(auth.userId), getActiveTrip(auth.userId)]);
-    console.log("[/api/trips] DELETE trip response sent.", {
+    auth.routeLogger.info("[/api/trips] DELETE trip response sent.", {
       userId: auth.userId,
       tripId,
     });

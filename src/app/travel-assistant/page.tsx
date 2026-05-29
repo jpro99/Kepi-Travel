@@ -81,6 +81,9 @@ import { TripSwitcher } from "@/components/travelAssistant/TripSwitcher";
 import { TripOrientationCard } from "@/components/travelAssistant/TripOrientationCard";
 import { DocumentVault } from "@/components/travelAssistant/DocumentVault";
 import { PackingList } from "@/components/travelAssistant/PackingList";
+import { BagControl } from "@/components/travelAssistant/BagControl";
+import { AirportMode } from "@/components/travelAssistant/AirportMode";
+import { ArrivalMode } from "@/components/travelAssistant/ArrivalMode";
 import { ShareTripCard } from "@/components/travelAssistant/ShareTripCard";
 import { TravelDayView } from "@/components/travelAssistant/TravelDayView";
 import { ShareModal } from "@/components/travelAssistant/ShareModal";
@@ -5353,12 +5356,6 @@ export default function TravelAssistantPage() {
           airline: lookupInput.airline,
           flightDate: lookupInput.flightDate,
         });
-        console.info("[travel-assistant] card flight lookup request", {
-          action: "flight-lookup",
-          flightNumber: lookupInput.flightNumber,
-          airline: lookupInput.airline,
-          flightDate: lookupInput.flightDate,
-        });
         const response = await fetch(`/api/travel-updates?${params.toString()}`, {
           method: "GET",
           credentials: "include",
@@ -5381,10 +5378,6 @@ export default function TravelAssistantPage() {
           onTime?: boolean | null;
           flightStatus?: string;
         };
-        console.info("[travel-assistant] card flight lookup response", {
-          status: response.status,
-          payload,
-        });
         if (!response.ok || payload.error) {
           throw new Error(payload.error ?? `Flight lookup failed (${response.status})`);
         }
@@ -6638,7 +6631,7 @@ export default function TravelAssistantPage() {
             </div>
           </header>
 
-          <div className="grid grid-cols-4 gap-2 rounded-2xl bg-white/80 p-2 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900/80 dark:ring-slate-800">
+          <div className="grid grid-cols-5 gap-1 rounded-2xl bg-white/80 p-2 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900/80 dark:ring-slate-800">
             {([
               ["trip", "Trip"],
               ["reservations", "Reservations"],
@@ -6762,6 +6755,16 @@ export default function TravelAssistantPage() {
                   {reviewQueue.length} reservation{reviewQueue.length === 1 ? "" : "s"} need{reviewQueue.length === 1 ? "s" : ""} your input — tap to review
                 </button>
               ) : null}
+
+              <AirportMode
+                reservations={consumerReservationsSorted}
+                onViewReservations={() => navigateToConsumerTab("reservations")}
+              />
+
+              <ArrivalMode
+                reservations={consumerReservationsSorted}
+                onViewReservations={() => navigateToConsumerTab("reservations")}
+              />
 
               <TripTimeline
                 reservations={consumerReservationsSorted}
@@ -7631,11 +7634,14 @@ export default function TravelAssistantPage() {
               )}
             </section>
           ) : consumerTab === "packing" ? (
-            <PackingList
-              mode="consumer"
-              tripId={activeTripId}
-              onCompletionChange={(percent) => setPackingCompletionPercent(percent)}
-            />
+            <section className="space-y-4 pb-4">
+              <PackingList
+                mode="consumer"
+                tripId={activeTripId}
+                onCompletionChange={(percent) => setPackingCompletionPercent(percent)}
+              />
+              <BagControl tripId={activeTripId} />
+            </section>
           ) : consumerTab === "family" ? (
             <section className="space-y-4 pb-4">
               <div>

@@ -201,9 +201,6 @@ export function ReservationList({
                   <button
                     type="button"
                     onClick={() => {
-                      console.log("[ReservationList] Check status button clicked.", {
-                        reservationId: reservation.id,
-                      });
                       onCheckFlightStatus(reservation.id);
                     }}
                     disabled={flightStatusCheck?.busy === true}
@@ -215,9 +212,6 @@ export function ReservationList({
                 <button
                   type="button"
                   onClick={() => {
-                    console.log("[ReservationList] Delete button clicked.", {
-                      reservationId: reservation.id,
-                    });
                     onDeleteReservation(reservation.id);
                   }}
                   className="rounded-md bg-rose-100 px-2 py-1 text-rose-800 ring-1 ring-rose-300 hover:bg-rose-200 dark:bg-rose-500/20 dark:text-rose-100 dark:ring-rose-400/40 dark:hover:bg-rose-500/30"

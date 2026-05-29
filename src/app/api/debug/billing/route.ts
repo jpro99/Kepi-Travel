@@ -44,11 +44,6 @@ export async function GET(req: Request) {
     getSubscriptionRecord(userId),
   ]);
 
-  console.info("[debug/billing] kv lookup", {
-    userId,
-    subscriptionStorageKey,
-    rawSubscriptionRecord,
-  });
   routeLogger.info("Debug billing subscription lookup.", {
     userId,
     subscriptionStorageKey,

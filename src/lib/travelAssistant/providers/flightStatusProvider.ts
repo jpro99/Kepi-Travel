@@ -35,11 +35,15 @@ const FlightStatusSchema = z.object({
     iata: z.string().trim().min(1).nullable().optional(),
     scheduled: z.string().trim().min(1).nullable().optional(),
     estimated: z.string().trim().min(1).nullable().optional(),
+    gate: z.string().trim().min(1).nullable().optional(),
+    terminal: z.string().trim().min(1).nullable().optional(),
   }),
   arrival: z.object({
     iata: z.string().trim().min(1).nullable().optional(),
     scheduled: z.string().trim().min(1).nullable().optional(),
     estimated: z.string().trim().min(1).nullable().optional(),
+    gate: z.string().trim().min(1).nullable().optional(),
+    terminal: z.string().trim().min(1).nullable().optional(),
   }),
   flight_status: z.enum(AVIATIONSTACK_STATUSES),
 });
@@ -161,6 +165,18 @@ function mapFlightSnapshotToUpdate(
     `Est arr ${snapshot.arrival.estimated ?? "n/a"}`,
   ].join(" | ");
 
+  // Build gate/terminal detail suffix
+  const deptGate = snapshot.departure.gate?.trim() ?? null;
+  const deptTerminal = snapshot.departure.terminal?.trim() ?? null;
+  const arrGate = snapshot.arrival.gate?.trim() ?? null;
+  const arrTerminal = snapshot.arrival.terminal?.trim() ?? null;
+  const gateDetail = [
+    deptTerminal ? `Departure Terminal ${deptTerminal}` : null,
+    deptGate ? `Gate ${deptGate}` : null,
+    arrTerminal ? `Arrival Terminal ${arrTerminal}` : null,
+    arrGate ? `Arr Gate ${arrGate}` : null,
+  ].filter(Boolean).join(" · ");
+
   if (governanceStatus === "red") {
     return {
       provider: "flight-status-provider",
@@ -170,7 +186,7 @@ function mapFlightSnapshotToUpdate(
         undefined,
         `${reservation.title} ${snapshot.flight_status === "cancelled" ? "cancelled" : snapshot.flight_status}`,
       ),
-      detail: `AviationStack status ${snapshot.flight_status}. Route ${routeSummary}. ${scheduleSummary}`,
+      detail: `AviationStack status ${snapshot.flight_status}. Route ${routeSummary}. ${scheduleSummary}${gateDetail ? `. ${gateDetail}` : ""}`,
       target: {
         reservationType: "flight",
         confirmationCode: reservation.confirmationCode,
@@ -186,7 +202,7 @@ function mapFlightSnapshotToUpdate(
       kind: "delay",
       severity,
       summary: `${reservation.title} delayed ${normalizedDelay} minutes`,
-      detail: `AviationStack status ${snapshot.flight_status}. Route ${routeSummary}. ${scheduleSummary}`,
+      detail: `AviationStack status ${snapshot.flight_status}. Route ${routeSummary}. ${scheduleSummary}${gateDetail ? `. ${gateDetail}` : ""}`,
       target: {
         reservationType: "flight",
         confirmationCode: reservation.confirmationCode,
@@ -196,17 +212,23 @@ function mapFlightSnapshotToUpdate(
     };
   }
 
+  // On-time — include gate info in updatedLocation if available
+  const updatedLocation = deptGate
+    ? [deptTerminal ? `Terminal ${deptTerminal}` : null, `Gate ${deptGate}`].filter(Boolean).join(" · ")
+    : undefined;
+
   return {
     provider: "flight-status-provider",
     kind: "on-time",
     severity: "info",
-    summary: `${reservation.title} on time`,
-    detail: `AviationStack status ${snapshot.flight_status}. Route ${routeSummary}. ${scheduleSummary}`,
+    summary: `${reservation.title} on time${deptGate ? ` · Gate ${deptGate}` : ""}`,
+    detail: `AviationStack status ${snapshot.flight_status}. Route ${routeSummary}. ${scheduleSummary}${gateDetail ? `. ${gateDetail}` : ""}`,
     target: {
       reservationType: "flight",
       confirmationCode: reservation.confirmationCode,
       titleHint: reservation.title,
     },
+    ...(updatedLocation ? { updatedLocation } : {}),
   };
 }
 
