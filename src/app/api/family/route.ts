@@ -85,7 +85,7 @@ export async function GET() {
     };
     await kvStoreSet(FAMILY_GROUP_KEY, group, { userId });
     // Register invite code → owner mapping so other users can join
-    await kvStoreSet(FAMILY_INVITE_INDEX_KEY(group.inviteCode), userId, { userId });
+    await kvStoreSet(FAMILY_INVITE_INDEX_KEY(group.inviteCode), userId, { userId: "global" });
   }
 
   // Check if this user is a member of someone else's group (not the owner)
@@ -116,6 +116,9 @@ export async function GET() {
     })
   );
   const locations = Object.fromEntries(locationEntries.filter(([, v]) => v !== null));
+
+  // Re-register invite index in global namespace — self-heals groups created before this fix
+  await kvStoreSet(FAMILY_INVITE_INDEX_KEY(group.inviteCode), userId, { userId: "global" });
 
   return NextResponse.json({ group, locations, role: "owner", myMemberId: userId });
 }
@@ -162,7 +165,17 @@ export async function POST(request: Request) {
       memberId: userId,
       label: label ?? undefined,
     };
-    await kvStoreSet(FAMILY_LOCATION_KEY(userId), location, { userId });
+
+    // Determine which namespace to write into — must always be the group owner's namespace
+    // so the owner's GET can read all member locations in one place.
+    let locationNamespaceUserId = userId; // default: own group (user is the owner)
+    const membershipRecord = await kvStoreGet<{ ownerId: string; inviteCode: string }>(FAMILY_MEMBERSHIP_KEY, { userId });
+    if (membershipRecord && membershipRecord.ownerId !== userId) {
+      // This user is a member of someone else's group — write into owner's namespace
+      locationNamespaceUserId = membershipRecord.ownerId;
+    }
+
+    await kvStoreSet(FAMILY_LOCATION_KEY(userId), location, { userId: locationNamespaceUserId });
     return NextResponse.json({ ok: true, location });
   }
 
@@ -222,7 +235,7 @@ export async function POST(request: Request) {
     if (!inviteCode) return NextResponse.json({ error: "inviteCode required" }, { status: 400 });
 
     // Look up which user owns this group via the invite index
-    const ownerUserId = await kvStoreGet<string>(FAMILY_INVITE_INDEX_KEY(inviteCode.toUpperCase()), { userId });
+    const ownerUserId = await kvStoreGet<string>(FAMILY_INVITE_INDEX_KEY(inviteCode.toUpperCase()), { userId: "global" });
     if (!ownerUserId) {
       return NextResponse.json({ error: "Invalid invite code. Ask the group organizer for the correct code." }, { status: 404 });
     }
