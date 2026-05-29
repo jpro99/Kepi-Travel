@@ -381,23 +381,42 @@ export async function POST(request: Request) {
     }
 
     if (ownerGroup.members.some(m => m.id === userId)) {
-      // Already a member — just refresh the membership key and return the group
+      // Already a member (by Clerk userId) — just refresh the membership key
       await kvStoreSet(FAMILY_MEMBERSHIP_KEY, { ownerId: ownerUserId, groupId: ownerGroup.id, inviteCode: d.inviteCode.toUpperCase() }, { userId });
       return NextResponse.json({ ok: true, group: ownerGroup, alreadyMember: true });
     }
 
-    const newMember: Member = {
-      id: userId,
-      name: d.name ?? "Family Member",
-      email: null,
-      role: "adult",
-      color: nextColor(ownerGroup.members),
-      sharingEnabled: true,
-      visibility: "all-members",
-      joinedAt: new Date().toISOString(),
-      imageUrl: d.imageUrl ?? null,
-    };
-    ownerGroup.members.push(newMember);
+    // Check if there's a placeholder member with the same email (added via "Add member" form)
+    // If so, replace the placeholder with the real Clerk userId so they're one entry
+    const joiningEmail = d.email?.toLowerCase().trim();
+    const placeholderIdx = joiningEmail
+      ? ownerGroup.members.findIndex(m => m.email?.toLowerCase().trim() === joiningEmail && m.id !== ownerUserId)
+      : -1;
+
+    if (placeholderIdx >= 0) {
+      // Replace placeholder with real user account
+      const placeholder = ownerGroup.members[placeholderIdx]!;
+      ownerGroup.members[placeholderIdx] = {
+        ...placeholder,
+        id: userId, // replace generated UUID with real Clerk userId
+        name: d.name ?? placeholder.name,
+        imageUrl: d.imageUrl ?? null,
+        joinedAt: new Date().toISOString(),
+      };
+    } else {
+      // New member — add fresh entry
+      ownerGroup.members.push({
+        id: userId,
+        name: d.name ?? "Family Member",
+        email: joiningEmail ?? null,
+        role: "adult",
+        color: nextColor(ownerGroup.members),
+        sharingEnabled: true,
+        visibility: "all-members",
+        joinedAt: new Date().toISOString(),
+        imageUrl: d.imageUrl ?? null,
+      });
+    }
     const ownerGIdx = ownerGroups.findIndex(g => g.id === ownerGroup.id);
     ownerGroups[ownerGIdx] = ownerGroup;
     await saveGroups(ownerUserId, ownerGroups);

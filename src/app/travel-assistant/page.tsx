@@ -1838,6 +1838,7 @@ export default function TravelAssistantPage() {
         action: "join-group",
         inviteCode: joinCode.toUpperCase(),
         name: user.firstName ?? user.username ?? "Family Member",
+        email: user.primaryEmailAddress?.emailAddress ?? null,
         imageUrl: user.imageUrl ?? null,
       }),
     }).then(r => r.json()).then((d: { ok?: boolean; error?: string; alreadyMember?: boolean }) => {
