@@ -155,9 +155,9 @@ export async function GET(req: Request) {
 
   // Check if member of someone else's group
   const membership = await kvStoreGet<{ ownerId: string; groupId: string; inviteCode: string }>(FAMILY_MEMBERSHIP_KEY, { userId });
-  if (membership && membership.ownerId !== userId) {
+  if (membership && typeof membership.ownerId === "string" && membership.ownerId !== userId) {
     const ownerGroups = await loadGroups(membership.ownerId);
-    const memberGroup = ownerGroups.find(g => g.id === membership.groupId);
+    const memberGroup = ownerGroups.find(g => g.id === membership.groupId) ?? ownerGroups[0];
     if (memberGroup) {
       const locs = Object.fromEntries(
         (await Promise.all(memberGroup.members.map(async m => {
@@ -175,12 +175,13 @@ export async function GET(req: Request) {
     const def = createDefaultGroup(userId);
     groups = [def];
     await saveGroups(userId, groups);
-    await kvStoreSet(FAMILY_INVITE_INDEX_KEY(def.inviteCode), JSON.stringify({ ownerId: userId, groupId: def.id }), { userId: "global" });
+    // Store invite index as object (not JSON string) so it round-trips correctly
+    await kvStoreSet(FAMILY_INVITE_INDEX_KEY(def.inviteCode), { ownerId: userId, groupId: def.id }, { userId: "global" });
   }
 
-  // Re-register all invite codes (self-heal)
+  // Re-register all invite codes (self-heal) — store as objects not strings
   for (const g of groups) {
-    await kvStoreSet(FAMILY_INVITE_INDEX_KEY(g.inviteCode), JSON.stringify({ ownerId: userId, groupId: g.id }), { userId: "global" });
+    await kvStoreSet(FAMILY_INVITE_INDEX_KEY(g.inviteCode), { ownerId: userId, groupId: g.id }, { userId: "global" });
   }
 
   const activeGroup = requestedGroupId ? groups.find(g => g.id === requestedGroupId) ?? groups[0] : groups[0];
@@ -252,7 +253,7 @@ export async function POST(request: Request) {
     const g = createDefaultGroup(userId, d.groupName ?? "New Group");
     groups.push(g);
     await saveGroups(userId, groups);
-    await kvStoreSet(FAMILY_INVITE_INDEX_KEY(g.inviteCode), JSON.stringify({ ownerId: userId, groupId: g.id }), { userId: "global" });
+    await kvStoreSet(FAMILY_INVITE_INDEX_KEY(g.inviteCode), { ownerId: userId, groupId: g.id }, { userId: "global" });
     return NextResponse.json({ ok: true, group: g, groups });
   }
 
@@ -339,25 +340,48 @@ export async function POST(request: Request) {
   // ── join-group ────────────────────────────────────────────────────────────
   if (d.action === "join-group") {
     if (!d.inviteCode) return NextResponse.json({ error: "inviteCode required" }, { status: 400 });
-    const raw = await kvStoreGet<string>(FAMILY_INVITE_INDEX_KEY(d.inviteCode.toUpperCase()), { userId: "global" });
-    if (!raw) return NextResponse.json({ error: "Invalid invite code. Ask the organizer for the correct link." }, { status: 404 });
-    let ownerUserId: string, groupId: string;
-    try {
-      const parsed2 = JSON.parse(raw) as { ownerId: string; groupId: string };
-      ownerUserId = parsed2.ownerId;
-      groupId = parsed2.groupId;
-    } catch {
-      // Legacy format — raw string was the userId
-      ownerUserId = raw;
-      groupId = "";
+
+    // Read invite index — stored as { ownerId, groupId } object
+    // Legacy format was JSON.stringify({ ownerId, groupId }) string, or plain userId string
+    const raw = await kvStoreGet<unknown>(FAMILY_INVITE_INDEX_KEY(d.inviteCode.toUpperCase()), { userId: "global" });
+    if (!raw) {
+      return NextResponse.json({ error: "Invite code not found. Ask the organizer to open their Family panel to refresh the code, then share the link again." }, { status: 404 });
     }
-    if (ownerUserId === userId) return NextResponse.json({ error: "You created this group." }, { status: 400 });
+
+    let ownerUserId: string;
+    let groupId: string;
+
+    if (typeof raw === "object" && raw !== null && "ownerId" in raw) {
+      // Current format: { ownerId: string, groupId: string }
+      ownerUserId = (raw as { ownerId: string; groupId: string }).ownerId;
+      groupId = (raw as { ownerId: string; groupId: string }).groupId ?? "";
+    } else if (typeof raw === "string") {
+      // Try parsing as JSON string (old double-encoded format)
+      try {
+        const parsed2 = JSON.parse(raw) as { ownerId: string; groupId?: string };
+        ownerUserId = parsed2.ownerId;
+        groupId = parsed2.groupId ?? "";
+      } catch {
+        // Oldest format — plain userId string
+        ownerUserId = raw;
+        groupId = "";
+      }
+    } else {
+      return NextResponse.json({ error: "Invalid invite code format. Please ask the organizer to share a new link." }, { status: 400 });
+    }
+
+    if (!ownerUserId || ownerUserId === userId) {
+      return NextResponse.json({ error: "You created this group — you're already in it as the organizer." }, { status: 400 });
+    }
 
     const ownerGroups = await loadGroups(ownerUserId);
-    const ownerGroup = groupId ? ownerGroups.find(g => g.id === groupId) ?? ownerGroups[0] : ownerGroups[0];
-    if (!ownerGroup) return NextResponse.json({ error: "Group not found." }, { status: 404 });
+    const ownerGroup = (groupId ? ownerGroups.find(g => g.id === groupId) : null) ?? ownerGroups[0];
+    if (!ownerGroup) {
+      return NextResponse.json({ error: "Group not found. The organizer may have deleted it." }, { status: 404 });
+    }
 
     if (ownerGroup.members.some(m => m.id === userId)) {
+      // Already a member — just refresh the membership key and return the group
       await kvStoreSet(FAMILY_MEMBERSHIP_KEY, { ownerId: ownerUserId, groupId: ownerGroup.id, inviteCode: d.inviteCode.toUpperCase() }, { userId });
       return NextResponse.json({ ok: true, group: ownerGroup, alreadyMember: true });
     }

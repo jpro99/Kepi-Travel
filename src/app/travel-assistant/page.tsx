@@ -1840,13 +1840,15 @@ export default function TravelAssistantPage() {
         name: user.firstName ?? user.username ?? "Family Member",
         imageUrl: user.imageUrl ?? null,
       }),
-    }).then(r => r.json()).then((d: { ok?: boolean; error?: string }) => {
+    }).then(r => r.json()).then((d: { ok?: boolean; error?: string; alreadyMember?: boolean }) => {
       if (d.ok) {
-        setToast("✅ Joined! Location sharing starting automatically…");
+        setToast(d.alreadyMember ? "✅ Already in the group — location sharing starting…" : "✅ Joined! Location sharing starting automatically…");
         window.dispatchEvent(new CustomEvent("kepi:family-reload"));
         window.dispatchEvent(new CustomEvent("kepi:family-start-sharing"));
-      } else setToast(d.error ?? "Could not join family group.");
-    }).catch(() => setToast("Could not join family group."));
+      } else {
+        setToast(`Family join failed: ${d.error ?? "Unknown error"}`);
+      }
+    }).catch((err: unknown) => setToast(`Family join error: ${err instanceof Error ? err.message : "Network error"}`));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, user]);
   const [pushSubscribed, setPushSubscribed] = useState(false);
