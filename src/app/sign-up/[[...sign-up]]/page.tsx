@@ -34,6 +34,9 @@ function SignUpPageInner() {
   const handleSignUp = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!isLoaded || loading) return;
+    // Client-side guard — catches empty fields even when autofill skips onChange
+    if (!email.trim()) { setError("Please enter your email address."); return; }
+    if (!password) { setError("Please enter a password."); return; }
     setLoading(true);
     setError(null);
     try {
@@ -226,10 +229,12 @@ function SignUpPageInner() {
                   </p>
                 )}
 
-                {/* type="submit" lets iOS keyboard "Go" / "Done" button trigger this */}
+                {/* type="submit" — no field-level disabled check so autofill/paste
+                    on Android/Samsung browser always enables the button.
+                    Clerk's API returns a clear error if fields are empty.       */}
                 <button
                   type="submit"
-                  disabled={loading || !email || !password}
+                  disabled={loading}
                   className="w-full rounded-xl bg-sky-600 py-3 text-sm font-bold text-white disabled:opacity-50 hover:bg-sky-500 transition"
                 >
                   {loading ? "Creating account…" : "Create account →"}
