@@ -31,8 +31,16 @@ async function resolveRequestLocale(): Promise<"en" | "es"> {
 
 export default getRequestConfig(async () => {
   const locale = await resolveRequestLocale();
-  return {
-    locale,
-    messages: (await import(`../../messages/${locale}.json`)).default,
-  };
+  let messages: Record<string, unknown> = {};
+  try {
+    messages = (await import(`../../messages/${locale}.json`)).default as Record<string, unknown>;
+  } catch {
+    // Locale file not found — fall back to English
+    try {
+      messages = (await import("../../messages/en.json")).default as Record<string, unknown>;
+    } catch {
+      messages = {};
+    }
+  }
+  return { locale, messages };
 });
