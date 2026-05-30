@@ -30,11 +30,28 @@ export interface ConcourseRoute {
   totalMinutes: number;
 }
 
+export interface BaggageCarousel {
+  terminal?: string;
+  carouselNote: string;          // e.g. "Carousel 2 — follow signs from gate level down one floor"
+  walkMinutes: number;           // gate to carousel
+  tips?: string[];
+}
+
+export interface ArrivalInfo {
+  baggageCarousels: BaggageCarousel[];
+  exitDirections: string;        // "Follow green 'Exit/Ground Transport' signs past carousel"
+  groundTransport?: string;      // rideshare, taxi, shuttle info
+  connectingFlight?: string;     // if this is a connection hub, how to re-enter security
+  customsTip?: string;           // international arrivals only
+  generalTip?: string;
+}
+
 export interface AirportNavigation {
   iata: string;
   name: string;
-  securityNotes: NavStep[];         // what happens right after you clear security
+  securityNotes: NavStep[];
   concourseRoutes: ConcourseRoute[];
+  arrivalInfo?: ArrivalInfo;     // what to do AFTER landing
   generalNotes?: string;
 }
 
@@ -575,12 +592,78 @@ const AIRPORT_NAV: AirportNavigation[] = [
         totalMinutes: 8,
       },
     ],
+    arrivalInfo: {
+      baggageCarousels: [
+        {
+          terminal: "T2",
+          carouselNote: "Baggage claim is on the ground floor — exit your gate, walk straight through the terminal, take the escalator or stairs DOWN one level. Carousels are immediately at the bottom. Alaska Airlines typically uses Carousel 1 or 2.",
+          walkMinutes: 5,
+          tips: [
+            "ONT baggage claim is one of the fastest in California — bags typically arrive 10–15 min after touchdown",
+            "Carousel number will be on the arrivals screen near the escalator",
+            "If bags are delayed, the Alaska counter is upstairs at check-in level",
+          ],
+        },
+        {
+          terminal: "T4",
+          carouselNote: "T4 baggage claim is on the ground floor, directly below the gate level. Follow signs for 'Baggage Claim' from the gate area.",
+          walkMinutes: 5,
+          tips: ["T4 is smaller — only 2 carousels total"],
+        },
+      ],
+      exitDirections: "After grabbing bags, follow the green 'Exit / Ground Transportation' signs through the glass doors to the curb. Rideshare (Uber/Lyft) pickup is at the outer curb — follow the signs on the pillars for 'App-Based Rides'. Taxis are at the inner curb. Short-term parking and cell phone lot are a 2-min walk across the roadway.",
+      groundTransport: "Rideshare (Uber/Lyft): Exit baggage claim through the glass doors, turn RIGHT, follow 'App-Based Transportation' signs to the designated pickup zone on the outer lane. Taxis: available at the taxi stand on the inner curb immediately outside baggage claim. Rental cars: Take the shuttle from outside baggage claim — Hertz, Avis, Enterprise, Budget, and National are all at the rental car facility a 5-min shuttle ride away. The shuttle stop is marked with orange signs outside the exit.",
+      generalTip: "ONT is tiny and easy — you can be in a car within 20 minutes of landing. No trains, no trams, no complicated transfers. Just walk straight down to baggage and out.",
+    },
     generalNotes: "ONT is a small, easy airport. Most Alaska, Southwest, American, and Delta flights use T2. T4 is used by some other carriers. Very short walks to all gates.",
   },
 
   // ════════════════════════════════════════════════════════════
   //  TIER 2 — US DOMESTIC
   // ════════════════════════════════════════════════════════════
+
+  // ── Honolulu HNL ─────────────────────────────────────────────
+  {
+    iata: "HNL",
+    name: "Daniel K. Inouye International (Honolulu)",
+    securityNotes: [
+      { instruction: "HNL has the Overseas Terminal (inter-island and mainland) and the Commuter Terminal. For mainland US flights use the Overseas Terminal.", mode: "walk", estimatedMinutes: 0 },
+      { instruction: "After security follow the gate letter signs — Gates 1–22 are in the main concourse, Gates 50+ are the inter-island gates", mode: "walk", estimatedMinutes: 0 },
+    ],
+    concourseRoutes: [
+      {
+        fromZone: "security", toZone: "A",
+        steps: [{ instruction: "Gates A1–A8: turn left after security and walk to the A concourse", mode: "walk", estimatedMinutes: 4 }],
+        totalMinutes: 4,
+      },
+      {
+        fromZone: "security", toZone: "B",
+        steps: [{ instruction: "Gates B1–B12: walk straight through the terminal to the B concourse", mode: "walk", estimatedMinutes: 6 }],
+        totalMinutes: 6,
+      },
+    ],
+    arrivalInfo: {
+      baggageCarousels: [
+        {
+          terminal: "Overseas Terminal",
+          carouselNote: "After deplaning, follow 'Baggage Claim' signs DOWN the escalators to street level. Carousels are numbered — your carousel will be on the arrivals board near the bottom of the escalator. Alaska Airlines mainland flights typically use carousels 8–13.",
+          walkMinutes: 8,
+          tips: [
+            "HNL bags can take 20–30 min — the airport is busy and the walk from gate to carousel is longer than it looks",
+            "Stay on the same level after exiting the jetway — follow the overhead 'Baggage Claim' signs, not 'Connecting Flights'",
+            "If you checked a bag with a lei box or surfboard, oversized baggage is at the far end of the claim area",
+          ],
+        },
+      ],
+      exitDirections: "After baggage claim, exit through the glass doors to the ground transportation level. The exit opens onto the roadway — turn left for Uber/Lyft pickup, right for taxis and hotel shuttles.",
+      groundTransport: "Rideshare (Uber/Lyft): Exit baggage claim and follow signs to 'App-Based Transportation' — pickup is in the designated zone on the outer curb. Taxis: immediately outside baggage claim exit. TheBus: Route 20 (Airport–Waikiki) stops outside — $3 cash exact change, 45 min to Waikiki. Rental cars: take the inter-terminal shuttle from outside baggage claim to the consolidated rental car facility.",
+      connectingFlight: "Connecting to a mainland flight: do NOT exit security. After deplaning, follow 'Connecting Flights' signs to stay airside. Your connecting gate will be in the same Overseas Terminal — check the departure board for the gate.",
+      generalTip: "HNL is sprawling but well-signed. The biggest mistake is following 'Exit' signs when you mean to connect — stay airside if connecting.",
+    },
+    generalNotes: "HNL is open-air in many sections — enjoy the trade winds. Mainland departures are from the Overseas Terminal. Inter-island flights are from the commuter terminal (separate building, requires exiting and re-entering security).",
+  },
+
+
 
   // ── Chicago Midway MDW ───────────────────────────────────────
   {
@@ -1542,4 +1625,104 @@ export function buildGateInstructions(
   }
 
   return { steps, totalMinutes };
+}
+
+// ── Universal arrival guidance ────────────────────────────────────────────────
+// Works for any airport even without specific data in the database.
+// Apple approach: smart contextual guidance based on what we know.
+
+export interface UniversalArrivalGuide {
+  airportName: string;
+  iata: string;
+  hasSpecificData: boolean;
+  baggage: {
+    heading: string;
+    steps: string[];
+    walkMinutes: number;
+  };
+  exit: {
+    heading: string;
+    steps: string[];
+  };
+  rideshare: {
+    heading: string;
+    instructions: string;
+  };
+  tips: string[];
+}
+
+// Airline-specific baggage tips
+const AIRLINE_BAGGAGE: Record<string, string> = {
+  AS: "Alaska Airlines bags typically arrive within 20 min of landing.",
+  AA: "American Airlines uses the central carousel hall — check screens for your flight number.",
+  DL: "Delta bags are usually among the first off — Medallion bags tagged priority arrive first.",
+  UA: "United Airlines — Premier bags arrive first on the carousel.",
+  WN: "Southwest — no bag priority tiers, all bags go to the same carousel.",
+  B6: "JetBlue — check the arrivals screen for your carousel number.",
+  F9: "Frontier — bags may take 25–30 min, carousel posted on arrivals screen.",
+  NK: "Spirit — bag claim can be slow, allow 30–35 min after landing.",
+};
+
+export function buildArrivalGuide(
+  iata: string,
+  airlineCode?: string,
+  terminal?: string,
+): UniversalArrivalGuide {
+  const nav = getAirportNav(iata);
+  const specific = nav?.arrivalInfo;
+  const airlineTip = airlineCode ? AIRLINE_BAGGAGE[airlineCode.toUpperCase()] : undefined;
+
+  // Use specific carousel data if available, otherwise build universal steps
+  const carousel = specific?.baggageCarousels.find(c =>
+    !c.terminal || !terminal || c.terminal.toLowerCase().includes(terminal.toLowerCase())
+  ) ?? specific?.baggageCarousels[0];
+
+  const baggageSteps = carousel
+    ? [carousel.carouselNote]
+    : [
+        "After deplaning, do NOT exit to the street — stay inside and follow the 'Baggage Claim' signs.",
+        "Take escalators or elevators DOWN to the baggage claim level.",
+        "Find your flight on the carousel screen — it will show your carousel number.",
+        "Wait at the carousel. If bags don't appear within 30 min, find the airline's baggage desk.",
+      ];
+
+  const exitSteps = specific?.exitDirections
+    ? [specific.exitDirections]
+    : [
+        "After grabbing your bag, follow the green 'Exit / Ground Transportation' signs.",
+        "Push through the one-way doors to the arrivals curb — you cannot re-enter once you exit.",
+        "Rideshare pickup is usually marked with signs on pillars — look for 'Uber/Lyft' or 'App-Based Rides'.",
+      ];
+
+  const rideshareInstructions = specific?.groundTransport
+    ?? "Open Uber or Lyft and select the airport pickup zone shown in the app. Follow signs on the curb pillars for 'App-Based Transportation' or 'TNC Pickup'. Do not get in unmarked cars — only board a vehicle whose plate matches your app.";
+
+  const tips: string[] = [];
+  if (airlineTip) tips.push(airlineTip);
+  if (specific?.generalTip) tips.push(specific.generalTip);
+  if (!specific) {
+    tips.push("Keep your boarding pass accessible — some airports scan it at baggage claim exits.");
+    tips.push("If your bag is damaged or missing, report it to the airline desk before leaving the baggage claim area.");
+  }
+  if (specific?.connectingFlight) tips.push("Connecting? " + specific.connectingFlight);
+
+  return {
+    airportName: nav?.name ?? iata,
+    iata,
+    hasSpecificData: Boolean(specific),
+    baggage: {
+      heading: "Baggage claim",
+      steps: baggageSteps,
+      walkMinutes: carousel?.walkMinutes ?? 8,
+    },
+    exit: {
+      heading: "Getting out",
+      steps: exitSteps,
+    },
+    rideshare: {
+      heading: "Rideshare & transport",
+      instructions: rideshareInstructions,
+    },
+    tips,
+  };
 }

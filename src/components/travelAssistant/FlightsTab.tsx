@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { buildGateInstructions, getAirportNav } from "@/lib/travelAssistant/airportNavigation";
+import { buildGateInstructions, getAirportNav, buildArrivalGuide } from "@/lib/travelAssistant/airportNavigation";
 
 /* ─── Types ──────────────────────────────────────────────────── */
 interface Reservation {
@@ -128,6 +128,105 @@ function StatusBadge({ r, live }: { r: Reservation; live?: LiveStatusResult }) {
     </span>
   );
   return null;
+}
+
+
+/* ─── Arrival guide card — universal, works for all airports ────── */
+function ArrivalGuideCard({ flight }: { flight: Reservation }) {
+  const [expanded, setExpanded] = useState(false);
+  const iata = flight.flightArrivalAirport ?? "";
+  if (!iata) return null;
+
+  // Extract 2-letter airline code from flight number (e.g. "AS271" → "AS")
+  const airlineCode = flight.flightNumber?.match(/^([A-Z]{2})/)?.[1] ?? "";
+  const terminal = flight.flightArrivalTerminal ?? "";
+
+  const guide = buildArrivalGuide(iata, airlineCode, terminal);
+
+  return (
+    <div className="rounded-3xl overflow-hidden bg-gradient-to-br from-emerald-900 via-teal-950 to-slate-900 shadow-xl">
+      {/* Header */}
+      <div className="px-5 pt-4 pb-2 flex items-center justify-between">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-300/70">
+            Arriving · {iata} · {guide.airportName}
+          </p>
+          <p className="text-xl font-black text-white mt-0.5">Landing guide</p>
+        </div>
+        <span className="text-3xl">🛬</span>
+      </div>
+
+      {/* Step indicator — baggage → exit → transport */}
+      <div className="flex gap-0 mx-4 mb-3">
+        {["🧳 Bags", "🚪 Exit", "🚗 Ride"].map((label, i) => (
+          <div key={i} className="flex-1 text-center">
+            <div className={`h-1 rounded-full mx-0.5 ${i === 0 ? "bg-emerald-400" : "bg-white/20"}`} />
+            <p className="text-[9px] text-white/40 mt-1 font-medium">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Baggage claim — always visible */}
+      <div className="mx-4 mb-2 rounded-2xl bg-white/10 border border-white/[0.08] px-4 py-3">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-200/60 mb-2">
+          🧳 {guide.baggage.heading}
+        </p>
+        {guide.baggage.steps.map((step, i) => (
+          <div key={i} className="flex gap-2.5 mb-1.5 last:mb-0">
+            <span className="text-emerald-400 text-xs font-bold shrink-0 mt-0.5">{i + 1}</span>
+            <p className="text-white/90 text-sm leading-snug">{step}</p>
+          </div>
+        ))}
+        <p className="text-emerald-200/40 text-[11px] mt-2">~{guide.baggage.walkMinutes} min from gate to carousel</p>
+      </div>
+
+      {/* Exit directions — always visible */}
+      <div className="mx-4 mb-2 rounded-2xl bg-white/10 border border-white/[0.08] px-4 py-3">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-200/60 mb-2">
+          🚪 {guide.exit.heading}
+        </p>
+        {guide.exit.steps.map((step, i) => (
+          <div key={i} className="flex gap-2.5 mb-1.5 last:mb-0">
+            <span className="text-emerald-400 text-xs font-bold shrink-0 mt-0.5">{i + 1}</span>
+            <p className="text-white/90 text-sm leading-snug">{step}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Rideshare — always visible */}
+      <div className="mx-4 mb-2 rounded-2xl bg-white/10 border border-white/[0.08] px-4 py-3">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-200/60 mb-2">
+          🚗 {guide.rideshare.heading}
+        </p>
+        <p className="text-white/90 text-sm leading-snug">{guide.rideshare.instructions}</p>
+      </div>
+
+      {/* Tips — collapsible */}
+      {guide.tips.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setExpanded(v => !v)}
+            className="w-full px-4 py-2 text-center text-xs font-semibold text-emerald-300/60 hover:text-emerald-200 transition"
+          >
+            {expanded ? "▲ Hide tips" : `▼ ${guide.tips.length} tip${guide.tips.length > 1 ? "s" : ""} for this airport`}
+          </button>
+          {expanded && (
+            <div className="mx-4 mb-4 rounded-2xl bg-white/[0.06] border border-white/[0.06] px-4 py-3 space-y-2">
+              {guide.tips.map((tip, i) => (
+                <div key={i} className="flex gap-2">
+                  <span className="text-emerald-400 shrink-0">💡</span>
+                  <p className="text-white/70 text-xs leading-relaxed">{tip}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {!expanded && <div className="pb-1" />}
+    </div>
+  );
 }
 
 /* ─── Airport guide card ─────────────────────────────────────── */
@@ -303,13 +402,40 @@ export function FlightsTab({
 
   const shown = showPast ? [...upcoming, ...past] : upcoming;
 
-  // Always show the airport guide card for the next upcoming flight
-  // It gives gate/terminal/seat at a glance and auto-checks live status
-  const showGuide = Boolean(nextFlight);
+  // Determine what to show at the top — Apple approach:
+  // The app knows where you are in your journey and shows the right card automatically
+  const nowMs = Date.now();
+
+  // Are we currently airborne on a flight? (departed, not yet arrived)
+  const airborneOnFlight = useMemo(() => [...upcoming, ...past].find(r => {
+    const depMs = parseFlightTimeMs(r.flightDepartureTime ?? r.localTime ?? "", r.timezone);
+    const arrMs = parseFlightTimeMs(r.flightArrivalTime ?? "", r.timezone);
+    return !isNaN(depMs) && nowMs > depMs &&
+      (isNaN(arrMs) ? nowMs - depMs < 18 * 3600_000 : nowMs < arrMs + 30 * 60_000);
+  }) ?? null, [upcoming, past, nowMs]);
+
+  // Did we just land? (within 2 hours of arrival time)
+  const justLanded = useMemo(() => [...upcoming, ...past].find(r => {
+    const arrMs = parseFlightTimeMs(r.flightArrivalTime ?? "", r.timezone);
+    return !isNaN(arrMs) && nowMs > arrMs && nowMs - arrMs < 2 * 3600_000;
+  }) ?? null, [upcoming, past, nowMs]);
+
+  // Show arrival guide when airborne (show destination info) or just landed
+  const showArrivalGuide = Boolean(airborneOnFlight ?? justLanded);
+  const arrivalFlight = airborneOnFlight ?? justLanded;
+
+  // Show departure guide for the next upcoming (not yet departed) flight
+  const showGuide = Boolean(nextFlight) && !airborneOnFlight;
 
   return (
     <section className="space-y-4 pb-6">
-      {/* ── Live airport guide — top of page ── */}
+      {/* ── ARRIVAL GUIDE — shown when airborne or just landed ── */}
+      {/* Apple: when you're on a plane, show where you're going, not where you left */}
+      {showArrivalGuide && arrivalFlight && (
+        <ArrivalGuideCard flight={arrivalFlight} />
+      )}
+
+      {/* ── DEPARTURE GUIDE — gate/terminal/seat for next flight ── */}
       {showGuide && nextFlight && (
         <AirportGuideCard
           flight={nextFlight}
