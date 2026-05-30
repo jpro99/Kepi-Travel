@@ -1814,20 +1814,77 @@ export default function TravelAssistantPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // ── Background GPS for location-aware AI guidance ─────────────────────────
-  // Low-accuracy, low-frequency — only used to tell the AI where the traveler is.
-  // Does NOT affect the map (LiveMapPage has its own higher-accuracy watch).
+  // ── Background GPS for guidance + persistent family location sharing ─────────
   const [guidanceUserLat, setGuidanceUserLat] = useState<number | null>(null);
   const [guidanceUserLon, setGuidanceUserLon] = useState<number | null>(null);
   const guidanceGpsWatchRef = useRef<number | null>(null);
+  const familyWatchRef = useRef<number | null>(null);
+  const familySendingRef = useRef(false);
+  const FAMILY_SHARING_PREF_KEY = "kepi:family-sharing-active";
+
+  const sendFamilyLocation = useCallback(async (lat: number, lon: number, accuracy?: number) => {
+    if (familySendingRef.current) return;
+    familySendingRef.current = true;
+    try {
+      await fetch("/api/family", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update-location", lat, lon, accuracy }),
+      });
+    } catch { /* silent */ } finally { familySendingRef.current = false; }
+  }, []);
+
+  const startFamilyWatch = useCallback(() => {
+    if (familyWatchRef.current !== null) return;
+    if (!localStorage.getItem(FAMILY_SHARING_PREF_KEY)) return;
+    if (!navigator.geolocation) return;
+    familyWatchRef.current = navigator.geolocation.watchPosition(
+      pos => { void sendFamilyLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy); },
+      (err) => {
+        if (familyWatchRef.current !== null) { navigator.geolocation.clearWatch(familyWatchRef.current); familyWatchRef.current = null; }
+        if (err.code !== 1) { setTimeout(startFamilyWatch, 30_000); } // retry unless permission denied
+        else { localStorage.removeItem(FAMILY_SHARING_PREF_KEY); }
+      },
+      { enableHighAccuracy: true, maximumAge: 5_000, timeout: 30_000 },
+    );
+  }, [sendFamilyLocation]);
+
+  const stopFamilyWatch = useCallback(() => {
+    localStorage.removeItem(FAMILY_SHARING_PREF_KEY);
+    if (familyWatchRef.current !== null) { navigator.geolocation.clearWatch(familyWatchRef.current); familyWatchRef.current = null; }
+  }, []);
 
   useEffect(() => {
+    // Start guidance GPS
     if (!navigator.geolocation) return;
     guidanceGpsWatchRef.current = navigator.geolocation.watchPosition(
       pos => { setGuidanceUserLat(pos.coords.latitude); setGuidanceUserLon(pos.coords.longitude); },
       () => null,
       { enableHighAccuracy: false, maximumAge: 60_000, timeout: 30_000 },
     );
+
+    // Start family sharing if preference saved (survives tab switches)
+    startFamilyWatch();
+
+    // Restart after iOS background kill / screen lock
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        if (localStorage.getItem(FAMILY_SHARING_PREF_KEY) && familyWatchRef.current === null) startFamilyWatch();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    // Listen for UI events from FamilyPanel
+    const onStart = () => { localStorage.setItem(FAMILY_SHARING_PREF_KEY, "1"); startFamilyWatch(); };
+    const onStop = () => stopFamilyWatch();
+    window.addEventListener("kepi:family-start-sharing", onStart);
+    window.addEventListener("kepi:family-stop-sharing", onStop);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("kepi:family-start-sharing", onStart);
+      window.removeEventListener("kepi:family-stop-sharing", onStop);
+      if (familyWatchRef.current !== null) { navigator.geolocation.clearWatch(familyWatchRef.current); familyWatchRef.current = null; }
+    };
     return () => { if (guidanceGpsWatchRef.current !== null) navigator.geolocation.clearWatch(guidanceGpsWatchRef.current); };
   }, []);
 
@@ -3542,51 +3599,87 @@ export default function TravelAssistantPage() {
     const nowMs = Date.now();
     const flights = consumerReservationsSorted.filter(r => r.type === "flight");
 
+    // GPS truth: if we have a location that's NOT over ocean and NOT at an airport,
+    // trust it over stale flight time calculations
+    const hasGPS = guidanceUserLat !== null && guidanceUserLon !== null;
+    const gpsIsOverOcean = hasGPS && Math.abs(guidanceUserLat!) > 90; // impossible — always false
+    const gpsLooksLikeHome = hasGPS && guidanceLocationStatus === "away";
+
+    // Parse flight time as UTC to avoid timezone errors.
+    // Flight times stored as "YYYY-MM-DD HH:MM" local to departure airport.
+    // Without timezone we can't be precise, so we use a ±14h window to detect
+    // if a flight is "definitely in the past" regardless of timezone interpretation.
+    const safeDepMs = (r: Reservation): number => {
+      const rr = r as Reservation & Record<string, string | undefined>;
+      const t = (rr.flightDepartureTime ?? r.localTime ?? "").slice(0, 16).replace(" ", "T");
+      // Parse as UTC-0 — even if the time zone is off by ±14h, a flight
+      // that departed yesterday is unambiguously in the past
+      return Date.parse(t + "Z");
+    };
+
+    const safeArrMs = (r: Reservation): number => {
+      const rr = r as Reservation & Record<string, string | undefined>;
+      const t = (rr.flightArrivalTime ?? "").slice(0, 16).replace(" ", "T");
+      return t.length >= 16 ? Date.parse(t + "Z") : NaN;
+    };
+
     for (const r of flights) {
       const rr = r as Reservation & Record<string, string | undefined>;
-      const depMs = parseDateInput(rr.flightDepartureTime ?? rr.localTime ?? "");
-      const arrMs = parseDateInput(rr.flightArrivalTime ?? "");
+      const depMs = safeDepMs(r);
+      const arrMs = safeArrMs(r);
       const depValid = !isNaN(depMs);
       const arrValid = !isNaN(arrMs);
-      const departed = depValid && nowMs > depMs;
-      const arrived = arrValid && nowMs > arrMs + 30 * 60_000;
 
-      if (departed && !arrived) {
-        // Currently airborne on this flight
-        const minsLeft = arrValid ? Math.max(0, Math.round((arrMs - nowMs) / 60_000)) : null;
-        const landingIn = minsLeft !== null
-          ? minsLeft < 60 ? `${minsLeft} min` : `${Math.floor(minsLeft / 60)}h ${minsLeft % 60}m`
-          : "en route";
-        return {
-          kind: "airborne",
-          onFlight: r,
-          landingAt: rr.flightArrivalAirport ?? "",
-          landingIn,
-        };
-      }
+      // "Definitely departed" = dep time was more than 1 hour ago even in the
+      // most generous timezone (UTC+14). If depMs+14h < now = certainly departed.
+      const definitelyDeparted = depValid && nowMs > depMs + 14 * 3600_000;
+      // "Possibly not yet departed" = dep time is within next 2h in any timezone
+      const mightNotHaveDeparted = depValid && nowMs < depMs - 2 * 3600_000;
 
-      if (departed && arrived && nowMs - arrMs < 2 * 3600_000) {
-        // Just landed — within 2 hours
-        return {
-          kind: "just-landed",
-          flight: r,
-          landedMinutesAgo: Math.round((nowMs - arrMs) / 60_000),
-        };
-      }
-
-      if (!departed && depValid) {
-        // This is the next upcoming flight
+      if (mightNotHaveDeparted) {
+        // This flight is definitely upcoming
         const daysUntil = Math.max(0, Math.ceil((depMs - nowMs) / 86400_000));
         return { kind: "pre-trip", daysUntil, nextFlight: r };
       }
+
+      if (definitelyDeparted) {
+        const definitelyArrived = arrValid && nowMs > arrMs + 15 * 3600_000;
+        // "Just landed" window: arr+14h timezone buffer to arr+2h+14h
+        const mightHaveArrived = arrValid && nowMs > arrMs - 14 * 3600_000;
+        const recentlyArrived = arrValid && nowMs > arrMs + 14 * 3600_000 &&
+          nowMs - arrMs < (2 + 14) * 3600_000;
+
+        if (definitelyArrived || (gpsLooksLikeHome && mightHaveArrived)) {
+          // GPS says we're away from airports = we've landed and left
+          // OR arrival was >15h ago = definitely done
+          if (recentlyArrived) {
+            const landedMinsAgo = Math.max(0, Math.round((nowMs - arrMs - 14 * 3600_000) / 60_000));
+            return { kind: "just-landed", flight: r, landedMinutesAgo: landedMinsAgo };
+          }
+          // Fully completed — continue to next flight or at-destination
+          continue;
+        }
+
+        if (!mightHaveArrived) {
+          // Departed but arrival time unknown or too far out — check GPS
+          if (gpsLooksLikeHome) continue; // GPS says we're home, skip
+          const minsLeft: number | null = arrValid
+            ? Math.max(0, Math.round((arrMs - nowMs + 14 * 3600_000) / 60_000))
+            : null;
+          const landingIn = minsLeft !== null
+            ? minsLeft < 60 ? `${minsLeft} min` : `${Math.floor(minsLeft / 60)}h ${minsLeft % 60}m`
+            : "en route";
+          return { kind: "airborne", onFlight: r, landingAt: rr.flightArrivalAirport ?? "", landingIn };
+        }
+      }
     }
 
-    // All flights completed — at destination
+    // All flights done
     const dest = consumerTripDestination ?? activeTrip?.destination ?? "";
     if (dest) return { kind: "at-destination", destination: dest };
     return { kind: "no-trip" };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [consumerReservationsSorted, consumerTripDestination, activeTrip?.destination]);
+  }, [consumerReservationsSorted, consumerTripDestination, activeTrip?.destination,
+      guidanceUserLat, guidanceUserLon, guidanceLocationStatus]);
   useEffect(() => {
     if (!tripsHydratedRef.current) return;
     if (!activeTripId) return;

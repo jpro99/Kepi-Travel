@@ -79,13 +79,12 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
 
-  // ── Location sharing ─────────────────────────────────────────────────────
-  // sharingLocation persists across tab navigations via localStorage
-  const [sharingLocation, setSharingLocation] = useState(false);
-  const [locationError, setLocationError] = useState<string | null>(null);
-  const [lastSentAt, setLastSentAt] = useState<string | null>(null);
-  const watchIdRef = useRef<number | null>(null);
-  const sendingRef = useRef(false);
+  // ── Location sharing — GPS is managed at page.tsx level, never unmounts ─────
+  // FamilyPanel just controls the preference; page.tsx does the actual watching.
+  const [sharingLocation, setSharingLocation] = useState(
+    typeof window !== "undefined" && localStorage.getItem("kepi:family-sharing-active") === "1"
+  );
+  const [locationError] = useState<string | null>(null);
 
   const activeGroup = useMemo(
     () => groups.find(g => g.id === activeGroupId) ?? groups[0] ?? null,
@@ -99,146 +98,25 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
     [activeGroup]
   );
 
-  // Send a single location update to the server
-  const sendLocation = useCallback(async (lat: number, lon: number, accuracy?: number) => {
-    if (sendingRef.current) return; // debounce concurrent sends
-    sendingRef.current = true;
-    try {
-      const res = await fetch("/api/family", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "update-location", lat, lon, accuracy }),
-      });
-      if (res.ok) {
-        setLastSentAt(new Date().toISOString());
-        setLocationError(null);
-      } else {
-        setLocationError("Location update failed — will retry.");
-      }
-    } catch {
-      setLocationError("Network error — location not sent.");
-    } finally {
-      sendingRef.current = false;
-    }
-  }, []);
+  // sendLocation moved to page.tsx persistent effect
 
-  // Start watching GPS — called on mount if sharing was active, and when user taps Share
-  const startSharing = useCallback(() => {
-    if (watchIdRef.current !== null) return; // already watching
-    if (!navigator.geolocation) {
-      setLocationError("GPS not available on this device.");
-      return;
-    }
-    setLocationError(null);
+  // startSharing moved to page.tsx
 
-    const tryWatch = (highAccuracy: boolean) => {
-      if (watchIdRef.current !== null) return;
-      watchIdRef.current = navigator.geolocation.watchPosition(
-        pos => {
-          void sendLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
-          setLocationError(null);
-        },
-        err => {
-          if (err.code === 1) {
-            // PERMISSION_DENIED — stop permanently, user must fix settings
-            setLocationError("Location permission denied. iPhone: Settings → Privacy & Security → Location Services → Safari → While Using.");
-            setSharingLocation(false);
-            localStorage.removeItem(SHARING_PREF_KEY);
-            if (watchIdRef.current !== null) {
-              navigator.geolocation.clearWatch(watchIdRef.current);
-              watchIdRef.current = null;
-            }
-          } else if (highAccuracy) {
-            // POSITION_UNAVAILABLE or TIMEOUT with high accuracy (common on plane WiFi)
-            // Fall back to low accuracy — works with WiFi positioning
-            if (watchIdRef.current !== null) {
-              navigator.geolocation.clearWatch(watchIdRef.current);
-              watchIdRef.current = null;
-            }
-            setLocationError("Switching to low-accuracy GPS (plane WiFi mode)…");
-            setTimeout(() => tryWatch(false), 1000);
-          } else {
-            // Low accuracy also failed — show error but keep preference, will retry on next visibility
-            setLocationError("Location unavailable. Will retry when GPS signal improves.");
-            if (watchIdRef.current !== null) {
-              navigator.geolocation.clearWatch(watchIdRef.current);
-              watchIdRef.current = null;
-            }
-            // Auto-retry in 30 seconds — don't kill the preference
-            setTimeout(() => {
-              if (localStorage.getItem(SHARING_PREF_KEY) === "1") {
-                watchIdRef.current = null;
-                tryWatch(false);
-              }
-            }, 30_000);
-          }
-        },
-        {
-          enableHighAccuracy: highAccuracy,
-          maximumAge: highAccuracy ? 5_000 : 30_000,
-          timeout: highAccuracy ? 15_000 : 45_000,
-        }
-      );
-    };
 
-    tryWatch(true);
-  }, [sendLocation]);
-
-  const stopSharing = useCallback(() => {
-    if (watchIdRef.current !== null) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-    }
-    setSharingLocation(false);
-    setLastSentAt(null);
-    localStorage.removeItem(SHARING_PREF_KEY);
-  }, []);
 
   const toggleSharing = useCallback(() => {
     if (sharingLocation) {
-      stopSharing();
+      setSharingLocation(false);
+      window.dispatchEvent(new CustomEvent("kepi:family-stop-sharing"));
       setMessage("Location sharing stopped.");
     } else {
       setSharingLocation(true);
-      localStorage.setItem(SHARING_PREF_KEY, "1");
-      startSharing();
+      window.dispatchEvent(new CustomEvent("kepi:family-start-sharing"));
       setMessage(null);
     }
-  }, [sharingLocation, startSharing, stopSharing]);
+  }, [sharingLocation]);
 
-  // Auto-resume sharing on mount if preference was saved
-  useEffect(() => {
-    if (!isPremium) return;
-    const saved = localStorage.getItem(SHARING_PREF_KEY);
-    if (saved === "1") {
-      // Use setTimeout to avoid setState-in-effect lint error
-      // This is safe — sharing state is UI-only, slight delay is fine
-      setTimeout(() => {
-        setSharingLocation(true);
-      }, 0);
-      startSharing();
-    }
 
-    // iOS kills watchPosition when the page goes to background or screen locks.
-    // Restart it the moment the page becomes visible again.
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible" && localStorage.getItem(SHARING_PREF_KEY) === "1") {
-        if (watchIdRef.current === null) {
-          startSharing();
-        }
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibility);
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-        watchIdRef.current = null;
-      }
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPremium]);
 
   // Load groups
   const load = useCallback(async (groupId?: string) => {
@@ -276,17 +154,7 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
     return () => window.removeEventListener("kepi:family-reload", handler);
   }, [isPremium, load]);
 
-  // Also listen for auto-start-sharing event (fired after join)
-  useEffect(() => {
-    if (!isPremium) return;
-    const handler = () => {
-      setSharingLocation(true);
-      localStorage.setItem(SHARING_PREF_KEY, "1");
-      startSharing();
-    };
-    window.addEventListener("kepi:family-start-sharing", handler);
-    return () => window.removeEventListener("kepi:family-start-sharing", handler);
-  }, [isPremium, startSharing]);
+
 
   // Poll locations every 10s
   useEffect(() => {

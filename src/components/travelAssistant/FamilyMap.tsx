@@ -71,6 +71,7 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
       members.forEach(member => {
         const loc = locations[member.id];
         if (!loc) return;
+
         const stale = isStale(loc.updatedAt);
 
         // Animate marker to new position using requestAnimationFrame lerp
