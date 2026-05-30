@@ -3598,86 +3598,67 @@ export default function TravelAssistantPage() {
   // Apple principle: one phase drives the entire app — Trip, Flights, everything.
   const journeyPhase = useMemo((): JourneyPhase => {
     const nowMs = Date.now();
+    const nowDate = new Date(nowMs);
+    const todayStr = `${nowDate.getFullYear()}-${String(nowDate.getMonth()+1).padStart(2,'0')}-${String(nowDate.getDate()).padStart(2,'0')}`;
+
     const flights = consumerReservationsSorted.filter(r => r.type === "flight");
+    if (flights.length === 0) return { kind: "no-trip" };
 
-    // GPS truth: if we have a location that's NOT over ocean and NOT at an airport,
-    // trust it over stale flight time calculations
-    const hasGPS = guidanceUserLat !== null && guidanceUserLon !== null;
-    const gpsIsOverOcean = hasGPS && Math.abs(guidanceUserLat!) > 90; // impossible — always false
-    const gpsLooksLikeHome = hasGPS && guidanceLocationStatus === "away";
-
-    // Parse flight time as UTC to avoid timezone errors.
-    // Flight times stored as "YYYY-MM-DD HH:MM" local to departure airport.
-    // Without timezone we can't be precise, so we use a ±14h window to detect
-    // if a flight is "definitely in the past" regardless of timezone interpretation.
-    const safeDepMs = (r: Reservation): number => {
+    // Apple rule: use the DATE not the time to determine if a flight is done.
+    // A flight on May 29 is DONE on May 30. No timezone math, no GPS guessing.
+    const getDepDate = (r: Reservation): string => {
       const rr = r as Reservation & Record<string, string | undefined>;
-      const t = (rr.flightDepartureTime ?? r.localTime ?? "").slice(0, 16).replace(" ", "T");
-      // Parse as UTC-0 — even if the time zone is off by ±14h, a flight
-      // that departed yesterday is unambiguously in the past
-      return Date.parse(t + "Z");
+      return (rr.flightDate ?? rr.flightDepartureTime ?? r.localTime ?? "").slice(0, 10);
+    };
+    const getArrDate = (r: Reservation): string => {
+      const rr = r as Reservation & Record<string, string | undefined>;
+      return (rr.flightArrivalTime ?? "").slice(0, 10);
     };
 
-    const safeArrMs = (r: Reservation): number => {
-      const rr = r as Reservation & Record<string, string | undefined>;
-      const t = (rr.flightArrivalTime ?? "").slice(0, 16).replace(" ", "T");
-      return t.length >= 16 ? Date.parse(t + "Z") : NaN;
-    };
+    // All flights departed before today = trip is 100% done
+    const allPast = flights.every(r => getDepDate(r) < todayStr);
+    if (allPast) {
+      const dest = consumerTripDestination ?? activeTrip?.destination ?? "";
+      return dest ? { kind: "at-destination", destination: dest } : { kind: "no-trip" };
+    }
 
-    for (const r of flights) {
-      const rr = r as Reservation & Record<string, string | undefined>;
-      const depMs = safeDepMs(r);
-      const arrMs = safeArrMs(r);
-      const depValid = !isNaN(depMs);
-      const arrValid = !isNaN(arrMs);
+    // Find today's flight and future flights
+    const todayFlight = flights.find(r => getDepDate(r) === todayStr);
+    const futureFlight = flights.find(r => getDepDate(r) > todayStr);
 
-      // "Definitely departed" = dep time was more than 1 hour ago even in the
-      // most generous timezone (UTC+14). If depMs+14h < now = certainly departed.
-      const definitelyDeparted = depValid && nowMs > depMs + 14 * 3600_000;
-      // "Possibly not yet departed" = dep time is within next 2h in any timezone
-      const mightNotHaveDeparted = depValid && nowMs < depMs - 2 * 3600_000;
+    if (todayFlight) {
+      const rr = todayFlight as Reservation & Record<string, string | undefined>;
+      const depTimeStr = (rr.flightDepartureTime ?? todayFlight.localTime ?? "").slice(0, 16);
+      const arrTimeStr = (rr.flightArrivalTime ?? "").slice(0, 16);
+      const depMs = depTimeStr ? Date.parse(depTimeStr.replace(" ", "T")) : NaN;
+      const arrMs = arrTimeStr ? Date.parse(arrTimeStr.replace(" ", "T")) : NaN;
+      const depPast = !isNaN(depMs) && nowMs > depMs;
+      const arrPast = !isNaN(arrMs) && nowMs > arrMs + 30 * 60_000;
 
-      if (mightNotHaveDeparted) {
-        // This flight is definitely upcoming
-        const daysUntil = Math.max(0, Math.ceil((depMs - nowMs) / 86400_000));
-        return { kind: "pre-trip", daysUntil, nextFlight: r };
+      if (!depPast) {
+        return { kind: "pre-trip", daysUntil: 0, nextFlight: todayFlight };
       }
-
-      if (definitelyDeparted) {
-        const definitelyArrived = arrValid && nowMs > arrMs + 15 * 3600_000;
-        // "Just landed" window: arr+14h timezone buffer to arr+2h+14h
-        const mightHaveArrived = arrValid && nowMs > arrMs - 14 * 3600_000;
-        const recentlyArrived = arrValid && nowMs > arrMs + 14 * 3600_000 &&
-          nowMs - arrMs < (2 + 14) * 3600_000;
-
-        if (definitelyArrived || (gpsLooksLikeHome && mightHaveArrived)) {
-          // GPS says we're away from airports = we've landed and left
-          // OR arrival was >15h ago = definitely done
-          if (recentlyArrived) {
-            const landedMinsAgo = Math.max(0, Math.round((nowMs - arrMs - 14 * 3600_000) / 60_000));
-            return { kind: "just-landed", flight: r, landedMinutesAgo: landedMinsAgo };
-          }
-          // Fully completed — continue to next flight or at-destination
-          continue;
-        }
-
-        if (!mightHaveArrived) {
-          // Departed but arrival time unknown or too far out — check GPS
-          if (gpsLooksLikeHome) continue; // GPS says we're home, skip
-          const minsLeft: number | null = arrValid
-            ? Math.max(0, Math.round((arrMs - nowMs + 14 * 3600_000) / 60_000))
-            : null;
-          const landingIn = minsLeft !== null
-            ? minsLeft < 60 ? `${minsLeft} min` : `${Math.floor(minsLeft / 60)}h ${minsLeft % 60}m`
-            : "en route";
-          return { kind: "airborne", onFlight: r, landingAt: rr.flightArrivalAirport ?? "", landingIn };
-        }
+      if (depPast && arrPast) {
+        const minsAgo = isNaN(arrMs) ? 999 : Math.round((nowMs - arrMs) / 60_000);
+        if (minsAgo < 120) return { kind: "just-landed", flight: todayFlight, landedMinutesAgo: minsAgo };
+        const dest = consumerTripDestination ?? activeTrip?.destination ?? "";
+        return dest ? { kind: "at-destination", destination: dest } : { kind: "no-trip" };
+      }
+      if (depPast && !arrPast) {
+        const minsLeft = isNaN(arrMs) ? null : Math.max(0, Math.round((arrMs - nowMs) / 60_000));
+        const landingIn = minsLeft === null ? "en route"
+          : minsLeft < 60 ? `${minsLeft} min`
+          : `${Math.floor(minsLeft/60)}h ${minsLeft % 60}m`;
+        return { kind: "airborne", onFlight: todayFlight, landingAt: rr.flightArrivalAirport ?? "", landingIn };
       }
     }
 
-    // All flights done
-    const dest = consumerTripDestination ?? activeTrip?.destination ?? "";
-    if (dest) return { kind: "at-destination", destination: dest };
+    if (futureFlight) {
+      const depMs = Date.parse(getDepDate(futureFlight) + "T12:00:00Z");
+      const daysUntil = Math.max(1, Math.ceil((depMs - nowMs) / 86400_000));
+      return { kind: "pre-trip", daysUntil, nextFlight: futureFlight };
+    }
+
     return { kind: "no-trip" };
   }, [consumerReservationsSorted, consumerTripDestination, activeTrip?.destination,
       guidanceUserLat, guidanceUserLon, guidanceLocationStatus]);
