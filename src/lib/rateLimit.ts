@@ -23,7 +23,7 @@ type RateLimitDecision = {
 
 const RATE_LIMIT_POLICIES: Record<RateLimitPolicyName, RateLimitPolicy> = {
   "travel-updates-general": {
-    limit: 30,
+    limit: 60,
     windowSeconds: 60,
     prefix: "kepi:rl:travel-updates",
   },

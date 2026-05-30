@@ -253,12 +253,17 @@ function AirportGuideCard({
     [gate, terminal, iata]
   );
 
-  // Auto-check status on mount — always get fresh gate/terminal/delay data
-  // Gate assignments change right up to departure so always fetch latest
+  // Auto-check on mount — but only if not checked in the last 5 minutes
+  // Delayed 3s so navigating quickly between tabs doesn't spam the API
   useEffect(() => {
-    if (!live?.busy) {
+    const lastChecked = live?.checkedAt ? Date.parse(live.checkedAt) : 0;
+    const staleMs = Date.now() - lastChecked;
+    const isStale = staleMs > 5 * 60_000; // older than 5 minutes
+    if (live?.busy || !isStale) return;
+    const timer = setTimeout(() => {
       onCheckStatus(flight.id);
-    }
+    }, 3000);
+    return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flight.id]);
   const isAirside = locationStatus === "in-terminal";
@@ -365,9 +370,13 @@ function AirportGuideCard({
           className="w-full rounded-2xl bg-white/10 border border-white/15 py-2.5 text-xs font-bold text-white/80 hover:bg-white/15 disabled:opacity-50 transition flex items-center justify-center gap-2"
         >
           {live?.busy ? (
-            <><span className="animate-spin">↻</span> Getting live status…</>
+            <><span className="animate-spin inline-block">↻</span> Checking live status…</>
+          ) : live?.error?.includes("Too many") ? (
+            <>↻ Refresh · rate limited — try in a moment</>
           ) : (
-            <>↻ Refresh live status{live?.checkedAt ? ` · ${new Date(live.checkedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}</>
+            <>↻ Refresh live status{live?.checkedAt
+              ? ` · ${new Date(live.checkedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
+              : ""}</>
           )}
         </button>
       </div>
@@ -561,10 +570,23 @@ export function FlightsTab({
                 ))}
               </div>
 
-              {/* Live error */}
-              {live?.error && (
-                <div className="mx-4 mb-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 px-3 py-2">
-                  <p className="text-xs text-amber-700 dark:text-amber-300">{live.error}</p>
+              {/* Live status error — shown inline, never alarming */}
+              {live?.error && !live.busy && (
+                <div className="mx-4 mb-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 px-4 py-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                      {live.error.includes("Too many") ? "Live status will refresh shortly" : "Couldn't reach status server"}
+                    </p>
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                      {live.error.includes("Too many") ? "Check the boards at the airport for gate updates" : "Tap to retry"}
+                    </p>
+                  </div>
+                  {!live.error.includes("Too many") && (
+                    <button type="button" onClick={() => onCheckStatus(r.id)}
+                      className="shrink-0 rounded-xl bg-[#007AFF]/10 px-3 py-1.5 text-xs font-bold text-[#007AFF]">
+                      Retry
+                    </button>
+                  )}
                 </div>
               )}
 
