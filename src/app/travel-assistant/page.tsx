@@ -1852,13 +1852,13 @@ export default function TravelAssistantPage() {
       }),
     }).then(r => r.json()).then((d: { ok?: boolean; error?: string; alreadyMember?: boolean }) => {
       if (d.ok) {
-        setToast(d.alreadyMember ? "✅ Already in the group — location sharing starting…" : "✅ Joined! Location sharing starting automatically…");
+        setToastRaw(d.alreadyMember ? "✅ Already in the group — location sharing starting…" : "✅ Joined! Location sharing starting automatically…");
         window.dispatchEvent(new CustomEvent("kepi:family-reload"));
         window.dispatchEvent(new CustomEvent("kepi:family-start-sharing"));
       } else {
-        setToast(`Family join failed: ${d.error ?? "Unknown error"}`);
+        setToastRaw(`Family join failed: ${d.error ?? "Unknown error"}`);
       }
-    }).catch((err: unknown) => setToast(`Family join error: ${err instanceof Error ? err.message : "Network error"}`));
+    }).catch((err: unknown) => setToastRaw(`Family join error: ${err instanceof Error ? err.message : "Network error"}`));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, user]);
   const [pushSubscribed, setPushSubscribed] = useState(false);
@@ -3448,57 +3448,7 @@ export default function TravelAssistantPage() {
     }) ?? null;
   }, [consumerReservationsSorted]);
 
-  // ── Single source of truth: where is the user right now in their journey? ──
-  // Apple principle: one phase drives the entire app — Trip, Flights, everything.
-  const journeyPhase = useMemo((): JourneyPhase => {
-    const nowMs = Date.now();
-    const flights = consumerReservationsSorted.filter(r => r.type === "flight");
 
-    for (const r of flights) {
-      const rr = r as Reservation & Record<string, string | undefined>;
-      const depMs = parseDateInput(rr.flightDepartureTime ?? rr.localTime ?? "");
-      const arrMs = parseDateInput(rr.flightArrivalTime ?? "");
-      const depValid = !isNaN(depMs);
-      const arrValid = !isNaN(arrMs);
-      const departed = depValid && nowMs > depMs;
-      const arrived = arrValid && nowMs > arrMs + 30 * 60_000;
-
-      if (departed && !arrived) {
-        // Currently airborne on this flight
-        const minsLeft = arrValid ? Math.max(0, Math.round((arrMs - nowMs) / 60_000)) : null;
-        const landingIn = minsLeft !== null
-          ? minsLeft < 60 ? `${minsLeft} min` : `${Math.floor(minsLeft / 60)}h ${minsLeft % 60}m`
-          : "en route";
-        return {
-          kind: "airborne",
-          onFlight: r,
-          landingAt: rr.flightArrivalAirport ?? "",
-          landingIn,
-        };
-      }
-
-      if (departed && arrived && nowMs - arrMs < 2 * 3600_000) {
-        // Just landed — within 2 hours
-        return {
-          kind: "just-landed",
-          flight: r,
-          landedMinutesAgo: Math.round((nowMs - arrMs) / 60_000),
-        };
-      }
-
-      if (!departed && depValid) {
-        // This is the next upcoming flight
-        const daysUntil = Math.max(0, Math.ceil((depMs - nowMs) / 86400_000));
-        return { kind: "pre-trip", daysUntil, nextFlight: r };
-      }
-    }
-
-    // All flights completed — at destination
-    const dest = consumerTripDestination ?? activeTrip?.destination ?? "";
-    if (dest) return { kind: "at-destination", destination: dest };
-    return { kind: "no-trip" };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [consumerReservationsSorted, consumerTripDestination, activeTrip?.destination]);
 
 
 
@@ -3585,6 +3535,58 @@ export default function TravelAssistantPage() {
     const currentStartDate = activeTrip?.startDate?.trim() ?? "";
     return currentStartDate || null;
   }, [activeTrip?.startDate, derivedTripStartDate]);
+
+  // ── Single source of truth: where is the user right now in their journey? ──
+  // Apple principle: one phase drives the entire app — Trip, Flights, everything.
+  const journeyPhase = useMemo((): JourneyPhase => {
+    const nowMs = Date.now();
+    const flights = consumerReservationsSorted.filter(r => r.type === "flight");
+
+    for (const r of flights) {
+      const rr = r as Reservation & Record<string, string | undefined>;
+      const depMs = parseDateInput(rr.flightDepartureTime ?? rr.localTime ?? "");
+      const arrMs = parseDateInput(rr.flightArrivalTime ?? "");
+      const depValid = !isNaN(depMs);
+      const arrValid = !isNaN(arrMs);
+      const departed = depValid && nowMs > depMs;
+      const arrived = arrValid && nowMs > arrMs + 30 * 60_000;
+
+      if (departed && !arrived) {
+        // Currently airborne on this flight
+        const minsLeft = arrValid ? Math.max(0, Math.round((arrMs - nowMs) / 60_000)) : null;
+        const landingIn = minsLeft !== null
+          ? minsLeft < 60 ? `${minsLeft} min` : `${Math.floor(minsLeft / 60)}h ${minsLeft % 60}m`
+          : "en route";
+        return {
+          kind: "airborne",
+          onFlight: r,
+          landingAt: rr.flightArrivalAirport ?? "",
+          landingIn,
+        };
+      }
+
+      if (departed && arrived && nowMs - arrMs < 2 * 3600_000) {
+        // Just landed — within 2 hours
+        return {
+          kind: "just-landed",
+          flight: r,
+          landedMinutesAgo: Math.round((nowMs - arrMs) / 60_000),
+        };
+      }
+
+      if (!departed && depValid) {
+        // This is the next upcoming flight
+        const daysUntil = Math.max(0, Math.ceil((depMs - nowMs) / 86400_000));
+        return { kind: "pre-trip", daysUntil, nextFlight: r };
+      }
+    }
+
+    // All flights completed — at destination
+    const dest = consumerTripDestination ?? activeTrip?.destination ?? "";
+    if (dest) return { kind: "at-destination", destination: dest };
+    return { kind: "no-trip" };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [consumerReservationsSorted, consumerTripDestination, activeTrip?.destination]);
   useEffect(() => {
     if (!tripsHydratedRef.current) return;
     if (!activeTripId) return;
