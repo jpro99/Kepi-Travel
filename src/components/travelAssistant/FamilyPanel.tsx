@@ -568,7 +568,7 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm text-slate-900 dark:text-white">
-                      {member.name}{isMe ? " (you)" : ""}
+                      {member.name}
                     </p>
                     <p className="text-xs mt-0.5 flex items-center gap-1.5">
                       <span className={`inline-block h-2 w-2 rounded-full ${!loc ? "bg-slate-200 dark:bg-slate-700" : live ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`} />

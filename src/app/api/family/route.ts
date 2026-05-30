@@ -81,14 +81,14 @@ async function saveGroups(userId: string, groups: Group[]): Promise<void> {
   await kvStoreSet(FAMILY_GROUPS_KEY, groups, { userId });
 }
 
-function createDefaultGroup(userId: string, name = "My Family"): Group {
+function createDefaultGroup(userId: string, name = "My Family", organizerName = "Me"): Group {
   return {
     id: generateId(),
     name,
     ownerId: userId,
     members: [{
       id: userId,
-      name: "Me",
+      name: organizerName,
       email: null,
       role: "organizer",
       color: MEMBER_COLORS[0],
@@ -143,6 +143,20 @@ async function sendInviteEmail(opts: {
     logger.warn("Family invite email failed.", { error: err instanceof Error ? err.message : "unknown" });
     return false;
   }
+}
+
+// ── Get real name from Clerk ──────────────────────────────────────────────────
+async function getClerkDisplayName(userId: string): Promise<string | null> {
+  try {
+    const { clerkClient } = await import("@clerk/nextjs/server");
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId);
+    const name = [user.firstName, user.lastName].filter(Boolean).join(" ").trim()
+      || user.username
+      || user.emailAddresses[0]?.emailAddress?.split("@")[0]
+      || null;
+    return name || null;
+  } catch { return null; }
 }
 
 // ── Resolve membership record, handling all corrupted formats ────────────────
@@ -217,16 +231,39 @@ export async function GET(req: Request) {
   // Load own groups
   let groups = await loadGroups(userId);
   if (groups.length === 0) {
-    const def = createDefaultGroup(userId);
+    const realName = await getClerkDisplayName(userId);
+    const def = createDefaultGroup(userId, "My Family", realName ?? "Me");
     groups = [def];
     await saveGroups(userId, groups);
-    // Store invite index as object (not JSON string) so it round-trips correctly
     await kvStoreSet(FAMILY_INVITE_INDEX_KEY(def.inviteCode), { ownerId: userId, groupId: def.id }, { userId: "global" });
   }
 
   // Re-register all invite codes (self-heal) — store as objects not strings
   for (const g of groups) {
     await kvStoreSet(FAMILY_INVITE_INDEX_KEY(g.inviteCode), { ownerId: userId, groupId: g.id }, { userId: "global" });
+  }
+
+  // Auto-fix "Me" → real Clerk display name for the organizer member
+  const organizerMember = groups[0]?.members.find(m => m.id === userId);
+  if (organizerMember && (organizerMember.name === "Me" || organizerMember.name === "")) {
+    const realName = await getClerkDisplayName(userId);
+    if (realName) {
+      let changed = false;
+      const fixedGroups = groups.map(g => ({
+        ...g,
+        members: g.members.map(m => {
+          if (m.id === userId && (m.name === "Me" || m.name === "")) {
+            changed = true;
+            return { ...m, name: realName };
+          }
+          return m;
+        }),
+      }));
+      if (changed) {
+        groups = fixedGroups;
+        await saveGroups(userId, groups);
+      }
+    }
   }
 
   const activeGroup = requestedGroupId ? groups.find(g => g.id === requestedGroupId) ?? groups[0] : groups[0];
