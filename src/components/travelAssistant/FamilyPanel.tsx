@@ -100,7 +100,6 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
 
   // sendLocation moved to page.tsx persistent effect
 
-  // startSharing moved to page.tsx
 
 
 
@@ -266,23 +265,26 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
       if (data.group) setGroups([data.group]);
       setGroupRole("member"); setJoiningGroup(false); setJoinCode(""); setJoinName("");
       setMessage("✅ Joined! Starting location sharing automatically…");
-      // Auto-start sharing immediately after joining
       setSharingLocation(true);
       localStorage.setItem(SHARING_PREF_KEY, "1");
-      startSharing();
+      window.dispatchEvent(new CustomEvent("kepi:family-start-sharing"));
     } catch { setMessage("Failed to join."); }
     finally { setBusy(false); }
-  }, [joinCode, joinName, startSharing]);
+  }, [joinCode, joinName]);
 
   const handleLeaveGroup = useCallback(async () => {
     if (!confirm("Leave this group?")) return;
     setBusy(true);
     try {
       await fetch("/api/family", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "leave-group" }) });
-      setGroupRole("owner"); stopSharing(); void load();
+      setGroupRole("owner");
+      setSharingLocation(false);
+      localStorage.removeItem(SHARING_PREF_KEY);
+      window.dispatchEvent(new CustomEvent("kepi:family-stop-sharing"));
+      void load();
     } catch { setMessage("Failed."); }
     finally { setBusy(false); }
-  }, [load, stopSharing]);
+  }, [load]);
 
   // ── Paywall ───────────────────────────────────────────────────────────────
   if (!isPremium) {
