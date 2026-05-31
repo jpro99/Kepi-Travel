@@ -7,10 +7,10 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   // Try every possible env var name the user might have set
   const maptilerKey =
-    process.env.NEXT_PUBLIC_MAPTILER_KEY ||
-    process.env.MAPTILER_KEY ||
-    process.env.NEXT_PUBLIC_MAPLIBRE_KEY ||
+    process.env.MAPTILER_KEY ||         // server-only, no domain restrictions — best
     process.env.MAPTILER_API_KEY ||
+    process.env.NEXT_PUBLIC_MAPTILER_KEY ||
+    process.env.NEXT_PUBLIC_MAPLIBRE_KEY ||
     "";
 
   return NextResponse.json(

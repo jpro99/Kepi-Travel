@@ -79,18 +79,23 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
           const marker = existing[member.id];
           const from = marker.getLngLat();
           const to = { lng: loc.lon, lat: loc.lat };
-          // Only animate if moved more than ~5m (avoids jitter from GPS noise)
+          // Only animate if moved more than ~15m (consumer GPS drifts 10-30m standing still)
           const dLng = Math.abs(to.lng - from.lng);
           const dLat = Math.abs(to.lat - from.lat);
-          if (dLng < 0.00005 && dLat < 0.00005) return; // GPS noise, skip
-          const duration = 2000;
+          if (dLng < 0.00015 && dLat < 0.00015) return; // GPS noise, skip
+          // Smooth to weighted average — 70% new, 30% current — reduces jump to raw GPS
+          const smoothTo = {
+            lng: from.lng * 0.3 + to.lng * 0.7,
+            lat: from.lat * 0.3 + to.lat * 0.7,
+          };
+          const duration = 3000;
           const start = performance.now();
           const animate = (now: number) => {
             const t = Math.min(1, (now - start) / duration);
             const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; // ease-in-out
             marker.setLngLat([
-              from.lng + (to.lng - from.lng) * ease,
-              from.lat + (to.lat - from.lat) * ease,
+              from.lng + (smoothTo.lng - from.lng) * ease,
+              from.lat + (smoothTo.lat - from.lat) * ease,
             ]);
             if (t < 1) requestAnimationFrame(animate);
           };

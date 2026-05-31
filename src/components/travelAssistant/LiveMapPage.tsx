@@ -140,13 +140,19 @@ export function LiveMapPage() {
         if (existing[member.id]) {
           const marker = existing[member.id];
           const from = marker.getLngLat();
-          // GPS noise filter — skip if moved less than ~5 metres
+          // GPS noise filter — skip if moved less than ~15 metres
+          // Consumer GPS drifts 10-30m even when standing still
           const dLng = Math.abs(loc.lon - from.lng);
           const dLat = Math.abs(loc.lat - from.lat);
-          if (dLng < 0.00005 && dLat < 0.00005) return;
-          // Smooth animated lerp over 2s
-          const to = { lng: loc.lon, lat: loc.lat };
-          const dur = 2000;
+          if (dLng < 0.00015 && dLat < 0.00015) return;
+          // Smooth to a weighted average of current position and new reading
+          // This prevents jumping to raw GPS coordinates (which are noisy)
+          // Weight: 70% new reading, 30% current — smooths noise but stays accurate
+          const to = {
+            lng: from.lng * 0.3 + loc.lon * 0.7,
+            lat: from.lat * 0.3 + loc.lat * 0.7,
+          };
+          const dur = 3000; // slower animation = less jumpy appearance
           const t0 = performance.now();
           const step = (now: number) => {
             const p = Math.min(1, (now - t0) / dur);
