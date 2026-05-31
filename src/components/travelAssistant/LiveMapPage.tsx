@@ -64,7 +64,8 @@ function streetsStyleUrl(key: string) {
   return `https://api.maptiler.com/maps/streets-v2/style.json?key=${key}`;
 }
 function satelliteStyleUrl(key: string) {
-  return `https://api.maptiler.com/maps/hybrid/style.json?key=${key}`;
+  // Use satellite-v2 style which has higher quality raster tiles vs hybrid
+  return `https://api.maptiler.com/maps/satellite/style.json?key=${key}`;
 }
 
 /* ─── Component ──────────────────────────────────────────────── */
@@ -82,6 +83,9 @@ export function LiveMapPage() {
   const [locations, setLocations] = useState<Record<string, LocationPoint>>({});
   const [maptilerKey, setMaptilerKey] = useState("");
   const [satellite, setSatellite] = useState(false);
+  const [headingUp, setHeadingUp] = useState(false); // rotate map to match phone direction
+  const headingRef = useRef<number>(0); // current compass heading in degrees
+  const headingWatchRef = useRef<(() => void) | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isError, setIsError] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -165,8 +169,35 @@ export function LiveMapPage() {
         }
 
         // Build new marker
+        const isMyMarker = member.id === myMemberIdRef.current;
         const wrap = document.createElement("div");
         wrap.style.cssText = "cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;";
+
+        // Direction cone — only on my marker, shows which way phone is pointing
+        if (isMyMarker) {
+          const cone = document.createElement("div");
+          cone.id = `kepi-cone-${member.id}`;
+          cone.style.cssText = [
+            "position:absolute;width:0;height:0;",
+            "border-left:10px solid transparent;",
+            "border-right:10px solid transparent;",
+            `border-bottom:22px solid ${member.color};`,
+            "opacity:0.85;",
+            "top:-26px;left:50%;transform:translateX(-50%);",
+            `transform-origin:center 26px;`,
+          ].join("");
+          // Rotate cone to current heading
+          const updateCone = () => {
+            cone.style.transform = `translateX(-50%) rotate(${headingRef.current}deg)`;
+          };
+          // Update cone every 500ms when heading changes
+          const coneInterval = setInterval(updateCone, 500);
+          updateCone();
+          // Store interval cleanup on the element
+          (cone as HTMLDivElement & { _interval?: ReturnType<typeof setInterval> })._interval = coneInterval;
+          wrap.style.position = "relative";
+          wrap.appendChild(cone);
+        }
 
         if (!stale) {
           const pulse = document.createElement("div");
@@ -468,6 +499,19 @@ export function LiveMapPage() {
               Satellite
             </button>
           </div>
+          {/* Heading-up toggle */}
+          <button
+            type="button"
+            onClick={() => setHeadingUp(v => !v)}
+            className={`flex h-9 w-9 items-center justify-center rounded-full shadow-lg text-base transition-all ${
+              headingUp
+                ? "bg-[#007AFF] text-white shadow-blue-500/40"
+                : "bg-black/40 backdrop-blur-md text-white/80"
+            }`}
+            title={headingUp ? "Heading up (tap for north up)" : "North up (tap for heading up)"}
+          >
+            {headingUp ? "🧭" : "⬆️"}
+          </button>
         </div>
 
         {/* Loading overlay */}
