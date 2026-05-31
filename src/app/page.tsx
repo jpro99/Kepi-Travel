@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { AuthRedirect } from "@/components/ui/AuthRedirect";
+
+// Force dynamic rendering — this page uses auth() which reads cookies
+export const dynamic = "force-dynamic";
 import { auth } from "@clerk/nextjs/server";
 import { getSubscriptionRecord, isSubscriptionActive } from "@/lib/billing/subscriptionStore";
 import { Logo } from "@/components/ui/Logo";

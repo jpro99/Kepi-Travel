@@ -29,6 +29,9 @@ function resolveSiteUrl(): URL {
 
 const siteUrl = resolveSiteUrl();
 
+// Force dynamic — layout reads headers for locale detection
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   metadataBase: siteUrl,
   title: {
