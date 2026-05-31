@@ -538,7 +538,7 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-sky-800 dark:text-sky-200">Do you have airline status?</p>
             <p className="text-xs text-sky-600 dark:text-sky-400 mt-0.5">
-              Tell Kepi your tier — it'll route you through the lounge and give you the right leave time.
+              Tell Kepi your tier — it&apos;ll route you through the lounge and give you the right leave time.
             </p>
           </div>
           <button

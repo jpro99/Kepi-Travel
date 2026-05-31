@@ -512,7 +512,7 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
                   </div>
                   {newEmail && (
                     <p className="text-[11px] text-slate-400">
-                      They'll receive an email with a link. When they tap it, they join automatically and location sharing starts immediately.
+                      They&apos;ll receive an email with a link. When they tap it, they join automatically and location sharing starts immediately.
                     </p>
                   )}
                 </div>
@@ -584,7 +584,7 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
         ) : (
           <button type="button" onClick={() => setJoiningGroup(true)}
             className="w-full rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 py-3 text-sm font-semibold text-slate-400 hover:text-[#007AFF] hover:border-[#007AFF]/40 transition">
-            Join someone else's group by code
+            Join someone else&apos;s group by code
           </button>
         )
       )}
