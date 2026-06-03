@@ -16,6 +16,11 @@ const PUBLIC_PATH_PATTERNS: RegExp[] = [
   /^\/sign-in(?:\/.*)?$/,
   /^\/sign-up(?:\/.*)?$/,
   /^\/refer(?:\/.*)?$/,
+  /^\/join-family(?:\/.*)?$/,   // invite link — must be public so non-users can sign up
+  /^\/share(?:\/.*)?$/,          // shared trip view — public read-only
+  /^\/sso-callback(?:\/.*)?$/,   // OAuth callback — must be public
+  /^\/redeem(?:\/.*)?$/,         // invite code redemption
+  /^\/city(?:\/.*)?$/,           // city pages — public marketing
 ];
 const PROTECTED_PATH_PATTERNS: RegExp[] = [
   /^\/travel-assistant(?:\/.*)?$/,
