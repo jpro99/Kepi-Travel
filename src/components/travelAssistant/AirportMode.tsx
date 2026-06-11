@@ -18,31 +18,9 @@ import { AirportNavigatorMap } from "@/components/travelAssistant/AirportNavigat
 // Type-only import — fully erased at compile time, so the route's "server-only"
 // guard never runs in the client bundle. Single source of truth for the schema.
 import type { TravelProfile } from "@/app/api/travel-profile/route";
+import { selectActiveFlight, type FlightReservation } from "@/lib/travelAssistant/useActiveFlight";
 
 /* ─── Types ──────────────────────────────────────────────────── */
-interface FlightReservation {
-  id: string;
-  type: string;
-  title: string;
-  provider: string;
-  localTime: string;
-  timezone?: string;
-  location: string;
-  confirmationCode?: string;
-  flightNumber?: string;
-  flightAirline?: string;
-  flightDepartureAirport?: string;
-  flightArrivalAirport?: string;
-  flightDepartureTime?: string;
-  flightArrivalTime?: string;
-  flightDepartureGate?: string;
-  flightDepartureTerminal?: string;
-  flightArrivalGate?: string;
-  flightArrivalTerminal?: string;
-  flightDelayMinutes?: number;
-  flightOnTime?: boolean;
-  flightStatus?: string;
-}
 
 interface AirportModeProps {
   reservations: FlightReservation[];
@@ -50,22 +28,6 @@ interface AirportModeProps {
 }
 
 /* ─── Time helpers ───────────────────────────────────────────── */
-function toUtcMs(localTime: string, timezone?: string): number {
-  const s = localTime.trim().replace("T", " ").slice(0, 16);
-  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(s);
-  if (!m) return NaN;
-  const approxUtc = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
-  if (!timezone) return approxUtc;
-  try {
-    const fmt = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone, year: "numeric", month: "2-digit",
-      day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false,
-    });
-    const parts = Object.fromEntries(fmt.formatToParts(new Date(approxUtc)).map(p => [p.type, p.value]));
-    const tzAsUtc = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute);
-    return approxUtc - (tzAsUtc - approxUtc);
-  } catch { return approxUtc; }
-}
 
 function fmtCountdown(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -478,14 +440,8 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
     return () => { if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current); };
   }, []);
 
-  // Find active flight
-  const activeFlight = useMemo(() => {
-    const flights = reservations.filter(r => r.type === "flight");
-    return flights
-      .map(f => ({ f, utcMs: toUtcMs(f.localTime, f.timezone) }))
-      .filter(({ utcMs }) => !isNaN(utcMs) && (utcMs - now) / 60_000 < 180 && (now - utcMs) / 60_000 < 60)
-      .sort((a, b) => a.utcMs - b.utcMs)[0] ?? null;
-  }, [reservations, now]);
+  // Find active flight — shared selector (single source of truth with Map page)
+  const activeFlight = useMemo(() => selectActiveFlight(reservations, now), [reservations, now]);
 
   // Airport proximity
   const proximity = useMemo(() =>

@@ -39,6 +39,8 @@ interface AirportNavigatorMapProps {
   flightDelayed?: boolean;
   /** "in-terminal" auto-expands the map to full screen once (auto-pop). */
   proximityStatus?: string;
+  /** Fill the parent (Map page embed) — no card chrome, no expand button. */
+  fill?: boolean;
   minutesToDeparture: number;
   userLat: number | null;
   userLon: number | null;
@@ -118,6 +120,7 @@ export function AirportNavigatorMap({
   flightStatusLabel = null,
   flightDelayed = false,
   proximityStatus = "away",
+  fill = false,
 }: AirportNavigatorMapProps) {
   const mapEl = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1066,11 +1069,13 @@ export function AirportNavigatorMap({
   return (
     <div
       className={
-        expanded
+        fill
+          ? "relative h-full w-full overflow-hidden bg-[#0b1f3a]"
+          : expanded
           ? "fixed inset-0 z-[100] overflow-hidden bg-[#0b1f3a]"
           : "relative overflow-hidden rounded-3xl border border-slate-700 bg-[#0b1f3a]"
       }
-      style={expanded ? undefined : { height: 420 }}
+      style={fill || expanded ? undefined : { height: 420 }}
     >
       <style>{`@keyframes kepiPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
 @keyframes kepiMicRing{0%{box-shadow:0 0 0 0 rgba(56,189,248,0.55)}100%{box-shadow:0 0 0 14px rgba(56,189,248,0)}}
@@ -1085,6 +1090,7 @@ export function AirportNavigatorMap({
         }}
       />
       {/* Expand / close — the map is always one tap away, and one tap out */}
+      {!fill && (
       <button
         type="button"
         aria-label={expanded ? "Close full map" : "Open full map"}
@@ -1094,6 +1100,7 @@ export function AirportNavigatorMap({
       >
         {expanded ? "✕" : "⤢"}
       </button>
+      )}
 
       {/* Flight hero card — everything glanceable: gate, flight, boarding, status */}
       <div

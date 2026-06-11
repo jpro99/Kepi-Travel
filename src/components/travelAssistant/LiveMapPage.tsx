@@ -2,8 +2,15 @@
 
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@/lib/maplibreCspWorker";
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { AirportNavigatorMap } from "@/components/travelAssistant/AirportNavigatorMap";
+import {
+  deriveEligibleLounges,
+  useActiveFlight,
+  useNavigatorCredentials,
+} from "@/lib/travelAssistant/useActiveFlight";
+import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface LocationPoint {
@@ -63,6 +70,16 @@ async function loadProxiedStyle(styleUrl: string): Promise<Record<string, unknow
 function streetsStyleUrl(key: string) {
   return `https://api.maptiler.com/maps/streets-v2/style.json?key=${key}`;
 }
+function darkStyleUrl(key: string) {
+  // Premium concierge default — minimal, high-contrast, lets member colors pop
+  return `https://api.maptiler.com/maps/dataviz-dark/style.json?key=${key}`;
+}
+type MapStyleId = "dark" | "streets" | "satellite";
+function styleUrlFor(styleId: MapStyleId, key: string): string {
+  if (styleId === "satellite") return satelliteStyleUrl(key);
+  if (styleId === "streets") return streetsStyleUrl(key);
+  return darkStyleUrl(key);
+}
 function satelliteStyleUrl(key: string) {
   // Use satellite-v2 style which has higher quality raster tiles vs hybrid
   return `https://api.maptiler.com/maps/satellite/style.json?key=${key}`;
@@ -82,7 +99,7 @@ export function LiveMapPage() {
   const [group, setGroup] = useState<FamilyGroup | null>(null);
   const [locations, setLocations] = useState<Record<string, LocationPoint>>({});
   const [maptilerKey, setMaptilerKey] = useState("");
-  const [satellite, setSatellite] = useState(false);
+  const [mapStyle, setMapStyle] = useState<MapStyleId>("dark");
   const [headingUp, setHeadingUp] = useState(false); // rotate map to match phone direction
   const headingRef = useRef<number>(0); // current compass heading in degrees
   const headingWatchRef = useRef<(() => void) | null>(null);
@@ -216,15 +233,22 @@ export function LiveMapPage() {
           wrap.appendChild(buildAvatar(member, stale));
         }
 
+        // Frosted name chip with live/stale dot — readable on dark and satellite
         const lbl = document.createElement("div");
         lbl.style.cssText = [
-          "background:rgba(255,255,255,0.96);border-radius:8px;padding:3px 8px;",
-          "font-size:11px;font-weight:700;color:#0f172a;",
-          "box-shadow:0 2px 8px rgba(0,0,0,0.18);",
-          "white-space:nowrap;max-width:90px;overflow:hidden;text-overflow:ellipsis;",
+          "display:flex;align-items:center;gap:4px;",
+          "background:rgba(10,16,28,0.72);border:1px solid rgba(255,255,255,0.14);",
+          "backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);",
+          "border-radius:9999px;padding:3px 9px;",
+          "font-size:11px;font-weight:700;color:#f8fafc;",
+          "box-shadow:0 3px 10px rgba(0,0,0,0.35);",
+          "white-space:nowrap;max-width:104px;overflow:hidden;text-overflow:ellipsis;",
           "font-family:system-ui,sans-serif;letter-spacing:-0.01em;",
         ].join("");
-        lbl.textContent = member.name;
+        const liveDot = document.createElement("span");
+        liveDot.style.cssText = `width:6px;height:6px;border-radius:50%;flex-shrink:0;background:${stale ? "#64748b" : "#34d399"};${stale ? "" : "box-shadow:0 0 6px rgba(52,211,153,0.9);"}`;
+        lbl.appendChild(liveDot);
+        lbl.appendChild(document.createTextNode(member.name));
         wrap.appendChild(lbl);
 
         wrap.addEventListener("click", () => {
@@ -278,7 +302,7 @@ export function LiveMapPage() {
         const zoom = locs.length === 1 ? 14 : locs.length > 1 ? 11 : 4;
         const key = encodeURIComponent(maptilerKey);
 
-        const styleUrl = satellite ? satelliteStyleUrl(key) : streetsStyleUrl(key);
+        const styleUrl = styleUrlFor(mapStyle, key);
         const style = await loadProxiedStyle(styleUrl);
 
         const origin = window.location.origin;
@@ -354,13 +378,13 @@ export function LiveMapPage() {
   useEffect(() => {
     if (!mapRef.current || !maptilerKey || !isLoaded) return;
     const key = encodeURIComponent(maptilerKey);
-    const styleUrl = satellite ? satelliteStyleUrl(key) : streetsStyleUrl(key);
+    const styleUrl = styleUrlFor(mapStyle, key);
     void loadProxiedStyle(styleUrl).then(style => {
       if (!mapRef.current) return;
       mapRef.current.setStyle(style);
       mapRef.current.once("styledata", () => { if (mapRef.current) placeMarkers(mapRef.current); });
     });
-  }, [satellite, maptilerKey, isLoaded, placeMarkers]);
+  }, [mapStyle, maptilerKey, isLoaded, placeMarkers]);
 
   /* ── Fit all members ── */
   const fitAll = useCallback(() => {
@@ -377,6 +401,62 @@ export function LiveMapPage() {
       mapRef.current?.fitBounds(b, { padding: 80, maxZoom: 14, duration: 800 });
     }).catch(console.error);
   }, [locations]);
+
+  /* ── Airport Navigator integration (shared selection — Map button asks
+        the SAME question AirportMode does, via useActiveFlight) ── */
+  const { activeFlight } = useActiveFlight();
+  const { credentials: navCredentials, profile: navProfile, saveCredentials } = useNavigatorCredentials();
+  const [mapView, setMapView] = useState<"family" | "airport">("family");
+  const [navLat, setNavLat] = useState<number | null>(null);
+  const [navLon, setNavLon] = useState<number | null>(null);
+  const navWatchRef = useRef<number | null>(null);
+  const autoAirportRef = useRef(false);
+
+  // Passive low-accuracy watch for proximity + indoor snapping (separate from
+  // the consent-gated family location SHARING — this never leaves the device)
+  useEffect(() => {
+    if (!activeFlight || !navigator.geolocation) return;
+    navWatchRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        setNavLat(pos.coords.latitude);
+        setNavLon(pos.coords.longitude);
+      },
+      () => null,
+      { enableHighAccuracy: false, maximumAge: 30_000, timeout: 15_000 },
+    );
+    return () => {
+      if (navWatchRef.current !== null) navigator.geolocation.clearWatch(navWatchRef.current);
+      navWatchRef.current = null;
+    };
+  }, [activeFlight]);
+
+  const navProximity = useMemo(
+    () => getAirportProximity(navLat, navLon, activeFlight?.f.flightDepartureAirport),
+    [navLat, navLon, activeFlight],
+  );
+
+  // Auto-default to the airport view ONCE when you're actually at the airport
+  useEffect(() => {
+    if (autoAirportRef.current || !activeFlight) return;
+    if (navProximity.status === "at-airport" || navProximity.status === "in-terminal") {
+      autoAirportRef.current = true;
+      setMapView("airport");
+    }
+  }, [navProximity.status, activeFlight]);
+
+  const navEligibleLounges = useMemo(
+    () =>
+      activeFlight
+        ? deriveEligibleLounges(
+            navProfile,
+            activeFlight.f.flightAirline ?? activeFlight.f.provider ?? "",
+            activeFlight.f.flightDepartureAirport ?? "",
+          )
+        : [],
+    [navProfile, activeFlight],
+  );
+
+  const navMinutesToDeparture = activeFlight ? (activeFlight.utcMs - Date.now()) / 60_000 : 0;
 
   /* ── Share my location ── */
   const shareLocation = useCallback(() => {
@@ -460,6 +540,55 @@ export function LiveMapPage() {
         {/* Map canvas */}
         <div ref={mapEl} className="absolute inset-0 w-full h-full" />
 
+        {/* Airport Navigator overlay — full-bleed when at the airport view */}
+        {mapView === "airport" && activeFlight && (
+          <div className="absolute inset-0 z-40">
+            <AirportNavigatorMap
+              fill
+              iata={activeFlight.f.flightDepartureAirport ?? ""}
+              gateCode={activeFlight.f.flightDepartureGate ?? null}
+              airlineName={activeFlight.f.flightAirline ?? activeFlight.f.provider ?? null}
+              flightNumber={activeFlight.f.flightNumber ?? null}
+              arrivalAirport={activeFlight.f.flightArrivalAirport ?? null}
+              departureTerminal={activeFlight.f.flightDepartureTerminal ?? null}
+              flightStatusLabel={
+                (activeFlight.f.flightDelayMinutes ?? 0) > 0
+                  ? `Delayed +${activeFlight.f.flightDelayMinutes}m`
+                  : activeFlight.f.flightStatus ?? (activeFlight.f.flightOnTime === false ? "Delayed" : "On time")
+              }
+              flightDelayed={(activeFlight.f.flightDelayMinutes ?? 0) > 0 || activeFlight.f.flightOnTime === false}
+              proximityStatus={navProximity.status}
+              minutesToDeparture={navMinutesToDeparture}
+              userLat={navLat}
+              userLon={navLon}
+              credentials={navCredentials}
+              onCredentialsAnswer={saveCredentials}
+              eligibleLoungeNames={navEligibleLounges}
+            />
+          </div>
+        )}
+
+        {/* Airport ⇄ Family view pill — only when a flight is in the window */}
+        {activeFlight && (
+          <div
+            className="absolute left-1/2 z-50 flex -translate-x-1/2 overflow-hidden rounded-full border border-white/15 shadow-xl"
+            style={{ top: "max(3.6rem, calc(env(safe-area-inset-top) + 3.1rem))" }}
+          >
+            {([["airport", "✈ Airport"], ["family", "👪 Family"]] as ["airport" | "family", string][]).map(([viewId, viewLabel]) => (
+              <button
+                key={viewId}
+                type="button"
+                onClick={() => setMapView(viewId)}
+                className={`px-3.5 py-1.5 text-[11px] font-bold backdrop-blur-md transition-all ${
+                  mapView === viewId ? "bg-white text-slate-900" : "bg-black/45 text-white/85"
+                }`}
+              >
+                {viewLabel}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Top scrim */}
         <div className="absolute top-0 left-0 right-0 z-20 pointer-events-none">
           <div className="h-28 bg-gradient-to-b from-black/60 via-black/20 to-transparent" />
@@ -484,20 +613,16 @@ export function LiveMapPage() {
             </p>
           </div>
           <div className="flex rounded-full overflow-hidden shadow-lg border border-white/10">
-            <button
-              type="button"
-              onClick={() => setSatellite(false)}
-              className={`px-3 py-1.5 text-[11px] font-bold transition-all ${!satellite ? "bg-white text-slate-900" : "bg-black/40 backdrop-blur-md text-white/80"}`}
-            >
-              Map
-            </button>
-            <button
-              type="button"
-              onClick={() => setSatellite(true)}
-              className={`px-3 py-1.5 text-[11px] font-bold transition-all ${satellite ? "bg-white text-slate-900" : "bg-black/40 backdrop-blur-md text-white/80"}`}
-            >
-              Satellite
-            </button>
+            {([["dark", "Dark"], ["streets", "Map"], ["satellite", "Sat"]] as [MapStyleId, string][]).map(([styleId, styleLabel]) => (
+              <button
+                key={styleId}
+                type="button"
+                onClick={() => setMapStyle(styleId)}
+                className={`px-2.5 py-1.5 text-[11px] font-bold transition-all ${mapStyle === styleId ? "bg-white text-slate-900" : "bg-black/40 backdrop-blur-md text-white/80"}`}
+              >
+                {styleLabel}
+              </button>
+            ))}
           </div>
           {/* Heading-up toggle */}
           <button
@@ -710,16 +835,30 @@ export function LiveMapPage() {
 
 /* ─── Avatar DOM helper ──────────────────────────────────────── */
 function buildAvatar(member: { name: string; color: string }, stale: boolean): HTMLElement {
-  const av = document.createElement("div");
-  av.style.cssText = [
-    "width:48px;height:48px;border-radius:50%;",
-    `background:${stale ? "#334155" : member.color};`,
-    "border:3px solid rgba(255,255,255,0.95);",
-    "box-shadow:0 3px 14px rgba(0,0,0,0.35);",
-    "display:flex;align-items:center;justify-content:center;",
-    "font-size:18px;font-weight:800;color:white;",
-    "font-family:system-ui,sans-serif;",
+  // Premium puck: color gradient ring → white gap → colored face, deep soft shadow
+  const ring = document.createElement("div");
+  ring.style.cssText = [
+    "width:50px;height:50px;border-radius:50%;padding:2.5px;",
+    stale
+      ? "background:#475569;"
+      : `background:linear-gradient(145deg, ${member.color}, ${member.color}cc 60%, #ffffff55);`,
+    "box-shadow:0 6px 18px rgba(0,0,0,0.45), 0 1px 3px rgba(0,0,0,0.3);",
   ].join("");
-  av.textContent = member.name.charAt(0).toUpperCase();
-  return av;
+  const gap = document.createElement("div");
+  gap.style.cssText =
+    "width:100%;height:100%;border-radius:50%;padding:2.5px;background:rgba(255,255,255,0.96);";
+  const face = document.createElement("div");
+  face.style.cssText = [
+    "width:100%;height:100%;border-radius:50%;",
+    `background:${stale ? "#334155" : member.color};`,
+    stale ? "filter:saturate(0.4);" : "",
+    "display:flex;align-items:center;justify-content:center;",
+    "font-size:17px;font-weight:800;color:white;",
+    "font-family:system-ui,sans-serif;letter-spacing:0.01em;",
+    "text-shadow:0 1px 2px rgba(0,0,0,0.25);",
+  ].join("");
+  face.textContent = member.name.charAt(0).toUpperCase();
+  gap.appendChild(face);
+  ring.appendChild(gap);
+  return ring;
 }
