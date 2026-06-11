@@ -19,6 +19,13 @@ import type { AirportLayout, GraphEdge, GraphNode, PoiDefinition, TerminalZonePo
 // Main terminal runs roughly N–S just west of International Blvd.
 const MAIN_LNG = -122.3005;
 
+// Landside node ids — everything else in this layout is past security.
+// (security_entry sits landside; security_exit sits airside.)
+const LANDSIDE_NODE_IDS = new Set([
+  "checkin-south", "checkin-center", "checkin-north", "landside-hall",
+  "sec3-entry", "sec5-entry",
+]);
+
 function n(
   id: string,
   lng: number,
@@ -26,7 +33,7 @@ function n(
   kind: GraphNode["kind"],
   landmark?: string,
 ): GraphNode {
-  return { id, pos: [lng, lat], kind, landmark };
+  return { id, pos: [lng, lat], kind, airside: !LANDSIDE_NODE_IDS.has(id), landmark };
 }
 
 const LAT_BASE = 47.4428; // south end of ticketing hall (approx)

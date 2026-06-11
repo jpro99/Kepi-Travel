@@ -28,6 +28,8 @@ export interface GraphNode {
   /** [lng, lat] */
   pos: [number, number];
   kind: GraphNodeKind;
+  /** True when this node is past security. Drives journey phase detection. */
+  airside: boolean;
   /** Human landmark used in spoken/written instructions. */
   landmark?: string;
 }

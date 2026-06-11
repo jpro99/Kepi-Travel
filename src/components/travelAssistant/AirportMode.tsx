@@ -778,6 +778,7 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
           userLon={userLon}
           credentials={navCredentials}
           onCredentialsAnswer={saveNavCredentials}
+          eligibleLoungeNames={lounges.map((loungeInfo) => loungeInfo.name)}
         />
       )}
 
