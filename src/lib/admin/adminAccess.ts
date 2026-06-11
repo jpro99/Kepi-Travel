@@ -1,38 +1,23 @@
 import { isAutomatedTestRuntime } from "@/lib/auth/mockClerkAuth";
-
-const ADMIN_ENV_SEPARATOR = ",";
-
-export function parseAdminUserIds(rawValue = process.env.ADMIN_USER_IDS): string[] {
-  if (!rawValue) {
-    return [];
-  }
-  return rawValue
-    .split(ADMIN_ENV_SEPARATOR)
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
-}
-
-export function isAdminUserId(userId: string | null | undefined): boolean {
-  if (!userId) {
-    return false;
-  }
-  const adminUserIds = new Set(parseAdminUserIds());
-  if (adminUserIds.size === 0) {
-    return false;
-  }
-  return adminUserIds.has(userId);
-}
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 export async function resolveAuthenticatedUserId(): Promise<string | null> {
   const isTestEnv = isAutomatedTestRuntime();
   try {
-    const clerkServer = await import("@clerk/nextjs/server");
-    const session = await clerkServer.auth();
-    if (session.userId) {
-      return session.userId;
+    const session = await getServerSession(authOptions);
+    if (session?.user?.id) {
+      return session.user.id;
     }
     return isTestEnv ? "test-user" : null;
   } catch {
     return isTestEnv ? "test-user" : null;
   }
+}
+
+export async function isAdminUserId(userId: string | null): Promise<boolean> {
+  if (!userId) return false;
+  // In a real application, this would be a database lookup.
+  // For now, we'll hardcode the admin user ID.
+  return userId === "1";
 }

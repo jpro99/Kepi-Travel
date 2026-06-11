@@ -1,0 +1,6 @@
+{
+  "biometricAuthEnabled": true,
+  "continuousAuthEnabled": false,
+  "virtualCardEnabled": false,
+  "secureEnclaveKeyId": null
+}

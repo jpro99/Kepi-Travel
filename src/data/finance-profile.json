@@ -1,0 +1,12 @@
+{
+  "expenseReportingEnabled": false,
+  "rewardsOptimizationEnabled": true,
+  "connectedCards": [
+    {
+      "id": "card-1",
+      "name": "Chase Sapphire Reserve",
+      "issuer": "Chase",
+      "last4": "1234"
+    }
+  ]
+}

@@ -3,6 +3,21 @@ import type {
   SessionReservation,
   SessionReviewItem,
 } from "@/lib/travelAssistant/clientSessionState";
+
+export async function ensureStarterTrip(userId?: string): Promise<void> {
+  const trips = await readTrips(userId);
+  if (trips.length === 0) {
+    await createTrip(
+      {
+        name: "Welcome to Kepi",
+        destination: "San Francisco",
+        startDate: "2024-08-15",
+        endDate: "2024-08-19",
+      },
+      userId
+    );
+  }
+}
 import type { TripFlowStage } from "@/lib/travelAssistant/tripFlowControls";
 import { kvStoreDel, kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 import { generateId } from "@/lib/utils/generateId";

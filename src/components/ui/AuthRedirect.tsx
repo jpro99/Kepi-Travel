@@ -1,15 +1,17 @@
 "use client";
 import { useEffect } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 export function AuthRedirect() {
-  const { isSignedIn, isLoaded } = useAuth();
+  const { data: session, status } = useSession();
   const router = useRouter();
+
   useEffect(() => {
-    if (isLoaded && isSignedIn) {
+    if (status === "authenticated") {
       router.push("/travel-assistant");
     }
-  }, [isLoaded, isSignedIn, router]);
+  }, [status, router]);
+
   return null;
 }

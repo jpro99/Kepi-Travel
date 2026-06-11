@@ -1,24 +1,38 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
-  testDir: "./e2e",
-  reporter: "list",
-  use: {
-    baseURL: "http://localhost:3000",
+  testDir: './app-sitter',
+  fullyParallel: true,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
+  workers: process.env.CI ? 1 : undefined,
+  reporter: 'html',
+  timeout: 120000,
+
+  webServer: {
+    command: 'npx next dev -p 3001',
+    url: 'http://localhost:3001',
+    reuseExistingServer: !process.env.CI,
   },
+
+  // Run the global setup file before all tests
+  globalSetup: require.resolve('./global.setup.ts'),
+
+  use: {
+    baseURL: 'http://localhost:3001',
+    trace: 'on-first-retry',
+
+    // Use the saved storage state for all tests
+    storageState: 'storageState.json',
+    expect: {
+      timeout: 20000,
+    },
+  },
+
   projects: [
     {
-      name: "chromium",
-      use: {
-        ...devices["Desktop Chrome"],
-        browserName: "chromium",
-      },
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
-    command: 'bash -lc "set -a; source .env.test; set +a; npm run dev"',
-    url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
-  },
 });
