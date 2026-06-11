@@ -773,6 +773,17 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
           iata={f.flightDepartureAirport ?? ""}
           gateCode={f.flightDepartureGate ?? null}
           airlineName={f.flightAirline ?? f.provider ?? null}
+          flightNumber={f.flightNumber ?? null}
+          arrivalAirport={f.flightArrivalAirport ?? null}
+          departureTerminal={f.flightDepartureTerminal ?? null}
+          departureClockLabel={fmtTime(deptUtcMs)}
+          flightStatusLabel={
+            isDelayed
+              ? `Delayed +${f.flightDelayMinutes}m`
+              : f.flightStatus ?? (f.flightOnTime === false ? "Delayed" : "On time")
+          }
+          flightDelayed={isDelayed || f.flightOnTime === false}
+          proximityStatus={proximity.status}
           minutesToDeparture={msUntilDept / 60_000}
           userLat={userLat}
           userLon={userLon}

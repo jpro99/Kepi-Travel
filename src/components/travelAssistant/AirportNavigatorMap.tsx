@@ -30,6 +30,15 @@ interface AirportNavigatorMapProps {
   /** e.g. "C11" — from the active flight reservation, may be unknown. */
   gateCode: string | null;
   airlineName: string | null;
+  /** Flight hero card data — everything glanceable, zero hunting. */
+  flightNumber?: string | null;
+  arrivalAirport?: string | null;
+  departureTerminal?: string | null;
+  departureClockLabel?: string | null;
+  flightStatusLabel?: string | null;
+  flightDelayed?: boolean;
+  /** "in-terminal" auto-expands the map to full screen once (auto-pop). */
+  proximityStatus?: string;
   minutesToDeparture: number;
   userLat: number | null;
   userLon: number | null;
@@ -102,6 +111,13 @@ export function AirportNavigatorMap({
   credentials,
   onCredentialsAnswer,
   eligibleLoungeNames = [],
+  flightNumber = null,
+  arrivalAirport = null,
+  departureTerminal = null,
+  departureClockLabel = null,
+  flightStatusLabel = null,
+  flightDelayed = false,
+  proximityStatus = "away",
 }: AirportNavigatorMapProps) {
   const mapEl = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -148,6 +164,25 @@ export function AirportNavigatorMap({
     sprintRef.current = on;
     setSprint(on);
   }, []);
+
+  // Full-screen map (auto-pops once on entering the terminal; ✕ to leave,
+  // tap the card to come back — the map is always one tap away)
+  const [expanded, setExpanded] = useState(false);
+  const autoPoppedRef = useRef(false);
+  const [heroOpen, setHeroOpen] = useState(true);
+  useEffect(() => {
+    if (proximityStatus === "in-terminal" && !autoPoppedRef.current) {
+      autoPoppedRef.current = true;
+      setExpanded(true);
+    }
+  }, [proximityStatus]);
+  // MapLibre must re-measure its container when the card resizes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const timer = setTimeout(() => map.resize(), 320);
+    return () => clearTimeout(timer);
+  }, [expanded]);
 
   // Rebuild-sensitive values rounded so per-second parent ticks don't thrash markers
   const minutesRounded = Math.round(minutesToDeparture);
@@ -760,6 +795,19 @@ export function AirportNavigatorMap({
       lineMetrics: true,
       data: { type: "FeatureCollection", features: [] },
     });
+    // Soft glow casing beneath the warm path — premium depth, not neon
+    map.addLayer({
+      id: "kepi-route-glow",
+      type: "line",
+      source: "kepi-route",
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": PATH_WARM,
+        "line-width": 16,
+        "line-blur": 8,
+        "line-opacity": 0.3,
+      },
+    });
     map.addLayer({
       id: "kepi-route-line",
       type: "line",
@@ -925,6 +973,89 @@ export function AirportNavigatorMap({
     });
   }, [mapReady, snapped]);
 
+  /* ── Animated dash flow on the active path (subtle forward shimmer) ── */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !activeRoute) return;
+    const dashPhases: [number, number, number][] = [
+      [0, 2.2, 2.2],
+      [1.1, 2.2, 1.1],
+      [2.2, 2.2, 0.001],
+    ];
+    let phase = 0;
+    const interval = setInterval(() => {
+      phase = (phase + 1) % dashPhases.length;
+      try {
+        map.setPaintProperty("kepi-route-line", "line-dasharray", dashPhases[phase]);
+      } catch {
+        /* layer mid-teardown */
+      }
+    }, 220);
+    return () => {
+      clearInterval(interval);
+      try {
+        map.setPaintProperty("kepi-route-line", "line-dasharray", [1, 0]);
+      } catch {
+        /* noop */
+      }
+    };
+  }, [mapReady, activeRoute]);
+
+  /* ── Zone ground labels + destination beacon (DOM markers) ──────────── */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const zoneMarkersRef = useRef<any[]>([]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !layout) return;
+    void import("maplibre-gl").then((ml) => {
+      for (const marker of zoneMarkersRef.current) marker.remove();
+      zoneMarkersRef.current = [];
+      for (const zone of layout.zones) {
+        const ring = zone.ring;
+        const cLng = ring.reduce((sum, pt) => sum + pt[0], 0) / ring.length;
+        const cLat = ring.reduce((sum, pt) => sum + pt[1], 0) / ring.length;
+        const label = document.createElement("div");
+        label.textContent = zone.name.toUpperCase();
+        label.style.cssText =
+          "pointer-events:none;font:700 8px system-ui,-apple-system,sans-serif;letter-spacing:0.14em;color:rgba(255,255,255,0.38);text-shadow:0 1px 4px rgba(0,0,0,0.6);white-space:nowrap;";
+        zoneMarkersRef.current.push(
+          new ml.Marker({ element: label, anchor: "center" }).setLngLat([cLng, cLat]).addTo(map),
+        );
+      }
+    });
+    return () => {
+      for (const marker of zoneMarkersRef.current) marker.remove();
+      zoneMarkersRef.current = [];
+    };
+  }, [mapReady, layout]);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const beaconMarkerRef = useRef<any>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    if (beaconMarkerRef.current) {
+      beaconMarkerRef.current.remove();
+      beaconMarkerRef.current = null;
+    }
+    if (!activeRoute || activeRoute.coordinates.length === 0) return;
+    void import("maplibre-gl").then((ml) => {
+      const dest = activeRoute.coordinates[activeRoute.coordinates.length - 1];
+      const ring = document.createElement("div");
+      ring.style.cssText =
+        "pointer-events:none;width:22px;height:22px;border-radius:50%;border:2px solid #f4c95d;animation:kepiBeacon 1.8s ease-out infinite;";
+      beaconMarkerRef.current = new ml.Marker({ element: ring, anchor: "center" })
+        .setLngLat(dest as [number, number])
+        .addTo(map);
+    });
+    return () => {
+      if (beaconMarkerRef.current) {
+        beaconMarkerRef.current.remove();
+        beaconMarkerRef.current = null;
+      }
+    };
+  }, [mapReady, activeRoute]);
+
   /* ── Render ─────────────────────────────────────────────────────────── */
   if (layoutError) return null;
 
@@ -933,21 +1064,92 @@ export function AirportNavigatorMap({
   const securityQuestionOpen = pendingPoiId !== null && !credentials.known;
 
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-slate-700 bg-[#0b1f3a]" style={{ height: 420 }}>
+    <div
+      className={
+        expanded
+          ? "fixed inset-0 z-[100] overflow-hidden bg-[#0b1f3a]"
+          : "relative overflow-hidden rounded-3xl border border-slate-700 bg-[#0b1f3a]"
+      }
+      style={expanded ? undefined : { height: 420 }}
+    >
       <style>{`@keyframes kepiPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
-@keyframes kepiMicRing{0%{box-shadow:0 0 0 0 rgba(56,189,248,0.55)}100%{box-shadow:0 0 0 14px rgba(56,189,248,0)}}`}</style>
+@keyframes kepiMicRing{0%{box-shadow:0 0 0 0 rgba(56,189,248,0.55)}100%{box-shadow:0 0 0 14px rgba(56,189,248,0)}}
+@keyframes kepiBeacon{0%{transform:scale(0.6);opacity:0.9}100%{transform:scale(1.9);opacity:0}}`}</style>
       <div ref={mapEl} className="absolute inset-0" />
+      {/* Vignette + top legibility gradient — concierge depth, not flat canvas */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(120% 90% at 50% 30%, transparent 55%, rgba(2,8,20,0.55) 100%), linear-gradient(to bottom, rgba(2,8,20,0.55), transparent 22%)",
+        }}
+      />
+      {/* Expand / close — the map is always one tap away, and one tap out */}
+      <button
+        type="button"
+        aria-label={expanded ? "Close full map" : "Open full map"}
+        onClick={() => setExpanded((open) => !open)}
+        className="absolute right-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-sm font-bold text-white backdrop-blur"
+        style={{ top: expanded ? "max(0.75rem, env(safe-area-inset-top))" : "0.75rem" }}
+      >
+        {expanded ? "✕" : "⤢"}
+      </button>
 
-      {/* Header strip: status line + confidence + leave-by */}
-      <div className="pointer-events-none absolute left-3 top-3 right-3 flex items-start justify-between gap-2">
-        <div className="rounded-xl bg-black/45 px-3 py-1.5 backdrop-blur">
-          <p className="text-[11px] font-bold text-white">
-            {statusLine ?? phaseStatusLine(journeyPhase, gateCode)}
-          </p>
-          <p className="text-[9px] text-sky-200/80">
-            {layout?.name ?? iata} · Layout beta
-            {snapped ? ` · confidence ${Math.round(snapped.confidence * 100)}%` : " · locating…"}
-          </p>
+      {/* Flight hero card — everything glanceable: gate, flight, boarding, status */}
+      <div
+        className="pointer-events-none absolute left-3 right-14 z-10 flex items-start justify-between gap-2"
+        style={{ top: expanded ? "max(0.75rem, env(safe-area-inset-top))" : "0.75rem" }}
+      >
+        <div className="pointer-events-auto min-w-0">
+          <button
+            type="button"
+            onClick={() => setHeroOpen((open) => !open)}
+            className="block w-full rounded-2xl bg-black/55 px-3 py-2 text-left backdrop-blur"
+            aria-label="Toggle flight details"
+          >
+            {heroOpen ? (
+              <span className="flex items-center gap-3">
+                <span className="flex flex-col items-center rounded-xl bg-white/10 px-2.5 py-1">
+                  <span className="text-[8px] font-bold uppercase tracking-widest text-sky-200/90">Gate</span>
+                  <span className="text-xl font-black leading-tight text-white">{gateCode?.toUpperCase() ?? "TBD"}</span>
+                  {departureTerminal && (
+                    <span className="text-[8px] font-semibold text-sky-200/70">Term {departureTerminal}</span>
+                  )}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-[12px] font-bold text-white">
+                    {[airlineName, flightNumber].filter(Boolean).join(" ") || "Your flight"}
+                    {arrivalAirport ? ` · ${iata} → ${arrivalAirport.toUpperCase()}` : ""}
+                  </span>
+                  <span className="block truncate text-[11px] font-semibold text-sky-100/90">
+                    {minutesRounded > 30 && minutesRounded < 600
+                      ? `Boards in ${minutesRounded - 30} min`
+                      : minutesRounded <= 30 && minutesRounded > 0
+                      ? "Boarding now"
+                      : departureClockLabel
+                      ? `Departs ${departureClockLabel}`
+                      : ""}
+                    {departureClockLabel && minutesRounded < 600 ? ` · departs ${departureClockLabel}` : ""}
+                    {flightStatusLabel ? (
+                      <span className={flightDelayed ? " text-amber-300" : " text-emerald-300"}>
+                        {" "}· {flightStatusLabel}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="block truncate text-[9px] text-sky-200/70">
+                    {statusLine ?? phaseStatusLine(journeyPhase, gateCode)}
+                    {snapped ? ` · position ${Math.round(snapped.confidence * 100)}%` : " · locating…"}
+                  </span>
+                </span>
+              </span>
+            ) : (
+              <span className="block truncate text-[11px] font-bold text-white">
+                {gateCode ? `Gate ${gateCode.toUpperCase()}` : "Gate TBD"}
+                {minutesRounded > 30 && minutesRounded < 600 ? ` · boards in ${minutesRounded - 30}m` : ""}
+                {" "}· {statusLine ?? phaseStatusLine(journeyPhase, gateCode)}
+              </span>
+            )}
+          </button>
         </div>
         <div className="flex flex-col items-end gap-1">
           {pressure && (
@@ -1006,11 +1208,11 @@ export function AirportNavigatorMap({
           onPointerDown={startListening}
           onPointerUp={stopListening}
           onPointerLeave={stopListening}
-          className="absolute bottom-16 right-3 z-10 flex h-12 w-12 items-center justify-center rounded-full text-lg shadow-xl"
           style={{
+            bottom: "max(4rem, calc(env(safe-area-inset-bottom) + 3.25rem))",
             background: listening ? "#38bdf8" : "rgba(255,255,255,0.92)",
             animation: listening ? "kepiMicRing 1.2s ease-out infinite" : undefined,
-          }}
+          }} className="absolute right-3 z-10 flex h-12 w-12 items-center justify-center rounded-full text-lg shadow-xl"
         >
           🎙
         </button>
@@ -1018,7 +1220,7 @@ export function AirportNavigatorMap({
 
       {/* Journey prompt (e.g. "Are you through security yet?") */}
       {journeyPrompt && !securityQuestionOpen && (
-        <div className="absolute inset-x-3 bottom-3 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95">
+        <div style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }} className="absolute inset-x-3 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95">
           <p className="text-xs font-bold text-slate-900 dark:text-slate-100">{journeyPrompt.text}</p>
           <div className="mt-2 flex gap-1.5">
             {journeyPrompt.options.map((option) => (
@@ -1037,7 +1239,7 @@ export function AirportNavigatorMap({
 
       {/* Security credential question */}
       {securityQuestionOpen && (
-        <div className="absolute inset-x-3 bottom-3 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95">
+        <div style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }} className="absolute inset-x-3 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95">
           <p className="text-xs font-bold text-slate-900 dark:text-slate-100">
             Quick one — do you have TSA PreCheck or CLEAR?
           </p>
@@ -1053,7 +1255,7 @@ export function AirportNavigatorMap({
 
       {/* Quiet Mode at security — no nagging while hands are full */}
       {quietMode && !journeyPrompt && !securityQuestionOpen && (
-        <div className="absolute inset-x-3 bottom-3 rounded-2xl bg-black/55 p-3 text-center backdrop-blur">
+        <div style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }} className="absolute inset-x-3 rounded-2xl bg-black/55 p-3 text-center backdrop-blur">
           <p className="text-[11px] font-semibold text-sky-100">
             We&apos;ll pick up on the other side.
             {gateCode ? ` Gate ${gateCode.toUpperCase()} after security.` : ""}
@@ -1063,7 +1265,7 @@ export function AirportNavigatorMap({
 
       {/* Active route card */}
       {!securityQuestionOpen && !journeyPrompt && !quietMode && activeRoute && (
-        <div className="absolute inset-x-3 bottom-3 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95">
+        <div style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }} className="absolute inset-x-3 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <p className="truncate text-xs font-bold text-slate-900 dark:text-slate-100">
@@ -1105,7 +1307,7 @@ export function AirportNavigatorMap({
 
       {/* Guide-me CTA when idle */}
       {!securityQuestionOpen && !journeyPrompt && !quietMode && !activeRoute && layout && gatePoi && (
-        <div className="absolute inset-x-3 bottom-3">
+        <div style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }} className="absolute inset-x-3">
           <button
             type="button"
             onClick={() => startRoute(gatePoi.id)}
