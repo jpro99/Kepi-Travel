@@ -14,6 +14,10 @@ import {
   type StatusTier,
 } from "@/lib/travelAssistant/airlineStatus";
 import { buildGateInstructions, getAirportNav } from "@/lib/travelAssistant/airportNavigation";
+import { AirportNavigatorMap } from "@/components/travelAssistant/AirportNavigatorMap";
+// Type-only import — fully erased at compile time, so the route's "server-only"
+// guard never runs in the client bundle. Single source of truth for the schema.
+import type { TravelProfile } from "@/app/api/travel-profile/route";
 
 /* ─── Types ──────────────────────────────────────────────────── */
 interface FlightReservation {
@@ -529,6 +533,32 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
   // Show setup prompt if profile not loaded yet or no statuses set and we're within 3h
   const showSetupPrompt = profileLoaded && !profile?.airlineStatuses?.length && !showSetup;
 
+  // ── Airport Navigator map (Phase 0 — curated layouts only, SEA pilot) ──
+  // Credentials are "known" once the traveler has answered the security
+  // question anywhere (status setup or the in-map prompt — asked once, ever).
+  const navCredentials = {
+    tsaPreCheck: Boolean(profile?.tsa_precheck || profile?.global_entry),
+    clear: Boolean(profile?.clear),
+    known: Boolean(
+      profile && (typeof profile.tsa_precheck === "boolean" || typeof profile.clear === "boolean"),
+    ),
+  };
+  const saveNavCredentials = (answer: { tsaPreCheck: boolean; clear: boolean }) => {
+    const updated: TravelProfile = {
+      ...(profile ?? { airlineStatuses: [] }),
+      airlineStatuses: profile?.airlineStatuses ?? [],
+      tsa_precheck: answer.tsaPreCheck,
+      clear: answer.clear,
+    };
+    setProfile(updated);
+    void fetch("/api/travel-profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updated),
+    }).catch(() => null); // fail-safe: local state already updated
+  };
+  const showNavigatorMap = proximity.status !== "away" && Boolean(f.flightDepartureAirport);
+
   return (
     <div className="space-y-3">
       {/* Setup prompt — one-time, non-blocking */}
@@ -735,6 +765,20 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
             </p>
           )}
         </div>
+      )}
+
+      {/* Airport Navigator — 3D terminal map (curated airports; renders nothing otherwise) */}
+      {showNavigatorMap && (
+        <AirportNavigatorMap
+          iata={f.flightDepartureAirport ?? ""}
+          gateCode={f.flightDepartureGate ?? null}
+          airlineName={f.flightAirline ?? f.provider ?? null}
+          minutesToDeparture={msUntilDept / 60_000}
+          userLat={userLat}
+          userLon={userLon}
+          credentials={navCredentials}
+          onCredentialsAnswer={saveNavCredentials}
+        />
       )}
 
       {/* Airport walkthrough steps */}
