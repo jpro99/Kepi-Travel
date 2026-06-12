@@ -17,7 +17,9 @@ export default function Error({
   const errorMessage =
     typeof error?.message === "string" && error.message.length > 0
       ? error.message
-      : "Unknown error";
+      : error?.digest
+        ? `Error digest: ${error.digest}`
+        : "Unknown error";
 
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center gap-4 px-4 py-6 text-center">
