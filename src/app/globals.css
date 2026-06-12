@@ -1,51 +1,96 @@
 @import "tailwindcss";
 
-/* ─── Kepi Design Tokens ─────────────────────────────────────────────────── */
+@plugin "tailwindcss-animate";
+
+@custom-variant dark (&:is(.dark *));
 
 :root {
-  --bg-base:        #f8f9fc;
-  --bg-card:        #ffffff;
-  --bg-muted:       #f0f2f7;
-  --text-primary:   #0f1623;
-  --text-secondary: #4a5568;
-  --text-muted:     #8892a4;
-  --border-default: #e2e8f3;
-  --brand:          #06b6d4;
-  --background:     var(--bg-base);
-  --foreground:     var(--text-primary);
+  --background: hsl(0 0% 100%);
+  --foreground: hsl(240 10% 3.9%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(240 10% 3.9%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(240 10% 3.9%);
+  --primary: hsl(240 5.9% 10%);
+  --primary-foreground: hsl(0 0% 98%);
+  --secondary: hsl(240 4.8% 95.9%);
+  --secondary-foreground: hsl(240 5.9% 10%);
+  --muted: hsl(240 4.8% 95.9%);
+  --muted-foreground: hsl(240 3.8% 46.1%);
+  --accent: hsl(240 4.8% 95.9%);
+  --accent-foreground: hsl(240 5.9% 10%);
+  --destructive: hsl(0 84.2% 60.2%);
+  --destructive-foreground: hsl(0 0% 98%);
+  --border: hsl(240 5.9% 90%);
+  --input: hsl(240 5.9% 90%);
+  --ring: hsl(240 5.9% 10%);
+  --radius: 0.5rem;
 }
 
 .dark {
-  --bg-base:        #0d1117;
-  --bg-card:        #161b22;
-  --bg-muted:       #1c2330;
-  --text-primary:   #e6edf3;
-  --text-secondary: #8b949e;
-  --text-muted:     #6e7681;
-  --border-default: #30363d;
-  --brand:          #22d3ee;
-  --background:     var(--bg-base);
-  --foreground:     var(--text-primary);
+  --background: hsl(240 10% 3.9%);
+  --foreground: hsl(0 0% 98%);
+  --card: hsl(240 10% 3.9%);
+  --card-foreground: hsl(0 0% 98%);
+  --popover: hsl(240 10% 3.9%);
+  --popover-foreground: hsl(0 0% 98%);
+  --primary: hsl(0 0% 98%);
+  --primary-foreground: hsl(240 5.9% 10%);
+  --secondary: hsl(240 3.7% 15.9%);
+  --secondary-foreground: hsl(0 0% 98%);
+  --muted: hsl(240 3.7% 15.9%);
+  --muted-foreground: hsl(240 5% 64.9%);
+  --accent: hsl(240 3.7% 15.9%);
+  --accent-foreground: hsl(0 0% 98%);
+  --destructive: hsl(0 62.8% 30.6%);
+  --destructive-foreground: hsl(0 0% 98%);
+  --border: hsl(240 3.7% 15.9%);
+  --input: hsl(240 3.7% 15.9%);
+  --ring: hsl(240 4.9% 83.9%);
 }
 
-/* ─── Base ──────────────────────────────────────────────────────────────── */
-
-body {
-  background: var(--bg-base);
-  color: var(--text-primary);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
 }
 
-/* ─── Focus ─────────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    @apply border-border;
+  }
 
-:focus-visible {
-  outline: 2px solid var(--brand);
-  outline-offset: 2px;
+  body {
+    @apply bg-background text-foreground;
+  }
 }
 
-/* ─── Scrollbar (dark mode) ─────────────────────────────────────────────── */
+/* Airport Navigator — keep POI bubbles above map canvas, tappable */
+.airport-nav-bubble-marker {
+  z-index: 5;
+  pointer-events: auto;
+}
 
-.dark ::-webkit-scrollbar { width: 4px; height: 4px; }
-.dark ::-webkit-scrollbar-track { background: transparent; }
-.dark ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+.airport-nav-user-marker {
+  z-index: 6;
+  pointer-events: none;
+}

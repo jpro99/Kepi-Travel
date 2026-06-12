@@ -1,7 +1,7 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { kvStoreGet } from "@/lib/travelAssistant/kvStore";
+import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

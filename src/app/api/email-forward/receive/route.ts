@@ -5,6 +5,7 @@ import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { getResendClient } from "@/lib/email/resendClient";
 import { logger } from "@/lib/logger";
 import { parseForwardedEmail } from "@/lib/travelAssistant/emailForwardParser";
+import type { SessionReservation, SessionReviewItem } from "@/lib/travelAssistant/clientSessionState";
 import { resolveUserIdByForwardAddress } from "@/lib/travelAssistant/emailForwardSetupStore";
 import { sendPushNotification } from "@/lib/travelAssistant/pushNotificationService";
 import { getActiveTrip, getTrip, updateTrip } from "@/lib/travelAssistant/tripStore";
@@ -582,22 +583,13 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       html: parserHtml,
       attachments: parserAttachments,
     });
-    const parserDraftRecordCandidates = Array.isArray((parserResult as { drafts?: unknown }).drafts)
-      ? (parserResult as { drafts?: unknown }).drafts
-      : [];
     const parserDraftRecords = (
-      parserDraftRecordCandidates.length > 0 ? parserDraftRecordCandidates : [parserResult?.draft ?? {}]
-    ).flatMap((candidate) =>
-      candidate && typeof candidate === "object" && !Array.isArray(candidate)
-        ? [(candidate as Record<string, unknown>)]
-        : [],
-    );
+      parserResult.drafts.length > 0 ? parserResult.drafts : [parserResult.draft]
+    ).map((candidate) => ({ ...candidate }) as Record<string, unknown>);
     const parserNotes = Array.isArray(parserResult?.parserNotes)
       ? parserResult.parserNotes.filter((note): note is string => typeof note === "string" && note.trim().length > 0)
       : [];
-    const parserMissingFields = Array.isArray(parserResult?.missingFields)
-      ? parserResult.missingFields.filter((field): field is string => typeof field === "string")
-      : [];
+    const parserMissingFields = parserResult.missingFields;
     const parserConfidenceScore = Number.isFinite(parserResult?.confidenceScore) ? parserResult.confidenceScore : 0;
     const parserParsingStatus =
       parserResult?.parsingStatus === "auto-parsed" ||
@@ -619,12 +611,14 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
     let acceptedDraftCount = 0;
     let duplicateDraftCount = 0;
     for (const parserDraftRecord of parserDraftRecords) {
-      const parserType =
-        parserDraftRecord.type === "flight" ||
-        parserDraftRecord.type === "hotel" ||
-        parserDraftRecord.type === "train" ||
-        parserDraftRecord.type === "ride"
-          ? parserDraftRecord.type
+      const rawType = parserDraftRecord.type;
+      const parserType: SessionReservation["type"] =
+        rawType === "flight" ||
+        rawType === "hotel" ||
+        rawType === "train" ||
+        rawType === "ride" ||
+        rawType === "dinner"
+          ? rawType
           : "ride";
       const parserTitle = typeof parserDraftRecord.title === "string" ? parserDraftRecord.title : "";
       const parserProvider = typeof parserDraftRecord.provider === "string" ? parserDraftRecord.provider : "";
@@ -801,7 +795,9 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
           sourceChannel: "email-forward" as const,
           parseConfidenceScore: parserConfidenceScore,
           parsingStatus: parserParsingStatus,
-          missingFields: parserMissingFields,
+          missingFields: parserMissingFields.filter(
+            (field) => field !== "departureAirport" && field !== "arrivalAirport" && field !== "checkOutDate",
+          ) as SessionReviewItem["missingFields"],
           originalEmailText: parserOriginalEmailText,
           hasPdfAttachment: parserHasPdfAttachment,
           imageBasedEmail: parserImageBasedEmail,

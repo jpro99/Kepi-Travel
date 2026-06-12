@@ -98,7 +98,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       const { emailSent, warning } = await sendInviteEmail({
         email,
         code: record.code,
-        type: record.type === "referral" ? "trial-30" : record.type,
+        type: record.type,
         redeemUrl,
       });
 

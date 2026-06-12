@@ -13,8 +13,8 @@ export async function GET(): Promise<NextResponse> {
   if (!trip) return NextResponse.json({ error: "No active trip" }, { status: 404 });
 
   const hotels = trip.reservations
-    .filter((r: Record<string, unknown>) => r.type === "hotel")
-    .map((h: Record<string, unknown>) => ({
+    .filter((r) => r.type === "hotel")
+    .map((h) => ({
       provider: h.provider,
       localTime: h.localTime,
       checkOutDate: h.checkOutDate,
@@ -23,8 +23,8 @@ export async function GET(): Promise<NextResponse> {
     }));
 
   const flights = trip.reservations
-    .filter((r: Record<string, unknown>) => r.type === "flight")
-    .map((f: Record<string, unknown>) => ({
+    .filter((r) => r.type === "flight")
+    .map((f) => ({
       provider: f.provider,
       flightNumber: f.flightNumber,
       localTime: f.localTime,

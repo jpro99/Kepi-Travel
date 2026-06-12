@@ -89,8 +89,7 @@ export function UpgradeModal({ open, gate, currentPlan = "free", onClose }: Upgr
     }
     setBusy(true);
     setError(null);
-    const analyticsCurrentPlan: BillingPlanId =
-      currentPlan === "concierge" ? "concierge" : currentPlan === "free" ? "free" : "pro";
+    const analyticsCurrentPlan: BillingPlanId = "free";
     void trackEvent({
       type: "upgrade_clicked",
       currentPlan: analyticsCurrentPlan,

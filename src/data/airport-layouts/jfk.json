@@ -1,0 +1,79 @@
+
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "terminal",
+        "name": "Terminal 4"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-73.785, 40.645],
+            [-73.78, 40.646],
+            [-73.775, 40.64],
+            [-73.78, 40.639],
+            [-73.785, 40.645]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "gate",
+        "name": "B22"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-73.782, 40.644]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "gate",
+        "name": "B24"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-73.781, 40.643]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "walkway"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-73.784, 40.6445],
+          [-73.782, 40.644],
+          [-73.781, 40.643]
+        ]
+      }
+    },
+    {
+        "type": "Feature",
+        "properties": {
+            "type": "baggage-claim"
+        },
+        "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+                [
+                    [-73.778, 40.642],
+                    [-73.777, 40.6425],
+                    [-73.776, 40.6415],
+                    [-73.777, 40.641],
+                    [-73.778, 40.642]
+                ]
+            ]
+        }
+    }
+  ]
+}

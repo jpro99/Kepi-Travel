@@ -7,6 +7,8 @@
  * fallthrough endpoint handles those in a later phase.
  */
 
+import type { VoiceNavIntent } from "./types";
+
 export type VoiceIntentKind =
   | "navigate_gate"
   | "navigate_lounge"
@@ -135,4 +137,41 @@ export function routeVoiceIntent(rawUtterance: string): VoiceIntent {
   }
 
   return { intent: "unknown", utterance };
+}
+
+/** Maps Phase-1 local intents to the 3D navigator VoiceNavIntent shape. */
+export function routeLocalVoiceIntent(rawUtterance: string): VoiceNavIntent | null {
+  const result = routeVoiceIntent(rawUtterance);
+  if (result.intent === "unknown" || result.intent === "eta") return null;
+
+  const intentByKind: Record<
+    Exclude<VoiceIntentKind, "unknown" | "eta">,
+    VoiceNavIntent["intent"]
+  > = {
+    navigate_gate: "navigate_gate",
+    navigate_lounge: "navigate_poi",
+    navigate_security: "navigate_poi",
+    navigate_checkin: "navigate_poi",
+    navigate_restroom: "navigate_poi",
+    navigate_train: "navigate_poi",
+    set_credentials: "set_credentials",
+    next_step: "next_step",
+    sprint: "sprint",
+    cancel: "cancel",
+  };
+
+  const intent = intentByKind[result.intent];
+  const slots: Record<string, string | boolean> = { utterance: result.utterance };
+  if (result.credentials) {
+    slots.tsaPreCheck = result.credentials.tsaPreCheck;
+    slots.clear = result.credentials.clear;
+  }
+  if (intent === "sprint") slots.on = true;
+
+  return {
+    intent,
+    slots,
+    confidence: 0.9,
+    source: "local_router",
+  };
 }

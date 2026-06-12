@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { PlanFeature } from "@/lib/billing/plans";
 import { ReferralCard } from "@/components/referral/ReferralCard";
@@ -14,6 +14,20 @@ function normalizeRedeemCode(value: string): string {
 }
 
 export default function BillingPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto max-w-3xl px-4 py-10 text-sm text-slate-600 dark:text-slate-300">
+          Loading billing…
+        </main>
+      }
+    >
+      <BillingPageContent />
+    </Suspense>
+  );
+}
+
+function BillingPageContent() {
   const searchParams = useSearchParams();
   const { status, loading, error: billingContextError, refresh: refreshBillingStatus, plan: billingStatusPlan } = useBilling();
   const [busy, setBusy] = useState(false);

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
+import { enforceRateLimit } from "@/lib/rateLimit";
 import { enrichBriefWithDuffelPricing } from "@/lib/decision/livePricing";
 import { buildCounterfactual, buildDecisionBrief } from "@/lib/decision/strategyEngine";
 import { searchDuffelCashQuotes } from "@/lib/providers/duffel/flightOffers";
@@ -16,6 +17,20 @@ const BodySchema = z.object({
 });
 
 export async function POST(req: Request) {
+  const userId = await resolveAuthenticatedUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const rateLimit = await enforceRateLimit({
+    policyName: "ai-suggestions",
+    identifier: userId,
+    route: "decision-counterfactual",
+    requestId: `${"decision-counterfactual"}-${userId}-${Date.now()}`,
+  });
+  if (!rateLimit.allowed) {
+    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429, headers: rateLimit.headers });
+  }
+
   let body: unknown;
   try {
     body = await req.json();
@@ -28,8 +43,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const userId = await resolveAuthenticatedUserId();
-  const genome = await getTravelerGenome(userId ?? undefined);
+  const genome = await getTravelerGenome(userId);
   const result = buildCounterfactual(parsed.data.prompt, genome, parsed.data.mutation);
   const comfortWeight =
     parsed.data.mutation.priorityComfort ?? genome.decisionWeights.comfort;

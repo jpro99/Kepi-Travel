@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { BillingPlanId } from "@/lib/billing/plans";
+import { Chat } from "@/components/chat/Chat";
 
 interface ConciergePanelReservation {
   type: string;
@@ -69,10 +70,7 @@ export function ConciergePanel({
   const [error, setError] = useState<string | null>(null);
   const [autoRebookDraft, setAutoRebookDraft] = useState(false);
   const [showSupportForm, setShowSupportForm] = useState(false);
-  const [supportSubject, setSupportSubject] = useState(`Priority help needed for ${tripName}`);
-  const [supportMessage, setSupportMessage] = useState("");
-  const [supportSuccess, setSupportSuccess] = useState<string | null>(null);
-
+  
   const isConcierge = billingPlan === "concierge";
 
   const loadState = useCallback(async (): Promise<void> => {
@@ -267,48 +265,12 @@ export function ConciergePanel({
           type="button"
           onClick={() => {
             setShowSupportForm((previous) => !previous);
-            setSupportSuccess(null);
           }}
           className="rounded-md border border-slate-600 px-2 py-1 text-xs font-semibold text-slate-100 hover:bg-slate-800"
         >
-          Talk to a human
+          {showSupportForm ? 'Close Chat' : 'Talk to Concierge'}
         </button>
-        {showSupportForm ? (
-          <form
-            className="mt-3 space-y-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setSupportSuccess("Priority ticket queued. Concierge support will respond shortly.");
-              setSupportMessage("");
-            }}
-          >
-            <label className="block text-xs text-slate-300">
-              Subject
-              <input
-                value={supportSubject}
-                onChange={(event) => setSupportSubject(event.target.value)}
-                className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-sm text-slate-100"
-              />
-            </label>
-            <label className="block text-xs text-slate-300">
-              Priority details
-              <textarea
-                value={supportMessage}
-                onChange={(event) => setSupportMessage(event.target.value)}
-                rows={3}
-                required
-                className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-sm text-slate-100"
-              />
-            </label>
-            <button
-              type="submit"
-              className="rounded-md bg-indigo-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-400"
-            >
-              Submit priority ticket
-            </button>
-            {supportSuccess ? <p className="text-xs text-emerald-300">{supportSuccess}</p> : null}
-          </form>
-        ) : null}
+        {showSupportForm && <Chat tripContext={`Trip: ${tripName}, Destination: ${destination}, Reservations: ${JSON.stringify(reservations)}`} />}
       </div>
 
       {monitorState?.lastCheckedAt ? (

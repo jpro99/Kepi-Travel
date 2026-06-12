@@ -31,6 +31,8 @@ interface TripTimelineProps {
   tripStartDate: string | null;
   tripDaysAway: number;
   onReservationTap?: (id: string) => void;
+  /** Hide "already mid-trip" banner when the trip is fully in the past. */
+  suppressMidTripBanner?: boolean;
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -361,7 +363,14 @@ function MidTripBanner({ pastCount, onConfirm }: { pastCount: number; onConfirm:
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function TripTimeline({ reservations, tripName, tripStartDate, tripDaysAway, onReservationTap }: TripTimelineProps) {
+export function TripTimeline({
+  reservations,
+  tripName,
+  tripStartDate,
+  tripDaysAway,
+  onReservationTap,
+  suppressMidTripBanner = false,
+}: TripTimelineProps) {
   const [midTripConfirmed, setMidTripConfirmed] = useState(false);
   const [dimPast, setDimPast] = useState(true);
 
@@ -413,8 +422,9 @@ export function TripTimeline({ reservations, tripName, tripStartDate, tripDaysAw
   const today = new Date().toISOString().slice(0, 10);
   const pastDaysWithEvents = days.filter((d) => d.key < today && d.reservations.length > 0);
   const hasPastReservations = pastDaysWithEvents.length > 0;
+  const hasUpcomingDays = days.some((d) => d.key >= today && d.reservations.length > 0);
   const pastResCount = pastDaysWithEvents.reduce((n, d) => n + d.reservations.length, 0);
-  const showMidTripBanner = hasPastReservations && !midTripConfirmed;
+  const showMidTripBanner = hasPastReservations && hasUpcomingDays && !midTripConfirmed && !suppressMidTripBanner;
 
   const totalDays = days.length;
   const daysWithEvents = days.filter((d) => d.reservations.length > 0).length;

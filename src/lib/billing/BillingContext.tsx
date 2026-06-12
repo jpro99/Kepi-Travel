@@ -208,7 +208,6 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
     void refresh();
   }, [isLoaded, refresh, userId]);
 
-  // Listen for manual refresh triggers (e.g. after silent invite code redemption)
   useEffect(() => {
     const handler = () => { void refresh(); };
     window.addEventListener("kepi:billing-refresh", handler);

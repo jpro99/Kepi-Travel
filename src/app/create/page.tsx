@@ -1,7 +1,5 @@
-"use client";
-
-import { CommandDeck } from "@/components/decision/CommandDeck";
+import { redirect } from "next/navigation";
 
 export default function CreatePage() {
-  return <CommandDeck />;
+  redirect("/?tab=plan");
 }

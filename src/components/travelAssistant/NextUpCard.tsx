@@ -217,6 +217,8 @@ export function NextUpCard({ reservations, tripName, onReservationTap, locationS
         headline?: string;
         detail?: string;
         error?: string;
+        proactive_flag?: string;
+        action?: string;
       };
 
       if (data.error) {

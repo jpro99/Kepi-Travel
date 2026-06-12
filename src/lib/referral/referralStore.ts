@@ -253,22 +253,22 @@ export async function listReferralCodes(limit = 2000): Promise<ReferralCodeCatal
     limit,
   });
   return entries
-    .map((entry) => {
+    .flatMap((entry) => {
       const code = extractCodeFromNamespacedKey(entry.key);
       const record = sanitizeCodeRecord(entry.value);
       if (!code || !record) {
-        return null;
+        return [];
       }
       const latestUse = [...record.uses].sort((a, b) => Date.parse(b.redeemedAt) - Date.parse(a.redeemedAt))[0] ?? null;
-      return {
+      const catalogEntry: ReferralCodeCatalogEntry = {
         code,
         userId: record.userId,
         createdAt: record.createdAt,
         latestUsedBy: latestUse?.newUserId ?? null,
         latestUsedAt: latestUse?.redeemedAt ?? null,
         totalUses: record.uses.length,
-      } satisfies ReferralCodeCatalogEntry;
+      };
+      return [catalogEntry];
     })
-    .filter((entry): entry is ReferralCodeCatalogEntry => entry !== null)
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }
