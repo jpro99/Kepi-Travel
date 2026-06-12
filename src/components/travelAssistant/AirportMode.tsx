@@ -14,31 +14,13 @@ import {
   type StatusTier,
 } from "@/lib/travelAssistant/airlineStatus";
 import { buildGateInstructions, getAirportNav } from "@/lib/travelAssistant/airportNavigation";
+import { AirportNavigatorMap } from "@/components/travelAssistant/AirportNavigatorMap";
+// Type-only import — fully erased at compile time, so the route's "server-only"
+// guard never runs in the client bundle. Single source of truth for the schema.
+import type { TravelProfile } from "@/app/api/travel-profile/route";
+import { selectActiveFlight, type FlightReservation } from "@/lib/travelAssistant/useActiveFlight";
 
 /* ─── Types ──────────────────────────────────────────────────── */
-interface FlightReservation {
-  id: string;
-  type: string;
-  title: string;
-  provider: string;
-  localTime: string;
-  timezone?: string;
-  location: string;
-  confirmationCode?: string;
-  flightNumber?: string;
-  flightAirline?: string;
-  flightDepartureAirport?: string;
-  flightArrivalAirport?: string;
-  flightDepartureTime?: string;
-  flightArrivalTime?: string;
-  flightDepartureGate?: string;
-  flightDepartureTerminal?: string;
-  flightArrivalGate?: string;
-  flightArrivalTerminal?: string;
-  flightDelayMinutes?: number;
-  flightOnTime?: boolean;
-  flightStatus?: string;
-}
 
 interface AirportModeProps {
   reservations: FlightReservation[];
@@ -46,22 +28,6 @@ interface AirportModeProps {
 }
 
 /* ─── Time helpers ───────────────────────────────────────────── */
-function toUtcMs(localTime: string, timezone?: string): number {
-  const s = localTime.trim().replace("T", " ").slice(0, 16);
-  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(s);
-  if (!m) return NaN;
-  const approxUtc = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
-  if (!timezone) return approxUtc;
-  try {
-    const fmt = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone, year: "numeric", month: "2-digit",
-      day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false,
-    });
-    const parts = Object.fromEntries(fmt.formatToParts(new Date(approxUtc)).map(p => [p.type, p.value]));
-    const tzAsUtc = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute);
-    return approxUtc - (tzAsUtc - approxUtc);
-  } catch { return approxUtc; }
-}
 
 function fmtCountdown(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -474,14 +440,8 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
     return () => { if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current); };
   }, []);
 
-  // Find active flight
-  const activeFlight = useMemo(() => {
-    const flights = reservations.filter(r => r.type === "flight");
-    return flights
-      .map(f => ({ f, utcMs: toUtcMs(f.localTime, f.timezone) }))
-      .filter(({ utcMs }) => !isNaN(utcMs) && (utcMs - now) / 60_000 < 180 && (now - utcMs) / 60_000 < 60)
-      .sort((a, b) => a.utcMs - b.utcMs)[0] ?? null;
-  }, [reservations, now]);
+  // Find active flight — shared selector (single source of truth with Map page)
+  const activeFlight = useMemo(() => selectActiveFlight(reservations, now), [reservations, now]);
 
   // Airport proximity
   const proximity = useMemo(() =>
@@ -528,6 +488,32 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
 
   // Show setup prompt if profile not loaded yet or no statuses set and we're within 3h
   const showSetupPrompt = profileLoaded && !profile?.airlineStatuses?.length && !showSetup;
+
+  // ── Airport Navigator map (Phase 0 — curated layouts only, SEA pilot) ──
+  // Credentials are "known" once the traveler has answered the security
+  // question anywhere (status setup or the in-map prompt — asked once, ever).
+  const navCredentials = {
+    tsaPreCheck: Boolean(profile?.tsa_precheck || profile?.global_entry),
+    clear: Boolean(profile?.clear),
+    known: Boolean(
+      profile && (typeof profile.tsa_precheck === "boolean" || typeof profile.clear === "boolean"),
+    ),
+  };
+  const saveNavCredentials = (answer: { tsaPreCheck: boolean; clear: boolean }) => {
+    const updated: TravelProfile = {
+      ...(profile ?? { airlineStatuses: [] }),
+      airlineStatuses: profile?.airlineStatuses ?? [],
+      tsa_precheck: answer.tsaPreCheck,
+      clear: answer.clear,
+    };
+    setProfile(updated);
+    void fetch("/api/travel-profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updated),
+    }).catch(() => null); // fail-safe: local state already updated
+  };
+  const showNavigatorMap = proximity.status !== "away" && Boolean(f.flightDepartureAirport);
 
   return (
     <div className="space-y-3">
@@ -735,6 +721,32 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
             </p>
           )}
         </div>
+      )}
+
+      {/* Airport Navigator — 3D terminal map (curated airports; renders nothing otherwise) */}
+      {showNavigatorMap && (
+        <AirportNavigatorMap
+          iata={f.flightDepartureAirport ?? ""}
+          gateCode={f.flightDepartureGate ?? null}
+          airlineName={f.flightAirline ?? f.provider ?? null}
+          flightNumber={f.flightNumber ?? null}
+          arrivalAirport={f.flightArrivalAirport ?? null}
+          departureTerminal={f.flightDepartureTerminal ?? null}
+          departureClockLabel={fmtTime(deptUtcMs)}
+          flightStatusLabel={
+            isDelayed
+              ? `Delayed +${f.flightDelayMinutes}m`
+              : f.flightStatus ?? (f.flightOnTime === false ? "Delayed" : "On time")
+          }
+          flightDelayed={isDelayed || f.flightOnTime === false}
+          proximityStatus={proximity.status}
+          minutesToDeparture={msUntilDept / 60_000}
+          userLat={userLat}
+          userLon={userLon}
+          credentials={navCredentials}
+          onCredentialsAnswer={saveNavCredentials}
+          eligibleLoungeNames={lounges.map((loungeInfo) => loungeInfo.name)}
+        />
       )}
 
       {/* Airport walkthrough steps */}
