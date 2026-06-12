@@ -7097,7 +7097,10 @@ export default function TravelAssistantPage() {
 
               {/* AirportMode: only when pre-trip, not airborne or landed */}
               {(journeyPhase.kind === "pre-trip" || journeyPhase.kind === "no-trip") && (
-                <AirportMode />
+                <AirportMode
+                  reservations={consumerReservationsSorted}
+                  onViewReservations={() => navigateToConsumerTab("flights")}
+                />
               )}
 
               {/* ArrivalMode: only when just-landed or close to landing */}

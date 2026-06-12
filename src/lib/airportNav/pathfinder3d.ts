@@ -1,7 +1,7 @@
 import type {
   AirportTerminal3DModel,
-  GraphEdge,
-  GraphNode,
+  NavGraphEdge,
+  NavGraphNode,
   IndoorPositionFix,
   NavigationPath,
   PathSegment,
@@ -23,7 +23,7 @@ export interface RouteRequest {
 }
 
 interface ScoredEdge {
-  edge: GraphEdge;
+  edge: NavGraphEdge;
   toNodeId: string;
   cost: number;
 }
@@ -52,7 +52,7 @@ function resolveSecurityLane(credentials: TravelerCredentials): SecurityLaneType
 }
 
 function laneAllowed(
-  edge: GraphEdge,
+  edge: NavGraphEdge,
   credentials: TravelerCredentials,
 ): boolean {
   if (edge.kind !== "security_transition" || !edge.laneType) return true;
@@ -63,7 +63,7 @@ function laneAllowed(
   return edge.laneType === needed;
 }
 
-function edgeCost(edge: GraphEdge, profile: RouteProfile): number {
+function edgeCost(edge: NavGraphEdge, profile: RouteProfile): number {
   let cost = edge.traverseSeconds;
   if (profile === "sprint") {
     if (edge.kind === "stairs") cost *= 1.8;
@@ -83,12 +83,12 @@ function edgeCost(edge: GraphEdge, profile: RouteProfile): number {
 function nearestNode(
   graph: AirportTerminal3DModel["graph"],
   fix: IndoorPositionFix,
-): GraphNode | null {
+): NavGraphNode | null {
   if (fix.snappedNodeId) {
     const exact = graph.nodes.find((node) => node.id === fix.snappedNodeId);
     if (exact) return exact;
   }
-  let best: GraphNode | null = null;
+  let best: NavGraphNode | null = null;
   let bestDist = Number.POSITIVE_INFINITY;
   for (const node of graph.nodes) {
     const dist = haversineMeters(fix.pos, node.pos);
@@ -128,9 +128,9 @@ function dijkstra(
   adj: Map<string, ScoredEdge[]>,
   startId: string,
   goalId: string,
-): { nodeIds: string[]; edges: GraphEdge[]; totalCost: number } | null {
+): { nodeIds: string[]; edges: NavGraphEdge[]; totalCost: number } | null {
   const dist = new Map<string, number>();
-  const prev = new Map<string, { nodeId: string; edge: GraphEdge }>();
+  const prev = new Map<string, { nodeId: string; edge: NavGraphEdge }>();
   const queue = new Set<string>([startId]);
   dist.set(startId, 0);
 
@@ -162,7 +162,7 @@ function dijkstra(
   if (!dist.has(goalId)) return null;
 
   const nodeIds: string[] = [goalId];
-  const edges: GraphEdge[] = [];
+  const edges: NavGraphEdge[] = [];
   let cursor = goalId;
   while (cursor !== startId) {
     const step = prev.get(cursor);
@@ -176,9 +176,9 @@ function dijkstra(
 }
 
 function instructionForEdge(
-  edge: GraphEdge,
-  fromNode: GraphNode,
-  toNode: GraphNode,
+  edge: NavGraphEdge,
+  fromNode: NavGraphNode,
+  toNode: NavGraphNode,
 ): TurnInstruction {
   if (edge.kind === "security_transition") {
     return {
@@ -218,7 +218,7 @@ function instructionForEdge(
 function edgesToSegments(
   model: AirportTerminal3DModel,
   nodeIds: string[],
-  edges: GraphEdge[],
+  edges: NavGraphEdge[],
 ): PathSegment[] {
   const nodeById = new Map(model.graph.nodes.map((node) => [node.id, node]));
   const segments: PathSegment[] = [];
@@ -333,8 +333,8 @@ export function computeRoute(request: RouteRequest): NavigationPath | null {
 
 export function findNodeByRegion(
   model: AirportTerminal3DModel,
-  region: GraphNode["region"],
-): GraphNode | undefined {
+  region: NavGraphNode["region"],
+): NavGraphNode | undefined {
   return model.graph.nodes.find((node) => node.region === region);
 }
 
