@@ -1,29 +1,33 @@
 import { NextResponse } from "next/server";
-import { getAirportLayout, listSupportedAirports, normalizeAirportIata } from "@/lib/airportNav/layouts";
+import { getAirportLayout } from "@/lib/airportNav/getLayout";
 
-export const dynamic = "force-dynamic";
+type Params = { params: Promise<{ iata: string }> };
 
-export async function GET(
-  _request: Request,
-  context: { params: { iata: string } | Promise<{ iata: string }> },
-): Promise<Response> {
-  const { iata: rawIata } = await Promise.resolve(context.params);
-  const iata = normalizeAirportIata(rawIata);
-  const model = getAirportLayout(iata);
-  if (!model) {
+/**
+ * GET /api/airport-nav/[iata]/layout
+ * Returns the curated AirportLayout (zones + walkway graph + POIs) for the
+ * given IATA code, or 404 when no curated layout exists yet.
+ * Long cache — layouts change only on curation pushes (layoutVersion bumps).
+ */
+export async function GET(_request: Request, { params }: Params) {
+  const { iata: raw } = await params;
+  const iata = decodeURIComponent(raw).trim().toUpperCase();
+
+  if (!/^[A-Z]{3}$/.test(iata)) {
+    return NextResponse.json({ error: "Invalid IATA code" }, { status: 400 });
+  }
+
+  const layout = getAirportLayout(iata);
+  if (!layout) {
     return NextResponse.json(
-      {
-        error: `Airport layout not available for ${iata.toUpperCase()}`,
-        supported: listSupportedAirports(),
-      },
+      { error: "No curated layout for this airport yet", iata },
       { status: 404 },
     );
   }
 
-  return NextResponse.json(model, {
+  return NextResponse.json(layout, {
     headers: {
-      "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
-      ETag: `"${model.iata}-${model.updatedAt}"`,
+      "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
     },
   });
 }

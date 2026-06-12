@@ -1,136 +1,138 @@
-import type { VoiceNavIntent } from "./types";
+/**
+ * Kepi Airport Navigator — local voice intent router (Phase 1, spec §D5).
+ *
+ * Pure function: utterance string → VoiceIntent. Runs on-device with zero
+ * latency and no connectivity, covering the core navigation intents.
+ * Anything it can't resolve returns { intent: "unknown" } — the Claude
+ * fallthrough endpoint handles those in a later phase.
+ */
 
-const PRECHECK_PATTERNS = [
-  /\bpre[\s-]?check\b/i,
-  /\btsa pre\b/i,
-  /\bglobal entry\b/i,
-];
-const CLEAR_PATTERNS = [/\bclear\b/i, /\bclear\+?\b/i];
-const BOTH_PATTERNS = [/\bboth\b/i, /pre[\s-]?check and clear/i, /clear and pre/i];
-const NEITHER_PATTERNS = [/\bneither\b/i, /\bstandard\b/i, /\bno precheck\b/i, /\bregular security\b/i];
+export type VoiceIntentKind =
+  | "navigate_gate"
+  | "navigate_lounge"
+  | "navigate_security"
+  | "navigate_checkin"
+  | "navigate_restroom"
+  | "navigate_train"
+  | "set_credentials"
+  | "next_step"
+  | "eta"
+  | "sprint"
+  | "cancel"
+  | "unknown";
 
-export function routeLocalVoiceIntent(utterance: string): VoiceNavIntent | null {
-  const text = utterance.trim();
-  if (!text) return null;
-  const lower = text.toLowerCase();
+export interface VoiceIntent {
+  intent: VoiceIntentKind;
+  /** Only for set_credentials. */
+  credentials?: { tsaPreCheck: boolean; clear: boolean };
+  /** Normalized utterance, for logging/debug. */
+  utterance: string;
+}
 
-  if (/take me to (my )?gate|go to (my )?gate|navigate to gate/.test(lower)) {
-    return {
-      intent: "navigate_gate",
-      slots: {},
-      confidence: 0.95,
-      source: "local_router",
-      spokenResponse: "Routing to your gate.",
-    };
+function normalize(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/[‘’]/g, "'")
+    .replace(/[^a-z0-9' ]+/g, " ")
+    .replace(/\bpre[- ]?check\b/g, "precheck")
+    .replace(/\btsa precheck\b/g, "precheck")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Credential parsing handles the conversational answers from spec §B Flow 2:
+ *  "I have precheck and clear" / "only clear, no precheck" / "both" /
+ *  "neither" / "no" / "I don't have either" / "just precheck"
+ */
+function parseCredentials(text: string): { tsaPreCheck: boolean; clear: boolean } | null {
+  const mentionsPre = /\bprecheck\b/.test(text);
+  const mentionsClear = /\bclear\b/.test(text);
+  const both = /\bboth\b/.test(text);
+  const neither = /\b(neither|none|nothing|no i don'?t|don'?t have (either|any|one))\b/.test(text);
+  const only = /\b(only|just)\b/.test(text);
+  const negated = (word: string) =>
+    new RegExp(`\\b(no|not|don'?t have|without)\\b[^.]{0,12}\\b${word}\\b`).test(text);
+
+  if (neither && !mentionsPre && !mentionsClear) return { tsaPreCheck: false, clear: false };
+  if (both && !mentionsPre && !mentionsClear) return { tsaPreCheck: true, clear: true };
+
+  if (!mentionsPre && !mentionsClear) {
+    // Bare "yes"/"no" style answers — only meaningful as a follow-up;
+    // treat bare "no"/"nope" as neither.
+    if (/^(no|nope|nah)\b/.test(text)) return { tsaPreCheck: false, clear: false };
+    return null;
   }
 
-  if (/running late|fastest route|sprint|hurry/.test(lower)) {
-    return {
-      intent: "sprint",
-      slots: { on: true },
-      confidence: 0.9,
-      source: "local_router",
-      spokenResponse: "Switching to fastest route.",
-    };
+  let pre = mentionsPre ? !negated("precheck") : false;
+  let clr = mentionsClear ? !negated("clear") : false;
+  if (both) {
+    pre = true;
+    clr = true;
+  }
+  if (only) {
+    // "only clear" → the unmentioned one is explicitly false
+    if (mentionsClear && !mentionsPre) pre = false;
+    if (mentionsPre && !mentionsClear) clr = false;
+  }
+  return { tsaPreCheck: pre, clear: clr };
+}
+
+export function routeVoiceIntent(rawUtterance: string): VoiceIntent {
+  const text = normalize(rawUtterance);
+  const utterance = text;
+  if (!text) return { intent: "unknown", utterance };
+
+  // Cancel / stop
+  if (/\b(stop|cancel|end (the )?(route|navigation)|never ?mind)\b/.test(text)) {
+    return { intent: "cancel", utterance };
   }
 
-  if (/what('s| is) my next step|what do i do now|what next/.test(lower)) {
-    return {
-      intent: "next_step",
-      slots: {},
-      confidence: 0.92,
-      source: "local_router",
-    };
+  // Sprint — running late beats everything except cancel
+  if (/\b(running late|i'?m late|fastest|quickest|hurry|sprint|gonna miss)\b/.test(text)) {
+    return { intent: "sprint", utterance };
   }
 
-  if (/through security|i'?m through|past security|made it through/.test(lower)) {
-    return {
-      intent: "confirm_phase",
-      slots: { phaseId: "airside" },
-      confidence: 0.88,
-      source: "local_router",
-      spokenResponse: "Great — continuing on the airside side of security.",
-    };
+  // Credentials — check BEFORE navigate_security ("I have precheck" must not
+  // be read as "take me to security"), but only when phrased as having/not
+  // having, not as a destination.
+  const looksLikeCredentialAnswer =
+    /\b(i (have|got|only have|don'?t have)|i'?ve got|both|neither|just|only)\b/.test(text) ||
+    /^(no|nope|nah|yes|yeah)\b/.test(text) ||
+    (/\b(precheck|clear)\b/.test(text) && !/\b(where|take|go|route|navigate|find)\b/.test(text));
+  if (looksLikeCredentialAnswer) {
+    const creds = parseCredentials(text);
+    if (creds) return { intent: "set_credentials", credentials: creds, utterance };
   }
 
-  if (/lounge|club|centurion|admirals/.test(lower)) {
-    return {
-      intent: "lounge_query",
-      slots: { utterance: text },
-      confidence: 0.85,
-      source: "local_router",
-    };
+  // Status questions — BEFORE destination keywords: "how long to my gate"
+  // is a question about the gate, not a command to navigate to it.
+  if (/\b(next step|what now|what'?s next|where (do|should) i go|what do i do)\b/.test(text)) {
+    return { intent: "next_step", utterance };
+  }
+  if (/\b(how (long|far)|eta|time (to|until)|am i going to make)\b/.test(text)) {
+    return { intent: "eta", utterance };
   }
 
-  if (/where('s| is) .*(spouse|partner|wife|husband|stephanie)/.test(lower)) {
-    return {
-      intent: "find_companion",
-      slots: {},
-      confidence: 0.86,
-      source: "local_router",
-    };
+  // Navigation targets
+  if (/\bgate\b/.test(text) || /\bboarding\b/.test(text)) {
+    return { intent: "navigate_gate", utterance };
+  }
+  if (/\blounge\b/.test(text)) {
+    return { intent: "navigate_lounge", utterance };
+  }
+  if (/\bsecurity\b/.test(text) || /\btsa\b/.test(text) || /\bcheckpoint\b/.test(text)) {
+    return { intent: "navigate_security", utterance };
+  }
+  if (/\b(check ?in|bag drop|ticket(ing)? counter|kiosk)\b/.test(text)) {
+    return { intent: "navigate_checkin", utterance };
+  }
+  if (/\b(restroom|bathroom|toilet|washroom)\b/.test(text)) {
+    return { intent: "navigate_restroom", utterance };
+  }
+  if (/\btrain\b/.test(text) || /\bsatellite\b/.test(text)) {
+    return { intent: "navigate_train", utterance };
   }
 
-  if (BOTH_PATTERNS.some((pattern) => pattern.test(text))) {
-    return {
-      intent: "set_credentials",
-      slots: { tsaPreCheck: true, clear: true },
-      confidence: 0.93,
-      source: "local_router",
-      spokenResponse: "Got it — routing to the CLEAR plus PreCheck entrance.",
-    };
-  }
-
-  if (CLEAR_PATTERNS.some((pattern) => pattern.test(text)) &&
-      !PRECHECK_PATTERNS.some((pattern) => pattern.test(text))) {
-    return {
-      intent: "set_credentials",
-      slots: { tsaPreCheck: false, clear: true },
-      confidence: 0.9,
-      source: "local_router",
-      spokenResponse: "Routing to the CLEAR lane.",
-    };
-  }
-
-  if (PRECHECK_PATTERNS.some((pattern) => pattern.test(text)) &&
-      !CLEAR_PATTERNS.some((pattern) => pattern.test(text))) {
-    return {
-      intent: "set_credentials",
-      slots: { tsaPreCheck: true, clear: false },
-      confidence: 0.9,
-      source: "local_router",
-      spokenResponse: "Routing to the TSA PreCheck lane.",
-    };
-  }
-
-  if (/only have clear|just clear|don't have precheck|do not have precheck/.test(lower)) {
-    return {
-      intent: "set_credentials",
-      slots: { tsaPreCheck: false, clear: true },
-      confidence: 0.94,
-      source: "local_router",
-      spokenResponse: "Clear only — updating your security route.",
-    };
-  }
-
-  if (NEITHER_PATTERNS.some((pattern) => pattern.test(text))) {
-    return {
-      intent: "set_credentials",
-      slots: { tsaPreCheck: false, clear: false },
-      confidence: 0.88,
-      source: "local_router",
-      spokenResponse: "Routing to standard security.",
-    };
-  }
-
-  if (/security|pre[\s-]?check|clear/.test(lower)) {
-    return {
-      intent: "set_credentials",
-      slots: { utterance: text },
-      confidence: 0.6,
-      source: "local_router",
-    };
-  }
-
-  return null;
+  return { intent: "unknown", utterance };
 }
