@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   computeJourneyPhase,
+  defaultConsumerTabForPhase,
   hasUpcomingTripEvents,
   shouldPromptAirportTransport,
 } from "./journeyPhase";
@@ -86,4 +87,22 @@ test("multi-leg trip between connections stays pre-trip for next flight", () => 
   if (phase.kind === "pre-trip") {
     assert.equal(phase.nextFlight.id, "2");
   }
+});
+
+test("defaultConsumerTabForPhase picks flights when departure is within 24h", () => {
+  const nowMs = Date.parse("2026-05-29T06:00:00Z");
+  const phase = computeJourneyPhase({
+    reservations: honoluluTripFlights,
+    nowMs,
+  });
+  assert.equal(defaultConsumerTabForPhase(phase, nowMs), "flights");
+});
+
+test("defaultConsumerTabForPhase keeps trip tab when departure is more than a day out", () => {
+  const nowMs = Date.parse("2026-05-20T12:00:00Z");
+  const phase = computeJourneyPhase({
+    reservations: honoluluTripFlights,
+    nowMs,
+  });
+  assert.equal(defaultConsumerTabForPhase(phase, nowMs), "trip");
 });

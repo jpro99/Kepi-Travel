@@ -70,7 +70,7 @@ function LandingShellInner({ userId, hasProAccess }: LandingShellProps) {
                 Sign in
               </Link>
               <Link
-                href="/sign-up"
+                href={activeTab === "plan" ? "/sign-up?redirect_url=%2F%3Ftab%3Dplan" : "/sign-up"}
                 className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-500"
               >
                 Get started

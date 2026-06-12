@@ -107,6 +107,6 @@ export async function activateStrategy(
   return {
     tripId: trip.id,
     tripName: trip.name,
-    redirectPath: `/travel-assistant?tripId=${encodeURIComponent(trip.id)}&stage=readiness`,
+    redirectPath: `/travel-assistant?tripId=${encodeURIComponent(trip.id)}&stage=readiness&tab=trip&activated=1`,
   };
 }

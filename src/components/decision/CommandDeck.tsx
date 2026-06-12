@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useAuth } from "@clerk/nextjs";
 import type {
   CounterfactualMutation,
   DecisionBrief,
@@ -241,9 +242,12 @@ function StrategyCard({
   );
 }
 
+const PENDING_ACTIVATE_KEY = "kepi:pendingActivate";
+
 /* ── Command Deck ───────────────────────────────────────────────────────── */
 export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter();
+  const { isSignedIn } = useAuth();
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
   const [inputPrompt, setInputPrompt] = useState(DEFAULT_PROMPT);
   const [brief, setBrief] = useState<DecisionBrief | null>(null);
@@ -418,6 +422,15 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
   };
 
   const handleActivate = async (strategyId: string) => {
+    if (!isSignedIn) {
+      sessionStorage.setItem(
+        PENDING_ACTIVATE_KEY,
+        JSON.stringify({ prompt, strategyId }),
+      );
+      const returnTo = embedded ? "/?tab=plan" : window.location.pathname;
+      router.push(`/sign-up?redirect_url=${encodeURIComponent(returnTo)}`);
+      return;
+    }
     setActivatingId(strategyId);
     setError(null);
     try {
@@ -426,6 +439,14 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt, strategyId }),
       });
+      if (res.status === 401) {
+        sessionStorage.setItem(
+          PENDING_ACTIVATE_KEY,
+          JSON.stringify({ prompt, strategyId }),
+        );
+        router.push(`/sign-up?redirect_url=${encodeURIComponent(embedded ? "/?tab=plan" : "/travel-assistant")}`);
+        return;
+      }
       if (!res.ok) throw new Error("Activation failed — try again.");
       const data = await res.json();
       router.push(data.activation.redirectPath);
@@ -434,6 +455,29 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
       setActivatingId(null);
     }
   };
+
+  const handleActivateRef = useRef(handleActivate);
+  handleActivateRef.current = handleActivate;
+
+  useEffect(() => {
+    if (!isSignedIn) return;
+    const raw = sessionStorage.getItem(PENDING_ACTIVATE_KEY);
+    if (!raw) return;
+    try {
+      const pending = JSON.parse(raw) as { prompt?: string; strategyId?: string };
+      sessionStorage.removeItem(PENDING_ACTIVATE_KEY);
+      if (!pending.strategyId) return;
+      const nextPrompt = pending.prompt?.trim() || DEFAULT_PROMPT;
+      setPrompt(nextPrompt);
+      setInputPrompt(nextPrompt);
+      void fetchStrategies(nextPrompt, comfortWeight).finally(() => {
+        void handleActivateRef.current(pending.strategyId!);
+      });
+    } catch {
+      sessionStorage.removeItem(PENDING_ACTIVATE_KEY);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resume once after auth
+  }, [isSignedIn]);
 
   const live = brief?.livePricing;
   const bestLiveFare = live?.bestOffer?.amount ?? null;

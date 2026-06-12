@@ -28,6 +28,7 @@ import {
 } from "@/lib/travelAssistant/tripFlowControls";
 import {
   computeJourneyPhase,
+  defaultConsumerTabForPhase,
   hasUpcomingTripEvents,
   shouldPromptAirportTransport,
   type JourneyPhase,
@@ -1708,6 +1709,8 @@ export default function TravelAssistantPage() {
   const activeTripRuntimeSnapshotRef = useRef<ManagedTripRuntimeSnapshot | null>(null);
   const sessionHydratedRef = useRef(false);
   const tripsHydratedRef = useRef(false);
+  const urlTripHandledRef = useRef(false);
+  const lastJourneyPhaseKindRef = useRef<string | null>(null);
   const applyingTripStateRef = useRef(false);
   const drawerContainerRef = useRef<HTMLDivElement | null>(null);
   const drawerCloseButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -2012,6 +2015,22 @@ export default function TravelAssistantPage() {
       if (tab === "trip" || tab === "flights" || tab === "hotels" || tab === "map" || tab === "more") {
         setConsumerTab(tab);
       }
+      const hadActivated = params.get("activated") === "1";
+      if (hadActivated) {
+        setToast("Your trip is live in Kepi — reservations and readiness are ready.");
+        params.delete("activated");
+      }
+      const stage = params.get("stage");
+      const hadStage =
+        stage === "readiness" ||
+        stage === "pre-departure" ||
+        stage === "airport" ||
+        stage === "arrival" ||
+        stage === "recovery";
+      if (hadStage && stage) {
+        setTripStage(stage);
+        params.delete("stage");
+      }
       const gmailStatus = params.get("gmail");
       if (gmailStatus === "connected") {
         void fetch("/api/email-forward/setup", {
@@ -2024,13 +2043,15 @@ export default function TravelAssistantPage() {
       }
       if (gmailStatus) {
         params.delete("gmail");
+      }
+      if (hadActivated || hadStage || gmailStatus) {
         const nextQuery = params.toString();
         const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}`;
         window.history.replaceState({}, "", nextUrl);
       }
     }, 0);
     return () => window.clearTimeout(timeout);
-  }, [refreshEmailForwardSetup]);
+  }, [refreshEmailForwardSetup, setToast]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -2469,12 +2490,13 @@ export default function TravelAssistantPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const urlTripId = searchParams.get("tripId");
     const loadTrips = async (): Promise<void> => {
       setTripsLoading(true);
       try {
         const tripCount = await refreshTripsFromServer();
         if (cancelled) return;
-        if (tripCount === 0) {
+        if (tripCount === 0 && !urlTripId) {
           await ensureDefaultTripIfMissing();
           if (cancelled) return;
           await refreshTripsFromServer();
@@ -2489,7 +2511,7 @@ export default function TravelAssistantPage() {
     return () => {
       cancelled = true;
     };
-  }, [ensureDefaultTripIfMissing, refreshTripsFromServer, setToast]);
+  }, [ensureDefaultTripIfMissing, refreshTripsFromServer, searchParams, setToast]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -2609,6 +2631,24 @@ export default function TravelAssistantPage() {
     },
     [activeTripId, applyManagedTripToState, setToast],
   );
+
+  useEffect(() => {
+    if (tripsLoading || urlTripHandledRef.current) return;
+    const tripId = searchParams.get("tripId")?.trim();
+    if (!tripId) return;
+    urlTripHandledRef.current = true;
+
+    const params = new URLSearchParams(window.location.search);
+    params.delete("tripId");
+    const nextQuery = params.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}`);
+
+    if (tripId === activeTripId) {
+      return;
+    }
+
+    void handleSwitchTrip(tripId);
+  }, [activeTripId, handleSwitchTrip, searchParams, tripsLoading]);
 
   const handleCreateTrip = useCallback(async (): Promise<void> => {
     const tripLimit = billingStatus?.usage?.tripLimit ?? 1;
@@ -3639,6 +3679,23 @@ export default function TravelAssistantPage() {
       }),
     [consumerReservationsSorted, consumerTripDestination, activeTrip?.destination],
   );
+
+  useEffect(() => {
+    const phaseKind = journeyPhase.kind;
+    if (lastJourneyPhaseKindRef.current === phaseKind) {
+      return;
+    }
+    const isFirstPhase = lastJourneyPhaseKindRef.current === null;
+    lastJourneyPhaseKindRef.current = phaseKind;
+    if (isFirstPhase) {
+      const tab = new URLSearchParams(window.location.search).get("tab");
+      if (tab === "trip" || tab === "flights" || tab === "hotels" || tab === "map" || tab === "more") {
+        return;
+      }
+    }
+    setConsumerTab(defaultConsumerTabForPhase(journeyPhase));
+  }, [journeyPhase]);
+
   const tripHasUpcomingEvents = useMemo(
     () => hasUpcomingTripEvents(consumerReservationsSorted),
     [consumerReservationsSorted],

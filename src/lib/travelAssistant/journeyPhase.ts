@@ -26,6 +26,24 @@ export type JourneyPhase =
   | { kind: "post-trip"; lastDestination?: string }
   | { kind: "no-trip" };
 
+/** Consumer shell tabs — phase picks the best default surface. */
+export type JourneyConsumerTab = "trip" | "flights" | "hotels" | "map" | "more";
+
+export function defaultConsumerTabForPhase(phase: JourneyPhase, nowMs: number = Date.now()): JourneyConsumerTab {
+  if (phase.kind === "airborne" || phase.kind === "just-landed") {
+    return "flights";
+  }
+  if (phase.kind === "pre-trip") {
+    const depMs = flightDepartureUtcMs(phase.nextFlight);
+    if (!Number.isNaN(depMs)) {
+      const hoursUntil = (depMs - nowMs) / (60 * 60 * 1000);
+      return hoursUntil <= 24 ? "flights" : "trip";
+    }
+    return phase.daysUntil <= 1 ? "flights" : "trip";
+  }
+  return "trip";
+}
+
 const MS_PER_MIN = 60_000;
 const MS_PER_DAY = 86_400_000;
 /** After final arrival, stay in just-landed / active mode briefly before post-trip. */
