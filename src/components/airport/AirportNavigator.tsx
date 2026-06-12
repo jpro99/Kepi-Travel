@@ -15,7 +15,7 @@ import {
   listSupportedAirports,
   normalizeAirportIata,
 } from "@/lib/airportNav/layouts";
-import { buildAirportMapStyle, proxyMaptilerRequest } from "@/components/airport/airportMapStyle";
+import { buildAirportMapStyle, directMaptilerTransformRequest } from "@/components/airport/airportMapStyle";
 import {
   configureMapLighting,
   countTerminalLayers,
@@ -103,6 +103,16 @@ export function AirportNavigator({
   const [mapLib, setMapLib] = useState<typeof maplibregl | null>(null);
   const [statusLine, setStatusLine] = useState<string | null>(null);
   const [layoutVersion, setLayoutVersion] = useState(0);
+  const [maptilerKey, setMaptilerKey] = useState("");
+
+  useEffect(() => {
+    void fetch("/api/config", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d: { maptilerKey?: string }) => {
+        if (d.maptilerKey) setMaptilerKey(d.maptilerKey);
+      })
+      .catch(() => null);
+  }, []);
 
   if (engineRef.current === null) {
     engineRef.current = new AirportNavigatorEngine({});
@@ -175,7 +185,7 @@ export function AirportNavigator({
   useEffect(() => {
     const model = modelRef.current;
     const container = containerRef.current;
-    if (!mapLib || !model || !container || layoutVersion === 0) return undefined;
+    if (!mapLib || !model || !container || layoutVersion === 0 || !maptilerKey) return undefined;
 
     let cancelled = false;
     let map: maplibregl.Map | null = null;
@@ -187,13 +197,13 @@ export function AirportNavigator({
 
         map = new mapLib.Map({
           container,
-          style: buildAirportMapStyle(),
+          style: buildAirportMapStyle(maptilerKey),
           center: [model.center.lng, model.center.lat],
           zoom: 16.5,
           pitch: 58,
           bearing: -24,
           attributionControl: { compact: true },
-          transformRequest: proxyMaptilerRequest,
+          transformRequest: directMaptilerTransformRequest(maptilerKey),
         });
         mapRef.current = map;
 
@@ -234,7 +244,7 @@ export function AirportNavigator({
       mapRef.current = null;
       setMapReady(false);
     };
-  }, [mapLib, layoutVersion]);
+  }, [mapLib, layoutVersion, maptilerKey]);
 
   useEffect(() => {
     const map = mapRef.current;

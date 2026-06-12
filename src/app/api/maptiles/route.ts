@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // MAPTILER_KEY = server-only key with NO domain restrictions (for proxy use)

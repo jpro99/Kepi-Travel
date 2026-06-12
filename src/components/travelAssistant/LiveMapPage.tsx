@@ -16,6 +16,7 @@ import {
   isFamilySharingOptedOut,
   setFamilySharingOptedOut,
 } from "@/lib/family/locationSharingPrefs";
+import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
 
 /* ΓöÇΓöÇΓöÇ Types ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
 interface LocationPoint {
@@ -57,37 +58,12 @@ function timeAgo(iso: string): string {
 }
 function isStale(iso: string) { return Date.now() - Date.parse(iso) > 10 * 60_000; }
 
-/* ΓöÇΓöÇΓöÇ Map style builders ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
-// Rewrite all MapTiler URLs in a style object to go through our server proxy.
-// This keeps the API key server-side and avoids the host_not_allowed 403.
-async function loadProxiedStyle(styleUrl: string): Promise<Record<string, unknown>> {
-  // Fetch the style JSON through our proxy (direct MapTiler fetch is blocked).
-  // We do NOT rewrite URLs inside the style ΓÇö transformRequest handles all
-  // subsequent MapTiler requests that MapLibre makes after loading the style.
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const clean = styleUrl.replace(/[?&]key=[^&]*/g, "").replace(/\?$/, "");
-  const proxiedUrl = `${origin}/api/maptiles?url=${encodeURIComponent(clean)}`;
-  const res = await fetch(proxiedUrl);
-  if (!res.ok) throw new Error(`Style fetch failed: ${res.status}`);
-  return res.json() as Promise<Record<string, unknown>>;
-}
-
-function streetsStyleUrl(key: string) {
-  return `https://api.maptiler.com/maps/streets-v2/style.json?key=${key}`;
-}
-function darkStyleUrl(key: string) {
-  // Premium concierge default ΓÇö minimal, high-contrast, lets member colors pop
-  return `https://api.maptiler.com/maps/dataviz-dark/style.json?key=${key}`;
-}
+/* ─── Map style builders ─── */
 type MapStyleId = "dark" | "streets" | "satellite";
 function styleUrlFor(styleId: MapStyleId, key: string): string {
-  if (styleId === "satellite") return satelliteStyleUrl(key);
-  if (styleId === "streets") return streetsStyleUrl(key);
-  return darkStyleUrl(key);
-}
-function satelliteStyleUrl(key: string) {
-  // Use satellite-v2 style which has higher quality raster tiles vs hybrid
-  return `https://api.maptiler.com/maps/satellite/style.json?key=${key}`;
+  if (styleId === "satellite") return maptilerStyleUrl("satellite", key);
+  if (styleId === "streets") return maptilerStyleUrl("streets-v2", key);
+  return maptilerStyleUrl("dataviz-dark", key);
 }
 
 /* ΓöÇΓöÇΓöÇ Component ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
@@ -305,36 +281,16 @@ export function LiveMapPage() {
           ? [locs.reduce((s, l) => s + l.lon, 0) / locs.length, locs.reduce((s, l) => s + l.lat, 0) / locs.length]
           : [-118.2437, 34.0522];
         const zoom = locs.length === 1 ? 14 : locs.length > 1 ? 11 : 4;
-        const key = encodeURIComponent(maptilerKey);
-
-        const styleUrl = styleUrlFor(mapStyle, key);
-        const style = await loadProxiedStyle(styleUrl);
-
-        const origin = window.location.origin;
-
-        // transformRequest intercepts EVERY network request MapLibre makes.
-        // This catches tile URLs that come from tiles.json (which our style rewrite never sees).
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const transformRequest = (url: string, resourceType: string): { url: string } | undefined => {
-          if (!url.includes("api.maptiler.com")) return undefined;
-          const clean = url.replace(/[?&]key=[^&]*/g, "").replace(/\?$/, "");
-          const tokenMatch = clean.match(/^(.*?)(\{[^}]+\}.*)$/);
-          if (tokenMatch) {
-            const base = tokenMatch[1].replace(/\/$/, "");
-            const suffix = tokenMatch[2];
-            return { url: `${origin}/api/maptiles?url=${encodeURIComponent(base)}&suffix=${suffix}` };
-          }
-          return { url: `${origin}/api/maptiles?url=${encodeURIComponent(clean)}` };
-        };
+        const styleUrl = styleUrlFor(mapStyle, maptilerKey);
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const map = new (ml as any).Map({
           container: mapEl.current,
-          style,
+          style: styleUrl,
           center, zoom,
           maxZoom: 20,
           attributionControl: false,
-          transformRequest,
+          transformRequest: directMaptilerTransformRequest(maptilerKey),
         });
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -382,13 +338,8 @@ export function LiveMapPage() {
   /* ΓöÇΓöÇ Satellite toggle ΓÇö swap style without reinitialising map ΓöÇΓöÇ */
   useEffect(() => {
     if (!mapRef.current || !maptilerKey || !isLoaded) return;
-    const key = encodeURIComponent(maptilerKey);
-    const styleUrl = styleUrlFor(mapStyle, key);
-    void loadProxiedStyle(styleUrl).then(style => {
-      if (!mapRef.current) return;
-      mapRef.current.setStyle(style);
-      mapRef.current.once("styledata", () => { if (mapRef.current) placeMarkers(mapRef.current); });
-    });
+    mapRef.current.setStyle(styleUrlFor(mapStyle, maptilerKey));
+    mapRef.current.once("styledata", () => { if (mapRef.current) placeMarkers(mapRef.current); });
   }, [mapStyle, maptilerKey, isLoaded, placeMarkers]);
 
   /* ΓöÇΓöÇ Fit all members ΓöÇΓöÇ */
