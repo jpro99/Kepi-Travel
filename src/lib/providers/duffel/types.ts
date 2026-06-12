@@ -15,3 +15,22 @@ export interface DuffelSearchResult {
   quotes: DuffelFlightQuote[];
   error?: string;
 }
+
+export interface DuffelStayQuote {
+  id: string;
+  name: string;
+  chainName?: string;
+  ratingStars?: number;
+  reviewScore?: number;
+  photoUrl?: string;
+  area?: string;
+  totalAmountUsd: number;
+  currency: string;
+  nightlyUsd: number;
+}
+
+export interface DuffelStaysResult {
+  configured: boolean;
+  stays: DuffelStayQuote[];
+  error?: string;
+}

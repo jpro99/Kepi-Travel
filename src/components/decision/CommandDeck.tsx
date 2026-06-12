@@ -21,6 +21,14 @@ import type {
   DecisionQuestion,
   TravelStrategy,
 } from "@/lib/decision/types";
+import type { RankedStay } from "@/lib/decision/stayRanking";
+
+interface StaysResponse {
+  configured: boolean;
+  error?: string;
+  intent: { destination: string; nights: number; startDate: string; endDate: string };
+  stays: RankedStay[];
+}
 
 const DEFAULT_PROMPT = "I want to go to Italy in September";
 
@@ -246,6 +254,11 @@ export function CommandDeck() {
   const [error, setError] = useState<string | null>(null);
   const [counterfactualNote, setCounterfactualNote] = useState<string | null>(null);
 
+  // Stays — load unasked, the moment strategies exist (godlike mode)
+  const [staysData, setStaysData] = useState<StaysResponse | null>(null);
+  const [staysLoading, setStaysLoading] = useState(false);
+  const [selectedStayId, setSelectedStayId] = useState<string | null>(null);
+
   // Voice counterfactual bar
   const [listening, setListening] = useState(false);
   const [transcript, setTranscript] = useState("");
@@ -291,6 +304,38 @@ export function CommandDeck() {
     void fetchStrategies(DEFAULT_PROMPT, 0.55);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- initial load only
   }, []);
+
+  // The traveler never asks for hotels — Kepi already checked, ranked to
+  // their genome, by the time they scroll down.
+  useEffect(() => {
+    if (!brief) return;
+    let cancelled = false;
+    setStaysLoading(true);
+    setStaysData(null);
+    setSelectedStayId(null);
+    void fetch("/api/decision/stays", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt }),
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
+      .then((data: StaysResponse) => {
+        if (cancelled) return;
+        setStaysData(data);
+        const pick = data.stays.find((stay) => stay.kepiPick);
+        if (pick) setSelectedStayId(pick.quote.id);
+      })
+      .catch(() => {
+        if (!cancelled) setStaysData(null);
+      })
+      .finally(() => {
+        if (!cancelled) setStaysLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch only when a new analysis lands
+  }, [brief?.intent.rawPrompt, brief?.intent.startDate]);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -392,6 +437,13 @@ export function CommandDeck() {
 
   const live = brief?.livePricing;
   const bestLiveFare = live?.bestOffer?.amount ?? null;
+
+  const selectedStay = staysData?.stays.find((stay) => stay.quote.id === selectedStayId) ?? null;
+  const expandedStrategy = brief?.strategies.find((strategy) => strategy.id === expandedId) ?? null;
+  const tripTotal =
+    selectedStay && expandedStrategy
+      ? Math.round(expandedStrategy.scores.trueOutOfPocket + selectedStay.quote.totalAmountUsd)
+      : null;
 
   return (
     <div className="min-h-screen bg-[#0b1f3a] text-white">
@@ -567,6 +619,119 @@ export function CommandDeck() {
             />
           ))}
         </div>
+
+        {/* Where you'll sleep — Kepi already checked, ranked to your genome */}
+        {(staysLoading || (staysData && staysData.stays.length > 0) || staysData?.error) && (
+          <section className="mt-8">
+            <div className="flex items-baseline justify-between">
+              <h2 className="text-sm font-black uppercase tracking-widest text-white/80">
+                Where you&apos;ll sleep
+              </h2>
+              {staysData && staysData.stays.length > 0 && (
+                <span className="text-[10px] font-semibold text-white/40">
+                  {staysData.intent.nights} nights · {staysData.intent.startDate.slice(5)} → {staysData.intent.endDate.slice(5)}
+                </span>
+              )}
+            </div>
+
+            {staysLoading && (
+              <div className="mt-3 rounded-3xl border border-white/10 bg-white/[0.04] p-6 text-center">
+                <p className="text-xs font-bold text-white/55" style={{ animation: "deckPulse 1.4s ease-in-out infinite" }}>
+                  Kepi is already checking hotels near {brief?.intent.destination} for your dates…
+                </p>
+              </div>
+            )}
+
+            {!staysLoading && staysData?.error && staysData.stays.length === 0 && (
+              <p className="mt-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-xs font-semibold text-white/50">
+                {staysData.error}
+              </p>
+            )}
+
+            {!staysLoading && staysData && staysData.stays.length > 0 && (
+              <div className="-mx-5 mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2">
+                {staysData.stays.slice(0, 8).map((stay, stayIdx) => {
+                  const selected = stay.quote.id === selectedStayId;
+                  return (
+                    <button
+                      key={stay.quote.id}
+                      type="button"
+                      onClick={() =>
+                        setSelectedStayId((current) => (current === stay.quote.id ? null : stay.quote.id))
+                      }
+                      className={`w-60 shrink-0 snap-start overflow-hidden rounded-3xl border text-left backdrop-blur transition-all duration-300 ${
+                        selected
+                          ? "border-[#f4c95d] bg-[#f4c95d]/10 shadow-[0_8px_28px_rgba(244,201,93,0.18)]"
+                          : "border-white/10 bg-white/[0.04] hover:border-white/25"
+                      }`}
+                      style={{ animation: "deckRise 0.45s ease-out both", animationDelay: `${stayIdx * 70}ms` }}
+                    >
+                      <div className="relative h-28 w-full">
+                        {stay.quote.photoUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={stay.quote.photoUrl}
+                            alt={stay.quote.name}
+                            referrerPolicy="no-referrer"
+                            className="h-28 w-full object-cover"
+                          />
+                        ) : (
+                          <div className="h-28 w-full bg-gradient-to-br from-[#1d3557] to-[#0b1f3a]" />
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#0b1f3a]/80 to-transparent" />
+                        {stay.kepiPick && (
+                          <span className="absolute left-2 top-2 rounded-full bg-[#f4c95d] px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#0b1f3a]">
+                            ★ Kepi&apos;s pick
+                          </span>
+                        )}
+                        {stay.chainMatch && (
+                          <span className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[9px] font-bold text-[#ffe29a] backdrop-blur">
+                            Your {stay.chainMatch}
+                          </span>
+                        )}
+                        {selected && (
+                          <span className="absolute bottom-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#f4c95d] text-xs font-black text-[#0b1f3a]">
+                            ✓
+                          </span>
+                        )}
+                      </div>
+                      <div className="px-3.5 py-3">
+                        <p className="truncate text-sm font-bold text-white">{stay.quote.name}</p>
+                        <p className="mt-0.5 truncate text-[11px] text-white/50">
+                          {stay.quote.area ?? staysData.intent.destination} · {stay.whyLine}
+                        </p>
+                        <p className="mt-2 text-base font-black text-white">
+                          ${Math.round(stay.quote.nightlyUsd).toLocaleString()}
+                          <span className="text-[10px] font-bold text-white/45"> /night</span>
+                          <span className="ml-2 text-[10px] font-semibold text-white/45">
+                            ${Math.round(stay.quote.totalAmountUsd).toLocaleString()} total
+                          </span>
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Fused trip total — flight strategy + stay, one honest number */}
+        {tripTotal !== null && selectedStay && expandedStrategy && (
+          <div className="sticky bottom-4 z-20 mt-6">
+            <div className="flex items-center justify-between gap-3 rounded-3xl border border-[#f4c95d]/50 bg-[#0b1f3a]/95 px-5 py-3.5 shadow-[0_12px_40px_rgba(0,0,0,0.5)] backdrop-blur">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#f4c95d]">Trip total</p>
+                <p className="truncate text-[11px] font-semibold text-white/65">
+                  {expandedStrategy.title} + {staysData?.intent.nights} nights {selectedStay.quote.name}
+                </p>
+              </div>
+              <p className="shrink-0 text-2xl font-black tabular-nums text-white">
+                ${tripTotal.toLocaleString()}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Genome footer */}
         {brief && (
