@@ -2,7 +2,12 @@
 
 import { useRef, useEffect, useCallback } from 'react';
 
-export function Camera({ onCapture, onCancel }) {
+interface CameraProps {
+  onCapture: (dataUrl: string) => void;
+  onCancel: () => void;
+}
+
+export function Camera({ onCapture, onCancel }: CameraProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
 

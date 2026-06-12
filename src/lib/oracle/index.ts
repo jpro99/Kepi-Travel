@@ -1,4 +1,4 @@
-import { JourneyContext, ItineraryFortification } from "@/lib/journey/JourneyEngine";
+import { JourneyContext, ItineraryFortification } from "@/lib/journey/types";
 import { getRealtimeAviationData } from "./dataSources/aviationData";
 import { AnalysisEngine } from "./analysisEngine";
 

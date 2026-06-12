@@ -1,113 +1,181 @@
-import { useEffect, useState } from "react";
-import { useDebouncedCallback } from 'use-debounce';
-import { AlertTriangle, HelpCircle, Info, X, Zap, ShieldCheck, Umbrella } from 'lucide-react';
-import type { JourneyState, JourneyContext, NextStep, ProactiveIntervention, AutonomousAction, Opportunity, ItineraryFortification } from "@/lib/journey/types";
+"use client";
 
-interface JourneyFlowPanelProps {
-    journeyState: JourneyState;
-    journeyContext: JourneyContext;
-    setJourneyState: (state: JourneyState) => void;
-    onReportProblem: () => void;
-    isLoading: boolean;
+type TripStage = "readiness" | "pre-departure" | "airport" | "arrival" | "recovery";
+
+interface StageFlowCard {
+  stage: TripStage;
+  objective: string;
+  easiestInput: string;
+  mustConfirm: string;
+  exitCheck: string;
 }
 
-const InterventionCard: React.FC<{ intervention: ProactiveIntervention }> = ({ intervention }) => (
-    <div className="mt-4 rounded-2xl border border-yellow-300 bg-yellow-50 p-4 dark:border-yellow-700 dark:bg-yellow-950/50">
-        <div className="flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 flex-shrink-0 text-yellow-500 dark:text-yellow-400" />
-            <div className="flex-1">
-                <h3 className="font-bold text-sm text-yellow-800 dark:text-yellow-200">{intervention.title}</h3>
-                <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">{intervention.description}</p>
-            </div>
+interface UndoAuditEntry {
+  id: string;
+  action: string;
+  undoneAt: string;
+}
+
+interface JourneyFlowPanelProps {
+  stages: TripStage[];
+  stageIndex: number;
+  tripStage: TripStage;
+  stageLabelByTripStage: Record<TripStage, string>;
+  nextBestFlowAction: string;
+  stageFlowCards: StageFlowCard[];
+  onTripStageSelect: (stage: TripStage) => void;
+  onVoiceQuickCapture: () => void;
+  onImportAction: (target: "live" | "review") => void;
+  onOpenTopReview: () => void;
+  reviewQueueLength: number;
+  voiceCaptureCount: number;
+  lastVoiceCaptureAt: string | null;
+  selectedEmailSubject: string;
+  undoStackLength: number;
+  undoAuditTrail: UndoAuditEntry[];
+  formatClock: (value: string | null) => string;
+}
+
+export function JourneyFlowPanel({
+  stages,
+  stageIndex,
+  tripStage,
+  stageLabelByTripStage,
+  nextBestFlowAction,
+  stageFlowCards,
+  onTripStageSelect,
+  onVoiceQuickCapture,
+  onImportAction,
+  onOpenTopReview,
+  reviewQueueLength,
+  voiceCaptureCount,
+  lastVoiceCaptureAt,
+  selectedEmailSubject,
+  undoStackLength,
+  undoAuditTrail,
+  formatClock,
+}: JourneyFlowPanelProps) {
+  return (
+    <section className="grid gap-4 sm:gap-6 xl:grid-cols-[1.3fr_1fr]">
+      <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-semibold">Journey flow navigator</h2>
+            <p className="text-xs text-slate-400">
+              Start-to-finish operating map focused on easiest input, safety checks, and clean stage handoffs.
+            </p>
+          </div>
+          <span className="rounded-full bg-cyan-500/15 px-2.5 py-1 text-xs font-medium text-cyan-100 ring-1 ring-cyan-400/40">
+            Progress {Math.round(((stageIndex + 1) / stages.length) * 100)}%
+          </span>
         </div>
-    </div>
-);
-
-const AutonomousActionCard: React.FC<{ action: AutonomousAction }> = ({ action }) => (
-    <div className="mt-4 rounded-2xl border-2 border-red-500 bg-red-50 p-4 dark:bg-red-950/50">
-         <h3 className="font-bold text-md text-red-800 dark:text-red-200">{action.title}</h3>
-         <p className="mt-1 text-sm text-red-700 dark:text-red-300">{action.description}</p>
-    </div>
-);
-
-const OpportunityCard: React.FC<{ opportunity: Opportunity }> = ({ opportunity }) => (
-     <div className="mt-4 rounded-2xl border border-dashed border-sky-400 bg-sky-50 p-4 dark:border-sky-600 dark:bg-sky-950/50">
-        <h3 className="font-bold text-sm text-sky-800 dark:text-sky-200">{opportunity.title}</h3>
-        <p className="mt-1 text-sm text-sky-700 dark:text-sky-300">{opportunity.description}</p>
-    </div>
-); 
-
-const FortificationCard: React.FC<{ fortification: ItineraryFortification }> = ({ fortification }) => (
-    <div className="mt-4 rounded-2xl border-2 border-indigo-500 bg-indigo-50 p-4 dark:bg-indigo-950/50">
-        <div className="flex items-start gap-3">
-            <Umbrella className="h-6 w-6 flex-shrink-0 text-indigo-500" />
-            <div className="flex-1">
-                <h3 className="font-bold text-md text-indigo-800 dark:text-indigo-200">Itinerary Fortified</h3>
-                <p className="mt-1 text-sm font-semibold text-indigo-700 dark:text-indigo-300">Predicted Risk: {fortification.predictedDisruption.description}</p>
-                <div className="mt-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/50 p-3">
-                    <p className="text-sm font-bold text-indigo-800 dark:text-indigo-200">Contingency Plan:</p>
-                    <p className="text-sm text-indigo-700 dark:text-indigo-300">{fortification.contingencyPlan.description}</p>
-                </div>
-            </div>
-        </div>
-    </div>
-);
-
-
-export const JourneyFlowPanel: React.FC<JourneyFlowPanelProps> = ({ 
-    journeyState, 
-    journeyContext, 
-    setJourneyState,
-    onReportProblem,
-    isLoading
-}) => {
-    const [nextStep, setNextStep] = useState<NextStep | null>(null);
-    const [fortification, setFortification] = useState<ItineraryFortification | null>(null);
-
-    const debouncedGetStep = useDebouncedCallback(async (state, context) => {
-        if (isLoading) return; // Do not fetch if the main hook is still loading
-        const response = await fetch('/api/journey/next-step', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ state, context }),
-        });
-        const step = await response.json();
-        setNextStep(step);
-    }, 300);
-
-    useEffect(() => {
-        debouncedGetStep(journeyState, journeyContext);
-    }, [journeyState, journeyContext, debouncedGetStep]);
-
-    const activeStep = nextStep;
-
-    if (!activeStep) {
-        return <div className="relative rounded-3xl bg-white dark:bg-slate-900 p-6 shadow-lg animate-pulse min-h-[150px]"></div>;
-    }
-
-    const displayFortification = fortification || activeStep.fortification;
-
-    return (
-        <div className="relative rounded-3xl bg-white dark:bg-slate-900 p-6 shadow-lg">
-            <div className="flex items-start gap-4">
-                {displayFortification && <Umbrella className="h-6 w-6 flex-shrink-0 text-indigo-500" />}
-                
-                <div className="flex-1">
-                    <h2 className="text-xl font-bold text-slate-900 dark:text-white">{activeStep.title}</h2>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{activeStep.description}</p>
-                </div>
-            </div>
-            
-            {/* --- "Pre-Crime" Oracle Component --- */}
-            {displayFortification && <FortificationCard fortification={displayFortification} />}
-
-            {activeStep.autonomousAction && <AutonomousActionCard action={activeStep.autonomousAction} />}
-            {activeStep.opportunity && <OpportunityCard opportunity={activeStep.opportunity} />}
-            {activeStep.intervention && <InterventionCard intervention={activeStep.intervention} />}
-
-            <button onClick={onReportProblem} aria-label="Report a Problem" className="absolute bottom-[-20px] right-6 flex items-center justify-center h-12 w-12 rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 transition-transform hover:scale-110 focus:outline-none focus:ring-4 focus:ring-blue-300 dark:focus:ring-blue-800">
-                <HelpCircle className="h-6 w-6" />
+        <nav className="mt-3 flex flex-wrap gap-2" aria-label="Trip stage progression">
+          {stages.map((stage, index) => (
+            <button
+              key={`flow-${stage}`}
+              type="button"
+              onClick={() => onTripStageSelect(stage)}
+              aria-current={stage === tripStage ? "true" : undefined}
+              className={`rounded-full px-3 py-1.5 text-xs ring-1 transition ${
+                stage === tripStage
+                  ? "bg-cyan-500 text-slate-950 ring-cyan-300"
+                  : index <= stageIndex
+                    ? "bg-emerald-500/15 text-emerald-100 ring-emerald-400/40"
+                    : "bg-slate-800 text-slate-200 ring-slate-700 hover:bg-slate-700"
+              }`}
+            >
+              {index + 1}. {stageLabelByTripStage[stage]}
             </button>
+          ))}
+        </nav>
+        <div className="mt-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-sm text-cyan-50">
+          <p className="text-xs font-semibold uppercase tracking-wide text-cyan-200">Next best action</p>
+          <p className="mt-1">{nextBestFlowAction}</p>
         </div>
-    );
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          {stageFlowCards.map((card) => (
+            <div
+              key={`flow-card-${card.stage}`}
+              className={`rounded-lg border p-3 text-xs ${
+                card.stage === tripStage
+                  ? "border-cyan-400/50 bg-slate-900 text-slate-100"
+                  : "border-slate-700 bg-slate-950/60 text-slate-300"
+              }`}
+            >
+              <p className="font-semibold">{stageLabelByTripStage[card.stage]}</p>
+              <p className="mt-1 text-slate-300">{card.objective}</p>
+              <p className="mt-1">
+                <span className="text-slate-400">Easiest input:</span> {card.easiestInput}
+              </p>
+              <p className="mt-1">
+                <span className="text-slate-400">Must confirm:</span> {card.mustConfirm}
+              </p>
+              <p className="mt-1">
+                <span className="text-slate-400">Exit gate:</span> {card.exitCheck}
+              </p>
+            </div>
+          ))}
+        </div>
+      </article>
+
+      <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
+        <h2 className="text-lg font-semibold">Quick input lane</h2>
+        <p className="text-xs text-slate-400">
+          Fastest ways to input while in motion: voice capture, email intake, and one-touch queue handling.
+        </p>
+        <div className="mt-3 space-y-2 text-xs">
+          <button
+            type="button"
+            onClick={onVoiceQuickCapture}
+            className="w-full rounded-lg border border-violet-500/40 bg-violet-500/15 px-3 py-2 text-left text-violet-100 hover:bg-violet-500/25"
+          >
+            <p className="font-semibold">One-tap voice capture</p>
+            <p className="text-violet-100/80">Stores spoken changes in review queue with safety checks.</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => onImportAction("live")}
+            className="w-full rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-left text-emerald-100 hover:bg-emerald-500/25"
+          >
+            <p className="font-semibold">Accept selected email to live</p>
+            <p className="text-emerald-100/80">Best for high-confidence confirmations.</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => onImportAction("review")}
+            className="w-full rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-left text-amber-100 hover:bg-amber-500/25"
+          >
+            <p className="font-semibold">Queue selected email for review</p>
+            <p className="text-amber-100/80">Safer path when details are incomplete or uncertain.</p>
+          </button>
+          <button
+            type="button"
+            onClick={onOpenTopReview}
+            className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-left text-slate-100 hover:bg-slate-700"
+          >
+            <p className="font-semibold">Open top review item</p>
+            <p className="text-slate-300">Resolve uncertainty immediately before moving to the next stage.</p>
+          </button>
+        </div>
+        <div className="mt-3 rounded-lg border border-slate-700 bg-slate-950/70 p-3 text-xs text-slate-300">
+          <p>
+            Voice captures: {voiceCaptureCount} • Last capture: {formatClock(lastVoiceCaptureAt)}
+          </p>
+          <p className="mt-1">
+            Selected importer: {selectedEmailSubject} • Queue size {reviewQueueLength}
+          </p>
+          <p className="mt-1">Undo stack: {undoStackLength} changes ready.</p>
+          {undoAuditTrail.length > 0 ? (
+            <ul className="mt-1 space-y-1 text-[11px] text-slate-400">
+              {undoAuditTrail.slice(0, 3).map((entry) => (
+                <li key={entry.id}>
+                  Undid: {entry.action} • {formatClock(entry.undoneAt)}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      </article>
+    </section>
+  );
 }

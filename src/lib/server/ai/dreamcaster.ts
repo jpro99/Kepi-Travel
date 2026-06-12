@@ -2,7 +2,7 @@ import type { TripCanvas } from '@/lib/dreamcaster/types';
 
 // This is a simulated LLM. In a real application, this would be a call to a service like OpenAI or Google AI.
 
-const tripTemplates = {
+const tripTemplates: Record<"paris" | "italy", TripCanvas> = {
   paris: {
     title: 'Romantic Weekend in Paris',
     narrative: 'Experience the city of love with a curated itinerary that balances iconic sights with hidden gems.',

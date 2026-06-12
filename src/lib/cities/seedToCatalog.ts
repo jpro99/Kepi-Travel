@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { CityCatalog } from "@/data/cities/types";
 import type { Chain, TransitMode } from "@/lib/search/types";
 

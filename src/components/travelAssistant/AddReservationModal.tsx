@@ -1,12 +1,22 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import type { Reservation } from '@/lib/travelAssistant/travelUpdateTypes';
+
+export interface ItineraryReservation {
+  id: string;
+  type: string;
+  title: string;
+  provider: string;
+  localTime: string;
+  location: string;
+  timezone?: string;
+  confirmationCode: string;
+}
 
 interface AddReservationModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onAddReservation: (reservation: Omit<Reservation, 'id'>) => void;
+    onAddReservation: (reservation: Omit<ItineraryReservation, 'id'>) => void;
 }
 
 type ReservationType = 'flight' | 'hotel' | 'rental' | 'dining';
@@ -22,7 +32,7 @@ export function AddReservationModal({ isOpen, onClose, onAddReservation }: AddRe
 
     const handleSubmit = (event: React.FormEvent) => {
         event.preventDefault();
-        let newReservation: Omit<Reservation, 'id'>;
+        let newReservation: Omit<ItineraryReservation, 'id'>;
 
         switch (type) {
             case 'flight':

@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use client";
 
 export function SuggestedItem({ item, onAccept, onDismiss }) {

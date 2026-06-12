@@ -1,5 +1,5 @@
-import { ProbabilisticDisruption } from "@/lib/journey/JourneyEngine";
-import { RealtimeAviationData } from "./dataSources/aviationData";
+import { ProbabilisticDisruption } from "@/lib/journey/types";
+import type { RealtimeAviationData } from "./dataSources/types";
 
 // This is the brain of the "Pre-Crime" Oracle. It analyzes multiple data
 // streams to calculate the probability of future disruptions.

@@ -1,6 +1,6 @@
 "use client";
 
-type OnSwitchTab = "trip" | "reservations" | "packing" | "family" | "more";
+type OrientationTab = "trip" | "flights" | "hotels" | "map" | "more" | "reservations" | "packing" | "family";
 
 interface TripOrientationCardProps {
   travelerName: string;
@@ -11,8 +11,8 @@ interface TripOrientationCardProps {
   weatherLabel?: string;
   nextActionLabel: string;
   onNextAction?: () => void;
-  actionTargetTab?: OnSwitchTab;
-  onSwitchTab?: (tab: OnSwitchTab) => void;
+  actionTargetTab?: OrientationTab;
+  onSwitchTab?: (tab: OrientationTab) => void;
   statusToneClassName: string;
 }
 

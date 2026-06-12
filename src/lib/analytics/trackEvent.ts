@@ -10,8 +10,9 @@ export type KepiAnalyticsEvent =
   | { type: "share_link_created"; userId: string; tripId: string; readOnly: boolean; expiresInDays: number }
   | { type: "upgrade_clicked"; currentPlan: PlanType; featureGated?: string; targetPlan?: PlanType }
   | { type: "upgrade_completed"; userId: string; newPlan: "pro" | "concierge" }
-  | { type: "gmail_import_triggered"; userId: string; maxResults: number; tripId?: string }
-  | { type: "ai_suggestion_requested"; userId: string; suggestionType: string; tripId?: string };
+  | { type: "gmail_import_triggered"; userId: string; maxResults: number; tripId?: string; lookbackDays?: number; tripStartDate?: string | null; tripEndDate?: string | null }
+  | { type: "ai_suggestion_requested"; userId: string; suggestionType: string; tripId?: string }
+  | { type: "invite_code_redeemed"; userId: string; inviteType: string; inviteCode: string };
 
 export type AnalyticsPrimitive = string | number | boolean | null;
 export type AnalyticsProperties = Record<string, AnalyticsPrimitive>;

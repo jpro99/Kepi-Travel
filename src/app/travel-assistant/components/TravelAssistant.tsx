@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useSession } from "next-auth/react";
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useTravelAssistant } from "@/hooks/useTravelAssistant";

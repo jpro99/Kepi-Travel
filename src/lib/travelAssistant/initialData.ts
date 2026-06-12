@@ -1,4 +1,8 @@
-import type { Reservation, ReviewItem, ReadinessItem } from "./travelUpdateTypes";
+import type {
+  SessionReservation as Reservation,
+  SessionReviewItem as ReviewItem,
+  SessionReadinessItem as ReadinessItem,
+} from "./clientSessionState";
 
 export const BASE_CHECKLIST: ReadinessItem[] = [
   { id: "ready-flight", category: "Flights", title: "Flight confirmation codes verified", complete: false, required: true },

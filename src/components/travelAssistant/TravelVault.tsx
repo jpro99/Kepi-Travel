@@ -359,8 +359,8 @@ export function TravelVault() {
                 return clone;
               })
             }
-            inputType={row.inputType}
-            multiline={row.multiline}
+            inputType={"inputType" in row ? row.inputType : undefined}
+            multiline={"multiline" in row ? row.multiline : undefined}
           />
         ))}
       </div>

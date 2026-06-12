@@ -3,9 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import maplibregl, { Map } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import dynamic from 'next/dynamic';
-
-const ARFamilyFinder = dynamic(() => import('@/components/ar/ARFamilyFinder'), { ssr: false });
+import { useRouter } from "next/navigation";
 
 // ---[ TYPES ]----------------------------------------------------------------
 interface LocationPoint {
@@ -41,6 +39,7 @@ function isStale(iso: string): boolean { return Date.now() - Date.parse(iso) > 1
 
 // ---[ MAIN COMPONENT ]-------------------------------------------------------
 export function FamilyPanel({ isPremium, onUpgrade, lastSentAt }: FamilyPanelProps) {
+    const router = useRouter();
     const mapContainer = useRef<HTMLDivElement>(null);
     const mapRef = useRef<Map | null>(null);
     const markersRef = useRef<Record<string, maplibregl.Marker>>({});
@@ -50,14 +49,8 @@ export function FamilyPanel({ isPremium, onUpgrade, lastSentAt }: FamilyPanelPro
     const [locations, setLocations] = useState<Record<string, LocationPoint>>({});
     const [loading, setLoading] = useState(true);
     const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
-    const [arNavigating, setArNavigating] = useState(false);
     
     const activeGroup = useMemo(() => groups.find(g => g.id === activeGroupId) ?? groups[0] ?? null, [groups, activeGroupId]);
-
-    const arLocations = useMemo(() => {
-        if (!activeGroup) return [];
-        return activeGroup.members.map(m => locations[m.id]).filter(Boolean).map(l => ({ id: l.memberId, name: activeGroup.members.find(m => m.id === l.memberId)?.name || 'Unknown', lat: l.lat, lon: l.lon }));
-    }, [activeGroup, locations]);
 
     // ---[ DATA FETCHING ]----------------------------------------------------
     const load = useCallback(async (groupId?: string) => {
@@ -141,10 +134,6 @@ export function FamilyPanel({ isPremium, onUpgrade, lastSentAt }: FamilyPanelPro
 
 
     // ---[ RENDER LOGIC ]-----------------------------------------------------
-    if (arNavigating) {
-        return <ARFamilyFinder familyLocations={arLocations} />;
-    }
-
     if (!isPremium) {
         return (
             <div className="rounded-3xl bg-white dark:bg-slate-900 p-5 text-center">
@@ -178,7 +167,13 @@ export function FamilyPanel({ isPremium, onUpgrade, lastSentAt }: FamilyPanelPro
             <div className="flex-shrink-0 bg-slate-900/80 backdrop-blur-sm p-4 border-t border-slate-800">
                 <div className="flex justify-between items-center">
                     <h3 className="font-bold text-white text-lg">{activeGroup.name}</h3>
-                    <button onClick={() => setArNavigating(true)} className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold">AR View</button>
+                    <button
+                      type="button"
+                      onClick={() => router.push("/travel-assistant/live-map")}
+                      className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold"
+                    >
+                      Open live map
+                    </button>
                 </div>
                 <div className="flex overflow-x-auto gap-3 py-2 mt-2">
                     {activeGroup.members.map(member => {

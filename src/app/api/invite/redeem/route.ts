@@ -200,7 +200,7 @@ export async function POST(req: Request) {
           existingSubscription.lifetimePlan ||
           (typeof existingSubscription.trialExpiresAt === "string" &&
             Date.parse(existingSubscription.trialExpiresAt) > Date.now());
-        const persisted =
+        const persisted: Awaited<ReturnType<typeof persistInviteDerivedSubscription>> =
           hasInviteDerivedAccess && (existingSubscription.lifetimePlan || existingSubscription.trialExpiresAt)
             ? {
                 plan: existingSubscription.lifetimePlan ? "lifetime" : "trial",

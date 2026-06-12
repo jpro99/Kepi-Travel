@@ -16,10 +16,10 @@ const MOCK_TRIP_DATA = {
 };
 
 export async function POST(request: Request) {
-    const { tripId } = await request.json();
+    const { tripId } = await request.json() as { tripId?: string };
 
-    if (MOCK_TRIP_DATA[tripId]) {
-        return NextResponse.json({ memory: MOCK_TRIP_DATA[tripId] });
+    if (tripId && tripId in MOCK_TRIP_DATA) {
+        return NextResponse.json({ memory: MOCK_TRIP_DATA[tripId as keyof typeof MOCK_TRIP_DATA] });
     } else {
         return NextResponse.json({ error: 'Trip not found' }, { status: 404 });
     }

@@ -1,16 +1,15 @@
 "use client";
 
 import { useState, useMemo } from 'react';
-import { AddReservationModal } from './AddReservationModal';
-import type { Reservation } from "@/lib/travelAssistant/travelUpdateTypes";
+import { AddReservationModal, type ItineraryReservation } from './AddReservationModal';
 
 interface ItineraryTabProps {
-    reservations: Reservation[];
-    onAddReservation: (reservation: Omit<Reservation, 'id'>) => void;
+    reservations: ItineraryReservation[];
+    onAddReservation: (reservation: Omit<ItineraryReservation, 'id'>) => void;
     onDeleteReservation: (id: string) => void;
 }
 
-const ReservationCard = ({ reservation }: { reservation: Reservation }) => {
+const ReservationCard = ({ reservation }: { reservation: ItineraryReservation }) => {
     const { type, title, provider, localTime, location, confirmationCode } = reservation;
 
     const renderCardContent = () => {

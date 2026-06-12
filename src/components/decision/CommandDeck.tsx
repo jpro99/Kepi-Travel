@@ -17,7 +17,12 @@ import { useCallback, useEffect, useState } from "react";
 
 const DEFAULT_PROMPT = "I want to go to Italy in September";
 
-export function CommandDeck() {
+interface CommandDeckProps {
+  /** When true, renders inside the landing page tab without standalone chrome. */
+  embedded?: boolean;
+}
+
+export function CommandDeck({ embedded = false }: CommandDeckProps) {
   const router = useRouter();
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
   const [inputPrompt, setInputPrompt] = useState(DEFAULT_PROMPT);
@@ -125,29 +130,43 @@ export function CommandDeck() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-foreground">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-900/20 via-transparent to-transparent" />
+    <div
+      className={
+        embedded
+          ? "relative bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-foreground"
+          : "min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-foreground"
+      }
+    >
+      <div
+        className={
+          embedded
+            ? "pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-900/20 via-transparent to-transparent"
+            : "pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-900/20 via-transparent to-transparent"
+        }
+      />
 
-      <header className="relative z-10 border-b border-white/5 px-6 py-4">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-widest text-emerald-400/80">
-              Kepi Travel Decision Engine
-            </p>
-            <h1 className="text-2xl font-bold tracking-tight">Command Deck</h1>
+      {!embedded ? (
+        <header className="relative z-10 border-b border-white/5 px-6 py-4">
+          <div className="mx-auto flex max-w-6xl items-center justify-between">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-widest text-emerald-400/80">
+                Kepi Travel Decision Engine
+              </p>
+              <h1 className="text-2xl font-bold tracking-tight">Command Deck</h1>
+            </div>
+            <nav className="flex gap-4 text-sm">
+              <Link href="/travel-assistant" className="text-muted-foreground hover:text-foreground">
+                Travel Assistant
+              </Link>
+              <Link href="/" className="text-muted-foreground hover:text-foreground">
+                Home
+              </Link>
+            </nav>
           </div>
-          <nav className="flex gap-4 text-sm">
-            <Link href="/travel-assistant" className="text-muted-foreground hover:text-foreground">
-              Travel Assistant
-            </Link>
-            <Link href="/" className="text-muted-foreground hover:text-foreground">
-              Home
-            </Link>
-          </nav>
-        </div>
-      </header>
+        </header>
+      ) : null}
 
-      <main className="relative z-10 mx-auto max-w-6xl px-6 py-8">
+      <main className={`relative z-10 mx-auto max-w-6xl px-6 ${embedded ? "py-6" : "py-8"}`}>
         <form onSubmit={handleSubmit} className="mb-8">
           <label htmlFor="trip-intent" className="sr-only">
             Trip intent

@@ -1,7 +1,24 @@
-import { JourneyContext } from "../journey/JourneyEngine";
+import type { JourneyContext } from "../journey/types";
+
+type RideshareOption = {
+    provider: string;
+    etaMinutes: number;
+    costDollars: number;
+    surgeMultiplier: number;
+};
+
+type TransitOption = {
+    provider: string;
+    etaMinutes: number;
+    costDollars: number;
+    line: string;
+    station: string;
+};
+
+type TransportOption = RideshareOption | TransitOption;
 
 // Mock API responses for demonstration
-const fetchUberEstimate = async (context: JourneyContext) => {
+const fetchUberEstimate = async (_context: JourneyContext): Promise<RideshareOption> => {
     // In a real app, this would call the Uber API
     const isSurging = Math.random() > 0.7;
     return {
@@ -12,7 +29,7 @@ const fetchUberEstimate = async (context: JourneyContext) => {
     };
 };
 
-const fetchLyftEstimate = async (context: JourneyContext) => {
+const fetchLyftEstimate = async (_context: JourneyContext): Promise<RideshareOption> => {
     const isSurging = Math.random() > 0.8;
     return {
         provider: 'Lyft',
@@ -22,7 +39,7 @@ const fetchLyftEstimate = async (context: JourneyContext) => {
     };
 };
 
-const fetchTransitEstimate = async (context: JourneyContext) => {
+const fetchTransitEstimate = async (_context: JourneyContext): Promise<TransitOption> => {
     // In a real app, this would call a transit API like Google Maps
     return {
         provider: 'Public Transit',
@@ -40,10 +57,10 @@ export const getOptimalTransport = async (context: JourneyContext) => {
         fetchTransitEstimate(context),
     ]);
 
-    const options = [uber, lyft, transit];
+    const options: TransportOption[] = [uber, lyft, transit];
 
     // Simplified decision logic: prioritize cost unless rideshare is significantly faster
-    let optimalChoice = transit;
+    let optimalChoice: TransportOption = transit;
     const bestRideshare = uber.etaMinutes < lyft.etaMinutes ? uber : lyft;
 
     if (bestRideshare.etaMinutes < transit.etaMinutes - 15) { // If rideshare is >15 mins faster

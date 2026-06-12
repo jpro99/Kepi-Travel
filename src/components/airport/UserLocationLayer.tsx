@@ -47,7 +47,9 @@ export function UserLocationLayer({
   useEffect(() => {
     if (!map || !fix) return undefined;
 
-    const airportCenter = model?.center ?? fix.pos;
+    const airportCenter = model?.center
+      ? { lng: model.center.lng, lat: model.center.lat, level: fix.pos.level }
+      : fix.pos;
     const distM = model
       ? haversineMeters(fix.pos, airportCenter)
       : 0;
@@ -154,7 +156,11 @@ export function describeUserLocation(
 ): string | null {
   if (!fix) return "Locating you…";
   if (!model) return null;
-  const distM = haversineMeters(fix.pos, model.center);
+  const distM = haversineMeters(fix.pos, {
+    lng: model.center.lng,
+    lat: model.center.lat,
+    level: fix.pos.level,
+  });
   if (fix.snappedNodeId || distM <= 150) {
     return "You are at the terminal (GPS)";
   }
@@ -173,7 +179,11 @@ export function fitMapToUserAndTerminal(
   for (const node of model.graph.nodes) {
     bounds.extend([node.pos.lng, node.pos.lat]);
   }
-  const distM = haversineMeters(fix.pos, model.center);
+  const distM = haversineMeters(fix.pos, {
+    lng: model.center.lng,
+    lat: model.center.lat,
+    level: fix.pos.level,
+  });
   map.fitBounds(bounds, {
     padding: { top: 120, bottom: 180, left: 48, right: 48 },
     pitch: distM > 2000 ? 0 : 52,

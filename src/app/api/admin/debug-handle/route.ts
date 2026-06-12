@@ -32,7 +32,7 @@ export async function GET(req: Request) {
   }
 
   const debugResult = await debugEmailForwardHandleOwner(handle);
-  routeLogger.info("Email forward handle debug lookup.", debugResult);
+  routeLogger.info("Email forward handle debug lookup.", { ...debugResult });
   return NextResponse.json({
     ok: true,
     ...debugResult,

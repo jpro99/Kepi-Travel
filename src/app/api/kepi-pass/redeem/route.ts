@@ -19,7 +19,8 @@ async function applyKepiPassSubscription(userId: string, passType: "GOLDEN" | "S
   const trialExpiresAt = passType === "SILVER" ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() : null;
 
   // 1. Update Clerk Metadata
-  await clerkClient.users.updateUserMetadata(userId, {
+  const client = await clerkClient();
+  await client.users.updateUserMetadata(userId, {
     privateMetadata: {
       [CLERK_METADATA_PLAN_KEY]: plan,
       [CLERK_METADATA_LIFETIME_KEY]: plan === "lifetime",
@@ -62,7 +63,8 @@ export async function POST(req: Request) {
   }
 
   // Security Check: Verify email
-  const user = await clerkClient.users.getUser(userId);
+  const client = await clerkClient();
+  const user = await client.users.getUser(userId);
   const userEmails = user.emailAddresses.map(e => e.emailAddress.toLowerCase());
   if (!userEmails.includes(passRecord.intendedEmail.toLowerCase())) {
     routeLogger.warn("Kepi Pass email mismatch.", { intendedEmail: passRecord.intendedEmail, userEmails });

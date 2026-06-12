@@ -2,8 +2,20 @@
 
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@/lib/maplibreCspWorker";
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import {
+  ensureDefaultFamilySharingOn,
+  isFamilySharingOptedOut,
+  setFamilySharingOptedOut,
+} from "@/lib/family/locationSharingPrefs";
+import {
+  bearingDegrees,
+  formatHeadingHint,
+  headingDelta,
+  walkingEta,
+} from "@/lib/family/familyMapNav";
+import { triggerHaptic } from "@/lib/native/haptics";
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface LocationPoint {
@@ -86,13 +98,19 @@ export function LiveMapPage() {
   const [headingUp, setHeadingUp] = useState(false); // rotate map to match phone direction
   const headingRef = useRef<number>(0); // current compass heading in degrees
   const headingWatchRef = useRef<(() => void) | null>(null);
+  const hasFitOnceRef = useRef(false);
+  const lastHapticAtRef = useRef(0);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isError, setIsError] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(true);
-  const [sharingLocation, setSharingLocation] = useState(false);
+  const [sharingLocation, setSharingLocation] = useState(() =>
+    typeof window !== "undefined" ? !isFamilySharingOptedOut() : true,
+  );
   const [myMemberId, setMyMemberId] = useState<string | null>(null);
+  const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
+  const [myFix, setMyFix] = useState<{ lat: number; lon: number } | null>(null);
 
   /* ── Load group + config ── */
   useEffect(() => {
@@ -378,59 +396,178 @@ export function LiveMapPage() {
     }).catch(console.error);
   }, [locations]);
 
-  /* ── Share my location ── */
-  const shareLocation = useCallback(() => {
-    if (sharingLocation) {
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-        watchIdRef.current = null;
-      }
-      firstFixRef.current = false;
-      setSharingLocation(false);
+  /* ── Route line between me and selected / navigation target ── */
+  const updateRouteLine = useCallback((from: { lat: number; lon: number } | null, to: { lat: number; lon: number } | null) => {
+    const map = mapRef.current;
+    if (!map || !isLoaded) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const m = map as any;
+    if (!from || !to) {
+      if (m.getLayer?.("kepi-route-line")) m.removeLayer("kepi-route-line");
+      if (m.getSource?.("kepi-route")) m.removeSource("kepi-route");
       return;
     }
-    if (!navigator.geolocation) { alert("Geolocation not supported on this device."); return; }
+    const data = {
+      type: "Feature",
+      geometry: {
+        type: "LineString",
+        coordinates: [[from.lon, from.lat], [to.lon, to.lat]],
+      },
+    };
+    if (m.getSource?.("kepi-route")) {
+      m.getSource("kepi-route").setData(data);
+    } else {
+      m.addSource("kepi-route", { type: "geojson", data });
+      m.addLayer({
+        id: "kepi-route-line",
+        type: "line",
+        source: "kepi-route",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": "#007AFF",
+          "line-width": 5,
+          "line-opacity": 0.85,
+          "line-dasharray": [2, 1.5],
+        },
+      });
+    }
+  }, [isLoaded]);
+
+  /* ── Share my location (default ON — opt out via button) ── */
+  const startSharingWatch = useCallback(() => {
+    if (watchIdRef.current !== null) return;
+    if (!navigator.geolocation) return;
+    ensureDefaultFamilySharingOn();
+    setFamilySharingOptedOut(false);
     setSharingLocation(true);
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       pos => {
         const { latitude: lat, longitude: lon, accuracy } = pos.coords;
+        setMyFix({ lat, lon });
 
-        // FIX: correct endpoint is POST /api/family with action:"update-location"
         void fetch("/api/family", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "update-location", lat, lon, accuracy }),
         }).catch(() => null);
 
-        // FIX: update own pin immediately without waiting for next poll
         const memberId = myMemberIdRef.current;
         if (memberId) {
           setLocations(prev => ({
             ...prev,
             [memberId]: { lat, lon, accuracy, updatedAt: new Date().toISOString(), memberId },
           }));
-          // Only center map on first GPS fix, not every update (prevents jumpiness)
           if (mapRef.current && !firstFixRef.current) {
             firstFixRef.current = true;
             mapRef.current.easeTo({ center: [lon, lat], zoom: 15, duration: 1200 });
           }
         }
       },
-      () => setSharingLocation(false),
-      { enableHighAccuracy: true, maximumAge: 3000, timeout: 10_000 }
+      () => {
+        /* keep trying — don't auto opt-out on transient GPS loss */
+      },
+      { enableHighAccuracy: true, maximumAge: 3000, timeout: 15_000 },
     );
-  }, [sharingLocation]);
-
-  useEffect(() => () => {
-    if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
   }, []);
+
+  const stopSharingWatch = useCallback(() => {
+    setFamilySharingOptedOut(true);
+    setSharingLocation(false);
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    firstFixRef.current = false;
+    window.dispatchEvent(new CustomEvent("kepi:family-stop-sharing"));
+  }, []);
+
+  const toggleSharing = useCallback(() => {
+    if (sharingLocation) stopSharingWatch();
+    else startSharingWatch();
+  }, [sharingLocation, startSharingWatch, stopSharingWatch]);
+
+  /* Auto-start sharing when map opens unless user previously opted out */
+  useEffect(() => {
+    ensureDefaultFamilySharingOn();
+    if (!isFamilySharingOptedOut()) startSharingWatch();
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+    };
+  }, [startSharingWatch]);
+
+  /* Compass / heading-up mode */
+  useEffect(() => {
+    if (!headingUp) {
+      mapRef.current?.setBearing?.(0);
+      return;
+    }
+    const onOrientation = (event: DeviceOrientationEvent) => {
+      const compass = (event as DeviceOrientationEvent & { webkitCompassHeading?: number }).webkitCompassHeading;
+      const alpha = event.alpha;
+      if (typeof compass === "number" && !Number.isNaN(compass)) {
+        headingRef.current = compass;
+      } else if (typeof alpha === "number" && !Number.isNaN(alpha)) {
+        headingRef.current = (360 - alpha) % 360;
+      } else {
+        return;
+      }
+      mapRef.current?.setBearing?.(headingRef.current);
+    };
+    window.addEventListener("deviceorientation", onOrientation, true);
+    headingWatchRef.current = () => window.removeEventListener("deviceorientation", onOrientation, true);
+    return () => headingWatchRef.current?.();
+  }, [headingUp, isLoaded]);
+
+  /* Draw route + haptic nudges while navigating */
+  useEffect(() => {
+    const targetId = navigatingTo ?? selected;
+    const targetLoc = targetId ? locations[targetId] : null;
+    const from = myFix ?? (myMemberId ? locations[myMemberId] : null);
+    if (!from || !targetLoc) {
+      updateRouteLine(null, null);
+      return;
+    }
+    updateRouteLine(from, targetLoc);
+
+    if (!navigatingTo || headingRef.current === 0) return;
+    const bearing = bearingDegrees(from, targetLoc);
+    const delta = headingDelta(headingRef.current, bearing);
+    const now = Date.now();
+    if (now - lastHapticAtRef.current > 2500) {
+      if (Math.abs(delta) <= 25) triggerHaptic("light");
+      else triggerHaptic("medium");
+      lastHapticAtRef.current = now;
+    }
+  }, [navigatingTo, selected, locations, myFix, myMemberId, updateRouteLine]);
 
   /* ── Derived ── */
   const members = group?.members ?? [];
   const liveCount = members.filter(m => locations[m.id] && !isStale(locations[m.id].updatedAt)).length;
   const selMember = selected ? members.find(m => m.id === selected) : null;
   const selLoc = selected ? locations[selected] : null;
+  const navMember = navigatingTo ? members.find(m => m.id === navigatingTo) : null;
+  const navLoc = navigatingTo ? locations[navigatingTo] : null;
+  const myLocation = myFix ?? (myMemberId ? locations[myMemberId] : null);
+
+  const walkGuide = useMemo(() => {
+    const target = navLoc ?? selLoc;
+    if (!myLocation || !target) return null;
+    const eta = walkingEta(myLocation, target);
+    const bearing = bearingDegrees(myLocation, target);
+    const hint = formatHeadingHint(headingDelta(headingRef.current, bearing));
+    return { ...eta, bearing, hint };
+  }, [myLocation, navLoc, selLoc]);
+
+  useEffect(() => {
+    if (!isLoaded || hasFitOnceRef.current) return;
+    if (Object.keys(locations).length === 0) return;
+    hasFitOnceRef.current = true;
+    fitAll();
+  }, [isLoaded, locations, fitAll]);
 
   /* ── Render ── */
   return (
@@ -514,6 +651,43 @@ export function LiveMapPage() {
           </button>
         </div>
 
+        {!maptilerKey && !isError && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-slate-950/90 p-6 text-center">
+            <span className="text-4xl">🗺</span>
+            <p className="text-white/80 text-sm max-w-xs">
+              Map key missing. Add <code className="text-sky-300">MAPTILER_KEY</code> to your environment.
+            </p>
+          </div>
+        )}
+
+        {/* Navigation HUD */}
+        {navigatingTo && navMember && walkGuide && (
+          <div className="absolute top-24 left-4 right-4 z-30 rounded-2xl border border-sky-400/40 bg-slate-900/95 backdrop-blur-xl p-4 shadow-2xl">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-sky-300">Walking to {navMember.name}</p>
+            <p className="mt-1 text-xl font-black text-white">{walkGuide.label}</p>
+            <p className="mt-1 text-sm text-sky-100/80">{walkGuide.hint}</p>
+            <div className="mt-3 flex gap-2">
+              {navLoc && myLocation ? (
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&origin=${myLocation.lat},${myLocation.lon}&destination=${navLoc.lat},${navLoc.lon}&travelmode=walking`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex-1 rounded-xl bg-[#007AFF] px-3 py-2 text-xs font-bold text-white text-center"
+                >
+                  Open walking directions
+                </a>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => { setNavigatingTo(null); updateRouteLine(null, null); }}
+                className="rounded-xl bg-white/10 px-3 py-2 text-xs font-bold text-white/80"
+              >
+                Stop
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Loading overlay */}
         {!isLoaded && !isError && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-slate-950/80">
@@ -573,6 +747,20 @@ export function LiveMapPage() {
                   )}
                 </div>
                 <div className="flex flex-col gap-1.5 shrink-0">
+                  {myLocation && walkGuide ? (
+                    <p className="text-[10px] font-semibold text-sky-300 text-right max-w-[120px]">{walkGuide.label}</p>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNavigatingTo(selMember.id);
+                      setHeadingUp(true);
+                      mapRef.current?.flyTo({ center: [selLoc.lon, selLoc.lat], zoom: 17, essential: true });
+                    }}
+                    className="rounded-xl bg-[#007AFF] px-3 py-1.5 text-[11px] font-bold text-white shadow"
+                  >
+                    Walk to {selMember.name.split(" ")[0]}
+                  </button>
                   <button
                     type="button"
                     onClick={() => mapRef.current?.flyTo({ center: [selLoc.lon, selLoc.lat], zoom: 17, essential: true })}
@@ -582,7 +770,7 @@ export function LiveMapPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setSelected(null)}
+                    onClick={() => { setSelected(null); setNavigatingTo(null); updateRouteLine(null, null); }}
                     className="rounded-xl bg-white/10 px-3 py-1.5 text-[11px] font-bold text-white/70"
                   >
                     Dismiss
@@ -620,15 +808,15 @@ export function LiveMapPage() {
               </div>
               <button
                 type="button"
-                onClick={shareLocation}
+                onClick={toggleSharing}
                 className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-bold shadow transition-all ${
                   sharingLocation
                     ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                    : "bg-sky-600 text-white"
+                    : "bg-amber-500/20 text-amber-300 border border-amber-500/40"
                 }`}
               >
-                <span>{sharingLocation ? "🟢" : "📍"}</span>
-                {sharingLocation ? "Sharing" : "Share me"}
+                <span>{sharingLocation ? "🟢" : "⏸"}</span>
+                {sharingLocation ? "Sharing live · tap to stop" : "Sharing paused · tap to resume"}
               </button>
             </div>
 

@@ -401,6 +401,13 @@ export async function POST(req: Request) {
 
     try {
       const imageBase64 = Buffer.from(await image.arrayBuffer()).toString("base64");
+      const mediaType =
+        image.type === "image/jpeg" ||
+        image.type === "image/png" ||
+        image.type === "image/gif" ||
+        image.type === "image/webp"
+          ? image.type
+          : "image/jpeg";
       const client = new Anthropic({ apiKey: anthropicApiKey });
       const scanResponse = await client.messages.create({
         model: "claude-sonnet-4-5",
@@ -430,7 +437,7 @@ export async function POST(req: Request) {
                 type: "image",
                 source: {
                   type: "base64",
-                  media_type: image.type,
+                  media_type: mediaType,
                   data: imageBase64,
                 },
               },

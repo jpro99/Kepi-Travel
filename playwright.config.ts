@@ -7,7 +7,10 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
-  timeout: 120000,
+  timeout: 120_000,
+  expect: {
+    timeout: 20_000,
+  },
 
   webServer: {
     command: 'npx next dev -p 3001',
@@ -24,9 +27,6 @@ export default defineConfig({
 
     // Use the saved storage state for all tests
     storageState: 'storageState.json',
-    expect: {
-      timeout: 20000,
-    },
   },
 
   projects: [

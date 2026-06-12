@@ -146,7 +146,7 @@ export class JourneyEngine {
         let nextStep: NextStep;
 
         // --- "PRE-CRIME" ORACLE --- 
-        const fortification = await runOracle(context);
+        const fortification = (await runOracle(context)) ?? undefined;
 
         // --- SENTIENT ITINERARY --- 
         const { autonomousAction, opportunity } = this.findOpportunitiesAndDisruptions(state, context);
@@ -171,7 +171,7 @@ export class JourneyEngine {
                 fortification, // Carry fortification info through
             };
         } else {
-            const intervention = this.checkForProactiveInterventions(state, context);
+            const intervention = this.checkForProactiveInterventions(state, context) ?? undefined;
             // Standard journey guidance
             switch (state) {
                 case 'BAGGAGE_ISSUE':
@@ -183,12 +183,16 @@ export class JourneyEngine {
                     break;
                 case 'EN_ROUTE_TO_HOTEL':
                     const { optimalChoice, allOptions } = await getOptimalTransport(context);
-                    if (optimalChoice.provider === 'Public Transit') {
+                    if ("line" in optimalChoice) {
                         const rideshareOption = allOptions.find(o => o.provider !== 'Public Transit');
                         const costSavings = rideshareOption ? rideshareOption.costDollars - optimalChoice.costDollars : 0;
+                        const surgeMultiplier =
+                            rideshareOption && "surgeMultiplier" in rideshareOption
+                                ? rideshareOption.surgeMultiplier
+                                : 1;
                         nextStep = {
                             title: `The ${optimalChoice.line} is your best choice.`,
-                            description: `An Uber is currently at ${rideshareOption?.surgeMultiplier || 1}x surge pricing. The train will save you ~$${costSavings.toFixed(0)} and is expected to be faster.`,
+                            description: `An Uber is currently at ${surgeMultiplier}x surge pricing. The train will save you ~$${costSavings.toFixed(0)} and is expected to be faster.`,
                             action: { label: "Get AR directions to station & buy ticket", type: 'function', payload: 'NAV_TO_TRANSIT' }
                         };
                     } else {

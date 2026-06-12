@@ -1,8 +1,7 @@
 import { getSafeRedisClient, hasRedisEnvConfig } from "@/lib/redis";
 import { getKvUserContextUserId } from "@/lib/travelAssistant/kvUserContext";
 import { logger } from "@/lib/logger";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { auth } from "@clerk/nextjs/server";
 
 const KEPI_NAMESPACE_PREFIX = "kepi";
 const ANONYMOUS_NAMESPACE = "anonymous";
@@ -45,9 +44,9 @@ async function resolveUserNamespace(userId?: string): Promise<string> {
     return contextUserId.trim();
   }
   try {
-    const session = await getServerSession(authOptions);
-    if (session && session.user && session.user.id) {
-      return session.user.id.trim();
+    const { userId } = await auth();
+    if (userId && userId.trim().length > 0) {
+      return userId.trim();
     }
   } catch {
     // Ignore request-context errors in local scripts/tests and use shared fallback namespace.

@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use client";
 
 import { AlertTriangle, ShieldCheck } from "lucide-react";

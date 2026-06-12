@@ -27,8 +27,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       provider: d.provider,
       flightNumber: d.flightNumber,
       localTime: d.localTime,
-      departureAirport: (d as Record<string, unknown>).departureAirport ?? "",
-      arrivalAirport: (d as Record<string, unknown>).arrivalAirport ?? "",
+      departureAirport: d.departureAirport ?? "",
+      arrivalAirport: d.arrivalAirport ?? "",
       confirmationCode: d.confirmationCode,
     })),
   });

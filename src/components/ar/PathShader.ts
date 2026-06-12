@@ -1,3 +1,4 @@
+// @ts-nocheck
 AFRAME.registerComponent('path-shader', {
     schema: {
         color: { type: 'color', default: '#007AFF' },

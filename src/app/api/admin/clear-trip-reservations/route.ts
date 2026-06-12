@@ -19,8 +19,8 @@ export async function GET(): Promise<NextResponse> {
       type: r.type,
       provider: r.provider,
       localTime: r.localTime,
-      flightDate: (r as Record<string, unknown>).flightDate ?? null,
-      flightNumber: (r as Record<string, unknown>).flightNumber ?? null,
+      flightDate: r.flightDate ?? null,
+      flightNumber: r.flightNumber ?? null,
     })),
   });
 }

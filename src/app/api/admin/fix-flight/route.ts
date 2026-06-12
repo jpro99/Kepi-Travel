@@ -17,7 +17,7 @@ export async function PATCH(request: Request): Promise<NextResponse> {
 
   const updatedReservations = trip.reservations.map((r) => {
     if (r.id !== reservationId) return r;
-    return { ...(r as Record<string, unknown>), ...fields };
+    return { ...r, ...fields };
   });
 
   await updateTrip(trip.id, { reservations: updatedReservations }, userId);

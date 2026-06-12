@@ -192,7 +192,6 @@ export function AirportNavigator({
           zoom: 16.5,
           pitch: 58,
           bearing: -24,
-          antialias: true,
           attributionControl: { compact: true },
           transformRequest: proxyMaptilerRequest,
         });

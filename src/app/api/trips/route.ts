@@ -451,11 +451,12 @@ export async function DELETE(req: Request) {
       payload: parsed.data,
     });
     if ("action" in parsed.data && parsed.data.action === "delete-reservation") {
+      const { tripId, reservationId } = parsed.data;
       const tripsBeforeDelete = await listTrips(auth.userId);
-      const targetTrip = parsed.data.tripId
-        ? tripsBeforeDelete.find((trip) => trip.id === parsed.data.tripId) ?? null
+      const targetTrip = tripId
+        ? tripsBeforeDelete.find((trip) => trip.id === tripId) ?? null
         : tripsBeforeDelete.find((trip) =>
-            trip.reservations.some((reservation) => reservation.id === parsed.data.reservationId),
+            trip.reservations.some((reservation) => reservation.id === reservationId),
           ) ?? null;
       if (!targetTrip) {
         return NextResponse.json(
@@ -464,7 +465,7 @@ export async function DELETE(req: Request) {
         );
       }
       const nextReservations = targetTrip.reservations.filter(
-        (reservation) => reservation.id !== parsed.data.reservationId,
+        (reservation) => reservation.id !== reservationId,
       );
       if (nextReservations.length === targetTrip.reservations.length) {
         return NextResponse.json(

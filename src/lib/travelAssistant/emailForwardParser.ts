@@ -762,7 +762,7 @@ function buildDraft(candidates: CandidateMap, parserNotes: string[]): ForwardedR
 function missingFieldsFromDraft(draft: ForwardedReservationDraft): ForwardedReservationField[] {
   const missing = new Set<ForwardedReservationField>();
   for (const field of REQUIRED_FIELDS) {
-    if (!draft[field].trim()) {
+    if (!(draft[field] ?? "").trim()) {
       missing.add(field);
     }
   }

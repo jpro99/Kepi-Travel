@@ -4,8 +4,20 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Camera } from './Camera';
 
-export function ExpenseReport({ tripId }) {
-    const [expenses, setExpenses] = useState([]);
+interface TripExpense {
+  id: string;
+  date: string;
+  category: string;
+  description: string;
+  amount: string;
+}
+
+interface ExpenseReportProps {
+  tripId: string;
+}
+
+export function ExpenseReport({ tripId }: ExpenseReportProps) {
+    const [expenses, setExpenses] = useState<TripExpense[]>([]);
     const [showCamera, setShowCamera] = useState(false);
     const router = useRouter();
 
@@ -27,7 +39,7 @@ export function ExpenseReport({ tripId }) {
         const headers = ['Date', 'Category', 'Description', 'Amount'];
         const csv = [
             headers.join(','),
-            ...expenses.map(row => headers.map(field => row[field.toLowerCase()]).join(',')),
+            ...expenses.map((row) => [row.date, row.category, row.description, row.amount].join(",")),
         ].join('\n');
 
         const blob = new Blob([csv], { type: 'text/csv' });

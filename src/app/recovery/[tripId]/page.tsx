@@ -4,10 +4,19 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 
+interface RecoveryRecommendation {
+  category: string;
+  advice: string;
+}
+
+interface RecoveryPlan {
+  recommendations: RecoveryRecommendation[];
+}
+
 export default function RecoveryPage() {
     const params = useParams();
     const tripId = params.tripId as string;
-    const [plan, setPlan] = useState(null);
+    const [plan, setPlan] = useState<RecoveryPlan | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {

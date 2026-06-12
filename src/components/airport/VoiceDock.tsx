@@ -107,10 +107,3 @@ export function VoiceDock({ onIntent, disabled }: VoiceDockProps) {
     </div>
   );
 }
-
-declare global {
-  interface Window {
-    SpeechRecognition: typeof SpeechRecognition;
-    webkitSpeechRecognition: typeof SpeechRecognition;
-  }
-}

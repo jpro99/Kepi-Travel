@@ -1,1 +1,12 @@
-// In a real implementation, this would connect to a real-time aviation data firehose.\n// For now, it returns simulated data to demonstrate the concept.\n\nexport interface RealtimeAviationData {\n    airTrafficCongestion: {\n        [airportIata: string]: number; // Congestion score from 0 to 1\n    };\n    weatherConditions: {\n        [airportIata: string]: {\n            temperature: number; // in Celsius\n            windSpeed: number; // in km/h\n            isThunderstorm: boolean;\n        };\n    };\n}\n
+export interface RealtimeAviationData {
+    airTrafficCongestion: {
+        [airportIata: string]: number; // Congestion score from 0 to 1
+    };
+    weatherConditions: {
+        [airportIata: string]: {
+            temperature: number; // in Celsius
+            windSpeed: number; // in km/h
+            isThunderstorm: boolean;
+        };
+    };
+}

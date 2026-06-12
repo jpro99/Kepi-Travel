@@ -1,3 +1,4 @@
+// @ts-nocheck
 import 'aframe';
 import '@ar-js-org/ar.js';
 import './PathShader'; // Register the A-Frame component

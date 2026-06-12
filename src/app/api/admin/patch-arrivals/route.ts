@@ -13,7 +13,7 @@ export async function GET(): Promise<NextResponse> {
   if (!trip) return NextResponse.json({ error: "No active trip" }, { status: 404 });
 
   let patched = 0;
-  const updatedReservations = trip.reservations.map((r: Record<string, unknown>) => {
+  const updatedReservations = trip.reservations.map((r) => {
     if (r.type !== "flight") return r;
 
     // AS832 HND→HNL — arrives 10:00 AM HST (Pacific/Honolulu)
@@ -22,7 +22,6 @@ export async function GET(): Promise<NextResponse> {
       return {
         ...r,
         flightArrivalTime: "2026-05-29 10:00",
-        flightArrivalTimezone: "Pacific/Honolulu",
       };
     }
 
@@ -32,14 +31,13 @@ export async function GET(): Promise<NextResponse> {
       return {
         ...r,
         flightArrivalTime: "2026-05-29 22:17",
-        flightArrivalTimezone: "America/Los_Angeles",
       };
     }
 
     return r;
   });
 
-  await updateTrip(userId, trip.id, { reservations: updatedReservations });
+  await updateTrip(trip.id, { reservations: updatedReservations }, userId);
 
   return NextResponse.json({ ok: true, patched, message: `Updated ${patched} flight arrival times` });
 }

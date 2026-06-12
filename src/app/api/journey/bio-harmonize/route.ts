@@ -5,7 +5,7 @@ import type { JourneyContext, BioHarmonizationPlan } from '@/lib/journey/types';
 // In a real app, this would involve complex logic and multiple API calls.
 async function getBioHarmonizationPlan(context: JourneyContext): Promise<BioHarmonizationPlan | null> {
     // Mock logic: if the trip is international, recommend a jet lag plan.
-    const isInternational = context.reservations.some(r => r.type === 'flight' && r.arrivalAirport && r.departureAirport && r.departureAirport.slice(0, 2) !== r.arrivalAirport.slice(0, 2));
+    const isInternational = context.reservations.some(r => r.type === 'flight' && r.flightArrivalAirport && r.flightDepartureAirport && r.flightDepartureAirport.slice(0, 2) !== r.flightArrivalAirport.slice(0, 2));
 
     if (isInternational) {
         return {

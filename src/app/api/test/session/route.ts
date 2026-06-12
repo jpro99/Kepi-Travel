@@ -23,7 +23,7 @@ export async function POST() {
   // Set the session cookie in the response headers
   response.cookies.set('next-auth.session-token', token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: false,
     sameSite: 'lax',
     path: '/',
   });

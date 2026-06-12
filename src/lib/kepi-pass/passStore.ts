@@ -10,7 +10,7 @@ const KEPI_PASS_ID_PREFIX = "kp_";
  * Generates a unique, secure ID for a new Kepi Pass.
  */
 function generateKepiPassId(): string {
-  return `${KEPI_PASS_ID_PREFIX}${generateId(24)}`;
+  return `${KEPI_PASS_ID_PREFIX}${generateId()}`;
 }
 
 /**

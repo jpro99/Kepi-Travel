@@ -1,4 +1,4 @@
-import type { Reservation } from './travelUpdateTypes';
+import type { SessionReservation as Reservation } from "@/lib/travelAssistant/clientSessionState";
 
 // Core Types
 
