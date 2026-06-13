@@ -694,7 +694,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
 
             {!staysLoading && staysData?.error && staysData.stays.length === 0 && (
               <p className="mt-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-xs font-semibold text-white/50">
-                {staysData.error}
+                {typeof staysData.error === "string" ? staysData.error : "Hotel search unavailable right now."}
               </p>
             )}
 

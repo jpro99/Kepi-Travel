@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import maplibregl, { Map } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useRouter } from "next/navigation";
+import { fetchJson } from "@/lib/api/readJsonResponse";
+import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
 
 // ---[ TYPES ]----------------------------------------------------------------
 interface LocationPoint {
@@ -48,6 +50,8 @@ export function FamilyPanel({ isPremium, onUpgrade, lastSentAt }: FamilyPanelPro
     const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
     const [locations, setLocations] = useState<Record<string, LocationPoint>>({});
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [maptilerKey, setMaptilerKey] = useState("");
     const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
     
     const activeGroup = useMemo(() => groups.find(g => g.id === activeGroupId) ?? groups[0] ?? null, [groups, activeGroupId]);
@@ -56,13 +60,18 @@ export function FamilyPanel({ isPremium, onUpgrade, lastSentAt }: FamilyPanelPro
     const load = useCallback(async (groupId?: string) => {
         try {
             const url = groupId ? `/api/family?groupId=${groupId}` : "/api/family";
-            const res = await fetch(url, { cache: "no-store" });
-            const data = await res.json();
+            const data = await fetchJson<{
+                groups?: FamilyGroup[];
+                group?: FamilyGroup;
+                locations?: Record<string, LocationPoint>;
+            }>(url);
             if (data.groups) setGroups(data.groups);
             else if (data.group) setGroups([data.group]);
             setLocations(data.locations ?? {});
             if (data.group) setActiveGroupId(data.group.id);
+            setLoadError(null);
         } catch (e) {
+            setLoadError(e instanceof Error ? e.message : "Could not load family group.");
             console.error("Could not load family groups", e);
         } finally {
             setLoading(false);
@@ -71,23 +80,27 @@ export function FamilyPanel({ isPremium, onUpgrade, lastSentAt }: FamilyPanelPro
 
     useEffect(() => {
         if (!isPremium) { setLoading(false); return; }
+        void fetchJson<{ maptilerKey?: string }>("/api/config")
+            .then((d) => { if (d.maptilerKey) setMaptilerKey(d.maptilerKey); })
+            .catch(() => null);
         void load();
-        const poll = setInterval(() => load(activeGroupId ?? undefined), 15000); // Poll every 15s
+        const poll = setInterval(() => load(activeGroupId ?? undefined), 15000);
         return () => clearInterval(poll);
     }, [isPremium, load, activeGroupId]);
 
     // ---[ MAP LOGIC ]--------------------------------------------------------
     useEffect(() => {
-        if (mapRef.current || !mapContainer.current || !activeGroup) return;
+        if (mapRef.current || !mapContainer.current || !activeGroup || !maptilerKey) return;
 
         mapRef.current = new maplibregl.Map({
             container: mapContainer.current,
-            style: `https://api.maptiler.com/maps/streets-v2-dark/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY}`,
-            center: [-98.5795, 39.8283], // Center of US
+            style: maptilerStyleUrl("streets-v2-dark", maptilerKey),
+            center: [-98.5795, 39.8283],
             zoom: 3,
+            transformRequest: directMaptilerTransformRequest(maptilerKey),
         });
 
-    }, [activeGroup]); // Initialize map only when there's an active group
+    }, [activeGroup, maptilerKey]);
 
     useEffect(() => {
         const map = mapRef.current;
@@ -146,6 +159,18 @@ export function FamilyPanel({ isPremium, onUpgrade, lastSentAt }: FamilyPanelPro
 
     if (loading) {
         return <div className="h-96 rounded-3xl bg-slate-800 animate-pulse" />;
+    }
+
+    if (loadError && !activeGroup) {
+        return (
+            <div className="rounded-3xl bg-white dark:bg-slate-900 p-5 text-center">
+                <h2 className="font-bold text-slate-900 dark:text-white">Family map unavailable</h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">{loadError}</p>
+                <button type="button" onClick={() => void load()} className="mt-4 rounded-2xl bg-[#007AFF] px-4 py-2 text-sm font-bold text-white">
+                    Try again
+                </button>
+            </div>
+        );
     }
 
     if (!activeGroup) {

@@ -101,6 +101,7 @@ import { WeatherCard } from "@/components/travelAssistant/WeatherCard";
 import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntelligencePanel";
 import { ConciergePanel } from "@/components/travelAssistant/ConciergePanel";
 import { trackEvent } from "@/lib/analytics/trackEvent";
+import { formatApiErrorMessage } from "@/lib/api/readJsonResponse";
 import { useBilling } from "@/lib/billing/BillingContext";
 import type { PlanFeature } from "@/lib/billing/plans";
 import { AdvancedModeToggle } from "@/components/ui/AdvancedModeToggle";
@@ -1925,15 +1926,16 @@ export default function TravelAssistantPage() {
         email: user.primaryEmailAddress?.emailAddress ?? null,
         imageUrl: user.imageUrl ?? null,
       }),
-    }).then(r => r.json()).then((d: { ok?: boolean; error?: string; alreadyMember?: boolean }) => {
+    }).then(r => r.json()).then((d: { ok?: boolean; error?: unknown; alreadyMember?: boolean }) => {
       if (d.ok) {
         setToastRaw(d.alreadyMember ? "✅ Already in the group — location sharing starting…" : "✅ Joined! Location sharing starting automatically…");
         window.dispatchEvent(new CustomEvent("kepi:family-reload"));
         window.dispatchEvent(new CustomEvent("kepi:family-start-sharing"));
       } else {
-        setToastRaw(`Family join failed: ${d.error ?? "Unknown error"}`);
+        const errText = typeof d.error === "string" ? d.error : "Could not join family group — check your invite link.";
+        setToastRaw(`Family join failed: ${errText}`);
       }
-    }).catch((err: unknown) => setToastRaw(`Family join error: ${err instanceof Error ? err.message : "Network error"}`));
+    }).catch((err: unknown) => setToastRaw(err instanceof Error ? err.message : "Family join failed — check your connection."));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, user]);
   const [pushSubscribed, setPushSubscribed] = useState(false);
@@ -2399,17 +2401,23 @@ export default function TravelAssistantPage() {
   const refreshTripsFromServer = useCallback(async (): Promise<number> => {
     const response = await fetch(TRIP_API_ROUTE, {
       method: "GET",
+      credentials: "include",
       cache: "no-store",
     });
-    if (!response.ok) {
-      throw new Error(`Trip API returned ${response.status}`);
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.includes("application/json")) {
+      throw new Error(formatApiErrorMessage(null, response.status));
     }
     const payload = (await response.json()) as {
       trips?: unknown[];
       activeTripId?: string | null;
       activeTrip?: unknown;
       degraded?: boolean;
+      error?: string;
     };
+    if (!response.ok) {
+      throw new Error(formatApiErrorMessage(payload, response.status));
+    }
 
     const parsedTrips = Array.isArray(payload.trips)
       ? payload.trips.map((trip) => normalizeManagedTrip(trip)).filter((trip): trip is ManagedTrip => trip !== null)

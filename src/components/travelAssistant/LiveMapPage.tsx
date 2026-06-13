@@ -17,6 +17,7 @@ import {
   setFamilySharingOptedOut,
 } from "@/lib/family/locationSharingPrefs";
 import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
+import { fetchJson } from "@/lib/api/readJsonResponse";
 
 /* ΓöÇΓöÇΓöÇ Types ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
 interface LocationPoint {
@@ -87,37 +88,56 @@ export function LiveMapPage() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isError, setIsError] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [familyLoadError, setFamilyLoadError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [sharingLocation, setSharingLocation] = useState(false);
   const [myMemberId, setMyMemberId] = useState<string | null>(null);
 
-  /* ΓöÇΓöÇ Load group + config ΓöÇΓöÇ */
-  useEffect(() => {
-    void fetch("/api/config", { cache: "no-store" })
-      .then(r => r.json())
-      .then((d: { maptilerKey?: string }) => { if (d.maptilerKey) setMaptilerKey(d.maptilerKey); })
-      .catch(() => null);
-
-    void fetch("/api/family", { cache: "no-store" })
-      .then(r => r.json())
-      .then((d: { group: FamilyGroup; locations: Record<string, LocationPoint>; myMemberId?: string }) => {
-        setGroup(d.group);
-        setLocations(d.locations ?? {});
-        if (d.myMemberId) {
-          setMyMemberId(d.myMemberId);
-          myMemberIdRef.current = d.myMemberId;
-        }
-      })
-      .catch(() => null);
+  /* ── Load group + config ── */
+  const loadFamilyState = useCallback(async (): Promise<void> => {
+    try {
+      const d = await fetchJson<{
+        group?: FamilyGroup;
+        locations?: Record<string, LocationPoint>;
+        myMemberId?: string;
+      }>("/api/family");
+      if (!d.group || !Array.isArray(d.group.members)) {
+        throw new Error("Family group data looks broken — pull down to refresh or sign in again.");
+      }
+      setFamilyLoadError(null);
+      setGroup(d.group);
+      setLocations(d.locations ?? {});
+      if (d.myMemberId) {
+        setMyMemberId(d.myMemberId);
+        myMemberIdRef.current = d.myMemberId;
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not load family group.";
+      setFamilyLoadError(message);
+      setGroup(null);
+    }
   }, []);
 
-  /* ΓöÇΓöÇ Poll locations every 10 s (faster than before) ΓöÇΓöÇ */
+  useEffect(() => {
+    void fetchJson<{ maptilerKey?: string }>("/api/config")
+      .then((d) => { if (d.maptilerKey) setMaptilerKey(d.maptilerKey); })
+      .catch(() => {
+        setIsError(true);
+        setErrorMsg("Map could not load — check your connection and try again.");
+      });
+
+    void loadFamilyState();
+
+    const onReload = (): void => { void loadFamilyState(); };
+    window.addEventListener("kepi:family-reload", onReload);
+    return () => window.removeEventListener("kepi:family-reload", onReload);
+  }, [loadFamilyState]);
+
   useEffect(() => {
     const id = setInterval(() => {
-      void fetch("/api/family", { cache: "no-store" })
-        .then(r => r.json())
-        .then((d: { locations?: Record<string, LocationPoint> }) => {
+      void fetchJson<{ locations?: Record<string, LocationPoint> }>("/api/family")
+        .then((d) => {
           if (d.locations) setLocations(d.locations);
         })
         .catch(() => null);
@@ -613,8 +633,22 @@ export function LiveMapPage() {
         {/* Error overlay */}
         {isError && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-slate-950/90 p-6 text-center">
-            <span className="text-4xl">≡ƒù║</span>
+            <span className="text-4xl">🗺</span>
             <p className="text-red-400 text-sm max-w-xs leading-relaxed">{errorMsg}</p>
+          </div>
+        )}
+
+        {familyLoadError && !group && (
+          <div className="absolute inset-x-4 top-20 z-10 rounded-2xl border border-amber-500/30 bg-slate-900/95 p-4 text-center shadow-xl">
+            <p className="text-amber-200 text-sm font-semibold">Family map unavailable</p>
+            <p className="text-white/60 text-xs mt-2 leading-relaxed">{familyLoadError}</p>
+            <button
+              type="button"
+              onClick={() => void loadFamilyState()}
+              className="mt-3 rounded-xl bg-sky-600 px-4 py-2 text-xs font-bold text-white"
+            >
+              Try again
+            </button>
           </div>
         )}
 
