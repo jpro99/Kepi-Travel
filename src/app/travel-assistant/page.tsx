@@ -1730,6 +1730,30 @@ export default function TravelAssistantPage() {
     lastMessage: null,
     lastShownAtMs: 0,
   });
+  const setToast = useCallback((message: string | null, options?: { force?: boolean }): void => {
+    if (message === null) {
+      setToastRaw(null);
+      return;
+    }
+    const normalized = message.trim();
+    if (!normalized) return;
+
+    const now = Date.now();
+    const policy = toastPolicyRef.current;
+    const dedupeWindowMs = policy.tone === "subtle" ? 18_000 : 8_000;
+    const cooldownMs = policy.tone === "subtle" ? 3_200 : 1_500;
+    const isDuplicate = normalized === policy.lastMessage && now - policy.lastShownAtMs < dedupeWindowMs;
+    const isCoolingDown = now - policy.lastShownAtMs < cooldownMs;
+    const isCritical = /\b(error|failed|cannot|unauthorized|blocked|timeout)\b/i.test(normalized);
+    if (!options?.force && !isCritical && (isDuplicate || isCoolingDown)) {
+      setSuppressedNudgeCount((count) => count + 1);
+      return;
+    }
+
+    policy.lastMessage = normalized;
+    policy.lastShownAtMs = now;
+    setToastRaw(normalized);
+  }, []);
   const swipeGestureRef = useRef<{
     kind: "reservation" | "review";
     id: string;
@@ -2206,31 +2230,6 @@ export default function TravelAssistantPage() {
   useEffect(() => {
     toastPolicyRef.current.tone = guidanceTone;
   }, [guidanceTone]);
-
-  const setToast = useCallback((message: string | null, options?: { force?: boolean }): void => {
-    if (message === null) {
-      setToastRaw(null);
-      return;
-    }
-    const normalized = message.trim();
-    if (!normalized) return;
-
-    const now = Date.now();
-    const policy = toastPolicyRef.current;
-    const dedupeWindowMs = policy.tone === "subtle" ? 18_000 : 8_000;
-    const cooldownMs = policy.tone === "subtle" ? 3_200 : 1_500;
-    const isDuplicate = normalized === policy.lastMessage && now - policy.lastShownAtMs < dedupeWindowMs;
-    const isCoolingDown = now - policy.lastShownAtMs < cooldownMs;
-    const isCritical = /\b(error|failed|cannot|unauthorized|blocked|timeout)\b/i.test(normalized);
-    if (!options?.force && !isCritical && (isDuplicate || isCoolingDown)) {
-      setSuppressedNudgeCount((count) => count + 1);
-      return;
-    }
-
-    policy.lastMessage = normalized;
-    policy.lastShownAtMs = now;
-    setToastRaw(normalized);
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
