@@ -1820,6 +1820,11 @@ export default function TravelAssistantPage() {
   const [travelDayOpen, setTravelDayOpen] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const initialUrlTripIdRef = useRef<string | null | undefined>(undefined);
+  if (initialUrlTripIdRef.current === undefined) {
+    initialUrlTripIdRef.current = searchParams.get("tripId")?.trim() || null;
+  }
+  const tripsInitialLoadRef = useRef(false);
 
   // ── Background GPS for guidance + persistent family location sharing ─────────
   const [guidanceUserLat, setGuidanceUserLat] = useState<number | null>(null);
@@ -2489,13 +2494,23 @@ export default function TravelAssistantPage() {
   ]);
 
   useEffect(() => {
+    if (tripsInitialLoadRef.current) {
+      return;
+    }
+    tripsInitialLoadRef.current = true;
+
     let cancelled = false;
-    const urlTripId = searchParams.get("tripId");
+    const urlTripId = initialUrlTripIdRef.current;
     const loadTrips = async (): Promise<void> => {
       setTripsLoading(true);
       try {
-        const tripCount = await refreshTripsFromServer();
+        let tripCount = await refreshTripsFromServer();
         if (cancelled) return;
+        if (tripCount === 0 && urlTripId) {
+          await new Promise((resolve) => window.setTimeout(resolve, 400));
+          if (cancelled) return;
+          tripCount = await refreshTripsFromServer();
+        }
         if (tripCount === 0 && !urlTripId) {
           await ensureDefaultTripIfMissing();
           if (cancelled) return;
@@ -2511,7 +2526,7 @@ export default function TravelAssistantPage() {
     return () => {
       cancelled = true;
     };
-  }, [ensureDefaultTripIfMissing, refreshTripsFromServer, searchParams, setToast]);
+  }, [ensureDefaultTripIfMissing, refreshTripsFromServer, setToast]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -2634,7 +2649,7 @@ export default function TravelAssistantPage() {
 
   useEffect(() => {
     if (tripsLoading || urlTripHandledRef.current) return;
-    const tripId = searchParams.get("tripId")?.trim();
+    const tripId = initialUrlTripIdRef.current;
     if (!tripId) return;
     urlTripHandledRef.current = true;
 
@@ -2648,7 +2663,7 @@ export default function TravelAssistantPage() {
     }
 
     void handleSwitchTrip(tripId);
-  }, [activeTripId, handleSwitchTrip, searchParams, tripsLoading]);
+  }, [activeTripId, handleSwitchTrip, tripsLoading]);
 
   const handleCreateTrip = useCallback(async (): Promise<void> => {
     const tripLimit = billingStatus?.usage?.tripLimit ?? 1;

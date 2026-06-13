@@ -284,7 +284,11 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
           body: JSON.stringify(body),
         });
         if (!res.ok) {
-          throw new Error(res.status === 401 ? "Sign in to use the Command Deck." : "Couldn't analyze that trip — try again.");
+          throw new Error(
+            res.status === 401 || res.status === 404
+              ? "Sign in to use the Command Deck."
+              : "Couldn't analyze that trip — try again.",
+          );
         }
         const data = await res.json();
         setBrief(data.brief);
