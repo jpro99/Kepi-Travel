@@ -4,6 +4,9 @@
   "private": true,
   "scripts": {
     "postinstall": "patch-package && node scripts/patch-maplibre-dist.cjs && node scripts/copy-maplibre-worker.cjs",
+    "copy-maplibre-worker": "node scripts/copy-maplibre-worker.cjs",
+    "predev": "node scripts/copy-maplibre-worker.cjs",
+    "prebuild": "node scripts/copy-maplibre-worker.cjs",
     "dev": "next dev",
     "build": "next build",
     "analyze": "ANALYZE=true npm run build",
