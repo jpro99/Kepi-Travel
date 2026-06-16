@@ -10,6 +10,7 @@ import { persistTravelUpdateAudit } from "@/lib/travelAssistant/updateAuditStore
 import { persistTravelRuntimeState } from "@/lib/travelAssistant/updateRuntimeStateStore";
 import type { TravelUpdateEvent } from "@/lib/travelAssistant/travelUpdateTypes";
 import { generateId } from "@/lib/utils/generateId";
+import { maybeSendFlightStatusPushAlerts } from "@/lib/travelAssistant/flightStatusPushBridge";
 
 const ReservationSchema = z.object({
   id: z.string().min(1),
@@ -327,7 +328,17 @@ export async function GET(req: Request) {
       flightStatus,
     };
     routeLogger.info("AeroDataBox flight lookup response.", { responseBody });
-    return NextResponse.json(responseBody, { headers: rateLimit.headers });
+    const pushResult = await maybeSendFlightStatusPushAlerts(userId, {
+      flightNumber: responseBody.flightNumber,
+      flightDate: responseBody.flightDate,
+      departureGate: responseBody.departureGate,
+      delayMinutes: responseBody.delayMinutes,
+      flightStatus: responseBody.flightStatus,
+    });
+    return NextResponse.json(
+      { ...responseBody, pushAlertsSent: pushResult.sent },
+      { headers: rateLimit.headers },
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown flight lookup error.";
     routeLogger.warn("Flight lookup failed.", { error: message });

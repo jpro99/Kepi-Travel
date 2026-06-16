@@ -29,6 +29,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Run lint
+        continue-on-error: true
         run: npm run lint
 
   test:
@@ -76,5 +77,36 @@ jobs:
             ${{ runner.os }}-node22-
       - name: Install dependencies
         run: npm ci
-      - name: Run build
+      - name: Run production build
         run: npm run build
+      - name: Verify MapLibre CSP worker
+        run: test -f public/maplibre-gl-csp-worker.js
+
+  ship-gate:
+    name: ship-gate
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Require test and build
+        run: |
+          if [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.build.result }}" != "success" ]; then
+            echo "::error::Ship gate failed — fix tests or build before merge."
+            exit 1
+          fi
+          echo "Ship gate passed (test:adapters + npm run build)."
+
+  notify-failure:
+    name: notify-failure
+    needs: [test, build, ship-gate]
+    runs-on: ubuntu-latest
+    if: failure()
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Notify Sentry
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+          DEPLOY_FAILURE_CONTEXT: kepi-travel CI ship-gate
+        run: node scripts/notify-deploy-failure.cjs

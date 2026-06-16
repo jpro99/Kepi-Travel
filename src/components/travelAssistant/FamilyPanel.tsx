@@ -4,7 +4,9 @@ import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import maplibregl, { Map } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useRouter } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
 import { fetchJson } from "@/lib/api/readJsonResponse";
+import { FAMILY_LOCATION_STALE_MS } from "@/lib/family/familyLocationWatch";
 import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
 
 // ---[ TYPES ]----------------------------------------------------------------
@@ -37,11 +39,26 @@ function timeAgo(iso: string): string {
   if (d < 1440) return `${Math.floor(d/60)}h ago`;
   return `${Math.floor(d/1440)}d ago`;
 }
-function isStale(iso: string): boolean { return Date.now() - Date.parse(iso) > 10 * 60_000; }
+function isStale(iso: string): boolean { return Date.now() - Date.parse(iso) > FAMILY_LOCATION_STALE_MS; }
+
+function familyInviteLink(code: string): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://kepitravel.com";
+  return `${origin}/join-family?code=${encodeURIComponent(code)}`;
+}
+
+async function copyText(value: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // ---[ MAIN COMPONENT ]-------------------------------------------------------
 export function FamilyPanel({ isPremium, onUpgrade, lastSentAt }: FamilyPanelProps) {
     const router = useRouter();
+    const { user } = useUser();
     const mapContainer = useRef<HTMLDivElement>(null);
     const mapRef = useRef<Map | null>(null);
     const markersRef = useRef<Record<string, maplibregl.Marker>>({});
@@ -53,6 +70,9 @@ export function FamilyPanel({ isPremium, onUpgrade, lastSentAt }: FamilyPanelPro
     const [loadError, setLoadError] = useState<string | null>(null);
     const [maptilerKey, setMaptilerKey] = useState("");
     const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+    const [joinCode, setJoinCode] = useState("");
+    const [actionBusy, setActionBusy] = useState(false);
+    const [actionMessage, setActionMessage] = useState<string | null>(null);
     
     const activeGroup = useMemo(() => groups.find(g => g.id === activeGroupId) ?? groups[0] ?? null, [groups, activeGroupId]);
 
@@ -145,6 +165,65 @@ export function FamilyPanel({ isPremium, onUpgrade, lastSentAt }: FamilyPanelPro
 
     }, [locations, activeGroup, selectedMemberId]);
 
+    const handleCreateGroup = useCallback(async () => {
+        setActionBusy(true);
+        setActionMessage(null);
+        try {
+            const data = await fetchJson<{ group?: FamilyGroup; groups?: FamilyGroup[] }>("/api/family", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "create-group", groupName: "My Family" }),
+            });
+            if (data.group) {
+                setGroups(data.groups ?? [data.group]);
+                setActiveGroupId(data.group.id);
+            }
+            await load(data.group?.id);
+            setActionMessage("Family group ready — share the invite link below.");
+        } catch (e) {
+            setActionMessage(e instanceof Error ? e.message : "Could not create group.");
+        } finally {
+            setActionBusy(false);
+        }
+    }, [load]);
+
+    const handleJoinGroup = useCallback(async () => {
+        const code = joinCode.trim().toUpperCase();
+        if (!code) {
+            setActionMessage("Enter an invite code from your travel companion.");
+            return;
+        }
+        setActionBusy(true);
+        setActionMessage(null);
+        try {
+            const data = await fetchJson<{ ok?: boolean; error?: string; group?: FamilyGroup }>("/api/family", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    action: "join-group",
+                    inviteCode: code,
+                    name: user?.firstName ?? user?.username ?? "Family Member",
+                    email: user?.primaryEmailAddress?.emailAddress ?? null,
+                    imageUrl: user?.imageUrl ?? null,
+                }),
+            });
+            if (!data.ok) throw new Error(data.error ?? "Could not join group.");
+            setJoinCode("");
+            await load(data.group?.id);
+            setActionMessage(data.group ? `Joined ${data.group.name}. Location sharing is on.` : "Joined family group.");
+            window.dispatchEvent(new Event("kepi:family-start-sharing"));
+        } catch (e) {
+            setActionMessage(e instanceof Error ? e.message : "Could not join group.");
+        } finally {
+            setActionBusy(false);
+        }
+    }, [joinCode, load, user]);
+
+    const handleCopyInvite = useCallback(async (code: string) => {
+        const copied = await copyText(familyInviteLink(code));
+        setActionMessage(copied ? "Invite link copied — send it to your family." : "Could not copy link.");
+    }, []);
+
 
     // ---[ RENDER LOGIC ]-----------------------------------------------------
     if (!isPremium) {
@@ -175,10 +254,43 @@ export function FamilyPanel({ isPremium, onUpgrade, lastSentAt }: FamilyPanelPro
 
     if (!activeGroup) {
         return (
-            <div className="rounded-3xl bg-white dark:bg-slate-900 p-5 text-center">
-                <h2 className="font-bold text-slate-900 dark:text-white">Family Tracking</h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Create or join a family group to start sharing locations.</p>
-                 {/* TODO: Add buttons to create/join group */}
+            <div className="rounded-3xl bg-white dark:bg-slate-900 p-5 space-y-4">
+                <div className="text-center">
+                    <h2 className="font-bold text-slate-900 dark:text-white">Family Tracking</h2>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+                        Create a group for your trip, or join someone who already started one.
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    disabled={actionBusy}
+                    onClick={() => void handleCreateGroup()}
+                    className="w-full rounded-2xl bg-[#007AFF] py-3 text-sm font-bold text-white disabled:opacity-60"
+                >
+                    {actionBusy ? "Setting up…" : "Create family group"}
+                </button>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Have an invite code?
+                    </p>
+                    <input
+                        value={joinCode}
+                        onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                        placeholder="ABC12345"
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-white"
+                    />
+                    <button
+                        type="button"
+                        disabled={actionBusy}
+                        onClick={() => void handleJoinGroup()}
+                        className="w-full rounded-2xl bg-slate-900 dark:bg-white py-3 text-sm font-bold text-white dark:text-slate-900 disabled:opacity-60"
+                    >
+                        Join family group
+                    </button>
+                </div>
+                {actionMessage ? (
+                    <p className="text-sm text-center text-slate-600 dark:text-slate-300">{actionMessage}</p>
+                ) : null}
             </div>
         );
     }
@@ -189,17 +301,38 @@ export function FamilyPanel({ isPremium, onUpgrade, lastSentAt }: FamilyPanelPro
     return (
         <div className="h-[600px] w-full flex flex-col bg-slate-900 rounded-3xl overflow-hidden ring-1 ring-white/[0.08]">
             <div ref={mapContainer} className="flex-grow" />
-            <div className="flex-shrink-0 bg-slate-900/80 backdrop-blur-sm p-4 border-t border-slate-800">
-                <div className="flex justify-between items-center">
+            <div className="flex-shrink-0 bg-slate-900/80 backdrop-blur-sm p-4 border-t border-slate-800 space-y-3">
+                <div className="flex justify-between items-center gap-3">
                     <h3 className="font-bold text-white text-lg">{activeGroup.name}</h3>
                     <button
                       type="button"
                       onClick={() => router.push("/travel-assistant/live-map")}
-                      className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold"
+                      className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold shrink-0"
                     >
                       Open live map
                     </button>
                 </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-slate-400">Invite code</span>
+                    <code className="rounded-lg bg-slate-800 px-2 py-1 text-sm font-mono text-cyan-300">
+                        {activeGroup.inviteCode}
+                    </code>
+                    <button
+                        type="button"
+                        onClick={() => void handleCopyInvite(activeGroup.inviteCode)}
+                        className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white"
+                    >
+                        Copy invite link
+                    </button>
+                </div>
+                {actionMessage ? (
+                    <p className="text-xs text-slate-300">{actionMessage}</p>
+                ) : null}
+                {lastSentAt ? (
+                    <p className="text-xs text-emerald-400">Your location shared {timeAgo(lastSentAt)}</p>
+                ) : (
+                    <p className="text-xs text-slate-400">Enable location in your browser to appear on the map.</p>
+                )}
                 <div className="flex overflow-x-auto gap-3 py-2 mt-2">
                     {activeGroup.members.map(member => {
                         const location = locations[member.id];

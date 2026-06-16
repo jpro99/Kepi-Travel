@@ -6,9 +6,23 @@ import { activateStrategy } from "@/lib/decision/activateStrategy";
 import { buildDecisionBrief } from "@/lib/decision/strategyEngine";
 import { getTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
 
+const SelectedStaySchema = z.object({
+  quoteId: z.string().trim().min(1).max(120),
+  name: z.string().trim().min(1).max(200),
+  chainName: z.string().trim().max(120).optional(),
+  photoUrl: z.string().trim().max(500).optional(),
+  area: z.string().trim().max(120).optional(),
+  totalAmountUsd: z.number().nonnegative(),
+  nightlyUsd: z.number().nonnegative(),
+  currency: z.string().trim().min(1).max(8),
+  checkInDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  checkOutDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
 const BodySchema = z.object({
-  prompt: z.string().trim().min(1).max(500),
+  prompt: z.string().trim().min(1).max(2000),
   strategyId: z.string().trim().min(1),
+  stay: SelectedStaySchema.optional(),
 });
 
 export async function POST(req: Request) {
@@ -40,11 +54,18 @@ export async function POST(req: Request) {
 
   const genome = await getTravelerGenome(userId);
   const brief = buildDecisionBrief(parsed.data.prompt, genome);
-  const strategy = brief.strategies.find((s) => s.id === parsed.data.strategyId);
+  const strategy =
+    brief.strategies.find((s) => s.id === parsed.data.strategyId) ??
+    brief.strategies.find((s) => s.kind === parsed.data.strategyId);
   if (!strategy) {
-    return NextResponse.json({ error: "Strategy not found" }, { status: 404 });
+    return NextResponse.json({ error: "Strategy not found — refresh and try again." }, { status: 404 });
   }
 
-  const result = await activateStrategy(strategy, brief.intent, userId ?? undefined);
+  const result = await activateStrategy(
+    strategy,
+    brief.intent,
+    userId ?? undefined,
+    parsed.data.stay,
+  );
   return NextResponse.json({ activation: result, strategyTitle: strategy.title });
 }

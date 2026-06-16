@@ -33,4 +33,5 @@ export interface DuffelStaysResult {
   configured: boolean;
   stays: DuffelStayQuote[];
   error?: string;
+  source?: "duffel" | "estimated";
 }

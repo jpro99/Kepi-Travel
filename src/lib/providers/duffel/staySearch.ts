@@ -14,12 +14,19 @@ const MAX_RESULTS = 12;
 
 /** City-center coordinates for every destination the intent parser knows. */
 export const CITY_COORDS: Record<string, { latitude: number; longitude: number }> = {
+  VCE: { latitude: 45.4408, longitude: 12.3155 }, // Venice
+  BRI: { latitude: 41.1171, longitude: 16.8719 }, // Bari / Puglia
   FCO: { latitude: 41.9028, longitude: 12.4964 }, // Rome
   FLR: { latitude: 43.7696, longitude: 11.2558 }, // Florence
-  MXP: { latitude: 45.4642, longitude: 9.19 },    // Milan
-  CDG: { latitude: 48.8566, longitude: 2.3522 },  // Paris
+  MXP: { latitude: 45.4642, longitude: 9.19 }, // Milan
+  CDG: { latitude: 48.8566, longitude: 2.3522 }, // Paris
   NRT: { latitude: 35.6762, longitude: 139.6503 }, // Tokyo
+  HND: { latitude: 35.5494, longitude: 139.7798 }, // Tokyo Haneda
   LHR: { latitude: 51.5074, longitude: -0.1278 }, // London
+  HNL: { latitude: 21.3069, longitude: -157.8583 }, // Honolulu
+  SEA: { latitude: 47.6062, longitude: -122.3321 }, // Seattle
+  LAX: { latitude: 34.0522, longitude: -118.2437 }, // Los Angeles
+  ONT: { latitude: 34.0633, longitude: -117.6509 }, // Ontario CA
 };
 
 function resolveDuffelToken(): string | null {

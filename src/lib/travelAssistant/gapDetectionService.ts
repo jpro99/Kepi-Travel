@@ -138,6 +138,27 @@ export function detectTripGaps(reservations: GapReservation[], nowMs = Date.now(
 
   const flights = upcoming.filter((r) => r.type === "flight");
 
+  // ── 0. Placeholder reservations from Command Deck / manual stubs ─────────
+  const placeholders = upcoming.filter(
+    (r) =>
+      (r.type === "flight" || r.type === "hotel") &&
+      (() => {
+        const code = r.confirmationCode?.trim().toUpperCase() ?? "";
+        return !code || ["PENDING", "SELECTED", "TBD", "PENDING-BOOK", "UNKNOWN"].includes(code);
+      })(),
+  );
+  if (placeholders.length > 0) {
+    gaps.push({
+      id: "placeholder-reservations",
+      severity: "warning",
+      emoji: "📧",
+      title: "Replace placeholder bookings",
+      detail: `${placeholders.length} item${placeholders.length === 1 ? "" : "s"} still ${placeholders.length === 1 ? "has" : "have"} no real confirmation. Forward your booking emails or import from Gmail.`,
+      actionLabel: "See import options",
+      actionTab: "trip",
+    });
+  }
+
   // Hotels use checkOutDate for coverage — include ALL hotels regardless of check-in date
   // A hotel checked in days ago can still cover future nights
   const hotels = reservations.filter((r) => r.type === "hotel");

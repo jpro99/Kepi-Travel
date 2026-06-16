@@ -6,6 +6,14 @@ export type StrategyKind =
   | "instrument_play"
   | "status_play";
 
+export interface TripStop {
+  name: string;
+  region?: string;
+  iata?: string;
+  nights?: number;
+  nightsLabel?: string;
+}
+
 export interface TripIntent {
   rawPrompt: string;
   destination: string;
@@ -16,6 +24,16 @@ export interface TripIntent {
   endDate: string;
   nights: number;
   seasonNote: string;
+  /** Parsed home / departure area */
+  originCity?: string;
+  originRegion?: string;
+  originAirports?: string[];
+  /** Multi-city legs in visit order */
+  stops?: TripStop[];
+  loyaltyPrograms?: string[];
+  preferredAirlines?: string[];
+  budgetHint?: string;
+  isMultiCity?: boolean;
 }
 
 export interface StrategySegment {
@@ -38,6 +56,12 @@ export interface InstrumentUsage {
 export interface StrategyScores {
   tvs: number;
   trueOutOfPocket: number;
+  /** Cash + points valued at segment ¢/pt — used for rank order */
+  totalTripValue?: number;
+  /** Best flight redemption ¢/mi on this play */
+  bestCpp?: number;
+  /** Internal sort key (includes reposition penalty) */
+  sortKey?: number;
   frictionMinutes: number;
   comfortScore: number;
   valueScore: number;
@@ -57,6 +81,11 @@ export interface TravelStrategy {
   preCrimeWarnings: string[];
   departureAirports: string[];
   recommended: boolean;
+  /** Rank by total trip value (#1 = cheapest overall) */
+  valueRank?: number;
+  /** Status Play flagged when status goals outweigh pure cost rank */
+  statusRecommended?: boolean;
+  statusRecommendReason?: string;
 }
 
 export interface DecisionQuestion {
@@ -115,8 +144,50 @@ export interface CounterfactualResult {
   }>;
 }
 
+/** Hotel picked on the Command Deck — carried into trip activation. */
+export interface SelectedStayActivation {
+  quoteId: string;
+  name: string;
+  chainName?: string;
+  photoUrl?: string;
+  area?: string;
+  totalAmountUsd: number;
+  nightlyUsd: number;
+  currency: string;
+  checkInDate: string;
+  checkOutDate: string;
+}
+
 export interface ActivateStrategyResult {
   tripId: string;
   tripName: string;
   redirectPath: string;
+}
+
+export type FlexPricingSource = "live" | "estimated" | "mixed";
+
+export interface StrategyFlexOption {
+  rank: number;
+  departureDate: string;
+  dateShiftDays: number;
+  dateLabel: string;
+  headline: string;
+  trueOutOfPocket: number;
+  milesUsed?: number;
+  centsPerMile?: number;
+  cashFareUsd?: number;
+  pricingSource: FlexPricingSource;
+  detail: string;
+  savingsVsBaseline?: number;
+  verifyUrl?: string;
+  benchmarkNote?: string;
+}
+
+export interface StrategyFlexOptionsResult {
+  strategyId: string;
+  strategyTitle: string;
+  kind: StrategyKind;
+  baselineDate: string;
+  notice: string;
+  options: StrategyFlexOption[];
 }

@@ -4,7 +4,7 @@ import { isAutomatedTestRuntime } from "@/lib/auth/mockClerkAuth";
 import { getUserPlan } from "@/lib/billing/planGate";
 import { logger } from "@/lib/logger";
 import { enforceRateLimit } from "@/lib/rateLimit";
-import { subscribeUser } from "@/lib/travelAssistant/pushNotificationService";
+import { subscribeUser, hasPushSubscription } from "@/lib/travelAssistant/pushNotificationService";
 import { generateId } from "@/lib/utils/generateId";
 
 const WebPushSubscriptionSchema = z.object({
@@ -68,7 +68,8 @@ export async function GET(req: Request) {
     routeLogger.warn("VAPID public key is missing.");
     return NextResponse.json({ error: "VAPID public key is not configured." }, { status: 503 });
   }
-  return NextResponse.json({ publicKey });
+  const subscribed = await hasPushSubscription(userId);
+  return NextResponse.json({ publicKey, subscribed });
 }
 
 export async function POST(req: Request) {

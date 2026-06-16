@@ -79,6 +79,12 @@ export async function subscribeUser(userId: string, subscription: StoredPushSubs
   await kvStoreSet(PUSH_SUBSCRIPTION_KEY, subscription, { userId });
 }
 
+export async function hasPushSubscription(userId: string): Promise<boolean> {
+  const stored = await kvStoreGet<unknown>(PUSH_SUBSCRIPTION_KEY, { userId });
+  if (!stored) return false;
+  return isNativeSubscription(stored) || isWebPushSubscription(stored);
+}
+
 export async function unsubscribeUser(userId: string): Promise<void> {
   await kvStoreDel(PUSH_SUBSCRIPTION_KEY, { userId });
 }
@@ -152,7 +158,7 @@ export async function sendGateChangeAlert(
   return sendPushNotification(userId, {
     title: `Gate changed for ${flightNumber}`,
     body: `Your gate is now ${newGate}. Open Kepi to review departure timing.`,
-    url: "/travel-assistant",
+    url: "/travel-assistant?tab=flights",
   });
 }
 
@@ -164,7 +170,7 @@ export async function sendDelayAlert(
   return sendPushNotification(userId, {
     title: `Delay alert for ${flightNumber}`,
     body: `${flightNumber} is delayed by ${delayMinutes} minutes. Check updated timeline now.`,
-    url: "/travel-assistant",
+    url: "/travel-assistant?tab=flights",
   });
 }
 

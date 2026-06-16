@@ -3,7 +3,7 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@/lib/maplibreCspWorker";
 import { useEffect, useRef, useCallback, useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AirportNavigatorMap } from "@/components/travelAssistant/AirportNavigatorMap";
 import {
   deriveEligibleLounges,
@@ -12,9 +12,15 @@ import {
 } from "@/lib/travelAssistant/useActiveFlight";
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
 import {
+  resumePersistentFamilyLocationWatch,
+  setFamilyLocationSender,
+  startPersistentFamilyLocationWatch,
+  stopPersistentFamilyLocationWatch,
+  FAMILY_LOCATION_STALE_MS,
+} from "@/lib/family/familyLocationWatch";
+import {
   ensureDefaultFamilySharingOn,
   isFamilySharingOptedOut,
-  setFamilySharingOptedOut,
 } from "@/lib/family/locationSharingPrefs";
 import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
 import { fetchJson } from "@/lib/api/readJsonResponse";
@@ -57,7 +63,7 @@ function timeAgo(iso: string): string {
   if (d < 1440) return `${Math.floor(d / 60)}h ago`;
   return `${Math.floor(d / 1440)}d ago`;
 }
-function isStale(iso: string) { return Date.now() - Date.parse(iso) > 10 * 60_000; }
+function isStale(iso: string) { return Date.now() - Date.parse(iso) > FAMILY_LOCATION_STALE_MS; }
 
 /* ─── Map style builders ─── */
 type MapStyleId = "dark" | "streets" | "satellite";
@@ -70,6 +76,8 @@ function styleUrlFor(styleId: MapStyleId, key: string): string {
 /* ΓöÇΓöÇΓöÇ Component ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
 export function LiveMapPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialView = searchParams.get("view") === "airport" ? "airport" : "family";
   const mapEl = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
@@ -382,11 +390,19 @@ export function LiveMapPage() {
         the SAME question AirportMode does, via useActiveFlight) ΓöÇΓöÇ */
   const { activeFlight } = useActiveFlight();
   const { credentials: navCredentials, profile: navProfile, saveCredentials } = useNavigatorCredentials();
-  const [mapView, setMapView] = useState<"family" | "airport">("family");
+  const [mapView, setMapView] = useState<"family" | "airport">(initialView);
   const [navLat, setNavLat] = useState<number | null>(null);
   const [navLon, setNavLon] = useState<number | null>(null);
   const navWatchRef = useRef<number | null>(null);
-  const autoAirportRef = useRef(false);
+  const autoAirportRef = useRef(initialView === "airport");
+  const [airportHandoffNote, setAirportHandoffNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (searchParams.get("view") === "airport") {
+      setMapView("airport");
+      autoAirportRef.current = true;
+    }
+  }, [searchParams]);
 
   // Passive low-accuracy watch for proximity + indoor snapping (separate from
   // the consent-gated family location SHARING ΓÇö this never leaves the device)
@@ -417,8 +433,12 @@ export function LiveMapPage() {
     if (navProximity.status === "at-airport" || navProximity.status === "in-terminal") {
       autoAirportRef.current = true;
       setMapView("airport");
+      const code = navProximity.airport?.iata ?? activeFlight.f.flightDepartureAirport ?? "the airport";
+      setAirportHandoffNote(`You're at ${code} — terminal navigator is ready`);
+      const timer = window.setTimeout(() => setAirportHandoffNote(null), 8000);
+      return () => window.clearTimeout(timer);
     }
-  }, [navProximity.status, activeFlight]);
+  }, [navProximity.status, navProximity.airport?.iata, activeFlight]);
 
   const navEligibleLounges = useMemo(
     () =>
@@ -434,59 +454,45 @@ export function LiveMapPage() {
 
   const navMinutesToDeparture = activeFlight ? (activeFlight.utcMs - Date.now()) / 60_000 : 0;
 
-  /* ΓöÇΓöÇ Share my location ΓöÇΓöÇ */
+  /* ── Share my location (uses app-wide persistent watch) ── */
   const shareLocation = useCallback(() => {
     if (sharingLocation) {
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-        watchIdRef.current = null;
-      }
+      stopPersistentFamilyLocationWatch();
       firstFixRef.current = false;
       setSharingLocation(false);
       return;
     }
     if (!navigator.geolocation) { alert("Geolocation not supported on this device."); return; }
+    resumePersistentFamilyLocationWatch();
     setSharingLocation(true);
-
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      pos => {
-        const { latitude: lat, longitude: lon, accuracy } = pos.coords;
-
-        // FIX: correct endpoint is POST /api/family with action:"update-location"
-        void fetch("/api/family", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "update-location", lat, lon, accuracy }),
-        }).catch(() => null);
-
-        // FIX: update own pin immediately without waiting for next poll
-        const memberId = myMemberIdRef.current;
-        if (memberId) {
-          setLocations(prev => ({
-            ...prev,
-            [memberId]: { lat, lon, accuracy, updatedAt: new Date().toISOString(), memberId },
-          }));
-          // Only center map on first GPS fix, not every update (prevents jumpiness)
-          if (mapRef.current && !firstFixRef.current) {
-            firstFixRef.current = true;
-            mapRef.current.easeTo({ center: [lon, lat], zoom: 15, duration: 1200 });
-          }
-        }
-      },
-      () => setSharingLocation(false),
-      { enableHighAccuracy: true, maximumAge: 3000, timeout: 10_000 }
-    );
   }, [sharingLocation]);
 
   useEffect(() => {
+    setFamilyLocationSender(async (lat, lon, accuracy) => {
+      await fetch("/api/family", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update-location", lat, lon, accuracy }),
+      });
+      const memberId = myMemberIdRef.current;
+      if (memberId) {
+        setLocations((prev) => ({
+          ...prev,
+          [memberId]: { lat, lon, accuracy, updatedAt: new Date().toISOString(), memberId },
+        }));
+        if (mapRef.current && !firstFixRef.current) {
+          firstFixRef.current = true;
+          mapRef.current.easeTo({ center: [lon, lat], zoom: 15, duration: 1200 });
+        }
+      }
+    });
     ensureDefaultFamilySharingOn();
-    if (!isFamilySharingOptedOut()) shareLocation();
-    // Auto-start family sharing unless the user opted out.
+    if (!isFamilySharingOptedOut()) {
+      startPersistentFamilyLocationWatch();
+      setSharingLocation(true);
+    }
+    return () => setFamilyLocationSender(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => () => {
-    if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
   }, []);
 
   /* ΓöÇΓöÇ Derived ΓöÇΓöÇ */
@@ -557,7 +563,7 @@ export function LiveMapPage() {
             className="absolute left-1/2 z-50 flex -translate-x-1/2 overflow-hidden rounded-full border border-white/15 shadow-xl"
             style={{ top: "max(3.6rem, calc(env(safe-area-inset-top) + 3.1rem))" }}
           >
-            {([["airport", "Γ£ê Airport"], ["family", "≡ƒæ¬ Family"]] as ["airport" | "family", string][]).map(([viewId, viewLabel]) => (
+            {([["airport", "✈ Airport"], ["family", "👪 Family"]] as ["airport" | "family", string][]).map(([viewId, viewLabel]) => (
               <button
                 key={viewId}
                 type="button"
@@ -585,14 +591,14 @@ export function LiveMapPage() {
             className="flex h-9 w-9 items-center justify-center rounded-full bg-black/40 backdrop-blur-md text-white text-lg shadow-lg"
             aria-label="Back"
           >
-            ΓåÉ
+            ←
           </button>
           <div className="flex-1 min-w-0">
             <p className="text-white font-semibold text-sm leading-tight tracking-tight drop-shadow">
               {group?.name ?? "Family"}
             </p>
             <p className="text-white/60 text-[11px] leading-tight">
-              {liveCount > 0 ? `${liveCount} live ┬╖ updates every 10s` : "No live locations"}
+              {liveCount > 0 ? `${liveCount} live · updates every 10s` : "No live locations"}
             </p>
           </div>
           <div className="flex rounded-full overflow-hidden shadow-lg border border-white/10">
@@ -618,15 +624,24 @@ export function LiveMapPage() {
             }`}
             title={headingUp ? "Heading up (tap for north up)" : "North up (tap for heading up)"}
           >
-            {headingUp ? "≡ƒº¡" : "Γ¼å∩╕Å"}
+            {headingUp ? "🧭" : "⬆️"}
           </button>
         </div>
+
+        {airportHandoffNote ? (
+          <div
+            className="absolute left-1/2 z-50 max-w-sm -translate-x-1/2 rounded-2xl border border-sky-400/40 bg-sky-950/95 px-4 py-3 text-center text-sm font-semibold text-sky-100 shadow-xl"
+            style={{ top: "max(6.5rem, calc(env(safe-area-inset-top) + 5.5rem))" }}
+          >
+            {airportHandoffNote}
+          </div>
+        ) : null}
 
         {/* Loading overlay */}
         {!isLoaded && !isError && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-slate-950/80">
             <div className="h-8 w-8 rounded-full border-2 border-sky-400 border-t-transparent animate-spin" />
-            <p className="text-white/60 text-xs">Loading mapΓÇª</p>
+            <p className="text-white/60 text-xs">Loading map…</p>
           </div>
         )}
 
@@ -660,7 +675,7 @@ export function LiveMapPage() {
             className="absolute left-4 bottom-[220px] z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 backdrop-blur-md text-white shadow-lg text-base border border-white/10"
             title="Fit all members"
           >
-            ΓèÖ
+            ⊙
           </button>
         )}
 
@@ -687,11 +702,11 @@ export function LiveMapPage() {
                   <p className="text-white font-semibold text-sm truncate">{selMember.name}</p>
                   <p className="text-white/50 text-xs">
                     {isStale(selLoc.updatedAt)
-                      ? `ΓÜá ${timeAgo(selLoc.updatedAt)} ΓÇö may be outdated`
-                      : `≡ƒƒó Live ┬╖ ${timeAgo(selLoc.updatedAt)}`}
+                      ? `⚠ ${timeAgo(selLoc.updatedAt)} — may be outdated`
+                      : `🟢 Live · ${timeAgo(selLoc.updatedAt)}`}
                   </p>
                   {selLoc.label && (
-                    <p className="text-white/40 text-[11px] mt-0.5 truncate">≡ƒôì {selLoc.label}</p>
+                    <p className="text-white/40 text-[11px] mt-0.5 truncate">📍 {selLoc.label}</p>
                   )}
                 </div>
                 <div className="flex flex-col gap-1.5 shrink-0">
@@ -749,7 +764,7 @@ export function LiveMapPage() {
                     : "bg-sky-600 text-white"
                 }`}
               >
-                <span>{sharingLocation ? "≡ƒƒó" : "≡ƒôì"}</span>
+                <span>{sharingLocation ? "🟢" : "📍"}</span>
                 {sharingLocation ? "Sharing" : "Share me"}
               </button>
             </div>
@@ -796,15 +811,15 @@ export function LiveMapPage() {
                       <p className="text-white/40 text-[11px] truncate">
                         {loc
                           ? live
-                            ? `≡ƒƒó Live ┬╖ ${timeAgo(loc.updatedAt)}`
-                            : `ΓÜ¬ ${timeAgo(loc.updatedAt)}`
+                            ? `🟢 Live · ${timeAgo(loc.updatedAt)}`
+                            : `⚪ ${timeAgo(loc.updatedAt)}`
                           : "No location shared"}
                       </p>
                     </div>
                     <span className="shrink-0 rounded-md bg-white/8 px-2 py-0.5 text-[10px] text-white/40 font-medium capitalize">
                       {member.role}
                     </span>
-                    {isSelected && <span className="shrink-0 text-sky-400 text-xs">ΓùÅ</span>}
+                    {isSelected && <span className="shrink-0 text-sky-400 text-xs">●</span>}
                   </button>
                 );
               })}

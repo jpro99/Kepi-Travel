@@ -1,6 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import {
+  buildCompactTimelineDayKeys,
+  splitPastAndUpcomingReservations,
+} from "@/lib/travelAssistant/tripTimelinePlanning";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -29,6 +33,7 @@ interface TripTimelineProps {
   reservations: TimelineReservation[];
   tripName: string;
   tripStartDate: string | null;
+  tripEndDate?: string | null;
   tripDaysAway: number;
   onReservationTap?: (id: string) => void;
   /** Hide "already mid-trip" banner when the trip is fully in the past. */
@@ -367,32 +372,30 @@ export function TripTimeline({
   reservations,
   tripName,
   tripStartDate,
+  tripEndDate = null,
   tripDaysAway,
   onReservationTap,
   suppressMidTripBanner = false,
 }: TripTimelineProps) {
   const [midTripConfirmed, setMidTripConfirmed] = useState(false);
-  const [dimPast, setDimPast] = useState(true);
+  const [showPastArchive, setShowPastArchive] = useState(false);
+
+  const { upcoming, past } = useMemo(
+    () => splitPastAndUpcomingReservations(reservations),
+    [reservations],
+  );
 
   const days = useMemo((): DayEntry[] => {
-    if (reservations.length === 0 && !tripStartDate) return [];
+    if (upcoming.length === 0 && !tripStartDate) return [];
 
-    // Deduplicate: same flightNumber + same date = same flight, keep first
     const seen = new Set<string>();
-    const dedupedReservations = reservations.filter(r => {
+    const dedupedReservations = upcoming.filter((r) => {
       if (r.type !== "flight" || !r.flightNumber) return true;
       const key = `${r.flightNumber.replace(/\s+/g, "").toUpperCase()}_${flightDateKey(r)}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
-
-    const resDates = dedupedReservations.map((r) => reservationDateKey(r)).filter(Boolean).sort();
-    const firstDateKey = tripStartDate?.slice(0, 10) ?? resDates[0] ?? new Date().toISOString().slice(0, 10);
-    const lastDateKey = resDates[resDates.length - 1] ?? firstDateKey;
-    const today = new Date().toISOString().slice(0, 10);
-
-    const startKey = firstDateKey < today ? firstDateKey : today < lastDateKey ? today : firstDateKey;
 
     const map = new Map<string, TimelineReservation[]>();
     for (const r of dedupedReservations) {
@@ -406,24 +409,17 @@ export function TripTimeline({
       map.set(key, [...arr].sort((a, b) => parseLocalMs(a.localTime) - parseLocalMs(b.localTime)));
     }
 
-    const result: DayEntry[] = [];
-    const cursor = new Date(startKey + "T12:00:00");
-    const endMs = new Date(lastDateKey + "T12:00:00").getTime() + 86_400_000;
-    while (cursor.getTime() <= endMs) {
-      const key = cursor.toISOString().slice(0, 10);
-      result.push({ key, reservations: map.get(key) ?? [] });
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    return result;
-  }, [reservations, tripStartDate]);
+    const dayKeys = buildCompactTimelineDayKeys(dedupedReservations, tripStartDate, tripEndDate);
+    return dayKeys.map((key) => ({ key, reservations: map.get(key) ?? [] }));
+  }, [upcoming, tripStartDate, tripEndDate]);
 
   if (days.length === 0) return null;
 
   const today = new Date().toISOString().slice(0, 10);
   const pastDaysWithEvents = days.filter((d) => d.key < today && d.reservations.length > 0);
-  const hasPastReservations = pastDaysWithEvents.length > 0;
+  const hasPastReservations = past.length > 0 || pastDaysWithEvents.length > 0;
   const hasUpcomingDays = days.some((d) => d.key >= today && d.reservations.length > 0);
-  const pastResCount = pastDaysWithEvents.reduce((n, d) => n + d.reservations.length, 0);
+  const pastResCount = past.length;
   const showMidTripBanner = hasPastReservations && hasUpcomingDays && !midTripConfirmed && !suppressMidTripBanner;
 
   const totalDays = days.length;
@@ -458,14 +454,14 @@ export function TripTimeline({
           {hasPastReservations ? (
             <button
               type="button"
-              onClick={() => setDimPast((v) => !v)}
+              onClick={() => setShowPastArchive((v) => !v)}
               className={`mt-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
-                dimPast
-                  ? "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                  : "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300"
+                showPastArchive
+                  ? "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300"
+                  : "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
               }`}
             >
-              {dimPast ? "Show past" : "Dim past"}
+              {showPastArchive ? "Hide past" : `Past (${pastResCount})`}
             </button>
           ) : null}
         </div>
@@ -479,10 +475,26 @@ export function TripTimeline({
             day={day}
             onReservationTap={onReservationTap ?? (() => undefined)}
             showPastConfirmed={midTripConfirmed}
-            dimPast={dimPast}
+            dimPast={false}
           />
         ))}
       </div>
+
+      {showPastArchive && past.length > 0 ? (
+        <section className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/50">
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Past trips & completed</p>
+          <div className="mt-3 space-y-3">
+            {past.map((reservation) => (
+              <ReservationCard
+                key={reservation.id}
+                reservation={reservation}
+                onTap={() => onReservationTap?.(reservation.id)}
+                isPast
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {/* Mid-trip confirmation banner */}
       {showMidTripBanner ? (

@@ -1,5 +1,7 @@
 import { buildInferredSummary, parseTripIntent } from "@/lib/decision/intentParser";
-import { applyPriorityWeights, buildQuestionBudget } from "@/lib/decision/questionBudget";
+import { buildQuestionBudget } from "@/lib/decision/questionBudget";
+import { rankStrategiesByValue } from "@/lib/decision/strategyRanking";
+import { personalizeStrategiesForIntent } from "@/lib/decision/strategyPersonalization";
 import type {
   CounterfactualMutation,
   CounterfactualResult,
@@ -8,12 +10,12 @@ import type {
   TripIntent,
 } from "@/lib/decision/types";
 import type { TravelerGenome } from "@/lib/traveler/types";
-import { generateId } from "@/lib/utils/generateId";
 
-function expandSearchAirports(genome: TravelerGenome): string[] {
+function expandSearchAirports(genome: TravelerGenome, intent?: TripIntent): string[] {
+  const fromIntent = intent?.originAirports ?? [];
   const fromCluster = genome.geoCluster.map((a) => a.iata);
   const gateways = ["SEA", "SFO"];
-  return [...new Set([...fromCluster, ...gateways])];
+  return [...new Set([...fromIntent, ...fromCluster, ...gateways])].slice(0, 6);
 }
 
 function buildItalyStrategies(intent: TripIntent, genome: TravelerGenome): TravelStrategy[] {
@@ -23,7 +25,7 @@ function buildItalyStrategies(intent: TripIntent, genome: TravelerGenome): Trave
 
   const strategies: TravelStrategy[] = [
     {
-      id: generateId(),
+      id: "reposition_award",
       kind: "reposition_award",
       title: "Reposition Play",
       headline: "ONT → SEA · Alaska partner J to Rome",
@@ -71,10 +73,10 @@ function buildItalyStrategies(intent: TripIntent, genome: TravelerGenome): Trave
       instrumentsUsed: [],
       preCrimeWarnings: ["45-min ONT connection buffer recommended if same-day reposition."],
       departureAirports: ["ONT", "SEA"],
-      recommended: true,
+      recommended: false,
     },
     {
-      id: generateId(),
+      id: "direct_cash",
       kind: "direct_cash",
       title: "Direct Play",
       headline: "LAX → FCO nonstop · cash fare",
@@ -111,7 +113,7 @@ function buildItalyStrategies(intent: TripIntent, genome: TravelerGenome): Trave
       recommended: false,
     },
     {
-      id: generateId(),
+      id: "instrument_play",
       kind: "instrument_play",
       title: "Instrument Play",
       headline: "SNA → FCO · guest upgrade cert + suite cert",
@@ -170,7 +172,7 @@ function buildItalyStrategies(intent: TripIntent, genome: TravelerGenome): Trave
       recommended: false,
     },
     {
-      id: generateId(),
+      id: "status_play",
       kind: "status_play",
       title: "Status Play",
       headline: "LAX → FCO · earn requal · lounge chain",
@@ -233,15 +235,16 @@ function buildItalyStrategies(intent: TripIntent, genome: TravelerGenome): Trave
     }
   }
 
-  const sorted = [...strategies].sort((a, b) => b.scores.tvs - a.scores.tvs);
-  return sorted.map((s, i) => ({ ...s, recommended: i === 0 }));
+  return strategies;
 }
 
 function buildGenericStrategies(intent: TripIntent, genome: TravelerGenome): TravelStrategy[] {
-  return buildItalyStrategies(
+  let strategies = buildItalyStrategies(
     { ...intent, destination: intent.destination, destinationIata: intent.destinationIata },
     genome,
   );
+  strategies = personalizeStrategiesForIntent(strategies, intent, genome);
+  return strategies;
 }
 
 function instrumentHighlights(genome: TravelerGenome): string[] {
@@ -281,7 +284,7 @@ export function buildDecisionBrief(
     };
   }
 
-  const searchAirports = expandSearchAirports(genome);
+  const searchAirports = expandSearchAirports(genome, intent);
   let strategies = buildGenericStrategies(intent, genome);
 
   if (options.mutation?.willingToReposition !== undefined) {
@@ -294,7 +297,7 @@ export function buildDecisionBrief(
     options.comfortWeight ??
     genome.decisionWeights.comfort;
 
-  strategies = applyPriorityWeights(strategies, comfortWeight);
+  strategies = rankStrategiesByValue(strategies, genome, comfortWeight);
 
   const questions = buildQuestionBudget(strategies, genome);
 

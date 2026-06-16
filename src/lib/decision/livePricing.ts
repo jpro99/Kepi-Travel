@@ -1,6 +1,7 @@
 import type { DecisionBrief, TravelStrategy } from "@/lib/decision/types";
 import type { DuffelSearchResult } from "@/lib/providers/duffel/types";
-import { applyPriorityWeights } from "@/lib/decision/questionBudget";
+import { rankStrategiesByValue } from "@/lib/decision/strategyRanking";
+import type { TravelerGenome } from "@/lib/traveler/types";
 
 function applyQuoteToDirectStrategy(
   strategy: TravelStrategy,
@@ -46,6 +47,7 @@ function applyQuoteToDirectStrategy(
 export function enrichBriefWithDuffelPricing(
   brief: DecisionBrief,
   duffel: DuffelSearchResult,
+  genome: TravelerGenome,
   comfortWeight: number,
 ): DecisionBrief {
   if (!duffel.configured || duffel.quotes.length === 0) {
@@ -67,10 +69,7 @@ export function enrichBriefWithDuffelPricing(
     s.kind === "direct_cash" ? applyQuoteToDirectStrategy(s, best) : s,
   );
 
-  strategies = applyPriorityWeights(strategies, comfortWeight).map((s, i) => ({
-    ...s,
-    recommended: i === 0,
-  }));
+  strategies = rankStrategiesByValue(strategies, genome, comfortWeight);
 
   return {
     ...brief,

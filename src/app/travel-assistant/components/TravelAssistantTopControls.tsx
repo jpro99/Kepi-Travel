@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useClerk, useUser } from "@clerk/nextjs";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Logo } from "@/components/ui/Logo";
@@ -50,13 +50,14 @@ export function TravelAssistantTopControls({
   formatClock,
   toggleDisruption,
 }: TravelAssistantTopControlsProps) {
-  const { data: session } = useSession();
+  const { user } = useUser();
+  const clerk = useClerk();
   const [isAdmin, setIsAdmin] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
 
   const avatarLabel =
-    session?.user?.name?.slice(0, 1)?.toUpperCase() ??
-    session?.user?.email?.slice(0, 1)?.toUpperCase() ??
+    user?.firstName?.slice(0, 1)?.toUpperCase() ??
+    user?.primaryEmailAddress?.emailAddress?.slice(0, 1)?.toUpperCase() ??
     "U";
 
   useEffect(() => {
@@ -117,7 +118,7 @@ export function TravelAssistantTopControls({
                       type="button"
                       onClick={() => {
                         setAvatarMenuOpen(false);
-                        void signOut();
+                        void clerk.signOut();
                       }}
                       className="mt-2 w-full rounded-xl px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/10"
                     >

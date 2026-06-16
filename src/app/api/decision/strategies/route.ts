@@ -8,7 +8,7 @@ import { searchDuffelCashQuotes } from "@/lib/providers/duffel/flightOffers";
 import { getTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
 
 const BodySchema = z.object({
-  prompt: z.string().trim().min(1).max(500),
+  prompt: z.string().trim().min(1).max(2000),
   comfortWeight: z.number().min(0).max(1).optional(),
 });
 
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
     departureDate: brief.intent.startDate,
   });
 
-  const enriched = enrichBriefWithDuffelPricing(brief, duffel, comfortWeight);
+  const enriched = enrichBriefWithDuffelPricing(brief, duffel, genome, comfortWeight);
 
   return NextResponse.json({ brief: enriched });
 }

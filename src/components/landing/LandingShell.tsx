@@ -92,11 +92,13 @@ function LandingShellInner({ userId, hasProAccess }: LandingShellProps) {
               Search flights, hotels, and trip strategies
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-600 dark:text-slate-300">
-              Describe where and when you want to go. Kepi ranks airports, loyalty plays, and out-of-pocket
-              options — then you activate a strategy into your trip workspace.
+              Describe where and when you want to go — or tap{" "}
+              <span className="font-semibold text-slate-800 dark:text-white">Record my trip</span> to talk
+              through a multi-city itinerary (cities, dates, Hyatt, Alaska, budget). Kepi ranks airports,
+              loyalty plays, and out-of-pocket options — then you activate a strategy into your trip workspace.
             </p>
           </div>
-          <div className="overflow-hidden rounded-2xl border border-slate-300 shadow-xl dark:border-slate-700">
+          <div className="overflow-hidden rounded-2xl border border-slate-700 bg-[#0b1f3a] shadow-xl">
             <CommandDeck embedded />
           </div>
         </section>

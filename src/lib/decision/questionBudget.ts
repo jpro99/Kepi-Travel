@@ -7,7 +7,9 @@ export function buildQuestionBudget(
   genome: TravelerGenome,
 ): DecisionQuestion[] {
   const questions: DecisionQuestion[] = [];
-  const sorted = [...strategies].sort((a, b) => b.scores.tvs - a.scores.tvs);
+  const sorted = [...strategies].sort(
+    (a, b) => (a.valueRank ?? 99) - (b.valueRank ?? 99),
+  );
   const top = sorted[0];
   const second = sorted[1];
   if (!top || !second) return questions;

@@ -1,11 +1,23 @@
 # Deployment Guide (Vercel)
 
-This guide covers production deployment for the **Kepi premium adaptive travel execution app**.
+This guide covers production deployment for **Kepi Travel** (`kepitravel.com`).
+
+> **Canonical repo:** `kepi-travel` only. See `CANONICAL.md`. Do not deploy from `kepi-travel-reborn` or `kepi-travel-rebuilt`.
+
+## 0) Ship gate (local + CI)
+
+Before every push:
+
+```bash
+npm run verify:ship
+```
+
+GitHub Actions `.github/workflows/ci.yml` runs lint, `test:adapters`, and `npm run build` on every push/PR. Merge to `main` only when CI is green — failed Vercel builds cost credits.
 
 ## 1) Connect the repository to Vercel
 
 1. Go to [vercel.com/new](https://vercel.com/new).
-2. Import `jpro99/Kepi-Search`.
+2. Import the **kepi-travel** GitHub repo (production domain: `kepitravel.com`).
 3. Select the project root (`/`) and keep default Next.js framework detection.
 4. Confirm the build settings:
    - Install command: `npm install`
@@ -82,28 +94,35 @@ If you use `.github/workflows/deploy.yml`, configure these repository secrets:
 - `VERCEL_TOKEN` (Vercel account token)
 - `VERCEL_ORG_ID` (from Vercel project settings)
 - `VERCEL_PROJECT_ID` (from Vercel project settings)
+- `SENTRY_DSN` or `NEXT_PUBLIC_SENTRY_DSN` (optional — CI/deploy failure alerts)
 
-When these are missing, the workflow now skips the deploy step with a warning instead
-of failing the whole run. This keeps CI green while still surfacing configuration
-issues.
+When Vercel secrets are missing, the workflow skips the deploy step with a warning instead
+of failing the whole run. The workflow still runs `npm run build` first so broken code
+never reaches Vercel.
 
-## 6) Run Playwright E2E tests against a Preview URL
+## 6) Cost monitoring
+
+- Run `npm run verify:ship` locally before push (same as CI build gate).
+- Watch Vercel dashboard → Usage for build minutes and failed deploys.
+- CI `ship-gate` job blocks merge when lint, tests, or build fail.
+- Deploy workflow re-runs `npm run build` before `vercel --prod`.
+
+## 7) Run Playwright E2E tests against a Preview URL
 
 1. Open a preview deployment URL (from a PR), for example:
-   - `https://kepi-search-git-<branch>-<team>.vercel.app`
+   - `https://kepitravel-git-<branch>-<team>.vercel.app`
 2. Run locally:
 
 ```bash
-PLAYWRIGHT_BASE_URL="https://kepi-search-git-<branch>-<team>.vercel.app" npm run test:e2e
+PLAYWRIGHT_BASE_URL="https://kepitravel-git-<branch>-<team>.vercel.app" npm run test:e2e
 ```
 
 3. If your tests require auth mocks, ensure the Preview environment includes the test-compatible Clerk values as documented in `.env.test`/`.env.example`.
 
-## 7) Production checklist
+## 8) Production checklist
 
-- [ ] `npm run lint`
-- [ ] `npm run test:adapters`
-- [ ] `npm run build`
+- [ ] `npm run verify:ship`
 - [ ] Vercel env vars configured
 - [ ] Upstash Redis connected and keys set
 - [ ] Clerk/Inngest/AviationStack/Sentry keys configured
+- [ ] GitHub secrets: `VERCEL_*` + optional `SENTRY_DSN`

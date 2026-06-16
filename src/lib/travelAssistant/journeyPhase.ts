@@ -223,7 +223,20 @@ export function computeJourneyPhase(args: {
     if (!nextHotel) {
       return { kind: "post-trip", lastDestination: args.tripDestination ?? undefined };
     }
-    return { kind: "no-trip" };
+    const checkInMs = toUtcMs(nextHotel.localTime, nextHotel.timezone);
+    const daysUntil = Number.isNaN(checkInMs)
+      ? 0
+      : Math.max(0, Math.ceil((checkInMs - nowMs) / MS_PER_DAY));
+    return {
+      kind: "pre-trip",
+      daysUntil,
+      nextFlight: {
+        ...nextHotel,
+        type: "hotel",
+        flightDepartureAirport: nextHotel.provider ?? "Hotel",
+        flightArrivalAirport: nextHotel.provider ?? "Hotel",
+      },
+    };
   }
 
   const tripEndMs = tripEndUtcMs(flights, hotels);

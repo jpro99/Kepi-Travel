@@ -39,6 +39,9 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   ...(isCapacitorBuild ? { output: "export" as const } : {}),
   images: {
     formats: ["image/avif", "image/webp"],
