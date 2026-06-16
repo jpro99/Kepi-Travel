@@ -8003,11 +8003,20 @@ export default function TravelAssistantPage() {
             onCopyForwardAddress={() => {
               void handleCopyForwardAddress();
             }}
-            onViewTrip={() => navigateToConsumerTab("trip")}
-            onViewFlights={() => navigateToConsumerTab("flights")}
-            onViewHotels={() => navigateToConsumerTab("hotels")}
+            onViewTrip={() => setConsumerTab("trip")}
+            onViewFlights={() => {
+              setTimelineSectionTab("reservations");
+              setConsumerTab("trip");
+              setToast("Flights are in the reservations timeline below.");
+            }}
+            onViewHotels={() => {
+              setTimelineSectionTab("reservations");
+              setConsumerTab("trip");
+              setToast("Hotels are in the reservations timeline below.");
+            }}
           />
-        ) : null}
+        ) : (
+          <>
         <TripOrientationCard
           travelerName={viewerDisplayName}
           destination={activeTrip?.destination ?? "your trip"}
@@ -8696,6 +8705,9 @@ export default function TravelAssistantPage() {
             activeScenarioPlaybook={activeScenarioPlaybook}
           />
         </Suspense>
+
+          </>
+        )}
       </div>
 
       {activeDrawerPanel}
@@ -8742,6 +8754,14 @@ export default function TravelAssistantPage() {
           });
         }}
       />
+      {manualReservationModalOpen ? (
+        <ManualReservationEntryModal
+          familyMembers={familyMembers.map((member) => ({ id: member.id, name: member.name }))}
+          defaultAssignedTo={[selectedFamilyMember.id]}
+          onClose={() => setManualReservationModalOpen(false)}
+          onSave={handleSaveManualReservation}
+        />
+      ) : null}
       <InstallPrompt />
       <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
     </main>
