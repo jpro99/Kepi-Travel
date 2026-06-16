@@ -51,12 +51,58 @@ async function buildRepositionAwardOptions(
   const hotelCash = hotelCashFromStrategy(strategy);
   const baselineCash = strategy.scores.trueOutOfPocket;
 
-  const feederOrigin = intent.originAirports?.[0] ?? strategy.departureAirports[0] ?? "ONT";
+  const feederOrigin = intent.originAirports?.[0]?.toUpperCase() ?? strategy.departureAirports[0] ?? "LAX";
   const gateway =
     strategy.departureAirports.find((code) => code !== feederOrigin) ??
-    intent.originAirports?.[1] ??
-    "SEA";
+    intent.originAirports?.[1]?.toUpperCase() ??
+    null;
   const longHaulDest = intent.stops?.[0]?.iata ?? intent.destinationIata;
+
+  if (!gateway || gateway === feederOrigin) {
+    const directCash = await searchDuffelAcrossDates({
+      origins: [feederOrigin],
+      destination: longHaulDest,
+      baseDepartureDate: baseDate,
+      cabinClass: "business",
+    });
+    const cashByShift = new Map(directCash.map((q) => [q.dateShiftDays, q]));
+    const candidates: StrategyFlexOption[] = [];
+    for (const shift of DEFAULT_DATE_SHIFTS) {
+      const departureDate = shiftIsoDate(baseDate, shift);
+      const cashBench = cashByShift.get(shift);
+      const miles = estimateAwardMiles({
+        baseMiles,
+        origin: feederOrigin,
+        destination: longHaulDest,
+        departureDate,
+        cabin: "business",
+      });
+      const trueOutOfPocket = Math.round((cashBench?.totalAmountUsd ?? 650) * 0.15 + hotelCash + 5.6);
+      candidates.push({
+        rank: 0,
+        departureDate,
+        dateShiftDays: shift,
+        dateLabel: formatDateShiftLabel(departureDate, shift),
+        headline: `${feederOrigin} → ${longHaulDest}`,
+        trueOutOfPocket,
+        milesUsed: miles,
+        centsPerMile: cashBench
+          ? Math.round((cashBench.totalAmountUsd / miles) * 1000) / 10
+          : cpp,
+        cashFareUsd: cashBench?.totalAmountUsd,
+        pricingSource: cashBench ? "live" : "estimated",
+        detail: cashBench
+          ? `${cashBench.airline} · $${cashBench.totalAmountUsd} cash benchmark`
+          : `${miles.toLocaleString()} mi (est.) from ${feederOrigin}`,
+        verifyUrl: buildSeatsAeroSearchUrl({
+          origin: feederOrigin,
+          destination: longHaulDest,
+          departureDate,
+        }),
+      });
+    }
+    return dedupeAndTakeTop3(candidates, cpp);
+  }
 
   const [repositionQuotes, longHaulCash] = await Promise.all([
     searchDuffelAcrossDates({

@@ -16,7 +16,30 @@ const DESTINATION_MAP: Record<string, { city: string; iata: string; region: stri
   hnl: { city: "Honolulu", iata: "HNL", region: "Hawaii" },
   seattle: { city: "Seattle", iata: "SEA", region: "Washington" },
   "los angeles": { city: "Los Angeles", iata: "LAX", region: "California" },
+  "new york": { city: "New York", iata: "JFK", region: "New York" },
+  chicago: { city: "Chicago", iata: "ORD", region: "Illinois" },
+  boston: { city: "Boston", iata: "BOS", region: "Massachusetts" },
+  amsterdam: { city: "Amsterdam", iata: "AMS", region: "Netherlands" },
+  frankfurt: { city: "Frankfurt", iata: "FRA", region: "Germany" },
+  dubai: { city: "Dubai", iata: "DXB", region: "UAE" },
+  sydney: { city: "Sydney", iata: "SYD", region: "Australia" },
 };
+
+const IATA_TO_CITY: Record<string, { city: string; region: string }> = {};
+for (const dest of Object.values(DESTINATION_MAP)) {
+  IATA_TO_CITY[dest.iata] = { city: dest.city, region: dest.region };
+}
+IATA_TO_CITY.LHR = { city: "London Heathrow", region: "United Kingdom" };
+IATA_TO_CITY.LGW = { city: "London Gatwick", region: "United Kingdom" };
+IATA_TO_CITY.STN = { city: "London Stansted", region: "United Kingdom" };
+IATA_TO_CITY.JFK = { city: "New York JFK", region: "New York" };
+IATA_TO_CITY.EWR = { city: "Newark", region: "New Jersey" };
+IATA_TO_CITY.LGA = { city: "New York LaGuardia", region: "New York" };
+IATA_TO_CITY.ONT = { city: "Ontario, CA", region: "California" };
+IATA_TO_CITY.SNA = { city: "Santa Ana", region: "California" };
+IATA_TO_CITY.LAX = { city: "Los Angeles", region: "California" };
+IATA_TO_CITY.SEA = { city: "Seattle", region: "Washington" };
+IATA_TO_CITY.SFO = { city: "San Francisco", region: "California" };
 
 const STOP_ALIASES: Record<string, keyof typeof DESTINATION_MAP> = {
   venice: "venice",
@@ -35,11 +58,81 @@ const ORIGIN_MAP: Record<string, { city: string; region: string; airports: strin
   beaumont: { city: "Beaumont, CA", region: "California", airports: ["ONT", "LAX", "SNA"] },
   "los angeles": { city: "Los Angeles", region: "California", airports: ["LAX", "ONT", "SNA"] },
   orange: { city: "Orange County", region: "California", airports: ["SNA", "ONT", "LAX"] },
+  "santa ana": { city: "Santa Ana", region: "California", airports: ["SNA", "ONT", "LAX"] },
   seattle: { city: "Seattle", region: "Washington", airports: ["SEA", "BFI"] },
   "san francisco": { city: "San Francisco", region: "California", airports: ["SFO", "OAK", "SJC"] },
   california: { city: "Southern California", region: "California", airports: ["LAX", "ONT", "SNA"] },
   "west coast": { city: "West Coast", region: "California", airports: ["LAX", "ONT", "SNA", "SEA", "SFO"] },
+  london: { city: "London", region: "United Kingdom", airports: ["LHR", "LGW", "STN"] },
+  heathrow: { city: "London Heathrow", region: "United Kingdom", airports: ["LHR"] },
+  "london heathrow": { city: "London Heathrow", region: "United Kingdom", airports: ["LHR"] },
+  gatwick: { city: "London Gatwick", region: "United Kingdom", airports: ["LGW"] },
+  uk: { city: "United Kingdom", region: "United Kingdom", airports: ["LHR", "LGW", "STN", "MAN"] },
+  "united kingdom": { city: "United Kingdom", region: "United Kingdom", airports: ["LHR", "LGW", "STN", "MAN"] },
+  england: { city: "England", region: "United Kingdom", airports: ["LHR", "LGW", "STN", "MAN"] },
+  manchester: { city: "Manchester", region: "United Kingdom", airports: ["MAN", "LHR"] },
+  paris: { city: "Paris", region: "France", airports: ["CDG", "ORY"] },
+  "new york": { city: "New York", region: "New York", airports: ["JFK", "EWR", "LGA"] },
+  jfk: { city: "New York JFK", region: "New York", airports: ["JFK"] },
+  chicago: { city: "Chicago", region: "Illinois", airports: ["ORD", "MDW"] },
+  boston: { city: "Boston", region: "Massachusetts", airports: ["BOS"] },
+  amsterdam: { city: "Amsterdam", region: "Netherlands", airports: ["AMS"] },
+  frankfurt: { city: "Frankfurt", region: "Germany", airports: ["FRA"] },
+  dubai: { city: "Dubai", region: "UAE", airports: ["DXB"] },
+  sydney: { city: "Sydney", region: "Australia", airports: ["SYD"] },
+  tokyo: { city: "Tokyo", region: "Japan", airports: ["NRT", "HND"] },
 };
+
+type ParsedOrigin = { city: string; region: string; airports: string[] };
+
+function originFromIata(iata: string): ParsedOrigin | null {
+  const upper = iata.toUpperCase();
+  const meta = IATA_TO_CITY[upper];
+  if (!meta) return null;
+  return { city: meta.city, region: meta.region, airports: [upper] };
+}
+
+function matchOriginFromText(text: string): ParsedOrigin | null {
+  const normalized = text.toLowerCase().trim().replace(/\s+/g, " ");
+  if (!normalized) return null;
+
+  const iataOnly = normalized.match(/^([a-z]{3})$/);
+  if (iataOnly?.[1]) {
+    const fromCode = originFromIata(iataOnly[1]);
+    if (fromCode) return fromCode;
+  }
+
+  const sortedOriginKeys = Object.keys(ORIGIN_MAP).sort((a, b) => b.length - a.length);
+  const regionOnlyKeys = new Set(["california", "west coast", "uk", "united kingdom", "england"]);
+  for (const key of sortedOriginKeys) {
+    if (!normalized.includes(key)) continue;
+    if (regionOnlyKeys.has(key)) {
+      const hasSpecificCity = sortedOriginKeys.some(
+        (other) => other !== key && !regionOnlyKeys.has(other) && normalized.includes(other),
+      );
+      if (hasSpecificCity) continue;
+    }
+    return ORIGIN_MAP[key]!;
+  }
+
+  const sortedDestKeys = Object.keys(DESTINATION_MAP).sort((a, b) => b.length - a.length);
+  for (const key of sortedDestKeys) {
+    if (normalized.includes(key)) {
+      const dest = DESTINATION_MAP[key]!;
+      return { city: dest.city, region: dest.region, airports: [dest.iata] };
+    }
+  }
+
+  const embeddedIata = normalized.match(/\b([a-z]{3})\b/g);
+  if (embeddedIata) {
+    for (const token of embeddedIata) {
+      const fromCode = originFromIata(token);
+      if (fromCode) return fromCode;
+    }
+  }
+
+  return null;
+}
 
 const MONTHS: Record<string, number> = {
   january: 0,
@@ -177,15 +270,36 @@ function parseTripDurationNights(lower: string): number | null {
   return null;
 }
 
-function parseOrigin(lower: string): { city: string; region: string; airports: string[] } | null {
-  const fromMatch = lower.match(/from\s+([a-z\s,]+?)(?:\s+to|\s+and|\s*,|\s+\.|$)/i);
-  const candidates = [fromMatch?.[1]?.trim(), lower].filter(Boolean) as string[];
+function parseOrigin(lower: string): ParsedOrigin | null {
+  const stripped = lower
+    .replace(/^i\s+(want|wanna|would like|'d like)\s+to\s+(go\s+)?/i, "")
+    .replace(/^plan\s+(a\s+)?trip\s+/i, "")
+    .trim();
 
-  for (const candidate of candidates) {
-    for (const [key, value] of Object.entries(ORIGIN_MAP)) {
-      if (candidate.includes(key)) return value;
-    }
+  const fromToMatch = stripped.match(/(?:^|\. )from\s+(.+?)\s+to\s+/i);
+  if (fromToMatch?.[1]) {
+    const matched = matchOriginFromText(fromToMatch[1]);
+    if (matched) return matched;
   }
+
+  const leadingToMatch = stripped.match(/^(.+?)\s+to\s+/i);
+  if (leadingToMatch?.[1]) {
+    const matched = matchOriginFromText(leadingToMatch[1]);
+    if (matched) return matched;
+  }
+
+  const flyFromMatch = lower.match(/fly(?:ing)?\s+(?:out\s+)?from\s+(.+?)(?:\s+to|\s+in|\s+on|\s*,|\.|$)/i);
+  if (flyFromMatch?.[1]) {
+    const matched = matchOriginFromText(flyFromMatch[1]);
+    if (matched) return matched;
+  }
+
+  const departMatch = lower.match(/depart(?:ing)?\s+(?:from\s+)?(.+?)(?:\s+to|\s+in|\s+on|\s*,|\.|$)/i);
+  if (departMatch?.[1]) {
+    const matched = matchOriginFromText(departMatch[1]);
+    if (matched) return matched;
+  }
+
   return null;
 }
 

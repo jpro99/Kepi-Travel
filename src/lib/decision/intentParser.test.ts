@@ -33,6 +33,19 @@ test("parses Beaumont origin from natural speech", () => {
   assert.equal(intent.originCity, "Beaumont, CA");
 });
 
+test("parses London Heathrow to Italy origin", () => {
+  const intent = parseTripIntent("London Heathrow to Italy in September", new Date("2026-06-01"));
+  assert.equal(intent.originCity, "London Heathrow");
+  assert.deepEqual(intent.originAirports?.slice(0, 1), ["LHR"]);
+  assert.equal(intent.destinationIata, "FCO");
+});
+
+test("parses from Heathrow to Rome", () => {
+  const intent = parseTripIntent("I want to fly from London Heathrow to Rome in October");
+  assert.equal(intent.originAirports?.[0], "LHR");
+  assert.equal(intent.destinationIata, "FCO");
+});
+
 test("parses three week duration", () => {
   const intent = parseTripIntent("Three week trip to Italy in September", new Date("2026-06-01"));
   assert.equal(intent.nights, 21);

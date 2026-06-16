@@ -12,54 +12,74 @@ import type {
 import type { TravelerGenome } from "@/lib/traveler/types";
 
 function expandSearchAirports(genome: TravelerGenome, intent?: TripIntent): string[] {
-  const fromIntent = intent?.originAirports ?? [];
-  const fromCluster = genome.geoCluster.map((a) => a.iata);
-  const gateways = ["SEA", "SFO"];
-  return [...new Set([...fromIntent, ...fromCluster, ...gateways])].slice(0, 6);
+  if (intent?.originAirports?.length) {
+    return [...new Set(intent.originAirports.map((code) => code.toUpperCase()))].slice(0, 6);
+  }
+  return [...new Set(genome.geoCluster.map((a) => a.iata))].slice(0, 6);
 }
 
-function buildItalyStrategies(intent: TripIntent, genome: TravelerGenome): TravelStrategy[] {
+const SOCAL_AIRPORTS = new Set(["LAX", "ONT", "SNA", "BUR", "SAN", "PSP"]);
+
+function isSoCalOrigin(iata: string): boolean {
+  return SOCAL_AIRPORTS.has(iata.toUpperCase());
+}
+
+function resolvePrimaryOrigin(intent: TripIntent, genome: TravelerGenome): string {
+  return intent.originAirports?.[0]?.toUpperCase() ?? genome.geoCluster.find((a) => a.isPrimary)?.iata ?? "LAX";
+}
+
+function buildRouteStrategies(intent: TripIntent, genome: TravelerGenome): TravelStrategy[] {
   const suiteCert = genome.instruments.find((i) => i.type === "suite_certificate");
   const guestUpgrade = genome.instruments.find((i) => i.type === "guest_upgrade");
   const primaryHotel = genome.hotelChainPriority[0] ?? "Hyatt";
 
-  const strategies: TravelStrategy[] = [
-    {
+  const origin = resolvePrimaryOrigin(intent, genome);
+  const altOrigins = (intent.originAirports ?? []).map((c) => c.toUpperCase()).filter((c) => c !== origin);
+  const dest = intent.destinationIata.toUpperCase();
+  const destLabel = intent.stops?.[0]?.name ?? intent.destination;
+  const soCal = isSoCalOrigin(origin);
+  const repositionHub = soCal ? "SEA" : altOrigins[0] ?? null;
+
+  const hotelSegment = {
+    mode: "hotel" as const,
+    label: `${primaryHotel} ${destLabel}`,
+    detail: "21k Hyatt points/night · Globalist breakfast + late checkout",
+    costUsd: 0,
+    milesUsed: 21_000,
+    cpp: 1.7,
+  };
+
+  const strategies: TravelStrategy[] = [];
+
+  if (soCal && genome.toleratesRepositioning && repositionHub && repositionHub !== origin) {
+    strategies.push({
       id: "reposition_award",
       kind: "reposition_award",
       title: "Reposition Play",
-      headline: "ONT → SEA · Alaska partner J to Rome",
-      reasoning:
-        "Drive to Ontario, reposition to Seattle for Alaska partner business class at 70k miles. Beats LAX cash by ~$1,400 at 2.1¢/mi. MVP Gold lounge at SEA before departure.",
+      headline: `${origin} → ${repositionHub} · partner J to ${destLabel}`,
+      reasoning: `Reposition to ${repositionHub} for partner business class at ~70k miles. Often beats a direct cash fare from ${origin} at 2.1¢/mi when award space opens.`,
       segments: [
         {
           mode: "drive",
-          label: "Drive to ONT",
-          detail: "~35 min from home cluster",
+          label: `Drive to ${origin}`,
+          detail: "Local airport reposition",
           costUsd: 25,
         },
         {
           mode: "flight",
-          label: "ONT → SEA",
-          detail: "Alaska AS 543 · Economy",
+          label: `${origin} → ${repositionHub}`,
+          detail: "Feeder · Economy",
           costUsd: 89,
         },
         {
           mode: "flight",
-          label: "SEA → FCO",
-          detail: "Partner business · 70k AS miles + $5.60",
+          label: `${repositionHub} → ${dest}`,
+          detail: "Partner business · 70k miles + $5.60",
           costUsd: 5.6,
           milesUsed: 70_000,
           cpp: 2.1,
         },
-        {
-          mode: "hotel",
-          label: `${primaryHotel} Centric Rome`,
-          detail: "21k Hyatt points/night · Globalist breakfast + late checkout",
-          costUsd: 0,
-          milesUsed: 21_000,
-          cpp: 1.7,
-        },
+        hotelSegment,
       ],
       scores: {
         tvs: 94,
@@ -71,28 +91,69 @@ function buildItalyStrategies(intent: TripIntent, genome: TravelerGenome): Trave
         confidence: 0.91,
       },
       instrumentsUsed: [],
-      preCrimeWarnings: ["45-min ONT connection buffer recommended if same-day reposition."],
-      departureAirports: ["ONT", "SEA"],
+      preCrimeWarnings: [`45-min ${origin} connection buffer recommended if same-day reposition.`],
+      departureAirports: [origin, repositionHub],
       recommended: false,
-    },
+    });
+  } else {
+    const feeder = altOrigins[0] ?? origin;
+    strategies.push({
+      id: "reposition_award",
+      kind: "reposition_award",
+      title: altOrigins.length > 0 ? "Alternate Airport Play" : "Connecting Play",
+      headline:
+        altOrigins.length > 0
+          ? `${feeder} → ${dest} · compare nearby gateways`
+          : `${origin} → ${dest} · 1-stop value routing`,
+      reasoning:
+        altOrigins.length > 0
+          ? `Search ${[origin, ...altOrigins].join(", ")} for the lowest cash or miles out of your metro — not a US West Coast default.`
+          : `Optimized connecting routing from ${origin} to ${dest}. Live Duffel pricing checks your stated origin, not LAX/ONT defaults.`,
+      segments: [
+        {
+          mode: "flight",
+          label: `${feeder} → ${dest}`,
+          detail: altOrigins.length > 0 ? "Alternate gateway · award or cash" : "1-stop · award or cash",
+          costUsd: 420,
+          milesUsed: 55_000,
+          cpp: 1.9,
+        },
+        hotelSegment,
+      ],
+      scores: {
+        tvs: 88,
+        trueOutOfPocket: 720,
+        frictionMinutes: 75,
+        comfortScore: 82,
+        valueScore: 90,
+        statusScore: 78,
+        confidence: 0.86,
+      },
+      instrumentsUsed: [],
+      preCrimeWarnings: [`Confirm award space ${feeder} → ${dest} before committing.`],
+      departureAirports: [feeder],
+      recommended: false,
+    });
+  }
+
+  strategies.push(
     {
       id: "direct_cash",
       kind: "direct_cash",
       title: "Direct Play",
-      headline: "LAX → FCO nonstop · cash fare",
-      reasoning:
-        "Simplest path: nonstop from LAX in premium economy cash, Hyatt on points. No repositioning, no certificates burned. Best when time matters more than marginal savings.",
+      headline: `${origin} → ${dest} · cash fare`,
+      reasoning: `Simplest path: fly ${origin} → ${dest} in cash. No US repositioning assumed — Duffel live search uses your origin airports.`,
       segments: [
         {
           mode: "flight",
-          label: "LAX → FCO",
-          detail: "Nonstop premium economy · ~$1,850 RT",
-          costUsd: 1850,
+          label: `${origin} → ${dest}`,
+          detail: "Best available nonstop or 1-stop · live Duffel",
+          costUsd: 850,
         },
         {
           mode: "hotel",
-          label: `${primaryHotel} Centric Rome`,
-          detail: "21k Hyatt points/night × 10 nights",
+          label: `${primaryHotel} ${destLabel}`,
+          detail: "21k Hyatt points/night × trip length",
           costUsd: 0,
           milesUsed: 210_000,
           cpp: 1.7,
@@ -100,7 +161,7 @@ function buildItalyStrategies(intent: TripIntent, genome: TravelerGenome): Trave
       ],
       scores: {
         tvs: 81,
-        trueOutOfPocket: 1850,
+        trueOutOfPocket: 850,
         frictionMinutes: 20,
         comfortScore: 92,
         valueScore: 68,
@@ -109,30 +170,29 @@ function buildItalyStrategies(intent: TripIntent, genome: TravelerGenome): Trave
       },
       instrumentsUsed: [],
       preCrimeWarnings: [],
-      departureAirports: ["LAX"],
+      departureAirports: [origin],
       recommended: false,
     },
     {
       id: "instrument_play",
       kind: "instrument_play",
       title: "Instrument Play",
-      headline: "SNA → FCO · guest upgrade cert + suite cert",
-      reasoning:
-        guestUpgrade
-          ? `Use your ${guestUpgrade.label} for business on SNA→SEA→FCO. Burn Globalist suite cert at Park Hyatt Roma for maximum cert value (~$800/night suite for cert face value).`
-          : "Combine upgrade instrument with Globalist suite certificate at Park Hyatt Roma.",
+      headline: `${origin} → ${dest} · certs + points`,
+      reasoning: guestUpgrade
+        ? `Use ${guestUpgrade.label} on ${origin}→${dest}. Burn suite cert at ${primaryHotel} ${destLabel} when face value is highest.`
+        : `Combine upgrade instruments and hotel points for ${origin} → ${dest}.`,
       segments: [
         {
           mode: "flight",
-          label: "SNA → FCO",
-          detail: "1-stop via SEA · cert upgrade to business",
+          label: `${origin} → ${dest}`,
+          detail: "Upgrade instrument or miles · business when available",
           costUsd: 420,
           milesUsed: 15_000,
           cpp: 1.9,
         },
         {
           mode: "hotel",
-          label: "Park Hyatt Roma",
+          label: `${primaryHotel} ${destLabel}`,
           detail: "Suite cert + points top-up nights",
           costUsd: 180,
           milesUsed: 35_000,
@@ -142,7 +202,7 @@ function buildItalyStrategies(intent: TripIntent, genome: TravelerGenome): Trave
       scores: {
         tvs: 78,
         trueOutOfPocket: 600,
-        frictionMinutes: 90,
+        frictionMinutes: 60,
         comfortScore: 95,
         valueScore: 72,
         statusScore: 90,
@@ -164,30 +224,29 @@ function buildItalyStrategies(intent: TripIntent, genome: TravelerGenome): Trave
       ],
       preCrimeWarnings: [
         suiteCert?.expiresAt
-          ? `Suite cert expires ${suiteCert.expiresAt} — this trip uses it optimally.`
+          ? `Suite cert expires ${suiteCert.expiresAt} — verify before booking.`
           : "Verify suite cert expiry before booking.",
-        "Guest upgrade inventory limited — confirm before committing.",
+        "Upgrade inventory limited — confirm before committing.",
       ],
-      departureAirports: ["SNA", "SEA"],
+      departureAirports: [origin],
       recommended: false,
     },
     {
       id: "status_play",
       kind: "status_play",
       title: "Status Play",
-      headline: "LAX → FCO · earn requal · lounge chain",
-      reasoning:
-        "Pay cash for flexible fare on Oneworld metal to maximize Alaska status credit. Use MVP Gold lounge access at LAX T6 and partner lounges in Rome. Hyatt base room on points — save suite cert.",
+      headline: `${origin} → ${dest} · earn requal · lounges`,
+      reasoning: `Pay cash for flexible fare from ${origin} to maximize status credit and lounge access. Hotel on points — preserve suite cert.`,
       segments: [
         {
           mode: "flight",
-          label: "LAX → FCO",
-          detail: "AA/BA codeshare · full fare economy+ · ~$2,100",
-          costUsd: 2100,
+          label: `${origin} → ${dest}`,
+          detail: "Full fare economy+ · status earn",
+          costUsd: 1100,
         },
         {
           mode: "hotel",
-          label: `${primaryHotel} Centric Rome`,
+          label: `${primaryHotel} ${destLabel}`,
           detail: "Points only · preserve suite cert",
           costUsd: 0,
           milesUsed: 210_000,
@@ -196,7 +255,7 @@ function buildItalyStrategies(intent: TripIntent, genome: TravelerGenome): Trave
       ],
       scores: {
         tvs: 74,
-        trueOutOfPocket: 2100,
+        trueOutOfPocket: 1100,
         frictionMinutes: 30,
         comfortScore: 85,
         valueScore: 62,
@@ -212,11 +271,11 @@ function buildItalyStrategies(intent: TripIntent, genome: TravelerGenome): Trave
           warning: "Not used — saved for higher-value property",
         },
       ],
-      preCrimeWarnings: ["Higher cash outlay — best if requalifying MVP Gold 75K this year."],
-      departureAirports: ["LAX"],
+      preCrimeWarnings: ["Higher cash outlay — best when status requal matters this year."],
+      departureAirports: [origin],
       recommended: false,
     },
-  ];
+  );
 
   if (!genome.toleratesRepositioning) {
     for (const s of strategies) {
@@ -236,6 +295,10 @@ function buildItalyStrategies(intent: TripIntent, genome: TravelerGenome): Trave
   }
 
   return strategies;
+}
+
+function buildItalyStrategies(intent: TripIntent, genome: TravelerGenome): TravelStrategy[] {
+  return buildRouteStrategies(intent, genome);
 }
 
 function buildGenericStrategies(intent: TripIntent, genome: TravelerGenome): TravelStrategy[] {

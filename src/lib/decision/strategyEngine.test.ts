@@ -11,6 +11,19 @@ test("parses Italy in September intent", () => {
   assert.equal(intent.destinationIata, "FCO");
 });
 
+test("uses London origin in strategies not LAX default", () => {
+  const genome = createSampleGenome("test-user-lhr");
+  const brief = buildDecisionBrief("London Heathrow to Italy in September", genome);
+  assert.ok(brief.intent.originAirports?.includes("LHR"));
+  assert.ok(brief.searchAirports.includes("LHR"));
+  assert.equal(brief.searchAirports.includes("SNA"), false);
+  assert.equal(brief.searchAirports.includes("SEA"), false);
+  const direct = brief.strategies.find((s) => s.kind === "direct_cash");
+  assert.ok(direct?.headline.includes("LHR"));
+  assert.ok(direct?.headline.includes("FCO"));
+  assert.equal(direct?.departureAirports[0], "LHR");
+});
+
 test("returns 3-4 strategies for SoCal genome", () => {
   const genome = createSampleGenome("test-user");
   const brief = buildDecisionBrief("Italy in September", genome);
@@ -19,7 +32,8 @@ test("returns 3-4 strategies for SoCal genome", () => {
   assert.equal(brief.strategies[0]?.recommended, true);
   assert.equal(brief.strategies[0]?.valueRank, 1);
   assert.ok(brief.searchAirports.includes("SNA"));
-  assert.ok(brief.searchAirports.includes("SEA"));
+  assert.equal(brief.searchAirports.includes("SFO"), false);
+  assert.equal(brief.searchAirports.includes("SEA"), false);
 });
 
 test("penalizes reposition when genome disallows it", () => {
