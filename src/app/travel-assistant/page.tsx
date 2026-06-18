@@ -87,6 +87,7 @@ import { BookingWalkthroughModal } from "@/components/decision/BookingWalkthroug
 import { countPlaceholderReservations } from "@/lib/travelAssistant/placeholderReservations";
 import {
   countBookingProgress,
+  findPlannedReplacementIndex,
   upsertReservationReplacingPlanned,
 } from "@/lib/travelAssistant/plannedReservationMatch";
 import { buildWalkthroughLegsFromReservations } from "@/lib/travelAssistant/walkthroughFromReservations";
@@ -1642,12 +1643,13 @@ function defaultTripFromCurrentState(input: {
   hotelArrivalTime: string | null;
 } {
   const fallbackDate = new Date().toISOString().slice(0, 10);
+  const endDateFallback = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const firstReservationDate = input.reservations[0]?.localTime?.slice(0, 10) || fallbackDate;
   const startDate = firstReservationDate;
-  const endDate = input.reservations[1]?.localTime?.slice(0, 10) || firstReservationDate;
+  const endDate = input.reservations[1]?.localTime?.slice(0, 10) || endDateFallback;
   return {
-    name: "My First Trip",
-    destination: input.reservations[0]?.location || "Set destination",
+    name: "My trip",
+    destination: "Plan in Trip Planner",
     startDate,
     endDate,
     stage: input.tripStage,
@@ -2158,6 +2160,16 @@ export default function TravelAssistantPage() {
     }
     return trips.find((trip) => trip.id === activeTripId) ?? null;
   }, [activeTripId, trips]);
+
+  const isLegacyStarterTrip = useMemo(() => {
+    if (!activeTrip) return false;
+    if (activeTrip.name === "Welcome to Kepi") return true;
+    return (
+      activeTrip.reservations.length === 0 &&
+      activeTrip.startDate.startsWith("2024") &&
+      activeTrip.destination === "San Francisco"
+    );
+  }, [activeTrip]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -5956,18 +5968,21 @@ export default function TravelAssistantPage() {
     const target = reviewQueue.find((item) => item.id === reviewId);
     if (!target) return;
     const draft = draftOverride ?? target.draft;
-    const duplicateReservation = reservations.find((reservation) => isDuplicateReservation(reservation, draft));
-    if (duplicateReservation) {
-      pushUndoSnapshot("Duplicate review item skipped");
-      setReviewQueue((prev) => prev.filter((item) => item.id !== reviewId));
-      queueMutation("Duplicate review item skipped.", {
-        key: "review-duplicate-skip",
-        reservationId: duplicateReservation.id,
-      });
-      setToast(
-        `Possible duplicate found (${duplicateReservation.title || duplicateReservation.provider || "existing reservation"}) — skipped this review item.`,
-      );
-      return;
+    const plannedReplacementIndex = findPlannedReplacementIndex(reservations, draft);
+    if (plannedReplacementIndex < 0) {
+      const duplicateReservation = reservations.find((reservation) => isDuplicateReservation(reservation, draft));
+      if (duplicateReservation) {
+        pushUndoSnapshot("Duplicate review item skipped");
+        setReviewQueue((prev) => prev.filter((item) => item.id !== reviewId));
+        queueMutation("Duplicate review item skipped.", {
+          key: "review-duplicate-skip",
+          reservationId: duplicateReservation.id,
+        });
+        setToast(
+          `Possible duplicate found (${duplicateReservation.title || duplicateReservation.provider || "existing reservation"}) — skipped this review item.`,
+        );
+        return;
+      }
     }
     const integrity = evaluateReservationIntegrity(draft);
     if (!integrity.safeForLive) {
@@ -7275,6 +7290,24 @@ export default function TravelAssistantPage() {
                   </button>
                 </div>
               </article>
+
+              {isLegacyStarterTrip ? (
+                <article className="rounded-3xl border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-500/40 dark:bg-amber-950/30">
+                  <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">
+                    This is a sample trip from an older version of Kepi.
+                  </p>
+                  <p className="mt-1 text-xs text-amber-800/90 dark:text-amber-100/80">
+                    Open Trip Planner to describe your real trip — Kepi will build a plan with book links and PLANNED legs you can confirm later.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => openTripPlanner()}
+                    className="mt-3 rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-amber-500"
+                  >
+                    Plan my trip →
+                  </button>
+                </article>
+              ) : null}
 
               <section className="grid gap-3 sm:grid-cols-2">
                 <button

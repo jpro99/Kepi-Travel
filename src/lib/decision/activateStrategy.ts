@@ -3,6 +3,7 @@ import type { SessionReadinessItem, SessionReservation } from "@/lib/travelAssis
 import type { ActivateStrategyResult, SelectedStayActivation, TravelStrategy, TripIntent } from "@/lib/decision/types";
 import type { AlignmentLeg } from "@/lib/decision/tripAlignment";
 import { countVerifiedLegs } from "@/lib/decision/tripAlignment";
+import { resolveHotelBookUrl } from "@/lib/decision/bookingLinks";
 import { allocateStopDates } from "@/lib/decision/stopDates";
 import { generateId } from "@/lib/utils/generateId";
 import { incrementTripCount } from "@/lib/traveler/travelerGenomeStore";
@@ -51,6 +52,15 @@ function hotelReservationFromStay(stay: SelectedStayActivation, location: string
   const nightly = Math.round(stay.nightlyUsd);
   const total = Math.round(stay.totalAmountUsd);
   const isEstimated = stay.quoteId.startsWith("est-");
+  const book = resolveHotelBookUrl({
+    propertyName: stay.name,
+    chainName: stay.chainName,
+    location: stay.area?.trim() || location,
+    checkInDate: stay.checkInDate,
+    checkOutDate: stay.checkOutDate,
+    quotedPriceUsd: total,
+    quoteId: stay.quoteId,
+  });
 
   return {
     id: generateId(),
@@ -73,6 +83,7 @@ function hotelReservationFromStay(stay: SelectedStayActivation, location: string
     quotedPriceUsd: total,
     checkOutDate: stay.checkOutDate,
     roomType: `$${nightly}/night · $${total} total`,
+    bookUrl: book.url,
   };
 }
 
@@ -98,11 +109,18 @@ function plannedLegReservation(leg: AlignmentLeg): SessionReservation | null {
   }
 
   if (leg.role === "hotel") {
+    const purchaseUrl = leg.bookUrl;
+    const notesParts = [
+      leg.statusLabel,
+      leg.detail,
+      purchaseUrl ? `Purchase: ${purchaseUrl}` : null,
+      "Forward your confirmation email after booking",
+    ].filter(Boolean);
     return {
       id: generateId(),
       type: "hotel",
       title: leg.label,
-      provider: "Hotel",
+      provider: leg.airline?.trim() || "Hotel",
       localTime: leg.departureDate ? `${leg.departureDate}T15:00:00` : "2099-01-01T15:00:00",
       timezone: "Etc/UTC",
       location: leg.label,
@@ -110,11 +128,13 @@ function plannedLegReservation(leg: AlignmentLeg): SessionReservation | null {
       assignedTo: ["You"],
       stage: "readiness",
       critical: false,
-      confidence: "medium",
-      notes: leg.detail,
+      confidence: leg.status === "verified" ? "high" : "medium",
+      notes: notesParts.join(" · "),
       source: "manual",
       plannedOnly: true,
       quotedPriceUsd: leg.priceUsd,
+      checkOutDate: leg.checkOutDate,
+      bookUrl: purchaseUrl,
     };
   }
 
@@ -161,13 +181,14 @@ function reservationsFromAlignment(
   intent?: TripIntent,
 ): SessionReservation[] {
   const reservations: SessionReservation[] = [];
+  const hasSelectedHotelLeg = alignmentLegs.some((leg) => leg.id === "hotel-selected");
 
   for (const leg of alignmentLegs) {
     const row = plannedLegReservation(leg);
     if (row) reservations.push(row);
   }
 
-  if (selectedStay && intent) {
+  if (selectedStay && intent && !hasSelectedHotelLeg) {
     const stop = intent.stops?.[0];
     reservations.push(
       hotelReservationFromStay(

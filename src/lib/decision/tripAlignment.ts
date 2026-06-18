@@ -1,6 +1,6 @@
 import { buildSeatsAeroSearchUrl } from "@/lib/decision/awardFlexEstimate";
-import { resolveCashBookUrl } from "@/lib/decision/bookingLinks";
-import type { DecisionBrief, TravelStrategy } from "@/lib/decision/types";
+import { resolveCashBookUrl, resolveHotelBookUrl } from "@/lib/decision/bookingLinks";
+import type { DecisionBrief, SelectedStayActivation, TravelStrategy } from "@/lib/decision/types";
 
 export type AlignmentStatus = "verified" | "estimated" | "recommended_skip" | "modeled";
 
@@ -20,6 +20,7 @@ export interface AlignmentLeg {
   bookUrl?: string;
   bookLabel?: string;
   verifyUrl?: string;
+  checkOutDate?: string;
 }
 
 function statusChip(status: AlignmentStatus): string {
@@ -44,6 +45,7 @@ function parseRouteFromLabel(label: string): { origin?: string; destination?: st
 export function buildAlignmentBoard(
   brief: DecisionBrief,
   strategy: TravelStrategy,
+  selectedStay?: SelectedStayActivation | null,
 ): AlignmentLeg[] {
   const legs: AlignmentLeg[] = [];
   const live = brief.livePricing;
@@ -238,17 +240,59 @@ export function buildAlignmentBoard(
     }
   }
 
-  for (const segment of strategy.segments.filter((s) => s.mode === "hotel")) {
+  if (selectedStay) {
+    const isEstimated = selectedStay.quoteId.startsWith("est-");
+    const book = resolveHotelBookUrl({
+      propertyName: selectedStay.name,
+      chainName: selectedStay.chainName,
+      location: selectedStay.area ?? brief.intent.destination,
+      checkInDate: selectedStay.checkInDate,
+      checkOutDate: selectedStay.checkOutDate,
+      quotedPriceUsd: selectedStay.totalAmountUsd,
+      quoteId: selectedStay.quoteId,
+    });
     legs.push({
-      id: `hotel-${segment.label}`,
+      id: "hotel-selected",
       step: step++,
       role: "hotel",
-      label: segment.label,
-      detail: segment.detail,
-      status: "modeled",
-      statusLabel: "Book after flights — ranked in Hotels mode",
-      priceUsd: segment.costUsd,
+      label: selectedStay.name,
+      detail: `${selectedStay.chainName?.trim() || "Hotel"} · ${selectedStay.checkInDate} → ${selectedStay.checkOutDate}`,
+      status: isEstimated ? "modeled" : "verified",
+      statusLabel: isEstimated ? statusChip("modeled") : statusChip("verified"),
+      priceUsd: selectedStay.totalAmountUsd,
+      departureDate: selectedStay.checkInDate,
+      checkOutDate: selectedStay.checkOutDate,
+      airline: selectedStay.chainName,
+      bookUrl: book.url,
+      bookLabel: book.label,
     });
+  } else {
+    for (const segment of strategy.segments.filter((s) => s.mode === "hotel")) {
+      const dateMatch = segment.detail.match(/(\d{4}-\d{2}-\d{2})\s*→\s*(\d{4}-\d{2}-\d{2})/);
+      const checkIn = dateMatch?.[1] ?? intent.startDate;
+      const checkOut = dateMatch?.[2] ?? intent.endDate;
+      const book = resolveHotelBookUrl({
+        propertyName: segment.label,
+        location: intent.destination,
+        checkInDate: checkIn,
+        checkOutDate: checkOut,
+        quotedPriceUsd: segment.costUsd,
+      });
+      legs.push({
+        id: `hotel-${segment.label}`,
+        step: step++,
+        role: "hotel",
+        label: segment.label,
+        detail: segment.detail,
+        status: "modeled",
+        statusLabel: "Ranked stay — confirm property before booking",
+        priceUsd: segment.costUsd,
+        departureDate: checkIn,
+        checkOutDate: checkOut,
+        bookUrl: book.url,
+        bookLabel: book.label,
+      });
+    }
   }
 
   return legs;

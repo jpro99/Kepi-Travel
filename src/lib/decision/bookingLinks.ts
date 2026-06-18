@@ -80,3 +80,79 @@ export function resolveCashBookUrl(input: {
     label: "Search on Google Flights ↗",
   };
 }
+
+const HOTEL_CHAIN_HOME: Record<string, string> = {
+  marriott: "https://www.marriott.com",
+  hilton: "https://www.hilton.com",
+  hyatt: "https://www.hyatt.com",
+  ihg: "https://www.ihg.com",
+  "intercontinental": "https://www.ihg.com",
+  accor: "https://all.accor.com",
+  wyndham: "https://www.wyndhamhotels.com",
+  choice: "https://www.choicehotels.com",
+  best: "https://www.bestwestern.com",
+  "best western": "https://www.bestwestern.com",
+  radisson: "https://www.radissonhotels.com",
+  four: "https://www.fourseasons.com",
+  "four seasons": "https://www.fourseasons.com",
+  kimpton: "https://www.kimptonhotels.com",
+};
+
+export function buildGoogleHotelsUrl(input: {
+  propertyName: string;
+  location?: string;
+  checkInDate: string;
+  checkOutDate: string;
+}): string {
+  const locationBit = input.location?.trim() ? ` ${input.location.trim()}` : "";
+  const query = `${input.propertyName}${locationBit} ${input.checkInDate} to ${input.checkOutDate}`;
+  return `https://www.google.com/travel/hotels?q=${encodeURIComponent(query)}`;
+}
+
+export function resolveHotelChainHomeUrl(chainName: string): string | null {
+  const lower = chainName.toLowerCase();
+  for (const [key, url] of Object.entries(HOTEL_CHAIN_HOME)) {
+    if (lower.includes(key)) return url;
+  }
+  return null;
+}
+
+export function resolveHotelBookUrl(input: {
+  propertyName: string;
+  chainName?: string;
+  location?: string;
+  checkInDate: string;
+  checkOutDate: string;
+  quotedPriceUsd?: number;
+  quoteId?: string;
+}): { url: string; label: string } {
+  const googleUrl = buildGoogleHotelsUrl(input);
+  const isLiveQuote = Boolean(input.quoteId?.trim() && !input.quoteId.startsWith("est-"));
+
+  if (isLiveQuote || input.quotedPriceUsd !== undefined) {
+    const shortName = input.propertyName.split(/\s+/).slice(0, 4).join(" ");
+    const priceBit =
+      input.quotedPriceUsd !== undefined
+        ? ` · $${Math.round(input.quotedPriceUsd).toLocaleString()}`
+        : isLiveQuote
+          ? " · live quote"
+          : "";
+    return {
+      url: googleUrl,
+      label: `${shortName} on Google Hotels${priceBit} ↗`,
+    };
+  }
+
+  const chainUrl = input.chainName ? resolveHotelChainHomeUrl(input.chainName) : null;
+  if (chainUrl) {
+    return {
+      url: chainUrl,
+      label: `Book on ${input.chainName?.split(" ")[0] ?? "chain"} ↗`,
+    };
+  }
+
+  return {
+    url: googleUrl,
+    label: "Search on Google Hotels ↗",
+  };
+}

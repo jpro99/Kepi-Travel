@@ -937,10 +937,12 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
   const expandedStrategy = brief?.strategies.find((strategy) => strategy.id === expandedId) ?? null;
   const alignmentPreviewStrategy =
     expandedStrategy ?? (visibleStrategies.length > 0 ? visibleStrategies[0] : null);
+  const selectedStayPayload =
+    selectedStay && staysData ? stayPayloadFromSelection(selectedStay, staysData.intent) : null;
   const alignmentPreviewLegs = useMemo(() => {
     if (!brief || !alignmentPreviewStrategy) return [];
-    return buildAlignmentBoard(brief, alignmentPreviewStrategy);
-  }, [brief, alignmentPreviewStrategy]);
+    return buildAlignmentBoard(brief, alignmentPreviewStrategy, selectedStayPayload);
+  }, [brief, alignmentPreviewStrategy, selectedStayPayload]);
   const tripTotal =
     selectedStay && expandedStrategy
       ? Math.round(expandedStrategy.scores.trueOutOfPocket + selectedStay.quote.totalAmountUsd)

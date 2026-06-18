@@ -113,7 +113,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const alignmentLegs = buildAlignmentBoard(enrichedBrief, strategy);
+  const alignmentLegs = buildAlignmentBoard(enrichedBrief, strategy, parsed.data.stay);
 
   const result = await activateStrategy(
     strategy,
