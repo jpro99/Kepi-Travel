@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import type {
@@ -362,6 +362,7 @@ function stayPayloadFromSelection(
 /* ── Command Deck ───────────────────────────────────────────────────────── */
 export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isSignedIn } = useAuth();
   const [prompt, setPrompt] = useState("");
   const [inputPrompt, setInputPrompt] = useState("");
@@ -395,6 +396,13 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     redirectPath: string;
   } | null>(null);
   const [forwardAddress, setForwardAddress] = useState<string | null>(null);
+
+  useEffect(() => {
+    const modeParam = searchParams.get("mode");
+    if (modeParam === "flights" || modeParam === "hotels" || modeParam === "full") {
+      setPlanMode(modeParam);
+    }
+  }, [searchParams]);
 
   // Stays — load unasked, the moment strategies exist (godlike mode)
   const [staysData, setStaysData] = useState<StaysResponse | null>(null);

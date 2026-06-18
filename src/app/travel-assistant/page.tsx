@@ -2725,6 +2725,17 @@ export default function TravelAssistantPage() {
     void handleSwitchTrip(tripId);
   }, [activeTripId, handleSwitchTrip, tripsLoading]);
 
+  const openTripPlanner = useCallback(
+    (options?: { mode?: "flights" | "hotels" | "full"; toast?: string }) => {
+      if (options?.toast) {
+        setToast(options.toast, { force: true });
+      }
+      const query = options?.mode ? `?mode=${encodeURIComponent(options.mode)}` : "";
+      router.push(`/book${query}`);
+    },
+    [router, setToast],
+  );
+
   const handleCreateTrip = useCallback(async (): Promise<void> => {
     const tripLimit = billingStatus?.usage?.tripLimit ?? 1;
     const allowCreation = hasProAccess || tripLimit === null || trips.length < tripLimit;
@@ -2733,7 +2744,9 @@ export default function TravelAssistantPage() {
         setToast("Still loading your plan — try again in a moment.", { force: true });
         return;
       }
+      setToast("Free plan includes one trip shell — open Trip Planner to build your route.", { force: true });
       openUpgradeModal("multi-trip", "Free includes one trip. Upgrade to add and manage multiple trips.");
+      router.push("/book");
       return;
     }
     const nextTripNumber = trips.length + 1;
@@ -2774,6 +2787,8 @@ export default function TravelAssistantPage() {
           // ignore parse errors
         }
         openUpgradeModal("multi-trip", detail);
+        setToast("Opening Trip Planner — save a plan to update your current trip shell.", { force: true });
+        router.push("/book");
         return;
       }
       if (!response.ok) {
@@ -2820,6 +2835,7 @@ export default function TravelAssistantPage() {
     openUpgradeModal,
     refreshGlobalBillingStatus,
     refreshTripsFromServer,
+    router,
     setToast,
     trips.length,
   ]);
@@ -3043,6 +3059,34 @@ export default function TravelAssistantPage() {
   const billingTripLimit = billingStatus?.usage?.tripLimit ?? 1;
   const canCreateAdditionalTrips =
     hasProAccess || billingTripLimit === null || trips.length < billingTripLimit;
+
+  const handlePlanTabNewTrip = useCallback(async (): Promise<void> => {
+    if (creatingTrip) return;
+    if (canCreateAdditionalTrips) {
+      await handleCreateTrip();
+      return;
+    }
+    openTripPlanner({
+      toast: activeTrip
+        ? "Trip Planner opens next — describe your trip to update routes and stays."
+        : "Trip Planner opens next — tell Kepi where you want to go.",
+    });
+  }, [activeTrip, canCreateAdditionalTrips, creatingTrip, handleCreateTrip, openTripPlanner]);
+
+  const openManualReservationFlow = useCallback((): void => {
+    const fallbackTrip = trips.find((trip) => trip.id === activeTripId) ?? trips[0] ?? null;
+    if (!activeTripId && fallbackTrip) {
+      setActiveTripId(fallbackTrip.id);
+      applyManagedTripToState(fallbackTrip, { resetHighlight: true });
+    }
+    if (!fallbackTrip && trips.length === 0) {
+      setToast("Creating a trip shell first…", { force: true });
+      void handleCreateTrip().then(() => setManualReservationModalOpen(true));
+      return;
+    }
+    setManualReservationModalOpen(true);
+  }, [activeTripId, applyManagedTripToState, handleCreateTrip, setToast, trips]);
+
   const trialDaysRemaining = isTrial ? Math.max(1, billingStatus?.trialDaysRemaining ?? 0) : 0;
   const trialExpiresAt = isTrial
     ? billingStatus?.inviteAccess?.trialExpiresAt ?? billingStatus?.subscription?.trialExpiresAt ?? null
@@ -7198,37 +7242,63 @@ export default function TravelAssistantPage() {
                 <p className="text-[10px] font-bold uppercase tracking-widest text-sky-200/80">Plan</p>
                 <h1 className="mt-1 text-2xl font-black leading-tight">Build your next trip</h1>
                 <p className="mt-2 text-sm leading-relaxed text-sky-100/80">
-                  Add flights, hotels, rides, and key plans. Kepi turns them into one live timeline.
+                  Add flights, hotels, rides, and key plans — or open Trip Planner for AI-ranked routes and stays.
                 </p>
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">
                   <button
                     type="button"
-                    onClick={() => setManualReservationModalOpen(true)}
+                    onClick={() => openTripPlanner()}
+                    className="rounded-2xl bg-[#f4c95d] px-4 py-3 text-sm font-black text-[#0b1f3a] transition hover:bg-[#ffe29a] sm:col-span-2"
+                  >
+                    Plan with Trip Planner →
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openManualReservationFlow}
                     className="rounded-2xl bg-white px-4 py-3 text-sm font-bold text-slate-950 transition hover:bg-sky-50"
                   >
                     + Add booking
                   </button>
                   <button
                     type="button"
+                    disabled={creatingTrip}
                     onClick={() => {
-                      void handleCreateTrip();
+                      void handlePlanTabNewTrip();
                     }}
-                    className="rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-bold text-white transition hover:bg-white/15"
+                    className="rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-bold text-white transition hover:bg-white/15 disabled:opacity-60"
                   >
-                    New trip
+                    {creatingTrip
+                      ? "Creating…"
+                      : canCreateAdditionalTrips
+                        ? "New trip shell"
+                        : "Plan new trip"}
                   </button>
                 </div>
               </article>
 
-              <section className="grid gap-3 sm:grid-cols-3">
+              <section className="grid gap-3 sm:grid-cols-2">
                 <button
                   type="button"
-                  onClick={() => setManualReservationModalOpen(true)}
+                  onClick={openManualReservationFlow}
                   className="rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800"
                 >
                   <span className="text-xl">📌</span>
                   <p className="mt-2 font-semibold text-slate-900 dark:text-white">Manual add</p>
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Flight, hotel, train, ride, dinner.</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    openTripPlanner({
+                      mode: "hotels",
+                      toast: "Hotel search is in Trip Planner — describe your cities and dates.",
+                    })
+                  }
+                  className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left shadow-sm transition hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-950/30 dark:hover:bg-amber-900/40"
+                >
+                  <span className="text-xl">🏨</span>
+                  <p className="mt-2 font-semibold text-amber-950 dark:text-amber-100">Find hotels (AI)</p>
+                  <p className="mt-1 text-xs text-amber-800/80 dark:text-amber-100/70">Ranked stays in Trip Planner.</p>
                 </button>
                 <button
                   type="button"
@@ -7311,9 +7381,17 @@ export default function TravelAssistantPage() {
                       done: Boolean(activeTrip),
                       title: "Create trip shell",
                       detail: activeTrip?.name ?? "Start a trip before adding bookings.",
-                      action: "New trip",
+                      action: activeTrip
+                        ? canCreateAdditionalTrips
+                          ? "New shell"
+                          : "Plan trip"
+                        : "New trip",
                       onClick: () => {
-                        void handleCreateTrip();
+                        if (activeTrip && !canCreateAdditionalTrips) {
+                          openTripPlanner();
+                          return;
+                        }
+                        void handlePlanTabNewTrip();
                       },
                     },
                     {
@@ -7328,14 +7406,17 @@ export default function TravelAssistantPage() {
                       title: "Add flights",
                       detail: plannerFlightCount > 0 ? `${plannerFlightCount} flight${plannerFlightCount === 1 ? "" : "s"} added.` : "Add or import flight confirmations.",
                       action: plannerFlightCount > 0 ? "Flights" : "Add",
-                      onClick: () => (plannerFlightCount > 0 ? navigateToConsumerTab("flights") : setManualReservationModalOpen(true)),
+                      onClick: () => (plannerFlightCount > 0 ? navigateToConsumerTab("flights") : openManualReservationFlow()),
                     },
                     {
                       done: plannerHotelCount > 0,
                       title: "Add stays",
-                      detail: plannerHotelCount > 0 ? `${plannerHotelCount} hotel${plannerHotelCount === 1 ? "" : "s"} added.` : "Add hotel or stay confirmations.",
-                      action: plannerHotelCount > 0 ? "Hotels" : "Add",
-                      onClick: () => (plannerHotelCount > 0 ? navigateToConsumerTab("hotels") : setManualReservationModalOpen(true)),
+                      detail: plannerHotelCount > 0 ? `${plannerHotelCount} hotel${plannerHotelCount === 1 ? "" : "s"} added.` : "Search ranked hotels in Trip Planner or add a confirmation manually.",
+                      action: plannerHotelCount > 0 ? "Hotels" : "Find hotels",
+                      onClick: () =>
+                        plannerHotelCount > 0
+                          ? navigateToConsumerTab("hotels")
+                          : openTripPlanner({ mode: "hotels" }),
                     },
                   ].map((step) => (
                     <div
