@@ -25,13 +25,13 @@ export function buildGoogleFlightsUrl(input: {
   origin: string;
   destination: string;
   departureDate: string;
+  returnDate?: string;
 }): string {
   const origin = input.origin.toUpperCase();
   const destination = input.destination.toUpperCase();
-  const query = encodeURIComponent(
-    `Flights from ${origin} to ${destination} on ${input.departureDate}`,
-  );
-  return `https://www.google.com/travel/flights?q=${query}`;
+  const outbound = `Flights from ${origin} to ${destination} on ${input.departureDate}`;
+  const query = input.returnDate ? `${outbound} returning ${input.returnDate}` : outbound;
+  return `https://www.google.com/travel/flights?q=${encodeURIComponent(query)}`;
 }
 
 export function resolveAirlineHomeUrl(airline: string): string | null {
@@ -47,7 +47,26 @@ export function resolveCashBookUrl(input: {
   destination: string;
   departureDate: string;
   airline?: string;
+  /** Present when Duffel returned a live offer — prefer route-specific Google Flights. */
+  offerId?: string;
+  quotedPriceUsd?: number;
+  flightNumber?: string;
 }): { url: string; label: string } {
+  const googleUrl = buildGoogleFlightsUrl(input);
+
+  if (input.offerId?.trim()) {
+    const airlineBit = input.airline?.split(" ")[0] ?? "Flight";
+    const flightBit = input.flightNumber ? ` ${input.flightNumber}` : "";
+    const priceBit =
+      input.quotedPriceUsd !== undefined
+        ? ` · $${Math.round(input.quotedPriceUsd).toLocaleString()} verified`
+        : " · live quote";
+    return {
+      url: googleUrl,
+      label: `${airlineBit}${flightBit} on Google Flights${priceBit} ↗`,
+    };
+  }
+
   const airlineUrl = input.airline ? resolveAirlineHomeUrl(input.airline) : null;
   if (airlineUrl) {
     return {
@@ -55,8 +74,9 @@ export function resolveCashBookUrl(input: {
       label: `Book on ${input.airline?.split(" ")[0] ?? "airline"} ↗`,
     };
   }
+
   return {
-    url: buildGoogleFlightsUrl(input),
+    url: googleUrl,
     label: "Search on Google Flights ↗",
   };
 }

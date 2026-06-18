@@ -64,6 +64,9 @@ export function buildAlignmentBoard(
       destination: offer.destination,
       departureDate: outboundDate,
       airline: offer.airline,
+      offerId: offer.offerId,
+      quotedPriceUsd: offer.amount,
+      flightNumber: offer.flightNumber,
     });
     legs.push({
       id: "outbound",
@@ -135,6 +138,9 @@ export function buildAlignmentBoard(
         destination: liveConnector.destination,
         departureDate: connector.departureDate,
         airline: liveConnector.airline,
+        offerId: liveConnector.offerId,
+        quotedPriceUsd: liveConnector.amount,
+        flightNumber: liveConnector.flightNumber,
       });
       legs.push({
         id: connector.id,
@@ -162,6 +168,9 @@ export function buildAlignmentBoard(
       destination: offer.destination,
       departureDate: returnDate,
       airline: offer.airline,
+      offerId: offer.offerId,
+      quotedPriceUsd: offer.amount,
+      flightNumber: offer.flightNumber,
     });
     legs.push({
       id: "return",

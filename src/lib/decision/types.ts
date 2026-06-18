@@ -132,6 +132,9 @@ export interface LivePricingSummary {
     currency: string;
     airline: string;
     stops: number;
+    offerId?: string;
+    flightNumber?: string;
+    departureDate?: string;
   };
   returnOffer?: {
     origin: string;
@@ -140,6 +143,9 @@ export interface LivePricingSummary {
     currency: string;
     airline: string;
     stops: number;
+    offerId?: string;
+    flightNumber?: string;
+    departureDate?: string;
   };
   roundTripTotalUsd?: number;
   connectorOffers?: Array<{
@@ -150,6 +156,9 @@ export interface LivePricingSummary {
     currency: string;
     airline: string;
     stops: number;
+    offerId?: string;
+    flightNumber?: string;
+    departureDate?: string;
   }>;
   searchedOrigins?: string[];
   message?: string;

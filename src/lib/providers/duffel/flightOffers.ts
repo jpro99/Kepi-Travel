@@ -38,6 +38,29 @@ function airlineName(offer: Record<string, unknown>): string {
   return "Airline";
 }
 
+function primaryFlightNumber(offer: Record<string, unknown>): string | undefined {
+  const slices = offer.slices;
+  if (!Array.isArray(slices) || slices.length === 0) return undefined;
+  const firstSlice = slices[0];
+  if (!firstSlice || typeof firstSlice !== "object") return undefined;
+  const segments = (firstSlice as Record<string, unknown>).segments;
+  if (!Array.isArray(segments) || segments.length === 0) return undefined;
+  const segment = segments[0];
+  if (!segment || typeof segment !== "object") return undefined;
+  const row = segment as Record<string, unknown>;
+  const carrier = row.marketing_carrier;
+  const iata =
+    carrier && typeof carrier === "object" && typeof (carrier as Record<string, unknown>).iata_code === "string"
+      ? ((carrier as Record<string, unknown>).iata_code as string)
+      : undefined;
+  const number =
+    typeof row.marketing_carrier_flight_number === "string"
+      ? row.marketing_carrier_flight_number.trim()
+      : undefined;
+  if (!iata || !number) return undefined;
+  return `${iata}${number}`.replace(/\s+/g, "").toUpperCase();
+}
+
 async function fetchOfferForRoute(
   token: string,
   origin: string,
@@ -119,6 +142,7 @@ async function fetchOfferForRoute(
       cabinClass,
       stops: countStops(best),
       offerId: typeof best.id === "string" ? best.id : "",
+      flightNumber: primaryFlightNumber(best),
     };
   } catch (error) {
     logger.warn("Duffel offer request error", {

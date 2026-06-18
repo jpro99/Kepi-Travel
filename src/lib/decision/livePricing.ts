@@ -121,6 +121,9 @@ export function enrichBriefWithDuffelPricing(
         currency: quote.currency,
         airline: quote.airline,
         stops: quote.stops,
+        offerId: quote.offerId,
+        flightNumber: quote.flightNumber,
+        departureDate: quote.departureDate,
       };
     })
     .filter((offer): offer is NonNullable<typeof offer> => offer !== null);
@@ -134,7 +137,10 @@ export function enrichBriefWithDuffelPricing(
       currency: offer.currency,
       airline: offer.airline,
       stops: offer.stops,
-      departureDate: "",
+      departureDate: offer.departureDate,
+      offerId: offer.offerId ?? "",
+      flightNumber: offer.flightNumber,
+      cabinClass: "economy",
     },
   }));
 
@@ -202,6 +208,9 @@ export function enrichBriefWithDuffelPricing(
         currency: outboundBest.currency,
         airline: outboundBest.airline,
         stops: outboundBest.stops,
+        offerId: outboundBest.offerId || undefined,
+        flightNumber: outboundBest.flightNumber,
+        departureDate: outboundBest.departureDate,
       },
       returnOffer: returnBest
         ? {
@@ -211,6 +220,9 @@ export function enrichBriefWithDuffelPricing(
             currency: returnBest.currency,
             airline: returnBest.airline,
             stops: returnBest.stops,
+            offerId: returnBest.offerId || undefined,
+            flightNumber: returnBest.flightNumber,
+            departureDate: returnBest.departureDate,
           }
         : undefined,
       connectorOffers: connectorOffers.length > 0 ? connectorOffers : undefined,
