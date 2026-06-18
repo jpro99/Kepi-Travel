@@ -7,10 +7,19 @@ function stopLabel(stops: number): string {
   return stops === 0 ? "nonstop" : `${stops} stop${stops > 1 ? "s" : ""}`;
 }
 
+export interface ConnectorDuffelQuote {
+  legId: string;
+  result: DuffelSearchResult;
+}
+
 function applyRoundTripToDirectStrategy(
   strategy: TravelStrategy,
   outboundQuote: DuffelSearchResult["quotes"][number],
   returnQuote?: DuffelSearchResult["quotes"][number],
+  connectorQuotes: Array<{
+    legId: string;
+    quote: DuffelSearchResult["quotes"][number];
+  }> = [],
 ): TravelStrategy {
   const flightSegments = strategy.segments.filter((segment) => segment.mode === "flight");
   const otherSegments = strategy.segments.filter((segment) => segment.mode !== "flight");
@@ -23,6 +32,14 @@ function applyRoundTripToDirectStrategy(
   };
 
   const segments = [outboundSegment];
+  for (const connector of connectorQuotes) {
+    segments.push({
+      mode: "flight" as const,
+      label: `${connector.quote.origin} → ${connector.quote.destination}`,
+      detail: `${connector.quote.airline} · ${stopLabel(connector.quote.stops)} · live Duffel connector`,
+      costUsd: connector.quote.totalAmountUsd,
+    });
+  }
   if (returnQuote) {
     segments.push({
       mode: "flight",
@@ -42,21 +59,35 @@ function applyRoundTripToDirectStrategy(
     }
   }
 
+  const connectorCash = connectorQuotes.reduce((sum, item) => sum + item.quote.totalAmountUsd, 0);
   const driveCost = otherSegments.reduce((sum, segment) => sum + segment.costUsd, 0);
   const trueOutOfPocket = Math.round(
-    outboundQuote.totalAmountUsd + (returnQuote?.totalAmountUsd ?? flightSegments[1]?.costUsd ?? 0) + driveCost,
+    outboundQuote.totalAmountUsd +
+      (returnQuote?.totalAmountUsd ?? flightSegments[1]?.costUsd ?? 0) +
+      connectorCash +
+      driveCost,
   );
 
+  const connectorSummary =
+    connectorQuotes.length > 0
+      ? ` + ${connectorQuotes.length} connector leg${connectorQuotes.length > 1 ? "s" : ""}`
+      : "";
+
   const headline = returnQuote
-    ? `${outboundQuote.origin} → ${outboundQuote.destination} · ${returnQuote.origin} → ${returnQuote.destination} · $${trueOutOfPocket.toLocaleString()} RT cash`
+    ? `${outboundQuote.origin} → ${outboundQuote.destination} · ${returnQuote.origin} → ${returnQuote.destination}${connectorSummary} · $${trueOutOfPocket.toLocaleString()} RT cash`
     : `${outboundQuote.origin} → ${outboundQuote.destination} · ${stopLabel(outboundQuote.stops)} · $${outboundQuote.totalAmountUsd.toLocaleString()} cash`;
+
+  const connectorReason =
+    connectorQuotes.length > 0
+      ? ` Connectors: ${connectorQuotes.map((item) => `${item.quote.origin}→${item.quote.destination} $${item.quote.totalAmountUsd}`).join("; ")}.`
+      : "";
 
   return {
     ...strategy,
     headline,
     reasoning: returnQuote
-      ? `Live Duffel round-trip: outbound ${outboundQuote.airline} $${outboundQuote.totalAmountUsd}, return ${returnQuote.airline} $${returnQuote.totalAmountUsd}.`
-      : `Live cash fare from Duffel (${outboundQuote.airline}, ${outboundQuote.departureDate}). Compared against miles and reposition strategies in your genome.`,
+      ? `Live Duffel round-trip: outbound ${outboundQuote.airline} $${outboundQuote.totalAmountUsd}, return ${returnQuote.airline} $${returnQuote.totalAmountUsd}.${connectorReason}`
+      : `Live cash fare from Duffel (${outboundQuote.airline}, ${outboundQuote.departureDate}). Compared against miles and reposition strategies in your genome.${connectorReason}`,
     segments: [...otherSegments, ...segments],
     departureAirports: [outboundQuote.origin],
     scores: {
@@ -73,9 +104,39 @@ export function enrichBriefWithDuffelPricing(
   genome: TravelerGenome,
   comfortWeight: number,
   returnDuffel?: DuffelSearchResult,
+  connectorDuffel: ConnectorDuffelQuote[] = [],
 ): DecisionBrief {
   const outboundBest = outboundDuffel.quotes[0];
   const returnBest = returnDuffel?.quotes[0];
+
+  const connectorOffers = connectorDuffel
+    .map(({ legId, result }) => {
+      const quote = result.quotes[0];
+      if (!quote) return null;
+      return {
+        legId,
+        origin: quote.origin,
+        destination: quote.destination,
+        amount: quote.totalAmountUsd,
+        currency: quote.currency,
+        airline: quote.airline,
+        stops: quote.stops,
+      };
+    })
+    .filter((offer): offer is NonNullable<typeof offer> => offer !== null);
+
+  const connectorQuotePairs = connectorOffers.map((offer) => ({
+    legId: offer.legId,
+    quote: {
+      origin: offer.origin,
+      destination: offer.destination,
+      totalAmountUsd: offer.amount,
+      currency: offer.currency,
+      airline: offer.airline,
+      stops: offer.stops,
+      departureDate: "",
+    },
+  }));
 
   if (!outboundDuffel.configured || !outboundBest) {
     return {
@@ -93,23 +154,47 @@ export function enrichBriefWithDuffelPricing(
 
   let strategies = brief.strategies.map((strategy) =>
     strategy.kind === "direct_cash"
-      ? applyRoundTripToDirectStrategy(strategy, outboundBest, returnBest)
+      ? applyRoundTripToDirectStrategy(
+          strategy,
+          outboundBest,
+          returnBest,
+          connectorQuotePairs,
+        )
       : strategy,
   );
 
   strategies = rankStrategiesByValue(strategies, genome, comfortWeight);
 
+  const connectorTotalUsd = connectorOffers.reduce((sum, offer) => sum + offer.amount, 0);
   const roundTripTotalUsd = returnBest
-    ? outboundBest.totalAmountUsd + returnBest.totalAmountUsd
-    : outboundBest.totalAmountUsd;
+    ? outboundBest.totalAmountUsd + returnBest.totalAmountUsd + connectorTotalUsd
+    : outboundBest.totalAmountUsd + connectorTotalUsd;
+
+  const connectorMessage =
+    connectorOffers.length > 0
+      ? ` + ${connectorOffers.length} connector${connectorOffers.length > 1 ? "s" : ""} $${connectorTotalUsd}`
+      : "";
 
   return {
     ...brief,
     strategies,
+    strategyCatalog: brief.strategyCatalog?.map((strategy) =>
+      strategy.kind === "direct_cash"
+        ? applyRoundTripToDirectStrategy(
+            strategy,
+            outboundBest,
+            returnBest,
+            connectorQuotePairs,
+          )
+        : strategy,
+    ),
     livePricing: {
       source: "duffel",
       configured: true,
-      quotesFound: outboundDuffel.quotes.length + (returnDuffel?.quotes.length ?? 0),
+      quotesFound:
+        outboundDuffel.quotes.length +
+        (returnDuffel?.quotes.length ?? 0) +
+        connectorOffers.length,
       bestOffer: {
         origin: outboundBest.origin,
         destination: outboundBest.destination,
@@ -128,14 +213,16 @@ export function enrichBriefWithDuffelPricing(
             stops: returnBest.stops,
           }
         : undefined,
+      connectorOffers: connectorOffers.length > 0 ? connectorOffers : undefined,
       roundTripTotalUsd,
       searchedOrigins: [
         ...outboundDuffel.quotes.map((quote) => quote.origin),
         ...(returnDuffel?.quotes.map((quote) => quote.origin) ?? []),
+        ...connectorOffers.map((offer) => offer.origin),
       ],
       message: returnBest
-        ? `Live RT cash: out $${outboundBest.totalAmountUsd} (${outboundBest.airline}) + return $${returnBest.totalAmountUsd} (${returnBest.airline})`
-        : `Live cash from ${outboundBest.origin}: $${outboundBest.totalAmountUsd} (${outboundBest.airline})`,
+        ? `Live RT cash: out $${outboundBest.totalAmountUsd} (${outboundBest.airline}) + return $${returnBest.totalAmountUsd} (${returnBest.airline})${connectorMessage}`
+        : `Live cash from ${outboundBest.origin}: $${outboundBest.totalAmountUsd} (${outboundBest.airline})${connectorMessage}`,
     },
   };
 }

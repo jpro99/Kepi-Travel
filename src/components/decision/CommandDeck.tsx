@@ -26,6 +26,7 @@ import type {
   TravelStrategy,
 } from "@/lib/decision/types";
 import { filterStrategiesByPaymentMode, paymentModeDescription } from "@/lib/decision/paymentMode";
+import { toggleLegEnabled } from "@/lib/decision/flightLegPlanner";
 import type { RankedStay } from "@/lib/decision/stayRanking";
 import { StrategyFlexModal } from "@/components/decision/StrategyFlexModal";
 import { RecordTripModal } from "@/components/decision/RecordTripModal";
@@ -360,6 +361,8 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
   const [flexStrategyId, setFlexStrategyId] = useState<string | null>(null);
   const [recordOpen, setRecordOpen] = useState(false);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>("cash");
+  const [enabledLegIds, setEnabledLegIds] = useState<string[]>([]);
+  const [legToggleBusy, setLegToggleBusy] = useState(false);
 
   // Stays — load unasked, the moment strategies exist (godlike mode)
   const [staysData, setStaysData] = useState<StaysResponse | null>(null);
@@ -373,24 +376,42 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
   const recognitionRef = useRef<any>(null);
 
   const fetchStrategies = useCallback(
-    async (nextPrompt: string, weight: number, mutation?: CounterfactualMutation) => {
+    async (
+      nextPrompt: string,
+      weight: number,
+      mutation?: CounterfactualMutation,
+      legIdsOverride?: string[],
+    ) => {
       const trimmed = nextPrompt.trim();
       if (!trimmed) return;
 
-      setLoading(true);
-      setError(null);
-      setBrief(null);
-      setStaysData(null);
-      setSelectedStayId(null);
-      setExpandedId(null);
-      setCounterfactualNote(null);
-      if (!mutation) setHasAnalyzed(true);
+      const isLegToggle = Boolean(legIdsOverride);
+      if (isLegToggle) {
+        setLegToggleBusy(true);
+      } else {
+        setLoading(true);
+        setError(null);
+        setBrief(null);
+        setStaysData(null);
+        setSelectedStayId(null);
+        setExpandedId(null);
+        setCounterfactualNote(null);
+        setEnabledLegIds([]);
+        if (!mutation) setHasAnalyzed(true);
+      }
 
       try {
         const endpoint = mutation ? "/api/decision/counterfactual" : "/api/decision/strategies";
+        const legIds = legIdsOverride ?? enabledLegIds;
         const body = mutation
           ? { prompt: nextPrompt, mutation: { ...mutation, priorityComfort: mutation.priorityComfort ?? weight } }
-          : { prompt: nextPrompt, comfortWeight: weight, planMode: "flights", paymentMode };
+          : {
+              prompt: nextPrompt,
+              comfortWeight: weight,
+              planMode: "flights",
+              paymentMode,
+              enabledLegIds: legIds.length > 0 ? legIds : undefined,
+            };
         const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -408,21 +429,36 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         if (data.brief?.paymentMode) {
           setPaymentMode(data.brief.paymentMode);
         }
+        if (data.brief?.flightLegs) {
+          setEnabledLegIds(data.brief.flightLegs.filter((leg) => leg.enabled).map((leg) => leg.id));
+        }
         if (mutation && data.counterfactual?.rankingChanged) {
           setCounterfactualNote("Ranking changed from your refinement ↑");
         } else if (mutation) {
           setCounterfactualNote("Scores updated — top pick holds.");
         }
         const top = data.brief?.strategies?.[0];
-        if (top) setExpandedId(top.id);
+        if (top && !isLegToggle) setExpandedId(top.id);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Something went wrong");
       } finally {
-        setLoading(false);
+        if (isLegToggle) {
+          setLegToggleBusy(false);
+        } else {
+          setLoading(false);
+        }
       }
     },
-    [paymentMode],
+    [paymentMode, enabledLegIds],
   );
+
+  const handleLegToggle = (legId: string): void => {
+    if (!brief?.flightLegs || !prompt.trim()) return;
+    const toggled = toggleLegEnabled(brief.flightLegs, legId);
+    const nextIds = toggled.filter((leg) => leg.enabled).map((leg) => leg.id);
+    setEnabledLegIds(nextIds);
+    void fetchStrategies(prompt, comfortWeight, undefined, nextIds);
+  };
 
   const visibleStrategies = brief
     ? filterStrategiesByPaymentMode(brief.strategyCatalog ?? brief.strategies, paymentMode)
@@ -993,23 +1029,45 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
               <div className="mt-4 rounded-2xl border border-slate-600 bg-[#152238] px-4 py-3">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Flight legs</p>
                 <p className="mt-1 text-xs text-slate-400">
-                  Long-haul searched now. Toggle city-to-city flights in a later update.
+                  Tap optional legs to search city-to-city flights. Long-haul legs always on.
+                  {legToggleBusy ? " Updating fares…" : ""}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {brief.flightLegs.map((leg) => (
-                    <span
-                      key={leg.id}
-                      className={`rounded-xl px-3 py-1.5 text-xs font-semibold ${
-                        leg.enabled
-                          ? "border border-emerald-500/50 bg-emerald-950/50 text-emerald-100"
-                          : "border border-dashed border-slate-600 bg-slate-800/80 text-slate-400"
-                      }`}
-                    >
-                      {leg.fromLabel} → {leg.toLabel}
-                      {leg.optional ? " · off" : ""}
-                    </span>
-                  ))}
+                  {brief.flightLegs.map((leg) => {
+                    const chip = (
+                      <span
+                        className={`rounded-xl px-3 py-1.5 text-xs font-semibold ${
+                          leg.enabled
+                            ? "border border-emerald-500/50 bg-emerald-950/50 text-emerald-100"
+                            : "border border-dashed border-slate-600 bg-slate-800/80 text-slate-400"
+                        }`}
+                      >
+                        {leg.fromLabel} → {leg.toLabel}
+                        {leg.optional ? (leg.enabled ? " · on" : " · off") : ""}
+                      </span>
+                    );
+                    if (!leg.optional) {
+                      return <span key={leg.id}>{chip}</span>;
+                    }
+                    return (
+                      <button
+                        key={leg.id}
+                        type="button"
+                        disabled={legToggleBusy || loading}
+                        onClick={() => handleLegToggle(leg.id)}
+                        className="text-left disabled:opacity-60"
+                        title={leg.loyaltyNote ?? "Toggle this connector leg"}
+                      >
+                        {chip}
+                      </button>
+                    );
+                  })}
                 </div>
+                {brief.flightLegs.some((leg) => leg.loyaltyNote) ? (
+                  <p className="mt-3 text-xs leading-relaxed text-amber-200/90">
+                    {brief.flightLegs.find((leg) => leg.loyaltyNote)?.loyaltyNote}
+                  </p>
+                ) : null}
               </div>
             ) : null}
             <p className="mt-5 text-xs leading-relaxed text-slate-400">

@@ -50,6 +50,8 @@ export interface FlightLegPlan {
   enabled: boolean;
   optional: boolean;
   departureDate: string;
+  /** Shown when status airline cannot operate this leg (e.g. Alaska on EU connectors). */
+  loyaltyNote?: string;
 }
 
 export type PlanMode = "flights" | "hotels" | "full";
@@ -137,6 +139,15 @@ export interface LivePricingSummary {
     stops: number;
   };
   roundTripTotalUsd?: number;
+  connectorOffers?: Array<{
+    legId: string;
+    origin: string;
+    destination: string;
+    amount: number;
+    currency: string;
+    airline: string;
+    stops: number;
+  }>;
   searchedOrigins?: string[];
   message?: string;
 }

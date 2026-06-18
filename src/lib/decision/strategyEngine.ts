@@ -1,5 +1,5 @@
 import { buildInferredSummary, parseTripIntent } from "@/lib/decision/intentParser";
-import { buildFlightLegsFromIntent } from "@/lib/decision/flightLegPlanner";
+import { buildFlightLegsFromIntent, applyLegEnabledOverrides, annotateLegLoyaltyNotes } from "@/lib/decision/flightLegPlanner";
 import { buildQuestionBudget } from "@/lib/decision/questionBudget";
 import { rankStrategiesByValue } from "@/lib/decision/strategyRanking";
 import { personalizeStrategiesForIntent } from "@/lib/decision/strategyPersonalization";
@@ -442,6 +442,7 @@ export interface BuildDecisionOptions {
   mutation?: CounterfactualMutation;
   planMode?: PlanMode;
   paymentMode?: PaymentMode;
+  enabledLegIds?: string[];
 }
 
 export function buildDecisionBrief(
@@ -466,7 +467,9 @@ export function buildDecisionBrief(
   const needsOrigin = originRequiredForIntent(intent);
 
   const planMode = options.planMode ?? "full";
-  const flightLegs = buildFlightLegsFromIntent(intent, genome);
+  let flightLegs = buildFlightLegsFromIntent(intent, genome);
+  flightLegs = applyLegEnabledOverrides(flightLegs, options.enabledLegIds);
+  flightLegs = annotateLegLoyaltyNotes(flightLegs, intent);
 
   if (needsOrigin) {
     return {
@@ -518,7 +521,7 @@ export function buildDecisionBrief(
       ? filterStrategiesByPaymentMode(strategyCatalog, paymentMode)
       : strategyCatalog;
 
-  const questions = buildQuestionBudget(visibleStrategies, genome);
+  const questions = buildQuestionBudget(visibleStrategies, genome, intent);
 
   return {
     intent,

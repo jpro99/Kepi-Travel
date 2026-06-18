@@ -4,6 +4,7 @@ import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { enforceRateLimit } from "@/lib/rateLimit";
 import { enrichBriefWithDuffelPricing } from "@/lib/decision/livePricing";
 import { buildDecisionBrief } from "@/lib/decision/strategyEngine";
+import { enabledConnectorLegs } from "@/lib/decision/flightLegPlanner";
 import { searchDuffelCashQuotes } from "@/lib/providers/duffel/flightOffers";
 import { getTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
 
@@ -12,6 +13,7 @@ const BodySchema = z.object({
   comfortWeight: z.number().min(0).max(1).optional(),
   planMode: z.enum(["flights", "hotels", "full"]).optional(),
   paymentMode: z.enum(["cash", "points", "mix"]).optional(),
+  enabledLegIds: z.array(z.string()).optional(),
 });
 
 export async function POST(req: Request) {
@@ -49,6 +51,7 @@ export async function POST(req: Request) {
     comfortWeight,
     planMode,
     paymentMode,
+    enabledLegIds: parsed.data.enabledLegIds,
   });
 
   const arrivalIata = brief.intent.stops?.[0]?.iata ?? brief.intent.destinationIata;
@@ -68,12 +71,25 @@ export async function POST(req: Request) {
     });
   }
 
+  const connectorLegs = enabledConnectorLegs(brief.flightLegs ?? []);
+  const connectorDuffel = await Promise.all(
+    connectorLegs.map(async (leg) => ({
+      legId: leg.id,
+      result: await searchDuffelCashQuotes({
+        origins: [leg.fromIata],
+        destination: leg.toIata,
+        departureDate: leg.departureDate,
+      }),
+    })),
+  );
+
   const enriched = enrichBriefWithDuffelPricing(
     brief,
     outboundDuffel,
     genome,
     comfortWeight,
     returnDuffel,
+    connectorDuffel,
   );
 
   return NextResponse.json({ brief: enriched });
