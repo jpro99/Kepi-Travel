@@ -17,6 +17,7 @@ interface TripSwitcherProps {
   onSwitchTrip: (tripId: string) => Promise<void> | void;
   onCreateTrip: () => Promise<void> | void;
   disabled?: boolean;
+  creating?: boolean;
   canCreateTrip?: boolean;
   onRequestUpgrade?: () => void;
   createDisabledMessage?: string;
@@ -34,6 +35,7 @@ export function TripSwitcher({
   onSwitchTrip,
   onCreateTrip,
   disabled = false,
+  creating = false,
   canCreateTrip = true,
   onRequestUpgrade,
   createDisabledMessage,
@@ -107,18 +109,22 @@ export function TripSwitcher({
             <button
               type="button"
               onClick={async () => {
+                if (creating || disabled) return;
                 if (!canCreateTrip) {
                   onRequestUpgrade?.();
                   setOpen(false);
                   return;
                 }
-                await onCreateTrip();
-                setOpen(false);
+                try {
+                  await onCreateTrip();
+                } finally {
+                  setOpen(false);
+                }
               }}
-              disabled={disabled}
-              className="w-full rounded-lg bg-cyan-500 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-400"
+              disabled={disabled || creating}
+              className="w-full rounded-lg bg-cyan-500 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {canCreateTrip ? "New Trip" : "Upgrade for additional trips"}
+              {creating ? "Creating trip…" : canCreateTrip ? "New Trip" : "Upgrade for additional trips"}
             </button>
             {!canCreateTrip && createDisabledMessage ? (
               <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">{createDisabledMessage}</p>

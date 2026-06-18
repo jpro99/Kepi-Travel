@@ -28,6 +28,10 @@ export interface TripIntent {
   originCity?: string;
   originRegion?: string;
   originAirports?: string[];
+  /** Open-jaw return — fly home from a different city than arrival region */
+  returnCity?: string;
+  returnRegion?: string;
+  returnAirports?: string[];
   /** Multi-city legs in visit order */
   stops?: TripStop[];
   loyaltyPrograms?: string[];
@@ -35,6 +39,22 @@ export interface TripIntent {
   budgetHint?: string;
   isMultiCity?: boolean;
 }
+
+export interface FlightLegPlan {
+  id: string;
+  role: "outbound" | "return" | "connector";
+  fromIata: string;
+  toIata: string;
+  fromLabel: string;
+  toLabel: string;
+  enabled: boolean;
+  optional: boolean;
+  departureDate: string;
+}
+
+export type PlanMode = "flights" | "hotels" | "full";
+
+export type PaymentMode = "cash" | "points" | "mix";
 
 export interface StrategySegment {
   mode: "drive" | "flight" | "hotel" | "train";
@@ -108,6 +128,15 @@ export interface LivePricingSummary {
     airline: string;
     stops: number;
   };
+  returnOffer?: {
+    origin: string;
+    destination: string;
+    amount: number;
+    currency: string;
+    airline: string;
+    stops: number;
+  };
+  roundTripTotalUsd?: number;
   searchedOrigins?: string[];
   message?: string;
 }
@@ -119,6 +148,13 @@ export interface DecisionBrief {
   strategies: TravelStrategy[];
   questions: DecisionQuestion[];
   instrumentHighlights: string[];
+  /** True when international trip has no parsed departure — user must name origin airport. */
+  originRequired?: boolean;
+  planMode?: PlanMode;
+  paymentMode?: PaymentMode;
+  /** Full ranked strategies before payment-mode filter (for UI toggles). */
+  strategyCatalog?: TravelStrategy[];
+  flightLegs?: FlightLegPlan[];
   livePricing?: LivePricingSummary;
   genomeSnapshot: Pick<
     TravelerGenome,

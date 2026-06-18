@@ -20,10 +20,12 @@ import type {
   CounterfactualMutation,
   DecisionBrief,
   DecisionQuestion,
+  PaymentMode,
   SelectedStayActivation,
   StrategyFlexOptionsResult,
   TravelStrategy,
 } from "@/lib/decision/types";
+import { filterStrategiesByPaymentMode, paymentModeDescription } from "@/lib/decision/paymentMode";
 import type { RankedStay } from "@/lib/decision/stayRanking";
 import { StrategyFlexModal } from "@/components/decision/StrategyFlexModal";
 import { RecordTripModal } from "@/components/decision/RecordTripModal";
@@ -55,7 +57,8 @@ interface StaysResponse {
   }>;
 }
 
-const INPUT_PLACEHOLDER = "Describe your trip — or tap Record my trip";
+const INPUT_PLACEHOLDER =
+  "Where do you plan to travel? e.g. West Coast to Bari, Venice, Dolomites, Germany — fly home from Munich. Alaska Gold.";
 
 const SEGMENT_ICON: Record<string, string> = {
   flight: "✈️",
@@ -193,7 +196,7 @@ function StrategyCard({
             <h3 className="text-lg font-bold tracking-tight text-white">{strategy.title}</h3>
             <p className="mt-0.5 text-sm font-medium text-sky-100">{strategy.headline}</p>
           </div>
-          <TvsDial value={strategy.scores.tvs} gold={gold || statusPick} />
+          <TvsDial value={strategy.scores.tvs} gold={Boolean(gold || statusPick)} />
         </div>
 
         <p className="mt-3 text-sm leading-relaxed text-slate-300">{strategy.reasoning}</p>
@@ -356,6 +359,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
   const [flexData, setFlexData] = useState<StrategyFlexOptionsResult | null>(null);
   const [flexStrategyId, setFlexStrategyId] = useState<string | null>(null);
   const [recordOpen, setRecordOpen] = useState(false);
+  const [paymentMode, setPaymentMode] = useState<PaymentMode>("cash");
 
   // Stays — load unasked, the moment strategies exist (godlike mode)
   const [staysData, setStaysData] = useState<StaysResponse | null>(null);
@@ -386,7 +390,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         const endpoint = mutation ? "/api/decision/counterfactual" : "/api/decision/strategies";
         const body = mutation
           ? { prompt: nextPrompt, mutation: { ...mutation, priorityComfort: mutation.priorityComfort ?? weight } }
-          : { prompt: nextPrompt, comfortWeight: weight };
+          : { prompt: nextPrompt, comfortWeight: weight, planMode: "flights", paymentMode };
         const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -401,6 +405,9 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         }
         const data = await res.json();
         setBrief(data.brief);
+        if (data.brief?.paymentMode) {
+          setPaymentMode(data.brief.paymentMode);
+        }
         if (mutation && data.counterfactual?.rankingChanged) {
           setCounterfactualNote("Ranking changed from your refinement ↑");
         } else if (mutation) {
@@ -414,12 +421,23 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         setLoading(false);
       }
     },
-    [],
+    [paymentMode],
   );
 
-  // Stays — load when a new brief lands (server parses prompt; no stale client prompt)
-  useEffect(() => {
+  const visibleStrategies = brief
+    ? filterStrategiesByPaymentMode(brief.strategyCatalog ?? brief.strategies, paymentMode)
+    : [];
+
+  const handlePaymentModeChange = (mode: PaymentMode): void => {
+    setPaymentMode(mode);
     if (!brief) return;
+    const next = filterStrategiesByPaymentMode(brief.strategyCatalog ?? brief.strategies, mode);
+    if (next[0]) setExpandedId(next[0].id);
+  };
+
+  // Stays — hotels mode only (Phase 1 Command Deck is flights-only)
+  useEffect(() => {
+    if (!brief || brief.planMode === "flights") return;
     let cancelled = false;
     setStaysLoading(true);
     setStaysData(null);
@@ -800,7 +818,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
       <main className={`relative z-10 mx-auto max-w-3xl px-5 ${embedded ? "py-4 pb-8" : "py-6 pb-16"}`}>
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-slate-400">
-            Describe your trip in plain language — cities, dates, loyalty, budget.
+            Flight planning — where you&apos;re going, open-jaw returns, and status. Hotels come later.
           </p>
           <button
             type="button"
@@ -907,9 +925,18 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
             <span className={live.configured && live.bestOffer ? "animate-pulse" : ""}>●</span>
             {live.configured && live.bestOffer ? (
               <span>
-                Live fares verified — best ${Math.round(live.bestOffer.amount).toLocaleString()}{" "}
-                {live.bestOffer.airline} {live.bestOffer.stops === 0 ? "nonstop" : `(${live.bestOffer.stops} stop${live.bestOffer.stops > 1 ? "s" : ""})`}{" "}
-                from {live.bestOffer.origin} · {live.quotesFound} routes checked
+                Live fares — out ${Math.round(live.bestOffer.amount).toLocaleString()} {live.bestOffer.airline}{" "}
+                {live.bestOffer.origin}→{live.bestOffer.destination}
+                {live.returnOffer ? (
+                  <>
+                    {" "}
+                    · return ${Math.round(live.returnOffer.amount).toLocaleString()} {live.returnOffer.airline}{" "}
+                    {live.returnOffer.origin}→{live.returnOffer.destination}
+                  </>
+                ) : null}
+                {live.roundTripTotalUsd ? (
+                  <> · RT ${Math.round(live.roundTripTotalUsd).toLocaleString()}</>
+                ) : null}
               </span>
             ) : (
               <span>{live.message ?? "Live pricing unavailable — showing modeled estimates."}</span>
@@ -956,7 +983,35 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         {/* Inferred summary — Kepi shows its homework */}
         {brief && (
           <>
+            {brief.originRequired && (
+              <div className="mt-4 rounded-2xl border border-amber-500/60 bg-amber-950/40 px-4 py-3 text-sm leading-relaxed text-amber-100">
+                Name your departure airport (e.g. London Heathrow, JFK) — Kepi won&apos;t assume US West Coast.
+              </div>
+            )}
             <TripItinerarySummary intent={brief.intent} />
+            {brief.flightLegs && brief.flightLegs.length > 0 ? (
+              <div className="mt-4 rounded-2xl border border-slate-600 bg-[#152238] px-4 py-3">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Flight legs</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Long-haul searched now. Toggle city-to-city flights in a later update.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {brief.flightLegs.map((leg) => (
+                    <span
+                      key={leg.id}
+                      className={`rounded-xl px-3 py-1.5 text-xs font-semibold ${
+                        leg.enabled
+                          ? "border border-emerald-500/50 bg-emerald-950/50 text-emerald-100"
+                          : "border border-dashed border-slate-600 bg-slate-800/80 text-slate-400"
+                      }`}
+                    >
+                      {leg.fromLabel} → {leg.toLabel}
+                      {leg.optional ? " · off" : ""}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <p className="mt-5 text-xs leading-relaxed text-slate-400">
               <span className="font-bold text-slate-200">Kepi inferred:</span> {brief.inferredSummary}
             </p>
@@ -964,7 +1019,31 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         )}
 
         {/* Strategies */}
-        {brief && (
+        {brief && brief.planMode === "flights" && (
+          <p className="mt-5 rounded-2xl border border-slate-600 bg-[#152238] px-4 py-3 text-xs leading-relaxed text-slate-300">
+            <span className="font-bold text-slate-100">Flights only:</span> pick cash, points, or mix — up to 3
+            plays. {paymentModeDescription(paymentMode)}
+          </p>
+        )}
+        {brief && brief.planMode === "flights" && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {(["cash", "points", "mix"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => handlePaymentModeChange(mode)}
+                className={`rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-wide transition ${
+                  paymentMode === mode
+                    ? "bg-[#f4c95d] text-[#0b1f3a]"
+                    : "border border-slate-600 bg-[#152238] text-slate-300 hover:border-slate-400"
+                }`}
+              >
+                {mode === "cash" ? "Cash" : mode === "points" ? "Points" : "Mix"}
+              </button>
+            ))}
+          </div>
+        )}
+        {brief && brief.planMode !== "flights" && (
           <p className="mt-5 rounded-2xl border border-slate-600 bg-[#152238] px-4 py-3 text-xs leading-relaxed text-slate-300">
             <span className="font-bold text-slate-100">Ranked by value:</span> #1 is the lowest total
             trip cost (cash + points at your ¢/pt).{" "}
@@ -981,7 +1060,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
               </p>
             </div>
           )}
-          {brief?.strategies.map((strategy, index) => (
+          {visibleStrategies.map((strategy, index) => (
             <StrategyCard
               key={strategy.id}
               strategy={strategy}
@@ -1008,10 +1087,11 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         />
 
         {/* Where you'll sleep — Kepi already checked, ranked to your genome */}
-        {(staysLoading ||
+        {(brief?.planMode !== "flights" &&
+          (staysLoading ||
           (staysData && staysData.stays.length > 0) ||
           staysData?.error ||
-          staysData?.notice) && (
+          staysData?.notice)) && (
           <section className="mt-8">
             <div className="flex items-baseline justify-between gap-2">
               <h2 className="text-sm font-black uppercase tracking-widest text-slate-200">

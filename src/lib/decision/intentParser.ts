@@ -1,4 +1,5 @@
 import type { TripIntent, TripStop } from "@/lib/decision/types";
+import { stripOriginParseNoise } from "@/lib/decision/tripOrigins";
 
 const DESTINATION_MAP: Record<string, { city: string; iata: string; region: string }> = {
   italy: { city: "Italy", iata: "FCO", region: "Italy" },
@@ -20,6 +21,10 @@ const DESTINATION_MAP: Record<string, { city: string; iata: string; region: stri
   chicago: { city: "Chicago", iata: "ORD", region: "Illinois" },
   boston: { city: "Boston", iata: "BOS", region: "Massachusetts" },
   amsterdam: { city: "Amsterdam", iata: "AMS", region: "Netherlands" },
+  bari: { city: "Bari", iata: "BRI", region: "Italy" },
+  germany: { city: "Germany", iata: "MUC", region: "Germany" },
+  munich: { city: "Munich", iata: "MUC", region: "Germany" },
+  berlin: { city: "Berlin", iata: "BER", region: "Germany" },
   frankfurt: { city: "Frankfurt", iata: "FRA", region: "Germany" },
   dubai: { city: "Dubai", iata: "DXB", region: "UAE" },
   sydney: { city: "Sydney", iata: "SYD", region: "Australia" },
@@ -42,6 +47,7 @@ IATA_TO_CITY.SEA = { city: "Seattle", region: "Washington" };
 IATA_TO_CITY.SFO = { city: "San Francisco", region: "California" };
 
 const STOP_ALIASES: Record<string, keyof typeof DESTINATION_MAP> = {
+  bari: "bari",
   venice: "venice",
   venezia: "venice",
   dolomite: "dolomites",
@@ -52,6 +58,11 @@ const STOP_ALIASES: Record<string, keyof typeof DESTINATION_MAP> = {
   roma: "rome",
   florence: "florence",
   milan: "milan",
+  germany: "germany",
+  munich: "munich",
+  münchen: "munich",
+  berlin: "berlin",
+  frankfurt: "frankfurt",
 };
 
 const ORIGIN_MAP: Record<string, { city: string; region: string; airports: string[] }> = {
@@ -270,8 +281,29 @@ function parseTripDurationNights(lower: string): number | null {
   return null;
 }
 
+function matchPlaceFromText(text: string): ParsedOrigin | null {
+  return matchOriginFromText(text);
+}
+
+function parseReturn(lower: string): ParsedOrigin | null {
+  const normalized = stripOriginParseNoise(lower);
+  const patterns = [
+    /(?:fly(?:\s+back|\s+home)|return(?:\s+home)?|head(?:\s+)?back)\s+(?:from|via|out of)\s+(.+?)(?:\s+back|\s+to|\s+and|\s*,|\.|$)/i,
+    /(?:from)\s+(.+?)\s+(?:back|home)\s+to\s+(?:the\s+)?(?:united states|u\.?s\.?|america)/i,
+    /(?:then\s+)?(?:fly|go)\s+(?:back|home)\s+(?:from|via)\s+(.+?)(?:\s+back|\s+to|\s*,|\.|$)/i,
+  ];
+  for (const pattern of patterns) {
+    const match = normalized.match(pattern);
+    if (!match?.[1]) continue;
+    const place = matchPlaceFromText(match[1].replace(/\s+back\s+to.*$/i, "").trim());
+    if (place) return place;
+  }
+  return null;
+}
+
 function parseOrigin(lower: string): ParsedOrigin | null {
-  const stripped = lower
+  const normalized = stripOriginParseNoise(lower);
+  const stripped = normalized
     .replace(/^i\s+(want|wanna|would like|'d like)\s+to\s+(go\s+)?/i, "")
     .replace(/^plan\s+(a\s+)?trip\s+/i, "")
     .trim();
@@ -288,15 +320,21 @@ function parseOrigin(lower: string): ParsedOrigin | null {
     if (matched) return matched;
   }
 
-  const flyFromMatch = lower.match(/fly(?:ing)?\s+(?:out\s+)?from\s+(.+?)(?:\s+to|\s+in|\s+on|\s*,|\.|$)/i);
+  const flyFromMatch = normalized.match(/fly(?:ing)?\s+(?:out\s+)?from\s+(.+?)(?:\s+to|\s+in|\s+on|\s*,|\.|$)/i);
   if (flyFromMatch?.[1]) {
     const matched = matchOriginFromText(flyFromMatch[1]);
     if (matched) return matched;
   }
 
-  const departMatch = lower.match(/depart(?:ing)?\s+(?:from\s+)?(.+?)(?:\s+to|\s+in|\s+on|\s*,|\.|$)/i);
+  const departMatch = normalized.match(/depart(?:ing)?\s+(?:from\s+)?(.+?)(?:\s+to|\s+in|\s+on|\s*,|\.|$)/i);
   if (departMatch?.[1]) {
     const matched = matchOriginFromText(departMatch[1]);
+    if (matched) return matched;
+  }
+
+  const leavingMatch = normalized.match(/leaving\s+(?:from\s+)?(.+?)(?:\s+to|\s+in|\s+on|\s*,|\.|$)/i);
+  if (leavingMatch?.[1]) {
+    const matched = matchOriginFromText(leavingMatch[1]);
     if (matched) return matched;
   }
 
@@ -394,6 +432,7 @@ export function parseTripIntent(rawPrompt: string, referenceDate = new Date()): 
   const lower = rawPrompt.toLowerCase().trim();
   const stops = parseStops(lower);
   const origin = parseOrigin(lower);
+  const returnPlace = parseReturn(lower);
   const loyalty = parseLoyalty(lower);
   const budgetHint = parseBudgetHint(lower);
 
@@ -447,13 +486,16 @@ export function parseTripIntent(rawPrompt: string, referenceDate = new Date()): 
       ? "Peak season — book early for award space."
       : "Shoulder season — strong cash and award value.";
 
-  const primaryDestination = stops.length > 0 ? stops[0]! : dest;
+  const primaryStop = stops.length > 0 ? stops[0]! : null;
+  const primaryLabel = primaryStop?.name ?? dest.city;
+  const primaryIata = primaryStop?.iata ?? dest.iata;
+  const primaryRegion = primaryStop?.region ?? dest.region;
 
   return {
     rawPrompt,
-    destination: stops.length > 1 ? `${primaryDestination.name} + ${stops.length - 1} more` : primaryDestination.name,
-    destinationIata: primaryDestination.iata ?? dest.iata,
-    region: primaryDestination.region ?? dest.region,
+    destination: stops.length > 1 ? `${primaryLabel} + ${stops.length - 1} more` : primaryLabel,
+    destinationIata: primaryIata,
+    region: primaryRegion,
     monthLabel,
     startDate,
     endDate,
@@ -462,6 +504,9 @@ export function parseTripIntent(rawPrompt: string, referenceDate = new Date()): 
     originCity: origin?.city,
     originRegion: origin?.region,
     originAirports: origin?.airports,
+    returnCity: returnPlace?.city,
+    returnRegion: returnPlace?.region,
+    returnAirports: returnPlace?.airports,
     stops: stops.length > 0 ? stops : undefined,
     loyaltyPrograms: loyalty.programs.length > 0 ? loyalty.programs : undefined,
     preferredAirlines: loyalty.airlines.length > 0 ? loyalty.airlines : undefined,
@@ -473,6 +518,7 @@ export function parseTripIntent(rawPrompt: string, referenceDate = new Date()): 
 export function buildInferredSummary(intent: TripIntent, searchAirports: string[]): string {
   const airportList = searchAirports.slice(0, 5).join(" · ");
   const originPart = intent.originCity ? `${intent.originCity} → ` : "";
+  const returnPart = intent.returnCity ? ` · return from ${intent.returnCity}` : "";
   const datePart = `${intent.startDate.slice(5)} – ${intent.endDate.slice(5)}, ${intent.startDate.slice(0, 4)}`;
 
   if (intent.stops && intent.stops.length > 0) {
@@ -487,10 +533,10 @@ export function buildInferredSummary(intent: TripIntent, searchAirports: string[
         ? ` · ${[...(intent.loyaltyPrograms ?? []), ...(intent.preferredAirlines ?? [])].join(", ")}`
         : "";
     const budgetPart = intent.budgetHint ? ` · Budget ${intent.budgetHint}` : "";
-    return `${originPart}${legs} · ${datePart} · ${intent.nights} nights · via ${airportList}${loyaltyPart}${budgetPart}`;
+    return `${originPart}${legs}${returnPart} · ${datePart} · ${intent.nights} nights · flights via ${airportList}${loyaltyPart}${budgetPart}`;
   }
 
-  return `${originPart}${intent.destination}, ${intent.monthLabel} ${intent.startDate.slice(0, 4)} · ${intent.nights} nights · Searching ${airportList}`;
+  return `${originPart}${intent.destination}${returnPart}, ${intent.monthLabel} ${intent.startDate.slice(0, 4)} · ${intent.nights} nights · Searching ${airportList}`;
 }
 
-export const RECORD_TRIP_EXAMPLE = `I want to go from Beaumont, California to Italy — Venice for 3 days, then 5–7 days in the Dolomites, then the rest in Puglia (2–3 towns). Three-week trip: fly out around the 1st, fly home around the 25th from the West Coast. I'm Hyatt Globalist and Alaska MVP Gold — use Alaska if we can.`;
+export const RECORD_TRIP_EXAMPLE = `West Coast to Bari, then Venice, Dolomites, and Germany — fly home from Munich in September. Alaska MVP Gold.`;

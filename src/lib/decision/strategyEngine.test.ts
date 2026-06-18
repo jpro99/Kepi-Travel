@@ -24,22 +24,54 @@ test("uses London origin in strategies not LAX default", () => {
   assert.equal(direct?.departureAirports[0], "LHR");
 });
 
-test("returns 3-4 strategies for SoCal genome", () => {
-  const genome = createSampleGenome("test-user");
+test("Italy without stated origin flags originRequired not SoCal airports", () => {
+  const genome = createSampleGenome("test-user-intl");
   const brief = buildDecisionBrief("Italy in September", genome);
+  assert.equal(brief.originRequired, true);
+  assert.equal(brief.strategies.length, 0);
+  assert.equal(brief.searchAirports.length, 0);
+  assert.equal(brief.searchAirports.includes("SNA"), false);
+});
+
+test("returns up to 3 flight strategies in flights plan mode", () => {
+  const genome = createSampleGenome("test-user");
+  const brief = buildDecisionBrief("Beaumont California to Italy in September", genome, { planMode: "flights" });
+  assert.ok(brief.strategies.length >= 1);
+  assert.ok(brief.strategies.length <= 3);
+  assert.ok(brief.flightLegs && brief.flightLegs.length >= 1);
+  assert.equal(brief.strategies.every((strategy) => !strategy.segments.some((segment) => segment.mode === "hotel")), true);
+});
+
+test("returns full playbook strategies in full plan mode", () => {
+  const genome = createSampleGenome("test-user-full");
+  const brief = buildDecisionBrief("Beaumont California to Italy in September", genome, { planMode: "full" });
   assert.ok(brief.strategies.length >= 3);
   assert.ok(brief.strategies.length <= 4);
   assert.equal(brief.strategies[0]?.recommended, true);
   assert.equal(brief.strategies[0]?.valueRank, 1);
-  assert.ok(brief.searchAirports.includes("SNA"));
+  assert.ok(brief.searchAirports.includes("ONT") || brief.searchAirports.includes("SNA"));
   assert.equal(brief.searchAirports.includes("SFO"), false);
   assert.equal(brief.searchAirports.includes("SEA"), false);
+});
+
+test("open-jaw trip includes return leg in flights mode", () => {
+  const genome = createSampleGenome("test-user-open-jaw");
+  const brief = buildDecisionBrief(
+    "West Coast to Bari, Venice, Dolomites, Germany — fly home from Munich in September",
+    genome,
+    { planMode: "flights" },
+  );
+  assert.equal(brief.intent.returnAirports?.[0], "MUC");
+  const returnLeg = brief.flightLegs?.find((leg) => leg.role === "return");
+  assert.ok(returnLeg?.enabled);
+  const direct = brief.strategies.find((strategy) => strategy.kind === "direct_cash");
+  assert.ok(direct?.segments.some((segment) => segment.label.includes("MUC")));
 });
 
 test("penalizes reposition when genome disallows it", () => {
   const genome = createSampleGenome("test-user-2");
   genome.toleratesRepositioning = false;
-  const brief = buildDecisionBrief("Italy in September", genome);
+  const brief = buildDecisionBrief("Beaumont California to Italy in September", genome, { planMode: "full" });
   const reposition = brief.strategies.find((s) => s.kind === "reposition_award");
   assert.ok(reposition);
   assert.equal(reposition!.valueRank, brief.strategies.length);

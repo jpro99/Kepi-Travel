@@ -10,6 +10,8 @@ import { getTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
 const BodySchema = z.object({
   prompt: z.string().trim().min(1).max(2000),
   comfortWeight: z.number().min(0).max(1).optional(),
+  planMode: z.enum(["flights", "hotels", "full"]).optional(),
+  paymentMode: z.enum(["cash", "points", "mix"]).optional(),
 });
 
 export async function POST(req: Request) {
@@ -41,17 +43,38 @@ export async function POST(req: Request) {
 
   const genome = await getTravelerGenome(userId);
   const comfortWeight = parsed.data.comfortWeight ?? genome.decisionWeights.comfort;
+  const planMode = parsed.data.planMode ?? "flights";
+  const paymentMode = parsed.data.paymentMode ?? "cash";
   const brief = buildDecisionBrief(parsed.data.prompt, genome, {
     comfortWeight,
+    planMode,
+    paymentMode,
   });
 
-  const duffel = await searchDuffelCashQuotes({
+  const arrivalIata = brief.intent.stops?.[0]?.iata ?? brief.intent.destinationIata;
+  const outboundDuffel = await searchDuffelCashQuotes({
     origins: brief.searchAirports,
-    destination: brief.intent.destinationIata,
+    destination: arrivalIata,
     departureDate: brief.intent.startDate,
   });
 
-  const enriched = enrichBriefWithDuffelPricing(brief, duffel, genome, comfortWeight);
+  let returnDuffel: Awaited<ReturnType<typeof searchDuffelCashQuotes>> | undefined;
+  const homeIata = brief.searchAirports[0];
+  if (brief.intent.returnAirports?.length && homeIata) {
+    returnDuffel = await searchDuffelCashQuotes({
+      origins: brief.intent.returnAirports,
+      destination: homeIata,
+      departureDate: brief.intent.endDate,
+    });
+  }
+
+  const enriched = enrichBriefWithDuffelPricing(
+    brief,
+    outboundDuffel,
+    genome,
+    comfortWeight,
+    returnDuffel,
+  );
 
   return NextResponse.json({ brief: enriched });
 }

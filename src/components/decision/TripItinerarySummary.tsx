@@ -3,7 +3,7 @@
 import type { TripIntent } from "@/lib/decision/types";
 
 export function TripItinerarySummary({ intent }: { intent: TripIntent }) {
-  if (!intent.stops?.length && !intent.originCity && !intent.loyaltyPrograms?.length) {
+  if (!intent.stops?.length && !intent.originCity && !intent.returnCity && !intent.loyaltyPrograms?.length) {
     return null;
   }
 
@@ -16,6 +16,15 @@ export function TripItinerarySummary({ intent }: { intent: TripIntent }) {
           <span className="font-bold text-white">From:</span> {intent.originCity}
           {intent.originAirports?.length ? (
             <span className="text-slate-400"> · via {intent.originAirports.slice(0, 3).join(", ")}</span>
+          ) : null}
+        </p>
+      )}
+
+      {intent.returnCity && (
+        <p className="mt-2 text-sm text-slate-200">
+          <span className="font-bold text-white">Fly home from:</span> {intent.returnCity}
+          {intent.returnAirports?.length ? (
+            <span className="text-slate-400"> · via {intent.returnAirports.slice(0, 3).join(", ")}</span>
           ) : null}
         </p>
       )}

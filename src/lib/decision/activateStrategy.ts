@@ -145,7 +145,10 @@ function reservationsFromStrategy(
   selectedStay?: SelectedStayActivation | null,
 ): SessionReservation[] {
   const reservations: SessionReservation[] = [];
-  const depAirport = strategy.departureAirports[0] ?? intent.originAirports?.[0] ?? "LAX";
+  const depAirport = strategy.departureAirports[0] ?? intent.originAirports?.[0];
+  if (!depAirport) {
+    throw new Error("Cannot activate strategy without a departure airport");
+  }
   const preferAlaska = intent.preferredAirlines?.includes("Alaska");
   const stopRanges = allocateStopDates(intent);
   const arrivalIata = stopRanges[0]?.stop.iata ?? intent.destinationIata;

@@ -1,31 +1,123 @@
 import { buildInferredSummary, parseTripIntent } from "@/lib/decision/intentParser";
+import { buildFlightLegsFromIntent } from "@/lib/decision/flightLegPlanner";
 import { buildQuestionBudget } from "@/lib/decision/questionBudget";
 import { rankStrategiesByValue } from "@/lib/decision/strategyRanking";
 import { personalizeStrategiesForIntent } from "@/lib/decision/strategyPersonalization";
+import {
+  originRequiredForIntent,
+  resolvePrimaryOrigin,
+  resolveSearchAirports,
+} from "@/lib/decision/tripOrigins";
+import { filterStrategiesByPaymentMode, type PaymentMode } from "@/lib/decision/paymentMode";
 import type {
   CounterfactualMutation,
   CounterfactualResult,
   DecisionBrief,
+  PlanMode,
   TravelStrategy,
   TripIntent,
 } from "@/lib/decision/types";
 import type { TravelerGenome } from "@/lib/traveler/types";
 
-function expandSearchAirports(genome: TravelerGenome, intent?: TripIntent): string[] {
-  if (intent?.originAirports?.length) {
-    return [...new Set(intent.originAirports.map((code) => code.toUpperCase()))].slice(0, 6);
-  }
-  return [...new Set(genome.geoCluster.map((a) => a.iata))].slice(0, 6);
-}
-
 const SOCAL_AIRPORTS = new Set(["LAX", "ONT", "SNA", "BUR", "SAN", "PSP"]);
+const WEST_COAST_METRO = new Set(["LAX", "ONT", "SNA", "BUR", "SAN", "PSP", "SFO", "OAK", "SJC", "SEA"]);
 
 function isSoCalOrigin(iata: string): boolean {
   return SOCAL_AIRPORTS.has(iata.toUpperCase());
 }
 
-function resolvePrimaryOrigin(intent: TripIntent, genome: TravelerGenome): string {
-  return intent.originAirports?.[0]?.toUpperCase() ?? genome.geoCluster.find((a) => a.isPrimary)?.iata ?? "LAX";
+function isWestCoastMetroOrigin(iata: string): boolean {
+  return WEST_COAST_METRO.has(iata.toUpperCase());
+}
+
+function prefersAlaska(intent: TripIntent): boolean {
+  return Boolean(
+    intent.preferredAirlines?.includes("Alaska") ||
+    intent.loyaltyPrograms?.some((program) => /alaska/i.test(program)),
+  );
+}
+
+function returnFlightSegment(intent: TripIntent, homeIata: string, costUsd = 650): TravelStrategy["segments"][number] | null {
+  const returnFrom = intent.returnAirports?.[0]?.toUpperCase();
+  if (!returnFrom) return null;
+  return {
+    mode: "flight",
+    label: `${returnFrom} → ${homeIata}`,
+    detail: `Return · ${intent.returnCity ?? returnFrom} · ${intent.endDate}`,
+    costUsd,
+  };
+}
+
+function stripHotelSegments(strategy: TravelStrategy): TravelStrategy {
+  const flightSegments = strategy.segments.filter((segment) => segment.mode !== "hotel");
+  const returnCost = flightSegments
+    .filter((segment) => segment.mode === "flight")
+    .slice(1)
+    .reduce((sum, segment) => sum + segment.costUsd, 0);
+  const outboundCost = flightSegments.find((segment) => segment.mode === "flight")?.costUsd ?? 0;
+  return {
+    ...strategy,
+    segments: flightSegments,
+    scores: {
+      ...strategy.scores,
+      trueOutOfPocket: outboundCost + returnCost + strategy.segments
+        .filter((segment) => segment.mode === "drive")
+        .reduce((sum, segment) => sum + segment.costUsd, 0),
+    },
+  };
+}
+
+function appendReturnToStrategies(
+  strategies: TravelStrategy[],
+  intent: TripIntent,
+  homeIata: string,
+): TravelStrategy[] {
+  const returnSegment = returnFlightSegment(intent, homeIata);
+  if (!returnSegment) return strategies;
+
+  return strategies.map((strategy) => {
+    const hasReturn = strategy.segments.some(
+      (segment) => segment.mode === "flight" && segment.label.startsWith(`${returnSegment.label.split(" → ")[0]} →`),
+    );
+    if (hasReturn) return strategy;
+
+    const flightSegments = strategy.segments.filter((segment) => segment.mode === "flight");
+    const otherSegments = strategy.segments.filter((segment) => segment.mode !== "flight");
+    const outbound = flightSegments[0];
+    const returnFrom = returnSegment.label.split(" → ")[0] ?? intent.returnAirports?.[0] ?? "";
+    const returnTo = homeIata;
+    const headline =
+      outbound && strategy.kind === "direct_cash"
+        ? `${outbound.label} · ${returnFrom} → ${returnTo} · round-trip cash`
+        : strategy.headline;
+
+    return {
+      ...strategy,
+      headline,
+      reasoning: `${strategy.reasoning} Open-jaw return from ${intent.returnCity ?? returnFrom} on ${intent.endDate}.`,
+      segments: [...otherSegments, ...flightSegments, returnSegment],
+      scores: {
+        ...strategy.scores,
+        trueOutOfPocket: strategy.scores.trueOutOfPocket + returnSegment.costUsd,
+      },
+    };
+  });
+}
+
+function toFlightOnlyStrategies(
+  strategies: TravelStrategy[],
+  intent: TripIntent,
+  homeIata: string,
+): TravelStrategy[] {
+  const flightKinds = new Set<TravelStrategy["kind"]>(["direct_cash", "reposition_award", "instrument_play"]);
+  return appendReturnToStrategies(
+    strategies
+      .filter((strategy) => flightKinds.has(strategy.kind))
+      .map(stripHotelSegments)
+      .slice(0, 3),
+    intent,
+    homeIata,
+  );
 }
 
 function buildRouteStrategies(intent: TripIntent, genome: TravelerGenome): TravelStrategy[] {
@@ -34,11 +126,20 @@ function buildRouteStrategies(intent: TripIntent, genome: TravelerGenome): Trave
   const primaryHotel = genome.hotelChainPriority[0] ?? "Hyatt";
 
   const origin = resolvePrimaryOrigin(intent, genome);
+  if (!origin) return [];
+
   const altOrigins = (intent.originAirports ?? []).map((c) => c.toUpperCase()).filter((c) => c !== origin);
   const dest = intent.destinationIata.toUpperCase();
   const destLabel = intent.stops?.[0]?.name ?? intent.destination;
   const soCal = isSoCalOrigin(origin);
-  const repositionHub = soCal ? "SEA" : altOrigins[0] ?? null;
+  const preferAlaska = prefersAlaska(intent);
+  const westCoastMetro = isWestCoastMetroOrigin(origin);
+  const repositionHub =
+    preferAlaska && westCoastMetro && origin !== "SEA"
+      ? "SEA"
+      : soCal
+        ? "SEA"
+        : altOrigins[0] ?? null;
 
   const hotelSegment = {
     mode: "hotel" as const,
@@ -51,13 +152,15 @@ function buildRouteStrategies(intent: TripIntent, genome: TravelerGenome): Trave
 
   const strategies: TravelStrategy[] = [];
 
-  if (soCal && genome.toleratesRepositioning && repositionHub && repositionHub !== origin) {
+  if (genome.toleratesRepositioning && repositionHub && repositionHub !== origin && (soCal || preferAlaska)) {
     strategies.push({
       id: "reposition_award",
       kind: "reposition_award",
-      title: "Reposition Play",
+      title: preferAlaska ? "Alaska Reposition Play" : "Reposition Play",
       headline: `${origin} → ${repositionHub} · partner J to ${destLabel}`,
-      reasoning: `Reposition to ${repositionHub} for partner business class at ~70k miles. Often beats a direct cash fare from ${origin} at 2.1¢/mi when award space opens.`,
+      reasoning: preferAlaska
+        ? `Feeder to ${repositionHub} then partner business ~70k miles. Alaska MVP Gold often sees upgrade space on ${repositionHub} long-hauls vs flying direct from ${origin}.`
+        : `Reposition to ${repositionHub} for partner business class at ~70k miles. Often beats a direct cash fare from ${origin} at 2.1¢/mi when award space opens.`,
       segments: [
         {
           mode: "drive",
@@ -301,12 +404,22 @@ function buildItalyStrategies(intent: TripIntent, genome: TravelerGenome): Trave
   return buildRouteStrategies(intent, genome);
 }
 
-function buildGenericStrategies(intent: TripIntent, genome: TravelerGenome): TravelStrategy[] {
+function buildGenericStrategies(
+  intent: TripIntent,
+  genome: TravelerGenome,
+  planMode: PlanMode = "full",
+): TravelStrategy[] {
   let strategies = buildItalyStrategies(
     { ...intent, destination: intent.destination, destinationIata: intent.destinationIata },
     genome,
   );
   strategies = personalizeStrategiesForIntent(strategies, intent, genome);
+  if (planMode === "flights") {
+    const homeIata = resolvePrimaryOrigin(intent, genome);
+    if (homeIata) {
+      strategies = toFlightOnlyStrategies(strategies, intent, homeIata);
+    }
+  }
   return strategies;
 }
 
@@ -327,6 +440,8 @@ function instrumentHighlights(genome: TravelerGenome): string[] {
 export interface BuildDecisionOptions {
   comfortWeight?: number;
   mutation?: CounterfactualMutation;
+  planMode?: PlanMode;
+  paymentMode?: PaymentMode;
 }
 
 export function buildDecisionBrief(
@@ -347,12 +462,47 @@ export function buildDecisionBrief(
     };
   }
 
-  const searchAirports = expandSearchAirports(genome, intent);
-  let strategies = buildGenericStrategies(intent, genome);
+  const searchAirports = resolveSearchAirports(intent, genome);
+  const needsOrigin = originRequiredForIntent(intent);
+
+  const planMode = options.planMode ?? "full";
+  const flightLegs = buildFlightLegsFromIntent(intent, genome);
+
+  if (needsOrigin) {
+    return {
+      intent,
+      inferredSummary: `${intent.destination} — name your departure city or airport to see routes (no US West Coast default).`,
+      searchAirports,
+      strategies: [],
+      originRequired: true,
+      planMode,
+      flightLegs,
+      questions: [
+        {
+          id: "q-stated-origin",
+          prompt: "Where are you flying from?",
+          stakes: "Routes and live fares need your real departure airport — not a West Coast guess.",
+          flipsRanking: true,
+          options: [
+            { id: "edit", label: "Add origin to your prompt (e.g. London Heathrow to Italy)" },
+          ],
+        },
+      ],
+      instrumentHighlights: instrumentHighlights(genome),
+      genomeSnapshot: {
+        homeRegion: genome.homeRegion,
+        decisionWeights: genome.decisionWeights,
+        hotelChainPriority: genome.hotelChainPriority,
+        tripCount: genome.tripCount,
+      },
+    };
+  }
+
+  let strategies = buildGenericStrategies(intent, genome, planMode);
 
   if (options.mutation?.willingToReposition !== undefined) {
     const g = { ...genome, toleratesRepositioning: options.mutation.willingToReposition };
-    strategies = buildGenericStrategies(intent, g);
+    strategies = buildGenericStrategies(intent, g, planMode);
   }
 
   const comfortWeight =
@@ -361,16 +511,26 @@ export function buildDecisionBrief(
     genome.decisionWeights.comfort;
 
   strategies = rankStrategiesByValue(strategies, genome, comfortWeight);
+  const strategyCatalog = strategies;
+  const paymentMode = options.paymentMode ?? "cash";
+  const visibleStrategies =
+    planMode === "flights"
+      ? filterStrategiesByPaymentMode(strategyCatalog, paymentMode)
+      : strategyCatalog;
 
-  const questions = buildQuestionBudget(strategies, genome);
+  const questions = buildQuestionBudget(visibleStrategies, genome);
 
   return {
     intent,
     inferredSummary: buildInferredSummary(intent, searchAirports),
     searchAirports,
-    strategies,
+    strategies: visibleStrategies,
+    strategyCatalog,
+    paymentMode,
     questions,
     instrumentHighlights: instrumentHighlights(genome),
+    planMode,
+    flightLegs,
     genomeSnapshot: {
       homeRegion: genome.homeRegion,
       decisionWeights: genome.decisionWeights,

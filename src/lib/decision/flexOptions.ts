@@ -51,7 +51,8 @@ async function buildRepositionAwardOptions(
   const hotelCash = hotelCashFromStrategy(strategy);
   const baselineCash = strategy.scores.trueOutOfPocket;
 
-  const feederOrigin = intent.originAirports?.[0]?.toUpperCase() ?? strategy.departureAirports[0] ?? "LAX";
+  const feederOrigin = intent.originAirports?.[0]?.toUpperCase() ?? strategy.departureAirports[0];
+  if (!feederOrigin) return [];
   const gateway =
     strategy.departureAirports.find((code) => code !== feederOrigin) ??
     intent.originAirports?.[1]?.toUpperCase() ??
@@ -238,7 +239,8 @@ async function buildInstrumentOrStatusOptions(
   intent: TripIntent,
   searchAirports: string[],
 ): Promise<StrategyFlexOption[]> {
-  const origin = strategy.departureAirports[0] ?? searchAirports[0] ?? "LAX";
+  const origin = strategy.departureAirports[0] ?? searchAirports[0];
+  if (!origin) return [];
   const baseDate = intent.startDate;
   const hotelCash = hotelCashFromStrategy(strategy);
   const baselineCash = strategy.scores.trueOutOfPocket;

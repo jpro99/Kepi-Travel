@@ -1675,6 +1675,7 @@ export default function TravelAssistantPage() {
   const [trips, setTrips] = useState<ManagedTrip[]>([]);
   const [activeTripId, setActiveTripId] = useState<string | null>(null);
   const [tripsLoading, setTripsLoading] = useState(true);
+  const [creatingTrip, setCreatingTrip] = useState(false);
   const [upgradeModalGate, setUpgradeModalGate] = useState<UpgradeModalGateContext | null>(null);
   const [highlightedReservationId, setHighlightedReservationId] = useState<string | null>(null);
   const [tripStage, setTripStage] = useState<TripStage>("readiness");
@@ -2481,11 +2482,15 @@ export default function TravelAssistantPage() {
   }, [applyManagedTripToState]);
 
   const openUpgradeModal = useCallback((feature: PlanFeature, detail?: string): void => {
-    if (billingLoading || billingStatusPlan !== "free") {
+    if (billingLoading) {
+      setToast("Still loading your plan — try again in a moment.", { force: true });
+      return;
+    }
+    if (billingStatusPlan !== "free") {
       return;
     }
     setUpgradeModalGate({ feature, detail });
-  }, [billingLoading, billingStatusPlan]);
+  }, [billingLoading, billingStatusPlan, setToast]);
 
   const closeUpgradeModal = useCallback((): void => {
     setUpgradeModalGate(null);
@@ -2703,6 +2708,10 @@ export default function TravelAssistantPage() {
     const tripLimit = billingStatus?.usage?.tripLimit ?? 1;
     const allowCreation = hasProAccess || tripLimit === null || trips.length < tripLimit;
     if (!allowCreation) {
+      if (billingLoading) {
+        setToast("Still loading your plan — try again in a moment.", { force: true });
+        return;
+      }
       openUpgradeModal("multi-trip", "Free includes one trip. Upgrade to add and manage multiple trips.");
       return;
     }
@@ -2710,9 +2719,12 @@ export default function TravelAssistantPage() {
     const now = new Date();
     const startDate = now.toISOString().slice(0, 10);
     const endDate = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    setCreatingTrip(true);
     try {
       const response = await fetch(TRIP_API_ROUTE, {
         method: "POST",
+        credentials: "include",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           setActive: true,
@@ -2732,8 +2744,19 @@ export default function TravelAssistantPage() {
           },
         }),
       });
+      if (response.status === 402) {
+        let detail = "Free includes one trip. Upgrade to add and manage multiple trips.";
+        try {
+          const denied = (await response.json()) as { error?: string };
+          if (denied.error?.trim()) detail = denied.error.trim();
+        } catch {
+          // ignore parse errors
+        }
+        openUpgradeModal("multi-trip", detail);
+        return;
+      }
       if (!response.ok) {
-        setToast("Could not create a new trip.");
+        setToast("Could not create a new trip.", { force: true });
         return;
       }
       const payload = (await response.json()) as {
@@ -2744,7 +2767,7 @@ export default function TravelAssistantPage() {
       };
       const createdTrip = normalizeManagedTrip(payload.trip ?? payload.activeTrip);
       if (!createdTrip) {
-        setToast("Trip created but response was invalid.");
+        setToast("Trip created but response was invalid.", { force: true });
         return;
       }
       if (Array.isArray(payload.trips)) {
@@ -2752,20 +2775,30 @@ export default function TravelAssistantPage() {
           .map((trip) => normalizeManagedTrip(trip))
           .filter((trip): trip is ManagedTrip => trip !== null);
         setTrips(parsedTrips);
+      } else {
+        await refreshTripsFromServer();
       }
       setActiveTripId(payload.activeTripId ?? createdTrip.id);
       applyManagedTripToState(createdTrip, { resetHighlight: true });
       void refreshGlobalBillingStatus();
-      setToast(`Created ${createdTrip.name}.`);
+      setConsumerTab("trip");
+      const params = new URLSearchParams(window.location.search);
+      params.set("tab", "trip");
+      window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
+      setToast(`Created ${createdTrip.name}.`, { force: true });
     } catch {
-      setToast("Could not create a new trip.");
+      setToast("Could not create a new trip.", { force: true });
+    } finally {
+      setCreatingTrip(false);
     }
   }, [
     applyManagedTripToState,
+    billingLoading,
     billingStatus?.usage?.tripLimit,
     hasProAccess,
     openUpgradeModal,
     refreshGlobalBillingStatus,
+    refreshTripsFromServer,
     setToast,
     trips.length,
   ]);
@@ -2987,7 +3020,8 @@ export default function TravelAssistantPage() {
   const canUseAiSuggestions = hasProPlan;
   const canUsePushNotifications = hasProPlan;
   const billingTripLimit = billingStatus?.usage?.tripLimit ?? 1;
-  const canCreateAdditionalTrips = hasProPlan || billingTripLimit === null || trips.length < billingTripLimit;
+  const canCreateAdditionalTrips =
+    hasProAccess || billingTripLimit === null || trips.length < billingTripLimit;
   const trialDaysRemaining = isTrial ? Math.max(1, billingStatus?.trialDaysRemaining ?? 0) : 0;
   const trialExpiresAt = isTrial
     ? billingStatus?.inviteAccess?.trialExpiresAt ?? billingStatus?.subscription?.trialExpiresAt ?? null
@@ -7062,6 +7096,27 @@ export default function TravelAssistantPage() {
                 ) : null}
               </div>
             </div>
+            <div className="mt-3">
+              <TripSwitcher
+                trips={trips.map((trip) => ({
+                  id: trip.id,
+                  name: trip.name,
+                  destination: trip.destination,
+                  startDate: trip.startDate,
+                  endDate: trip.endDate,
+                }))}
+                activeTripId={activeTripId}
+                onSwitchTrip={handleSwitchTrip}
+                onCreateTrip={handleCreateTrip}
+                disabled={tripsLoading || billingLoading}
+                creating={creatingTrip}
+                canCreateTrip={canCreateAdditionalTrips}
+                createDisabledMessage="Free plan supports one trip."
+                onRequestUpgrade={() =>
+                  openUpgradeModal("multi-trip", "Upgrade to Pro to create and switch between multiple trips.")
+                }
+              />
+            </div>
           </header>
 
           {/* Apple-style tab bar */}
@@ -8021,7 +8076,8 @@ export default function TravelAssistantPage() {
               activeTripId={activeTripId}
               onSwitchTrip={handleSwitchTrip}
               onCreateTrip={handleCreateTrip}
-              disabled={tripsLoading}
+              disabled={tripsLoading || billingLoading}
+              creating={creatingTrip}
               canCreateTrip={canCreateAdditionalTrips}
               createDisabledMessage="Free plan supports one trip."
               onRequestUpgrade={() =>
