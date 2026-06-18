@@ -1,3 +1,4 @@
+import type { AlignmentLeg } from "@/lib/decision/tripAlignment";
 import type { TravelerGenome } from "@/lib/traveler/types";
 
 export type StrategyKind =
@@ -211,6 +212,9 @@ export interface ActivateStrategyResult {
   tripId: string;
   tripName: string;
   redirectPath: string;
+  alignmentLegs: AlignmentLeg[];
+  verifiedLegCount: number;
+  totalBookableLegs: number;
 }
 
 export type FlexPricingSource = "live" | "estimated" | "mixed";

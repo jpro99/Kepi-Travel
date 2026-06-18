@@ -12,7 +12,7 @@
  * earlier?"), and Activate → a real Kepi trip.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
@@ -35,6 +35,10 @@ import { StrategyFlexModal } from "@/components/decision/StrategyFlexModal";
 import { RecordTripModal } from "@/components/decision/RecordTripModal";
 import { TripItinerarySummary } from "@/components/decision/TripItinerarySummary";
 import { ExpertDeckPanel } from "@/components/decision/ExpertDeckPanel";
+import { TripAlignmentBoard } from "@/components/decision/TripAlignmentBoard";
+import { BookingWalkthroughModal } from "@/components/decision/BookingWalkthroughModal";
+import { buildAlignmentBoard } from "@/lib/decision/tripAlignment";
+import type { AlignmentLeg } from "@/lib/decision/tripAlignment";
 
 import { RECORD_TRIP_EXAMPLE } from "@/lib/decision/intentParser";
 
@@ -321,7 +325,7 @@ function StrategyCard({
                 : "border border-slate-500 bg-slate-700 text-white hover:bg-slate-600 disabled:opacity-60"
             }`}
           >
-            {activating ? "Building your trip…" : "Activate this strategy →"}
+            {activating ? "Saving your plan…" : "Save plan & book →"}
           </button>
         </div>
       )}
@@ -381,6 +385,16 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
   const [expertOptions, setExpertOptions] = useState<ExpertDeckOptions>({ enabled: false, dateFlexDays: 3 });
   const [enabledLegIds, setEnabledLegIds] = useState<string[]>([]);
   const [legToggleBusy, setLegToggleBusy] = useState(false);
+  const [walkthroughOpen, setWalkthroughOpen] = useState(false);
+  const [walkthroughData, setWalkthroughData] = useState<{
+    tripName: string;
+    strategyTitle: string;
+    legs: AlignmentLeg[];
+    verifiedLegCount: number;
+    totalBookableLegs: number;
+    redirectPath: string;
+  } | null>(null);
+  const [forwardAddress, setForwardAddress] = useState<string | null>(null);
 
   // Stays — load unasked, the moment strategies exist (godlike mode)
   const [staysData, setStaysData] = useState<StaysResponse | null>(null);
@@ -392,6 +406,18 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
   const [transcript, setTranscript] = useState("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!walkthroughOpen) return;
+    void fetch("/api/email-handle/mine", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { forwardAddress?: string } | null) => {
+        if (data?.forwardAddress) {
+          setForwardAddress(data.forwardAddress);
+        }
+      })
+      .catch(() => null);
+  }, [walkthroughOpen]);
 
   const fetchStrategies = useCallback(
     async (
@@ -578,6 +604,31 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     void fetchStrategies(inputPrompt, comfortWeight);
   };
 
+  const openWalkthroughFromResponse = useCallback(
+    (data: {
+      activation: {
+        tripName: string;
+        redirectPath: string;
+        verifiedLegCount: number;
+        totalBookableLegs: number;
+        alignmentLegs: AlignmentLeg[];
+      };
+      alignment?: { legs: AlignmentLeg[] };
+      strategyTitle?: string;
+    }) => {
+      setWalkthroughData({
+        tripName: data.activation.tripName,
+        strategyTitle: data.strategyTitle ?? "Your play",
+        legs: data.alignment?.legs ?? data.activation.alignmentLegs ?? [],
+        verifiedLegCount: data.activation.verifiedLegCount,
+        totalBookableLegs: data.activation.totalBookableLegs,
+        redirectPath: data.activation.redirectPath,
+      });
+      setWalkthroughOpen(true);
+    },
+    [],
+  );
+
   const activateTripDirect = useCallback(
     async (payload: PendingActivate) => {
       setActivatingId(payload.strategyId);
@@ -589,6 +640,9 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
           body: JSON.stringify({
             prompt: payload.prompt,
             strategyId: payload.strategyId,
+            planMode,
+            paymentMode,
+            enabledLegIds: enabledLegIds.length > 0 ? enabledLegIds : undefined,
             ...(payload.stay ? { stay: payload.stay } : {}),
           }),
         });
@@ -597,13 +651,14 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
           throw new Error(typeof errBody?.error === "string" ? errBody.error : "Activation failed");
         }
         const data = await res.json();
-        router.push(data.activation.redirectPath);
+        openWalkthroughFromResponse(data);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Activation failed");
+      } finally {
         setActivatingId(null);
       }
     },
-    [router],
+    [enabledLegIds, openWalkthroughFromResponse, paymentMode, planMode],
   );
 
   const handleRecordTrip = useCallback(
@@ -765,6 +820,8 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
           prompt,
           strategyId,
           planMode: brief?.planMode ?? planMode,
+          paymentMode,
+          enabledLegIds: enabledLegIds.length > 0 ? enabledLegIds : undefined,
           ...(stayPayload ? { stay: stayPayload } : {}),
         }),
       });
@@ -784,9 +841,10 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         throw new Error(msg);
       }
       const data = await res.json();
-      router.push(data.activation.redirectPath);
+      openWalkthroughFromResponse(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Activation failed");
+    } finally {
       setActivatingId(null);
     }
   };
@@ -869,6 +927,12 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
 
   const selectedStay = staysData?.stays.find((stay) => stay.quote.id === selectedStayId) ?? null;
   const expandedStrategy = brief?.strategies.find((strategy) => strategy.id === expandedId) ?? null;
+  const alignmentPreviewStrategy =
+    expandedStrategy ?? (visibleStrategies.length > 0 ? visibleStrategies[0] : null);
+  const alignmentPreviewLegs = useMemo(() => {
+    if (!brief || !alignmentPreviewStrategy) return [];
+    return buildAlignmentBoard(brief, alignmentPreviewStrategy);
+  }, [brief, alignmentPreviewStrategy]);
   const tripTotal =
     selectedStay && expandedStrategy
       ? Math.round(expandedStrategy.scores.trueOutOfPocket + selectedStay.quote.totalAmountUsd)
@@ -1167,10 +1231,22 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
           </>
         )}
 
+        {brief && alignmentPreviewLegs.length > 0 && !loading && (
+          <div className="mt-5">
+            <TripAlignmentBoard
+              legs={alignmentPreviewLegs}
+              strategyTitle={alignmentPreviewStrategy?.title}
+            />
+            <p className="mt-2 text-center text-[10px] leading-relaxed text-slate-500">
+              Green = live quote · Amber = estimate · Slate = skip · Save plan to open booking links
+            </p>
+          </div>
+        )}
+
         {/* Strategies */}
         {brief && brief.planMode === "hotels" && (
           <p className="mt-5 rounded-2xl border border-slate-600 bg-[#152238] px-4 py-3 text-xs leading-relaxed text-slate-300">
-            <span className="font-bold text-slate-100">Hotels only:</span> pick a property below, then activate
+            <span className="font-bold text-slate-100">Hotels only:</span> pick a property below, then save
             your stay plan. Switch to Flights or Full trip when you&apos;re ready to route airfare.
           </p>
         )}
@@ -1351,6 +1427,23 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         onClose={() => setRecordOpen(false)}
         onSubmit={handleRecordTrip}
       />
+
+      {walkthroughData ? (
+        <BookingWalkthroughModal
+          open={walkthroughOpen}
+          tripName={walkthroughData.tripName}
+          strategyTitle={walkthroughData.strategyTitle}
+          legs={walkthroughData.legs}
+          verifiedLegCount={walkthroughData.verifiedLegCount}
+          totalBookableLegs={walkthroughData.totalBookableLegs}
+          forwardAddress={forwardAddress}
+          onClose={() => setWalkthroughOpen(false)}
+          onGoToTrip={() => {
+            setWalkthroughOpen(false);
+            router.push(walkthroughData.redirectPath);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

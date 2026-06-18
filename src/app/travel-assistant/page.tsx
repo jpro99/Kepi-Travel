@@ -2074,7 +2074,14 @@ export default function TravelAssistantPage() {
         setConsumerTab(tab);
       }
       const hadActivated = params.get("activated") === "1";
-      if (hadActivated) {
+      const hadWalkthrough = params.get("walkthrough") === "1";
+      if (hadWalkthrough) {
+        setImportBannerHighlighted(true);
+        setToast(
+          "Plan saved — book from your walkthrough links, then forward confirmations to replace planned legs.",
+        );
+        params.delete("walkthrough");
+      } else if (hadActivated) {
         setImportBannerHighlighted(true);
         setToast("Your trip is live — forward confirmations or import from Gmail to replace placeholders.");
         params.delete("activated");
@@ -2103,7 +2110,7 @@ export default function TravelAssistantPage() {
       if (gmailStatus) {
         params.delete("gmail");
       }
-      if (hadActivated || hadStage || gmailStatus) {
+      if (hadActivated || hadWalkthrough || hadStage || gmailStatus) {
         const nextQuery = params.toString();
         const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}`;
         window.history.replaceState({}, "", nextUrl);
