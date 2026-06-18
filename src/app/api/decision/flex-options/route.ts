@@ -10,6 +10,7 @@ const BodySchema = z.object({
   prompt: z.string().trim().min(1).max(2000),
   strategyId: z.string().trim().min(1).max(80),
   comfortWeight: z.number().min(0).max(1).optional(),
+  dateFlexDays: z.union([z.literal(3), z.literal(7), z.literal(14)]).optional(),
 });
 
 export async function POST(req: Request) {
@@ -52,6 +53,7 @@ export async function POST(req: Request) {
     kind: strategy.kind,
     intent: brief.intent,
     searchAirports: brief.searchAirports,
+    dateFlexDays: parsed.data.dateFlexDays,
   });
 
   return NextResponse.json({

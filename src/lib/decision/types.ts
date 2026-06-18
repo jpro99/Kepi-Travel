@@ -108,6 +108,8 @@ export interface TravelStrategy {
   /** Status Play flagged when status goals outweigh pure cost rank */
   statusRecommended?: boolean;
   statusRecommendReason?: string;
+  /** Expert mode — why this strategy landed at its rank. */
+  rankExplanation?: string;
 }
 
 export interface DecisionQuestion {

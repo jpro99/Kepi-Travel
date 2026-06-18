@@ -8,12 +8,24 @@ import { enabledConnectorLegs } from "@/lib/decision/flightLegPlanner";
 import { searchDuffelCashQuotes } from "@/lib/providers/duffel/flightOffers";
 import { getTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
 
+const ExpertSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    originIata: z.string().trim().length(3).optional(),
+    cppFloor: z.number().min(0).max(10).optional(),
+    dateFlexDays: z.union([z.literal(3), z.literal(7), z.literal(14)]).optional(),
+    pointsProgram: z.string().trim().max(80).optional(),
+    legDateOverrides: z.record(z.string(), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
+  })
+  .optional();
+
 const BodySchema = z.object({
   prompt: z.string().trim().min(1).max(2000),
   comfortWeight: z.number().min(0).max(1).optional(),
   planMode: z.enum(["flights", "hotels", "full"]).optional(),
   paymentMode: z.enum(["cash", "points", "mix"]).optional(),
   enabledLegIds: z.array(z.string()).optional(),
+  expert: ExpertSchema,
 });
 
 export async function POST(req: Request) {
@@ -52,7 +64,12 @@ export async function POST(req: Request) {
     planMode,
     paymentMode,
     enabledLegIds: parsed.data.enabledLegIds,
+    expert: parsed.data.expert,
   });
+
+  if (planMode === "hotels") {
+    return NextResponse.json({ brief });
+  }
 
   const arrivalIata = brief.intent.stops?.[0]?.iata ?? brief.intent.destinationIata;
   const outboundDuffel = await searchDuffelCashQuotes({

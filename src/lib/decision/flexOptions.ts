@@ -9,6 +9,7 @@ import {
   searchDuffelAcrossDates,
   shiftIsoDate,
 } from "@/lib/providers/duffel/flexFlightSearch";
+import { DATE_FLEX_SHIFTS, type DateFlexDays } from "@/lib/decision/expertDeck";
 
 function hotelCashFromStrategy(strategy: TravelStrategy): number {
   return strategy.segments.filter((s) => s.mode === "hotel").reduce((sum, s) => sum + s.costUsd, 0);
@@ -44,6 +45,7 @@ function dedupeAndTakeTop3(candidates: StrategyFlexOption[], cpp: number): Strat
 async function buildRepositionAwardOptions(
   strategy: TravelStrategy,
   intent: TripIntent,
+  dateShifts: readonly number[] = DEFAULT_DATE_SHIFTS,
 ): Promise<StrategyFlexOption[]> {
   const baseDate = intent.startDate;
   const baseMiles = baselineAwardMiles(strategy);
@@ -65,10 +67,11 @@ async function buildRepositionAwardOptions(
       destination: longHaulDest,
       baseDepartureDate: baseDate,
       cabinClass: "business",
+      dateShifts,
     });
     const cashByShift = new Map(directCash.map((q) => [q.dateShiftDays, q]));
     const candidates: StrategyFlexOption[] = [];
-    for (const shift of DEFAULT_DATE_SHIFTS) {
+    for (const shift of dateShifts) {
       const departureDate = shiftIsoDate(baseDate, shift);
       const cashBench = cashByShift.get(shift);
       const miles = estimateAwardMiles({
@@ -111,12 +114,14 @@ async function buildRepositionAwardOptions(
       destination: gateway,
       baseDepartureDate: baseDate,
       cabinClass: "economy",
+      dateShifts,
     }),
     searchDuffelAcrossDates({
       origins: [gateway],
       destination: longHaulDest,
       baseDepartureDate: baseDate,
       cabinClass: "business",
+      dateShifts,
     }),
   ]);
 
@@ -125,7 +130,7 @@ async function buildRepositionAwardOptions(
 
   const candidates: StrategyFlexOption[] = [];
 
-  for (const shift of DEFAULT_DATE_SHIFTS) {
+  for (const shift of dateShifts) {
     const departureDate = shiftIsoDate(baseDate, shift);
     const reposition = repositionByShift.get(shift);
     const cashBench = cashByShift.get(shift);
@@ -183,6 +188,7 @@ async function buildDirectCashOptions(
   strategy: TravelStrategy,
   intent: TripIntent,
   searchAirports: string[],
+  dateShifts: readonly number[] = DEFAULT_DATE_SHIFTS,
 ): Promise<StrategyFlexOption[]> {
   const baseDate = intent.startDate;
   const hotelCash = hotelCashFromStrategy(strategy);
@@ -196,6 +202,7 @@ async function buildDirectCashOptions(
     destination: intent.destinationIata,
     baseDepartureDate: baseDate,
     cabinClass: cabin,
+    dateShifts,
   });
 
   const candidates: StrategyFlexOption[] = quotes.map((q) => {
@@ -238,6 +245,7 @@ async function buildInstrumentOrStatusOptions(
   strategy: TravelStrategy,
   intent: TripIntent,
   searchAirports: string[],
+  dateShifts: readonly number[] = DEFAULT_DATE_SHIFTS,
 ): Promise<StrategyFlexOption[]> {
   const origin = strategy.departureAirports[0] ?? searchAirports[0];
   if (!origin) return [];
@@ -251,11 +259,12 @@ async function buildInstrumentOrStatusOptions(
     destination: intent.destinationIata,
     baseDepartureDate: baseDate,
     cabinClass: "economy",
+    dateShifts,
   });
 
   const candidates: StrategyFlexOption[] = [];
 
-  for (const shift of DEFAULT_DATE_SHIFTS) {
+  for (const shift of dateShifts) {
     const departureDate = shiftIsoDate(baseDate, shift);
     const live = quotes.find((q) => q.dateShiftDays === shift);
     const miles =
@@ -300,30 +309,39 @@ export async function buildStrategyFlexOptions(input: {
   kind: StrategyKind;
   intent: TripIntent;
   searchAirports: string[];
+  dateFlexDays?: DateFlexDays;
 }): Promise<{
   options: StrategyFlexOption[];
   baselineDate: string;
   notice: string;
 }> {
-  const { strategy, kind, intent, searchAirports } = input;
+  const { strategy, kind, intent, searchAirports, dateFlexDays } = input;
+  const dateShifts = dateFlexDays ? DATE_FLEX_SHIFTS[dateFlexDays] : DEFAULT_DATE_SHIFTS;
 
   let options: StrategyFlexOption[];
   let notice: string;
 
   switch (kind) {
     case "reposition_award":
-      options = await buildRepositionAwardOptions(strategy, intent);
+      options = await buildRepositionAwardOptions(strategy, intent, dateShifts);
       notice =
-        "Top 3 by lowest true cost. Feeder fares are live Duffel; partner award miles are date-modeled — verify on Seats.aero before booking.";
+        dateFlexDays && dateFlexDays > 3
+          ? `Expert flex ±${dateFlexDays} days. Feeder fares live Duffel; partner miles modeled — verify on Seats.aero.`
+          : "Top 3 by lowest true cost. Feeder fares are live Duffel; partner award miles are date-modeled — verify on Seats.aero before booking.";
       break;
     case "direct_cash":
-      options = await buildDirectCashOptions(strategy, intent, searchAirports);
-      notice = "All fares below are live Duffel cash quotes across nearby dates.";
+      options = await buildDirectCashOptions(strategy, intent, searchAirports, dateShifts);
+      notice =
+        dateFlexDays && dateFlexDays > 3
+          ? `Expert flex ±${dateFlexDays} days — live Duffel cash across the window.`
+          : "All fares below are live Duffel cash quotes across nearby dates.";
       break;
     default:
-      options = await buildInstrumentOrStatusOptions(strategy, intent, searchAirports);
+      options = await buildInstrumentOrStatusOptions(strategy, intent, searchAirports, dateShifts);
       notice =
-        "Cash segments are live Duffel where available; miles/cert value stays modeled from your genome.";
+        dateFlexDays && dateFlexDays > 3
+          ? `Expert flex ±${dateFlexDays} days. Cash live where available; miles/cert value modeled.`
+          : "Cash segments are live Duffel where available; miles/cert value stays modeled from your genome.";
       break;
   }
 

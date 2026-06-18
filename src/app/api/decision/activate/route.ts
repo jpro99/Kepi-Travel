@@ -22,6 +22,7 @@ const SelectedStaySchema = z.object({
 const BodySchema = z.object({
   prompt: z.string().trim().min(1).max(2000),
   strategyId: z.string().trim().min(1),
+  planMode: z.enum(["flights", "hotels", "full"]).optional(),
   stay: SelectedStaySchema.optional(),
 });
 
@@ -53,7 +54,8 @@ export async function POST(req: Request) {
   }
 
   const genome = await getTravelerGenome(userId);
-  const brief = buildDecisionBrief(parsed.data.prompt, genome);
+  const planMode = parsed.data.planMode ?? "full";
+  const brief = buildDecisionBrief(parsed.data.prompt, genome, { planMode });
   const strategy =
     brief.strategies.find((s) => s.id === parsed.data.strategyId) ??
     brief.strategies.find((s) => s.kind === parsed.data.strategyId);

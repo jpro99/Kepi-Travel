@@ -1,5 +1,13 @@
 import { buildInferredSummary, parseTripIntent } from "@/lib/decision/intentParser";
 import { buildFlightLegsFromIntent, applyLegEnabledOverrides, annotateLegLoyaltyNotes } from "@/lib/decision/flightLegPlanner";
+import { buildHotelsOnlyBrief } from "@/lib/decision/hotelsMode";
+import {
+  applyLegDateOverrides,
+  attachRankExplanations,
+  filterStrategiesByCppFloor,
+  resolveExpertSearchAirports,
+  type ExpertDeckOptions,
+} from "@/lib/decision/expertDeck";
 import { buildQuestionBudget } from "@/lib/decision/questionBudget";
 import { rankStrategiesByValue } from "@/lib/decision/strategyRanking";
 import { personalizeStrategiesForIntent } from "@/lib/decision/strategyPersonalization";
@@ -443,6 +451,7 @@ export interface BuildDecisionOptions {
   planMode?: PlanMode;
   paymentMode?: PaymentMode;
   enabledLegIds?: string[];
+  expert?: ExpertDeckOptions;
 }
 
 export function buildDecisionBrief(
@@ -463,13 +472,35 @@ export function buildDecisionBrief(
     };
   }
 
-  const searchAirports = resolveSearchAirports(intent, genome);
-  const needsOrigin = originRequiredForIntent(intent);
-
   const planMode = options.planMode ?? "full";
+  const searchAirports = resolveExpertSearchAirports(intent, genome, options.expert);
+  const needsOrigin = planMode !== "hotels" && originRequiredForIntent(intent);
+
   let flightLegs = buildFlightLegsFromIntent(intent, genome);
   flightLegs = applyLegEnabledOverrides(flightLegs, options.enabledLegIds);
+  flightLegs = applyLegDateOverrides(flightLegs, options.expert?.legDateOverrides);
   flightLegs = annotateLegLoyaltyNotes(flightLegs, intent);
+
+  if (planMode === "hotels") {
+    const hotelsBrief = buildHotelsOnlyBrief(intent, genome);
+    return {
+      intent,
+      inferredSummary: hotelsBrief.inferredSummary,
+      searchAirports: [],
+      strategies: hotelsBrief.strategies,
+      strategyCatalog: hotelsBrief.strategyCatalog,
+      questions: hotelsBrief.questions,
+      instrumentHighlights: instrumentHighlights(genome),
+      planMode,
+      flightLegs: [],
+      genomeSnapshot: {
+        homeRegion: genome.homeRegion,
+        decisionWeights: genome.decisionWeights,
+        hotelChainPriority: genome.hotelChainPriority,
+        tripCount: genome.tripCount,
+      },
+    };
+  }
 
   if (needsOrigin) {
     return {
@@ -514,6 +545,13 @@ export function buildDecisionBrief(
     genome.decisionWeights.comfort;
 
   strategies = rankStrategiesByValue(strategies, genome, comfortWeight);
+  if (options.expert?.cppFloor) {
+    const filtered = filterStrategiesByCppFloor(strategies, options.expert.cppFloor);
+    if (filtered.length > 0) strategies = filtered;
+  }
+  if (options.expert?.enabled) {
+    strategies = attachRankExplanations(strategies, genome);
+  }
   const strategyCatalog = strategies;
   const paymentMode = options.paymentMode ?? "cash";
   const visibleStrategies =
