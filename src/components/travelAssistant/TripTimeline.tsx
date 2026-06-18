@@ -5,6 +5,11 @@ import {
   buildCompactTimelineDayKeys,
   splitPastAndUpcomingReservations,
 } from "@/lib/travelAssistant/tripTimelinePlanning";
+import {
+  countBookingProgress,
+  isPlannedReservation,
+  isPlaceholderScheduleTime,
+} from "@/lib/travelAssistant/plannedReservationMatch";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,6 +32,9 @@ interface TimelineReservation {
   flightOnTime?: boolean;
   checkOutDate?: string;
   notes?: string;
+  plannedOnly?: boolean;
+  bookUrl?: string;
+  quotedPriceUsd?: number;
 }
 
 interface TripTimelineProps {
@@ -147,6 +155,13 @@ function formatTime(localTime: string): string {
   return new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
+function reservationFlightDateLabel(reservation: TimelineReservation): string {
+  const dateKey = reservation.flightDate?.slice(0, 10) ?? reservation.localTime.trim().slice(0, 10);
+  if (!dateKey.match(/^\d{4}-\d{2}-\d{2}$/)) return "Date TBD";
+  const d = new Date(dateKey + "T12:00:00");
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 function getTodayKey(): string { return new Date().toISOString().slice(0, 10); }
 function isToday(dateKey: string): boolean { return dateKey === getTodayKey(); }
 function isPastDay(dateKey: string): boolean { return dateKey < getTodayKey(); }
@@ -159,21 +174,31 @@ function ReservationCard({
   const cfg = typeConfig(reservation.type);
   const isFlight = reservation.type === "flight";
   const isHotel = reservation.type === "hotel";
+  const isPlanned = isPlannedReservation(reservation);
+  const showScheduleTime =
+    !isPlanned || (!isPlaceholderScheduleTime(reservation.localTime) && !isPlaceholderScheduleTime(reservation.flightDepartureTime));
 
   return (
     <button
       type="button"
       onClick={onTap}
-      className={`group relative w-full overflow-hidden rounded-2xl border text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg ${cfg.card} ${isPast ? "opacity-70 grayscale-[20%]" : ""}`}
+      className={`group relative w-full overflow-hidden rounded-2xl border text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg ${cfg.card} ${isPast ? "opacity-70 grayscale-[20%]" : ""} ${isPlanned && !isPast ? "border-dashed border-amber-400/70 bg-amber-950/20 dark:border-amber-500/50 dark:bg-amber-950/30" : ""}`}
     >
-      <div className={`h-0.5 w-full ${isPast ? "bg-slate-400" : cfg.dot}`} />
+      <div className={`h-0.5 w-full ${isPast ? "bg-slate-400" : isPlanned ? "bg-amber-400" : cfg.dot}`} />
       <div className="p-4">
         <div className="flex items-center justify-between gap-2">
-          <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-widest ${isPast ? "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400" : cfg.chip}`}>
-            {cfg.emoji} {cfg.label}{isPast ? " · Completed" : ""}
+          <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-widest ${isPast ? "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400" : isPlanned ? "bg-amber-500/20 text-amber-800 dark:text-amber-200" : cfg.chip}`}>
+            {cfg.emoji} {cfg.label}
+            {isPlanned && !isPast ? " · To book" : isPast ? " · Completed" : ""}
           </span>
           <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-            {isFlight ? formatTime(reservation.flightDepartureTime ?? reservation.localTime) : formatTime(reservation.localTime)}
+            {isFlight
+              ? showScheduleTime
+                ? formatTime(reservation.flightDepartureTime ?? reservation.localTime)
+                : reservationFlightDateLabel(reservation)
+              : showScheduleTime
+                ? formatTime(reservation.localTime)
+                : reservation.localTime.trim().slice(0, 10)}
           </span>
         </div>
 
@@ -184,18 +209,24 @@ function ReservationCard({
                 <p className={`text-3xl font-black tracking-tight ${isPast ? "text-slate-400 dark:text-slate-500" : "text-slate-900 dark:text-slate-100"}`}>
                   {reservation.flightDepartureAirport || "DEP"}
                 </p>
-                <p className="mt-0.5 text-xs text-slate-400">{formatTime(reservation.flightDepartureTime ?? reservation.localTime)}</p>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  {showScheduleTime
+                    ? formatTime(reservation.flightDepartureTime ?? reservation.localTime)
+                    : "Time after booking"}
+                </p>
               </div>
               <div className="flex flex-col items-center gap-1">
                 <div className="flex items-center gap-1">
-                  <div className={`h-px w-8 ${isPast ? "bg-slate-600" : "bg-sky-400/60"}`} />
-                  <span className={isPast ? "text-slate-500" : "text-sky-300"}>✈</span>
-                  <div className={`h-px w-8 ${isPast ? "bg-slate-600" : "bg-sky-400/60"}`} />
+                  <div className={`h-px w-8 ${isPast ? "bg-slate-600" : isPlanned ? "bg-amber-400/60" : "bg-sky-400/60"}`} />
+                  <span className={isPast ? "text-slate-500" : isPlanned ? "text-amber-300" : "text-sky-300"}>✈</span>
+                  <div className={`h-px w-8 ${isPast ? "bg-slate-600" : isPlanned ? "bg-amber-400/60" : "bg-sky-400/60"}`} />
                 </div>
-                {reservation.flightNumber ? (
-                  <span className={`text-[10px] font-bold tracking-widest ${isPast ? "text-slate-500" : "text-sky-400"}`}>
+                {reservation.flightNumber && reservation.flightNumber !== "Not booked yet" ? (
+                  <span className={`text-[10px] font-bold tracking-widest ${isPast ? "text-slate-500" : isPlanned ? "text-amber-400" : "text-sky-400"}`}>
                     {reservation.flightNumber}
                   </span>
+                ) : isPlanned ? (
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400">Planned</span>
                 ) : null}
               </div>
               <div className="min-w-0 flex-1 text-right">
@@ -224,9 +255,13 @@ function ReservationCard({
             </div>
             <div className="mt-3 flex items-center justify-between gap-2 rounded-xl bg-white/5 px-3 py-2">
               <span className="text-xs text-slate-400">
-                {reservation.provider && !EMAIL_PROVIDERS.has(reservation.provider.toLowerCase()) ? reservation.provider : reservation.flightNumber ?? "Airline"}
+                {reservation.provider && !EMAIL_PROVIDERS.has(reservation.provider.toLowerCase()) ? reservation.provider : reservation.flightNumber && reservation.flightNumber !== "Not booked yet" ? reservation.flightNumber : "Airline"}
               </span>
-              {reservation.confirmationCode ? <span className="text-xs font-mono font-bold text-sky-300">{reservation.confirmationCode}</span> : null}
+              {isPlanned ? (
+                <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-300">PLANNED</span>
+              ) : reservation.confirmationCode ? (
+                <span className="text-xs font-mono font-bold text-sky-300">{reservation.confirmationCode}</span>
+              ) : null}
               {isPast ? (
                 <span className="rounded-full bg-slate-500/20 px-2 py-0.5 text-[10px] font-bold text-slate-400">LANDED</span>
               ) : reservation.flightOnTime === true ? (
@@ -251,13 +286,28 @@ function ReservationCard({
                 </p>
               </div>
             </div>
-            {reservation.confirmationCode ? <p className="mt-2 text-xs font-mono font-semibold text-amber-700 dark:text-amber-300">{reservation.confirmationCode}</p> : null}
+            {isPlanned ? (
+              <p className="mt-2 text-xs leading-relaxed text-amber-700 dark:text-amber-200">
+                Planned stay from Command Deck — book the property, then forward your confirmation.
+                {reservation.quotedPriceUsd ? (
+                  <span className="ml-1 font-semibold">${reservation.quotedPriceUsd.toLocaleString()} quoted</span>
+                ) : null}
+              </p>
+            ) : reservation.confirmationCode ? (
+              <p className="mt-2 text-xs font-mono font-semibold text-amber-700 dark:text-amber-300">{reservation.confirmationCode}</p>
+            ) : null}
           </>
         ) : (
           <>
             <p className={`mt-2 text-xl font-bold ${isPast ? "text-slate-400" : cfg.accent}`}>{reservation.provider || reservation.title}</p>
             {reservation.location ? <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">📍 {reservation.location}</p> : null}
-            {reservation.confirmationCode ? <p className="mt-1 text-xs font-mono font-semibold text-slate-600 dark:text-slate-300">{reservation.confirmationCode}</p> : null}
+            {isPlanned ? (
+              <p className="mt-2 text-xs leading-relaxed text-amber-700 dark:text-amber-200">
+                Planned leg — forward confirmation after you book.
+              </p>
+            ) : reservation.confirmationCode ? (
+              <p className="mt-1 text-xs font-mono font-semibold text-slate-600 dark:text-slate-300">{reservation.confirmationCode}</p>
+            ) : null}
           </>
         )}
       </div>
@@ -424,6 +474,7 @@ export function TripTimeline({
 
   const totalDays = days.length;
   const daysWithEvents = days.filter((d) => d.reservations.length > 0).length;
+  const bookingProgress = countBookingProgress(reservations);
 
   return (
     <div>
@@ -436,8 +487,19 @@ export function TripTimeline({
         <div className="h-8 w-px bg-[var(--border-default)]" />
         <div className="text-center">
           <p className="text-xl font-black text-[var(--text-primary)]">{daysWithEvents}</p>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">Planned</p>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">With events</p>
         </div>
+        {bookingProgress.total > 0 ? (
+          <>
+            <div className="h-8 w-px bg-[var(--border-default)]" />
+            <div className="text-center">
+              <p className="text-xl font-black text-[var(--text-primary)]">
+                {bookingProgress.confirmed}/{bookingProgress.total}
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">Booked</p>
+            </div>
+          </>
+        ) : null}
         <div className="h-8 w-px bg-[var(--border-default)]" />
         <div className="text-center">
           <p className="text-xl font-black text-[var(--text-primary)]">{tripDaysAway === 0 ? "NOW" : tripDaysAway}</p>

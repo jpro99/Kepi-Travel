@@ -83,7 +83,14 @@ import { NextUpCard } from "@/components/travelAssistant/NextUpCard";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 import { GapAlerts } from "@/components/travelAssistant/GapAlerts";
 import { ImportReservationsCard } from "@/components/travelAssistant/ImportReservationsCard";
+import { BookingWalkthroughModal } from "@/components/decision/BookingWalkthroughModal";
 import { countPlaceholderReservations } from "@/lib/travelAssistant/placeholderReservations";
+import {
+  countBookingProgress,
+  upsertReservationReplacingPlanned,
+} from "@/lib/travelAssistant/plannedReservationMatch";
+import { buildWalkthroughLegsFromReservations } from "@/lib/travelAssistant/walkthroughFromReservations";
+import type { SessionReservation } from "@/lib/travelAssistant/clientSessionState";
 import { OnTrackButton } from "@/components/travelAssistant/OnTrackButton";
 import { TripSearch, type TripSearchSelection } from "@/components/travelAssistant/TripSearch";
 import { TripSwitcher } from "@/components/travelAssistant/TripSwitcher";
@@ -210,6 +217,9 @@ interface ReservationDraft {
   checkOutDate?: string;
   roomType?: string;
   trainNumber?: string;
+  plannedOnly?: boolean;
+  bookUrl?: string;
+  quotedPriceUsd?: number;
 }
 
 interface Reservation extends ReservationDraft {
@@ -1840,6 +1850,8 @@ export default function TravelAssistantPage() {
   const [gmailScopeModalOpen, setGmailScopeModalOpen] = useState(false);
   const [gmailScopeModalKey] = useState(0);
   const [importBannerHighlighted, setImportBannerHighlighted] = useState(false);
+  const [importBannerMode, setImportBannerMode] = useState<"default" | "plan-saved">("default");
+  const [tripWalkthroughOpen, setTripWalkthroughOpen] = useState(false);
   const [gmailImportMaxResults] = useState(10);
   const [advancedModeEnabled, setAdvancedModeEnabled] = useState(false);
   const [advancedModeSaving, setAdvancedModeSaving] = useState(false);
@@ -2077,6 +2089,8 @@ export default function TravelAssistantPage() {
       const hadWalkthrough = params.get("walkthrough") === "1";
       if (hadWalkthrough) {
         setImportBannerHighlighted(true);
+        setImportBannerMode("plan-saved");
+        setTripWalkthroughOpen(true);
         setToast(
           "Plan saved — book from your walkthrough links, then forward confirmations to replace planned legs.",
         );
@@ -3636,6 +3650,16 @@ export default function TravelAssistantPage() {
     [consumerReservationsSorted],
   );
 
+  const bookingProgress = useMemo(
+    () => countBookingProgress(consumerReservationsSorted),
+    [consumerReservationsSorted],
+  );
+
+  const tripWalkthroughLegs = useMemo(
+    () => buildWalkthroughLegsFromReservations(consumerReservationsSorted as SessionReservation[]),
+    [consumerReservationsSorted],
+  );
+
   const hasUpcomingFlightWithin24h = useMemo(() => {
     const nowMs = Date.now();
     return consumerReservationsSorted.some((r) => {
@@ -4659,9 +4683,11 @@ export default function TravelAssistantPage() {
         flightDate: mappedType === "flight" ? localTime.slice(0, 10) : undefined,
       };
       pushUndoSnapshot("Manual reservation added");
-      // Build the new list first, then set state AND save in one step
       const existingReservations = trips.find((t) => t.id === (activeTripId ?? trips[0]?.id))?.reservations ?? [];
-      const nextReservations = [reservation, ...existingReservations];
+      const { reservations: nextReservations, replaced } = upsertReservationReplacingPlanned(
+        existingReservations as Reservation[],
+        reservation,
+      );
       setReservations(nextReservations);
       // Force immediate server write with the correct new list
       const targetTripId = activeTripId ?? trips[0]?.id ?? null;
@@ -4691,7 +4717,7 @@ export default function TravelAssistantPage() {
         reservationId: reservation.id,
       });
       setManualReservationModalOpen(false);
-      setToast("Reservation added ✓");
+      setToast(replaced ? "Confirmation replaced planned leg ✓" : "Reservation added ✓");
     },
     [activeTripId, pushUndoSnapshot, queueMutation, setToast, trips],
   );
@@ -5924,20 +5950,30 @@ export default function TravelAssistantPage() {
       return;
     }
     pushUndoSnapshot("Review item accepted");
-    const newReservation: Reservation = {
+    const incoming: Reservation = {
       ...draft,
       id: nextId("res"),
       source: "review-accepted",
+      plannedOnly: false,
     };
-    const nextReservations = [newReservation, ...reservations];
-    setReservations((prev) => [newReservation, ...prev]);
+    const { reservations: nextReservations, replaced, replacedId } = upsertReservationReplacingPlanned(
+      reservations,
+      incoming,
+    );
+    setReservations(nextReservations);
     setReviewQueue((prev) => prev.filter((item) => item.id !== reviewId));
     void triggerHaptic("medium");
-    queueMutation("Review item accepted into live trip.", {
-      key: "review-accept",
-      reservationId: newReservation.id,
-    });
+    queueMutation(
+      replaced ? "Review item replaced a planned leg." : "Review item accepted into live trip.",
+      {
+        key: "review-accept",
+        reservationId: replaced && replacedId ? replacedId : incoming.id,
+      },
+    );
     void syncReservationsToGoogleCalendar(nextReservations, "review-accept");
+    if (replaced) {
+      setToast("Planned leg updated with your confirmation ✓");
+    }
   };
 
   const handleAcceptReview = (reviewId: string): void => {
@@ -7341,6 +7377,9 @@ export default function TravelAssistantPage() {
                   forwardAddress={emptyStateForwardAddress}
                   placeholderCount={placeholderReservationCount}
                   highlighted={importBannerHighlighted}
+                  mode={importBannerMode}
+                  confirmedCount={bookingProgress.confirmed}
+                  totalBookableCount={bookingProgress.total}
                   canUseGmailImport={canUseGmailImport}
                   gmailImportBusy={gmailImportBusy}
                   onCopyForward={() => void handleCopyForwardAddress()}
@@ -7349,10 +7388,18 @@ export default function TravelAssistantPage() {
                     window.location.href = `/api/gmail/connect?returnTo=${encodeURIComponent("/travel-assistant?tab=trip&gmail=connected")}`;
                   }}
                   onAddManual={() => setManualReservationModalOpen(true)}
+                  onContinueBooking={
+                    tripWalkthroughLegs.length > 0
+                      ? () => setTripWalkthroughOpen(true)
+                      : undefined
+                  }
                   onRequestUpgrade={() =>
                     openUpgradeModal("gmail-import", "Upgrade to Pro to import reservations from your connected email account.")
                   }
-                  onDismiss={() => setImportBannerHighlighted(false)}
+                  onDismiss={() => {
+                    setImportBannerHighlighted(false);
+                    setImportBannerMode("default");
+                  }}
                 />
               ) : null}
               {(guidanceLocationStatus === "at-airport" || guidanceLocationStatus === "in-terminal") &&
@@ -8044,6 +8091,19 @@ export default function TravelAssistantPage() {
             defaultAssignedTo={[selectedFamilyMember.id]}
             onClose={() => setManualReservationModalOpen(false)}
             onSave={handleSaveManualReservation}
+          />
+        ) : null}
+        {tripWalkthroughLegs.length > 0 ? (
+          <BookingWalkthroughModal
+            open={tripWalkthroughOpen}
+            tripName={activeTrip?.name ?? "Your trip"}
+            strategyTitle="Your saved plan"
+            legs={tripWalkthroughLegs}
+            verifiedLegCount={bookingProgress.confirmed}
+            totalBookableLegs={bookingProgress.total}
+            forwardAddress={emptyStateForwardAddress}
+            onClose={() => setTripWalkthroughOpen(false)}
+            onGoToTrip={() => setTripWalkthroughOpen(false)}
           />
         ) : null}
         <GmailImportScopeModal
