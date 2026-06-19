@@ -7,6 +7,7 @@ import { buildDecisionBrief } from "@/lib/decision/strategyEngine";
 import { enabledConnectorLegs } from "@/lib/decision/flightLegPlanner";
 import { mergeTopologyIntoStrategies, attachTopologyMetadata } from "@/lib/decision/topology/toStrategy";
 import { runKepiWaveSearch } from "@/lib/decision/topology/waveSearch";
+import { runFusedSearchForTrip } from "@/lib/flights/fusedFlightSearch";
 import { searchDuffelCashQuotes } from "@/lib/providers/duffel/flightOffers";
 import { getTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
 
@@ -76,12 +77,26 @@ export async function POST(req: Request) {
   let workingBrief = brief;
 
   if (!brief.originRequired && brief.searchAirports.length > 0) {
-    const topologySearch = await runKepiWaveSearch(brief.intent, genome, brief.searchAirports);
+    const [topologySearch, fusedFlightSearch] = await Promise.all([
+      runKepiWaveSearch(brief.intent, genome, brief.searchAirports),
+      planMode !== "hotels" ? runFusedSearchForTrip(brief.intent, brief.searchAirports, genome, userId) : null,
+    ]);
+
+    if (fusedFlightSearch) {
+      console.log("[trip-planner-fused-search]", {
+        cashOffers: fusedFlightSearch.cashOffers.length,
+        awardOffers: fusedFlightSearch.awardOffers.length,
+        headline: fusedFlightSearch.headline,
+        bestVerdict: fusedFlightSearch.best?.verdict,
+      });
+    }
+
     const mergedStrategies = mergeTopologyIntoStrategies(brief.strategies, topologySearch);
     const mergedCatalog = mergeTopologyIntoStrategies(brief.strategyCatalog ?? brief.strategies, topologySearch);
     workingBrief = {
       ...brief,
       topologySearch,
+      fusedFlightSearch: fusedFlightSearch ?? undefined,
       strategies: mergedStrategies,
       strategyCatalog: mergedCatalog,
     };

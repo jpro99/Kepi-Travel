@@ -1,6 +1,7 @@
 import type { AlignmentLeg } from "@/lib/decision/tripAlignment";
 import type { TravelerGenome } from "@/lib/traveler/types";
 import type { TopologySearchResult } from "@/lib/decision/topology/types";
+import type { FusedFlightSearchResult } from "@/lib/flights/types";
 
 export type StrategyKind =
   | "direct_cash"
@@ -182,6 +183,8 @@ export interface DecisionBrief {
   livePricing?: LivePricingSummary;
   /** Kepi Wave Search — combinatorial trip topology results vs naive baseline */
   topologySearch?: TopologySearchResult;
+  /** Live Duffel cash + Seats.aero awards fused for main outbound leg */
+  fusedFlightSearch?: FusedFlightSearchResult;
   genomeSnapshot: Pick<
     TravelerGenome,
     "homeRegion" | "decisionWeights" | "hotelChainPriority" | "tripCount"

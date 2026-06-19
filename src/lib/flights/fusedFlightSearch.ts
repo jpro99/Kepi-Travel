@@ -6,10 +6,13 @@ import { resolveReachablePrograms } from "@/lib/flights/transferPartners";
 import type {
   AwardOffer,
   CashOffer,
+  FlightCabin,
   FusedFlightOption,
   FusedFlightSearchParams,
   FusedFlightSearchResult,
 } from "@/lib/flights/types";
+import type { TripIntent } from "@/lib/decision/types";
+import type { TravelerGenome } from "@/lib/traveler/types";
 
 function bestCashForRoute(cashOffers: CashOffer[], award: AwardOffer): CashOffer | null {
   const matches = cashOffers.filter(
@@ -158,4 +161,33 @@ export async function runFusedFlightSearch(
       seatsAeroConfigured: isSeatsAeroConfigured(),
     },
   };
+}
+
+export function cabinFromGenome(genome: TravelerGenome): FlightCabin {
+  if (genome.cabinPreference === "first") return "first";
+  if (genome.cabinPreference === "premium_economy") return "premium_economy";
+  if (genome.cabinPreference === "economy") return "economy";
+  return "business";
+}
+
+/** Main outbound leg — used by Trip Planner analyze. */
+export async function runFusedSearchForTrip(
+  intent: TripIntent,
+  searchAirports: string[],
+  genome: TravelerGenome,
+  userId: string,
+): Promise<FusedFlightSearchResult | null> {
+  const destination = (intent.stops?.[0]?.iata ?? intent.destinationIata)?.toUpperCase();
+  if (!destination || searchAirports.length === 0) return null;
+
+  return runFusedFlightSearch(
+    {
+      origins: searchAirports,
+      destination,
+      departureDate: intent.startDate,
+      returnDate: intent.endDate,
+      cabin: cabinFromGenome(genome),
+    },
+    userId,
+  );
 }
