@@ -1,5 +1,6 @@
 import type { AlignmentLeg } from "@/lib/decision/tripAlignment";
 import type { TravelerGenome } from "@/lib/traveler/types";
+import type { TopologySearchResult } from "@/lib/decision/topology/types";
 
 export type StrategyKind =
   | "direct_cash"
@@ -179,6 +180,8 @@ export interface DecisionBrief {
   strategyCatalog?: TravelStrategy[];
   flightLegs?: FlightLegPlan[];
   livePricing?: LivePricingSummary;
+  /** Kepi Wave Search — combinatorial trip topology results vs naive baseline */
+  topologySearch?: TopologySearchResult;
   genomeSnapshot: Pick<
     TravelerGenome,
     "homeRegion" | "decisionWeights" | "hotelChainPriority" | "tripCount"

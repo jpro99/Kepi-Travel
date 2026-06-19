@@ -7,6 +7,9 @@ import { buildDecisionBrief } from "@/lib/decision/strategyEngine";
 import { enrichBriefWithDuffelPricing } from "@/lib/decision/livePricing";
 import { enabledConnectorLegs } from "@/lib/decision/flightLegPlanner";
 import { buildAlignmentBoard } from "@/lib/decision/tripAlignment";
+import { buildAlignmentFromPricedTopology } from "@/lib/decision/topology/alignment";
+import { runKepiWaveSearch } from "@/lib/decision/topology/waveSearch";
+import { mergeTopologyIntoStrategies } from "@/lib/decision/topology/toStrategy";
 import { searchDuffelCashQuotes } from "@/lib/providers/duffel/flightOffers";
 import { getTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
 
@@ -69,9 +72,16 @@ export async function POST(req: Request) {
     enabledLegIds: parsed.data.enabledLegIds,
   });
 
+  let topologyResult = null;
+  if (!brief.originRequired && brief.searchAirports.length > 0) {
+    topologyResult = await runKepiWaveSearch(brief.intent, genome, brief.searchAirports);
+  }
+
+  const strategyCatalog = mergeTopologyIntoStrategies(brief.strategies, topologyResult ?? undefined);
+
   const strategy =
-    brief.strategies.find((s) => s.id === parsed.data.strategyId) ??
-    brief.strategies.find((s) => s.kind === parsed.data.strategyId);
+    strategyCatalog.find((s) => s.id === parsed.data.strategyId) ??
+    strategyCatalog.find((s) => s.kind === parsed.data.strategyId);
   if (!strategy) {
     return NextResponse.json({ error: "Strategy not found — refresh and try again." }, { status: 404 });
   }
@@ -121,11 +131,20 @@ export async function POST(req: Request) {
         ? [parsed.data.stay]
         : [];
 
-  const alignmentLegs = buildAlignmentBoard(
+  let alignmentLegs = buildAlignmentBoard(
     enrichedBrief,
     strategy,
     selectedStays.length > 0 ? selectedStays : null,
   );
+
+  if (strategy.id.startsWith("topology-") && topologyResult) {
+    const winner =
+      topologyResult.winners.find((row) => `topology-${row.candidate.id}` === strategy.id) ??
+      topologyResult.winners[0];
+    if (winner) {
+      alignmentLegs = buildAlignmentFromPricedTopology(winner);
+    }
+  }
 
   const result = await activateStrategy(
     strategy,

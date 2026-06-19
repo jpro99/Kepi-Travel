@@ -5,6 +5,8 @@ import { enforceRateLimit } from "@/lib/rateLimit";
 import { enrichBriefWithDuffelPricing } from "@/lib/decision/livePricing";
 import { buildDecisionBrief } from "@/lib/decision/strategyEngine";
 import { enabledConnectorLegs } from "@/lib/decision/flightLegPlanner";
+import { mergeTopologyIntoStrategies, attachTopologyMetadata } from "@/lib/decision/topology/toStrategy";
+import { runKepiWaveSearch } from "@/lib/decision/topology/waveSearch";
 import { searchDuffelCashQuotes } from "@/lib/providers/duffel/flightOffers";
 import { getTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
 
@@ -71,24 +73,39 @@ export async function POST(req: Request) {
     return NextResponse.json({ brief });
   }
 
-  const arrivalIata = brief.intent.stops?.[0]?.iata ?? brief.intent.destinationIata;
+  let workingBrief = brief;
+
+  if (!brief.originRequired && brief.searchAirports.length > 0) {
+    const topologySearch = await runKepiWaveSearch(brief.intent, genome, brief.searchAirports);
+    const mergedStrategies = mergeTopologyIntoStrategies(brief.strategies, topologySearch);
+    const mergedCatalog = mergeTopologyIntoStrategies(brief.strategyCatalog ?? brief.strategies, topologySearch);
+    workingBrief = {
+      ...brief,
+      topologySearch,
+      strategies: mergedStrategies,
+      strategyCatalog: mergedCatalog,
+    };
+    attachTopologyMetadata(workingBrief, topologySearch);
+  }
+
+  const arrivalIata = workingBrief.intent.stops?.[0]?.iata ?? workingBrief.intent.destinationIata;
   const outboundDuffel = await searchDuffelCashQuotes({
-    origins: brief.searchAirports,
+    origins: workingBrief.searchAirports,
     destination: arrivalIata,
-    departureDate: brief.intent.startDate,
+    departureDate: workingBrief.intent.startDate,
   });
 
   let returnDuffel: Awaited<ReturnType<typeof searchDuffelCashQuotes>> | undefined;
-  const homeIata = brief.searchAirports[0];
-  if (brief.intent.returnAirports?.length && homeIata) {
+  const homeIata = workingBrief.searchAirports[0];
+  if (workingBrief.intent.returnAirports?.length && homeIata) {
     returnDuffel = await searchDuffelCashQuotes({
-      origins: brief.intent.returnAirports,
+      origins: workingBrief.intent.returnAirports,
       destination: homeIata,
-      departureDate: brief.intent.endDate,
+      departureDate: workingBrief.intent.endDate,
     });
   }
 
-  const connectorLegs = enabledConnectorLegs(brief.flightLegs ?? []);
+  const connectorLegs = enabledConnectorLegs(workingBrief.flightLegs ?? []);
   const connectorDuffel = await Promise.all(
     connectorLegs.map(async (leg) => ({
       legId: leg.id,
@@ -101,7 +118,7 @@ export async function POST(req: Request) {
   );
 
   const enriched = enrichBriefWithDuffelPricing(
-    brief,
+    workingBrief,
     outboundDuffel,
     genome,
     comfortWeight,

@@ -36,6 +36,7 @@ import { RecordTripModal } from "@/components/decision/RecordTripModal";
 import { TripItinerarySummary } from "@/components/decision/TripItinerarySummary";
 import { ExpertDeckPanel } from "@/components/decision/ExpertDeckPanel";
 import { TripAlignmentBoard } from "@/components/decision/TripAlignmentBoard";
+import { TopologyWaveHero } from "@/components/decision/TopologyWaveHero";
 import { BookingWalkthroughModal } from "@/components/decision/BookingWalkthroughModal";
 import { buildAlignmentBoard } from "@/lib/decision/tripAlignment";
 import type { AlignmentLeg } from "@/lib/decision/tripAlignment";
@@ -1292,6 +1293,10 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
             </p>
           </>
         )}
+
+        {brief?.topologySearch && !loading ? (
+          <TopologyWaveHero search={brief.topologySearch} />
+        ) : null}
 
         {brief && alignmentPreviewLegs.length > 0 && !loading && (
           <div className="mt-5">
