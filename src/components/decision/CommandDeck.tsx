@@ -71,6 +71,9 @@ interface StaysResponse {
 
 const INPUT_PLACEHOLDER_FLIGHTS =
   "Where do you plan to travel? e.g. West Coast to Bari, Venice, Dolomites, Germany — fly home from Munich. Alaska Gold.";
+const STRATEGY_TIMEOUT_MS = 42_000;
+const STAYS_TIMEOUT_MS = 24_000;
+const FLEX_TIMEOUT_MS = 32_000;
 
 const SEGMENT_ICON: Record<string, string> = {
   flight: "✈️",
@@ -78,6 +81,33 @@ const SEGMENT_ICON: Record<string, string> = {
   drive: "🚗",
   train: "🚆",
 };
+
+class RequestTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RequestTimeoutError";
+  }
+}
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs: number,
+  timeoutMessage: string,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new RequestTimeoutError(timeoutMessage);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
 
 function parseVoiceMutation(text: string): CounterfactualMutation | null {
   const lower = text.toLowerCase();
@@ -526,11 +556,16 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
               enabledLegIds: legIds.length > 0 ? legIds : undefined,
               expert: expertOptions.enabled ? { ...expertOptions, enabled: true } : undefined,
             };
-        const res = await fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
+        const res = await fetchWithTimeout(
+          endpoint,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          },
+          STRATEGY_TIMEOUT_MS,
+          "Live trip math is taking too long. Try again, or simplify to fewer cities/dates.",
+        );
         if (!res.ok) {
           throw new Error(
             res.status === 401 || res.status === 404
@@ -620,11 +655,16 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     setStaysLoading(true);
     setStaysData(null);
     setSelectedStayId(null);
-    void fetch("/api/decision/stays", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: brief.intent.rawPrompt }),
-    })
+    void fetchWithTimeout(
+      "/api/decision/stays",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: brief.intent.rawPrompt }),
+      },
+      STAYS_TIMEOUT_MS,
+      "Hotel estimates took too long.",
+    )
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
       .then((data: StaysResponse) => {
         if (cancelled) return;
@@ -637,7 +677,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
           setStaysData({
             configured: false,
             stays: [],
-            error: "Couldn't load hotels — refresh to try again.",
+            error: "Couldn't load hotels fast enough — strategies are ready, and you can refresh hotels later.",
             intent: {
               destination: brief.intent.destination,
               nights: brief.intent.nights,
@@ -756,16 +796,21 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
       setFlexError(null);
       setFlexData(null);
       try {
-        const res = await fetch("/api/decision/flex-options", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            prompt,
-            strategyId,
-            comfortWeight,
-            dateFlexDays: expertOptions.enabled ? expertOptions.dateFlexDays : undefined,
-          }),
-        });
+        const res = await fetchWithTimeout(
+          "/api/decision/flex-options",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              prompt,
+              strategyId,
+              comfortWeight,
+              dateFlexDays: expertOptions.enabled ? expertOptions.dateFlexDays : undefined,
+            }),
+          },
+          FLEX_TIMEOUT_MS,
+          "Date comparison is taking too long. Try fewer date changes or retry.",
+        );
         if (!res.ok) {
           throw new Error(res.status === 401 ? "Sign in to compare dates." : "Couldn't load date options.");
         }
