@@ -18,12 +18,18 @@ function prefersAlaska(intent: TripIntent): boolean {
   );
 }
 
-function pickRepositionHub(origin: string, intent: TripIntent): string | null {
+const US_LONGHAUL_HUBS = ["SEA", "LAX", "SFO", "JFK", "ORD", "BOS", "ATL", "DFW", "EWR", "IAD"] as const;
+
+function pickRepositionHubs(origin: string, intent: TripIntent): string[] {
   const upper = origin.toUpperCase();
-  if (prefersAlaska(intent) && upper !== "SEA") return "SEA";
-  if (isSoCalOrigin(upper) && upper !== "SEA") return "SEA";
-  if (upper === "ONT" || upper === "SNA") return "LAX";
-  return null;
+  const hubs: string[] = [];
+  if (prefersAlaska(intent) && upper !== "SEA") hubs.push("SEA");
+  if (isSoCalOrigin(upper) && upper !== "SEA") hubs.push("SEA");
+  if (upper === "ONT" || upper === "SNA") hubs.push("LAX");
+  for (const hub of US_LONGHAUL_HUBS) {
+    if (hub !== upper && !hubs.includes(hub)) hubs.push(hub);
+  }
+  return hubs.slice(0, 4);
 }
 
 function longHaulEstimateUsd(origin: string, dest: string): number {
@@ -232,6 +238,8 @@ export function generateTopologyCandidates(
     });
   };
 
+  const primaryDest = intent.destinationIata?.toUpperCase();
+
   // Wave 0 — naive baseline (what Google defaults to if you don't know open-jaw)
   for (const home of origins.slice(0, 2)) {
     const { flightLegs, groundLegs, friction } = buildFlightLegs({
@@ -266,6 +274,42 @@ export function generateTopologyCandidates(
     });
   }
 
+  // Wave 0 — primary destination round-trip (Google multi-city "fly home from same city" alt)
+  if (primaryDest && primaryDest !== arriveIata && !isMulti) {
+    for (const home of origins.slice(0, 2)) {
+      const { flightLegs, groundLegs, friction } = buildFlightLegs({
+        home,
+        homeLabel: home === primaryHome ? homeLabel : home,
+        arrive: primaryDest,
+        arriveLabel: intent.destination,
+        returnFrom: primaryDest,
+        returnLabel: intent.destination,
+        startDate: intent.startDate,
+        endDate: intent.endDate,
+        includeConnectors: false,
+        connectorMode: "flight",
+        intent,
+      });
+      const est = longHaulEstimateUsd(home, primaryDest) * 2;
+      pushCandidate(out, seen, {
+        id: candidateId(["primary-hub", home, primaryDest]),
+        kind: "primary_hub_roundtrip",
+        title: "Primary destination round-trip",
+        headline: `${home} ↔ ${intent.destination} · round-trip to main city`,
+        reasoning: "Round-trip to your stated destination — not just the first stop.",
+        savingsDna: "Baseline — fly into and out of the primary destination city.",
+        flightLegs,
+        groundLegs,
+        frictionMinutes: friction,
+        wave: 0,
+        estimateLowerBoundUsd: Math.round(est),
+        homeAirport: home,
+        arrivalAirport: primaryDest,
+        returnAirport: primaryDest,
+      });
+    }
+  }
+
   // Wave 1 — open-jaw (intent-native)
   if (returnIata !== arriveIata || isMulti) {
     addOpenJaw(
@@ -288,18 +332,27 @@ export function generateTopologyCandidates(
     );
   }
 
-  // Wave 2 — gateway sweep (alternate home airports)
+  // Wave 2 — gateway sweep (alternate home airports × return options)
+  const returnOptionsForSweep = [
+    ...new Set(
+      [returnIata, ...(intent.returnAirports ?? []).map((c) => c.toUpperCase()), lastStop?.iata?.toUpperCase()].filter(
+        Boolean,
+      ) as string[],
+    ),
+  ];
   for (const home of origins) {
     if (home === primaryHome) continue;
-    addOpenJaw(
-      home,
-      returnIata,
-      "gateway_sweep",
-      2,
-      `Gateway via ${home}`,
-      `Alternate departure airport ${home} — metro areas often hide a cheaper long-haul.`,
-      "flight",
-    );
+    for (const ret of returnOptionsForSweep.slice(0, 2)) {
+      addOpenJaw(
+        home,
+        ret,
+        "gateway_sweep",
+        2,
+        `Gateway via ${home}`,
+        `Alternate departure ${home} + return from ${ret} — metro gateways often beat local fares.`,
+        "flight",
+      );
+    }
   }
 
   // Wave 2 — return sweep
@@ -317,19 +370,31 @@ export function generateTopologyCandidates(
     );
   }
 
-  // Wave 3 — positioning hub (feeder + long-haul)
-  const hub = pickRepositionHub(primaryHome, intent);
-  if (hub && hub !== primaryHome && genome.toleratesRepositioning !== false) {
-    addOpenJaw(primaryHome, returnIata, "position_cash", 3, `Position via ${hub}`, `Feeder to ${hub} then long-haul — unlocks partner fares and award space.`, "flight", {
-      hub,
-      hubLabel: hub,
-      pricing: "cash_live",
-    });
-    addOpenJaw(primaryHome, returnIata, "position_award", 3, `Position + award via ${hub}`, `Cash feeder to ${hub}, partner award long-haul — expert play when miles beat cash.`, "flight", {
-      hub,
-      hubLabel: hub,
-      pricing: "award_estimate",
-    });
+  // Wave 3 — positioning hubs (feeder + long-haul)
+  if (genome.toleratesRepositioning !== false) {
+    for (const hub of pickRepositionHubs(primaryHome, intent)) {
+      if (hub === primaryHome) continue;
+      addOpenJaw(
+        primaryHome,
+        returnIata,
+        "position_cash",
+        3,
+        `Position via ${hub}`,
+        `Feeder to ${hub} then long-haul — unlocks partner fares and award space.`,
+        "flight",
+        { hub, hubLabel: hub, pricing: "cash_live" },
+      );
+      addOpenJaw(
+        primaryHome,
+        returnIata,
+        "position_award",
+        3,
+        `Position + award via ${hub}`,
+        `Cash feeder to ${hub}, partner award long-haul — expert play when miles beat cash.`,
+        "flight",
+        { hub, hubLabel: hub, pricing: "award_estimate" },
+      );
+    }
   }
 
   return out.sort((a, b) => a.wave - b.wave || a.estimateLowerBoundUsd - b.estimateLowerBoundUsd);

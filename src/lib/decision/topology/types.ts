@@ -2,12 +2,14 @@
 
 export type TopologyKind =
   | "naive_roundtrip"
+  | "primary_hub_roundtrip"
   | "open_jaw"
   | "gateway_sweep"
   | "return_sweep"
   | "position_cash"
   | "position_award"
-  | "ground_connector";
+  | "ground_connector"
+  | "date_flex";
 
 export type TopologyLegRole = "outbound" | "return" | "feeder" | "longhaul" | "connector";
 
@@ -49,6 +51,8 @@ export interface TripTopologyCandidate {
   homeAirport: string;
   arrivalAirport: string;
   returnAirport: string;
+  /** Days shifted from user dates (0 = exact dates) */
+  dateShiftDays?: number;
 }
 
 export interface PricedTopologyLeg {
@@ -68,7 +72,11 @@ export interface PricedTopology {
   candidate: TripTopologyCandidate;
   legs: PricedTopologyLeg[];
   groundLegs: TopologyGroundLeg[];
+  /** Flights + ground only */
   totalCashUsd: number;
+  hotelCashUsd: number;
+  /** Flights + ground + hotels — primary "cheapest trip" metric */
+  grandTotalCashUsd: number;
   totalAwardMiles: number;
   imputedPointsUsd: number;
   totalTripValue: number;
@@ -81,12 +89,14 @@ export interface PricedTopology {
 }
 
 export interface TopologySearchResult {
-  algorithm: "kepi-wave-search";
-  version: 1;
+  algorithm: "kepi-optimal-search";
+  version: 2;
   candidatesGenerated: number;
   candidatesPriced: number;
   candidatesPruned: number;
+  dateFlexVariantsPriced: number;
   duffelCallsUsed: number;
+  hotelEstimateUsd: number;
   baseline: PricedTopology | null;
   winners: PricedTopology[];
   bestSavingsUsd: number;

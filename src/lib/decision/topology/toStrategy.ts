@@ -1,6 +1,7 @@
 import { resolveCashBookUrl } from "@/lib/decision/bookingLinks";
 import type { TravelStrategy, StrategySegment } from "@/lib/decision/types";
 import type { PricedTopology, TopologySearchResult } from "@/lib/decision/topology/types";
+import { rankScoreForCheapest } from "@/lib/decision/topology/priceLeg";
 
 function kindForTopology(row: PricedTopology): TravelStrategy["kind"] {
   if (row.candidate.kind === "position_award") return "reposition_award";
@@ -70,22 +71,25 @@ export function topologyToStrategy(row: PricedTopology, rank: number): TravelStr
   const segments = segmentsFromTopology(row);
   const savingsBit =
     row.savingsVsBaselineUsd > 0
-      ? ` Saves ~$${row.savingsVsBaselineUsd.toLocaleString()} vs simple round-trip.`
+      ? ` Saves ~$${row.savingsVsBaselineUsd.toLocaleString()} all-in vs baseline.`
       : "";
+
+  const hotelBit =
+    row.hotelCashUsd > 0 ? ` Includes ~$${row.hotelCashUsd.toLocaleString()} estimated hotels.` : "";
 
   return {
     id: `topology-${row.candidate.id}`,
     kind,
     title: row.candidate.title,
     headline: row.candidate.headline,
-    reasoning: `${row.candidate.savingsDna}${savingsBit} (${row.liveLegCount}/${row.totalFlightLegs} flight legs live-priced · Kepi Wave Search).`,
+    reasoning: `${row.candidate.savingsDna}${savingsBit}${hotelBit} (${row.liveLegCount}/${row.totalFlightLegs} flight legs live-priced · Kepi Optimal Search).`,
     segments,
     scores: {
       tvs: Math.min(99, 88 + Math.min(10, row.savingsVsBaselinePct / 5)),
-      trueOutOfPocket: row.totalCashUsd,
+      trueOutOfPocket: row.grandTotalCashUsd,
       totalTripValue: row.totalTripValue,
       bestCpp: row.totalAwardMiles > 0 ? 2.0 : 0,
-      sortKey: row.totalTripValue + row.frictionMinutes * 2,
+      sortKey: rankScoreForCheapest(row) + row.frictionMinutes * 2,
       frictionMinutes: row.frictionMinutes,
       comfortScore: row.frictionMinutes > 120 ? 72 : 85,
       valueScore: Math.min(99, 70 + row.savingsVsBaselinePct),
@@ -100,7 +104,7 @@ export function topologyToStrategy(row: PricedTopology, rank: number): TravelStr
     departureAirports: [row.candidate.homeAirport],
     recommended: rank === 1,
     valueRank: rank,
-    rankExplanation: `Wave Search rank #${rank} · ${row.candidate.savingsDna}`,
+    rankExplanation: `Optimal Search rank #${rank} · ${row.candidate.savingsDna}`,
   };
 }
 
@@ -132,7 +136,7 @@ export function attachTopologyMetadata(
       if (!winner) return s;
       return {
         ...s,
-        reasoning: `${s.reasoning} Wave Search: ${topology.duffelCallsUsed} live searches · ${topology.candidatesPruned} shapes pruned.`,
+        reasoning: `${s.reasoning} Optimal Search: ${topology.duffelCallsUsed} live searches · ${topology.candidatesPruned} pruned · ~$${topology.hotelEstimateUsd} hotels.`,
       };
     });
 

@@ -5,11 +5,30 @@ import type { PricedTopologyLeg, TopologyFlightLeg, TripTopologyCandidate } from
 const AWARD_CPP = 2.0;
 const BASE_AWARD_MILES = 70_000;
 
+export class DuffelCallBudget {
+  remaining: number;
+  used = 0;
+
+  constructor(limit: number) {
+    this.remaining = limit;
+  }
+
+  tryConsume(count = 1): boolean {
+    if (this.remaining < count) return false;
+    this.remaining -= count;
+    this.used += count;
+    return true;
+  }
+}
+
 export function imputedAwardUsd(miles: number, cpp = AWARD_CPP): number {
   return Math.round((miles * cpp) / 100);
 }
 
-export async function priceTopologyLeg(leg: TopologyFlightLeg): Promise<PricedTopologyLeg> {
+export async function priceTopologyLeg(
+  leg: TopologyFlightLeg,
+  budget?: DuffelCallBudget,
+): Promise<PricedTopologyLeg> {
   if (leg.pricing === "award_estimate") {
     const miles = estimateAwardMiles({
       baseMiles: BASE_AWARD_MILES,
@@ -29,6 +48,10 @@ export async function priceTopologyLeg(leg: TopologyFlightLeg): Promise<PricedTo
         departureDate: leg.departureDate,
       }),
     };
+  }
+
+  if (budget && !budget.tryConsume()) {
+    return { leg, priced: false };
   }
 
   const result = await searchDuffelCashQuotes({
@@ -52,11 +75,22 @@ export async function priceTopologyLeg(leg: TopologyFlightLeg): Promise<PricedTo
   };
 }
 
+/** Price every flight leg in parallel — maximizes Duffel throughput per topology. */
+export async function priceTopologyCandidateParallel(
+  candidate: TripTopologyCandidate,
+  budget: DuffelCallBudget,
+): Promise<PricedTopologyLeg[]> {
+  return Promise.all(candidate.flightLegs.map((leg) => priceTopologyLeg(leg, budget)));
+}
+
 export function summarizePricedTopology(
   candidate: TripTopologyCandidate,
   legs: PricedTopologyLeg[],
+  hotelCashUsd: number,
 ): {
   totalCashUsd: number;
+  hotelCashUsd: number;
+  grandTotalCashUsd: number;
   totalAwardMiles: number;
   imputedPointsUsd: number;
   totalTripValue: number;
@@ -81,20 +115,36 @@ export function summarizePricedTopology(
   }
 
   const imputedPointsUsd = imputedAwardUsd(totalAwardMiles);
-  const totalTripValue = totalCashUsd + imputedPointsUsd;
+  const flightCash = Math.round(totalCashUsd);
+  const grandTotalCashUsd = flightCash + hotelCashUsd;
+  const totalTripValue = grandTotalCashUsd + imputedPointsUsd;
 
   let confidence: "live" | "mixed" | "estimated" = "live";
   if (hasUnpriced) confidence = hasAward || liveLegCount > 0 ? "mixed" : "estimated";
   else if (hasAward) confidence = "mixed";
 
   return {
-    totalCashUsd: Math.round(totalCashUsd),
+    totalCashUsd: flightCash,
+    hotelCashUsd,
+    grandTotalCashUsd,
     totalAwardMiles,
     imputedPointsUsd,
     totalTripValue,
     confidence,
     liveLegCount,
   };
+}
+
+export function rankScoreForCheapest(row: {
+  candidate: TripTopologyCandidate;
+  grandTotalCashUsd: number;
+  totalTripValue: number;
+  liveLegCount: number;
+}): number {
+  if (row.candidate.kind === "position_award") {
+    return row.totalTripValue;
+  }
+  return row.grandTotalCashUsd;
 }
 
 export { AWARD_CPP };
