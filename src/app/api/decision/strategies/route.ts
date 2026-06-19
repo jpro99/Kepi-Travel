@@ -125,53 +125,48 @@ export async function POST(req: Request) {
   }
 
   const arrivalIata = workingBrief.intent.stops?.[0]?.iata ?? workingBrief.intent.destinationIata;
-  console.log("[analyze] route:outbound-duffel:start", { ms: Date.now() - analyzeStartedAt, arrivalIata });
-  const outboundDuffel = await searchDuffelCashQuotes({
-    origins: workingBrief.searchAirports,
-    destination: arrivalIata,
-    departureDate: workingBrief.intent.startDate,
-  });
-
-  console.log("[analyze] route:outbound-duffel:done", {
-    ms: Date.now() - analyzeStartedAt,
-    quotes: outboundDuffel.quotes.length,
-  });
-
-  let returnDuffel: Awaited<ReturnType<typeof searchDuffelCashQuotes>> | undefined;
   const homeIata = workingBrief.searchAirports[0];
-  if (workingBrief.intent.returnAirports?.length && homeIata) {
-    console.log("[analyze] route:return-duffel:start", { ms: Date.now() - analyzeStartedAt });
-    returnDuffel = await searchDuffelCashQuotes({
-      origins: workingBrief.intent.returnAirports,
-      destination: homeIata,
-      departureDate: workingBrief.intent.endDate,
-    });
-  }
-
-  if (returnDuffel) {
-    console.log("[analyze] route:return-duffel:done", {
-      ms: Date.now() - analyzeStartedAt,
-      quotes: returnDuffel.quotes.length,
-    });
-  }
-
+  const hasReturn = Boolean(workingBrief.intent.returnAirports?.length && homeIata);
   const connectorLegs = enabledConnectorLegs(workingBrief.flightLegs ?? []);
-  console.log("[analyze] route:connector-duffel:start", {
+
+  console.log("[analyze] route:duffel:start", {
     ms: Date.now() - analyzeStartedAt,
+    arrivalIata,
+    hasReturn,
     connectorCount: connectorLegs.length,
   });
-  const connectorDuffel = await Promise.all(
-    connectorLegs.map(async (leg) => ({
-      legId: leg.id,
-      result: await searchDuffelCashQuotes({
-        origins: [leg.fromIata],
-        destination: leg.toIata,
-        departureDate: leg.departureDate,
-      }),
-    })),
-  );
 
-  console.log("[analyze] route:connector-duffel:done", { ms: Date.now() - analyzeStartedAt });
+  const [outboundDuffel, returnDuffel, connectorDuffel] = await Promise.all([
+    searchDuffelCashQuotes({
+      origins: workingBrief.searchAirports,
+      destination: arrivalIata,
+      departureDate: workingBrief.intent.startDate,
+    }),
+    hasReturn
+      ? searchDuffelCashQuotes({
+          origins: workingBrief.intent.returnAirports as string[],
+          destination: homeIata as string,
+          departureDate: workingBrief.intent.endDate,
+        })
+      : Promise.resolve(undefined),
+    Promise.all(
+      connectorLegs.map(async (leg) => ({
+        legId: leg.id,
+        result: await searchDuffelCashQuotes({
+          origins: [leg.fromIata],
+          destination: leg.toIata,
+          departureDate: leg.departureDate,
+        }),
+      })),
+    ),
+  ]);
+
+  console.log("[analyze] route:duffel:done", {
+    ms: Date.now() - analyzeStartedAt,
+    outboundQuotes: outboundDuffel.quotes.length,
+    returnQuotes: returnDuffel?.quotes.length ?? 0,
+    connectorCount: connectorDuffel.length,
+  });
 
   const enriched = enrichBriefWithDuffelPricing(
     workingBrief,
