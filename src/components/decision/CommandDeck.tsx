@@ -73,6 +73,7 @@ const INPUT_PLACEHOLDER = "Describe your trip — or tap Record my trip";
 const STRATEGY_TIMEOUT_MS = 45_000;
 const STAYS_TIMEOUT_MS = 25_000;
 const FLEX_TIMEOUT_MS = 35_000;
+const ANALYZE_FAST_RETRY_MAX = 1;
 
 const SEGMENT_ICON: Record<string, string> = {
   flight: "✈️",
@@ -565,7 +566,15 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         const activePlanMode = planModeOverride ?? planMode;
         const body = mutation
           ? { prompt: nextPrompt, mutation: { ...mutation, priorityComfort: mutation.priorityComfort ?? weight } }
-          : { prompt: nextPrompt, comfortWeight: weight };
+          : {
+              prompt: nextPrompt,
+              comfortWeight: weight,
+              planMode: activePlanMode,
+              paymentMode,
+              enabledLegIds: legIds.length > 0 ? legIds : undefined,
+              expert: expertOptions.enabled ? { ...expertOptions, enabled: true } : undefined,
+              ...(useFastPath ? { fastPath: true } : {}),
+            };
         const res = await fetchWithTimeout(
           endpoint,
           {
@@ -607,6 +616,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         const data = await res.json();
         if (analysisRunRef.current !== runId) return;
         analyzeFastRetryRef.current = 0;
+        const elapsedMs = Date.now() - analyzeFetchStartedAt;
         console.log("[analyze] complete", {
           ms: elapsedMs,
           fastPath: useFastPath,
@@ -706,7 +716,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     : [];
 
   const inputPlaceholder =
-    planMode === "flights" ? INPUT_PLACEHOLDER_FLIGHTS : expertPlaceholder(planMode);
+    planMode === "flights" ? INPUT_PLACEHOLDER : expertPlaceholder(planMode);
 
   const handlePaymentModeChange = (mode: PaymentMode): void => {
     setPaymentMode(mode);
@@ -868,7 +878,12 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt, strategyId, comfortWeight }),
+            body: JSON.stringify({
+              prompt,
+              strategyId,
+              comfortWeight,
+              dateFlexDays: expertOptions.enabled ? expertOptions.dateFlexDays : undefined,
+            }),
           },
           FLEX_TIMEOUT_MS,
           "Date comparison is taking too long. Try fewer date changes or retry.",
