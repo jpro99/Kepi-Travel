@@ -1,9 +1,7 @@
 import { buildSeatsAeroSearchUrl, estimateAwardMiles } from "@/lib/decision/awardFlexEstimate";
-import { resolveCppForProgram } from "@/lib/flights/cppValuations";
-import { searchSeatsAeroAwards, isSeatsAeroConfigured } from "@/lib/flights/seatsAero";
-import { resolveReachablePrograms } from "@/lib/flights/transferPartners";
-import type { AwardOffer, FlightCabin } from "@/lib/flights/types";
-import type { ReachableProgram } from "@/lib/flights/transferPartners";
+import { resolveCppForProgram, labelFor } from "@/lib/flights/cppValuations";
+import { searchAwardAvailability, isSeatsAeroConfigured } from "@/lib/flights/seatsAero";
+import type { AwardOffer, CabinClass } from "@/lib/flights/types";
 import { searchDuffelCashQuotes } from "@/lib/providers/duffel/flightOffers";
 import type { TravelerGenome } from "@/lib/traveler/types";
 import type { PricedTopologyLeg, TopologyFlightLeg, TripTopologyCandidate } from "@/lib/decision/topology/types";
@@ -46,8 +44,7 @@ export class SeatsAeroCallBudget {
 
 export interface TopologyPricingContext {
   seatsAeroBudget: SeatsAeroCallBudget;
-  reachablePrograms: ReachableProgram[];
-  awardCabin: FlightCabin;
+  awardCabin: CabinClass;
   awardCache: Map<string, AwardOffer | null>;
 }
 
@@ -55,11 +52,11 @@ export function imputedAwardUsd(miles: number, cpp = AWARD_CPP): number {
   return Math.round((miles * cpp) / 100);
 }
 
-function awardCacheKey(leg: TopologyFlightLeg, cabin: FlightCabin): string {
+function awardCacheKey(leg: TopologyFlightLeg, cabin: CabinClass): string {
   return `${leg.fromIata}-${leg.toIata}-${leg.departureDate}-${cabin}`;
 }
 
-function cabinFromGenome(genome: TravelerGenome): FlightCabin {
+function cabinFromGenome(genome: TravelerGenome): CabinClass {
   if (genome.cabinPreference === "first") return "first";
   if (genome.cabinPreference === "premium_economy") return "premium_economy";
   if (genome.cabinPreference === "economy") return "economy";
@@ -70,12 +67,8 @@ export async function buildTopologyPricingContext(
   genome: TravelerGenome,
   maxSeatsAeroCalls = DEFAULT_SEATS_AERO_BUDGET,
 ): Promise<TopologyPricingContext> {
-  const reachablePrograms = await resolveReachablePrograms(
-    genome.pointsBalances.map((row) => ({ program: row.program, balance: row.balance })),
-  );
   return {
     seatsAeroBudget: new SeatsAeroCallBudget(maxSeatsAeroCalls),
-    reachablePrograms,
     awardCabin: cabinFromGenome(genome),
     awardCache: new Map(),
   };
@@ -84,14 +77,12 @@ export async function buildTopologyPricingContext(
 function pickBestAwardOffer(offers: AwardOffer[], leg: TopologyFlightLeg): AwardOffer | null {
   const origin = leg.fromIata.toUpperCase();
   const destination = leg.toIata.toUpperCase();
-  const matching = offers.filter(
-    (offer) =>
-      offer.origin === origin &&
-      offer.destination === destination &&
-      offer.departureDate === leg.departureDate,
-  );
+  const matching = offers.filter((offer) => {
+    const seg = offer.segments[0];
+    return seg?.origin.toUpperCase() === origin && seg?.destination.toUpperCase() === destination;
+  });
   const pool = matching.length > 0 ? matching : offers;
-  return pool.sort((a, b) => a.miles - b.miles)[0] ?? null;
+  return pool.sort((a, b) => a.milesCost - b.milesCost)[0] ?? null;
 }
 
 async function priceEstimatedAwardLeg(leg: TopologyFlightLeg): Promise<PricedTopologyLeg> {
@@ -126,18 +117,22 @@ async function priceLiveAwardLeg(
   if (ctx.awardCache.has(cacheKey)) {
     const cached = ctx.awardCache.get(cacheKey);
     if (cached) {
-      const cpp = await resolveCppForProgram(cached.programSlug);
+      const cpp = await resolveCppForProgram(cached.program);
       return {
         leg,
         priced: true,
-        amountUsd: cached.taxesUsd,
-        awardMiles: cached.miles,
-        awardProgram: cached.program,
-        awardAirlines: cached.airlines,
+        amountUsd: cached.cashSurcharge / 100,
+        awardMiles: cached.milesCost,
+        awardProgram: labelFor(cached.program),
+        awardAirlines: cached.segments[0]?.marketingCarrier ?? cached.program,
         awardLive: true,
         awardCpp: cpp,
-        awardImputedUsd: imputedAwardUsd(cached.miles, cpp),
-        verifyUrl: cached.verifyUrl,
+        awardImputedUsd: imputedAwardUsd(cached.milesCost, cpp),
+        verifyUrl: buildSeatsAeroSearchUrl({
+          origin: leg.fromIata,
+          destination: leg.toIata,
+          departureDate: leg.departureDate,
+        }),
       };
     }
     return priceEstimatedAwardLeg(leg);
@@ -148,12 +143,11 @@ async function priceLiveAwardLeg(
     return priceEstimatedAwardLeg(leg);
   }
 
-  const { offers } = await searchSeatsAeroAwards({
-    origins: [leg.fromIata],
+  const offers = await searchAwardAvailability({
+    origin: leg.fromIata,
     destination: leg.toIata,
-    departureDate: leg.departureDate,
+    departDate: leg.departureDate,
     cabin: ctx.awardCabin,
-    reachablePrograms: ctx.reachablePrograms,
   });
 
   const best = pickBestAwardOffer(offers, leg);
@@ -163,18 +157,22 @@ async function priceLiveAwardLeg(
     return priceEstimatedAwardLeg(leg);
   }
 
-  const cpp = await resolveCppForProgram(best.programSlug);
+  const cpp = await resolveCppForProgram(best.program);
   return {
     leg,
     priced: true,
-    amountUsd: best.taxesUsd,
-    awardMiles: best.miles,
-    awardProgram: best.program,
-    awardAirlines: best.airlines,
+    amountUsd: best.cashSurcharge / 100,
+    awardMiles: best.milesCost,
+    awardProgram: labelFor(best.program),
+    awardAirlines: best.segments[0]?.marketingCarrier ?? best.program,
     awardLive: true,
     awardCpp: cpp,
-    awardImputedUsd: imputedAwardUsd(best.miles, cpp),
-    verifyUrl: best.verifyUrl,
+    awardImputedUsd: imputedAwardUsd(best.milesCost, cpp),
+    verifyUrl: buildSeatsAeroSearchUrl({
+      origin: leg.fromIata,
+      destination: leg.toIata,
+      departureDate: leg.departureDate,
+    }),
   };
 }
 

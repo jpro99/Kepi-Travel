@@ -1,81 +1,130 @@
-export type FlightCabin = "economy" | "premium_economy" | "business" | "first";
+// Shared types for Kepi's fused (cash + award) flight search.
+// v2: per-offer metrics, composite scoring, passenger-aware comparison.
 
-export interface CashOffer {
-  id: string;
+export type CabinClass = "economy" | "premium_economy" | "business" | "first";
+
+/** @deprecated Use CabinClass */
+export type FlightCabin = CabinClass;
+
+export type LoyaltyProgram =
+  | "united"
+  | "american"
+  | "delta"
+  | "alaska"
+  | "jetblue"
+  | "southwest"
+  | "aeroplan"
+  | "flyingblue"
+  | "avios_ba"
+  | "avios_iberia"
+  | "virginatlantic"
+  | "lifemiles"
+  | "singapore_krisflyer"
+  | "ana"
+  | "emirates"
+  | "etihad"
+  | "qatar_avios"
+  | "turkish"
+  | "chase_ur"
+  | "amex_mr"
+  | "capitalone"
+  | "citi_typ"
+  | "bilt"
+  | "wellsfargo";
+
+export interface FlightSegment {
   origin: string;
   destination: string;
-  departureDate: string;
-  airline: string;
-  flightNumber?: string;
-  stops: number;
-  cabin: FlightCabin;
-  totalUsd: number;
+  departingAt: string;
+  arrivingAt: string;
+  marketingCarrier: string;
+  flightNumber: string;
+  aircraft?: string;
+}
+
+export interface CashOffer {
+  kind: "cash";
+  id: string;
+  totalAmount: number;
   currency: string;
-  offerId?: string;
+  cabin: CabinClass;
+  segments: FlightSegment[];
   source: "duffel";
 }
 
 export interface AwardOffer {
+  kind: "award";
   id: string;
-  origin: string;
-  destination: string;
-  departureDate: string;
-  program: string;
-  programSlug: string;
-  miles: number;
-  taxesUsd: number;
-  cabin: FlightCabin;
-  airlines: string;
-  direct: boolean;
-  remainingSeats: number;
-  availabilityId: string;
-  verifyUrl: string;
-  source: "seats_aero";
-  /** Bank points program used to fund transfer, if applicable */
-  fundedBy?: string;
-  transferFrom?: string;
+  program: LoyaltyProgram;
+  milesCost: number;
+  cashSurcharge: number;
+  currency: string;
+  cabin: CabinClass;
+  segments: FlightSegment[];
+  source: "seats_aero" | string;
+  surchargeHeavy?: boolean;
+  rawAvailabilityId?: string;
 }
 
-export type PaymentVerdict = "use_cash" | "use_points" | "transfer_points" | "insufficient_points";
+export type AnyOffer = CashOffer | AwardOffer;
 
-export interface FusedFlightOption {
-  id: string;
-  origin: string;
-  destination: string;
-  departureDate: string;
-  cabin: FlightCabin;
-  cashOffer: CashOffer | null;
-  awardOffer: AwardOffer | null;
-  verdict: PaymentVerdict;
-  headline: string;
-  reasoning: string;
-  cpp: number;
-  cashUsd: number;
-  milesRequired: number;
-  imputedPointsUsd: number;
-  savingsUsd: number;
-  rankScore: number;
+export interface OfferMetrics {
+  stops: number;
+  durationMinutes: number | null;
 }
 
-export interface FusedFlightSearchParams {
-  origins: string[];
+export interface ScoreBreakdown {
+  value: number;
+  convenience: number;
+  reachability: number;
+  quality: number;
+  composite: number;
+}
+
+export interface FusedOffer {
+  offer: AnyOffer;
+  cashEquivalent: number;
+  centsPerPoint?: number;
+  isBestValue: boolean;
+  reachable?: boolean;
+  reachableVia?: ReachabilityPath[];
+  recommendationReason?: string;
+  metrics?: OfferMetrics;
+  score?: number;
+  scoreBreakdown?: ScoreBreakdown;
+}
+
+export interface ReachabilityPath {
+  fromCurrency: LoyaltyProgram;
+  toProgram: LoyaltyProgram;
+  ratio: string;
+  transferBonusPct?: number;
+  hasEnoughBalance: boolean;
+  shortfall?: number;
+}
+
+export interface FusedSearchParams {
+  origin: string;
   destination: string;
-  departureDate: string;
+  departDate: string;
   returnDate?: string;
-  cabin?: FlightCabin;
+  passengers: number;
+  cabin: CabinClass;
+  userId?: string;
 }
 
-export interface FusedFlightSearchResult {
-  params: FusedFlightSearchParams;
-  cashOffers: CashOffer[];
-  awardOffers: AwardOffer[];
-  fused: FusedFlightOption[];
-  headline: string;
-  best: FusedFlightOption | null;
+export interface FusedSearchResult {
+  params: FusedSearchParams;
+  offers: FusedOffer[];
+  cheapestCash?: FusedOffer;
+  bestAward?: FusedOffer;
+  headline?: string;
+  warnings: string[];
   meta: {
-    cashSource: "duffel" | "none";
-    awardSource: "seats_aero" | "none";
-    duffelConfigured: boolean;
-    seatsAeroConfigured: boolean;
+    cashCount: number;
+    awardCount: number;
+    cashCached: boolean;
+    awardCached: boolean;
+    elapsedMs: number;
   };
 }

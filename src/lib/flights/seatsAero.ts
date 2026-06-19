@@ -1,201 +1,170 @@
-import { buildSeatsAeroSearchUrl } from "@/lib/decision/awardFlexEstimate";
-import { logger } from "@/lib/logger";
-import type { AwardOffer, FlightCabin } from "@/lib/flights/types";
-import type { ReachableProgram } from "@/lib/flights/transferPartners";
+import type { AwardOffer, CabinClass, LoyaltyProgram } from "./types";
+import { SURCHARGE_HEAVY } from "./cppValuations";
 
 const SEATS_AERO_BASE = "https://seats.aero/partnerapi";
 const TIMEOUT_MS = 18_000;
 
-function resolveSeatsAeroKey(): string | null {
-  return process.env.SEATS_AERO_API_KEY?.trim() || null;
+interface SeatsAeroSearchInput {
+  origin: string;
+  destination: string;
+  departDate: string;
+  cabin: CabinClass;
 }
 
-const CABIN_FIELDS: Record<
-  FlightCabin,
-  { available: string; miles: string; airlines: string; direct: string; seats: string }
-> = {
-  economy: {
-    available: "YAvailable",
-    miles: "YMileageCost",
-    airlines: "YAirlines",
-    direct: "YDirect",
-    seats: "YRemainingSeats",
-  },
-  premium_economy: {
-    available: "WAvailable",
-    miles: "WMileageCost",
-    airlines: "WAirlines",
-    direct: "WDirect",
-    seats: "WRemainingSeats",
-  },
-  business: {
-    available: "JAvailable",
-    miles: "JMileageCost",
-    airlines: "JAirlines",
-    direct: "JDirect",
-    seats: "JRemainingSeats",
-  },
-  first: {
-    available: "FAvailable",
-    miles: "FMileageCost",
-    airlines: "FAirlines",
-    direct: "FDirect",
-    seats: "FRemainingSeats",
-  },
+const SOURCE_TO_PROGRAM: Record<string, LoyaltyProgram> = {
+  united: "united",
+  aeroplan: "aeroplan",
+  american: "american",
+  delta: "delta",
+  alaska: "alaska",
+  jetblue: "jetblue",
+  flyingblue: "flyingblue",
+  virginatlantic: "virginatlantic",
+  emirates: "emirates",
+  etihad: "etihad",
+  qatar: "qatar_avios",
+  ana: "ana",
+  singapore: "singapore_krisflyer",
+  lifemiles: "lifemiles",
+  turkish: "turkish",
+  britishairways: "avios_ba",
+  iberia: "avios_iberia",
 };
 
-function readBool(row: Record<string, unknown>, key: string): boolean {
-  const value = row[key];
-  return value === true;
+const CABIN_FIELD: Record<CabinClass, string> = {
+  economy: "Y",
+  premium_economy: "W",
+  business: "J",
+  first: "F",
+};
+
+export function isSeatsAeroConfigured(): boolean {
+  return Boolean(process.env.SEATS_AERO_API_KEY?.trim());
 }
 
-function readString(row: Record<string, unknown>, key: string): string {
-  const value = row[key];
-  return typeof value === "string" ? value : "";
-}
-
-function readInt(row: Record<string, unknown>, key: string): number {
-  const value = row[key];
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const parsed = Number.parseInt(value, 10);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-  return 0;
-}
-
-function programLabel(slug: string): string {
-  return slug.charAt(0).toUpperCase() + slug.slice(1);
-}
-
-function normalizeAvailability(
-  row: Record<string, unknown>,
-  cabin: FlightCabin,
-  funded?: ReachableProgram,
-): AwardOffer | null {
-  const fields = CABIN_FIELDS[cabin];
-  if (!readBool(row, fields.available)) return null;
-
-  const miles = readInt(row, fields.miles);
-  if (miles <= 0) return null;
-
-  const route = row.Route;
-  if (!route || typeof route !== "object") return null;
-  const routeRow = route as Record<string, unknown>;
-  const origin = readString(routeRow, "OriginAirport").toUpperCase();
-  const destination = readString(routeRow, "DestinationAirport").toUpperCase();
-  if (!origin || !destination) return null;
-
-  const programSlug = readString(row, "Source").toLowerCase() || readString(routeRow, "Source").toLowerCase();
-  if (!programSlug) return null;
-
-  const departureDate = readString(row, "Date");
-  const id = readString(row, "ID") || `${programSlug}-${origin}-${destination}-${departureDate}-${cabin}`;
-
-  return {
-    id,
-    origin,
-    destination,
-    departureDate,
-    program: programLabel(programSlug),
-    programSlug,
-    miles,
-    taxesUsd: 5.6,
-    cabin,
-    airlines: readString(row, fields.airlines),
-    direct: readBool(row, fields.direct),
-    remainingSeats: readInt(row, fields.seats),
-    availabilityId: id,
-    verifyUrl: buildSeatsAeroSearchUrl({ origin, destination, departureDate }),
-    source: "seats_aero",
-    fundedBy: funded?.fundedBy,
-    transferFrom: funded?.fundedBy,
-  };
-}
-
-export interface SeatsAeroSearchParams {
-  origins: string[];
-  destination: string;
-  departureDate: string;
-  cabin?: FlightCabin;
-  reachablePrograms?: ReachableProgram[];
-}
-
-export async function searchSeatsAeroAwards(params: SeatsAeroSearchParams): Promise<{
-  configured: boolean;
-  offers: AwardOffer[];
-}> {
-  const apiKey = resolveSeatsAeroKey();
-  if (!apiKey) {
-    return { configured: false, offers: [] };
+export async function searchAwardAvailability(input: SeatsAeroSearchInput): Promise<AwardOffer[]> {
+  if (!isSeatsAeroConfigured()) {
+    return [];
   }
 
-  const cabin = params.cabin ?? "economy";
-  const origins = params.origins.map((o) => o.toUpperCase()).join(",");
-  const destination = params.destination.toUpperCase();
-  const sourceFilter = params.reachablePrograms?.map((p) => p.slug).join(",") ?? "";
-
-  const query = new URLSearchParams({
-    origin_airport: origins,
-    destination_airport: destination,
-    start_date: params.departureDate,
-    end_date: params.departureDate,
-    take: "100",
-    order_by: "lowest_mileage",
+  const params = new URLSearchParams({
+    origin_airport: input.origin,
+    destination_airport: input.destination,
+    start_date: input.departDate,
+    end_date: input.departDate,
+    take: "50",
   });
-  if (sourceFilter) query.set("sources", sourceFilter);
 
+  let payload: unknown;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
-    const response = await fetch(`${SEATS_AERO_BASE}/search?${query.toString()}`, {
+    const res = await fetch(`${SEATS_AERO_BASE}/search?${params.toString()}`, {
       method: "GET",
       headers: {
+        "Partner-Authorization": process.env.SEATS_AERO_API_KEY as string,
         Accept: "application/json",
-        "Partner-Authorization": apiKey,
       },
-      signal: controller.signal,
       cache: "no-store",
+      signal: controller.signal,
     });
-
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      logger.warn("Seats.aero search failed", {
-        scope: "flights/seatsAero",
-        status: response.status,
-        body: text.slice(0, 200),
-      });
-      return { configured: true, offers: [] };
+    if (!res.ok) {
+      return [];
     }
-
-    const payload = (await response.json()) as { data?: unknown[] };
-    const rows = Array.isArray(payload.data) ? payload.data : [];
-    const reachable = params.reachablePrograms ?? [];
-    const fundedBySlug = new Map(reachable.map((p) => [p.slug, p]));
-
-    const offers: AwardOffer[] = [];
-    for (const item of rows) {
-      if (!item || typeof item !== "object") continue;
-      const row = item as Record<string, unknown>;
-      const slug = readString(row, "Source").toLowerCase();
-      const offer = normalizeAvailability(row, cabin, fundedBySlug.get(slug));
-      if (offer) offers.push(offer);
-    }
-
-    offers.sort((a, b) => a.miles - b.miles);
-    return { configured: true, offers };
-  } catch (error) {
-    logger.warn("Seats.aero search error", {
-      scope: "flights/seatsAero",
-      error: error instanceof Error ? error.message : "unknown",
-    });
-    return { configured: true, offers: [] };
+    payload = await res.json();
+  } catch {
+    return [];
   } finally {
     clearTimeout(timer);
   }
+
+  return normalizeAvailability(payload, input.cabin);
 }
 
-export function isSeatsAeroConfigured(): boolean {
-  return Boolean(resolveSeatsAeroKey());
+function normalizeAvailability(payload: unknown, cabin: CabinClass): AwardOffer[] {
+  const records = extractRecords(payload);
+  const wantedCabin = CABIN_FIELD[cabin];
+  const offers: AwardOffer[] = [];
+
+  for (const record of records) {
+    try {
+      const sourceRaw = String(record.Source ?? record.source ?? "").toLowerCase();
+      const program = SOURCE_TO_PROGRAM[sourceRaw];
+      if (!program) continue;
+
+      const availableFlag = record[`${wantedCabin}Available`] ?? record[`${wantedCabin}available`];
+      if (availableFlag === false) continue;
+
+      const milesRaw = record[`${wantedCabin}MileageCost`] ?? record[`${wantedCabin}MileageCostRaw`];
+      const milesCost = toNumber(milesRaw);
+      if (!milesCost || milesCost <= 0) continue;
+
+      const taxesRaw = record[`${wantedCabin}TotalTaxes`] ?? record[`${wantedCabin}TaxesCents`] ?? 0;
+      const cashSurcharge = normalizeTaxesToCents(taxesRaw);
+
+      const origin = String(record.OriginAirport ?? record.Route?.OriginAirport ?? "");
+      const destination = String(record.DestinationAirport ?? record.Route?.DestinationAirport ?? "");
+      const date = String(record.Date ?? record.date ?? "");
+
+      offers.push({
+        kind: "award",
+        id: makeAwardId(program, origin, destination, date, milesCost),
+        program,
+        milesCost,
+        cashSurcharge,
+        currency: "USD",
+        cabin,
+        surchargeHeavy: SURCHARGE_HEAVY.has(program),
+        rawAvailabilityId: String(record.ID ?? record.id ?? ""),
+        source: "seats_aero",
+        segments: [
+          {
+            origin,
+            destination,
+            departingAt: date,
+            arrivingAt: date,
+            marketingCarrier: sourceRaw.toUpperCase().slice(0, 2),
+            flightNumber: "—",
+          },
+        ],
+      });
+    } catch {
+      continue;
+    }
+  }
+
+  return offers;
+}
+
+function extractRecords(payload: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(payload)) return payload as Array<Record<string, unknown>>;
+  if (payload && typeof payload === "object") {
+    const obj = payload as Record<string, unknown>;
+    if (Array.isArray(obj.data)) return obj.data as Array<Record<string, unknown>>;
+    if (Array.isArray(obj.results)) return obj.results as Array<Record<string, unknown>>;
+  }
+  return [];
+}
+
+function toNumber(value: unknown): number {
+  const parsed = typeof value === "string" ? Number.parseFloat(value) : Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeTaxesToCents(value: unknown): number {
+  const num = toNumber(value);
+  if (num === 0) return 0;
+  if (Number.isInteger(num) && num >= 1000) return num;
+  return Math.round(num * 100);
+}
+
+function makeAwardId(
+  program: string,
+  origin: string,
+  destination: string,
+  date: string,
+  miles: number,
+): string {
+  return `award_${program}_${origin}_${destination}_${date}_${miles}`.replace(/\s+/g, "");
 }

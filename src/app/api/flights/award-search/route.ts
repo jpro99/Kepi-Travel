@@ -2,13 +2,18 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { enforceRateLimit } from "@/lib/rateLimit";
-import { runFusedFlightSearch } from "@/lib/flights/fusedFlightSearch";
+import { fusedFlightSearch } from "@/lib/flights/fusedFlightSearch";
+import { fetchDuffelCashOffers } from "@/lib/flights/duffelAdapter";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const BodySchema = z.object({
-  origins: z.array(z.string().trim().length(3)).min(1).max(5),
+  origin: z.string().trim().length(3),
   destination: z.string().trim().length(3),
-  departureDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  departDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   returnDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  passengers: z.number().int().min(1).max(9).optional(),
   cabin: z.enum(["economy", "premium_economy", "business", "first"]).optional(),
 });
 
@@ -40,16 +45,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const result = await runFusedFlightSearch(parsed.data, userId);
+  const params = {
+    origin: parsed.data.origin.toUpperCase(),
+    destination: parsed.data.destination.toUpperCase(),
+    departDate: parsed.data.departDate,
+    returnDate: parsed.data.returnDate,
+    passengers: parsed.data.passengers ?? 1,
+    cabin: parsed.data.cabin ?? ("economy" as const),
+    userId,
+  };
 
-  console.log("[fused-flight-search]", {
-    cashOffers: result.cashOffers.length,
-    awardOffers: result.awardOffers.length,
-    fused: result.fused.length,
-    headline: result.headline,
-    duffel: result.meta.duffelConfigured,
-    seatsAero: result.meta.seatsAeroConfigured,
-  });
+  try {
+    const result = await fusedFlightSearch(params, fetchDuffelCashOffers);
 
-  return NextResponse.json(result);
+    console.log("[fused-flight-search]", {
+      meta: result.meta,
+      headline: result.headline,
+      warnings: result.warnings,
+      topScore: result.offers[0]?.score,
+    });
+
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error("[fused-flight-search] failed:", error);
+    return NextResponse.json({ error: "Search failed. Check server logs." }, { status: 500 });
+  }
 }

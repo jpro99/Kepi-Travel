@@ -2,8 +2,17 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { enforceRateLimit } from "@/lib/rateLimit";
+import { enrichBriefWithDuffelPricing } from "@/lib/decision/livePricing";
 import { buildDecisionBrief } from "@/lib/decision/strategyEngine";
+import { enabledConnectorLegs } from "@/lib/decision/flightLegPlanner";
+import { mergeTopologyIntoStrategies, attachTopologyMetadata } from "@/lib/decision/topology/toStrategy";
+import { runKepiWaveSearch } from "@/lib/decision/topology/waveSearch";
+import { runFusedSearchForTrip } from "@/lib/flights/fusedFlightSearch";
+import { searchDuffelCashQuotes } from "@/lib/providers/duffel/flightOffers";
 import { getTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const ExpertSchema = z
   .object({
@@ -23,11 +32,17 @@ const BodySchema = z.object({
   paymentMode: z.enum(["cash", "points", "mix"]).optional(),
   enabledLegIds: z.array(z.string()).optional(),
   expert: ExpertSchema,
+  /** Skip Optimal Search + fused awards — used once after a full-path timeout. */
+  fastPath: z.boolean().optional(),
 });
 
 export async function POST(req: Request) {
+  const analyzeStartedAt = Date.now();
+  console.log("[analyze] route:start", { ts: analyzeStartedAt });
+
   const userId = await resolveAuthenticatedUserId();
   if (!userId) {
+    console.log("[analyze] route:abort", { reason: "unauthorized", ms: Date.now() - analyzeStartedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const rateLimit = await enforceRateLimit({
@@ -56,6 +71,7 @@ export async function POST(req: Request) {
   const comfortWeight = parsed.data.comfortWeight ?? genome.decisionWeights.comfort;
   const planMode = parsed.data.planMode ?? "flights";
   const paymentMode = parsed.data.paymentMode ?? "cash";
+  const fastPath = parsed.data.fastPath === true;
   const brief = buildDecisionBrief(parsed.data.prompt, genome, {
     comfortWeight,
     planMode,
@@ -68,5 +84,109 @@ export async function POST(req: Request) {
     return NextResponse.json({ brief });
   }
 
-  return NextResponse.json({ brief });
+  let workingBrief = brief;
+
+  if (!fastPath && !brief.originRequired && brief.searchAirports.length > 0) {
+    console.log("[analyze] route:parallel-search:start", {
+      ms: Date.now() - analyzeStartedAt,
+      planMode,
+      searchAirports: brief.searchAirports,
+    });
+    const [topologySearch, fusedFlightSearch] = await Promise.all([
+      runKepiWaveSearch(brief.intent, genome, brief.searchAirports),
+      planMode !== "hotels" ? runFusedSearchForTrip(brief.intent, brief.searchAirports, genome, userId) : null,
+    ]);
+    console.log("[analyze] route:parallel-search:done", {
+      ms: Date.now() - analyzeStartedAt,
+      duffelCallsUsed: topologySearch.duffelCallsUsed,
+      seatsAeroCallsUsed: topologySearch.seatsAeroCallsUsed,
+      fusedMeta: fusedFlightSearch?.meta,
+      fusedCash: fusedFlightSearch?.meta.cashCount ?? 0,
+    });
+
+    if (fusedFlightSearch) {
+      console.log("[trip-planner-fused-search]", {
+        meta: fusedFlightSearch.meta,
+        headline: fusedFlightSearch.headline,
+        topScore: fusedFlightSearch.offers[0]?.score,
+      });
+    }
+
+    const mergedStrategies = mergeTopologyIntoStrategies(brief.strategies, topologySearch);
+    const mergedCatalog = mergeTopologyIntoStrategies(brief.strategyCatalog ?? brief.strategies, topologySearch);
+    workingBrief = {
+      ...brief,
+      topologySearch,
+      fusedFlightSearch: fusedFlightSearch ?? undefined,
+      strategies: mergedStrategies,
+      strategyCatalog: mergedCatalog,
+    };
+    attachTopologyMetadata(workingBrief, topologySearch);
+  }
+
+  const arrivalIata = workingBrief.intent.stops?.[0]?.iata ?? workingBrief.intent.destinationIata;
+  console.log("[analyze] route:outbound-duffel:start", { ms: Date.now() - analyzeStartedAt, arrivalIata });
+  const outboundDuffel = await searchDuffelCashQuotes({
+    origins: workingBrief.searchAirports,
+    destination: arrivalIata,
+    departureDate: workingBrief.intent.startDate,
+  });
+
+  console.log("[analyze] route:outbound-duffel:done", {
+    ms: Date.now() - analyzeStartedAt,
+    quotes: outboundDuffel.quotes.length,
+  });
+
+  let returnDuffel: Awaited<ReturnType<typeof searchDuffelCashQuotes>> | undefined;
+  const homeIata = workingBrief.searchAirports[0];
+  if (workingBrief.intent.returnAirports?.length && homeIata) {
+    console.log("[analyze] route:return-duffel:start", { ms: Date.now() - analyzeStartedAt });
+    returnDuffel = await searchDuffelCashQuotes({
+      origins: workingBrief.intent.returnAirports,
+      destination: homeIata,
+      departureDate: workingBrief.intent.endDate,
+    });
+  }
+
+  if (returnDuffel) {
+    console.log("[analyze] route:return-duffel:done", {
+      ms: Date.now() - analyzeStartedAt,
+      quotes: returnDuffel.quotes.length,
+    });
+  }
+
+  const connectorLegs = enabledConnectorLegs(workingBrief.flightLegs ?? []);
+  console.log("[analyze] route:connector-duffel:start", {
+    ms: Date.now() - analyzeStartedAt,
+    connectorCount: connectorLegs.length,
+  });
+  const connectorDuffel = await Promise.all(
+    connectorLegs.map(async (leg) => ({
+      legId: leg.id,
+      result: await searchDuffelCashQuotes({
+        origins: [leg.fromIata],
+        destination: leg.toIata,
+        departureDate: leg.departureDate,
+      }),
+    })),
+  );
+
+  console.log("[analyze] route:connector-duffel:done", { ms: Date.now() - analyzeStartedAt });
+
+  const enriched = enrichBriefWithDuffelPricing(
+    workingBrief,
+    outboundDuffel,
+    genome,
+    comfortWeight,
+    returnDuffel,
+    connectorDuffel,
+  );
+
+  console.log("[analyze] route:complete", {
+    ms: Date.now() - analyzeStartedAt,
+    strategyCount: enriched.strategies.length,
+    fastPath,
+  });
+
+  return NextResponse.json({ brief: enriched });
 }

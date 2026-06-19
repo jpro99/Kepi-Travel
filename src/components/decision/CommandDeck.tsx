@@ -71,10 +71,10 @@ interface StaysResponse {
 
 const INPUT_PLACEHOLDER_FLIGHTS =
   "Where do you plan to travel? e.g. West Coast to Bari, Venice, Dolomites, Germany — fly home from Munich. Alaska Gold.";
-const STRATEGY_TIMEOUT_MS = 42_000;
+const STRATEGY_TIMEOUT_MS = 45_000;
 const STAYS_TIMEOUT_MS = 24_000;
 const FLEX_TIMEOUT_MS = 32_000;
-const ANALYZE_WATCHDOG_MS = 25_000;
+const ANALYZE_FAST_RETRY_MAX = 1;
 
 const SEGMENT_ICON: Record<string, string> = {
   flight: "✈️",
@@ -473,6 +473,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     redirectPath: string;
   } | null>(null);
   const [forwardAddress, setForwardAddress] = useState<string | null>(null);
+  const analyzeFastRetryRef = useRef(0);
 
   useEffect(() => {
     const modeParam = searchParams.get("mode");
@@ -518,17 +519,6 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     return () => window.clearInterval(timer);
   }, [loading, planMode]);
 
-  useEffect(() => {
-    if (!loading) return;
-    const timer = window.setTimeout(() => {
-      analysisRunRef.current += 1;
-      setLoading(false);
-      setLegToggleBusy(false);
-      setError("Analyze stopped before it could finish. Please try again; Kepi will use the fast strategy path.");
-    }, ANALYZE_WATCHDOG_MS);
-    return () => window.clearTimeout(timer);
-  }, [loading]);
-
   const fetchStrategies = useCallback(
     async (
       nextPrompt: string,
@@ -536,6 +526,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
       mutation?: CounterfactualMutation,
       legIdsOverride?: string[],
       planModeOverride?: PlanMode,
+      fetchOptions?: { fastPath?: boolean; isFastRetry?: boolean },
     ) => {
       const trimmed = nextPrompt.trim();
       if (!trimmed) return;
@@ -553,11 +544,25 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         setExpandedId(null);
         setCounterfactualNote(null);
         setEnabledLegIds([]);
-        if (!mutation) setHasAnalyzed(true);
+        if (!mutation) {
+          setHasAnalyzed(true);
+          if (!fetchOptions?.isFastRetry) {
+            analyzeFastRetryRef.current = 0;
+          }
+        }
       }
 
       try {
         const endpoint = mutation ? "/api/decision/counterfactual" : "/api/decision/strategies";
+        const analyzeFetchStartedAt = Date.now();
+        const useFastPath = fetchOptions?.fastPath === true;
+        console.log("[analyze] fetch:start", {
+          endpoint,
+          planMode: planModeOverride ?? planMode,
+          isLegToggle,
+          fastPath: useFastPath,
+          timeoutMs: STRATEGY_TIMEOUT_MS,
+        });
         const legIds = legIdsOverride ?? enabledLegIds;
         const activePlanMode = planModeOverride ?? planMode;
         const body = mutation
@@ -569,6 +574,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
               paymentMode,
               enabledLegIds: legIds.length > 0 ? legIds : undefined,
               expert: expertOptions.enabled ? { ...expertOptions, enabled: true } : undefined,
+              ...(useFastPath ? { fastPath: true } : {}),
             };
         const res = await fetchWithTimeout(
           endpoint,
@@ -580,17 +586,52 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
             credentials: "same-origin",
           },
           STRATEGY_TIMEOUT_MS,
-          "Live trip math is taking too long. Try again, or simplify to fewer cities/dates.",
+          "Analyze timed out after 45 seconds — try again.",
         );
+        const elapsedMs = Date.now() - analyzeFetchStartedAt;
+        console.log("[analyze] fetch:response", {
+          ms: elapsedMs,
+          ok: res.ok,
+          status: res.status,
+          fastPath: useFastPath,
+        });
         if (!res.ok) {
+          const canFastRetry =
+            !mutation &&
+            !isLegToggle &&
+            !useFastPath &&
+            analyzeFastRetryRef.current < ANALYZE_FAST_RETRY_MAX &&
+            (res.status === 504 || res.status === 408);
+          if (canFastRetry) {
+            analyzeFastRetryRef.current += 1;
+            console.log("[analyze] fast-path retry", {
+              attempt: analyzeFastRetryRef.current,
+              max: ANALYZE_FAST_RETRY_MAX,
+              reason: `HTTP ${res.status}`,
+            });
+            await fetchStrategies(nextPrompt, weight, mutation, legIdsOverride, planModeOverride, {
+              fastPath: true,
+              isFastRetry: true,
+            });
+            return;
+          }
           throw new Error(
             res.status === 401 || res.status === 404
               ? "Sign in to use the Command Deck."
-              : "Couldn't analyze that trip — try again.",
+              : useFastPath
+                ? "Analyze stopped before it could finish — fast strategy path failed. Try again in a moment."
+                : "Couldn't analyze that trip — try again.",
           );
         }
         const data = await res.json();
         if (analysisRunRef.current !== runId) return;
+        analyzeFastRetryRef.current = 0;
+        console.log("[analyze] complete", {
+          ms: elapsedMs,
+          fastPath: useFastPath,
+          strategyCount: data.brief?.strategies?.length ?? 0,
+          hasTopology: Boolean(data.brief?.topologySearch),
+        });
         setBrief(data.brief);
         if (data.brief?.paymentMode) {
           setPaymentMode(data.brief.paymentMode);
@@ -609,9 +650,34 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         const top = data.brief?.strategies?.[0];
         if (top && !isLegToggle) setExpandedId(top.id);
       } catch (e) {
-        if (analysisRunRef.current === runId) {
-          setError(e instanceof Error ? e.message : "Something went wrong");
+        if (analysisRunRef.current !== runId) return;
+        const isTimeout = e instanceof RequestTimeoutError;
+        const canFastRetry =
+          !mutation &&
+          !isLegToggle &&
+          !fetchOptions?.fastPath &&
+          analyzeFastRetryRef.current < ANALYZE_FAST_RETRY_MAX &&
+          isTimeout;
+        if (canFastRetry) {
+          analyzeFastRetryRef.current += 1;
+          console.log("[analyze] fast-path retry", {
+            attempt: analyzeFastRetryRef.current,
+            max: ANALYZE_FAST_RETRY_MAX,
+            reason: "client abort timeout",
+          });
+          await fetchStrategies(nextPrompt, weight, mutation, legIdsOverride, planModeOverride, {
+            fastPath: true,
+            isFastRetry: true,
+          });
+          return;
         }
+        console.log("[analyze] fetch:failed", {
+          message: e instanceof Error ? e.message : "unknown",
+          name: e instanceof Error ? e.name : "unknown",
+          fastPath: fetchOptions?.fastPath ?? false,
+          retriesUsed: analyzeFastRetryRef.current,
+        });
+        setError(e instanceof Error ? e.message : "Something went wrong");
       } finally {
         if (analysisRunRef.current !== runId) return;
         if (isLegToggle) {

@@ -1,193 +1,206 @@
-import { decideCashVsPoints, rankScore } from "@/lib/flights/cppValuations";
-import { fetchDuffelCashOffers } from "@/lib/flights/duffelAdapter";
-import { getLoyaltyBalances } from "@/lib/flights/loyaltyBalances";
-import { searchSeatsAeroAwards, isSeatsAeroConfigured } from "@/lib/flights/seatsAero";
-import { resolveReachablePrograms } from "@/lib/flights/transferPartners";
 import type {
   AwardOffer,
+  CabinClass,
   CashOffer,
-  FlightCabin,
-  FusedFlightOption,
-  FusedFlightSearchParams,
-  FusedFlightSearchResult,
-} from "@/lib/flights/types";
+  FusedOffer,
+  FusedSearchParams,
+  FusedSearchResult,
+} from "./types";
+import { searchAwardAvailability, isSeatsAeroConfigured } from "./seatsAero";
+import {
+  awardCashEquivalent,
+  decideCashVsPoints,
+  getProgramValuations,
+  realizedCpp,
+} from "./cppValuations";
+import { getLoyaltyBalances } from "./loyaltyBalances";
+import { getActiveTransferBonuses, resolveReachability } from "./transferPartners";
+import {
+  withCache,
+  cashCacheKey,
+  awardCacheKey,
+  CASH_TTL_SECONDS,
+  AWARD_TTL_SECONDS,
+} from "./flightCache";
+import { scoreAndRank, deriveMetrics } from "./scoring";
 import type { TripIntent } from "@/lib/decision/types";
 import type { TravelerGenome } from "@/lib/traveler/types";
 
-function bestCashForRoute(cashOffers: CashOffer[], award: AwardOffer): CashOffer | null {
-  const matches = cashOffers.filter(
-    (c) =>
-      c.origin === award.origin &&
-      c.destination === award.destination &&
-      c.departureDate === award.departureDate,
-  );
-  if (matches.length === 0) return cashOffers[0] ?? null;
-  return matches.sort((a, b) => a.totalUsd - b.totalUsd)[0] ?? null;
-}
+type FetchCashOffers = (params: FusedSearchParams) => Promise<CashOffer[]>;
 
-function balanceForAward(
-  balances: Array<{ program: string; balance: number; baselineCpp?: number }>,
-  award: AwardOffer,
-): { balance: number; baselineCpp?: number } {
-  const slug = award.programSlug.toLowerCase();
-  const direct = balances.find((b) => b.program.toLowerCase().includes(slug));
-  if (direct) return { balance: direct.balance, baselineCpp: direct.baselineCpp };
-  if (award.fundedBy) {
-    const bank = balances.find((b) => b.program.toLowerCase() === award.fundedBy!.toLowerCase());
-    if (bank) return { balance: bank.balance, baselineCpp: bank.baselineCpp };
-  }
-  return { balance: 0 };
-}
+export async function fusedFlightSearch(
+  params: FusedSearchParams,
+  fetchCashOffers: FetchCashOffers,
+): Promise<FusedSearchResult> {
+  const startedAt = Date.now();
+  const warnings: string[] = [];
+  const pax = Math.max(1, params.passengers || 1);
 
-async function fuseOffers(
-  cashOffers: CashOffer[],
-  awardOffers: AwardOffer[],
-  balances: Array<{ program: string; balance: number; baselineCpp?: number }>,
-  cabin: FusedFlightSearchParams["cabin"],
-): Promise<FusedFlightOption[]> {
-  const fused: FusedFlightOption[] = [];
-  const usedCash = new Set<string>();
-
-  for (const award of awardOffers) {
-    const cash = bestCashForRoute(cashOffers, award);
-    if (cash) usedCash.add(cash.id);
-    const { balance, baselineCpp } = balanceForAward(balances, award);
-    const decision = await decideCashVsPoints({ cash, award, userBalance: balance, baselineCpp });
-
-    fused.push({
-      id: `fused-${award.id}`,
-      origin: award.origin,
-      destination: award.destination,
-      departureDate: award.departureDate,
-      cabin: cabin ?? "economy",
-      cashOffer: cash,
-      awardOffer: award,
-      verdict: decision.verdict,
-      headline:
-        decision.verdict === "use_cash"
-          ? `$${cash?.totalUsd.toLocaleString() ?? "?"} cash · ${award.airlines || award.program}`
-          : `${award.miles.toLocaleString()} ${award.program} · ${decision.cpp.toFixed(1)}¢/pt`,
-      reasoning: decision.reasoning,
-      cpp: decision.cpp,
-      cashUsd: cash?.totalUsd ?? 0,
-      milesRequired: award.miles,
-      imputedPointsUsd: decision.imputedPointsUsd,
-      savingsUsd: decision.savingsUsd,
-      rankScore: rankScore({
-        verdict: decision.verdict,
-        cashUsd: cash?.totalUsd ?? 0,
-        savingsUsd: decision.savingsUsd,
-        cpp: decision.cpp,
-      }),
-    });
-  }
-
-  for (const cash of cashOffers) {
-    if (usedCash.has(cash.id)) continue;
-    const decision = await decideCashVsPoints({ cash, award: null });
-    fused.push({
-      id: `fused-cash-${cash.id}`,
-      origin: cash.origin,
-      destination: cash.destination,
-      departureDate: cash.departureDate,
-      cabin: cash.cabin,
-      cashOffer: cash,
-      awardOffer: null,
-      verdict: "use_cash",
-      headline: `$${cash.totalUsd.toLocaleString()} cash · ${cash.airline}`,
-      reasoning: decision.reasoning,
-      cpp: 0,
-      cashUsd: cash.totalUsd,
-      milesRequired: 0,
-      imputedPointsUsd: cash.totalUsd,
-      savingsUsd: 0,
-      rankScore: cash.totalUsd,
-    });
-  }
-
-  return fused.sort((a, b) => a.rankScore - b.rankScore);
-}
-
-function buildHeadline(best: FusedFlightOption | null, cashCount: number, awardCount: number): string {
-  if (!best) {
-    return cashCount || awardCount ? "No fused options ranked." : "No live cash or award offers returned.";
-  }
-  if (best.verdict === "use_cash") {
-    return `Best: ${best.headline}${best.awardOffer ? " — cash beats points on this route" : ""}`;
-  }
-  return `Best: ${best.headline} — saves ~$${best.savingsUsd.toLocaleString()} vs cash`;
-}
-
-/** Fuses live Duffel cash + Seats.aero awards with user balances and CPP verdict. */
-export async function runFusedFlightSearch(
-  params: FusedFlightSearchParams,
-  userId: string,
-): Promise<FusedFlightSearchResult> {
-  const cabin = params.cabin ?? "economy";
-  const balances = await getLoyaltyBalances(userId);
-  const reachable = await resolveReachablePrograms(balances);
-
-  const [cashResult, awardResult] = await Promise.all([
-    fetchDuffelCashOffers({
-      origins: params.origins,
-      destination: params.destination,
-      departureDate: params.departureDate,
-      cabin,
-    }),
-    searchSeatsAeroAwards({
-      origins: params.origins,
-      destination: params.destination,
-      departureDate: params.departureDate,
-      cabin,
-      reachablePrograms: reachable,
-    }),
+  const [cashResult, awardResult, balances, valuations, bonuses] = await Promise.all([
+    safe(
+      () =>
+        withCache(cashCacheKey(params), CASH_TTL_SECONDS, () => fetchCashOffers(params)),
+      { value: [] as CashOffer[], cached: false },
+      () => warnings.push("Cash search (Duffel) failed — award results only."),
+    ),
+    safe(
+      () =>
+        withCache(awardCacheKey(params), AWARD_TTL_SECONDS, () =>
+          searchAwardAvailability({
+            origin: params.origin,
+            destination: params.destination,
+            departDate: params.departDate,
+            cabin: params.cabin,
+          }),
+        ),
+      { value: [] as AwardOffer[], cached: false },
+      () => warnings.push("Award search (Seats.aero) failed — cash only."),
+    ),
+    params.userId
+      ? safe(() => getLoyaltyBalances(params.userId as string), {})
+      : Promise.resolve({}),
+    getProgramValuations(),
+    getActiveTransferBonuses(),
   ]);
 
-  const fused = await fuseOffers(cashResult.offers, awardResult.offers, balances, cabin);
-  const best = fused[0] ?? null;
-  const headline = buildHeadline(best, cashResult.offers.length, awardResult.offers.length);
+  const cashOffers = cashResult.value;
+  const awardOffers = awardResult.value;
+
+  if (!isSeatsAeroConfigured()) {
+    warnings.push("SEATS_AERO_API_KEY not set — award results disabled.");
+  }
+
+  const sameCabinCash = cashOffers.filter((c) => c.cabin === params.cabin);
+  const benchmarkCash = [...(sameCabinCash.length ? sameCabinCash : cashOffers)].sort(
+    (a, b) => a.totalAmount - b.totalAmount,
+  )[0];
+
+  const fused: FusedOffer[] = [];
+
+  for (const cash of cashOffers) {
+    fused.push({
+      offer: cash,
+      cashEquivalent: cash.totalAmount,
+      isBestValue: false,
+      metrics: deriveMetrics(cash),
+    });
+  }
+
+  for (const award of awardOffers) {
+    const cpp = valuations[award.program];
+    const cashEquivalent = awardCashEquivalent(award, pax, cpp);
+
+    let reachable: boolean | undefined;
+    let reachableVia;
+    if (params.userId) {
+      reachableVia = resolveReachability(award.program, award.milesCost * pax, balances, bonuses);
+      reachable = reachableVia.some((p) => p.hasEnoughBalance);
+    }
+
+    const recommendationReason = benchmarkCash
+      ? decideCashVsPoints(benchmarkCash, award, pax, cpp).reason
+      : undefined;
+
+    fused.push({
+      offer: award,
+      cashEquivalent,
+      centsPerPoint: realizedCpp(award, benchmarkCash, pax),
+      isBestValue: false,
+      reachable,
+      reachableVia,
+      recommendationReason,
+      metrics: deriveMetrics(award),
+    });
+  }
+
+  const ranked = scoreAndRank(fused, params);
+  const cheapestCash = ranked.find((f) => f.offer.kind === "cash");
+  const bestAward = ranked.find(
+    (f) => f.offer.kind === "award" && (params.userId ? f.reachable : true),
+  );
 
   return {
-    params: { ...params, cabin },
-    cashOffers: cashResult.offers,
-    awardOffers: awardResult.offers,
-    fused,
-    headline,
-    best,
+    params,
+    offers: ranked,
+    cheapestCash,
+    bestAward,
+    headline: buildHeadline(ranked[0], cheapestCash, bestAward),
+    warnings,
     meta: {
-      cashSource: cashResult.configured ? "duffel" : "none",
-      awardSource: awardResult.configured ? "seats_aero" : "none",
-      duffelConfigured: cashResult.configured,
-      seatsAeroConfigured: isSeatsAeroConfigured(),
+      cashCount: cashOffers.length,
+      awardCount: awardOffers.length,
+      cashCached: cashResult.cached,
+      awardCached: awardResult.cached,
+      elapsedMs: Date.now() - startedAt,
     },
   };
 }
 
-export function cabinFromGenome(genome: TravelerGenome): FlightCabin {
+function buildHeadline(
+  best: FusedOffer | undefined,
+  cheapestCash: FusedOffer | undefined,
+  bestAward: FusedOffer | undefined,
+): string | undefined {
+  if (!best) return undefined;
+  if (best.offer.kind === "award" && best.recommendationReason) {
+    return best.recommendationReason;
+  }
+  if (
+    cheapestCash &&
+    bestAward &&
+    bestAward.recommendationReason &&
+    bestAward.cashEquivalent < cheapestCash.cashEquivalent
+  ) {
+    return bestAward.recommendationReason;
+  }
+  if (cheapestCash) {
+    const usd = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    }).format(cheapestCash.cashEquivalent / 100);
+    return `Best play: pay cash at ${usd}. No award beats it after surcharges.`;
+  }
+  return undefined;
+}
+
+async function safe<T>(fn: () => Promise<T>, fallback: T, onError?: () => void): Promise<T> {
+  try {
+    return await fn();
+  } catch {
+    onError?.();
+    return fallback;
+  }
+}
+
+export function cabinFromGenome(genome: TravelerGenome): CabinClass {
   if (genome.cabinPreference === "first") return "first";
   if (genome.cabinPreference === "premium_economy") return "premium_economy";
   if (genome.cabinPreference === "economy") return "economy";
   return "business";
 }
 
-/** Main outbound leg — used by Trip Planner analyze. */
+/** Trip Planner analyze — fuses live cash + awards for main outbound leg. */
 export async function runFusedSearchForTrip(
   intent: TripIntent,
   searchAirports: string[],
   genome: TravelerGenome,
   userId: string,
-): Promise<FusedFlightSearchResult | null> {
+): Promise<FusedSearchResult | null> {
   const destination = (intent.stops?.[0]?.iata ?? intent.destinationIata)?.toUpperCase();
-  if (!destination || searchAirports.length === 0) return null;
+  const origin = searchAirports[0]?.toUpperCase();
+  if (!destination || !origin) return null;
 
-  return runFusedFlightSearch(
+  const { fetchDuffelCashOffers } = await import("@/lib/flights/duffelAdapter");
+  return fusedFlightSearch(
     {
-      origins: searchAirports,
+      origin,
       destination,
-      departureDate: intent.startDate,
+      departDate: intent.startDate,
       returnDate: intent.endDate,
+      passengers: 1,
       cabin: cabinFromGenome(genome),
+      userId,
     },
-    userId,
+    fetchDuffelCashOffers,
   );
 }

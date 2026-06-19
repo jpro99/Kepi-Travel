@@ -1,103 +1,159 @@
 import { kvStoreGet } from "@/lib/travelAssistant/kvStore";
+import type { LoyaltyProgram, ReachabilityPath } from "./types";
+
+type BankCurrency =
+  | "chase_ur"
+  | "amex_mr"
+  | "capitalone"
+  | "citi_typ"
+  | "bilt"
+  | "wellsfargo";
+
+interface PartnerEdge {
+  to: LoyaltyProgram;
+  ratio: string;
+  multiplier: number;
+}
+
+const TRANSFER_PARTNERS: Record<BankCurrency, PartnerEdge[]> = {
+  chase_ur: [
+    { to: "united", ratio: "1:1", multiplier: 1 },
+    { to: "southwest", ratio: "1:1", multiplier: 1 },
+    { to: "jetblue", ratio: "1:1", multiplier: 1 },
+    { to: "aeroplan", ratio: "1:1", multiplier: 1 },
+    { to: "flyingblue", ratio: "1:1", multiplier: 1 },
+    { to: "avios_ba", ratio: "1:1", multiplier: 1 },
+    { to: "avios_iberia", ratio: "1:1", multiplier: 1 },
+    { to: "virginatlantic", ratio: "1:1", multiplier: 1 },
+    { to: "emirates", ratio: "1:1", multiplier: 1 },
+    { to: "singapore_krisflyer", ratio: "1:1", multiplier: 1 },
+  ],
+  amex_mr: [
+    { to: "delta", ratio: "1:1", multiplier: 1 },
+    { to: "ana", ratio: "1:1", multiplier: 1 },
+    { to: "flyingblue", ratio: "1:1", multiplier: 1 },
+    { to: "avios_ba", ratio: "1:1", multiplier: 1 },
+    { to: "virginatlantic", ratio: "1:1", multiplier: 1 },
+    { to: "singapore_krisflyer", ratio: "1:1", multiplier: 1 },
+    { to: "lifemiles", ratio: "1:1", multiplier: 1 },
+    { to: "emirates", ratio: "1:1", multiplier: 1 },
+    { to: "etihad", ratio: "1:1", multiplier: 1 },
+    { to: "qatar_avios", ratio: "1:1", multiplier: 1 },
+    { to: "aeroplan", ratio: "1:1", multiplier: 1 },
+    { to: "jetblue", ratio: "1:1", multiplier: 1 },
+  ],
+  capitalone: [
+    { to: "flyingblue", ratio: "1:1", multiplier: 1 },
+    { to: "avios_ba", ratio: "1:1", multiplier: 1 },
+    { to: "aeroplan", ratio: "1:1", multiplier: 1 },
+    { to: "lifemiles", ratio: "1:1", multiplier: 1 },
+    { to: "emirates", ratio: "1:1", multiplier: 1 },
+    { to: "singapore_krisflyer", ratio: "1:1", multiplier: 1 },
+    { to: "turkish", ratio: "1:1", multiplier: 1 },
+    { to: "virginatlantic", ratio: "1:1", multiplier: 1 },
+  ],
+  citi_typ: [
+    { to: "flyingblue", ratio: "1:1", multiplier: 1 },
+    { to: "lifemiles", ratio: "1:1", multiplier: 1 },
+    { to: "emirates", ratio: "1:1", multiplier: 1 },
+    { to: "etihad", ratio: "1:1", multiplier: 1 },
+    { to: "jetblue", ratio: "1:1", multiplier: 1 },
+    { to: "qatar_avios", ratio: "1:1", multiplier: 1 },
+    { to: "singapore_krisflyer", ratio: "1:1", multiplier: 1 },
+    { to: "turkish", ratio: "1:1", multiplier: 1 },
+    { to: "virginatlantic", ratio: "1:1", multiplier: 1 },
+  ],
+  bilt: [
+    { to: "united", ratio: "1:1", multiplier: 1 },
+    { to: "flyingblue", ratio: "1:1", multiplier: 1 },
+    { to: "avios_ba", ratio: "1:1", multiplier: 1 },
+    { to: "aeroplan", ratio: "1:1", multiplier: 1 },
+    { to: "virginatlantic", ratio: "1:1", multiplier: 1 },
+    { to: "turkish", ratio: "1:1", multiplier: 1 },
+  ],
+  wellsfargo: [
+    { to: "flyingblue", ratio: "1:1", multiplier: 1 },
+    { to: "avios_ba", ratio: "1:1", multiplier: 1 },
+    { to: "aeroplan", ratio: "1:1", multiplier: 1 },
+    { to: "virginatlantic", ratio: "1:1", multiplier: 1 },
+  ],
+};
+
+const BANK_CURRENCIES: BankCurrency[] = [
+  "chase_ur",
+  "amex_mr",
+  "capitalone",
+  "citi_typ",
+  "bilt",
+  "wellsfargo",
+];
 
 const TRANSFER_BONUSES_KEY = "flights:transfer_bonuses";
+const GLOBAL_USER = "global";
 
-/** Bank program label → Seats.aero mileage program slugs */
-export const TRANSFER_PARTNERS: Record<string, string[]> = {
-  "chase ultimate rewards": [
-    "united",
-    "hyatt",
-    "aeroplan",
-    "virginatlantic",
-    "flyingblue",
-    "britishairways",
-    "iberia",
-    "singapore",
-    "jetblue",
-  ],
-  "amex membership rewards": [
-    "delta",
-    "aeroplan",
-    "flyingblue",
-    "britishairways",
-    "virginatlantic",
-    "jetblue",
-    "singapore",
-  ],
-  "citi thankyou": ["american", "jetblue", "singapore", "virginatlantic", "flyingblue"],
-  "capital one": ["aeroplan", "flyingblue", "britishairways", "virginatlantic", "singapore", "jetblue"],
-  "bilt rewards": ["united", "aeroplan", "virginatlantic", "flyingblue", "hyatt"],
-};
-
-/** Genome / human labels → Seats.aero slug */
-export const PROGRAM_SLUGS: Record<string, string> = {
-  alaska: "alaska",
-  "alaska mileage plan": "alaska",
-  "mileage plan": "alaska",
-  american: "american",
-  "american aadvantage": "american",
-  aadvantage: "american",
-  united: "united",
-  "united mileageplus": "united",
-  mileageplus: "united",
-  delta: "delta",
-  "delta skymiles": "delta",
-  skymiles: "delta",
-  aeroplan: "aeroplan",
-  virginatlantic: "virginatlantic",
-  "virgin atlantic": "virginatlantic",
-  flyingblue: "flyingblue",
-  "air france flying blue": "flyingblue",
-  britishairways: "britishairways",
-  "british airways": "britishairways",
-  jetblue: "jetblue",
-  hyatt: "hyatt",
-  "world of hyatt": "hyatt",
-  singapore: "singapore",
-  iberia: "iberia",
-};
-
-export function normalizeProgramSlug(label: string): string {
-  const key = label.trim().toLowerCase();
-  return PROGRAM_SLUGS[key] ?? key.replace(/\s+/g, "");
+export async function getActiveTransferBonuses(): Promise<Record<string, number>> {
+  try {
+    const cached = await kvStoreGet<Record<string, number>>(TRANSFER_BONUSES_KEY, {
+      userId: GLOBAL_USER,
+    });
+    if (cached && typeof cached === "object") {
+      return cached;
+    }
+  } catch {
+    /* ignore */
+  }
+  return {};
 }
 
-export interface ReachableProgram {
-  slug: string;
-  label: string;
-  balance: number;
-  fundedBy?: string;
-  transferBonusPct?: number;
-}
+export function resolveReachability(
+  targetProgram: LoyaltyProgram,
+  milesNeeded: number,
+  balances: Partial<Record<LoyaltyProgram, number>>,
+  activeBonuses: Record<string, number> = {},
+): ReachabilityPath[] {
+  const paths: ReachabilityPath[] = [];
 
-export async function resolveReachablePrograms(balances: Array<{ program: string; balance: number }>): Promise<ReachableProgram[]> {
-  const bonuses = await kvStoreGet<Record<string, number>>(TRANSFER_BONUSES_KEY, { userId: "global" });
-  const reachable: ReachableProgram[] = [];
-  const seen = new Set<string>();
-
-  for (const row of balances) {
-    const programKey = row.program.trim().toLowerCase();
-    const directSlug = normalizeProgramSlug(row.program);
-    if (directSlug && !seen.has(directSlug)) {
-      seen.add(directSlug);
-      reachable.push({ slug: directSlug, label: row.program, balance: row.balance });
-    }
-
-    const partners = TRANSFER_PARTNERS[programKey];
-    if (!partners) continue;
-    for (const slug of partners) {
-      if (seen.has(slug)) continue;
-      seen.add(slug);
-      const bonusKey = `${programKey.replace(/\s+/g, "_")}->${slug}`;
-      reachable.push({
-        slug,
-        label: slug,
-        balance: row.balance,
-        fundedBy: row.program,
-        transferBonusPct: bonuses?.[bonusKey] ?? 0,
-      });
-    }
+  const directBalance = balances[targetProgram] ?? 0;
+  if (directBalance > 0 || balances[targetProgram] !== undefined) {
+    paths.push({
+      fromCurrency: targetProgram,
+      toProgram: targetProgram,
+      ratio: "1:1",
+      hasEnoughBalance: directBalance >= milesNeeded,
+      shortfall: directBalance >= milesNeeded ? undefined : milesNeeded - directBalance,
+    });
   }
 
-  return reachable;
+  for (const currency of BANK_CURRENCIES) {
+    const held = balances[currency];
+    if (!held || held <= 0) continue;
+
+    const edges = TRANSFER_PARTNERS[currency];
+    const edge = edges.find((e) => e.to === targetProgram);
+    if (!edge) continue;
+
+    const bonusKey = `${currency}->${targetProgram}`;
+    const bonusPct = activeBonuses[bonusKey];
+    const effectiveMultiplier = edge.multiplier * (1 + (bonusPct ? bonusPct / 100 : 0));
+    const bankPointsRequired = Math.ceil(milesNeeded / effectiveMultiplier);
+
+    paths.push({
+      fromCurrency: currency,
+      toProgram: targetProgram,
+      ratio: edge.ratio,
+      transferBonusPct: bonusPct,
+      hasEnoughBalance: held >= bankPointsRequired,
+      shortfall: held >= bankPointsRequired ? undefined : bankPointsRequired - held,
+    });
+  }
+
+  return paths.sort((first, second) => {
+    if (first.hasEnoughBalance !== second.hasEnoughBalance) {
+      return first.hasEnoughBalance ? -1 : 1;
+    }
+    const bonusA = first.transferBonusPct ?? 0;
+    const bonusB = second.transferBonusPct ?? 0;
+    if (bonusA !== bonusB) return bonusB - bonusA;
+    return (first.shortfall ?? 0) - (second.shortfall ?? 0);
+  });
 }
