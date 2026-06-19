@@ -71,7 +71,7 @@ interface StaysResponse {
 
 const INPUT_PLACEHOLDER_FLIGHTS =
   "Where do you plan to travel? e.g. West Coast to Bari, Venice, Dolomites, Germany — fly home from Munich. Alaska Gold.";
-const STRATEGY_TIMEOUT_MS = 45_000;
+const STRATEGY_TIMEOUT_MS = 40_000; // route guaranteed to respond within 38s
 const STAYS_TIMEOUT_MS = 24_000;
 const FLEX_TIMEOUT_MS = 32_000;
 const ANALYZE_FAST_RETRY_MAX = 1;
@@ -515,7 +515,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     const steps = planMode === "hotels" ? 2 : 4;
     const timer = window.setInterval(() => {
       setAnalyzeStep((current) => Math.min(current + 1, steps - 1));
-    }, 4500);
+    }, 3200); // advance steps faster — API responds in ~38s, 4 steps = 3.2s each
     return () => window.clearInterval(timer);
   }, [loading, planMode]);
 
@@ -586,7 +586,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
             credentials: "same-origin",
           },
           STRATEGY_TIMEOUT_MS,
-          "Analyze timed out after 45 seconds — try again.",
+          "Taking longer than expected — tap Try Again for a faster result.",
         );
         const elapsedMs = Date.now() - analyzeFetchStartedAt;
         console.log("[analyze] fetch:response", {
@@ -620,7 +620,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
               ? "Sign in to use the Command Deck."
               : useFastPath
                 ? "Analyze stopped before it could finish — fast strategy path failed. Try again in a moment."
-                : "Couldn't analyze that trip — try again.",
+                : "Couldn't load strategies — check your internet and try again.",
           );
         }
         const data = await res.json();
