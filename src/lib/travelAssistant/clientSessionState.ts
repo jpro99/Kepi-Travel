@@ -32,7 +32,11 @@ export interface SessionReservation {
   flightArrivalTerminal?: string;
   checkOutDate?: string;
   roomType?: string;
-  trainNumber?: string;
+  /** Planned leg from Command Deck — not a real confirmation yet. */
+  plannedOnly?: boolean;
+  /** Where to purchase (airline, Google Flights, Seats.aero). */
+  bookUrl?: string;
+  quotedPriceUsd?: number;
 }
 
 export interface SessionReviewItem {

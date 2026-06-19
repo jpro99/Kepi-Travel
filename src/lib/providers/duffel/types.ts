@@ -8,6 +8,7 @@ export interface DuffelFlightQuote {
   cabinClass: string;
   stops: number;
   offerId: string;
+  flightNumber?: string;
 }
 
 export interface DuffelSearchResult {

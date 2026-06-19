@@ -1,6 +1,9 @@
 import { createTrip, setActiveTrip } from "@/lib/travelAssistant/tripStore";
 import type { SessionReadinessItem, SessionReservation } from "@/lib/travelAssistant/clientSessionState";
 import type { ActivateStrategyResult, SelectedStayActivation, TravelStrategy, TripIntent } from "@/lib/decision/types";
+import type { AlignmentLeg } from "@/lib/decision/tripAlignment";
+import { countVerifiedLegs } from "@/lib/decision/tripAlignment";
+import { resolveHotelBookUrl } from "@/lib/decision/bookingLinks";
 import { allocateStopDates } from "@/lib/decision/stopDates";
 import { generateId } from "@/lib/utils/generateId";
 import { incrementTripCount } from "@/lib/traveler/travelerGenomeStore";
@@ -11,6 +14,7 @@ const IATA_TIMEZONE: Record<string, string> = {
   MXP: "Europe/Rome",
   VCE: "Europe/Rome",
   BRI: "Europe/Rome",
+  MUC: "Europe/Berlin",
   CDG: "Europe/Paris",
   NRT: "Asia/Tokyo",
   HND: "Asia/Tokyo",
@@ -28,12 +32,11 @@ function timezoneForDestination(iata: string): string {
 
 function readinessSeed(): SessionReadinessItem[] {
   const categories = [
-    { category: "Flights", title: "Confirm flight reservations" },
-    { category: "Hotels", title: "Confirm hotel bookings" },
+    { category: "Flights", title: "Book flights from your walkthrough links" },
+    { category: "Flights", title: "Forward confirmations to replace planned legs" },
+    { category: "Hotels", title: "Book hotels after flights are set" },
     { category: "Passport", title: "Verify passport validity (6+ months)" },
-    { category: "Check-in timing", title: "Set check-in reminders" },
     { category: "Transportation", title: "Plan airport transfers between cities" },
-    { category: "Essentials", title: "Travel insurance / medical cards packed" },
   ];
   return categories.map((c) => ({
     id: generateId(),
@@ -49,12 +52,15 @@ function hotelReservationFromStay(stay: SelectedStayActivation, location: string
   const nightly = Math.round(stay.nightlyUsd);
   const total = Math.round(stay.totalAmountUsd);
   const isEstimated = stay.quoteId.startsWith("est-");
-  const noteParts = [
-    isEstimated
-      ? "Estimated rate from Command Deck — confirm before booking"
-      : `Selected on Command Deck · ${stay.currency} ${total} total`,
-    stay.photoUrl ? `Photo: ${stay.photoUrl}` : null,
-  ].filter(Boolean);
+  const book = resolveHotelBookUrl({
+    propertyName: stay.name,
+    chainName: stay.chainName,
+    location: stay.area?.trim() || location,
+    checkInDate: stay.checkInDate,
+    checkOutDate: stay.checkOutDate,
+    quotedPriceUsd: total,
+    quoteId: stay.quoteId,
+  });
 
   return {
     id: generateId(),
@@ -64,188 +70,203 @@ function hotelReservationFromStay(stay: SelectedStayActivation, location: string
     localTime: `${stay.checkInDate}T15:00:00`,
     timezone,
     location: stay.area?.trim() || location,
-    confirmationCode: "SELECTED",
+    confirmationCode: "PLANNED",
     assignedTo: ["You"],
     stage: "readiness",
     critical: false,
     confidence: "high",
-    notes: noteParts.join(" · "),
+    notes: isEstimated
+      ? "Planned stay from Command Deck — book hotel, then forward confirmation"
+      : `Planned stay · ${stay.currency} ${total} total — forward confirmation when booked`,
     source: "manual",
+    plannedOnly: true,
+    quotedPriceUsd: total,
     checkOutDate: stay.checkOutDate,
-    roomType: `$${nightly}/night · $${total} total (quote ${stay.quoteId.slice(0, 8)}…)`,
+    roomType: `$${nightly}/night · $${total} total`,
+    bookUrl: book.url,
   };
 }
 
-function placeholderHotelReservation(
-  label: string,
-  detail: string,
-  location: string,
-  iata: string,
-  checkIn: string,
-  checkOut: string,
-): SessionReservation {
-  return {
-    id: generateId(),
-    type: "hotel",
-    title: label,
-    provider: "Hyatt",
-    localTime: `${checkIn}T15:00:00`,
-    timezone: timezoneForDestination(iata),
-    location,
-    confirmationCode: "PENDING",
-    assignedTo: ["You"],
-    stage: "readiness",
-    critical: false,
-    confidence: "medium",
-    notes: detail,
-    source: "manual",
-    checkOutDate: checkOut,
-    roomType: "Standard / Suite per strategy",
-  };
-}
+function plannedLegReservation(leg: AlignmentLeg): SessionReservation | null {
+  if (leg.role === "ground") {
+    return {
+      id: generateId(),
+      type: "train",
+      title: leg.label,
+      provider: "Ground",
+      localTime: leg.departureDate ? `${leg.departureDate}T09:00:00` : "2099-01-01T09:00:00",
+      timezone: "Etc/UTC",
+      location: leg.label,
+      confirmationCode: "PLANNED",
+      assignedTo: ["You"],
+      stage: "readiness",
+      critical: false,
+      confidence: "medium",
+      notes: `${leg.detail} · Not a flight booking`,
+      source: "manual",
+      plannedOnly: true,
+    };
+  }
 
-function flightReservation(input: {
-  title: string;
-  depAirport: string;
-  arrAirport: string;
-  date: string;
-  notes: string;
-  preferAlaska?: boolean;
-}): SessionReservation {
+  if (leg.role === "hotel") {
+    const purchaseUrl = leg.bookUrl;
+    const notesParts = [
+      leg.statusLabel,
+      leg.detail,
+      purchaseUrl ? `Purchase: ${purchaseUrl}` : null,
+      "Forward your confirmation email after booking",
+    ].filter(Boolean);
+    return {
+      id: generateId(),
+      type: "hotel",
+      title: leg.label,
+      provider: leg.airline?.trim() || "Hotel",
+      localTime: leg.departureDate ? `${leg.departureDate}T15:00:00` : "2099-01-01T15:00:00",
+      timezone: "Etc/UTC",
+      location: leg.label,
+      confirmationCode: "PLANNED",
+      assignedTo: ["You"],
+      stage: "readiness",
+      critical: false,
+      confidence: leg.status === "verified" ? "high" : "medium",
+      notes: notesParts.join(" · "),
+      source: "manual",
+      plannedOnly: true,
+      quotedPriceUsd: leg.priceUsd,
+      checkOutDate: leg.checkOutDate,
+      bookUrl: purchaseUrl,
+    };
+  }
+
+  if (!leg.originIata || !leg.destinationIata) return null;
+
+  const tz = timezoneForDestination(leg.originIata);
+  const purchaseUrl = leg.bookUrl ?? leg.verifyUrl;
+  const notesParts = [
+    leg.statusLabel,
+    leg.detail,
+    purchaseUrl ? `Purchase: ${purchaseUrl}` : null,
+    "Forward your confirmation email after booking to add real times and record locator",
+  ].filter(Boolean);
+
   return {
     id: generateId(),
     type: "flight",
-    title: input.title,
-    provider: input.preferAlaska ? "Alaska Airlines / Partner" : "Airline",
-    localTime: `${input.date}T08:00:00`,
-    timezone: "America/Los_Angeles",
-    location: `${input.depAirport} → ${input.arrAirport}`,
-    confirmationCode: "PENDING",
+    title: leg.label,
+    provider: leg.airline ?? (leg.role === "award" ? "Partner award" : "Airline"),
+    localTime: leg.departureDate ? `${leg.departureDate}T12:00:00` : "2099-01-01T12:00:00",
+    timezone: tz,
+    location: `${leg.originIata} → ${leg.destinationIata}`,
+    confirmationCode: "PLANNED",
     assignedTo: ["You"],
     stage: "readiness",
-    critical: true,
-    confidence: "medium",
-    notes: input.notes,
+    critical: leg.role === "outbound" || leg.role === "return",
+    confidence: leg.status === "verified" ? "high" : "medium",
+    notes: notesParts.join(" · "),
     source: "manual",
-    flightNumber: input.preferAlaska ? "AS TBD" : "TBD",
-    flightAirline: input.preferAlaska ? "Alaska" : "Partner",
-    flightDate: input.date,
-    flightDepartureAirport: input.depAirport,
-    flightArrivalAirport: input.arrAirport,
-    flightDepartureTime: "08:00",
-    flightArrivalTime: "14:00",
-    flightStatus: "scheduled",
-    flightOnTime: true,
+    plannedOnly: true,
+    bookUrl: purchaseUrl,
+    quotedPriceUsd: leg.priceUsd,
+    flightAirline: leg.airline,
+    flightDate: leg.departureDate,
+    flightDepartureAirport: leg.originIata,
+    flightArrivalAirport: leg.destinationIata,
+    flightNumber: "Not booked yet",
   };
 }
 
-function reservationsFromStrategy(
-  strategy: TravelStrategy,
-  intent: TripIntent,
-  selectedStay?: SelectedStayActivation | null,
+function reservationsFromAlignment(
+  alignmentLegs: AlignmentLeg[],
+  selectedStays?: SelectedStayActivation[] | null,
+  intent?: TripIntent,
 ): SessionReservation[] {
   const reservations: SessionReservation[] = [];
-  const depAirport = strategy.departureAirports[0] ?? intent.originAirports?.[0] ?? "LAX";
-  const preferAlaska = intent.preferredAirlines?.includes("Alaska");
-  const stopRanges = allocateStopDates(intent);
-  const arrivalIata = stopRanges[0]?.stop.iata ?? intent.destinationIata;
-  const returnIata = stopRanges[stopRanges.length - 1]?.stop.iata ?? intent.destinationIata;
+  const hasSelectedHotelLegs = alignmentLegs.some((leg) => leg.id.startsWith("hotel-selected"));
 
-  if (stopRanges.length > 0) {
-    reservations.push(
-      flightReservation({
-        title: `${depAirport} → ${arrivalIata}`,
-        depAirport,
-        arrAirport: arrivalIata,
-        date: intent.startDate,
-        notes: strategy.reasoning,
-        preferAlaska,
-      }),
-    );
+  for (const leg of alignmentLegs) {
+    const row = plannedLegReservation(leg);
+    if (row) reservations.push(row);
+  }
 
-    for (const range of stopRanges) {
-      const hotelSeg = strategy.segments.find(
-        (s) => s.mode === "hotel" && s.label.toLowerCase().includes(range.stop.name.toLowerCase()),
-      );
+  if (selectedStays && selectedStays.length > 0 && !hasSelectedHotelLegs && intent) {
+    const stopRanges = allocateStopDates(intent);
+    selectedStays.forEach((stay, index) => {
+      const stop = stopRanges[index]?.stop ?? intent.stops?.[index];
       reservations.push(
-        placeholderHotelReservation(
-          hotelSeg?.label ?? `${range.stop.name} stay`,
-          hotelSeg?.detail ?? `Confirm hotel in ${range.stop.name}`,
-          range.stop.name,
-          range.stop.iata ?? intent.destinationIata,
-          range.checkIn,
-          range.checkOut,
+        hotelReservationFromStay(
+          stay,
+          stop?.name ?? intent.destination,
+          stop?.iata ?? intent.destinationIata,
         ),
       );
-    }
-
-    reservations.push(
-      flightReservation({
-        title: `${returnIata} → ${depAirport}`,
-        depAirport: returnIata,
-        arrAirport: depAirport,
-        date: intent.endDate,
-        notes: "Return flight — confirm times after outbound is booked.",
-        preferAlaska,
-      }),
-    );
-
-    if (selectedStay && stopRanges[0]) {
-      reservations[1] = hotelReservationFromStay(
-        { ...selectedStay, checkInDate: stopRanges[0].checkIn, checkOutDate: stopRanges[0].checkOut },
-        stopRanges[0].stop.name,
-        stopRanges[0].stop.iata ?? intent.destinationIata,
-      );
-    }
-
-    return reservations;
-  }
-
-  const flightSeg = strategy.segments.find((s) => s.mode === "flight");
-  const hotelSeg = strategy.segments.find((s) => s.mode === "hotel");
-
-  if (flightSeg) {
-    reservations.push(
-      flightReservation({
-        title: flightSeg.label,
-        depAirport,
-        arrAirport: intent.destinationIata,
-        date: intent.startDate,
-        notes: strategy.reasoning,
-        preferAlaska,
-      }),
-    );
-  }
-
-  if (selectedStay) {
-    reservations.push(
-      hotelReservationFromStay(selectedStay, intent.destination, intent.destinationIata),
-    );
-  } else if (hotelSeg) {
-    reservations.push(
-      placeholderHotelReservation(
-        hotelSeg.label,
-        hotelSeg.detail,
-        intent.destination,
-        intent.destinationIata,
-        intent.startDate,
-        intent.endDate,
-      ),
-    );
+    });
   }
 
   return reservations;
+}
+
+function reservationsFromStrategyLegacy(
+  strategy: TravelStrategy,
+  intent: TripIntent,
+  selectedStays?: SelectedStayActivation[] | null,
+): SessionReservation[] {
+  const depAirport = strategy.departureAirports[0] ?? intent.originAirports?.[0];
+  if (!depAirport) {
+    throw new Error("Cannot activate strategy without a departure airport");
+  }
+  const stopRanges = allocateStopDates(intent);
+  const arrivalIata = stopRanges[0]?.stop.iata ?? intent.destinationIata;
+  const returnIata = intent.returnAirports?.[0] ?? intent.destinationIata;
+  const homeIata = depAirport;
+
+  const legs: AlignmentLeg[] = [
+    {
+      id: "outbound",
+      step: 1,
+      role: "outbound",
+      label: `${depAirport} → ${arrivalIata}`,
+      detail: strategy.reasoning,
+      status: "modeled",
+      statusLabel: "Modeled playbook",
+      originIata: depAirport,
+      destinationIata: arrivalIata,
+      departureDate: intent.startDate,
+    },
+    {
+      id: "return",
+      step: 2,
+      role: "return",
+      label: `${returnIata} → ${homeIata}`,
+      detail: "Return leg",
+      status: "modeled",
+      statusLabel: "Modeled playbook",
+      originIata: returnIata,
+      destinationIata: homeIata,
+      departureDate: intent.endDate,
+    },
+  ];
+
+  return reservationsFromAlignment(legs, selectedStays, intent);
 }
 
 export async function activateStrategy(
   strategy: TravelStrategy,
   intent: TripIntent,
   userId?: string,
-  selectedStay?: SelectedStayActivation | null,
+  selectedStays?: SelectedStayActivation[] | null,
+  alignmentLegs: AlignmentLeg[] = [],
 ): Promise<ActivateStrategyResult> {
   const tripName = intent.isMultiCity
     ? `${intent.region} multi-city — ${strategy.title}`
     : `${intent.region} — ${strategy.title}`;
+
+  const legs = alignmentLegs.length > 0 ? alignmentLegs : [];
+  const reservations =
+    legs.length > 0
+      ? reservationsFromAlignment(legs, selectedStays, intent)
+      : reservationsFromStrategyLegacy(strategy, intent, selectedStays);
+
+  const { verified, total } = countVerifiedLegs(legs);
 
   const trip = await createTrip(
     {
@@ -254,7 +275,7 @@ export async function activateStrategy(
       startDate: intent.startDate,
       endDate: intent.endDate,
       stage: "readiness",
-      reservations: reservationsFromStrategy(strategy, intent, selectedStay),
+      reservations,
       readinessItems: readinessSeed(),
       tripStatus: "yellow",
       minutesToDeparture: 60 * 24 * 14,
@@ -268,6 +289,9 @@ export async function activateStrategy(
   return {
     tripId: trip.id,
     tripName: trip.name,
-    redirectPath: `/travel-assistant?tripId=${encodeURIComponent(trip.id)}&stage=readiness&tab=trip&activated=1`,
+    redirectPath: `/travel-assistant?tripId=${encodeURIComponent(trip.id)}&stage=readiness&tab=trip&walkthrough=1`,
+    alignmentLegs: legs,
+    verifiedLegCount: verified,
+    totalBookableLegs: total,
   };
 }

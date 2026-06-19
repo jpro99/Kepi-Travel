@@ -1,4 +1,5 @@
 import { formatStopRoute } from "@/lib/decision/stopDates";
+import { resolvePrimaryOrigin } from "@/lib/decision/tripOrigins";
 import type { TravelStrategy, TripIntent } from "@/lib/decision/types";
 import type { TravelerGenome } from "@/lib/traveler/types";
 
@@ -22,8 +23,8 @@ function replaceHotelSegments(
   return [...nonHotel, ...hotelSegments];
 }
 
-function originAirport(intent: TripIntent, genome: TravelerGenome): string {
-  return intent.originAirports?.[0]?.toUpperCase() ?? genome.geoCluster.find((a) => a.isPrimary)?.iata ?? "LAX";
+function originAirport(intent: TripIntent, genome: TravelerGenome): string | null {
+  return resolvePrimaryOrigin(intent, genome);
 }
 
 function arrivalAirport(intent: TripIntent): string {
@@ -37,6 +38,7 @@ export function personalizeStrategiesForIntent(
   genome: TravelerGenome,
 ): TravelStrategy[] {
   const origin = originAirport(intent, genome);
+  if (!origin) return strategies;
   const arrival = arrivalAirport(intent);
   const primaryHotel = genome.hotelChainPriority[0] ?? "Hyatt";
   const preferAlaska = intent.preferredAirlines?.includes("Alaska");

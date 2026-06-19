@@ -4,6 +4,13 @@ import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { enforceRateLimit } from "@/lib/rateLimit";
 import { activateStrategy } from "@/lib/decision/activateStrategy";
 import { buildDecisionBrief } from "@/lib/decision/strategyEngine";
+import { enrichBriefWithDuffelPricing } from "@/lib/decision/livePricing";
+import { enabledConnectorLegs } from "@/lib/decision/flightLegPlanner";
+import { buildAlignmentBoard } from "@/lib/decision/tripAlignment";
+import { buildAlignmentFromPricedTopology } from "@/lib/decision/topology/alignment";
+import { runKepiWaveSearch } from "@/lib/decision/topology/waveSearch";
+import { mergeTopologyIntoStrategies } from "@/lib/decision/topology/toStrategy";
+import { searchDuffelCashQuotes } from "@/lib/providers/duffel/flightOffers";
 import { getTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
 
 const SelectedStaySchema = z.object({
@@ -22,7 +29,11 @@ const SelectedStaySchema = z.object({
 const BodySchema = z.object({
   prompt: z.string().trim().min(1).max(2000),
   strategyId: z.string().trim().min(1),
+  planMode: z.enum(["flights", "hotels", "full"]).optional(),
+  paymentMode: z.enum(["cash", "points", "mix"]).optional(),
+  enabledLegIds: z.array(z.string()).optional(),
   stay: SelectedStaySchema.optional(),
+  stays: z.array(SelectedStaySchema).max(12).optional(),
 });
 
 export async function POST(req: Request) {
@@ -53,19 +64,103 @@ export async function POST(req: Request) {
   }
 
   const genome = await getTravelerGenome(userId);
-  const brief = buildDecisionBrief(parsed.data.prompt, genome);
+  const planMode = parsed.data.planMode ?? "flights";
+  const paymentMode = parsed.data.paymentMode ?? "cash";
+  const brief = buildDecisionBrief(parsed.data.prompt, genome, {
+    planMode,
+    paymentMode,
+    enabledLegIds: parsed.data.enabledLegIds,
+  });
+
+  let topologyResult = null;
+  if (!brief.originRequired && brief.searchAirports.length > 0) {
+    topologyResult = await runKepiWaveSearch(brief.intent, genome, brief.searchAirports);
+  }
+
+  const strategyCatalog = mergeTopologyIntoStrategies(brief.strategies, topologyResult ?? undefined);
+
   const strategy =
-    brief.strategies.find((s) => s.id === parsed.data.strategyId) ??
-    brief.strategies.find((s) => s.kind === parsed.data.strategyId);
+    strategyCatalog.find((s) => s.id === parsed.data.strategyId) ??
+    strategyCatalog.find((s) => s.kind === parsed.data.strategyId);
   if (!strategy) {
     return NextResponse.json({ error: "Strategy not found — refresh and try again." }, { status: 404 });
   }
 
+  let enrichedBrief = brief;
+  if (planMode !== "hotels" && !brief.originRequired) {
+    const arrivalIata = brief.intent.stops?.[0]?.iata ?? brief.intent.destinationIata;
+    const outboundDuffel = await searchDuffelCashQuotes({
+      origins: brief.searchAirports,
+      destination: arrivalIata,
+      departureDate: brief.intent.startDate,
+    });
+    let returnDuffel: Awaited<ReturnType<typeof searchDuffelCashQuotes>> | undefined;
+    const homeIata = brief.searchAirports[0];
+    if (brief.intent.returnAirports?.length && homeIata) {
+      returnDuffel = await searchDuffelCashQuotes({
+        origins: brief.intent.returnAirports,
+        destination: homeIata,
+        departureDate: brief.intent.endDate,
+      });
+    }
+    const connectorLegs = enabledConnectorLegs(brief.flightLegs ?? []);
+    const connectorDuffel = await Promise.all(
+      connectorLegs.map(async (leg) => ({
+        legId: leg.id,
+        result: await searchDuffelCashQuotes({
+          origins: [leg.fromIata],
+          destination: leg.toIata,
+          departureDate: leg.departureDate,
+        }),
+      })),
+    );
+    enrichedBrief = enrichBriefWithDuffelPricing(
+      brief,
+      outboundDuffel,
+      genome,
+      genome.decisionWeights.comfort,
+      returnDuffel,
+      connectorDuffel,
+    );
+  }
+
+  const selectedStays =
+    parsed.data.stays && parsed.data.stays.length > 0
+      ? parsed.data.stays
+      : parsed.data.stay
+        ? [parsed.data.stay]
+        : [];
+
+  let alignmentLegs = buildAlignmentBoard(
+    enrichedBrief,
+    strategy,
+    selectedStays.length > 0 ? selectedStays : null,
+  );
+
+  if (strategy.id.startsWith("topology-") && topologyResult) {
+    const winner =
+      topologyResult.winners.find((row) => `topology-${row.candidate.id}` === strategy.id) ??
+      topologyResult.winners[0];
+    if (winner) {
+      alignmentLegs = buildAlignmentFromPricedTopology(winner);
+    }
+  }
+
   const result = await activateStrategy(
     strategy,
-    brief.intent,
+    enrichedBrief.intent,
     userId ?? undefined,
-    parsed.data.stay,
+    selectedStays.length > 0 ? selectedStays : null,
+    alignmentLegs,
   );
-  return NextResponse.json({ activation: result, strategyTitle: strategy.title });
+
+  return NextResponse.json({
+    activation: result,
+    alignment: {
+      legs: alignmentLegs,
+      verifiedLegCount: result.verifiedLegCount,
+      totalBookableLegs: result.totalBookableLegs,
+    },
+    strategyTitle: strategy.title,
+  });
 }

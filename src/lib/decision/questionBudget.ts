@@ -1,18 +1,36 @@
 import type { TravelerGenome } from "@/lib/traveler/types";
-import type { DecisionQuestion } from "@/lib/decision/types";
+import type { DecisionQuestion, TripIntent } from "@/lib/decision/types";
 import type { TravelStrategy } from "@/lib/decision/types";
+import { ambiguousStopQuestions } from "@/lib/decision/flightLegPlanner";
 
 export function buildQuestionBudget(
   strategies: TravelStrategy[],
   genome: TravelerGenome,
+  intent?: TripIntent,
 ): DecisionQuestion[] {
   const questions: DecisionQuestion[] = [];
+
+  if (intent) {
+    for (const ambiguous of ambiguousStopQuestions(intent)) {
+      questions.push({
+        id: `q-airport-${ambiguous.stopName.toLowerCase().replace(/\s+/g, "-")}`,
+        prompt: `Which airport for ${ambiguous.stopName}?`,
+        stakes: `Connector fares depend on the nearest airport (${ambiguous.airports.join(" / ")}).`,
+        flipsRanking: false,
+        options: ambiguous.airports.map((iata) => ({
+          id: iata.toLowerCase(),
+          label: iata,
+        })),
+      });
+    }
+  }
+
   const sorted = [...strategies].sort(
     (a, b) => (a.valueRank ?? 99) - (b.valueRank ?? 99),
   );
   const top = sorted[0];
   const second = sorted[1];
-  if (!top || !second) return questions;
+  if (!top || !second) return questions.slice(0, 2);
 
   const repositionWins =
     top.kind === "reposition_award" ||

@@ -16,24 +16,44 @@ export function RecordTripModal({ open, loading = false, onClose, onSubmit }: Re
   const [voiceNote, setVoiceNote] = useState<string | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
+  /** Text in the box when this recording session started. */
+  const baseTextRef = useRef("");
+  /** Final transcript chunks for the current session only. */
+  const sessionFinalRef = useRef("");
+  const listeningRef = useRef(false);
+
+  useEffect(() => {
+    listeningRef.current = listening;
+  }, [listening]);
 
   useEffect(() => {
     if (!open) {
+      try {
+        recognitionRef.current?.stop();
+      } catch {
+        /* already stopped */
+      }
+      recognitionRef.current = null;
       setListening(false);
       setVoiceNote(null);
     }
   }, [open]);
 
   const stopListening = useCallback(() => {
+    listeningRef.current = false;
     try {
       recognitionRef.current?.stop();
     } catch {
       /* already stopped */
     }
+    recognitionRef.current = null;
     setListening(false);
+    setVoiceNote("Recording stopped — review below, then tap Build my trip.");
   }, []);
 
   const startListening = useCallback(() => {
+    if (listeningRef.current) return;
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const win = window as any;
     const SpeechRecognitionImpl = win.SpeechRecognition ?? win.webkitSpeechRecognition;
@@ -42,6 +62,9 @@ export function RecordTripModal({ open, loading = false, onClose, onSubmit }: Re
       return;
     }
 
+    baseTextRef.current = text.trim();
+    sessionFinalRef.current = "";
+
     const recognition = new SpeechRecognitionImpl();
     recognition.lang = "en-US";
     recognition.interimResults = true;
@@ -49,26 +72,69 @@ export function RecordTripModal({ open, loading = false, onClose, onSubmit }: Re
     recognition.maxAlternatives = 1;
     recognitionRef.current = recognition;
 
+    const composeDisplay = (interim: string): string => {
+      const prefix = baseTextRef.current ? `${baseTextRef.current} ` : "";
+      const body = `${sessionFinalRef.current}${interim}`.trim();
+      return `${prefix}${body}`.trim();
+    };
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = (event: any) => {
-      const transcript = Array.from(event.results as ArrayLike<{ 0?: { transcript?: string } }>)
-        .map((result) => result[0]?.transcript ?? "")
-        .join("")
-        .trim();
-      setText(transcript);
-      setVoiceNote("Listening… describe your whole trip naturally.");
-      const last = event.results[event.results.length - 1];
-      if (last?.isFinal) {
-        setVoiceNote("Got it — review below, then tap Build my trip.");
+      let interim = "";
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        const chunk = result[0]?.transcript ?? "";
+        if (!chunk) continue;
+        if (result.isFinal) {
+          sessionFinalRef.current += chunk;
+        } else {
+          interim += chunk;
+        }
+      }
+      setText(composeDisplay(interim));
+      setVoiceNote("Recording… tap Stop when you're done.");
+    };
+
+    recognition.onerror = (event: Event & { error?: string }) => {
+      if (event.error === "aborted") return;
+      if (event.error === "no-speech") {
+        setVoiceNote("Didn't catch that — tap Start recording and try again.");
+      } else {
+        setVoiceNote("Voice hit a snag — you can keep typing instead.");
+      }
+      listeningRef.current = false;
+      setListening(false);
+      recognitionRef.current = null;
+    };
+
+    recognition.onend = () => {
+      recognitionRef.current = null;
+      if (listeningRef.current) {
+        listeningRef.current = false;
+        setListening(false);
+        setVoiceNote("Recording ended — tap Start recording to add more, or build your trip.");
       }
     };
-    recognition.onerror = () => stopListening();
-    recognition.onend = () => setListening(false);
 
-    setVoiceNote("Listening… cities, dates, loyalty, budget — say it all.");
+    setVoiceNote("Recording… describe your whole trip, then tap Stop.");
+    listeningRef.current = true;
     setListening(true);
-    recognition.start();
-  }, [stopListening]);
+    try {
+      recognition.start();
+    } catch {
+      listeningRef.current = false;
+      setListening(false);
+      setVoiceNote("Couldn't start the microphone — check browser permissions.");
+    }
+  }, [text, stopListening]);
+
+  const toggleRecording = (): void => {
+    if (listening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
 
   const handleClose = () => {
     stopListening();
@@ -85,6 +151,7 @@ export function RecordTripModal({ open, loading = false, onClose, onSubmit }: Re
   };
 
   const loadExample = () => {
+    stopListening();
     setText(RECORD_TRIP_EXAMPLE);
     setVoiceNote("Example loaded — edit or replace, then build.");
   };
@@ -120,8 +187,8 @@ export function RecordTripModal({ open, loading = false, onClose, onSubmit }: Re
         </div>
 
         <p className="mt-3 text-sm leading-relaxed text-white/60">
-          Describe where you want to go, your loyalty status, budget, and dates. Talk naturally — Kepi
-          parses cities, legs, and Alaska/Hyatt preferences into a ranked plan.
+          Tap <span className="font-semibold text-white/80">Start recording</span>, describe your trip, then tap{" "}
+          <span className="font-semibold text-white/80">Stop</span>. No need to hold the button.
         </p>
 
         <ul className="mt-3 space-y-1 text-xs text-white/45">
@@ -134,16 +201,17 @@ export function RecordTripModal({ open, loading = false, onClose, onSubmit }: Re
         <div className="mt-4 flex items-center gap-2">
           <button
             type="button"
-            onClick={listening ? stopListening : startListening}
+            onClick={toggleRecording}
             disabled={loading}
-            className={`flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl text-sm font-black transition-all ${
+            aria-pressed={listening}
+            className={`flex h-12 flex-1 select-none items-center justify-center gap-2 rounded-2xl text-sm font-black transition-all touch-manipulation ${
               listening
                 ? "bg-[#f4c95d] text-[#0b1f3a]"
                 : "bg-white/10 text-white hover:bg-white/15"
             }`}
             style={listening ? { animation: "recordPulse 1.2s ease-in-out infinite" } : undefined}
           >
-            {listening ? "■ Stop recording" : "🎙 Hold to talk — describe your trip"}
+            {listening ? "■ Stop recording" : "🎙 Start recording"}
           </button>
         </div>
 

@@ -29,7 +29,7 @@ async function quotesForStop(input: {
   chainPriority: string[];
   mockMode: boolean;
 }): Promise<{ quotes: Awaited<ReturnType<typeof searchDuffelStays>>["stays"]; source: "duffel" | "estimated"; error?: string }> {
-  const liveResult = mockMode
+  const liveResult = input.mockMode
     ? { configured: false, stays: [], error: undefined as string | undefined }
     : await searchDuffelStays({
         destinationIata: input.destinationIata,

@@ -9,6 +9,10 @@ import type { SessionReservation, SessionReviewItem } from "@/lib/travelAssistan
 import { resolveUserIdByForwardAddress } from "@/lib/travelAssistant/emailForwardSetupStore";
 import { sendPushNotification } from "@/lib/travelAssistant/pushNotificationService";
 import { getActiveTrip, getTrip, updateTrip } from "@/lib/travelAssistant/tripStore";
+import {
+  findPlannedReplacementIndex,
+  mergeIncomingOverPlanned,
+} from "@/lib/travelAssistant/plannedReservationMatch";
 import { generateId } from "@/lib/utils/generateId";
 
 const AttachmentSchema = z.object({
@@ -694,6 +698,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         confidence: confidenceToDraftValue(parserConfidenceScore),
         notes: parserNotesText,
         source: "imported" as const,
+        plannedOnly: false,
         flightNumber: parserType === "flight" ? parserFlightNumber : "",
         flightAirline: resolvedAirline,
         flightDate: parserType === "flight" ? parserLocalTime.slice(0, 10) : "",
@@ -708,6 +713,27 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
           ? (typeof parserDraftRecord.checkOutDate === "string" ? parserDraftRecord.checkOutDate.trim().slice(0, 10) : "")
           : "",
       };
+
+      const plannedReplacementIndex = findPlannedReplacementIndex(nextReservations, parsedReservation);
+      if (plannedReplacementIndex >= 0) {
+        const replaced = mergeIncomingOverPlanned(
+          nextReservations[plannedReplacementIndex] as SessionReservation,
+          parsedReservation as SessionReservation,
+        );
+        nextReservations = nextReservations.map((reservation, index) =>
+          index === plannedReplacementIndex ? replaced : reservation,
+        );
+        acceptedDraftCount += 1;
+        routeLogger.info("Replaced planned leg with forwarded confirmation.", {
+          userId: targetUserId,
+          tripId: targetTrip.id,
+          type: parserType,
+          provider: parserProvider || null,
+          flightNumber: parserFlightNumber || null,
+          replacedReservationId: replaced.id,
+        });
+        continue;
+      }
 
       const matchingReservationIndex = nextReservations.findIndex((reservation) =>
         isDuplicateReservation(reservation, parsedReservation),

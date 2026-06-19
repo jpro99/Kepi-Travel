@@ -14,7 +14,6 @@ import {
   listTrips,
   setActiveTrip,
   updateTrip,
-  ensureStarterTrip,
 } from "@/lib/travelAssistant/tripStore";
 import { generateId } from "@/lib/utils/generateId";
 
@@ -163,23 +162,6 @@ async function authorize(req: Request): Promise<
 export async function GET(req: Request) {
   const auth = await authorize(req);
   if (!auth.ok) return auth.response;
-
-  await ensureStarterTrip(auth.userId);
-
-  const trips = await listTrips(auth.userId);
-  if (trips.length === 0) {
-    await ensureStarterTrip(auth.userId);
-    const newTrips = await listTrips(auth.userId);
-    const activeTrip = await getActiveTrip(auth.userId);
-    return NextResponse.json(
-      {
-        trips: newTrips,
-        activeTripId: activeTrip?.id ?? null,
-        activeTrip,
-      },
-      { headers: auth.headers },
-    );
-  }
 
   try {
     const url = new URL(req.url);

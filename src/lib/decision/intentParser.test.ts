@@ -13,16 +13,23 @@ test("parses multi-city Italy voice trip", () => {
   const intent = parseTripIntent(RECORD_TRIP_EXAMPLE, new Date("2026-06-01"));
   assert.equal(intent.isMultiCity, true);
   assert.ok(intent.stops && intent.stops.length >= 3);
-  assert.equal(intent.stops![0]?.name, "Venice");
+  assert.equal(intent.stops![0]?.name, "Bari");
+  assert.ok(intent.stops!.some((s) => s.name === "Venice"));
   assert.ok(intent.stops!.some((s) => s.name === "Dolomites"));
-  assert.ok(intent.stops!.some((s) => s.name === "Puglia"));
-  assert.equal(intent.originCity, "Beaumont, CA");
-  assert.deepEqual(intent.originAirports?.slice(0, 1), ["ONT"]);
-  assert.ok(intent.loyaltyPrograms?.some((p) => p.includes("Hyatt")));
+  assert.equal(intent.originCity, "West Coast");
+  assert.equal(intent.returnAirports?.[0], "MUC");
   assert.ok(intent.loyaltyPrograms?.some((p) => p.includes("Alaska")));
-  assert.equal(intent.startDate.slice(8), "01");
-  assert.equal(intent.endDate.slice(8), "25");
-  assert.ok(intent.nights >= 20);
+  assert.ok(intent.nights >= 10);
+});
+
+test("parses open-jaw return from Munich", () => {
+  const intent = parseTripIntent(
+    "West Coast to Bari then Venice and Germany, fly home from Munich in September",
+    new Date("2026-06-01"),
+  );
+  assert.equal(intent.returnCity, "Munich");
+  assert.deepEqual(intent.returnAirports?.slice(0, 1), ["MUC"]);
+  assert.equal(intent.stops?.[0]?.iata, "BRI");
 });
 
 test("parses Beaumont origin from natural speech", () => {

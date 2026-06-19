@@ -1,4 +1,7 @@
+import type { AlignmentLeg } from "@/lib/decision/tripAlignment";
 import type { TravelerGenome } from "@/lib/traveler/types";
+import type { TopologySearchResult } from "@/lib/decision/topology/types";
+import type { FusedSearchResult } from "@/lib/flights/types";
 
 export type StrategyKind =
   | "direct_cash"
@@ -28,6 +31,10 @@ export interface TripIntent {
   originCity?: string;
   originRegion?: string;
   originAirports?: string[];
+  /** Open-jaw return — fly home from a different city than arrival region */
+  returnCity?: string;
+  returnRegion?: string;
+  returnAirports?: string[];
   /** Multi-city legs in visit order */
   stops?: TripStop[];
   loyaltyPrograms?: string[];
@@ -35,6 +42,24 @@ export interface TripIntent {
   budgetHint?: string;
   isMultiCity?: boolean;
 }
+
+export interface FlightLegPlan {
+  id: string;
+  role: "outbound" | "return" | "connector";
+  fromIata: string;
+  toIata: string;
+  fromLabel: string;
+  toLabel: string;
+  enabled: boolean;
+  optional: boolean;
+  departureDate: string;
+  /** Shown when status airline cannot operate this leg (e.g. Alaska on EU connectors). */
+  loyaltyNote?: string;
+}
+
+export type PlanMode = "flights" | "hotels" | "full";
+
+export type PaymentMode = "cash" | "points" | "mix";
 
 export interface StrategySegment {
   mode: "drive" | "flight" | "hotel" | "train";
@@ -86,6 +111,8 @@ export interface TravelStrategy {
   /** Status Play flagged when status goals outweigh pure cost rank */
   statusRecommended?: boolean;
   statusRecommendReason?: string;
+  /** Expert mode — why this strategy landed at its rank. */
+  rankExplanation?: string;
 }
 
 export interface DecisionQuestion {
@@ -107,7 +134,34 @@ export interface LivePricingSummary {
     currency: string;
     airline: string;
     stops: number;
+    offerId?: string;
+    flightNumber?: string;
+    departureDate?: string;
   };
+  returnOffer?: {
+    origin: string;
+    destination: string;
+    amount: number;
+    currency: string;
+    airline: string;
+    stops: number;
+    offerId?: string;
+    flightNumber?: string;
+    departureDate?: string;
+  };
+  roundTripTotalUsd?: number;
+  connectorOffers?: Array<{
+    legId: string;
+    origin: string;
+    destination: string;
+    amount: number;
+    currency: string;
+    airline: string;
+    stops: number;
+    offerId?: string;
+    flightNumber?: string;
+    departureDate?: string;
+  }>;
   searchedOrigins?: string[];
   message?: string;
 }
@@ -119,7 +173,18 @@ export interface DecisionBrief {
   strategies: TravelStrategy[];
   questions: DecisionQuestion[];
   instrumentHighlights: string[];
+  /** True when international trip has no parsed departure — user must name origin airport. */
+  originRequired?: boolean;
+  planMode?: PlanMode;
+  paymentMode?: PaymentMode;
+  /** Full ranked strategies before payment-mode filter (for UI toggles). */
+  strategyCatalog?: TravelStrategy[];
+  flightLegs?: FlightLegPlan[];
   livePricing?: LivePricingSummary;
+  /** Kepi Wave Search — combinatorial trip topology results vs naive baseline */
+  topologySearch?: TopologySearchResult;
+  /** Live Duffel cash + Seats.aero awards fused for main outbound leg */
+  fusedFlightSearch?: FusedSearchResult;
   genomeSnapshot: Pick<
     TravelerGenome,
     "homeRegion" | "decisionWeights" | "hotelChainPriority" | "tripCount"
@@ -162,6 +227,9 @@ export interface ActivateStrategyResult {
   tripId: string;
   tripName: string;
   redirectPath: string;
+  alignmentLegs: AlignmentLeg[];
+  verifiedLegCount: number;
+  totalBookableLegs: number;
 }
 
 export type FlexPricingSource = "live" | "estimated" | "mixed";

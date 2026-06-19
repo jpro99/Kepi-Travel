@@ -4,6 +4,7 @@ const PLACEHOLDER_CODES = new Set([
   "TBD",
   "PENDING-BOOK",
   "UNKNOWN",
+  "PLANNED",
 ]);
 
 /** Strategy/Command Deck placeholders — not real airline/hotel confirmations. */

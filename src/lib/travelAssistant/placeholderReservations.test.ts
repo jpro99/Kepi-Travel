@@ -5,6 +5,7 @@ import { countPlaceholderReservations, isPlaceholderConfirmation } from "@/lib/t
 test("isPlaceholderConfirmation detects planning stubs", () => {
   assert.equal(isPlaceholderConfirmation("PENDING"), true);
   assert.equal(isPlaceholderConfirmation("selected"), true);
+  assert.equal(isPlaceholderConfirmation("PLANNED"), true);
   assert.equal(isPlaceholderConfirmation("ABC123"), false);
   assert.equal(isPlaceholderConfirmation(""), true);
 });
