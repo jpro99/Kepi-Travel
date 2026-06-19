@@ -74,6 +74,7 @@ const INPUT_PLACEHOLDER_FLIGHTS =
 const STRATEGY_TIMEOUT_MS = 42_000;
 const STAYS_TIMEOUT_MS = 24_000;
 const FLEX_TIMEOUT_MS = 32_000;
+const ANALYZE_WATCHDOG_MS = 25_000;
 
 const SEGMENT_ICON: Record<string, string> = {
   flight: "✈️",
@@ -490,6 +491,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
   const [transcript, setTranscript] = useState("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
+  const analysisRunRef = useRef(0);
 
   useEffect(() => {
     if (!walkthroughOpen) return;
@@ -516,6 +518,17 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     return () => window.clearInterval(timer);
   }, [loading, planMode]);
 
+  useEffect(() => {
+    if (!loading) return;
+    const timer = window.setTimeout(() => {
+      analysisRunRef.current += 1;
+      setLoading(false);
+      setLegToggleBusy(false);
+      setError("Analyze stopped before it could finish. Please try again; Kepi will use the fast strategy path.");
+    }, ANALYZE_WATCHDOG_MS);
+    return () => window.clearTimeout(timer);
+  }, [loading]);
+
   const fetchStrategies = useCallback(
     async (
       nextPrompt: string,
@@ -526,6 +539,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     ) => {
       const trimmed = nextPrompt.trim();
       if (!trimmed) return;
+      const runId = (analysisRunRef.current += 1);
 
       const isLegToggle = Boolean(legIdsOverride);
       if (isLegToggle) {
@@ -562,6 +576,8 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
+            cache: "no-store",
+            credentials: "same-origin",
           },
           STRATEGY_TIMEOUT_MS,
           "Live trip math is taking too long. Try again, or simplify to fewer cities/dates.",
@@ -574,6 +590,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
           );
         }
         const data = await res.json();
+        if (analysisRunRef.current !== runId) return;
         setBrief(data.brief);
         if (data.brief?.paymentMode) {
           setPaymentMode(data.brief.paymentMode);
@@ -592,8 +609,11 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         const top = data.brief?.strategies?.[0];
         if (top && !isLegToggle) setExpandedId(top.id);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Something went wrong");
+        if (analysisRunRef.current === runId) {
+          setError(e instanceof Error ? e.message : "Something went wrong");
+        }
       } finally {
+        if (analysisRunRef.current !== runId) return;
         if (isLegToggle) {
           setLegToggleBusy(false);
         } else {
