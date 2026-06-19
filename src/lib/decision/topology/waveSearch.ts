@@ -5,10 +5,13 @@ import { JOINT_DATE_SHIFTS, shiftCandidateDates } from "@/lib/decision/topology/
 import { generateTopologyCandidates } from "@/lib/decision/topology/generate";
 import { estimateTripHotels } from "@/lib/decision/topology/hotelEstimate";
 import {
+  buildTopologyPricingContext,
   DuffelCallBudget,
+  isSeatsAeroConfigured,
   priceTopologyCandidateParallel,
   rankScoreForCheapest,
   summarizePricedTopology,
+  type TopologyPricingContext,
 } from "@/lib/decision/topology/priceLeg";
 import type {
   PricedTopology,
@@ -43,8 +46,9 @@ async function priceCandidate(
   candidate: TripTopologyCandidate,
   budget: DuffelCallBudget,
   hotelCashUsd: number,
+  pricingContext: TopologyPricingContext,
 ): Promise<PricedTopology | null> {
-  const legs = await priceTopologyCandidateParallel(candidate, budget);
+  const legs = await priceTopologyCandidateParallel(candidate, budget, pricingContext);
   const summary = summarizePricedTopology(candidate, legs, hotelCashUsd);
 
   if (summary.liveLegCount === 0 && !isBaselineKind(candidate.kind)) {
@@ -129,6 +133,8 @@ export async function runKepiWaveSearch(
       candidatesPruned: 0,
       dateFlexVariantsPriced: 0,
       duffelCallsUsed: 0,
+      seatsAeroCallsUsed: 0,
+      seatsAeroConfigured: isSeatsAeroConfigured(),
       hotelEstimateUsd: hotelCashUsd,
       baseline: null,
       winners: [],
@@ -140,6 +146,7 @@ export async function runKepiWaveSearch(
   }
 
   const budget = new DuffelCallBudget(maxDuffelCalls);
+  const pricingContext = await buildTopologyPricingContext(genome);
   let pruned = 0;
   let dateFlexPriced = 0;
 
@@ -149,7 +156,7 @@ export async function runKepiWaveSearch(
   const pricedRows: PricedTopology[] = [];
 
   for (const candidate of wave0) {
-    const row = await priceCandidate(candidate, budget, hotelCashUsd);
+    const row = await priceCandidate(candidate, budget, hotelCashUsd, pricingContext);
     if (row) pricedRows.push(row);
   }
 
@@ -164,7 +171,7 @@ export async function runKepiWaveSearch(
       pruned += 1;
       continue;
     }
-    const row = await priceCandidate(candidate, budget, hotelCashUsd);
+    const row = await priceCandidate(candidate, budget, hotelCashUsd, pricingContext);
     if (row) pricedRows.push(row);
   }
 
@@ -179,7 +186,7 @@ export async function runKepiWaveSearch(
         ...shiftCandidateDates(seed.candidate, shift),
         kind: "date_flex",
       };
-      const row = await priceCandidate(shifted, budget, hotelCashUsd);
+      const row = await priceCandidate(shifted, budget, hotelCashUsd, pricingContext);
       if (row) {
         pricedRows.push(row);
         dateFlexPriced += 1;
@@ -193,6 +200,15 @@ export async function runKepiWaveSearch(
   const best = winners[0];
   const bestSavingsUsd = best?.savingsVsBaselineUsd ?? 0;
   const bestSavingsPct = best?.savingsVsBaselinePct ?? 0;
+
+  console.log("[kepi-optimal-search]", {
+    shapes: candidates.length,
+    priced: pricedRows.length,
+    duffelCalls: budget.used,
+    seatsAeroCalls: pricingContext.seatsAeroBudget.used,
+    seatsAeroConfigured: isSeatsAeroConfigured(),
+    winners: winners.length,
+  });
 
   let headline = "Kepi searched trip shapes — no live fares returned.";
   if (best && bestSavingsUsd > 0) {
@@ -212,6 +228,8 @@ export async function runKepiWaveSearch(
     candidatesPruned: pruned,
     dateFlexVariantsPriced: dateFlexPriced,
     duffelCallsUsed: budget.used,
+    seatsAeroCallsUsed: pricingContext.seatsAeroBudget.used,
+    seatsAeroConfigured: isSeatsAeroConfigured(),
     hotelEstimateUsd: hotelCashUsd,
     baseline,
     winners,

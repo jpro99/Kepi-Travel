@@ -32,11 +32,15 @@ export function TopologyWaveHero({ search }: TopologyWaveHeroProps) {
           <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-200/80">Searched</p>
           <p className="text-sm font-black tabular-nums text-white">{search.candidatesGenerated} shapes</p>
           <p className="text-[10px] text-emerald-100/70">
-            {search.duffelCallsUsed} live · {search.candidatesPruned} pruned
+            {search.duffelCallsUsed} Duffel · {search.seatsAeroCallsUsed ?? 0} awards · {search.candidatesPruned}{" "}
+            pruned
             {search.version >= 2 && search.dateFlexVariantsPriced > 0
               ? ` · ${search.dateFlexVariantsPriced} date-flex`
               : null}
           </p>
+          {search.seatsAeroConfigured === false ? (
+            <p className="text-[9px] text-amber-200/80">Seats.aero key not set — awards estimated</p>
+          ) : null}
         </div>
       </div>
 

@@ -38,17 +38,28 @@ export function buildAlignmentFromPricedTopology(topology: PricedTopology): Alig
                 : "outbound",
       label: `${leg.fromIata} → ${leg.toIata}`,
       detail: row.airline
-        ? `${row.airline} · Kepi Wave Search`
+        ? `${row.airline} · Kepi Optimal Search`
         : isAward
-          ? `~${row.awardMiles?.toLocaleString() ?? "?"} miles · estimated award`
+          ? row.awardLive
+            ? `${row.awardProgram ?? "Award"} · ${row.awardMiles?.toLocaleString() ?? "?"} miles live · ${row.awardAirlines ?? ""}`
+            : `~${row.awardMiles?.toLocaleString() ?? "?"} miles · estimated award`
           : leg.fromLabel + " → " + leg.toLabel,
-      status: row.priced && row.offerId ? "verified" : isAward ? "estimated" : "modeled",
+      status:
+        row.priced && row.offerId
+          ? "verified"
+          : isAward && row.awardLive
+            ? "verified"
+            : isAward
+              ? "estimated"
+              : "modeled",
       statusLabel:
         row.priced && row.offerId
           ? "Live price verified"
-          : isAward
-            ? "Award estimate — verify before booking"
-            : "Modeled — confirm fare",
+          : isAward && row.awardLive
+            ? "Live award · verify before booking"
+            : isAward
+              ? "Award estimate — verify before booking"
+              : "Modeled — confirm fare",
       priceUsd: row.amountUsd,
       originIata: leg.fromIata,
       destinationIata: leg.toIata,

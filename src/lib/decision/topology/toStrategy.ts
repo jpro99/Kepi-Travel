@@ -23,13 +23,15 @@ function segmentsFromTopology(row: PricedTopology): StrategySegment[] {
       continue;
     }
     if (leg.pricing === "award_estimate") {
+      const liveLabel = priced.awardLive ? "live Seats.aero" : "estimated";
+      const programBit = priced.awardProgram ? `${priced.awardProgram} · ` : "";
       segments.push({
         mode: "flight",
         label: `${leg.fromIata} → ${leg.toIata}`,
-        detail: `Partner award · ~${priced.awardMiles?.toLocaleString() ?? "?"} miles · verify on Seats.aero`,
+        detail: `${programBit}${priced.awardMiles?.toLocaleString() ?? "?"} miles · ${liveLabel}${priced.awardCpp ? ` · ${priced.awardCpp.toFixed(1)}¢/pt` : ""}`,
         costUsd: priced.amountUsd ?? 5.6,
         milesUsed: priced.awardMiles,
-        cpp: 2.0,
+        cpp: priced.awardCpp ?? 2.0,
       });
       continue;
     }
@@ -136,7 +138,7 @@ export function attachTopologyMetadata(
       if (!winner) return s;
       return {
         ...s,
-        reasoning: `${s.reasoning} Optimal Search: ${topology.duffelCallsUsed} live searches · ${topology.candidatesPruned} pruned · ~$${topology.hotelEstimateUsd} hotels.`,
+        reasoning: `${s.reasoning} Optimal Search: ${topology.duffelCallsUsed} Duffel · ${topology.seatsAeroCallsUsed} Seats.aero · ${topology.candidatesPruned} pruned · ~$${topology.hotelEstimateUsd} hotels.`,
       };
     });
 

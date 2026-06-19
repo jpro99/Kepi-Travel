@@ -65,6 +65,12 @@ export interface PricedTopologyLeg {
   offerId?: string;
   flightNumber?: string;
   awardMiles?: number;
+  awardProgram?: string;
+  awardAirlines?: string;
+  /** Live Seats.aero inventory vs deterministic estimate */
+  awardLive?: boolean;
+  awardCpp?: number;
+  awardImputedUsd?: number;
   verifyUrl?: string;
 }
 
@@ -96,6 +102,8 @@ export interface TopologySearchResult {
   candidatesPruned: number;
   dateFlexVariantsPriced: number;
   duffelCallsUsed: number;
+  seatsAeroCallsUsed: number;
+  seatsAeroConfigured: boolean;
   hotelEstimateUsd: number;
   baseline: PricedTopology | null;
   winners: PricedTopology[];
