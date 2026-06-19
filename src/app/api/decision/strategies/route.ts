@@ -2,13 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { enforceRateLimit } from "@/lib/rateLimit";
-import { enrichBriefWithDuffelPricing } from "@/lib/decision/livePricing";
 import { buildDecisionBrief } from "@/lib/decision/strategyEngine";
-import { enabledConnectorLegs } from "@/lib/decision/flightLegPlanner";
-import { mergeTopologyIntoStrategies, attachTopologyMetadata } from "@/lib/decision/topology/toStrategy";
-import { runKepiWaveSearch } from "@/lib/decision/topology/waveSearch";
-import { runFusedSearchForTrip } from "@/lib/flights/fusedFlightSearch";
-import { searchDuffelCashQuotes } from "@/lib/providers/duffel/flightOffers";
 import { getTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
 
 const ExpertSchema = z
@@ -30,24 +24,6 @@ const BodySchema = z.object({
   enabledLegIds: z.array(z.string()).optional(),
   expert: ExpertSchema,
 });
-
-const TOPOLOGY_TIMEOUT_MS = 22_000;
-const FUSED_SEARCH_TIMEOUT_MS = 18_000;
-const LEG_PRICING_TIMEOUT_MS = 12_000;
-
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<null>((resolve) => {
-        timer = setTimeout(() => resolve(null), timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
 
 export async function POST(req: Request) {
   const userId = await resolveAuthenticatedUserId();
@@ -92,104 +68,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ brief });
   }
 
-  let workingBrief = brief;
-
-  if (!brief.originRequired && brief.searchAirports.length > 0) {
-    const [topologySearch, fusedFlightSearch] = await Promise.all([
-      withTimeout(
-        runKepiWaveSearch(brief.intent, genome, brief.searchAirports, {
-          maxDuffelCalls: 24,
-          maxWinners: 4,
-        }),
-        TOPOLOGY_TIMEOUT_MS,
-      ),
-      planMode !== "hotels"
-        ? withTimeout(
-            runFusedSearchForTrip(brief.intent, brief.searchAirports, genome, userId),
-            FUSED_SEARCH_TIMEOUT_MS,
-          )
-        : null,
-    ]);
-
-    if (fusedFlightSearch) {
-      console.log("[trip-planner-fused-search]", {
-        cashOffers: fusedFlightSearch.cashOffers.length,
-        awardOffers: fusedFlightSearch.awardOffers.length,
-        headline: fusedFlightSearch.headline,
-        bestVerdict: fusedFlightSearch.best?.verdict,
-      });
-    }
-
-    const mergedStrategies = topologySearch
-      ? mergeTopologyIntoStrategies(brief.strategies, topologySearch)
-      : brief.strategies;
-    const mergedCatalog = topologySearch
-      ? mergeTopologyIntoStrategies(brief.strategyCatalog ?? brief.strategies, topologySearch)
-      : brief.strategyCatalog;
-    workingBrief = {
-      ...brief,
-      topologySearch: topologySearch ?? undefined,
-      fusedFlightSearch: fusedFlightSearch ?? undefined,
-      strategies: mergedStrategies,
-      strategyCatalog: mergedCatalog,
-    };
-    if (topologySearch) {
-      attachTopologyMetadata(workingBrief, topologySearch);
-    }
-  }
-
-  const arrivalIata = workingBrief.intent.stops?.[0]?.iata ?? workingBrief.intent.destinationIata;
-  const outboundDuffel =
-    (await withTimeout(
-      searchDuffelCashQuotes({
-        origins: workingBrief.searchAirports,
-        destination: arrivalIata,
-        departureDate: workingBrief.intent.startDate,
-      }),
-      LEG_PRICING_TIMEOUT_MS,
-    )) ?? { configured: true, quotes: [], error: "Live outbound pricing timed out." };
-
-  let returnDuffel: Awaited<ReturnType<typeof searchDuffelCashQuotes>> | undefined;
-  const homeIata = workingBrief.searchAirports[0];
-  if (workingBrief.intent.returnAirports?.length && homeIata) {
-    returnDuffel =
-      (await withTimeout(
-        searchDuffelCashQuotes({
-          origins: workingBrief.intent.returnAirports,
-          destination: homeIata,
-          departureDate: workingBrief.intent.endDate,
-        }),
-        LEG_PRICING_TIMEOUT_MS,
-      )) ?? { configured: true, quotes: [], error: "Live return pricing timed out." };
-  }
-
-  const connectorLegs = enabledConnectorLegs(workingBrief.flightLegs ?? []);
-  const connectorDuffel = await Promise.all(
-    connectorLegs.map(async (leg) => {
-      const result =
-        (await withTimeout(
-          searchDuffelCashQuotes({
-            origins: [leg.fromIata],
-            destination: leg.toIata,
-            departureDate: leg.departureDate,
-          }),
-          LEG_PRICING_TIMEOUT_MS,
-        )) ?? { configured: true, quotes: [], error: "Live connector pricing timed out." };
-      return {
-        legId: leg.id,
-        result,
-      };
-    }),
-  );
-
-  const enriched = enrichBriefWithDuffelPricing(
-    workingBrief,
-    outboundDuffel,
-    genome,
-    comfortWeight,
-    returnDuffel,
-    connectorDuffel,
-  );
-
-  return NextResponse.json({ brief: enriched });
+  return NextResponse.json({ brief });
 }

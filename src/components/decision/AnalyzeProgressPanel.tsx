@@ -2,9 +2,16 @@
 
 const FLIGHT_STEPS = [
   "Understanding your trip…",
-  "Kepi Optimal Search — trip shapes & live Duffel fares…",
-  "Cash vs points — Seats.aero award inventory…",
-  "Ranking strategies & hotel estimates…",
+  "Building route shapes for your airports…",
+  "Ranking cash, points, and mix plays…",
+  "Preparing flight strategies…",
+] as const;
+
+const FULL_TRIP_STEPS = [
+  "Understanding your trip…",
+  "Building route shapes for your airports…",
+  "Ranking flight plays…",
+  "Preparing hotel search…",
 ] as const;
 
 const HOTEL_STEPS = ["Understanding your trip…", "Finding ranked hotels for your cities…"] as const;
@@ -15,7 +22,7 @@ interface AnalyzeProgressPanelProps {
 }
 
 export function AnalyzeProgressPanel({ planMode, stepIndex }: AnalyzeProgressPanelProps) {
-  const steps = planMode === "hotels" ? HOTEL_STEPS : FLIGHT_STEPS;
+  const steps = planMode === "hotels" ? HOTEL_STEPS : planMode === "full" ? FULL_TRIP_STEPS : FLIGHT_STEPS;
   const clampedStep = Math.min(stepIndex, steps.length - 1);
   const progressPct = Math.min(96, Math.round(((clampedStep + 1) / steps.length) * 100));
 
@@ -40,8 +47,7 @@ export function AnalyzeProgressPanel({ planMode, stepIndex }: AnalyzeProgressPan
         />
       </div>
       <p className="mt-3 text-[10px] leading-relaxed text-slate-400">
-        Optimal Search can run 40+ live fare checks — usually 15–35 seconds. Your results appear as soon as
-        the math finishes.
+        Kepi returns the strategy pass first. Hotels and live provider checks degrade safely if a travel API is slow.
       </p>
       <ul className="mt-3 space-y-1">
         {steps.map((label, index) => (

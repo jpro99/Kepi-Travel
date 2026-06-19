@@ -9,7 +9,7 @@ import type { DuffelStayQuote, DuffelStaysResult } from "@/lib/providers/duffel/
  */
 
 const DUFFEL_STAYS_API = "https://api.duffel.com/stays/search";
-const TIMEOUT_MS = 20_000;
+const TIMEOUT_MS = 7_000;
 const MAX_RESULTS = 12;
 
 /** City-center coordinates for every destination the intent parser knows. */
