@@ -1,9 +1,9 @@
-﻿"use client";
+"use client";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@/lib/maplibreCspWorker";
 import { useEffect, useRef, useCallback, useState, useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { AirportNavigatorMap } from "@/components/travelAssistant/AirportNavigatorMap";
 import {
   deriveEligibleLounges,
@@ -11,21 +11,8 @@ import {
   useNavigatorCredentials,
 } from "@/lib/travelAssistant/useActiveFlight";
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
-import {
-  resumePersistentFamilyLocationWatch,
-  setFamilyLocationSender,
-  startPersistentFamilyLocationWatch,
-  stopPersistentFamilyLocationWatch,
-  FAMILY_LOCATION_STALE_MS,
-} from "@/lib/family/familyLocationWatch";
-import {
-  ensureDefaultFamilySharingOn,
-  isFamilySharingOptedOut,
-} from "@/lib/family/locationSharingPrefs";
-import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
-import { fetchJson } from "@/lib/api/readJsonResponse";
 
-/* ΓöÇΓöÇΓöÇ Types ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+/* ─── Types ─────────────────────────────────────────────────── */
 interface LocationPoint {
   lat: number;
   lon: number;
@@ -55,7 +42,7 @@ interface FamilyGroup {
   createdAt: string;
 }
 
-/* ΓöÇΓöÇΓöÇ Helpers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+/* ─── Helpers ────────────────────────────────────────────────── */
 function timeAgo(iso: string): string {
   const d = Math.floor((Date.now() - Date.parse(iso)) / 60_000);
   if (d < 1) return "just now";
@@ -63,21 +50,44 @@ function timeAgo(iso: string): string {
   if (d < 1440) return `${Math.floor(d / 60)}h ago`;
   return `${Math.floor(d / 1440)}d ago`;
 }
-function isStale(iso: string) { return Date.now() - Date.parse(iso) > FAMILY_LOCATION_STALE_MS; }
+function isStale(iso: string) { return Date.now() - Date.parse(iso) > 10 * 60_000; }
 
-/* ─── Map style builders ─── */
-type MapStyleId = "dark" | "streets" | "satellite";
-function styleUrlFor(styleId: MapStyleId, key: string): string {
-  if (styleId === "satellite") return maptilerStyleUrl("satellite", key);
-  if (styleId === "streets") return maptilerStyleUrl("streets-v2", key);
-  return maptilerStyleUrl("dataviz-dark", key);
+/* ─── Map style builders ─────────────────────────────────────── */
+// Rewrite all MapTiler URLs in a style object to go through our server proxy.
+// This keeps the API key server-side and avoids the host_not_allowed 403.
+async function loadProxiedStyle(styleUrl: string): Promise<Record<string, unknown>> {
+  // Fetch the style JSON through our proxy (direct MapTiler fetch is blocked).
+  // We do NOT rewrite URLs inside the style — transformRequest handles all
+  // subsequent MapTiler requests that MapLibre makes after loading the style.
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const clean = styleUrl.replace(/[?&]key=[^&]*/g, "").replace(/\?$/, "");
+  const proxiedUrl = `${origin}/api/maptiles?url=${encodeURIComponent(clean)}`;
+  const res = await fetch(proxiedUrl);
+  if (!res.ok) throw new Error(`Style fetch failed: ${res.status}`);
+  return res.json() as Promise<Record<string, unknown>>;
 }
 
-/* ΓöÇΓöÇΓöÇ Component ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+function streetsStyleUrl(key: string) {
+  return `https://api.maptiler.com/maps/streets-v2/style.json?key=${key}`;
+}
+function darkStyleUrl(key: string) {
+  // Premium concierge default — minimal, high-contrast, lets member colors pop
+  return `https://api.maptiler.com/maps/dataviz-dark/style.json?key=${key}`;
+}
+type MapStyleId = "dark" | "streets" | "satellite";
+function styleUrlFor(styleId: MapStyleId, key: string): string {
+  if (styleId === "satellite") return satelliteStyleUrl(key);
+  if (styleId === "streets") return streetsStyleUrl(key);
+  return darkStyleUrl(key);
+}
+function satelliteStyleUrl(key: string) {
+  // Use satellite-v2 style which has higher quality raster tiles vs hybrid
+  return `https://api.maptiler.com/maps/satellite/style.json?key=${key}`;
+}
+
+/* ─── Component ──────────────────────────────────────────────── */
 export function LiveMapPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const initialView = searchParams.get("view") === "airport" ? "airport" : "family";
   const mapEl = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
@@ -96,56 +106,37 @@ export function LiveMapPage() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isError, setIsError] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [familyLoadError, setFamilyLoadError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [sharingLocation, setSharingLocation] = useState(false);
   const [myMemberId, setMyMemberId] = useState<string | null>(null);
 
   /* ── Load group + config ── */
-  const loadFamilyState = useCallback(async (): Promise<void> => {
-    try {
-      const d = await fetchJson<{
-        group?: FamilyGroup;
-        locations?: Record<string, LocationPoint>;
-        myMemberId?: string;
-      }>("/api/family");
-      if (!d.group || !Array.isArray(d.group.members)) {
-        throw new Error("Family group data looks broken — pull down to refresh or sign in again.");
-      }
-      setFamilyLoadError(null);
-      setGroup(d.group);
-      setLocations(d.locations ?? {});
-      if (d.myMemberId) {
-        setMyMemberId(d.myMemberId);
-        myMemberIdRef.current = d.myMemberId;
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not load family group.";
-      setFamilyLoadError(message);
-      setGroup(null);
-    }
+  useEffect(() => {
+    void fetch("/api/config", { cache: "no-store" })
+      .then(r => r.json())
+      .then((d: { maptilerKey?: string }) => { if (d.maptilerKey) setMaptilerKey(d.maptilerKey); })
+      .catch(() => null);
+
+    void fetch("/api/family", { cache: "no-store" })
+      .then(r => r.json())
+      .then((d: { group: FamilyGroup; locations: Record<string, LocationPoint>; myMemberId?: string }) => {
+        setGroup(d.group);
+        setLocations(d.locations ?? {});
+        if (d.myMemberId) {
+          setMyMemberId(d.myMemberId);
+          myMemberIdRef.current = d.myMemberId;
+        }
+      })
+      .catch(() => null);
   }, []);
 
-  useEffect(() => {
-    void fetchJson<{ maptilerKey?: string }>("/api/config")
-      .then((d) => { if (d.maptilerKey) setMaptilerKey(d.maptilerKey); })
-      .catch(() => {
-        setIsError(true);
-        setErrorMsg("Map could not load — check your connection and try again.");
-      });
-
-    void loadFamilyState();
-
-    const onReload = (): void => { void loadFamilyState(); };
-    window.addEventListener("kepi:family-reload", onReload);
-    return () => window.removeEventListener("kepi:family-reload", onReload);
-  }, [loadFamilyState]);
-
+  /* ── Poll locations every 10 s (faster than before) ── */
   useEffect(() => {
     const id = setInterval(() => {
-      void fetchJson<{ locations?: Record<string, LocationPoint> }>("/api/family")
-        .then((d) => {
+      void fetch("/api/family", { cache: "no-store" })
+        .then(r => r.json())
+        .then((d: { locations?: Record<string, LocationPoint> }) => {
           if (d.locations) setLocations(d.locations);
         })
         .catch(() => null);
@@ -153,7 +144,7 @@ export function LiveMapPage() {
     return () => clearInterval(id);
   }, []);
 
-  /* ΓöÇΓöÇ Place/update markers (move existing ones, no full rebuild) ΓöÇΓöÇ */
+  /* ── Place/update markers (move existing ones, no full rebuild) ── */
   const placeMarkers = useCallback((map: unknown) => {
     if (!map) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -170,14 +161,14 @@ export function LiveMapPage() {
         if (existing[member.id]) {
           const marker = existing[member.id];
           const from = marker.getLngLat();
-          // GPS noise filter ΓÇö skip if moved less than ~15 metres
+          // GPS noise filter — skip if moved less than ~15 metres
           // Consumer GPS drifts 10-30m even when standing still
           const dLng = Math.abs(loc.lon - from.lng);
           const dLat = Math.abs(loc.lat - from.lat);
           if (dLng < 0.00015 && dLat < 0.00015) return;
           // Smooth to a weighted average of current position and new reading
           // This prevents jumping to raw GPS coordinates (which are noisy)
-          // Weight: 70% new reading, 30% current ΓÇö smooths noise but stays accurate
+          // Weight: 70% new reading, 30% current — smooths noise but stays accurate
           const to = {
             lng: from.lng * 0.3 + loc.lon * 0.7,
             lat: from.lat * 0.3 + loc.lat * 0.7,
@@ -199,7 +190,7 @@ export function LiveMapPage() {
         const wrap = document.createElement("div");
         wrap.style.cssText = "cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;";
 
-        // Direction cone ΓÇö only on my marker, shows which way phone is pointing
+        // Direction cone — only on my marker, shows which way phone is pointing
         if (isMyMarker) {
           const cone = document.createElement("div");
           cone.id = `kepi-cone-${member.id}`;
@@ -242,7 +233,7 @@ export function LiveMapPage() {
           wrap.appendChild(buildAvatar(member, stale));
         }
 
-        // Frosted name chip with live/stale dot ΓÇö readable on dark and satellite
+        // Frosted name chip with live/stale dot — readable on dark and satellite
         const lbl = document.createElement("div");
         lbl.style.cssText = [
           "display:flex;align-items:center;gap:4px;",
@@ -284,7 +275,7 @@ export function LiveMapPage() {
     }).catch(console.error);
   }, [group, locations]);
 
-  /* ΓöÇΓöÇ Init map (only when maptilerKey first arrives) ΓöÇΓöÇ */
+  /* ── Init map (only when maptilerKey first arrives) ── */
   useEffect(() => {
     if (!maptilerKey || !mapEl.current) return;
     let cancelled = false;
@@ -309,16 +300,36 @@ export function LiveMapPage() {
           ? [locs.reduce((s, l) => s + l.lon, 0) / locs.length, locs.reduce((s, l) => s + l.lat, 0) / locs.length]
           : [-118.2437, 34.0522];
         const zoom = locs.length === 1 ? 14 : locs.length > 1 ? 11 : 4;
-        const styleUrl = styleUrlFor(mapStyle, maptilerKey);
+        const key = encodeURIComponent(maptilerKey);
+
+        const styleUrl = styleUrlFor(mapStyle, key);
+        const style = await loadProxiedStyle(styleUrl);
+
+        const origin = window.location.origin;
+
+        // transformRequest intercepts EVERY network request MapLibre makes.
+        // This catches tile URLs that come from tiles.json (which our style rewrite never sees).
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const transformRequest = (url: string, resourceType: string): { url: string } | undefined => {
+          if (!url.includes("api.maptiler.com")) return undefined;
+          const clean = url.replace(/[?&]key=[^&]*/g, "").replace(/\?$/, "");
+          const tokenMatch = clean.match(/^(.*?)(\{[^}]+\}.*)$/);
+          if (tokenMatch) {
+            const base = tokenMatch[1].replace(/\/$/, "");
+            const suffix = tokenMatch[2];
+            return { url: `${origin}/api/maptiles?url=${encodeURIComponent(base)}&suffix=${suffix}` };
+          }
+          return { url: `${origin}/api/maptiles?url=${encodeURIComponent(clean)}` };
+        };
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const map = new (ml as any).Map({
           container: mapEl.current,
-          style: styleUrl,
+          style,
           center, zoom,
           maxZoom: 20,
           attributionControl: false,
-          transformRequest: directMaptilerTransformRequest(maptilerKey),
+          transformRequest,
         });
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -358,19 +369,24 @@ export function LiveMapPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [maptilerKey]);
 
-  /* ΓöÇΓöÇ Re-place/move markers when locations update ΓöÇΓöÇ */
+  /* ── Re-place/move markers when locations update ── */
   useEffect(() => {
     if (mapRef.current && isLoaded) placeMarkers(mapRef.current);
   }, [placeMarkers, isLoaded]);
 
-  /* ΓöÇΓöÇ Satellite toggle ΓÇö swap style without reinitialising map ΓöÇΓöÇ */
+  /* ── Satellite toggle — swap style without reinitialising map ── */
   useEffect(() => {
     if (!mapRef.current || !maptilerKey || !isLoaded) return;
-    mapRef.current.setStyle(styleUrlFor(mapStyle, maptilerKey));
-    mapRef.current.once("styledata", () => { if (mapRef.current) placeMarkers(mapRef.current); });
+    const key = encodeURIComponent(maptilerKey);
+    const styleUrl = styleUrlFor(mapStyle, key);
+    void loadProxiedStyle(styleUrl).then(style => {
+      if (!mapRef.current) return;
+      mapRef.current.setStyle(style);
+      mapRef.current.once("styledata", () => { if (mapRef.current) placeMarkers(mapRef.current); });
+    });
   }, [mapStyle, maptilerKey, isLoaded, placeMarkers]);
 
-  /* ΓöÇΓöÇ Fit all members ΓöÇΓöÇ */
+  /* ── Fit all members ── */
   const fitAll = useCallback(() => {
     if (!mapRef.current) return;
     const locs = Object.values(locations);
@@ -386,26 +402,18 @@ export function LiveMapPage() {
     }).catch(console.error);
   }, [locations]);
 
-  /* ΓöÇΓöÇ Airport Navigator integration (shared selection ΓÇö Map button asks
-        the SAME question AirportMode does, via useActiveFlight) ΓöÇΓöÇ */
+  /* ── Airport Navigator integration (shared selection — Map button asks
+        the SAME question AirportMode does, via useActiveFlight) ── */
   const { activeFlight } = useActiveFlight();
   const { credentials: navCredentials, profile: navProfile, saveCredentials } = useNavigatorCredentials();
-  const [mapView, setMapView] = useState<"family" | "airport">(initialView);
+  const [mapView, setMapView] = useState<"family" | "airport">("family");
   const [navLat, setNavLat] = useState<number | null>(null);
   const [navLon, setNavLon] = useState<number | null>(null);
   const navWatchRef = useRef<number | null>(null);
-  const autoAirportRef = useRef(initialView === "airport");
-  const [airportHandoffNote, setAirportHandoffNote] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (searchParams.get("view") === "airport") {
-      setMapView("airport");
-      autoAirportRef.current = true;
-    }
-  }, [searchParams]);
+  const autoAirportRef = useRef(false);
 
   // Passive low-accuracy watch for proximity + indoor snapping (separate from
-  // the consent-gated family location SHARING ΓÇö this never leaves the device)
+  // the consent-gated family location SHARING — this never leaves the device)
   useEffect(() => {
     if (!activeFlight || !navigator.geolocation) return;
     navWatchRef.current = navigator.geolocation.watchPosition(
@@ -433,12 +441,8 @@ export function LiveMapPage() {
     if (navProximity.status === "at-airport" || navProximity.status === "in-terminal") {
       autoAirportRef.current = true;
       setMapView("airport");
-      const code = navProximity.airport?.iata ?? activeFlight.f.flightDepartureAirport ?? "the airport";
-      setAirportHandoffNote(`You're at ${code} — terminal navigator is ready`);
-      const timer = window.setTimeout(() => setAirportHandoffNote(null), 8000);
-      return () => window.clearTimeout(timer);
     }
-  }, [navProximity.status, navProximity.airport?.iata, activeFlight]);
+  }, [navProximity.status, activeFlight]);
 
   const navEligibleLounges = useMemo(
     () =>
@@ -454,54 +458,61 @@ export function LiveMapPage() {
 
   const navMinutesToDeparture = activeFlight ? (activeFlight.utcMs - Date.now()) / 60_000 : 0;
 
-  /* ── Share my location (uses app-wide persistent watch) ── */
+  /* ── Share my location ── */
   const shareLocation = useCallback(() => {
     if (sharingLocation) {
-      stopPersistentFamilyLocationWatch();
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
       firstFixRef.current = false;
       setSharingLocation(false);
       return;
     }
     if (!navigator.geolocation) { alert("Geolocation not supported on this device."); return; }
-    resumePersistentFamilyLocationWatch();
     setSharingLocation(true);
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      pos => {
+        const { latitude: lat, longitude: lon, accuracy } = pos.coords;
+
+        // FIX: correct endpoint is POST /api/family with action:"update-location"
+        void fetch("/api/family", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "update-location", lat, lon, accuracy }),
+        }).catch(() => null);
+
+        // FIX: update own pin immediately without waiting for next poll
+        const memberId = myMemberIdRef.current;
+        if (memberId) {
+          setLocations(prev => ({
+            ...prev,
+            [memberId]: { lat, lon, accuracy, updatedAt: new Date().toISOString(), memberId },
+          }));
+          // Only center map on first GPS fix, not every update (prevents jumpiness)
+          if (mapRef.current && !firstFixRef.current) {
+            firstFixRef.current = true;
+            mapRef.current.easeTo({ center: [lon, lat], zoom: 15, duration: 1200 });
+          }
+        }
+      },
+      () => setSharingLocation(false),
+      { enableHighAccuracy: true, maximumAge: 3000, timeout: 10_000 }
+    );
   }, [sharingLocation]);
 
-  useEffect(() => {
-    setFamilyLocationSender(async (lat, lon, accuracy) => {
-      await fetch("/api/family", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "update-location", lat, lon, accuracy }),
-      });
-      const memberId = myMemberIdRef.current;
-      if (memberId) {
-        setLocations((prev) => ({
-          ...prev,
-          [memberId]: { lat, lon, accuracy, updatedAt: new Date().toISOString(), memberId },
-        }));
-        if (mapRef.current && !firstFixRef.current) {
-          firstFixRef.current = true;
-          mapRef.current.easeTo({ center: [lon, lat], zoom: 15, duration: 1200 });
-        }
-      }
-    });
-    ensureDefaultFamilySharingOn();
-    if (!isFamilySharingOptedOut()) {
-      startPersistentFamilyLocationWatch();
-      setSharingLocation(true);
-    }
-    return () => setFamilyLocationSender(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => () => {
+    if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
   }, []);
 
-  /* ΓöÇΓöÇ Derived ΓöÇΓöÇ */
+  /* ── Derived ── */
   const members = group?.members ?? [];
   const liveCount = members.filter(m => locations[m.id] && !isStale(locations[m.id].updatedAt)).length;
   const selMember = selected ? members.find(m => m.id === selected) : null;
   const selLoc = selected ? locations[selected] : null;
 
-  /* ΓöÇΓöÇ Render ΓöÇΓöÇ */
+  /* ── Render ── */
   return (
     <>
       <style>{`
@@ -529,7 +540,7 @@ export function LiveMapPage() {
         {/* Map canvas */}
         <div ref={mapEl} className="absolute inset-0 w-full h-full" />
 
-        {/* Airport Navigator overlay ΓÇö full-bleed when at the airport view */}
+        {/* Airport Navigator overlay — full-bleed when at the airport view */}
         {mapView === "airport" && activeFlight && (
           <div className="absolute inset-0 z-40">
             <AirportNavigatorMap
@@ -557,7 +568,7 @@ export function LiveMapPage() {
           </div>
         )}
 
-        {/* Airport Γçä Family view pill ΓÇö only when a flight is in the window */}
+        {/* Airport ⇄ Family view pill — only when a flight is in the window */}
         {activeFlight && (
           <div
             className="absolute left-1/2 z-50 flex -translate-x-1/2 overflow-hidden rounded-full border border-white/15 shadow-xl"
@@ -628,15 +639,6 @@ export function LiveMapPage() {
           </button>
         </div>
 
-        {airportHandoffNote ? (
-          <div
-            className="absolute left-1/2 z-50 max-w-sm -translate-x-1/2 rounded-2xl border border-sky-400/40 bg-sky-950/95 px-4 py-3 text-center text-sm font-semibold text-sky-100 shadow-xl"
-            style={{ top: "max(6.5rem, calc(env(safe-area-inset-top) + 5.5rem))" }}
-          >
-            {airportHandoffNote}
-          </div>
-        ) : null}
-
         {/* Loading overlay */}
         {!isLoaded && !isError && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-slate-950/80">
@@ -650,20 +652,6 @@ export function LiveMapPage() {
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-slate-950/90 p-6 text-center">
             <span className="text-4xl">🗺</span>
             <p className="text-red-400 text-sm max-w-xs leading-relaxed">{errorMsg}</p>
-          </div>
-        )}
-
-        {familyLoadError && !group && (
-          <div className="absolute inset-x-4 top-20 z-10 rounded-2xl border border-amber-500/30 bg-slate-900/95 p-4 text-center shadow-xl">
-            <p className="text-amber-200 text-sm font-semibold">Family map unavailable</p>
-            <p className="text-white/60 text-xs mt-2 leading-relaxed">{familyLoadError}</p>
-            <button
-              type="button"
-              onClick={() => void loadFamilyState()}
-              className="mt-3 rounded-xl bg-sky-600 px-4 py-2 text-xs font-bold text-white"
-            >
-              Try again
-            </button>
           </div>
         )}
 
@@ -845,9 +833,9 @@ export function LiveMapPage() {
   );
 }
 
-/* ΓöÇΓöÇΓöÇ Avatar DOM helper ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+/* ─── Avatar DOM helper ──────────────────────────────────────── */
 function buildAvatar(member: { name: string; color: string }, stale: boolean): HTMLElement {
-  // Premium puck: color gradient ring ΓåÆ white gap ΓåÆ colored face, deep soft shadow
+  // Premium puck: color gradient ring → white gap → colored face, deep soft shadow
   const ring = document.createElement("div");
   ring.style.cssText = [
     "width:50px;height:50px;border-radius:50%;padding:2.5px;",

@@ -63,47 +63,6 @@ function nextColor(members: Member[]): string {
   return MEMBER_COLORS.find(c => !used.has(c)) ?? MEMBER_COLORS[members.length % MEMBER_COLORS.length];
 }
 
-function looksLikeClerkId(value: string): boolean {
-  return /^user_[a-zA-Z0-9]+$/u.test(value.trim());
-}
-
-function sanitizeMemberName(name: string | undefined, memberId: string, fallback: string): string {
-  const trimmed = name?.trim() ?? "";
-  if (trimmed.length > 0 && !looksLikeClerkId(trimmed) && trimmed !== memberId) {
-    return trimmed.slice(0, 80);
-  }
-  return fallback;
-}
-
-function sanitizeGroup(group: Group, selfUserId: string, selfDisplayName?: string | null): Group {
-  return {
-    ...group,
-    name: group.name?.trim() || "My Family",
-    members: group.members
-      .filter((member) => typeof member.id === "string" && member.id.trim().length > 0)
-      .map((member) => ({
-        ...member,
-        name: sanitizeMemberName(
-          member.name,
-          member.id,
-          member.id === selfUserId ? (selfDisplayName?.trim() || "You") : "Family member",
-        ),
-        email: member.email ?? null,
-        role: member.role ?? "adult",
-        color: member.color?.match(/^#[0-9a-fA-F]{6}$/) ? member.color : MEMBER_COLORS[0],
-        sharingEnabled: member.sharingEnabled !== false,
-        visibility: member.visibility ?? "all-members",
-      })),
-  };
-}
-
-async function sanitizeGroupsForUser(groups: Group[], userId: string): Promise<Group[]> {
-  const displayName = await getClerkDisplayName(userId);
-  return groups
-    .map((group) => sanitizeGroup(group, userId, displayName))
-    .filter((group) => group.members.length > 0);
-}
-
 // ── Load/save multiple groups ─────────────────────────────────────────────────
 async function loadGroups(userId: string): Promise<Group[]> {
   const groups = await kvStoreGet<Group[]>(FAMILY_GROUPS_KEY, { userId });
@@ -266,12 +225,7 @@ export async function GET(req: Request) {
           return [m.id, loc] as const;
         }))).filter(([, v]) => v !== null)
       );
-      const [sanitized] = await sanitizeGroupsForUser([memberGroup], userId);
-      if (!sanitized) {
-        await kvStoreSet(FAMILY_MEMBERSHIP_KEY, null, { userId });
-      } else {
-        return NextResponse.json({ group: sanitized, groups: [sanitized], locations: locs, role: "member", myMemberId: userId });
-      }
+      return NextResponse.json({ group: memberGroup, groups: [memberGroup], locations: locs, role: "member", myMemberId: userId });
     }
     // Membership pointed to a group that no longer exists — clear it and fall through to own groups
     await kvStoreSet(FAMILY_MEMBERSHIP_KEY, null, { userId });
@@ -316,29 +270,15 @@ export async function GET(req: Request) {
   }
 
   const activeGroup = requestedGroupId ? groups.find(g => g.id === requestedGroupId) ?? groups[0] : groups[0];
-  const sanitizedGroups = await sanitizeGroupsForUser(groups, userId);
-  const sanitizedActive = sanitizedGroups.find((g) => g.id === activeGroup.id) ?? sanitizedGroups[0];
-  if (!sanitizedActive) {
-    const realName = await getClerkDisplayName(userId);
-    const def = createDefaultGroup(userId, "My Family", realName ?? "You");
-    await saveGroups(userId, [def]);
-    const locs = Object.fromEntries(
-      (await Promise.all(def.members.map(async m => {
-        const loc = await kvStoreGet<z.infer<typeof LocationSchema>>(FAMILY_LOCATION_KEY(m.id), { userId });
-        return [m.id, loc] as const;
-      }))).filter(([, v]) => v !== null)
-    );
-    return NextResponse.json({ group: def, groups: [def], locations: locs, role: "owner", myMemberId: userId });
-  }
 
   const locs = Object.fromEntries(
-    (await Promise.all(sanitizedActive.members.map(async m => {
+    (await Promise.all(activeGroup.members.map(async m => {
       const loc = await kvStoreGet<z.infer<typeof LocationSchema>>(FAMILY_LOCATION_KEY(m.id), { userId });
       return [m.id, loc] as const;
     }))).filter(([, v]) => v !== null)
   );
 
-  return NextResponse.json({ group: sanitizedActive, groups: sanitizedGroups, locations: locs, role: "owner", myMemberId: userId });
+  return NextResponse.json({ group: activeGroup, groups, locations: locs, role: "owner", myMemberId: userId });
 }
 
 // ── POST ──────────────────────────────────────────────────────────────────────

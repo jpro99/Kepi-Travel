@@ -83,11 +83,22 @@ function toUtcMs(localTime: string, timezone?: string): number {
 }
 
 function parseBestMs(r: NextUpReservation): number {
-  // Convert local departure time + timezone to UTC for correct ordering across timezones
-  // HND 21:20 JST = 12:20 UTC, HNL 13:41 HST = 23:41 UTC — must sort correctly
-  if (r.localTime) {
-    const utc = toUtcMs(r.localTime, r.timezone);
+  // Use same field precedence as journeyPhase: flightDepartureTime > flightDate > localTime
+  // This ensures NextUpCard and journeyPhase agree on which flights are upcoming
+  const candidates = [
+    r.flightDepartureTime,
+    r.flightDate,
+    r.localTime,
+  ].filter(Boolean) as string[];
+
+  for (const t of candidates) {
+    // Handle date-only strings like "2026-07-15" — treat as noon local time
+    const normalized = t.trim().length === 10 ? t.trim() + " 12:00" : t.trim();
+    const utc = toUtcMs(normalized, r.timezone);
     if (!Number.isNaN(utc)) return utc;
+    // Fallback: parse without timezone
+    const ms = parseMs(normalized);
+    if (!Number.isNaN(ms)) return ms;
   }
   return Number.NaN;
 }
@@ -184,18 +195,24 @@ export function NextUpCard({ reservations, tripName, onReservationTap, locationS
   // console.log("[NextUpCard] nextReservation:", nextReservation?.flightNumber, parseBestMs(nextReservation ?? reservations[0]));
 
   const fetchGuidance = useCallback(async () => {
-    if (reservations.filter((r) => (parseBestMs(r) - Date.now()) / 3_600_000 > -2).length === 0) return;
+    const upcoming = reservations.filter((r) => (parseBestMs(r) - Date.now()) / 3_600_000 > -2);
+    if (upcoming.length === 0) return;
     setGuidance({ status: "loading" });
     const contextBlock = buildContextBlock(reservations);
+    const nowIso = new Date().toISOString();
+    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const userLocalTime = new Date().toLocaleString("en-US", { timeZone: userTimezone, hour12: false });
+
+    // 12-second timeout — never leave user on spinning dots
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 12_000);
 
     try {
-      const nowIso = new Date().toISOString();
-      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const userLocalTime = new Date().toLocaleString("en-US", { timeZone: userTimezone, hour12: false });
       const res = await fetch("/api/trip-guidance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
+        signal: controller.signal,
         body: JSON.stringify({
           tripName,
           nowIso,
@@ -207,8 +224,15 @@ export function NextUpCard({ reservations, tripName, onReservationTap, locationS
         }),
       });
 
+      window.clearTimeout(timeoutId);
+
       if (!res.ok) {
-        setGuidance({ status: "error" });
+        // Rate limited or server error — show fallback, not red error
+        setGuidance({
+          status: "done",
+          text: "**Review your itinerary**\nTap refresh for live timing guidance.",
+          urgency: "normal",
+        });
         return;
       }
 
@@ -217,12 +241,14 @@ export function NextUpCard({ reservations, tripName, onReservationTap, locationS
         headline?: string;
         detail?: string;
         error?: string;
-        proactive_flag?: string;
-        action?: string;
       };
 
       if (data.error) {
-        setGuidance({ status: "error" });
+        setGuidance({
+          status: "done",
+          text: "**Review your itinerary**\nTap refresh for live timing guidance.",
+          urgency: "normal",
+        });
         return;
       }
 
@@ -235,10 +261,16 @@ ${data.detail ?? ""}`,
         proactive_flag: typeof data.proactive_flag === "string" ? data.proactive_flag : "",
         action: typeof data.action === "string" ? data.action : "",
       });
-    } catch {
-      setGuidance({ status: "error" });
+    } catch (err) {
+      window.clearTimeout(timeoutId);
+      // Timeout or network error — show friendly fallback
+      setGuidance({
+        status: "done",
+        text: "**Check your itinerary**\nTap refresh for live trip guidance.",
+        urgency: "normal",
+      });
     }
-  }, [reservations, tripName]);
+  }, [reservations, tripName, locationStatus, nearestAirport]);
 
   // Auto-fetch when the next reservation changes (by id + hour bucket)
   useEffect(() => {

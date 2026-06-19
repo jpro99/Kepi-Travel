@@ -1,10 +1,8 @@
-// @ts-nocheck
 "use client";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@/lib/maplibreCspWorker";
 import { useEffect, useRef, useCallback, useState, useMemo } from "react";
-import { directMaptilerTransformRequest } from "@/lib/map/maptilerClient";
 
 interface LocationPoint {
   lat: number;
@@ -53,6 +51,16 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
   // Stable style URLs — only recompute when key changes
   const streetsUrl = useMemo(() => `https://api.maptiler.com/maps/streets-v2/style.json?key=${encodeURIComponent(maptilerKey)}`, [maptilerKey]);
   const hybridUrl  = useMemo(() => `https://api.maptiler.com/maps/hybrid/style.json?key=${encodeURIComponent(maptilerKey)}`, [maptilerKey]);
+
+  // Rewrite style URLs through server proxy so API key never hits the browser
+  const loadStyle = useCallback(async (url: string): Promise<Record<string, unknown>> => {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    // Only proxy the style JSON fetch — transformRequest handles all tile/glyph/sprite requests
+    const clean = url.replace(/[?&]key=[^&]*/g, "").replace(/\?$/, "");
+    const proxiedUrl = `${origin}/api/maptiles?url=${encodeURIComponent(clean)}`;
+    const res = await fetch(proxiedUrl);
+    return res.json() as Promise<Record<string, unknown>>;
+  }, []);
 
   // Place/move markers — update existing ones in place (no flicker)
   const placeMarkers = useCallback((map: unknown) => {
@@ -189,16 +197,28 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
         : [-118.2437, 34.0522];
       const zoom = knownLocs.length === 1 ? 14 : knownLocs.length > 1 ? 10 : 4;
 
-      const styleUrl = streetsUrl;
-
+      const style = await loadStyle(streetsUrl);
+      const origin = window.location.origin;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const transformRequest = (url: string): { url: string } | undefined => {
+        if (!url.includes("api.maptiler.com")) return undefined;
+        const clean = url.replace(/[?&]key=[^&]*/g, "").replace(/\?$/, "");
+        const tokenMatch = clean.match(/^(.*?)(\{[^}]+\}.*)$/);
+        if (tokenMatch) {
+          const base = tokenMatch[1].replace(/\/$/, "");
+          const suffix = tokenMatch[2];
+          return { url: `${origin}/api/maptiles?url=${encodeURIComponent(base)}&suffix=${suffix}` };
+        }
+        return { url: `${origin}/api/maptiles?url=${encodeURIComponent(clean)}` };
+      };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const map = new (ml as any).Map({
         container: mapEl.current,
-        style: styleUrl,
+        style,
         center, zoom,
         attributionControl: false,
         fadeDuration: 0,
-        transformRequest: directMaptilerTransformRequest(maptilerKey),
+        transformRequest,
       });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       map.addControl(new (ml as any).NavigationControl({ showCompass: false }), "top-right");
@@ -236,9 +256,12 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
   // Toggle satellite — swap style without reinitialising
   useEffect(() => {
     if (!mapRef.current || !isLoaded) return;
-    mapRef.current.setStyle(satellite ? hybridUrl : streetsUrl);
-    mapRef.current.once("styledata", () => { if (mapRef.current) placeMarkers(mapRef.current); });
-  }, [satellite, hybridUrl, streetsUrl, isLoaded, placeMarkers]);
+    void loadStyle(satellite ? hybridUrl : streetsUrl).then(style => {
+      if (!mapRef.current) return;
+      mapRef.current.setStyle(style);
+      mapRef.current.once("styledata", () => { if (mapRef.current) placeMarkers(mapRef.current); });
+    });
+  }, [satellite, hybridUrl, streetsUrl, isLoaded, placeMarkers, loadStyle]);
 
   // Resize after fullscreen transition
   useEffect(() => {
