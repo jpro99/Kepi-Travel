@@ -4786,41 +4786,13 @@ export default function TravelAssistantPage() {
       }
 
       const defaultAssignees = familyMembers.map((member) => member.id);
-      const importedSamples: EmailSample[] = importedReservations.map((item) => ({
-        id: `gmail-${item.messageId}`,
-        sender: item.sender,
-        receivedAt: item.receivedAt,
-        subject: item.subject,
-        body: item.body,
-        confidence: item.reservation.confidence,
-        issues: item.reservation.issues,
-        parsed: {
-          type: item.reservation.type,
-          title: item.reservation.title,
-          provider: item.reservation.provider,
-          localTime: item.reservation.localTime,
-          timezone: item.reservation.timezone,
-          location: item.reservation.location,
-          confirmationCode: item.reservation.confirmationCode,
-          assignedTo: defaultAssignees,
-          stage: defaultStageForReservationType(item.reservation.type),
-          critical: item.reservation.type === "flight" || item.reservation.type === "train" || item.reservation.type === "ride",
-          confidence: item.reservation.confidence,
-          notes: `Imported from email message ${item.messageId}`,
-        },
-      }));
-      setEmailSamples(importedSamples);
-      setSelectedEmailId(importedSamples[0]?.id ?? "");
+      const importedSamples: EmailSample[] = [];
+      const reviewItems: ReviewItem[] = [];
+      let nextReservations = reservations;
+      let autoAppliedCount = 0;
 
-      const queueItems = importedReservations.map((item) => ({
-        id: nextId("review"),
-        reasons:
-          item.reservation.issues.length > 0
-            ? item.reservation.issues
-            : ["Imported from email import. Confirm before publishing to live itinerary."],
-        impact: "Imported email needs review and confirmation before live activation.",
-        sourceEmailSubject: item.subject,
-        draft: {
+      for (const item of importedReservations) {
+        const draft: ReservationDraft = {
           type: item.reservation.type,
           title: item.reservation.title,
           provider: item.reservation.provider,
@@ -4830,20 +4802,80 @@ export default function TravelAssistantPage() {
           confirmationCode: item.reservation.confirmationCode,
           assignedTo: defaultAssignees,
           stage: defaultStageForReservationType(item.reservation.type),
-          critical: item.reservation.type === "flight" || item.reservation.type === "train" || item.reservation.type === "ride",
+          critical:
+            item.reservation.type === "flight" ||
+            item.reservation.type === "train" ||
+            item.reservation.type === "ride",
           confidence: item.reservation.confidence,
           notes: `Imported via email import from message ${item.messageId}.`,
-        },
-        sourceChannel: "gmail-import",
-        parseConfidenceScore:
-          item.reservation.confidence === "high" ? 85 : item.reservation.confidence === "medium" ? 55 : 30,
-        parsingStatus:
-          item.reservation.confidence === "high"
-            ? "auto-parsed"
-            : item.reservation.confidence === "medium"
-              ? "needs-review"
-              : "needs-user-input",
-        missingFields: item.reservation.issues.flatMap((issue) => {
+          flightDate:
+            item.reservation.type === "flight" ? item.reservation.localTime.trim().slice(0, 10) : undefined,
+          flightAirline: item.reservation.type === "flight" ? item.reservation.provider.trim() : undefined,
+        };
+
+        importedSamples.push({
+          id: `gmail-${item.messageId}`,
+          sender: item.sender,
+          receivedAt: item.receivedAt,
+          subject: item.subject,
+          body: item.body,
+          confidence: item.reservation.confidence,
+          issues: item.reservation.issues,
+          parsed: {
+            type: draft.type,
+            title: draft.title,
+            provider: draft.provider,
+            localTime: draft.localTime,
+            timezone: draft.timezone,
+            location: draft.location,
+            confirmationCode: draft.confirmationCode,
+            assignedTo: draft.assignedTo,
+            stage: draft.stage,
+            critical: draft.critical,
+            confidence: draft.confidence,
+            notes: `Imported from email message ${item.messageId}`,
+          },
+        });
+
+        const plannedReplacementIndex = findPlannedReplacementIndex(nextReservations, draft);
+        const integrity = evaluateReservationIntegrity(draft);
+        const canAutoApply =
+          item.reservation.confidence === "high" &&
+          plannedReplacementIndex >= 0 &&
+          integrity.safeForLive;
+
+        if (canAutoApply) {
+          const incoming: Reservation = {
+            ...draft,
+            id: nextId("res"),
+            source: "gmail-import",
+            plannedOnly: false,
+          };
+          const result = upsertReservationReplacingPlanned(nextReservations, incoming);
+          nextReservations = result.reservations;
+          autoAppliedCount += 1;
+          continue;
+        }
+
+        reviewItems.push({
+          id: nextId("review"),
+          reasons:
+            item.reservation.issues.length > 0
+              ? item.reservation.issues
+              : ["Imported from email import. Confirm before publishing to live itinerary."],
+          impact: "Imported email needs review and confirmation before live activation.",
+          sourceEmailSubject: item.subject,
+          draft,
+          sourceChannel: "gmail-import",
+          parseConfidenceScore:
+            item.reservation.confidence === "high" ? 85 : item.reservation.confidence === "medium" ? 55 : 30,
+          parsingStatus:
+            item.reservation.confidence === "high"
+              ? "auto-parsed"
+              : item.reservation.confidence === "medium"
+                ? "needs-review"
+                : "needs-user-input",
+          missingFields: item.reservation.issues.flatMap((issue) => {
             const normalized = issue.toLowerCase();
             if (normalized.includes("title")) return ["title" as const];
             if (normalized.includes("provider")) return ["provider" as const];
@@ -4853,17 +4885,63 @@ export default function TravelAssistantPage() {
             if (normalized.includes("location") || normalized.includes("terminal")) return ["location" as const];
             return [];
           }),
-        originalEmailText: item.body,
-        reviewStatus: item.reservation.confidence === "low" ? "incomplete" : "pending",
-      })) as ReviewItem[];
-      setReviewQueue((prev) => [...queueItems, ...prev]);
-      queueMutation("Imported reservations from email import into review queue.", {
-        key: "gmail-import",
-        fingerprint: `gmail:${importedReservations.map((item) => item.messageId).join(",")}`,
-      });
-      setToast(`Imported ${importedReservations.length} reservation${importedReservations.length === 1 ? "" : "s"} from email.`);
+          originalEmailText: item.body,
+          reviewStatus: item.reservation.confidence === "low" ? "incomplete" : "pending",
+        });
+      }
+
+      if (autoAppliedCount > 0) {
+        pushUndoSnapshot("Gmail import replaced planned legs");
+        setReservations(nextReservations);
+        const targetTripId = activeTripId ?? trips[0]?.id ?? null;
+        if (targetTripId) {
+          void fetch(TRIP_API_ROUTE, {
+            method: "PUT",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "update",
+              id: targetTripId,
+              patch: { reservations: nextReservations },
+            }),
+          });
+        }
+        queueMutation("Gmail import replaced planned legs on your trip.", {
+          key: "gmail-import-auto",
+          fingerprint: `gmail-auto:${importedReservations.map((item) => item.messageId).join(",")}`,
+        });
+      }
+
+      setEmailSamples(importedSamples);
+      setSelectedEmailId(importedSamples[0]?.id ?? "");
+
+      if (reviewItems.length > 0) {
+        setReviewQueue((prev) => [...reviewItems, ...prev]);
+        queueMutation("Imported reservations from email import into review queue.", {
+          key: "gmail-import",
+          fingerprint: `gmail:${importedReservations.map((item) => item.messageId).join(",")}`,
+        });
+      }
+
+      if (autoAppliedCount > 0 && reviewItems.length === 0) {
+        setToast(`${autoAppliedCount} confirmation${autoAppliedCount === 1 ? "" : "s"} matched planned legs ✓`);
+      } else if (autoAppliedCount > 0) {
+        setToast(
+          `${autoAppliedCount} confirmation${autoAppliedCount === 1 ? "" : "s"} applied · ${reviewItems.length} need review`,
+        );
+      } else {
+        setToast(`Imported ${importedReservations.length} reservation${importedReservations.length === 1 ? "" : "s"} from email.`);
+      }
     },
-    [familyMembers, queueMutation, setToast],
+    [
+      activeTripId,
+      familyMembers,
+      pushUndoSnapshot,
+      queueMutation,
+      reservations,
+      setToast,
+      trips,
+    ],
   );
 
   const handleEnablePush = useCallback(async (): Promise<void> => {
@@ -7209,11 +7287,11 @@ export default function TravelAssistantPage() {
                 }))}
                 activeTripId={activeTripId}
                 onSwitchTrip={handleSwitchTrip}
-                onCreateTrip={handleCreateTrip}
+                onCreateTrip={handlePlanTabNewTrip}
                 disabled={tripsLoading || billingLoading}
                 creating={creatingTrip}
                 canCreateTrip={canCreateAdditionalTrips}
-                createDisabledMessage="Free plan supports one trip."
+                createDisabledMessage="Free plan includes one trip — use Trip Planner for your next route."
                 onRequestUpgrade={() =>
                   openUpgradeModal("multi-trip", "Upgrade to Pro to create and switch between multiple trips.")
                 }
@@ -8256,11 +8334,11 @@ export default function TravelAssistantPage() {
               }))}
               activeTripId={activeTripId}
               onSwitchTrip={handleSwitchTrip}
-              onCreateTrip={handleCreateTrip}
+              onCreateTrip={handlePlanTabNewTrip}
               disabled={tripsLoading || billingLoading}
               creating={creatingTrip}
               canCreateTrip={canCreateAdditionalTrips}
-              createDisabledMessage="Free plan supports one trip."
+              createDisabledMessage="Free plan includes one trip — use Trip Planner for your next route."
               onRequestUpgrade={() =>
                 openUpgradeModal("multi-trip", "Upgrade to Pro to create and switch between multiple trips.")
               }

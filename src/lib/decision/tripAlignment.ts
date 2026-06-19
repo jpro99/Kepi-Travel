@@ -42,10 +42,44 @@ function parseRouteFromLabel(label: string): { origin?: string; destination?: st
   return { origin: match[1], destination: match[2] };
 }
 
+function pushSelectedHotelLeg(
+  legs: AlignmentLeg[],
+  step: number,
+  stay: SelectedStayActivation,
+  destination: string,
+): number {
+  const isEstimated = stay.quoteId.startsWith("est-");
+  const book = resolveHotelBookUrl({
+    propertyName: stay.name,
+    chainName: stay.chainName,
+    location: stay.area ?? destination,
+    checkInDate: stay.checkInDate,
+    checkOutDate: stay.checkOutDate,
+    quotedPriceUsd: stay.totalAmountUsd,
+    quoteId: stay.quoteId,
+  });
+  legs.push({
+    id: `hotel-selected-${stay.checkInDate}`,
+    step,
+    role: "hotel",
+    label: stay.name,
+    detail: `${stay.chainName?.trim() || "Hotel"} · ${stay.checkInDate} → ${stay.checkOutDate}`,
+    status: isEstimated ? "modeled" : "verified",
+    statusLabel: isEstimated ? statusChip("modeled") : statusChip("verified"),
+    priceUsd: stay.totalAmountUsd,
+    departureDate: stay.checkInDate,
+    checkOutDate: stay.checkOutDate,
+    airline: stay.chainName,
+    bookUrl: book.url,
+    bookLabel: book.label,
+  });
+  return step + 1;
+}
+
 export function buildAlignmentBoard(
   brief: DecisionBrief,
   strategy: TravelStrategy,
-  selectedStay?: SelectedStayActivation | null,
+  selectedStays?: SelectedStayActivation[] | null,
 ): AlignmentLeg[] {
   const legs: AlignmentLeg[] = [];
   const live = brief.livePricing;
@@ -240,32 +274,10 @@ export function buildAlignmentBoard(
     }
   }
 
-  if (selectedStay) {
-    const isEstimated = selectedStay.quoteId.startsWith("est-");
-    const book = resolveHotelBookUrl({
-      propertyName: selectedStay.name,
-      chainName: selectedStay.chainName,
-      location: selectedStay.area ?? brief.intent.destination,
-      checkInDate: selectedStay.checkInDate,
-      checkOutDate: selectedStay.checkOutDate,
-      quotedPriceUsd: selectedStay.totalAmountUsd,
-      quoteId: selectedStay.quoteId,
-    });
-    legs.push({
-      id: "hotel-selected",
-      step: step++,
-      role: "hotel",
-      label: selectedStay.name,
-      detail: `${selectedStay.chainName?.trim() || "Hotel"} · ${selectedStay.checkInDate} → ${selectedStay.checkOutDate}`,
-      status: isEstimated ? "modeled" : "verified",
-      statusLabel: isEstimated ? statusChip("modeled") : statusChip("verified"),
-      priceUsd: selectedStay.totalAmountUsd,
-      departureDate: selectedStay.checkInDate,
-      checkOutDate: selectedStay.checkOutDate,
-      airline: selectedStay.chainName,
-      bookUrl: book.url,
-      bookLabel: book.label,
-    });
+  if (selectedStays && selectedStays.length > 0) {
+    for (const stay of selectedStays) {
+      step = pushSelectedHotelLeg(legs, step, stay, brief.intent.destination);
+    }
   } else {
     for (const segment of strategy.segments.filter((s) => s.mode === "hotel")) {
       const dateMatch = segment.detail.match(/(\d{4}-\d{2}-\d{2})\s*→\s*(\d{4}-\d{2}-\d{2})/);

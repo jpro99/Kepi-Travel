@@ -54,3 +54,39 @@ test("alignment board includes outbound and return for open-jaw brief", () => {
   const counts = countVerifiedLegs(legs);
   assert.ok(counts.verified >= 2);
 });
+
+test("alignment board adds one hotel leg per selected stay", () => {
+  const genome = createSampleGenome("alignment-hotels-test");
+  const brief = buildDecisionBrief("Hotels in Venice and Florence for 5 nights each in June", genome, {
+    planMode: "hotels",
+  });
+  const strategy = brief.strategies[0];
+  assert.ok(strategy);
+
+  const legs = buildAlignmentBoard(brief, strategy, [
+    {
+      quoteId: "stay-venice",
+      name: "Hotel Danieli",
+      chainName: "Marriott",
+      totalAmountUsd: 980,
+      nightlyUsd: 196,
+      currency: "USD",
+      checkInDate: "2026-06-01",
+      checkOutDate: "2026-06-06",
+    },
+    {
+      quoteId: "stay-florence",
+      name: "Portrait Firenze",
+      chainName: "Lungarno",
+      totalAmountUsd: 1100,
+      nightlyUsd: 220,
+      currency: "USD",
+      checkInDate: "2026-06-06",
+      checkOutDate: "2026-06-11",
+    },
+  ]);
+
+  const hotelLegs = legs.filter((leg) => leg.role === "hotel");
+  assert.equal(hotelLegs.length, 2);
+  assert.ok(hotelLegs.every((leg) => leg.bookUrl?.includes("google.com/travel/hotels")));
+});

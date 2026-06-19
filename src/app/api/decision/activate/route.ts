@@ -30,6 +30,7 @@ const BodySchema = z.object({
   paymentMode: z.enum(["cash", "points", "mix"]).optional(),
   enabledLegIds: z.array(z.string()).optional(),
   stay: SelectedStaySchema.optional(),
+  stays: z.array(SelectedStaySchema).max(12).optional(),
 });
 
 export async function POST(req: Request) {
@@ -113,13 +114,24 @@ export async function POST(req: Request) {
     );
   }
 
-  const alignmentLegs = buildAlignmentBoard(enrichedBrief, strategy, parsed.data.stay);
+  const selectedStays =
+    parsed.data.stays && parsed.data.stays.length > 0
+      ? parsed.data.stays
+      : parsed.data.stay
+        ? [parsed.data.stay]
+        : [];
+
+  const alignmentLegs = buildAlignmentBoard(
+    enrichedBrief,
+    strategy,
+    selectedStays.length > 0 ? selectedStays : null,
+  );
 
   const result = await activateStrategy(
     strategy,
     enrichedBrief.intent,
     userId ?? undefined,
-    parsed.data.stay,
+    selectedStays.length > 0 ? selectedStays : null,
     alignmentLegs,
   );
 

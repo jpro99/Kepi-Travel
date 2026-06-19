@@ -177,26 +177,29 @@ function plannedLegReservation(leg: AlignmentLeg): SessionReservation | null {
 
 function reservationsFromAlignment(
   alignmentLegs: AlignmentLeg[],
-  selectedStay?: SelectedStayActivation | null,
+  selectedStays?: SelectedStayActivation[] | null,
   intent?: TripIntent,
 ): SessionReservation[] {
   const reservations: SessionReservation[] = [];
-  const hasSelectedHotelLeg = alignmentLegs.some((leg) => leg.id === "hotel-selected");
+  const hasSelectedHotelLegs = alignmentLegs.some((leg) => leg.id.startsWith("hotel-selected"));
 
   for (const leg of alignmentLegs) {
     const row = plannedLegReservation(leg);
     if (row) reservations.push(row);
   }
 
-  if (selectedStay && intent && !hasSelectedHotelLeg) {
-    const stop = intent.stops?.[0];
-    reservations.push(
-      hotelReservationFromStay(
-        selectedStay,
-        stop?.name ?? intent.destination,
-        stop?.iata ?? intent.destinationIata,
-      ),
-    );
+  if (selectedStays && selectedStays.length > 0 && !hasSelectedHotelLegs && intent) {
+    const stopRanges = allocateStopDates(intent);
+    selectedStays.forEach((stay, index) => {
+      const stop = stopRanges[index]?.stop ?? intent.stops?.[index];
+      reservations.push(
+        hotelReservationFromStay(
+          stay,
+          stop?.name ?? intent.destination,
+          stop?.iata ?? intent.destinationIata,
+        ),
+      );
+    });
   }
 
   return reservations;
@@ -205,7 +208,7 @@ function reservationsFromAlignment(
 function reservationsFromStrategyLegacy(
   strategy: TravelStrategy,
   intent: TripIntent,
-  selectedStay?: SelectedStayActivation | null,
+  selectedStays?: SelectedStayActivation[] | null,
 ): SessionReservation[] {
   const depAirport = strategy.departureAirports[0] ?? intent.originAirports?.[0];
   if (!depAirport) {
@@ -243,14 +246,14 @@ function reservationsFromStrategyLegacy(
     },
   ];
 
-  return reservationsFromAlignment(legs, selectedStay, intent);
+  return reservationsFromAlignment(legs, selectedStays, intent);
 }
 
 export async function activateStrategy(
   strategy: TravelStrategy,
   intent: TripIntent,
   userId?: string,
-  selectedStay?: SelectedStayActivation | null,
+  selectedStays?: SelectedStayActivation[] | null,
   alignmentLegs: AlignmentLeg[] = [],
 ): Promise<ActivateStrategyResult> {
   const tripName = intent.isMultiCity
@@ -260,8 +263,8 @@ export async function activateStrategy(
   const legs = alignmentLegs.length > 0 ? alignmentLegs : [];
   const reservations =
     legs.length > 0
-      ? reservationsFromAlignment(legs, selectedStay, intent)
-      : reservationsFromStrategyLegacy(strategy, intent, selectedStay);
+      ? reservationsFromAlignment(legs, selectedStays, intent)
+      : reservationsFromStrategyLegacy(strategy, intent, selectedStays);
 
   const { verified, total } = countVerifiedLegs(legs);
 

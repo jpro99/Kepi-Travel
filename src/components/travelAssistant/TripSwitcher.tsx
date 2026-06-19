@@ -110,11 +110,6 @@ export function TripSwitcher({
               type="button"
               onClick={async () => {
                 if (creating || disabled) return;
-                if (!canCreateTrip) {
-                  onRequestUpgrade?.();
-                  setOpen(false);
-                  return;
-                }
                 try {
                   await onCreateTrip();
                 } finally {
@@ -124,10 +119,22 @@ export function TripSwitcher({
               disabled={disabled || creating}
               className="w-full rounded-lg bg-cyan-500 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {creating ? "Creating trip…" : canCreateTrip ? "New Trip" : "Upgrade for additional trips"}
+              {creating ? "Creating trip…" : canCreateTrip ? "New Trip" : "Plan new trip"}
             </button>
             {!canCreateTrip && createDisabledMessage ? (
-              <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">{createDisabledMessage}</p>
+              <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+                {createDisabledMessage}{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onRequestUpgrade?.();
+                    setOpen(false);
+                  }}
+                  className="font-semibold text-cyan-700 underline underline-offset-2 dark:text-cyan-300"
+                >
+                  Upgrade for multiple trips
+                </button>
+              </p>
             ) : null}
           </div>
         </div>

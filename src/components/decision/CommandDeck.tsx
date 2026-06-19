@@ -338,12 +338,16 @@ const PENDING_ACTIVATE_KEY = "kepi:pendingActivate";
 type PendingActivate = {
   prompt: string;
   strategyId: string;
-  stay?: SelectedStayActivation;
+  stays?: SelectedStayActivation[];
 };
+
+function stayLegKey(input: { stopName: string; checkInDate: string }): string {
+  return `${input.stopName}-${input.checkInDate}`;
+}
 
 function stayPayloadFromSelection(
   stay: RankedStay,
-  intent: StaysResponse["intent"],
+  dates: { checkInDate: string; checkOutDate: string },
 ): SelectedStayActivation {
   return {
     quoteId: stay.quote.id,
@@ -354,9 +358,47 @@ function stayPayloadFromSelection(
     totalAmountUsd: stay.quote.totalAmountUsd,
     nightlyUsd: stay.quote.nightlyUsd,
     currency: stay.quote.currency,
-    checkInDate: intent.startDate,
-    checkOutDate: intent.endDate,
+    checkInDate: dates.checkInDate,
+    checkOutDate: dates.checkOutDate,
   };
+}
+
+function collectSelectedStayPayloads(
+  staysData: StaysResponse | null,
+  selectedStayByLeg: Record<string, string>,
+): SelectedStayActivation[] {
+  if (!staysData) return [];
+
+  if (staysData.stopLegs && staysData.stopLegs.length > 0) {
+    return staysData.stopLegs.flatMap((leg) => {
+      const key = stayLegKey(leg);
+      const selectedId = selectedStayByLeg[key];
+      const ranked =
+        (selectedId ? leg.stays.find((stay) => stay.quote.id === selectedId) : undefined) ??
+        leg.stays.find((stay) => stay.kepiPick) ??
+        leg.stays[0];
+      if (!ranked) return [];
+      return [
+        stayPayloadFromSelection(ranked, {
+          checkInDate: leg.checkInDate,
+          checkOutDate: leg.checkOutDate,
+        }),
+      ];
+    });
+  }
+
+  const selectedId = selectedStayByLeg.default;
+  const ranked =
+    (selectedId ? staysData.stays.find((stay) => stay.quote.id === selectedId) : undefined) ??
+    staysData.stays.find((stay) => stay.kepiPick) ??
+    staysData.stays[0];
+  if (!ranked) return [];
+  return [
+    stayPayloadFromSelection(ranked, {
+      checkInDate: staysData.intent.startDate,
+      checkOutDate: staysData.intent.endDate,
+    }),
+  ];
 }
 
 /* ── Command Deck ───────────────────────────────────────────────────────── */
@@ -407,7 +449,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
   // Stays — load unasked, the moment strategies exist (godlike mode)
   const [staysData, setStaysData] = useState<StaysResponse | null>(null);
   const [staysLoading, setStaysLoading] = useState(false);
-  const [selectedStayId, setSelectedStayId] = useState<string | null>(null);
+  const [selectedStayByLeg, setSelectedStayByLeg] = useState<Record<string, string>>({});
 
   // Voice counterfactual bar
   const [listening, setListening] = useState(false);
@@ -651,7 +693,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
             planMode,
             paymentMode,
             enabledLegIds: enabledLegIds.length > 0 ? enabledLegIds : undefined,
-            ...(payload.stay ? { stay: payload.stay } : {}),
+            ...(payload.stays && payload.stays.length > 0 ? { stays: payload.stays } : {}),
           }),
         });
         if (!res.ok) {
@@ -789,23 +831,19 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     }
   };
 
-  const handleActivate = async (strategyId: string, stayOverride?: SelectedStayActivation) => {
+  const handleActivate = async (strategyId: string, staysOverride?: SelectedStayActivation[]) => {
     const strategy = brief?.strategies.find((item) => item.id === strategyId);
-    let stayPayload =
-      stayOverride ??
-      (selectedStayId && staysData
-        ? (() => {
-            const ranked = staysData.stays.find((stay) => stay.quote.id === selectedStayId);
-            return ranked ? stayPayloadFromSelection(ranked, staysData.intent) : undefined;
-          })()
-        : undefined);
+    const staysPayload =
+      staysOverride ??
+      (staysData && strategy?.segments.some((segment) => segment.mode === "hotel")
+        ? collectSelectedStayPayloads(staysData, selectedStayByLeg)
+        : []);
 
-    if (!stayPayload && staysData && strategy?.segments.some((segment) => segment.mode === "hotel")) {
-      const pick = staysData.stays.find((stay) => stay.kepiPick) ?? staysData.stays[0];
-      if (pick) stayPayload = stayPayloadFromSelection(pick, staysData.intent);
-    }
-
-    const pending: PendingActivate = { prompt: prompt.trim() || inputPrompt.trim(), strategyId, stay: stayPayload };
+    const pending: PendingActivate = {
+      prompt: prompt.trim() || inputPrompt.trim(),
+      strategyId,
+      ...(staysPayload.length > 0 ? { stays: staysPayload } : {}),
+    };
 
     if (!pending.prompt) {
       setError("Describe your trip before activating.");
@@ -830,7 +868,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
           planMode: brief?.planMode ?? planMode,
           paymentMode,
           enabledLegIds: enabledLegIds.length > 0 ? enabledLegIds : undefined,
-          ...(stayPayload ? { stay: stayPayload } : {}),
+          ...(staysPayload.length > 0 ? { stays: staysPayload } : {}),
         }),
       });
       if (res.status === 401) {
@@ -874,16 +912,24 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     }
   }, [isSignedIn, activateTripDirect]);
 
-  const renderStayCarousel = (stays: RankedStay[], keyPrefix: string) => (
+  const renderStayCarousel = (stays: RankedStay[], legKey: string) => (
     <div className="-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2">
       {stays.slice(0, 6).map((stay, stayIdx) => {
-        const selected = stay.quote.id === selectedStayId;
+        const selected = selectedStayByLeg[legKey] === stay.quote.id;
         return (
           <button
-            key={`${keyPrefix}-${stay.quote.id}`}
+            key={`${legKey}-${stay.quote.id}`}
             type="button"
             onClick={() =>
-              setSelectedStayId((current) => (current === stay.quote.id ? null : stay.quote.id))
+              setSelectedStayByLeg((current) => {
+                const next = { ...current };
+                if (current[legKey] === stay.quote.id) {
+                  delete next[legKey];
+                } else {
+                  next[legKey] = stay.quote.id;
+                }
+                return next;
+              })
             }
             className={`w-60 shrink-0 snap-start overflow-hidden rounded-3xl border text-left transition-all duration-300 ${
               selected
@@ -933,19 +979,25 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
   const live = brief?.livePricing;
   const bestLiveFare = live?.bestOffer?.amount ?? null;
 
-  const selectedStay = staysData?.stays.find((stay) => stay.quote.id === selectedStayId) ?? null;
+  const selectedStayPayloads = useMemo(
+    () => (staysData ? collectSelectedStayPayloads(staysData, selectedStayByLeg) : []),
+    [staysData, selectedStayByLeg],
+  );
   const expandedStrategy = brief?.strategies.find((strategy) => strategy.id === expandedId) ?? null;
   const alignmentPreviewStrategy =
     expandedStrategy ?? (visibleStrategies.length > 0 ? visibleStrategies[0] : null);
-  const selectedStayPayload =
-    selectedStay && staysData ? stayPayloadFromSelection(selectedStay, staysData.intent) : null;
   const alignmentPreviewLegs = useMemo(() => {
     if (!brief || !alignmentPreviewStrategy) return [];
-    return buildAlignmentBoard(brief, alignmentPreviewStrategy, selectedStayPayload);
-  }, [brief, alignmentPreviewStrategy, selectedStayPayload]);
+    return buildAlignmentBoard(
+      brief,
+      alignmentPreviewStrategy,
+      selectedStayPayloads.length > 0 ? selectedStayPayloads : null,
+    );
+  }, [brief, alignmentPreviewStrategy, selectedStayPayloads]);
+  const hotelTotalUsd = selectedStayPayloads.reduce((sum, stay) => sum + stay.totalAmountUsd, 0);
   const tripTotal =
-    selectedStay && expandedStrategy
-      ? Math.round(expandedStrategy.scores.trueOutOfPocket + selectedStay.quote.totalAmountUsd)
+    hotelTotalUsd > 0 && expandedStrategy
+      ? Math.round(expandedStrategy.scores.trueOutOfPocket + hotelTotalUsd)
       : null;
 
   return (
@@ -1391,7 +1443,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
                       {leg.stopName} · {leg.nights} nights · {leg.checkInDate.slice(5)} → {leg.checkOutDate.slice(5)}
                     </p>
                     {leg.stays.length > 0 ? (
-                      renderStayCarousel(leg.stays, leg.stopName)
+                      renderStayCarousel(leg.stays, stayLegKey(leg))
                     ) : (
                       <p className="text-xs text-slate-400">No hotels found for {leg.stopName}.</p>
                     )}
@@ -1401,19 +1453,24 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
             )}
 
             {!staysLoading && staysData && !staysData.stopLegs?.length && staysData.stays.length > 0 && (
-              <div className="mt-3">{renderStayCarousel(staysData.stays, "single")}</div>
+              <div className="mt-3">
+                {renderStayCarousel(staysData.stays, "default")}
+              </div>
             )}
           </section>
         )}
 
         {/* Fused trip total — flight strategy + stay, one honest number */}
-        {tripTotal !== null && selectedStay && expandedStrategy && (
+        {tripTotal !== null && selectedStayPayloads.length > 0 && expandedStrategy && (
           <div className="sticky bottom-4 z-20 mt-6">
             <div className="flex items-center justify-between gap-3 rounded-3xl border border-amber-400/60 bg-[#0b1f3a] px-5 py-3.5 shadow-xl">
               <div className="min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-widest text-amber-200">Trip total</p>
                 <p className="truncate text-[11px] font-semibold text-slate-300">
-                  {expandedStrategy.title} + {staysData?.intent.nights} nights {selectedStay.quote.name}
+                  {expandedStrategy.title}
+                  {selectedStayPayloads.length === 1
+                    ? ` + ${staysData?.intent.nights} nights ${selectedStayPayloads[0]?.name ?? ""}`
+                    : ` + ${selectedStayPayloads.length} hotel stays · ${staysData?.intent.nights} nights total`}
                 </p>
               </div>
               <p className="shrink-0 text-2xl font-black tabular-nums text-white">
