@@ -130,6 +130,7 @@ import {
   hotelNeedsTripDateConfirmation,
 } from "@/lib/travelAssistant/tripTimelinePlanning";
 import { NewTripDatesCard } from "@/components/travelAssistant/NewTripDatesCard";
+import { PlannerTab } from "@/components/travelAssistant/PlannerTab";
 
 const OpsPanel = lazy(async () => {
   const loadedModule = await import("@/components/travelAssistant/OpsPanel");
@@ -7330,235 +7331,33 @@ export default function TravelAssistantPage() {
               </div>
             </section>
           ) : consumerTab === "plan" ? (
-            <section className="space-y-4">
-              <article className="overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-blue-950 to-sky-900 p-5 text-white shadow-xl">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-sky-200/80">Plan</p>
-                <h1 className="mt-1 text-2xl font-black leading-tight">Build your next trip</h1>
-                <p className="mt-2 text-sm leading-relaxed text-sky-100/80">
-                  Add flights, hotels, rides, and key plans — or open Trip Planner for AI-ranked routes and stays.
-                </p>
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => openTripPlanner()}
-                    className="rounded-2xl bg-[#f4c95d] px-4 py-3 text-sm font-black text-[#0b1f3a] transition hover:bg-[#ffe29a] sm:col-span-2"
-                  >
-                    Plan with Trip Planner →
-                  </button>
-                  <button
-                    type="button"
-                    onClick={openManualReservationFlow}
-                    className="rounded-2xl bg-white px-4 py-3 text-sm font-bold text-slate-950 transition hover:bg-sky-50"
-                  >
-                    + Add booking
-                  </button>
-                  <button
-                    type="button"
-                    disabled={creatingTrip}
-                    onClick={() => {
-                      void handlePlanTabNewTrip();
-                    }}
-                    className="rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-bold text-white transition hover:bg-white/15 disabled:opacity-60"
-                  >
-                    {creatingTrip
-                      ? "Creating…"
-                      : canCreateAdditionalTrips
-                        ? "New trip shell"
-                        : "Plan new trip"}
-                  </button>
-                </div>
-              </article>
-
-              {isLegacyStarterTrip ? (
-                <article className="rounded-3xl border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-500/40 dark:bg-amber-950/30">
-                  <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">
-                    This is a sample trip from an older version of Kepi.
-                  </p>
-                  <p className="mt-1 text-xs text-amber-800/90 dark:text-amber-100/80">
-                    Open Trip Planner to describe your real trip — Kepi will build a plan with book links and PLANNED legs you can confirm later.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => openTripPlanner()}
-                    className="mt-3 rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-amber-500"
-                  >
-                    Plan my trip →
-                  </button>
-                </article>
-              ) : null}
-
-              <section className="grid gap-3 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={openManualReservationFlow}
-                  className="rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800"
-                >
-                  <span className="text-xl">📌</span>
-                  <p className="mt-2 font-semibold text-slate-900 dark:text-white">Manual add</p>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Flight, hotel, train, ride, dinner.</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    openTripPlanner({
-                      mode: "hotels",
-                      toast: "Hotel search is in Trip Planner — describe your cities and dates.",
-                    })
-                  }
-                  className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left shadow-sm transition hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-950/30 dark:hover:bg-amber-900/40"
-                >
-                  <span className="text-xl">🏨</span>
-                  <p className="mt-2 font-semibold text-amber-950 dark:text-amber-100">Find hotels (AI)</p>
-                  <p className="mt-1 text-xs text-amber-800/80 dark:text-amber-100/70">Ranked stays in Trip Planner.</p>
-                </button>
-                <button
-                  type="button"
-                  disabled={gmailImportBusy}
-                  onClick={() => {
-                    if (!canUseGmailImport) {
-                      openUpgradeModal("gmail-import", "Upgrade to Pro to import reservations from your connected email account.");
-                      return;
-                    }
-                    setGmailScopeModalOpen(true);
-                  }}
-                  className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-left shadow-sm transition hover:bg-sky-100 disabled:opacity-60 dark:border-sky-500/40 dark:bg-sky-950/40 dark:hover:bg-sky-900/50"
-                >
-                  <span className="text-xl">✉️</span>
-                  <p className="mt-2 font-semibold text-sky-950 dark:text-sky-100">
-                    {gmailImportBusy ? "Scanning Gmail" : "Import Gmail"}
-                  </p>
-                  <p className="mt-1 text-xs text-sky-800/80 dark:text-sky-100/70">Pull bookings into the plan.</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void handleCopyForwardAddress();
-                  }}
-                  className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-left shadow-sm transition hover:bg-emerald-100 dark:border-emerald-500/40 dark:bg-emerald-950/30 dark:hover:bg-emerald-900/40"
-                >
-                  <span className="text-xl">↗</span>
-                  <p className="mt-2 font-semibold text-emerald-950 dark:text-emerald-100">Forward email</p>
-                  <p className="mt-1 break-all text-xs text-emerald-800/80 dark:text-emerald-100/70">{emptyStateForwardAddress}</p>
-                </button>
-              </section>
-
-              <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Current plan</p>
-                    <h2 className="mt-1 text-xl font-bold text-slate-950 dark:text-white">{activeTrip?.name ?? "No trip selected"}</h2>
-                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                      {consumerTripDestination ?? "Destination pending"} · {consumerTripStartDate ?? "Start pending"}
-                      {consumerTripEndDate ? ` → ${consumerTripEndDate}` : ""}
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-bold text-sky-800 dark:bg-sky-500/20 dark:text-sky-100">
-                    {plannerReadyStepCount}/4 ready
-                  </span>
-                </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-2xl bg-slate-50 p-3 dark:bg-slate-950/60">
-                    <p className="text-2xl font-black text-slate-950 dark:text-white">{plannerFlightCount}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Flights</p>
-                  </div>
-                  <div className="rounded-2xl bg-slate-50 p-3 dark:bg-slate-950/60">
-                    <p className="text-2xl font-black text-slate-950 dark:text-white">{plannerHotelCount}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Hotels</p>
-                  </div>
-                  <div className="rounded-2xl bg-slate-50 p-3 dark:bg-slate-950/60">
-                    <p className="text-2xl font-black text-slate-950 dark:text-white">{Math.max(0, plannerOtherBookingCount)}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Other plans</p>
-                  </div>
-                </div>
-              </article>
-
-              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <h2 className="font-bold text-slate-950 dark:text-white">Planning steps</h2>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Do these first. Timeline cleans up after.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => navigateToConsumerTab("trip")}
-                    className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                  >
-                    View trip
-                  </button>
-                </div>
-                <div className="mt-4 space-y-2">
-                  {[
-                    {
-                      done: Boolean(activeTrip),
-                      title: "Create trip shell",
-                      detail: activeTrip?.name ?? "Start a trip before adding bookings.",
-                      action: activeTrip
-                        ? canCreateAdditionalTrips
-                          ? "New shell"
-                          : "Plan trip"
-                        : "New trip",
-                      onClick: () => {
-                        if (activeTrip && !canCreateAdditionalTrips) {
-                          openTripPlanner();
-                          return;
-                        }
-                        void handlePlanTabNewTrip();
-                      },
-                    },
-                    {
-                      done: Boolean(consumerTripStartDate && consumerTripEndDate),
-                      title: "Set dates",
-                      detail: consumerTripStartDate && consumerTripEndDate ? `${consumerTripStartDate} to ${consumerTripEndDate}` : "Dates fill from first flight or hotel.",
-                      action: "Review",
-                      onClick: () => navigateToConsumerTab("trip"),
-                    },
-                    {
-                      done: plannerFlightCount > 0,
-                      title: "Add flights",
-                      detail: plannerFlightCount > 0 ? `${plannerFlightCount} flight${plannerFlightCount === 1 ? "" : "s"} added.` : "Add or import flight confirmations.",
-                      action: plannerFlightCount > 0 ? "Flights" : "Add",
-                      onClick: () => (plannerFlightCount > 0 ? navigateToConsumerTab("flights") : openManualReservationFlow()),
-                    },
-                    {
-                      done: plannerHotelCount > 0,
-                      title: "Add stays",
-                      detail: plannerHotelCount > 0 ? `${plannerHotelCount} hotel${plannerHotelCount === 1 ? "" : "s"} added.` : "Search ranked hotels in Trip Planner or add a confirmation manually.",
-                      action: plannerHotelCount > 0 ? "Hotels" : "Find hotels",
-                      onClick: () =>
-                        plannerHotelCount > 0
-                          ? navigateToConsumerTab("hotels")
-                          : openTripPlanner({ mode: "hotels" }),
-                    },
-                  ].map((step) => (
-                    <div
-                      key={step.title}
-                      className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-800 dark:bg-slate-950/50"
-                    >
-                      <span
-                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-black ${
-                          step.done
-                            ? "bg-emerald-500 text-white"
-                            : "bg-white text-slate-400 ring-1 ring-slate-300 dark:bg-slate-900 dark:ring-slate-700"
-                        }`}
-                      >
-                        {step.done ? "✓" : "•"}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-semibold text-slate-900 dark:text-white">{step.title}</span>
-                        <span className="block text-xs text-slate-500 dark:text-slate-400">{step.detail}</span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={step.onClick}
-                        className="shrink-0 rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-slate-200"
-                      >
-                        {step.action}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            </section>
+            <PlannerTab
+              tripName={activeTrip?.name ?? null}
+              destination={consumerTripDestination}
+              startDate={consumerTripStartDate}
+              endDate={consumerTripEndDate}
+              flightCount={plannerFlightCount}
+              hotelCount={plannerHotelCount}
+              otherBookingCount={plannerOtherBookingCount}
+              readyStepCount={plannerReadyStepCount}
+              forwardAddress={emptyStateForwardAddress}
+              canUseGmailImport={canUseGmailImport}
+              gmailImportBusy={gmailImportBusy}
+              onAddBooking={() => setManualReservationModalOpen(true)}
+              onCreateTrip={() => {
+                void handleCreateTrip();
+              }}
+              onImportGmail={() => setGmailScopeModalOpen(true)}
+              onRequestGmailUpgrade={() =>
+                openUpgradeModal("gmail-import", "Upgrade to Pro to import reservations from your connected email account.")
+              }
+              onCopyForwardAddress={() => {
+                void handleCopyForwardAddress();
+              }}
+              onViewTrip={() => navigateToConsumerTab("trip")}
+              onViewFlights={() => navigateToConsumerTab("flights")}
+              onViewHotels={() => navigateToConsumerTab("hotels")}
+            />
           ) : consumerTab === "trip" ? (
             <section className="space-y-4">
               {/* ── TRIP TAB: phase-driven, single source of truth ── */}
@@ -8421,6 +8220,63 @@ export default function TravelAssistantPage() {
           onQuickAdd={handleQuickAdd}
           undoStackLength={undoStack.length}
         />
+        <nav className="hidden rounded-2xl border border-slate-700 bg-slate-900/70 p-1 shadow-sm md:flex md:w-fit" aria-label="Desktop planning tabs">
+          {([
+            ["plan", "🧭 Plan"],
+            ["trip", "Overview"],
+          ] as const).map(([tab, label]) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => navigateToConsumerTab(tab)}
+              className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                consumerTab === tab
+                  ? "bg-cyan-500 text-slate-950"
+                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+        {consumerTab === "plan" ? (
+          <PlannerTab
+            tripName={activeTrip?.name ?? null}
+            destination={consumerTripDestination}
+            startDate={consumerTripStartDate}
+            endDate={consumerTripEndDate}
+            flightCount={plannerFlightCount}
+            hotelCount={plannerHotelCount}
+            otherBookingCount={plannerOtherBookingCount}
+            readyStepCount={plannerReadyStepCount}
+            forwardAddress={emptyStateForwardAddress}
+            canUseGmailImport={canUseGmailImport}
+            gmailImportBusy={gmailImportBusy}
+            onAddBooking={() => setManualReservationModalOpen(true)}
+            onCreateTrip={() => {
+              void handleCreateTrip();
+            }}
+            onImportGmail={() => setGmailScopeModalOpen(true)}
+            onRequestGmailUpgrade={() =>
+              openUpgradeModal("gmail-import", "Upgrade to Pro to import reservations from your connected email account.")
+            }
+            onCopyForwardAddress={() => {
+              void handleCopyForwardAddress();
+            }}
+            onViewTrip={() => setConsumerTab("trip")}
+            onViewFlights={() => {
+              setTimelineSectionTab("reservations");
+              setConsumerTab("trip");
+              setToast("Flights are in the reservations timeline below.");
+            }}
+            onViewHotels={() => {
+              setTimelineSectionTab("reservations");
+              setConsumerTab("trip");
+              setToast("Hotels are in the reservations timeline below.");
+            }}
+          />
+        ) : (
+          <>
         <TripOrientationCard
           travelerName={viewerDisplayName}
           destination={activeTrip?.destination ?? "your trip"}
@@ -9109,6 +8965,9 @@ export default function TravelAssistantPage() {
             activeScenarioPlaybook={activeScenarioPlaybook}
           />
         </Suspense>
+
+          </>
+        )}
       </div>
 
       {activeDrawerPanel}
@@ -9155,6 +9014,14 @@ export default function TravelAssistantPage() {
           });
         }}
       />
+      {manualReservationModalOpen ? (
+        <ManualReservationEntryModal
+          familyMembers={familyMembers.map((member) => ({ id: member.id, name: member.name }))}
+          defaultAssignedTo={[selectedFamilyMember.id]}
+          onClose={() => setManualReservationModalOpen(false)}
+          onSave={handleSaveManualReservation}
+        />
+      ) : null}
       <InstallPrompt />
       <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
     </main>

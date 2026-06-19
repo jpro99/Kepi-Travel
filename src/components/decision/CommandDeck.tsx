@@ -69,11 +69,10 @@ interface StaysResponse {
   }>;
 }
 
-const INPUT_PLACEHOLDER_FLIGHTS =
-  "Where do you plan to travel? e.g. West Coast to Bari, Venice, Dolomites, Germany — fly home from Munich. Alaska Gold.";
+const INPUT_PLACEHOLDER = "Describe your trip — or tap Record my trip";
 const STRATEGY_TIMEOUT_MS = 45_000;
-const STAYS_TIMEOUT_MS = 24_000;
-const FLEX_TIMEOUT_MS = 32_000;
+const STAYS_TIMEOUT_MS = 25_000;
+const FLEX_TIMEOUT_MS = 35_000;
 const ANALYZE_FAST_RETRY_MAX = 1;
 
 const SEGMENT_ICON: Record<string, string> = {
@@ -582,19 +581,10 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
-            cache: "no-store",
-            credentials: "same-origin",
           },
           STRATEGY_TIMEOUT_MS,
-          "Analyze timed out after 45 seconds — try again.",
+          "Live fare math is taking too long. Try again, or simplify the trip to fewer cities/dates.",
         );
-        const elapsedMs = Date.now() - analyzeFetchStartedAt;
-        console.log("[analyze] fetch:response", {
-          ms: elapsedMs,
-          ok: res.ok,
-          status: res.status,
-          fastPath: useFastPath,
-        });
         if (!res.ok) {
           const canFastRetry =
             !mutation &&
@@ -626,6 +616,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         const data = await res.json();
         if (analysisRunRef.current !== runId) return;
         analyzeFastRetryRef.current = 0;
+        const elapsedMs = Date.now() - analyzeFetchStartedAt;
         console.log("[analyze] complete", {
           ms: elapsedMs,
           fastPath: useFastPath,
@@ -725,7 +716,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     : [];
 
   const inputPlaceholder =
-    planMode === "flights" ? INPUT_PLACEHOLDER_FLIGHTS : expertPlaceholder(planMode);
+    planMode === "flights" ? INPUT_PLACEHOLDER : expertPlaceholder(planMode);
 
   const handlePaymentModeChange = (mode: PaymentMode): void => {
     setPaymentMode(mode);
