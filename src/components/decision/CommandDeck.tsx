@@ -38,6 +38,7 @@ import { ExpertDeckPanel } from "@/components/decision/ExpertDeckPanel";
 import { TripAlignmentBoard } from "@/components/decision/TripAlignmentBoard";
 import { TopologyWaveHero } from "@/components/decision/TopologyWaveHero";
 import { FusedFlightHero } from "@/components/decision/FusedFlightHero";
+import { AnalyzeProgressPanel } from "@/components/decision/AnalyzeProgressPanel";
 import { BookingWalkthroughModal } from "@/components/decision/BookingWalkthroughModal";
 import { buildAlignmentBoard } from "@/lib/decision/tripAlignment";
 import type { AlignmentLeg } from "@/lib/decision/tripAlignment";
@@ -431,6 +432,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
   const [enabledLegIds, setEnabledLegIds] = useState<string[]>([]);
   const [legToggleBusy, setLegToggleBusy] = useState(false);
   const [walkthroughOpen, setWalkthroughOpen] = useState(false);
+  const [analyzeStep, setAnalyzeStep] = useState(0);
   const [walkthroughData, setWalkthroughData] = useState<{
     tripName: string;
     strategyTitle: string;
@@ -470,6 +472,19 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
       })
       .catch(() => null);
   }, [walkthroughOpen]);
+
+  useEffect(() => {
+    if (!loading) {
+      setAnalyzeStep(0);
+      return;
+    }
+    setAnalyzeStep(0);
+    const steps = planMode === "hotels" ? 2 : 4;
+    const timer = window.setInterval(() => {
+      setAnalyzeStep((current) => Math.min(current + 1, steps - 1));
+    }, 4500);
+    return () => window.clearInterval(timer);
+  }, [loading, planMode]);
 
   const fetchStrategies = useCallback(
     async (
@@ -1083,7 +1098,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
             disabled={loading}
             className="rounded-2xl bg-[#f4c95d] px-6 py-3 text-sm font-black text-[#0b1f3a] transition-all hover:bg-[#ffe29a] disabled:opacity-60"
           >
-            {loading ? "Thinking…" : "⚡ Analyze"}
+            {loading ? "Analyzing…" : "⚡ Analyze"}
           </button>
         </form>
 
@@ -1356,12 +1371,16 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
           </p>
         )}
         <div className="mt-4 space-y-3">
-          {loading && (
-            <div className="rounded-3xl border border-slate-600 bg-[#152238] p-8 text-center">
-              <p className="text-sm font-bold text-slate-300" style={{ animation: "deckPulse 1.4s ease-in-out infinite" }}>
-                {planMode === "hotels"
-                  ? "Finding ranked hotels for your cities…"
-                  : "Running the math on every way to get you there…"}
+          {loading && !legToggleBusy && (
+            <AnalyzeProgressPanel planMode={planMode} stepIndex={analyzeStep} />
+          )}
+          {legToggleBusy && (
+            <div className="rounded-3xl border border-slate-600 bg-[#152238] p-6 text-center">
+              <p
+                className="text-sm font-bold text-slate-300"
+                style={{ animation: "deckPulse 1.4s ease-in-out infinite" }}
+              >
+                Updating connector fares…
               </p>
             </div>
           )}
