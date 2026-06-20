@@ -34,7 +34,12 @@ function extractAirline(offer: Record<string, unknown>): string | undefined {
   const segs = (slices[0] as Record<string, unknown>).segments;
   if (!Array.isArray(segs) || !segs[0]) return undefined;
   const seg = segs[0] as Record<string, unknown>;
-  return (seg.operating_carrier_code ?? seg.marketing_carrier_code) as string | undefined;
+  // Live API: operating_carrier.iata_code (nested object)
+  // Test API: operating_carrier_code (flat string)
+  const nested = (seg.operating_carrier as Record<string, unknown> | undefined)?.iata_code
+    ?? (seg.marketing_carrier as Record<string, unknown> | undefined)?.iata_code;
+  const flat = seg.operating_carrier_code ?? seg.marketing_carrier_code;
+  return (nested ?? flat) as string | undefined;
 }
 
 function extractFlightNumber(offer: Record<string, unknown>): string | undefined {
@@ -43,8 +48,16 @@ function extractFlightNumber(offer: Record<string, unknown>): string | undefined
   const segs = (slices[0] as Record<string, unknown>).segments;
   if (!Array.isArray(segs) || !segs[0]) return undefined;
   const seg = segs[0] as Record<string, unknown>;
-  const iata = (seg.operating_carrier_code ?? seg.marketing_carrier_code ?? "") as string;
-  const num = (seg.operating_carrier_flight_number ?? seg.marketing_carrier_flight_number ?? "") as string;
+  // Live API: nested carrier objects; Test API: flat fields
+  const carrier = (seg.operating_carrier as Record<string, unknown> | undefined);
+  const iata = (carrier?.iata_code
+    ?? seg.operating_carrier_code
+    ?? seg.marketing_carrier_code
+    ?? "") as string;
+  const num = (seg.operating_carrier_flight_number
+    ?? seg.marketing_carrier_flight_number
+    ?? carrier?.flight_number
+    ?? "") as string;
   if (!iata || !num) return undefined;
   return `${iata}${num}`.replace(/\s+/g, "").toUpperCase();
 }
