@@ -7024,39 +7024,41 @@ export default function TravelAssistantPage() {
                 </div>
 
               ) : journeyPhase.kind === "no-trip" ? (
-                /* ── WELCOME — new user, no trips yet ── */
+                /* ── WELCOME — no trips yet ── */
                 <div className="rounded-3xl overflow-hidden bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 shadow-xl">
                   <div className="px-5 pt-6 pb-4">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-sky-300/70">Welcome to Kepi</p>
-                    <p className="text-2xl font-black text-white mt-1">Your travel assistant ✈️</p>
-                    <p className="text-sky-100/70 text-sm mt-3 leading-relaxed">
-                      Kepi keeps track of everything so you can relax. Forward a confirmation email or add a flight to get started.
+                    <p className="text-2xl font-black text-white mt-1">Where to next? ✈️</p>
+                    <p className="text-sky-100/70 text-sm mt-2 leading-relaxed">
+                      Tell Kepi your trip and it finds the best flights, tracks your gate, and keeps your family on the map.
                     </p>
                   </div>
-                  <div className="mx-4 mb-4 space-y-2">
-                    {[
-                      { icon: "🛫", tab: "Flights" as ConsumerTab, label: "Flights", desc: "Gate · terminal · live status · baggage claim" },
-                      { icon: "🏨", tab: "Hotels" as ConsumerTab, label: "Hotels", desc: "Check-in · check-out · confirmation" },
-                      { icon: "🗺", tab: "map" as ConsumerTab, label: "Map", desc: "Family location sharing in real time" },
-                    ].map(({ icon, tab, label, desc }) => (
-                      <button key={label} type="button"
-                        onClick={() => tab === "map" ? router.push("/travel-assistant/live-map") : navigateToConsumerTab(tab)}
-                        className="w-full rounded-2xl bg-white/10 border border-white/10 px-4 py-3 text-left flex items-center gap-3 hover:bg-white/15 transition">
-                        <span className="text-xl">{icon}</span>
-                        <div>
-                          <p className="text-white font-semibold text-sm">{label}</p>
-                          <p className="text-white/50 text-xs">{desc}</p>
-                        </div>
-                        <span className="ml-auto text-white/30">›</span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="mx-4 mb-4 rounded-2xl bg-white/8 border border-white/10 px-4 py-3">
-                    <p className="text-white/60 text-xs leading-relaxed">
-                      💡 <span className="text-white/80 font-medium">Tip:</span> Forward any flight or hotel confirmation email to your Kepi address and it will appear here automatically.
-                    </p>
+                  <div className="mx-4 mb-4 space-y-3">
+                    {/* Primary CTA */}
+                    <button
+                      type="button"
+                      onClick={() => router.push("/book")}
+                      className="w-full rounded-2xl bg-[#f4c95d] py-4 text-center font-black text-[#0b1f3a] text-base active:opacity-80"
+                    >
+                      ⚡ Plan my next trip
+                    </button>
+                    <p className="text-center text-xs text-sky-200/40">or</p>
+                    <button
+                      type="button"
+                      onClick={() => navigateToConsumerTab("flights" as ConsumerTab)}
+                      className="w-full rounded-2xl border border-white/10 bg-white/8 py-3 text-center text-sm font-semibold text-white active:opacity-80"
+                    >
+                      + Add a flight manually
+                    </button>
+                    <div className="rounded-2xl bg-white/8 border border-white/10 px-4 py-3">
+                      <p className="text-white/60 text-xs leading-relaxed">
+                        💡 <span className="text-white/80 font-medium">Easiest way:</span> forward any booking confirmation email to{" "}
+                        <span className="text-sky-300 font-mono">jpro99-2@trips.kepitravel.com</span> and it appears here automatically.
+                      </p>
+                    </div>
                   </div>
                 </div>
+
 
               ) : null}
               <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -7068,9 +7070,24 @@ export default function TravelAssistantPage() {
                        journeyPhase.kind === "at-destination" ? "At destination" :
                        "Trip"}
                     </p>
-                    <h1 className="mt-1 text-2xl font-bold text-slate-950 dark:text-slate-100">
-                      {activeTrip?.name ?? "Your next trip"}
-                    </h1>
+                    <div className="flex items-center justify-between gap-2 mt-1">
+                      <h1 className="text-2xl font-bold text-slate-950 dark:text-slate-100">
+                        {activeTrip?.name ?? "Your next trip"}
+                      </h1>
+                      {activeTrip && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!window.confirm(`Delete "${activeTrip.name}"? This removes all flights and hotels in this trip.`)) return;
+                            await fetch(`/api/trips?tripId=${encodeURIComponent(activeTrip.id)}`, { method: "DELETE" });
+                            await refreshTripsFromServer();
+                          }}
+                          className="shrink-0 rounded-xl bg-red-50 dark:bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-500 dark:text-red-400 active:opacity-70"
+                        >
+                          Delete trip
+                        </button>
+                      )}
+                    </div>
                     <p className="mt-1 text-base text-slate-600 dark:text-slate-300">
                       {journeyPhase.kind === "airborne"
                         ? `Flying to ${journeyPhase.landingAt} · ${journeyPhase.landingIn} to land`
