@@ -19,7 +19,7 @@ import type {
   TripTopologyCandidate,
 } from "@/lib/decision/topology/types";
 
-const MAX_DUFFEL_CALLS = 12; // 12 calls max — with 7s each = 84s theoretical but runs in parallel waves
+const MAX_DUFFEL_CALLS = 4; // one batch only — guarantees ≤3s wave time regardless of route
 const MAX_WINNERS = 5;
 const DATE_FLEX_TOP_N = 2; // fewer date flex variants = faster
 const PRUNE_MARGIN = 1.03;

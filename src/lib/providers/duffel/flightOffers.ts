@@ -109,7 +109,7 @@ async function fetchOfferForRoute(
   let inlineOffers: unknown[] | null = null;
   try {
     const ctrl1 = new AbortController();
-    const t1 = setTimeout(() => ctrl1.abort(), 5_000);
+    const t1 = setTimeout(() => ctrl1.abort(), 3_000); // 3s hard cap
     const r1 = await fetch(OFFER_REQUEST_URL, {
       method: "POST",
       headers,
