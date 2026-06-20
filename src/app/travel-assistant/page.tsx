@@ -260,9 +260,10 @@ interface DrawerState {
 }
 
 interface PendingDeleteConfirmation {
-  kind: "reservation" | "review";
+  kind: "reservation" | "review" | "trip";
   id: string;
-  source: "reservation-card" | "review-card" | "review-drawer";
+  name?: string;
+  source: "reservation-card" | "review-card" | "review-drawer" | "trip-header";
 }
 
 interface ExportRow {
@@ -5836,7 +5837,16 @@ export default function TravelAssistantPage() {
     if (!pendingDeleteConfirmation) {
       return;
     }
-    if (pendingDeleteConfirmation.kind === "reservation") {
+    if (pendingDeleteConfirmation.kind === "trip") {
+      const tripId = pendingDeleteConfirmation.id;
+      void fetch("/api/trips", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: tripId }),
+      }).then(() => refreshTripsFromServer()).catch(() => {
+        setToast("Could not delete trip — try again.");
+      });
+    } else if (pendingDeleteConfirmation.kind === "reservation") {
       handleDeleteReservation(pendingDeleteConfirmation.id);
     } else {
       handleRejectReview(pendingDeleteConfirmation.id, {
@@ -5844,7 +5854,7 @@ export default function TravelAssistantPage() {
       });
     }
     setPendingDeleteConfirmation(null);
-  }, [handleDeleteReservation, handleRejectReview, pendingDeleteConfirmation]);
+  }, [handleDeleteReservation, handleRejectReview, pendingDeleteConfirmation, refreshTripsFromServer, setToast]);
 
   const handleCloseDeleteConfirmation = useCallback((): void => {
     if (!pendingDeleteConfirmation) {
@@ -6760,9 +6770,11 @@ export default function TravelAssistantPage() {
   const deleteConfirmationDialog = pendingDeleteConfirmation ? (
     <div className="fixed inset-0 z-[170] flex items-center justify-center bg-slate-950/70 px-4">
       <div className="w-full max-w-sm rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 text-[var(--text-primary)] shadow-2xl">
-        <h2 className="text-base font-semibold">Delete this reservation? This cannot be undone.</h2>
+        <h2 className="text-base font-semibold">Delete this {pendingDeleteConfirmation.kind === "trip" ? "trip" : "reservation"}? This cannot be undone.</h2>
         <p className="mt-2 text-sm text-slate-300">
-          {pendingDeleteConfirmation.kind === "review"
+          {pendingDeleteConfirmation.kind === "trip"
+            ? `"${pendingDeleteConfirmation.name ?? "This trip"}" and all its flights and hotels will be permanently removed.`
+            : pendingDeleteConfirmation.kind === "review"
             ? "This will permanently remove the pending review item."
             : "This will permanently remove the saved reservation."}
         </p>
@@ -7077,11 +7089,7 @@ export default function TravelAssistantPage() {
                       {activeTrip && (
                         <button
                           type="button"
-                          onClick={async () => {
-                            if (!window.confirm(`Delete "${activeTrip.name}"? This removes all flights and hotels in this trip.`)) return;
-                            await fetch(`/api/trips?tripId=${encodeURIComponent(activeTrip.id)}`, { method: "DELETE" });
-                            await refreshTripsFromServer();
-                          }}
+                          onClick={() => setPendingDeleteConfirmation({ kind: "trip", id: activeTrip.id, name: activeTrip.name, source: "trip-header" })}
                           className="shrink-0 rounded-xl bg-red-50 dark:bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-500 dark:text-red-400 active:opacity-70"
                         >
                           Delete trip
