@@ -71,7 +71,7 @@ interface StaysResponse {
 
 const INPUT_PLACEHOLDER_FLIGHTS =
   "Where do you plan to travel? e.g. West Coast to Bari, Venice, Dolomites, Germany — fly home from Munich. Alaska Gold.";
-const STRATEGY_TIMEOUT_MS = 20_000; // cold start 5s + server 9s = 14s max; 20s is safe
+const STRATEGY_TIMEOUT_MS = 30_000; // cold start 10s + server 7s = 17s max; 30s is safe
 const STAYS_TIMEOUT_MS = 24_000;
 const FLEX_TIMEOUT_MS = 32_000;
 const ANALYZE_FAST_RETRY_MAX = 1;
@@ -603,25 +603,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
           fastPath: useFastPath,
         });
         if (!res.ok) {
-          const canFastRetry =
-            !mutation &&
-            !isLegToggle &&
-            !useFastPath &&
-            analyzeFastRetryRef.current < ANALYZE_FAST_RETRY_MAX &&
-            (res.status === 504 || res.status === 408);
-          if (canFastRetry) {
-            analyzeFastRetryRef.current += 1;
-            console.log("[analyze] fast-path retry", {
-              attempt: analyzeFastRetryRef.current,
-              max: ANALYZE_FAST_RETRY_MAX,
-              reason: `HTTP ${res.status}`,
-            });
-            await fetchStrategies(nextPrompt, weight, mutation, legIdsOverride, planModeOverride, {
-              fastPath: true,
-              isFastRetry: true,
-            });
-            return;
-          }
+          // No retry — just surface the error clearly
           throw new Error(
             res.status === 401 || res.status === 404
               ? "Sign in to use the Command Deck."
@@ -664,25 +646,6 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         if (top && !isLegToggle) setExpandedId(top.id);
       } catch (e) {
         const isTimeout = e instanceof RequestTimeoutError;
-        const canFastRetry =
-          !mutation &&
-          !isLegToggle &&
-          !fetchOptions?.fastPath &&
-          analyzeFastRetryRef.current < ANALYZE_FAST_RETRY_MAX &&
-          isTimeout;
-        if (canFastRetry) {
-          analyzeFastRetryRef.current += 1;
-          console.log("[analyze] fast-path retry", {
-            attempt: analyzeFastRetryRef.current,
-            max: ANALYZE_FAST_RETRY_MAX,
-            reason: "client abort timeout",
-          });
-          await fetchStrategies(nextPrompt, weight, mutation, legIdsOverride, planModeOverride, {
-            fastPath: true,
-            isFastRetry: true,
-          });
-          return;
-        }
         console.log("[analyze] fetch:failed", {
           message: e instanceof Error ? e.message : "unknown",
           name: e instanceof Error ? e.name : "unknown",
@@ -709,7 +672,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     const timer = window.setTimeout(() => {
       setLoading(false);
       if (!brief) setError("Search timed out — tap Analyze to try again.");
-    }, 25_000);
+    }, 33_000);
     return () => window.clearTimeout(timer);
   }, [loading, brief]);
 
