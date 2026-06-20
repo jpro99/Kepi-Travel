@@ -155,41 +155,9 @@ export async function POST(req: Request) {
       });
     }
 
-    let workingBrief = brief;
-
-    // Phase 1: wave search + fused search — hard deadline
-    if (!fastPath && !brief.originRequired && hasOrigin) {
-      const phase1Budget = 4_000;
-      console.log("[analyze] phase1:start", { ms: elapsed(), phase1Budget, airports: brief.searchAirports, destination: arrivalIata });
-
-      const [topologySearch, fusedFlightSearch] = await Promise.all([
-        withDeadline(
-          runKepiWaveSearch(brief.intent, genome, brief.searchAirports).catch(() => EMPTY_WAVE),
-          phase1Budget,
-          EMPTY_WAVE,
-        ),
-        withDeadline(
-          runFusedSearchForTrip(brief.intent, brief.searchAirports, genome, userId).catch(() => null),
-          phase1Budget,
-          null,
-        ),
-      ]);
-
-      console.log("[analyze] phase1:done", {
-        ms: elapsed(),
-        duffelCalls: topologySearch.duffelCallsUsed,
-        fusedCash: fusedFlightSearch?.meta.cashCount ?? 0,
-      });
-
-      workingBrief = {
-        ...brief,
-        topologySearch,
-        fusedFlightSearch: fusedFlightSearch ?? undefined,
-        strategies: mergeTopologyIntoStrategies(brief.strategies, topologySearch),
-        strategyCatalog: mergeTopologyIntoStrategies(brief.strategyCatalog ?? brief.strategies, topologySearch),
-      };
-      attachTopologyMetadata(workingBrief, topologySearch);
-    }
+    // Phase 1 (wave search) removed — was adding 4-8s per request
+    // Duffel phase2 quotes are the primary price source
+    const workingBrief = brief;
 
     // Phase 2: Duffel cash quotes — hard deadline
     const homeIata = workingBrief.searchAirports[0];
