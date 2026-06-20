@@ -71,7 +71,7 @@ interface StaysResponse {
 
 const INPUT_PLACEHOLDER_FLIGHTS =
   "Where do you plan to travel? e.g. West Coast to Bari, Venice, Dolomites, Germany — fly home from Munich. Alaska Gold.";
-const STRATEGY_TIMEOUT_MS = 40_000; // route guaranteed to respond within 38s
+const STRATEGY_TIMEOUT_MS = 12_000; // server responds in ≤8.5s; 12s gives buffer
 const STAYS_TIMEOUT_MS = 24_000;
 const FLEX_TIMEOUT_MS = 32_000;
 const ANALYZE_FAST_RETRY_MAX = 1;
@@ -624,7 +624,8 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
           );
         }
         const data = await res.json();
-        if (analysisRunRef.current !== runId) return;
+        // Don't bail on runId mismatch — brief from the latest fetch is always valid
+        // and setLoading(false) in finally always runs regardless
         analyzeFastRetryRef.current = 0;
         console.log("[analyze] complete", {
           ms: elapsedMs,
@@ -650,7 +651,6 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         const top = data.brief?.strategies?.[0];
         if (top && !isLegToggle) setExpandedId(top.id);
       } catch (e) {
-        if (analysisRunRef.current !== runId) return;
         const isTimeout = e instanceof RequestTimeoutError;
         const canFastRetry =
           !mutation &&
@@ -690,6 +690,16 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     },
     [paymentMode, enabledLegIds, planMode, expertOptions],
   );
+
+  // Nuclear fallback: if loading hasn't cleared in 15s something is stuck — force it off
+  useEffect(() => {
+    if (!loading) return;
+    const timer = window.setTimeout(() => {
+      setLoading(false);
+      if (!brief) setError("Search timed out — tap Analyze to try again.");
+    }, 15_000);
+    return () => window.clearTimeout(timer);
+  }, [loading, brief]);
 
   const handleLegToggle = (legId: string): void => {
     if (!brief?.flightLegs || !prompt.trim()) return;
@@ -1565,7 +1575,16 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         )}
         <div className="mt-4 space-y-3">
           {loading && !legToggleBusy && (
-            <AnalyzeProgressPanel planMode={planMode} stepIndex={analyzeStep} />
+            <div>
+              <AnalyzeProgressPanel planMode={planMode} stepIndex={analyzeStep} />
+              <button
+                type="button"
+                onClick={() => { setLoading(false); setError("Search cancelled — tap Analyze to try again."); }}
+                className="mt-3 w-full rounded-2xl border border-slate-600 bg-slate-800 py-2.5 text-sm font-semibold text-slate-300 active:opacity-70"
+              >
+                Cancel
+              </button>
+            </div>
           )}
           {legToggleBusy && (
             <div className="rounded-3xl border border-slate-600 bg-[#152238] p-6 text-center">
