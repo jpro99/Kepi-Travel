@@ -46,7 +46,7 @@ const EMPTY_WAVE: TopologySearchResult = {
   headline: "",
 };
 
-const EMPTY_DUFFEL = { configured: false, quotes: [] } as const;
+const EMPTY_DUFFEL = { configured: true, quotes: [] } as const; // configured:true = token present, just no quotes found
 
 const ExpertSchema = z
   .object({
@@ -168,7 +168,7 @@ export async function POST(req: Request) {
     const homeIata = workingBrief.searchAirports[0];
     const hasReturn = Boolean(workingBrief.intent.returnAirports?.length && homeIata);
     const connectorLegs = enabledConnectorLegs(workingBrief.flightLegs ?? []);
-    const phase2Budget = 4_000; // hard 4s cap — 3s Duffel timeout + 1s buffer
+    const phase2Budget = 5_000; // 3s Duffel timeout + 2s buffer
 
     console.log("[analyze] phase2:start", { ms: elapsed(), phase2Budget, arrivalIata, hasReturn, origins: workingBrief.searchAirports });
 

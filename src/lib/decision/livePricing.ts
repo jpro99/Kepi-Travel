@@ -144,16 +144,17 @@ export function enrichBriefWithDuffelPricing(
     },
   }));
 
-  if (!outboundDuffel.configured || !outboundBest) {
+  if (!outboundBest) {
+    // Configured but no quotes found — return strategies without live price enrichment
     return {
       ...brief,
       livePricing: {
         source: "duffel",
         configured: outboundDuffel.configured,
         quotesFound: 0,
-        message:
-          outboundDuffel.error ??
-          (outboundDuffel.configured ? "No offers" : "Add DUFFEL_ACCESS_TOKEN to .env.local"),
+        message: outboundDuffel.configured
+          ? "No fares found for this route — try a nearby airport"
+          : "Add DUFFEL_ACCESS_TOKEN to .env.local",
       },
     };
   }
