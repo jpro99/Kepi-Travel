@@ -64,80 +64,77 @@ export function RecordTripModal({ open, loading = false, onClose, onSubmit }: Re
 
     baseTextRef.current = text.trim();
     sessionFinalRef.current = "";
+    listeningRef.current = true;
+    setListening(true);
+    setVoiceNote("Recording… describe your whole trip, then tap Stop.");
 
-    const recognition = new SpeechRecognitionImpl();
-    recognition.lang = "en-US";
-    recognition.interimResults = true;
-    recognition.continuous = true;
-    recognition.maxAlternatives = 1;
-    recognitionRef.current = recognition;
+    // Use NON-continuous mode — most reliable cross-platform approach.
+    // Each phrase ends naturally on pause; we auto-restart for the next.
+    // This avoids all Android Chrome bugs with continuous + resultIndex.
+    const startChunk = () => {
+      if (!listeningRef.current) return;
 
-    /** Track which results we've already committed to sessionFinalRef.
-     *  Android Chrome sometimes sends event.resultIndex=0 for ALL events
-     *  even after earlier results are final, causing double-appending.
-     *  We ignore event.resultIndex and track it ourselves. */
-    let lastCommittedIndex = 0;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const r = new SpeechRecognitionImpl() as any;
+      r.lang = "en-US";
+      r.interimResults = true;
+      r.continuous = false;       // stop after each natural pause
+      r.maxAlternatives = 1;
+      recognitionRef.current = r;
 
-    const composeDisplay = (interim: string): string => {
-      const prefix = baseTextRef.current ? `${baseTextRef.current} ` : "";
-      const body = `${sessionFinalRef.current}${interim ? " " + interim : ""}`.trim();
-      return `${prefix}${body}`.trim();
-    };
+      // What the user committed in previous chunks
+      const committed = () =>
+        [baseTextRef.current, sessionFinalRef.current].filter(Boolean).join(" ");
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    recognition.onresult = (event: any) => {
-      let interim = "";
-      // Always start from lastCommittedIndex — never re-process finals
-      for (let index = lastCommittedIndex; index < event.results.length; index += 1) {
-        const result = event.results[index];
-        const chunk = (result[0]?.transcript ?? "").trim();
-        if (!chunk) continue;
-        if (result.isFinal) {
-          // Commit final to ref, advance our pointer
+      r.onresult = (event: any) => {
+        // event.results is small (one phrase worth) — no index tracking needed
+        // The LAST result is the authoritative transcript; earlier ones are interim
+        const lastResult = event.results[event.results.length - 1];
+        const chunk = (lastResult?.[0]?.transcript ?? "").trim();
+        if (!chunk) return;
+
+        if (lastResult?.isFinal) {
+          // Commit this phrase permanently
           sessionFinalRef.current = sessionFinalRef.current
             ? `${sessionFinalRef.current} ${chunk}`
             : chunk;
-          lastCommittedIndex = index + 1;
+          setText(committed());
         } else {
-          // Interim — show live but don't commit
-          interim = chunk;
+          // Show live interim without committing
+          setText(`${committed()} ${chunk}`.trim());
         }
-      }
-      setText(composeDisplay(interim));
-      setVoiceNote("Recording… tap Stop when you're done.");
-    };
+        setVoiceNote("Recording… tap Stop when you're done.");
+      };
 
-    recognition.onerror = (event: Event & { error?: string }) => {
-      if (event.error === "aborted") return;
-      if (event.error === "no-speech") {
-        setVoiceNote("Didn't catch that — tap Start recording and try again.");
-      } else {
+      r.onerror = (event: Event & { error?: string }) => {
+        if (event.error === "aborted" || event.error === "no-speech") return;
         setVoiceNote("Voice hit a snag — you can keep typing instead.");
-      }
-      listeningRef.current = false;
-      setListening(false);
-      recognitionRef.current = null;
-    };
-
-    recognition.onend = () => {
-      recognitionRef.current = null;
-      if (listeningRef.current) {
         listeningRef.current = false;
         setListening(false);
-        setVoiceNote("Recording ended — tap Start recording to add more, or build your trip.");
+        recognitionRef.current = null;
+      };
+
+      r.onend = () => {
+        recognitionRef.current = null;
+        if (listeningRef.current) {
+          // Natural pause — restart for next phrase
+          startChunk();
+        } else {
+          setListening(false);
+          setVoiceNote("Recording ended — tap Start recording to add more, or build your trip.");
+        }
+      };
+
+      try {
+        r.start();
+      } catch {
+        listeningRef.current = false;
+        setListening(false);
+        setVoiceNote("Couldn't start the microphone — check browser permissions.");
       }
     };
 
-    setVoiceNote("Recording… describe your whole trip, then tap Stop.");
-    listeningRef.current = true;
-    setListening(true);
-    try {
-      recognition.start();
-    } catch {
-      listeningRef.current = false;
-      setListening(false);
-      setVoiceNote("Couldn't start the microphone — check browser permissions.");
-    }
+    startChunk();
   }, [text, stopListening]);
 
   const toggleRecording = (): void => {
