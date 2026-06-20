@@ -590,24 +590,22 @@ export function FlightsTab({
                 </div>
               )}
 
-              {/* Expanded actions */}
-              {isOpen && (
-                <div className="border-t border-slate-100 dark:border-slate-800 px-5 py-3 flex items-center gap-2">
-                  <button type="button" onClick={() => onReservationTap(r.id)}
-                    className="flex-1 rounded-xl bg-slate-100 dark:bg-slate-800 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 active:opacity-70">
-                    Edit details
-                  </button>
-                  <button type="button" onClick={() => onCheckStatus(r.id)} disabled={live?.busy}
-                    className="flex-1 rounded-xl bg-[#007AFF]/10 dark:bg-[#0A84FF]/20 py-2 text-sm font-semibold text-[#007AFF] dark:text-[#0A84FF] active:opacity-70 disabled:opacity-50">
-                    {live?.busy ? "Checking…" : "Live status"}
-                  </button>
-                  <button type="button"
-                    onClick={() => { if (window.confirm("Delete this flight?")) onDelete(r.id); }}
-                    className="rounded-xl bg-red-50 dark:bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-600 dark:text-red-400 active:opacity-70">
-                    Delete
-                  </button>
-                </div>
-              )}
+              {/* Quick delete — always visible */}
+              <div className="border-t border-slate-100 dark:border-slate-800 px-5 py-3 flex items-center gap-2">
+                <button type="button" onClick={() => onReservationTap(r.id)}
+                  className="flex-1 rounded-xl bg-slate-100 dark:bg-slate-800 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 active:opacity-70">
+                  Edit
+                </button>
+                <button type="button" onClick={() => onCheckStatus(r.id)} disabled={live?.busy}
+                  className="flex-1 rounded-xl bg-[#007AFF]/10 dark:bg-[#0A84FF]/20 py-2 text-sm font-semibold text-[#007AFF] dark:text-[#0A84FF] active:opacity-70 disabled:opacity-50">
+                  {live?.busy ? "Checking…" : "Status"}
+                </button>
+                <button type="button"
+                  onClick={() => { if (window.confirm("Delete this flight?")) onDelete(r.id); }}
+                  className="rounded-xl bg-red-50 dark:bg-red-500/10 px-3 py-2 text-sm font-bold text-red-600 dark:text-red-400 active:opacity-70">
+                  🗑
+                </button>
+              </div>
             </div>
           );
         })}
