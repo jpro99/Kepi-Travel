@@ -48,6 +48,11 @@ IATA_TO_CITY.SFO = { city: "San Francisco", region: "California" };
 
 const STOP_ALIASES: Record<string, keyof typeof DESTINATION_MAP> = {
   bari: "bari",
+  // Common voice misrecognitions of "Bari"
+  party: "bari",
+  barry: "bari",
+  barri: "bari",
+  "bari italy": "bari",
   venice: "venice",
   venezia: "venice",
   dolomite: "dolomites",
