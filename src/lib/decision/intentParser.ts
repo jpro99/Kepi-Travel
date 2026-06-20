@@ -429,7 +429,12 @@ function parseBudgetHint(lower: string): string | undefined {
 }
 
 export function parseTripIntent(rawPrompt: string, referenceDate = new Date()): TripIntent {
-  const lower = rawPrompt.toLowerCase().trim();
+  // Normalize common voice/typing errors before parsing
+  const cleanPrompt = rawPrompt
+    .replace(/\bfky\b/gi, "fly").replace(/\bflky\b/gi, "fly")
+    .replace(/\bwnat\b/gi, "want").replace(/\bfomr\b/gi, "from")
+    .replace(/\bform\b/gi, "from").replace(/\badn\b/gi, "and");
+  const lower = cleanPrompt.toLowerCase().trim();
   const stops = parseStops(lower);
   const origin = parseOrigin(lower);
   const returnPlace = parseReturn(lower);

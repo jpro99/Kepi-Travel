@@ -102,7 +102,24 @@ export async function POST(req: Request) {
     const phase1Budget = Math.max(5_000, remaining() - 12_000);
     console.log("[analyze] phase1:start", { ms: elapsed(), phase1Budget, airports: brief.searchAirports });
 
-    const emptyWave = { candidates: [], duffelCallsUsed: 0, seatsAeroCallsUsed: 0, pricedRoutes: [] };
+    const emptyWave = {
+      algorithm: "kepi-optimal-search" as const,
+      version: 2 as const,
+      candidatesGenerated: 0,
+      candidatesPriced: 0,
+      candidatesPruned: 0,
+      dateFlexVariantsPriced: 0,
+      duffelCallsUsed: 0,
+      seatsAeroCallsUsed: 0,
+      seatsAeroConfigured: false,
+      hotelEstimateUsd: 0,
+      baseline: null,
+      winners: [],
+      bestSavingsUsd: 0,
+      bestSavingsPct: 0,
+      routeSummary: "",
+      headline: "",
+    };
 
     const [topologySearch, fusedFlightSearch] = await Promise.all([
       withDeadline(
