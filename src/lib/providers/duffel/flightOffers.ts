@@ -141,26 +141,10 @@ async function fetchOfferForRoute(
     return null;
   }
 
-  // Use inline offers if we got them
-  let offers: unknown[] = Array.isArray(inlineOffers) && inlineOffers.length > 0 ? inlineOffers : [];
-
-  // STEP 2: If no inline offers, poll GET endpoint (2s wait for airlines to respond)
-  if (offers.length === 0 && offerRequestId) {
-    await new Promise((r) => setTimeout(r, 2_000));
-    try {
-      const ctrl2 = new AbortController();
-      const t2 = setTimeout(() => ctrl2.abort(), 5_000);
-      const r2 = await fetch(
-        `${OFFERS_URL}?offer_request_id=${offerRequestId}&sort=total_amount&limit=10`,
-        { headers, signal: ctrl2.signal, cache: "no-store" }
-      );
-      clearTimeout(t2);
-      if (r2.ok) {
-        const payload2 = (await r2.json()) as { data?: unknown[] };
-        offers = Array.isArray(payload2.data) ? payload2.data : [];
-      }
-    } catch { /* non-fatal — use empty */ }
-  }
+  // Use inline offers if we got them — if not, skip polling (adds 2s+ latency)
+  // return_offers:true means Duffel collects offers synchronously in the POST.
+  // If we got none inline, this route has no inventory right now.
+  const offers: unknown[] = Array.isArray(inlineOffers) && inlineOffers.length > 0 ? inlineOffers : [];
 
   if (offers.length === 0) return null;
 
