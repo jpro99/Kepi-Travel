@@ -74,7 +74,6 @@ const INPUT_PLACEHOLDER_FLIGHTS =
 const STRATEGY_TIMEOUT_MS = 30_000; // cold start 10s + server 7s = 17s max; 30s is safe
 const STAYS_TIMEOUT_MS = 24_000;
 const FLEX_TIMEOUT_MS = 32_000;
-const ANALYZE_WATCHDOG_MS = 18_000;
 const ANALYZE_FAST_RETRY_MAX = 1;
 
 const SEGMENT_ICON: Record<string, string> = {
@@ -526,17 +525,6 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     return () => window.clearInterval(timer);
   }, [loading, planMode]);
 
-  useEffect(() => {
-    if (!loading) return;
-    const timer = window.setTimeout(() => {
-      analysisRunRef.current += 1;
-      setLoading(false);
-      setLegToggleBusy(false);
-      setError("Search stopped before results came back. Tap Analyze again; the fast strategy path is active.");
-    }, ANALYZE_WATCHDOG_MS);
-    return () => window.clearTimeout(timer);
-  }, [loading]);
-
   const fetchStrategies = useCallback(
     async (
       nextPrompt: string,
@@ -677,16 +665,6 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     },
     [paymentMode, enabledLegIds, planMode, expertOptions],
   );
-
-  // Nuclear fallback: if loading hasn't cleared in 15s something is stuck — force it off
-  useEffect(() => {
-    if (!loading) return;
-    const timer = window.setTimeout(() => {
-      setLoading(false);
-      if (!brief) setError("Search timed out — tap Analyze to try again.");
-    }, 33_000);
-    return () => window.clearTimeout(timer);
-  }, [loading, brief]);
 
   const handleLegToggle = (legId: string): void => {
     if (!brief?.flightLegs || !prompt.trim()) return;
