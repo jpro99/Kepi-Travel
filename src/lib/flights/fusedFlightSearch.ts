@@ -192,7 +192,7 @@ export async function runFusedSearchForTrip(
 
   const { fetchDuffelCashOffers } = await import("@/lib/flights/duffelAdapter");
 
-  // Hard 8s cap — fusedFlightSearch runs SeatsAero which can hang
+  // Hard 3s cap — fusedFlightSearch runs SeatsAero + Redis which can hang
   const result = await Promise.race([
     fusedFlightSearch(
       {
@@ -206,7 +206,7 @@ export async function runFusedSearchForTrip(
       },
       fetchDuffelCashOffers,
     ),
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), 8_000)),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 3_000)),
   ]);
 
   return result;

@@ -515,7 +515,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     const steps = planMode === "hotels" ? 2 : 4;
     const timer = window.setInterval(() => {
       setAnalyzeStep((current) => Math.min(current + 1, steps - 1));
-    }, 3200); // advance steps faster — API responds in ~38s, 4 steps = 3.2s each
+    }, 6000); // slow steps down — API responds in ~5s, so results show mid-step-1
     return () => window.clearInterval(timer);
   }, [loading, planMode]);
 
