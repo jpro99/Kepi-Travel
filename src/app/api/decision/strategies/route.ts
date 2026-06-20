@@ -132,7 +132,7 @@ export async function POST(req: Request) {
 
     // Phase 1: wave search + fused search — hard deadline
     if (!fastPath && !brief.originRequired && brief.searchAirports.length > 0) {
-      const phase1Budget = Math.max(3_000, remaining() - 12_000);
+      const phase1Budget = Math.max(3_000, remaining() - 10_000); // leave 10s for Duffel quotes
       console.log("[analyze] phase1:start", { ms: elapsed(), phase1Budget, airports: brief.searchAirports, destination: arrivalIata });
 
       const [topologySearch, fusedFlightSearch] = await Promise.all([
@@ -168,7 +168,7 @@ export async function POST(req: Request) {
     const homeIata = workingBrief.searchAirports[0];
     const hasReturn = Boolean(workingBrief.intent.returnAirports?.length && homeIata);
     const connectorLegs = enabledConnectorLegs(workingBrief.flightLegs ?? []);
-    const phase2Budget = Math.max(3_000, remaining() - 1_000);
+    const phase2Budget = Math.min(9_000, Math.max(7_000, remaining() - 1_000)); // 7-9s window for Duffel
 
     console.log("[analyze] phase2:start", { ms: elapsed(), phase2Budget, arrivalIata, hasReturn, origins: workingBrief.searchAirports });
 

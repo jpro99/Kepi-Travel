@@ -6,7 +6,7 @@ const FLIGHT_STEPS = [
   { label: "Understanding your trip…", detail: "Parsing dates, airports, and route shape" },
   { label: "Building route options…", detail: "ONT · LAX · SNA + open-jaw variations" },
   { label: "Ranking cash, points & mix plays…", detail: "Scoring strategies by value per dollar" },
-  { label: "Fetching live prices…", detail: "Checking Duffel for real-time fares" },
+  { label: "Checking live fares…", detail: "Querying airlines · estimated prices shown if slow" },
 ] as const;
 
 const FULL_TRIP_STEPS = [

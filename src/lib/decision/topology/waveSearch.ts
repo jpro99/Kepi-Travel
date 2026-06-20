@@ -19,9 +19,9 @@ import type {
   TripTopologyCandidate,
 } from "@/lib/decision/topology/types";
 
-const MAX_DUFFEL_CALLS = 54;
+const MAX_DUFFEL_CALLS = 12; // 12 calls max — with 7s each = 84s theoretical but runs in parallel waves
 const MAX_WINNERS = 5;
-const DATE_FLEX_TOP_N = 6;
+const DATE_FLEX_TOP_N = 2; // fewer date flex variants = faster
 const PRUNE_MARGIN = 1.03;
 
 export interface WaveSearchOptions {
@@ -155,24 +155,42 @@ export async function runKepiWaveSearch(
 
   const pricedRows: PricedTopology[] = [];
 
-  for (const candidate of wave0) {
-    const row = await priceCandidate(candidate, budget, hotelCashUsd, pricingContext);
-    if (row) pricedRows.push(row);
+  // Run wave0 candidates in parallel — each prices its own legs concurrently
+  // This cuts total time from (N × duffelLatency) to (1 × duffelLatency)
+  const PARALLEL_BATCH = 4;
+  for (let i = 0; i < wave0.length; i += PARALLEL_BATCH) {
+    if (budget.remaining <= 0) break;
+    const batch = wave0.slice(i, i + PARALLEL_BATCH);
+    const batchResults = await Promise.all(
+      batch.map((c) => priceCandidate(c, budget, hotelCashUsd, pricingContext).catch(() => null))
+    );
+    for (const row of batchResults) {
+      if (row) pricedRows.push(row);
+    }
   }
 
   const baseline = pickBaseline(pricedRows);
   const baselineScore = baseline ? rankScoreForCheapest(baseline) : Number.POSITIVE_INFINITY;
 
-  for (const candidate of rest) {
-    if (
-      baselineScore < Number.POSITIVE_INFINITY &&
-      candidate.estimateLowerBoundUsd * PRUNE_MARGIN + hotelCashUsd > baselineScore
-    ) {
+  // Prune rest candidates, then run survivors in parallel
+  const survivingRest = rest.filter((c) => {
+    if (baselineScore < Number.POSITIVE_INFINITY &&
+        c.estimateLowerBoundUsd * PRUNE_MARGIN + hotelCashUsd > baselineScore) {
       pruned += 1;
-      continue;
+      return false;
     }
-    const row = await priceCandidate(candidate, budget, hotelCashUsd, pricingContext);
-    if (row) pricedRows.push(row);
+    return true;
+  });
+
+  for (let i = 0; i < survivingRest.length; i += PARALLEL_BATCH) {
+    if (budget.remaining <= 0) break;
+    const batch = survivingRest.slice(i, i + PARALLEL_BATCH);
+    const batchResults = await Promise.all(
+      batch.map((c) => priceCandidate(c, budget, hotelCashUsd, pricingContext).catch(() => null))
+    );
+    for (const row of batchResults) {
+      if (row) pricedRows.push(row);
+    }
   }
 
   const rankedInitial = rankWinners(pricedRows.filter((r) => !isBaselineKind(r.candidate.kind)));
