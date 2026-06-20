@@ -72,23 +72,35 @@ export function RecordTripModal({ open, loading = false, onClose, onSubmit }: Re
     recognition.maxAlternatives = 1;
     recognitionRef.current = recognition;
 
+    /** Track which results we've already committed to sessionFinalRef.
+     *  Android Chrome sometimes sends event.resultIndex=0 for ALL events
+     *  even after earlier results are final, causing double-appending.
+     *  We ignore event.resultIndex and track it ourselves. */
+    let lastCommittedIndex = 0;
+
     const composeDisplay = (interim: string): string => {
       const prefix = baseTextRef.current ? `${baseTextRef.current} ` : "";
-      const body = `${sessionFinalRef.current}${interim}`.trim();
+      const body = `${sessionFinalRef.current}${interim ? " " + interim : ""}`.trim();
       return `${prefix}${body}`.trim();
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = (event: any) => {
       let interim = "";
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+      // Always start from lastCommittedIndex — never re-process finals
+      for (let index = lastCommittedIndex; index < event.results.length; index += 1) {
         const result = event.results[index];
-        const chunk = result[0]?.transcript ?? "";
+        const chunk = (result[0]?.transcript ?? "").trim();
         if (!chunk) continue;
         if (result.isFinal) {
-          sessionFinalRef.current += chunk;
+          // Commit final to ref, advance our pointer
+          sessionFinalRef.current = sessionFinalRef.current
+            ? `${sessionFinalRef.current} ${chunk}`
+            : chunk;
+          lastCommittedIndex = index + 1;
         } else {
-          interim += chunk;
+          // Interim — show live but don't commit
+          interim = chunk;
         }
       }
       setText(composeDisplay(interim));
