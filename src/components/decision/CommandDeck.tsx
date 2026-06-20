@@ -699,6 +699,19 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     void fetchStrategies(prompt, comfortWeight, undefined, nextIds);
   };
 
+  const handleReset = (): void => {
+    setBrief(null);
+    setStaysData(null);
+    setError(null);
+    setHasAnalyzed(false);
+    setInputPrompt("");
+    setExpandedId(null);
+    setCounterfactualNote(null);
+    setEnabledLegIds([]);
+    setPaymentMode("cash");
+    setPlanMode("flights");
+  };
+
   const handlePlanModeChange = (mode: PlanMode): void => {
     setPlanMode(mode);
     if (prompt.trim()) void fetchStrategies(prompt, comfortWeight, undefined, undefined, mode);
@@ -1171,12 +1184,23 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
             </p>
             <h1 className="text-xl font-black tracking-tight">Command Deck</h1>
           </div>
-          <Link
-            href="/travel-assistant"
-            className="rounded-xl border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-200 hover:bg-slate-700"
-          >
-            Travel Assistant →
-          </Link>
+          <div className="flex items-center gap-2">
+            {brief && (
+              <button
+                type="button"
+                onClick={handleReset}
+                className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-3 py-1.5 text-xs font-bold text-amber-200 hover:bg-amber-500/20 transition"
+              >
+                ↩ New trip
+              </button>
+            )}
+            <Link
+              href="/travel-assistant"
+              className="rounded-xl border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-200 hover:bg-slate-700"
+            >
+              My trips →
+            </Link>
+          </div>
         </div>
       </header>
       ) : null}
@@ -1230,9 +1254,31 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
             disabled={loading}
             className="rounded-2xl bg-[#f4c95d] px-6 py-3 text-sm font-black text-[#0b1f3a] transition-all hover:bg-[#ffe29a] disabled:opacity-60"
           >
-            {loading ? "Analyzing…" : "⚡ Analyze"}
+            {loading ? "Analyzing…" : brief ? "🔄 Re-analyze" : "⚡ Analyze"}
           </button>
         </form>
+
+        {/* Refinement chips — quick follow-ups when results are showing */}
+        {brief && !loading && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {[
+              { label: "💰 Cash only", action: () => handlePaymentModeChange("cash") },
+              { label: "🏆 Points play", action: () => handlePaymentModeChange("points") },
+              { label: "🏨 Add hotels", action: () => handlePlanModeChange("full") },
+              { label: "📅 Try different dates", action: () => { setInputPrompt((p) => p + " — try flexible dates"); } },
+              { label: "✈️ Direct flights only", action: () => { setInputPrompt((p) => p + " direct only"); void fetchStrategies((prompt + " direct only"), comfortWeight); } },
+            ].map(({ label, action }) => (
+              <button
+                key={label}
+                type="button"
+                onClick={action}
+                className="rounded-xl border border-slate-600 bg-slate-800/60 px-3 py-1.5 text-[11px] font-semibold text-slate-300 hover:border-amber-400/50 hover:text-amber-200 transition"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Comfort ⇄ value steering — only after a trip is loaded */}
         {brief && (
@@ -1301,16 +1347,31 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         )}
 
         {!hasAnalyzed && !loading && (
-          <div className="mt-8 rounded-3xl border border-dashed border-slate-600 bg-[#152238] px-6 py-10 text-center">
-            <p className="text-lg font-bold text-white">Your trip starts here</p>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-slate-300">
-              Tap <span className="font-semibold text-amber-200">Record my trip</span>, then Start recording — talk,
-              tap Stop, and build your plan. Or type cities, dates, and loyalty below.
+          <div className="mt-6 rounded-3xl bg-gradient-to-br from-[#152238] via-[#0f1d35] to-[#152238] border border-slate-700 px-6 py-8">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#f4c95d]">Your personal trip guru</p>
+            <p className="mt-2 text-xl font-black text-white">Where are we going?</p>
+            <p className="mt-2 text-sm leading-relaxed text-slate-300">
+              Tell me your trip in plain English — destination, dates, who&apos;s going, and what matters to you. I&apos;ll find the smartest way to get there.
             </p>
+            <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {[
+                "Fly from Beaumont CA to New York on Sept 1st, back Sept 10",
+                "Family of 4 to Hawaii in December, budget-friendly",
+                "Business trip LAX to Chicago next Tuesday",
+                "Europe for 2 weeks in June — open to routing through London",
+              ].map((example) => (
+                <button
+                  key={example}
+                  type="button"
+                  onClick={() => { setInputPrompt(example); }}
+                  className="rounded-2xl border border-slate-600 bg-slate-800/60 px-4 py-3 text-left text-xs text-slate-300 hover:border-amber-400/50 hover:text-white transition"
+                >
+                  <span className="text-[#f4c95d]">→</span> {example}
+                </button>
+              ))}
+            </div>
             {!isSignedIn && (
-              <p className="mt-4 text-xs text-slate-400">
-                Sign in to analyze and activate — planning is free to describe.
-              </p>
+              <p className="mt-5 text-xs text-slate-500">Sign in to analyze and book — planning is always free.</p>
             )}
           </div>
         )}
