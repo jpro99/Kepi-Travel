@@ -679,7 +679,19 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         });
         setError(e instanceof Error ? e.message : "Something went wrong");
       } finally {
-        if (analysisRunRef.current !== runId) return;
+        const finalRef = analysisRunRef.current;
+        const shouldClear = finalRef === runId;
+        console.log("[analyze] finally", {
+          runId,
+          analysisRunRefCurrent: finalRef,
+          shouldClear,
+          isLegToggle,
+          fastPath: fetchOptions?.fastPath ?? false,
+        });
+        if (!shouldClear) {
+          console.warn("[analyze] LOADING STUCK — runId mismatch, a second analysis was started");
+          return;
+        }
         if (isLegToggle) {
           setLegToggleBusy(false);
         } else {
