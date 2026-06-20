@@ -2,47 +2,78 @@ import type { DuffelFlightQuote, DuffelSearchResult } from "@/lib/providers/duff
 import { logger } from "@/lib/logger";
 import { getSafeRedisClient } from "@/lib/redis";
 
-const DUFFEL_API = "https://api.duffel.com/air/offer_requests";
-const TIMEOUT_MS = 9_000;     // 9s per Duffel call
-const MAX_ORIGINS = 3;         // up to 3 origins in parallel
-const CACHE_TTL_SECONDS = 900; // 15-minute Redis cache — Duffel prices are stable short-term
+const OFFER_REQUEST_URL = "https://api.duffel.com/air/offer_requests";
+const OFFERS_URL = "https://api.duffel.com/air/offers";
+const CACHE_TTL_SECONDS = 900; // 15 min cache
+const MAX_ORIGINS = 3;
 
 function resolveDuffelToken(): string | null {
   return process.env.DUFFEL_ACCESS_TOKEN?.trim() || null;
 }
 
-function cacheKey(origin: string, destination: string, date: string, cabin: string): string {
-  return `kepi:duffel:v2:${origin}:${destination}:${date}:${cabin}`;
+function cacheKey(origin: string, dest: string, date: string, cabin: string) {
+  return `kepi:duffel:v3:${origin}:${dest}:${date}:${cabin}`;
 }
 
 function parseAmount(amount: string | undefined, currency: string | undefined): number {
-  const value = Number.parseFloat(amount ?? "NaN");
-  if (!Number.isFinite(value)) return 0;
-  if ((currency ?? "USD").toUpperCase() === "USD") return value;
-  return value;
+  const v = Number.parseFloat(amount ?? "NaN");
+  if (!Number.isFinite(v)) return 0;
+  return (currency ?? "USD").toUpperCase() === "USD" ? v : v;
 }
 
 function countStops(offer: Record<string, unknown>): number {
   const slices = offer.slices;
-  if (!Array.isArray(slices) || slices.length === 0) return 0;
-  const first = slices[0];
-  if (!first || typeof first !== "object") return 0;
-  const segments = (first as Record<string, unknown>).segments;
-  return Array.isArray(segments) ? Math.max(0, segments.length - 1) : 0;
+  if (!Array.isArray(slices) || !slices[0]) return 0;
+  const segs = (slices[0] as Record<string, unknown>).segments;
+  return Array.isArray(segs) ? Math.max(0, segs.length - 1) : 0;
+}
+
+function extractAirline(offer: Record<string, unknown>): string | undefined {
+  const slices = offer.slices;
+  if (!Array.isArray(slices) || !slices[0]) return undefined;
+  const segs = (slices[0] as Record<string, unknown>).segments;
+  if (!Array.isArray(segs) || !segs[0]) return undefined;
+  const seg = segs[0] as Record<string, unknown>;
+  return (seg.operating_carrier_code ?? seg.marketing_carrier_code) as string | undefined;
 }
 
 function extractFlightNumber(offer: Record<string, unknown>): string | undefined {
   const slices = offer.slices;
-  if (!Array.isArray(slices) || slices.length === 0) return undefined;
-  const first = slices[0];
-  if (!first || typeof first !== "object") return undefined;
-  const segments = (first as Record<string, unknown>).segments;
-  if (!Array.isArray(segments) || segments.length === 0) return undefined;
-  const seg = segments[0] as Record<string, unknown>;
+  if (!Array.isArray(slices) || !slices[0]) return undefined;
+  const segs = (slices[0] as Record<string, unknown>).segments;
+  if (!Array.isArray(segs) || !segs[0]) return undefined;
+  const seg = segs[0] as Record<string, unknown>;
   const iata = (seg.operating_carrier_code ?? seg.marketing_carrier_code ?? "") as string;
-  const number = (seg.operating_carrier_flight_number ?? seg.marketing_carrier_flight_number ?? "") as string;
-  if (!iata || !number) return undefined;
-  return `${iata}${number}`.replace(/\s+/g, "").toUpperCase();
+  const num = (seg.operating_carrier_flight_number ?? seg.marketing_carrier_flight_number ?? "") as string;
+  if (!iata || !num) return undefined;
+  return `${iata}${num}`.replace(/\s+/g, "").toUpperCase();
+}
+
+function bestOffer(offers: unknown[]): DuffelFlightQuote | null {
+  let best: Record<string, unknown> | null = null;
+  let bestAmount = Infinity;
+  for (const offer of offers) {
+    if (!offer || typeof offer !== "object") continue;
+    const row = offer as Record<string, unknown>;
+    const amount = parseAmount(
+      typeof row.total_amount === "string" ? row.total_amount : undefined,
+      typeof row.total_currency === "string" ? row.total_currency : undefined,
+    );
+    if (amount > 0 && amount < bestAmount) { bestAmount = amount; best = row; }
+  }
+  if (!best) return null;
+  return {
+    offerId: typeof best.id === "string" ? best.id : undefined,
+    origin: "",
+    destination: "",
+    departureDate: "",
+    cabinClass: "economy",
+    totalAmountUsd: bestAmount,
+    currency: typeof best.total_currency === "string" ? best.total_currency : "USD",
+    airline: extractAirline(best),
+    stops: countStops(best),
+    flightNumber: extractFlightNumber(best),
+  };
 }
 
 async function fetchOfferForRoute(
@@ -52,127 +83,98 @@ async function fetchOfferForRoute(
   departureDate: string,
   cabinClass: "economy" | "premium_economy" | "business" | "first",
 ): Promise<DuffelFlightQuote | null> {
-  // Check Redis cache first — 15 min TTL means near-instant repeat searches
   const redis = getSafeRedisClient("duffel-cache");
   const key = cacheKey(origin, destination, departureDate, cabinClass);
 
+  // Cache check
   if (redis) {
     try {
       const cached = await redis.get<DuffelFlightQuote | null>(key);
-      if (cached !== null && cached !== undefined) {
-        logger.info("Duffel cache hit", { scope: "providers/duffel", origin, destination, departureDate });
-        return cached;
+      if (cached) {
+        logger.info("Duffel cache hit", { scope: "providers/duffel", origin, destination });
+        return { ...cached, origin, destination, departureDate, cabinClass };
       }
-    } catch {
-      // Cache miss or Redis error — fall through to live API
-    }
+    } catch { /* non-fatal */ }
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    "Duffel-Version": "v2",
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
 
+  // STEP 1: Create offer request (returns in <1s)
+  let offerRequestId: string;
+  let inlineOffers: unknown[] | null = null;
   try {
-    const response = await fetch(DUFFEL_API, {
+    const ctrl1 = new AbortController();
+    const t1 = setTimeout(() => ctrl1.abort(), 5_000);
+    const r1 = await fetch(OFFER_REQUEST_URL, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Duffel-Version": "v2",
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      headers,
       body: JSON.stringify({
         data: {
           cabin_class: cabinClass,
-          return_offers: false, // Don't wait for all airlines — get fastest response
+          return_offers: true, // get offers inline on first call
           slices: [{ origin, destination, departure_date: departureDate }],
           passengers: [{ type: "adult" }],
-          max_connections: 1,   // Direct + 1 stop only — reduces Duffel search time
+          max_connections: 1,
         },
       }),
-      signal: controller.signal,
+      signal: ctrl1.signal,
       cache: "no-store",
     });
+    clearTimeout(t1);
 
-    clearTimeout(timer);
-
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      logger.warn("Duffel offer request failed", {
-        scope: "providers/duffel",
-        origin, destination,
-        status: response.status,
-        body: text.slice(0, 200),
-      });
+    if (!r1.ok) {
+      const body = await r1.text().catch(() => "");
+      logger.warn("Duffel POST failed", { scope: "providers/duffel", origin, destination, status: r1.status, body: body.slice(0, 200) });
       return null;
     }
 
-    const payload = (await response.json()) as { data?: Record<string, unknown> };
-    const offers = payload.data?.offers;
-    if (!Array.isArray(offers) || offers.length === 0) return null;
-
-    let best: Record<string, unknown> | null = null;
-    let bestAmount = Number.POSITIVE_INFINITY;
-
-    for (const offer of offers) {
-      if (!offer || typeof offer !== "object") continue;
-      const row = offer as Record<string, unknown>;
-      const amount = parseAmount(
-        typeof row.total_amount === "string" ? row.total_amount : undefined,
-        typeof row.total_currency === "string" ? row.total_currency : undefined,
-      );
-      if (amount > 0 && amount < bestAmount) {
-        bestAmount = amount;
-        best = row;
-      }
-    }
-
-    if (!best) return null;
-
-    const result: DuffelFlightQuote = {
-      offerId: typeof best.id === "string" ? best.id : undefined,
-      origin,
-      destination,
-      departureDate,
-      cabinClass,
-      totalAmountUsd: bestAmount,
-      currency: typeof best.total_currency === "string" ? best.total_currency : "USD",
-      airline: (() => {
-        const slices = best.slices;
-        if (!Array.isArray(slices) || !slices[0]) return undefined;
-        const segments = (slices[0] as Record<string, unknown>).segments;
-        if (!Array.isArray(segments) || !segments[0]) return undefined;
-        const seg = segments[0] as Record<string, unknown>;
-        return typeof seg.operating_carrier_code === "string"
-          ? seg.operating_carrier_code
-          : typeof seg.marketing_carrier_code === "string"
-            ? seg.marketing_carrier_code
-            : undefined;
-      })(),
-      stops: countStops(best),
-      flightNumber: extractFlightNumber(best),
-    };
-
-    // Cache result in Redis for 15 minutes
-    if (redis) {
-      try {
-        await redis.set(key, result, { ex: CACHE_TTL_SECONDS });
-      } catch {
-        // Cache write failure is non-fatal
-      }
-    }
-
-    return result;
-
+    const payload = (await r1.json()) as { data?: { id?: string; offers?: unknown[] } };
+    offerRequestId = payload.data?.id ?? "";
+    inlineOffers = payload.data?.offers ?? null;
   } catch (err) {
-    clearTimeout(timer);
-    const isAbort = err instanceof Error && err.name === "AbortError";
-    logger.warn("Duffel fetch error", {
-      scope: "providers/duffel",
-      origin, destination,
-      reason: isAbort ? "timeout" : err instanceof Error ? err.message : "unknown",
-    });
+    logger.warn("Duffel POST error", { scope: "providers/duffel", origin, destination, err: err instanceof Error ? err.message : "unknown" });
     return null;
   }
+
+  // Use inline offers if we got them
+  let offers: unknown[] = Array.isArray(inlineOffers) && inlineOffers.length > 0 ? inlineOffers : [];
+
+  // STEP 2: If no inline offers, poll GET endpoint (2s wait for airlines to respond)
+  if (offers.length === 0 && offerRequestId) {
+    await new Promise((r) => setTimeout(r, 2_000));
+    try {
+      const ctrl2 = new AbortController();
+      const t2 = setTimeout(() => ctrl2.abort(), 5_000);
+      const r2 = await fetch(
+        `${OFFERS_URL}?offer_request_id=${offerRequestId}&sort=total_amount&limit=10`,
+        { headers, signal: ctrl2.signal, cache: "no-store" }
+      );
+      clearTimeout(t2);
+      if (r2.ok) {
+        const payload2 = (await r2.json()) as { data?: unknown[] };
+        offers = Array.isArray(payload2.data) ? payload2.data : [];
+      }
+    } catch { /* non-fatal — use empty */ }
+  }
+
+  if (offers.length === 0) return null;
+
+  const result = bestOffer(offers);
+  if (!result) return null;
+
+  const finalResult = { ...result, origin, destination, departureDate, cabinClass };
+
+  // Cache for 15 minutes
+  if (redis) {
+    try { await redis.set(key, finalResult, { ex: CACHE_TTL_SECONDS }); } catch { /* non-fatal */ }
+  }
+
+  return finalResult;
 }
 
 export async function searchDuffelCashQuotes(input: {
@@ -182,26 +184,18 @@ export async function searchDuffelCashQuotes(input: {
   cabinClass?: "economy" | "premium_economy" | "business" | "first";
 }): Promise<DuffelSearchResult> {
   const token = resolveDuffelToken();
-  if (!token) {
-    return { configured: false, quotes: [] };
-  }
-
-  if (!input.destination || input.destination.length < 2) {
-    return { configured: true, quotes: [] };
-  }
+  if (!token) return { configured: false, quotes: [] };
+  if (!input.destination || input.destination.length < 2) return { configured: true, quotes: [] };
 
   const cabin = input.cabinClass ?? "economy";
   const origins = [...new Set(input.origins.map((o) => o.toUpperCase()))].slice(0, MAX_ORIGINS);
 
-  // All origins searched in parallel — total time = slowest single call, not sum
   const results = await Promise.all(
     origins.map((origin) =>
       fetchOfferForRoute(token, origin, input.destination.toUpperCase(), input.departureDate, cabin)
-        .catch(() => null),
-    ),
+        .catch(() => null)
+    )
   );
 
-  const quotes = results.filter((r): r is DuffelFlightQuote => r !== null);
-
-  return { configured: true, quotes };
+  return { configured: true, quotes: results.filter((r): r is DuffelFlightQuote => r !== null) };
 }
