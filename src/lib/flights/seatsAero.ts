@@ -2,7 +2,7 @@ import type { AwardOffer, CabinClass, LoyaltyProgram } from "./types";
 import { SURCHARGE_HEAVY } from "./cppValuations";
 
 const SEATS_AERO_BASE = "https://seats.aero/partnerapi";
-const TIMEOUT_MS = 18_000;
+const TIMEOUT_MS = 4_000; // 4s max — Duffel is the primary source, SeatsAero is bonus
 
 interface SeatsAeroSearchInput {
   origin: string;

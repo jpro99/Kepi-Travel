@@ -191,16 +191,23 @@ export async function runFusedSearchForTrip(
   if (!destination || !origin) return null;
 
   const { fetchDuffelCashOffers } = await import("@/lib/flights/duffelAdapter");
-  return fusedFlightSearch(
-    {
-      origin,
-      destination,
-      departDate: intent.startDate,
-      returnDate: intent.endDate,
-      passengers: 1,
-      cabin: cabinFromGenome(genome),
-      userId,
-    },
-    fetchDuffelCashOffers,
-  );
+
+  // Hard 8s cap — fusedFlightSearch runs SeatsAero which can hang
+  const result = await Promise.race([
+    fusedFlightSearch(
+      {
+        origin,
+        destination,
+        departDate: intent.startDate,
+        returnDate: intent.endDate,
+        passengers: 1,
+        cabin: cabinFromGenome(genome),
+        userId,
+      },
+      fetchDuffelCashOffers,
+    ),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 8_000)),
+  ]);
+
+  return result;
 }
