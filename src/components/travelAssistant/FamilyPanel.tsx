@@ -332,9 +332,7 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
             </p>
             <p className={`text-xs mt-0.5 ${sharingLocation ? "text-emerald-100" : "text-slate-500 dark:text-slate-400"}`}>
               {sharingLocation
-                ? lastSentAt
-                  ? `Last sent ${timeAgo(lastSentAt)} · auto-resumes when you return`
-                  : "Starting GPS…"
+                ? "Live · updates every 30s"
                 : "Tap to share — stays on when you navigate away"}
             </p>
           </div>

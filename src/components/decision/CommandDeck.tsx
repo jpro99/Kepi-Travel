@@ -679,19 +679,8 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         });
         setError(e instanceof Error ? e.message : "Something went wrong");
       } finally {
-        const finalRef = analysisRunRef.current;
-        const shouldClear = finalRef === runId;
-        console.log("[analyze] finally", {
-          runId,
-          analysisRunRefCurrent: finalRef,
-          shouldClear,
-          isLegToggle,
-          fastPath: fetchOptions?.fastPath ?? false,
-        });
-        if (!shouldClear) {
-          console.warn("[analyze] LOADING STUCK — runId mismatch, a second analysis was started");
-          return;
-        }
+        // Always clear loading — even if a second analysis started,
+        // leaving the spinner forever is worse than a brief flash
         if (isLegToggle) {
           setLegToggleBusy(false);
         } else {
