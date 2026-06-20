@@ -446,6 +446,12 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
   const [comfortWeight, setComfortWeight] = useState(0.55);
   const [loading, setLoading] = useState(false);
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
+  const [clarification, setClarification] = useState<{
+    type: string;
+    message: string;
+    hint: string;
+    parsed: Record<string, unknown>;
+  } | null>(null);
   const [refineOpen, setRefineOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [activatingId, setActivatingId] = useState<string | null>(null);
@@ -539,6 +545,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         setLoading(true);
         setError(null);
         setBrief(null);
+        setClarification(null);
         setStaysData(null);
         setSelectedStayId(null);
         setExpandedId(null);
@@ -633,6 +640,11 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
           strategyCount: data.brief?.strategies?.length ?? 0,
           hasTopology: Boolean(data.brief?.topologySearch),
         });
+        if (data.clarification) {
+          setClarification(data.clarification);
+          setLoading(false);
+          return;
+        }
         setBrief(data.brief);
         if (data.brief?.paymentMode) {
           setPaymentMode(data.brief.paymentMode);
@@ -1356,7 +1368,47 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
           </div>
         )}
 
-        {!hasAnalyzed && !loading && (
+        {clarification && !loading && (
+          <div className="mt-4 rounded-3xl border border-amber-400/30 bg-gradient-to-br from-amber-950/30 to-[#152238] px-5 py-6">
+            <p className="text-[10px] font-black uppercase tracking-widest text-amber-300">One more thing</p>
+            <p className="mt-2 text-lg font-bold text-white">{clarification.message}</p>
+            <p className="mt-1 text-sm text-slate-400">{clarification.hint}</p>
+            <div className="mt-4 flex gap-2">
+              <input
+                type="text"
+                placeholder="Type your answer…"
+                className="flex-1 rounded-2xl border border-slate-600 bg-slate-800 px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:border-amber-400/60 focus:outline-none"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && e.currentTarget.value.trim()) {
+                    const answer = e.currentTarget.value.trim();
+                    const refined = (prompt + " " + answer).trim();
+                    setInputPrompt(refined);
+                    setClarification(null);
+                    void fetchStrategies(refined, comfortWeight);
+                  }
+                }}
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={(ev) => {
+                  const inp = ev.currentTarget.previousElementSibling as HTMLInputElement;
+                  if (inp?.value.trim()) {
+                    const refined = (prompt + " " + inp.value.trim()).trim();
+                    setInputPrompt(refined);
+                    setClarification(null);
+                    void fetchStrategies(refined, comfortWeight);
+                  }
+                }}
+                className="rounded-2xl bg-amber-400 px-5 py-3 font-bold text-[#0b1f3a] active:opacity-80"
+              >
+                Go
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!hasAnalyzed && !loading && !clarification && (
           <div className="mt-6 rounded-3xl bg-gradient-to-br from-[#152238] via-[#0f1d35] to-[#152238] border border-slate-700 px-6 py-8">
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#f4c95d]">Your personal trip guru</p>
             <p className="mt-2 text-xl font-black text-white">Where are we going?</p>

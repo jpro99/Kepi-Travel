@@ -117,22 +117,49 @@ export async function POST(req: Request) {
       return NextResponse.json({ brief });
     }
 
-    // If destination couldn't be parsed, return strategies immediately
-    // without Duffel calls — avoids TypeError on undefined.toUpperCase()
     const arrivalIata = brief.intent.stops?.[0]?.iata ?? brief.intent.destinationIata;
+    const hasOrigin = brief.searchAirports.length > 0;
+
+    // Missing destination — ask the user instead of silently failing
     if (!arrivalIata) {
-      console.log("[analyze] no destination parsed — returning strategies without live prices", {
-        prompt: parsed.data.prompt.slice(0, 80),
-        ms: elapsed(),
+      const clarification = hasOrigin
+        ? {
+            type: "missing_destination" as const,
+            message: `Got it — flying out of ${brief.originCity ?? "your area"} on ${brief.intent.startDate ?? "your travel date"}. Where are you flying to?`,
+            hint: "Try: 'New York', 'London Heathrow', 'Bari Italy', or any city or airport code.",
+            parsed: {
+              origin: brief.originCity,
+              airports: brief.searchAirports,
+              startDate: brief.intent.startDate,
+            },
+          }
+        : {
+            type: "missing_both" as const,
+            message: "Where are you flying from and to? Add your home city or airport and your destination.",
+            hint: "Try: 'Fly from Los Angeles to New York on October 5th'",
+            parsed: {},
+          };
+      return NextResponse.json({ brief, clarification });
+    }
+
+    // Missing origin — ask for it
+    if (brief.originRequired || !hasOrigin) {
+      return NextResponse.json({
+        brief,
+        clarification: {
+          type: "missing_origin" as const,
+          message: `Flying to ${brief.intent.destinationIata ?? "your destination"} — where are you flying from?`,
+          hint: "Add your home city or airport: 'from Los Angeles', 'from LAX', 'from Chicago'",
+          parsed: { destination: brief.intent.destinationIata, startDate: brief.intent.startDate },
+        },
       });
-      return NextResponse.json({ brief, _meta: { skipped: "no_destination" } });
     }
 
     let workingBrief = brief;
 
     // Phase 1: wave search + fused search — hard deadline
-    if (!fastPath && !brief.originRequired && brief.searchAirports.length > 0) {
-      const phase1Budget = 4_000; // hard 4s cap — prevents background Duffel calls blocking phase2
+    if (!fastPath && !brief.originRequired && hasOrigin) {
+      const phase1Budget = 4_000;
       console.log("[analyze] phase1:start", { ms: elapsed(), phase1Budget, airports: brief.searchAirports, destination: arrivalIata });
 
       const [topologySearch, fusedFlightSearch] = await Promise.all([
