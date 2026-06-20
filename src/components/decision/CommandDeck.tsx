@@ -74,6 +74,7 @@ const INPUT_PLACEHOLDER_FLIGHTS =
 const STRATEGY_TIMEOUT_MS = 30_000; // cold start 10s + server 7s = 17s max; 30s is safe
 const STAYS_TIMEOUT_MS = 24_000;
 const FLEX_TIMEOUT_MS = 32_000;
+const ANALYZE_WATCHDOG_MS = 18_000;
 const ANALYZE_FAST_RETRY_MAX = 1;
 
 const SEGMENT_ICON: Record<string, string> = {
@@ -524,6 +525,17 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     }, 6000); // slow steps down — API responds in ~5s, so results show mid-step-1
     return () => window.clearInterval(timer);
   }, [loading, planMode]);
+
+  useEffect(() => {
+    if (!loading) return;
+    const timer = window.setTimeout(() => {
+      analysisRunRef.current += 1;
+      setLoading(false);
+      setLegToggleBusy(false);
+      setError("Search stopped before results came back. Tap Analyze again; the fast strategy path is active.");
+    }, ANALYZE_WATCHDOG_MS);
+    return () => window.clearTimeout(timer);
+  }, [loading]);
 
   const fetchStrategies = useCallback(
     async (

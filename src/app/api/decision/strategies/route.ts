@@ -2,51 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { enforceRateLimit } from "@/lib/rateLimit";
-import { enrichBriefWithDuffelPricing } from "@/lib/decision/livePricing";
 import { buildDecisionBrief } from "@/lib/decision/strategyEngine";
-import { enabledConnectorLegs } from "@/lib/decision/flightLegPlanner";
-import { mergeTopologyIntoStrategies, attachTopologyMetadata } from "@/lib/decision/topology/toStrategy";
-import { runKepiWaveSearch } from "@/lib/decision/topology/waveSearch";
-import { runFusedSearchForTrip } from "@/lib/flights/fusedFlightSearch";
-import { searchDuffelCashQuotes } from "@/lib/providers/duffel/flightOffers";
 import { getTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
-import type { TopologySearchResult } from "@/lib/decision/topology/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-// Guarantee a response before Vercel kills the function (60s) and before
-// the client timeout (40s). Must respond by 38s.
-const ROUTE_DEADLINE_MS = 38_000;
-
-function withDeadline<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
-  if (ms <= 0) return Promise.resolve(fallback);
-  return Promise.race([
-    promise,
-    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
-  ]);
-}
-
-const EMPTY_WAVE: TopologySearchResult = {
-  algorithm: "kepi-optimal-search",
-  version: 2,
-  candidatesGenerated: 0,
-  candidatesPriced: 0,
-  candidatesPruned: 0,
-  dateFlexVariantsPriced: 0,
-  duffelCallsUsed: 0,
-  seatsAeroCallsUsed: 0,
-  seatsAeroConfigured: false,
-  hotelEstimateUsd: 0,
-  baseline: null,
-  winners: [],
-  bestSavingsUsd: 0,
-  bestSavingsPct: 0,
-  routeSummary: "",
-  headline: "",
-};
-
-const EMPTY_DUFFEL = { configured: true, quotes: [] } as const; // configured:true = token present, just no quotes found
 
 const ExpertSchema = z
   .object({
@@ -66,13 +26,13 @@ const BodySchema = z.object({
   paymentMode: z.enum(["cash", "points", "mix"]).optional(),
   enabledLegIds: z.array(z.string()).optional(),
   expert: ExpertSchema,
+  // Kept for client compatibility. Analyze now always returns the fast brief.
   fastPath: z.boolean().optional(),
 });
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
   const elapsed = () => Date.now() - startedAt;
-  const remaining = () => ROUTE_DEADLINE_MS - elapsed();
 
   try {
     const userId = await resolveAuthenticatedUserId();
@@ -87,11 +47,16 @@ export async function POST(req: Request) {
       requestId: `decision-strategies-${userId}-${Date.now()}`,
     });
     if (!rateLimit.allowed) {
-      return NextResponse.json({ error: "Rate limit exceeded — try again in a minute." }, { status: 429, headers: rateLimit.headers });
+      return NextResponse.json(
+        { error: "Rate limit exceeded — try again in a minute." },
+        { status: 429, headers: rateLimit.headers },
+      );
     }
 
     let rawBody: unknown;
-    try { rawBody = await req.json(); } catch {
+    try {
+      rawBody = await req.json();
+    } catch {
       return NextResponse.json({ error: "Invalid request — please try again." }, { status: 400 });
     }
 
@@ -104,24 +69,18 @@ export async function POST(req: Request) {
     const comfortWeight = parsed.data.comfortWeight ?? genome.decisionWeights.comfort;
     const planMode = parsed.data.planMode ?? "flights";
     const paymentMode = parsed.data.paymentMode ?? "cash";
-    const fastPath = parsed.data.fastPath === true;
-
     const brief = buildDecisionBrief(parsed.data.prompt, genome, {
-      comfortWeight, planMode, paymentMode,
+      comfortWeight,
+      planMode,
+      paymentMode,
       enabledLegIds: parsed.data.enabledLegIds,
       expert: parsed.data.expert,
     });
 
-    // Hotels — no flight search needed
-    if (planMode === "hotels") {
-      return NextResponse.json({ brief });
-    }
-
     const arrivalIata = brief.intent.stops?.[0]?.iata ?? brief.intent.destinationIata;
     const hasOrigin = brief.searchAirports.length > 0;
 
-    // Missing destination — ask the user instead of silently failing
-    if (!arrivalIata) {
+    if (planMode !== "hotels" && !arrivalIata) {
       const clarification = hasOrigin
         ? {
             type: "missing_destination" as const,
@@ -142,8 +101,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ brief, clarification });
     }
 
-    // Missing origin — ask for it
-    if (brief.originRequired || !hasOrigin) {
+    if (planMode !== "hotels" && (brief.originRequired || !hasOrigin)) {
       return NextResponse.json({
         brief,
         clarification: {
@@ -155,80 +113,18 @@ export async function POST(req: Request) {
       });
     }
 
-    // Phase 1 (wave search) removed — was adding 4-8s per request
-    // Duffel phase2 quotes are the primary price source
-    const workingBrief = brief;
-
-    // Phase 2: Duffel cash quotes — hard deadline
-    const homeIata = workingBrief.searchAirports[0];
-    const hasReturn = Boolean(workingBrief.intent.returnAirports?.length && homeIata);
-    const connectorLegs = enabledConnectorLegs(workingBrief.flightLegs ?? []);
-    const phase2Budget = 5_000; // 3s Duffel timeout + 2s buffer
-
-    console.log("[analyze] phase2:start", { ms: elapsed(), phase2Budget, arrivalIata, hasReturn, origins: workingBrief.searchAirports });
-
-    const [outboundDuffel, returnDuffel, connectorDuffel] = await Promise.all([
-      withDeadline(
-        searchDuffelCashQuotes({
-          origins: workingBrief.searchAirports,
-          destination: arrivalIata,
-          departureDate: workingBrief.intent.startDate,
-        }).catch(() => EMPTY_DUFFEL),
-        phase2Budget,
-        EMPTY_DUFFEL,
-      ),
-      hasReturn && workingBrief.intent.endDate
-        ? withDeadline(
-            searchDuffelCashQuotes({
-              origins: workingBrief.intent.returnAirports as string[],
-              destination: homeIata as string,
-              departureDate: workingBrief.intent.endDate,
-            }).catch(() => EMPTY_DUFFEL),
-            phase2Budget,
-            EMPTY_DUFFEL,
-          )
-        : Promise.resolve(undefined),
-      Promise.all(
-        connectorLegs.map(async (leg) => ({
-          legId: leg.id,
-          result: await withDeadline(
-            searchDuffelCashQuotes({
-              origins: [leg.fromIata],
-              destination: leg.toIata,
-              departureDate: leg.departureDate,
-            }).catch(() => EMPTY_DUFFEL),
-            phase2Budget,
-            EMPTY_DUFFEL,
-          ),
-        })),
-      ),
-    ]);
-
-    console.log("[analyze] phase2:done", {
+    console.log("[analyze] fast-brief:complete", {
       ms: elapsed(),
-      outbound: outboundDuffel.quotes.length,
-      configured: outboundDuffel.configured,
+      planMode,
+      strategyCount: brief.strategies.length,
     });
 
-    const enriched = enrichBriefWithDuffelPricing(
-      workingBrief,
-      outboundDuffel,
-      genome,
-      comfortWeight,
-      returnDuffel,
-      connectorDuffel,
-    );
-
-    console.log("[analyze] complete", { ms: elapsed(), strategies: enriched.strategies.length, fastPath });
-    return NextResponse.json({ brief: enriched });
-
-  } catch (err) {
-    // Last-resort catch — should never happen but prevents hanging
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    console.error("[analyze] unhandled error", { ms: Date.now() - startedAt, error: msg });
-    return NextResponse.json(
-      { error: "Analysis failed — please try again." },
-      { status: 500 }
-    );
+    return NextResponse.json({ brief });
+  } catch (error) {
+    console.error("[analyze] fast-brief:error", {
+      ms: elapsed(),
+      error: error instanceof Error ? error.message : "unknown",
+    });
+    return NextResponse.json({ error: "Analysis failed — please try again." }, { status: 500 });
   }
 }
