@@ -1,112 +1,96 @@
 import { NextResponse } from "next/server";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
+import { buildDecisionBrief } from "@/lib/decision/strategyEngine";
+import { getTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
-export async function GET() {
+export async function GET(req: Request) {
   const userId = await resolveAuthenticatedUserId();
   if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const token = process.env.DUFFEL_ACCESS_TOKEN?.trim();
-  if (!token) return NextResponse.json({ error: "DUFFEL_ACCESS_TOKEN not set in Vercel env vars" }, { status: 500 });
-
-  const steps: Record<string, unknown> = {
-    tokenFound: true,
-    tokenPrefix: token.slice(0, 12) + "...",
+  const url = new URL(req.url);
+  const prompt = url.searchParams.get("q") ?? "fly from Beaumont CA to New York on September 1st";
+  const t0 = Date.now();
+  const log: Record<string, unknown>[] = [];
+  const mark = (label: string, extra?: Record<string, unknown>) => {
+    log.push({ label, ms: Date.now() - t0, ...extra });
   };
 
-  // STEP 1: POST offer request
-  const t1Start = Date.now();
-  let offerRequestId = "";
-  let inlineOffers: unknown[] = [];
+  mark("start");
+
+  // Step 1: genome
+  const genome = await getTravelerGenome(userId);
+  mark("genome_loaded");
+
+  // Step 2: build brief
+  const brief = buildDecisionBrief(prompt, genome, { planMode: "flights", paymentMode: "cash" });
+  mark("brief_built", {
+    strategies: brief.strategies.length,
+    searchAirports: brief.searchAirports,
+    destination: brief.intent.destinationIata,
+    originRequired: brief.originRequired,
+    startDate: brief.intent.startDate,
+  });
+
+  if (brief.originRequired || !brief.searchAirports.length) {
+    return NextResponse.json({ log, error: "No origin parsed from prompt" });
+  }
+
+  const arrivalIata = brief.intent.stops?.[0]?.iata ?? brief.intent.destinationIata;
+  if (!arrivalIata) {
+    return NextResponse.json({ log, error: "No destination parsed from prompt" });
+  }
+
+  // Step 3: single Duffel call (top airport only)
+  mark("duffel_start", { origin: brief.searchAirports[0], destination: arrivalIata });
   try {
-    const ctrl = new AbortController();
-    setTimeout(() => ctrl.abort(), 10_000);
-    const r = await fetch("https://api.duffel.com/air/offer_requests", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Duffel-Version": "v2",
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({
-        data: {
-          cabin_class: "economy",
-          return_offers: true,
-          slices: [{ origin: "ONT", destination: "JFK", departure_date: "2026-09-01" }],
-          passengers: [{ type: "adult" }],
-          max_connections: 1,
-        },
-      }),
-      signal: ctrl.signal,
-      cache: "no-store",
+    const { searchDuffelCashQuotes } = await import("@/lib/providers/duffel/flightOffers");
+    const result = await searchDuffelCashQuotes({
+      origins: [brief.searchAirports[0]!],
+      destination: arrivalIata,
+      departureDate: brief.intent.startDate,
     });
-    steps.postStatus = r.status;
-    steps.postMs = Date.now() - t1Start;
-
-    if (r.ok) {
-      const payload = (await r.json()) as { data?: { id?: string; offers?: unknown[] } };
-      offerRequestId = payload.data?.id ?? "";
-      inlineOffers = payload.data?.offers ?? [];
-      steps.offerRequestId = offerRequestId;
-      steps.inlineOfferCount = inlineOffers.length;
-      if (inlineOffers.length > 0) {
-        const first = inlineOffers[0] as Record<string, unknown>;
-        steps.cheapestOffer = {
-          amount: first.total_amount,
-          currency: first.total_currency,
-          airline: (() => {
-            const s = first.slices;
-            if (!Array.isArray(s) || !s[0]) return null;
-            const segs = (s[0] as Record<string, unknown>).segments;
-            if (!Array.isArray(segs) || !segs[0]) return null;
-            return (segs[0] as Record<string, unknown>).operating_carrier_code;
-          })(),
-        };
-      }
-    } else {
-      const body = await r.text().catch(() => "");
-      steps.postError = body.slice(0, 300);
-    }
+    mark("duffel_done", { configured: result.configured, quotes: result.quotes.length, cheapest: result.quotes[0]?.totalAmountUsd });
   } catch (err) {
-    steps.postException = err instanceof Error ? err.message : String(err);
-    steps.postMs = Date.now() - t1Start;
+    mark("duffel_error", { error: err instanceof Error ? err.message : String(err) });
   }
 
-  // STEP 2: GET offers if needed
-  if (inlineOffers.length === 0 && offerRequestId) {
-    await new Promise((r) => setTimeout(r, 2000));
-    const t2Start = Date.now();
-    try {
-      const ctrl = new AbortController();
-      setTimeout(() => ctrl.abort(), 6_000);
-      const r = await fetch(
-        `https://api.duffel.com/air/offers?offer_request_id=${offerRequestId}&sort=total_amount&limit=5`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Duffel-Version": "v2",
-            Accept: "application/json",
-          },
-          signal: ctrl.signal,
-          cache: "no-store",
-        }
-      );
-      steps.getStatus = r.status;
-      steps.getMs = Date.now() - t2Start;
-      if (r.ok) {
-        const payload = (await r.json()) as { data?: unknown[] };
-        steps.pollOfferCount = Array.isArray(payload.data) ? payload.data.length : 0;
-      } else {
-        steps.getError = await r.text().catch(() => "");
-      }
-    } catch (err) {
-      steps.getException = err instanceof Error ? err.message : String(err);
-    }
+  // Step 4: wave search (capped at 10s)
+  mark("wave_start");
+  try {
+    const { runKepiWaveSearch } = await import("@/lib/decision/topology/waveSearch");
+    const wave = await Promise.race([
+      runKepiWaveSearch(brief.intent, genome, brief.searchAirports),
+      new Promise<null>((r) => setTimeout(() => r(null), 10_000)),
+    ]);
+    mark("wave_done", {
+      timedOut: wave === null,
+      duffelCalls: wave?.duffelCallsUsed ?? "timed out",
+      winners: wave?.winners.length ?? 0,
+    });
+  } catch (err) {
+    mark("wave_error", { error: err instanceof Error ? err.message : String(err) });
   }
 
-  steps.totalMs = Date.now() - t1Start;
-  return NextResponse.json(steps);
+  // Step 5: fused search (capped at 8s)
+  mark("fused_start");
+  try {
+    const { runFusedSearchForTrip } = await import("@/lib/flights/fusedFlightSearch");
+    const fused = await Promise.race([
+      runFusedSearchForTrip(brief.intent, brief.searchAirports, genome, userId),
+      new Promise<null>((r) => setTimeout(() => r(null), 8_000)),
+    ]);
+    mark("fused_done", {
+      timedOut: fused === null,
+      cashCount: fused?.meta.cashCount ?? "timed out",
+    });
+  } catch (err) {
+    mark("fused_error", { error: err instanceof Error ? err.message : String(err) });
+  }
+
+  mark("complete");
+  return NextResponse.json({ log, prompt });
 }
