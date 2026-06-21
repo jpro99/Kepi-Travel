@@ -803,10 +803,6 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
       setRecordOpen(true);
       return;
     }
-    if (!isSignedIn) {
-      setError("Sign in to analyze your trip — your recording is saved in the box below.");
-      return;
-    }
     setPrompt(inputPrompt);
     setCounterfactualNote(null);
     void fetchStrategies(inputPrompt, comfortWeight);
@@ -875,13 +871,9 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
       setInputPrompt(recordedPrompt);
       setPrompt(recordedPrompt);
       setCounterfactualNote(null);
-      if (!isSignedIn) {
-        setError("Sign in to build your plan — your trip description is ready to go.");
-        return;
-      }
       void fetchStrategies(recordedPrompt, comfortWeight);
     },
-    [comfortWeight, fetchStrategies, isSignedIn],
+    [comfortWeight, fetchStrategies],
   );
 
   const handleComfortChange = (value: number) => {
