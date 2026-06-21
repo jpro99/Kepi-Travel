@@ -26,6 +26,7 @@ import type {
   StrategyFlexOptionsResult,
   TravelStrategy,
 } from "@/lib/decision/types";
+import type { FusedSearchResult } from "@/lib/flights/types";
 import { filterStrategiesByPaymentMode, paymentModeDescription } from "@/lib/decision/paymentMode";
 import { toggleLegEnabled } from "@/lib/decision/flightLegPlanner";
 import type { ExpertDeckOptions } from "@/lib/decision/expertDeck";
@@ -517,6 +518,10 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     redirectPath: string;
   } | null>(null);
   const [forwardAddress, setForwardAddress] = useState<string | null>(null);
+  const [liveSearchStatus, setLiveSearchStatus] = useState<{
+    state: "idle" | "searching" | "complete" | "failed";
+    message: string;
+  }>({ state: "idle", message: "" });
   const analyzeFastRetryRef = useRef(0);
 
   useEffect(() => {
@@ -585,6 +590,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         setBrief(null);
         setClarification(null);
         setAirportAnswers({});
+        setLiveSearchStatus({ state: "idle", message: "" });
         setStaysData(null);
         setSelectedStayByLeg({});
         setExpandedId(null);
@@ -632,6 +638,52 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
             ms: Date.now() - analyzeFetchStartedAt,
             strategyCount: localBrief.strategies.length,
           });
+          const origin = localBrief.searchAirports[0]?.toUpperCase();
+          const destination = (localBrief.intent.stops?.[0]?.iata ?? localBrief.intent.destinationIata)?.toUpperCase();
+          if (origin && destination && activePlanMode !== "hotels") {
+            setLiveSearchStatus({
+              state: "searching",
+              message: `Searching Duffel cash + Seats.aero awards for ${origin} → ${destination}...`,
+            });
+            void fetchWithTimeout(
+              "/api/flights/award-search",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  origin,
+                  destination,
+                  departDate: localBrief.intent.startDate,
+                  returnDate: localBrief.intent.endDate,
+                  passengers: 1,
+                  cabin: "business",
+                }),
+                cache: "no-store",
+                credentials: "same-origin",
+              },
+              8_000,
+              "Live cash/award search timed out.",
+            )
+              .then(async (response) => {
+                if (!response.ok) {
+                  throw new Error(`Live search returned ${response.status}`);
+                }
+                return (await response.json()) as FusedSearchResult;
+              })
+              .then((fusedFlightSearch) => {
+                setBrief((current) => (current ? { ...current, fusedFlightSearch } : current));
+                setLiveSearchStatus({
+                  state: "complete",
+                  message: `Live search complete: ${fusedFlightSearch.meta.cashCount} cash · ${fusedFlightSearch.meta.awardCount} award.`,
+                });
+              })
+              .catch(() => {
+                setLiveSearchStatus({
+                  state: "failed",
+                  message: "Live Duffel/Seats.aero search did not return fast enough. Modeled strategies stay visible.",
+                });
+              });
+          }
           return;
         }
 
@@ -742,6 +794,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     setStaysData(null);
     setError(null);
     setAirportAnswers({});
+    setLiveSearchStatus({ state: "idle", message: "" });
     setHasAnalyzed(false);
     setInputPrompt("");
     setExpandedId(null);
@@ -1485,6 +1538,19 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
             )}
           </div>
         )}
+        {brief && brief.planMode !== "hotels" && liveSearchStatus.state !== "idle" ? (
+          <p
+            className={`mt-3 rounded-xl border px-3 py-2 text-xs font-bold ${
+              liveSearchStatus.state === "complete"
+                ? "border-emerald-500/40 bg-emerald-950/40 text-emerald-200"
+                : liveSearchStatus.state === "failed"
+                  ? "border-amber-500/40 bg-amber-950/40 text-amber-100"
+                  : "border-sky-500/40 bg-sky-950/40 text-sky-100"
+            }`}
+          >
+            {liveSearchStatus.message}
+          </p>
+        ) : null}
 
         {counterfactualNote && (
           <p className="mt-3 rounded-xl border border-amber-600/30 bg-amber-950/40 px-3 py-2 text-xs font-bold text-amber-100">

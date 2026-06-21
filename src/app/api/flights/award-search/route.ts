@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
-import { enforceRateLimit } from "@/lib/rateLimit";
 import { fusedFlightSearch } from "@/lib/flights/fusedFlightSearch";
 import { fetchDuffelCashOffers } from "@/lib/flights/duffelAdapter";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 10;
 
 const BodySchema = z.object({
   origin: z.string().trim().length(3),
@@ -18,20 +18,7 @@ const BodySchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const userId = await resolveAuthenticatedUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const rateLimit = await enforceRateLimit({
-    policyName: "ai-suggestions",
-    identifier: userId,
-    route: "flights-award-search",
-    requestId: `flights-award-search-${userId}-${Date.now()}`,
-  });
-  if (!rateLimit.allowed) {
-    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429, headers: rateLimit.headers });
-  }
+  const userId = (await resolveAuthenticatedUserId()) ?? "anonymous";
 
   let body: unknown;
   try {
