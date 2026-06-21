@@ -22,6 +22,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/email-forward/receive(.*)",
   "/api/billing/webhook(.*)",
   "/api/auth(.*)",
+  "/api/flights/award-search(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
