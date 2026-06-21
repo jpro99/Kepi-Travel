@@ -549,7 +549,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         setBrief(null);
         setClarification(null);
         setStaysData(null);
-        setSelectedStayId(null);
+        setSelectedStayByLeg({});
         setExpandedId(null);
         setCounterfactualNote(null);
         setEnabledLegIds([]);
@@ -755,7 +755,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     let cancelled = false;
     setStaysLoading(true);
     setStaysData(null);
-    setSelectedStayId(null);
+    setSelectedStayByLeg({});
     void fetchWithTimeout(
       "/api/decision/stays",
       {
@@ -771,7 +771,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         if (cancelled) return;
         setStaysData(data);
         const pick = data.stays.find((stay) => stay.kepiPick);
-        if (pick) setSelectedStayId(pick.quote.id);
+        if (pick) setSelectedStayByLeg({ default: pick.quote.id });
       })
       .catch(() => {
         if (!cancelled && brief) {
