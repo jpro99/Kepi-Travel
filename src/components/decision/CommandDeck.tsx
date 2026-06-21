@@ -42,6 +42,8 @@ import { AnalyzeProgressPanel } from "@/components/decision/AnalyzeProgressPanel
 import { BookingWalkthroughModal } from "@/components/decision/BookingWalkthroughModal";
 import { buildAlignmentBoard } from "@/lib/decision/tripAlignment";
 import type { AlignmentLeg } from "@/lib/decision/tripAlignment";
+import { buildDecisionBrief } from "@/lib/decision/strategyEngine";
+import { createSampleGenome } from "@/lib/traveler/sampleGenome";
 
 import { RECORD_TRIP_EXAMPLE } from "@/lib/decision/intentParser";
 
@@ -572,6 +574,30 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         });
         const legIds = legIdsOverride ?? enabledLegIds;
         const activePlanMode = planModeOverride ?? planMode;
+
+        if (!mutation) {
+          const localBrief = buildDecisionBrief(trimmed, createSampleGenome("local-command-deck"), {
+            comfortWeight: weight,
+            planMode: activePlanMode,
+            paymentMode,
+            enabledLegIds: legIds.length > 0 ? legIds : undefined,
+            expert: expertOptions.enabled ? { ...expertOptions, enabled: true } : undefined,
+          });
+          setBrief(localBrief);
+          setPaymentMode(localBrief.paymentMode ?? paymentMode);
+          setPlanMode(localBrief.planMode ?? activePlanMode);
+          if (localBrief.flightLegs) {
+            setEnabledLegIds(localBrief.flightLegs.filter((leg) => leg.enabled).map((leg) => leg.id));
+          }
+          const top = localBrief.strategies?.[0];
+          if (top && !isLegToggle) setExpandedId(top.id);
+          console.log("[analyze] local:complete", {
+            ms: Date.now() - analyzeFetchStartedAt,
+            strategyCount: localBrief.strategies.length,
+          });
+          return;
+        }
+
         const body = mutation
           ? { prompt: nextPrompt, mutation: { ...mutation, priorityComfort: mutation.priorityComfort ?? weight } }
           : {
