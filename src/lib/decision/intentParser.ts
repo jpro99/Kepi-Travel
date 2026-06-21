@@ -72,6 +72,9 @@ const STOP_ALIASES: Record<string, keyof typeof DESTINATION_MAP> = {
 
 const ORIGIN_MAP: Record<string, { city: string; region: string; airports: string[] }> = {
   beaumont: { city: "Beaumont, CA", region: "California", airports: ["ONT", "LAX", "SNA"] },
+  ontario: { city: "Ontario, CA", region: "California", airports: ["ONT"] },
+  "ontario ca": { city: "Ontario, CA", region: "California", airports: ["ONT"] },
+  "ontario california": { city: "Ontario, CA", region: "California", airports: ["ONT"] },
   "los angeles": { city: "Los Angeles", region: "California", airports: ["LAX", "ONT", "SNA"] },
   orange: { city: "Orange County", region: "California", airports: ["SNA", "ONT", "LAX"] },
   "santa ana": { city: "Santa Ana", region: "California", airports: ["SNA", "ONT", "LAX"] },
@@ -310,6 +313,7 @@ function parseOrigin(lower: string): ParsedOrigin | null {
   const normalized = stripOriginParseNoise(lower);
   const stripped = normalized
     .replace(/^i\s+(want|wanna|would like|'d like)\s+to\s+(go\s+)?/i, "")
+    .replace(/^i\s+(want|wanna|would like|'d like)\s+(a\s+)?flight\s+to\s+(go\s+)?/i, "")
     .replace(/^plan\s+(a\s+)?trip\s+/i, "")
     .trim();
 

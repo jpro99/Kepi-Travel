@@ -29,3 +29,26 @@ test("decision strategies route returns fast brief without live provider blockin
   assert.equal(payload.brief.topologySearch, undefined);
   assert.equal(payload.brief.fusedFlightSearch, undefined);
 });
+
+test("decision strategies route parses Ontario CA as ONT origin", async () => {
+  process.env.NODE_ENV = "test";
+  const { POST } = await import("./route");
+  const response = await POST(
+    new Request("http://localhost/api/decision/strategies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "i want a flight to go from Ontario ca to bari italy",
+        comfortWeight: 0.55,
+        planMode: "flights",
+        paymentMode: "cash",
+      }),
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.brief?.intent?.originCity, "Ontario, CA");
+  assert.deepEqual(payload.brief?.searchAirports, ["ONT"]);
+  assert.equal(payload.clarification, undefined);
+});
