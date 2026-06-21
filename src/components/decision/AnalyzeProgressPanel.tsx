@@ -5,20 +5,20 @@ import { useEffect, useState } from "react";
 const FLIGHT_STEPS = [
   { label: "Understanding your trip…", detail: "Parsing dates, airports, and route shape" },
   { label: "Building route options…", detail: "ONT · LAX · SNA + open-jaw variations" },
-  { label: "Ranking cash, points & mix plays…", detail: "Scoring strategies by value per dollar" },
-  { label: "Checking live fares…", detail: "Querying airlines · estimated prices shown if slow" },
+  { label: "Ranking cash, points & mix plays…", detail: "Scoring fast modeled strategies" },
+  { label: "Preparing results…", detail: "Live fares are skipped on first pass" },
 ] as const;
 
 const FULL_TRIP_STEPS = [
   { label: "Understanding your trip…", detail: "Parsing dates, airports, stops" },
   { label: "Building route options…", detail: "Flight shapes + hotel city sequence" },
   { label: "Ranking flight plays…", detail: "Cash, points, and mix strategies" },
-  { label: "Searching hotels…", detail: "Live rates for your cities" },
+  { label: "Preparing results…", detail: "Hotels load separately after strategies" },
 ] as const;
 
 const HOTEL_STEPS = [
   { label: "Understanding your trip…", detail: "Parsing cities and dates" },
-  { label: "Finding ranked hotels…", detail: "Live rates + loyalty value" },
+  { label: "Finding ranked hotels…", detail: "Fast estimates first, live rates if available" },
 ] as const;
 
 interface AnalyzeProgressPanelProps {
@@ -92,7 +92,7 @@ export function AnalyzeProgressPanel({ planMode, stepIndex }: AnalyzeProgressPan
       </ul>
 
       <p className="mt-4 text-[10px] leading-relaxed text-slate-500">
-        Strategy pass returns first — live prices layer in as they arrive.
+        Strategy pass returns first. Slow live price checks never block results.
       </p>
     </div>
   );
