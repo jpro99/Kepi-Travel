@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
-import { enforceRateLimit } from "@/lib/rateLimit";
 import { buildDecisionBrief } from "@/lib/decision/strategyEngine";
-import { getTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
+import { createSampleGenome } from "@/lib/traveler/sampleGenome";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+const AUTH_TIMEOUT_MS = 1_200;
 
 const ExpertSchema = z
   .object({
@@ -30,28 +30,26 @@ const BodySchema = z.object({
   fastPath: z.boolean().optional(),
 });
 
+async function resolveUserIdFast(): Promise<string | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      resolveAuthenticatedUserId(),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), AUTH_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export async function POST(req: Request) {
   const startedAt = Date.now();
   const elapsed = () => Date.now() - startedAt;
 
   try {
-    const userId = await resolveAuthenticatedUserId();
-    if (!userId) {
-      return NextResponse.json({ error: "Sign in to use the Command Deck." }, { status: 401 });
-    }
-
-    const rateLimit = await enforceRateLimit({
-      policyName: "ai-suggestions",
-      identifier: userId,
-      route: "decision-strategies",
-      requestId: `decision-strategies-${userId}-${Date.now()}`,
-    });
-    if (!rateLimit.allowed) {
-      return NextResponse.json(
-        { error: "Rate limit exceeded — try again in a minute." },
-        { status: 429, headers: rateLimit.headers },
-      );
-    }
+    const userId = (await resolveUserIdFast()) ?? "anonymous";
 
     let rawBody: unknown;
     try {
@@ -65,7 +63,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid request parameters." }, { status: 400 });
     }
 
-    const genome = await getTravelerGenome(userId);
+    const genome = createSampleGenome(userId);
     const comfortWeight = parsed.data.comfortWeight ?? genome.decisionWeights.comfort;
     const planMode = parsed.data.planMode ?? "flights";
     const paymentMode = parsed.data.paymentMode ?? "cash";
