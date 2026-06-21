@@ -437,6 +437,41 @@ function collectSelectedStayPayloads(
   ];
 }
 
+function airportQuestionStopName(question: DecisionQuestion): string | null {
+  if (!question.id.startsWith("q-airport-")) return null;
+  const match = question.prompt.match(/^Which airport for (.+)\?$/u);
+  return match?.[1]?.trim() || null;
+}
+
+function applyAirportChoiceToBrief(
+  currentBrief: DecisionBrief,
+  stopName: string,
+  airportIata: string,
+): DecisionBrief {
+  const normalizedAirport = airportIata.toUpperCase();
+  const updatedStops = currentBrief.intent.stops?.map((stop) =>
+    stop.name === stopName ? { ...stop, iata: normalizedAirport } : stop,
+  );
+  const updatedFlightLegs = currentBrief.flightLegs?.map((leg) => {
+    if (leg.fromLabel === stopName) {
+      return { ...leg, fromIata: normalizedAirport };
+    }
+    if (leg.toLabel === stopName) {
+      return { ...leg, toIata: normalizedAirport };
+    }
+    return leg;
+  });
+
+  return {
+    ...currentBrief,
+    intent: {
+      ...currentBrief.intent,
+      stops: updatedStops,
+    },
+    flightLegs: updatedFlightLegs,
+  };
+}
+
 /* ── Command Deck ───────────────────────────────────────────────────────── */
 export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter();
@@ -454,6 +489,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     hint: string;
     parsed: Record<string, unknown>;
   } | null>(null);
+  const [airportAnswers, setAirportAnswers] = useState<Record<string, string>>({});
   const [refineOpen, setRefineOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [activatingId, setActivatingId] = useState<string | null>(null);
@@ -548,6 +584,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         setError(null);
         setBrief(null);
         setClarification(null);
+        setAirportAnswers({});
         setStaysData(null);
         setSelectedStayByLeg({});
         setExpandedId(null);
@@ -704,6 +741,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     setBrief(null);
     setStaysData(null);
     setError(null);
+    setAirportAnswers({});
     setHasAnalyzed(false);
     setInputPrompt("");
     setExpandedId(null);
@@ -971,6 +1009,14 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
 
   const handleQuestionAnswer = async (question: DecisionQuestion, optionId: string) => {
     const option = question.options.find((opt) => opt.id === optionId);
+    const stopName = airportQuestionStopName(question);
+    if (stopName && option) {
+      const selectedIata = option.label.toUpperCase();
+      setAirportAnswers((current) => ({ ...current, [question.id]: selectedIata }));
+      setBrief((current) => (current ? applyAirportChoiceToBrief(current, stopName, selectedIata) : current));
+      setCounterfactualNote(`Using ${selectedIata} for ${stopName}.`);
+      return;
+    }
     if (option?.genomeOverride) {
       await fetch("/api/traveler/genome", {
         method: "PUT",
@@ -1465,12 +1511,21 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
                       key={option.id}
                       type="button"
                       onClick={() => void handleQuestionAnswer(question, option.id)}
-                      className="rounded-xl border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-bold text-slate-100 transition-all hover:border-amber-400 hover:bg-[#f4c95d] hover:text-[#0b1f3a]"
+                      className={`rounded-xl border px-3 py-1.5 text-xs font-bold transition-all ${
+                        airportAnswers[question.id] === option.label.toUpperCase()
+                          ? "border-[#f4c95d] bg-[#f4c95d] text-[#0b1f3a]"
+                          : "border-slate-500 bg-slate-700 text-slate-100 hover:border-amber-400 hover:bg-[#f4c95d] hover:text-[#0b1f3a]"
+                      }`}
                     >
                       {option.label}
                     </button>
                   ))}
                 </div>
+                {airportAnswers[question.id] ? (
+                  <p className="mt-2 text-[11px] font-semibold text-emerald-300">
+                    Selected {airportAnswers[question.id]}.
+                  </p>
+                ) : null}
               </div>
             ))}
           </div>
