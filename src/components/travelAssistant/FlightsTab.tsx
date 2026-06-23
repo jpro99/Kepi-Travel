@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import Link from "next/link";
 import { buildGateInstructions, getAirportNav, buildArrivalGuide } from "@/lib/travelAssistant/airportNavigation";
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -268,6 +269,9 @@ function AirportGuideCard({
   }, [flight.id]);
   const isAirside = locationStatus === "in-terminal";
   const isAtAirport = locationStatus === "at-airport" || locationStatus === "in-terminal";
+  const minsToDep = minsUntilDep(flight);
+  const showTerminalNavigator =
+    Boolean(iata) && (isAtAirport || (minsToDep <= 12 * 60 && minsToDep > -3 * 60));
   const delay = live?.delayMinutes ?? flight.flightDelayMinutes ?? 0;
   const status = (live?.flightStatus || flight.flightStatus || "").toLowerCase();
   const cancelled = status === "cancelled";
@@ -342,6 +346,25 @@ function AirportGuideCard({
           )}
         </div>
       )}
+
+      {showTerminalNavigator ? (
+        <div className="mx-4 mb-3">
+          <Link
+            href="/travel-assistant/live-map?view=airport"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#007AFF] py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-500/30 transition hover:bg-[#0066DD]"
+          >
+            {isAtAirport ? "Open terminal navigator" : "Preview airport map"}
+            <span aria-hidden>→</span>
+          </Link>
+          <p className="mt-2 text-center text-[10px] text-white/40">
+            {isAtAirport
+              ? hasNav
+                ? `Gate routing · lounges · ${iata} terminal map`
+                : `Live map switches to ${iata} when you're at the airport`
+              : `Opens ${iata} navigator — family map stays one tap away`}
+          </p>
+        </div>
+      ) : null}
 
       {/* No gate yet — prompt check status */}
       {isAtAirport && !gate && (

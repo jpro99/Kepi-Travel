@@ -11,6 +11,9 @@ interface DisruptionAlertProps {
   scheduledDepart: string;
   scheduledArrive: string;
   nextFlight?: { origin: string; scheduledDepart: string };
+  /** Feeds this flight's live status into the broader incident-autopilot recovery pipeline —
+   * called on every check, not just actionable ones, so callers can clear a stale scenario too. */
+  onAssessment?: (assessment: DisruptionAssessment) => void;
 }
 
 function fmt(iso: string) {
@@ -30,7 +33,7 @@ const SEVERITY_STYLES = {
 
 export function DisruptionAlert({
   flightNumber, airlineIata, origin, destination,
-  scheduledDepart, scheduledArrive, nextFlight,
+  scheduledDepart, scheduledArrive, nextFlight, onAssessment,
 }: DisruptionAlertProps) {
   const [assessment, setAssessment] = useState<DisruptionAssessment | null>(null);
   const [status, setStatus] = useState<LiveFlightStatus | null>(null);
@@ -53,12 +56,13 @@ export function DisruptionAlert({
       setAlternatives(data.alternatives ?? []);
       setLastChecked(new Date());
       if (data.assessment?.actionRequired) setShowAlts(true);
+      if (data.assessment) onAssessment?.(data.assessment);
     } catch {
       // Silent fail — don't disrupt the main UI
     } finally {
       setLoading(false);
     }
-  }, [flightNumber, airlineIata, origin, destination, scheduledDepart, scheduledArrive, nextFlight]);
+  }, [flightNumber, airlineIata, origin, destination, scheduledDepart, scheduledArrive, nextFlight, onAssessment]);
 
   useEffect(() => {
     void check();

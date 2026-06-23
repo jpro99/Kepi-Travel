@@ -89,6 +89,10 @@ import { HotelsTab } from "@/components/travelAssistant/HotelsTab";
 import { ShareTripCard } from "@/components/travelAssistant/ShareTripCard";
 import { TravelDayView } from "@/components/travelAssistant/TravelDayView";
 import { ShareModal } from "@/components/travelAssistant/ShareModal";
+import { DisruptionAlert } from "@/components/travelAssistant/DisruptionAlert";
+import { TripReview } from "@/components/travelAssistant/TripReview";
+import { SmartPackingList } from "@/components/travelAssistant/SmartPackingList";
+import { LoyaltyWallet } from "@/components/loyalty/LoyaltyWallet";
 import { ReferralCard } from "@/components/referral/ReferralCard";
 import { WeatherCard } from "@/components/travelAssistant/WeatherCard";
 import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntelligencePanel";
@@ -1953,6 +1957,12 @@ export default function TravelAssistantPage() {
   const [showCompletedFlights, setShowCompletedFlights] = useState(false);
   const [reservationsRefreshing, setReservationsRefreshing] = useState(false);
   const [ticketScanBusy, setTicketScanBusy] = useState(false);
+  const [calendarSyncInFlight, setCalendarSyncInFlight] = useState(false);
+  const [calendarSyncTone, setCalendarSyncTone] = useState<"neutral" | "success" | "error">("neutral");
+  const [calendarSyncMessage, setCalendarSyncMessage] = useState<string | null>(null);
+  // Manual disruption-simulation trigger — surfaced as a button for QA/e2e only.
+  const [simulatedDisruption, setSimulatedDisruption] = useState(false);
+  const toggleDisruption = useCallback(() => setSimulatedDisruption((v) => !v), []);
 
   const viewerDisplayName = useMemo(
     () => resolveViewerName(user?.firstName, user?.primaryEmailAddress?.emailAddress),
@@ -7042,6 +7052,16 @@ export default function TravelAssistantPage() {
                         destination={arrAirport}
                         scheduledDepart={schedDepart}
                         scheduledArrive={schedArrive}
+                        onAssessment={(assessment) => {
+                          // Feed the real, live-polled flight status into the same
+                          // recovery pipeline the manual simulation buttons drive,
+                          // so incidentAutopilot reacts to real disruptions too.
+                          if (assessment.actionRequired && assessment.severity !== "none") {
+                            setActiveScenario((current) => (current === "none" ? "missed-flight" : current));
+                          } else if (activeScenario === "missed-flight") {
+                            setActiveScenario("none");
+                          }
+                        }}
                       />
                     );
                   })()}
@@ -7760,6 +7780,7 @@ export default function TravelAssistantPage() {
             ) : null}
           </div>
           <TravelAssistantTopControls
+            toggleDisruption={toggleDisruption}
             tripStatus={tripStatus}
             statusBadgeByTripStatus={STATUS_BADGE}
             statusLabelByTripStatus={STATUS_LABEL}
