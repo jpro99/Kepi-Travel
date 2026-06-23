@@ -1629,6 +1629,32 @@ function defaultTripFromCurrentState(input: {
   };
 }
 
+
+function LoyaltyWalletSection() {
+  const [balances, setBalances] = useState<{ programId: string; miles: number; tier?: string }[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/loyalty")
+      .then((r) => r.json())
+      .then((d) => { if (d.balances) setBalances(d.balances); })
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, []);
+
+  const handleUpdate = async (next: typeof balances) => {
+    await fetch("/api/loyalty", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ balances: next }),
+    });
+    setBalances(next);
+  };
+
+  if (!loaded) return <p className="text-sm text-slate-400 py-2">Loading wallet…</p>;
+  return <LoyaltyWallet balances={balances} onUpdate={handleUpdate} />;
+}
+
 export default function TravelAssistantPage() {
   const clerk = useClerk();
   const { user } = useUser();
@@ -7258,6 +7284,27 @@ export default function TravelAssistantPage() {
             />
           ) : (
             <section className="space-y-3">
+              {/* Loyalty Wallet */}
+              <div className="rounded-3xl bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/[0.08] overflow-hidden">
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between px-5 py-4 text-left"
+                  onClick={() => document.getElementById("loyalty-section")?.classList.toggle("hidden")}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">💳</span>
+                    <div>
+                      <p className="font-semibold text-slate-900 dark:text-white">Loyalty Wallet</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Miles · points · cash value · status</p>
+                    </div>
+                  </div>
+                  <span className="text-slate-400 text-sm">›</span>
+                </button>
+                <div id="loyalty-section" className="hidden border-t border-slate-100 dark:border-slate-800 px-4 pb-4 pt-4">
+                  <LoyaltyWalletSection />
+                </div>
+              </div>
+
               {/* Packing + Bags — now in More tab */}
               <div className="rounded-3xl bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/[0.08] overflow-hidden">
                 <button

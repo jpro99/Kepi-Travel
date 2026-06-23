@@ -53,6 +53,8 @@ export interface GenomeCorrection {
 }
 
 export interface TravelerGenome {
+  /** Loyalty program balances — updated by user */
+  loyaltyBalances?: { programId: string; miles: number; tier?: string }[];
   userId: string;
   homeRegion: string;
   geoCluster: GeoAirport[];

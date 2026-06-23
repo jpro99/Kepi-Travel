@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { suggestAirports, resolveAirport, type AirportResult } from "@/lib/airports/lookup";
+import { calcTrueCost, calcPointsOptions, type LoyaltyBalance } from "@/lib/loyalty/optimizer";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Flight {
@@ -279,9 +280,68 @@ function FlightDetail({ flight, onBack, onSave }: { flight: Flight; onBack: () =
           </div>
         )}
 
-        <p className="text-xs text-slate-500 text-center px-4">
-          Price is from Duffel's live inventory. Final price confirmed at checkout. Availability may change.
-        </p>
+        {/* True cost breakdown */}
+        {(() => {
+          const trueCost = calcTrueCost(flight.price, flight.airline, "economy", flight.fromIata, !!flight.returnFlight);
+          const pointsOpts = calcPointsOptions(flight.price, flight.airline, loyaltyBalances);
+          const bestPoints = pointsOpts.find(o => o.type === "points" && o.recommendation === "use");
+          return (
+            <div className="space-y-3">
+              {/* True cost */}
+              <div className="rounded-2xl border border-slate-700 bg-[#111e33] px-4 py-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">True trip cost</p>
+                <div className="space-y-2">
+                  {trueCost.breakdown.map((item, i) => (
+                    <div key={i} className="flex justify-between text-sm">
+                      <span className="text-slate-400">{item.label}</span>
+                      <span className="text-white font-semibold">
+                        {item.note ?? `$${item.amount}`}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between pt-2 border-t border-slate-700 text-sm font-black">
+                    <span className="text-white">Total real cost</span>
+                    <span className="text-[#f4c95d] text-lg">${trueCost.total.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Points options */}
+              {pointsOpts.length > 1 && (
+                <div className="rounded-2xl border border-slate-700 bg-[#111e33] px-4 py-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Pay with points?</p>
+                  <div className="space-y-2.5">
+                    {pointsOpts.map((opt, i) => (
+                      <div key={i} className={`rounded-xl px-3 py-2.5 border ${opt.recommendation === "use" ? "border-emerald-500/40 bg-emerald-950/20" : "border-slate-700/50"}`}>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-sm font-bold text-white">{opt.label}</span>
+                          {opt.recommendation === "use" && <span className="text-[10px] font-black text-emerald-400 uppercase">Best value</span>}
+                        </div>
+                        <p className="text-xs text-slate-400">{opt.reason}</p>
+                        {opt.milesUsed && (
+                          <p className="text-xs text-slate-300 mt-1 font-semibold">{opt.milesUsed.toLocaleString()} points</p>
+                        )}
+                      </div>
+                    ))}
+                    {loyaltyBalances.length === 0 && (
+                      <p className="text-xs text-slate-500">
+                        <Link href="/travel-assistant?tab=more" className="text-[#f4c95d] underline">Add your loyalty programs</Link> to see points options here.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {bestPoints && (
+                <p className="text-xs text-emerald-400 text-center">
+                  💡 You can cover this flight with points — saving ${Math.round(flight.price)} cash
+                </p>
+              )}
+            </div>
+          );
+        })()}
+
+        
 
         <button
           type="button"
@@ -341,6 +401,14 @@ export default function BookPage() {
   const [sort, setSort] = useState<SortKey>("price");
   const [selected, setSelected] = useState<Flight | null>(null);
   const [saved, setSaved] = useState(false);
+  const [loyaltyBalances, setLoyaltyBalances] = useState<LoyaltyBalance[]>([]);
+
+  // Load loyalty balances on mount
+  useEffect(() => {
+    fetch("/api/loyalty").then(r => r.json()).then(d => {
+      if (d.balances) setLoyaltyBalances(d.balances);
+    }).catch(() => {});
+  }, []);
 
   const swap = () => {
     setFromDisplay(toDisplay); setFromIata(toIata);
