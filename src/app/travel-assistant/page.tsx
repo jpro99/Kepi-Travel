@@ -7020,6 +7020,32 @@ export default function TravelAssistantPage() {
                     </p>
                   </div>
 
+                  {/* Disruption alert — auto-monitors on travel day */}
+                  {journeyPhase.daysUntil <= 1 && (() => {
+                    const rr = journeyPhase.nextFlight as Reservation & Record<string, string | undefined>;
+                    const flightNum = rr.flightNumber?.replace(/\s/g, "") ?? "";
+                    const airline = rr.flightAirline ?? rr.provider ?? "";
+                    const iata = airline.match(/^[A-Z]{2}/)?.[0] ?? "";
+                    const depAirport = rr.flightDepartureAirport ?? "";
+                    const arrAirport = rr.flightArrivalAirport ?? "";
+                    const depTime = rr.flightDepartureTime ?? rr.localTime ?? "";
+                    const arrTime = rr.flightArrivalTime ?? "";
+                    const depDate = rr.flightDate ?? rr.flightDepartureDate ?? new Date().toISOString().split("T")[0];
+                    if (!flightNum || !depAirport || !arrAirport) return null;
+                    const schedDepart = `${depDate}T${depTime || "00:00"}:00`;
+                    const schedArrive = `${depDate}T${arrTime || "23:59"}:00`;
+                    return (
+                      <DisruptionAlert
+                        flightNumber={flightNum}
+                        airlineIata={iata}
+                        origin={depAirport}
+                        destination={arrAirport}
+                        scheduledDepart={schedDepart}
+                        scheduledArrive={schedArrive}
+                      />
+                    );
+                  })()}
+
                   <NextUpCard
                     reservations={consumerReservationsSorted}
                     tripName={activeTrip?.name ?? "Your trip"}
