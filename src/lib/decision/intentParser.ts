@@ -71,7 +71,7 @@ const STOP_ALIASES: Record<string, keyof typeof DESTINATION_MAP> = {
 };
 
 const ORIGIN_MAP: Record<string, { city: string; region: string; airports: string[] }> = {
-  beaumont: { city: "Beaumont, CA", region: "California", airports: ["ONT", "LAX", "SNA"] },
+  beaumont: { city: "Beaumont, CA", region: "California", airports: ["ONT", "PSP", "SNA", "LAX"] },
   ontario: { city: "Ontario, CA", region: "California", airports: ["ONT"] },
   "ontario ca": { city: "Ontario, CA", region: "California", airports: ["ONT"] },
   "ontario california": { city: "Ontario, CA", region: "California", airports: ["ONT"] },
@@ -80,7 +80,7 @@ const ORIGIN_MAP: Record<string, { city: string; region: string; airports: strin
   "santa ana": { city: "Santa Ana", region: "California", airports: ["SNA", "ONT", "LAX"] },
   seattle: { city: "Seattle", region: "Washington", airports: ["SEA", "BFI"] },
   "san francisco": { city: "San Francisco", region: "California", airports: ["SFO", "OAK", "SJC"] },
-  california: { city: "Southern California", region: "California", airports: ["LAX", "ONT", "SNA"] },
+  california: { city: "Southern California", region: "California", airports: ["LAX", "ONT", "SNA", "PSP"] },
   "west coast": { city: "West Coast", region: "California", airports: ["LAX", "ONT", "SNA", "SEA", "SFO"] },
   london: { city: "London", region: "United Kingdom", airports: ["LHR", "LGW", "STN"] },
   heathrow: { city: "London Heathrow", region: "United Kingdom", airports: ["LHR"] },
@@ -111,8 +111,12 @@ function originFromIata(iata: string): ParsedOrigin | null {
   return { city: meta.city, region: meta.region, airports: [upper] };
 }
 
+function sanitizeOriginCapture(text: string): string {
+  return text.replace(/^[\s,;:–—-]+/, "").trim();
+}
+
 function matchOriginFromText(text: string): ParsedOrigin | null {
-  const normalized = text.toLowerCase().trim().replace(/\s+/g, " ");
+  const normalized = sanitizeOriginCapture(text.toLowerCase().trim().replace(/\s+/g, " "));
   if (!normalized) return null;
 
   const iataOnly = normalized.match(/^([a-z]{3})$/);
@@ -234,6 +238,7 @@ function parseFlightDates(
   year: number,
 ): { startDate: string; endDate: string; nights: number } | null {
   const departPatterns = [
+    /(?:on\s+)?(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?/i,
     /fly(?:\s+out|\s+from)?\s+(?:on|around)\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?/i,
     /leave(?:\s+on|\s+around)?\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?/i,
     /depart(?:\s+on|\s+around)?\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?/i,
@@ -423,6 +428,22 @@ function parseLoyalty(lower: string): { programs: string[]; airlines: string[] }
   return { programs, airlines };
 }
 
+function parseInstrumentHints(lower: string): { wantsAlaskaUpgrade: boolean; hints: string[] } {
+  const hints: string[] = [];
+  const mentionsUpgrade =
+    /upgrade\s*(?:cert(?:ificate)?|certificate)|guest\s*upgrade|apply\s*(?:my|an?)\s*upgrade/i.test(lower);
+  const mentionsAlaska = /alaska|as\s*(?:mvp|gold|75k|100k)/i.test(lower);
+
+  if (mentionsUpgrade && mentionsAlaska) {
+    hints.push("Alaska Guest Upgrade Certificate");
+    return { wantsAlaskaUpgrade: true, hints };
+  }
+  if (mentionsUpgrade) {
+    hints.push("Upgrade certificate");
+  }
+  return { wantsAlaskaUpgrade: false, hints };
+}
+
 function parseBudgetHint(lower: string): string | undefined {
   const rangeMatch = lower.match(/\$\s*([\d,]+)\s*(?:to|-)\s*\$\s*([\d,]+)/);
   if (rangeMatch) {
@@ -449,18 +470,25 @@ export function parseTripIntent(rawPrompt: string, referenceDate = new Date()): 
   const returnPlace = parseReturn(lower);
   const loyalty = parseLoyalty(lower);
   const budgetHint = parseBudgetHint(lower);
+  const instrument = parseInstrumentHints(lower);
 
   let destinationKey = "italy";
+  let destinationInferredDefault = false;
   if (stops.length > 0) {
     const last = stops[stops.length - 1]!;
     destinationKey =
       Object.entries(DESTINATION_MAP).find(([, d]) => d.city === last.name)?.[0] ?? "italy";
   } else {
+    destinationKey = "";
     for (const key of Object.keys(DESTINATION_MAP)) {
       if (lower.includes(key)) {
         destinationKey = key;
         break;
       }
+    }
+    if (!destinationKey) {
+      destinationKey = "italy";
+      destinationInferredDefault = true;
     }
   }
 
@@ -510,6 +538,7 @@ export function parseTripIntent(rawPrompt: string, referenceDate = new Date()): 
     destination: stops.length > 1 ? `${primaryLabel} + ${stops.length - 1} more` : primaryLabel,
     destinationIata: primaryIata,
     region: primaryRegion,
+    destinationInferredDefault: destinationInferredDefault || undefined,
     monthLabel,
     startDate,
     endDate,
@@ -526,6 +555,8 @@ export function parseTripIntent(rawPrompt: string, referenceDate = new Date()): 
     preferredAirlines: loyalty.airlines.length > 0 ? loyalty.airlines : undefined,
     budgetHint,
     isMultiCity: stops.length > 1,
+    wantsAlaskaUpgrade: instrument.wantsAlaskaUpgrade || undefined,
+    instrumentHints: instrument.hints.length > 0 ? instrument.hints : undefined,
   };
 }
 

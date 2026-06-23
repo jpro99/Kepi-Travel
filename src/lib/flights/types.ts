@@ -50,6 +50,8 @@ export interface CashOffer {
   cabin: CabinClass;
   segments: FlightSegment[];
   source: "duffel";
+  /** Full airline name from Duffel — used for booking links */
+  airlineName?: string;
 }
 
 export interface AwardOffer {
@@ -92,6 +94,66 @@ export interface FusedOffer {
   metrics?: OfferMetrics;
   score?: number;
   scoreBreakdown?: ScoreBreakdown;
+  /** IATA where this offer was found (cash origin or award search origin). */
+  searchOrigin?: string;
+  /** Award found via a West Coast gateway, not the traveler's home airport. */
+  isGatewayPlay?: boolean;
+  feederOrigin?: string;
+  feederCashUsd?: number;
+  gatewayPlayTitle?: string;
+}
+
+export interface OriginCashRow {
+  origin: string;
+  totalAmount: number;
+  currency: string;
+  airline: string;
+  stops: number;
+  offerId: string;
+  cabin: CabinClass;
+  departureDate: string;
+}
+
+/** Cheapest (by cash-equivalent value) live award per origin — points/miles counterpart to OriginCashRow. */
+export interface OriginAwardRow {
+  origin: string;
+  milesCost: number;
+  program: LoyaltyProgram;
+  /** Realized cents-per-point vs the cheapest comparable cash fare, when one exists. */
+  centsPerPoint?: number;
+  pricingSource: "live";
+  stops: number;
+  cabin: CabinClass;
+  departureDate: string;
+  isGatewayPlay: boolean;
+  feederOrigin?: string;
+  feederCashUsd?: number;
+  offerId?: string;
+}
+
+export interface AlaskaUpgradeCandidate {
+  origin: string;
+  destination: string;
+  departureDate: string;
+  cashUsd: number;
+  airline: string;
+  offerId?: string;
+  cabin: CabinClass;
+  instrumentLabel: string;
+  detail: string;
+  bookUrl: string;
+  bookLabel: string;
+}
+
+export interface CabinSearchSlice {
+  cabin: CabinClass;
+  offers: FusedOffer[];
+  cheapestCash?: FusedOffer;
+  bestAward?: FusedOffer;
+  originCashLeaderboard?: OriginCashRow[];
+  originAwardLeaderboard?: OriginAwardRow[];
+  gatewayPlays?: FusedOffer[];
+  headline?: string;
 }
 
 export interface ReachabilityPath {
@@ -118,6 +180,17 @@ export interface FusedSearchResult {
   offers: FusedOffer[];
   cheapestCash?: FusedOffer;
   bestAward?: FusedOffer;
+  /** Live Duffel cash from each nearby origin — sorted cheapest first. */
+  originCashLeaderboard?: OriginCashRow[];
+  /** Live award from each nearby origin (locals + West Coast gateways) — sorted cheapest cash-equivalent first. */
+  originAwardLeaderboard?: OriginAwardRow[];
+  /** Best award from a West Coast gateway when home airport has no space. */
+  gatewayPlays?: FusedOffer[];
+  /** Economy + business slices when both are searched */
+  cabinsSearched?: CabinClass[];
+  byCabin?: Partial<Record<CabinClass, CabinSearchSlice>>;
+  /** Alaska-metal fares where a Guest Upgrade Certificate may apply */
+  alaskaUpgradeCandidates?: AlaskaUpgradeCandidate[];
   headline?: string;
   warnings: string[];
   meta: {
@@ -126,5 +199,8 @@ export interface FusedSearchResult {
     cashCached: boolean;
     awardCached: boolean;
     elapsedMs: number;
+    cashOriginsSearched: string[];
+    awardOriginsSearched: string[];
+    awardGatewaysSearched: string[];
   };
 }

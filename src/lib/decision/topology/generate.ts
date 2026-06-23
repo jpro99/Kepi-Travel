@@ -1,6 +1,6 @@
 import { allocateStopDates } from "@/lib/decision/stopDates";
 import { formatStopRoute } from "@/lib/decision/stopDates";
-import { resolvePrimaryOrigin } from "@/lib/decision/tripOrigins";
+import { prefersCarrierFromIntentOrGenome, resolvePrimaryOrigin } from "@/lib/decision/tripOrigins";
 import type { TripIntent } from "@/lib/decision/types";
 import type { TravelerGenome } from "@/lib/traveler/types";
 import { estimateGroundConnector } from "@/lib/decision/topology/groundConnectors";
@@ -10,20 +10,12 @@ function isSoCalOrigin(iata: string): boolean {
   return ["LAX", "ONT", "SNA", "BUR", "SAN"].includes(iata.toUpperCase());
 }
 
-function prefersAlaska(intent: TripIntent): boolean {
-  return (
-    intent.preferredAirlines?.includes("Alaska") ||
-    intent.loyaltyPrograms?.some((p) => /alaska/i.test(p)) ||
-    false
-  );
-}
-
 const US_LONGHAUL_HUBS = ["SEA", "LAX", "SFO", "JFK", "ORD", "BOS", "ATL", "DFW", "EWR", "IAD"] as const;
 
-function pickRepositionHubs(origin: string, intent: TripIntent): string[] {
+function pickRepositionHubs(origin: string, intent: TripIntent, genome: Pick<TravelerGenome, "statuses">): string[] {
   const upper = origin.toUpperCase();
   const hubs: string[] = [];
-  if (prefersAlaska(intent) && upper !== "SEA") hubs.push("SEA");
+  if (prefersCarrierFromIntentOrGenome(intent, genome, "alaska") && upper !== "SEA") hubs.push("SEA");
   if (isSoCalOrigin(upper) && upper !== "SEA") hubs.push("SEA");
   if (upper === "ONT" || upper === "SNA") hubs.push("LAX");
   for (const hub of US_LONGHAUL_HUBS) {
@@ -372,7 +364,7 @@ export function generateTopologyCandidates(
 
   // Wave 3 — positioning hubs (feeder + long-haul)
   if (genome.toleratesRepositioning !== false) {
-    for (const hub of pickRepositionHubs(primaryHome, intent)) {
+    for (const hub of pickRepositionHubs(primaryHome, intent, genome)) {
       if (hub === primaryHome) continue;
       addOpenJaw(
         primaryHome,

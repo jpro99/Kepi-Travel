@@ -1,5 +1,6 @@
 import type { DecisionBrief, TravelStrategy } from "@/lib/decision/types";
 import type { DuffelSearchResult } from "@/lib/providers/duffel/types";
+import type { FusedSearchResult } from "@/lib/flights/types";
 import { rankStrategiesByValue } from "@/lib/decision/strategyRanking";
 import type { TravelerGenome } from "@/lib/traveler/types";
 
@@ -236,6 +237,92 @@ export function enrichBriefWithDuffelPricing(
       message: returnBest
         ? `Live RT cash: out $${outboundBest.totalAmountUsd} (${outboundBest.airline}) + return $${returnBest.totalAmountUsd} (${returnBest.airline})${connectorMessage}`
         : `Live cash from ${outboundBest.origin}: $${outboundBest.totalAmountUsd} (${outboundBest.airline})${connectorMessage}`,
+    },
+  };
+}
+
+/** Apply multi-origin fused search results to livePricing + direct_cash strategy. */
+export function mergeFusedIntoBrief(
+  brief: DecisionBrief,
+  fused: FusedSearchResult,
+  genome: TravelerGenome,
+  comfortWeight: number,
+): DecisionBrief {
+  const board = fused.originCashLeaderboard ?? [];
+  if (board.length === 0) return brief;
+
+  const best = board[0];
+  const bestUsd = Math.round((best.totalAmount / 100) * 100) / 100;
+  const quoteLike: DuffelSearchResult["quotes"][number] = {
+    origin: best.origin,
+    destination: fused.params.destination,
+    departureDate: best.departureDate,
+    totalAmountUsd: bestUsd,
+    currency: best.currency,
+    airline: best.airline,
+    stops: best.stops,
+    offerId: best.offerId,
+    flightNumber: undefined,
+    cabinClass: best.cabin,
+  };
+
+  const returnOffer = brief.livePricing?.returnOffer;
+  const returnQuote = returnOffer
+    ? {
+        origin: returnOffer.origin,
+        destination: returnOffer.destination,
+        departureDate: returnOffer.departureDate ?? brief.intent.endDate,
+        totalAmountUsd: returnOffer.amount,
+        currency: returnOffer.currency,
+        airline: returnOffer.airline,
+        stops: returnOffer.stops,
+        offerId: returnOffer.offerId ?? "",
+        flightNumber: returnOffer.flightNumber,
+        cabinClass: best.cabin,
+      }
+    : undefined;
+
+  let strategies = brief.strategies.map((strategy) =>
+    strategy.kind === "direct_cash"
+      ? applyRoundTripToDirectStrategy(strategy, quoteLike, returnQuote)
+      : strategy,
+  );
+  strategies = rankStrategiesByValue(strategies, genome, comfortWeight);
+
+  const perOriginCash = board.map((row) => ({
+    origin: row.origin,
+    amount: Math.round((row.totalAmount / 100) * 100) / 100,
+    airline: row.airline,
+    stops: row.stops,
+    offerId: row.offerId || undefined,
+  }));
+
+  return {
+    ...brief,
+    strategies,
+    strategyCatalog: brief.strategyCatalog?.map((strategy) =>
+      strategy.kind === "direct_cash"
+        ? applyRoundTripToDirectStrategy(strategy, quoteLike, returnQuote)
+        : strategy,
+    ),
+    livePricing: {
+      ...brief.livePricing,
+      source: "duffel",
+      configured: true,
+      quotesFound: Math.max(brief.livePricing?.quotesFound ?? 0, board.length),
+      bestOffer: {
+        origin: best.origin,
+        destination: fused.params.destination,
+        amount: bestUsd,
+        currency: best.currency,
+        airline: best.airline,
+        stops: best.stops,
+        offerId: best.offerId || undefined,
+        departureDate: best.departureDate,
+      },
+      perOriginCash,
+      searchedOrigins: fused.meta.cashOriginsSearched,
+      message: `Live ${fused.params.cabin.replace("_", " ")} from ${fused.meta.cashOriginsSearched.join(", ")} — best ${best.origin} $${Math.round(bestUsd).toLocaleString()}`,
     },
   };
 }

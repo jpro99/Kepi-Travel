@@ -81,6 +81,49 @@ export function resolveCashBookUrl(input: {
   };
 }
 
+const AWARD_PROGRAM_BOOK: Partial<Record<string, string>> = {
+  alaska: "https://www.alaskaair.com",
+  united: "https://www.united.com",
+  american: "https://www.aa.com",
+  delta: "https://www.delta.com",
+  aeroplan: "https://www.aircanada.com/aeroplan",
+  flyingblue: "https://www.airfrance.com",
+  avios_ba: "https://www.britishairways.com",
+  lifemiles: "https://www.lifemiles.com",
+  singapore_krisflyer: "https://www.singaporeair.com",
+};
+
+export function resolveAwardBookUrl(input: {
+  program: string;
+  origin: string;
+  destination: string;
+  departureDate: string;
+  milesCost: number;
+  verifyUrl?: string;
+}): { url: string; label: string } {
+  const programUrl = AWARD_PROGRAM_BOOK[input.program.toLowerCase()];
+  if (programUrl) {
+    return {
+      url: programUrl,
+      label: `Book ${input.milesCost.toLocaleString()} mi on ${input.program} ↗`,
+    };
+  }
+  if (input.verifyUrl) {
+    return {
+      url: input.verifyUrl,
+      label: "Verify & book on Seats.aero ↗",
+    };
+  }
+  return {
+    url: buildGoogleFlightsUrl({
+      origin: input.origin,
+      destination: input.destination,
+      departureDate: input.departureDate,
+    }),
+    label: "Search award space ↗",
+  };
+}
+
 const HOTEL_CHAIN_HOME: Record<string, string> = {
   marriott: "https://www.marriott.com",
   hilton: "https://www.hilton.com",

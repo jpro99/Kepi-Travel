@@ -1,55 +1,29 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
+import { enforceRateLimit } from "@/lib/rateLimit";
+import { BodySchema, resolveUserIdFast } from "@/lib/decision/analyzeRequestSchema";
 import { buildDecisionBrief } from "@/lib/decision/strategyEngine";
-import { createSampleGenome } from "@/lib/traveler/sampleGenome";
+import { getTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-const AUTH_TIMEOUT_MS = 1_200;
-
-const ExpertSchema = z
-  .object({
-    enabled: z.boolean().optional(),
-    originIata: z.string().trim().length(3).optional(),
-    cppFloor: z.number().min(0).max(10).optional(),
-    dateFlexDays: z.union([z.literal(3), z.literal(7), z.literal(14)]).optional(),
-    pointsProgram: z.string().trim().max(80).optional(),
-    legDateOverrides: z.record(z.string(), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
-  })
-  .optional();
-
-const BodySchema = z.object({
-  prompt: z.string().trim().min(1).max(2000),
-  comfortWeight: z.number().min(0).max(1).optional(),
-  planMode: z.enum(["flights", "hotels", "full"]).optional(),
-  paymentMode: z.enum(["cash", "points", "mix"]).optional(),
-  enabledLegIds: z.array(z.string()).optional(),
-  expert: ExpertSchema,
-  // Kept for client compatibility. Analyze now always returns the fast brief.
-  fastPath: z.boolean().optional(),
-});
-
-async function resolveUserIdFast(): Promise<string | null> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      resolveAuthenticatedUserId(),
-      new Promise<null>((resolve) => {
-        timer = setTimeout(() => resolve(null), AUTH_TIMEOUT_MS);
-      }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
   const elapsed = () => Date.now() - startedAt;
 
   try {
+    // Allow anonymous analyze — sign-in is only required to save/activate a trip.
     const userId = (await resolveUserIdFast()) ?? "anonymous";
+
+    const rateLimit = await enforceRateLimit({
+      policyName: "ai-suggestions",
+      identifier: userId,
+      route: "decision-strategies",
+      requestId: `decision-strategies-${userId}-${Date.now()}`,
+    });
+    if (!rateLimit.allowed) {
+      return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429, headers: rateLimit.headers });
+    }
 
     let rawBody: unknown;
     try {
@@ -63,7 +37,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid request parameters." }, { status: 400 });
     }
 
-    const genome = createSampleGenome(userId);
+    const genome = await getTravelerGenome(userId);
     const comfortWeight = parsed.data.comfortWeight ?? genome.decisionWeights.comfort;
     const planMode = parsed.data.planMode ?? "flights";
     const paymentMode = parsed.data.paymentMode ?? "cash";
@@ -75,17 +49,21 @@ export async function POST(req: Request) {
       expert: parsed.data.expert,
     });
 
+    if (planMode === "hotels") {
+      return NextResponse.json({ brief });
+    }
+
     const arrivalIata = brief.intent.stops?.[0]?.iata ?? brief.intent.destinationIata;
     const hasOrigin = brief.searchAirports.length > 0;
 
-    if (planMode !== "hotels" && !arrivalIata) {
+    if (!arrivalIata || brief.destinationRequired) {
       const clarification = hasOrigin
         ? {
             type: "missing_destination" as const,
-            message: `Got it — flying out of ${brief.originCity ?? "your area"} on ${brief.intent.startDate ?? "your travel date"}. Where are you flying to?`,
+            message: `Got it — flying out of ${brief.intent.originCity ?? "your area"} on ${brief.intent.startDate ?? "your travel date"}. Where are you flying to?`,
             hint: "Try: 'New York', 'London Heathrow', 'Bari Italy', or any city or airport code.",
             parsed: {
-              origin: brief.originCity,
+              origin: brief.intent.originCity,
               airports: brief.searchAirports,
               startDate: brief.intent.startDate,
             },
@@ -99,7 +77,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ brief, clarification });
     }
 
-    if (planMode !== "hotels" && (brief.originRequired || !hasOrigin)) {
+    if (brief.originRequired || !hasOrigin) {
+      console.log("[analyze] route:origin-required", { ms: elapsed() });
       return NextResponse.json({
         brief,
         clarification: {

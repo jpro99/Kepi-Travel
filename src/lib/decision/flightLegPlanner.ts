@@ -1,5 +1,5 @@
 import { allocateStopDates } from "@/lib/decision/stopDates";
-import { resolvePrimaryOrigin } from "@/lib/decision/tripOrigins";
+import { prefersCarrierFromIntentOrGenome, resolvePrimaryOrigin } from "@/lib/decision/tripOrigins";
 import type { FlightLegPlan, TripIntent } from "@/lib/decision/types";
 import type { TravelerGenome } from "@/lib/traveler/types";
 
@@ -8,14 +8,6 @@ export const AMBIGUOUS_STOP_AIRPORTS: Record<string, string[]> = {
   Dolomites: ["VCE", "INN", "MXP"],
   Germany: ["MUC", "BER", "FRA"],
 };
-
-function prefersAlaska(intent: TripIntent): boolean {
-  return (
-    intent.preferredAirlines?.includes("Alaska") ||
-    intent.loyaltyPrograms?.some((program) => /alaska/i.test(program)) ||
-    false
-  );
-}
 
 /** Build searchable flight legs — long-haul outbound + return; connectors optional. */
 export function buildFlightLegsFromIntent(
@@ -94,8 +86,9 @@ export function applyLegEnabledOverrides(
 export function annotateLegLoyaltyNotes(
   legs: FlightLegPlan[],
   intent: TripIntent,
+  genome: Pick<TravelerGenome, "statuses">,
 ): FlightLegPlan[] {
-  if (!prefersAlaska(intent)) return legs;
+  if (!prefersCarrierFromIntentOrGenome(intent, genome, "alaska")) return legs;
   return legs.map((leg) => {
     if (leg.role !== "connector") return leg;
     const note =

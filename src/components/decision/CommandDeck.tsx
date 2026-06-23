@@ -27,7 +27,9 @@ import type {
   TravelStrategy,
 } from "@/lib/decision/types";
 import type { FusedSearchResult } from "@/lib/flights/types";
+import type { TravelerGenome } from "@/lib/traveler/types";
 import { filterStrategiesByPaymentMode, paymentModeDescription } from "@/lib/decision/paymentMode";
+import { resolveCashBookUrl } from "@/lib/decision/bookingLinks";
 import { toggleLegEnabled } from "@/lib/decision/flightLegPlanner";
 import type { ExpertDeckOptions } from "@/lib/decision/expertDeck";
 import { expertPlaceholder } from "@/lib/decision/expertDeck";
@@ -39,6 +41,7 @@ import { ExpertDeckPanel } from "@/components/decision/ExpertDeckPanel";
 import { TripAlignmentBoard } from "@/components/decision/TripAlignmentBoard";
 import { TopologyWaveHero } from "@/components/decision/TopologyWaveHero";
 import { FusedFlightHero } from "@/components/decision/FusedFlightHero";
+import { RecentSearchesList } from "@/components/decision/RecentSearchesList";
 import { AnalyzeProgressPanel } from "@/components/decision/AnalyzeProgressPanel";
 import { BookingWalkthroughModal } from "@/components/decision/BookingWalkthroughModal";
 import { buildAlignmentBoard } from "@/lib/decision/tripAlignment";
@@ -184,6 +187,8 @@ function StrategyCard({
   bestLiveFare,
   liveConfigured,
   expertMode,
+  liveBookUrl,
+  liveBookLabel,
   onToggle,
   onActivate,
   onCompareDates,
@@ -198,6 +203,8 @@ function StrategyCard({
   bestLiveFare: number | null;
   liveConfigured: boolean;
   expertMode?: boolean;
+  liveBookUrl?: string | null;
+  liveBookLabel?: string | null;
   onToggle: () => void;
   onActivate: () => void;
   onCompareDates: () => void;
@@ -350,6 +357,17 @@ function StrategyCard({
           >
             {compareLoading ? "Checking nearby dates…" : "Compare dates — top 3 options →"}
           </button>
+          ) : null}
+
+          {liveBookUrl && (strategy.kind === "direct_cash" || strategy.kind === "instrument_play") ? (
+            <a
+              href={liveBookUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 flex w-full items-center justify-center rounded-2xl border border-emerald-500/50 bg-emerald-950/50 py-3 text-sm font-black text-emerald-100 transition-all hover:bg-emerald-900/60"
+            >
+              {liveBookLabel ?? "Book live fare on airline ↗"}
+            </a>
           ) : null}
 
           <button
@@ -505,6 +523,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
   const [paymentMode, setPaymentMode] = useState<PaymentMode>("cash");
   const [planMode, setPlanMode] = useState<PlanMode>("flights");
   const [expertOptions, setExpertOptions] = useState<ExpertDeckOptions>({ enabled: false, dateFlexDays: 3 });
+  const [showExpertControls, setShowExpertControls] = useState(false);
   const [enabledLegIds, setEnabledLegIds] = useState<string[]>([]);
   const [legToggleBusy, setLegToggleBusy] = useState(false);
   const [walkthroughOpen, setWalkthroughOpen] = useState(false);
@@ -530,6 +549,63 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
       setPlanMode(modeParam);
     }
   }, [searchParams]);
+
+  // Saved traveler profile — lets us detect loyalty mentioned in a prompt that isn't saved yet,
+  // so we can offer to remember it instead of asking the user to retype it every search.
+  const [profileGenome, setProfileGenome] = useState<TravelerGenome | null>(null);
+  const [savingLoyalty, setSavingLoyalty] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/traveler/genome")
+      .then((res) => res.json())
+      .then((data: { genome: TravelerGenome }) => {
+        if (!cancelled) setProfileGenome(data.genome);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const newLoyaltyMention = useMemo(() => {
+    if (!brief || !profileGenome) return null;
+    const mentioned = [...(brief.intent.loyaltyPrograms ?? []), ...(brief.intent.preferredAirlines ?? [])];
+    for (const mention of mentioned) {
+      const firstWord = mention.toLowerCase().split(/\s+/)[0] ?? "";
+      if (!firstWord) continue;
+      const alreadySaved = profileGenome.statuses.some(
+        (s) =>
+          s.program.toLowerCase().includes(firstWord) ||
+          s.airline?.toLowerCase().includes(firstWord) ||
+          s.hotelChain?.toLowerCase().includes(firstWord),
+      );
+      if (!alreadySaved) return mention;
+    }
+    return null;
+  }, [brief, profileGenome]);
+
+  const saveLoyaltyToProfile = useCallback(async () => {
+    if (!profileGenome || !newLoyaltyMention) return;
+    setSavingLoyalty(true);
+    try {
+      const nextGenome: TravelerGenome = {
+        ...profileGenome,
+        statuses: [
+          ...profileGenome.statuses,
+          { program: newLoyaltyMention, tier: "", loungeAccess: false, prioritySecurity: false, freeCheckedBags: 0 },
+        ],
+      };
+      const res = await fetch("/api/traveler/genome", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "save", genome: nextGenome }),
+      });
+      const data = (await res.json()) as { genome: TravelerGenome };
+      setProfileGenome(data.genome);
+    } finally {
+      setSavingLoyalty(false);
+    }
+  }, [profileGenome, newLoyaltyMention]);
 
   // Stays — load unasked, the moment strategies exist (godlike mode)
   const [staysData, setStaysData] = useState<StaysResponse | null>(null);
@@ -575,11 +651,11 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
       mutation?: CounterfactualMutation,
       legIdsOverride?: string[],
       planModeOverride?: PlanMode,
-      fetchOptions?: { fastPath?: boolean; isFastRetry?: boolean },
+      fetchOptions?: { fastPath?: boolean; isFastRetry?: boolean; runId?: number },
     ) => {
       const trimmed = nextPrompt.trim();
       if (!trimmed) return;
-      const runId = (analysisRunRef.current += 1);
+      const runId = fetchOptions?.runId ?? (analysisRunRef.current += 1);
 
       const isLegToggle = Boolean(legIdsOverride);
       if (isLegToggle) {
@@ -587,15 +663,17 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
       } else {
         setLoading(true);
         setError(null);
-        setBrief(null);
-        setClarification(null);
-        setAirportAnswers({});
-        setLiveSearchStatus({ state: "idle", message: "" });
-        setStaysData(null);
-        setSelectedStayByLeg({});
-        setExpandedId(null);
-        setCounterfactualNote(null);
-        setEnabledLegIds([]);
+        if (!fetchOptions?.isFastRetry) {
+          setBrief(null);
+          setClarification(null);
+          setAirportAnswers({});
+          setLiveSearchStatus({ state: "idle", message: "" });
+          setStaysData(null);
+          setSelectedStayByLeg({});
+          setExpandedId(null);
+          setCounterfactualNote(null);
+          setEnabledLegIds([]);
+        }
         if (!mutation) {
           setHasAnalyzed(true);
           if (!fetchOptions?.isFastRetry) {
@@ -743,7 +821,12 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
           return;
         }
         setBrief(data.brief);
-        if (data.brief?.paymentMode) {
+        if (
+          data.brief?.intent?.wantsAlaskaUpgrade ||
+          data.brief?.instrumentHighlights?.some((line) => /upgrade/i.test(line))
+        ) {
+          setPaymentMode("mix");
+        } else if (data.brief?.paymentMode) {
           setPaymentMode(data.brief.paymentMode);
         }
         if (data.brief?.planMode) {
@@ -759,8 +842,30 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         }
         const top = data.brief?.strategies?.[0];
         if (top && !isLegToggle) setExpandedId(top.id);
+
+        // /api/decision/strategies stays fast (no live providers) — fetch the live
+        // cash/points/topology enrichment as a second, non-blocking stage so the table
+        // doesn't have to wait on Seats.aero/Duffel before showing anything at all.
+        if (!mutation && !isLegToggle && data.brief?.planMode !== "hotels" && data.brief?.searchAirports?.length > 0) {
+          const enrichRunId = runId;
+          void fetch("/api/decision/enrich", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+            cache: "no-store",
+            credentials: "same-origin",
+          })
+            .then((enrichRes) => (enrichRes.ok ? enrichRes.json() : null))
+            .then((enrichData: { brief?: DecisionBrief } | null) => {
+              if (!enrichData?.brief) return;
+              if (analysisRunRef.current !== enrichRunId) return; // a newer analyze superseded this one
+              setBrief(enrichData.brief);
+            })
+            .catch(() => {
+              // Enrichment failed — fast brief (already shown) stays as the final result.
+            });
+        }
       } catch (e) {
-        const isTimeout = e instanceof RequestTimeoutError;
         console.log("[analyze] fetch:failed", {
           message: e instanceof Error ? e.message : "unknown",
           name: e instanceof Error ? e.name : "unknown",
@@ -861,8 +966,17 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
       .then((data: StaysResponse) => {
         if (cancelled) return;
         setStaysData(data);
-        const pick = data.stays.find((stay) => stay.kepiPick);
-        if (pick) setSelectedStayByLeg({ default: pick.quote.id });
+        if (data.stopLegs && data.stopLegs.length > 0) {
+          const picks: Record<string, string> = {};
+          for (const leg of data.stopLegs) {
+            const pick = leg.stays.find((stay) => stay.kepiPick);
+            if (pick) picks[stayLegKey(leg)] = pick.quote.id;
+          }
+          setSelectedStayByLeg(picks);
+        } else {
+          const pick = data.stays.find((stay) => stay.kepiPick);
+          if (pick) setSelectedStayByLeg({ default: pick.quote.id });
+        }
       })
       .catch(() => {
         if (!cancelled && brief) {
@@ -972,9 +1086,9 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     if (brief && prompt.trim()) void fetchStrategies(prompt, value);
   };
 
-  const loadFlexOptions = useCallback(
-    async (strategyId: string) => {
-      setFlexStrategyId(strategyId);
+  const loadFlexOptionsBody = useCallback(
+    async (body: Record<string, unknown>, busyKey: string | null) => {
+      setFlexStrategyId(busyKey);
       setFlexOpen(true);
       setFlexLoading(true);
       setFlexError(null);
@@ -987,9 +1101,9 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               prompt,
-              strategyId,
               comfortWeight,
               dateFlexDays: expertOptions.enabled ? expertOptions.dateFlexDays : undefined,
+              ...body,
             }),
           },
           FLEX_TIMEOUT_MS,
@@ -1007,6 +1121,17 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
       }
     },
     [prompt, comfortWeight, expertOptions.dateFlexDays, expertOptions.enabled],
+  );
+
+  const loadFlexOptions = useCallback(
+    (strategyId: string) => loadFlexOptionsBody({ strategyId }, strategyId),
+    [loadFlexOptionsBody],
+  );
+
+  const loadFlexOptionsForOrigin = useCallback(
+    (originIata: string, baselineCashCents: number) =>
+      loadFlexOptionsBody({ originIata, baselineCashUsd: baselineCashCents / 100 }, null),
+    [loadFlexOptionsBody],
   );
 
   const handleVoiceMutation = useCallback(
@@ -1232,6 +1357,17 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
 
   const live = brief?.livePricing;
   const bestLiveFare = live?.bestOffer?.amount ?? null;
+  const outboundLiveBook = live?.bestOffer
+    ? resolveCashBookUrl({
+        origin: live.bestOffer.origin,
+        destination: live.bestOffer.destination,
+        departureDate: live.bestOffer.departureDate ?? brief?.intent.startDate ?? "",
+        airline: live.bestOffer.airline,
+        offerId: live.bestOffer.offerId,
+        quotedPriceUsd: live.bestOffer.amount,
+        flightNumber: live.bestOffer.flightNumber,
+      })
+    : null;
 
   const selectedStayPayloads = useMemo(
     () => (staysData ? collectSelectedStayPayloads(staysData, selectedStayByLeg) : []),
@@ -1253,6 +1389,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     hotelTotalUsd > 0 && expandedStrategy
       ? Math.round(expandedStrategy.scores.trueOutOfPocket + hotelTotalUsd)
       : null;
+  const footerCostUsd = tripTotal ?? expandedStrategy?.scores.trueOutOfPocket ?? null;
 
   return (
     <div className={embedded ? "bg-[#0b1f3a] text-white" : "min-h-screen bg-[#0b1f3a] text-white"}>
@@ -1306,13 +1443,21 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
                 ? "Full trip — flights, hotels, and status plays together."
                 : "Flights mode — routes, open-jaw returns, cash/points/mix."}
           </p>
-          <button
-            type="button"
-            onClick={() => setRecordOpen(true)}
-            className="shrink-0 rounded-2xl border border-amber-400/60 bg-amber-500/20 px-4 py-2.5 text-sm font-black text-amber-100 transition-all hover:bg-amber-500/30"
-          >
-            🎙 Record my trip
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <a
+              href="/settings/travel-profile"
+              className="rounded-2xl border border-slate-600 bg-[#152238] px-3 py-2.5 text-xs font-bold text-slate-300 transition-all hover:border-slate-400"
+            >
+              👤 Your profile
+            </a>
+            <button
+              type="button"
+              onClick={() => setRecordOpen(true)}
+              className="rounded-2xl border border-amber-400/60 bg-amber-500/20 px-4 py-2.5 text-sm font-black text-amber-100 transition-all hover:bg-amber-500/30"
+            >
+              🎙 Record my trip
+            </button>
+          </div>
         </div>
 
         <div className="mb-4 flex flex-wrap gap-2">
@@ -1331,6 +1476,8 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
             </button>
           ))}
         </div>
+
+        {!brief && planMode === "flights" ? <RecentSearchesList /> : null}
 
         {/* Intent input */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-2.5 sm:flex-row">
@@ -1374,6 +1521,21 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
 
         {/* Comfort ⇄ value steering — only after a trip is loaded */}
         {brief && (
+          <button
+            type="button"
+            onClick={() => setShowExpertControls((v) => !v)}
+            className={`mt-3 rounded-xl px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors ${
+              showExpertControls
+                ? "border border-slate-400 bg-slate-700 text-white"
+                : "border border-slate-600 bg-[#152238] text-slate-400 hover:border-slate-400"
+            }`}
+          >
+            {showExpertControls ? "Hide expert controls" : "Show expert controls"}
+          </button>
+        )}
+
+        {/* Comfort ⇄ value steering — only after a trip is loaded */}
+        {brief && showExpertControls && (
         <div className="mt-4 rounded-2xl border border-slate-600 bg-[#152238] px-4 py-3">
           <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-slate-400">
             <span>Save money</span>
@@ -1392,7 +1554,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         </div>
         )}
 
-        {brief && brief.planMode !== "hotels" && (
+        {brief && brief.planMode !== "hotels" && showExpertControls && (
           <ExpertDeckPanel
             enabled={Boolean(expertOptions.enabled)}
             onToggle={(enabled) => setExpertOptions((current) => ({ ...current, enabled }))}
@@ -1407,7 +1569,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
           />
         )}
 
-        {brief && (
+        {brief && showExpertControls && (
           <div className="mt-3">
             <button
               type="button"
@@ -1605,6 +1767,24 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
                 Name your departure airport (e.g. London Heathrow, JFK) — Kepi won&apos;t assume US West Coast.
               </div>
             )}
+            {brief.destinationRequired && (
+              <div className="mt-4 rounded-2xl border border-amber-500/60 bg-amber-950/40 px-4 py-3 text-sm leading-relaxed text-amber-100">
+                Name your destination (e.g. to Rome, to Tokyo) — Kepi won&apos;t assume Italy.
+              </div>
+            )}
+            {newLoyaltyMention && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-sky-500/50 bg-sky-950/30 px-4 py-3 text-sm text-sky-100">
+                <span>Save &quot;{newLoyaltyMention}&quot; to your profile so you don&apos;t have to type it again?</span>
+                <button
+                  type="button"
+                  onClick={() => void saveLoyaltyToProfile()}
+                  disabled={savingLoyalty}
+                  className="rounded-xl border border-sky-400/60 bg-sky-500/20 px-3 py-1.5 text-xs font-bold text-sky-100 hover:bg-sky-500/30 disabled:opacity-50"
+                >
+                  {savingLoyalty ? "Saving…" : "Remember this"}
+                </button>
+              </div>
+            )}
             <TripItinerarySummary intent={brief.intent} />
             {brief.flightLegs && brief.flightLegs.length > 0 && brief.planMode !== "hotels" ? (
               <div className="mt-4 rounded-2xl border border-slate-600 bg-[#152238] px-4 py-3">
@@ -1662,7 +1842,30 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         ) : null}
 
         {brief?.fusedFlightSearch && brief.planMode !== "hotels" && !loading ? (
-          <FusedFlightHero search={brief.fusedFlightSearch} />
+          <FusedFlightHero
+            search={brief.fusedFlightSearch}
+            onOpenFlexForOrigin={(originIata, _cabin, baselineCashCents) =>
+              void loadFlexOptionsForOrigin(originIata, baselineCashCents)
+            }
+          />
+        ) : null}
+
+        {brief && brief.instrumentHighlights.length > 0 && !loading && showExpertControls ? (
+          <div className="mt-5 rounded-2xl border border-amber-500/40 bg-amber-950/30 px-4 py-4">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-amber-300">Your wallet</p>
+            <ul className="mt-2 space-y-1">
+              {brief.instrumentHighlights.map((line) => (
+                <li key={line} className="text-sm text-amber-50">
+                  {line}
+                </li>
+              ))}
+            </ul>
+            {brief.intent.wantsAlaskaUpgrade ? (
+              <p className="mt-2 text-xs text-amber-100/85">
+                You asked to use an upgrade certificate — switch to <strong>Mix</strong> below for the Alaska Guest Upgrade Play, or book eligible AS flights in the hero above.
+              </p>
+            ) : null}
+          </div>
         ) : null}
 
         {brief && alignmentPreviewLegs.length > 0 && !loading && (
@@ -1672,7 +1875,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
               strategyTitle={alignmentPreviewStrategy?.title}
             />
             <p className="mt-2 text-center text-[10px] leading-relaxed text-slate-500">
-              Green = live quote · Amber = estimate · Slate = skip · Save plan to open booking links
+              Green = live quote · Amber = estimate · Tap Book ↗ on any verified leg to purchase
             </p>
           </div>
         )}
@@ -1707,6 +1910,11 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
               </button>
             ))}
           </div>
+        )}
+        {brief && brief.planMode === "full" && (
+          <p className="mt-5 text-[10px] font-black uppercase tracking-widest text-[#f4c95d]">
+            Step 1 — Choose your flight strategy
+          </p>
         )}
         {brief && brief.planMode !== "flights" && (
           <p className="mt-5 rounded-2xl border border-slate-600 bg-[#152238] px-4 py-3 text-xs leading-relaxed text-slate-300">
@@ -1757,6 +1965,12 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
               bestLiveFare={bestLiveFare}
               liveConfigured={Boolean(live?.configured && live.quotesFound > 0)}
               expertMode={Boolean(expertOptions.enabled)}
+              liveBookUrl={
+                strategy.kind === "direct_cash" || strategy.kind === "instrument_play"
+                  ? outboundLiveBook?.url
+                  : null
+              }
+              liveBookLabel={outboundLiveBook?.label}
               hideCompareDates={strategy.id === "hotels-only"}
               onToggle={() => setExpandedId((current) => (current === strategy.id ? null : strategy.id))}
               onActivate={() => void handleActivate(strategy.id)}
@@ -1781,6 +1995,11 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
           staysData?.error ||
           staysData?.notice) && (
           <section className={`${brief?.planMode === "hotels" ? "mt-5" : "mt-8"}`}>
+            {brief?.planMode === "full" && (
+              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-[#f4c95d]">
+                Step 2 — Choose your stay
+              </p>
+            )}
             <div className="flex items-baseline justify-between gap-2">
               <h2 className="text-sm font-black uppercase tracking-widest text-slate-200">
                 Where you&apos;ll sleep
@@ -1845,21 +2064,27 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
           </section>
         )}
 
-        {/* Fused trip total — flight strategy + stay, one honest number */}
-        {tripTotal !== null && selectedStayPayloads.length > 0 && expandedStrategy && (
+        {/* Fused trip total — flight strategy + stay, one honest number. Shown as soon as a flight
+            strategy is chosen (Step 3), not gated on a stay also being picked, so the running
+            total is visible throughout full-trip mode instead of appearing only at the very end. */}
+        {brief?.planMode === "full" && expandedStrategy && footerCostUsd !== null && (
           <div className="sticky bottom-4 z-20 mt-6">
             <div className="flex items-center justify-between gap-3 rounded-3xl border border-amber-400/60 bg-[#0b1f3a] px-5 py-3.5 shadow-xl">
               <div className="min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-widest text-amber-200">Trip total</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-amber-200">
+                  {selectedStayPayloads.length > 0 ? "Trip total" : "Step 3 — Flight only"}
+                </p>
                 <p className="truncate text-[11px] font-semibold text-slate-300">
                   {expandedStrategy.title}
                   {selectedStayPayloads.length === 1
                     ? ` + ${staysData?.intent.nights} nights ${selectedStayPayloads[0]?.name ?? ""}`
-                    : ` + ${selectedStayPayloads.length} hotel stays · ${staysData?.intent.nights} nights total`}
+                    : selectedStayPayloads.length > 1
+                      ? ` + ${selectedStayPayloads.length} hotel stays · ${staysData?.intent.nights} nights total`
+                      : " — pick a stay above to see your trip total"}
                 </p>
               </div>
               <p className="shrink-0 text-2xl font-black tabular-nums text-white">
-                ${tripTotal.toLocaleString()}
+                ${footerCostUsd.toLocaleString()}
               </p>
             </div>
           </div>
