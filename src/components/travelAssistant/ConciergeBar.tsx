@@ -66,7 +66,9 @@ export function ConciergeBar() {
 }
 
 // Concierge upsell — shown in trip tab when on free plan and disruption detected
-export function ConciergeUpsell({ type }: { type: "cancellation" | "delay" | "connection" }) {
+export function ConciergeUpsell({ type: _type }: { type: "cancellation" | "delay" | "connection" }) {
+  // Concierge tier not yet live — hiding upsell
+  return null;
   const [dismissed, setDismissed] = useState(false);
   if (dismissed) return null;
 
