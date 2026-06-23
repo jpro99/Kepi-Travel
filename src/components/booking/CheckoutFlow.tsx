@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { SeatMap } from "@/components/booking/SeatMap";
 
 export interface Flight {
   id: string;
@@ -28,7 +29,7 @@ interface Passenger {
   passportCountry: string;
 }
 
-type CheckoutStep = "passengers" | "review" | "processing" | "confirmed" | "error";
+type CheckoutStep = "passengers" | "seats" | "review" | "processing" | "confirmed" | "error";
 
 function fmt12(iso: string) {
   if (!iso) return "--";
@@ -53,6 +54,7 @@ interface CheckoutFlowProps {
 
 export function CheckoutFlow({ flight, passengers: passengerCount, onCancel, onComplete }: CheckoutFlowProps) {
   const [step, setStep] = useState<CheckoutStep>("passengers");
+  const [selectedSeat, setSelectedSeat] = useState<string | null>(null);
   const [passengerForms, setPassengerForms] = useState<Passenger[]>(() =>
     Array.from({ length: passengerCount }, () => ({ ...EMPTY_PASSENGER }))
   );
@@ -83,7 +85,8 @@ export function CheckoutFlow({ flight, passengers: passengerCount, onCancel, onC
     setErrors(prev => { const next = { ...prev }; delete next[`${index}_${field}`]; return next; });
   };
 
-  const validate = (): boolean => {
+  // Steps: passengers → seats → review → processing → confirmed
+const validate = (): boolean => {
     const errs: Record<string, string> = {};
     passengerForms.forEach((p, i) => {
       if (!p.firstName.trim()) errs[`${i}_firstName`] = "Required";
@@ -182,6 +185,29 @@ export function CheckoutFlow({ flight, passengers: passengerCount, onCancel, onC
         <button type="button" onClick={onCancel} className="text-slate-400 text-sm">
           Back to search
         </button>
+      </div>
+    );
+  }
+
+  // ── Seats ──────────────────────────────────────────────────────────────────
+  if (step === "seats") {
+    return (
+      <div className="min-h-screen bg-[#0b1f3a]">
+        <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-700/50">
+          <button type="button" onClick={() => setStep("passengers")} className="text-slate-400 text-sm">← Back</button>
+          <h1 className="text-base font-black text-white">Choose your seat</h1>
+        </div>
+        <div className="px-4 py-5 max-w-lg mx-auto space-y-4">
+          <SeatMap
+            offerId={flight.id}
+            selectedSeat={selectedSeat}
+            onSelect={seat => setSelectedSeat(seat === "skip" ? null : seat)}
+          />
+          <button type="button" onClick={() => setStep("review")}
+            className="w-full py-4 rounded-2xl bg-[#f4c95d] text-[#0b1f3a] font-black text-base active:opacity-80">
+            {selectedSeat ? `Continue with seat ${selectedSeat} →` : "Continue without seat →"}
+          </button>
+        </div>
       </div>
     );
   }
@@ -338,9 +364,9 @@ export function CheckoutFlow({ flight, passengers: passengerCount, onCancel, onC
         ))}
 
         <button type="button"
-          onClick={() => { if (validate()) setStep("review"); }}
+          onClick={() => { if (validate()) setStep("seats"); }}
           className="w-full py-4 rounded-2xl bg-[#f4c95d] text-[#0b1f3a] font-black text-base active:opacity-80">
-          Review booking →
+          Choose seats →
         </button>
         <p className="text-[10px] text-slate-500 text-center mt-3">
           Your details are encrypted and only shared with the airline for this booking.

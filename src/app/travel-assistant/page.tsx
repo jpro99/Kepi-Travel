@@ -6999,6 +6999,9 @@ export default function TravelAssistantPage() {
               ) : journeyPhase.kind === "pre-trip" ? (
                 /* ── PRE-TRIP ── */
                 <>
+                  {/* Points expiration alerts */}
+                  <ConciergeBar />
+
                   {/* Always-visible countdown hero — never blank even if NextUpCard fails */}
                   <div className="rounded-3xl bg-gradient-to-br from-slate-900 via-sky-950 to-slate-900 shadow-xl p-5">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-sky-300/70">
