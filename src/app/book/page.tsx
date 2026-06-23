@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { suggestAirports, resolveAirport, type AirportResult } from "@/lib/airports/lookup";
+import { CheckoutFlow } from "@/components/booking/CheckoutFlow";
 import { calcTrueCost, calcPointsOptions, type LoyaltyBalance } from "@/lib/loyalty/optimizer";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -346,9 +347,16 @@ function FlightDetail({ flight, onBack, onSave }: { flight: Flight; onBack: () =
         <button
           type="button"
           onClick={onSave}
-          className="w-full py-4 rounded-2xl bg-[#f4c95d] text-[#0b1f3a] font-black text-base active:opacity-80"
+          className="w-full py-4 rounded-2xl bg-emerald-500 text-white font-black text-base active:opacity-80"
         >
-          Save to my Kepi trips
+          Book this flight →
+        </button>
+        <button
+          type="button"
+          onClick={() => window.location.href = "/travel-assistant"}
+          className="w-full py-3 rounded-2xl border border-slate-600 text-slate-300 text-sm font-semibold"
+        >
+          Save to my trips (without booking)
         </button>
         <button type="button" onClick={onBack} className="w-full py-3 text-slate-400 text-sm text-center">
           See other flights
@@ -401,6 +409,7 @@ export default function BookPage() {
   const [sort, setSort] = useState<SortKey>("price");
   const [selected, setSelected] = useState<Flight | null>(null);
   const [saved, setSaved] = useState(false);
+  const [inCheckout, setInCheckout] = useState(false);
   const [loyaltyBalances, setLoyaltyBalances] = useState<LoyaltyBalance[]>([]);
 
   // Search filters
@@ -501,9 +510,22 @@ export default function BookPage() {
   });
 
   const handleSave = async () => {
-    setSaved(true);
-    // TODO: wire to /api/trips to save the flight
+    setInCheckout(true);
   };
+
+  if (inCheckout && selected) {
+    return (
+      <CheckoutFlow
+        flight={selected}
+        passengers={passengers}
+        onCancel={() => setInCheckout(false)}
+        onComplete={(ref) => {
+          setSaved(true);
+          setInCheckout(false);
+        }}
+      />
+    );
+  }
 
   // ── Detail screen ────────────────────────────────────────────────────────
   if (screen === "detail" && selected) {

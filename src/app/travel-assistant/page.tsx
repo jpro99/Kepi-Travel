@@ -7081,10 +7081,28 @@ export default function TravelAssistantPage() {
 
               ) : journeyPhase.kind === "at-destination" ? (
                 /* ── AT DESTINATION / TRIP COMPLETE ── */
-                <div className="rounded-3xl bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/[0.08] p-5">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Trip complete</p>
-                  <p className="text-xl font-black text-slate-900 dark:text-white mt-1">You made it to {journeyPhase.destination} ✅</p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">All flights completed. Enjoy your trip!</p>
+                <div className="space-y-4">
+                  <div className="rounded-3xl bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/[0.08] p-5">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Trip complete</p>
+                    <p className="text-xl font-black text-slate-900 dark:text-white mt-1">You made it to {journeyPhase.destination} ✅</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">All flights completed. Enjoy your trip!</p>
+                  </div>
+                  {/* Trip review — Kepi learns from every experience */}
+                  {activeTripId && (() => {
+                    const dest = journeyPhase.destination;
+                    const depFlight = consumerReservationsSorted.find(r => r.type === "flight");
+                    const depDate = (depFlight as Record<string, string | undefined>)?.flightDate ?? new Date().toISOString().split("T")[0];
+                    return (
+                      <TripReview
+                        tripId={activeTripId}
+                        destination={dest}
+                        departDate={depDate}
+                        flightNumber={(depFlight as Record<string, string | undefined>)?.flightNumber}
+                        onComplete={() => {}}
+                        onDismiss={() => {}}
+                      />
+                    );
+                  })()}
                 </div>
 
               ) : journeyPhase.kind === "no-trip" ? (
