@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { suggestAirports, resolveAirport, type AirportResult } from "@/lib/airports/lookup";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface Flight {
   id: string;
   price: number;
@@ -14,87 +15,321 @@ interface Flight {
   arrives: string;
   fromIata: string;
   toIata: string;
+  fromCity: string;
+  toCity: string;
   stops: number;
   duration: string;
+  segments: FlightSegment[];
   returnFlight: {
     departs: string;
     arrives: string;
     stops: number;
     duration: string;
+    segments: FlightSegment[];
+    fromIata: string;
+    toIata: string;
   } | null;
 }
 
-function fmt(iso: string) {
+interface FlightSegment {
+  airline: string;
+  flightNumber: string;
+  fromIata: string;
+  toIata: string;
+  departs: string;
+  arrives: string;
+  duration: string;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function fmt12(iso: string) {
   if (!iso) return "--";
-  const d = new Date(iso);
-  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
 }
 function fmtDate(iso: string) {
-  if (!iso) return "--";
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
-function fmtDuration(dur: string) {
+function fmtDur(dur: string) {
   if (!dur) return "";
   const m = dur.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
   if (!m) return dur;
-  const h = m[1] ?? "0", min = m[2] ?? "0";
-  return `${h}h ${min}m`;
+  return `${m[1] ?? 0}h ${m[2] ?? 0}m`;
+}
+function stopsLabel(n: number) {
+  return n === 0 ? "Nonstop" : n === 1 ? "1 stop" : `${n} stops`;
+}
+function durationMins(dur: string) {
+  const m = dur?.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
+  if (!m) return 9999;
+  return (Number(m[1] ?? 0) * 60) + Number(m[2] ?? 0);
 }
 
-function FlightCard({ flight, onSelect }: { flight: Flight; onSelect: () => void }) {
-  const stops = flight.stops === 0 ? "Nonstop" : `${flight.stops} stop${flight.stops > 1 ? "s" : ""}`;
+// ─── Airport Input ─────────────────────────────────────────────────────────────
+function AirportInput({ label, value, onChange, placeholder }: {
+  label: string;
+  value: string;
+  onChange: (val: string, iata: string) => void;
+  placeholder: string;
+}) {
+  const [suggestions, setSuggestions] = useState<AirportResult[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setShowSuggestions(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const handleChange = (val: string) => {
+    onChange(val, "");
+    const suggestions = suggestAirports(val);
+    setSuggestions(suggestions);
+    setShowSuggestions(suggestions.length > 0);
+  };
+
+  const handleSelect = (airport: AirportResult) => {
+    onChange(`${airport.city} (${airport.iata})`, airport.iata);
+    setShowSuggestions(false);
+  };
+
   return (
-    <div className="rounded-2xl border border-slate-700 bg-[#111e33] overflow-hidden">
-      <div className="px-4 py-4">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{flight.airline} · {flight.airlineName}</span>
-          <span className="text-2xl font-black text-white">${Math.round(flight.price).toLocaleString()}</span>
+    <div ref={ref} className="relative">
+      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">{label}</label>
+      <input
+        type="text"
+        value={value}
+        onChange={e => handleChange(e.target.value)}
+        onFocus={() => value.length >= 2 && setSuggestions(suggestAirports(value)) && setShowSuggestions(true)}
+        placeholder={placeholder}
+        className="w-full rounded-2xl border border-slate-700 bg-slate-800/80 px-4 py-3.5 text-sm text-white placeholder:text-slate-500 focus:border-[#f4c95d]/60 focus:outline-none"
+      />
+      {showSuggestions && suggestions.length > 0 && (
+        <div className="absolute z-50 left-0 right-0 top-full mt-1 rounded-2xl border border-slate-700 bg-slate-900 shadow-xl overflow-hidden">
+          {suggestions.map(a => (
+            <button
+              key={a.iata}
+              type="button"
+              onMouseDown={() => handleSelect(a)}
+              onTouchEnd={() => handleSelect(a)}
+              className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-800 active:bg-slate-700 border-b border-slate-800 last:border-0"
+            >
+              <span className="text-xs font-black text-[#f4c95d] w-9 shrink-0">{a.iata}</span>
+              <span>
+                <p className="text-sm font-semibold text-white">{a.city}</p>
+                <p className="text-xs text-slate-400">{a.name}</p>
+              </span>
+            </button>
+          ))}
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-center">
-            <p className="text-xl font-bold text-white">{fmt(flight.departs)}</p>
-            <p className="text-xs text-slate-400">{flight.fromIata}</p>
-          </div>
-          <div className="flex-1 text-center">
-            <p className="text-xs text-slate-500">{fmtDuration(flight.duration)}</p>
-            <div className="flex items-center gap-1 my-1">
-              <div className="h-px flex-1 bg-slate-600" />
-              <div className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-              <div className="h-px flex-1 bg-slate-600" />
-            </div>
-            <p className="text-xs text-slate-400">{stops}</p>
-          </div>
-          <div className="text-center">
-            <p className="text-xl font-bold text-white">{fmt(flight.arrives)}</p>
-            <p className="text-xs text-slate-400">{flight.toIata}</p>
-          </div>
-        </div>
-        {flight.returnFlight && (
-          <div className="mt-3 pt-3 border-t border-slate-700/60">
-            <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Return · {fmtDate(flight.returnFlight.departs)}</p>
-            <div className="flex items-center gap-3">
-              <p className="text-sm font-semibold text-slate-300">{fmt(flight.returnFlight.departs)}</p>
-              <p className="flex-1 text-center text-xs text-slate-500">{fmtDuration(flight.returnFlight.duration)} · {flight.returnFlight.stops === 0 ? "Nonstop" : `${flight.returnFlight.stops} stop`}</p>
-              <p className="text-sm font-semibold text-slate-300">{fmt(flight.returnFlight.arrives)}</p>
-            </div>
-          </div>
-        )}
-      </div>
-      <button
-        type="button"
-        onClick={onSelect}
-        className="w-full py-3 bg-[#f4c95d] text-[#0b1f3a] font-black text-sm active:opacity-80"
-      >
-        Select this flight →
-      </button>
+      )}
     </div>
   );
 }
 
+// ─── Flight Card ──────────────────────────────────────────────────────────────
+function FlightCard({ flight, onSelect }: { flight: Flight; onSelect: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="w-full text-left rounded-2xl border border-slate-700 bg-[#111e33] overflow-hidden active:scale-[0.99] transition-transform"
+    >
+      <div className="px-4 py-4">
+        {/* Airline + price row */}
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <span className="text-xs font-bold text-slate-300">{flight.airline}</span>
+            {flight.airlineName && <span className="text-xs text-slate-500"> · {flight.airlineName}</span>}
+          </div>
+          <div className="text-right">
+            <span className="text-2xl font-black text-white">${Math.round(flight.price).toLocaleString()}</span>
+            <p className="text-[10px] text-slate-500">per person</p>
+          </div>
+        </div>
+
+        {/* Outbound flight times */}
+        <div className="flex items-center gap-2 mb-1">
+          <div className="text-center w-16">
+            <p className="text-lg font-bold text-white">{fmt12(flight.departs)}</p>
+            <p className="text-xs text-slate-400">{flight.fromIata}</p>
+          </div>
+          <div className="flex-1 flex flex-col items-center gap-0.5">
+            <p className="text-[10px] text-slate-500">{fmtDur(flight.duration)}</p>
+            <div className="w-full flex items-center gap-1">
+              <div className="h-px flex-1 bg-slate-600" />
+              {flight.stops > 0 && <div className="w-1.5 h-1.5 rounded-full bg-slate-500 shrink-0" />}
+              <div className="h-px flex-1 bg-slate-600" />
+              <div className="w-1.5 h-1.5 rounded-full border border-slate-500 shrink-0" />
+            </div>
+            <p className="text-[10px] font-medium text-slate-400">{stopsLabel(flight.stops)}</p>
+          </div>
+          <div className="text-center w-16">
+            <p className="text-lg font-bold text-white">{fmt12(flight.arrives)}</p>
+            <p className="text-xs text-slate-400">{flight.toIata}</p>
+          </div>
+        </div>
+
+        {/* Return leg */}
+        {flight.returnFlight && (
+          <div className="mt-3 pt-3 border-t border-slate-700/50">
+            <p className="text-[10px] text-[#f4c95d] font-bold uppercase mb-1.5">Return · {fmtDate(flight.returnFlight.departs)}</p>
+            <div className="flex items-center gap-2">
+              <div className="text-center w-16">
+                <p className="text-sm font-bold text-white">{fmt12(flight.returnFlight.departs)}</p>
+                <p className="text-[10px] text-slate-400">{flight.returnFlight.fromIata}</p>
+              </div>
+              <div className="flex-1 text-center">
+                <p className="text-[10px] text-slate-500">{fmtDur(flight.returnFlight.duration)} · {stopsLabel(flight.returnFlight.stops)}</p>
+              </div>
+              <div className="text-center w-16">
+                <p className="text-sm font-bold text-white">{fmt12(flight.returnFlight.arrives)}</p>
+                <p className="text-[10px] text-slate-400">{flight.returnFlight.toIata}</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="bg-[#f4c95d] px-4 py-3 text-center font-black text-sm text-[#0b1f3a]">
+        Select →
+      </div>
+    </button>
+  );
+}
+
+// ─── Flight Detail ─────────────────────────────────────────────────────────────
+function FlightDetail({ flight, onBack, onSave }: { flight: Flight; onBack: () => void; onSave: () => void }) {
+  const SegmentRow = ({ seg }: { seg: FlightSegment }) => (
+    <div className="flex items-start gap-3 py-3">
+      <div className="w-12 text-center shrink-0">
+        <p className="text-xs font-black text-[#f4c95d]">{seg.airline}</p>
+        <p className="text-[10px] text-slate-500">{seg.flightNumber}</p>
+      </div>
+      <div className="flex-1">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-bold text-white">{fmt12(seg.departs)}</p>
+            <p className="text-xs text-slate-400">{seg.fromIata}</p>
+          </div>
+          <div className="text-center text-xs text-slate-500 px-2">{fmtDur(seg.duration)}</div>
+          <div className="text-right">
+            <p className="text-sm font-bold text-white">{fmt12(seg.arrives)}</p>
+            <p className="text-xs text-slate-400">{seg.toIata}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-[#0b1f3a]">
+      <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-700/50">
+        <button type="button" onClick={onBack} className="text-slate-400 text-sm">← Back</button>
+        <h1 className="text-base font-black text-white">Flight details</h1>
+      </div>
+
+      <div className="px-4 py-5 max-w-lg mx-auto space-y-4">
+        {/* Price */}
+        <div className="rounded-2xl border border-slate-700 bg-[#111e33] px-5 py-4 flex items-center justify-between">
+          <div>
+            <p className="text-xs text-slate-400">Total price</p>
+            <p className="text-3xl font-black text-white">${Math.round(flight.price).toLocaleString()}</p>
+            <p className="text-xs text-slate-500">includes taxes &amp; fees</p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm font-bold text-slate-300">{flight.airline}</p>
+            <p className="text-xs text-slate-500">{flight.airlineName}</p>
+          </div>
+        </div>
+
+        {/* Outbound */}
+        <div className="rounded-2xl border border-slate-700 bg-[#111e33] px-4">
+          <p className="pt-4 pb-2 text-[10px] font-black uppercase tracking-widest text-[#f4c95d]">
+            Outbound · {fmtDate(flight.departs)}
+          </p>
+          {flight.segments.map((seg, i) => (
+            <div key={i}>
+              <SegmentRow seg={seg} />
+              {i < flight.segments.length - 1 && (
+                <p className="text-[10px] text-slate-500 text-center py-2 border-t border-slate-700/40">· Layover ·</p>
+              )}
+            </div>
+          ))}
+          <div className="pb-3" />
+        </div>
+
+        {/* Return */}
+        {flight.returnFlight && (
+          <div className="rounded-2xl border border-slate-700 bg-[#111e33] px-4">
+            <p className="pt-4 pb-2 text-[10px] font-black uppercase tracking-widest text-[#f4c95d]">
+              Return · {fmtDate(flight.returnFlight.departs)}
+            </p>
+            {flight.returnFlight.segments.map((seg, i) => (
+              <div key={i}>
+                <SegmentRow seg={seg} />
+                {i < flight.returnFlight!.segments.length - 1 && (
+                  <p className="text-[10px] text-slate-500 text-center py-2 border-t border-slate-700/40">· Layover ·</p>
+                )}
+              </div>
+            ))}
+            <div className="pb-3" />
+          </div>
+        )}
+
+        <p className="text-xs text-slate-500 text-center px-4">
+          Price is from Duffel's live inventory. Final price confirmed at checkout. Availability may change.
+        </p>
+
+        <button
+          type="button"
+          onClick={onSave}
+          className="w-full py-4 rounded-2xl bg-[#f4c95d] text-[#0b1f3a] font-black text-base active:opacity-80"
+        >
+          Save to my Kepi trips
+        </button>
+        <button type="button" onClick={onBack} className="w-full py-3 text-slate-400 text-sm text-center">
+          See other flights
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+function Skeleton() {
+  return (
+    <div className="space-y-3">
+      {[1, 2, 3, 4].map(i => (
+        <div key={i} className="rounded-2xl border border-slate-700 bg-[#111e33] p-4 animate-pulse">
+          <div className="flex justify-between mb-3">
+            <div className="h-3 w-24 bg-slate-700 rounded" />
+            <div className="h-7 w-16 bg-slate-700 rounded" />
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="h-5 w-14 bg-slate-700 rounded" />
+            <div className="h-px flex-1 bg-slate-700" />
+            <div className="h-5 w-14 bg-slate-700 rounded" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+type SortKey = "price" | "duration" | "stops";
+type Screen = "search" | "results" | "detail";
+
 export default function BookPage() {
-  const router = useRouter();
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [screen, setScreen] = useState<Screen>("search");
+  const [tripType, setTripType] = useState<"oneway" | "roundtrip">("roundtrip");
+  const [fromDisplay, setFromDisplay] = useState("");
+  const [fromIata, setFromIata] = useState("");
+  const [toDisplay, setToDisplay] = useState("");
+  const [toIata, setToIata] = useState("");
   const [depart, setDepart] = useState("");
   const [returnD, setReturnD] = useState("");
   const [passengers, setPassengers] = useState(1);
@@ -103,105 +338,171 @@ export default function BookPage() {
   const [error, setError] = useState<string | null>(null);
   const [flights, setFlights] = useState<Flight[]>([]);
   const [total, setTotal] = useState(0);
-  const [searched, setSearched] = useState(false);
+  const [sort, setSort] = useState<SortKey>("price");
   const [selected, setSelected] = useState<Flight | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const swap = () => {
+    setFromDisplay(toDisplay); setFromIata(toIata);
+    setToDisplay(fromDisplay); setToIata(fromIata);
+  };
+
+  const resolveIata = useCallback((display: string, known: string): string => {
+    if (known) return known;
+    const r = resolveAirport(display);
+    return r?.iata ?? display.trim().toUpperCase().slice(0, 3);
+  }, []);
 
   const search = async () => {
-    if (!from.trim() || !to.trim() || !depart) {
-      setError("Please fill in From, To, and Departure date.");
-      return;
-    }
-    setLoading(true);
     setError(null);
+    const origin = resolveIata(fromDisplay, fromIata);
+    const destination = resolveIata(toDisplay, toIata);
+
+    if (!fromDisplay.trim()) { setError("Please enter where you're flying from."); return; }
+    if (!toDisplay.trim()) { setError("Please enter where you're flying to."); return; }
+    if (!depart) { setError("Please select a departure date."); return; }
+    if (tripType === "roundtrip" && !returnD) { setError("Please select a return date for your round trip."); return; }
+
+    setLoading(true);
     setFlights([]);
-    setSearched(false);
-    setSelected(null);
+    setScreen("results");
 
     try {
       const res = await fetch("/api/flights/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          origin: from.trim(),
-          destination: to.trim(),
+          origin,
+          destination,
           departDate: depart,
-          returnDate: returnD || undefined,
+          returnDate: tripType === "roundtrip" ? returnD : undefined,
           passengers,
           cabin,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Search failed — please try again.");
+        setError(data.error ?? "Search failed. Please try again.");
+        setLoading(false);
         return;
       }
       setFlights(data.flights ?? []);
       setTotal(data.total ?? 0);
-      setSearched(true);
       if ((data.flights ?? []).length === 0) {
-        setError("No flights found for this route and date. Try different dates or a nearby airport.");
+        setError(`No flights found from ${origin} to ${destination} on ${depart}. Try different dates or nearby airports.`);
       }
     } catch {
-      setError("Connection error — check your internet and try again.");
+      setError("Connection error. Check your internet and try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  if (selected) {
+  const sorted = [...flights].sort((a, b) => {
+    if (sort === "price") return a.price - b.price;
+    if (sort === "duration") return durationMins(a.duration) - durationMins(b.duration);
+    if (sort === "stops") return a.stops - b.stops;
+    return 0;
+  });
+
+  const handleSave = async () => {
+    setSaved(true);
+    // TODO: wire to /api/trips to save the flight
+  };
+
+  // ── Detail screen ────────────────────────────────────────────────────────
+  if (screen === "detail" && selected) {
+    if (saved) {
+      return (
+        <div className="min-h-screen bg-[#0b1f3a] flex flex-col items-center justify-center px-6 text-center">
+          <p className="text-5xl mb-4">✈️</p>
+          <h2 className="text-2xl font-black text-white mb-2">Trip saved!</h2>
+          <p className="text-slate-400 text-sm mb-8">Your {selected.fromIata} → {selected.toIata} flight is in your Kepi trips.</p>
+          <Link href="/travel-assistant" className="w-full max-w-xs py-4 rounded-2xl bg-[#f4c95d] text-[#0b1f3a] font-black text-base text-center block">
+            View my trips →
+          </Link>
+          <button type="button" onClick={() => { setSaved(false); setScreen("search"); }} className="mt-4 text-slate-400 text-sm">
+            Search another flight
+          </button>
+        </div>
+      );
+    }
+    return <FlightDetail flight={selected} onBack={() => setScreen("results")} onSave={handleSave} />;
+  }
+
+  // ── Results screen ─────────────────────────────────────────────────────────
+  if (screen === "results") {
     return (
-      <div className="min-h-screen bg-[#0b1f3a] px-4 py-8 max-w-lg mx-auto">
-        <button type="button" onClick={() => setSelected(null)} className="mb-6 text-sm text-slate-400 flex items-center gap-1">
-          ← Back to results
-        </button>
-        <h1 className="text-2xl font-black text-white mb-2">Your flight</h1>
-        <div className="rounded-2xl border border-slate-700 bg-[#111e33] p-5 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-sm text-slate-400">{selected.fromIata} → {selected.toIata}</p>
-              <p className="text-lg font-bold text-white">{fmtDate(selected.departs)}</p>
+      <div className="min-h-screen bg-[#0b1f3a]">
+        {/* Header */}
+        <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-700/50">
+          <button type="button" onClick={() => { setScreen("search"); setError(null); }} className="text-slate-400 text-sm shrink-0">← Edit</button>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-black text-white truncate">
+              {resolveIata(fromDisplay, fromIata)} → {resolveIata(toDisplay, toIata)}
+            </p>
+            <p className="text-xs text-slate-400">{fmtDate(depart)}{returnD ? ` · Return ${fmtDate(returnD)}` : " · One way"} · {passengers} {passengers === 1 ? "adult" : "adults"}</p>
+          </div>
+        </div>
+
+        <div className="px-4 py-4 max-w-lg mx-auto">
+          {/* Sort tabs */}
+          {!loading && flights.length > 0 && (
+            <div className="flex gap-2 mb-4">
+              <p className="text-xs text-slate-400 self-center mr-1">Sort:</p>
+              {(["price", "duration", "stops"] as SortKey[]).map(key => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setSort(key)}
+                  className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${sort === key ? "bg-[#f4c95d] text-[#0b1f3a]" : "border border-slate-600 text-slate-400"}`}
+                >
+                  {key === "price" ? "Cheapest" : key === "duration" ? "Fastest" : "Fewest stops"}
+                </button>
+              ))}
             </div>
-            <p className="text-3xl font-black text-[#f4c95d]">${Math.round(selected.price)}</p>
-          </div>
-          <div className="space-y-1 text-sm text-slate-300">
-            <p>{selected.airline} · {selected.airlineName}</p>
-            <p>{fmt(selected.departs)} → {fmt(selected.arrives)} ({fmtDuration(selected.duration)})</p>
-            <p>{selected.stops === 0 ? "✓ Nonstop" : `${selected.stops} stop${selected.stops > 1 ? "s" : ""}`}</p>
-          </div>
-          {selected.returnFlight && (
-            <div className="mt-4 pt-4 border-t border-slate-700">
-              <p className="text-xs text-slate-500 uppercase font-bold mb-2">Return · {fmtDate(selected.returnFlight.departs)}</p>
-              <div className="text-sm text-slate-300 space-y-1">
-                <p>{fmt(selected.returnFlight.departs)} → {fmt(selected.returnFlight.arrives)} ({fmtDuration(selected.returnFlight.duration)})</p>
-                <p>{selected.returnFlight.stops === 0 ? "✓ Nonstop" : `${selected.returnFlight.stops} stop${selected.returnFlight.stops > 1 ? "s" : ""}`}</p>
+          )}
+
+          {loading && <Skeleton />}
+
+          {error && (
+            <div className="rounded-2xl bg-slate-800 border border-slate-700 px-4 py-5 text-center mt-4">
+              <p className="text-2xl mb-2">🔍</p>
+              <p className="text-white font-bold mb-1">No flights found</p>
+              <p className="text-sm text-slate-400">{error}</p>
+              <button type="button" onClick={() => setScreen("search")} className="mt-4 rounded-xl bg-[#f4c95d] text-[#0b1f3a] font-bold px-5 py-2.5 text-sm">
+                Edit search
+              </button>
+            </div>
+          )}
+
+          {!loading && flights.length > 0 && (
+            <div>
+              <p className="text-xs text-slate-500 mb-3">{total} flights found · showing {flights.length}</p>
+              <div className="space-y-3">
+                {sorted.map(f => (
+                  <FlightCard
+                    key={f.id}
+                    flight={f}
+                    onSelect={() => { setSelected(f); setScreen("detail"); }}
+                  />
+                ))}
               </div>
             </div>
           )}
         </div>
-        <p className="text-sm text-slate-400 mb-4">
-          Price shown is from Duffel and includes all taxes and fees. Final price confirmed at checkout.
-        </p>
-        <button
-          type="button"
-          onClick={() => router.push("/travel-assistant")}
-          className="w-full py-4 bg-[#f4c95d] text-[#0b1f3a] font-black text-base rounded-2xl active:opacity-80 mb-3"
-        >
-          Save to my trips →
-        </button>
-        <button type="button" onClick={() => setSelected(null)} className="w-full py-3 text-slate-400 text-sm">
-          See other options
-        </button>
       </div>
     );
   }
 
+  // ── Search screen (default) ────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#0b1f3a]">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-4 border-b border-slate-700/50">
         <div>
           <p className="text-[10px] font-black uppercase tracking-widest text-[#f4c95d]">Kepi Travel</p>
-          <h1 className="text-xl font-black text-white">Find Flights</h1>
+          <h1 className="text-xl font-black text-white">Find flights</h1>
         </div>
         <Link href="/travel-assistant" className="rounded-xl border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-200">
           My trips →
@@ -209,128 +510,142 @@ export default function BookPage() {
       </div>
 
       <div className="px-4 py-5 max-w-lg mx-auto">
-        {/* Search form */}
-        <div className="space-y-3 mb-5">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide">From</label>
-              <input
-                type="text"
-                value={from}
-                onChange={e => setFrom(e.target.value)}
-                placeholder="City or airport"
-                className="w-full rounded-2xl border border-slate-600 bg-slate-800 px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:border-[#f4c95d]/60 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide">To</label>
-              <input
-                type="text"
-                value={to}
-                onChange={e => setTo(e.target.value)}
-                placeholder="City or airport"
-                className="w-full rounded-2xl border border-slate-600 bg-slate-800 px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:border-[#f4c95d]/60 focus:outline-none"
-              />
-            </div>
+        {/* Trip type toggle */}
+        <div className="flex gap-2 mb-5">
+          <button
+            type="button"
+            onClick={() => setTripType("roundtrip")}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition ${tripType === "roundtrip" ? "bg-[#f4c95d] text-[#0b1f3a]" : "border border-slate-600 text-slate-400"}`}
+          >
+            Round trip
+          </button>
+          <button
+            type="button"
+            onClick={() => setTripType("oneway")}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition ${tripType === "oneway" ? "bg-[#f4c95d] text-[#0b1f3a]" : "border border-slate-600 text-slate-400"}`}
+          >
+            One way
+          </button>
+        </div>
+
+        {/* From / Swap / To */}
+        <div className="relative mb-4">
+          <AirportInput
+            label="From"
+            value={fromDisplay}
+            onChange={(val, iata) => { setFromDisplay(val); setFromIata(iata); }}
+            placeholder="City or airport (e.g. Los Angeles)"
+          />
+          {/* Swap button */}
+          <button
+            type="button"
+            onClick={swap}
+            className="absolute right-4 top-1/2 -translate-y-1/2 mt-3 z-10 w-8 h-8 rounded-full bg-slate-700 border border-slate-600 flex items-center justify-center text-slate-300 active:bg-slate-600"
+            aria-label="Swap airports"
+          >
+            ⇅
+          </button>
+          <div className="mt-3">
+            <AirportInput
+              label="To"
+              value={toDisplay}
+              onChange={(val, iata) => { setToDisplay(val); setToIata(iata); }}
+              placeholder="City or airport (e.g. Bari, Italy)"
+            />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+        </div>
+
+        {/* Dates */}
+        <div className={`grid gap-3 mb-4 ${tripType === "roundtrip" ? "grid-cols-2" : "grid-cols-1"}`}>
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Depart</label>
+            <input
+              type="date"
+              value={depart}
+              onChange={e => setDepart(e.target.value)}
+              min={new Date().toISOString().split("T")[0]}
+              className="w-full rounded-2xl border border-slate-700 bg-slate-800/80 px-4 py-3.5 text-sm text-white focus:border-[#f4c95d]/60 focus:outline-none"
+            />
+          </div>
+          {tripType === "roundtrip" && (
             <div>
-              <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide">Depart</label>
-              <input
-                type="date"
-                value={depart}
-                onChange={e => setDepart(e.target.value)}
-                min={new Date().toISOString().split("T")[0]}
-                className="w-full rounded-2xl border border-slate-600 bg-slate-800 px-4 py-3 text-sm text-white focus:border-[#f4c95d]/60 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide">Return <span className="text-slate-500 normal-case font-normal">(optional)</span></label>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Return</label>
               <input
                 type="date"
                 value={returnD}
                 onChange={e => setReturnD(e.target.value)}
                 min={depart || new Date().toISOString().split("T")[0]}
-                className="w-full rounded-2xl border border-slate-600 bg-slate-800 px-4 py-3 text-sm text-white focus:border-[#f4c95d]/60 focus:outline-none"
+                className="w-full rounded-2xl border border-slate-700 bg-slate-800/80 px-4 py-3.5 text-sm text-white focus:border-[#f4c95d]/60 focus:outline-none"
               />
             </div>
+          )}
+        </div>
+
+        {/* Passengers + Cabin */}
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Passengers</label>
+            <select
+              value={passengers}
+              onChange={e => setPassengers(Number(e.target.value))}
+              className="w-full rounded-2xl border border-slate-700 bg-slate-800/80 px-4 py-3.5 text-sm text-white focus:outline-none"
+            >
+              {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n} {n === 1 ? "adult" : "adults"}</option>)}
+            </select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide">Passengers</label>
-              <select
-                value={passengers}
-                onChange={e => setPassengers(Number(e.target.value))}
-                className="w-full rounded-2xl border border-slate-600 bg-slate-800 px-4 py-3 text-sm text-white focus:outline-none"
-              >
-                {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n} {n === 1 ? "adult" : "adults"}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide">Cabin</label>
-              <select
-                value={cabin}
-                onChange={e => setCabin(e.target.value)}
-                className="w-full rounded-2xl border border-slate-600 bg-slate-800 px-4 py-3 text-sm text-white focus:outline-none"
-              >
-                <option value="economy">Economy</option>
-                <option value="premium_economy">Premium Eco</option>
-                <option value="business">Business</option>
-                <option value="first">First</option>
-              </select>
-            </div>
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Cabin</label>
+            <select
+              value={cabin}
+              onChange={e => setCabin(e.target.value)}
+              className="w-full rounded-2xl border border-slate-700 bg-slate-800/80 px-4 py-3.5 text-sm text-white focus:outline-none"
+            >
+              <option value="economy">Economy</option>
+              <option value="premium_economy">Premium Eco</option>
+              <option value="business">Business</option>
+              <option value="first">First</option>
+            </select>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={search}
-          disabled={loading}
-          className="w-full py-4 rounded-2xl bg-[#f4c95d] text-[#0b1f3a] font-black text-base disabled:opacity-60 active:opacity-80 mb-6"
-        >
-          {loading ? "Searching flights…" : "Search flights"}
-        </button>
-
-        {error && (
-          <div className="rounded-2xl bg-red-900/30 border border-red-500/30 px-4 py-3 mb-4">
+        {error && screen === "search" && (
+          <div className="rounded-2xl bg-red-900/20 border border-red-500/30 px-4 py-3 mb-4">
             <p className="text-sm text-red-300">{error}</p>
           </div>
         )}
 
-        {searched && flights.length > 0 && (
-          <div>
-            <p className="text-xs text-slate-400 mb-3">{total} flights found · showing cheapest {flights.length}</p>
-            <div className="space-y-3">
-              {flights.map(f => (
-                <FlightCard key={f.id} flight={f} onSelect={() => setSelected(f)} />
-              ))}
-            </div>
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={search}
+          className="w-full py-4 rounded-2xl bg-[#f4c95d] text-[#0b1f3a] font-black text-base active:opacity-80"
+        >
+          Search flights
+        </button>
 
-        {!searched && !loading && (
-          <div className="rounded-2xl border border-dashed border-slate-700 px-5 py-8 text-center">
-            <p className="text-2xl mb-2">✈️</p>
-            <p className="text-white font-bold">Where are you going?</p>
-            <p className="text-sm text-slate-400 mt-1">Enter your origin and destination above to see real flights and prices.</p>
-            <div className="mt-4 space-y-2 text-left">
-              {["LAX → BRI", "ONT → JFK", "SNA → MUC"].map(ex => (
-                <button
-                  key={ex}
-                  type="button"
-                  onClick={() => {
-                    const [o, d] = ex.split(" → ");
-                    setFrom(o ?? "");
-                    setTo(d ?? "");
-                  }}
-                  className="block w-full text-left rounded-xl border border-slate-700 bg-slate-800/60 px-4 py-2.5 text-sm text-slate-300"
-                >
-                  → {ex}
-                </button>
-              ))}
-            </div>
+        {/* Quick picks */}
+        <div className="mt-6">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 mb-3">Popular routes</p>
+          <div className="space-y-2">
+            {[
+              { from: "Los Angeles (LAX)", fIata: "LAX", to: "New York (JFK)", tIata: "JFK" },
+              { from: "Ontario / Beaumont (ONT)", fIata: "ONT", to: "Bari, Italy (BRI)", tIata: "BRI" },
+              { from: "Los Angeles (LAX)", fIata: "LAX", to: "London (LHR)", tIata: "LHR" },
+            ].map(r => (
+              <button
+                key={r.fIata + r.tIata}
+                type="button"
+                onClick={() => { setFromDisplay(r.from); setFromIata(r.fIata); setToDisplay(r.to); setToIata(r.tIata); }}
+                className="w-full flex items-center gap-3 rounded-2xl border border-slate-700/60 bg-slate-800/40 px-4 py-3 text-left active:bg-slate-800"
+              >
+                <span className="text-slate-500 text-sm">✈</span>
+                <span>
+                  <p className="text-sm text-white">{r.fIata} → {r.tIata}</p>
+                  <p className="text-xs text-slate-500">{r.from.split("(")[0]?.trim()} → {r.to.split("(")[0]?.trim()}</p>
+                </span>
+              </button>
+            ))}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
