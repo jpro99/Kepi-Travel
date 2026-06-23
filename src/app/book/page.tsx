@@ -403,6 +403,14 @@ export default function BookPage() {
   const [saved, setSaved] = useState(false);
   const [loyaltyBalances, setLoyaltyBalances] = useState<LoyaltyBalance[]>([]);
 
+  // Search filters
+  const [filterNonstop, setFilterNonstop] = useState(false);
+  const [filterMaxPrice, setFilterMaxPrice] = useState<number | null>(null);
+  const [filterAirline, setFilterAirline] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [priceCalendar, setPriceCalendar] = useState<Record<string, number>>({});
+  const [calendarLoading, setCalendarLoading] = useState(false);
+
   // Load loyalty balances on mount
   useEffect(() => {
     fetch("/api/loyalty").then(r => r.json()).then(d => {
@@ -435,6 +443,16 @@ export default function BookPage() {
     setFlights([]);
     setScreen("results");
 
+    // Load price calendar in background
+    if (resolveIata(fromDisplay, fromIata) && resolveIata(toDisplay, toIata) && depart) {
+      setCalendarLoading(true);
+      fetch(`/api/flights/search?origin=${resolveIata(fromDisplay, fromIata)}&destination=${resolveIata(toDisplay, toIata)}&departDate=${depart}`)
+        .then(r => r.json())
+        .then(d => { if (d.prices) setPriceCalendar(d.prices); })
+        .catch(() => {})
+        .finally(() => setCalendarLoading(false));
+    }
+
     try {
       const res = await fetch("/api/flights/search", {
         method: "POST",
@@ -466,7 +484,16 @@ export default function BookPage() {
     }
   };
 
-  const sorted = [...flights].sort((a, b) => {
+  const filtered = flights
+    .filter(f => !filterNonstop || f.stops === 0)
+    .filter(f => !filterMaxPrice || f.price <= filterMaxPrice)
+    .filter(f => !filterAirline || f.airline === filterAirline);
+
+  const uniqueAirlines = [...new Set(flights.map(f => f.airline))];
+  const maxFlightPrice = flights.length ? Math.max(...flights.map(f => f.price)) : 0;
+  const minFlightPrice = flights.length ? Math.min(...flights.map(f => f.price)) : 0;
+
+  const sorted = [...filtered].sort((a, b) => {
     if (sort === "price") return a.price - b.price;
     if (sort === "duration") return durationMins(a.duration) - durationMins(b.duration);
     if (sort === "stops") return a.stops - b.stops;
@@ -514,20 +541,120 @@ export default function BookPage() {
         </div>
 
         <div className="px-4 py-4 max-w-lg mx-auto">
-          {/* Sort tabs */}
+          {/* Price calendar — cheapest day ±3 days */}
+          {(Object.keys(priceCalendar).length > 0 || calendarLoading) && !loading && (
+            <div className="mb-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Prices nearby dates</p>
+              <div className="flex gap-1.5 overflow-x-auto pb-1">
+                {Object.entries(priceCalendar)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([date, price]) => {
+                    const isSelected = date === depart;
+                    const cheapest = Math.min(...Object.values(priceCalendar));
+                    const isCheapest = price === cheapest;
+                    const d = new Date(date);
+                    return (
+                      <button
+                        key={date}
+                        type="button"
+                        onClick={() => { setDepart(date); void search(); }}
+                        className={`shrink-0 rounded-xl px-3 py-2 text-center transition ${
+                          isSelected ? "bg-[#f4c95d] text-[#0b1f3a]" :
+                          isCheapest ? "bg-emerald-950/40 border border-emerald-500/40 text-emerald-300" :
+                          "bg-slate-800 border border-slate-700 text-slate-300"
+                        }`}
+                      >
+                        <p className="text-[10px] font-bold">
+                          {d.toLocaleDateString("en-US", { weekday: "short" })}
+                        </p>
+                        <p className="text-[10px]">{d.toLocaleDateString("en-US", { month: "numeric", day: "numeric" })}</p>
+                        <p className={`text-xs font-black mt-0.5 ${isCheapest && !isSelected ? "text-emerald-400" : ""}`}>
+                          ${Math.round(price)}
+                        </p>
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
+          {/* Sort + Filter bar */}
           {!loading && flights.length > 0 && (
-            <div className="flex gap-2 mb-4">
-              <p className="text-xs text-slate-400 self-center mr-1">Sort:</p>
-              {(["price", "duration", "stops"] as SortKey[]).map(key => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setSort(key)}
-                  className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${sort === key ? "bg-[#f4c95d] text-[#0b1f3a]" : "border border-slate-600 text-slate-400"}`}
-                >
-                  {key === "price" ? "Cheapest" : key === "duration" ? "Fastest" : "Fewest stops"}
+            <div className="mb-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-slate-400 shrink-0">Sort:</p>
+                {(["price", "duration", "stops"] as SortKey[]).map(key => (
+                  <button key={key} type="button" onClick={() => setSort(key)}
+                    className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${sort === key ? "bg-[#f4c95d] text-[#0b1f3a]" : "border border-slate-600 text-slate-400"}`}>
+                    {key === "price" ? "Cheapest" : key === "duration" ? "Fastest" : "Fewest stops"}
+                  </button>
+                ))}
+                <button type="button" onClick={() => setShowFilters(!showFilters)}
+                  className={`ml-auto rounded-xl px-3 py-1.5 text-xs font-bold border ${showFilters ? "border-[#f4c95d]/60 text-[#f4c95d]" : "border-slate-600 text-slate-400"}`}>
+                  Filter {(filterNonstop || filterMaxPrice || filterAirline) ? "•" : ""}
                 </button>
-              ))}
+              </div>
+
+              {showFilters && (
+                <div className="rounded-2xl border border-slate-700 bg-[#111e33] px-4 py-4 space-y-3">
+                  {/* Nonstop toggle */}
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm text-white font-semibold">Nonstop only</label>
+                    <button type="button" onClick={() => setFilterNonstop(!filterNonstop)}
+                      className={`w-11 h-6 rounded-full transition relative ${filterNonstop ? "bg-[#f4c95d]" : "bg-slate-600"}`}>
+                      <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${filterNonstop ? "left-6" : "left-1"}`} />
+                    </button>
+                  </div>
+
+                  {/* Airline filter */}
+                  {uniqueAirlines.length > 1 && (
+                    <div>
+                      <p className="text-xs text-slate-400 mb-2">Airline</p>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={() => setFilterAirline(null)}
+                          className={`rounded-xl px-3 py-1.5 text-xs font-bold border ${!filterAirline ? "bg-[#f4c95d] border-[#f4c95d] text-[#0b1f3a]" : "border-slate-600 text-slate-400"}`}>
+                          All
+                        </button>
+                        {uniqueAirlines.map(a => (
+                          <button key={a} type="button" onClick={() => setFilterAirline(filterAirline === a ? null : a)}
+                            className={`rounded-xl px-3 py-1.5 text-xs font-bold border ${filterAirline === a ? "bg-[#f4c95d] border-[#f4c95d] text-[#0b1f3a]" : "border-slate-600 text-slate-400"}`}>
+                            {a}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Max price */}
+                  {maxFlightPrice > minFlightPrice && (
+                    <div>
+                      <div className="flex justify-between mb-2">
+                        <p className="text-xs text-slate-400">Max price</p>
+                        <p className="text-xs font-bold text-white">{filterMaxPrice ? `$${filterMaxPrice}` : "Any"}</p>
+                      </div>
+                      <input type="range" min={minFlightPrice} max={maxFlightPrice} step={10}
+                        value={filterMaxPrice ?? maxFlightPrice}
+                        onChange={e => setFilterMaxPrice(Number(e.target.value) >= maxFlightPrice ? null : Number(e.target.value))}
+                        className="w-full accent-[#f4c95d]" />
+                      <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                        <span>${Math.round(minFlightPrice)}</span>
+                        <span>${Math.round(maxFlightPrice)}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {(filterNonstop || filterMaxPrice || filterAirline) && (
+                    <button type="button" onClick={() => { setFilterNonstop(false); setFilterMaxPrice(null); setFilterAirline(null); }}
+                      className="text-xs text-red-400 font-semibold">
+                      Clear all filters
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <p className="text-xs text-slate-500">
+                {filtered.length} of {flights.length} flights shown
+              </p>
             </div>
           )}
 

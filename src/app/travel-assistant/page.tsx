@@ -7348,6 +7348,31 @@ export default function TravelAssistantPage() {
                   <span className="text-slate-400 text-sm">›</span>
                 </button>
                 <div id="packing-section" className="hidden border-t border-slate-100 dark:border-slate-800 px-4 pb-4">
+                  {/* Smart packing list if we have a trip with destination */}
+                  {activeTrip && (() => {
+                    const destRes = consumerReservationsSorted.find(r => r.type === "flight" && r.flightArrivalAirport);
+                    const dest = (destRes as Record<string, string | undefined>)?.flightArrivalAirport ?? activeTrip.name;
+                    const depDate = (destRes as Record<string, string | undefined>)?.flightDate ?? (destRes as Record<string, string | undefined>)?.flightDepartureDate;
+                    const retRes = consumerReservationsSorted.filter(r => r.type === "flight").slice(-1)[0];
+                    const retDate = (retRes as Record<string, string | undefined>)?.flightDate ?? (retRes as Record<string, string | undefined>)?.flightDepartureDate;
+                    if (!dest || !depDate) return null;
+                    return (
+                      <div className="mb-4">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3 mt-3">
+                          ✨ Smart list for {dest}
+                        </p>
+                        <SmartPackingList
+                          destination={dest}
+                          departDate={depDate}
+                          returnDate={retDate}
+                          tripType="leisure"
+                        />
+                        <div className="mt-4 border-t border-slate-700/30 pt-4">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3">Custom checklist</p>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <PackingList
                     mode="consumer"
                     tripId={activeTripId}

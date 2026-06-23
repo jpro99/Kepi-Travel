@@ -5,6 +5,57 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+// GET /api/flights/search?origin=LAX&destination=BRI&departDate=2026-09-01
+// Returns cheapest price for ±3 days (price calendar)
+export async function GET(req: Request) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const url = new URL(req.url);
+  const origin = url.searchParams.get("origin") ?? "";
+  const destination = url.searchParams.get("destination") ?? "";
+  const departDate = url.searchParams.get("departDate") ?? "";
+
+  if (!origin || !destination || !departDate) {
+    return NextResponse.json({ error: "Missing params" }, { status: 400 });
+  }
+
+  const token = process.env.DUFFEL_ACCESS_TOKEN;
+  if (!token) return NextResponse.json({ prices: {} });
+
+  // Search ±3 days
+  const base = new Date(departDate);
+  const dates: string[] = [];
+  for (let i = -3; i <= 3; i++) {
+    const d = new Date(base.getTime() + i * 86_400_000);
+    dates.push(d.toISOString().split("T")[0]!);
+  }
+
+  const prices: Record<string, number> = {};
+  await Promise.all(dates.map(async (date) => {
+    try {
+      const ctrl = new AbortController();
+      setTimeout(() => ctrl.abort(), 8_000);
+      const res = await fetch("https://api.duffel.com/air/offer_requests", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}`, "Duffel-Version": "v2", "Content-Type": "application/json" },
+        body: JSON.stringify({ data: { cabin_class: "economy", return_offers: true, max_connections: 2,
+          slices: [{ origin: origin.toUpperCase(), destination: destination.toUpperCase(), departure_date: date }],
+          passengers: [{ type: "adult" }] } }),
+        signal: ctrl.signal,
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const offers = data?.data?.offers ?? [];
+      if (offers.length > 0) {
+        prices[date] = Math.min(...offers.map((o: Record<string, unknown>) => Number(o.total_amount)));
+      }
+    } catch { /* skip */ }
+  }));
+
+  return NextResponse.json({ prices });
+}
+
 export async function POST(req: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Sign in to search flights" }, { status: 401 });
