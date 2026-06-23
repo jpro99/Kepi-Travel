@@ -177,10 +177,8 @@ export function DisruptionAlert({
                   <button
                     type="button"
                     onClick={() => {
-                      window.open(
-                        `/book?from=${alt.origin}&to=${alt.destination}&date=${alt.departs.split("T")[0]}`,
-                        "_self"
-                      );
+                      const prompt = `fly from ${alt.origin} to ${alt.destination} on ${alt.departs.split("T")[0]}`;
+                      window.open(`/book?prompt=${encodeURIComponent(prompt)}`, "_self");
                     }}
                     className="mt-3 w-full py-2.5 rounded-xl bg-[#f4c95d] text-[#0b1f3a] text-sm font-black active:opacity-80"
                   >

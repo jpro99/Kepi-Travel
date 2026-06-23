@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 
-interface Flight {
+export interface Flight {
   id: string;
   price: number;
   currency: string;

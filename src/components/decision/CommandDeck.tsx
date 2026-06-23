@@ -35,6 +35,7 @@ import type { ExpertDeckOptions } from "@/lib/decision/expertDeck";
 import { expertPlaceholder } from "@/lib/decision/expertDeck";
 import type { RankedStay } from "@/lib/decision/stayRanking";
 import { StrategyFlexModal } from "@/components/decision/StrategyFlexModal";
+import { CheckoutFlow, type Flight as CheckoutFlight } from "@/components/booking/CheckoutFlow";
 import { RecordTripModal } from "@/components/decision/RecordTripModal";
 import { TripItinerarySummary } from "@/components/decision/TripItinerarySummary";
 import { ExpertDeckPanel } from "@/components/decision/ExpertDeckPanel";
@@ -189,6 +190,7 @@ function StrategyCard({
   expertMode,
   liveBookUrl,
   liveBookLabel,
+  onBookNow,
   onToggle,
   onActivate,
   onCompareDates,
@@ -205,6 +207,7 @@ function StrategyCard({
   expertMode?: boolean;
   liveBookUrl?: string | null;
   liveBookLabel?: string | null;
+  onBookNow?: (() => void) | null;
   onToggle: () => void;
   onActivate: () => void;
   onCompareDates: () => void;
@@ -359,7 +362,15 @@ function StrategyCard({
           </button>
           ) : null}
 
-          {liveBookUrl && (strategy.kind === "direct_cash" || strategy.kind === "instrument_play") ? (
+          {onBookNow && (strategy.kind === "direct_cash" || strategy.kind === "instrument_play") ? (
+            <button
+              type="button"
+              onClick={onBookNow}
+              className="mt-3 flex w-full items-center justify-center rounded-2xl border border-emerald-500/50 bg-emerald-950/50 py-3 text-sm font-black text-emerald-100 transition-all hover:bg-emerald-900/60"
+            >
+              Book this fare — pay in Kepi
+            </button>
+          ) : liveBookUrl && (strategy.kind === "direct_cash" || strategy.kind === "instrument_play") ? (
             <a
               href={liveBookUrl}
               target="_blank"
@@ -514,6 +525,8 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
   const [activatingId, setActivatingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [counterfactualNote, setCounterfactualNote] = useState<string | null>(null);
+  const [checkout, setCheckout] = useState<{ flight: CheckoutFlight; strategyId: string } | null>(null);
+  const [bookingConfirmation, setBookingConfirmation] = useState<string | null>(null);
   const [flexOpen, setFlexOpen] = useState(false);
   const [flexLoading, setFlexLoading] = useState(false);
   const [flexError, setFlexError] = useState<string | null>(null);
@@ -1013,6 +1026,17 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     void fetchStrategies(inputPrompt, comfortWeight);
   };
 
+  // Deep-link prefill — e.g. a disruption alert's "rebook" link to
+  // /book?prompt=... auto-fills and runs the search instead of landing empty.
+  useEffect(() => {
+    const promptParam = searchParams.get("prompt");
+    if (!promptParam?.trim()) return;
+    setInputPrompt(promptParam);
+    setPrompt(promptParam);
+    void fetchStrategies(promptParam, comfortWeight);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once for the initial deep link only
+  }, [searchParams]);
+
   const openWalkthroughFromResponse = useCallback(
     (data: {
       activation: {
@@ -1210,6 +1234,20 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     }
   };
 
+  const openCheckout = (flight: CheckoutFlight, strategyId: string) => {
+    if (!isSignedIn) {
+      router.push(`/sign-up?redirect_url=${encodeURIComponent(embedded ? "/?tab=plan" : window.location.pathname)}`);
+      return;
+    }
+    setCheckout({ flight, strategyId });
+  };
+
+  const handleCheckoutComplete = (bookingRef: string, strategyId: string) => {
+    setCheckout(null);
+    setBookingConfirmation(bookingRef);
+    void handleActivate(strategyId);
+  };
+
   const handleActivate = async (strategyId: string, staysOverride?: SelectedStayActivation[]) => {
     const strategy = brief?.strategies.find((item) => item.id === strategyId);
     const staysPayload =
@@ -1368,6 +1406,32 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         flightNumber: live.bestOffer.flightNumber,
       })
     : null;
+
+  // Real, bookable live cash offer (full segment data — departs/arrives/stops) for in-app
+  // checkout. live.bestOffer (Duffel quote summary) lacks arrival time/stops, so prefer the
+  // richer fused-search cash offer when available.
+  const fusedCheapestCash = brief?.fusedFlightSearch?.cheapestCash;
+  const bookableCashOffer: CheckoutFlight | null =
+    fusedCheapestCash && fusedCheapestCash.offer.kind === "cash"
+      ? (() => {
+          const cash = fusedCheapestCash.offer;
+          const seg = cash.segments[0];
+          if (!seg) return null;
+          return {
+            id: cash.id,
+            price: cash.totalAmount / 100,
+            currency: cash.currency,
+            airline: cash.airlineName ?? seg.marketingCarrier,
+            airlineName: cash.airlineName ?? seg.marketingCarrier,
+            departs: seg.departingAt,
+            arrives: seg.arrivingAt,
+            fromIata: seg.origin,
+            toIata: seg.destination,
+            stops: Math.max(0, cash.segments.length - 1),
+            duration: "",
+          };
+        })()
+      : null;
 
   const selectedStayPayloads = useMemo(
     () => (staysData ? collectSelectedStayPayloads(staysData, selectedStayByLeg) : []),
@@ -1971,6 +2035,11 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
                   : null
               }
               liveBookLabel={outboundLiveBook?.label}
+              onBookNow={
+                (strategy.kind === "direct_cash" || strategy.kind === "instrument_play") && bookableCashOffer
+                  ? () => openCheckout(bookableCashOffer, strategy.id)
+                  : null
+              }
               hideCompareDates={strategy.id === "hotels-only"}
               onToggle={() => setExpandedId((current) => (current === strategy.id ? null : strategy.id))}
               onActivate={() => void handleActivate(strategy.id)}
@@ -1986,6 +2055,23 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
           data={flexData}
           onClose={() => setFlexOpen(false)}
         />
+
+        {checkout && (
+          <div className="fixed inset-0 z-[100] overflow-y-auto" role="dialog" aria-modal="true">
+            <CheckoutFlow
+              flight={checkout.flight}
+              passengers={1}
+              onCancel={() => setCheckout(null)}
+              onComplete={(bookingRef) => handleCheckoutComplete(bookingRef, checkout.strategyId)}
+            />
+          </div>
+        )}
+
+        {bookingConfirmation && (
+          <div className="mt-4 rounded-2xl border border-emerald-500/50 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-100">
+            Booked — confirmation <span className="font-black">{bookingConfirmation}</span>. Saving it to your trip…
+          </div>
+        )}
 
         {/* Where you'll sleep — Kepi already checked, ranked to your genome */}
         {(brief?.planMode === "hotels" ||
