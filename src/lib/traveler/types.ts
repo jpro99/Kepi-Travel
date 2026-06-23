@@ -52,9 +52,25 @@ export interface GenomeCorrection {
   context: string;
 }
 
+export interface SavedPassengerDetails {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  dateOfBirth: string;
+  gender: "m" | "f";
+  passportNumber?: string;
+  passportExpiry?: string;
+  passportCountry?: string;
+}
+
 export interface TravelerGenome {
   /** Loyalty program balances — updated by user */
   loyaltyBalances?: { programId: string; miles: number; tier?: string }[];
+  /** Post-trip feedback used by the trip-learning engine — see src/lib/learning/tripInsights.ts */
+  tripRatings?: import("@/lib/learning/tripInsights").TripRating[];
+  /** Prefilled from the most recent checkout — see src/app/api/orders/create/route.ts */
+  savedPassengerDetails?: SavedPassengerDetails;
   userId: string;
   homeRegion: string;
   geoCluster: GeoAirport[];
