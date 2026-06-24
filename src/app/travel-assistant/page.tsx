@@ -2702,18 +2702,24 @@ export default function TravelAssistantPage() {
       openUpgradeModal("multi-trip", "Free includes one trip. Upgrade to add and manage multiple trips.");
       return;
     }
+    setPlanningWizardPhaseOverride(null);
     setTripPlanningWizardOpen(true);
   }, [billingStatus?.usage?.tripLimit, hasProAccess, openUpgradeModal, trips.length]);
 
+  const openTripPlanningWizard = useCallback(() => {
+    setPlanningWizardPhaseOverride(null);
+    setTripPlanningWizardOpen(true);
+  }, []);
+
   const handleSaveTripPlanningSetup = useCallback(
-    async (tripDraft: TripSetupDraft): Promise<void> => {
+    async (tripDraft: TripSetupDraft): Promise<boolean> => {
       const tripName = tripDraft.tripName.trim();
       const destination = tripDraft.destination.trim();
       const departureDate = tripDraft.departureDate.trim();
       const returnDate = tripDraft.returnDate.trim();
       if (!tripName || !destination || !departureDate || !returnDate) {
         setToast("Trip setup is missing required fields.");
-        return;
+        return false;
       }
 
       const minutes =
@@ -2739,7 +2745,26 @@ export default function TravelAssistantPage() {
         activeTripId?: string | null;
       }): void => {
         applyServerTripsSnapshot(payload);
-        setPlanningWizardPhaseOverride(null);
+        const savedTrip = normalizeManagedTrip(payload.activeTrip ?? payload.trip);
+        const savedTripId = savedTrip?.id ?? activeTripId;
+        if (savedTripId) {
+          setTrips((previous) =>
+            previous.map((trip) => {
+              if (trip.id !== savedTripId) return trip;
+              return {
+                ...trip,
+                name: tripName,
+                destination,
+                startDate: departureDate,
+                endDate: returnDate,
+                minutesToDeparture: minutes,
+                bookingWizard,
+                ...(savedTrip ? { ...savedTrip, bookingWizard: savedTrip.bookingWizard ?? bookingWizard } : {}),
+              };
+            }),
+          );
+        }
+        setPlanningWizardPhaseOverride("flights");
         setToast(`Trip "${tripName}" is set — add flights when you're ready.`);
       };
 
@@ -2765,7 +2790,7 @@ export default function TravelAssistantPage() {
           });
           if (!response.ok) {
             setToast(await readTripApiError(response, "Could not save trip details."));
-            return;
+            return false;
           }
           finishTripPlanningSave((await response.json()) as {
             activeTrip?: unknown;
@@ -2773,7 +2798,7 @@ export default function TravelAssistantPage() {
             trips?: unknown[];
             activeTripId?: string | null;
           });
-          return;
+          return true;
         }
 
         const reusableShell = tripListRows.find(isEmptyTripShell);
@@ -2789,7 +2814,7 @@ export default function TravelAssistantPage() {
           });
           if (!activateResponse.ok) {
             setToast(await readTripApiError(activateResponse, "Could not activate trip shell."));
-            return;
+            return false;
           }
           const patchResponse = await fetch(TRIP_API_ROUTE, {
             method: "PUT",
@@ -2802,7 +2827,7 @@ export default function TravelAssistantPage() {
           });
           if (!patchResponse.ok) {
             setToast(await readTripApiError(patchResponse, "Could not save trip details."));
-            return;
+            return false;
           }
           finishTripPlanningSave((await patchResponse.json()) as {
             activeTrip?: unknown;
@@ -2810,7 +2835,7 @@ export default function TravelAssistantPage() {
             trips?: unknown[];
             activeTripId?: string | null;
           });
-          return;
+          return true;
         }
 
         const response = await fetch(TRIP_API_ROUTE, {
@@ -2832,7 +2857,7 @@ export default function TravelAssistantPage() {
         });
         if (!response.ok) {
           setToast(await readTripApiError(response, "Could not create your trip."));
-          return;
+          return false;
         }
         const payload = (await response.json()) as {
           trip?: unknown;
@@ -2842,12 +2867,14 @@ export default function TravelAssistantPage() {
         };
         if (!normalizeManagedTrip(payload.trip ?? payload.activeTrip)) {
           setToast("Trip saved but response was invalid.");
-          return;
+          return false;
         }
         finishTripPlanningSave(payload);
         void refreshGlobalBillingStatus();
+        return true;
       } catch {
         setToast("Could not save trip details.");
+        return false;
       }
     },
     [
@@ -2869,6 +2896,8 @@ export default function TravelAssistantPage() {
         normalizeBookingWizard(activeTrip?.bookingWizard),
         action,
       );
+      const nextPhase: BookingWizardPhase =
+        phase === "flights" ? "hotels" : phase === "hotels" ? "excursions" : "complete";
       try {
         const response = await fetch(TRIP_API_ROUTE, {
           method: "PUT",
@@ -2883,26 +2912,23 @@ export default function TravelAssistantPage() {
           setToast("Could not update planning step.");
           return;
         }
-        const payload = (await response.json()) as { activeTrip?: unknown; trips?: unknown[] };
-        const nextActiveTrip = normalizeManagedTrip(payload.activeTrip);
-        if (nextActiveTrip) {
-          applyManagedTripToState(nextActiveTrip);
-        }
-        if (Array.isArray(payload.trips)) {
-          setTrips(
-            payload.trips
-              .map((trip) => normalizeManagedTrip(trip))
-              .filter((trip): trip is ManagedTrip => trip !== null),
-          );
-        }
+        const payload = (await response.json()) as {
+          activeTrip?: unknown;
+          trip?: unknown;
+          trips?: unknown[];
+          activeTripId?: string | null;
+        };
+        applyServerTripsSnapshot(payload);
+        setPlanningWizardPhaseOverride(nextPhase);
         if (phase === "excursions") {
           setTripPlanningWizardOpen(false);
+          setPlanningWizardPhaseOverride(null);
         }
       } catch {
         setToast("Could not update planning step.");
       }
     },
-    [activeTrip?.bookingWizard, activeTripId, applyManagedTripToState, setToast],
+    [activeTrip?.bookingWizard, activeTripId, applyServerTripsSnapshot, setToast],
   );
 
   const handleAdjustTripPlanning = useCallback(async (): Promise<void> => {
@@ -2930,24 +2956,18 @@ export default function TravelAssistantPage() {
         setToast("Could not open trip editor. Try again.");
         return;
       }
-      const payload = (await response.json()) as { activeTrip?: unknown; trips?: unknown[] };
-      const nextActiveTrip = normalizeManagedTrip(payload.activeTrip);
-      if (nextActiveTrip) {
-        applyManagedTripToState(nextActiveTrip);
-      }
-      if (Array.isArray(payload.trips)) {
-        setTrips(
-          payload.trips
-            .map((trip) => normalizeManagedTrip(trip))
-            .filter((trip): trip is ManagedTrip => trip !== null),
-        );
-      }
-      setPlanningWizardPhaseOverride(null);
+      const payload = (await response.json()) as {
+        activeTrip?: unknown;
+        trip?: unknown;
+        trips?: unknown[];
+        activeTripId?: string | null;
+      };
+      applyServerTripsSnapshot(payload);
       setToast("Edit your trip name, dates, and bookings below.");
     } catch {
       setToast("Could not open trip editor. Try again.");
     }
-  }, [activeTrip?.bookingWizard, activeTripId, applyManagedTripToState, setToast]);
+  }, [activeTrip?.bookingWizard, activeTripId, applyServerTripsSnapshot, setToast]);
 
   const handleDeleteTripById = useCallback(
     async (tripId: string): Promise<void> => {
@@ -7204,19 +7224,14 @@ export default function TravelAssistantPage() {
           setMyTripsModalOpen(false);
         }}
         onDeleteTrip={handleDeleteTripById}
-        onCreateTrip={() => setTripPlanningWizardOpen(true)}
+        onCreateTrip={openTripPlanningWizard}
         onDeleteEmptyTrips={handleDeleteEmptyTrips}
       />
       <TripPlanningWizard
         open={tripPlanningWizardOpen}
         forwardAddress={emptyStateForwardAddress}
         initialDraft={tripPlanningInitialDraft}
-        wizardPhase={
-          planningWizardPhaseOverride ??
-          (isTripShellConfigured(activeTrip ?? {}) || activeBookingWizard.phase !== "setup"
-            ? activeBookingWizard.phase
-            : ("setup" as BookingWizardPhase))
-        }
+        wizardPhase={planningWizardPhaseOverride ?? activeBookingWizard.phase}
         flightCount={wizardFlightCount}
         hotelCount={wizardHotelCount}
         onClose={() => {
@@ -7552,7 +7567,7 @@ export default function TravelAssistantPage() {
                     {/* Primary CTA */}
                     <button
                       type="button"
-                      onClick={() => setTripPlanningWizardOpen(true)}
+                      onClick={openTripPlanningWizard}
                       className="w-full rounded-2xl bg-[#f4c95d] py-4 text-center font-black text-[#0b1f3a] text-base active:opacity-80"
                     >
                       ⚡ Plan my next trip
