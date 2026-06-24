@@ -20,6 +20,7 @@ export interface TripPlanningWizardProps {
   hotelCount: number;
   onClose: () => void;
   onSaveTripSetup: (draft: TripSetupDraft) => Promise<boolean> | boolean;
+  onBeginSave?: () => void;
   onMarkPhaseDone: (phase: "flights" | "hotels" | "excursions") => void;
   onAdjustTrip: () => void;
   onCopyForward: () => void;
@@ -43,6 +44,7 @@ export function TripPlanningWizard({
   hotelCount,
   onClose,
   onSaveTripSetup,
+  onBeginSave,
   onMarkPhaseDone,
   onAdjustTrip,
   onCopyForward,
@@ -54,22 +56,25 @@ export function TripPlanningWizard({
   });
   const [errors, setErrors] = useState<TripSetupValidationErrors>({});
   const [saving, setSaving] = useState(false);
-  const [displayPhase, setDisplayPhase] = useState<BookingWizardPhase>(wizardPhase);
   const wasOpenRef = useRef(false);
+  const initialDraftRef = useRef(initialDraft);
 
-  // Seed draft only when the modal opens — not on every parent re-render. page.tsx passes
-  // initialDraft as a new object each render (trip poll, toasts, API), which was wiping input.
+  initialDraftRef.current = initialDraft;
+
+  // Seed draft only when the modal opens — not on every parent re-render.
   useEffect(() => {
-    if (open && !wasOpenRef.current) {
-      setDraft({
-        ...EMPTY_TRIP_SETUP_DRAFT,
-        ...initialDraft,
-      });
-      setErrors({});
-      setDisplayPhase(wizardPhase);
+    if (!open) {
+      wasOpenRef.current = false;
+      return;
     }
-    wasOpenRef.current = open;
-  }, [open, initialDraft, wizardPhase]);
+    if (wasOpenRef.current) return;
+    wasOpenRef.current = true;
+    setDraft({
+      ...EMPTY_TRIP_SETUP_DRAFT,
+      ...initialDraftRef.current,
+    });
+    setErrors({});
+  }, [open]);
 
   const steps = useMemo(
     () => [
@@ -87,12 +92,10 @@ export function TripPlanningWizard({
     const nextErrors = validateTripSetupDraft(draft);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
+    onBeginSave?.();
     setSaving(true);
     try {
-      const saved = await onSaveTripSetup(draft);
-      if (saved) {
-        setDisplayPhase("flights");
-      }
+      await onSaveTripSetup(draft);
     } finally {
       setSaving(false);
     }
@@ -105,7 +108,7 @@ export function TripPlanningWizard({
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400">Plan my trip</p>
-              <h2 className="text-xl font-black text-slate-900 dark:text-white">{phaseLabel(displayPhase)}</h2>
+              <h2 className="text-xl font-black text-slate-900 dark:text-white">{phaseLabel(wizardPhase)}</h2>
             </div>
             <button type="button" onClick={onClose} className="rounded-lg px-2 py-1 text-slate-400 hover:text-slate-600">
               ✕
@@ -113,12 +116,12 @@ export function TripPlanningWizard({
           </div>
           <div className="mt-3 flex gap-1">
             {steps.map((step) => {
-              const active = step.id === displayPhase || (displayPhase === "complete" && step.id === "excursions");
+              const active = step.id === wizardPhase || (wizardPhase === "complete" && step.id === "excursions");
               const done =
-                (step.id === "setup" && displayPhase !== "setup") ||
-                (step.id === "flights" && (displayPhase === "hotels" || displayPhase === "excursions" || displayPhase === "complete")) ||
-                (step.id === "hotels" && (displayPhase === "excursions" || displayPhase === "complete")) ||
-                (step.id === "excursions" && displayPhase === "complete");
+                (step.id === "setup" && wizardPhase !== "setup") ||
+                (step.id === "flights" && (wizardPhase === "hotels" || wizardPhase === "excursions" || wizardPhase === "complete")) ||
+                (step.id === "hotels" && (wizardPhase === "excursions" || wizardPhase === "complete")) ||
+                (step.id === "excursions" && wizardPhase === "complete");
               return (
                 <div
                   key={step.id}
@@ -130,7 +133,7 @@ export function TripPlanningWizard({
         </header>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          {displayPhase === "setup" ? (
+          {wizardPhase === "setup" ? (
             <div className="space-y-4">
               <p className="text-sm text-slate-600 dark:text-slate-300">
                 Name your trip and set travel dates first. When you forward airline confirmations, Kepi matches them to this
@@ -147,7 +150,7 @@ export function TripPlanningWizard({
             </div>
           ) : null}
 
-          {displayPhase === "flights" ? (
+          {wizardPhase === "flights" ? (
             <div className="space-y-4">
               <p className="text-sm text-slate-600 dark:text-slate-300">
                 Search flights, add manually, or forward confirmations to{" "}
@@ -175,7 +178,7 @@ export function TripPlanningWizard({
             </div>
           ) : null}
 
-          {displayPhase === "hotels" ? (
+          {wizardPhase === "hotels" ? (
             <div className="space-y-4">
               <p className="text-sm text-slate-600 dark:text-slate-300">
                 Forward hotel confirmations or add stays manually. Dates outside your trip window will ask you to adjust dates.
@@ -196,7 +199,7 @@ export function TripPlanningWizard({
             </div>
           ) : null}
 
-          {displayPhase === "excursions" || displayPhase === "complete" ? (
+          {wizardPhase === "excursions" || wizardPhase === "complete" ? (
             <div className="space-y-4">
               <p className="text-sm text-slate-600 dark:text-slate-300">
                 Add tours, dinners, trains, or rides. Forward emails or use + Add manually anytime.
@@ -204,7 +207,7 @@ export function TripPlanningWizard({
               <button type="button" onClick={onAddManual} className="w-full rounded-2xl border border-slate-300 py-3 text-sm font-semibold">
                 + Add excursion / activity
               </button>
-              {displayPhase === "complete" ? (
+              {wizardPhase === "complete" ? (
                 <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
                   Your trip shell is set. Forward bookings anytime — Kepi keeps matching them to your dates.
                 </p>
@@ -214,20 +217,17 @@ export function TripPlanningWizard({
         </div>
 
         <footer className="border-t border-slate-200 px-5 py-4 dark:border-slate-800">
-          {displayPhase !== "setup" ? (
+          {wizardPhase !== "setup" ? (
             <button
               type="button"
-              onClick={() => {
-                setDisplayPhase("setup");
-                onAdjustTrip();
-              }}
+              onClick={onAdjustTrip}
               className="mb-3 w-full rounded-xl border border-slate-300 py-2 text-sm font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-200"
             >
               Edit trip details & dates
             </button>
           ) : null}
 
-          {displayPhase === "setup" ? (
+          {wizardPhase === "setup" ? (
             <button
               type="button"
               disabled={saving}
@@ -237,31 +237,25 @@ export function TripPlanningWizard({
               {saving ? "Saving…" : "Save trip & continue to flights →"}
             </button>
           ) : null}
-          {displayPhase === "flights" ? (
+          {wizardPhase === "flights" ? (
             <button
               type="button"
-              onClick={() => {
-                onMarkPhaseDone("flights");
-                setDisplayPhase("hotels");
-              }}
+              onClick={() => onMarkPhaseDone("flights")}
               className="w-full rounded-2xl bg-[#0b1f3a] py-3.5 text-sm font-black text-[#f4c95d]"
             >
               Done with flights →
             </button>
           ) : null}
-          {displayPhase === "hotels" ? (
+          {wizardPhase === "hotels" ? (
             <button
               type="button"
-              onClick={() => {
-                onMarkPhaseDone("hotels");
-                setDisplayPhase("excursions");
-              }}
+              onClick={() => onMarkPhaseDone("hotels")}
               className="w-full rounded-2xl bg-[#0b1f3a] py-3.5 text-sm font-black text-[#f4c95d]"
             >
               Done with hotels →
             </button>
           ) : null}
-          {displayPhase === "excursions" ? (
+          {wizardPhase === "excursions" ? (
             <button
               type="button"
               onClick={() => onMarkPhaseDone("excursions")}
