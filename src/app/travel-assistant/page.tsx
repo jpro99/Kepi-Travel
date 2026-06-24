@@ -2382,6 +2382,37 @@ export default function TravelAssistantPage() {
 
   const applyManagedTripToState = useCallback((trip: ManagedTrip, options?: { resetHighlight?: boolean }): void => {
     applyingTripStateRef.current = true;
+    setTrips((previous) => {
+      const index = previous.findIndex((entry) => entry.id === trip.id);
+      if (index < 0) {
+        return previous;
+      }
+      const current = previous[index]!;
+      const merged: ManagedTrip = {
+        ...current,
+        name: trip.name,
+        destination: trip.destination,
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+        stage: trip.stage,
+        tripStatus: trip.tripStatus,
+        minutesToDeparture: trip.minutesToDeparture,
+        activeScenario: trip.activeScenario,
+        bookingWizard: trip.bookingWizard ?? current.bookingWizard,
+        reservations: trip.reservations,
+        reviewQueue: trip.reviewQueue,
+        readinessItems: trip.readinessItems,
+        updateFeed: trip.updateFeed,
+        airportTransport: trip.airportTransport,
+        hotelArrivalTime: trip.hotelArrivalTime,
+      };
+      if (areSnapshotsEqual(current, merged)) {
+        return previous;
+      }
+      const next = [...previous];
+      next[index] = merged;
+      return next;
+    });
     setTripStage((previous) => (previous === trip.stage ? previous : trip.stage));
     setTripStatus((previous) => (previous === trip.tripStatus ? previous : trip.tripStatus));
     setMinutesToDeparture((previous) => (previous === trip.minutesToDeparture ? previous : trip.minutesToDeparture));
@@ -2413,11 +2444,12 @@ export default function TravelAssistantPage() {
       trips?: unknown[];
       activeTripId?: string | null;
       activeTrip?: unknown;
+      trip?: unknown;
     }): number => {
       const parsedTrips = Array.isArray(payload.trips)
         ? payload.trips.map((trip) => normalizeManagedTrip(trip)).filter((trip): trip is ManagedTrip => trip !== null)
         : [];
-      const payloadActiveTrip = normalizeManagedTrip(payload.activeTrip);
+      const payloadActiveTrip = normalizeManagedTrip(payload.activeTrip ?? payload.trip);
       const resolvedActiveTripId = payloadActiveTrip?.id ?? payload.activeTripId ?? parsedTrips[0]?.id ?? null;
       const resolvedActiveTrip =
         payloadActiveTrip ?? parsedTrips.find((trip) => trip.id === resolvedActiveTripId) ?? parsedTrips[0] ?? null;
@@ -2691,7 +2723,36 @@ export default function TravelAssistantPage() {
         "complete-setup",
       );
 
+      const readTripApiError = async (response: Response, fallback: string): Promise<string> => {
+        try {
+          const payload = (await response.json()) as { error?: string };
+          return payload.error?.trim() || fallback;
+        } catch {
+          return fallback;
+        }
+      };
+
+      const finishTripPlanningSave = (payload: {
+        activeTrip?: unknown;
+        trip?: unknown;
+        trips?: unknown[];
+        activeTripId?: string | null;
+      }): void => {
+        applyServerTripsSnapshot(payload);
+        setPlanningWizardPhaseOverride(null);
+        setToast(`Trip "${tripName}" is set — add flights when you're ready.`);
+      };
+
       try {
+        const tripPatch = {
+          name: tripName,
+          destination,
+          startDate: departureDate,
+          endDate: returnDate,
+          minutesToDeparture: minutes,
+          bookingWizard,
+        };
+
         if (activeTripId && activeTrip) {
           const response = await fetch(TRIP_API_ROUTE, {
             method: "PUT",
@@ -2699,137 +2760,92 @@ export default function TravelAssistantPage() {
             body: JSON.stringify({
               action: "update",
               id: activeTripId,
-              patch: {
-                name: tripName,
-                destination,
-                startDate: departureDate,
-                endDate: returnDate,
-                minutesToDeparture: minutes,
-                bookingWizard,
-              },
+              patch: tripPatch,
             }),
           });
           if (!response.ok) {
-            setToast("Could not save trip details.");
+            setToast(await readTripApiError(response, "Could not save trip details."));
             return;
           }
-          const payload = (await response.json()) as { activeTrip?: unknown; trips?: unknown[] };
-          const nextActiveTrip = normalizeManagedTrip(payload.activeTrip);
-          if (nextActiveTrip) {
-            applyManagedTripToState(nextActiveTrip, { resetHighlight: true });
-          }
-          if (Array.isArray(payload.trips)) {
-            setTrips(
-              payload.trips
-                .map((trip) => normalizeManagedTrip(trip))
-                .filter((trip): trip is ManagedTrip => trip !== null),
-            );
-          }
-        } else {
-          const reusableShell = tripListRows.find(isEmptyTripShell);
-          if (reusableShell) {
-            const shellId = reusableShell.id;
-            const activateResponse = await fetch(TRIP_API_ROUTE, {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "set-active",
-                id: shellId,
-              }),
-            });
-            if (!activateResponse.ok) {
-              setToast("Could not activate trip shell.");
-              return;
-            }
-            const activatePayload = (await activateResponse.json()) as { activeTrip?: unknown; trips?: unknown[] };
-            const activatedTrip = normalizeManagedTrip(activatePayload.activeTrip);
-            if (activatedTrip) {
-              setActiveTripId(activatedTrip.id);
-              applyManagedTripToState(activatedTrip, { resetHighlight: true });
-            }
-            const patchResponse = await fetch(TRIP_API_ROUTE, {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "update",
-                id: shellId,
-                patch: {
-                  name: tripName,
-                  destination,
-                  startDate: departureDate,
-                  endDate: returnDate,
-                  minutesToDeparture: minutes,
-                  bookingWizard,
-                },
-              }),
-            });
-            if (!patchResponse.ok) {
-              setToast("Could not save trip details.");
-              return;
-            }
-            const patchPayload = (await patchResponse.json()) as { activeTrip?: unknown; trips?: unknown[] };
-            const nextActiveTrip = normalizeManagedTrip(patchPayload.activeTrip);
-            if (nextActiveTrip) {
-              applyManagedTripToState(nextActiveTrip, { resetHighlight: true });
-            }
-            if (Array.isArray(patchPayload.trips)) {
-              setTrips(
-                patchPayload.trips
-                  .map((trip) => normalizeManagedTrip(trip))
-                  .filter((trip): trip is ManagedTrip => trip !== null),
-              );
-            }
-          } else {
-          const response = await fetch(TRIP_API_ROUTE, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              setActive: true,
-              trip: {
-                name: tripName,
-                destination,
-                startDate: departureDate,
-                endDate: returnDate,
-                stage: "readiness",
-                reservations: [],
-                tripStatus: "yellow",
-                minutesToDeparture: minutes,
-                activeScenario: "none",
-                reviewQueue: [],
-                readinessItems: INITIAL_CHECKLIST,
-                updateFeed: [],
-                bookingWizard,
-              },
-            }),
-          });
-          if (!response.ok) {
-            setToast("Could not create your trip.");
-            return;
-          }
-          const payload = (await response.json()) as {
-            trip?: unknown;
+          finishTripPlanningSave((await response.json()) as {
             activeTrip?: unknown;
+            trip?: unknown;
             trips?: unknown[];
             activeTripId?: string | null;
-          };
-          const createdTrip = normalizeManagedTrip(payload.trip ?? payload.activeTrip);
-          if (!createdTrip) {
-            setToast("Trip saved but response was invalid.");
+          });
+          return;
+        }
+
+        const reusableShell = tripListRows.find(isEmptyTripShell);
+        if (reusableShell) {
+          const shellId = reusableShell.id;
+          const activateResponse = await fetch(TRIP_API_ROUTE, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "set-active",
+              id: shellId,
+            }),
+          });
+          if (!activateResponse.ok) {
+            setToast(await readTripApiError(activateResponse, "Could not activate trip shell."));
             return;
           }
-          setActiveTripId(payload.activeTripId ?? createdTrip.id);
-          if (Array.isArray(payload.trips)) {
-            setTrips(
-              payload.trips
-                .map((trip) => normalizeManagedTrip(trip))
-                .filter((trip): trip is ManagedTrip => trip !== null),
-            );
+          const patchResponse = await fetch(TRIP_API_ROUTE, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "update",
+              id: shellId,
+              patch: tripPatch,
+            }),
+          });
+          if (!patchResponse.ok) {
+            setToast(await readTripApiError(patchResponse, "Could not save trip details."));
+            return;
           }
-          applyManagedTripToState(createdTrip, { resetHighlight: true });
-          void refreshGlobalBillingStatus();
-          }
+          finishTripPlanningSave((await patchResponse.json()) as {
+            activeTrip?: unknown;
+            trip?: unknown;
+            trips?: unknown[];
+            activeTripId?: string | null;
+          });
+          return;
         }
-        setToast(`Trip "${tripName}" is set — add flights when you're ready.`);
+
+        const response = await fetch(TRIP_API_ROUTE, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            setActive: true,
+            trip: {
+              ...tripPatch,
+              stage: "readiness",
+              reservations: [],
+              tripStatus: "yellow",
+              activeScenario: "none",
+              reviewQueue: [],
+              readinessItems: INITIAL_CHECKLIST,
+              updateFeed: [],
+            },
+          }),
+        });
+        if (!response.ok) {
+          setToast(await readTripApiError(response, "Could not create your trip."));
+          return;
+        }
+        const payload = (await response.json()) as {
+          trip?: unknown;
+          activeTrip?: unknown;
+          trips?: unknown[];
+          activeTripId?: string | null;
+        };
+        if (!normalizeManagedTrip(payload.trip ?? payload.activeTrip)) {
+          setToast("Trip saved but response was invalid.");
+          return;
+        }
+        finishTripPlanningSave(payload);
+        void refreshGlobalBillingStatus();
       } catch {
         setToast("Could not save trip details.");
       }
@@ -2837,7 +2853,7 @@ export default function TravelAssistantPage() {
     [
       activeTrip,
       activeTripId,
-      applyManagedTripToState,
+      applyServerTripsSnapshot,
       refreshGlobalBillingStatus,
       setToast,
       tripListRows,
@@ -7197,7 +7213,7 @@ export default function TravelAssistantPage() {
         initialDraft={tripPlanningInitialDraft}
         wizardPhase={
           planningWizardPhaseOverride ??
-          (isTripShellConfigured(activeTrip ?? {})
+          (isTripShellConfigured(activeTrip ?? {}) || activeBookingWizard.phase !== "setup"
             ? activeBookingWizard.phase
             : ("setup" as BookingWizardPhase))
         }
