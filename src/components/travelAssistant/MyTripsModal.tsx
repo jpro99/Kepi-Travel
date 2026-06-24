@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import {
   formatTripListSubtitle,
   formatTripListTitle,
@@ -36,6 +36,13 @@ export function MyTripsModal({
 }: MyTripsModalProps) {
   const sortedTrips = useMemo(() => sortTripsForDisplay(trips), [trips]);
   const emptyShellCount = useMemo(() => sortedTrips.filter(isEmptyTripShell).length, [sortedTrips]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open, onClose]);
 
   if (!open) return null;
 

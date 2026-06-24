@@ -7426,7 +7426,7 @@ export default function TravelAssistantPage() {
                     const rr = journeyPhase.nextFlight as Reservation & Record<string, string | undefined>;
                     const flightNum = rr.flightNumber?.replace(/\s/g, "") ?? "";
                     const airline = rr.flightAirline ?? rr.provider ?? "";
-                    const iata = airline.match(/^[A-Z]{2}/)?.[0] ?? "";
+                    const iata = airline.toUpperCase().match(/^[A-Z]{2}/)?.[0] ?? "";
                     const depAirport = rr.flightDepartureAirport ?? "";
                     const arrAirport = rr.flightArrivalAirport ?? "";
                     const depTime = rr.flightDepartureTime ?? rr.localTime ?? "";
@@ -8156,7 +8156,9 @@ export default function TravelAssistantPage() {
         />
         <InstallPrompt />
         {tripManagementModals}
-        <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
+        {!tripsLoading && trips.length === 0 && (
+          <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
+        )}
       </main>
     );
   }
@@ -8990,7 +8992,9 @@ export default function TravelAssistantPage() {
       />
       <InstallPrompt />
       {tripManagementModals}
-      <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
+      {!tripsLoading && trips.length === 0 && (
+        <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
+      )}
     </main>
   );
 }
