@@ -3711,6 +3711,15 @@ export default function TravelAssistantPage() {
     () => consumerDisplayReservations.filter((reservation) => reservation.type === "hotel").length,
     [consumerDisplayReservations],
   );
+  const tripPlanningInitialDraft = useMemo(
+    () => ({
+      tripName: activeTrip?.name && !/^trip \d+$/iu.test(activeTrip.name.trim()) ? activeTrip.name : "",
+      destination: isTripDestinationPlaceholder(activeTrip?.destination) ? "" : (activeTrip?.destination ?? ""),
+      departureDate: activeTrip?.startDate?.slice(0, 10) ?? "",
+      returnDate: activeTrip?.endDate?.slice(0, 10) ?? "",
+    }),
+    [activeTrip?.destination, activeTrip?.endDate, activeTrip?.name, activeTrip?.startDate],
+  );
   const delayedFlight = useMemo(
     () =>
       reservations.find(
@@ -7185,12 +7194,7 @@ export default function TravelAssistantPage() {
       <TripPlanningWizard
         open={tripPlanningWizardOpen}
         forwardAddress={emptyStateForwardAddress}
-        initialDraft={{
-          tripName: activeTrip?.name && !/^trip \d+$/iu.test(activeTrip.name.trim()) ? activeTrip.name : "",
-          destination: isTripDestinationPlaceholder(activeTrip?.destination) ? "" : (activeTrip?.destination ?? ""),
-          departureDate: activeTrip?.startDate?.slice(0, 10) ?? "",
-          returnDate: activeTrip?.endDate?.slice(0, 10) ?? "",
-        }}
+        initialDraft={tripPlanningInitialDraft}
         wizardPhase={
           planningWizardPhaseOverride ??
           (isTripShellConfigured(activeTrip ?? {})

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   EMPTY_TRIP_SETUP_DRAFT,
   TripSetupForm,
@@ -54,14 +54,19 @@ export function TripPlanningWizard({
   });
   const [errors, setErrors] = useState<TripSetupValidationErrors>({});
   const [saving, setSaving] = useState(false);
+  const wasOpenRef = useRef(false);
 
+  // Seed draft only when the modal opens — not on every parent re-render. page.tsx passes
+  // initialDraft as a new object each render (trip poll, toasts, API), which was wiping input.
   useEffect(() => {
-    if (!open) return;
-    setDraft({
-      ...EMPTY_TRIP_SETUP_DRAFT,
-      ...initialDraft,
-    });
-    setErrors({});
+    if (open && !wasOpenRef.current) {
+      setDraft({
+        ...EMPTY_TRIP_SETUP_DRAFT,
+        ...initialDraft,
+      });
+      setErrors({});
+    }
+    wasOpenRef.current = open;
   }, [open, initialDraft]);
 
   const steps = useMemo(
