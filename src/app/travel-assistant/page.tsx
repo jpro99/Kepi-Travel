@@ -8158,7 +8158,7 @@ export default function TravelAssistantPage() {
         />
         <InstallPrompt />
         {tripManagementModals}
-        {!tripsLoading && trips.length === 0 && (
+        {trips.length === 0 && (
           <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
         )}
       </main>
@@ -8994,7 +8994,7 @@ export default function TravelAssistantPage() {
       />
       <InstallPrompt />
       {tripManagementModals}
-      {!tripsLoading && trips.length === 0 && (
+      {trips.length === 0 && (
         <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
       )}
     </main>
