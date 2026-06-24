@@ -7425,16 +7425,18 @@ export default function TravelAssistantPage() {
                   {journeyPhase.daysUntil <= 1 && (() => {
                     const rr = journeyPhase.nextFlight as Reservation & Record<string, string | undefined>;
                     const flightNum = rr.flightNumber?.replace(/\s/g, "") ?? "";
-                    const airline = rr.flightAirline ?? rr.provider ?? "";
-                    const iata = airline.toUpperCase().match(/^[A-Z]{2}/)?.[0] ?? "";
+                    // Extract IATA from the flight number prefix (e.g. "AS1234" → "AS")
+                    // — more reliable than parsing the airline name string.
+                    const iata = flightNum.match(/^[A-Z]{2}/)?.[0] ?? "";
                     const depAirport = rr.flightDepartureAirport ?? "";
                     const arrAirport = rr.flightArrivalAirport ?? "";
-                    const depTime = rr.flightDepartureTime ?? rr.localTime ?? "";
-                    const arrTime = rr.flightArrivalTime ?? "";
                     const depDate = rr.flightDate ?? rr.flightDepartureDate ?? new Date().toISOString().split("T")[0];
-                    if (!flightNum || !depAirport || !arrAirport) return null;
-                    const schedDepart = `${depDate}T${depTime || "00:00"}:00`;
-                    const schedArrive = `${depDate}T${arrTime || "23:59"}:00`;
+                    // depTime / arrTime may be full ISO strings — extract just HH:mm
+                    const depTimeRaw = rr.flightDepartureTime ?? rr.localTime ?? "";
+                    const arrTimeRaw = rr.flightArrivalTime ?? "";
+                    const toHHMM = (s: string) => s.includes("T") ? s.split("T")[1]?.slice(0, 5) ?? "00:00" : s.slice(0, 5) || "00:00";
+                    const schedDepart = `${depDate}T${toHHMM(depTimeRaw)}`;
+                    const schedArrive = `${depDate}T${toHHMM(arrTimeRaw) || "23:59"}`;
                     return (
                       <DisruptionAlert
                         flightNumber={flightNum}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
@@ -285,16 +285,16 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
     }
   }, [inviteCodeFromUrl, referralCodeFromUrl, t]);
 
+  const initialLoadDoneRef = useRef(false);
   useEffect(() => {
+    // Guard: only load once on mount. loadOnboardingState changes identity when
+    // `t` (translations fn) gets a new reference on each render, which would
+    // reset tripDraft mid-typing without this guard.
+    if (initialLoadDoneRef.current) return;
+    initialLoadDoneRef.current = true;
     let active = true;
-    const run = async (): Promise<void> => {
-      await Promise.all([loadOnboardingState(), refreshEmailForwardSetupStatus()]);
-      if (!active) return;
-    };
-    void run();
-    return () => {
-      active = false;
-    };
+    void Promise.all([loadOnboardingState(), refreshEmailForwardSetupStatus()]);
+    return () => { active = false; };
   }, [loadOnboardingState, refreshEmailForwardSetupStatus]);
 
   const persistProgress = useCallback(
