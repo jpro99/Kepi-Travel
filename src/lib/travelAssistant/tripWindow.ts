@@ -1,5 +1,15 @@
 /** Date-only helpers for trip windows and smart email matching. */
 
+/** Max storable minutes-to-departure (~365 days). Trips planned further out still count down correctly until within range. */
+export const MAX_MINUTES_TO_DEPARTURE = 525_600;
+
+export function clampMinutesToDeparture(value: number | null | undefined, fallback = 180): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+  return Math.max(0, Math.min(MAX_MINUTES_TO_DEPARTURE, Math.round(value)));
+}
+
 export function dateOnly(value: string | undefined | null): string {
   return value?.trim().slice(0, 10) ?? "";
 }

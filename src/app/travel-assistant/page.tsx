@@ -70,7 +70,11 @@ import {
   normalizeBookingWizard,
   type BookingWizardPhase,
 } from "@/lib/travelAssistant/bookingWizard";
-import { computeMinutesToDeparture, isTripShellConfigured } from "@/lib/travelAssistant/tripWindow";
+import {
+  clampMinutesToDeparture,
+  computeMinutesToDeparture,
+  isTripShellConfigured,
+} from "@/lib/travelAssistant/tripWindow";
 import { isPlannedReservation } from "@/lib/travelAssistant/plannedReservationMatch";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { QuickAddLane } from "@/components/travelAssistant/QuickAddLane";
@@ -2352,7 +2356,7 @@ export default function TravelAssistantPage() {
       readinessItems,
       updateFeed,
       airportTransport: airportTransportChoice,
-      hotelArrivalTime,
+      hotelArrivalTime: hotelArrivalTime?.trim() ? hotelArrivalTime.trim() : null,
     }),
     [
       activeScenario,
@@ -2732,8 +2736,9 @@ export default function TravelAssistantPage() {
       // Advance UI immediately — do not wait for the network round-trip.
       setTripPlanningWizardPhase("flights");
 
-      const minutes =
-        computeMinutesToDeparture({ startDate: departureDate, reservations: [] }) ?? 180;
+      const minutes = clampMinutesToDeparture(
+        computeMinutesToDeparture({ startDate: departureDate, reservations: [] }),
+      );
       const bookingWizard = advanceBookingWizard(
         normalizeBookingWizard(activeTrip?.bookingWizard),
         "complete-setup",
@@ -2741,8 +2746,23 @@ export default function TravelAssistantPage() {
 
       const readTripApiError = async (response: Response, fallback: string): Promise<string> => {
         try {
-          const payload = (await response.json()) as { error?: string };
-          return payload.error?.trim() || fallback;
+          const payload = (await response.json()) as {
+            error?: string;
+            details?: { fieldErrors?: Record<string, string[]>; formErrors?: string[] };
+          };
+          const base = payload.error?.trim() || fallback;
+          if (base.toLowerCase() !== "validation failed" || !payload.details) {
+            return base;
+          }
+          for (const [field, messages] of Object.entries(payload.details.fieldErrors ?? {})) {
+            const message = messages?.find((entry) => entry.trim().length > 0);
+            if (message) {
+              const label = field.replace(/^patch\./, "").replace(/([A-Z])/g, " $1").trim();
+              return `${label || field}: ${message}`;
+            }
+          }
+          const formError = payload.details.formErrors?.find((entry) => entry.trim().length > 0);
+          return formError ?? base;
         } catch {
           return fallback;
         }

@@ -15,6 +15,7 @@ import {
   setActiveTrip,
   updateTrip,
 } from "@/lib/travelAssistant/tripStore";
+import { MAX_MINUTES_TO_DEPARTURE } from "@/lib/travelAssistant/tripWindow";
 import { generateId } from "@/lib/utils/generateId";
 
 const TripStageSchema = z.enum(["readiness", "pre-departure", "airport", "arrival", "recovery"]);
@@ -43,13 +44,19 @@ const TripPayloadSchema = z.object({
   stage: TripStageSchema.default("readiness"),
   reservations: z.array(z.any()).default([]),
   tripStatus: TripStatusSchema.default("yellow"),
-  minutesToDeparture: z.number().int().min(0).max(10080).default(180),
+  minutesToDeparture: z.number().int().min(0).max(MAX_MINUTES_TO_DEPARTURE).default(180),
   activeScenario: TripScenarioSchema.default("none"),
   reviewQueue: z.array(z.any()).default([]),
   readinessItems: z.array(z.any()).default([]),
   updateFeed: z.array(z.any()).default([]),
-  airportTransport: AirportTransportSchema.nullable().optional(),
-  hotelArrivalTime: z.string().trim().min(1).max(80).nullable().optional(),
+  airportTransport: z.preprocess(
+    (value) => (value === "" ? null : value),
+    AirportTransportSchema.nullable().optional(),
+  ),
+  hotelArrivalTime: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? null : value),
+    z.string().trim().min(1).max(80).nullable().optional(),
+  ),
   bookingWizard: z.any().optional(),
 });
 
@@ -61,13 +68,19 @@ const TripPatchSchema = z.object({
   stage: TripStageSchema.optional(),
   reservations: z.array(z.any()).optional(),
   tripStatus: TripStatusSchema.optional(),
-  minutesToDeparture: z.number().int().min(0).max(10080).optional(),
+  minutesToDeparture: z.number().int().min(0).max(MAX_MINUTES_TO_DEPARTURE).optional(),
   activeScenario: TripScenarioSchema.optional(),
   reviewQueue: z.array(z.any()).optional(),
   readinessItems: z.array(z.any()).optional(),
   updateFeed: z.array(z.any()).optional(),
-  airportTransport: AirportTransportSchema.nullable().optional(),
-  hotelArrivalTime: z.string().trim().min(1).max(80).nullable().optional(),
+  airportTransport: z.preprocess(
+    (value) => (value === "" ? null : value),
+    AirportTransportSchema.nullable().optional(),
+  ),
+  hotelArrivalTime: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? null : value),
+    z.string().trim().min(1).max(80).nullable().optional(),
+  ),
   bookingWizard: z.any().optional(),
 });
 
