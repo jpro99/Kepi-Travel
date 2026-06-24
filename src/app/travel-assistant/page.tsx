@@ -63,6 +63,8 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { OnboardingFlow } from "@/components/onboarding/OnboardingFlow";
 import type { TripSetupDraft } from "@/components/onboarding/TripSetupForm";
 import { TripPlanningWizard } from "@/components/travelAssistant/TripPlanningWizard";
+import { MyTripsModal } from "@/components/travelAssistant/MyTripsModal";
+import { isEmptyTripShell, type TripListRowInput } from "@/lib/travelAssistant/tripListDisplay";
 import {
   advanceBookingWizard,
   normalizeBookingWizard,
@@ -1858,6 +1860,8 @@ export default function TravelAssistantPage() {
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [manualReservationModalOpen, setManualReservationModalOpen] = useState(false);
   const [tripPlanningWizardOpen, setTripPlanningWizardOpen] = useState(false);
+  const [myTripsModalOpen, setMyTripsModalOpen] = useState(false);
+  const [deletingTripId, setDeletingTripId] = useState<string | null>(null);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [travelDayOpen, setTravelDayOpen] = useState(false);
   const router = useRouter();
@@ -2101,6 +2105,20 @@ export default function TravelAssistantPage() {
     }
     return trips.find((trip) => trip.id === activeTripId) ?? null;
   }, [activeTripId, trips]);
+
+  const tripListRows = useMemo<TripListRowInput[]>(
+    () =>
+      trips.map((trip) => ({
+        id: trip.id,
+        name: trip.name,
+        destination: trip.destination,
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+        createdAt: trip.createdAt,
+        reservationCount: trip.reservations.filter((reservation) => !isOnboardingPlaceholderReservation(reservation)).length,
+      })),
+    [trips],
+  );
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -2632,69 +2650,8 @@ export default function TravelAssistantPage() {
       openUpgradeModal("multi-trip", "Free includes one trip. Upgrade to add and manage multiple trips.");
       return;
     }
-    const nextTripNumber = trips.length + 1;
-    const now = new Date();
-    const startDate = now.toISOString().slice(0, 10);
-    const endDate = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    try {
-      const response = await fetch(TRIP_API_ROUTE, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          setActive: true,
-          trip: {
-            name: `Trip ${nextTripNumber}`,
-            destination: "Set destination",
-            startDate,
-            endDate,
-            stage: "readiness",
-            reservations: [],
-            tripStatus: "yellow",
-            minutesToDeparture: 180,
-            activeScenario: "none",
-            reviewQueue: [],
-            readinessItems: INITIAL_CHECKLIST,
-            updateFeed: [],
-          },
-        }),
-      });
-      if (!response.ok) {
-        setToast("Could not create a new trip.");
-        return;
-      }
-      const payload = (await response.json()) as {
-        trip?: unknown;
-        trips?: unknown[];
-        activeTrip?: unknown;
-        activeTripId?: string | null;
-      };
-      const createdTrip = normalizeManagedTrip(payload.trip ?? payload.activeTrip);
-      if (!createdTrip) {
-        setToast("Trip created but response was invalid.");
-        return;
-      }
-      if (Array.isArray(payload.trips)) {
-        const parsedTrips = payload.trips
-          .map((trip) => normalizeManagedTrip(trip))
-          .filter((trip): trip is ManagedTrip => trip !== null);
-        setTrips(parsedTrips);
-      }
-      setActiveTripId(payload.activeTripId ?? createdTrip.id);
-      applyManagedTripToState(createdTrip, { resetHighlight: true });
-      void refreshGlobalBillingStatus();
-      setToast(`Created ${createdTrip.name}.`);
-    } catch {
-      setToast("Could not create a new trip.");
-    }
-  }, [
-    applyManagedTripToState,
-    billingStatus?.usage?.tripLimit,
-    hasProAccess,
-    openUpgradeModal,
-    refreshGlobalBillingStatus,
-    setToast,
-    trips.length,
-  ]);
+    setTripPlanningWizardOpen(true);
+  }, [billingStatus?.usage?.tripLimit, hasProAccess, openUpgradeModal, trips.length]);
 
   const handleSaveTripPlanningSetup = useCallback(
     async (tripDraft: TripSetupDraft): Promise<void> => {
@@ -2749,6 +2706,60 @@ export default function TravelAssistantPage() {
             );
           }
         } else {
+          const reusableShell = tripListRows.find(isEmptyTripShell);
+          if (reusableShell) {
+            const shellId = reusableShell.id;
+            const activateResponse = await fetch(TRIP_API_ROUTE, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "set-active",
+                id: shellId,
+              }),
+            });
+            if (!activateResponse.ok) {
+              setToast("Could not activate trip shell.");
+              return;
+            }
+            const activatePayload = (await activateResponse.json()) as { activeTrip?: unknown; trips?: unknown[] };
+            const activatedTrip = normalizeManagedTrip(activatePayload.activeTrip);
+            if (activatedTrip) {
+              setActiveTripId(activatedTrip.id);
+              applyManagedTripToState(activatedTrip, { resetHighlight: true });
+            }
+            const patchResponse = await fetch(TRIP_API_ROUTE, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "update",
+                id: shellId,
+                patch: {
+                  name: tripName,
+                  destination,
+                  startDate: departureDate,
+                  endDate: returnDate,
+                  minutesToDeparture: minutes,
+                  bookingWizard,
+                },
+              }),
+            });
+            if (!patchResponse.ok) {
+              setToast("Could not save trip details.");
+              return;
+            }
+            const patchPayload = (await patchResponse.json()) as { activeTrip?: unknown; trips?: unknown[] };
+            const nextActiveTrip = normalizeManagedTrip(patchPayload.activeTrip);
+            if (nextActiveTrip) {
+              applyManagedTripToState(nextActiveTrip, { resetHighlight: true });
+            }
+            if (Array.isArray(patchPayload.trips)) {
+              setTrips(
+                patchPayload.trips
+                  .map((trip) => normalizeManagedTrip(trip))
+                  .filter((trip): trip is ManagedTrip => trip !== null),
+              );
+            }
+          } else {
           const response = await fetch(TRIP_API_ROUTE, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -2796,6 +2807,7 @@ export default function TravelAssistantPage() {
           }
           applyManagedTripToState(createdTrip, { resetHighlight: true });
           void refreshGlobalBillingStatus();
+          }
         }
         setToast(`Trip "${tripName}" is set — add flights when you're ready.`);
       } catch {
@@ -2808,6 +2820,7 @@ export default function TravelAssistantPage() {
       applyManagedTripToState,
       refreshGlobalBillingStatus,
       setToast,
+      tripListRows,
     ],
   );
 
@@ -2889,6 +2902,62 @@ export default function TravelAssistantPage() {
       // Non-blocking adjust action.
     }
   }, [activeTrip?.bookingWizard, activeTripId, applyManagedTripToState]);
+
+  const handleDeleteTripById = useCallback(
+    async (tripId: string): Promise<void> => {
+      if (!tripId || deletingTripId) return;
+      setDeletingTripId(tripId);
+      try {
+        const response = await fetch(TRIP_API_ROUTE, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: tripId }),
+        });
+        if (!response.ok) {
+          setToast("Could not delete trip — try again.");
+          return;
+        }
+        await refreshTripsFromServer();
+        setToast("Trip deleted.");
+        if (trips.length <= 1) {
+          setMyTripsModalOpen(false);
+        }
+      } catch {
+        setToast("Could not delete trip — try again.");
+      } finally {
+        setDeletingTripId(null);
+      }
+    },
+    [deletingTripId, refreshTripsFromServer, setToast, trips.length],
+  );
+
+  const handleDeleteEmptyTrips = useCallback(async (): Promise<void> => {
+    const emptyTripIds = tripListRows.filter(isEmptyTripShell).map((trip) => trip.id);
+    if (emptyTripIds.length === 0) return;
+    setDeletingTripId("bulk");
+    try {
+      for (const tripId of emptyTripIds) {
+        const response = await fetch(TRIP_API_ROUTE, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: tripId }),
+        });
+        if (!response.ok) {
+          setToast("Could not remove all empty trips.");
+          return;
+        }
+      }
+      await refreshTripsFromServer();
+      setToast(`Removed ${emptyTripIds.length} empty trip${emptyTripIds.length === 1 ? "" : "s"}.`);
+      if (trips.length <= emptyTripIds.length) {
+        setMyTripsModalOpen(false);
+      }
+    } catch {
+      setToast("Could not remove all empty trips.");
+    } finally {
+      setDeletingTripId(null);
+    }
+  }, [refreshTripsFromServer, setToast, tripListRows, trips.length]);
 
   const handleCreateOnboardingTrip = useCallback(
     (tripDraft: TripSetupDraft): void => {
@@ -7028,6 +7097,52 @@ export default function TravelAssistantPage() {
     </div>
   ) : null;
 
+  const tripManagementModals = (
+    <>
+      <MyTripsModal
+        open={myTripsModalOpen}
+        trips={tripListRows}
+        activeTripId={activeTripId}
+        deletingTripId={deletingTripId}
+        busy={deletingTripId !== null}
+        onClose={() => setMyTripsModalOpen(false)}
+        onSwitchTrip={async (tripId) => {
+          await handleSwitchTrip(tripId);
+          setMyTripsModalOpen(false);
+        }}
+        onDeleteTrip={handleDeleteTripById}
+        onCreateTrip={() => setTripPlanningWizardOpen(true)}
+        onDeleteEmptyTrips={handleDeleteEmptyTrips}
+      />
+      <TripPlanningWizard
+        open={tripPlanningWizardOpen}
+        forwardAddress={emptyStateForwardAddress}
+        initialDraft={{
+          tripName: activeTrip?.name && !/^trip \d+$/iu.test(activeTrip.name.trim()) ? activeTrip.name : "",
+          destination: isTripDestinationPlaceholder(activeTrip?.destination) ? "" : (activeTrip?.destination ?? ""),
+          departureDate: activeTrip?.startDate?.slice(0, 10) ?? "",
+          returnDate: activeTrip?.endDate?.slice(0, 10) ?? "",
+        }}
+        wizardPhase={
+          isTripShellConfigured(activeTrip ?? {})
+            ? activeBookingWizard.phase
+            : ("setup" as BookingWizardPhase)
+        }
+        flightCount={wizardFlightCount}
+        hotelCount={wizardHotelCount}
+        onClose={() => setTripPlanningWizardOpen(false)}
+        onSaveTripSetup={handleSaveTripPlanningSetup}
+        onMarkPhaseDone={(phase) => void handleMarkBookingPhaseDone(phase)}
+        onAdjustTrip={() => void handleAdjustTripPlanning()}
+        onCopyForward={() => void handleCopyForwardAddress(emptyStateForwardAddress)}
+        onAddManual={() => {
+          setTripPlanningWizardOpen(false);
+          setManualReservationModalOpen(true);
+        }}
+      />
+    </>
+  );
+
   if (!advancedWorkspaceEnabled) {
     return (
       <main className="relative min-h-screen overflow-x-hidden bg-[var(--bg-base)] pb-24 text-[var(--text-primary)]">
@@ -7037,6 +7152,13 @@ export default function TravelAssistantPage() {
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
                 <Logo size="sm" showWordmark={false} className="shrink-0" />
+                <button
+                  type="button"
+                  onClick={() => setMyTripsModalOpen(true)}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                >
+                  Trips{trips.length > 0 ? ` (${trips.length})` : ""}
+                </button>
               </div>
               <div className="relative">
                 <button
@@ -7582,6 +7704,24 @@ export default function TravelAssistantPage() {
             />
           ) : (
             <section className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setMyTripsModalOpen(true)}
+                className="w-full rounded-3xl bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/[0.08] px-5 py-4 text-left"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🗂️</span>
+                    <div>
+                      <p className="font-semibold text-slate-900 dark:text-white">My trips</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        {trips.length} saved · switch, rename, or delete
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-slate-400 text-sm">›</span>
+                </div>
+              </button>
               {/* Loyalty Wallet */}
               <div className="rounded-3xl bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/[0.08] overflow-hidden">
                 <button
@@ -7951,6 +8091,7 @@ export default function TravelAssistantPage() {
           }}
         />
         <InstallPrompt />
+        {tripManagementModals}
         <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
       </main>
     );
@@ -7969,10 +8110,12 @@ export default function TravelAssistantPage() {
                 destination: trip.destination,
                 startDate: trip.startDate,
                 endDate: trip.endDate,
+                reservationCount: trip.reservations.filter((reservation) => !isOnboardingPlaceholderReservation(reservation)).length,
               }))}
               activeTripId={activeTripId}
               onSwitchTrip={handleSwitchTrip}
               onCreateTrip={handleCreateTrip}
+              onManageTrips={() => setMyTripsModalOpen(true)}
               disabled={tripsLoading}
               canCreateTrip={canCreateAdditionalTrips}
               createDisabledMessage="Free plan supports one trip."
@@ -8782,32 +8925,7 @@ export default function TravelAssistantPage() {
         }}
       />
       <InstallPrompt />
-      <TripPlanningWizard
-        open={tripPlanningWizardOpen}
-        forwardAddress={emptyStateForwardAddress}
-        initialDraft={{
-          tripName: activeTrip?.name && !/^trip \d+$/iu.test(activeTrip.name.trim()) ? activeTrip.name : "",
-          destination: isTripDestinationPlaceholder(activeTrip?.destination) ? "" : (activeTrip?.destination ?? ""),
-          departureDate: activeTrip?.startDate?.slice(0, 10) ?? "",
-          returnDate: activeTrip?.endDate?.slice(0, 10) ?? "",
-        }}
-        wizardPhase={
-          isTripShellConfigured(activeTrip ?? {})
-            ? activeBookingWizard.phase
-            : ("setup" as BookingWizardPhase)
-        }
-        flightCount={wizardFlightCount}
-        hotelCount={wizardHotelCount}
-        onClose={() => setTripPlanningWizardOpen(false)}
-        onSaveTripSetup={handleSaveTripPlanningSetup}
-        onMarkPhaseDone={(phase) => void handleMarkBookingPhaseDone(phase)}
-        onAdjustTrip={() => void handleAdjustTripPlanning()}
-        onCopyForward={() => void handleCopyForwardAddress(emptyStateForwardAddress)}
-        onAddManual={() => {
-          setTripPlanningWizardOpen(false);
-          setManualReservationModalOpen(true);
-        }}
-      />
+      {tripManagementModals}
       <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
     </main>
   );

@@ -15,6 +15,8 @@ import {
   createTrip,
   getActiveTrip,
   getTrip,
+  listTrips,
+  setActiveTrip,
   updateTrip,
   type TravelTrip,
 } from "@/lib/travelAssistant/tripStore";
@@ -97,9 +99,43 @@ export async function resolveTargetTripForEmailForward(
   }
 
   const inferred = inferTripWindowFromDrafts(drafts);
-  const trip = await getActiveTrip(userId);
+  const allTrips = await listTrips(userId);
+  let trip = await getActiveTrip(userId);
 
   if (!trip) {
+    const draftDates = drafts.map((draft) => reservationPrimaryDate(draft)).filter(Boolean);
+    trip =
+      allTrips.find((candidate) => {
+        if (!isTripShellConfigured(candidate)) return false;
+        return draftDates.some((day) => reservationWithinTripWindow(day, candidate.startDate, candidate.endDate));
+      }) ?? null;
+  }
+
+  if (!trip) {
+    const emptyShell = allTrips.find((candidate) => !isTripShellConfigured(candidate) && candidate.reservations.length === 0);
+    if (emptyShell) {
+      const updated = await updateTrip(
+        emptyShell.id,
+        {
+          name: inferred.name,
+          destination: inferred.destination,
+          startDate: inferred.startDate,
+          endDate: inferred.endDate,
+          minutesToDeparture:
+            computeMinutesToDeparture({
+              startDate: inferred.startDate,
+              reservations: drafts,
+            }) ?? emptyShell.minutesToDeparture,
+        },
+        userId,
+      );
+      if (updated) {
+        await setActiveTrip(updated.id, userId);
+        return updated;
+      }
+      return emptyShell;
+    }
+
     const wizard: BookingWizardProgress = {
       ...advanceBookingWizard(EMPTY_BOOKING_WIZARD, "complete-setup"),
       phase: "flights",
