@@ -39,6 +39,30 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
+function Field({ label, pIndex, field, type = "text", placeholder, required = false, half = false, errors, formValues, onUpdate }: {
+  label: string; pIndex: number; field: keyof Passenger; type?: string;
+  placeholder?: string; required?: boolean; half?: boolean;
+  errors: Record<string, string>;
+  formValues: Passenger[];
+  onUpdate: (index: number, field: keyof Passenger, value: string) => void;
+}) {
+  const err = errors[`${pIndex}_${field}`];
+  const val = formValues[pIndex]?.[field] ?? "";
+  return (
+    <div className={half ? "flex-1" : "w-full"}>
+      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
+        {label}{required && <span className="text-red-400"> *</span>}
+      </label>
+      <input type={type} value={val as string}
+        onChange={e => onUpdate(pIndex, field, e.target.value)}
+        placeholder={placeholder}
+        className={`w-full rounded-2xl border px-4 py-3 text-sm text-white bg-slate-800 focus:outline-none ${err ? "border-red-500/60" : "border-slate-700 focus:border-[#f4c95d]/60"}`}
+      />
+      {err && <p className="text-[10px] text-red-400 mt-1">{err}</p>}
+    </div>
+  );
+}
+
 const EMPTY_PASSENGER: Passenger = {
   firstName: "", lastName: "", email: "", phone: "",
   dateOfBirth: "", gender: "m",
@@ -63,12 +87,8 @@ export function CheckoutFlow({ flight, passengers: passengerCount, onCancel, onC
   const [bookingError, setBookingError] = useState("");
   const [savedDetails, setSavedDetails] = useState<Partial<Passenger> | null>(null);
 
-  // Load saved passenger details
+  // Load saved passenger details for prefill
   useEffect(() => {
-    fetch("/api/loyalty") // reuse loyalty endpoint pattern - genome contains saved details
-      .then(r => r.json())
-      .catch(() => null);
-    // Actually fetch from genome via dedicated endpoint
     fetch("/api/orders/passenger-details")
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.details) setSavedDetails(d.details); })
@@ -279,28 +299,6 @@ const validate = (): boolean => {
     );
   }
 
-  // ── Passengers form ────────────────────────────────────────────────────────
-  const Field = ({ label, pIndex, field, type = "text", placeholder, required = false, half = false }: {
-    label: string; pIndex: number; field: keyof Passenger; type?: string;
-    placeholder?: string; required?: boolean; half?: boolean;
-  }) => {
-    const err = errors[`${pIndex}_${field}`];
-    const val = passengerForms[pIndex]?.[field] ?? "";
-    return (
-      <div className={half ? "flex-1" : "w-full"}>
-        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
-          {label}{required && <span className="text-red-400"> *</span>}
-        </label>
-        <input type={type} value={val as string}
-          onChange={e => updatePassenger(pIndex, field, e.target.value)}
-          placeholder={placeholder}
-          className={`w-full rounded-2xl border px-4 py-3 text-sm text-white bg-slate-800 focus:outline-none ${err ? "border-red-500/60" : "border-slate-700 focus:border-[#f4c95d]/60"}`}
-        />
-        {err && <p className="text-[10px] text-red-400 mt-1">{err}</p>}
-      </div>
-    );
-  };
-
   return (
     <div className="min-h-screen bg-[#0b1f3a]">
       <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-700/50">
@@ -332,13 +330,13 @@ const validate = (): boolean => {
             )}
             <div className="space-y-3">
               <div className="flex gap-3">
-                <Field label="First name" pIndex={pIndex} field="firstName" placeholder="As on passport" required half />
-                <Field label="Last name" pIndex={pIndex} field="lastName" placeholder="As on passport" required half />
+                <Field label="First name" pIndex={pIndex} field="firstName" placeholder="As on passport" required half errors={errors} formValues={passengerForms} onUpdate={updatePassenger} />
+                <Field label="Last name" pIndex={pIndex} field="lastName" placeholder="As on passport" required half errors={errors} formValues={passengerForms} onUpdate={updatePassenger} />
               </div>
-              <Field label="Email" pIndex={pIndex} field="email" type="email" placeholder="you@example.com" required />
-              <Field label="Phone" pIndex={pIndex} field="phone" type="tel" placeholder="+1 555 000 0000" required />
+              <Field label="Email" pIndex={pIndex} field="email" type="email" placeholder="you@example.com" required errors={errors} formValues={passengerForms} onUpdate={updatePassenger} />
+              <Field label="Phone" pIndex={pIndex} field="phone" type="tel" placeholder="+1 555 000 0000" required errors={errors} formValues={passengerForms} onUpdate={updatePassenger} />
               <div className="flex gap-3">
-                <Field label="Date of birth" pIndex={pIndex} field="dateOfBirth" placeholder="YYYY-MM-DD" required half />
+                <Field label="Date of birth" pIndex={pIndex} field="dateOfBirth" placeholder="YYYY-MM-DD" required half errors={errors} formValues={passengerForms} onUpdate={updatePassenger} />
                 <div className="flex-1">
                   <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Gender *</label>
                   <select value={passengerForms[pIndex]?.gender ?? "m"}
@@ -353,10 +351,10 @@ const validate = (): boolean => {
               {/* Passport — international flights */}
               <div className="rounded-2xl border border-slate-700/50 bg-slate-800/30 px-4 py-4 space-y-3">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Passport (required for international)</p>
-                <Field label="Passport number" pIndex={pIndex} field="passportNumber" placeholder="A12345678" />
+                <Field label="Passport number" pIndex={pIndex} field="passportNumber" placeholder="A12345678" errors={errors} formValues={passengerForms} onUpdate={updatePassenger} />
                 <div className="flex gap-3">
-                  <Field label="Expiry date" pIndex={pIndex} field="passportExpiry" placeholder="YYYY-MM-DD" half />
-                  <Field label="Country" pIndex={pIndex} field="passportCountry" placeholder="US" half />
+                  <Field label="Expiry date" pIndex={pIndex} field="passportExpiry" placeholder="YYYY-MM-DD" half errors={errors} formValues={passengerForms} onUpdate={updatePassenger} />
+                  <Field label="Country" pIndex={pIndex} field="passportCountry" placeholder="US" half errors={errors} formValues={passengerForms} onUpdate={updatePassenger} />
                 </div>
               </div>
             </div>

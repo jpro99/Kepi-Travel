@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getTravelerGenome, saveTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
+import { createTrip, getActiveTrip, updateTrip } from "@/lib/travelAssistant/tripStore";
+import type { SessionReservation } from "@/lib/travelAssistant/clientSessionState";
+import { generateId } from "@/lib/utils/generateId";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -114,6 +117,47 @@ export async function POST(req: Request) {
         tripCount: (genome.tripCount ?? 0) + 1,
       }, userId);
     } catch { /* non-fatal */ }
+
+    // Persist booking as a trip reservation so /travel-assistant can display it
+    try {
+      const departDate = (flightSummary.departs ?? "").split("T")[0] || new Date().toISOString().split("T")[0];
+      const newReservation: SessionReservation = {
+        id: generateId(),
+        type: "flight",
+        title: `${flightSummary.from} → ${flightSummary.to}`,
+        provider: flightSummary.airline,
+        localTime: flightSummary.departs,
+        timezone: "America/New_York",
+        location: flightSummary.from,
+        confirmationCode: bookingRef,
+        assignedTo: [],
+        stage: "airport",
+        critical: true,
+        confidence: "high",
+        notes: "",
+        source: "imported",
+        flightDepartureAirport: flightSummary.from,
+        flightArrivalAirport: flightSummary.to,
+        flightDepartureTime: flightSummary.departs,
+        flightAirline: flightSummary.airline,
+        flightDate: departDate,
+      };
+      const activeTrip = await getActiveTrip(userId);
+      if (activeTrip) {
+        await updateTrip(activeTrip.id, {
+          reservations: [...activeTrip.reservations, newReservation],
+        }, userId);
+      } else {
+        await createTrip({
+          name: `Trip to ${flightSummary.to}`,
+          destination: flightSummary.to,
+          startDate: departDate,
+          endDate: departDate,
+          stage: "readiness",
+          reservations: [newReservation],
+        }, userId);
+      }
+    } catch { /* non-fatal — trip still confirms even if persistence fails */ }
 
     return NextResponse.json({
       success: true,

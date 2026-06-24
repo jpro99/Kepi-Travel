@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getTravelerGenome, saveTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
+import { createTrip, getActiveTrip, updateTrip } from "@/lib/travelAssistant/tripStore";
+import type { SessionReservation } from "@/lib/travelAssistant/clientSessionState";
+import { generateId } from "@/lib/utils/generateId";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -109,6 +112,43 @@ export async function POST(req: Request) {
         },
         tripCount: (genome.tripCount ?? 0) + 1,
       }, userId);
+    } catch { /* non-fatal */ }
+
+    // Persist hotel booking as a trip reservation so /travel-assistant can display it
+    try {
+      const checkInDate = (hotelSummary?.checkIn ?? "").split("T")[0] || new Date().toISOString().split("T")[0];
+      const newReservation: SessionReservation = {
+        id: generateId(),
+        type: "hotel",
+        title: hotelSummary?.name ?? "Hotel stay",
+        provider: hotelSummary?.name ?? "Hotel",
+        localTime: hotelSummary?.checkIn ?? checkInDate,
+        timezone: "America/New_York",
+        location: hotelSummary?.city ?? hotelSummary?.to ?? "",
+        confirmationCode: bookingRef,
+        assignedTo: [],
+        stage: "readiness",
+        critical: true,
+        confidence: "high",
+        notes: "",
+        source: "imported",
+        checkOutDate: hotelSummary?.checkOut,
+      };
+      const activeTrip = await getActiveTrip(userId);
+      if (activeTrip) {
+        await updateTrip(activeTrip.id, {
+          reservations: [...activeTrip.reservations, newReservation],
+        }, userId);
+      } else {
+        await createTrip({
+          name: hotelSummary?.name ? `Stay at ${hotelSummary.name}` : "Hotel trip",
+          destination: hotelSummary?.city ?? hotelSummary?.to ?? "Unknown",
+          startDate: checkInDate,
+          endDate: (hotelSummary?.checkOut ?? "").split("T")[0] || checkInDate,
+          stage: "readiness",
+          reservations: [newReservation],
+        }, userId);
+      }
     } catch { /* non-fatal */ }
 
     return NextResponse.json({
