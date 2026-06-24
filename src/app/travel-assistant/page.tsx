@@ -2404,6 +2404,49 @@ export default function TravelAssistantPage() {
     });
   }, []);
 
+  const applyServerTripsSnapshot = useCallback(
+    (payload: {
+      trips?: unknown[];
+      activeTripId?: string | null;
+      activeTrip?: unknown;
+    }): number => {
+      const parsedTrips = Array.isArray(payload.trips)
+        ? payload.trips.map((trip) => normalizeManagedTrip(trip)).filter((trip): trip is ManagedTrip => trip !== null)
+        : [];
+      const payloadActiveTrip = normalizeManagedTrip(payload.activeTrip);
+      const resolvedActiveTripId = payloadActiveTrip?.id ?? payload.activeTripId ?? parsedTrips[0]?.id ?? null;
+      const resolvedActiveTrip =
+        payloadActiveTrip ?? parsedTrips.find((trip) => trip.id === resolvedActiveTripId) ?? parsedTrips[0] ?? null;
+
+      setTrips((previous) => (areSnapshotsEqual(previous, parsedTrips) ? previous : parsedTrips));
+      setActiveTripId((previous) => (previous === resolvedActiveTripId ? previous : resolvedActiveTripId));
+
+      if (resolvedActiveTrip) {
+        applyManagedTripToState(resolvedActiveTrip, { resetHighlight: true });
+      } else {
+        applyingTripStateRef.current = true;
+        setReservations([]);
+        setReviewQueue([]);
+        setUpdateFeed([]);
+        setTripStage("readiness");
+        setTripStatus("yellow");
+        setMinutesToDeparture(180);
+        setActiveScenario("none");
+        setAirportTransportChoice(null);
+        setHotelArrivalTime(null);
+        setHotelArrivalDraft("");
+        queueMicrotask(() => {
+          applyingTripStateRef.current = false;
+        });
+      }
+
+      tripsHydratedRef.current = true;
+      setTripsLoading(false);
+      return parsedTrips.length;
+    },
+    [applyManagedTripToState],
+  );
+
   const refreshTripsFromServer = useCallback(async (): Promise<number> => {
     const response = await fetch(TRIP_API_ROUTE, {
       method: "GET",
@@ -2419,40 +2462,13 @@ export default function TravelAssistantPage() {
       degraded?: boolean;
     };
 
-    const parsedTrips = Array.isArray(payload.trips)
-      ? payload.trips.map((trip) => normalizeManagedTrip(trip)).filter((trip): trip is ManagedTrip => trip !== null)
-      : [];
-    const payloadActiveTrip = normalizeManagedTrip(payload.activeTrip);
-    const resolvedActiveTripId = payloadActiveTrip?.id ?? payload.activeTripId ?? parsedTrips[0]?.id ?? null;
-    const resolvedActiveTrip =
-      payloadActiveTrip ?? parsedTrips.find((trip) => trip.id === resolvedActiveTripId) ?? parsedTrips[0] ?? null;
-
-    const hasExistingTripState = tripsHydratedRef.current && tripsRef.current.length > 0;
-    const shouldKeepCurrentState =
-      hasExistingTripState &&
-      (payload.degraded === true || parsedTrips.length === 0 || !resolvedActiveTripId || !resolvedActiveTrip);
-    if (shouldKeepCurrentState) {
+    if (payload.degraded === true && tripsHydratedRef.current && tripsRef.current.length > 0) {
       setTripsLoading(false);
       return tripsRef.current.length;
     }
 
-    setTrips((previous) => (areSnapshotsEqual(previous, parsedTrips) ? previous : parsedTrips));
-    setActiveTripId((previous) => (previous === resolvedActiveTripId ? previous : resolvedActiveTripId));
-    if (resolvedActiveTrip) {
-      const previousRuntimeSnapshot = activeTripRuntimeSnapshotRef.current;
-      const nextRuntimeSnapshot = createRuntimeSnapshotFromManagedTrip(resolvedActiveTrip);
-      const shouldApplyRuntimeSnapshot =
-        resolvedActiveTrip.id !== activeTripIdRef.current ||
-        !previousRuntimeSnapshot ||
-        !areSnapshotsEqual(previousRuntimeSnapshot, nextRuntimeSnapshot);
-      if (shouldApplyRuntimeSnapshot) {
-        applyManagedTripToState(resolvedActiveTrip);
-      }
-    }
-    tripsHydratedRef.current = true;
-    setTripsLoading(false);
-    return parsedTrips.length;
-  }, [applyManagedTripToState]);
+    return applyServerTripsSnapshot(payload);
+  }, [applyServerTripsSnapshot]);
 
   const openUpgradeModal = useCallback((feature: PlanFeature, detail?: string): void => {
     if (billingLoading || billingStatusPlan !== "free") {
@@ -2905,7 +2921,7 @@ export default function TravelAssistantPage() {
 
   const handleDeleteTripById = useCallback(
     async (tripId: string): Promise<void> => {
-      if (!tripId || deletingTripId) return;
+      if (!tripId) return;
       setDeletingTripId(tripId);
       try {
         const response = await fetch(TRIP_API_ROUTE, {
@@ -2913,13 +2929,19 @@ export default function TravelAssistantPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: tripId }),
         });
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+          trips?: unknown[];
+          activeTripId?: string | null;
+          activeTrip?: unknown;
+        };
         if (!response.ok) {
-          setToast("Could not delete trip — try again.");
+          setToast(payload.error ?? "Could not delete trip — try again.");
           return;
         }
-        await refreshTripsFromServer();
+        const remaining = applyServerTripsSnapshot(payload);
         setToast("Trip deleted.");
-        if (trips.length <= 1) {
+        if (remaining === 0) {
           setMyTripsModalOpen(false);
         }
       } catch {
@@ -2928,7 +2950,7 @@ export default function TravelAssistantPage() {
         setDeletingTripId(null);
       }
     },
-    [deletingTripId, refreshTripsFromServer, setToast, trips.length],
+    [applyServerTripsSnapshot, setToast],
   );
 
   const handleDeleteEmptyTrips = useCallback(async (): Promise<void> => {
@@ -2936,20 +2958,35 @@ export default function TravelAssistantPage() {
     if (emptyTripIds.length === 0) return;
     setDeletingTripId("bulk");
     try {
+      let lastPayload: {
+        trips?: unknown[];
+        activeTripId?: string | null;
+        activeTrip?: unknown;
+      } | null = null;
       for (const tripId of emptyTripIds) {
         const response = await fetch(TRIP_API_ROUTE, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: tripId }),
         });
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+          trips?: unknown[];
+          activeTripId?: string | null;
+          activeTrip?: unknown;
+        };
         if (!response.ok) {
-          setToast("Could not remove all empty trips.");
+          setToast(payload.error ?? "Could not remove all empty trips.");
+          if (lastPayload) {
+            applyServerTripsSnapshot(lastPayload);
+          }
           return;
         }
+        lastPayload = payload;
       }
-      await refreshTripsFromServer();
+      const remaining = lastPayload ? applyServerTripsSnapshot(lastPayload) : await refreshTripsFromServer();
       setToast(`Removed ${emptyTripIds.length} empty trip${emptyTripIds.length === 1 ? "" : "s"}.`);
-      if (trips.length <= emptyTripIds.length) {
+      if (remaining === 0) {
         setMyTripsModalOpen(false);
       }
     } catch {
@@ -2957,7 +2994,7 @@ export default function TravelAssistantPage() {
     } finally {
       setDeletingTripId(null);
     }
-  }, [refreshTripsFromServer, setToast, tripListRows, trips.length]);
+  }, [applyServerTripsSnapshot, refreshTripsFromServer, setToast, tripListRows]);
 
   const handleCreateOnboardingTrip = useCallback(
     (tripDraft: TripSetupDraft): void => {
@@ -6142,9 +6179,23 @@ export default function TravelAssistantPage() {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: tripId }),
-      }).then(() => refreshTripsFromServer()).catch(() => {
-        setToast("Could not delete trip — try again.");
-      });
+      })
+        .then(async (response) => {
+          const payload = (await response.json().catch(() => ({}))) as {
+            error?: string;
+            trips?: unknown[];
+            activeTripId?: string | null;
+            activeTrip?: unknown;
+          };
+          if (!response.ok) {
+            throw new Error(payload.error ?? "Delete failed");
+          }
+          applyServerTripsSnapshot(payload);
+          setToast("Trip deleted.");
+        })
+        .catch(() => {
+          setToast("Could not delete trip — try again.");
+        });
     } else if (pendingDeleteConfirmation.kind === "reservation") {
       handleDeleteReservation(pendingDeleteConfirmation.id);
     } else {
@@ -6153,7 +6204,7 @@ export default function TravelAssistantPage() {
       });
     }
     setPendingDeleteConfirmation(null);
-  }, [handleDeleteReservation, handleRejectReview, pendingDeleteConfirmation, refreshTripsFromServer, setToast]);
+  }, [applyServerTripsSnapshot, handleDeleteReservation, handleRejectReview, pendingDeleteConfirmation, setToast]);
 
   const handleCloseDeleteConfirmation = useCallback((): void => {
     if (!pendingDeleteConfirmation) {
