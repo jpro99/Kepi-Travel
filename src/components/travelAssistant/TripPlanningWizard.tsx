@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   EMPTY_TRIP_SETUP_DRAFT,
   TripSetupForm,
@@ -54,6 +54,15 @@ export function TripPlanningWizard({
   });
   const [errors, setErrors] = useState<TripSetupValidationErrors>({});
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setDraft({
+      ...EMPTY_TRIP_SETUP_DRAFT,
+      ...initialDraft,
+    });
+    setErrors({});
+  }, [open, initialDraft]);
 
   const steps = useMemo(
     () => [
@@ -201,7 +210,7 @@ export function TripPlanningWizard({
               onClick={onAdjustTrip}
               className="mb-3 w-full rounded-xl border border-slate-300 py-2 text-sm font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-200"
             >
-              Adjust trip
+              Edit trip details & dates
             </button>
           ) : null}
 

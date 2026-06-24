@@ -41,7 +41,7 @@ export function advanceBookingWizard(
 ): BookingWizardProgress {
   const now = new Date().toISOString();
   if (action === "adjust") {
-    return { ...current, phase: "flights", updatedAt: now };
+    return { ...current, phase: "setup", updatedAt: now };
   }
   if (action === "complete-setup") {
     return { phase: "flights", flightsDone: false, hotelsDone: false, excursionsDone: false, updatedAt: now };

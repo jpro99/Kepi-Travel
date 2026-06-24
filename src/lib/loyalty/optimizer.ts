@@ -6,6 +6,7 @@ export interface LoyaltyBalance {
   programId: string;
   miles: number;
   tier?: string;
+  memberNumber?: string;
 }
 
 export interface CostOption {

@@ -71,6 +71,7 @@ import {
   type BookingWizardPhase,
 } from "@/lib/travelAssistant/bookingWizard";
 import { computeMinutesToDeparture, isTripShellConfigured } from "@/lib/travelAssistant/tripWindow";
+import { isPlannedReservation } from "@/lib/travelAssistant/plannedReservationMatch";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { QuickAddLane } from "@/components/travelAssistant/QuickAddLane";
 import { ReservationList } from "@/components/travelAssistant/ReservationList";
@@ -1652,7 +1653,9 @@ function defaultTripFromCurrentState(input: {
 
 
 function LoyaltyWalletSection() {
-  const [balances, setBalances] = useState<{ programId: string; miles: number; tier?: string }[]>([]);
+  const [balances, setBalances] = useState<
+    { programId: string; miles: number; tier?: string; memberNumber?: string }[]
+  >([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -1860,6 +1863,7 @@ export default function TravelAssistantPage() {
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [manualReservationModalOpen, setManualReservationModalOpen] = useState(false);
   const [tripPlanningWizardOpen, setTripPlanningWizardOpen] = useState(false);
+  const [planningWizardPhaseOverride, setPlanningWizardPhaseOverride] = useState<BookingWizardPhase | null>(null);
   const [myTripsModalOpen, setMyTripsModalOpen] = useState(false);
   const [deletingTripId, setDeletingTripId] = useState<string | null>(null);
   const [shareModalOpen, setShareModalOpen] = useState(false);
@@ -2886,7 +2890,12 @@ export default function TravelAssistantPage() {
   );
 
   const handleAdjustTripPlanning = useCallback(async (): Promise<void> => {
-    if (!activeTripId) return;
+    if (!activeTripId) {
+      setToast("Select a trip first.");
+      return;
+    }
+    setPlanningWizardPhaseOverride("setup");
+    setTripPlanningWizardOpen(true);
     const bookingWizard = advanceBookingWizard(
       normalizeBookingWizard(activeTrip?.bookingWizard),
       "adjust",
@@ -2901,7 +2910,10 @@ export default function TravelAssistantPage() {
           patch: { bookingWizard },
         }),
       });
-      if (!response.ok) return;
+      if (!response.ok) {
+        setToast("Could not open trip editor. Try again.");
+        return;
+      }
       const payload = (await response.json()) as { activeTrip?: unknown; trips?: unknown[] };
       const nextActiveTrip = normalizeManagedTrip(payload.activeTrip);
       if (nextActiveTrip) {
@@ -2914,10 +2926,12 @@ export default function TravelAssistantPage() {
             .filter((trip): trip is ManagedTrip => trip !== null),
         );
       }
+      setPlanningWizardPhaseOverride(null);
+      setToast("Edit your trip name, dates, and bookings below.");
     } catch {
-      // Non-blocking adjust action.
+      setToast("Could not open trip editor. Try again.");
     }
-  }, [activeTrip?.bookingWizard, activeTripId, applyManagedTripToState]);
+  }, [activeTrip?.bookingWizard, activeTripId, applyManagedTripToState, setToast]);
 
   const handleDeleteTripById = useCallback(
     async (tripId: string): Promise<void> => {
@@ -3662,7 +3676,10 @@ export default function TravelAssistantPage() {
 
   const advancedWorkspaceEnabled = advancedModeEnabled;
   const consumerDisplayReservations = useMemo(() => {
-    return reservations.filter((reservation) => !isOnboardingPlaceholderReservation(reservation));
+    return reservations.filter(
+      (reservation) =>
+        !isOnboardingPlaceholderReservation(reservation) && !isPlannedReservation(reservation),
+    );
   }, [reservations]);
   const tripDaysAway = useMemo(() => {
     if (!activeTrip || consumerDisplayReservations.length === 0) {
@@ -7175,13 +7192,17 @@ export default function TravelAssistantPage() {
           returnDate: activeTrip?.endDate?.slice(0, 10) ?? "",
         }}
         wizardPhase={
-          isTripShellConfigured(activeTrip ?? {})
+          planningWizardPhaseOverride ??
+          (isTripShellConfigured(activeTrip ?? {})
             ? activeBookingWizard.phase
-            : ("setup" as BookingWizardPhase)
+            : ("setup" as BookingWizardPhase))
         }
         flightCount={wizardFlightCount}
         hotelCount={wizardHotelCount}
-        onClose={() => setTripPlanningWizardOpen(false)}
+        onClose={() => {
+          setTripPlanningWizardOpen(false);
+          setPlanningWizardPhaseOverride(null);
+        }}
         onSaveTripSetup={handleSaveTripPlanningSetup}
         onMarkPhaseDone={(phase) => void handleMarkBookingPhaseDone(phase)}
         onAdjustTrip={() => void handleAdjustTripPlanning()}
@@ -7642,10 +7663,7 @@ export default function TravelAssistantPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      void handleAdjustTripPlanning();
-                      setTripPlanningWizardOpen(true);
-                    }}
+                    onClick={() => void handleAdjustTripPlanning()}
                     className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-200"
                   >
                     Adjust trip
@@ -7775,21 +7793,16 @@ export default function TravelAssistantPage() {
               </button>
               {/* Loyalty Wallet */}
               <div className="rounded-3xl bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/[0.08] overflow-hidden">
-                <button
-                  type="button"
-                  className="w-full flex items-center justify-between px-5 py-4 text-left"
-                  onClick={() => document.getElementById("loyalty-section")?.classList.toggle("hidden")}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl">💳</span>
-                    <div>
-                      <p className="font-semibold text-slate-900 dark:text-white">Loyalty Wallet</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Miles · points · cash value · status</p>
-                    </div>
+                <div className="flex items-center gap-3 px-5 py-4">
+                  <span className="text-xl">💳</span>
+                  <div>
+                    <p className="font-semibold text-slate-900 dark:text-white">Loyalty Wallet</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Member numbers · miles · points · status
+                    </p>
                   </div>
-                  <span className="text-slate-400 text-sm">›</span>
-                </button>
-                <div id="loyalty-section" className="hidden border-t border-slate-100 dark:border-slate-800 px-4 pb-4 pt-4">
+                </div>
+                <div className="border-t border-slate-100 dark:border-slate-800 px-4 pb-4 pt-4">
                   <LoyaltyWalletSection />
                 </div>
               </div>

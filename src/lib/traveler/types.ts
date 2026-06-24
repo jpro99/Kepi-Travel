@@ -66,7 +66,7 @@ export interface SavedPassengerDetails {
 
 export interface TravelerGenome {
   /** Loyalty program balances — updated by user */
-  loyaltyBalances?: { programId: string; miles: number; tier?: string }[];
+  loyaltyBalances?: { programId: string; miles: number; tier?: string; memberNumber?: string }[];
   /** Post-trip feedback used by the trip-learning engine — see src/lib/learning/tripInsights.ts */
   tripRatings?: import("@/lib/learning/tripInsights").TripRating[];
   /** Prefilled from the most recent checkout — see src/app/api/orders/create/route.ts */
