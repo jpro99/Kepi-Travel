@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enforceRateLimit } from "@/lib/rateLimit";
 import { BodySchema, resolveUserIdFast } from "@/lib/decision/analyzeRequestSchema";
 import { enrichBriefWithDuffelPricing, mergeFusedIntoBrief } from "@/lib/decision/livePricing";
 import { buildDecisionBrief } from "@/lib/decision/strategyEngine";
@@ -29,6 +30,16 @@ export async function POST(req: Request) {
 
   try {
     const userId = (await resolveUserIdFast()) ?? "anonymous";
+
+    const rateLimit = await enforceRateLimit({
+      policyName: "ai-suggestions",
+      identifier: userId,
+      route: "decision-enrich",
+      requestId: `decision-enrich-${userId}-${Date.now()}`,
+    });
+    if (!rateLimit.allowed) {
+      return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429, headers: rateLimit.headers });
+    }
 
     let rawBody: unknown;
     try {

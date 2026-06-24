@@ -8,7 +8,14 @@ import { parseForwardedEmail } from "@/lib/travelAssistant/emailForwardParser";
 import type { SessionReservation, SessionReviewItem } from "@/lib/travelAssistant/clientSessionState";
 import { resolveUserIdByForwardAddress } from "@/lib/travelAssistant/emailForwardSetupStore";
 import { sendPushNotification } from "@/lib/travelAssistant/pushNotificationService";
-import { getActiveTrip, getTrip, updateTrip } from "@/lib/travelAssistant/tripStore";
+import { updateTrip } from "@/lib/travelAssistant/tripStore";
+import {
+  detectFlightScheduleChange,
+  expandTripWindowIfNeeded,
+  mergeFlightReservationUpdate,
+  resolveTargetTripForEmailForward,
+} from "@/lib/travelAssistant/tripEmailAttach";
+import { reservationPrimaryDate, computeMinutesToDeparture } from "@/lib/travelAssistant/tripWindow";
 import {
   findPlannedReplacementIndex,
   mergeIncomingOverPlanned,
@@ -522,17 +529,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       }
     }
 
-    const targetTrip = parsed.data.tripId
-      ? await getTrip(parsed.data.tripId, targetUserId)
-      : await getActiveTrip(targetUserId);
-    if (!targetTrip) {
-      console.error("[email-forward-webhook] No active trip found for target user.", {
-        requestId,
-        userId: targetUserId,
-        tripId: parsed.data.tripId ?? null,
-      });
-      return { ok: false, status: 404, message: "No active trip found for target user.", userId: targetUserId };
-    }
+    const targetTripIdHint = parsed.data.tripId?.trim() || undefined;
 
     let parserSubject = parsed.data.subject ?? "";
     let parserFrom = parsed.data.from ?? "";
@@ -607,11 +604,26 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
     const parserImageBasedEmail = Boolean(parserResult?.imageBasedEmail);
     const parserUsedAiFallback = Boolean(parserResult?.usedAiFallback);
 
+    const targetTrip = await resolveTargetTripForEmailForward(
+      targetUserId,
+      targetTripIdHint,
+      parserDraftRecords as Array<Record<string, unknown>>,
+    );
+    if (!targetTrip) {
+      console.error("[email-forward-webhook] Unable to resolve or create target trip.", {
+        requestId,
+        userId: targetUserId,
+        tripId: targetTripIdHint ?? null,
+      });
+      return { ok: false, status: 500, message: "Unable to resolve target trip.", userId: targetUserId };
+    }
+
     const defaultAssignees = Array.from(
       new Set(targetTrip.reservations.flatMap((reservation) => reservation.assignedTo)),
     );
     let nextReservations = [...targetTrip.reservations];
     let nextQueue = [...(targetTrip.reviewQueue ?? [])];
+    let nextUpdateFeed = [...(targetTrip.updateFeed ?? [])];
     let acceptedDraftCount = 0;
     let duplicateDraftCount = 0;
     for (const parserDraftRecord of parserDraftRecords) {
@@ -741,6 +753,38 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       const hasMatchingReservation = matchingReservationIndex !== -1;
       // Only check queue for duplicates (not adding to queue anymore, but keep for safety)
       const hasMatchingQueuedDraft = isDuplicateAgainstReviewQueue(nextQueue, parsedReservation);
+      if (hasMatchingReservation && parserType === "flight") {
+        const existing = nextReservations[matchingReservationIndex] as SessionReservation;
+        const incoming = parsedReservation as SessionReservation;
+        const scheduleChanges = detectFlightScheduleChange(existing, incoming);
+        if (scheduleChanges.length > 0) {
+          const merged = mergeFlightReservationUpdate(existing, incoming);
+          nextReservations = nextReservations.map((reservation, index) =>
+            index === matchingReservationIndex ? merged : reservation,
+          );
+          nextUpdateFeed = [
+            {
+              id: `feed-flight-change-${generateId()}`,
+              reservationId: merged.id,
+              kind: "flight-change",
+              severity: "yellow",
+              summary: "Your flights have changed — tap to review",
+              detail: `Updated ${scheduleChanges.join(", ")} for ${merged.flightNumber || merged.title}.`,
+              provider: merged.provider,
+              appliedAt: new Date().toISOString(),
+            },
+            ...nextUpdateFeed,
+          ];
+          acceptedDraftCount += 1;
+          routeLogger.info("Flight schedule updated from forwarded email.", {
+            userId: targetUserId,
+            tripId: targetTrip.id,
+            reservationId: merged.id,
+            scheduleChanges,
+          });
+          continue;
+        }
+      }
       if (hasMatchingReservation || hasMatchingQueuedDraft) {
         // For hotels: merge new info into existing reservation rather than dropping
         // This handles the case where user forwards the same email again with more info
@@ -864,11 +908,34 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       };
     }
 
+    const reservationDates = nextReservations
+      .map((reservation) => reservationPrimaryDate(reservation))
+      .filter((value) => value.length > 0);
+    let tripWindowPatch: { startDate: string; endDate: string } | null = null;
+    for (const reservationDate of reservationDates) {
+      const expanded = expandTripWindowIfNeeded(targetTrip, reservationDate);
+      if (expanded) {
+        tripWindowPatch = tripWindowPatch
+          ? {
+              startDate: expanded.startDate < tripWindowPatch.startDate ? expanded.startDate : tripWindowPatch.startDate,
+              endDate: expanded.endDate > tripWindowPatch.endDate ? expanded.endDate : tripWindowPatch.endDate,
+            }
+          : expanded;
+      }
+    }
+
     const updated = await updateTrip(
       targetTrip.id,
       {
         reservations: nextReservations,
         reviewQueue: nextQueue,
+        updateFeed: nextUpdateFeed,
+        ...(tripWindowPatch ?? {}),
+        minutesToDeparture:
+          computeMinutesToDeparture({
+            startDate: tripWindowPatch?.startDate ?? targetTrip.startDate,
+            reservations: nextReservations,
+          }) ?? targetTrip.minutesToDeparture,
       },
       targetUserId,
     );

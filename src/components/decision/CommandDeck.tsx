@@ -1995,7 +1995,11 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
               <AnalyzeProgressPanel planMode={planMode} stepIndex={analyzeStep} />
               <button
                 type="button"
-                onClick={() => { setLoading(false); setError("Search cancelled — tap Analyze to try again."); }}
+                onClick={() => {
+                  analysisRunRef.current += 1;
+                  setLoading(false);
+                  setError("Search cancelled — tap Analyze to try again.");
+                }}
                 className="mt-3 w-full rounded-2xl border border-slate-600 bg-slate-800 py-2.5 text-sm font-semibold text-slate-300 active:opacity-70"
               >
                 Cancel

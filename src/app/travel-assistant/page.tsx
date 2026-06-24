@@ -62,6 +62,13 @@ import { InstallPrompt } from "@/components/InstallPrompt";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { OnboardingFlow } from "@/components/onboarding/OnboardingFlow";
 import type { TripSetupDraft } from "@/components/onboarding/TripSetupForm";
+import { TripPlanningWizard } from "@/components/travelAssistant/TripPlanningWizard";
+import {
+  advanceBookingWizard,
+  normalizeBookingWizard,
+  type BookingWizardPhase,
+} from "@/lib/travelAssistant/bookingWizard";
+import { computeMinutesToDeparture, isTripShellConfigured } from "@/lib/travelAssistant/tripWindow";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { QuickAddLane } from "@/components/travelAssistant/QuickAddLane";
 import { ReservationList } from "@/components/travelAssistant/ReservationList";
@@ -105,6 +112,7 @@ import { Logo } from "@/components/ui/Logo";
 import { JourneyFlowPanel } from "./components/JourneyFlowPanel";
 import { TravelAssistantTopControls } from "./components/TravelAssistantTopControls";
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
+import type { ConsumerTab } from "@/lib/travelAssistant/consumerTabs";
 
 const OpsPanel = lazy(async () => {
   const loadedModule = await import("@/components/travelAssistant/OpsPanel");
@@ -129,7 +137,6 @@ type MobileViewPanel = "essentials" | "timeline" | "recovery" | "family" | "all"
 type VisibilityMode = "all-members" | "organizer-only";
 type DisruptionScenario = "none" | "missed-flight" | "train-delay" | "ride-no-show";
 type TimelineSectionTab = "reservations" | "documents" | "packing";
-type ConsumerTab = "trip" | "flights" | "hotels" | "map" | "more";
 
 const FAMILY_SHARING_PREF_KEY = "kepi:family-sharing-active";
 type AirportTransportChoice = "driving-myself" | "getting-dropped-off" | "uber-lyft" | "train-bus" | "other";
@@ -363,6 +370,7 @@ interface ManagedTrip {
   updateFeed: UpdateFeedItem[];
   airportTransport: AirportTransportChoice | null;
   hotelArrivalTime: string | null;
+  bookingWizard?: ReturnType<typeof normalizeBookingWizard>;
 }
 
 type ManagedTripRuntimeSnapshot = {
@@ -833,6 +841,11 @@ function formatTripDepartureDate(value: string | null | undefined): string {
 
 function getTripDaysAway(minutesToDeparture: number): number {
   return Math.max(0, Math.ceil(minutesToDeparture / 1440));
+}
+
+function getTripDaysAwayFromMinutes(minutes: number | null): number | null {
+  if (minutes === null) return null;
+  return getTripDaysAway(minutes);
 }
 
 function getReservationEmoji(type: ReservationType): string {
@@ -1562,6 +1575,7 @@ function normalizeManagedTrip(trip: unknown): ManagedTrip | null {
     hotelArrivalTime: typeof candidate.hotelArrivalTime === "string" && candidate.hotelArrivalTime.trim().length > 0
       ? candidate.hotelArrivalTime.trim()
       : null,
+    bookingWizard: candidate.bookingWizard ? normalizeBookingWizard(candidate.bookingWizard) : undefined,
   };
 }
 
@@ -1842,6 +1856,7 @@ export default function TravelAssistantPage() {
   const [showAdvancedShortcut] = useState(false);
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [manualReservationModalOpen, setManualReservationModalOpen] = useState(false);
+  const [tripPlanningWizardOpen, setTripPlanningWizardOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [travelDayOpen, setTravelDayOpen] = useState(false);
   const router = useRouter();
@@ -2475,9 +2490,8 @@ export default function TravelAssistantPage() {
         const tripCount = await refreshTripsFromServer();
         if (cancelled) return;
         if (tripCount === 0) {
-          await ensureDefaultTripIfMissing();
-          if (cancelled) return;
-          await refreshTripsFromServer();
+          setTripsLoading(false);
+          return;
         }
       } catch (error) {
         setTripsLoading(false);
@@ -2489,7 +2503,7 @@ export default function TravelAssistantPage() {
     return () => {
       cancelled = true;
     };
-  }, [ensureDefaultTripIfMissing, refreshTripsFromServer, setToast]);
+  }, [refreshTripsFromServer, setToast]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -2681,55 +2695,205 @@ export default function TravelAssistantPage() {
     trips.length,
   ]);
 
-  const handleCreateOnboardingTrip = useCallback(
-    (tripDraft: TripSetupDraft): void => {
+  const handleSaveTripPlanningSetup = useCallback(
+    async (tripDraft: TripSetupDraft): Promise<void> => {
       const tripName = tripDraft.tripName.trim();
       const destination = tripDraft.destination.trim();
       const departureDate = tripDraft.departureDate.trim();
-      if (!tripName || !destination || !departureDate) {
+      const returnDate = tripDraft.returnDate.trim();
+      if (!tripName || !destination || !departureDate || !returnDate) {
         setToast("Trip setup is missing required fields.");
         return;
       }
 
-      pushUndoSnapshot("Onboarding trip added");
-      setTripStage("readiness");
+      const minutes =
+        computeMinutesToDeparture({ startDate: departureDate, reservations: [] }) ?? 180;
+      const bookingWizard = advanceBookingWizard(
+        normalizeBookingWizard(activeTrip?.bookingWizard),
+        "complete-setup",
+      );
 
-      const departureMs = Date.parse(`${departureDate}T09:00:00`);
-      if (!Number.isNaN(departureMs)) {
-        const minutesUntilDeparture = Math.round((departureMs - Date.now()) / 60000);
-        setMinutesToDeparture(Math.max(15, minutesUntilDeparture));
-      }
-
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-      const noteFingerprint = `onboarding:${tripName.toLowerCase()}|${destination.toLowerCase()}|${departureDate}`;
-
-      setReservations((previous) => {
-        const alreadyCreated = previous.some((reservation) => reservation.notes.includes(noteFingerprint));
-        if (alreadyCreated) {
-          return previous;
+      try {
+        if (activeTripId && activeTrip) {
+          const response = await fetch(TRIP_API_ROUTE, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "update",
+              id: activeTripId,
+              patch: {
+                name: tripName,
+                destination,
+                startDate: departureDate,
+                endDate: returnDate,
+                minutesToDeparture: minutes,
+                bookingWizard,
+              },
+            }),
+          });
+          if (!response.ok) {
+            setToast("Could not save trip details.");
+            return;
+          }
+          const payload = (await response.json()) as { activeTrip?: unknown; trips?: unknown[] };
+          const nextActiveTrip = normalizeManagedTrip(payload.activeTrip);
+          if (nextActiveTrip) {
+            applyManagedTripToState(nextActiveTrip, { resetHighlight: true });
+          }
+          if (Array.isArray(payload.trips)) {
+            setTrips(
+              payload.trips
+                .map((trip) => normalizeManagedTrip(trip))
+                .filter((trip): trip is ManagedTrip => trip !== null),
+            );
+          }
+        } else {
+          const response = await fetch(TRIP_API_ROUTE, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              setActive: true,
+              trip: {
+                name: tripName,
+                destination,
+                startDate: departureDate,
+                endDate: returnDate,
+                stage: "readiness",
+                reservations: [],
+                tripStatus: "yellow",
+                minutesToDeparture: minutes,
+                activeScenario: "none",
+                reviewQueue: [],
+                readinessItems: INITIAL_CHECKLIST,
+                updateFeed: [],
+                bookingWizard,
+              },
+            }),
+          });
+          if (!response.ok) {
+            setToast("Could not create your trip.");
+            return;
+          }
+          const payload = (await response.json()) as {
+            trip?: unknown;
+            activeTrip?: unknown;
+            trips?: unknown[];
+            activeTripId?: string | null;
+          };
+          const createdTrip = normalizeManagedTrip(payload.trip ?? payload.activeTrip);
+          if (!createdTrip) {
+            setToast("Trip saved but response was invalid.");
+            return;
+          }
+          setActiveTripId(payload.activeTripId ?? createdTrip.id);
+          if (Array.isArray(payload.trips)) {
+            setTrips(
+              payload.trips
+                .map((trip) => normalizeManagedTrip(trip))
+                .filter((trip): trip is ManagedTrip => trip !== null),
+            );
+          }
+          applyManagedTripToState(createdTrip, { resetHighlight: true });
+          void refreshGlobalBillingStatus();
         }
-        const onboardingReservation: Reservation = {
-          id: nextId("res"),
-          type: "flight",
-          title: `${tripName} departure`,
-          provider: "Onboarding setup",
-          localTime: `${departureDate} 09:00`,
-          timezone,
-          location: destination,
-          confirmationCode: `TRIP-${Date.now().toString().slice(-6)}`,
-          assignedTo: [selectedFamilyMember.id],
-          stage: "readiness",
-          critical: true,
-          confidence: "medium",
-          notes: `Created during onboarding. ${noteFingerprint}`,
-          source: "manual",
-        };
-        return [onboardingReservation, ...previous];
-      });
-
-      setToast(`Trip "${tripName}" was added to your timeline.`);
+        setToast(`Trip "${tripName}" is set — add flights when you're ready.`);
+      } catch {
+        setToast("Could not save trip details.");
+      }
     },
-    [pushUndoSnapshot, selectedFamilyMember.id, setToast],
+    [
+      activeTrip,
+      activeTripId,
+      applyManagedTripToState,
+      refreshGlobalBillingStatus,
+      setToast,
+    ],
+  );
+
+  const handleMarkBookingPhaseDone = useCallback(
+    async (phase: "flights" | "hotels" | "excursions"): Promise<void> => {
+      if (!activeTripId) return;
+      const action =
+        phase === "flights" ? "done-flights" : phase === "hotels" ? "done-hotels" : "done-excursions";
+      const bookingWizard = advanceBookingWizard(
+        normalizeBookingWizard(activeTrip?.bookingWizard),
+        action,
+      );
+      try {
+        const response = await fetch(TRIP_API_ROUTE, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "update",
+            id: activeTripId,
+            patch: { bookingWizard },
+          }),
+        });
+        if (!response.ok) {
+          setToast("Could not update planning step.");
+          return;
+        }
+        const payload = (await response.json()) as { activeTrip?: unknown; trips?: unknown[] };
+        const nextActiveTrip = normalizeManagedTrip(payload.activeTrip);
+        if (nextActiveTrip) {
+          applyManagedTripToState(nextActiveTrip);
+        }
+        if (Array.isArray(payload.trips)) {
+          setTrips(
+            payload.trips
+              .map((trip) => normalizeManagedTrip(trip))
+              .filter((trip): trip is ManagedTrip => trip !== null),
+          );
+        }
+        if (phase === "excursions") {
+          setTripPlanningWizardOpen(false);
+        }
+      } catch {
+        setToast("Could not update planning step.");
+      }
+    },
+    [activeTrip?.bookingWizard, activeTripId, applyManagedTripToState, setToast],
+  );
+
+  const handleAdjustTripPlanning = useCallback(async (): Promise<void> => {
+    if (!activeTripId) return;
+    const bookingWizard = advanceBookingWizard(
+      normalizeBookingWizard(activeTrip?.bookingWizard),
+      "adjust",
+    );
+    try {
+      const response = await fetch(TRIP_API_ROUTE, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update",
+          id: activeTripId,
+          patch: { bookingWizard },
+        }),
+      });
+      if (!response.ok) return;
+      const payload = (await response.json()) as { activeTrip?: unknown; trips?: unknown[] };
+      const nextActiveTrip = normalizeManagedTrip(payload.activeTrip);
+      if (nextActiveTrip) {
+        applyManagedTripToState(nextActiveTrip);
+      }
+      if (Array.isArray(payload.trips)) {
+        setTrips(
+          payload.trips
+            .map((trip) => normalizeManagedTrip(trip))
+            .filter((trip): trip is ManagedTrip => trip !== null),
+        );
+      }
+    } catch {
+      // Non-blocking adjust action.
+    }
+  }, [activeTrip?.bookingWizard, activeTripId, applyManagedTripToState]);
+
+  const handleCreateOnboardingTrip = useCallback(
+    (tripDraft: TripSetupDraft): void => {
+      void handleSaveTripPlanningSetup(tripDraft);
+    },
+    [handleSaveTripPlanningSetup],
   );
 
   useEffect(() => {
@@ -3390,10 +3554,39 @@ export default function TravelAssistantPage() {
   );
 
   const advancedWorkspaceEnabled = advancedModeEnabled;
-  const tripDaysAway = getTripDaysAway(minutesToDeparture);
   const consumerDisplayReservations = useMemo(() => {
     return reservations.filter((reservation) => !isOnboardingPlaceholderReservation(reservation));
   }, [reservations]);
+  const tripDaysAway = useMemo(() => {
+    if (!activeTrip || consumerDisplayReservations.length === 0) {
+      return null;
+    }
+    const minutes = computeMinutesToDeparture({
+      startDate: activeTrip.startDate,
+      reservations: consumerDisplayReservations,
+    });
+    return getTripDaysAwayFromMinutes(minutes);
+  }, [activeTrip, consumerDisplayReservations]);
+  const activeBookingWizard = useMemo(
+    () => normalizeBookingWizard(activeTrip?.bookingWizard),
+    [activeTrip?.bookingWizard],
+  );
+  const showUnconfiguredTripShell = useMemo(
+    () => Boolean(activeTrip && !isTripShellConfigured(activeTrip) && consumerDisplayReservations.length === 0),
+    [activeTrip, consumerDisplayReservations.length],
+  );
+  const pendingFlightChangeAlert = useMemo(
+    () => updateFeed.find((entry) => entry.kind === "flight-change") ?? null,
+    [updateFeed],
+  );
+  const wizardFlightCount = useMemo(
+    () => consumerDisplayReservations.filter((reservation) => reservation.type === "flight").length,
+    [consumerDisplayReservations],
+  );
+  const wizardHotelCount = useMemo(
+    () => consumerDisplayReservations.filter((reservation) => reservation.type === "hotel").length,
+    [consumerDisplayReservations],
+  );
   const delayedFlight = useMemo(
     () =>
       reservations.find(
@@ -7128,7 +7321,7 @@ export default function TravelAssistantPage() {
                   })()}
                 </div>
 
-              ) : journeyPhase.kind === "no-trip" ? (
+              ) : journeyPhase.kind === "no-trip" || showUnconfiguredTripShell ? (
                 /* ── WELCOME — no trips yet ── */
                 <div className="rounded-3xl overflow-hidden bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 shadow-xl">
                   <div className="px-5 pt-6 pb-4">
@@ -7142,7 +7335,7 @@ export default function TravelAssistantPage() {
                     {/* Primary CTA */}
                     <button
                       type="button"
-                      onClick={() => router.push("/book")}
+                      onClick={() => setTripPlanningWizardOpen(true)}
                       className="w-full rounded-2xl bg-[#f4c95d] py-4 text-center font-black text-[#0b1f3a] text-base active:opacity-80"
                     >
                       ⚡ Plan my next trip
@@ -7166,6 +7359,8 @@ export default function TravelAssistantPage() {
 
 
               ) : null}
+              {!showUnconfiguredTripShell ? (
+              <>
               <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -7251,6 +7446,39 @@ export default function TravelAssistantPage() {
                 />
               )}
 
+              {pendingFlightChangeAlert ? (
+                <button
+                  type="button"
+                  onClick={() => openDrawer("reservation", pendingFlightChangeAlert.reservationId)}
+                  className="mb-4 w-full rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-left text-sm font-semibold text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100"
+                >
+                  {pendingFlightChangeAlert.summary}
+                  <span className="mt-1 block text-xs font-normal opacity-80">{pendingFlightChangeAlert.detail}</span>
+                </button>
+              ) : null}
+
+              {activeTrip && isTripShellConfigured(activeTrip) ? (
+                <div className="mb-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setManualReservationModalOpen(true)}
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-200"
+                  >
+                    + Add another flight
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleAdjustTripPlanning();
+                      setTripPlanningWizardOpen(true);
+                    }}
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-200"
+                  >
+                    Adjust trip
+                  </button>
+                </div>
+              ) : null}
+
               <TripTimeline
                 reservations={consumerReservationsSorted}
                 tripName={activeTrip?.name ?? "Your trip"}
@@ -7328,6 +7556,8 @@ export default function TravelAssistantPage() {
                     </div>
                   </section>
                 )
+              ) : null}
+              </>
               ) : null}
             </section>
           ) : consumerTab === "flights" ? (
@@ -8276,10 +8506,11 @@ export default function TravelAssistantPage() {
                 <article className="space-y-4">
                   <TripTimeline
                     reservations={visibleReservations}
-                    nowMs={nowMs}
-                    flightLiveStatusByReservationId={flightLiveStatusByReservationId}
-                    railLiveStatusByReservationId={railLiveStatusByReservationId}
-                    onOpenReservationDrawer={(reservationId) => openDrawer("reservation", reservationId)}
+                    tripName={activeTrip?.name ?? "Your trip"}
+                    tripStartDate={activeTrip?.startDate ?? null}
+                    tripEndDate={activeTrip?.endDate ?? null}
+                    tripDaysAway={tripDaysAway}
+                    onReservationTap={(reservationId: string) => openDrawer("reservation", reservationId)}
                   />
                   <ReservationList
                     visibleReservations={visibleReservations}
@@ -8550,6 +8781,32 @@ export default function TravelAssistantPage() {
         }}
       />
       <InstallPrompt />
+      <TripPlanningWizard
+        open={tripPlanningWizardOpen}
+        forwardAddress={emptyStateForwardAddress}
+        initialDraft={{
+          tripName: activeTrip?.name && !/^trip \d+$/iu.test(activeTrip.name.trim()) ? activeTrip.name : "",
+          destination: isTripDestinationPlaceholder(activeTrip?.destination) ? "" : (activeTrip?.destination ?? ""),
+          departureDate: activeTrip?.startDate?.slice(0, 10) ?? "",
+          returnDate: activeTrip?.endDate?.slice(0, 10) ?? "",
+        }}
+        wizardPhase={
+          isTripShellConfigured(activeTrip ?? {})
+            ? activeBookingWizard.phase
+            : ("setup" as BookingWizardPhase)
+        }
+        flightCount={wizardFlightCount}
+        hotelCount={wizardHotelCount}
+        onClose={() => setTripPlanningWizardOpen(false)}
+        onSaveTripSetup={handleSaveTripPlanningSetup}
+        onMarkPhaseDone={(phase) => void handleMarkBookingPhaseDone(phase)}
+        onAdjustTrip={() => void handleAdjustTripPlanning()}
+        onCopyForward={() => void handleCopyForwardAddress(emptyStateForwardAddress)}
+        onAddManual={() => {
+          setTripPlanningWizardOpen(false);
+          setManualReservationModalOpen(true);
+        }}
+      />
       <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
     </main>
   );

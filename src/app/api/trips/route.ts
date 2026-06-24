@@ -50,6 +50,7 @@ const TripPayloadSchema = z.object({
   updateFeed: z.array(z.any()).default([]),
   airportTransport: AirportTransportSchema.nullable().optional(),
   hotelArrivalTime: z.string().trim().min(1).max(80).nullable().optional(),
+  bookingWizard: z.any().optional(),
 });
 
 const TripPatchSchema = z.object({
@@ -67,6 +68,7 @@ const TripPatchSchema = z.object({
   updateFeed: z.array(z.any()).optional(),
   airportTransport: AirportTransportSchema.nullable().optional(),
   hotelArrivalTime: z.string().trim().min(1).max(80).nullable().optional(),
+  bookingWizard: z.any().optional(),
 });
 
 const PostBodySchema = z.object({

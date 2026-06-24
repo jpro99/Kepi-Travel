@@ -1,6 +1,6 @@
 import "server-only";
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { requireDebugApiAccess } from "@/lib/admin/requireAdminApiAccess";
 import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 
 export const runtime = "nodejs";
@@ -11,8 +11,9 @@ const FAMILY_MEMBERSHIP_KEY = "family:membership";
 const FAMILY_INVITE_INDEX_KEY = (code: string) => `family:invite-index:${code}`;
 
 export async function GET(req: Request) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const access = await requireDebugApiAccess("/api/family-debug");
+  if (!access.ok) return access.response;
+  const userId = access.userId;
 
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
@@ -48,8 +49,9 @@ export async function GET(req: Request) {
 // POST: repair a member's membership key so they can see the group
 // Usage: POST /api/family-debug { memberId: "...", groupId: "..." }
 export async function POST(request: Request) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const access = await requireDebugApiAccess("/api/family-debug");
+  if (!access.ok) return access.response;
+  const userId = access.userId;
 
   const body = await request.json().catch(() => ({})) as { targetUserId?: string; groupId?: string };
 

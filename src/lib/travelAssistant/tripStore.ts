@@ -3,6 +3,8 @@ import type {
   SessionReservation,
   SessionReviewItem,
 } from "@/lib/travelAssistant/clientSessionState";
+import type { BookingWizardProgress } from "@/lib/travelAssistant/bookingWizard";
+import { normalizeBookingWizard } from "@/lib/travelAssistant/bookingWizard";
 import type { TripFlowStage } from "@/lib/travelAssistant/tripFlowControls";
 import { kvStoreDel, kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 import { generateId } from "@/lib/utils/generateId";
@@ -42,6 +44,7 @@ export interface TravelTrip {
   updateFeed?: TripFeedItem[];
   airportTransport?: TripAirportTransport | null;
   hotelArrivalTime?: string | null;
+  bookingWizard?: BookingWizardProgress;
 }
 
 export interface CreateTripInput {
@@ -59,6 +62,7 @@ export interface CreateTripInput {
   updateFeed?: TripFeedItem[];
   airportTransport?: TripAirportTransport | null;
   hotelArrivalTime?: string | null;
+  bookingWizard?: BookingWizardProgress;
 }
 
 export type UpdateTripInput = Partial<Omit<TravelTrip, "id" | "createdAt">>;
@@ -124,6 +128,7 @@ function sanitizeTrip(raw: unknown): TravelTrip | null {
   const hotelArrivalTime = typeof raw.hotelArrivalTime === "string" && raw.hotelArrivalTime.trim().length > 0
     ? raw.hotelArrivalTime.trim()
     : null;
+  const bookingWizard = raw.bookingWizard ? normalizeBookingWizard(raw.bookingWizard) : undefined;
 
   return {
     id: raw.id,
@@ -142,6 +147,7 @@ function sanitizeTrip(raw: unknown): TravelTrip | null {
     updateFeed: asStringArrayValue<TripFeedItem>(raw.updateFeed),
     airportTransport,
     hotelArrivalTime,
+    bookingWizard,
   };
 }
 
@@ -197,6 +203,7 @@ export async function createTrip(input: CreateTripInput, userId?: string): Promi
     updateFeed: input.updateFeed ? [...input.updateFeed] : [],
     airportTransport: input.airportTransport ?? null,
     hotelArrivalTime: input.hotelArrivalTime ?? null,
+    bookingWizard: input.bookingWizard,
   };
   const nextTrips = [...trips, trip];
   await writeTrips(nextTrips, userId);

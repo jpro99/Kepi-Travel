@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
+import { requireDebugApiAccess } from "@/lib/admin/requireAdminApiAccess";
 import { getRawSubscriptionRecordForDebug, getSubscriptionRecord, getSubscriptionStorageKey, isSubscriptionActive } from "@/lib/billing/subscriptionStore";
 import { logger } from "@/lib/logger";
 import { enforceRateLimit } from "@/lib/rateLimit";
@@ -23,16 +23,14 @@ function resolvePlan(record: Awaited<ReturnType<typeof getSubscriptionRecord>>):
 
 export async function GET(req: Request) {
   const requestId = req.headers.get("x-request-id")?.trim() || generateId();
-  const userId = await resolveAuthenticatedUserId();
+  const access = await requireDebugApiAccess("/api/debug/my-plan");
+  if (!access.ok) return access.response;
+  const userId = access.userId;
   const routeLogger = logger.withContext({
     requestId,
     userId,
     route: "/api/debug/my-plan",
   });
-
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
 
   const rateLimit = await enforceRateLimit({
     policyName: "travel-updates-general",

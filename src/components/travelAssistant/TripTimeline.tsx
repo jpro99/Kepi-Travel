@@ -42,7 +42,7 @@ interface TripTimelineProps {
   tripName: string;
   tripStartDate: string | null;
   tripEndDate?: string | null;
-  tripDaysAway: number;
+  tripDaysAway: number | null;
   onReservationTap?: (id: string) => void;
   /** Hide "already mid-trip" banner when the trip is fully in the past. */
   suppressMidTripBanner?: boolean;
@@ -385,8 +385,6 @@ function DayRow({ day, onReservationTap, showPastConfirmed, dimPast }: {
             {day.reservations.length} reservation{day.reservations.length === 1 ? "" : "s"} — tap to expand
           </p>
         ) : null}
-
-        {!hasEvents ? <p className="mt-1.5 text-xs italic text-slate-300 dark:text-slate-600">Free day</p> : null}
       </div>
     </div>
   );
@@ -436,6 +434,7 @@ export function TripTimeline({
   );
 
   const days = useMemo((): DayEntry[] => {
+    if (reservations.length === 0) return [];
     if (upcoming.length === 0 && !tripStartDate) return [];
 
     const seen = new Set<string>();
@@ -461,9 +460,9 @@ export function TripTimeline({
 
     const dayKeys = buildCompactTimelineDayKeys(dedupedReservations, tripStartDate, tripEndDate);
     return dayKeys.map((key) => ({ key, reservations: map.get(key) ?? [] }));
-  }, [upcoming, tripStartDate, tripEndDate]);
+  }, [reservations.length, upcoming, tripStartDate, tripEndDate]);
 
-  if (days.length === 0) return null;
+  if (reservations.length === 0 || days.length === 0) return null;
 
   const today = new Date().toISOString().slice(0, 10);
   const pastDaysWithEvents = days.filter((d) => d.key < today && d.reservations.length > 0);
@@ -484,6 +483,15 @@ export function TripTimeline({
           <p className="text-xl font-black text-[var(--text-primary)]">{totalDays}</p>
           <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">Days</p>
         </div>
+        <div className="h-8 w-px bg-[var(--border-default)]" />
+        {tripDaysAway !== null ? (
+          <div className="text-center">
+            <p className="text-xl font-black text-[var(--text-primary)]">{tripDaysAway === 0 ? "NOW" : tripDaysAway}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
+              {tripDaysAway === 0 ? "Happening" : "Days away"}
+            </p>
+          </div>
+        ) : null}
         <div className="h-8 w-px bg-[var(--border-default)]" />
         <div className="text-center">
           <p className="text-xl font-black text-[var(--text-primary)]">{daysWithEvents}</p>

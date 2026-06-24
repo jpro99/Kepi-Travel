@@ -98,12 +98,12 @@ export function buildCompactTimelineDayKeys(
   for (const r of reservations) {
     for (const key of reservationDayKeys(r)) keys.add(key);
   }
-  const tripStart = tripStartDate?.slice(0, 10);
-  const tripEnd = tripEndDate?.slice(0, 10);
-  if (tripStart) keys.add(tripStart);
-  if (tripEnd) keys.add(tripEnd);
+
+  if (keys.size === 0) return [];
 
   let sorted = [...keys].sort();
+  const tripStart = tripStartDate?.slice(0, 10);
+  const tripEnd = tripEndDate?.slice(0, 10);
   if (tripStart && tripEnd) {
     sorted = sorted.filter((key) => key >= tripStart && key <= tripEnd);
   }

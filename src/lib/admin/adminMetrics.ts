@@ -538,6 +538,14 @@ async function collectInsightsStats(
   };
 }
 
+function measureEnvConfiguredHealth(envKey: string, label: string): AdminSystemServiceHealth {
+  const configured = Boolean(process.env[envKey]?.trim());
+  return {
+    status: configured ? "green" : "yellow",
+    detail: configured ? `${label} API key configured` : `${label} API key missing`,
+  };
+}
+
 export async function buildAdminHealthSnapshot(): Promise<AdminHealthResponse> {
   const [kvHealth, backgroundRuns, aviationStackHealth, sentryHealth] = await Promise.all([
     measureKvHealth(),
@@ -552,6 +560,8 @@ export async function buildAdminHealthSnapshot(): Promise<AdminHealthResponse> {
       inngest: evaluateInngestHealthFromRuns(backgroundRuns),
       aviationStack: aviationStackHealth,
       sentry: sentryHealth,
+      duffel: measureEnvConfiguredHealth("DUFFEL_ACCESS_TOKEN", "Duffel"),
+      seatsAero: measureEnvConfiguredHealth("SEATS_AERO_API_KEY", "Seats.aero"),
     },
   };
 }

@@ -95,6 +95,26 @@ export function SystemHealthCard({ data, loading, error, onRefresh }: SystemHeal
             </div>
             <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{data.services.sentry.detail}</p>
           </article>
+
+          <article className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/60">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold">Duffel</p>
+              <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(data.services.duffel.status)}`}>
+                {data.services.duffel.status.toUpperCase()}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{data.services.duffel.detail}</p>
+          </article>
+
+          <article className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/60">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold">Seats.aero</p>
+              <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(data.services.seatsAero.status)}`}>
+                {data.services.seatsAero.status.toUpperCase()}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{data.services.seatsAero.detail}</p>
+          </article>
         </div>
       ) : null}
     </section>

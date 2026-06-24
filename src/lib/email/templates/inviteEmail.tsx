@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactElement } from "react";
+import { getAppHostname } from "@/lib/utils/appUrl";
 
 export interface InviteEmailProps {
   recipientEmail: string;
@@ -115,6 +116,7 @@ export function InviteEmail({
 }: InviteEmailProps): ReactElement {
   const isLifetime = inviteType === "lifetime";
   const planLabel = isLifetime ? "Lifetime Access" : "30-Day Trial";
+  const appHostname = getAppHostname();
   const planDetail = isLifetime
     ? "Full access to Kepi — forever, at no cost to you."
     : "Full access to Kepi for 30 days, on us.";
@@ -152,14 +154,15 @@ export function InviteEmail({
           </a>
 
           <p style={helpText}>
-            Or visit <span style={{ color: "#0ea5e9" }}>kepi-search.vercel.app</span> and enter your code manually.<br />
+            Or visit <span style={{ color: "#0ea5e9" }}>{appHostname}</span> and enter your code manually.
+            <br />
             This invite is single-use and linked to your account once redeemed.
           </p>
         </div>
 
         {/* Footer */}
         <div style={footer}>
-          <p style={footerText}>Kepi · Premium AI Travel Execution · kepi-search.vercel.app</p>
+          <p style={footerText}>Kepi · Premium AI Travel Execution · {appHostname}</p>
         </div>
       </div>
     </div>

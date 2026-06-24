@@ -138,6 +138,9 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
       if (errors.departureDate) {
         localized.departureDate = tTripSetup("errorDepartureDateRequired");
       }
+      if (errors.returnDate) {
+        localized.returnDate = "Return date is required.";
+      }
       return localized;
     },
     [tTripSetup],

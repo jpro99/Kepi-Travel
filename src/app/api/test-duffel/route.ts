@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
+import { requireAdminApiAccess } from "@/lib/admin/requireAdminApiAccess";
 import { buildDecisionBrief } from "@/lib/decision/strategyEngine";
 import { getTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
 import { enrichBriefWithDuffelPricing } from "@/lib/decision/livePricing";
@@ -11,8 +11,9 @@ export const maxDuration = 60;
 
 // This mirrors EXACTLY what /api/decision/strategies does, step by step
 export async function GET(req: Request) {
-  const userId = await resolveAuthenticatedUserId();
-  if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const access = await requireAdminApiAccess("/api/test-duffel");
+  if (!access.ok) return access.response;
+  const userId = access.userId;
 
   const url = new URL(req.url);
   const prompt = url.searchParams.get("q") ?? "fly from Beaumont CA to New York on September 1st";

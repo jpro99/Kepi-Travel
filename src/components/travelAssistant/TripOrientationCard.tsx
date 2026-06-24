@@ -1,18 +1,21 @@
 "use client";
 
-type OrientationTab = "trip" | "flights" | "hotels" | "map" | "more" | "reservations" | "packing" | "family";
+import type { ConsumerTab } from "@/lib/travelAssistant/consumerTabs";
+import { orientationTabToConsumerTab } from "@/lib/travelAssistant/consumerTabs";
+
+type OrientationTab = ConsumerTab | "reservations" | "packing" | "family";
 
 interface TripOrientationCardProps {
   travelerName: string;
   destination: string;
-  tripDaysAway: number;
+  tripDaysAway: number | null;
   statusTitle: string;
   statusDetail: string;
   weatherLabel?: string;
   nextActionLabel: string;
   onNextAction?: () => void;
   actionTargetTab?: OrientationTab;
-  onSwitchTab?: (tab: OrientationTab) => void;
+  onSwitchTab?: (tab: ConsumerTab) => void;
   statusToneClassName: string;
 }
 
@@ -36,7 +39,9 @@ export function TripOrientationCard({
       <p className="text-sm font-semibold opacity-80">Good morning {travelerName}!</p>
       <h1 className="mt-2 text-3xl font-bold leading-tight">{statusTitle}</h1>
       <p className="mt-3 text-base">
-        Your flight to {destination} is in {tripDaysAway === 1 ? "1 day" : `${tripDaysAway} days`}.
+        {tripDaysAway !== null
+          ? `Your flight to ${destination} is in ${tripDaysAway === 1 ? "1 day" : `${tripDaysAway} days`}.`
+          : `Your trip to ${destination} is taking shape.`}
       </p>
       {weatherLabel ? <p className="mt-2 text-base">{weatherLabel}</p> : null}
       <p className="mt-4 rounded-2xl bg-white/60 p-3 text-sm font-medium text-slate-900 dark:bg-slate-950/40 dark:text-slate-100">
@@ -47,7 +52,7 @@ export function TripOrientationCard({
           type="button"
           onClick={() => {
             if (actionTargetTab && onSwitchTab) {
-              onSwitchTab(actionTargetTab);
+              onSwitchTab(orientationTabToConsumerTab(actionTargetTab));
             }
             onNextAction?.();
           }}
