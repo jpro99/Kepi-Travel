@@ -97,7 +97,7 @@ export async function resolveTargetTripForEmailForward(
   }
 
   const inferred = inferTripWindowFromDrafts(drafts);
-  let trip = await getActiveTrip(userId);
+  const trip = await getActiveTrip(userId);
 
   if (!trip) {
     const wizard: BookingWizardProgress = {

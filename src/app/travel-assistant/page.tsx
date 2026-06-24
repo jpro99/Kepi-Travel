@@ -104,6 +104,7 @@ import { ReferralCard } from "@/components/referral/ReferralCard";
 import { WeatherCard } from "@/components/travelAssistant/WeatherCard";
 import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntelligencePanel";
 import { ConciergePanel } from "@/components/travelAssistant/ConciergePanel";
+import { ConciergeBar } from "@/components/travelAssistant/ConciergeBar";
 import { trackEvent } from "@/lib/analytics/trackEvent";
 import { useBilling } from "@/lib/billing/BillingContext";
 import type { PlanFeature } from "@/lib/billing/plans";
