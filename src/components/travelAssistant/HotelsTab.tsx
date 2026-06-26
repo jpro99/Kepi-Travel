@@ -81,14 +81,44 @@ export function HotelsTab({ reservations, onReservationTap, onCheckStatus, onDel
             {upcoming.length} upcoming{past.length > 0 ? ` · ${past.length} past` : ""}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onAdd}
-          className="flex items-center gap-1.5 rounded-full bg-[#007AFF] px-4 py-2 text-sm font-semibold text-white shadow-sm active:opacity-80 transition-opacity"
-        >
-          <span className="text-base leading-none">+</span> Add
-        </button>
+        <div className="flex items-center gap-2">
+          {onSearchHotels ? (
+            <button
+              type="button"
+              onClick={onSearchHotels}
+              className="flex items-center gap-1.5 rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm active:opacity-80 transition-opacity"
+            >
+              Search
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={onAdd}
+            className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm active:opacity-80 transition-opacity dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+          >
+            <span className="text-base leading-none">+</span> Add
+          </button>
+        </div>
       </div>
+
+      {shown.length > 0 && onSearchHotels ? (
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={onSearchHotels}
+            className="rounded-2xl bg-sky-600 py-3 text-sm font-bold text-white shadow-sm"
+          >
+            Search for a hotel
+          </button>
+          <button
+            type="button"
+            onClick={onAdd}
+            className="rounded-2xl border border-slate-300 bg-white py-3 text-sm font-bold text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+          >
+            Add manually
+          </button>
+        </div>
+      ) : null}
 
       {/* Empty state */}
       {shown.length === 0 && (

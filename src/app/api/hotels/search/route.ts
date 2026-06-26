@@ -76,29 +76,51 @@ export async function POST(req: Request) {
     });
 
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      return NextResponse.json({ error: "Hotel search failed", detail: err }, { status: 502 });
+      const err = (await res.json().catch(() => ({}))) as {
+        errors?: Array<{ message?: string }>;
+      };
+      const duffelMessage = err.errors?.[0]?.message;
+      const hint =
+        res.status === 403 || res.status === 404
+          ? "Hotel search is not enabled on this booking account yet."
+          : res.status === 422
+            ? "Those dates or destination are not valid for hotel search."
+            : "Hotel search failed — try different dates or a nearby city.";
+      return NextResponse.json(
+        { error: duffelMessage ?? hint, detail: err },
+        { status: 502 },
+      );
     }
 
     const data = await res.json();
     const results: Record<string, unknown>[] = (data?.data?.results ?? []) as Record<string, unknown>[];
 
-    const hotels: HotelSearchResult[] = results.slice(0, 20).map((row) => {
+    const hotels: HotelSearchResult[] = [];
+    for (const row of results.slice(0, 30)) {
       const prop = (row.property ?? row.accommodation) as Record<string, unknown> | undefined;
-      const rate = row.cheapest_rate_total_amount as string;
-      const amenities = (prop?.amenities as { type: string }[] | undefined)?.map((entry) => entry.type).slice(0, 8) ?? [];
-      const photos = (prop?.photos as { url: string }[] | undefined)?.map((entry) => entry.url).slice(0, 4) ?? [];
-      const addressRecord = prop?.address as Record<string, unknown> | undefined;
+      const rateRaw = row.cheapest_rate_total_amount;
+      const total =
+        typeof rateRaw === "number"
+          ? rateRaw
+          : typeof rateRaw === "string"
+            ? Number.parseFloat(rateRaw)
+            : Number.NaN;
+      if (!prop || !Number.isFinite(total) || total <= 0) continue;
 
-      return {
+      const name = (prop.name ?? "Unknown Hotel") as string;
+      const amenities = (prop.amenities as { type: string }[] | undefined)?.map((entry) => entry.type).slice(0, 8) ?? [];
+      const photos = (prop.photos as { url: string }[] | undefined)?.map((entry) => entry.url).slice(0, 4) ?? [];
+      const addressRecord = prop.address as Record<string, unknown> | undefined;
+
+      hotels.push({
         id: row.id as string,
-        name: (prop?.name ?? "Unknown Hotel") as string,
-        chainName: prop?.chain_name as string | undefined,
-        stars: Number(prop?.star_rating ?? 3),
-        rating: prop?.review_score ? Number(prop.review_score) : undefined,
-        ratingCount: prop?.review_count as number | undefined,
-        pricePerNight: Number(rate) / nights,
-        totalPrice: Number(rate),
+        name,
+        chainName: prop.chain_name as string | undefined,
+        stars: Number(prop.star_rating ?? 3),
+        rating: prop.review_score ? Number(prop.review_score) : undefined,
+        ratingCount: prop.review_count as number | undefined,
+        pricePerNight: total / nights,
+        totalPrice: total,
         currency: (row.cheapest_rate_currency ?? "USD") as string,
         nights,
         address: (addressRecord?.line_one as string | undefined) ?? "",
@@ -111,8 +133,22 @@ export async function POST(req: Request) {
         guests: Number(guests),
         cancellable: Boolean((row as Record<string, unknown>).cheapest_rate_is_cancellable),
         cancellationDeadline: (row as Record<string, unknown>).cheapest_rate_cancellation_deadline as string | undefined,
-      };
-    });
+      });
+      if (hotels.length >= 20) break;
+    }
+
+    if (hotels.length === 0) {
+      return NextResponse.json({
+        hotels: [],
+        total: results.length,
+        city: resolved.displayName,
+        memorySummary: null,
+        resolved: { lat: resolved.lat, lng: resolved.lng, iata: resolved.iata ?? null },
+        error: results.length > 0
+          ? "Hotels were found but none had live rates for these dates."
+          : `No hotels found near ${resolved.displayName}. Try different dates or a nearby airport code.`,
+      });
+    }
 
     const [genome, memory] = await Promise.all([getTravelerGenome(userId), getHotelStayMemory(userId)]);
     const loyaltyBalances = normalizeLoyaltyBalances(genome.loyaltyBalances ?? []);

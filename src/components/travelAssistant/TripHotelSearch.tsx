@@ -6,6 +6,7 @@ import type { HotelSearchResult, HotelSearchTier, RankedHotelSearchResult } from
 
 export interface TripHotelSearchProps {
   defaultCity?: string;
+  defaultCityIata?: string;
   defaultCheckIn?: string;
   defaultCheckOut?: string;
   onAddHotel: (hotel: HotelSearchResult) => void;
@@ -146,9 +147,15 @@ function CityInput({
   );
 }
 
-export function TripHotelSearch({ defaultCity = "", defaultCheckIn = "", defaultCheckOut = "", onAddHotel }: TripHotelSearchProps) {
+export function TripHotelSearch({
+  defaultCity = "",
+  defaultCityIata = "",
+  defaultCheckIn = "",
+  defaultCheckOut = "",
+  onAddHotel,
+}: TripHotelSearchProps) {
   const [city, setCity] = useState(defaultCity);
-  const [cityIata, setCityIata] = useState("");
+  const [cityIata, setCityIata] = useState(defaultCityIata);
   const [checkIn, setCheckIn] = useState(defaultCheckIn);
   const [checkOut, setCheckOut] = useState(defaultCheckOut);
   const [guests, setGuests] = useState(2);
@@ -163,9 +170,10 @@ export function TripHotelSearch({ defaultCity = "", defaultCheckIn = "", default
 
   useEffect(() => {
     setCity(defaultCity);
+    setCityIata(defaultCityIata);
     setCheckIn(defaultCheckIn);
     setCheckOut(defaultCheckOut);
-  }, [defaultCity, defaultCheckIn, defaultCheckOut]);
+  }, [defaultCity, defaultCityIata, defaultCheckIn, defaultCheckOut]);
 
   const runSearch = async (): Promise<void> => {
     const destination = cityIata || city.trim();
@@ -206,18 +214,22 @@ export function TripHotelSearch({ defaultCity = "", defaultCheckIn = "", default
       });
       const payload = (await response.json()) as {
         error?: string;
+        detail?: { errors?: Array<{ message?: string }> };
         hotels?: RankedHotelSearchResult[];
         city?: string;
         memorySummary?: string | null;
       };
       if (!response.ok) {
-        setError(payload.error ?? "Hotel search failed.");
+        const duffelMessage = payload.detail?.errors?.[0]?.message;
+        setError(payload.error ?? duffelMessage ?? "Hotel search failed.");
         return;
       }
       setResults(payload.hotels ?? []);
       setResolvedCity(payload.city ?? destination);
       setMemorySummary(payload.memorySummary ?? null);
-      if (!(payload.hotels?.length ?? 0)) {
+      if (payload.error) {
+        setError(payload.error);
+      } else if (!(payload.hotels?.length ?? 0)) {
         setError(`No hotels found near ${payload.city ?? destination}. Try different dates or a nearby airport code.`);
       }
     } catch {

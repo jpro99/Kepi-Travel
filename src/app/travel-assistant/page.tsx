@@ -63,7 +63,9 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { OnboardingFlow } from "@/components/onboarding/OnboardingFlow";
 import type { TripSetupDraft } from "@/components/onboarding/TripSetupForm";
 import { TripPlanningWizard } from "@/components/travelAssistant/TripPlanningWizard";
+import { HotelSearchModal } from "@/components/travelAssistant/HotelSearchModal";
 import type { HotelSearchResult } from "@/lib/hotels/types";
+import { deriveHotelSearchContext } from "@/lib/hotels/tripSearchContext";
 import { MyTripsModal } from "@/components/travelAssistant/MyTripsModal";
 import { isEmptyTripShell, type TripListRowInput } from "@/lib/travelAssistant/tripListDisplay";
 import {
@@ -1873,6 +1875,8 @@ export default function TravelAssistantPage() {
   const [showAdvancedShortcut] = useState(false);
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [manualReservationModalOpen, setManualReservationModalOpen] = useState(false);
+  const [manualReservationPresetType, setManualReservationPresetType] = useState<"flight" | "hotel" | null>(null);
+  const [hotelSearchModalOpen, setHotelSearchModalOpen] = useState(false);
   const [tripPlanningWizardOpen, setTripPlanningWizardOpen] = useState(false);
   const [tripPlanningWizardPhase, setTripPlanningWizardPhase] = useState<BookingWizardPhase>("setup");
   const [myTripsModalOpen, setMyTripsModalOpen] = useState(false);
@@ -3803,15 +3807,6 @@ export default function TravelAssistantPage() {
     () => consumerDisplayReservations.filter((reservation) => reservation.type === "hotel").length,
     [consumerDisplayReservations],
   );
-  const tripPlanningInitialDraft = useMemo(
-    () => ({
-      tripName: activeTrip?.name && !/^trip \d+$/iu.test(activeTrip.name.trim()) ? activeTrip.name : "",
-      destination: isTripDestinationPlaceholder(activeTrip?.destination) ? "" : (activeTrip?.destination ?? ""),
-      departureDate: activeTrip?.startDate?.slice(0, 10) ?? "",
-      returnDate: activeTrip?.endDate?.slice(0, 10) ?? "",
-    }),
-    [activeTrip?.destination, activeTrip?.endDate, activeTrip?.name, activeTrip?.startDate],
-  );
   const delayedFlight = useMemo(
     () =>
       reservations.find(
@@ -4048,6 +4043,44 @@ export default function TravelAssistantPage() {
     const currentStartDate = activeTrip?.startDate?.trim() ?? "";
     return currentStartDate || null;
   }, [activeTrip?.startDate, derivedTripStartDate]);
+
+  const hotelSearchDefaults = useMemo(
+    () =>
+      deriveHotelSearchContext({
+        tripDestination: consumerTripDestination ?? activeTrip?.destination,
+        tripStartDate: consumerTripStartDate ?? activeTrip?.startDate,
+        tripEndDate: activeTrip?.endDate,
+        flights: consumerReservationsSorted.filter((reservation) => reservation.type === "flight"),
+        hotels: consumerReservationsSorted.filter((reservation) => reservation.type === "hotel"),
+      }),
+    [
+      activeTrip?.destination,
+      activeTrip?.endDate,
+      activeTrip?.startDate,
+      consumerReservationsSorted,
+      consumerTripDestination,
+      consumerTripStartDate,
+    ],
+  );
+  const tripPlanningInitialDraft = useMemo(
+    () => ({
+      tripName: activeTrip?.name && !/^trip \d+$/iu.test(activeTrip.name.trim()) ? activeTrip.name : "",
+      destination:
+        hotelSearchDefaults.city ||
+        (isTripDestinationPlaceholder(activeTrip?.destination) ? "" : (activeTrip?.destination ?? "")),
+      departureDate: hotelSearchDefaults.checkIn || activeTrip?.startDate?.slice(0, 10) || "",
+      returnDate: hotelSearchDefaults.checkOut || activeTrip?.endDate?.slice(0, 10) || "",
+    }),
+    [
+      activeTrip?.destination,
+      activeTrip?.endDate,
+      activeTrip?.name,
+      activeTrip?.startDate,
+      hotelSearchDefaults.checkIn,
+      hotelSearchDefaults.checkOut,
+      hotelSearchDefaults.city,
+    ],
+  );
 
   // ── Single source of truth: where is the user right now in their journey? ──
   // Apple principle: one phase drives the entire app — Trip, Flights, everything.
@@ -4922,10 +4955,20 @@ export default function TravelAssistantPage() {
         reservationId: reservation.id,
       });
       setManualReservationModalOpen(false);
+      setManualReservationPresetType(null);
       setToast("Reservation added ✓");
     },
     [activeTripId, pushUndoSnapshot, queueMutation, setToast, trips],
   );
+
+  const openHotelSearchForTrip = useCallback((): void => {
+    setHotelSearchModalOpen(true);
+  }, []);
+
+  const openManualHotelReservation = useCallback((): void => {
+    setManualReservationPresetType("hotel");
+    setManualReservationModalOpen(true);
+  }, []);
 
   const handleAddHotelFromSearch = useCallback(
     (hotel: HotelSearchResult): void => {
@@ -7354,10 +7397,26 @@ export default function TravelAssistantPage() {
         onAdjustTrip={() => void handleAdjustTripPlanning()}
         onCopyForward={() => void handleCopyForwardAddress(emptyStateForwardAddress)}
         onAddManual={() => {
+          const preset = tripPlanningWizardPhase === "hotels" ? "hotel" : "flight";
           setTripPlanningWizardOpen(false);
+          setManualReservationPresetType(preset);
           setManualReservationModalOpen(true);
         }}
         onAddHotelFromSearch={handleAddHotelFromSearch}
+        hotelSearchCity={hotelSearchDefaults.city}
+        hotelSearchCityIata={hotelSearchDefaults.cityIata}
+        hotelSearchCheckIn={hotelSearchDefaults.checkIn}
+        hotelSearchCheckOut={hotelSearchDefaults.checkOut}
+      />
+      <HotelSearchModal
+        open={hotelSearchModalOpen}
+        tripName={activeTrip?.name}
+        defaultCity={hotelSearchDefaults.city}
+        defaultCityIata={hotelSearchDefaults.cityIata}
+        defaultCheckIn={hotelSearchDefaults.checkIn}
+        defaultCheckOut={hotelSearchDefaults.checkOut}
+        onClose={() => setHotelSearchModalOpen(false)}
+        onAddHotel={handleAddHotelFromSearch}
       />
     </>
   );
@@ -7918,11 +7977,8 @@ export default function TravelAssistantPage() {
               onReservationTap={(id) => openDrawer("reservation", id)}
               onCheckStatus={(id) => void handleCheckFlightStatus(id)}
               onDelete={(id) => void handleDeleteReservation(id)}
-              onAdd={() => setManualReservationModalOpen(true)}
-              onSearchHotels={() => {
-                setTripPlanningWizardPhase("hotels");
-                setTripPlanningWizardOpen(true);
-              }}
+              onAdd={openManualHotelReservation}
+              onSearchHotels={openHotelSearchForTrip}
             />
           ) : (
             <section className="space-y-3">
@@ -8287,9 +8343,14 @@ export default function TravelAssistantPage() {
         )}
         {manualReservationModalOpen ? (
           <ManualReservationEntryModal
+            key={manualReservationPresetType ?? "default"}
             familyMembers={familyMembers.map((member) => ({ id: member.id, name: member.name }))}
             defaultAssignedTo={[selectedFamilyMember.id]}
-            onClose={() => setManualReservationModalOpen(false)}
+            defaultReservationType={manualReservationPresetType ?? "flight"}
+            onClose={() => {
+              setManualReservationModalOpen(false);
+              setManualReservationPresetType(null);
+            }}
             onSave={handleSaveManualReservation}
           />
         ) : null}

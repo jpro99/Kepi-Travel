@@ -28,6 +28,10 @@ export interface TripPlanningWizardProps {
   onCopyForward: () => void;
   onAddManual: () => void;
   onAddHotelFromSearch?: (hotel: HotelSearchResult) => void;
+  hotelSearchCity?: string;
+  hotelSearchCityIata?: string;
+  hotelSearchCheckIn?: string;
+  hotelSearchCheckOut?: string;
 }
 
 function phaseLabel(phase: BookingWizardPhase): string {
@@ -53,6 +57,10 @@ export function TripPlanningWizard({
   onCopyForward,
   onAddManual,
   onAddHotelFromSearch,
+  hotelSearchCity = "",
+  hotelSearchCityIata = "",
+  hotelSearchCheckIn = "",
+  hotelSearchCheckOut = "",
 }: TripPlanningWizardProps) {
   const [draft, setDraft] = useState<TripSetupDraft>({
     ...EMPTY_TRIP_SETUP_DRAFT,
@@ -193,9 +201,10 @@ export function TripPlanningWizard({
               </div>
               {onAddHotelFromSearch ? (
                 <TripHotelSearch
-                  defaultCity={draft.destination}
-                  defaultCheckIn={draft.departureDate}
-                  defaultCheckOut={draft.returnDate}
+                  defaultCity={hotelSearchCity || draft.destination}
+                  defaultCityIata={hotelSearchCityIata}
+                  defaultCheckIn={hotelSearchCheckIn || draft.departureDate}
+                  defaultCheckOut={hotelSearchCheckOut || draft.returnDate}
                   onAddHotel={onAddHotelFromSearch}
                 />
               ) : null}
