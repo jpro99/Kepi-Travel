@@ -17,6 +17,8 @@ export const HOTEL_CITY_COORDS: Record<string, { lat: number; lng: number; name:
   MCO: { lat: 28.5383, lng: -81.3792, name: "Orlando" },
   HNL: { lat: 21.3069, lng: -157.8583, name: "Honolulu" },
   BRI: { lat: 41.1177, lng: 16.8512, name: "Bari" },
+  BDS: { lat: 40.6383, lng: 17.9461, name: "Brindisi" },
+  MONOPOLI: { lat: 40.9526, lng: 17.2972, name: "Monopoli" },
   FCO: { lat: 41.9028, lng: 12.4964, name: "Rome" },
   MXP: { lat: 45.4642, lng: 9.19, name: "Milan" },
   VCE: { lat: 45.4408, lng: 12.3155, name: "Venice" },

@@ -165,6 +165,8 @@ export function TripHotelSearch({
   const [results, setResults] = useState<RankedHotelSearchResult[]>([]);
   const [resolvedCity, setResolvedCity] = useState<string | null>(null);
   const [memorySummary, setMemorySummary] = useState<string | null>(null);
+  const [searchNotice, setSearchNotice] = useState<string | null>(null);
+  const [searchSource, setSearchSource] = useState<"duffel" | "estimated" | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
 
@@ -198,6 +200,8 @@ export function TripHotelSearch({
     setError(null);
     setResults([]);
     setDismissedIds(new Set());
+    setSearchNotice(null);
+    setSearchSource(null);
     setShowResults(true);
 
     try {
@@ -218,6 +222,8 @@ export function TripHotelSearch({
         hotels?: RankedHotelSearchResult[];
         city?: string;
         memorySummary?: string | null;
+        notice?: string;
+        source?: "duffel" | "estimated";
       };
       if (!response.ok) {
         const duffelMessage = payload.detail?.errors?.[0]?.message;
@@ -227,9 +233,13 @@ export function TripHotelSearch({
       setResults(payload.hotels ?? []);
       setResolvedCity(payload.city ?? destination);
       setMemorySummary(payload.memorySummary ?? null);
-      if (payload.error) {
+      setSearchNotice(payload.notice ?? null);
+      setSearchSource(payload.source ?? null);
+      if ((payload.hotels?.length ?? 0) > 0) {
+        setError(null);
+      } else if (payload.error) {
         setError(payload.error);
-      } else if (!(payload.hotels?.length ?? 0)) {
+      } else {
         setError(`No hotels found near ${payload.city ?? destination}. Try different dates or a nearby airport code.`);
       }
     } catch {
@@ -346,6 +356,25 @@ export function TripHotelSearch({
               Edit search
             </button>
           </div>
+
+          {searchNotice ? (
+            <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+              {searchNotice}
+              {searchSource === "estimated" ? (
+                <>
+                  {" "}
+                  <a
+                    href="https://duffel.com/docs/guides/getting-started-with-stays"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold underline"
+                  >
+                    Enable live Stays in Duffel →
+                  </a>
+                </>
+              ) : null}
+            </p>
+          ) : null}
 
           {memorySummary ? (
             <p className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">
