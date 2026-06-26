@@ -10,6 +10,8 @@ import {
   type TripSetupValidationErrors,
 } from "@/components/onboarding/TripSetupForm";
 import type { BookingWizardPhase } from "@/lib/travelAssistant/bookingWizard";
+import type { HotelSearchResult } from "@/lib/hotels/types";
+import { TripHotelSearch } from "@/components/travelAssistant/TripHotelSearch";
 
 export interface TripPlanningWizardProps {
   open: boolean;
@@ -25,6 +27,7 @@ export interface TripPlanningWizardProps {
   onAdjustTrip: () => void;
   onCopyForward: () => void;
   onAddManual: () => void;
+  onAddHotelFromSearch?: (hotel: HotelSearchResult) => void;
 }
 
 function phaseLabel(phase: BookingWizardPhase): string {
@@ -49,6 +52,7 @@ export function TripPlanningWizard({
   onAdjustTrip,
   onCopyForward,
   onAddManual,
+  onAddHotelFromSearch,
 }: TripPlanningWizardProps) {
   const [draft, setDraft] = useState<TripSetupDraft>({
     ...EMPTY_TRIP_SETUP_DRAFT,
@@ -181,17 +185,25 @@ export function TripPlanningWizard({
           {wizardPhase === "hotels" ? (
             <div className="space-y-4">
               <p className="text-sm text-slate-600 dark:text-slate-300">
-                Forward hotel confirmations or add stays manually. Dates outside your trip window will ask you to adjust dates.
+                Search hotels in any city, forward confirmations, or add a stay manually.
               </p>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/50">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Hotels on trip</p>
                 <p className="mt-1 text-2xl font-black">{hotelCount}</p>
               </div>
+              {onAddHotelFromSearch ? (
+                <TripHotelSearch
+                  defaultCity={draft.destination}
+                  defaultCheckIn={draft.departureDate}
+                  defaultCheckOut={draft.returnDate}
+                  onAddHotel={onAddHotelFromSearch}
+                />
+              ) : null}
               <Link
-                href={`/book?planMode=hotels&prompt=${encodeURIComponent(`Hotels in ${draft.destination || "my destination"}`)}`}
-                className="block w-full rounded-2xl bg-sky-600 py-3.5 text-center text-sm font-black text-white"
+                href={`/book?tab=hotels&destination=${encodeURIComponent(draft.destination || "")}&checkIn=${encodeURIComponent(draft.departureDate)}&checkOut=${encodeURIComponent(draft.returnDate)}`}
+                className="block w-full rounded-xl border border-slate-300 py-2.5 text-center text-sm font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-200"
               >
-                Search hotels →
+                Open full booking page →
               </Link>
               <button type="button" onClick={onAddManual} className="w-full rounded-xl border border-slate-300 py-2.5 text-sm font-semibold">
                 Add hotel manually

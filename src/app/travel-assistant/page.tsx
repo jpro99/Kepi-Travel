@@ -63,11 +63,13 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { OnboardingFlow } from "@/components/onboarding/OnboardingFlow";
 import type { TripSetupDraft } from "@/components/onboarding/TripSetupForm";
 import { TripPlanningWizard } from "@/components/travelAssistant/TripPlanningWizard";
+import type { HotelSearchResult } from "@/lib/hotels/types";
 import { MyTripsModal } from "@/components/travelAssistant/MyTripsModal";
 import { isEmptyTripShell, type TripListRowInput } from "@/lib/travelAssistant/tripListDisplay";
 import {
   advanceBookingWizard,
   normalizeBookingWizard,
+  resolveBookingWizardPhase,
   type BookingWizardPhase,
 } from "@/lib/travelAssistant/bookingWizard";
 import {
@@ -75,7 +77,10 @@ import {
   computeMinutesToDeparture,
   isTripShellConfigured,
 } from "@/lib/travelAssistant/tripWindow";
-import { isPlannedReservation } from "@/lib/travelAssistant/plannedReservationMatch";
+import {
+  filterConsumerTimelineReservations,
+  isOnboardingSetupPlaceholder,
+} from "@/lib/travelAssistant/consumerTimeline";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { QuickAddLane } from "@/components/travelAssistant/QuickAddLane";
 import { ReservationList } from "@/components/travelAssistant/ReservationList";
@@ -1200,9 +1205,7 @@ function getReservationRouteLabel(reservation: Reservation): string {
 }
 
 function isOnboardingPlaceholderReservation(reservation: Reservation): boolean {
-  const provider = reservation.provider.trim().toLowerCase();
-  const notes = reservation.notes.trim().toLowerCase();
-  return provider === "onboarding setup" || notes.includes("created during onboarding");
+  return isOnboardingSetupPlaceholder(reservation);
 }
 
 function isTripNamePlaceholder(name: string | null | undefined): boolean {
@@ -1671,12 +1674,16 @@ function LoyaltyWalletSection() {
   }, []);
 
   const handleUpdate = async (next: typeof balances) => {
-    await fetch("/api/loyalty", {
+    const res = await fetch("/api/loyalty", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ balances: next }),
     });
-    setBalances(next);
+    if (!res.ok) {
+      throw new Error("Failed to save loyalty wallet");
+    }
+    const data = (await res.json()) as { balances?: typeof balances };
+    setBalances(Array.isArray(data.balances) ? data.balances : next);
   };
 
   if (!loaded) return <p className="text-sm text-slate-400 py-2">Loading wallet…</p>;
@@ -2700,10 +2707,7 @@ export default function TravelAssistantPage() {
   );
 
   const resolveTripPlanningWizardPhase = useCallback((): BookingWizardPhase => {
-    if (!activeTrip || !isTripShellConfigured(activeTrip)) {
-      return "setup";
-    }
-    return normalizeBookingWizard(activeTrip.bookingWizard).phase;
+    return resolveBookingWizardPhase(activeTrip);
   }, [activeTrip]);
 
   const handleCreateTrip = useCallback(async (): Promise<void> => {
@@ -2925,16 +2929,20 @@ export default function TravelAssistantPage() {
 
   const handleMarkBookingPhaseDone = useCallback(
     async (phase: "flights" | "hotels" | "excursions"): Promise<void> => {
-      if (!activeTripId) return;
+      if (!activeTripId) {
+        setToast("Save trip details first, then continue planning.");
+        return;
+      }
       const action =
         phase === "flights" ? "done-flights" : phase === "hotels" ? "done-hotels" : "done-excursions";
-      const bookingWizard = advanceBookingWizard(
-        normalizeBookingWizard(activeTrip?.bookingWizard),
-        action,
-      );
+      const previousWizard = normalizeBookingWizard(activeTrip?.bookingWizard);
+      const bookingWizard = advanceBookingWizard(previousWizard, action);
       const nextPhase: BookingWizardPhase =
         phase === "flights" ? "hotels" : phase === "hotels" ? "excursions" : "complete";
       setTripPlanningWizardPhase(nextPhase);
+      setTrips((previous) =>
+        previous.map((trip) => (trip.id === activeTripId ? { ...trip, bookingWizard } : trip)),
+      );
       try {
         const response = await fetch(TRIP_API_ROUTE, {
           method: "PUT",
@@ -2946,6 +2954,11 @@ export default function TravelAssistantPage() {
           }),
         });
         if (!response.ok) {
+          setTrips((previous) =>
+            previous.map((trip) =>
+              trip.id === activeTripId ? { ...trip, bookingWizard: previousWizard } : trip,
+            ),
+          );
           setTripPlanningWizardPhase(
             phase === "flights" ? "flights" : phase === "hotels" ? "hotels" : "excursions",
           );
@@ -2963,6 +2976,11 @@ export default function TravelAssistantPage() {
           setTripPlanningWizardOpen(false);
         }
       } catch {
+        setTrips((previous) =>
+          previous.map((trip) =>
+            trip.id === activeTripId ? { ...trip, bookingWizard: previousWizard } : trip,
+          ),
+        );
         setTripPlanningWizardPhase(
           phase === "flights" ? "flights" : phase === "hotels" ? "hotels" : "excursions",
         );
@@ -3753,10 +3771,7 @@ export default function TravelAssistantPage() {
 
   const advancedWorkspaceEnabled = advancedModeEnabled;
   const consumerDisplayReservations = useMemo(() => {
-    return reservations.filter(
-      (reservation) =>
-        !isOnboardingPlaceholderReservation(reservation) && !isPlannedReservation(reservation),
-    );
+    return filterConsumerTimelineReservations(reservations);
   }, [reservations]);
   const tripDaysAway = useMemo(() => {
     if (!activeTrip || consumerDisplayReservations.length === 0) {
@@ -4910,6 +4925,61 @@ export default function TravelAssistantPage() {
       setToast("Reservation added ✓");
     },
     [activeTripId, pushUndoSnapshot, queueMutation, setToast, trips],
+  );
+
+  const handleAddHotelFromSearch = useCallback(
+    (hotel: HotelSearchResult): void => {
+      const reservation: Reservation = {
+        id: nextId("res"),
+        type: "hotel",
+        title: hotel.name,
+        provider: hotel.chainName?.trim() || "Hotel",
+        localTime: `${hotel.checkIn}T15:00:00`,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Etc/UTC",
+        location: hotel.address ? `${hotel.address}, ${hotel.city}` : hotel.city,
+        confirmationCode: "",
+        assignedTo: [selectedFamilyMember.id],
+        stage: "readiness",
+        critical: false,
+        confidence: "medium",
+        notes: `From Kepi hotel search · ${hotel.currency} ${Math.round(hotel.totalPrice)} total (${Math.round(hotel.pricePerNight)}/night)`,
+        source: "manual",
+        checkOutDate: hotel.checkOut,
+        roomType: `${hotel.guests} guest${hotel.guests === 1 ? "" : "s"}`,
+      };
+      pushUndoSnapshot("Hotel added from search");
+      const existingReservations = trips.find((trip) => trip.id === (activeTripId ?? trips[0]?.id))?.reservations ?? [];
+      const nextReservations = [reservation, ...existingReservations];
+      setReservations(nextReservations);
+      const targetTripId = activeTripId ?? trips[0]?.id ?? null;
+      if (targetTripId) {
+        void fetch(TRIP_API_ROUTE, {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "update",
+            id: targetTripId,
+            patch: { reservations: nextReservations },
+          }),
+        }).then(async (response) => {
+          if (!response.ok) return;
+          const payload = (await response.json()) as { trips?: unknown[] };
+          if (Array.isArray(payload.trips)) {
+            const parsedTrips = payload.trips
+              .map((trip) => normalizeManagedTrip(trip))
+              .filter((trip): trip is ManagedTrip => trip !== null);
+            setTrips(parsedTrips);
+          }
+        });
+      }
+      queueMutation(`Added ${hotel.name} to your trip.`, {
+        key: "hotel-search-add",
+        reservationId: reservation.id,
+      });
+      setToast(`${hotel.name} added to your trip ✓`);
+    },
+    [activeTripId, pushUndoSnapshot, queueMutation, selectedFamilyMember.id, setToast, trips],
   );
 
   const handleImportParsedReservations = useCallback(
@@ -7287,6 +7357,7 @@ export default function TravelAssistantPage() {
           setTripPlanningWizardOpen(false);
           setManualReservationModalOpen(true);
         }}
+        onAddHotelFromSearch={handleAddHotelFromSearch}
       />
     </>
   );
@@ -7848,6 +7919,10 @@ export default function TravelAssistantPage() {
               onCheckStatus={(id) => void handleCheckFlightStatus(id)}
               onDelete={(id) => void handleDeleteReservation(id)}
               onAdd={() => setManualReservationModalOpen(true)}
+              onSearchHotels={() => {
+                setTripPlanningWizardPhase("hotels");
+                setTripPlanningWizardOpen(true);
+              }}
             />
           ) : (
             <section className="space-y-3">

@@ -3,14 +3,11 @@
 import { useState } from "react";
 import { LOYALTY_PROGRAMS } from "@/lib/loyalty/programs";
 import type { LoyaltyBalance } from "@/lib/loyalty/optimizer";
+import { hasStoredLoyaltyEntry } from "@/lib/loyalty/walletBalances";
 
 interface LoyaltyWalletProps {
   balances: LoyaltyBalance[];
   onUpdate: (balances: LoyaltyBalance[]) => Promise<void>;
-}
-
-function hasStoredProgram(balance: LoyaltyBalance): boolean {
-  return balance.miles > 0 || Boolean(balance.tier?.trim()) || Boolean(balance.memberNumber?.trim());
 }
 
 export function LoyaltyWallet({ balances, onUpdate }: LoyaltyWalletProps) {
@@ -40,30 +37,36 @@ export function LoyaltyWallet({ balances, onUpdate }: LoyaltyWalletProps) {
     if (miles === 0 && !memberNumber && !tier) return;
 
     setSaving(true);
-    const next = balances.filter((b) => b.programId !== programId);
-    next.push({
-      programId,
-      miles,
-      tier: tier || undefined,
-      memberNumber: memberNumber || undefined,
-    });
-    await onUpdate(next);
-    setSaving(false);
-    setEditing(null);
+    try {
+      const next = balances.filter((b) => b.programId !== programId);
+      next.push({
+        programId,
+        miles,
+        tier: tier || undefined,
+        memberNumber: memberNumber || undefined,
+      });
+      await onUpdate(next);
+      setEditing(null);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const remove = async (programId: string) => {
     setSaving(true);
-    await onUpdate(balances.filter((b) => b.programId !== programId));
-    setSaving(false);
-    setEditing(null);
+    try {
+      await onUpdate(balances.filter((b) => b.programId !== programId));
+      setEditing(null);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const activePrograms = LOYALTY_PROGRAMS.filter((p) => {
     const bal = getBalance(p.id);
-    return bal && hasStoredProgram(bal);
+    return bal && hasStoredLoyaltyEntry(bal);
   });
-  const inactivePrograms = LOYALTY_PROGRAMS.filter((p) => !getBalance(p.id) || !hasStoredProgram(getBalance(p.id)!));
+  const inactivePrograms = LOYALTY_PROGRAMS.filter((p) => !getBalance(p.id) || !hasStoredLoyaltyEntry(getBalance(p.id)!));
 
   const totalCashValue = balances.reduce((sum, b) => {
     const prog = LOYALTY_PROGRAMS.find((p) => p.id === b.programId);

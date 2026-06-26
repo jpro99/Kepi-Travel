@@ -8,10 +8,13 @@ import {
   upsertReservationReplacingPlanned,
 } from "@/lib/travelAssistant/plannedReservationMatch";
 
-test("isPlannedReservation detects plannedOnly and PLANNED code", () => {
+test("isPlannedReservation detects plannedOnly, PLANNED code, and flight/hotel placeholder codes", () => {
   assert.equal(isPlannedReservation({ type: "flight", confirmationCode: "PLANNED", plannedOnly: true }), true);
   assert.equal(isPlannedReservation({ type: "flight", confirmationCode: "PLANNED" }), true);
+  assert.equal(isPlannedReservation({ type: "flight", confirmationCode: "PENDING" }), true);
+  assert.equal(isPlannedReservation({ type: "hotel", confirmationCode: "SELECTED" }), true);
   assert.equal(isPlannedReservation({ type: "flight", confirmationCode: "ABC123" }), false);
+  assert.equal(isPlannedReservation({ type: "train", confirmationCode: "PENDING" }), false);
 });
 
 test("matchesPlannedFlight by route and date", () => {

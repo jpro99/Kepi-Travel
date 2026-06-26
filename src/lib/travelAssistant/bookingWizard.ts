@@ -1,5 +1,7 @@
 /** Guided trip booking phases — flights → hotels → excursions. */
 
+import { isTripShellConfigured } from "@/lib/travelAssistant/tripWindow";
+
 export type BookingWizardPhase = "setup" | "flights" | "hotels" | "excursions" | "complete";
 
 export interface BookingWizardProgress {
@@ -8,6 +10,16 @@ export interface BookingWizardProgress {
   hotelsDone: boolean;
   excursionsDone: boolean;
   updatedAt: string;
+  /** True when user explicitly opened setup to edit trip details. */
+  setupEdit?: boolean;
+}
+
+export interface TripWizardPhaseInput {
+  name?: string;
+  destination?: string;
+  startDate?: string;
+  endDate?: string;
+  bookingWizard?: unknown;
 }
 
 export const EMPTY_BOOKING_WIZARD: BookingWizardProgress = {
@@ -32,7 +44,23 @@ export function normalizeBookingWizard(value: unknown): BookingWizardProgress {
     hotelsDone: Boolean(record.hotelsDone),
     excursionsDone: Boolean(record.excursionsDone),
     updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : new Date().toISOString(),
+    setupEdit: Boolean(record.setupEdit),
   };
+}
+
+/** Resolve which wizard step to show when opening plan-my-trip. */
+export function resolveBookingWizardPhase(trip: TripWizardPhaseInput | null | undefined): BookingWizardPhase {
+  if (!trip || !isTripShellConfigured(trip)) {
+    return "setup";
+  }
+  if (!trip.bookingWizard) {
+    return "flights";
+  }
+  const wizard = normalizeBookingWizard(trip.bookingWizard);
+  if (wizard.phase === "setup" && !wizard.setupEdit) {
+    return "flights";
+  }
+  return wizard.phase;
 }
 
 export function advanceBookingWizard(
@@ -41,10 +69,17 @@ export function advanceBookingWizard(
 ): BookingWizardProgress {
   const now = new Date().toISOString();
   if (action === "adjust") {
-    return { ...current, phase: "setup", updatedAt: now };
+    return { ...current, phase: "setup", setupEdit: true, updatedAt: now };
   }
   if (action === "complete-setup") {
-    return { phase: "flights", flightsDone: false, hotelsDone: false, excursionsDone: false, updatedAt: now };
+    return {
+      phase: "flights",
+      flightsDone: false,
+      hotelsDone: false,
+      excursionsDone: false,
+      setupEdit: false,
+      updatedAt: now,
+    };
   }
   if (action === "done-flights") {
     return { ...current, phase: "hotels", flightsDone: true, updatedAt: now };

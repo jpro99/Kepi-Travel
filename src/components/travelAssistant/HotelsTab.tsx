@@ -21,6 +21,7 @@ interface HotelsTabProps {
   onCheckStatus: (id: string) => void;
   onDelete: (id: string) => void;
   onAdd: () => void;
+  onSearchHotels?: () => void;
 }
 
 function fmtDate(localTime: string): string {
@@ -59,7 +60,7 @@ function cityEmoji(location: string): string {
   return "🏨";
 }
 
-export function HotelsTab({ reservations, onReservationTap, onCheckStatus, onDelete, onAdd }: HotelsTabProps) {
+export function HotelsTab({ reservations, onReservationTap, onCheckStatus, onDelete, onAdd, onSearchHotels }: HotelsTabProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showPast, setShowPast] = useState(false);
 
@@ -95,8 +96,17 @@ export function HotelsTab({ reservations, onReservationTap, onCheckStatus, onDel
           <p className="text-4xl mb-3">🏨</p>
           <p className="font-semibold text-slate-900 dark:text-white">No hotels yet</p>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">
-            Forward a hotel confirmation email or add manually
+            Search for a hotel in your destination or forward a confirmation email
           </p>
+          {onSearchHotels ? (
+            <button
+              type="button"
+              onClick={onSearchHotels}
+              className="mb-3 w-full rounded-full bg-sky-600 px-6 py-2.5 text-sm font-semibold text-white"
+            >
+              Search hotels
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={onAdd}

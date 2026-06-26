@@ -22,6 +22,9 @@ export interface PlannedMatchableReservation {
 
 export function isPlannedReservation(reservation: PlannedMatchableReservation): boolean {
   if (reservation.plannedOnly === true) return true;
+  if (reservation.type === "flight" || reservation.type === "hotel") {
+    return isPlaceholderConfirmation(reservation.confirmationCode);
+  }
   const code = reservation.confirmationCode?.trim().toUpperCase() ?? "";
   return code === "PLANNED";
 }

@@ -98,7 +98,11 @@ export default function TravelProfileSettingsPage() {
           <a href="/book" className="text-blue-600 underline">
             /book
           </a>{" "}
-          — no more retyping &quot;Alaska Gold&quot; every time.
+          — no more retyping &quot;Alaska Gold&quot; every time. Manage member numbers, miles, and program status in the{" "}
+          <a href="/travel-assistant?tab=more" className="text-blue-600 underline">
+            Loyalty Wallet
+          </a>
+          .
         </p>
         {saving ? <p className="mt-2 text-xs text-blue-600">Saving…</p> : null}
         {!saving && savedAt ? <p className="mt-2 text-xs text-emerald-600">Saved.</p> : null}
