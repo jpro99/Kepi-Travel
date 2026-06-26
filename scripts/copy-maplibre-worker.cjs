@@ -8,13 +8,25 @@ const destDir = path.join(__dirname, "../public");
 const dest = path.join(destDir, WORKER);
 
 function resolveWorkerSrc() {
-  let pkgRoot;
+  const fallbackPkgRoot = path.join(__dirname, "../node_modules/maplibre-gl");
+  let pkgRoot = null;
+
   try {
     pkgRoot = path.dirname(
       require.resolve("maplibre-gl/package.json", { paths: [__dirname] }),
     );
   } catch {
-    pkgRoot = path.join(__dirname, "../node_modules/maplibre-gl");
+    if (fs.existsSync(fallbackPkgRoot)) {
+      pkgRoot = fallbackPkgRoot;
+    }
+  }
+
+  if (!pkgRoot) {
+    console.warn(
+      "copy-maplibre-worker: maplibre-gl is not installed; skipping worker copy",
+    );
+    console.warn("  run: npm install");
+    return null;
   }
 
   const candidates = [
@@ -33,6 +45,10 @@ function resolveWorkerSrc() {
 }
 
 const src = resolveWorkerSrc();
+if (!src) {
+  process.exit(0);
+}
+
 fs.mkdirSync(destDir, { recursive: true });
 
 const srcStat = fs.statSync(src);
