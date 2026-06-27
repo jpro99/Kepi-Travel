@@ -5,6 +5,7 @@ import {
   deriveStopRangesFromDayNotes,
   extractExplicitStayWindows,
   mergeStopRanges,
+  pickPrimaryStayPerCity,
   resolveEffectiveStopRanges,
 } from "./dayNoteStopRanges";
 
@@ -71,6 +72,21 @@ test("resolveEffectiveStopRanges uses explicit arrive/leave note over intent", (
   assert.equal(effective.length, 1);
   assert.equal(effective[0]?.checkIn, "2026-09-02");
   assert.equal(effective[0]?.checkOut, "2026-09-05");
+});
+
+test("pickPrimaryStayPerCity keeps one block per city with the longest stay", () => {
+  const picked = pickPrimaryStayPerCity([
+    { stop: { name: "Polignano a Mare" }, checkIn: "2026-09-01", checkOut: "2026-09-05", nights: 4 },
+    { stop: { name: "Monopoli, Italy" }, checkIn: "2026-09-05", checkOut: "2026-09-06", nights: 1 },
+    { stop: { name: "Polignano Amar" }, checkIn: "2026-09-06", checkOut: "2026-09-08", nights: 2 },
+    { stop: { name: "Polignano a Mare" }, checkIn: "2026-09-09", checkOut: "2026-09-12", nights: 3 },
+    { stop: { name: "Venice" }, checkIn: "2026-09-12", checkOut: "2026-09-13", nights: 1 },
+  ]);
+  assert.equal(picked.length, 3);
+  const polignano = picked.find((row) => row.stop.name.toLowerCase().includes("polignano"));
+  assert.equal(polignano?.checkIn, "2026-09-01");
+  assert.equal(polignano?.checkOut, "2026-09-05");
+  assert.equal(polignano?.nights, 4);
 });
 
 test("deriveStopRangesFromDayNotes builds one continuous range when city is consistent", () => {

@@ -30,8 +30,8 @@ export function HotelSearchModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[85] flex items-end justify-center bg-slate-950/70 p-0 sm:items-center sm:p-4 md:p-6 lg:p-8">
-      <div className={SEARCH_MODAL_PANEL}>
+    <div className="fixed inset-0 z-[85] flex items-end justify-center bg-slate-950/70 p-0 sm:items-center sm:p-3 md:p-4">
+      <div className={`${SEARCH_MODAL_PANEL} max-h-[96dvh] w-full max-w-[98vw] sm:max-w-[98vw] lg:max-w-6xl xl:max-w-7xl`}>
         <header className="border-b border-slate-200 px-4 py-3 dark:border-slate-800 md:px-5">
           <div className="flex items-start justify-between gap-3">
             <div>

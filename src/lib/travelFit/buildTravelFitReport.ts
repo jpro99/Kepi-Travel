@@ -150,13 +150,16 @@ export function buildTravelFitReport(input: {
     typicalNightlyUsd: habits.typicalHotelNightlyUsd,
   });
 
-  const earnStackPreview = suggestEarnStack({
-    context: "hotel",
-    habits,
-    pointsProfile: input.pointsProfile ?? null,
-    topHotelChain: hotelFit[0]?.program,
-    topAirline: airlineFit[0]?.program,
-  });
+  const hasHotelBooking = input.reservations.some((r) => r.type === "hotel");
+  const earnStackPreview = hasHotelBooking
+    ? suggestEarnStack({
+        context: "hotel",
+        habits,
+        pointsProfile: input.pointsProfile ?? null,
+        topHotelChain: hotelFit[0]?.program,
+        topAirline: airlineFit[0]?.program,
+      })
+    : null;
 
   return {
     generatedAt: new Date().toISOString(),

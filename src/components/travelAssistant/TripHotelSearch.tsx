@@ -245,7 +245,11 @@ export function TripHotelSearch({
         setHotelsWithCoords(
           attachHotelCoordinates(payload.hotels ?? [], payload.resolved.lat, payload.resolved.lng),
         );
+      } else if ((payload.hotels?.length ?? 0) > 0) {
+        setCityCenter(null);
+        setHotelsWithCoords([]);
       } else {
+        setCityCenter(null);
         setHotelsWithCoords([]);
       }
       setLearningNote(null);
@@ -255,6 +259,9 @@ export function TripHotelSearch({
       setMapBounds(null);
       if ((payload.hotels?.length ?? 0) === 0) {
         setError(payload.error ?? `No hotels found near ${payload.city ?? destination}.`);
+      }
+      if (!payload.resolved?.lat && payload.city) {
+        setError((prev) => prev ?? `Could not place ${payload.city} on the map. Try an airport code (e.g. BRI).`);
       }
     } catch {
       setError("Connection error — try again.");
@@ -456,52 +463,59 @@ export function TripHotelSearch({
 
           {!loading ? renderErrorWithSuggestions() : null}
 
-          {!loading && visibleResults.length > 0 && resultsView === "map" && cityCenter ? (
-            <div className="grid gap-3 lg:grid-cols-[1.15fr_0.85fr]">
-              <div className="space-y-3">
-                <HotelStayMap
-                  city={resolvedCity ?? city}
-                  centerLat={cityCenter.lat}
-                  centerLng={cityCenter.lng}
-                  hotels={mappedHotels}
-                  selectedId={mapSelectedId}
-                  onSelect={openDetail}
-                  onBoundsChange={setMapBounds}
-                />
-                {detailHotel ? (
-                  <HotelDetailSheet
-                    hotel={detailHotel}
-                    allHotels={visibleResults}
-                    city={resolvedCity ?? city}
-                    saved={savedHotelIds.has(detailHotel.id)}
-                    onSaveToTrip={() => handleSaveToTrip(detailHotel)}
-                    onClose={() => setDetailHotelId(null)}
-                  />
-                ) : (
-                  <p className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-center text-[11px] text-slate-500 dark:border-slate-700">
-                    Tap a price pin or hotel below to see photos, rooms, and booking options.
-                  </p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  {mapBounds ? `${hotelsInView.length} in this area` : "All hotels"}
+          {!loading && showResults && resultsView === "map" && cityCenter ? (
+            <div className="flex flex-col gap-3">
+              <HotelStayMap
+                city={resolvedCity ?? city}
+                centerLat={cityCenter.lat}
+                centerLng={cityCenter.lng}
+                hotels={mappedHotels}
+                selectedId={mapSelectedId}
+                onSelect={openDetail}
+                onBoundsChange={setMapBounds}
+                expanded
+              />
+              {visibleResults.length === 0 ? (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                  {error ?? "No hotels matched these dates. Try different dates or tap Edit to change the destination."}
                 </p>
-                <div className="max-h-80 space-y-1.5 overflow-y-auto lg:max-h-[32rem]">
-                  {(mapBounds ? hotelsInView : mappedHotels).map((hotel) => (
-                    <HotelRankCard
-                      key={hotel.id}
-                      hotel={hotel}
-                      totalInSearch={results.length}
-                      compact
-                      selected={mapSelectedId === hotel.id}
-                      onSelect={() => openDetail(hotel)}
-                      onAdd={() => openDetail(hotel)}
-                      onDismiss={() => handleDismiss(hotel)}
+              ) : (
+                <>
+                  {detailHotel ? (
+                    <HotelDetailSheet
+                      hotel={detailHotel}
+                      allHotels={visibleResults}
+                      city={resolvedCity ?? city}
+                      saved={savedHotelIds.has(detailHotel.id)}
+                      onSaveToTrip={() => handleSaveToTrip(detailHotel)}
+                      onClose={() => setDetailHotelId(null)}
                     />
-                  ))}
-                </div>
-              </div>
+                  ) : (
+                    <p className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-center text-[11px] text-slate-500 dark:border-slate-700">
+                      Tap a price pin or hotel below to see photos, rooms, and booking options.
+                    </p>
+                  )}
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      {mapBounds ? `${hotelsInView.length} in this area` : `${mappedHotels.length} on map`}
+                    </p>
+                    <div className="max-h-64 space-y-1.5 overflow-y-auto lg:max-h-72">
+                      {(mapBounds ? hotelsInView : mappedHotels).map((hotel) => (
+                        <HotelRankCard
+                          key={hotel.id}
+                          hotel={hotel}
+                          totalInSearch={results.length}
+                          compact
+                          selected={mapSelectedId === hotel.id}
+                          onSelect={() => openDetail(hotel)}
+                          onAdd={() => openDetail(hotel)}
+                          onDismiss={() => handleDismiss(hotel)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           ) : null}
 

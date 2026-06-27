@@ -147,7 +147,9 @@ export function HotelsTab({
         </div>
       </div>
 
-      {travelFitReservations.length > 0 ? <TravelFitEarnBar reservations={travelFitReservations} /> : null}
+      {travelFitReservations.some((r) => r.type === "hotel") && plannedStayCities.length === 0 ? (
+        <TravelFitEarnBar reservations={travelFitReservations.filter((r) => r.type === "hotel")} />
+      ) : null}
 
       {plannedStayCities.length > 0 && onPickPlannedCity ? (
         <TripHotelCityPicker

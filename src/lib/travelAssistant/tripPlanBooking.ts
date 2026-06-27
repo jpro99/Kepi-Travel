@@ -2,7 +2,7 @@ import { buildFlightLegsFromIntent } from "@/lib/decision/flightLegPlanner";
 import { buildGoogleFlightsUrl } from "@/lib/decision/bookingLinks";
 import type { FlightLegPlan, TripIntent } from "@/lib/decision/types";
 import type { StopDateRange } from "@/lib/decision/stopDates";
-import { mergeStopRanges } from "@/lib/travelAssistant/dayNoteStopRanges";
+import { mergeStopRanges, pickPrimaryStayPerCity } from "@/lib/travelAssistant/dayNoteStopRanges";
 import { formatHotelSearchCityLabel } from "@/lib/hotels/tripSearchContext";
 import { parseDayIntentFromLines } from "@/lib/travelAssistant/dayPlanLines";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
@@ -79,7 +79,7 @@ export function buildPlannedStayCities(
   stopRanges: StopDateRange[],
   hotels: TripHotelInput[],
 ): PlannedStayCity[] {
-  const merged = mergeStopRanges(stopRanges);
+  const merged = pickPrimaryStayPerCity(mergeStopRanges(stopRanges));
   return merged.map((range, index) => {
     const formatted = formatHotelSearchCityLabel(range.stop.name);
     const city = formatted.label || range.stop.name;

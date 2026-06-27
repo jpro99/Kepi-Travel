@@ -22,6 +22,7 @@ interface HotelStayMapProps {
   selectedId: string | null;
   onSelect: (hotel: RankedHotelSearchResult) => void;
   onBoundsChange?: (bounds: MapBounds) => void;
+  expanded?: boolean;
 }
 
 function createPricePin(
@@ -77,6 +78,7 @@ export function HotelStayMap({
   selectedId,
   onSelect,
   onBoundsChange,
+  expanded = false,
 }: HotelStayMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import("maplibre-gl").Map | null>(null);
@@ -261,7 +263,9 @@ export function HotelStayMap({
 
       <div
         ref={containerRef}
-        className="h-64 w-full overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 md:h-80 lg:h-[28rem]"
+        className={`w-full overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 ${
+          expanded ? "h-[52vh] min-h-[22rem] md:h-[58vh] lg:min-h-[28rem]" : "h-64 md:h-80 lg:h-[28rem]"
+        }`}
       />
 
       <p className="text-[10px] text-slate-500">

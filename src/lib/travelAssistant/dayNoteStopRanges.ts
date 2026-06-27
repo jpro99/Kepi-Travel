@@ -150,6 +150,30 @@ export function mergeStopRanges(ranges: StopDateRange[]): StopDateRange[] {
   return merged;
 }
 
+/**
+ * Hotel picker: one card per city — keep the longest stay block (base stay),
+ * not every day-note fragment or return visit.
+ */
+export function pickPrimaryStayPerCity(ranges: StopDateRange[]): StopDateRange[] {
+  const sorted = [...ranges].sort((a, b) => a.checkIn.localeCompare(b.checkIn));
+  const best = new Map<string, StopDateRange>();
+
+  for (const range of sorted) {
+    const key = normalizeStayCityKey(range.stop.name);
+    if (!key) continue;
+    const existing = best.get(key);
+    if (
+      !existing ||
+      range.nights > existing.nights ||
+      (range.nights === existing.nights && range.checkIn < existing.checkIn)
+    ) {
+      best.set(key, { ...range, stop: { ...range.stop } });
+    }
+  }
+
+  return [...best.values()].sort((a, b) => a.checkIn.localeCompare(b.checkIn));
+}
+
 /** Infer city stay ranges from per-day itinerary notes (fallback only). */
 export function deriveStopRangesFromDayNotes(
   tripStartDate: string | null | undefined,
@@ -236,14 +260,16 @@ export function resolveEffectiveStopRanges(
   tripEndDate: string | null | undefined,
   dayNotes: Record<string, string>,
 ): StopDateRange[] {
-  const explicit = mergeStopRanges(
+  const explicit = pickPrimaryStayPerCity(
     extractExplicitStayWindows(tripStartDate, tripEndDate, dayNotes),
   );
   if (explicit.length > 0) return explicit;
 
   if (intentRanges.length > 0) {
-    return mergeStopRanges(intentRanges);
+    return pickPrimaryStayPerCity(mergeStopRanges(intentRanges));
   }
 
-  return deriveStopRangesFromDayNotes(tripStartDate, tripEndDate, dayNotes);
+  return pickPrimaryStayPerCity(
+    deriveStopRangesFromDayNotes(tripStartDate, tripEndDate, dayNotes),
+  );
 }
