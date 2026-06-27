@@ -14,7 +14,7 @@ export const SEARCH_RESULTS_SHELL =
 
 /** Modal shell for in-trip hotel search. */
 export const SEARCH_MODAL_PANEL =
-  "flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl dark:bg-slate-900 sm:rounded-3xl md:max-w-2xl lg:max-w-3xl xl:max-w-4xl";
+  "flex max-h-[94dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl dark:bg-slate-900 sm:rounded-2xl md:max-w-3xl lg:max-w-5xl xl:max-w-6xl";
 
 /** Two-column results on wide screens. */
 export const SEARCH_RESULTS_GRID = "space-y-3 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0 xl:gap-5";

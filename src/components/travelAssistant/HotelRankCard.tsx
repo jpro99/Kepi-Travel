@@ -11,11 +11,72 @@ interface HotelRankCardProps {
   hotel: RankedHotelSearchResult;
   totalInSearch: number;
   featured?: boolean;
+  compact?: boolean;
+  selected?: boolean;
   onAdd: () => void;
   onDismiss: () => void;
+  onSelect?: () => void;
 }
 
-export function HotelRankCard({ hotel, totalInSearch, featured = false, onAdd, onDismiss }: HotelRankCardProps) {
+export function HotelRankCard({
+  hotel,
+  totalInSearch,
+  featured = false,
+  compact = false,
+  selected = false,
+  onAdd,
+  onDismiss,
+  onSelect,
+}: HotelRankCardProps) {
+  if (compact) {
+    return (
+      <article
+        role={onSelect ? "button" : undefined}
+        tabIndex={onSelect ? 0 : undefined}
+        onClick={onSelect}
+        onKeyDown={onSelect ? (event) => event.key === "Enter" && onSelect() : undefined}
+        className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 transition ${
+          selected
+            ? "border-emerald-500 bg-emerald-50 dark:border-emerald-600 dark:bg-emerald-950/30"
+            : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900"
+        }`}
+      >
+        <span
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-black ${
+            hotel.tier === "kepi_pick" || hotel.tier === "personal"
+              ? "bg-emerald-800 text-white"
+              : hotel.tier === "best_value"
+                ? "bg-amber-500 text-slate-900"
+                : "bg-orange-600 text-white"
+          }`}
+        >
+          #{hotel.rank}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs font-bold text-slate-900 dark:text-white">{hotel.name}</p>
+          <p className="truncate text-[10px] text-slate-500">
+            {hotel.chainName ? `${hotel.chainName} · ` : ""}
+            {hotel.rating !== undefined ? `${hotel.rating.toFixed(1)}★` : `${hotel.stars}★`}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-sm font-black text-slate-900 dark:text-white">${Math.round(hotel.pricePerNight)}</p>
+          <p className="text-[9px] text-slate-400">/ night</p>
+        </div>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onAdd();
+          }}
+          className="shrink-0 rounded-lg bg-sky-600 px-2 py-1.5 text-[10px] font-bold text-white"
+        >
+          Add
+        </button>
+      </article>
+    );
+  }
+
   const isKepiPick = hotel.tier === "kepi_pick";
   const cpp = hotel.pointsOption?.cppAchieved;
 

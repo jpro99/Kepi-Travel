@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { HotelRankCard, pickFeaturedHotels } from "@/components/travelAssistant/HotelRankCard";
+import { HotelRankCard } from "@/components/travelAssistant/HotelRankCard";
 import { HotelStayMap } from "@/components/travelAssistant/HotelStayMap";
+import { hotelMapPinStyle, fitScoreRange } from "@/lib/hotels/hotelMapColors";
 import { suggestAirports, type AirportResult } from "@/lib/airports/lookup";
 import { suggestHotelDestinations } from "@/lib/hotels/destinationAliases";
 import {
@@ -13,7 +14,7 @@ import {
 import type { HotelSearchResult, RankedHotelSearchResult } from "@/lib/hotels/types";
 
 type PayMode = "any" | "cash" | "points";
-type ResultsView = "picks" | "all" | "map";
+type ResultsView = "map" | "list";
 
 async function recordHotelMemory(event: {
   action: "saved" | "dismissed" | "liked";
@@ -134,7 +135,6 @@ function CityInput({
               <span className="w-10 shrink-0 text-xs font-black text-emerald-600">City</span>
               <span>
                 <p className="text-sm font-semibold text-slate-900 dark:text-white">{hint}</p>
-                <p className="text-xs text-slate-500">Tap to use this destination</p>
               </span>
             </button>
           ))}
@@ -163,18 +163,15 @@ export function TripHotelSearch({
   const [correctedFrom, setCorrectedFrom] = useState<string | null>(null);
   const [results, setResults] = useState<RankedHotelSearchResult[]>([]);
   const [resolvedCity, setResolvedCity] = useState<string | null>(null);
-  const [memorySummary, setMemorySummary] = useState<string | null>(null);
-  const [stayProfileSummary, setStayProfileSummary] = useState<string | null>(null);
-  const [searchNotice, setSearchNotice] = useState<string | null>(null);
-  const [searchSource, setSearchSource] = useState<"duffel" | "liteapi" | "estimated" | null>(null);
+  const [preferenceInsight, setPreferenceInsight] = useState<string | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [payMode, setPayMode] = useState<PayMode>("any");
-  const [resultsView, setResultsView] = useState<ResultsView>("picks");
-  const [showAllPicks, setShowAllPicks] = useState(false);
+  const [resultsView, setResultsView] = useState<ResultsView>("map");
   const [mapSelectedId, setMapSelectedId] = useState<string | null>(null);
   const [cityCenter, setCityCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [learningNote, setLearningNote] = useState<string | null>(null);
+  const autoSearchKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     setCity(defaultCity);
@@ -189,12 +186,8 @@ export function TripHotelSearch({
       setError("Enter a city or destination.");
       return;
     }
-    if (!checkIn.trim()) {
-      setError("Select a check-in date.");
-      return;
-    }
-    if (!checkOut.trim()) {
-      setError("Select a check-out date.");
+    if (!checkIn.trim() || !checkOut.trim()) {
+      setError("Select check-in and check-out dates.");
       return;
     }
     if (checkOut <= checkIn) {
@@ -208,21 +201,14 @@ export function TripHotelSearch({
     setCorrectedFrom(null);
     setResults([]);
     setDismissedIds(new Set());
-    setSearchNotice(null);
-    setSearchSource(null);
+    setPreferenceInsight(null);
     setShowResults(true);
 
     try {
       const response = await fetch("/api/hotels/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          destination,
-          checkIn,
-          checkOut,
-          guests,
-          rooms,
-        }),
+        body: JSON.stringify({ destination, checkIn, checkOut, guests, rooms }),
       });
       const payload = (await response.json()) as {
         error?: string;
@@ -231,37 +217,26 @@ export function TripHotelSearch({
         hotels?: RankedHotelSearchResult[];
         city?: string;
         correctedFrom?: string | null;
-        memorySummary?: string | null;
-        stayProfileSummary?: string | null;
-        notice?: string;
-        source?: "duffel" | "liteapi" | "estimated";
+        preferenceInsight?: string | null;
         resolved?: { lat: number; lng: number; iata?: string | null };
       };
       if (!response.ok) {
-        const duffelMessage = payload.detail?.errors?.[0]?.message;
-        setError(payload.error ?? duffelMessage ?? "Hotel search failed.");
+        setError(payload.error ?? payload.detail?.errors?.[0]?.message ?? "Hotel search failed.");
         setErrorSuggestions(payload.suggestions ?? []);
         return;
       }
       setResults(payload.hotels ?? []);
       setResolvedCity(payload.city ?? destination);
       setCorrectedFrom(payload.correctedFrom ?? null);
-      setMemorySummary(payload.memorySummary ?? null);
-      setStayProfileSummary(payload.stayProfileSummary ?? null);
-      setSearchNotice(payload.notice ?? null);
-      setSearchSource(payload.source ?? null);
+      setPreferenceInsight(payload.preferenceInsight ?? null);
       if (payload.resolved?.lat && payload.resolved?.lng) {
         setCityCenter({ lat: payload.resolved.lat, lng: payload.resolved.lng });
       }
       setLearningNote(null);
-      setResultsView("picks");
-      setShowAllPicks(false);
-      if ((payload.hotels?.length ?? 0) > 0) {
-        setError(null);
-      } else if (payload.error) {
-        setError(payload.error);
-      } else {
-        setError(`No hotels found near ${payload.city ?? destination}. Try different dates or a nearby airport code.`);
+      setResultsView("map");
+      setMapSelectedId(payload.hotels?.[0]?.id ?? null);
+      if ((payload.hotels?.length ?? 0) === 0) {
+        setError(payload.error ?? `No hotels found near ${payload.city ?? destination}.`);
       }
     } catch {
       setError("Connection error — try again.");
@@ -269,6 +244,15 @@ export function TripHotelSearch({
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const key = `${defaultCity}|${defaultCityIata}|${defaultCheckIn}|${defaultCheckOut}`;
+    if (!defaultCity.trim() || !defaultCheckIn || !defaultCheckOut) return;
+    if (autoSearchKeyRef.current === key) return;
+    autoSearchKeyRef.current = key;
+    void runSearch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultCity, defaultCityIata, defaultCheckIn, defaultCheckOut]);
 
   const visibleResults = useMemo(() => {
     let rows = results.filter((hotel) => !dismissedIds.has(hotel.id));
@@ -281,12 +265,8 @@ export function TripHotelSearch({
     return rows;
   }, [results, dismissedIds, payMode]);
 
-  const featuredHotels = useMemo(() => pickFeaturedHotels(visibleResults, 3), [visibleResults]);
-  const featuredIds = useMemo(() => new Set(featuredHotels.map((row) => row.id)), [featuredHotels]);
-  const moreHotels = useMemo(
-    () => visibleResults.filter((row) => !featuredIds.has(row.id)),
-    [visibleResults, featuredIds],
-  );
+  const scoreRange = useMemo(() => fitScoreRange(visibleResults), [visibleResults]);
+  const selectedHotel = visibleResults.find((row) => row.id === mapSelectedId) ?? null;
 
   const handleAdd = (hotel: RankedHotelSearchResult): void => {
     void recordHotelMemory({ action: "saved", hotel, city: resolvedCity ?? city });
@@ -296,11 +276,8 @@ export function TripHotelSearch({
   const handleDismiss = (hotel: RankedHotelSearchResult): void => {
     setDismissedIds((prev) => new Set([...prev, hotel.id]));
     void recordHotelMemory({ action: "dismissed", hotel, city: resolvedCity ?? city }).then((summary) => {
-      setLearningNote(
-        summary ??
-          `Got it — we’ll show fewer ${hotel.chainName ? `${hotel.chainName} ` : ""}options like this next time.`,
-      );
-      if (summary) setMemorySummary(summary);
+      setLearningNote(summary ?? `Got it — we'll adjust future picks.`);
+      if (summary) setPreferenceInsight(summary);
     });
   };
 
@@ -317,7 +294,7 @@ export function TripHotelSearch({
     if (!error) return null;
     return (
       <div className="space-y-2">
-        <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">{error}</p>
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">{error}</p>
         {errorSuggestions.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {errorSuggestions.map((suggestion) => (
@@ -325,7 +302,7 @@ export function TripHotelSearch({
                 key={suggestion}
                 type="button"
                 onClick={() => applyDestinationSuggestion(suggestion)}
-                className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-800 hover:bg-sky-100 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-200"
+                className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800"
               >
                 {suggestion}
               </button>
@@ -337,7 +314,7 @@ export function TripHotelSearch({
   };
 
   return (
-    <div className="space-y-4 md:space-y-5">
+    <div className="space-y-3">
       {!showResults ? (
         <>
           <CityInput
@@ -347,177 +324,82 @@ export function TripHotelSearch({
               setCity(display);
               setCityIata(iata);
             }}
-            placeholder="e.g. Rome, Bari, New York, Beaumont CA"
+            placeholder="e.g. Rome, Venice, New York"
           />
-          <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
             <div>
               <label className={SEARCH_LABEL}>Check-in</label>
-              <input
-                type="date"
-                value={checkIn}
-                min={new Date().toISOString().slice(0, 10)}
-                onChange={(event) => setCheckIn(event.target.value)}
-                className={SEARCH_INPUT_LIGHT}
-              />
+              <input type="date" value={checkIn} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setCheckIn(e.target.value)} className={SEARCH_INPUT_LIGHT} />
             </div>
             <div>
               <label className={SEARCH_LABEL}>Check-out</label>
-              <input
-                type="date"
-                value={checkOut}
-                min={checkIn || new Date().toISOString().slice(0, 10)}
-                onChange={(event) => setCheckOut(event.target.value)}
-                className={SEARCH_INPUT_LIGHT}
-              />
+              <input type="date" value={checkOut} min={checkIn || new Date().toISOString().slice(0, 10)} onChange={(e) => setCheckOut(e.target.value)} className={SEARCH_INPUT_LIGHT} />
             </div>
             <div>
               <label className={SEARCH_LABEL}>Guests</label>
-              <select
-                value={guests}
-                onChange={(event) => setGuests(Number(event.target.value))}
-                className={SEARCH_INPUT_LIGHT}
-              >
-                {[1, 2, 3, 4].map((count) => (
-                  <option key={count} value={count}>
-                    {count} {count === 1 ? "guest" : "guests"}
-                  </option>
+              <select value={guests} onChange={(e) => setGuests(Number(e.target.value))} className={SEARCH_INPUT_LIGHT}>
+                {[1, 2, 3, 4].map((n) => (
+                  <option key={n} value={n}>{n}</option>
                 ))}
               </select>
             </div>
             <div>
               <label className={SEARCH_LABEL}>Rooms</label>
-              <select
-                value={rooms}
-                onChange={(event) => setRooms(Number(event.target.value))}
-                className={SEARCH_INPUT_LIGHT}
-              >
-                {[1, 2, 3].map((count) => (
-                  <option key={count} value={count}>
-                    {count} {count === 1 ? "room" : "rooms"}
-                  </option>
+              <select value={rooms} onChange={(e) => setRooms(Number(e.target.value))} className={SEARCH_INPUT_LIGHT}>
+                {[1, 2, 3].map((n) => (
+                  <option key={n} value={n}>{n}</option>
                 ))}
               </select>
             </div>
           </div>
           {error ? renderErrorWithSuggestions() : null}
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => void runSearch()}
-            className={`${SEARCH_PRIMARY_BUTTON} bg-sky-600 text-white disabled:opacity-60`}
-          >
-            {loading ? "Searching hotels…" : "Search hotels"}
+          <button type="button" disabled={loading} onClick={() => void runSearch()} className={`${SEARCH_PRIMARY_BUTTON} bg-sky-600 text-white disabled:opacity-60`}>
+            {loading ? "Searching…" : "Search hotels"}
           </button>
         </>
       ) : (
         <>
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-sm font-bold text-slate-900 dark:text-white">{resolvedCity ?? city}</p>
-              <p className="text-xs text-slate-500">
-                {checkIn} → {checkOut}
-              </p>
+              <p className="text-[11px] text-slate-500">{checkIn} → {checkOut} · {visibleResults.length} results</p>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setShowResults(false);
-                setError(null);
-              }}
-              className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-600 dark:text-slate-300"
-            >
-              Edit search
-            </button>
+            <div className="flex gap-1.5">
+              <button type="button" onClick={() => setResultsView("map")} className={`rounded-lg px-2.5 py-1 text-[11px] font-bold ${resultsView === "map" ? "bg-sky-600 text-white" : "border border-slate-300 text-slate-600"}`}>Map</button>
+              <button type="button" onClick={() => setResultsView("list")} className={`rounded-lg px-2.5 py-1 text-[11px] font-bold ${resultsView === "list" ? "bg-sky-600 text-white" : "border border-slate-300 text-slate-600"}`}>List</button>
+              <button type="button" onClick={() => { setShowResults(false); setError(null); }} className="rounded-lg border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-600">Edit</button>
+            </div>
           </div>
 
           {correctedFrom ? (
-            <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
-              Showing hotels near <strong>{resolvedCity}</strong> — we corrected &ldquo;{correctedFrom}&rdquo;.
+            <p className="text-[11px] text-emerald-700 dark:text-emerald-300">Showing hotels near <strong>{resolvedCity}</strong> (corrected from &ldquo;{correctedFrom}&rdquo;).</p>
+          ) : null}
+
+          {(preferenceInsight || learningNote) ? (
+            <p className="rounded-lg border border-sky-200/80 bg-sky-50/80 px-3 py-2 text-[11px] leading-relaxed text-sky-950 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">
+              {learningNote ?? preferenceInsight}
             </p>
           ) : null}
 
-          {searchNotice ? (
-            <p
-              className={`rounded-xl border px-3 py-2 text-xs ${
-                searchSource === "estimated"
-                  ? "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
-                  : "border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100"
-              }`}
-            >
-              {searchNotice}
-              {searchSource === "estimated" ? (
-                <>
-                  {" "}
-                  <a
-                    href="https://duffel.com/docs/guides/getting-started-with-stays"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-semibold underline"
-                  >
-                    Enable live Stays in Duffel →
-                  </a>
-                </>
-              ) : null}
-            </p>
-          ) : null}
-
-          {stayProfileSummary ? (
-            <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
-              {stayProfileSummary}
-            </p>
-          ) : null}
-
-          {learningNote ? (
-            <p className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-900 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-100">
-              {learningNote}
-            </p>
-          ) : null}
-
-          {memorySummary ? (
-            <p className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">
-              {memorySummary}
-            </p>
-          ) : (
-            <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-              Ranked by value, quality, points, and your past picks. Tap &ldquo;Not for me&rdquo; — Kepi adjusts the next results.
-            </p>
-          )}
-
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {(["any", "cash", "points"] as PayMode[]).map((mode) => (
               <button
                 key={mode}
                 type="button"
                 onClick={() => setPayMode(mode)}
-                className={`rounded-full px-3 py-1.5 text-xs font-bold ${
-                  payMode === mode
-                    ? "bg-[#0b1f3a] text-[#f4c95d]"
-                    : "border border-slate-300 text-slate-600 dark:border-slate-600 dark:text-slate-300"
+                className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                  payMode === mode ? "bg-slate-800 text-white" : "border border-slate-300 text-slate-600"
                 }`}
               >
-                {mode === "any" ? "Best overall" : mode === "cash" ? "Cash" : "Points"}
-              </button>
-            ))}
-            {(["picks", "all", "map"] as ResultsView[]).map((view) => (
-              <button
-                key={view}
-                type="button"
-                onClick={() => setResultsView(view)}
-                className={`rounded-full px-3 py-1.5 text-xs font-bold ${
-                  resultsView === view
-                    ? "bg-sky-600 text-white"
-                    : "border border-slate-300 text-slate-600 dark:border-slate-600 dark:text-slate-300"
-                }`}
-              >
-                {view === "picks" ? "Top picks" : view === "all" ? `All (${visibleResults.length})` : "Map"}
+                {mode === "any" ? "Best fit" : mode === "cash" ? "Lowest cash" : "Points"}
               </button>
             ))}
           </div>
 
           {loading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((key) => (
-                <div key={key} className="h-24 animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800" />
+            <div className="space-y-2">
+              {[1, 2, 3, 4].map((key) => (
+                <div key={key} className="h-10 animate-pulse rounded-lg bg-slate-100 dark:bg-slate-800" />
               ))}
             </div>
           ) : null}
@@ -525,7 +407,7 @@ export function TripHotelSearch({
           {!loading ? renderErrorWithSuggestions() : null}
 
           {!loading && visibleResults.length > 0 && resultsView === "map" && cityCenter ? (
-            <div className="space-y-3">
+            <div className="grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
               <HotelStayMap
                 city={resolvedCity ?? city}
                 centerLat={cityCenter.lat}
@@ -534,77 +416,58 @@ export function TripHotelSearch({
                 selectedId={mapSelectedId}
                 onSelect={(hotel) => setMapSelectedId(hotel.id)}
               />
-              {mapSelectedId ? (
-                (() => {
-                  const selected = visibleResults.find((row) => row.id === mapSelectedId);
-                  if (!selected) return null;
-                  return (
-                    <HotelRankCard
-                      hotel={selected}
-                      totalInSearch={results.length}
-                      featured
-                      onAdd={() => handleAdd(selected)}
-                      onDismiss={() => handleDismiss(selected)}
-                    />
-                  );
-                })()
-              ) : null}
-            </div>
-          ) : null}
-
-          {!loading && visibleResults.length > 0 && resultsView === "picks" ? (
-            <div className="space-y-4">
-              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Kepi&apos;s top 3 for this stay</p>
-              <div className="space-y-3">
-                {featuredHotels.map((hotel) => (
+              <div className="max-h-80 space-y-1.5 overflow-y-auto lg:max-h-[22rem]">
+                {visibleResults.map((hotel) => (
                   <HotelRankCard
                     key={hotel.id}
                     hotel={hotel}
                     totalInSearch={results.length}
-                    featured
+                    compact
+                    selected={mapSelectedId === hotel.id}
+                    onSelect={() => setMapSelectedId(hotel.id)}
                     onAdd={() => handleAdd(hotel)}
                     onDismiss={() => handleDismiss(hotel)}
                   />
                 ))}
               </div>
-              {moreHotels.length > 0 ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setShowAllPicks((value) => !value)}
-                    className="w-full rounded-xl border border-slate-300 py-2.5 text-sm font-bold text-slate-700 dark:border-slate-600 dark:text-slate-200"
-                  >
-                    {showAllPicks ? "Hide" : "Show"} {moreHotels.length} more ranked option{moreHotels.length === 1 ? "" : "s"}
-                  </button>
-                  {showAllPicks ? (
-                    <div className="space-y-2">
-                      {moreHotels.map((hotel) => (
-                        <HotelRankCard
-                          key={hotel.id}
-                          hotel={hotel}
-                          totalInSearch={results.length}
-                          onAdd={() => handleAdd(hotel)}
-                          onDismiss={() => handleDismiss(hotel)}
-                        />
-                      ))}
-                    </div>
-                  ) : null}
-                </>
-              ) : null}
             </div>
           ) : null}
 
-          {!loading && visibleResults.length > 0 && resultsView === "all" ? (
-            <div className="space-y-2">
+          {!loading && visibleResults.length > 0 && resultsView === "list" ? (
+            <div className="max-h-[28rem] space-y-1.5 overflow-y-auto">
               {visibleResults.map((hotel) => (
                 <HotelRankCard
                   key={hotel.id}
                   hotel={hotel}
                   totalInSearch={results.length}
+                  compact
+                  selected={mapSelectedId === hotel.id}
+                  onSelect={() => setMapSelectedId(hotel.id)}
                   onAdd={() => handleAdd(hotel)}
                   onDismiss={() => handleDismiss(hotel)}
                 />
               ))}
+            </div>
+          ) : null}
+
+          {!loading && selectedHotel && resultsView === "map" ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900/50">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">{selectedHotel.name}</p>
+                  <p className="text-[11px] text-slate-500">{selectedHotel.whyLine}</p>
+                </div>
+                <span
+                  className="shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase text-white"
+                  style={{ backgroundColor: hotelMapPinStyle(selectedHotel, scoreRange).bg }}
+                >
+                  {hotelMapPinStyle(selectedHotel, scoreRange).label}
+                </span>
+              </div>
+              <div className="mt-2 flex gap-2">
+                <button type="button" onClick={() => handleAdd(selectedHotel)} className="flex-1 rounded-lg bg-sky-600 py-2 text-xs font-bold text-white">Add to trip</button>
+                <button type="button" onClick={() => handleDismiss(selectedHotel)} className="rounded-lg border border-slate-300 px-3 py-2 text-[11px] font-semibold text-slate-600">Not for me</button>
+              </div>
             </div>
           ) : null}
         </>

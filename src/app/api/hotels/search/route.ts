@@ -5,8 +5,8 @@ import { resolveHotelDestination, suggestHotelDestinations } from "@/lib/hotels/
 import { searchHotelsLiveOrEstimated } from "@/lib/hotels/searchHotels";
 import { isLiteApiConfigured } from "@/lib/providers/liteapi/searchHotels";
 import type { HotelSearchResult, RankedHotelSearchResult } from "@/lib/hotels/types";
-import { getHotelStayMemory, learnFromHotelEvent, saveHotelStayMemory, summarizeHotelMemory } from "@/lib/memory/hotelMemory";
-import { getHotelStayProfile, summarizeHotelStayProfile } from "@/lib/memory/hotelStayProfile";
+import { getHotelStayMemory, learnFromHotelEvent, saveHotelStayMemory, buildHotelPreferenceInsight } from "@/lib/memory/hotelMemory";
+import { getHotelStayProfile } from "@/lib/memory/hotelStayProfile";
 import { normalizeLoyaltyBalances } from "@/lib/loyalty/walletBalances";
 import { getTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
 
@@ -101,10 +101,12 @@ export async function POST(req: Request) {
       total: ranked.length,
       city: resolved.displayName,
       correctedFrom: resolved.correctedFrom ?? null,
-      source: searchResult.source,
-      notice: searchResult.notice,
-      memorySummary: summarizeHotelMemory(memory),
-      stayProfileSummary: summarizeHotelStayProfile(stayProfile),
+      preferenceInsight: buildHotelPreferenceInsight(
+        memory,
+        genome.hotelChainPriority ?? [],
+        ranked,
+        resolved.displayName,
+      ),
       resolved: { lat: resolved.lat, lng: resolved.lng, iata: resolved.iata ?? null },
     });
   } catch (err) {

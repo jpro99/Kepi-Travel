@@ -107,7 +107,7 @@ function diversifyRankedResults(results: RankedHotelSearchResult[]): RankedHotel
   if (pointsPlay) tryAdd(pointsPlay);
 
   for (const row of results) {
-    if (picked.length >= 20) break;
+    if (picked.length >= 50) break;
     tryAdd(row);
   }
 

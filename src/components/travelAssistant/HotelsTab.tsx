@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { HotelStayProfileCard } from "@/components/travelAssistant/HotelStayProfileCard";
 import { TravelFitEarnBar } from "@/components/travelAssistant/TravelFitEarnBar";
 import { TripStayPlanner } from "@/components/travelAssistant/TripStayPlanner";
 import { TripHotelCityPicker } from "@/components/travelAssistant/TripHotelCityPicker";
@@ -147,8 +146,6 @@ export function HotelsTab({
           </button>
         </div>
       </div>
-
-      <HotelStayProfileCard />
 
       {travelFitReservations.length > 0 ? <TravelFitEarnBar reservations={travelFitReservations} /> : null}
 

@@ -110,7 +110,7 @@ export function buildEstimatedStays(input: {
   );
 
   const spread = Math.max(unique.length, 2);
-  return unique.slice(0, 10).map((item, index) => {
+  return unique.slice(0, 18).map((item, index) => {
     const nightlyUsd = nightlyForIndex(iata, index, spread);
     const totalAmountUsd = Math.round(nightlyUsd * nights * 100) / 100;
     const reviewScore = Math.round((7.8 + (spread - index) * 0.35) * 10) / 10;

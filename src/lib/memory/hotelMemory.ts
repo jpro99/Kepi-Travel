@@ -195,3 +195,48 @@ export function summarizeHotelMemory(memory: HotelStayMemory): string | null {
   if (parts.length === 0) return null;
   return `Kepi remembers ${parts.join(", ")}.`;
 }
+
+/** One-line insight for search UI — e.g. missing preferred brand in this city. */
+export function buildHotelPreferenceInsight(
+  memory: HotelStayMemory,
+  chainPriority: string[],
+  hotels: Array<{ name: string; chainName?: string }>,
+  cityLabel?: string,
+): string | null {
+  const preferred = [
+    ...memory.preferredChains
+      .sort((a, b) => b.weight - a.weight)
+      .map((entry) => entry.name),
+    ...chainPriority,
+  ]
+    .map((name) => name.trim())
+    .filter((name) => name.length >= 3);
+
+  const seen = new Set<string>();
+  const uniquePreferred: string[] = [];
+  for (const name of preferred) {
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    uniquePreferred.push(name);
+  }
+
+  const area = cityLabel?.trim() || "this area";
+
+  for (const pref of uniquePreferred.slice(0, 2)) {
+    const needle = pref.toLowerCase();
+    const matches = hotels.filter((hotel) =>
+      `${hotel.chainName ?? ""} ${hotel.name}`.toLowerCase().includes(needle),
+    );
+    if (matches.length === 0) {
+      const brand = pref.charAt(0).toUpperCase() + pref.slice(1);
+      return `Kepi remembers you pick ${brand} — no ${brand} properties in ${area}. Dark green pins are your best matches here.`;
+    }
+    if (matches.length > 0 && uniquePreferred.indexOf(pref) === 0) {
+      const brand = pref.charAt(0).toUpperCase() + pref.slice(1);
+      return `${matches.length} ${brand} option${matches.length === 1 ? "" : "s"} on the map — dark green = best fit for you.`;
+    }
+  }
+
+  return null;
+}
