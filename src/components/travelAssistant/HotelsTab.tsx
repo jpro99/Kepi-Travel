@@ -158,25 +158,6 @@ export function HotelsTab({
         />
       ) : null}
 
-      {shown.length > 0 && onSearchHotels ? (
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={onSearchHotels}
-            className="rounded-2xl bg-sky-600 py-3 text-sm font-bold text-white shadow-sm"
-          >
-            Search for a hotel
-          </button>
-          <button
-            type="button"
-            onClick={onAdd}
-            className="rounded-2xl border border-slate-300 bg-white py-3 text-sm font-bold text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
-          >
-            Add manually
-          </button>
-        </div>
-      ) : null}
-
       {/* Empty state */}
       {shown.length === 0 && (
         <div className="rounded-3xl border border-dashed border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-10 text-center">

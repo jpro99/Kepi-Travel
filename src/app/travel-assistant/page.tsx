@@ -7687,7 +7687,7 @@ export default function TravelAssistantPage() {
     return (
       <main className="relative min-h-screen overflow-x-hidden bg-[var(--bg-base)] pb-24 text-[var(--text-primary)]">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(14,165,233,0.12),transparent_38%),radial-gradient(circle_at_80%_10%,rgba(34,197,94,0.10),transparent_35%)]" />
-        <div className="relative z-10 mx-auto max-w-3xl space-y-4 px-4 py-4 sm:py-6">
+        <div className="relative z-10 mx-auto max-w-3xl space-y-4 px-4 py-4 sm:py-6 md:max-w-4xl lg:max-w-5xl xl:max-w-6xl lg:px-6">
           <header className="sticky top-0 z-30 -mx-4 border-b border-slate-200/70 bg-slate-50/90 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">

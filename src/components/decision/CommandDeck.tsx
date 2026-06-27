@@ -1470,7 +1470,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
 
       {!embedded ? (
       <header className="relative z-10 border-b border-slate-700 px-5 py-4">
-        <div className="mx-auto flex max-w-3xl items-center justify-between">
+        <div className="mx-auto flex max-w-3xl items-center justify-between md:max-w-4xl lg:max-w-5xl xl:max-w-6xl">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#f4c95d]">
               Kepi · Decision Engine
@@ -1498,7 +1498,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
       </header>
       ) : null}
 
-      <main className={`relative z-10 mx-auto max-w-3xl px-5 ${embedded ? "py-4 pb-8" : "py-6 pb-16"}`}>
+      <main className={`relative z-10 mx-auto max-w-3xl px-5 md:max-w-4xl lg:max-w-5xl xl:max-w-6xl lg:px-8 ${embedded ? "py-4 pb-8" : "py-6 pb-16"}`}>
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-slate-400">
             {planMode === "hotels"

@@ -3,6 +3,17 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { CheckoutFlow } from "@/components/booking/CheckoutFlow";
+import {
+  SEARCH_INPUT_DARK,
+  SEARCH_LABEL_DARK,
+  SEARCH_DETAIL_SHELL,
+  SEARCH_PAGE_SHELL,
+  SEARCH_PRIMARY_BUTTON,
+  SEARCH_RESULTS_GRID,
+  SEARCH_RESULTS_SHELL,
+  SEARCH_SELECT_DARK,
+  SEARCH_TAB_BUTTON,
+} from "@/lib/ui/searchResponsive";
 import { suggestAirports, resolveAirport } from "@/lib/airports/lookup";
 import { calcTrueCost, calcPointsOptions, type LoyaltyBalance } from "@/lib/loyalty/optimizer";
 import type { AirportResult } from "@/lib/airports/lookup";
@@ -47,11 +58,11 @@ function AirportInput({ label, value, onChange, placeholder }: { label: string; 
   useEffect(() => { const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); }; document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h); }, []);
   return (
     <div ref={ref} className="relative">
-      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">{label}</label>
+      <label className={SEARCH_LABEL_DARK}>{label}</label>
       <input type="text" value={value} placeholder={placeholder}
         onChange={e => { onChange(e.target.value, ""); const s = suggestAirports(e.target.value); setSuggestions(s); setOpen(s.length > 0); }}
         onFocus={() => { if (value.length >= 2) { const s = suggestAirports(value); setSuggestions(s); setOpen(s.length > 0); } }}
-        className="w-full rounded-2xl border border-slate-700 bg-slate-800/80 px-4 py-3.5 text-sm text-white placeholder:text-slate-500 focus:border-[#f4c95d]/60 focus:outline-none" />
+        className={SEARCH_INPUT_DARK} />
       {open && suggestions.length > 0 && (
         <div className="absolute z-50 left-0 right-0 top-full mt-1 rounded-2xl border border-slate-700 bg-slate-900 shadow-xl overflow-hidden">
           {suggestions.map(a => (
@@ -157,7 +168,7 @@ function HotelDetail({ hotel, onBack, onBook }: { hotel: Hotel; onBack: () => vo
         <button type="button" onClick={onBack} className="text-slate-400 text-sm">← Back</button>
         <h1 className="text-base font-black text-white truncate">{hotel.name}</h1>
       </div>
-      <div className="px-4 py-5 max-w-lg mx-auto space-y-4">
+      <div className={SEARCH_DETAIL_SHELL}>
         {hotel.photos.length > 0 && (
           <div className="flex gap-2 overflow-x-auto rounded-2xl">
             {hotel.photos.slice(0, 3).map((p, i) => (
@@ -265,7 +276,7 @@ function HotelCheckout({ hotel, onCancel, onComplete }: { hotel: Hotel; onCancel
         <button type="button" onClick={() => setStep("form")} className="text-slate-400 text-sm">← Edit</button>
         <h1 className="text-base font-black text-white">Review & pay</h1>
       </div>
-      <div className="px-4 py-5 max-w-lg mx-auto space-y-4">
+      <div className={SEARCH_DETAIL_SHELL}>
         <div className="rounded-2xl border border-slate-700 bg-[#111e33] px-5 py-4">
           <p className="font-black text-white">{hotel.name}</p>
           <p className="text-sm text-slate-400">{fmtDate(hotel.checkIn)} → {fmtDate(hotel.checkOut)} · {hotel.nights} nights</p>
@@ -290,7 +301,7 @@ function HotelCheckout({ hotel, onCancel, onComplete }: { hotel: Hotel; onCancel
         <button type="button" onClick={onCancel} className="text-slate-400 text-sm">← Back</button>
         <h1 className="text-base font-black text-white">Guest details</h1>
       </div>
-      <div className="px-4 py-5 max-w-lg mx-auto space-y-4">
+      <div className={SEARCH_DETAIL_SHELL}>
         <div className="rounded-2xl border border-slate-700 bg-[#111e33] px-4 py-3 flex items-center justify-between">
           <div><p className="text-sm font-bold text-white truncate">{hotel.name}</p><p className="text-xs text-slate-400">{fmtDate(hotel.checkIn)} → {fmtDate(hotel.checkOut)}</p></div>
           <p className="text-lg font-black text-[#f4c95d] shrink-0">${Math.round(hotel.totalPrice)}</p>
@@ -429,7 +440,7 @@ export default function BookPage() {
           <button type="button" onClick={()=>setFlightScreen("results")} className="text-slate-400 text-sm">← Back</button>
           <h1 className="text-base font-black text-white">Flight details</h1>
         </div>
-        <div className="px-4 py-5 max-w-lg mx-auto space-y-4">
+        <div className={SEARCH_DETAIL_SHELL}>
           <div className="rounded-2xl border border-slate-700 bg-[#111e33] px-5 py-4 flex items-center justify-between">
             <div><p className="text-xs text-slate-400">{selectedFlight.fromIata} → {selectedFlight.toIata}</p><p className="text-lg font-bold text-white">{fmtDate(selectedFlight.departs)}</p><p className="text-sm text-slate-300">{selectedFlight.airline} · {stopsLabel(selectedFlight.stops)}</p></div>
             <p className="text-3xl font-black text-white">${Math.round(selectedFlight.price)}</p>
@@ -495,7 +506,7 @@ export default function BookPage() {
             <p className="text-xs text-slate-400">{fmtDate(depart)}{returnD?` · Return ${fmtDate(returnD)}`:" · One way"} · {passengers} {passengers===1?"adult":"adults"}</p>
           </div>
         </div>
-        <div className="px-4 py-4 max-w-lg mx-auto">
+        <div className={SEARCH_RESULTS_SHELL}>
           {/* Price calendar */}
           {Object.keys(priceCalendar).length > 0 && !flightLoading && (
             <div className="mb-4">
@@ -579,7 +590,7 @@ export default function BookPage() {
             </div>
           )}
           {!flightLoading && sorted.length > 0 && (
-            <div className="space-y-3">
+            <div className={SEARCH_RESULTS_GRID}>
               {sorted.map(f=><FlightCard key={f.id} flight={f} onSelect={()=>{ setSelectedFlight(f); setFlightScreen("detail"); }}/>)}
             </div>
           )}
@@ -603,7 +614,7 @@ export default function BookPage() {
             <p className="text-xs text-slate-400">{fmtDate(checkIn)} → {fmtDate(checkOut)} · {hotelGuests} {hotelGuests===1?"guest":"guests"}</p>
           </div>
         </div>
-        <div className="px-4 py-4 max-w-lg mx-auto">
+        <div className={SEARCH_RESULTS_SHELL}>
           {!hotelLoading && hotels.length > 0 && (
             <div className="flex gap-2 mb-4">
               <p className="text-xs text-slate-400 self-center">Sort:</p>
@@ -626,7 +637,7 @@ export default function BookPage() {
           {!hotelLoading && sortedHotels.length > 0 && (
             <div>
               <p className="text-xs text-slate-500 mb-3">{hotelTotal} hotels found · showing {hotels.length}</p>
-              <div className="space-y-3">
+              <div className={SEARCH_RESULTS_GRID}>
                 {sortedHotels.map(h=><HotelCard key={h.id} hotel={h} onSelect={()=>{ setSelectedHotel(h); setHotelScreen("detail"); }}/>)}
               </div>
             </div>
@@ -642,47 +653,47 @@ export default function BookPage() {
       <div className="flex items-center justify-between px-4 py-4 border-b border-slate-700/50">
         <div>
           <p className="text-[10px] font-black uppercase tracking-widest text-[#f4c95d]">Kepi Travel</p>
-          <h1 className="text-xl font-black text-white">Book travel</h1>
+          <h1 className="text-xl font-black text-white md:text-2xl lg:text-3xl">Book travel</h1>
         </div>
         <Link href="/travel-assistant" className="rounded-xl border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-200">My trips →</Link>
       </div>
 
-      <div className="px-4 py-5 max-w-lg mx-auto">
+        <div className={SEARCH_PAGE_SHELL}>
         {/* Flights / Hotels tab */}
-        <div className="flex gap-2 mb-5">
-          <button type="button" onClick={()=>setTab("flights")} className={`flex-1 py-3 rounded-xl text-sm font-bold transition ${tab==="flights"?"bg-[#f4c95d] text-[#0b1f3a]":"border border-slate-600 text-slate-400"}`}>✈️ Flights</button>
-          <button type="button" onClick={()=>setTab("hotels")} className={`flex-1 py-3 rounded-xl text-sm font-bold transition ${tab==="hotels"?"bg-[#f4c95d] text-[#0b1f3a]":"border border-slate-600 text-slate-400"}`}>🏨 Hotels</button>
+        <div className="mb-5 flex gap-2 md:mb-6 md:gap-3">
+          <button type="button" onClick={()=>setTab("flights")} className={`${SEARCH_TAB_BUTTON} ${tab==="flights"?"bg-[#f4c95d] text-[#0b1f3a]":"border border-slate-600 text-slate-400"}`}>✈️ Flights</button>
+          <button type="button" onClick={()=>setTab("hotels")} className={`${SEARCH_TAB_BUTTON} ${tab==="hotels"?"bg-[#f4c95d] text-[#0b1f3a]":"border border-slate-600 text-slate-400"}`}>🏨 Hotels</button>
         </div>
 
         {tab === "flights" && (
           <>
             {/* One way / Round trip */}
-            <div className="flex gap-2 mb-4">
-              <button type="button" onClick={()=>setTripType("roundtrip")} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition ${tripType==="roundtrip"?"bg-[#f4c95d] text-[#0b1f3a]":"border border-slate-600 text-slate-400"}`}>Round trip</button>
-              <button type="button" onClick={()=>setTripType("oneway")} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition ${tripType==="oneway"?"bg-[#f4c95d] text-[#0b1f3a]":"border border-slate-600 text-slate-400"}`}>One way</button>
+            <div className="mb-4 flex gap-2 md:mb-5 md:gap-3">
+              <button type="button" onClick={()=>setTripType("roundtrip")} className={`${SEARCH_TAB_BUTTON} ${tripType==="roundtrip"?"bg-[#f4c95d] text-[#0b1f3a]":"border border-slate-600 text-slate-400"}`}>Round trip</button>
+              <button type="button" onClick={()=>setTripType("oneway")} className={`${SEARCH_TAB_BUTTON} ${tripType==="oneway"?"bg-[#f4c95d] text-[#0b1f3a]":"border border-slate-600 text-slate-400"}`}>One way</button>
             </div>
             {/* From / To */}
-            <div className="relative mb-4">
+            <div className="relative mb-4 md:mb-5 lg:grid lg:grid-cols-2 lg:gap-4">
               <AirportInput label="From" value={fromDisplay} onChange={(v,i)=>{ setFromDisplay(v); setFromIata(i); }} placeholder="City or airport (e.g. Los Angeles)"/>
-              <button type="button" onClick={swap} className="absolute right-4 top-1/2 mt-3 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-slate-700 border border-slate-600 flex items-center justify-center text-slate-300 active:bg-slate-600">⇅</button>
-              <div className="mt-3"><AirportInput label="To" value={toDisplay} onChange={(v,i)=>{ setToDisplay(v); setToIata(i); }} placeholder="City or airport (e.g. Bari, Italy)"/></div>
+              <button type="button" onClick={swap} className="absolute right-4 top-1/2 z-10 mt-3 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-slate-600 bg-slate-700 text-slate-300 active:bg-slate-600 lg:right-[calc(50%-1rem)] lg:top-[calc(50%+0.75rem)]">⇅</button>
+              <div className="mt-3 lg:mt-0"><AirportInput label="To" value={toDisplay} onChange={(v,i)=>{ setToDisplay(v); setToIata(i); }} placeholder="City or airport (e.g. Bari, Italy)"/></div>
             </div>
-            <div className={`grid gap-3 mb-4 ${tripType==="roundtrip"?"grid-cols-2":"grid-cols-1"}`}>
-              <div><label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Depart</label>
-                <input type="date" value={depart} min={new Date().toISOString().split("T")[0]} onChange={e=>setDepart(e.target.value)} className="w-full rounded-2xl border border-slate-700 bg-slate-800/80 px-4 py-3.5 text-sm text-white focus:outline-none focus:border-[#f4c95d]/60"/></div>
-              {tripType==="roundtrip" && <div><label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Return</label>
-                <input type="date" value={returnD} min={depart||new Date().toISOString().split("T")[0]} onChange={e=>setReturnD(e.target.value)} className="w-full rounded-2xl border border-slate-700 bg-slate-800/80 px-4 py-3.5 text-sm text-white focus:outline-none focus:border-[#f4c95d]/60"/></div>}
+            <div className={`mb-4 grid gap-3 md:mb-5 md:gap-4 lg:grid-cols-2 ${tripType==="roundtrip"?"grid-cols-2":"grid-cols-1"}`}>
+              <div><label className={SEARCH_LABEL_DARK}>Depart</label>
+                <input type="date" value={depart} min={new Date().toISOString().split("T")[0]} onChange={e=>setDepart(e.target.value)} className={SEARCH_INPUT_DARK}/></div>
+              {tripType==="roundtrip" && <div><label className={SEARCH_LABEL_DARK}>Return</label>
+                <input type="date" value={returnD} min={depart||new Date().toISOString().split("T")[0]} onChange={e=>setReturnD(e.target.value)} className={SEARCH_INPUT_DARK}/></div>}
             </div>
-            <div className="grid grid-cols-2 gap-3 mb-5">
-              <div><label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Passengers</label>
-                <select value={passengers} onChange={e=>setPassengers(Number(e.target.value))} className="w-full rounded-2xl border border-slate-700 bg-slate-800/80 px-4 py-3.5 text-sm text-white focus:outline-none">
+            <div className="mb-5 grid grid-cols-2 gap-3 md:gap-4">
+              <div><label className={SEARCH_LABEL_DARK}>Passengers</label>
+                <select value={passengers} onChange={e=>setPassengers(Number(e.target.value))} className={SEARCH_SELECT_DARK}>
                   {[1,2,3,4,5,6].map(n=><option key={n} value={n}>{n} {n===1?"adult":"adults"}</option>)}</select></div>
-              <div><label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Cabin</label>
-                <select value={cabin} onChange={e=>setCabin(e.target.value)} className="w-full rounded-2xl border border-slate-700 bg-slate-800/80 px-4 py-3.5 text-sm text-white focus:outline-none">
+              <div><label className={SEARCH_LABEL_DARK}>Cabin</label>
+                <select value={cabin} onChange={e=>setCabin(e.target.value)} className={SEARCH_SELECT_DARK}>
                   <option value="economy">Economy</option><option value="premium_economy">Premium Eco</option><option value="business">Business</option><option value="first">First</option></select></div>
             </div>
-            {flightError && flightScreen==="search" && <div className="rounded-2xl bg-red-900/20 border border-red-500/30 px-4 py-3 mb-4"><p className="text-sm text-red-300">{flightError}</p></div>}
-            <button type="button" onClick={searchFlights} className="w-full py-4 rounded-2xl bg-[#f4c95d] text-[#0b1f3a] font-black text-base active:opacity-80 mb-6">Search flights</button>
+            {flightError && flightScreen==="search" && <div className="rounded-2xl bg-red-900/20 border border-red-500/30 px-4 py-3 mb-4"><p className="text-sm text-red-300 md:text-base">{flightError}</p></div>}
+            <button type="button" onClick={searchFlights} className={`${SEARCH_PRIMARY_BUTTON} bg-[#f4c95d] text-[#0b1f3a] mb-6`}>Search flights</button>
             {/* Popular routes */}
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 mb-3">Popular routes</p>
@@ -702,22 +713,20 @@ export default function BookPage() {
         {tab === "hotels" && (
           <>
             <AirportInput label="Destination" value={hotelDest} onChange={(v,i)=>{ setHotelDest(v); setHotelDestIata(i); }} placeholder="City or airport code (e.g. BRI, MUC, NYC)"/>
-            <div className="grid grid-cols-2 gap-3 mt-4 mb-4">
-              <div><label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Check-in</label>
-                <input type="date" value={checkIn} min={new Date().toISOString().split("T")[0]} onChange={e=>setCheckIn(e.target.value)} className="w-full rounded-2xl border border-slate-700 bg-slate-800/80 px-4 py-3.5 text-sm text-white focus:outline-none focus:border-[#f4c95d]/60"/></div>
-              <div><label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Check-out</label>
-                <input type="date" value={checkOut} min={checkIn||new Date().toISOString().split("T")[0]} onChange={e=>setCheckOut(e.target.value)} className="w-full rounded-2xl border border-slate-700 bg-slate-800/80 px-4 py-3.5 text-sm text-white focus:outline-none focus:border-[#f4c95d]/60"/></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3 mb-5">
-              <div><label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Guests</label>
-                <select value={hotelGuests} onChange={e=>setHotelGuests(Number(e.target.value))} className="w-full rounded-2xl border border-slate-700 bg-slate-800/80 px-4 py-3.5 text-sm text-white focus:outline-none">
+            <div className="mb-4 mt-4 grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
+              <div><label className={SEARCH_LABEL_DARK}>Check-in</label>
+                <input type="date" value={checkIn} min={new Date().toISOString().split("T")[0]} onChange={e=>setCheckIn(e.target.value)} className={SEARCH_INPUT_DARK}/></div>
+              <div><label className={SEARCH_LABEL_DARK}>Check-out</label>
+                <input type="date" value={checkOut} min={checkIn||new Date().toISOString().split("T")[0]} onChange={e=>setCheckOut(e.target.value)} className={SEARCH_INPUT_DARK}/></div>
+              <div><label className={SEARCH_LABEL_DARK}>Guests</label>
+                <select value={hotelGuests} onChange={e=>setHotelGuests(Number(e.target.value))} className={SEARCH_SELECT_DARK}>
                   {[1,2,3,4].map(n=><option key={n} value={n}>{n} {n===1?"guest":"guests"}</option>)}</select></div>
-              <div><label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Rooms</label>
-                <select value={hotelRooms} onChange={e=>setHotelRooms(Number(e.target.value))} className="w-full rounded-2xl border border-slate-700 bg-slate-800/80 px-4 py-3.5 text-sm text-white focus:outline-none">
+              <div><label className={SEARCH_LABEL_DARK}>Rooms</label>
+                <select value={hotelRooms} onChange={e=>setHotelRooms(Number(e.target.value))} className={SEARCH_SELECT_DARK}>
                   {[1,2,3].map(n=><option key={n} value={n}>{n} {n===1?"room":"rooms"}</option>)}</select></div>
             </div>
-            {hotelError && hotelScreen==="search" && <div className="rounded-2xl bg-red-900/20 border border-red-500/30 px-4 py-3 mb-4"><p className="text-sm text-red-300">{hotelError}</p></div>}
-            <button type="button" onClick={searchHotels} className="w-full py-4 rounded-2xl bg-[#f4c95d] text-[#0b1f3a] font-black text-base active:opacity-80 mb-6">Search hotels</button>
+            {hotelError && hotelScreen==="search" && <div className="rounded-2xl bg-red-900/20 border border-red-500/30 px-4 py-3 mb-4"><p className="text-sm text-red-300 md:text-base">{hotelError}</p></div>}
+            <button type="button" onClick={searchHotels} className={`${SEARCH_PRIMARY_BUTTON} bg-[#f4c95d] text-[#0b1f3a] mb-6`}>Search hotels</button>
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 mb-3">Popular destinations</p>
               <div className="space-y-2">

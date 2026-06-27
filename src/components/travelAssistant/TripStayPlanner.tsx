@@ -25,7 +25,7 @@ function statusLabel(segment: TripStaySegment): { text: string; className: strin
     return { text: "Partial", className: "bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-100" };
   }
   if (segment.stayIntent === "skip" || segment.status === "skipped") {
-    return { text: "No hotel", className: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" };
+    return { text: "Connection", className: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" };
   }
   if (segment.needsDecision) {
     return { text: "Need answer", className: "bg-sky-100 text-sky-900 dark:bg-sky-950/50 dark:text-sky-100" };
@@ -36,14 +36,16 @@ function statusLabel(segment: TripStaySegment): { text: string; className: strin
   return { text: "Review", className: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200" };
 }
 
-function stopKindHint(segment: TripStaySegment): string | null {
-  if (segment.stopKind === "connection") {
-    return segment.connectionHours != null
-      ? `Connection (~${Math.round(segment.connectionHours)}h) — catching another flight`
-      : "Connection only — catching another flight";
-  }
-  if (segment.stopKind === "overnight_layover") return "Overnight layover between flights";
-  return null;
+function cityName(segment: TripStaySegment): string {
+  return segment.city.split("(")[0]?.trim() || segment.city;
+}
+
+function isFoldedConnection(segment: TripStaySegment): boolean {
+  return (
+    segment.stopKind === "connection" &&
+    !segment.needsDecision &&
+    (segment.stayIntent === "skip" || segment.status === "skipped")
+  );
 }
 
 export function TripStayPlanner({
@@ -59,6 +61,13 @@ export function TripStayPlanner({
   const [newCheckIn, setNewCheckIn] = useState("");
   const [newCheckOut, setNewCheckOut] = useState("");
   const [busySegmentId, setBusySegmentId] = useState<string | null>(null);
+  const [connectionsOpen, setConnectionsOpen] = useState(false);
+
+  const { mainSegments, foldedConnections } = useMemo(() => {
+    const folded = segments.filter(isFoldedConnection);
+    const main = segments.filter((segment) => !isFoldedConnection(segment));
+    return { mainSegments: main, foldedConnections: folded };
+  }, [segments]);
 
   const nextMissing = useMemo(() => nextMissingStaySegment(segments), [segments]);
   const awaitingDecision = useMemo(() => segmentsAwaitingDecision(segments), [segments]);
@@ -86,15 +95,13 @@ export function TripStayPlanner({
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Trip stay planner</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Where you&apos;re staying</p>
           <p className="text-sm font-semibold text-slate-900 dark:text-white">
-            {tripName?.trim() ? `${tripName.trim()} — ` : ""}
-            {segments.length} stop{segments.length === 1 ? "" : "s"}
+            {tripName?.trim() ? `${tripName.trim()} · ` : ""}
+            {mainSegments.length} stop{mainSegments.length === 1 ? "" : "s"} to plan
           </p>
           {usuallySkipsConnections ? (
-            <p className="mt-0.5 text-[11px] text-slate-500">
-              Learned: you usually skip connection cities — we auto-skip same-day hubs unless you say otherwise.
-            </p>
+            <p className="mt-0.5 text-[11px] text-slate-500">Connection cities fold away automatically.</p>
           ) : null}
         </div>
         {onAddCityStay ? (
@@ -111,10 +118,7 @@ export function TripStayPlanner({
       {awaitingDecision.length > 0 ? (
         <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 dark:border-sky-800 dark:bg-sky-950/30">
           <p className="text-sm font-bold text-sky-900 dark:text-sky-100">
-            {awaitingDecision.length} stop{awaitingDecision.length === 1 ? "" : "s"} need a quick answer
-          </p>
-          <p className="mt-1 text-xs text-sky-800 dark:text-sky-200">
-            Do you need a hotel in this city, or are you just connecting?
+            {awaitingDecision.length} quick yes/no — hotel or just connecting?
           </p>
         </div>
       ) : null}
@@ -125,109 +129,74 @@ export function TripStayPlanner({
           onClick={() => onSearchSegment(nextMissing)}
           className="w-full rounded-2xl bg-[#0b1f3a] px-4 py-3 text-left text-white shadow-md"
         >
-          <p className="text-[10px] font-black uppercase tracking-widest text-[#f4c95d]">Next up</p>
-          <p className="mt-1 text-sm font-bold">{nextMissing.city.split("(")[0]?.trim() || nextMissing.city}</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-[#f4c95d]">Next hotel to book</p>
+          <p className="mt-1 text-sm font-bold">{cityName(nextMissing)}</p>
           <p className="text-xs text-slate-300">
             {nextMissing.checkIn} → {nextMissing.checkOut}
-            {nextMissing.nights > 0 ? ` · ${nextMissing.nights} nights` : ""} · hotel still needed
+            {nextMissing.nights > 0 ? ` · ${nextMissing.nights} nights` : ""}
           </p>
-          <p className="mt-2 text-xs font-bold text-[#f4c95d]">Search hotels now →</p>
         </button>
       ) : committedMissing.length === 0 && awaitingDecision.length === 0 ? (
         <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100">
-          {segments.some((s) => s.stayIntent === "needs_hotel" && s.status === "booked")
-            ? "Every city where you need a hotel is covered — nice work."
-            : "No open hotel tasks — connections skipped or all set."}
+          Stays covered — connections are tucked away below.
         </p>
       ) : null}
 
       <div className="space-y-2">
-        {segments.map((segment, index) => {
-          const status = statusLabel(segment);
-          const hint = stopKindHint(segment);
-          const cityName = segment.city.split("(")[0]?.trim() || segment.city;
-          const isBusy = busySegmentId === segment.id;
-
-          return (
-            <div
-              key={segment.id}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                    Stop {index + 1} of {segments.length}
-                  </p>
-                  <p className="font-bold text-slate-900 dark:text-white">{cityName}</p>
-                  <p className="mt-0.5 text-xs text-slate-500">{segment.label}</p>
-                  {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
-                  {segment.intentReason && segment.needsDecision ? (
-                    <p className="mt-1 text-xs text-sky-700 dark:text-sky-300">{segment.intentReason}</p>
-                  ) : null}
-                  {segment.reservationTitle ? (
-                    <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">{segment.reservationTitle}</p>
-                  ) : null}
-                  {segment.stayIntent === "needs_hotel" && segment.status === "missing" ? (
-                    <p className="mt-2 text-xs font-semibold text-red-700 dark:text-red-300">
-                      You said you need a hotel here — still not booked.
-                    </p>
-                  ) : null}
-                </div>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${status.className}`}>
-                  {status.text}
-                </span>
-              </div>
-
-              {segment.needsDecision && onSetStayIntent ? (
-                <div className="mt-3 space-y-2">
-                  <p className="text-xs font-bold text-slate-700 dark:text-slate-200">Need a hotel in {cityName}?</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => void handleIntent(segment, "needs_hotel")}
-                      className="rounded-xl bg-sky-600 py-2.5 text-sm font-bold text-white disabled:opacity-50"
-                    >
-                      Yes, need hotel
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => void handleIntent(segment, "skip")}
-                      className="rounded-xl border border-slate-300 py-2.5 text-sm font-bold text-slate-700 dark:border-slate-600 dark:text-slate-200 disabled:opacity-50"
-                    >
-                      No, just connecting
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-
-              {segment.stayIntent === "needs_hotel" && segment.status !== "booked" ? (
-                <button
-                  type="button"
-                  onClick={() => onSearchSegment(segment)}
-                  className="mt-3 w-full rounded-xl bg-sky-600 py-2.5 text-sm font-bold text-white"
-                >
-                  Search this stay
-                </button>
-              ) : null}
-
-              {!segment.needsDecision && segment.stayIntent !== "unknown" && onSetStayIntent ? (
-                <button
-                  type="button"
-                  disabled={isBusy}
-                  onClick={() =>
-                    void handleIntent(segment, segment.stayIntent === "skip" ? "needs_hotel" : "skip")
-                  }
-                  className="mt-2 text-[11px] font-semibold text-slate-500 underline-offset-2 hover:underline disabled:opacity-50"
-                >
-                  {segment.stayIntent === "skip" ? "Actually, I do need a hotel" : "Change to connection only"}
-                </button>
-              ) : null}
-            </div>
-          );
-        })}
+        {mainSegments.map((segment) => (
+          <SegmentCard
+            key={segment.id}
+            segment={segment}
+            busy={busySegmentId === segment.id}
+            onSearch={() => onSearchSegment(segment)}
+            onIntent={onSetStayIntent ? (intent) => void handleIntent(segment, intent) : undefined}
+          />
+        ))}
       </div>
+
+      {foldedConnections.length > 0 ? (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-950/40">
+          <button
+            type="button"
+            onClick={() => setConnectionsOpen((value) => !value)}
+            className="flex w-full items-center justify-between px-4 py-3 text-left"
+          >
+            <div>
+              <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                ✈️ {foldedConnections.length} connection{foldedConnections.length === 1 ? "" : "s"} — no hotel needed
+              </p>
+              <p className="text-[11px] text-slate-500">
+                {foldedConnections.map(cityName).join(" · ")}
+              </p>
+            </div>
+            <span className="text-slate-400">{connectionsOpen ? "▲" : "▼"}</span>
+          </button>
+          {connectionsOpen ? (
+            <div className="space-y-1 border-t border-slate-200 px-4 py-2 dark:border-slate-700">
+              {foldedConnections.map((segment) => (
+                <div key={segment.id} className="flex items-center justify-between py-1.5 text-xs text-slate-600 dark:text-slate-400">
+                  <span>{cityName(segment)}</span>
+                  <span>
+                    {segment.connectionHours != null
+                      ? `~${Math.round(segment.connectionHours)}h layover`
+                      : "Same-day connection"}
+                  </span>
+                  {onSetStayIntent ? (
+                    <button
+                      type="button"
+                      disabled={busySegmentId === segment.id}
+                      onClick={() => void handleIntent(segment, "needs_hotel")}
+                      className="font-semibold text-sky-700 underline dark:text-sky-300"
+                    >
+                      Need hotel?
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {showAddCity && onAddCityStay ? (
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/50">
@@ -269,6 +238,76 @@ export function TripStayPlanner({
             Add to planner
           </button>
         </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SegmentCard({
+  segment,
+  busy,
+  onSearch,
+  onIntent,
+}: {
+  segment: TripStaySegment;
+  busy: boolean;
+  onSearch: () => void;
+  onIntent?: (intent: "needs_hotel" | "skip") => void;
+}) {
+  const status = statusLabel(segment);
+  const name = cityName(segment);
+  const compact = segment.status === "booked" || segment.stayIntent === "skip";
+
+  if (compact && !segment.needsDecision) {
+    return (
+      <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
+        <div>
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">{name}</p>
+          <p className="text-[11px] text-slate-500">{segment.label}</p>
+        </div>
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${status.className}`}>{status.text}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-bold text-slate-900 dark:text-white">{name}</p>
+          <p className="mt-0.5 text-xs text-slate-500">{segment.label}</p>
+          {segment.stayIntent === "needs_hotel" && segment.status === "missing" ? (
+            <p className="mt-1 text-xs font-semibold text-red-700 dark:text-red-300">Still not booked</p>
+          ) : null}
+        </div>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${status.className}`}>{status.text}</span>
+      </div>
+
+      {segment.needsDecision && onIntent ? (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onIntent("needs_hotel")}
+            className="rounded-xl bg-sky-600 py-2 text-sm font-bold text-white disabled:opacity-50"
+          >
+            Yes — hotel
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onIntent("skip")}
+            className="rounded-xl border border-slate-300 py-2 text-sm font-bold text-slate-700 dark:border-slate-600 dark:text-slate-200 disabled:opacity-50"
+          >
+            No — connecting
+          </button>
+        </div>
+      ) : null}
+
+      {segment.stayIntent === "needs_hotel" && segment.status !== "booked" ? (
+        <button type="button" onClick={onSearch} className="mt-3 w-full rounded-xl bg-sky-600 py-2.5 text-sm font-bold text-white">
+          Search hotels
+        </button>
       ) : null}
     </div>
   );

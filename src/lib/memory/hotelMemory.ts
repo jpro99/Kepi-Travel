@@ -128,6 +128,21 @@ export function learnFromHotelEvent(
       .filter((entry) => entry.weight > 0);
   }
 
+  if (event.action === "dismissed") {
+    if (event.stars !== undefined && event.stars >= 4) {
+      valueVsQualityBias = Math.max(-1, valueVsQualityBias - 0.06);
+    } else if (event.stars !== undefined && event.stars <= 3) {
+      valueVsQualityBias = Math.min(1, valueVsQualityBias + 0.04);
+    }
+    if (event.nightlyUsd !== undefined && typicalNightlyUsd !== undefined) {
+      if (event.nightlyUsd > typicalNightlyUsd * 1.2) {
+        valueVsQualityBias = Math.max(-1, valueVsQualityBias - 0.05);
+      } else if (event.nightlyUsd < typicalNightlyUsd * 0.85) {
+        valueVsQualityBias = Math.min(1, valueVsQualityBias + 0.03);
+      }
+    }
+  }
+
   if (event.nightlyUsd && event.nightlyUsd > 0 && (event.action === "saved" || event.action === "booked")) {
     typicalNightlyUsd =
       typicalNightlyUsd === undefined

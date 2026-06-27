@@ -107,11 +107,23 @@ function diversifyRankedResults(results: RankedHotelSearchResult[]): RankedHotel
   if (pointsPlay) tryAdd(pointsPlay);
 
   for (const row of results) {
-    if (picked.length >= 12) break;
+    if (picked.length >= 20) break;
     tryAdd(row);
   }
 
-  return picked.map((row, index) => ({ ...row, rank: index + 1 }));
+  const total = picked.length;
+  return picked.map((row, index) => ({
+    ...row,
+    rank: index + 1,
+    cityRankLabel:
+      index === 0
+        ? "#1 for your search"
+        : index < Math.ceil(total * 0.25)
+          ? `Top ${Math.min(25, Math.round(((index + 1) / total) * 100))}% in city`
+          : index < Math.ceil(total * 0.5)
+            ? "Mid-range for this search"
+            : "Further from top picks",
+  }));
 }
 
 function stayProfileBoost(
@@ -287,6 +299,7 @@ export function rankHotelSearchResults(input: {
       qualityScore: Math.round(quality),
       valueScore: Math.round(value),
       pointsOption: bestPoints,
+      cityRankLabel: undefined,
     };
   });
 

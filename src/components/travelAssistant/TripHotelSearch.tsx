@@ -1,64 +1,27 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { HotelRankCard, pickFeaturedHotels } from "@/components/travelAssistant/HotelRankCard";
+import { HotelStayMap } from "@/components/travelAssistant/HotelStayMap";
 import { suggestAirports, type AirportResult } from "@/lib/airports/lookup";
 import { suggestHotelDestinations } from "@/lib/hotels/destinationAliases";
-import type { HotelSearchResult, HotelSearchTier, RankedHotelSearchResult } from "@/lib/hotels/types";
+import {
+  SEARCH_INPUT_LIGHT,
+  SEARCH_LABEL,
+  SEARCH_PRIMARY_BUTTON,
+} from "@/lib/ui/searchResponsive";
+import type { HotelSearchResult, RankedHotelSearchResult } from "@/lib/hotels/types";
 
-export interface TripHotelSearchProps {
-  defaultCity?: string;
-  defaultCityIata?: string;
-  defaultCheckIn?: string;
-  defaultCheckOut?: string;
-  onAddHotel: (hotel: HotelSearchResult) => void;
-}
-
-function starLabel(count: number): string {
-  const rounded = Math.max(0, Math.min(5, Math.round(count)));
-  return "★".repeat(rounded) + "☆".repeat(5 - rounded);
-}
-
-function tierHeading(tier: HotelSearchTier): string | null {
-  switch (tier) {
-    case "kepi_pick":
-      return "Kepi Pick — best deal in town";
-    case "points_play":
-      return "Best points play";
-    case "personal":
-      return "Matches your stay style";
-    case "best_value":
-      return "Best value for what you get";
-    case "best_quality":
-      return "Top quality in this search";
-    default:
-      return null;
-  }
-}
-
-function tierCardClass(tier: HotelSearchTier): string {
-  switch (tier) {
-    case "kepi_pick":
-      return "border-[#f4c95d] bg-gradient-to-br from-[#0b1f3a] to-[#123456] text-white shadow-md";
-    case "points_play":
-      return "border-sky-400 bg-sky-50 dark:border-sky-600 dark:bg-sky-950/40";
-    case "personal":
-      return "border-emerald-400 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950/30";
-    case "best_value":
-      return "border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-950/30";
-    case "best_quality":
-      return "border-indigo-300 bg-indigo-50 dark:border-indigo-700 dark:bg-indigo-950/30";
-    default:
-      return "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-950/50";
-  }
-}
+type PayMode = "any" | "cash" | "points";
+type ResultsView = "picks" | "all" | "map";
 
 async function recordHotelMemory(event: {
   action: "saved" | "dismissed" | "liked";
   hotel: RankedHotelSearchResult;
   city: string;
-}): Promise<void> {
+}): Promise<string | null> {
   try {
-    await fetch("/api/hotels/memory", {
+    const res = await fetch("/api/hotels/memory", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -72,9 +35,20 @@ async function recordHotelMemory(event: {
         amenities: event.hotel.amenities,
       }),
     });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { summary?: string | null };
+    return data.summary ?? null;
   } catch {
-    /* non-fatal */
+    return null;
   }
+}
+
+export interface TripHotelSearchProps {
+  defaultCity?: string;
+  defaultCityIata?: string;
+  defaultCheckIn?: string;
+  defaultCheckOut?: string;
+  onAddHotel: (hotel: HotelSearchResult) => void;
 }
 
 function CityInput({
@@ -103,7 +77,7 @@ function CityInput({
 
   return (
     <div ref={ref} className="relative">
-      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</label>
+      <label className={SEARCH_LABEL}>{label}</label>
       <input
         type="text"
         value={value}
@@ -126,7 +100,7 @@ function CityInput({
             setOpen(matches.length > 0 || hints.length > 0);
           }
         }}
-        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none ring-sky-300 focus-visible:ring-2 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+        className={SEARCH_INPUT_LIGHT}
       />
       {open && (suggestions.length > 0 || cityHints.length > 0) ? (
         <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
@@ -195,6 +169,12 @@ export function TripHotelSearch({
   const [searchSource, setSearchSource] = useState<"duffel" | "liteapi" | "estimated" | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [payMode, setPayMode] = useState<PayMode>("any");
+  const [resultsView, setResultsView] = useState<ResultsView>("picks");
+  const [showAllPicks, setShowAllPicks] = useState(false);
+  const [mapSelectedId, setMapSelectedId] = useState<string | null>(null);
+  const [cityCenter, setCityCenter] = useState<{ lat: number; lng: number } | null>(null);
+  const [learningNote, setLearningNote] = useState<string | null>(null);
 
   useEffect(() => {
     setCity(defaultCity);
@@ -255,6 +235,7 @@ export function TripHotelSearch({
         stayProfileSummary?: string | null;
         notice?: string;
         source?: "duffel" | "liteapi" | "estimated";
+        resolved?: { lat: number; lng: number; iata?: string | null };
       };
       if (!response.ok) {
         const duffelMessage = payload.detail?.errors?.[0]?.message;
@@ -269,6 +250,12 @@ export function TripHotelSearch({
       setStayProfileSummary(payload.stayProfileSummary ?? null);
       setSearchNotice(payload.notice ?? null);
       setSearchSource(payload.source ?? null);
+      if (payload.resolved?.lat && payload.resolved?.lng) {
+        setCityCenter({ lat: payload.resolved.lat, lng: payload.resolved.lng });
+      }
+      setLearningNote(null);
+      setResultsView("picks");
+      setShowAllPicks(false);
       if ((payload.hotels?.length ?? 0) > 0) {
         setError(null);
       } else if (payload.error) {
@@ -283,7 +270,23 @@ export function TripHotelSearch({
     }
   };
 
-  const visibleResults = results.filter((hotel) => !dismissedIds.has(hotel.id));
+  const visibleResults = useMemo(() => {
+    let rows = results.filter((hotel) => !dismissedIds.has(hotel.id));
+    if (payMode === "points") {
+      rows = rows.filter((hotel) => hotel.pointsOption && hotel.pointsOption.cppAchieved >= 0.8);
+      rows.sort((a, b) => (b.pointsOption?.cppAchieved ?? 0) - (a.pointsOption?.cppAchieved ?? 0));
+    } else if (payMode === "cash") {
+      rows.sort((a, b) => a.pricePerNight - b.pricePerNight);
+    }
+    return rows;
+  }, [results, dismissedIds, payMode]);
+
+  const featuredHotels = useMemo(() => pickFeaturedHotels(visibleResults, 3), [visibleResults]);
+  const featuredIds = useMemo(() => new Set(featuredHotels.map((row) => row.id)), [featuredHotels]);
+  const moreHotels = useMemo(
+    () => visibleResults.filter((row) => !featuredIds.has(row.id)),
+    [visibleResults, featuredIds],
+  );
 
   const handleAdd = (hotel: RankedHotelSearchResult): void => {
     void recordHotelMemory({ action: "saved", hotel, city: resolvedCity ?? city });
@@ -292,7 +295,13 @@ export function TripHotelSearch({
 
   const handleDismiss = (hotel: RankedHotelSearchResult): void => {
     setDismissedIds((prev) => new Set([...prev, hotel.id]));
-    void recordHotelMemory({ action: "dismissed", hotel, city: resolvedCity ?? city });
+    void recordHotelMemory({ action: "dismissed", hotel, city: resolvedCity ?? city }).then((summary) => {
+      setLearningNote(
+        summary ??
+          `Got it — we’ll show fewer ${hotel.chainName ? `${hotel.chainName} ` : ""}options like this next time.`,
+      );
+      if (summary) setMemorySummary(summary);
+    });
   };
 
   const applyDestinationSuggestion = (suggestion: string): void => {
@@ -328,7 +337,7 @@ export function TripHotelSearch({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 md:space-y-5">
       {!showResults ? (
         <>
           <CityInput
@@ -340,35 +349,33 @@ export function TripHotelSearch({
             }}
             placeholder="e.g. Rome, Bari, New York, Beaumont CA"
           />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
             <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Check-in</label>
+              <label className={SEARCH_LABEL}>Check-in</label>
               <input
                 type="date"
                 value={checkIn}
                 min={new Date().toISOString().slice(0, 10)}
                 onChange={(event) => setCheckIn(event.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                className={SEARCH_INPUT_LIGHT}
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Check-out</label>
+              <label className={SEARCH_LABEL}>Check-out</label>
               <input
                 type="date"
                 value={checkOut}
                 min={checkIn || new Date().toISOString().slice(0, 10)}
                 onChange={(event) => setCheckOut(event.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                className={SEARCH_INPUT_LIGHT}
               />
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Guests</label>
+              <label className={SEARCH_LABEL}>Guests</label>
               <select
                 value={guests}
                 onChange={(event) => setGuests(Number(event.target.value))}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                className={SEARCH_INPUT_LIGHT}
               >
                 {[1, 2, 3, 4].map((count) => (
                   <option key={count} value={count}>
@@ -378,11 +385,11 @@ export function TripHotelSearch({
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Rooms</label>
+              <label className={SEARCH_LABEL}>Rooms</label>
               <select
                 value={rooms}
                 onChange={(event) => setRooms(Number(event.target.value))}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                className={SEARCH_INPUT_LIGHT}
               >
                 {[1, 2, 3].map((count) => (
                   <option key={count} value={count}>
@@ -397,7 +404,7 @@ export function TripHotelSearch({
             type="button"
             disabled={loading}
             onClick={() => void runSearch()}
-            className="w-full rounded-2xl bg-sky-600 py-3.5 text-sm font-black text-white disabled:opacity-60"
+            className={`${SEARCH_PRIMARY_BUTTON} bg-sky-600 text-white disabled:opacity-60`}
           >
             {loading ? "Searching hotels…" : "Search hotels"}
           </button>
@@ -460,15 +467,52 @@ export function TripHotelSearch({
             </p>
           ) : null}
 
+          {learningNote ? (
+            <p className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-900 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-100">
+              {learningNote}
+            </p>
+          ) : null}
+
           {memorySummary ? (
             <p className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">
               {memorySummary}
             </p>
           ) : (
             <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-              Kepi ranks every result for value, quality, points, and what you&apos;ve saved before. Add hotels you like — we learn your style over time.
+              Ranked by value, quality, points, and your past picks. Tap &ldquo;Not for me&rdquo; — Kepi adjusts the next results.
             </p>
           )}
+
+          <div className="flex flex-wrap gap-2">
+            {(["any", "cash", "points"] as PayMode[]).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setPayMode(mode)}
+                className={`rounded-full px-3 py-1.5 text-xs font-bold ${
+                  payMode === mode
+                    ? "bg-[#0b1f3a] text-[#f4c95d]"
+                    : "border border-slate-300 text-slate-600 dark:border-slate-600 dark:text-slate-300"
+                }`}
+              >
+                {mode === "any" ? "Best overall" : mode === "cash" ? "Cash" : "Points"}
+              </button>
+            ))}
+            {(["picks", "all", "map"] as ResultsView[]).map((view) => (
+              <button
+                key={view}
+                type="button"
+                onClick={() => setResultsView(view)}
+                className={`rounded-full px-3 py-1.5 text-xs font-bold ${
+                  resultsView === view
+                    ? "bg-sky-600 text-white"
+                    : "border border-slate-300 text-slate-600 dark:border-slate-600 dark:text-slate-300"
+                }`}
+              >
+                {view === "picks" ? "Top picks" : view === "all" ? `All (${visibleResults.length})` : "Map"}
+              </button>
+            ))}
+          </div>
 
           {loading ? (
             <div className="space-y-3">
@@ -480,96 +524,87 @@ export function TripHotelSearch({
 
           {!loading ? renderErrorWithSuggestions() : null}
 
-          {!loading && visibleResults.length > 0 ? (
+          {!loading && visibleResults.length > 0 && resultsView === "map" && cityCenter ? (
             <div className="space-y-3">
-              {visibleResults.map((hotel) => {
-                const heading = tierHeading(hotel.tier);
-                const isKepiPick = hotel.tier === "kepi_pick";
-                const textMuted = isKepiPick ? "text-slate-300" : "text-slate-500";
-                const textPrimary = isKepiPick ? "text-white" : "text-slate-900 dark:text-white";
+              <HotelStayMap
+                city={resolvedCity ?? city}
+                centerLat={cityCenter.lat}
+                centerLng={cityCenter.lng}
+                hotels={visibleResults}
+                selectedId={mapSelectedId}
+                onSelect={(hotel) => setMapSelectedId(hotel.id)}
+              />
+              {mapSelectedId ? (
+                (() => {
+                  const selected = visibleResults.find((row) => row.id === mapSelectedId);
+                  if (!selected) return null;
+                  return (
+                    <HotelRankCard
+                      hotel={selected}
+                      totalInSearch={results.length}
+                      featured
+                      onAdd={() => handleAdd(selected)}
+                      onDismiss={() => handleDismiss(selected)}
+                    />
+                  );
+                })()
+              ) : null}
+            </div>
+          ) : null}
 
-                return (
-                  <div key={hotel.id} className={`overflow-hidden rounded-2xl border ${tierCardClass(hotel.tier)}`}>
-                    {hotel.photos[0] ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={hotel.photos[0]}
-                        alt=""
-                        className="h-32 w-full object-cover"
-                      />
-                    ) : null}
-                    <div className="p-4">
-                    {heading ? (
-                      <p className={`mb-2 text-[10px] font-black uppercase tracking-widest ${isKepiPick ? "text-[#f4c95d]" : "text-sky-700 dark:text-sky-300"}`}>
-                        {heading}
-                      </p>
-                    ) : null}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className={`font-bold ${textPrimary}`}>{hotel.name}</p>
-                        {hotel.chainName ? <p className={`text-xs ${textMuted}`}>{hotel.chainName}</p> : null}
-                        <p className={`mt-1 text-xs ${isKepiPick ? "text-[#f4c95d]" : "text-amber-600 dark:text-amber-400"}`}>
-                          {starLabel(hotel.stars)}
-                          {hotel.rating !== undefined ? ` · ${hotel.rating.toFixed(1)} guest score` : ""}
-                        </p>
-                        {hotel.whyLine ? <p className={`mt-1.5 text-xs ${textMuted}`}>{hotel.whyLine}</p> : null}
-                        {hotel.badges.length > 0 ? (
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            {hotel.badges.map((badge) => (
-                              <span
-                                key={badge}
-                                className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                                  isKepiPick
-                                    ? "bg-[#f4c95d]/20 text-[#f4c95d]"
-                                    : "bg-white/80 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
-                                }`}
-                              >
-                                {badge}
-                              </span>
-                            ))}
-                          </div>
-                        ) : null}
-                        {hotel.pointsOption ? (
-                          <p className={`mt-2 text-xs ${isKepiPick ? "text-sky-200" : "text-sky-700 dark:text-sky-300"}`}>
-                            Points: {hotel.pointsOption.programName} · {hotel.pointsOption.milesNeeded.toLocaleString()} pts ·{" "}
-                            {hotel.pointsOption.cppAchieved.toFixed(1)}¢/pt
-                          </p>
-                        ) : null}
-                        {hotel.address ? <p className={`mt-1 truncate text-xs ${textMuted}`}>{hotel.address}</p> : null}
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className={`text-lg font-black ${textPrimary}`}>${Math.round(hotel.pricePerNight)}</p>
-                        <p className={`text-[10px] ${textMuted}`}>/ night</p>
-                        <p className={`text-xs ${textMuted}`}>${Math.round(hotel.totalPrice)} total</p>
-                        <p className={`mt-1 text-[10px] ${textMuted}`}>#{hotel.rank} of {results.length}</p>
-                      </div>
+          {!loading && visibleResults.length > 0 && resultsView === "picks" ? (
+            <div className="space-y-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Kepi&apos;s top 3 for this stay</p>
+              <div className="space-y-3">
+                {featuredHotels.map((hotel) => (
+                  <HotelRankCard
+                    key={hotel.id}
+                    hotel={hotel}
+                    totalInSearch={results.length}
+                    featured
+                    onAdd={() => handleAdd(hotel)}
+                    onDismiss={() => handleDismiss(hotel)}
+                  />
+                ))}
+              </div>
+              {moreHotels.length > 0 ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowAllPicks((value) => !value)}
+                    className="w-full rounded-xl border border-slate-300 py-2.5 text-sm font-bold text-slate-700 dark:border-slate-600 dark:text-slate-200"
+                  >
+                    {showAllPicks ? "Hide" : "Show"} {moreHotels.length} more ranked option{moreHotels.length === 1 ? "" : "s"}
+                  </button>
+                  {showAllPicks ? (
+                    <div className="space-y-2">
+                      {moreHotels.map((hotel) => (
+                        <HotelRankCard
+                          key={hotel.id}
+                          hotel={hotel}
+                          totalInSearch={results.length}
+                          onAdd={() => handleAdd(hotel)}
+                          onDismiss={() => handleDismiss(hotel)}
+                        />
+                      ))}
                     </div>
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleAdd(hotel)}
-                        className={`flex-1 rounded-xl py-2.5 text-sm font-bold ${
-                          isKepiPick ? "bg-[#f4c95d] text-[#0b1f3a]" : "bg-[#0b1f3a] text-[#f4c95d]"
-                        }`}
-                      >
-                        Add to my trip
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDismiss(hotel)}
-                        className={`rounded-xl border px-3 py-2.5 text-xs font-semibold ${
-                          isKepiPick
-                            ? "border-slate-500 text-slate-300 hover:bg-white/10"
-                            : "border-slate-300 text-slate-600 dark:border-slate-600 dark:text-slate-300"
-                        }`}
-                      >
-                        Not for me
-                      </button>
-                    </div>
-                    </div>
-                  </div>
-                );
-              })}
+                  ) : null}
+                </>
+              ) : null}
+            </div>
+          ) : null}
+
+          {!loading && visibleResults.length > 0 && resultsView === "all" ? (
+            <div className="space-y-2">
+              {visibleResults.map((hotel) => (
+                <HotelRankCard
+                  key={hotel.id}
+                  hotel={hotel}
+                  totalInSearch={results.length}
+                  onAdd={() => handleAdd(hotel)}
+                  onDismiss={() => handleDismiss(hotel)}
+                />
+              ))}
             </div>
           ) : null}
         </>
