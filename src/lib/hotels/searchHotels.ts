@@ -59,8 +59,16 @@ function mapDuffelRowToHotel(input: {
   if (!prop || !Number.isFinite(total) || total <= 0) return null;
 
   const amenities = (prop.amenities as { type: string }[] | undefined)?.map((entry) => entry.type).slice(0, 8) ?? [];
-  const photos = (prop.photos as { url: string }[] | undefined)?.map((entry) => entry.url).slice(0, 4) ?? [];
+  const photos = (prop.photos as { url: string }[] | undefined)?.map((entry) => entry.url).slice(0, 8) ?? [];
   const addressRecord = prop.address as Record<string, unknown> | undefined;
+  const locationRecord = prop.location as Record<string, unknown> | undefined;
+  const geo =
+    (locationRecord?.geographic_coordinates as Record<string, unknown> | undefined) ??
+    (prop.geographic_coordinates as Record<string, unknown> | undefined);
+  const latRaw = geo?.latitude ?? geo?.lat;
+  const lngRaw = geo?.longitude ?? geo?.lng;
+  const lat = typeof latRaw === "number" ? latRaw : typeof latRaw === "string" ? Number.parseFloat(latRaw) : undefined;
+  const lng = typeof lngRaw === "number" ? lngRaw : typeof lngRaw === "string" ? Number.parseFloat(lngRaw) : undefined;
 
   return {
     id: row.id as string,
@@ -83,6 +91,7 @@ function mapDuffelRowToHotel(input: {
     guests,
     cancellable: Boolean((row as Record<string, unknown>).cheapest_rate_is_cancellable),
     cancellationDeadline: (row as Record<string, unknown>).cheapest_rate_cancellation_deadline as string | undefined,
+    ...(Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : {}),
   };
 }
 
@@ -155,7 +164,7 @@ async function searchDuffelHotels(input: {
               latitude: input.resolved.lat,
               longitude: input.resolved.lng,
             },
-            radius: 10,
+            radius: 15,
             distance_unit: "km",
           },
         },
@@ -184,7 +193,7 @@ async function searchDuffelHotels(input: {
     const data = (await response.json()) as { data?: { results?: Record<string, unknown>[] } };
     const results = data?.data?.results ?? [];
     const hotels: HotelSearchResult[] = [];
-    for (const row of results.slice(0, 30)) {
+    for (const row of results.slice(0, 50)) {
       const mapped = mapDuffelRowToHotel({
         row,
         nights: input.nights,
@@ -195,7 +204,7 @@ async function searchDuffelHotels(input: {
         guests: input.guests,
       });
       if (mapped) hotels.push(mapped);
-      if (hotels.length >= 30) break;
+      if (hotels.length >= 50) break;
     }
 
     if (hotels.length === 0 && results.length > 0) {

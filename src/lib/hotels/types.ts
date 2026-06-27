@@ -19,6 +19,8 @@ export interface HotelSearchResult {
   guests: number;
   cancellable: boolean;
   cancellationDeadline?: string;
+  lat?: number;
+  lng?: number;
 }
 
 export type HotelSearchTier =

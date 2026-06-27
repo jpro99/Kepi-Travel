@@ -19,6 +19,8 @@ interface LiteApiHotelMeta {
   images?: string[];
   chain?: string;
   hotelFacilities?: string[];
+  latitude?: number;
+  longitude?: number;
 }
 
 interface LiteApiRateRow {
@@ -72,7 +74,7 @@ function mapLiteApiToHotel(input: {
   if (input.meta?.thumbnail && !photos.includes(input.meta.thumbnail)) photos.push(input.meta.thumbnail);
   for (const image of input.meta?.images ?? []) {
     if (image && !photos.includes(image)) photos.push(image);
-    if (photos.length >= 4) break;
+    if (photos.length >= 8) break;
   }
 
   const amenities = (input.meta?.hotelFacilities ?? []).slice(0, 8);
@@ -96,6 +98,9 @@ function mapLiteApiToHotel(input: {
     rooms: input.rooms,
     guests: input.guests,
     cancellable: true,
+    ...(Number.isFinite(input.meta?.latitude) && Number.isFinite(input.meta?.longitude)
+      ? { lat: input.meta!.latitude!, lng: input.meta!.longitude! }
+      : {}),
   };
 }
 
@@ -126,7 +131,7 @@ export async function searchLiteApiHotels(input: {
     maxRatesPerHotel: 2,
     roomMapping: true,
     includeHotelData: true,
-    limit: 30,
+    limit: 50,
     minRating: 3,
   };
 
@@ -183,7 +188,7 @@ export async function searchLiteApiHotels(input: {
         guests: input.guests,
       });
       if (mapped) hotels.push(mapped);
-      if (hotels.length >= 30) break;
+      if (hotels.length >= 50) break;
     }
 
     if (hotels.length === 0) {

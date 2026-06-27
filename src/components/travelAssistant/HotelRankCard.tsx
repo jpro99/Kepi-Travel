@@ -71,7 +71,7 @@ export function HotelRankCard({
           }}
           className="shrink-0 rounded-lg bg-sky-600 px-2 py-1.5 text-[10px] font-bold text-white"
         >
-          Add
+          View
         </button>
       </article>
     );
@@ -158,7 +158,7 @@ export function HotelRankCard({
               featured && isKepiPick ? "bg-[#f4c95d] text-[#0b1f3a]" : "bg-[#0b1f3a] text-[#f4c95d]"
             }`}
           >
-            Add to trip
+            View rooms &amp; prices
           </button>
           <button
             type="button"

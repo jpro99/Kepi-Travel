@@ -1,9 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { HotelDetailSheet } from "@/components/travelAssistant/HotelDetailSheet";
 import { HotelRankCard } from "@/components/travelAssistant/HotelRankCard";
 import { HotelStayMap } from "@/components/travelAssistant/HotelStayMap";
-import { hotelMapPinStyle, fitScoreRange } from "@/lib/hotels/hotelMapColors";
+import {
+  attachHotelCoordinates,
+  hotelInBounds,
+  type MapBounds,
+} from "@/lib/hotels/hotelCoordinates";
 import { suggestAirports, type AirportResult } from "@/lib/airports/lookup";
 import { suggestHotelDestinations } from "@/lib/hotels/destinationAliases";
 import {
@@ -50,6 +55,7 @@ export interface TripHotelSearchProps {
   defaultCheckIn?: string;
   defaultCheckOut?: string;
   onAddHotel: (hotel: HotelSearchResult) => void;
+  onSavedToTrip?: (hotel: HotelSearchResult) => void;
 }
 
 function CityInput({
@@ -150,6 +156,7 @@ export function TripHotelSearch({
   defaultCheckIn = "",
   defaultCheckOut = "",
   onAddHotel,
+  onSavedToTrip,
 }: TripHotelSearchProps) {
   const [city, setCity] = useState(defaultCity);
   const [cityIata, setCityIata] = useState(defaultCityIata);
@@ -169,8 +176,12 @@ export function TripHotelSearch({
   const [payMode, setPayMode] = useState<PayMode>("any");
   const [resultsView, setResultsView] = useState<ResultsView>("map");
   const [mapSelectedId, setMapSelectedId] = useState<string | null>(null);
-  const [cityCenter, setCityCenter] = useState<{ lat: number; lng: number } | null>(null);
+  const [detailHotelId, setDetailHotelId] = useState<string | null>(null);
+  const [savedHotelIds, setSavedHotelIds] = useState<Set<string>>(new Set());
+  const [mapBounds, setMapBounds] = useState<MapBounds | null>(null);
+  const [hotelsWithCoords, setHotelsWithCoords] = useState<Array<RankedHotelSearchResult & { lat: number; lng: number }>>([]);
   const [learningNote, setLearningNote] = useState<string | null>(null);
+  const [cityCenter, setCityCenter] = useState<{ lat: number; lng: number } | null>(null);
   const autoSearchKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -231,10 +242,17 @@ export function TripHotelSearch({
       setPreferenceInsight(payload.preferenceInsight ?? null);
       if (payload.resolved?.lat && payload.resolved?.lng) {
         setCityCenter({ lat: payload.resolved.lat, lng: payload.resolved.lng });
+        setHotelsWithCoords(
+          attachHotelCoordinates(payload.hotels ?? [], payload.resolved.lat, payload.resolved.lng),
+        );
+      } else {
+        setHotelsWithCoords([]);
       }
       setLearningNote(null);
       setResultsView("map");
       setMapSelectedId(payload.hotels?.[0]?.id ?? null);
+      setDetailHotelId(null);
+      setMapBounds(null);
       if ((payload.hotels?.length ?? 0) === 0) {
         setError(payload.error ?? `No hotels found near ${payload.city ?? destination}.`);
       }
@@ -265,16 +283,37 @@ export function TripHotelSearch({
     return rows;
   }, [results, dismissedIds, payMode]);
 
-  const scoreRange = useMemo(() => fitScoreRange(visibleResults), [visibleResults]);
-  const selectedHotel = visibleResults.find((row) => row.id === mapSelectedId) ?? null;
+  const mappedHotels = useMemo(() => {
+    if (hotelsWithCoords.length > 0) {
+      const visibleIds = new Set(visibleResults.map((row) => row.id));
+      return hotelsWithCoords.filter((row) => visibleIds.has(row.id));
+    }
+    if (!cityCenter) return [];
+    return attachHotelCoordinates(visibleResults, cityCenter.lat, cityCenter.lng);
+  }, [cityCenter, hotelsWithCoords, visibleResults]);
 
-  const handleAdd = (hotel: RankedHotelSearchResult): void => {
+  const hotelsInView = useMemo(() => {
+    if (!mapBounds) return mappedHotels;
+    return mappedHotels.filter((hotel) => hotelInBounds(hotel, mapBounds));
+  }, [mappedHotels, mapBounds]);
+
+  const detailHotel = visibleResults.find((row) => row.id === detailHotelId) ?? null;
+
+  const openDetail = (hotel: RankedHotelSearchResult): void => {
+    setMapSelectedId(hotel.id);
+    setDetailHotelId(hotel.id);
+  };
+
+  const handleSaveToTrip = (hotel: RankedHotelSearchResult): void => {
     void recordHotelMemory({ action: "saved", hotel, city: resolvedCity ?? city });
     onAddHotel(hotel);
+    onSavedToTrip?.(hotel);
+    setSavedHotelIds((prev) => new Set([...prev, hotel.id]));
   };
 
   const handleDismiss = (hotel: RankedHotelSearchResult): void => {
     setDismissedIds((prev) => new Set([...prev, hotel.id]));
+    if (detailHotelId === hotel.id) setDetailHotelId(null);
     void recordHotelMemory({ action: "dismissed", hotel, city: resolvedCity ?? city }).then((summary) => {
       setLearningNote(summary ?? `Got it — we'll adjust future picks.`);
       if (summary) setPreferenceInsight(summary);
@@ -362,7 +401,12 @@ export function TripHotelSearch({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-sm font-bold text-slate-900 dark:text-white">{resolvedCity ?? city}</p>
-              <p className="text-[11px] text-slate-500">{checkIn} → {checkOut} · {visibleResults.length} results</p>
+              <p className="text-[11px] text-slate-500">
+                {checkIn} → {checkOut} ·{" "}
+                {mapBounds && resultsView === "map"
+                  ? `${hotelsInView.length} in view · ${visibleResults.length} total`
+                  : `${visibleResults.length} results`}
+              </p>
             </div>
             <div className="flex gap-1.5">
               <button type="button" onClick={() => setResultsView("map")} className={`rounded-lg px-2.5 py-1 text-[11px] font-bold ${resultsView === "map" ? "bg-sky-600 text-white" : "border border-slate-300 text-slate-600"}`}>Map</button>
@@ -378,6 +422,12 @@ export function TripHotelSearch({
           {(preferenceInsight || learningNote) ? (
             <p className="rounded-lg border border-sky-200/80 bg-sky-50/80 px-3 py-2 text-[11px] leading-relaxed text-sky-950 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">
               {learningNote ?? preferenceInsight}
+            </p>
+          ) : null}
+
+          {savedHotelIds.size > 0 ? (
+            <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
+              {savedHotelIds.size} hotel{savedHotelIds.size === 1 ? "" : "s"} saved to your trip — search stays open so you can compare more.
             </p>
           ) : null}
 
@@ -407,67 +457,80 @@ export function TripHotelSearch({
           {!loading ? renderErrorWithSuggestions() : null}
 
           {!loading && visibleResults.length > 0 && resultsView === "map" && cityCenter ? (
-            <div className="grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
-              <HotelStayMap
-                city={resolvedCity ?? city}
-                centerLat={cityCenter.lat}
-                centerLng={cityCenter.lng}
-                hotels={visibleResults}
-                selectedId={mapSelectedId}
-                onSelect={(hotel) => setMapSelectedId(hotel.id)}
-              />
-              <div className="max-h-80 space-y-1.5 overflow-y-auto lg:max-h-[22rem]">
+            <div className="grid gap-3 lg:grid-cols-[1.15fr_0.85fr]">
+              <div className="space-y-3">
+                <HotelStayMap
+                  city={resolvedCity ?? city}
+                  centerLat={cityCenter.lat}
+                  centerLng={cityCenter.lng}
+                  hotels={mappedHotels}
+                  selectedId={mapSelectedId}
+                  onSelect={openDetail}
+                  onBoundsChange={setMapBounds}
+                />
+                {detailHotel ? (
+                  <HotelDetailSheet
+                    hotel={detailHotel}
+                    allHotels={visibleResults}
+                    city={resolvedCity ?? city}
+                    saved={savedHotelIds.has(detailHotel.id)}
+                    onSaveToTrip={() => handleSaveToTrip(detailHotel)}
+                    onClose={() => setDetailHotelId(null)}
+                  />
+                ) : (
+                  <p className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-center text-[11px] text-slate-500 dark:border-slate-700">
+                    Tap a price pin or hotel below to see photos, rooms, and booking options.
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  {mapBounds ? `${hotelsInView.length} in this area` : "All hotels"}
+                </p>
+                <div className="max-h-80 space-y-1.5 overflow-y-auto lg:max-h-[32rem]">
+                  {(mapBounds ? hotelsInView : mappedHotels).map((hotel) => (
+                    <HotelRankCard
+                      key={hotel.id}
+                      hotel={hotel}
+                      totalInSearch={results.length}
+                      compact
+                      selected={mapSelectedId === hotel.id}
+                      onSelect={() => openDetail(hotel)}
+                      onAdd={() => openDetail(hotel)}
+                      onDismiss={() => handleDismiss(hotel)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {!loading && visibleResults.length > 0 && resultsView === "list" ? (
+            <div className="space-y-3">
+              <div className="max-h-[28rem] space-y-1.5 overflow-y-auto">
                 {visibleResults.map((hotel) => (
                   <HotelRankCard
                     key={hotel.id}
                     hotel={hotel}
                     totalInSearch={results.length}
                     compact
-                    selected={mapSelectedId === hotel.id}
-                    onSelect={() => setMapSelectedId(hotel.id)}
-                    onAdd={() => handleAdd(hotel)}
+                    selected={detailHotelId === hotel.id}
+                    onSelect={() => openDetail(hotel)}
+                    onAdd={() => openDetail(hotel)}
                     onDismiss={() => handleDismiss(hotel)}
                   />
                 ))}
               </div>
-            </div>
-          ) : null}
-
-          {!loading && visibleResults.length > 0 && resultsView === "list" ? (
-            <div className="max-h-[28rem] space-y-1.5 overflow-y-auto">
-              {visibleResults.map((hotel) => (
-                <HotelRankCard
-                  key={hotel.id}
-                  hotel={hotel}
-                  totalInSearch={results.length}
-                  compact
-                  selected={mapSelectedId === hotel.id}
-                  onSelect={() => setMapSelectedId(hotel.id)}
-                  onAdd={() => handleAdd(hotel)}
-                  onDismiss={() => handleDismiss(hotel)}
+              {detailHotel ? (
+                <HotelDetailSheet
+                  hotel={detailHotel}
+                  allHotels={visibleResults}
+                  city={resolvedCity ?? city}
+                  saved={savedHotelIds.has(detailHotel.id)}
+                  onSaveToTrip={() => handleSaveToTrip(detailHotel)}
+                  onClose={() => setDetailHotelId(null)}
                 />
-              ))}
-            </div>
-          ) : null}
-
-          {!loading && selectedHotel && resultsView === "map" ? (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900/50">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-slate-900 dark:text-white">{selectedHotel.name}</p>
-                  <p className="text-[11px] text-slate-500">{selectedHotel.whyLine}</p>
-                </div>
-                <span
-                  className="shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase text-white"
-                  style={{ backgroundColor: hotelMapPinStyle(selectedHotel, scoreRange).bg }}
-                >
-                  {hotelMapPinStyle(selectedHotel, scoreRange).label}
-                </span>
-              </div>
-              <div className="mt-2 flex gap-2">
-                <button type="button" onClick={() => handleAdd(selectedHotel)} className="flex-1 rounded-lg bg-sky-600 py-2 text-xs font-bold text-white">Add to trip</button>
-                <button type="button" onClick={() => handleDismiss(selectedHotel)} className="rounded-lg border border-slate-300 px-3 py-2 text-[11px] font-semibold text-slate-600">Not for me</button>
-              </div>
+              ) : null}
             </div>
           ) : null}
         </>

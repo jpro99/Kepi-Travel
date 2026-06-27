@@ -29,11 +29,6 @@ export function HotelSearchModal({
 }: HotelSearchModalProps) {
   if (!open) return null;
 
-  const handleAdd = (hotel: HotelSearchResult): void => {
-    onAddHotel(hotel);
-    onClose();
-  };
-
   return (
     <div className="fixed inset-0 z-[85] flex items-end justify-center bg-slate-950/70 p-0 sm:items-center sm:p-4 md:p-6 lg:p-8">
       <div className={SEARCH_MODAL_PANEL}>
@@ -67,7 +62,7 @@ export function HotelSearchModal({
             defaultCityIata={defaultCityIata}
             defaultCheckIn={defaultCheckIn}
             defaultCheckOut={defaultCheckOut}
-            onAddHotel={handleAdd}
+            onAddHotel={onAddHotel}
           />
         </div>
       </div>
