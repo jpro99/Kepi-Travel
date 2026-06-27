@@ -76,9 +76,13 @@ export type TravelStyleMode = keyof TravelStyleScores;
 export interface TravelStyleProfile {
   completed: boolean;
   skipped?: boolean;
+  /** Scores from the ten-question travel quiz (0–1 each). */
   scores: TravelStyleScores;
   dominant: TravelStyleMode;
   completedAt?: string;
+  /** Pro: manual slider mix (0–1 each). When set, overrides dominant for UX. */
+  guidanceMix?: TravelStyleScores;
+  mixCustomized?: boolean;
 }
 
 export interface TravelerGenome {

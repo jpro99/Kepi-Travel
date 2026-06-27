@@ -6,6 +6,7 @@ import {
   TRAVEL_STYLE_QUESTIONS,
   scoreTravelStyleAnswers,
   createSkippedTravelStyle,
+  effectiveDominantMode,
 } from "@/lib/travelStyle/travelStyleQuiz";
 import type { TravelStyleMode, TravelStyleProfile, TravelerGenome } from "@/lib/traveler/types";
 
@@ -33,7 +34,7 @@ export function TravelStyleQuiz({ onComplete, onSkip }: TravelStyleQuizProps) {
         <p className="text-[10px] font-black uppercase tracking-widest text-sky-600">Travel style</p>
         <h2 className="mt-1 text-xl font-bold text-slate-900 dark:text-white">How do you like to travel?</h2>
         <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-          Ten quick taps — Kepi adjusts tone and detail. No labels, no test score — just your travel rhythm.
+          Ten travel scenarios — Kepi picks your guidance style: fast, smart, calm, or structured.
         </p>
 
         <div className="mt-4 space-y-4">
@@ -91,15 +92,19 @@ export function TravelStyleQuiz({ onComplete, onSkip }: TravelStyleQuizProps) {
 export function TravelStyleBadge({ profile }: { profile: TravelStyleProfile | null | undefined }) {
   const label = useMemo(() => {
     if (!profile?.completed || profile.skipped) return null;
-    return TRAVEL_STYLE_LABELS[profile.dominant];
+    const mode = effectiveDominantMode(profile);
+    if (!mode) return null;
+    return TRAVEL_STYLE_LABELS[mode];
   }, [profile]);
 
   if (!label) return null;
 
   return (
-    <p className="text-xs text-slate-500 dark:text-slate-400">
-      Your travel style: <span className="font-semibold text-slate-800 dark:text-slate-200">{label.title}</span> —{" "}
-      {label.tagline}
+    <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+      {label.emoji} {label.guidanceLabel} — {label.tagline}{" "}
+      <a href="/settings/travel-profile#travel-guidance" className="font-semibold text-sky-700 underline">
+        Adjust
+      </a>
     </p>
   );
 }

@@ -62,12 +62,12 @@ export const TRAVEL_STYLE_QUESTIONS: TravelStyleQuestion[] = [
   },
   {
     id: "app",
-    prompt: "Your ideal trip app screen is…",
+    prompt: "During a trip, the best Kepi screen shows…",
     options: [
-      { mode: "quick_board", label: "One big Next button" },
-      { mode: "route_scout", label: "Details and comparisons" },
-      { mode: "travel_companion", label: "Friendly progress check-ins" },
-      { mode: "flight_plan", label: "Organized tabs and lists" },
+      { mode: "quick_board", label: "What's next — one tap" },
+      { mode: "route_scout", label: "Connections, timing, and why" },
+      { mode: "travel_companion", label: "A calm check-in that you're on track" },
+      { mode: "flight_plan", label: "Today's list, checked off as you go" },
     ],
   },
   {
@@ -112,25 +112,41 @@ export const TRAVEL_STYLE_QUESTIONS: TravelStyleQuestion[] = [
   },
 ];
 
+export const TRAVEL_GUIDANCE_MODES: TravelStyleMode[] = [
+  "quick_board",
+  "route_scout",
+  "travel_companion",
+  "flight_plan",
+];
+
+/** Travel-themed guidance labels shown in settings and badges. */
 export const TRAVEL_STYLE_LABELS: Record<
   TravelStyleMode,
-  { title: string; tagline: string }
+  { title: string; guidanceLabel: string; tagline: string; emoji: string }
 > = {
   quick_board: {
     title: "Quick Board",
-    tagline: "Fast boarding — book, go, minimal friction",
+    guidanceLabel: "Fast guidance",
+    tagline: "Short nudges — gate, go, minimal friction",
+    emoji: "⚡",
   },
   route_scout: {
     title: "Route Scout",
-    tagline: "Compare routes, value, and the why behind picks",
+    guidanceLabel: "Smart guidance",
+    tagline: "Compare options, tradeoffs, and the why",
+    emoji: "🧭",
   },
   travel_companion: {
     title: "Travel Companion",
-    tagline: "Warm guidance and steady encouragement",
+    guidanceLabel: "Calm guidance",
+    tagline: "Steady encouragement — you've got this",
+    emoji: "🤝",
   },
   flight_plan: {
     title: "Flight Plan",
-    tagline: "Organized steps, lists, and structure",
+    guidanceLabel: "Structured guidance",
+    tagline: "Checklists, steps, and clear priorities",
+    emoji: "📋",
   },
 };
 
@@ -151,9 +167,7 @@ export function scoreTravelStyleAnswers(answers: TravelStyleMode[]): TravelStyle
     travel_companion: counts.travel_companion / total,
     flight_plan: counts.flight_plan / total,
   };
-  const dominant = (Object.entries(scores) as Array<[TravelStyleMode, number]>).sort(
-    (a, b) => b[1] - a[1],
-  )[0]![0];
+  const dominant = dominantFromScores(scores);
 
   return {
     completed: true,
@@ -161,6 +175,62 @@ export function scoreTravelStyleAnswers(answers: TravelStyleMode[]): TravelStyle
     dominant,
     completedAt: new Date().toISOString(),
   };
+}
+
+export function dominantFromScores(scores: TravelStyleScores): TravelStyleMode {
+  return (Object.entries(scores) as Array<[TravelStyleMode, number]>).sort((a, b) => b[1] - a[1])[0]![0];
+}
+
+/** Quiz scores, or Pro slider mix when the user has customized. */
+export function effectiveStyleScores(profile: TravelStyleProfile | null | undefined): TravelStyleScores | null {
+  if (!profile || profile.skipped || !profile.completed) return null;
+  if (profile.mixCustomized && profile.guidanceMix) return profile.guidanceMix;
+  return profile.scores;
+}
+
+export function effectiveDominantMode(profile: TravelStyleProfile | null | undefined): TravelStyleMode | null {
+  const scores = effectiveStyleScores(profile);
+  if (!scores) return null;
+  return dominantFromScores(scores);
+}
+
+export function normalizeGuidanceMix(raw: TravelStyleScores): TravelStyleScores {
+  const total =
+    raw.quick_board + raw.route_scout + raw.travel_companion + raw.flight_plan || 1;
+  return {
+    quick_board: raw.quick_board / total,
+    route_scout: raw.route_scout / total,
+    travel_companion: raw.travel_companion / total,
+    flight_plan: raw.flight_plan / total,
+  };
+}
+
+export function applyGuidanceMix(
+  profile: TravelStyleProfile,
+  mix: TravelStyleScores,
+): TravelStyleProfile {
+  const normalized = normalizeGuidanceMix(mix);
+  return {
+    ...profile,
+    guidanceMix: normalized,
+    mixCustomized: true,
+    dominant: dominantFromScores(normalized),
+  };
+}
+
+export function clearGuidanceMix(profile: TravelStyleProfile): TravelStyleProfile {
+  const { guidanceMix: _g, mixCustomized: _m, ...rest } = profile;
+  return { ...rest, dominant: dominantFromScores(profile.scores) };
+}
+
+/** Maps travel style to app nudge density (toast / alert frequency). */
+export function guidanceToneFromStyle(
+  profile: TravelStyleProfile | null | undefined,
+): "subtle" | "standard" {
+  const scores = effectiveStyleScores(profile);
+  if (!scores) return "standard";
+  if (scores.quick_board >= 0.35 && scores.quick_board >= scores.route_scout) return "subtle";
+  return "standard";
 }
 
 export function createSkippedTravelStyle(): TravelStyleProfile {
@@ -179,10 +249,10 @@ export interface TravelStyleUX {
 }
 
 export function travelStyleUX(profile: TravelStyleProfile | null | undefined): TravelStyleUX {
-  if (!profile || profile.skipped) {
+  if (!profile || profile.skipped || !profile.completed) {
     return { detailLevel: "standard", showEncouragement: false, preferChecklists: false };
   }
-  const d = profile.dominant;
+  const d = effectiveDominantMode(profile) ?? profile.dominant;
   if (d === "quick_board") {
     return { detailLevel: "minimal", showEncouragement: false, preferChecklists: false };
   }

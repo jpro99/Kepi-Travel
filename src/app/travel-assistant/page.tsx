@@ -129,6 +129,7 @@ import {
   skipTravelStyleOnGenome,
 } from "@/components/travelAssistant/TravelStyleQuiz";
 import type { TravelStyleProfile } from "@/lib/traveler/types";
+import { guidanceToneFromStyle } from "@/lib/travelStyle/travelStyleQuiz";
 import { ReferralCard } from "@/components/referral/ReferralCard";
 import { WeatherCard } from "@/components/travelAssistant/WeatherCard";
 import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntelligencePanel";
@@ -1998,6 +1999,7 @@ export default function TravelAssistantPage() {
         const ts = data?.genome?.travelStyle;
         if (ts?.completed || ts?.skipped) {
           setTravelStyleProfile(ts);
+          setGuidanceTone(guidanceToneFromStyle(ts));
           return;
         }
         setTravelStyleQuizOpen(true);
@@ -2008,6 +2010,7 @@ export default function TravelAssistantPage() {
   const handleTravelStyleComplete = useCallback((profile: TravelStyleProfile) => {
     setTravelStyleProfile(profile);
     setTravelStyleQuizOpen(false);
+    setGuidanceTone(guidanceToneFromStyle(profile));
     void saveTravelStyleToGenome(profile).catch(() => undefined);
   }, []);
 
@@ -2022,6 +2025,14 @@ export default function TravelAssistantPage() {
       })
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get("retakeTravelStyle") !== "1" || !user?.id) return;
+    setTravelStyleQuizOpen(true);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("retakeTravelStyle");
+    window.history.replaceState({}, "", url.toString());
+  }, [searchParams, user?.id]);
 
   // Auto-join family group if ?joinFamily=CODE in URL
   useEffect(() => {

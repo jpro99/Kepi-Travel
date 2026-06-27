@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { GeoAirport, PointsBalance, StatusEntry, TravelInstrument, TravelerGenome } from "@/lib/traveler/types";
+import { TravelGuidanceSettings } from "@/components/travelAssistant/TravelGuidanceSettings";
 import { generateId } from "@/lib/utils/generateId";
 
 const INSTRUMENT_TYPES: TravelInstrument["type"][] = [
@@ -106,6 +107,8 @@ export default function TravelProfileSettingsPage() {
         </p>
         {saving ? <p className="mt-2 text-xs text-blue-600">Saving…</p> : null}
         {!saving && savedAt ? <p className="mt-2 text-xs text-emerald-600">Saved.</p> : null}
+
+        <TravelGuidanceSettings genome={genome} onSave={save} />
 
         {/* Home airports */}
         <div className="mt-8 rounded-lg bg-white p-8 shadow-md">
