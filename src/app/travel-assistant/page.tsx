@@ -105,6 +105,15 @@ import { TripItineraryPanel, useItineraryPanelPrefs } from "@/components/travelA
 import { ResizableItineraryPane } from "@/components/travelAssistant/ResizableItineraryPane";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
+import { RecordTripModal } from "@/components/decision/RecordTripModal";
+import {
+  BookFlightsWizard,
+  readStoredTripPlan,
+  writeStoredTripPlan,
+  type StoredTripPlan,
+} from "@/components/travelAssistant/BookFlightsWizard";
+import { buildTripPlanFromIntent } from "@/lib/travelAssistant/tripPlanFromIntent";
+import { buildFlightLegsFromIntent, defaultEnabledLegIds } from "@/lib/decision/flightLegPlanner";
 import { OnTrackButton } from "@/components/travelAssistant/OnTrackButton";
 import { TripSearch, type TripSearchSelection } from "@/components/travelAssistant/TripSearch";
 import { TripSwitcher } from "@/components/travelAssistant/TripSwitcher";
@@ -2091,6 +2100,12 @@ export default function TravelAssistantPage() {
   const [pushBusy, setPushBusy] = useState(false);
   const [pushMessage, setPushMessage] = useState<string | null>(null);
   const [reservationsCalendarView, setReservationsCalendarView] = useState(false);
+  const [talkPlannerOpen, setTalkPlannerOpen] = useState(false);
+  const [talkPlannerLoading, setTalkPlannerLoading] = useState(false);
+  const [bookFlightsWizardOpen, setBookFlightsWizardOpen] = useState(false);
+  const [storedTripPlan, setStoredTripPlan] = useState<StoredTripPlan | null>(null);
+  const pendingTalkDayNotesRef = useRef<Record<string, string> | null>(null);
+  const pendingTalkPlanRef = useRef<StoredTripPlan | null>(null);
   const [showCompletedFlights, setShowCompletedFlights] = useState(false);
   const [reservationsRefreshing, setReservationsRefreshing] = useState(false);
   const [ticketScanBusy, setTicketScanBusy] = useState(false);
@@ -6964,49 +6979,62 @@ export default function TravelAssistantPage() {
     })();
   };
 
-  const addDay = useCallback((dateKey: string, days: number): string => {
-    const ms = Date.parse(`${dateKey}T12:00:00Z`) + days * 86_400_000;
-    return new Date(ms).toISOString().slice(0, 10);
-  }, []);
-
-  const handlePlanDay = useCallback(
-    (dateKey: string, intent: ParsedDayIntent, mode: DayPlanMode): void => {
-      const city = intent.toCity ?? intent.stayCity;
-      if (mode === "hotel" && city) {
-        const formatted = formatHotelSearchCityLabel(city);
-        handleAddCityStay({
-          city: formatted.label || city,
-          checkIn: dateKey,
-          checkOut: addDay(dateKey, 1),
+  const handleTalkPlanTrip = useCallback(
+    async (prompt: string): Promise<void> => {
+      setTalkPlannerLoading(true);
+      try {
+        const plan = buildTripPlanFromIntent(prompt);
+        const legs = buildFlightLegsFromIntent(plan.intent);
+        pendingTalkDayNotesRef.current = plan.dayNotes;
+        pendingTalkPlanRef.current = {
+          rawPrompt: prompt,
+          intent: plan.intent,
+          enabledLegIds: defaultEnabledLegIds(legs),
+          statusNote: plan.intent.loyaltyPrograms?.join(", ") ?? plan.intent.preferredAirlines?.join(", "),
+        };
+        const saved = await handleSaveTripPlanningSetup({
+          tripName: plan.tripName,
+          destination: plan.destination,
+          departureDate: plan.intent.startDate,
+          returnDate: plan.intent.endDate,
         });
-        setHotelSearchSegment({
-          id: `day-plan-${dateKey}`,
-          city: formatted.label || city,
-          cityIata: formatted.iata,
-          checkIn: dateKey,
-          checkOut: addDay(dateKey, 1),
-          label: `${formatted.label || city} · ${dateKey}`,
-          source: "manual",
-          status: "missing",
-          needsDecision: false,
-          stayIntent: "needs_hotel",
-          nights: 1,
-        } as TripStaySegment);
-        setHotelSearchModalOpen(true);
-        navigateToConsumerTab("hotels");
-        setToast(`Hotel search ready for ${formatted.label || city}.`);
-        return;
+        if (!saved) {
+          pendingTalkDayNotesRef.current = null;
+          pendingTalkPlanRef.current = null;
+          return;
+        }
+        setTalkPlannerOpen(false);
+        setReservationsCalendarView(true);
+        setItineraryPanelOpen(true);
+        setBookFlightsWizardOpen(true);
+        setToast("Your trip is on the calendar — pick flights when you're ready.");
+      } finally {
+        setTalkPlannerLoading(false);
       }
-      if (mode === "flight") {
-        navigateToConsumerTab("flights");
-        setToast(intent.fromCity && intent.toCity ? `Flights: ${intent.fromCity} → ${intent.toCity}` : "Open Flights to book this leg.");
-        return;
-      }
-      navigateToConsumerTab("flights");
-      setToast(`${mode.charAt(0).toUpperCase()}${mode.slice(1)} planning for ${intent.summary}`);
     },
-    [addDay, handleAddCityStay, navigateToConsumerTab],
+    [handleSaveTripPlanningSetup],
   );
+
+  useEffect(() => {
+    if (!activeTripId) return;
+    setStoredTripPlan(readStoredTripPlan(activeTripId));
+    if (!pendingTalkDayNotesRef.current) return;
+    itineraryPrefs.replaceDayNotes(pendingTalkDayNotesRef.current);
+    if (pendingTalkPlanRef.current) {
+      writeStoredTripPlan(activeTripId, pendingTalkPlanRef.current);
+      setStoredTripPlan(pendingTalkPlanRef.current);
+    }
+    pendingTalkDayNotesRef.current = null;
+    pendingTalkPlanRef.current = null;
+  }, [activeTripId, itineraryPrefs.replaceDayNotes]);
+
+  useEffect(() => {
+    if (!showUnconfiguredTripShell || !activeTripId || typeof window === "undefined") return;
+    const key = `kepi:talk-prompted:${activeTripId}`;
+    if (window.localStorage.getItem(key)) return;
+    window.localStorage.setItem(key, "1");
+    setTalkPlannerOpen(true);
+  }, [activeTripId, showUnconfiguredTripShell]);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const toggleMemberSharing = (memberId: string): void => {
@@ -7193,6 +7221,50 @@ export default function TravelAssistantPage() {
     const nextUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, "", nextUrl);
   }, []);
+
+  const addDay = useCallback((dateKey: string, days: number): string => {
+    const ms = Date.parse(`${dateKey}T12:00:00Z`) + days * 86_400_000;
+    return new Date(ms).toISOString().slice(0, 10);
+  }, []);
+
+  const handlePlanDay = useCallback(
+    (dateKey: string, intent: ParsedDayIntent, mode: DayPlanMode): void => {
+      const city = intent.toCity ?? intent.stayCity;
+      if (mode === "hotel" && city) {
+        const formatted = formatHotelSearchCityLabel(city);
+        handleAddCityStay({
+          city: formatted.label || city,
+          checkIn: dateKey,
+          checkOut: addDay(dateKey, 1),
+        });
+        setHotelSearchSegment({
+          id: `day-plan-${dateKey}`,
+          city: formatted.label || city,
+          cityIata: formatted.iata,
+          checkIn: dateKey,
+          checkOut: addDay(dateKey, 1),
+          label: `${formatted.label || city} · ${dateKey}`,
+          source: "manual",
+          status: "missing",
+          needsDecision: false,
+          stayIntent: "needs_hotel",
+          nights: 1,
+        } as TripStaySegment);
+        setHotelSearchModalOpen(true);
+        navigateToConsumerTab("hotels");
+        setToast(`Hotel search ready for ${formatted.label || city}.`);
+        return;
+      }
+      if (mode === "flight") {
+        navigateToConsumerTab("flights");
+        setToast(intent.fromCity && intent.toCity ? `Flights: ${intent.fromCity} → ${intent.toCity}` : "Open Flights to book this leg.");
+        return;
+      }
+      navigateToConsumerTab("flights");
+      setToast(`${mode.charAt(0).toUpperCase()}${mode.slice(1)} planning for ${intent.summary}`);
+    },
+    [addDay, handleAddCityStay, navigateToConsumerTab, setToast],
+  );
 
   const handleReservationsRefresh = useCallback(async (): Promise<void> => {
     if (reservationsRefreshing) {
@@ -7802,6 +7874,26 @@ export default function TravelAssistantPage() {
         hotelSearchCheckIn={effectiveHotelSearchDefaults.checkIn}
         hotelSearchCheckOut={effectiveHotelSearchDefaults.checkOut}
       />
+      <RecordTripModal
+        open={talkPlannerOpen}
+        loading={talkPlannerLoading}
+        variant="consumer"
+        onClose={() => setTalkPlannerOpen(false)}
+        onSubmit={(prompt) => {
+          void handleTalkPlanTrip(prompt);
+        }}
+      />
+      <BookFlightsWizard
+        open={bookFlightsWizardOpen}
+        tripPlan={storedTripPlan}
+        onClose={() => setBookFlightsWizardOpen(false)}
+        onSavePrefs={(prefs) => {
+          if (!activeTripId || !storedTripPlan) return;
+          const next = { ...storedTripPlan, ...prefs };
+          writeStoredTripPlan(activeTripId, next);
+          setStoredTripPlan(next);
+        }}
+      />
       <HotelSearchModal
         open={hotelSearchModalOpen}
         tripName={activeTrip?.name}
@@ -8196,19 +8288,25 @@ export default function TravelAssistantPage() {
                     <p className="text-[10px] font-bold uppercase tracking-widest text-sky-300/70">Welcome to Kepi</p>
                     <p className="text-2xl font-black text-white mt-1">Where to next? ✈️</p>
                     <p className="text-sky-100/70 text-sm mt-2 leading-relaxed">
-                      Tell Kepi your trip and it finds the best flights, tracks your gate, and keeps your family on the map.
+                      Just talk to us — tell us your dates, cities, and how many nights in each place. We&apos;ll build your calendar and itinerary.
                     </p>
                   </div>
                   <div className="mx-4 mb-4 space-y-3">
-                    {/* Primary CTA */}
+                    <button
+                      type="button"
+                      onClick={() => setTalkPlannerOpen(true)}
+                      className="w-full rounded-2xl bg-[#f4c95d] py-4 text-center font-black text-[#0b1f3a] text-base active:opacity-80"
+                    >
+                      🎙 Tell us about your trip
+                    </button>
+                    <p className="text-center text-xs text-sky-200/40">or</p>
                     <button
                       type="button"
                       onClick={openTripPlanningWizard}
-                      className="w-full rounded-2xl bg-[#f4c95d] py-4 text-center font-black text-[#0b1f3a] text-base active:opacity-80"
+                      className="w-full rounded-2xl border border-white/10 bg-white/8 py-3 text-center text-sm font-semibold text-white active:opacity-80"
                     >
-                      ⚡ Plan my next trip
+                      Set dates manually
                     </button>
-                    <p className="text-center text-xs text-sky-200/40">or</p>
                     <button
                       type="button"
                       onClick={() => navigateToConsumerTab("flights" as ConsumerTab)}
@@ -8364,6 +8462,56 @@ export default function TravelAssistantPage() {
                     Day-by-day plan, print or send to your phone, and review gaps when you&apos;re ready.
                   </p>
                 </button>
+              ) : null}
+
+              {activeTrip && isTripShellConfigured(activeTrip) ? (
+                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-bold text-slate-900 dark:text-slate-100">Trip calendar</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {activeTrip.startDate} → {activeTrip.endDate}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {storedTripPlan ? (
+                        <button
+                          type="button"
+                          onClick={() => setBookFlightsWizardOpen(true)}
+                          className="rounded-xl bg-sky-600 px-3 py-1.5 text-xs font-bold text-white"
+                        >
+                          Book flights
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setTalkPlannerOpen(true)}
+                          className="rounded-xl border border-sky-200 px-3 py-1.5 text-xs font-bold text-sky-800 dark:border-sky-700 dark:text-sky-200"
+                        >
+                          Edit trip story
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setReservationsCalendarView((value) => !value)}
+                        className="rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-200"
+                      >
+                        {reservationsCalendarView ? "Hide calendar" : "Show calendar"}
+                      </button>
+                    </div>
+                  </div>
+                  {reservationsCalendarView ? (
+                    <div className="mt-4">
+                      <TripCalendarView
+                        reservations={consumerReservationsSorted}
+                        tripStartDate={activeTrip.startDate}
+                        tripEndDate={activeTrip.endDate}
+                        dayNotes={itineraryPrefs.dayNotes}
+                        onReservationTap={(id) => openDrawer("reservation", id)}
+                      />
+                    </div>
+                  ) : null}
+                </section>
               ) : null}
 
               {consumerReservationsSorted.length === 0 ? (
