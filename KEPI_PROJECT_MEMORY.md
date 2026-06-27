@@ -71,6 +71,8 @@ Project skills live in `.cursor/skills/` — these are **playbooks for Cursor ag
 
 **Local control UI:** `bot-deck/` — run `cd bot-deck && npm start` → http://127.0.0.1:3847 (phone: same Wi‑Fi). Assign tasks, edit memory, copy Cursor prompts. Does **not** auto-spend AI credits.
 
+**Remote control UI:** https://kepitravel.com/admin/bots — admin login + `ADMIN_USER_IDS`. Redis-backed tasks/memory; works from phone anywhere (no PC required).
+
 **How Jeff uses them:** Bot Deck for tasks/memory → paste prompt in Cursor → mark task done.
 
 ---
