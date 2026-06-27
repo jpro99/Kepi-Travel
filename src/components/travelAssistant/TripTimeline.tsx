@@ -11,10 +11,12 @@ import {
   isPlannedReservation,
   isPlaceholderScheduleTime,
 } from "@/lib/travelAssistant/plannedReservationMatch";
+import { ReservationQuickLinks } from "@/components/travelAssistant/ReservationQuickLinks";
+import type { ReservationLinkInput } from "@/lib/travelAssistant/reservationLinks";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface TimelineReservation {
+interface TimelineReservation extends ReservationLinkInput {
   id: string;
   type: string;
   title: string;
@@ -36,6 +38,7 @@ interface TimelineReservation {
   plannedOnly?: boolean;
   bookUrl?: string;
   quotedPriceUsd?: number;
+  flightAirline?: string;
 }
 
 interface TripTimelineProps {
@@ -52,6 +55,7 @@ interface TripTimelineProps {
   /** Tighter layout for sidebar itinerary panel. */
   compact?: boolean;
   onEmptyDayTap?: (dateKey: string) => void;
+  tripId?: string | null;
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -175,8 +179,8 @@ function isPastDay(dateKey: string): boolean { return dateKey < getTodayKey(); }
 // ─── Reservation card ─────────────────────────────────────────────────────────
 
 function ReservationCard({
-  reservation, onTap, isPast,
-}: { reservation: TimelineReservation; onTap: () => void; isPast: boolean }) {
+  reservation, onTap, isPast, tripId,
+}: { reservation: TimelineReservation; onTap: () => void; isPast: boolean; tripId?: string | null }) {
   const cfg = typeConfig(reservation.type);
   const isFlight = reservation.type === "flight";
   const isHotel = reservation.type === "hotel";
@@ -185,11 +189,10 @@ function ReservationCard({
     !isPlanned || (!isPlaceholderScheduleTime(reservation.localTime) && !isPlaceholderScheduleTime(reservation.flightDepartureTime));
 
   return (
-    <button
-      type="button"
-      onClick={onTap}
+    <div
       className={`group relative w-full overflow-hidden rounded-2xl border text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg ${cfg.card} ${isPast ? "opacity-70 grayscale-[20%]" : ""} ${isPlanned && !isPast ? "border-dashed border-amber-400/70 bg-amber-950/20 dark:border-amber-500/50 dark:bg-amber-950/30" : ""}`}
     >
+      <button type="button" onClick={onTap} className="w-full text-left">
       <div className={`h-0.5 w-full ${isPast ? "bg-slate-400" : isPlanned ? "bg-amber-400" : cfg.dot}`} />
       <div className="p-4">
         <div className="flex items-center justify-between gap-2">
@@ -317,7 +320,11 @@ function ReservationCard({
           </>
         )}
       </div>
-    </button>
+      </button>
+      <div className="px-4 pb-4">
+        <ReservationQuickLinks reservation={reservation} tripId={tripId} compact />
+      </div>
+    </div>
   );
 }
 
@@ -325,12 +332,13 @@ function ReservationCard({
 
 interface DayEntry { key: string; reservations: TimelineReservation[]; }
 
-function DayRow({ day, onReservationTap, showPastConfirmed, dimPast, onEmptyDayTap }: {
+function DayRow({ day, onReservationTap, showPastConfirmed, dimPast, onEmptyDayTap, tripId }: {
   day: DayEntry;
   onReservationTap: (id: string) => void;
   showPastConfirmed: boolean;
   dimPast: boolean;
   onEmptyDayTap?: (dateKey: string) => void;
+  tripId?: string | null;
 }) {
   const past = isPastDay(day.key) && !isToday(day.key);
   const hasEvents = day.reservations.length > 0;
@@ -382,7 +390,7 @@ function DayRow({ day, onReservationTap, showPastConfirmed, dimPast, onEmptyDayT
         {hasEvents && expanded ? (
           <div className="mt-3 space-y-3">
             {day.reservations.map((r) => (
-              <ReservationCard key={r.id} reservation={r} onTap={() => onReservationTap(r.id)} isPast={past} />
+              <ReservationCard key={r.id} reservation={r} onTap={() => onReservationTap(r.id)} isPast={past} tripId={tripId} />
             ))}
           </div>
         ) : null}
@@ -446,6 +454,7 @@ export function TripTimeline({
   showAllTripDays = false,
   compact = false,
   onEmptyDayTap,
+  tripId = null,
 }: TripTimelineProps) {
   const [midTripConfirmed, setMidTripConfirmed] = useState(false);
   const [showPastArchive, setShowPastArchive] = useState(false);
@@ -581,6 +590,7 @@ export function TripTimeline({
             showPastConfirmed={midTripConfirmed}
             dimPast={false}
             onEmptyDayTap={onEmptyDayTap}
+            tripId={tripId}
           />
         ))}
       </div>
@@ -595,6 +605,7 @@ export function TripTimeline({
                 reservation={reservation}
                 onTap={() => onReservationTap?.(reservation.id)}
                 isPast
+                tripId={tripId}
               />
             ))}
           </div>

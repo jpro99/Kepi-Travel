@@ -4,6 +4,7 @@ import { GapAlerts } from "@/components/travelAssistant/GapAlerts";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 
 interface TripItineraryPanelProps {
+  tripId?: string | null;
   tripName: string;
   tripStartDate: string | null;
   tripEndDate?: string | null;
@@ -36,6 +37,7 @@ interface TripItineraryPanelProps {
 }
 
 export function TripItineraryPanel({
+  tripId,
   tripName,
   tripStartDate,
   tripEndDate,
@@ -111,6 +113,7 @@ export function TripItineraryPanel({
             showAllTripDays={hasTripDates}
             compact
             onEmptyDayTap={onEmptyDayTap}
+            tripId={tripId}
             suppressMidTripBanner
           />
         ) : (

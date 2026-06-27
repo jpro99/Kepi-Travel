@@ -224,6 +224,12 @@ interface ReservationDraft {
 interface Reservation extends ReservationDraft {
   id: string;
   source: "imported" | "manual" | "review-accepted";
+  sourceEmailId?: string;
+  sourceEmailSubject?: string;
+  originalEmailText?: string;
+  hasPdfAttachment?: boolean;
+  manageUrl?: string;
+  sourceLinks?: Array<{ label: string; url: string; kind: string }>;
 }
 
 // Journey phase — single source of truth for where the user is in their trip
@@ -247,6 +253,9 @@ interface ReviewItem {
   originalEmailText?: string;
   hasPdfAttachment?: boolean;
   imageBasedEmail?: boolean;
+  sourceEmailId?: string;
+  manageUrl?: string;
+  sourceLinks?: Array<{ label: string; url: string; kind: string }>;
   reviewStatus?: "pending" | "incomplete";
   parserNotes?: string[];
 }
@@ -6523,6 +6532,12 @@ export default function TravelAssistantPage() {
       ...draft,
       id: nextId("res"),
       source: "review-accepted",
+      sourceEmailId: target.sourceEmailId,
+      sourceEmailSubject: target.sourceEmailSubject,
+      originalEmailText: target.originalEmailText,
+      hasPdfAttachment: target.hasPdfAttachment,
+      manageUrl: target.manageUrl,
+      sourceLinks: target.sourceLinks,
     };
     const nextReservations = [newReservation, ...reservations];
     setReservations((prev) => [newReservation, ...prev]);
@@ -7765,6 +7780,7 @@ export default function TravelAssistantPage() {
   if (!advancedWorkspaceEnabled) {
     const itineraryPanel = (
       <TripItineraryPanel
+        tripId={activeTripId}
         tripName={activeTrip?.name ?? "Your trip"}
         tripStartDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
         tripEndDate={activeTrip?.endDate ?? null}

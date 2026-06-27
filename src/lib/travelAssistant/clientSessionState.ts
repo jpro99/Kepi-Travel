@@ -37,6 +37,13 @@ export interface SessionReservation {
   /** Where to purchase (airline, Google Flights, Seats.aero). */
   bookUrl?: string;
   quotedPriceUsd?: number;
+  /** Forwarded confirmation metadata */
+  sourceEmailId?: string;
+  sourceEmailSubject?: string;
+  originalEmailText?: string;
+  hasPdfAttachment?: boolean;
+  manageUrl?: string;
+  sourceLinks?: Array<{ label: string; url: string; kind: string }>;
 }
 
 export interface SessionReviewItem {
@@ -52,6 +59,10 @@ export interface SessionReviewItem {
   originalEmailText?: string;
   hasPdfAttachment?: boolean;
   imageBasedEmail?: boolean;
+  sourceEmailId?: string;
+  sourceEmailSubject?: string;
+  manageUrl?: string;
+  sourceLinks?: Array<{ label: string; url: string; kind: string }>;
   reviewStatus?: "pending" | "incomplete";
   parserNotes?: string[];
 }

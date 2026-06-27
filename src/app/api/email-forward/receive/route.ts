@@ -20,6 +20,7 @@ import {
   findPlannedReplacementIndex,
   mergeIncomingOverPlanned,
 } from "@/lib/travelAssistant/plannedReservationMatch";
+import { extractReservationSourceLinks } from "@/lib/travelAssistant/reservationLinks";
 import { generateId } from "@/lib/utils/generateId";
 
 const AttachmentSchema = z.object({
@@ -626,6 +627,21 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
     let nextUpdateFeed = [...(targetTrip.updateFeed ?? [])];
     let acceptedDraftCount = 0;
     let duplicateDraftCount = 0;
+    const emailSourceLinks = extractReservationSourceLinks({
+      text: parserText,
+      html: parserHtml,
+    });
+    const emailManageUrl =
+      emailSourceLinks.find((link) => link.kind === "manage" || link.kind === "ticket" || link.kind === "checkin")
+        ?.url ?? undefined;
+    const emailSourceMetadata = {
+      sourceEmailId: emailId || undefined,
+      sourceEmailSubject: parserSubject.trim() || undefined,
+      originalEmailText: parserOriginalEmailText.trim().slice(0, 12_000) || undefined,
+      hasPdfAttachment: parserHasPdfAttachment || undefined,
+      manageUrl: emailManageUrl,
+      sourceLinks: emailSourceLinks.length > 0 ? emailSourceLinks : undefined,
+    };
     for (const parserDraftRecord of parserDraftRecords) {
       const rawType = parserDraftRecord.type;
       const parserType: SessionReservation["type"] =
@@ -724,6 +740,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         checkOutDate: parserType === "hotel"
           ? (typeof parserDraftRecord.checkOutDate === "string" ? parserDraftRecord.checkOutDate.trim().slice(0, 10) : "")
           : "",
+        ...emailSourceMetadata,
       };
 
       const plannedReplacementIndex = findPlannedReplacementIndex(nextReservations, parsedReservation);
@@ -870,6 +887,10 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
           ) as SessionReviewItem["missingFields"],
           originalEmailText: parserOriginalEmailText,
           hasPdfAttachment: parserHasPdfAttachment,
+          sourceEmailId: emailId || undefined,
+          sourceEmailSubject: parserSubject.trim() || undefined,
+          manageUrl: emailManageUrl,
+          sourceLinks: emailSourceLinks.length > 0 ? emailSourceLinks : undefined,
           imageBasedEmail: parserImageBasedEmail,
           reviewStatus: "pending" as const,
           parserNotes,
