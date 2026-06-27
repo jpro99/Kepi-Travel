@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { HotelStayProfileCard } from "@/components/travelAssistant/HotelStayProfileCard";
+import { TravelFitEarnBar } from "@/components/travelAssistant/TravelFitEarnBar";
 import { TripStayPlanner } from "@/components/travelAssistant/TripStayPlanner";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 
@@ -29,6 +30,24 @@ interface HotelsTabProps {
   onSearchHotels?: () => void;
   onSearchSegment?: (segment: TripStaySegment) => void;
   onAddCityStay?: (input: { city: string; checkIn: string; checkOut: string }) => void;
+  onSetStayIntent?: (
+    segment: TripStaySegment,
+    intent: "needs_hotel" | "skip",
+  ) => void | Promise<void>;
+  tripId?: string | null;
+  usuallySkipsConnections?: boolean;
+  travelFitReservations?: Array<{
+    id: string;
+    type: string;
+    provider?: string;
+    title?: string;
+    location?: string;
+    localTime?: string;
+    checkOutDate?: string;
+    flightDepartureAirport?: string;
+    flightArrivalAirport?: string;
+    flightDate?: string;
+  }>;
 }
 
 function fmtDate(localTime: string): string {
@@ -78,6 +97,10 @@ export function HotelsTab({
   onSearchHotels,
   onSearchSegment,
   onAddCityStay,
+  onSetStayIntent,
+  tripId,
+  usuallySkipsConnections,
+  travelFitReservations = [],
 }: HotelsTabProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showPast, setShowPast] = useState(false);
@@ -121,12 +144,17 @@ export function HotelsTab({
 
       <HotelStayProfileCard />
 
+      {travelFitReservations.length > 0 ? <TravelFitEarnBar reservations={travelFitReservations} /> : null}
+
       {staySegments.length > 0 && onSearchSegment ? (
         <TripStayPlanner
           segments={staySegments}
           tripName={tripName}
+          tripId={tripId}
+          usuallySkipsConnections={usuallySkipsConnections}
           onSearchSegment={onSearchSegment}
           onAddCityStay={onAddCityStay}
+          onSetStayIntent={onSetStayIntent}
         />
       ) : null}
 

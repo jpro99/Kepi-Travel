@@ -1,7 +1,14 @@
 import { formatHotelSearchCityLabel } from "@/lib/hotels/tripSearchContext";
 import { resolveHotelDestination } from "@/lib/hotels/resolveDestination";
+import {
+  classifyStayStop,
+  resolveStayIntent,
+  type StayIntent,
+  type StayStopKind,
+  type SuggestedStayIntent,
+} from "@/lib/hotels/classifyStayStop";
 
-export type TripStaySegmentStatus = "missing" | "booked" | "partial";
+export type TripStaySegmentStatus = "missing" | "booked" | "partial" | "skipped";
 
 export interface TripStaySegmentInput {
   id: string;
@@ -18,6 +25,12 @@ export interface TripStaySegment extends TripStaySegmentInput {
   reservationId?: string;
   reservationTitle?: string;
   label: string;
+  stopKind: StayStopKind;
+  stayIntent: StayIntent;
+  suggestedIntent: SuggestedStayIntent;
+  intentReason: string;
+  connectionHours: number | null;
+  needsDecision: boolean;
 }
 
 export interface DeriveTripStaySegmentsInput {
@@ -42,6 +55,9 @@ export interface DeriveTripStaySegmentsInput {
     checkOutDate?: string;
   }>;
   manualSegments?: TripStaySegmentInput[];
+  /** Per-segment user decisions keyed by segment id. */
+  stayDecisions?: Record<string, StayIntent | "needs_hotel" | "skip">;
+  usuallySkipsConnections?: boolean;
 }
 
 function isoDate(value: string | null | undefined): string | null {
@@ -57,7 +73,7 @@ function addDays(iso: string, days: number): string {
 
 function nightsBetween(checkIn: string, checkOut: string): number {
   const diff = Date.parse(`${checkOut}T12:00:00Z`) - Date.parse(`${checkIn}T12:00:00Z`);
-  return Math.max(1, Math.round(diff / 86_400_000));
+  return Math.max(0, Math.round(diff / 86_400_000));
 }
 
 function flightDay(f: DeriveTripStaySegmentsInput["flights"][0], kind: "arrival" | "departure"): string | null {
@@ -65,6 +81,20 @@ function flightDay(f: DeriveTripStaySegmentsInput["flights"][0], kind: "arrival"
     return isoDate(f.flightArrivalTime) ?? isoDate(f.flightDate) ?? isoDate(f.localTime);
   }
   return isoDate(f.flightDepartureTime) ?? isoDate(f.flightDate) ?? isoDate(f.localTime);
+}
+
+function flightMs(f: DeriveTripStaySegmentsInput["flights"][0], kind: "arrival" | "departure"): number | null {
+  const raw =
+    kind === "arrival"
+      ? f.flightArrivalTime ?? f.flightDate ?? f.localTime
+      : f.flightDepartureTime ?? f.flightDate ?? f.localTime;
+  if (!raw?.trim()) return null;
+  const normalized = raw.trim().replace("T", " ").slice(0, 16);
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}))?$/.exec(normalized);
+  if (!match) return null;
+  const [, y, mo, d, h = "12", mi = "0"] = match;
+  const ms = Date.UTC(+y, +mo - 1, +d, +h, +mi);
+  return Number.isNaN(ms) ? null : ms;
 }
 
 function hotelCheckout(h: DeriveTripStaySegmentsInput["hotels"][0]): string | null {
@@ -82,7 +112,7 @@ function cityMatchesHotel(city: string, hotel: DeriveTripStaySegmentsInput["hote
   return haystack.includes(stem) || (stem.length >= 4 && haystack.includes(stem.slice(0, 4)));
 }
 
-function segmentStatus(
+function segmentBookingStatus(
   segment: TripStaySegmentInput,
   hotels: DeriveTripStaySegmentsInput["hotels"],
 ): Pick<TripStaySegment, "status" | "reservationId" | "reservationTitle"> {
@@ -114,16 +144,30 @@ function segmentStatus(
   return { status: "missing" };
 }
 
-function buildSegmentLabel(city: string, checkIn: string, checkOut: string, nights: number): string {
-  return `${city} · ${checkIn} → ${checkOut} (${nights} night${nights === 1 ? "" : "s"})`;
+function buildSegmentLabel(
+  city: string,
+  checkIn: string,
+  checkOut: string,
+  nights: number,
+  stopKind: StayStopKind,
+): string {
+  const cityLabel = city.split("(")[0]?.trim() || city;
+  if (stopKind === "connection") {
+    return `${cityLabel} · ${checkIn} · connection only`;
+  }
+  if (nights === 0) {
+    return `${cityLabel} · ${checkIn}`;
+  }
+  return `${cityLabel} · ${checkIn} → ${checkOut} (${nights} night${nights === 1 ? "" : "s"})`;
 }
 
-/** Break a trip into city stay segments for guided hotel search. */
+/** Break a trip into city stops for guided hotel planning. */
 export function deriveTripStaySegments(input: DeriveTripStaySegmentsInput): TripStaySegment[] {
   const manual = input.manualSegments ?? [];
   const tripStart = isoDate(input.tripStartDate);
   const tripEnd = isoDate(input.tripEndDate);
   const today = new Date().toISOString().slice(0, 10);
+  const decisions = input.stayDecisions ?? {};
 
   const rawSegments: TripStaySegmentInput[] = [...manual];
 
@@ -148,7 +192,8 @@ export function deriveTripStaySegments(input: DeriveTripStaySegmentsInput): Trip
     if (checkIn < today) checkIn = today;
 
     let checkOut = nextDepartureDay ?? tripEnd ?? addDays(checkIn, 3);
-    if (checkOut <= checkIn) checkOut = addDays(checkIn, 3);
+    if (nextDepartureDay && checkOut <= checkIn) checkOut = nextDepartureDay;
+    if (!nextDepartureDay && checkOut <= checkIn) checkOut = addDays(checkIn, 3);
     if (tripEnd && checkOut > tripEnd) checkOut = tripEnd;
 
     rawSegments.push({
@@ -190,20 +235,75 @@ export function deriveTripStaySegments(input: DeriveTripStaySegmentsInput): Trip
     .sort((a, b) => a.checkIn.localeCompare(b.checkIn))
     .map((segment) => {
       const nights = nightsBetween(segment.checkIn, segment.checkOut);
-      const booking = segmentStatus(segment, input.hotels);
+      const booking = segmentBookingStatus(segment, input.hotels);
+      const isBooked = booking.status === "booked" || booking.status === "partial";
+
+      const flightIndex = segment.source === "flight" ? sortedFlights.findIndex((f, i) => segment.id === `flight-${f.id}-${i}`) : -1;
+      const nextFlight = flightIndex >= 0 ? sortedFlights[flightIndex + 1] : null;
+      const classification =
+        segment.source === "manual" || segment.source === "trip"
+          ? {
+              stopKind: "destination" as const,
+              suggestedIntent: "needs_hotel" as const,
+              connectionHours: null,
+              reason: "You added this city — plan a hotel unless you say otherwise.",
+            }
+          : classifyStayStop({
+              arrivalDay: segment.checkIn,
+              nextDepartureDay: segment.checkOut,
+              arrivalMs: flightIndex >= 0 ? flightMs(sortedFlights[flightIndex], "arrival") : null,
+              nextDepartureMs: nextFlight ? flightMs(nextFlight, "departure") : null,
+              hasNextFlight: Boolean(nextFlight),
+              usuallySkipsConnections: input.usuallySkipsConnections,
+            });
+
+      const storedIntent = decisions[segment.id];
+      const stayIntent = resolveStayIntent({
+        classification,
+        userIntent: storedIntent ?? null,
+        isBooked,
+        usuallySkipsConnections: input.usuallySkipsConnections,
+      });
+
+      let status = booking.status;
+      if (stayIntent === "skip" && !isBooked) status = "skipped";
+
       const cityLabel = segment.city.split("(")[0]?.trim() || segment.city;
+      const needsDecision = !isBooked && stayIntent === "unknown";
+
       return {
         ...segment,
         nights,
-        label: buildSegmentLabel(cityLabel, segment.checkIn, segment.checkOut, nights),
+        label: buildSegmentLabel(cityLabel, segment.checkIn, segment.checkOut, nights, classification.stopKind),
+        stopKind: classification.stopKind,
+        stayIntent,
+        suggestedIntent: classification.suggestedIntent,
+        intentReason: classification.reason,
+        connectionHours: classification.connectionHours,
+        needsDecision,
+        status,
         ...booking,
       };
     });
 }
 
+/** Segments that still need a hotel booked. */
+export function segmentsNeedingHotel(segments: TripStaySegment[]): TripStaySegment[] {
+  return segments.filter(
+    (segment) =>
+      segment.stayIntent === "needs_hotel" &&
+      (segment.status === "missing" || segment.status === "partial"),
+  );
+}
+
 /** First segment that still needs a hotel — used for "Search next stay" CTA. */
 export function nextMissingStaySegment(segments: TripStaySegment[]): TripStaySegment | null {
-  return segments.find((segment) => segment.status === "missing" || segment.status === "partial") ?? null;
+  return segmentsNeedingHotel(segments)[0] ?? null;
+}
+
+/** Stops waiting for a yes/no hotel decision. */
+export function segmentsAwaitingDecision(segments: TripStaySegment[]): TripStaySegment[] {
+  return segments.filter((segment) => segment.needsDecision);
 }
 
 /** Async helper to enrich manual city names with display labels. */

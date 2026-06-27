@@ -68,6 +68,16 @@ Project skills live in `.cursor/skills/` — these are **playbooks for Cursor ag
 | **Flight** | `.cursor/skills/kepi-flight-bot/SKILL.md` | `bot-deck/memory/flight.md` |
 | **Airport** | `.cursor/skills/kepi-airport-bot/SKILL.md` | `bot-deck/memory/airport.md` |
 | **Map** | `.cursor/skills/kepi-map-bot/SKILL.md` | `bot-deck/memory/map.md` |
+| **Points** | `.cursor/skills/kepi-points-bot/SKILL.md` | — |
+| **Card** | `.cursor/skills/kepi-card-bot/SKILL.md` | — |
+
+## Travel Fit (product)
+
+- **More tab:** Travel Fit card learns airlines, hotels, hubs from reservations; habits saved **locally on device** + optional Redis backup when signed in
+- **Card wallet:** card product names only (no PAN on servers) — `/api/points-profile`
+- **Earn stack:** Hotels tab shows suggested earn path — `/api/travel-fit`
+- **Hybrid model:** free basics; Pro for deep optimization later
+- **Rakuten:** one-tap only, never silent auto-apply
 
 **Local control UI:** `bot-deck/` — run `cd bot-deck && npm start` → http://127.0.0.1:3847 (phone: same Wi‑Fi). Assign tasks, edit memory, copy Cursor prompts. Does **not** auto-spend AI credits.
 

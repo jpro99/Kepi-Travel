@@ -103,6 +103,8 @@ For each finding:
 | Flight | `.cursor/skills/kepi-flight-bot/SKILL.md` |
 | Airport | `.cursor/skills/kepi-airport-bot/SKILL.md` |
 | Map | `.cursor/skills/kepi-map-bot/SKILL.md` |
+| Points / Travel Fit | `.cursor/skills/kepi-points-bot/SKILL.md` |
+| Card earn | `.cursor/skills/kepi-card-bot/SKILL.md` |
 
 These are agent playbooks, not autonomous runtime bots. Jeff instructs the conductor; conductor routes to domain skills.
 

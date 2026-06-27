@@ -64,6 +64,23 @@ export interface SavedPassengerDetails {
   passportCountry?: string;
 }
 
+export interface TravelStyleScores {
+  quick_board: number;
+  route_scout: number;
+  travel_companion: number;
+  flight_plan: number;
+}
+
+export type TravelStyleMode = keyof TravelStyleScores;
+
+export interface TravelStyleProfile {
+  completed: boolean;
+  skipped?: boolean;
+  scores: TravelStyleScores;
+  dominant: TravelStyleMode;
+  completedAt?: string;
+}
+
 export interface TravelerGenome {
   /** Loyalty program balances — updated by user */
   loyaltyBalances?: { programId: string; miles: number; tier?: string; memberNumber?: string }[];
@@ -86,4 +103,6 @@ export interface TravelerGenome {
   corrections: GenomeCorrection[];
   tripCount: number;
   updatedAt: string;
+  /** Lightweight travel-style quiz — tunes UX tone and detail level */
+  travelStyle?: TravelStyleProfile;
 }

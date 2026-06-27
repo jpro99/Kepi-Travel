@@ -120,6 +120,15 @@ import { DisruptionAlert } from "@/components/travelAssistant/DisruptionAlert";
 import { TripReview } from "@/components/travelAssistant/TripReview";
 import { SmartPackingList } from "@/components/travelAssistant/SmartPackingList";
 import { LoyaltyWallet } from "@/components/loyalty/LoyaltyWallet";
+import { PointsTravelProfileCard } from "@/components/travelAssistant/PointsTravelProfileCard";
+import { TravelFitCard } from "@/components/travelAssistant/TravelFitCard";
+import {
+  TravelStyleBadge,
+  TravelStyleQuiz,
+  saveTravelStyleToGenome,
+  skipTravelStyleOnGenome,
+} from "@/components/travelAssistant/TravelStyleQuiz";
+import type { TravelStyleProfile } from "@/lib/traveler/types";
 import { ReferralCard } from "@/components/referral/ReferralCard";
 import { WeatherCard } from "@/components/travelAssistant/WeatherCard";
 import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntelligencePanel";
@@ -1846,6 +1855,9 @@ export default function TravelAssistantPage() {
   const [timelineSectionTab, setTimelineSectionTab] = useState<TimelineSectionTab>("reservations");
   const [, setPackingCompletionPercent] = useState(0);
   const [consumerTab, setConsumerTab] = useState<ConsumerTab>("trip");
+  const [travelStyleProfile, setTravelStyleProfile] = useState<TravelStyleProfile | null>(null);
+  const [travelStyleQuizOpen, setTravelStyleQuizOpen] = useState(false);
+  const travelStyleFetchedRef = useRef(false);
   const [pendingMoreScrollTarget, setPendingMoreScrollTarget] = useState<"readiness-checklist" | null>(null);
   const [emailForwardAddress, setEmailForwardAddress] = useState<string | null>(() => {
     const handle = getEmailHandleFromCookie();
@@ -1885,6 +1897,10 @@ export default function TravelAssistantPage() {
   const [hotelSearchModalOpen, setHotelSearchModalOpen] = useState(false);
   const [hotelSearchSegment, setHotelSearchSegment] = useState<TripStaySegment | null>(null);
   const [manualStaySegmentsByTrip, setManualStaySegmentsByTrip] = useState<Record<string, TripStaySegmentInput[]>>({});
+  const [tripStayDecisionsByTrip, setTripStayDecisionsByTrip] = useState<
+    Record<string, Record<string, "needs_hotel" | "skip">>
+  >({});
+  const [usuallySkipsConnections, setUsuallySkipsConnections] = useState(false);
   const [tripPlanningWizardOpen, setTripPlanningWizardOpen] = useState(false);
   const [tripPlanningWizardPhase, setTripPlanningWizardPhase] = useState<BookingWizardPhase>("setup");
   const [myTripsModalOpen, setMyTripsModalOpen] = useState(false);
@@ -1966,6 +1982,46 @@ export default function TravelAssistantPage() {
       if (guidanceGpsWatchRef.current !== null) { navigator.geolocation.clearWatch(guidanceGpsWatchRef.current); guidanceGpsWatchRef.current = null; }
     };
   }, [startFamilyWatch, stopFamilyWatch]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      travelStyleFetchedRef.current = false;
+      setTravelStyleProfile(null);
+      setTravelStyleQuizOpen(false);
+      return;
+    }
+    if (travelStyleFetchedRef.current) return;
+    travelStyleFetchedRef.current = true;
+    void fetch("/api/traveler/genome")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { genome?: { travelStyle?: TravelStyleProfile } } | null) => {
+        const ts = data?.genome?.travelStyle;
+        if (ts?.completed || ts?.skipped) {
+          setTravelStyleProfile(ts);
+          return;
+        }
+        setTravelStyleQuizOpen(true);
+      })
+      .catch(() => undefined);
+  }, [user?.id]);
+
+  const handleTravelStyleComplete = useCallback((profile: TravelStyleProfile) => {
+    setTravelStyleProfile(profile);
+    setTravelStyleQuizOpen(false);
+    void saveTravelStyleToGenome(profile).catch(() => undefined);
+  }, []);
+
+  const handleTravelStyleSkip = useCallback(() => {
+    setTravelStyleQuizOpen(false);
+    void skipTravelStyleOnGenome()
+      .then(async () => {
+        const res = await fetch("/api/traveler/genome");
+        if (!res.ok) return;
+        const data = (await res.json()) as { genome?: { travelStyle?: TravelStyleProfile } };
+        if (data.genome?.travelStyle) setTravelStyleProfile(data.genome.travelStyle);
+      })
+      .catch(() => undefined);
+  }, []);
 
   // Auto-join family group if ?joinFamily=CODE in URL
   useEffect(() => {
@@ -4099,6 +4155,8 @@ export default function TravelAssistantPage() {
             checkOutDate: reservation.checkOutDate,
           })),
         manualSegments: activeTripId ? manualStaySegmentsByTrip[activeTripId] ?? [] : [],
+        stayDecisions: activeTripId ? tripStayDecisionsByTrip[activeTripId] ?? {} : {},
+        usuallySkipsConnections,
       }),
     [
       activeTrip?.destination,
@@ -4109,7 +4167,56 @@ export default function TravelAssistantPage() {
       consumerTripDestination,
       consumerTripStartDate,
       manualStaySegmentsByTrip,
+      tripStayDecisionsByTrip,
+      usuallySkipsConnections,
     ],
+  );
+
+  useEffect(() => {
+    if (!activeTripId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(`/api/hotels/stay-intent?tripId=${encodeURIComponent(activeTripId)}`, {
+          cache: "no-store",
+        });
+        if (!response.ok || cancelled) return;
+        const data = (await response.json()) as {
+          decisions?: Record<string, "needs_hotel" | "skip">;
+          usuallySkipsConnections?: boolean;
+        };
+        if (cancelled) return;
+        setTripStayDecisionsByTrip((prev) => ({
+          ...prev,
+          [activeTripId]: data.decisions ?? {},
+        }));
+        if (typeof data.usuallySkipsConnections === "boolean") {
+          setUsuallySkipsConnections(data.usuallySkipsConnections);
+        }
+      } catch {
+        /* degrade — planner still works with heuristics */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTripId]);
+
+  const travelFitReservations = useMemo(
+    () =>
+      consumerReservationsSorted.map((r) => ({
+        id: r.id,
+        type: r.type,
+        provider: r.provider,
+        title: r.title,
+        location: r.location,
+        localTime: r.localTime,
+        checkOutDate: r.checkOutDate,
+        flightDepartureAirport: r.flightDepartureAirport,
+        flightArrivalAirport: r.flightArrivalAirport,
+        flightDate: r.flightDate,
+      })),
+    [consumerReservationsSorted],
   );
 
   const effectiveHotelSearchDefaults = useMemo(() => {
@@ -5059,6 +5166,47 @@ export default function TravelAssistantPage() {
         ...prev,
         [activeTripId]: [...(prev[activeTripId] ?? []), segment],
       }));
+    },
+    [activeTripId],
+  );
+
+  const handleSetStayIntent = useCallback(
+    async (segment: TripStaySegment, intent: "needs_hotel" | "skip"): Promise<void> => {
+      if (!activeTripId) return;
+      setTripStayDecisionsByTrip((prev) => ({
+        ...prev,
+        [activeTripId]: {
+          ...(prev[activeTripId] ?? {}),
+          [segment.id]: intent,
+        },
+      }));
+      try {
+        const response = await fetch("/api/hotels/stay-intent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tripId: activeTripId,
+            segmentId: segment.id,
+            intent,
+            city: segment.city,
+            stopKind: segment.stopKind,
+          }),
+        });
+        if (!response.ok) return;
+        const data = (await response.json()) as {
+          decisions?: Record<string, "needs_hotel" | "skip">;
+          usuallySkipsConnections?: boolean;
+        };
+        setTripStayDecisionsByTrip((prev) => ({
+          ...prev,
+          [activeTripId]: data.decisions ?? prev[activeTripId] ?? {},
+        }));
+        if (typeof data.usuallySkipsConnections === "boolean") {
+          setUsuallySkipsConnections(data.usuallySkipsConnections);
+        }
+      } catch {
+        /* optimistic UI already updated */
+      }
     },
     [activeTripId],
   );
@@ -8078,6 +8226,8 @@ export default function TravelAssistantPage() {
             <HotelsTab
               reservations={consumerReservationsSorted.filter(r => r.type === "hotel")}
               tripName={activeTrip?.name}
+              tripId={activeTripId}
+              usuallySkipsConnections={usuallySkipsConnections}
               staySegments={tripStaySegments}
               onReservationTap={(id) => openDrawer("reservation", id)}
               onCheckStatus={(id) => void handleCheckFlightStatus(id)}
@@ -8086,6 +8236,8 @@ export default function TravelAssistantPage() {
               onSearchHotels={openHotelSearchForTrip}
               onSearchSegment={openHotelSearchForSegment}
               onAddCityStay={handleAddCityStay}
+              onSetStayIntent={handleSetStayIntent}
+              travelFitReservations={travelFitReservations}
             />
           ) : (
             <section className="space-y-3">
@@ -8107,6 +8259,43 @@ export default function TravelAssistantPage() {
                   <span className="text-slate-400 text-sm">›</span>
                 </div>
               </button>
+              {/* Travel Fit — learns your habits over time */}
+              <div className="rounded-3xl bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/[0.08] overflow-hidden">
+                <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                  <span className="text-xl">🎯</span>
+                  <div>
+                    <p className="font-semibold text-slate-900 dark:text-white">Travel Fit</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Kepi learns how you travel — airlines, hotels, and earn paths
+                    </p>
+                  </div>
+                </div>
+                <div className="px-4 pb-4 pt-4">
+                  <TravelStyleBadge profile={travelStyleProfile} />
+                  <TravelFitCard
+                    userId={user?.id ?? null}
+                    reservations={travelFitReservations}
+                    travelStyle={travelStyleProfile}
+                  />
+                </div>
+              </div>
+
+              {/* Card wallet for earn suggestions */}
+              <div className="rounded-3xl bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/[0.08] overflow-hidden">
+                <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                  <span className="text-xl">💳</span>
+                  <div>
+                    <p className="font-semibold text-slate-900 dark:text-white">Card wallet</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Which cards you hold — names only, no numbers stored on our servers
+                    </p>
+                  </div>
+                </div>
+                <div className="px-4 pb-4 pt-4">
+                  <PointsTravelProfileCard />
+                </div>
+              </div>
+
               {/* Loyalty Wallet */}
               <div className="rounded-3xl bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/[0.08] overflow-hidden">
                 <div className="flex items-center gap-3 px-5 py-4">
@@ -8476,6 +8665,9 @@ export default function TravelAssistantPage() {
           }}
         />
         <InstallPrompt />
+        {travelStyleQuizOpen ? (
+          <TravelStyleQuiz onComplete={handleTravelStyleComplete} onSkip={handleTravelStyleSkip} />
+        ) : null}
         {tripManagementModals}
         {trips.length === 0 && (
           <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
@@ -9312,6 +9504,9 @@ export default function TravelAssistantPage() {
         }}
       />
       <InstallPrompt />
+      {travelStyleQuizOpen ? (
+        <TravelStyleQuiz onComplete={handleTravelStyleComplete} onSkip={handleTravelStyleSkip} />
+      ) : null}
       {tripManagementModals}
       {trips.length === 0 && (
         <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />

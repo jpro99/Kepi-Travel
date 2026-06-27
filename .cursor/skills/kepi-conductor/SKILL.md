@@ -26,6 +26,8 @@ You coordinate specialized Kepi domain skills. You do not implement everything y
 | Flights, Duffel air, loyalty points on flights, booking | `kepi-flight-bot` |
 | Airport nav, connections, terminals, GE/Mobile Passport | `kepi-airport-bot` |
 | Live map, family GPS, trip timeline geography | `kepi-map-bot` |
+| Travel Fit, miles/points, earn stacks, status projections | `kepi-points-bot` |
+| Credit card catalog, which card to pay with, referrals | `kepi-card-bot` |
 
 ## Rules (non-negotiable)
 

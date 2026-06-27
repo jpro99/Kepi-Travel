@@ -30,6 +30,39 @@ test("decision strategies route returns fast brief without live provider blockin
   assert.equal(payload.brief.fusedFlightSearch, undefined);
 });
 
+test("decision strategies route returns ranked playbook in full plan mode", async () => {
+  process.env.NODE_ENV = "test";
+  const { POST } = await import("./route");
+  const response = await POST(
+    new Request("http://localhost/api/decision/strategies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "Beaumont California to Italy in September",
+        comfortWeight: 0.55,
+        planMode: "full",
+        paymentMode: "cash",
+      }),
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  const strategies = payload.brief.strategies as Array<{
+    valueRank?: number;
+    recommended?: boolean;
+    scores: { totalTripValue?: number };
+  }>;
+  assert.ok(strategies.length >= 2);
+  assert.equal(strategies[0]?.valueRank, 1);
+  assert.equal(strategies[0]?.recommended, true);
+  for (let i = 1; i < strategies.length; i += 1) {
+    const prev = strategies[i - 1]?.scores.totalTripValue ?? 0;
+    const next = strategies[i]?.scores.totalTripValue ?? 0;
+    assert.ok(next >= prev, "strategies should be ranked by ascending total trip value");
+  }
+});
+
 test("decision strategies route parses Ontario CA as ONT origin", async () => {
   process.env.NODE_ENV = "test";
   const { POST } = await import("./route");

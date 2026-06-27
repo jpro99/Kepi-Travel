@@ -1,0 +1,52 @@
+import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
+import { z } from "zod";
+import { getPointsTravelProfile, savePointsTravelProfile } from "@/lib/memory/pointsTravelProfile";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const PatchSchema = z.object({
+  ownedCards: z
+    .array(
+      z.object({
+        cardId: z.string(),
+        label: z.string().optional(),
+        lastFour: z.string().max(4).optional(),
+      }),
+    )
+    .optional(),
+  usesRakuten: z.boolean().optional(),
+  usesChasePortal: z.boolean().optional(),
+  earnGoal: z.enum(["maximize_miles", "maximize_cashback", "balanced"]).optional(),
+  typicalHotelNightlyUsd: z.number().optional(),
+  notes: z.string().optional(),
+});
+
+export async function GET() {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const profile = await getPointsTravelProfile(userId);
+  return NextResponse.json({ profile });
+}
+
+export async function POST(req: Request) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const parsed = PatchSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  const existing = await getPointsTravelProfile(userId);
+  const saved = await savePointsTravelProfile({ ...existing, ...parsed.data, userId }, userId);
+  return NextResponse.json({ ok: true, profile: saved });
+}
