@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { detectTripGaps, type TripGap } from "@/lib/travelAssistant/gapDetectionService";
 
 interface GapAlertsProps {
+  /** When collapsed, show a single button instead of all alerts — less stressful while planning. */
+  revealMode?: "inline" | "collapsed";
   reservations: {
     id: string;
     type: string;
@@ -45,8 +47,9 @@ const SEVERITY_STYLES: Record<TripGap["severity"], { border: string; bg: string;
   },
 };
 
-export function GapAlerts({ reservations, onActionTap }: GapAlertsProps) {
+export function GapAlerts({ reservations, onActionTap, revealMode = "inline" }: GapAlertsProps) {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [revealed, setRevealed] = useState(revealMode === "inline");
 
   const gaps = useMemo(
     () => detectTripGaps(reservations).filter((g) => !dismissed.has(g.id)),
@@ -55,15 +58,41 @@ export function GapAlerts({ reservations, onActionTap }: GapAlertsProps) {
 
   if (gaps.length === 0) return null;
 
+  if (revealMode === "collapsed" && !revealed) {
+    return (
+      <button
+        type="button"
+        onClick={() => setRevealed(true)}
+        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
+      >
+        <p className="text-sm font-bold text-slate-900 dark:text-white">Review planning gaps</p>
+        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+          {gaps.length} item{gaps.length === 1 ? "" : "s"} to check when you&apos;re ready — nothing urgent on the home screen.
+        </p>
+      </button>
+    );
+  }
+
   return (
     <section className="space-y-2">
-      <div className="flex items-center gap-2 px-0.5">
-        <span className="text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
-          Planning gaps
-        </span>
-        <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-          {gaps.length}
-        </span>
+      <div className="flex items-center justify-between gap-2 px-0.5">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+            Planning gaps
+          </span>
+          <span className="rounded-full bg-slate-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+            {gaps.length}
+          </span>
+        </div>
+        {revealMode === "collapsed" ? (
+          <button
+            type="button"
+            onClick={() => setRevealed(false)}
+            className="text-[11px] font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+          >
+            Hide
+          </button>
+        ) : null}
       </div>
       {gaps.map((gap) => {
         const s = SEVERITY_STYLES[gap.severity];

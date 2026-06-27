@@ -101,7 +101,7 @@ import {
 import { TripCalendarView } from "@/components/travelAssistant/TripCalendarView";
 import { NextUpCard } from "@/components/travelAssistant/NextUpCard";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
-import { GapAlerts } from "@/components/travelAssistant/GapAlerts";
+import { TripItineraryPanel } from "@/components/travelAssistant/TripItineraryPanel";
 import { OnTrackButton } from "@/components/travelAssistant/OnTrackButton";
 import { TripSearch, type TripSearchSelection } from "@/components/travelAssistant/TripSearch";
 import { TripSwitcher } from "@/components/travelAssistant/TripSwitcher";
@@ -1856,6 +1856,8 @@ export default function TravelAssistantPage() {
   const [timelineSectionTab, setTimelineSectionTab] = useState<TimelineSectionTab>("reservations");
   const [, setPackingCompletionPercent] = useState(0);
   const [consumerTab, setConsumerTab] = useState<ConsumerTab>("trip");
+  const [itineraryPanelOpen, setItineraryPanelOpen] = useState(false);
+  const [manualReservationDefaultDateTime, setManualReservationDefaultDateTime] = useState<string | null>(null);
   const [travelStyleProfile, setTravelStyleProfile] = useState<TravelStyleProfile | null>(null);
   const [travelStyleQuizOpen, setTravelStyleQuizOpen] = useState(false);
   const travelStyleFetchedRef = useRef(false);
@@ -2033,6 +2035,14 @@ export default function TravelAssistantPage() {
     url.searchParams.delete("retakeTravelStyle");
     window.history.replaceState({}, "", url.toString());
   }, [searchParams, user?.id]);
+
+  useEffect(() => {
+    if (searchParams.get("itinerary") !== "1") return;
+    setItineraryPanelOpen(true);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("itinerary");
+    window.history.replaceState({}, "", url.toString());
+  }, [searchParams]);
 
   // Auto-join family group if ?joinFamily=CODE in URL
   useEffect(() => {
@@ -6872,6 +6882,75 @@ export default function TravelAssistantPage() {
     printWindow.print();
     setToast("PDF print dialog opened.");
   };
+
+  const consumerItineraryExportRows = useMemo(
+    () =>
+      consumerReservationsSorted.map((reservation) => ({
+        owner: selectedFamilyMember.name,
+        itemType: RESERVATION_TYPE_LABEL[reservation.type] ?? reservation.type,
+        title: reservation.title,
+        provider: reservation.provider,
+        localTime: reservation.localTime,
+        timezone: reservation.timezone ?? "",
+        location: reservation.location,
+        confirmation: reservation.confirmationCode,
+        notes: reservation.notes,
+      })),
+    [consumerReservationsSorted, selectedFamilyMember.name],
+  );
+
+  const handleConsumerItineraryPrint = (): void => {
+    const printable = buildPremiumItineraryHtml({
+      rows: consumerItineraryExportRows,
+      generatedAt: new Date().toLocaleString(),
+      stageLabel: STAGE_LABEL[tripStage],
+      statusLabel: STATUS_LABEL[tripStatus],
+      confidenceScore: operationalConfidenceScore,
+      scopeLabel: activeTrip?.name ?? "Full trip",
+    });
+    const printWindow = window.open("", "_blank", "width=1024,height=768");
+    if (!printWindow) {
+      setToast("Please allow popups to print your itinerary.");
+      return;
+    }
+    printWindow.document.write(printable);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
+
+  const handleConsumerItineraryPdf = (): void => {
+    handleConsumerItineraryPrint();
+  };
+
+  const handleShareItineraryLink = (): void => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("itinerary", "1");
+    const link = url.toString();
+    void (async () => {
+      try {
+        if (typeof navigator.share === "function") {
+          await navigator.share({
+            title: `${activeTrip?.name ?? "Trip"} itinerary`,
+            text: "Open your Kepi itinerary on your phone.",
+            url: link,
+          });
+          return;
+        }
+        await navigator.clipboard.writeText(link);
+        setToast("Itinerary link copied — open it on your phone.");
+      } catch {
+        setToast("Could not share the itinerary link.");
+      }
+    })();
+  };
+
+  const handleItineraryEmptyDayTap = useCallback((dateKey: string): void => {
+    setManualReservationDefaultDateTime(`${dateKey}T09:00`);
+    setManualReservationPresetType("flight");
+    setManualReservationModalOpen(true);
+  }, []);
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const toggleMemberSharing = (memberId: string): void => {
     setFamilyMembers((prev) =>
@@ -7684,10 +7763,37 @@ export default function TravelAssistantPage() {
   );
 
   if (!advancedWorkspaceEnabled) {
+    const itineraryPanel = (
+      <TripItineraryPanel
+        tripName={activeTrip?.name ?? "Your trip"}
+        tripStartDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
+        tripEndDate={activeTrip?.endDate ?? null}
+        tripDaysAway={tripDaysAway}
+        reservations={consumerReservationsSorted}
+        onClose={() => setItineraryPanelOpen(false)}
+        onReservationTap={(id) => openDrawer("reservation", id)}
+        onEmptyDayTap={handleItineraryEmptyDayTap}
+        onGapActionTap={(tab) => navigateToConsumerTab(tab as ConsumerTab)}
+        onPrint={handleConsumerItineraryPrint}
+        onExportPdf={handleConsumerItineraryPdf}
+        onShareLink={handleShareItineraryLink}
+      />
+    );
+
     return (
       <main className="relative min-h-screen overflow-x-hidden bg-[var(--bg-base)] pb-24 text-[var(--text-primary)]">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(14,165,233,0.12),transparent_38%),radial-gradient(circle_at_80%_10%,rgba(34,197,94,0.10),transparent_35%)]" />
-        <div className="relative z-10 mx-auto max-w-3xl space-y-4 px-4 py-4 sm:py-6 md:max-w-4xl lg:max-w-5xl xl:max-w-6xl lg:px-6">
+        {itineraryPanelOpen ? (
+          <div className="fixed inset-0 z-50 lg:hidden">{itineraryPanel}</div>
+        ) : null}
+        <div className="relative z-10 flex min-h-screen">
+          {itineraryPanelOpen ? (
+            <aside className="sticky top-0 hidden h-[calc(100vh-6rem)] w-full max-w-sm shrink-0 border-r border-slate-200 dark:border-slate-800 lg:block lg:w-1/4 lg:min-w-[260px]">
+              {itineraryPanel}
+            </aside>
+          ) : null}
+          <div className="min-w-0 flex-1">
+        <div className="mx-auto max-w-3xl space-y-4 px-4 py-4 sm:py-6 md:max-w-4xl lg:max-w-5xl xl:max-w-6xl lg:px-6">
           <header className="sticky top-0 z-30 -mx-4 border-b border-slate-200/70 bg-slate-50/90 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
@@ -7699,6 +7805,19 @@ export default function TravelAssistantPage() {
                 >
                   Trips{trips.length > 0 ? ` (${trips.length})` : ""}
                 </button>
+                {!showUnconfiguredTripShell && activeTrip ? (
+                  <button
+                    type="button"
+                    onClick={() => setItineraryPanelOpen((value) => !value)}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-bold shadow-sm ${
+                      itineraryPanelOpen
+                        ? "border-sky-400 bg-sky-600 text-white dark:border-sky-500"
+                        : "border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-700 dark:bg-sky-950 dark:text-sky-200"
+                    }`}
+                  >
+                    {itineraryPanelOpen ? "Hide itinerary" : "Itinerary"}
+                  </button>
+                ) : null}
               </div>
               <div className="relative">
                 <button
@@ -7860,6 +7979,8 @@ export default function TravelAssistantPage() {
 
                   {/* Always-visible countdown hero — never blank even if NextUpCard fails */}
                   <div className="rounded-3xl bg-gradient-to-br from-slate-900 via-sky-950 to-slate-900 shadow-xl p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-sky-300/70">
                       {journeyPhase.daysUntil === 0 ? "Departing today" : `${journeyPhase.daysUntil} day${journeyPhase.daysUntil === 1 ? "" : "s"} until departure`}
                     </p>
@@ -7887,6 +8008,22 @@ export default function TravelAssistantPage() {
                         return `Departs ${h}:${m} ${ampm}${airline ? ` · ${airline}` : ""}`;
                       })()}
                     </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setItineraryPanelOpen(true)}
+                        className="shrink-0 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-bold text-white hover:bg-white/20 lg:hidden"
+                      >
+                        Itinerary
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setItineraryPanelOpen((value) => !value)}
+                        className="hidden shrink-0 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-bold text-white hover:bg-white/20 lg:inline-flex"
+                      >
+                        {itineraryPanelOpen ? "Hide itinerary" : "Itinerary"}
+                      </button>
+                  </div>
                   </div>
 
                   {/* Disruption alert — auto-monitors on travel day */}
@@ -7954,10 +8091,6 @@ export default function TravelAssistantPage() {
                       <p className="text-xs text-sky-100 mt-0.5">Timeline · Leave by time · What to expect</p>
                     </button>
                   )}
-                  <GapAlerts
-                    reservations={consumerReservationsSorted}
-                    onActionTap={(tab) => navigateToConsumerTab(tab as ConsumerTab)}
-                  />
                 </>
 
               ) : journeyPhase.kind === "at-destination" ? (
@@ -8039,15 +8172,24 @@ export default function TravelAssistantPage() {
                       <h1 className="text-2xl font-bold text-slate-950 dark:text-slate-100">
                         {activeTrip?.name ?? "Your next trip"}
                       </h1>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setItineraryPanelOpen((value) => !value)}
+                          className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-800 dark:border-sky-700 dark:bg-sky-950 dark:text-sky-200"
+                        >
+                          {itineraryPanelOpen ? "Hide itinerary" : "Itinerary"}
+                        </button>
                       {activeTrip && (
                         <button
                           type="button"
                           onClick={() => setPendingDeleteConfirmation({ kind: "trip", id: activeTrip.id, name: activeTrip.name, source: "trip-header" })}
-                          className="shrink-0 rounded-xl bg-red-50 dark:bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-500 dark:text-red-400 active:opacity-70"
+                          className="rounded-xl bg-red-50 dark:bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-500 dark:text-red-400 active:opacity-70"
                         >
                           Delete trip
                         </button>
                       )}
+                      </div>
                     </div>
                     <p className="mt-1 text-base text-slate-600 dark:text-slate-300">
                       {journeyPhase.kind === "airborne"
@@ -8141,13 +8283,18 @@ export default function TravelAssistantPage() {
                 </div>
               ) : null}
 
-              <TripTimeline
-                reservations={consumerReservationsSorted}
-                tripName={activeTrip?.name ?? "Your trip"}
-                tripStartDate={consumerTripStartDate}
-                tripDaysAway={tripDaysAway}
-                onReservationTap={(id) => openDrawer("reservation", id)}
-              />
+              {!itineraryPanelOpen ? (
+                <button
+                  type="button"
+                  onClick={() => setItineraryPanelOpen(true)}
+                  className="w-full rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-50 to-white px-4 py-4 text-left shadow-sm dark:border-sky-800 dark:from-sky-950/40 dark:to-slate-900"
+                >
+                  <p className="text-sm font-bold text-sky-900 dark:text-sky-100">Open your itinerary</p>
+                  <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
+                    Day-by-day plan, print or send to your phone, and review gaps when you&apos;re ready.
+                  </p>
+                </button>
+              ) : null}
 
               {consumerReservationsSorted.length === 0 ? (
                 <section className="rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
@@ -8559,6 +8706,8 @@ export default function TravelAssistantPage() {
             </section>
           )}
         </div>
+          </div>
+        </div>
 
         <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--border-default)] bg-[var(--bg-card)]/95 px-3 py-2 shadow-2xl backdrop-blur md:hidden">
           <div className="mx-auto grid max-w-md grid-cols-5 gap-0.5 text-[11px] font-semibold">
@@ -8650,13 +8799,15 @@ export default function TravelAssistantPage() {
         )}
         {manualReservationModalOpen ? (
           <ManualReservationEntryModal
-            key={manualReservationPresetType ?? "default"}
+            key={`${manualReservationPresetType ?? "default"}-${manualReservationDefaultDateTime ?? "nodate"}`}
             familyMembers={familyMembers.map((member) => ({ id: member.id, name: member.name }))}
             defaultAssignedTo={[selectedFamilyMember.id]}
             defaultReservationType={manualReservationPresetType ?? "flight"}
+            defaultLocalDateTime={manualReservationDefaultDateTime ?? undefined}
             onClose={() => {
               setManualReservationModalOpen(false);
               setManualReservationPresetType(null);
+              setManualReservationDefaultDateTime(null);
             }}
             onSave={handleSaveManualReservation}
           />

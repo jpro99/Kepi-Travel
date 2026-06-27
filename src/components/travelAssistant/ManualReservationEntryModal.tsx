@@ -27,6 +27,7 @@ interface ManualReservationEntryModalProps {
   familyMembers: FamilyMemberOption[];
   defaultAssignedTo: string[];
   defaultReservationType?: ManualReservationType;
+  defaultLocalDateTime?: string;
   onClose: () => void;
   onSave: (value: ManualReservationFormValue) => void;
 }
@@ -78,6 +79,7 @@ export function ManualReservationEntryModal({
   familyMembers,
   defaultAssignedTo,
   defaultReservationType = "flight",
+  defaultLocalDateTime,
   onClose,
   onSave,
 }: ManualReservationEntryModalProps) {
@@ -89,7 +91,9 @@ export function ManualReservationEntryModal({
   const [reservationType, setReservationType] = useState<ManualReservationType>(defaultReservationType);
   const [title, setTitle] = useState("");
   const [provider, setProvider] = useState("");
-  const [localDateTime, setLocalDateTime] = useState(localDateTimeDefault());
+  const [localDateTime, setLocalDateTime] = useState(
+    () => defaultLocalDateTime ?? localDateTimeDefault(),
+  );
   const [location, setLocation] = useState("");
   const [confirmationCode, setConfirmationCode] = useState("");
   const [notes, setNotes] = useState("");
