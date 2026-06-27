@@ -1,4 +1,11 @@
 import { resolveAirport } from "@/lib/airports/lookup";
+import {
+  HOTEL_DESTINATION_ALIASES,
+  normalizeHotelDestinationQuery,
+  suggestHotelDestinations,
+} from "@/lib/hotels/destinationAliases";
+
+export { suggestHotelDestinations };
 
 /** Known city centers keyed by IATA or alias (uppercase). */
 export const HOTEL_CITY_COORDS: Record<string, { lat: number; lng: number; name: string }> = {
@@ -18,7 +25,7 @@ export const HOTEL_CITY_COORDS: Record<string, { lat: number; lng: number; name:
   HNL: { lat: 21.3069, lng: -157.8583, name: "Honolulu" },
   BRI: { lat: 41.1177, lng: 16.8512, name: "Bari" },
   BDS: { lat: 40.6383, lng: 17.9461, name: "Brindisi" },
-  MONOPOLI: { lat: 40.9526, lng: 17.2972, name: "Monopoli" },
+  MONOPOLI: { lat: 40.9526, lng: 17.2972, name: "Monopoli, Italy" },
   FCO: { lat: 41.9028, lng: 12.4964, name: "Rome" },
   MXP: { lat: 45.4642, lng: 9.19, name: "Milan" },
   VCE: { lat: 45.4408, lng: 12.3155, name: "Venice" },
@@ -54,43 +61,76 @@ export interface ResolvedHotelDestination {
   lng: number;
   displayName: string;
   iata?: string;
+  /** Set when we corrected a typo or alias (e.g. Monopoly → Monopoli). */
+  correctedFrom?: string;
 }
 
-function matchKnownCity(input: string): ResolvedHotelDestination | null {
+function matchKnownCity(input: string, correctedFrom?: string): ResolvedHotelDestination | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
+
+  const attachCorrection = (result: ResolvedHotelDestination): ResolvedHotelDestination =>
+    correctedFrom ? { ...result, correctedFrom } : result;
 
   const upper = trimmed.toUpperCase();
   if (HOTEL_CITY_COORDS[upper]) {
     const hit = HOTEL_CITY_COORDS[upper];
-    return { lat: hit.lat, lng: hit.lng, displayName: hit.name, iata: upper.length === 3 ? upper : undefined };
+    return attachCorrection({
+      lat: hit.lat,
+      lng: hit.lng,
+      displayName: hit.name,
+      iata: upper.length === 3 ? upper : upper === "MONOPOLI" ? "BRI" : undefined,
+    });
   }
 
   const airport = resolveAirport(trimmed);
   if (airport && HOTEL_CITY_COORDS[airport.iata]) {
     const hit = HOTEL_CITY_COORDS[airport.iata];
-    return { lat: hit.lat, lng: hit.lng, displayName: hit.name, iata: airport.iata };
+    return attachCorrection({ lat: hit.lat, lng: hit.lng, displayName: hit.name, iata: airport.iata });
   }
 
   const needle = trimmed.toLowerCase();
   for (const [key, hit] of Object.entries(HOTEL_CITY_COORDS)) {
-    if (hit.name.toLowerCase().includes(needle) || needle.includes(hit.name.toLowerCase())) {
-      return { lat: hit.lat, lng: hit.lng, displayName: hit.name, iata: key };
+    const cityName = hit.name.toLowerCase();
+    const cityStem = cityName.split(",")[0]?.trim() ?? cityName;
+    if (
+      cityStem.includes(needle) ||
+      needle.includes(cityStem) ||
+      cityName.includes(needle) ||
+      needle.includes(cityName)
+    ) {
+      return attachCorrection({
+        lat: hit.lat,
+        lng: hit.lng,
+        displayName: hit.name,
+        iata: key.length === 3 ? key : key === "MONOPOLI" ? "BRI" : undefined,
+      });
+    }
+  }
+
+  // Alias values like "monopoli" after normalization
+  for (const [alias, canonical] of Object.entries(HOTEL_DESTINATION_ALIASES)) {
+    if (needle === canonical || needle === alias) {
+      const nested = matchKnownCity(canonical, correctedFrom ?? trimmed);
+      if (nested) return nested;
     }
   }
 
   return null;
 }
 
-async function geocodeWithNominatim(query: string): Promise<ResolvedHotelDestination | null> {
+async function geocodeWithNominatim(query: string, countryHint?: string): Promise<ResolvedHotelDestination | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8_000);
   try {
     const url = new URL("https://nominatim.openstreetmap.org/search");
     url.searchParams.set("q", query);
     url.searchParams.set("format", "json");
-    url.searchParams.set("limit", "1");
+    url.searchParams.set("limit", "3");
     url.searchParams.set("addressdetails", "0");
+    if (countryHint) {
+      url.searchParams.set("countrycodes", countryHint);
+    }
 
     const response = await fetch(url.toString(), {
       headers: {
@@ -121,7 +161,17 @@ async function geocodeWithNominatim(query: string): Promise<ResolvedHotelDestina
 
 /** Resolve a free-text city or airport into coordinates for hotel search. */
 export async function resolveHotelDestination(input: string): Promise<ResolvedHotelDestination | null> {
-  const known = matchKnownCity(input);
+  const { query, correctedFrom } = normalizeHotelDestinationQuery(input);
+  if (!query) return null;
+
+  const known = matchKnownCity(query, correctedFrom);
   if (known) return known;
-  return geocodeWithNominatim(input.trim());
+
+  const countryHint = /\b(italy|italia|it)\b/i.test(input) ? "it" : undefined;
+  const geocoded =
+    (await geocodeWithNominatim(query, countryHint)) ??
+    (await geocodeWithNominatim(`${query}, Italy`, "it"));
+
+  if (!geocoded) return null;
+  return correctedFrom ? { ...geocoded, correctedFrom } : geocoded;
 }

@@ -6,9 +6,10 @@ import {
   estimatedStaysNotice,
   resolveStaysMode,
 } from "@/lib/providers/duffel/fallbackStays";
+import { isLiteApiConfigured, searchLiteApiHotels } from "@/lib/providers/liteapi/searchHotels";
 import type { DuffelStayQuote } from "@/lib/providers/duffel/types";
 
-export type HotelSearchSource = "duffel" | "estimated";
+export type HotelSearchSource = "duffel" | "liteapi" | "estimated";
 
 export interface HotelSearchPayload {
   hotels: HotelSearchResult[];
@@ -27,6 +28,7 @@ function pickFallbackIata(resolved: ResolvedHotelDestination): string {
   let bestIata = "FCO";
   let bestDistance = Number.POSITIVE_INFINITY;
   for (const [iata, hit] of Object.entries(HOTEL_CITY_COORDS)) {
+    if (iata.length !== 3) continue;
     const distance = Math.hypot(hit.lat - resolved.lat, hit.lng - resolved.lng);
     if (distance < bestDistance) {
       bestDistance = distance;
@@ -193,7 +195,7 @@ async function searchDuffelHotels(input: {
         guests: input.guests,
       });
       if (mapped) hotels.push(mapped);
-      if (hotels.length >= 20) break;
+      if (hotels.length >= 30) break;
     }
 
     if (hotels.length === 0 && results.length > 0) {
@@ -214,7 +216,7 @@ async function searchDuffelHotels(input: {
   }
 }
 
-/** Live Duffel Stays when enabled; otherwise estimated rates so the Hotels tab still works. */
+/** Duffel Stays → LiteAPI → estimated fallback. */
 export async function searchHotelsLiveOrEstimated(input: {
   resolved: ResolvedHotelDestination;
   checkIn: string;
@@ -225,12 +227,35 @@ export async function searchHotelsLiveOrEstimated(input: {
   chainPriority: string[];
 }): Promise<HotelSearchPayload> {
   const mockMode = resolveStaysMode() === "mock";
-  const live = mockMode
+  const duffel = mockMode
     ? { hotels: [], error: "Mock stays mode" }
     : await searchDuffelHotels(input);
 
-  if (live.hotels.length > 0) {
-    return { hotels: live.hotels, source: "duffel" };
+  if (duffel.hotels.length > 0) {
+    return { hotels: duffel.hotels, source: "duffel" };
+  }
+
+  const liteApi = await searchLiteApiHotels({
+    resolved: input.resolved,
+    checkIn: input.checkIn,
+    checkOut: input.checkOut,
+    nights: input.nights,
+    guests: input.guests,
+    rooms: input.rooms,
+    iata: input.resolved.iata,
+  });
+
+  if (liteApi.hotels.length > 0) {
+    const notice =
+      duffel.error?.includes("Stays not enabled") || duffel.error?.includes("403")
+        ? "Live rates via LiteAPI — Duffel Stays will take over when enabled on your account."
+        : undefined;
+    return {
+      hotels: liteApi.hotels,
+      source: "liteapi",
+      notice,
+      duffelError: duffel.error,
+    };
   }
 
   const fallbackIata = pickFallbackIata(input.resolved);
@@ -253,11 +278,11 @@ export async function searchHotelsLiveOrEstimated(input: {
     }),
   );
 
-  const notice = estimatedStaysNotice(live.error, mockMode);
+  const notice = estimatedStaysNotice(duffel.error ?? liteApi.error, mockMode);
   return {
     hotels,
     source: "estimated",
     notice,
-    duffelError: live.error,
+    duffelError: duffel.error ?? liteApi.error,
   };
 }

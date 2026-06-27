@@ -1,4 +1,5 @@
 import type { HotelStayMemory } from "@/lib/memory/hotelMemory";
+import type { HotelStayProfile } from "@/lib/memory/hotelStayProfile";
 import type { TravelerGenome } from "@/lib/traveler/types";
 import type { LoyaltyBalance } from "@/lib/loyalty/optimizer";
 import { estimateHotelPointsOptions } from "@/lib/hotels/hotelPointsEstimate";
@@ -9,7 +10,7 @@ function chainMatchScore(chainName: string | undefined, hotelName: string, prior
   for (let index = 0; index < priorities.length; index++) {
     const needle = priorities[index].toLowerCase().trim();
     if (needle && haystack.includes(needle)) {
-      return (priorities.length - index) * 14;
+      return (priorities.length - index) * 8;
     }
   }
   return 0;
@@ -68,13 +69,112 @@ function pickTier(args: {
   return "solid";
 }
 
+function chainGroupKey(hotel: HotelSearchResult): string {
+  const chain = hotel.chainName?.trim().toLowerCase();
+  if (chain) return chain;
+  if (/masseria|trullo|boutique|b&b|guesthouse|inn|apartment|palazzo/i.test(hotel.name)) {
+    return "independent";
+  }
+  return "other";
+}
+
+/** Keep Kepi Pick smart but surface chain variety — not three of the same brand. */
+function diversifyRankedResults(results: RankedHotelSearchResult[]): RankedHotelSearchResult[] {
+  if (results.length <= 4) return results;
+
+  const picked: RankedHotelSearchResult[] = [];
+  const usedIds = new Set<string>();
+  const chainCounts = new Map<string, number>();
+
+  const tryAdd = (hotel: RankedHotelSearchResult, maxPerChain = 2): boolean => {
+    if (usedIds.has(hotel.id)) return false;
+    const key = chainGroupKey(hotel);
+    const count = chainCounts.get(key) ?? 0;
+    if (count >= maxPerChain) return false;
+    picked.push(hotel);
+    usedIds.add(hotel.id);
+    chainCounts.set(key, count + 1);
+    return true;
+  };
+
+  if (results[0]) tryAdd(results[0], 1);
+
+  const bestValue = results.find((row) => row.tier === "best_value" || row.badges.includes("Best value"));
+  const bestQuality = results.find((row) => row.tier === "best_quality" || row.badges.includes("Top quality"));
+  const pointsPlay = results.find((row) => row.tier === "points_play");
+  if (bestValue) tryAdd(bestValue);
+  if (bestQuality) tryAdd(bestQuality);
+  if (pointsPlay) tryAdd(pointsPlay);
+
+  for (const row of results) {
+    if (picked.length >= 12) break;
+    tryAdd(row);
+  }
+
+  return picked.map((row, index) => ({ ...row, rank: index + 1 }));
+}
+
+function stayProfileBoost(
+  profile: HotelStayProfile | null | undefined,
+  hotel: HotelSearchResult,
+): { boost: number; badges: string[] } {
+  if (!profile?.completed && !profile?.freeTextSummary?.trim()) {
+    return { boost: 0, badges: [] };
+  }
+
+  const haystack = `${hotel.name} ${hotel.address} ${hotel.city} ${hotel.amenities.join(" ")}`.toLowerCase();
+  let boost = 0;
+  const badges: string[] = [];
+
+  if (profile.requiresElevator || profile.avoidStairs) {
+    if (/elevator|lift|accessible|ground floor|no stairs/.test(haystack)) {
+      boost += 14;
+      badges.push("Elevator");
+    } else if (/walk-up|stairs|no elevator/.test(haystack)) {
+      boost -= 18;
+    }
+  }
+
+  if (profile.prefersBalcony && /balcony|terrace|patio/.test(haystack)) {
+    boost += 8;
+    badges.push("Balcony");
+  }
+
+  if (profile.prefersOceanView && /ocean|beach|sea|waterfront|coast|harbor|seaside/.test(haystack)) {
+    boost += 10;
+    badges.push("Near water");
+  }
+
+  if (profile.prefersNearTransit && /metro|subway|train|transit|rail|station/.test(haystack)) {
+    boost += 8;
+    badges.push("Near transit");
+  }
+
+  if (profile.prefersBreakfast !== "dont_care" && /breakfast/.test(haystack)) {
+    boost += profile.prefersBreakfast === "required" ? 12 : 6;
+    badges.push("Breakfast");
+  }
+
+  const minStars =
+    profile.qualityFloor === "luxury" ? 4.5 : profile.qualityFloor === "high" ? 4 : profile.qualityFloor === "budget" ? 2 : 3;
+  const review = hotel.rating ?? hotel.stars;
+  if (review >= minStars) {
+    boost += profile.qualityFloor === "luxury" || profile.qualityFloor === "high" ? 6 : 3;
+  } else if (profile.qualityFloor === "high" || profile.qualityFloor === "luxury") {
+    boost -= 6;
+  }
+
+  return { boost, badges: badges.slice(0, 3) };
+}
+
 export function rankHotelSearchResults(input: {
   hotels: HotelSearchResult[];
   genome: TravelerGenome;
   memory: HotelStayMemory;
   loyaltyBalances: LoyaltyBalance[];
+  stayProfile?: HotelStayProfile | null;
 }): RankedHotelSearchResult[] {
-  const { hotels, genome, memory, loyaltyBalances } = input;
+  const { hotels, genome, memory, loyaltyBalances, stayProfile } = input;
   if (hotels.length === 0) return [];
 
   const nightlies = hotels.map((hotel) => hotel.pricePerNight).filter((value) => value > 0);
@@ -93,6 +193,7 @@ export function rankHotelSearchResults(input: {
     const loyalty = chainMatchScore(hotel.chainName, hotel.name, chainPriority);
     const learned = memoryChainBoost(memory, hotel.chainName, hotel.name);
     const transit = transitBoost(hotel.amenities, memory);
+    const profileMatch = stayProfileBoost(stayProfile, hotel);
     const bias = memory.valueVsQualityBias;
     const weightedQuality = quality * (1 + Math.max(0, bias) * 0.35);
     const weightedValue = value * (1 + Math.max(0, -bias) * 0.35);
@@ -111,7 +212,9 @@ export function rankHotelSearchResults(input: {
     const bestPoints = pointsOptions.find((option) => option.recommendation === "use") ?? pointsOptions[0];
     const pointsBoost = bestPoints?.recommendation === "use" ? 10 + bestPoints.cppAchieved * 0.5 : 0;
 
-    const fitScore = Math.round(weightedQuality + weightedValue + loyalty + learned + transit + pointsBoost - comfortPenalty);
+    const fitScore = Math.round(
+      weightedQuality + weightedValue + loyalty + learned + transit + profileMatch.boost + pointsBoost - comfortPenalty,
+    );
 
     return {
       hotel,
@@ -119,7 +222,8 @@ export function rankHotelSearchResults(input: {
       value,
       fitScore,
       bestPoints,
-      personalBoost: learned + loyalty,
+      personalBoost: learned + loyalty + profileMatch.boost,
+      profileBadges: profileMatch.badges,
     };
   });
 
@@ -129,8 +233,8 @@ export function rankHotelSearchResults(input: {
   const bestQualityId = [...hotels].sort((a, b) => qualityScore(b) - qualityScore(a))[0]?.id;
   const pointsPlayId = scored.find((entry) => entry.bestPoints?.recommendation === "use")?.hotel.id;
 
-  return scored.map((entry, index) => {
-    const { hotel, fitScore, bestPoints, personalBoost, quality, value } = entry;
+  const ranked = scored.map((entry, index) => {
+    const { hotel, fitScore, bestPoints, personalBoost, quality, value, profileBadges } = entry;
     const isKepiPick = index === 0;
     const isBestValue = hotel.id === bestValueId;
     const isBestQuality = hotel.id === bestQualityId;
@@ -151,6 +255,9 @@ export function rankHotelSearchResults(input: {
     if (isBestQuality && !isKepiPick) badges.push("Top quality");
     if (bestPoints?.recommendation === "use") badges.push(`${bestPoints.cppAchieved.toFixed(1)}¢/pt`);
     if (personalBoost >= 12) badges.push("Matches you");
+    for (const badge of profileBadges ?? []) {
+      if (!badges.includes(badge)) badges.push(badge);
+    }
 
     const ratingLabel =
       hotel.rating !== undefined
@@ -182,4 +289,6 @@ export function rankHotelSearchResults(input: {
       pointsOption: bestPoints,
     };
   });
+
+  return diversifyRankedResults(ranked);
 }

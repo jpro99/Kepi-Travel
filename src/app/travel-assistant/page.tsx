@@ -65,7 +65,13 @@ import type { TripSetupDraft } from "@/components/onboarding/TripSetupForm";
 import { TripPlanningWizard } from "@/components/travelAssistant/TripPlanningWizard";
 import { HotelSearchModal } from "@/components/travelAssistant/HotelSearchModal";
 import type { HotelSearchResult } from "@/lib/hotels/types";
-import { deriveHotelSearchContext } from "@/lib/hotels/tripSearchContext";
+import { deriveHotelSearchContext, formatHotelSearchCityLabel } from "@/lib/hotels/tripSearchContext";
+import {
+  deriveTripStaySegments,
+  nextMissingStaySegment,
+  type TripStaySegment,
+  type TripStaySegmentInput,
+} from "@/lib/hotels/deriveTripStaySegments";
 import { MyTripsModal } from "@/components/travelAssistant/MyTripsModal";
 import { isEmptyTripShell, type TripListRowInput } from "@/lib/travelAssistant/tripListDisplay";
 import {
@@ -1877,6 +1883,8 @@ export default function TravelAssistantPage() {
   const [manualReservationModalOpen, setManualReservationModalOpen] = useState(false);
   const [manualReservationPresetType, setManualReservationPresetType] = useState<"flight" | "hotel" | null>(null);
   const [hotelSearchModalOpen, setHotelSearchModalOpen] = useState(false);
+  const [hotelSearchSegment, setHotelSearchSegment] = useState<TripStaySegment | null>(null);
+  const [manualStaySegmentsByTrip, setManualStaySegmentsByTrip] = useState<Record<string, TripStaySegmentInput[]>>({});
   const [tripPlanningWizardOpen, setTripPlanningWizardOpen] = useState(false);
   const [tripPlanningWizardPhase, setTripPlanningWizardPhase] = useState<BookingWizardPhase>("setup");
   const [myTripsModalOpen, setMyTripsModalOpen] = useState(false);
@@ -4062,6 +4070,70 @@ export default function TravelAssistantPage() {
       consumerTripStartDate,
     ],
   );
+
+  const tripStaySegments = useMemo(
+    () =>
+      deriveTripStaySegments({
+        tripDestination: consumerTripDestination ?? activeTrip?.destination,
+        tripStartDate: consumerTripStartDate ?? activeTrip?.startDate,
+        tripEndDate: activeTrip?.endDate,
+        flights: consumerReservationsSorted
+          .filter((reservation) => reservation.type === "flight")
+          .map((reservation) => ({
+            id: reservation.id,
+            flightArrivalAirport: reservation.flightArrivalAirport,
+            flightDepartureAirport: reservation.flightDepartureAirport,
+            flightArrivalTime: reservation.flightArrivalTime,
+            flightDepartureTime: reservation.flightDepartureTime,
+            flightDate: reservation.flightDate,
+            localTime: reservation.localTime,
+          })),
+        hotels: consumerReservationsSorted
+          .filter((reservation) => reservation.type === "hotel")
+          .map((reservation) => ({
+            id: reservation.id,
+            title: reservation.title,
+            provider: reservation.provider,
+            location: reservation.location,
+            localTime: reservation.localTime,
+            checkOutDate: reservation.checkOutDate,
+          })),
+        manualSegments: activeTripId ? manualStaySegmentsByTrip[activeTripId] ?? [] : [],
+      }),
+    [
+      activeTrip?.destination,
+      activeTrip?.endDate,
+      activeTrip?.startDate,
+      activeTripId,
+      consumerReservationsSorted,
+      consumerTripDestination,
+      consumerTripStartDate,
+      manualStaySegmentsByTrip,
+    ],
+  );
+
+  const effectiveHotelSearchDefaults = useMemo(() => {
+    if (hotelSearchSegment) {
+      return {
+        city: hotelSearchSegment.city,
+        cityIata: hotelSearchSegment.cityIata ?? "",
+        checkIn: hotelSearchSegment.checkIn,
+        checkOut: hotelSearchSegment.checkOut,
+        source: "segment" as const,
+      };
+    }
+    const nextMissing = nextMissingStaySegment(tripStaySegments);
+    if (nextMissing) {
+      return {
+        city: nextMissing.city,
+        cityIata: nextMissing.cityIata ?? "",
+        checkIn: nextMissing.checkIn,
+        checkOut: nextMissing.checkOut,
+        source: "segment" as const,
+      };
+    }
+    return hotelSearchDefaults;
+  }, [hotelSearchDefaults, hotelSearchSegment, tripStaySegments]);
   const tripPlanningInitialDraft = useMemo(
     () => ({
       tripName: activeTrip?.name && !/^trip \d+$/iu.test(activeTrip.name.trim()) ? activeTrip.name : "",
@@ -4962,8 +5034,34 @@ export default function TravelAssistantPage() {
   );
 
   const openHotelSearchForTrip = useCallback((): void => {
+    setHotelSearchSegment(nextMissingStaySegment(tripStaySegments));
+    setHotelSearchModalOpen(true);
+  }, [tripStaySegments]);
+
+  const openHotelSearchForSegment = useCallback((segment: TripStaySegment): void => {
+    setHotelSearchSegment(segment);
     setHotelSearchModalOpen(true);
   }, []);
+
+  const handleAddCityStay = useCallback(
+    (input: { city: string; checkIn: string; checkOut: string }) => {
+      if (!activeTripId) return;
+      const formatted = formatHotelSearchCityLabel(input.city);
+      const segment: TripStaySegmentInput = {
+        id: `manual-${Date.now()}`,
+        city: formatted.label || input.city,
+        cityIata: formatted.iata || undefined,
+        checkIn: input.checkIn,
+        checkOut: input.checkOut,
+        source: "manual",
+      };
+      setManualStaySegmentsByTrip((prev) => ({
+        ...prev,
+        [activeTripId]: [...(prev[activeTripId] ?? []), segment],
+      }));
+    },
+    [activeTripId],
+  );
 
   const openManualHotelReservation = useCallback((): void => {
     setManualReservationPresetType("hotel");
@@ -5021,6 +5119,7 @@ export default function TravelAssistantPage() {
         reservationId: reservation.id,
       });
       setToast(`${hotel.name} added to your trip ✓`);
+      setHotelSearchSegment(null);
     },
     [activeTripId, pushUndoSnapshot, queueMutation, selectedFamilyMember.id, setToast, trips],
   );
@@ -7403,19 +7502,23 @@ export default function TravelAssistantPage() {
           setManualReservationModalOpen(true);
         }}
         onAddHotelFromSearch={handleAddHotelFromSearch}
-        hotelSearchCity={hotelSearchDefaults.city}
-        hotelSearchCityIata={hotelSearchDefaults.cityIata}
-        hotelSearchCheckIn={hotelSearchDefaults.checkIn}
-        hotelSearchCheckOut={hotelSearchDefaults.checkOut}
+        hotelSearchCity={effectiveHotelSearchDefaults.city}
+        hotelSearchCityIata={effectiveHotelSearchDefaults.cityIata}
+        hotelSearchCheckIn={effectiveHotelSearchDefaults.checkIn}
+        hotelSearchCheckOut={effectiveHotelSearchDefaults.checkOut}
       />
       <HotelSearchModal
         open={hotelSearchModalOpen}
         tripName={activeTrip?.name}
-        defaultCity={hotelSearchDefaults.city}
-        defaultCityIata={hotelSearchDefaults.cityIata}
-        defaultCheckIn={hotelSearchDefaults.checkIn}
-        defaultCheckOut={hotelSearchDefaults.checkOut}
-        onClose={() => setHotelSearchModalOpen(false)}
+        segmentLabel={hotelSearchSegment?.label}
+        defaultCity={effectiveHotelSearchDefaults.city}
+        defaultCityIata={effectiveHotelSearchDefaults.cityIata}
+        defaultCheckIn={effectiveHotelSearchDefaults.checkIn}
+        defaultCheckOut={effectiveHotelSearchDefaults.checkOut}
+        onClose={() => {
+          setHotelSearchModalOpen(false);
+          setHotelSearchSegment(null);
+        }}
         onAddHotel={handleAddHotelFromSearch}
       />
     </>
@@ -7974,11 +8077,15 @@ export default function TravelAssistantPage() {
                     ) : consumerTab === "hotels" ? (
             <HotelsTab
               reservations={consumerReservationsSorted.filter(r => r.type === "hotel")}
+              tripName={activeTrip?.name}
+              staySegments={tripStaySegments}
               onReservationTap={(id) => openDrawer("reservation", id)}
               onCheckStatus={(id) => void handleCheckFlightStatus(id)}
               onDelete={(id) => void handleDeleteReservation(id)}
               onAdd={openManualHotelReservation}
               onSearchHotels={openHotelSearchForTrip}
+              onSearchSegment={openHotelSearchForSegment}
+              onAddCityStay={handleAddCityStay}
             />
           ) : (
             <section className="space-y-3">

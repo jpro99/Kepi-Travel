@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { rankHotelSearchResults } from "@/lib/hotels/intelligentRanking";
-import { resolveHotelDestination } from "@/lib/hotels/resolveDestination";
+import { resolveHotelDestination, suggestHotelDestinations } from "@/lib/hotels/resolveDestination";
 import { searchHotelsLiveOrEstimated } from "@/lib/hotels/searchHotels";
+import { isLiteApiConfigured } from "@/lib/providers/liteapi/searchHotels";
 import type { HotelSearchResult, RankedHotelSearchResult } from "@/lib/hotels/types";
 import { getHotelStayMemory, learnFromHotelEvent, saveHotelStayMemory, summarizeHotelMemory } from "@/lib/memory/hotelMemory";
+import { getHotelStayProfile, summarizeHotelStayProfile } from "@/lib/memory/hotelStayProfile";
 import { normalizeLoyaltyBalances } from "@/lib/loyalty/walletBalances";
 import { getTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
 
@@ -25,15 +27,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing destination, check-in, or check-out date" }, { status: 400 });
   }
 
-  if (!process.env.DUFFEL_ACCESS_TOKEN?.trim()) {
-    return NextResponse.json({ error: "Hotels not configured — add DUFFEL_ACCESS_TOKEN in Vercel." }, { status: 500 });
+  if (!process.env.DUFFEL_ACCESS_TOKEN?.trim() && !isLiteApiConfigured()) {
+    return NextResponse.json(
+      { error: "Hotels not configured — add DUFFEL_ACCESS_TOKEN and/or LITEAPI_KEY in Vercel." },
+      { status: 500 },
+    );
   }
 
   const resolved = await resolveHotelDestination(String(destination));
   if (!resolved) {
     return NextResponse.json(
       {
-        error: `Could not find "${destination}". Try a city name (e.g. Rome, Italy) or airport code (e.g. FCO, JFK).`,
+        error: `Could not find "${destination}". Try a city name (e.g. Monopoli, Italy) or airport code (e.g. BRI, FCO).`,
+        suggestions: suggestHotelDestinations(String(destination)),
       },
       { status: 400 },
     );
@@ -72,12 +78,14 @@ export async function POST(req: Request) {
     }
 
     const memory = await getHotelStayMemory(userId);
+    const stayProfile = await getHotelStayProfile(userId);
     const loyaltyBalances = normalizeLoyaltyBalances(genome.loyaltyBalances ?? []);
     const ranked = rankHotelSearchResults({
       hotels: searchResult.hotels,
       genome,
       memory,
       loyaltyBalances,
+      stayProfile,
     });
 
     saveHotelStayMemory(
@@ -92,9 +100,11 @@ export async function POST(req: Request) {
       hotels: ranked,
       total: ranked.length,
       city: resolved.displayName,
+      correctedFrom: resolved.correctedFrom ?? null,
       source: searchResult.source,
       notice: searchResult.notice,
       memorySummary: summarizeHotelMemory(memory),
+      stayProfileSummary: summarizeHotelStayProfile(stayProfile),
       resolved: { lat: resolved.lat, lng: resolved.lng, iata: resolved.iata ?? null },
     });
   } catch (err) {

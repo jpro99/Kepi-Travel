@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { suggestAirports, type AirportResult } from "@/lib/airports/lookup";
+import { suggestHotelDestinations } from "@/lib/hotels/destinationAliases";
 import type { HotelSearchResult, HotelSearchTier, RankedHotelSearchResult } from "@/lib/hotels/types";
 
 export interface TripHotelSearchProps {
@@ -88,6 +89,7 @@ function CityInput({
   placeholder: string;
 }) {
   const [suggestions, setSuggestions] = useState<AirportResult[]>([]);
+  const [cityHints, setCityHints] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -111,18 +113,22 @@ function CityInput({
           onChange(next, "");
           const matches = suggestAirports(next);
           setSuggestions(matches);
-          setOpen(matches.length > 0);
+          const hints = matches.length === 0 && next.trim().length >= 3 ? suggestHotelDestinations(next) : [];
+          setCityHints(hints);
+          setOpen(matches.length > 0 || hints.length > 0);
         }}
         onFocus={() => {
           if (value.length >= 2) {
             const matches = suggestAirports(value);
             setSuggestions(matches);
-            setOpen(matches.length > 0);
+            const hints = matches.length === 0 ? suggestHotelDestinations(value) : [];
+            setCityHints(hints);
+            setOpen(matches.length > 0 || hints.length > 0);
           }
         }}
         className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none ring-sky-300 focus-visible:ring-2 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
       />
-      {open && suggestions.length > 0 ? (
+      {open && (suggestions.length > 0 || cityHints.length > 0) ? (
         <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
           {suggestions.map((airport) => (
             <button
@@ -138,6 +144,23 @@ function CityInput({
               <span>
                 <p className="text-sm font-semibold text-slate-900 dark:text-white">{airport.city}</p>
                 <p className="text-xs text-slate-500">{airport.name}</p>
+              </span>
+            </button>
+          ))}
+          {cityHints.map((hint) => (
+            <button
+              key={hint}
+              type="button"
+              onMouseDown={() => {
+                onChange(hint, "");
+                setOpen(false);
+              }}
+              className="flex w-full items-center gap-3 border-b border-slate-100 px-3 py-2.5 text-left last:border-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800"
+            >
+              <span className="w-10 shrink-0 text-xs font-black text-emerald-600">City</span>
+              <span>
+                <p className="text-sm font-semibold text-slate-900 dark:text-white">{hint}</p>
+                <p className="text-xs text-slate-500">Tap to use this destination</p>
               </span>
             </button>
           ))}
@@ -162,11 +185,14 @@ export function TripHotelSearch({
   const [rooms, setRooms] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorSuggestions, setErrorSuggestions] = useState<string[]>([]);
+  const [correctedFrom, setCorrectedFrom] = useState<string | null>(null);
   const [results, setResults] = useState<RankedHotelSearchResult[]>([]);
   const [resolvedCity, setResolvedCity] = useState<string | null>(null);
   const [memorySummary, setMemorySummary] = useState<string | null>(null);
+  const [stayProfileSummary, setStayProfileSummary] = useState<string | null>(null);
   const [searchNotice, setSearchNotice] = useState<string | null>(null);
-  const [searchSource, setSearchSource] = useState<"duffel" | "estimated" | null>(null);
+  const [searchSource, setSearchSource] = useState<"duffel" | "liteapi" | "estimated" | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
 
@@ -198,6 +224,8 @@ export function TripHotelSearch({
 
     setLoading(true);
     setError(null);
+    setErrorSuggestions([]);
+    setCorrectedFrom(null);
     setResults([]);
     setDismissedIds(new Set());
     setSearchNotice(null);
@@ -218,21 +246,27 @@ export function TripHotelSearch({
       });
       const payload = (await response.json()) as {
         error?: string;
+        suggestions?: string[];
         detail?: { errors?: Array<{ message?: string }> };
         hotels?: RankedHotelSearchResult[];
         city?: string;
+        correctedFrom?: string | null;
         memorySummary?: string | null;
+        stayProfileSummary?: string | null;
         notice?: string;
-        source?: "duffel" | "estimated";
+        source?: "duffel" | "liteapi" | "estimated";
       };
       if (!response.ok) {
         const duffelMessage = payload.detail?.errors?.[0]?.message;
         setError(payload.error ?? duffelMessage ?? "Hotel search failed.");
+        setErrorSuggestions(payload.suggestions ?? []);
         return;
       }
       setResults(payload.hotels ?? []);
       setResolvedCity(payload.city ?? destination);
+      setCorrectedFrom(payload.correctedFrom ?? null);
       setMemorySummary(payload.memorySummary ?? null);
+      setStayProfileSummary(payload.stayProfileSummary ?? null);
       setSearchNotice(payload.notice ?? null);
       setSearchSource(payload.source ?? null);
       if ((payload.hotels?.length ?? 0) > 0) {
@@ -259,6 +293,38 @@ export function TripHotelSearch({
   const handleDismiss = (hotel: RankedHotelSearchResult): void => {
     setDismissedIds((prev) => new Set([...prev, hotel.id]));
     void recordHotelMemory({ action: "dismissed", hotel, city: resolvedCity ?? city });
+  };
+
+  const applyDestinationSuggestion = (suggestion: string): void => {
+    const iataMatch = suggestion.match(/\(([A-Z]{3})\)/);
+    setCity(suggestion);
+    setCityIata(iataMatch?.[1] ?? "");
+    setError(null);
+    setErrorSuggestions([]);
+    setShowResults(false);
+  };
+
+  const renderErrorWithSuggestions = (): ReactNode => {
+    if (!error) return null;
+    return (
+      <div className="space-y-2">
+        <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">{error}</p>
+        {errorSuggestions.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {errorSuggestions.map((suggestion) => (
+              <button
+                key={suggestion}
+                type="button"
+                onClick={() => applyDestinationSuggestion(suggestion)}
+                className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-800 hover:bg-sky-100 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-200"
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
   };
 
   return (
@@ -326,7 +392,7 @@ export function TripHotelSearch({
               </select>
             </div>
           </div>
-          {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
+          {error ? renderErrorWithSuggestions() : null}
           <button
             type="button"
             disabled={loading}
@@ -357,8 +423,20 @@ export function TripHotelSearch({
             </button>
           </div>
 
+          {correctedFrom ? (
+            <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
+              Showing hotels near <strong>{resolvedCity}</strong> — we corrected &ldquo;{correctedFrom}&rdquo;.
+            </p>
+          ) : null}
+
           {searchNotice ? (
-            <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+            <p
+              className={`rounded-xl border px-3 py-2 text-xs ${
+                searchSource === "estimated"
+                  ? "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+                  : "border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100"
+              }`}
+            >
               {searchNotice}
               {searchSource === "estimated" ? (
                 <>
@@ -373,6 +451,12 @@ export function TripHotelSearch({
                   </a>
                 </>
               ) : null}
+            </p>
+          ) : null}
+
+          {stayProfileSummary ? (
+            <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
+              {stayProfileSummary}
             </p>
           ) : null}
 
@@ -394,9 +478,7 @@ export function TripHotelSearch({
             </div>
           ) : null}
 
-          {error && !loading ? (
-            <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">{error}</p>
-          ) : null}
+          {!loading ? renderErrorWithSuggestions() : null}
 
           {!loading && visibleResults.length > 0 ? (
             <div className="space-y-3">
@@ -407,7 +489,16 @@ export function TripHotelSearch({
                 const textPrimary = isKepiPick ? "text-white" : "text-slate-900 dark:text-white";
 
                 return (
-                  <div key={hotel.id} className={`rounded-2xl border p-4 ${tierCardClass(hotel.tier)}`}>
+                  <div key={hotel.id} className={`overflow-hidden rounded-2xl border ${tierCardClass(hotel.tier)}`}>
+                    {hotel.photos[0] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={hotel.photos[0]}
+                        alt=""
+                        className="h-32 w-full object-cover"
+                      />
+                    ) : null}
+                    <div className="p-4">
                     {heading ? (
                       <p className={`mb-2 text-[10px] font-black uppercase tracking-widest ${isKepiPick ? "text-[#f4c95d]" : "text-sky-700 dark:text-sky-300"}`}>
                         {heading}
@@ -474,6 +565,7 @@ export function TripHotelSearch({
                       >
                         Not for me
                       </button>
+                    </div>
                     </div>
                   </div>
                 );

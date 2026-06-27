@@ -6,6 +6,7 @@ import type { HotelSearchResult } from "@/lib/hotels/types";
 export interface HotelSearchModalProps {
   open: boolean;
   tripName?: string | null;
+  segmentLabel?: string;
   defaultCity?: string;
   defaultCityIata?: string;
   defaultCheckIn?: string;
@@ -17,6 +18,7 @@ export interface HotelSearchModalProps {
 export function HotelSearchModal({
   open,
   tripName,
+  segmentLabel,
   defaultCity = "",
   defaultCityIata = "",
   defaultCheckIn = "",
@@ -43,7 +45,9 @@ export function HotelSearchModal({
               <h2 className="text-xl font-black text-slate-900 dark:text-white">
                 {tripName?.trim() ? `For ${tripName.trim()}` : "Find your stay"}
               </h2>
-              {defaultCity && defaultCheckIn && defaultCheckOut ? (
+              {segmentLabel ? (
+                <p className="mt-1 text-xs font-semibold text-sky-700 dark:text-sky-300">{segmentLabel}</p>
+              ) : defaultCity && defaultCheckIn && defaultCheckOut ? (
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                   Pre-filled from your trip · edit anything before searching
                 </p>
@@ -65,7 +69,7 @@ export function HotelSearchModal({
         </header>
         <div className="flex-1 overflow-y-auto px-5 py-4">
           <TripHotelSearch
-            key={`${defaultCity}-${defaultCityIata}-${defaultCheckIn}-${defaultCheckOut}`}
+            key={`${segmentLabel ?? "default"}-${defaultCity}-${defaultCityIata}-${defaultCheckIn}-${defaultCheckOut}`}
             defaultCity={defaultCity}
             defaultCityIata={defaultCityIata}
             defaultCheckIn={defaultCheckIn}

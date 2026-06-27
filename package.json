@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test src/lib/**/*.test.ts src/app/api/**/*.test.ts",
     "test:unit": "node --import tsx --test src/lib/decision/*.test.ts src/lib/flights/*.test.ts src/lib/admin/*.test.ts",
+    "bot-deck": "npm start --prefix bot-deck",
     "icons:generate": "node scripts/generate-icons.mjs",
     "seed:generate": "node scripts/generate-city-seeds.mjs",
     "hotels:overpass": "node scripts/fetch-hotels-overpass.mjs",

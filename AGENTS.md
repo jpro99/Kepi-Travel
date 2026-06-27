@@ -88,3 +88,27 @@ For each finding:
 - Use `.claude/agents/` for specialist subagents.
 - Route to read-only subagents first.
 - Use Playwright MCP for browser flow validation when available.
+
+## Project memory (agents)
+
+- Read and update `KEPI_PROJECT_MEMORY.md` for durable facts (provider status, completed setup, do-not-repeat advice).
+- Rule: `.cursor/rules/30-project-memory.mdc` (always apply).
+
+## Domain bot skills (Cursor)
+
+| Skill | Path |
+|-------|------|
+| Conductor | `.cursor/skills/kepi-conductor/SKILL.md` |
+| Hotel | `.cursor/skills/kepi-hotel-bot/SKILL.md` |
+| Flight | `.cursor/skills/kepi-flight-bot/SKILL.md` |
+| Airport | `.cursor/skills/kepi-airport-bot/SKILL.md` |
+| Map | `.cursor/skills/kepi-map-bot/SKILL.md` |
+
+These are agent playbooks, not autonomous runtime bots. Jeff instructs the conductor; conductor routes to domain skills.
+
+## Fix log
+
+### 2026-06-15
+- Hotel stay profile, trip stay planner, LiteAPI fallback, `KEPI_PROJECT_MEMORY.md`
+- Duffel Stays emails already sent by owner — do not re-suggest unless asked
+- Travelpayouts Drive skipped (no sitewide install)

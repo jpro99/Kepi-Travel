@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { HotelStayProfileCard } from "@/components/travelAssistant/HotelStayProfileCard";
+import { TripStayPlanner } from "@/components/travelAssistant/TripStayPlanner";
+import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 
 interface Reservation {
   id: string;
@@ -17,11 +20,15 @@ interface Reservation {
 
 interface HotelsTabProps {
   reservations: Reservation[];
+  tripName?: string | null;
+  staySegments?: TripStaySegment[];
   onReservationTap: (id: string) => void;
   onCheckStatus: (id: string) => void;
   onDelete: (id: string) => void;
   onAdd: () => void;
   onSearchHotels?: () => void;
+  onSearchSegment?: (segment: TripStaySegment) => void;
+  onAddCityStay?: (input: { city: string; checkIn: string; checkOut: string }) => void;
 }
 
 function fmtDate(localTime: string): string {
@@ -60,7 +67,18 @@ function cityEmoji(location: string): string {
   return "🏨";
 }
 
-export function HotelsTab({ reservations, onReservationTap, onCheckStatus, onDelete, onAdd, onSearchHotels }: HotelsTabProps) {
+export function HotelsTab({
+  reservations,
+  tripName,
+  staySegments = [],
+  onReservationTap,
+  onCheckStatus,
+  onDelete,
+  onAdd,
+  onSearchHotels,
+  onSearchSegment,
+  onAddCityStay,
+}: HotelsTabProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showPast, setShowPast] = useState(false);
 
@@ -100,6 +118,17 @@ export function HotelsTab({ reservations, onReservationTap, onCheckStatus, onDel
           </button>
         </div>
       </div>
+
+      <HotelStayProfileCard />
+
+      {staySegments.length > 0 && onSearchSegment ? (
+        <TripStayPlanner
+          segments={staySegments}
+          tripName={tripName}
+          onSearchSegment={onSearchSegment}
+          onAddCityStay={onAddCityStay}
+        />
+      ) : null}
 
       {shown.length > 0 && onSearchHotels ? (
         <div className="grid grid-cols-2 gap-2">
