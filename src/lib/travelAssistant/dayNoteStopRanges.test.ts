@@ -1,53 +1,86 @@
-import { describe, expect, it } from "vitest";
+import test from "node:test";
+import assert from "node:assert/strict";
 import {
+  citiesSame,
   deriveStopRangesFromDayNotes,
+  extractExplicitStayWindows,
+  mergeStopRanges,
   resolveEffectiveStopRanges,
 } from "./dayNoteStopRanges";
 
-describe("deriveStopRangesFromDayNotes", () => {
-  it("builds ranges from move and stay notes", () => {
-    const notes: Record<string, string> = {
-      "2026-09-01": "Fly from Ontario to Rome, check into hotel",
-      "2026-09-02": "In Rome",
-      "2026-09-03": "In Rome",
-      "2026-09-04": "Leave Rome, go to Venice",
-      "2026-09-05": "In Venice",
-      "2026-09-06": "In Venice",
-    };
-    const ranges = deriveStopRangesFromDayNotes("2026-09-01", "2026-09-06", notes);
-    expect(ranges.length).toBeGreaterThanOrEqual(2);
-    expect(ranges[0]?.stop.name.toLowerCase()).toContain("rome");
-    expect(ranges[1]?.stop.name.toLowerCase()).toContain("venice");
-  });
-
-  it("returns empty when no notes", () => {
-    expect(deriveStopRangesFromDayNotes("2026-09-01", "2026-09-10", {})).toEqual([]);
-  });
+test("citiesSame treats Polignano spelling variants as the same city", () => {
+  assert.equal(citiesSame("Polignano a Mare", "Polignano Amar"), true);
 });
 
-describe("resolveEffectiveStopRanges", () => {
-  it("prefers day notes over intent ranges", () => {
-    const intentRanges = [
-      {
-        stop: { name: "Bari" },
-        checkIn: "2026-09-01",
-        checkOut: "2026-09-05",
-        nights: 4,
-      },
-    ];
-    const notes = {
-      "2026-09-01": "Arrive in Rome",
-      "2026-09-02": "In Rome",
-      "2026-09-03": "Leave Rome, go to Venice",
-      "2026-09-04": "In Venice",
-    };
-    const effective = resolveEffectiveStopRanges(
-      intentRanges,
-      "2026-09-01",
-      "2026-09-04",
-      notes,
-    );
-    expect(effective.some((r) => r.stop.name.toLowerCase().includes("rome"))).toBe(true);
-    expect(effective.some((r) => r.stop.name.toLowerCase().includes("bari"))).toBe(false);
-  });
+test("extractExplicitStayWindows parses arrive 2nd leave 5th into one stay block", () => {
+  const notes = {
+    "2026-09-01": "Polignano a Mare — get there on the 2nd, leave on the 5th",
+  };
+  const ranges = extractExplicitStayWindows("2026-09-01", "2026-09-25", notes);
+  assert.equal(ranges.length, 1);
+  assert.equal(ranges[0]?.checkIn, "2026-09-02");
+  assert.equal(ranges[0]?.checkOut, "2026-09-05");
+  assert.match(ranges[0]?.stop.name.toLowerCase() ?? "", /polignano/);
+});
+
+test("mergeStopRanges merges fragmented same-city ranges", () => {
+  const merged = mergeStopRanges([
+    { stop: { name: "Polignano a Mare" }, checkIn: "2026-09-02", checkOut: "2026-09-04", nights: 2 },
+    { stop: { name: "Polignano Amar" }, checkIn: "2026-09-06", checkOut: "2026-09-08", nights: 2 },
+  ]);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0]?.checkIn, "2026-09-02");
+  assert.equal(merged[0]?.checkOut, "2026-09-08");
+});
+
+test("resolveEffectiveStopRanges prefers talk-to-plan intent over fragmented day notes", () => {
+  const intentRanges = [
+    {
+      stop: { name: "Polignano a Mare" },
+      checkIn: "2026-09-02",
+      checkOut: "2026-09-05",
+      nights: 3,
+    },
+    {
+      stop: { name: "Monopoli, Italy" },
+      checkIn: "2026-09-05",
+      checkOut: "2026-09-08",
+      nights: 3,
+    },
+  ];
+  const notes = {
+    "2026-09-02": "In Polignano",
+    "2026-09-06": "Polignano Amar",
+    "2026-09-09": "Polignano a Mare",
+    "2026-09-13": "Polignano",
+  };
+  const effective = resolveEffectiveStopRanges(intentRanges, "2026-09-01", "2026-09-25", notes);
+  assert.equal(effective.length, 2);
+  assert.equal(effective[0]?.checkIn, "2026-09-02");
+  assert.equal(effective[0]?.checkOut, "2026-09-05");
+});
+
+test("resolveEffectiveStopRanges uses explicit arrive/leave note over intent", () => {
+  const intentRanges = [
+    { stop: { name: "Bari" }, checkIn: "2026-09-01", checkOut: "2026-09-10", nights: 9 },
+  ];
+  const notes = {
+    "2026-09-01": "Polignano a Mare, arrive 2nd leave 5th",
+  };
+  const effective = resolveEffectiveStopRanges(intentRanges, "2026-09-01", "2026-09-25", notes);
+  assert.equal(effective.length, 1);
+  assert.equal(effective[0]?.checkIn, "2026-09-02");
+  assert.equal(effective[0]?.checkOut, "2026-09-05");
+});
+
+test("deriveStopRangesFromDayNotes builds one continuous range when city is consistent", () => {
+  const notes: Record<string, string> = {
+    "2026-09-02": "Arrive in Polignano a Mare",
+    "2026-09-03": "In Polignano a Mare",
+    "2026-09-04": "In Polignano a Mare",
+    "2026-09-05": "Leave Polignano a Mare",
+  };
+  const ranges = deriveStopRangesFromDayNotes("2026-09-01", "2026-09-10", notes);
+  assert.equal(ranges.length, 1);
+  assert.equal(ranges[0]?.checkIn, "2026-09-02");
 });

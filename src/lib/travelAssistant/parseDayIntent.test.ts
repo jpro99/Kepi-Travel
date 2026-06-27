@@ -11,8 +11,13 @@ test("parseDayIntent understands leave and go phrasing", () => {
   assert.equal(intent?.needsHotelCheckin, true);
 });
 
-test("parseDayIntent treats city-only input as stay", () => {
-  const intent = parseDayIntent("Bari");
+test("parseDayIntent treats In City phrasing as stay", () => {
+  const intent = parseDayIntent("In Bari");
   assert.equal(intent?.kind, "stay");
   assert.equal(intent?.stayCity, "Bari");
+});
+
+test("parseDayIntent does not treat bare city name as stay", () => {
+  const intent = parseDayIntent("Bari");
+  assert.equal(intent?.kind, "unknown");
 });

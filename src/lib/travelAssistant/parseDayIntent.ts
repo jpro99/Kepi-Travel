@@ -84,8 +84,8 @@ export function parseDayIntent(text: string): ParsedDayIntent | null {
     };
   }
 
-  if (raw.length >= 2 && raw.length <= 64 && !/\d{4}-\d{2}-\d{2}/u.test(raw)) {
-    const stayCity = titleCase(cleanCity(raw));
+  if (/^in\s+/iu.test(raw)) {
+    const stayCity = titleCase(cleanCity(raw.replace(/^in\s+/iu, "")));
     return {
       kind: "stay",
       raw,
@@ -93,7 +93,7 @@ export function parseDayIntent(text: string): ParsedDayIntent | null {
       toCity: stayCity,
       needsTransport: false,
       needsHotelCheckout: false,
-      needsHotelCheckin: true,
+      needsHotelCheckin: false,
       summary: `In ${stayCity}`,
     };
   }
