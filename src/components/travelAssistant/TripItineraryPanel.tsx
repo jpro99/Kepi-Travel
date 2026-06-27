@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { GapAlerts } from "@/components/travelAssistant/GapAlerts";
+import { ItineraryBriefView } from "@/components/travelAssistant/ItineraryBriefView";
 import { ItinerarySpreadsheet } from "@/components/travelAssistant/ItinerarySpreadsheet";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
+import type { StopDateRange } from "@/lib/decision/stopDates";
 
-export type ItineraryViewMode = "list" | "cards";
+export type ItineraryViewMode = "edit" | "brief" | "cards";
 
 interface TripItineraryPanelProps {
   tripId?: string | null;
@@ -41,6 +43,7 @@ interface TripItineraryPanelProps {
     flightAirline?: string;
   }[];
   dayNotes: Record<string, string>;
+  stopRanges?: StopDateRange[];
   onDayNoteChange: (dateKey: string, value: string) => void;
   onPlanDay: (dateKey: string, intent: ParsedDayIntent, mode: DayPlanMode) => void;
   viewMode: ItineraryViewMode;
@@ -61,6 +64,7 @@ export function TripItineraryPanel({
   tripDaysAway,
   reservations,
   dayNotes,
+  stopRanges = [],
   onDayNoteChange,
   onPlanDay,
   viewMode,
@@ -73,6 +77,18 @@ export function TripItineraryPanel({
   onShareLink,
 }: TripItineraryPanelProps) {
   const hasTripDates = Boolean(tripStartDate && tripEndDate);
+  const [planSavedFlash, setPlanSavedFlash] = useState(false);
+
+  useEffect(() => {
+    if (!planSavedFlash) return;
+    const timer = window.setTimeout(() => setPlanSavedFlash(false), 2000);
+    return () => window.clearTimeout(timer);
+  }, [planSavedFlash]);
+
+  const handleDayNoteChange = (dateKey: string, value: string): void => {
+    onDayNoteChange(dateKey, value);
+    setPlanSavedFlash(true);
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-slate-50 dark:bg-slate-950">
@@ -100,10 +116,17 @@ export function TripItineraryPanel({
           <div className="inline-flex rounded-lg border border-slate-200 p-0.5 text-[10px] font-bold dark:border-slate-700">
             <button
               type="button"
-              onClick={() => onViewModeChange("list")}
-              className={`rounded-md px-2.5 py-1 ${viewMode === "list" ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "text-slate-600 dark:text-slate-300"}`}
+              onClick={() => onViewModeChange("edit")}
+              className={`rounded-md px-2.5 py-1 ${viewMode === "edit" ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "text-slate-600 dark:text-slate-300"}`}
             >
-              Text
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => onViewModeChange("brief")}
+              className={`rounded-md px-2.5 py-1 ${viewMode === "brief" ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "text-slate-600 dark:text-slate-300"}`}
+            >
+              Brief
             </button>
             <button
               type="button"
@@ -119,21 +142,42 @@ export function TripItineraryPanel({
           <button type="button" onClick={onShareLink} className="rounded-lg border border-sky-200 px-2 py-1 text-[10px] font-bold text-sky-800 dark:border-sky-700 dark:text-sky-200">
             Phone
           </button>
+          {viewMode === "edit" ? (
+            <span
+              className={`text-[10px] font-semibold ${
+                planSavedFlash ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400 dark:text-slate-500"
+              }`}
+            >
+              {planSavedFlash ? "Saved on this device ✓" : "Auto-saves as you type"}
+            </span>
+          ) : null}
         </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         {hasTripDates || reservations.length > 0 ? (
-          viewMode === "list" ? (
+          viewMode === "edit" ? (
             <ItinerarySpreadsheet
               tripId={tripId}
               tripStartDate={tripStartDate}
               tripEndDate={tripEndDate}
               reservations={reservations}
               dayNotes={dayNotes}
-              onDayNoteChange={onDayNoteChange}
+              stopRanges={stopRanges}
+              onDayNoteChange={handleDayNoteChange}
               onReservationTap={onReservationTap}
               onPlanDay={onPlanDay}
+            />
+          ) : viewMode === "brief" ? (
+            <ItineraryBriefView
+              tripName={tripName}
+              tripStartDate={tripStartDate}
+              tripEndDate={tripEndDate}
+              tripId={tripId}
+              reservations={reservations}
+              dayNotes={dayNotes}
+              stopRanges={stopRanges}
+              onReservationTap={onReservationTap}
             />
           ) : (
             <TripTimeline
@@ -165,14 +209,16 @@ export function TripItineraryPanel({
 }
 
 export function useItineraryPanelPrefs(tripId: string | null) {
-  const [viewMode, setViewMode] = useState<ItineraryViewMode>("list");
+  const [viewMode, setViewMode] = useState<ItineraryViewMode>("edit");
   const [panelWidth, setPanelWidth] = useState(420);
   const [dayNotes, setDayNotes] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const storedView = window.localStorage.getItem("kepi:itinerary-view-mode");
-    if (storedView === "list" || storedView === "cards") setViewMode(storedView);
+    if (storedView === "edit" || storedView === "brief" || storedView === "cards" || storedView === "list") {
+      setViewMode(storedView === "list" ? "edit" : storedView);
+    }
     const storedWidth = Number(window.localStorage.getItem("kepi:itinerary-panel-width"));
     if (Number.isFinite(storedWidth) && storedWidth >= 300) setPanelWidth(storedWidth);
   }, []);

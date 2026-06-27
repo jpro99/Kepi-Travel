@@ -2,6 +2,8 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { TripFlightLegPicker } from "@/components/travelAssistant/TripFlightLegPicker";
+import type { FlightSearchPlan, PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
 import { buildGateInstructions, getAirportNav, buildArrivalGuide } from "@/lib/travelAssistant/airportNavigation";
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -28,6 +30,9 @@ interface LiveStatusResult {
 
 interface FlightsTabProps {
   reservations: Reservation[];
+  plannedFlightLegs?: PlannedFlightLeg[];
+  tripName?: string | null;
+  onSearchFlights?: (plan: FlightSearchPlan, selectedLegs: PlannedFlightLeg[]) => void;
   liveStatus?: Record<string, LiveStatusResult>;
   locationStatus?: "away" | "at-airport" | "in-terminal" | "airborne" | "unknown";
   nearestAirport?: string;
@@ -409,7 +414,11 @@ function AirportGuideCard({
 
 /* ─── Main component ──────────────────────────────────────────── */
 export function FlightsTab({
-  reservations, liveStatus = {}, locationStatus = "unknown", nearestAirport = "",
+  reservations,
+  plannedFlightLegs = [],
+  tripName,
+  onSearchFlights,
+  liveStatus = {}, locationStatus = "unknown", nearestAirport = "",
   onReservationTap, onCheckStatus, onDelete, onAdd,
 }: FlightsTabProps) {
   const [showPast, setShowPast] = useState(false);
@@ -461,6 +470,14 @@ export function FlightsTab({
 
   return (
     <section className="space-y-4 pb-6">
+      {plannedFlightLegs.length > 0 && onSearchFlights ? (
+        <TripFlightLegPicker
+          legs={plannedFlightLegs}
+          tripName={tripName}
+          onSearch={onSearchFlights}
+        />
+      ) : null}
+
       {/* ── ARRIVAL GUIDE — shown when airborne or just landed ── */}
       {/* Apple: when you're on a plane, show where you're going, not where you left */}
       {showArrivalGuide && arrivalFlight && (

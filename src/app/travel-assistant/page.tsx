@@ -113,6 +113,15 @@ import {
   type StoredTripPlan,
 } from "@/components/travelAssistant/BookFlightsWizard";
 import { buildTripPlanFromIntent } from "@/lib/travelAssistant/tripPlanFromIntent";
+import {
+  buildPlannedFlightLegs,
+  buildPlannedStayCities,
+  plannedStayCityToSegment,
+  type FlightSearchPlan,
+  type PlannedStayCity,
+} from "@/lib/travelAssistant/tripPlanBooking";
+import { allocateStopDates } from "@/lib/decision/stopDates";
+import { resolveStayCityForDay } from "@/lib/travelAssistant/dayPlanLines";
 import { buildFlightLegsFromIntent, defaultEnabledLegIds } from "@/lib/decision/flightLegPlanner";
 import { OnTrackButton } from "@/components/travelAssistant/OnTrackButton";
 import { TripSearch, type TripSearchSelection } from "@/components/travelAssistant/TripSearch";
@@ -3908,6 +3917,10 @@ export default function TravelAssistantPage() {
     () => Boolean(activeTrip && !isTripShellConfigured(activeTrip) && consumerDisplayReservations.length === 0),
     [activeTrip, consumerDisplayReservations.length],
   );
+  const itineraryStopRanges = useMemo(
+    () => (storedTripPlan?.intent ? allocateStopDates(storedTripPlan.intent) : []),
+    [storedTripPlan],
+  );
   const pendingFlightChangeAlert = useMemo(
     () => updateFeed.find((entry) => entry.kind === "flight-change") ?? null,
     [updateFeed],
@@ -4219,6 +4232,44 @@ export default function TravelAssistantPage() {
       tripStayDecisionsByTrip,
       usuallySkipsConnections,
     ],
+  );
+
+  const plannedStayCities = useMemo(
+    () =>
+      buildPlannedStayCities(
+        itineraryStopRanges,
+        consumerReservationsSorted
+          .filter((reservation) => reservation.type === "hotel")
+          .map((reservation) => ({
+            id: reservation.id,
+            location: reservation.location,
+            title: reservation.title,
+            provider: reservation.provider,
+            localTime: reservation.localTime,
+            checkOutDate: reservation.checkOutDate,
+          })),
+      ),
+    [consumerReservationsSorted, itineraryStopRanges],
+  );
+
+  const plannedFlightLegs = useMemo(
+    () =>
+      buildPlannedFlightLegs(
+        storedTripPlan?.intent,
+        consumerReservationsSorted
+          .filter((reservation) => reservation.type === "flight")
+          .map((reservation) => ({
+            id: reservation.id,
+            flightNumber: reservation.flightNumber,
+            flightDepartureAirport: reservation.flightDepartureAirport,
+            flightArrivalAirport: reservation.flightArrivalAirport,
+            flightDate: reservation.flightDate,
+            flightDepartureTime: reservation.flightDepartureTime,
+            localTime: reservation.localTime,
+            provider: reservation.provider,
+          })),
+      ),
+    [consumerReservationsSorted, storedTripPlan?.intent],
   );
 
   useEffect(() => {
@@ -5190,9 +5241,38 @@ export default function TravelAssistantPage() {
   );
 
   const openHotelSearchForTrip = useCallback((): void => {
+    const nextPlanned =
+      plannedStayCities.find((city) => city.status === "needed") ?? plannedStayCities[0];
+    if (nextPlanned) {
+      setHotelSearchSegment(plannedStayCityToSegment(nextPlanned));
+      setHotelSearchModalOpen(true);
+      return;
+    }
     setHotelSearchSegment(nextMissingStaySegment(tripStaySegments));
     setHotelSearchModalOpen(true);
-  }, [tripStaySegments]);
+  }, [plannedStayCities, tripStaySegments]);
+
+  const openHotelSearchForPlannedCity = useCallback((city: PlannedStayCity): void => {
+    setHotelSearchSegment(plannedStayCityToSegment(city));
+    setHotelSearchModalOpen(true);
+  }, []);
+
+  const handleFlightSearchPlan = useCallback(
+    (plan: FlightSearchPlan): void => {
+      window.open(plan.url, "_blank", "noopener,noreferrer");
+      for (const extra of plan.extraUrls ?? []) {
+        window.open(extra, "_blank", "noopener,noreferrer");
+      }
+      const modeLabel =
+        plan.mode === "roundtrip"
+          ? "Round-trip search opened"
+          : plan.mode === "multi"
+            ? "Multi-city searches opened"
+            : "Flight search opened";
+      setToast(`${modeLabel} ✓`);
+    },
+    [setToast],
+  );
 
   const openHotelSearchForSegment = useCallback((segment: TripStaySegment): void => {
     setHotelSearchSegment(segment);
@@ -7229,7 +7309,10 @@ export default function TravelAssistantPage() {
 
   const handlePlanDay = useCallback(
     (dateKey: string, intent: ParsedDayIntent, mode: DayPlanMode): void => {
-      const city = intent.toCity ?? intent.stayCity;
+      const city =
+        intent.toCity ??
+        intent.stayCity ??
+        resolveStayCityForDay(dateKey, itineraryPrefs.dayNotes, itineraryStopRanges);
       if (mode === "hotel" && city) {
         const formatted = formatHotelSearchCityLabel(city);
         handleAddCityStay({
@@ -7263,7 +7346,7 @@ export default function TravelAssistantPage() {
       navigateToConsumerTab("flights");
       setToast(`${mode.charAt(0).toUpperCase()}${mode.slice(1)} planning for ${intent.summary}`);
     },
-    [addDay, handleAddCityStay, navigateToConsumerTab, setToast],
+    [addDay, handleAddCityStay, itineraryPrefs.dayNotes, itineraryStopRanges, navigateToConsumerTab, setToast],
   );
 
   const handleReservationsRefresh = useCallback(async (): Promise<void> => {
@@ -7921,6 +8004,7 @@ export default function TravelAssistantPage() {
         tripDaysAway={tripDaysAway}
         reservations={consumerReservationsSorted}
         dayNotes={itineraryPrefs.dayNotes}
+        stopRanges={itineraryStopRanges}
         onDayNoteChange={itineraryPrefs.updateDayNote}
         onPlanDay={handlePlanDay}
         viewMode={itineraryPrefs.viewMode}
@@ -8590,6 +8674,9 @@ export default function TravelAssistantPage() {
           ) : consumerTab === "flights" ? (
             <FlightsTab
               reservations={consumerReservationsSorted.filter(r => r.type === "flight")}
+              plannedFlightLegs={plannedFlightLegs}
+              tripName={activeTrip?.name}
+              onSearchFlights={handleFlightSearchPlan}
               liveStatus={flightStatusCheckByReservationId}
               locationStatus={guidanceLocationStatus}
               nearestAirport={guidanceNearestAirport}
@@ -8605,6 +8692,8 @@ export default function TravelAssistantPage() {
               tripId={activeTripId}
               usuallySkipsConnections={usuallySkipsConnections}
               staySegments={tripStaySegments}
+              plannedStayCities={plannedStayCities}
+              onPickPlannedCity={openHotelSearchForPlannedCity}
               onReservationTap={(id) => openDrawer("reservation", id)}
               onCheckStatus={(id) => void handleCheckFlightStatus(id)}
               onDelete={(id) => void handleDeleteReservation(id)}

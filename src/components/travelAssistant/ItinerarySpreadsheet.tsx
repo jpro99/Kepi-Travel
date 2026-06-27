@@ -1,8 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ItineraryDayEditor } from "@/components/travelAssistant/ItineraryDayEditor";
 import { buildFullTripDayKeys } from "@/lib/travelAssistant/tripTimelinePlanning";
-import { parseDayIntent, type ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
+import {
+  parseDayIntentFromLines,
+  resolveStayCityForDay,
+} from "@/lib/travelAssistant/dayPlanLines";
+import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
+import type { StopDateRange } from "@/lib/decision/stopDates";
 import {
   buildReservationQuickLinks,
   buildSourceEmailViewPath,
@@ -33,6 +39,7 @@ interface ItinerarySpreadsheetProps {
   tripEndDate?: string | null;
   reservations: SpreadsheetReservation[];
   dayNotes: Record<string, string>;
+  stopRanges?: StopDateRange[];
   onDayNoteChange: (dateKey: string, value: string) => void;
   onReservationTap: (id: string) => void;
   onPlanDay: (dateKey: string, intent: ParsedDayIntent, mode: DayPlanMode) => void;
@@ -105,6 +112,7 @@ export function ItinerarySpreadsheet({
   tripEndDate = null,
   reservations,
   dayNotes,
+  stopRanges = [],
   onDayNoteChange,
   onReservationTap,
   onPlanDay,
@@ -121,13 +129,44 @@ export function ItinerarySpreadsheet({
       list.push(reservation);
       byDay.set(key, list);
     }
-    return dayKeys.map((dateKey) => ({
-      dateKey,
-      reservations: byDay.get(dateKey) ?? [],
-      note: dayNotes[dateKey] ?? "",
-      intent: parseDayIntent(dayNotes[dateKey] ?? ""),
-    }));
-  }, [dayNotes, reservations, tripEndDate, tripStartDate]);
+    return dayKeys.map((dateKey) => {
+      const note = dayNotes[dateKey] ?? "";
+      const stayCity = resolveStayCityForDay(dateKey, dayNotes, stopRanges);
+      const intent = parseDayIntentFromLines(note);
+      return {
+        dateKey,
+        reservations: byDay.get(dateKey) ?? [],
+        note,
+        stayCity,
+        intent,
+      };
+    });
+  }, [dayNotes, reservations, stopRanges, tripEndDate, tripStartDate]);
+
+  const openPlan = (dateKey: string, mode?: DayPlanMode): void => {
+    const note = dayNotes[dateKey] ?? "";
+    const stayCity = resolveStayCityForDay(dateKey, dayNotes, stopRanges);
+    let intent = parseDayIntentFromLines(note);
+    if (mode === "hotel" && stayCity) {
+      intent = {
+        kind: "stay",
+        raw: note,
+        stayCity,
+        toCity: stayCity,
+        needsTransport: false,
+        needsHotelCheckout: false,
+        needsHotelCheckin: true,
+        summary: `Stay in ${stayCity}`,
+      };
+      onPlanDay(dateKey, intent, mode);
+      return;
+    }
+    if (mode && intent) {
+      onPlanDay(dateKey, intent, mode);
+      return;
+    }
+    setPlanningDate(dateKey);
+  };
 
   if (rows.length === 0) {
     return (
@@ -139,6 +178,10 @@ export function ItinerarySpreadsheet({
 
   return (
     <div className="overflow-x-auto">
+      <p className="mb-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+        One row per day — use <span className="font-semibold">+ Dinner</span> or <span className="font-semibold">+ Line</span> for
+        multiple items. Switch to <span className="font-semibold">Brief</span> for the polished view.
+      </p>
       <table className="w-full min-w-[520px] border-collapse text-left text-[12px]">
         <thead>
           <tr className="border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:border-slate-700">
@@ -149,29 +192,22 @@ export function ItinerarySpreadsheet({
           </tr>
         </thead>
         <tbody>
-          {rows.map(({ dateKey, reservations: dayReservations, note, intent }) => (
+          {rows.map(({ dateKey, reservations: dayReservations, note, stayCity, intent }) => (
             <tr key={dateKey} className="border-b border-slate-100 align-top dark:border-slate-800">
               <td className="py-2 pr-2 font-semibold text-slate-700 dark:text-slate-200">{formatShortDate(dateKey)}</td>
               <td className="py-2 pr-2">
-                <input
-                  type="text"
+                <ItineraryDayEditor
+                  dateKey={dateKey}
                   value={note}
-                  placeholder="e.g. Leave Dolomites, go to Bari"
-                  onChange={(event) => onDayNoteChange(dateKey, event.target.value)}
-                  className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-[12px] text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                  stayCity={stayCity}
+                  onChange={(value) => onDayNoteChange(dateKey, value)}
+                  onPlanDay={intent ? () => openPlan(dateKey) : undefined}
+                  onPlanHotel={
+                    stayCity
+                      ? () => openPlan(dateKey, "hotel")
+                      : undefined
+                  }
                 />
-                {intent ? (
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400">{intent.summary}</span>
-                    <button
-                      type="button"
-                      onClick={() => setPlanningDate(dateKey)}
-                      className="rounded bg-sky-600 px-2 py-0.5 text-[10px] font-bold text-white"
-                    >
-                      Plan day
-                    </button>
-                  </div>
-                ) : null}
               </td>
               <td className="py-2 pr-2">
                 {dayReservations.length === 0 ? (
@@ -214,10 +250,11 @@ export function ItinerarySpreadsheet({
       {planningDate ? (
         <DayPlanOverlay
           dateKey={planningDate}
-          intent={parseDayIntent(dayNotes[planningDate] ?? "")}
+          stayCity={resolveStayCityForDay(planningDate, dayNotes, stopRanges)}
+          intent={parseDayIntentFromLines(dayNotes[planningDate] ?? "")}
           onClose={() => setPlanningDate(null)}
           onSelectMode={(mode) => {
-            const intent = parseDayIntent(dayNotes[planningDate] ?? "");
+            const intent = parseDayIntentFromLines(dayNotes[planningDate] ?? "");
             if (intent) onPlanDay(planningDate, intent, mode);
             setPlanningDate(null);
           }}
@@ -229,29 +266,39 @@ export function ItinerarySpreadsheet({
 
 function DayPlanOverlay({
   dateKey,
+  stayCity,
   intent,
   onClose,
   onSelectMode,
 }: {
   dateKey: string;
+  stayCity: string | null;
   intent: ParsedDayIntent | null;
   onClose: () => void;
   onSelectMode: (mode: DayPlanMode) => void;
 }) {
   if (!intent) return null;
 
-  const modes: Array<{ id: DayPlanMode; label: string; show: boolean }> = [
+  const modes: Array<{ id: DayPlanMode; label: string; detail?: string; show: boolean }> = [
     { id: "flight", label: "Flight", show: intent.needsTransport },
     { id: "train", label: "Train", show: intent.needsTransport },
     { id: "bus", label: "Bus", show: intent.needsTransport },
     { id: "car", label: "Car", show: intent.needsTransport },
-    { id: "hotel", label: "Hotel / stay", show: intent.needsHotelCheckin },
+    {
+      id: "hotel",
+      label: stayCity ? `Hotel in ${stayCity}` : "Hotel / stay",
+      detail: stayCity ? `Search stays in ${stayCity} for this leg` : undefined,
+      show: Boolean(stayCity) || intent.needsHotelCheckin,
+    },
   ].filter((mode) => mode.show);
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/40 p-4">
       <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-700 dark:bg-slate-900">
         <p className="text-[10px] font-bold uppercase tracking-widest text-sky-600">Plan {dateKey}</p>
+        {stayCity ? (
+          <p className="mt-1 text-xs font-semibold text-sky-700 dark:text-sky-300">You&apos;re in {stayCity}</p>
+        ) : null}
         <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{intent.summary}</p>
         <div className="mt-3 grid gap-2">
           {modes.map((mode) => (
@@ -259,9 +306,10 @@ function DayPlanOverlay({
               key={mode.id}
               type="button"
               onClick={() => onSelectMode(mode.id)}
-              className="rounded-lg border border-slate-200 px-3 py-2 text-left text-sm font-bold hover:bg-sky-50 dark:border-slate-700 dark:hover:bg-sky-950/30"
+              className="rounded-lg border border-slate-200 px-3 py-2 text-left hover:bg-sky-50 dark:border-slate-700 dark:hover:bg-sky-950/30"
             >
-              {mode.label}
+              <span className="block text-sm font-bold">{mode.label}</span>
+              {mode.detail ? <span className="block text-[11px] text-slate-500">{mode.detail}</span> : null}
             </button>
           ))}
         </div>

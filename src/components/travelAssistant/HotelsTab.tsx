@@ -4,6 +4,8 @@ import { useState, useMemo } from "react";
 import { HotelStayProfileCard } from "@/components/travelAssistant/HotelStayProfileCard";
 import { TravelFitEarnBar } from "@/components/travelAssistant/TravelFitEarnBar";
 import { TripStayPlanner } from "@/components/travelAssistant/TripStayPlanner";
+import { TripHotelCityPicker } from "@/components/travelAssistant/TripHotelCityPicker";
+import type { PlannedStayCity } from "@/lib/travelAssistant/tripPlanBooking";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 
 interface Reservation {
@@ -23,6 +25,8 @@ interface HotelsTabProps {
   reservations: Reservation[];
   tripName?: string | null;
   staySegments?: TripStaySegment[];
+  plannedStayCities?: PlannedStayCity[];
+  onPickPlannedCity?: (city: PlannedStayCity) => void;
   onReservationTap: (id: string) => void;
   onCheckStatus: (id: string) => void;
   onDelete: (id: string) => void;
@@ -90,6 +94,8 @@ export function HotelsTab({
   reservations,
   tripName,
   staySegments = [],
+  plannedStayCities = [],
+  onPickPlannedCity,
   onReservationTap,
   onCheckStatus,
   onDelete,
@@ -146,7 +152,15 @@ export function HotelsTab({
 
       {travelFitReservations.length > 0 ? <TravelFitEarnBar reservations={travelFitReservations} /> : null}
 
-      {staySegments.length > 0 && onSearchSegment ? (
+      {plannedStayCities.length > 0 && onPickPlannedCity ? (
+        <TripHotelCityPicker
+          cities={plannedStayCities}
+          tripName={tripName}
+          onPickCity={onPickPlannedCity}
+        />
+      ) : null}
+
+      {staySegments.length > 0 && onSearchSegment && plannedStayCities.length === 0 ? (
         <TripStayPlanner
           segments={staySegments}
           tripName={tripName}
