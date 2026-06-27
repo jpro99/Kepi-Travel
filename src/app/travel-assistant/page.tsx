@@ -120,6 +120,7 @@ import {
   type FlightSearchPlan,
   type PlannedStayCity,
 } from "@/lib/travelAssistant/tripPlanBooking";
+import { resolveEffectiveStopRanges } from "@/lib/travelAssistant/dayNoteStopRanges";
 import { allocateStopDates } from "@/lib/decision/stopDates";
 import { resolveStayCityForDay } from "@/lib/travelAssistant/dayPlanLines";
 import { buildFlightLegsFromIntent, defaultEnabledLegIds } from "@/lib/decision/flightLegPlanner";
@@ -4234,10 +4235,27 @@ export default function TravelAssistantPage() {
     ],
   );
 
+  const effectiveStopRanges = useMemo(
+    () =>
+      resolveEffectiveStopRanges(
+        itineraryStopRanges,
+        consumerTripStartDate ?? activeTrip?.startDate,
+        activeTrip?.endDate,
+        itineraryPrefs.dayNotes,
+      ),
+    [
+      activeTrip?.endDate,
+      activeTrip?.startDate,
+      consumerTripStartDate,
+      itineraryPrefs.dayNotes,
+      itineraryStopRanges,
+    ],
+  );
+
   const plannedStayCities = useMemo(
     () =>
       buildPlannedStayCities(
-        itineraryStopRanges,
+        effectiveStopRanges,
         consumerReservationsSorted
           .filter((reservation) => reservation.type === "hotel")
           .map((reservation) => ({
@@ -4249,7 +4267,7 @@ export default function TravelAssistantPage() {
             checkOutDate: reservation.checkOutDate,
           })),
       ),
-    [consumerReservationsSorted, itineraryStopRanges],
+    [consumerReservationsSorted, effectiveStopRanges],
   );
 
   const plannedFlightLegs = useMemo(
@@ -4268,8 +4286,20 @@ export default function TravelAssistantPage() {
             localTime: reservation.localTime,
             provider: reservation.provider,
           })),
+        effectiveStopRanges,
+        itineraryPrefs.dayNotes,
+        consumerTripStartDate ?? activeTrip?.startDate,
+        activeTrip?.endDate,
       ),
-    [consumerReservationsSorted, storedTripPlan?.intent],
+    [
+      activeTrip?.endDate,
+      activeTrip?.startDate,
+      consumerReservationsSorted,
+      consumerTripStartDate,
+      effectiveStopRanges,
+      itineraryPrefs.dayNotes,
+      storedTripPlan?.intent,
+    ],
   );
 
   useEffect(() => {
@@ -7084,6 +7114,7 @@ export default function TravelAssistantPage() {
           return;
         }
         setTalkPlannerOpen(false);
+        itineraryPrefs.setViewMode("calendar");
         setReservationsCalendarView(true);
         setItineraryPanelOpen(true);
         setBookFlightsWizardOpen(true);
@@ -7092,7 +7123,7 @@ export default function TravelAssistantPage() {
         setTalkPlannerLoading(false);
       }
     },
-    [handleSaveTripPlanningSetup],
+    [handleSaveTripPlanningSetup, itineraryPrefs.setViewMode],
   );
 
   useEffect(() => {
@@ -7312,7 +7343,7 @@ export default function TravelAssistantPage() {
       const city =
         intent.toCity ??
         intent.stayCity ??
-        resolveStayCityForDay(dateKey, itineraryPrefs.dayNotes, itineraryStopRanges);
+        resolveStayCityForDay(dateKey, itineraryPrefs.dayNotes, effectiveStopRanges);
       if (mode === "hotel" && city) {
         const formatted = formatHotelSearchCityLabel(city);
         handleAddCityStay({
@@ -7346,7 +7377,7 @@ export default function TravelAssistantPage() {
       navigateToConsumerTab("flights");
       setToast(`${mode.charAt(0).toUpperCase()}${mode.slice(1)} planning for ${intent.summary}`);
     },
-    [addDay, handleAddCityStay, itineraryPrefs.dayNotes, itineraryStopRanges, navigateToConsumerTab, setToast],
+    [addDay, handleAddCityStay, itineraryPrefs.dayNotes, effectiveStopRanges, navigateToConsumerTab, setToast],
   );
 
   const handleReservationsRefresh = useCallback(async (): Promise<void> => {
@@ -8004,7 +8035,7 @@ export default function TravelAssistantPage() {
         tripDaysAway={tripDaysAway}
         reservations={consumerReservationsSorted}
         dayNotes={itineraryPrefs.dayNotes}
-        stopRanges={itineraryStopRanges}
+        stopRanges={effectiveStopRanges}
         onDayNoteChange={itineraryPrefs.updateDayNote}
         onPlanDay={handlePlanDay}
         viewMode={itineraryPrefs.viewMode}
@@ -8015,6 +8046,12 @@ export default function TravelAssistantPage() {
         onPrint={handleConsumerItineraryPrint}
         onExportPdf={handleConsumerItineraryPdf}
         onShareLink={handleShareItineraryLink}
+        plannedStayCities={plannedStayCities}
+        plannedFlightLegs={plannedFlightLegs}
+        onPickPlannedCity={openHotelSearchForPlannedCity}
+        onSearchFlights={handleFlightSearchPlan}
+        onOpenHotelsTab={() => navigateToConsumerTab("hotels")}
+        onOpenFlightsTab={() => navigateToConsumerTab("flights")}
       />
     );
 
@@ -8590,8 +8627,18 @@ export default function TravelAssistantPage() {
                         reservations={consumerReservationsSorted}
                         tripStartDate={activeTrip.startDate}
                         tripEndDate={activeTrip.endDate}
+                        tripName={activeTrip.name}
                         dayNotes={itineraryPrefs.dayNotes}
+                        stopRanges={effectiveStopRanges}
+                        onDayNoteChange={itineraryPrefs.updateDayNote}
                         onReservationTap={(id) => openDrawer("reservation", id)}
+                        onPlanDay={handlePlanDay}
+                        plannedStayCities={plannedStayCities}
+                        plannedFlightLegs={plannedFlightLegs}
+                        onPickCity={openHotelSearchForPlannedCity}
+                        onSearchFlights={handleFlightSearchPlan}
+                        onOpenHotelsTab={() => navigateToConsumerTab("hotels")}
+                        onOpenFlightsTab={() => navigateToConsumerTab("flights")}
                       />
                     </div>
                   ) : null}

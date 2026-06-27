@@ -4,12 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import { GapAlerts } from "@/components/travelAssistant/GapAlerts";
 import { ItineraryBriefView } from "@/components/travelAssistant/ItineraryBriefView";
 import { ItinerarySpreadsheet } from "@/components/travelAssistant/ItinerarySpreadsheet";
+import { TripCalendarView } from "@/components/travelAssistant/TripCalendarView";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
 import type { StopDateRange } from "@/lib/decision/stopDates";
+import type { FlightSearchPlan, PlannedFlightLeg, PlannedStayCity } from "@/lib/travelAssistant/tripPlanBooking";
 
-export type ItineraryViewMode = "edit" | "brief" | "cards";
+export type ItineraryViewMode = "edit" | "brief" | "cards" | "calendar";
 
 interface TripItineraryPanelProps {
   tripId?: string | null;
@@ -54,6 +56,12 @@ interface TripItineraryPanelProps {
   onPrint: () => void;
   onExportPdf: () => void;
   onShareLink: () => void;
+  plannedStayCities?: PlannedStayCity[];
+  plannedFlightLegs?: PlannedFlightLeg[];
+  onPickPlannedCity?: (city: PlannedStayCity) => void;
+  onSearchFlights?: (plan: FlightSearchPlan, selectedLegs: PlannedFlightLeg[]) => void;
+  onOpenHotelsTab?: () => void;
+  onOpenFlightsTab?: () => void;
 }
 
 export function TripItineraryPanel({
@@ -75,6 +83,12 @@ export function TripItineraryPanel({
   onPrint,
   onExportPdf,
   onShareLink,
+  plannedStayCities = [],
+  plannedFlightLegs = [],
+  onPickPlannedCity,
+  onSearchFlights,
+  onOpenHotelsTab,
+  onOpenFlightsTab,
 }: TripItineraryPanelProps) {
   const hasTripDates = Boolean(tripStartDate && tripEndDate);
   const [planSavedFlash, setPlanSavedFlash] = useState(false);
@@ -135,6 +149,13 @@ export function TripItineraryPanel({
             >
               Cards
             </button>
+            <button
+              type="button"
+              onClick={() => onViewModeChange("calendar")}
+              className={`rounded-md px-2.5 py-1 ${viewMode === "calendar" ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "text-slate-600 dark:text-slate-300"}`}
+            >
+              Calendar
+            </button>
           </div>
           <button type="button" onClick={onPrint} className="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-bold dark:border-slate-700">
             Print
@@ -142,7 +163,7 @@ export function TripItineraryPanel({
           <button type="button" onClick={onShareLink} className="rounded-lg border border-sky-200 px-2 py-1 text-[10px] font-bold text-sky-800 dark:border-sky-700 dark:text-sky-200">
             Phone
           </button>
-          {viewMode === "edit" ? (
+          {viewMode === "edit" || viewMode === "calendar" ? (
             <span
               className={`text-[10px] font-semibold ${
                 planSavedFlash ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400 dark:text-slate-500"
@@ -178,6 +199,24 @@ export function TripItineraryPanel({
               dayNotes={dayNotes}
               stopRanges={stopRanges}
               onReservationTap={onReservationTap}
+            />
+          ) : viewMode === "calendar" ? (
+            <TripCalendarView
+              reservations={reservations}
+              tripStartDate={tripStartDate}
+              tripEndDate={tripEndDate}
+              tripName={tripName}
+              dayNotes={dayNotes}
+              stopRanges={stopRanges}
+              onDayNoteChange={handleDayNoteChange}
+              onReservationTap={onReservationTap}
+              onPlanDay={onPlanDay}
+              plannedStayCities={plannedStayCities}
+              plannedFlightLegs={plannedFlightLegs}
+              onPickCity={onPickPlannedCity}
+              onSearchFlights={onSearchFlights}
+              onOpenHotelsTab={onOpenHotelsTab}
+              onOpenFlightsTab={onOpenFlightsTab}
             />
           ) : (
             <TripTimeline
@@ -216,7 +255,7 @@ export function useItineraryPanelPrefs(tripId: string | null) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const storedView = window.localStorage.getItem("kepi:itinerary-view-mode");
-    if (storedView === "edit" || storedView === "brief" || storedView === "cards" || storedView === "list") {
+    if (storedView === "edit" || storedView === "brief" || storedView === "cards" || storedView === "calendar" || storedView === "list") {
       setViewMode(storedView === "list" ? "edit" : storedView);
     }
     const storedWidth = Number(window.localStorage.getItem("kepi:itinerary-panel-width"));

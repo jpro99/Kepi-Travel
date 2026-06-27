@@ -99,6 +99,8 @@ export function TripFlightLegPicker({ legs, tripName, onSearch }: TripFlightLegP
                     </span>
                     {isBooked && leg.bookedSummary ? (
                       <span className="mt-1 block text-[10px] font-semibold text-emerald-200">{leg.bookedSummary}</span>
+                    ) : leg.role === "connector" ? (
+                      <span className="mt-1 block text-[10px] text-sky-200/70">✈ Flight or 🚆 train — check to search flights</span>
                     ) : null}
                   </span>
                 </button>

@@ -3,6 +3,7 @@ import { buildGoogleFlightsUrl } from "@/lib/decision/bookingLinks";
 import type { FlightLegPlan, TripIntent } from "@/lib/decision/types";
 import type { StopDateRange } from "@/lib/decision/stopDates";
 import { formatHotelSearchCityLabel } from "@/lib/hotels/tripSearchContext";
+import { parseDayIntentFromLines } from "@/lib/travelAssistant/dayPlanLines";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 
 export interface PlannedStayCity {
@@ -97,9 +98,17 @@ export function buildPlannedStayCities(
 export function buildPlannedFlightLegs(
   intent: TripIntent | null | undefined,
   flights: TripFlightInput[],
+  stopRanges: StopDateRange[] = [],
+  dayNotes: Record<string, string> = {},
+  tripStart?: string | null,
+  tripEnd?: string | null,
 ): PlannedFlightLeg[] {
-  if (!intent) return [];
-  const legs = buildFlightLegsFromIntent(intent);
+  const start = intent?.startDate ?? tripStart?.slice(0, 10) ?? stopRanges[0]?.checkIn;
+  const end = intent?.endDate ?? tripEnd?.slice(0, 10) ?? stopRanges[stopRanges.length - 1]?.checkOut;
+  const legs =
+    intent && (intent.stops?.length ?? 0) > 0
+      ? buildFlightLegsFromIntent(intent)
+      : buildFlightLegsFromStopRanges(stopRanges, start, end, dayNotes);
   return legs.map((leg) => {
     const match = flights.find((flight) => legMatchesFlight(leg, flight));
     const fn = match?.flightNumber?.trim();
@@ -113,6 +122,105 @@ export function buildPlannedFlightLegs(
       reservationId: match?.id,
     };
   });
+}
+
+function iataForCity(city: string): string | undefined {
+  return formatHotelSearchCityLabel(city).iata || undefined;
+}
+
+function homeFromDayNotes(dayNotes: Record<string, string>, tripStart?: string): { city: string; iata?: string } | null {
+  const keys = Object.keys(dayNotes).sort();
+  const firstKey = tripStart && dayNotes[tripStart] ? tripStart : keys[0];
+  if (!firstKey) return null;
+  const intent = parseDayIntentFromLines(dayNotes[firstKey] ?? "");
+  if (!intent?.fromCity) return null;
+  return { city: intent.fromCity, iata: iataForCity(intent.fromCity) };
+}
+
+function returnTargetFromDayNotes(
+  dayNotes: Record<string, string>,
+  tripEnd?: string,
+): { city: string; iata?: string } | null {
+  const keys = Object.keys(dayNotes).sort();
+  const lastKey = tripEnd && dayNotes[tripEnd] ? tripEnd : keys[keys.length - 1];
+  if (!lastKey) return null;
+  const intent = parseDayIntentFromLines(dayNotes[lastKey] ?? "");
+  if (intent?.toCity && intent.kind === "depart") {
+    return { city: intent.toCity, iata: iataForCity(intent.toCity) };
+  }
+  if (intent?.fromCity && /\bfly home\b/iu.test(dayNotes[lastKey] ?? "")) {
+    const home = homeFromDayNotes(dayNotes);
+    if (home) return home;
+  }
+  return null;
+}
+
+/** Build flight legs from calendar/itinerary city ranges when no full talk-to-plan intent exists. */
+export function buildFlightLegsFromStopRanges(
+  ranges: StopDateRange[],
+  tripStart?: string,
+  tripEnd?: string,
+  dayNotes: Record<string, string> = {},
+): FlightLegPlan[] {
+  if (ranges.length === 0 || !tripStart || !tripEnd) return [];
+
+  const legs: FlightLegPlan[] = [];
+  const home = homeFromDayNotes(dayNotes, tripStart);
+  const returnTarget = returnTargetFromDayNotes(dayNotes, tripEnd) ?? home;
+  const first = ranges[0]!;
+  const last = ranges[ranges.length - 1]!;
+  const firstIata = first.stop.iata?.toUpperCase() ?? iataForCity(first.stop.name)?.toUpperCase();
+  const lastIata = last.stop.iata?.toUpperCase() ?? iataForCity(last.stop.name)?.toUpperCase();
+  const homeIata = home?.iata?.toUpperCase();
+
+  if (homeIata && firstIata) {
+    legs.push({
+      id: "outbound",
+      role: "outbound",
+      fromIata: homeIata,
+      toIata: firstIata,
+      fromLabel: home?.city ?? homeIata,
+      toLabel: first.stop.name,
+      enabled: true,
+      optional: false,
+      departureDate: tripStart,
+    });
+  }
+
+  for (let index = 0; index < ranges.length - 1; index += 1) {
+    const fromStop = ranges[index]!;
+    const toStop = ranges[index + 1]!;
+    const fromIata = fromStop.stop.iata?.toUpperCase() ?? iataForCity(fromStop.stop.name)?.toUpperCase();
+    const toIata = toStop.stop.iata?.toUpperCase() ?? iataForCity(toStop.stop.name)?.toUpperCase();
+    if (!fromIata || !toIata) continue;
+    legs.push({
+      id: `connector-${index}`,
+      role: "connector",
+      fromIata,
+      toIata,
+      fromLabel: fromStop.stop.name,
+      toLabel: toStop.stop.name,
+      enabled: false,
+      optional: true,
+      departureDate: fromStop.checkOut,
+    });
+  }
+
+  if (homeIata && lastIata && returnTarget) {
+    legs.push({
+      id: "return",
+      role: "return",
+      fromIata: lastIata,
+      toIata: homeIata,
+      fromLabel: last.stop.name,
+      toLabel: returnTarget.city,
+      enabled: true,
+      optional: false,
+      departureDate: tripEnd,
+    });
+  }
+
+  return legs;
 }
 
 export function defaultSelectableFlightLegIds(legs: PlannedFlightLeg[]): string[] {
