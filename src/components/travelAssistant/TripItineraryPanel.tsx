@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { GapAlerts } from "@/components/travelAssistant/GapAlerts";
 import { ItinerarySpreadsheet } from "@/components/travelAssistant/ItinerarySpreadsheet";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
@@ -207,6 +207,16 @@ export function useItineraryPanelPrefs(tripId: string | null) {
     });
   };
 
+  const replaceDayNotes = useCallback(
+    (notes: Record<string, string>): void => {
+      setDayNotes(notes);
+      if (tripId && typeof window !== "undefined") {
+        window.localStorage.setItem(`kepi:day-notes:${tripId}`, JSON.stringify(notes));
+      }
+    },
+    [tripId],
+  );
+
   return {
     viewMode,
     setViewMode: persistViewMode,
@@ -214,5 +224,6 @@ export function useItineraryPanelPrefs(tripId: string | null) {
     setPanelWidth: persistPanelWidth,
     dayNotes,
     updateDayNote,
+    replaceDayNotes,
   };
 }

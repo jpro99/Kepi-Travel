@@ -237,6 +237,22 @@ function parseFlightDates(
   monthIndex: number,
   year: number,
 ): { startDate: string; endDate: string; nights: number } | null {
+  const monthToken =
+    "(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)";
+  const betweenMatch = lower.match(
+    new RegExp(`between\\s+${monthToken}?\\s*(\\d{1,2})(?:st|nd|rd|th)?\\s+and\\s+${monthToken}?\\s*(\\d{1,2})(?:st|nd|rd|th)?`, "i"),
+  );
+  if (betweenMatch?.[1] && betweenMatch[2]) {
+    const startDay = parseDayToken(betweenMatch[1]);
+    const endDay = parseDayToken(betweenMatch[2]);
+    if (startDay && endDay && endDay > startDay) {
+      const startDate = formatIso(new Date(year, monthIndex, startDay));
+      const endDate = formatIso(new Date(year, monthIndex, endDay));
+      const nights = Math.max(1, Math.round((Date.parse(endDate) - Date.parse(startDate)) / 86_400_000));
+      return { startDate, endDate, nights };
+    }
+  }
+
   const departPatterns = [
     /(?:on\s+)?(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?/i,
     /fly(?:\s+out|\s+from)?\s+(?:on|around)\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?/i,
@@ -301,6 +317,7 @@ function matchPlaceFromText(text: string): ParsedOrigin | null {
 function parseReturn(lower: string): ParsedOrigin | null {
   const normalized = stripOriginParseNoise(lower);
   const patterns = [
+    /(?:fly(?:\s+back|\s+home)|return(?:\s+home)?|head(?:\s+)?back)\s+(?:back\s+)?to\s+(.+?)(?:\s+the next|\s+back|\s+to|\s+and|\s*,|\.|$)/i,
     /(?:fly(?:\s+back|\s+home)|return(?:\s+home)?|head(?:\s+)?back)\s+(?:from|via|out of)\s+(.+?)(?:\s+back|\s+to|\s+and|\s*,|\.|$)/i,
     /(?:from)\s+(.+?)\s+(?:back|home)\s+to\s+(?:the\s+)?(?:united states|u\.?s\.?|america)/i,
     /(?:then\s+)?(?:fly|go)\s+(?:back|home)\s+(?:from|via)\s+(.+?)(?:\s+back|\s+to|\s*,|\.|$)/i,
@@ -355,25 +372,28 @@ function parseOrigin(lower: string): ParsedOrigin | null {
   return null;
 }
 
-function parseStopNights(lower: string, stopKey: string): { nights?: number; nightsLabel?: string } {
+function parseStopNights(lower: string, stopKey: string, segmentStart = 0, segmentEnd?: number): { nights?: number; nightsLabel?: string } {
+  const segment = lower.slice(segmentStart, segmentEnd ?? lower.length);
   const num = `(\\d+|${Object.keys(WORD_NUMBERS).join("|")})`;
   const patterns = [
+    new RegExp(`${num}\\s*(?:or|to|-)\\s*${num}?\\s*nights?`, "i"),
+    new RegExp(`(?:stay(?:ing)?(?:\\s+there)?\\s+for\\s+)${num}\\s*(?:or|to|-)?\\s*${num}?\\s*nights?`, "i"),
     new RegExp(`${num}\\s*(?:or|to|-)\\s*${num}?\\s*days?\\s*(?:in|at|around|near)?\\s*${stopKey}`, "i"),
     new RegExp(`${num}\\s*days?\\s*(?:in|at|around|near)?\\s*${stopKey}`, "i"),
-    new RegExp(`${stopKey}[^.]{0,40}?${num}\\s*(?:or|to|-)\\s*${num}?\\s*days?`, "i"),
-    new RegExp(`(?:spend|staying)\\s*${num}\\s*(?:or|to|-)\\s*${num}?\\s*days?[^.]{0,30}?${stopKey}`, "i"),
+    new RegExp(`${stopKey}[^.]{0,60}?${num}\\s*(?:or|to|-)\\s*${num}?\\s*(?:nights?|days?)`, "i"),
+    new RegExp(`(?:spend|staying)\\s*${num}\\s*(?:or|to|-)\\s*${num}?\\s*(?:nights?|days?)[^.]{0,30}?${stopKey}`, "i"),
   ];
 
   for (const pattern of patterns) {
-    const match = lower.match(pattern);
+    const match = segment.match(pattern);
     if (!match) continue;
     const low = parseDayToken(match[1] ?? "");
     const high = match[2] ? parseDayToken(match[2]) : null;
     if (low === null) continue;
     if (high !== null && high !== low) {
-      return { nights: Math.round((low + high) / 2), nightsLabel: `${low}–${high} days` };
+      return { nights: Math.round((low + high) / 2), nightsLabel: `${low}–${high} nights` };
     }
-    return { nights: low, nightsLabel: `${low} days` };
+    return { nights: low, nightsLabel: `${low} nights` };
   }
   return {};
 }
@@ -387,14 +407,20 @@ function parseStops(lower: string): TripStop[] {
   found.sort((a, b) => a.index - b.index);
 
   const uniqueKeys: string[] = [];
+  const uniqueIndexes: number[] = [];
   for (const item of found) {
-    if (!uniqueKeys.includes(item.key)) uniqueKeys.push(item.key);
+    if (!uniqueKeys.includes(item.key)) {
+      uniqueKeys.push(item.key);
+      uniqueIndexes.push(item.index);
+    }
   }
 
-  return uniqueKeys.map((key) => {
+  return uniqueKeys.map((key, index) => {
     const dest = DESTINATION_MAP[key]!;
     const alias = Object.entries(STOP_ALIASES).find(([, v]) => v === key)?.[0] ?? key;
-    const duration = parseStopNights(lower, alias);
+    const segmentStart = uniqueIndexes[index] ?? 0;
+    const segmentEnd = uniqueIndexes[index + 1] ?? lower.length;
+    const duration = parseStopNights(lower, alias, segmentStart, segmentEnd);
     return {
       name: dest.city,
       region: dest.region,
@@ -466,8 +492,11 @@ export function parseTripIntent(rawPrompt: string, referenceDate = new Date()): 
     .replace(/\bform\b/gi, "from").replace(/\badn\b/gi, "and");
   const lower = cleanPrompt.toLowerCase().trim();
   const stops = parseStops(lower);
-  const origin = parseOrigin(lower);
+  let origin = parseOrigin(lower);
   const returnPlace = parseReturn(lower);
+  if (!origin && returnPlace) {
+    origin = returnPlace;
+  }
   const loyalty = parseLoyalty(lower);
   const budgetHint = parseBudgetHint(lower);
   const instrument = parseInstrumentHints(lower);
@@ -584,4 +613,4 @@ export function buildInferredSummary(intent: TripIntent, searchAirports: string[
   return `${originPart}${intent.destination}${returnPart}, ${intent.monthLabel} ${intent.startDate.slice(0, 4)} · ${intent.nights} nights · Searching ${airportList}`;
 }
 
-export const RECORD_TRIP_EXAMPLE = `West Coast to Bari, then Venice, Dolomites, and Germany — fly home from Munich in September. Alaska MVP Gold.`;
+export const RECORD_TRIP_EXAMPLE = `Trip between September 1 and September 25. Fly from Ontario to Rome — stay 5 nights. Then Venice 4 nights, Dolomites 5 nights, Munich 3–4 nights. Fly home to Ontario. Alaska MVP Gold.`;

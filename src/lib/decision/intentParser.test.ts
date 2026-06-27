@@ -56,13 +56,14 @@ test("parses multi-city Italy voice trip", () => {
   const intent = parseTripIntent(RECORD_TRIP_EXAMPLE, new Date("2026-06-01"));
   assert.equal(intent.isMultiCity, true);
   assert.ok(intent.stops && intent.stops.length >= 3);
-  assert.equal(intent.stops![0]?.name, "Bari");
+  assert.equal(intent.stops![0]?.name, "Rome");
   assert.ok(intent.stops!.some((s) => s.name === "Venice"));
   assert.ok(intent.stops!.some((s) => s.name === "Dolomites"));
-  assert.equal(intent.originCity, "West Coast");
-  assert.equal(intent.returnAirports?.[0], "MUC");
+  assert.equal(intent.originCity, "Ontario, CA");
+  assert.equal(intent.startDate, "2026-09-01");
+  assert.equal(intent.endDate, "2026-09-25");
   assert.ok(intent.loyaltyPrograms?.some((p) => p.includes("Alaska")));
-  assert.ok(intent.nights >= 10);
+  assert.ok(intent.nights >= 20);
 });
 
 test("parses open-jaw return from Munich", () => {

@@ -16,6 +16,9 @@ interface CalendarReservation {
 
 interface TripCalendarViewProps {
   reservations: CalendarReservation[];
+  tripStartDate?: string | null;
+  tripEndDate?: string | null;
+  dayNotes?: Record<string, string>;
   onReservationTap?: (id: string) => void;
 }
 
@@ -82,11 +85,28 @@ const MONTH_NAMES = [
   "July","August","September","October","November","December",
 ];
 
-export function TripCalendarView({ reservations, onReservationTap }: TripCalendarViewProps) {
+function dateKeyFromDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+export function TripCalendarView({
+  reservations,
+  tripStartDate = null,
+  tripEndDate = null,
+  dayNotes = {},
+  onReservationTap,
+}: TripCalendarViewProps) {
   const today = new Date();
 
   // Find the earliest reservation month to default to, otherwise today
   const defaultMonth = useMemo(() => {
+    if (tripStartDate) {
+      const parsed = Date.parse(`${tripStartDate}T12:00:00`);
+      if (!Number.isNaN(parsed)) return new Date(parsed);
+    }
     if (reservations.length === 0) return new Date(today.getFullYear(), today.getMonth(), 1);
     const dates = reservations
       .map((r) => parseLocalDate(r.localTime))
@@ -95,7 +115,7 @@ export function TripCalendarView({ reservations, onReservationTap }: TripCalenda
     const first = dates[0];
     if (!first) return new Date(today.getFullYear(), today.getMonth(), 1);
     return new Date(first.getFullYear(), first.getMonth(), 1);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [reservations, tripStartDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [viewMonth, setViewMonth] = useState<Date>(defaultMonth);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -127,6 +147,7 @@ export function TripCalendarView({ reservations, onReservationTap }: TripCalenda
   };
 
   const selectedReservations = selectedDate ? getDayReservations(selectedDate) : [];
+  const selectedPlanNote = selectedDate ? dayNotes[dateKeyFromDate(selectedDate)]?.trim() : "";
 
   const prevMonth = () => setViewMonth(new Date(year, month - 1, 1));
   const nextMonth = () => setViewMonth(new Date(year, month + 1, 1));
@@ -182,6 +203,13 @@ export function TripCalendarView({ reservations, onReservationTap }: TripCalenda
             const isToday = sameDay(cellDate, today);
             const isSelected = selectedDate ? sameDay(cellDate, selectedDate) : false;
             const hasRes = dayRes.length > 0;
+            const planNote = dayNotes[dateKeyFromDate(cellDate)]?.trim();
+            const hasPlan = Boolean(planNote);
+            const inTripWindow =
+              tripStartDate && tripEndDate
+                ? dateKeyFromDate(cellDate) >= tripStartDate.slice(0, 10) &&
+                  dateKeyFromDate(cellDate) <= tripEndDate.slice(0, 10)
+                : false;
 
             return (
               <button
@@ -191,9 +219,11 @@ export function TripCalendarView({ reservations, onReservationTap }: TripCalenda
                 className={`relative flex flex-col items-center justify-start gap-0.5 py-2 transition ${
                   isSelected
                     ? "bg-cyan-500/15 dark:bg-cyan-500/20"
-                    : hasRes
+                    : hasRes || hasPlan
                       ? "hover:bg-slate-50 dark:hover:bg-slate-800"
-                      : "cursor-default"
+                      : inTripWindow
+                        ? "hover:bg-slate-50/80 dark:hover:bg-slate-800/80"
+                        : "cursor-default"
                 }`}
               >
                 <span
@@ -217,6 +247,8 @@ export function TripCalendarView({ reservations, onReservationTap }: TripCalenda
                       />
                     ))}
                   </div>
+                ) : hasPlan ? (
+                  <span className="h-1.5 w-1.5 rounded-full bg-sky-500" aria-hidden />
                 ) : null}
               </button>
             );
@@ -241,9 +273,16 @@ export function TripCalendarView({ reservations, onReservationTap }: TripCalenda
             {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
           </p>
           {selectedReservations.length === 0 ? (
+            selectedPlanNote ? (
+              <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-100">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-sky-600 dark:text-sky-300">Your plan</p>
+                <p className="mt-1 font-medium">{selectedPlanNote}</p>
+              </div>
+            ) : (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900">
               Nothing scheduled this day.
             </div>
+            )
           ) : (
             selectedReservations.map((r) => (
               <button
