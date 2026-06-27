@@ -101,7 +101,10 @@ import {
 import { TripCalendarView } from "@/components/travelAssistant/TripCalendarView";
 import { NextUpCard } from "@/components/travelAssistant/NextUpCard";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
-import { TripItineraryPanel } from "@/components/travelAssistant/TripItineraryPanel";
+import { TripItineraryPanel, useItineraryPanelPrefs } from "@/components/travelAssistant/TripItineraryPanel";
+import { ResizableItineraryPane } from "@/components/travelAssistant/ResizableItineraryPane";
+import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
+import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
 import { OnTrackButton } from "@/components/travelAssistant/OnTrackButton";
 import { TripSearch, type TripSearchSelection } from "@/components/travelAssistant/TripSearch";
 import { TripSwitcher } from "@/components/travelAssistant/TripSwitcher";
@@ -1867,6 +1870,7 @@ export default function TravelAssistantPage() {
   const [consumerTab, setConsumerTab] = useState<ConsumerTab>("trip");
   const [itineraryPanelOpen, setItineraryPanelOpen] = useState(false);
   const [manualReservationDefaultDateTime, setManualReservationDefaultDateTime] = useState<string | null>(null);
+  const itineraryPrefs = useItineraryPanelPrefs(activeTripId);
   const [travelStyleProfile, setTravelStyleProfile] = useState<TravelStyleProfile | null>(null);
   const [travelStyleQuizOpen, setTravelStyleQuizOpen] = useState(false);
   const travelStyleFetchedRef = useRef(false);
@@ -6960,11 +6964,49 @@ export default function TravelAssistantPage() {
     })();
   };
 
-  const handleItineraryEmptyDayTap = useCallback((dateKey: string): void => {
-    setManualReservationDefaultDateTime(`${dateKey}T09:00`);
-    setManualReservationPresetType("flight");
-    setManualReservationModalOpen(true);
+  const addDay = useCallback((dateKey: string, days: number): string => {
+    const ms = Date.parse(`${dateKey}T12:00:00Z`) + days * 86_400_000;
+    return new Date(ms).toISOString().slice(0, 10);
   }, []);
+
+  const handlePlanDay = useCallback(
+    (dateKey: string, intent: ParsedDayIntent, mode: DayPlanMode): void => {
+      const city = intent.toCity ?? intent.stayCity;
+      if (mode === "hotel" && city) {
+        const formatted = formatHotelSearchCityLabel(city);
+        handleAddCityStay({
+          city: formatted.label || city,
+          checkIn: dateKey,
+          checkOut: addDay(dateKey, 1),
+        });
+        setHotelSearchSegment({
+          id: `day-plan-${dateKey}`,
+          city: formatted.label || city,
+          cityIata: formatted.iata,
+          checkIn: dateKey,
+          checkOut: addDay(dateKey, 1),
+          label: `${formatted.label || city} · ${dateKey}`,
+          source: "manual",
+          status: "missing",
+          needsDecision: false,
+          stayIntent: "needs_hotel",
+          nights: 1,
+        } as TripStaySegment);
+        setHotelSearchModalOpen(true);
+        navigateToConsumerTab("hotels");
+        setToast(`Hotel search ready for ${formatted.label || city}.`);
+        return;
+      }
+      if (mode === "flight") {
+        navigateToConsumerTab("flights");
+        setToast(intent.fromCity && intent.toCity ? `Flights: ${intent.fromCity} → ${intent.toCity}` : "Open Flights to book this leg.");
+        return;
+      }
+      navigateToConsumerTab("flights");
+      setToast(`${mode.charAt(0).toUpperCase()}${mode.slice(1)} planning for ${intent.summary}`);
+    },
+    [addDay, handleAddCityStay, navigateToConsumerTab],
+  );
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const toggleMemberSharing = (memberId: string): void => {
@@ -7786,9 +7828,13 @@ export default function TravelAssistantPage() {
         tripEndDate={activeTrip?.endDate ?? null}
         tripDaysAway={tripDaysAway}
         reservations={consumerReservationsSorted}
+        dayNotes={itineraryPrefs.dayNotes}
+        onDayNoteChange={itineraryPrefs.updateDayNote}
+        onPlanDay={handlePlanDay}
+        viewMode={itineraryPrefs.viewMode}
+        onViewModeChange={itineraryPrefs.setViewMode}
         onClose={() => setItineraryPanelOpen(false)}
         onReservationTap={(id) => openDrawer("reservation", id)}
-        onEmptyDayTap={handleItineraryEmptyDayTap}
         onGapActionTap={(tab) => navigateToConsumerTab(tab as ConsumerTab)}
         onPrint={handleConsumerItineraryPrint}
         onExportPdf={handleConsumerItineraryPdf}
@@ -7798,18 +7844,26 @@ export default function TravelAssistantPage() {
 
     return (
       <main className="relative min-h-screen overflow-x-hidden bg-[var(--bg-base)] pb-24 text-[var(--text-primary)]">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(14,165,233,0.12),transparent_38%),radial-gradient(circle_at_80%_10%,rgba(34,197,94,0.10),transparent_35%)]" />
         {itineraryPanelOpen ? (
           <div className="fixed inset-0 z-50 lg:hidden">{itineraryPanel}</div>
         ) : null}
         <div className="relative z-10 flex min-h-screen">
           {itineraryPanelOpen ? (
-            <aside className="sticky top-0 hidden h-[calc(100vh-6rem)] w-full max-w-sm shrink-0 border-r border-slate-200 dark:border-slate-800 lg:block lg:w-1/4 lg:min-w-[260px]">
+            <ResizableItineraryPane
+              width={itineraryPrefs.panelWidth}
+              onWidthChange={itineraryPrefs.setPanelWidth}
+            >
               {itineraryPanel}
-            </aside>
+            </ResizableItineraryPane>
           ) : null}
           <div className="min-w-0 flex-1">
-        <div className="mx-auto max-w-3xl space-y-4 px-4 py-4 sm:py-6 md:max-w-4xl lg:max-w-5xl xl:max-w-6xl lg:px-6">
+        <div
+          className={`mx-auto space-y-3 px-3 py-3 sm:px-4 lg:px-5 ${
+            itineraryPanelOpen
+              ? "w-full max-w-none"
+              : "max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl"
+          }`}
+        >
           <header className="sticky top-0 z-30 -mx-4 border-b border-slate-200/70 bg-slate-50/90 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
