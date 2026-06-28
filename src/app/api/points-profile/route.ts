@@ -20,6 +20,17 @@ const PatchSchema = z.object({
   usesChasePortal: z.boolean().optional(),
   earnGoal: z.enum(["maximize_miles", "maximize_cashback", "balanced"]).optional(),
   typicalHotelNightlyUsd: z.number().optional(),
+  cardReferralLinks: z.record(z.string(), z.string()).optional(),
+  invitationCodes: z
+    .array(
+      z.object({
+        id: z.string(),
+        label: z.string().trim().min(1).max(120),
+        code: z.string().trim().min(1).max(240),
+        notes: z.string().max(500).optional(),
+      }),
+    )
+    .optional(),
   notes: z.string().optional(),
 });
 

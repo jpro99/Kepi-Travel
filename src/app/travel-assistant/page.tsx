@@ -73,6 +73,8 @@ import { AISuggestionPanel } from "@/components/travelAssistant/AISuggestionPane
 import { UpgradeModal, type UpgradeModalGateContext } from "@/components/billing/UpgradeModal";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { LanguageToggle } from "@/components/LanguageToggle";
+import { LanguageSettingsCard } from "@/components/LanguageSettingsCard";
+import { subscribeToWebPushNotifications } from "@/lib/push/webPushClient";
 import { OnboardingFlow } from "@/components/onboarding/OnboardingFlow";
 import type { TripSetupDraft } from "@/components/onboarding/TripSetupForm";
 import { TripPlanningWizard } from "@/components/travelAssistant/TripPlanningWizard";
@@ -5692,49 +5694,25 @@ export default function TravelAssistantPage() {
 
   const handleEnablePush = useCallback(async (): Promise<void> => {
     if (pushBusy) return;
-    if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-      setPushMessage("Push notifications are not supported on this browser.");
-      return;
-    }
     setPushBusy(true);
     setPushMessage(null);
     try {
-      const permission = Notification.permission === "granted"
-        ? "granted"
-        : await Notification.requestPermission();
-      if (permission !== "granted") {
-        setPushMessage("Notification permission denied. Enable in device settings.");
-        setPushBusy(false);
-        return;
-      }
-      const reg = await navigator.serviceWorker.ready;
-      const vapidKey = document.querySelector("meta[name=vapid-public-key]")?.getAttribute("content");
-      if (!vapidKey) {
-        setPushMessage("Push configuration missing — contact support.");
-        setPushBusy(false);
-        return;
-      }
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: vapidKey,
-      });
-      const res = await fetch("/api/push/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(sub.toJSON()),
-      });
-      if (res.ok) {
+      const result = await subscribeToWebPushNotifications();
+      if (result.ok) {
         setPushSubscribed(true);
         setPushMessage("✅ Push alerts enabled! You'll be notified of gate changes and delays.");
+      } else if (result.requiresPro) {
+        setPushMessage(result.message);
+        openUpgradeModal("push-notifications", result.message);
       } else {
-        setPushMessage("Failed to register push subscription.");
+        setPushMessage(result.message);
       }
     } catch {
       setPushMessage("Could not enable push notifications.");
     } finally {
       setPushBusy(false);
     }
-  }, [pushBusy]);
+  }, [pushBusy, openUpgradeModal]);
 
   const handleCopyForwardAddress = useCallback(async (address?: string): Promise<void> => {
     const value = (address ?? emailForwardAddress)?.trim();
@@ -9338,12 +9316,7 @@ export default function TravelAssistantPage() {
                 </div>
               </section>
 
-              <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <h2 className="font-semibold">Language</h2>
-                <div className="mt-3">
-                  <LanguageToggle />
-                </div>
-              </section>
+              <LanguageSettingsCard />
 
               <Link
                 href="/support"

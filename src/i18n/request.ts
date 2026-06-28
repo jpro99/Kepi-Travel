@@ -6,6 +6,12 @@ import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { logger } from "@/lib/logger";
 
 async function resolveRequestLocale(): Promise<"en" | "es"> {
+  const cookieStore = await cookies();
+  const cookieLocale = normalizeLocale(cookieStore.get(LOCALE_COOKIE_NAME)?.value);
+  if (cookieLocale) {
+    return cookieLocale;
+  }
+
   try {
     const userId = await resolveAuthenticatedUserId();
     if (userId) {
@@ -16,12 +22,6 @@ async function resolveRequestLocale(): Promise<"en" | "es"> {
     }
   } catch (error) {
     logger.withContext({ scope: "i18n/request" }).warn("Falling back from KV locale lookup.", { error });
-  }
-
-  const cookieStore = await cookies();
-  const cookieLocale = normalizeLocale(cookieStore.get(LOCALE_COOKIE_NAME)?.value);
-  if (cookieLocale) {
-    return cookieLocale;
   }
 
   const headerStore = await headers();

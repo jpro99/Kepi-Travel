@@ -9,6 +9,13 @@ export interface OwnedCardEntry {
   lastFour?: string;
 }
 
+export interface SavedInvitationCode {
+  id: string;
+  label: string;
+  code: string;
+  notes?: string;
+}
+
 export interface PointsTravelProfile {
   userId: string;
   updatedAt: string;
@@ -19,6 +26,8 @@ export interface PointsTravelProfile {
   typicalHotelNightlyUsd?: number;
   /** Optional disclosed referral URLs — user or admin configured */
   cardReferralLinks: Record<string, string>;
+  /** Card sign-up / invitation codes saved for later */
+  invitationCodes: SavedInvitationCode[];
   notes: string;
 }
 
@@ -31,6 +40,7 @@ export function createEmptyPointsTravelProfile(userId: string): PointsTravelProf
     usesChasePortal: false,
     earnGoal: "maximize_miles",
     cardReferralLinks: {},
+    invitationCodes: [],
     notes: "",
   };
 }
@@ -42,7 +52,7 @@ export async function getPointsTravelProfile(userId?: string): Promise<PointsTra
       kvStoreGet<PointsTravelProfile>(POINTS_PROFILE_KEY, { userId: namespace }),
       new Promise<null>((resolve) => setTimeout(() => resolve(null), 3_000)),
     ]);
-    if (existing) return existing;
+    if (existing) return { ...existing, invitationCodes: existing.invitationCodes ?? [] };
   } catch {
     /* degrade */
   }
