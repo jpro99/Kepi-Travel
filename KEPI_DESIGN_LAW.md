@@ -113,6 +113,11 @@ The nightly budget slider uses independent draggable thumbs (min and max). Neith
 
 **Test:** `src/lib/hotels/__tests__/priceRangeSlider.test.ts`
 
+**H12 — Points mode shows chain hotels without wallet balance**  
+Points pay mode must list Hyatt, Marriott, Hilton, and IHG properties when they appear in search results. Catalog points estimates (~X pts) are shown even when the traveler has no loyalty balances saved — booking happens on the chain site.
+
+**Test:** `src/lib/hotels/__tests__/hotelPointsEstimate.test.ts`
+
 ---
 
 ## MAP LAWS

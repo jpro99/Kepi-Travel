@@ -2,7 +2,8 @@ import type { HotelStayMemory } from "@/lib/memory/hotelMemory";
 import type { HotelStayProfile } from "@/lib/memory/hotelStayProfile";
 import type { TravelerGenome } from "@/lib/traveler/types";
 import type { LoyaltyBalance } from "@/lib/loyalty/optimizer";
-import { estimateHotelPointsOptions } from "@/lib/hotels/hotelPointsEstimate";
+import { estimateHotelPointsOptions, resolvePointsCashBasis } from "@/lib/hotels/hotelPointsEstimate";
+import { matchHotelChain } from "@/lib/loyalty/chainRegistry";
 import { hotelInSearchCity, type SearchCityCenter } from "@/lib/hotels/hotelCityScope";
 import type { HotelSearchResult, RankedHotelSearchResult } from "@/lib/hotels/types";
 
@@ -213,9 +214,15 @@ function rankHotelPool(input: {
       comfortPenalty = 8;
     }
 
-    const pointsOptions = hotel.browseOnly
-      ? []
-      : estimateHotelPointsOptions(hotel.totalPrice, hotel.chainName, hotel.name, loyaltyBalances);
+    const pointsEligible = matchHotelChain(hotel.chainName, hotel.name) !== null;
+    const pointsOptions = pointsEligible
+      ? estimateHotelPointsOptions(
+          resolvePointsCashBasis(hotel),
+          hotel.chainName,
+          hotel.name,
+          loyaltyBalances,
+        )
+      : [];
     const bestPoints = pointsOptions.find((option) => option.recommendation === "use") ?? pointsOptions[0];
     const pointsBoost = bestPoints?.recommendation === "use" ? 10 + bestPoints.cppAchieved * 0.5 : 0;
 

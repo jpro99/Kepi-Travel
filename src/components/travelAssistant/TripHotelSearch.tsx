@@ -26,7 +26,7 @@ import { HotelFilteredOutSheet, type FilteredHotelRow } from "@/components/trave
 import { HotelRefineSheet } from "@/components/travelAssistant/HotelRefineSheet";
 import { computeLivePriceBounds, resolveHotelDisplay } from "@/lib/hotels/hotelSearchFilters";
 import type { HotelStayProfile } from "@/lib/memory/hotelStayProfile";
-import { hotelParticipatesInPoints, matchHotelChain, type HotelChainId } from "@/lib/loyalty/chainRegistry";
+import { hotelParticipatesInPoints, HOTEL_CHAINS, matchHotelChain, type HotelChainId } from "@/lib/loyalty/chainRegistry";
 
 type PayMode = "any" | "cash" | "points";
 type SortMode = "browse" | "price" | "rating" | "match" | "points";
@@ -338,7 +338,10 @@ export function TripHotelSearch({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultCity, defaultCityIata, defaultCheckIn, defaultCheckOut]);
 
-  const enabledChains = useMemo(() => new Set(enabledHotelChainIds(chainToggles)), [chainToggles]);
+  const enabledChains = useMemo(() => {
+    const ids = enabledHotelChainIds(chainToggles);
+    return new Set(ids.length > 0 ? ids : HOTEL_CHAINS.map((chain) => chain.id));
+  }, [chainToggles]);
 
   const handleChainToggle = (id: HotelChainId, enabled: boolean): void => {
     setChainToggles((prev) => {
@@ -365,8 +368,10 @@ export function TripHotelSearch({
       rows = rows.filter((hotel) => hotel.inSearchCity !== false);
     }
     if (sortMode === "points" || payMode === "points") {
-      rows = rows.filter((hotel) => hotel.pointsOption && hotel.pointsOption.milesNeeded > 0);
       rows.sort((a, b) => {
+        const aPts = a.pointsOption?.milesNeeded ?? Number.POSITIVE_INFINITY;
+        const bPts = b.pointsOption?.milesNeeded ?? Number.POSITIVE_INFINITY;
+        if (aPts !== bPts) return aPts - bPts;
         const aCpp = a.pointsOption?.cppAchieved ?? 0;
         const bCpp = b.pointsOption?.cppAchieved ?? 0;
         if (aCpp !== bCpp) return bCpp - aCpp;
@@ -667,8 +672,12 @@ export function TripHotelSearch({
             </>
           ) : null}
 
-          {!loading && chainFilteredResults.length === 0 && results.length > 0 ? (
-            <p className="text-sm text-slate-500">No hotels match your chain filters — open Refine to adjust.</p>
+          {!loading && visibleResults.length === 0 && results.length > 0 ? (
+            <p className="text-sm text-slate-500">
+              {payMode === "points"
+                ? "No Hyatt, Marriott, Hilton, or IHG hotels in this search for your dates — try Cash + points or open Refine to widen chains."
+                : "No hotels match your filters — open Refine to adjust."}
+            </p>
           ) : null}
 
           {detailHotel ? (
