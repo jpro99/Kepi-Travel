@@ -302,7 +302,7 @@ export function HotelStayMap({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-white px-4 py-3 text-xs shadow-sm dark:bg-slate-900/60">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 overflow-visible rounded-2xl bg-white px-4 py-3 text-xs shadow-sm dark:bg-slate-900/60">
         <div className="flex flex-wrap items-center gap-3 text-slate-600 dark:text-slate-300">
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-sm bg-[#f4c95d]" /> Best match

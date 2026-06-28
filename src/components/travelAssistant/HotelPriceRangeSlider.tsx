@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { clampDualPriceRange, priceFromTrackRatio } from "@/lib/hotels/priceRangeSlider";
 
 interface HotelPriceRangeSliderProps {
@@ -12,6 +12,8 @@ interface HotelPriceRangeSliderProps {
   disabled?: boolean;
 }
 
+const THUMB_INSET_PX = 12;
+
 export function HotelPriceRangeSlider({
   minBound,
   maxBound,
@@ -21,6 +23,10 @@ export function HotelPriceRangeSlider({
   disabled = false,
 }: HotelPriceRangeSliderProps) {
   const trackRef = useRef<HTMLDivElement>(null);
+  const activeThumbRef = useRef<"min" | "max" | null>(null);
+  const minRef = useRef(valueMin);
+  const maxRef = useRef(valueMax);
+  const onChangeRef = useRef(onChange);
   const [activeThumb, setActiveThumb] = useState<"min" | "max" | null>(null);
 
   const floor = Math.floor(minBound);
@@ -28,70 +34,93 @@ export function HotelPriceRangeSlider({
   const span = Math.max(1, ceiling - floor);
   const { min, max } = clampDualPriceRange(floor, ceiling, valueMin, valueMax);
 
+  minRef.current = min;
+  maxRef.current = max;
+  onChangeRef.current = onChange;
+
   const valueFromClientX = useCallback(
     (clientX: number): number => {
       const track = trackRef.current;
       if (!track) return floor;
       const rect = track.getBoundingClientRect();
-      if (rect.width <= 0) return floor;
-      return priceFromTrackRatio(floor, ceiling, (clientX - rect.left) / rect.width);
+      const innerWidth = Math.max(1, rect.width - THUMB_INSET_PX * 2);
+      const ratio = (clientX - rect.left - THUMB_INSET_PX) / innerWidth;
+      return priceFromTrackRatio(floor, ceiling, ratio);
     },
     [floor, ceiling],
   );
 
-  const nearestThumb = useCallback(
-    (value: number): "min" | "max" => {
-      const minDist = Math.abs(value - min);
-      const maxDist = Math.abs(value - max);
-      return minDist <= maxDist ? "min" : "max";
-    },
-    [min, max],
-  );
-
-  const applyThumbValue = useCallback(
-    (thumb: "min" | "max", value: number) => {
-      if (thumb === "min") {
-        onChange(Math.min(value, max - 1), max);
-      } else {
-        onChange(min, Math.max(value, min + 1));
-      }
-    },
-    [min, max, onChange],
-  );
-
-  const onDragPointerMove = (event: React.PointerEvent) => {
-    if (disabled || activeThumb === null) return;
-    applyThumbValue(activeThumb, valueFromClientX(event.clientX));
-  };
-
-  const endDrag = (event: React.PointerEvent) => {
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
+  const applyThumbValue = useCallback((thumb: "min" | "max", value: number) => {
+    if (thumb === "min") {
+      onChangeRef.current(Math.min(value, maxRef.current - 1), maxRef.current);
+      return;
     }
+    onChangeRef.current(minRef.current, Math.max(value, minRef.current + 1));
+  }, []);
+
+  const nearestThumb = useCallback((value: number): "min" | "max" => {
+    const minDist = Math.abs(value - minRef.current);
+    const maxDist = Math.abs(value - maxRef.current);
+    return minDist <= maxDist ? "min" : "max";
+  }, []);
+
+  const beginDrag = useCallback(
+    (thumb: "min" | "max", clientX: number) => {
+      if (disabled) return;
+      activeThumbRef.current = thumb;
+      setActiveThumb(thumb);
+      applyThumbValue(thumb, valueFromClientX(clientX));
+    },
+    [applyThumbValue, disabled, valueFromClientX],
+  );
+
+  const endDrag = useCallback(() => {
+    activeThumbRef.current = null;
     setActiveThumb(null);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (activeThumb === null) return;
+
+    const handleMove = (event: PointerEvent) => {
+      const thumb = activeThumbRef.current;
+      if (!thumb || disabled) return;
+      event.preventDefault();
+      applyThumbValue(thumb, valueFromClientX(event.clientX));
+    };
+
+    const handleUp = () => {
+      endDrag();
+    };
+
+    window.addEventListener("pointermove", handleMove, { passive: false });
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+    };
+  }, [activeThumb, applyThumbValue, disabled, endDrag, valueFromClientX]);
+
+  const insetTrack = (pctFromLeft: number) =>
+    `calc(${THUMB_INSET_PX}px + ${pctFromLeft / 100} * (100% - ${THUMB_INSET_PX * 2}px))`;
+
+  const minPct = ((min - floor) / span) * 100;
+  const maxPct = ((max - floor) / span) * 100;
 
   const onTrackPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (disabled) return;
     const target = event.target as HTMLElement;
     if (target.dataset.thumb) return;
-
-    const value = valueFromClientX(event.clientX);
-    const thumb = nearestThumb(value);
-    setActiveThumb(thumb);
-    event.currentTarget.setPointerCapture(event.pointerId);
-    applyThumbValue(thumb, value);
+    beginDrag(nearestThumb(valueFromClientX(event.clientX)), event.clientX);
   };
 
   const onThumbPointerDown = (thumb: "min" | "max") => (event: React.PointerEvent<HTMLButtonElement>) => {
-    if (disabled) return;
+    event.preventDefault();
     event.stopPropagation();
-    setActiveThumb(thumb);
-    event.currentTarget.setPointerCapture(event.pointerId);
+    beginDrag(thumb, event.clientX);
   };
-
-  const minPct = ((min - floor) / span) * 100;
-  const maxPct = ((max - floor) / span) * 100;
 
   return (
     <div className="flex min-w-[10rem] flex-1 flex-col gap-1 sm:min-w-[14rem]">
@@ -104,18 +133,21 @@ export function HotelPriceRangeSlider({
       </div>
       <div
         ref={trackRef}
-        className={`relative h-8 touch-none select-none ${disabled ? "opacity-50" : ""}`}
+        className={`relative mx-1 h-9 touch-none select-none overflow-visible ${disabled ? "opacity-50" : ""}`}
         onPointerDown={onTrackPointerDown}
-        onPointerMove={onDragPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
         role="group"
         aria-label="Nightly budget range"
       >
-        <div className="absolute left-0 right-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-slate-200 dark:bg-slate-700" />
+        <div
+          className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-slate-200 dark:bg-slate-700"
+          style={{ left: THUMB_INSET_PX, right: THUMB_INSET_PX }}
+        />
         <div
           className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-sky-500"
-          style={{ left: `${minPct}%`, right: `${100 - maxPct}%` }}
+          style={{
+            left: insetTrack(minPct),
+            right: insetTrack(100 - maxPct),
+          }}
         />
         <button
           type="button"
@@ -126,13 +158,10 @@ export function HotelPriceRangeSlider({
           aria-valuemax={max - 1}
           aria-valuenow={min}
           onPointerDown={onThumbPointerDown("min")}
-          onPointerMove={onDragPointerMove}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
-          className={`absolute top-1/2 z-20 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-sky-600 shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
-            activeThumb === "min" ? "scale-110 cursor-grabbing" : "cursor-grab"
+          className={`absolute top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-sky-600 shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
+            activeThumb === "min" ? "z-30 scale-110 cursor-grabbing" : "z-20 cursor-grab"
           }`}
-          style={{ left: `${minPct}%` }}
+          style={{ left: insetTrack(minPct) }}
         />
         <button
           type="button"
@@ -143,13 +172,10 @@ export function HotelPriceRangeSlider({
           aria-valuemax={ceiling}
           aria-valuenow={max}
           onPointerDown={onThumbPointerDown("max")}
-          onPointerMove={onDragPointerMove}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
-          className={`absolute top-1/2 z-20 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-sky-600 shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
-            activeThumb === "max" ? "scale-110 cursor-grabbing" : "cursor-grab"
+          className={`absolute top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-sky-600 shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
+            activeThumb === "max" ? "z-30 scale-110 cursor-grabbing" : "z-20 cursor-grab"
           }`}
-          style={{ left: `${maxPct}%` }}
+          style={{ left: insetTrack(maxPct) }}
         />
       </div>
     </div>
