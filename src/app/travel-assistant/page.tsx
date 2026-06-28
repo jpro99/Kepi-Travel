@@ -9269,14 +9269,11 @@ export default function TravelAssistantPage() {
               tripStartDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
               tripEndDate={activeTrip?.endDate ?? null}
               reservations={consumerReservationsSorted}
-              dayNotes={itineraryPrefs.dayNotes}
-              stopRanges={effectiveStopRanges}
               selectedDateKey={itinerarySelectedDateKey}
               highlightedLegId={itineraryHighlightedLegId}
               onSelectedDateKeyChange={handleItineraryDateSelect}
               onHighlightedLegIdChange={setItineraryHighlightedLegId}
               onScrollToTimeline={handleCalendarJumpToTimeline}
-              onReservationTap={(id) => openDrawer("reservation", id)}
               onPlanHotel={handleItineraryPlanHotel}
             />
           ) : consumerTab === "flights" ? (

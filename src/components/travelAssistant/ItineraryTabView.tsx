@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ItineraryTimeline } from "@/components/travelAssistant/ItineraryTimeline";
-import { ItineraryMissionCards } from "@/components/travelAssistant/ItineraryMissionCards";
 import { ItinerarySlideBanners } from "@/components/travelAssistant/ItinerarySlideBanners";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
@@ -136,20 +135,15 @@ export function ItineraryTabView({
         </div>
       </header>
 
-      {missionItems.length > 0 && onMissionAction ? (
-        <ItineraryMissionCards items={missionItems} onAction={onMissionAction} />
-      ) : null}
-
-      <div ref={timelineRef} className="rounded-3xl bg-[#FAFAF8] p-4 shadow-sm ring-1 ring-black/[0.04] dark:bg-[#0F1923]/40 dark:ring-white/[0.06] lg:p-5">
-        <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-          Day by day · tap to expand
+      <div ref={timelineRef} className="rounded-3xl bg-[#FAFAF8] p-4 shadow-sm ring-1 ring-black/[0.04] lg:p-5">
+        <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+          Trip blocks · tap destination to expand days
         </p>
         <ItineraryTimeline
           tripStartDate={tripStartDate}
           tripEndDate={tripEndDate}
           reservations={reservations}
           dayNotes={dayNotes}
-          stopRanges={stopRanges}
           selectedDateKey={selectedDateKey}
           highlightedLegId={highlightedLegId}
           scrollToDateKey={scrollToDateKey}
@@ -158,6 +152,8 @@ export function ItineraryTabView({
           onReservationTap={onReservationTap}
           onPlanDay={onPlanDay}
           onPlanHotel={onPlanHotel}
+          missionItems={missionItems}
+          onMissionAction={onMissionAction}
         />
       </div>
     </section>

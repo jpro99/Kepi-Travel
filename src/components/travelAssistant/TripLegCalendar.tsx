@@ -1,19 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  buildTripLegModel,
+  buildTripLegCalendarModel,
   cellFillStyle,
-  cellRadiusClass,
-  destinationLegs,
-  formatLegDateRange,
+  countNights,
+  formatLegChipRange,
+  ribbonPositionForGridCell,
+  ribbonRadiusClass,
   TRAVEL_LEG_COLOR,
+  type BuiltTripLeg,
   type DayLegCell,
-  type TripLeg,
-} from "@/lib/travelAssistant/tripLegColors";
-import type { StopDateRange } from "@/lib/decision/stopDates";
-import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
-import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
+} from "@/lib/travelAssistant/buildTripLegs";
+import { fetchCityWeatherSimple } from "@/lib/travelAssistant/cityWeather";
 
 type CalendarReservation = {
   id: string;
@@ -26,6 +25,8 @@ type CalendarReservation = {
   flightNumber?: string;
   flightDepartureAirport?: string;
   flightArrivalAirport?: string;
+  flightDepartureTime?: string;
+  flightArrivalTime?: string;
   flightDate?: string;
   checkOutDate?: string;
 };
@@ -37,15 +38,11 @@ interface TripLegCalendarProps {
   tripStartDate: string | null;
   tripEndDate?: string | null;
   reservations: CalendarReservation[];
-  dayNotes: Record<string, string>;
-  stopRanges?: StopDateRange[];
   selectedDateKey?: string | null;
   highlightedLegId?: string | null;
   onSelectedDateKeyChange?: (dateKey: string) => void;
   onHighlightedLegIdChange?: (legId: string | null) => void;
   onScrollToTimelineDate?: (dateKey: string) => void;
-  onReservationTap?: (id: string) => void;
-  onPlanDay?: (dateKey: string, intent: ParsedDayIntent, mode: DayPlanMode) => void;
   onPlanHotel?: (dateKey: string, city: string) => void;
 }
 
@@ -53,7 +50,7 @@ const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
-const DAY_HEADERS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAY_HEADERS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
 function dateKeyFromParts(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -61,21 +58,7 @@ function dateKeyFromParts(year: number, month: number, day: number): string {
 
 function isToday(dateKey: string): boolean {
   const today = new Date();
-  const key = dateKeyFromParts(today.getFullYear(), today.getMonth(), today.getDate());
-  return key === dateKey;
-}
-
-function popoverCta(cell: DayLegCell, onPlanHotel?: (dateKey: string, city: string) => void): {
-  label: string;
-  action: () => void;
-} | null {
-  if (cell.hotelNeeded && cell.cityName && onPlanHotel) {
-    return { label: "Find hotels", action: () => onPlanHotel(cell.dateKey, cell.cityName!) };
-  }
-  if (cell.kind === "travel" || cell.flightSummary) {
-    return { label: "View flight", action: () => {} };
-  }
-  return null;
+  return dateKey === dateKeyFromParts(today.getFullYear(), today.getMonth(), today.getDate());
 }
 
 function CalendarCell({
@@ -85,8 +68,8 @@ function CalendarCell({
   isSelected,
   isHighlightedLeg,
   isTodayCell,
+  ribbonPosition,
   onSelect,
-  onPopover,
 }: {
   cell: DayLegCell | null;
   dayNumber: number;
@@ -94,54 +77,64 @@ function CalendarCell({
   isSelected: boolean;
   isHighlightedLeg: boolean;
   isTodayCell: boolean;
+  ribbonPosition: ReturnType<typeof ribbonPositionForGridCell> | "none";
   onSelect: () => void;
-  onPopover: () => void;
 }) {
   const filled = cell && cell.kind !== "empty";
-  const textClass = filled ? "text-white" : "text-slate-700 dark:text-slate-200";
+  const pos = ribbonPosition === "none" ? "none" : ribbonPosition;
+  const radiusClass = filled ? ribbonRadiusClass(pos) : "rounded-none";
 
   return (
     <button
       type="button"
-      onClick={() => {
-        onSelect();
-        onPopover();
-      }}
-      className={`relative flex min-h-[52px] flex-col items-center justify-start px-0.5 py-1.5 transition ${textClass} ${
-        cell ? cellRadiusClass(cell.position) : "rounded-xl"
-      } ${inTripWindow ? "" : "opacity-40"} ${
-        isSelected ? "ring-2 ring-[#f4c95d] ring-offset-1 ring-offset-[#FAFAF8] dark:ring-offset-[#0F1923]" : ""
-      } ${isHighlightedLeg && !isSelected ? "ring-2 ring-white/70" : ""} ${
-        isTodayCell ? "shadow-lg ring-2 ring-white" : ""
-      }`}
-      style={cell ? cellFillStyle(cell) : { backgroundColor: inTripWindow ? "rgba(148,163,184,0.12)" : "transparent" }}
+      onClick={onSelect}
+      className={`relative flex min-h-[52px] flex-col items-center justify-center transition ${radiusClass} ${
+        filled ? "text-white" : inTripWindow ? "text-[#4A5568]" : "text-[#4A5568]/50"
+      } ${isHighlightedLeg && !isSelected ? "ring-2 ring-white ring-offset-0" : ""} ${
+        isTodayCell ? "font-bold shadow-[0_0_0_2px_#fff,0_0_0_6px_rgba(255,255,255,0.3)]" : ""
+      } ${isSelected ? "ring-2 ring-[#f4c95d]" : ""}`}
+      style={
+        cell && filled
+          ? cellFillStyle(cell)
+          : { backgroundColor: inTripWindow ? "#1A2535" : "transparent" }
+      }
     >
-      <span className={`text-xs font-extrabold ${textClass}`}>{dayNumber}</span>
       {cell?.kind === "transition" ? (
-        <span className="mt-auto pb-0.5 text-[10px]">✈</span>
-      ) : null}
-      {cell?.cityName && cell.kind === "destination" ? (
-        <span className="mt-0.5 max-w-full truncate px-0.5 text-[8px] font-semibold opacity-90">
-          {cell.cityName.split(" ")[0]}
+        <span className="pointer-events-none absolute inset-y-0 left-1/2 z-10 -translate-x-1/2 text-[10px] text-white">
+          ✈
         </span>
       ) : null}
+      <span className={`text-sm font-bold ${isTodayCell ? "font-extrabold" : ""}`}>{dayNumber}</span>
     </button>
   );
 }
 
-function CellPopover({
+function DayDetailPanel({
   cell,
   onClose,
-  onReservationTap,
   onPlanHotel,
+  onViewTimeline,
 }: {
   cell: DayLegCell;
   onClose: () => void;
-  onReservationTap?: (id: string) => void;
   onPlanHotel?: (dateKey: string, city: string) => void;
+  onViewTimeline: () => void;
 }) {
+  const [weatherLine, setWeatherLine] = useState<string | null>(null);
+  const city = cell.cityName ?? cell.flightSummary?.split("→").pop()?.trim() ?? null;
+
+  useEffect(() => {
+    if (!city) return;
+    let cancelled = false;
+    void fetchCityWeatherSimple(city).then((line) => {
+      if (!cancelled) setWeatherLine(line);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [city]);
+
   const bg = cell.transitionToColor ?? cell.color ?? TRAVEL_LEG_COLOR;
-  const cta = popoverCta(cell, onPlanHotel);
   const dateLabel = new Date(`${cell.dateKey}T12:00:00`).toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
@@ -149,29 +142,27 @@ function CellPopover({
   });
 
   return (
-    <div
-      className="rounded-2xl p-4 shadow-2xl"
-      style={{ backgroundColor: bg }}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div>
+    <div className="rounded-2xl p-5 shadow-2xl" style={{ backgroundColor: bg }}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-white/70">{dateLabel}</p>
           {cell.cityName ? (
-            <p className="mt-1 text-lg font-extrabold text-white">{cell.cityName}</p>
+            <p className="mt-1 text-2xl font-extrabold text-white">{cell.cityName}</p>
           ) : cell.flightSummary ? (
-            <p className="mt-1 text-lg font-extrabold text-white">{cell.flightSummary}</p>
+            <p className="mt-1 text-2xl font-extrabold text-white">{cell.flightSummary}</p>
           ) : (
-            <p className="mt-1 text-lg font-extrabold text-white">Travel day</p>
+            <p className="mt-1 text-2xl font-extrabold text-white">Travel day</p>
           )}
           {cell.cityName && cell.legDayCount > 0 ? (
-            <p className="mt-0.5 text-sm text-white/85">
+            <p className="mt-1 text-sm text-white/85">
               Day {cell.dayIndexInLeg} of {cell.legDayCount} in {cell.cityName}
             </p>
           ) : null}
+          {weatherLine ? <p className="mt-2 text-sm text-white/90">{weatherLine}</p> : null}
           {cell.hotelName ? (
             <p className="mt-2 text-sm font-semibold text-white">🏨 {cell.hotelName}</p>
           ) : cell.hotelNeeded ? (
-            <p className="mt-2 text-sm font-semibold text-amber-200">Hotel needed</p>
+            <p className="mt-2 text-sm font-semibold text-amber-200">No hotel booked</p>
           ) : null}
           {cell.flightSummary ? (
             <p className="mt-1 text-sm text-white/90">✈ {cell.flightSummary}</p>
@@ -181,15 +172,25 @@ function CellPopover({
           ✕
         </button>
       </div>
-      {cta ? (
-        <button
-          type="button"
-          onClick={cta.action}
-          className="mt-3 rounded-xl bg-[#f4c95d] px-4 py-2 text-sm font-extrabold text-[#0F1923]"
-        >
-          {cta.label}
-        </button>
-      ) : null}
+      <div className="mt-4 flex flex-wrap gap-2">
+        {cell.hotelNeeded && cell.cityName && onPlanHotel ? (
+          <button
+            type="button"
+            onClick={() => onPlanHotel(cell.dateKey, cell.cityName!)}
+            className="rounded-xl bg-[#f4c95d] px-4 py-2 text-sm font-extrabold text-[#0F1923]"
+          >
+            Fix → Find hotels
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onViewTimeline}
+            className="rounded-xl bg-[#f4c95d] px-4 py-2 text-sm font-extrabold text-[#0F1923]"
+          >
+            View on timeline
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -199,8 +200,6 @@ export function TripLegCalendar({
   tripStartDate,
   tripEndDate = null,
   reservations,
-  dayNotes,
-  stopRanges = [],
   selectedDateKey = null,
   highlightedLegId = null,
   onSelectedDateKeyChange,
@@ -216,38 +215,52 @@ export function TripLegCalendar({
     if (tripStart) return new Date(`${tripStart}T12:00:00`);
     return new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   });
-  const [popoverDateKey, setPopoverDateKey] = useState<string | null>(null);
+  const [detailDateKey, setDetailDateKey] = useState<string | null>(null);
 
   const model = useMemo(
-    () =>
-      buildTripLegModel({
-        tripStartDate: tripStart,
-        tripEndDate: tripEnd,
-        dayNotes,
-        stopRanges,
-        reservations,
-      }),
-    [dayNotes, reservations, stopRanges, tripEnd, tripStart],
+    () => buildTripLegCalendarModel(reservations, tripStart, tripEnd),
+    [reservations, tripEnd, tripStart],
   );
-
-  const destLegs = useMemo(() => destinationLegs(model), [model]);
-  const travelLegs = useMemo(() => model.legs.filter((l) => l.kind === "travel"), [model.legs]);
 
   const year = viewMonth.getFullYear();
   const month = viewMonth.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDow = new Date(year, month, 1).getDay();
 
-  const totalTripDays = [...model.dayCells.keys()].length;
+  const monthDayKeys = useMemo(
+    () =>
+      Array.from({ length: daysInMonth }, (_, i) => dateKeyFromParts(year, month, i + 1)),
+    [daysInMonth, month, year],
+  );
 
-  const handleLegLegendClick = (leg: TripLeg): void => {
+  const tripDayKeys = useMemo(
+    () => [...model.dayCells.keys()].sort(),
+    [model.dayCells],
+  );
+  const totalTripDays = tripDayKeys.length;
+
+  const destinationStats = useMemo(() => {
+    const stays = model.legs.filter((l) => l.type === "stay");
+    return stays.map((leg) => ({
+      city: leg.label,
+      nights: countNights(leg.startDate, leg.endDate),
+    }));
+  }, [model.legs]);
+
+  const handleLegLegendClick = (leg: BuiltTripLeg): void => {
     onHighlightedLegIdChange?.(leg.id);
-    onSelectedDateKeyChange?.(leg.startDateKey);
-    onScrollToTimelineDate?.(leg.startDateKey);
+    onSelectedDateKeyChange?.(leg.startDate);
+    onScrollToTimelineDate?.(leg.startDate);
   };
 
-  const selectedCell = selectedDateKey ? model.dayCells.get(selectedDateKey) ?? null : null;
-  const popoverCell = popoverDateKey ? model.dayCells.get(popoverDateKey) ?? null : null;
+  const handleDaySelect = (dateKey: string): void => {
+    onSelectedDateKeyChange?.(dateKey);
+    onScrollToTimelineDate?.(dateKey);
+    setDetailDateKey(dateKey);
+    if (viewMode !== "day") setViewMode("day");
+  };
+
+  const detailCell = detailDateKey ? model.dayCells.get(detailDateKey) ?? null : null;
 
   const monthCells: (number | null)[] = [
     ...Array(firstDow).fill(null),
@@ -267,16 +280,14 @@ export function TripLegCalendar({
       </header>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="inline-flex rounded-2xl bg-slate-100 p-1 dark:bg-slate-800/80">
+        <div className="inline-flex rounded-2xl bg-[#162030] p-1">
           {(["month", "trip", "day"] as LegCalendarViewMode[]).map((mode) => (
             <button
               key={mode}
               type="button"
               onClick={() => setViewMode(mode)}
               className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold capitalize ${
-                viewMode === mode
-                  ? "bg-[#0F1923] text-white dark:bg-[#f4c95d] dark:text-[#0F1923]"
-                  : "text-slate-600 dark:text-slate-300"
+                viewMode === mode ? "bg-[#4A6FA5] text-white" : "text-[#4A5568] hover:text-white"
               }`}
             >
               {mode === "trip" ? "Full trip" : mode}
@@ -288,17 +299,17 @@ export function TripLegCalendar({
             <button
               type="button"
               onClick={() => setViewMonth(new Date(year, month - 1, 1))}
-              className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-lg dark:bg-slate-800"
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-lg text-white/60 hover:text-white"
             >
               ‹
             </button>
-            <span className="min-w-[8rem] text-center text-sm font-extrabold text-slate-800 dark:text-white">
+            <span className="min-w-[10rem] text-center text-[28px] font-bold text-white">
               {MONTH_NAMES[month]} {year}
             </span>
             <button
               type="button"
               onClick={() => setViewMonth(new Date(year, month + 1, 1))}
-              className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-lg dark:bg-slate-800"
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-lg text-white/60 hover:text-white"
             >
               ›
             </button>
@@ -307,21 +318,26 @@ export function TripLegCalendar({
       </div>
 
       {viewMode === "month" ? (
-        <div className="overflow-hidden rounded-3xl bg-[#FAFAF8] p-3 shadow-xl ring-1 ring-black/[0.05] dark:bg-[#0F1923] dark:ring-white/[0.06]">
+        <div className="overflow-hidden rounded-3xl bg-[#0F1923] p-3 shadow-xl">
           <div className="grid grid-cols-7 gap-1 pb-2">
             {DAY_HEADERS.map((d) => (
-              <div key={d} className="py-1 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              <div key={d} className="py-1 text-center text-[11px] font-semibold uppercase tracking-wider text-[#4A5568]">
                 {d}
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-7 gap-1">
+          <div className="grid grid-cols-7 gap-1 rounded-2xl bg-[#162030] p-2">
             {monthCells.map((day, idx) => {
               if (!day) return <div key={`blank-${idx}`} className="min-h-[52px]" />;
               const dateKey = dateKeyFromParts(year, month, day);
               const cell = model.dayCells.get(dateKey) ?? null;
               const inTrip = tripStart && tripEnd ? dateKey >= tripStart && dateKey <= tripEnd : false;
               const legId = cell?.legId ?? null;
+              const leg = legId ? model.legById.get(legId) ?? null : null;
+              const ribbonPos =
+                cell && leg && inTrip
+                  ? ribbonPositionForGridCell({ dateKey, leg, monthDayKeys, firstDow })
+                  : "none";
               return (
                 <CalendarCell
                   key={dateKey}
@@ -331,11 +347,8 @@ export function TripLegCalendar({
                   isSelected={selectedDateKey === dateKey}
                   isHighlightedLeg={Boolean(highlightedLegId && legId === highlightedLegId)}
                   isTodayCell={isToday(dateKey)}
-                  onSelect={() => {
-                    onSelectedDateKeyChange?.(dateKey);
-                    onScrollToTimelineDate?.(dateKey);
-                  }}
-                  onPopover={() => setPopoverDateKey(dateKey)}
+                  ribbonPosition={ribbonPos}
+                  onSelect={() => handleDaySelect(dateKey)}
                 />
               );
             })}
@@ -344,106 +357,75 @@ export function TripLegCalendar({
       ) : null}
 
       {viewMode === "trip" && tripStart && tripEnd ? (
-        <div className="rounded-3xl bg-[#FAFAF8] p-5 shadow-xl dark:bg-[#0F1923]">
-          <p className="mb-4 text-sm font-extrabold text-slate-800 dark:text-white">Full trip arc</p>
-          <div className="relative h-16 overflow-hidden rounded-2xl bg-slate-200/50 dark:bg-slate-800/50">
+        <div className="rounded-3xl bg-[#0F1923] p-5 shadow-xl">
+          <div className="relative h-14 overflow-hidden rounded-xl bg-[#162030]">
             {model.legs.map((leg) => {
-              const allKeys = [...model.dayCells.keys()].sort();
-              const tripLen = allKeys.length || 1;
-              const legKeys = allKeys.filter((k) => k >= leg.startDateKey && k <= leg.endDateKey);
-              const startIdx = allKeys.indexOf(legKeys[0] ?? leg.startDateKey);
-              const widthPct = Math.max((legKeys.length / tripLen) * 100, 4);
-              const leftPct = (startIdx / tripLen) * 100;
+              const tripLen = totalTripDays || 1;
+              const legKeys = tripDayKeys.filter((k) => k >= leg.startDate && k <= leg.endDate);
+              const startIdx = tripDayKeys.indexOf(legKeys[0] ?? leg.startDate);
+              const widthPct = Math.max((legKeys.length / tripLen) * 100, leg.type === "travel" ? 3 : 6);
+              const leftPct = startIdx >= 0 ? (startIdx / tripLen) * 100 : 0;
+              const isTravel = leg.type === "travel";
               return (
                 <button
                   key={leg.id}
                   type="button"
                   onClick={() => handleLegLegendClick(leg)}
-                  className={`absolute top-2 flex h-12 items-center justify-center overflow-hidden px-2 text-[10px] font-extrabold text-white shadow-md transition hover:brightness-110 ${
-                    highlightedLegId === leg.id ? "ring-2 ring-[#f4c95d]" : ""
-                  }`}
+                  className={`absolute top-1 flex h-12 items-center justify-center overflow-hidden px-1 text-[10px] font-extrabold text-white transition hover:brightness-110 ${
+                    highlightedLegId === leg.id ? "ring-2 ring-white" : ""
+                  } ${isTravel ? "rounded-full" : "rounded-lg"}`}
                   style={{
                     left: `${leftPct}%`,
                     width: `${widthPct}%`,
-                    backgroundColor: `${leg.color}D9`,
-                    borderRadius: leg.kind === "travel" ? "9999px" : "12px",
+                    backgroundColor: `${leg.color}E6`,
                   }}
                   title={leg.label}
                 >
-                  <span className="truncate">{leg.label}</span>
+                  {isTravel && legKeys.length <= 2 ? "✈" : <span className="truncate px-1">{leg.label}</span>}
                 </button>
               );
             })}
           </div>
-          <p className="mt-3 text-center text-xs text-slate-500">{totalTripDays} days · tap a segment to highlight</p>
-        </div>
-      ) : null}
-
-      {viewMode === "day" && selectedDateKey && selectedCell ? (
-        <div className="space-y-4">
-          <CellPopover
-            cell={selectedCell}
-            onClose={() => setPopoverDateKey(null)}
-            onPlanHotel={onPlanHotel}
-          />
-          <div className="rounded-3xl bg-white p-4 shadow-sm dark:bg-slate-900">
-            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Quick actions</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {selectedCell.hotelNeeded && selectedCell.cityName && onPlanHotel ? (
-                <button
-                  type="button"
-                  onClick={() => onPlanHotel(selectedDateKey, selectedCell.cityName!)}
-                  className="rounded-xl bg-[#f4c95d] px-4 py-2 text-sm font-extrabold text-[#0F1923]"
-                >
-                  Find hotels in {selectedCell.cityName}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => onScrollToTimelineDate?.(selectedDateKey)}
-                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold dark:border-slate-600"
-              >
-                View on timeline
-              </button>
-            </div>
+          <div className="mt-4 flex flex-wrap justify-center gap-4 text-center text-xs text-white/80">
+            {destinationStats.map((s) => (
+              <span key={s.city}>
+                {s.city}: <strong className="text-white">{s.nights} nights</strong>
+              </span>
+            ))}
+            <span>
+              Total: <strong className="text-white">{totalTripDays} days</strong>
+            </span>
           </div>
         </div>
+      ) : null}
+
+      {viewMode === "day" && detailCell ? (
+        <DayDetailPanel
+          cell={detailCell}
+          onClose={() => setDetailDateKey(null)}
+          onPlanHotel={onPlanHotel}
+          onViewTimeline={() => onScrollToTimelineDate?.(detailCell.dateKey)}
+        />
       ) : viewMode === "day" ? (
-        <p className="text-center text-sm text-slate-500">Select a day on the month view first.</p>
+        <p className="text-center text-sm text-[#4A5568]">Select a colored day on the month view.</p>
       ) : null}
 
-      {popoverCell && viewMode === "month" ? (
-        <div className="fixed inset-x-4 bottom-24 z-50 mx-auto max-w-md sm:static sm:inset-auto">
-          <CellPopover cell={popoverCell} onClose={() => setPopoverDateKey(null)} onPlanHotel={onPlanHotel} />
-        </div>
-      ) : null}
-
-      <div className="rounded-2xl bg-white/80 p-4 dark:bg-slate-900/80">
-        <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Trip legs</p>
-        <div className="flex flex-wrap gap-3">
-          {destLegs.map((leg) => (
-            <button
-              key={leg.id}
-              type="button"
-              onClick={() => handleLegLegendClick(leg)}
-              className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-left transition ${
-                highlightedLegId === leg.id ? "bg-slate-100 ring-2 ring-[#f4c95d] dark:bg-slate-800" : "hover:bg-slate-50 dark:hover:bg-slate-800/60"
-              }`}
-            >
-              <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: leg.color }} />
-              <span className="text-xs font-semibold text-slate-800 dark:text-slate-100">
-                {leg.label}
-                <span className="ml-1 font-normal text-slate-500">· {formatLegDateRange(leg)}</span>
-              </span>
-            </button>
-          ))}
-          {travelLegs.length > 0 ? (
-            <span className="flex items-center gap-2 px-2 py-1.5 text-xs text-slate-500">
-              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: TRAVEL_LEG_COLOR }} />
-              Travel days
-            </span>
-          ) : null}
-        </div>
+      <div className="flex flex-wrap gap-2">
+        {model.legs.map((leg) => (
+          <button
+            key={leg.id}
+            type="button"
+            onClick={() => handleLegLegendClick(leg)}
+            className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium text-white transition ${
+              highlightedLegId === leg.id ? "ring-2 ring-white" : ""
+            }`}
+            style={{ backgroundColor: `${leg.color}33` }}
+          >
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: leg.color }} />
+            {leg.type === "travel" ? "✈ " : null}
+            {leg.label} · {formatLegChipRange(leg)}
+          </button>
+        ))}
       </div>
     </section>
   );

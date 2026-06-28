@@ -184,16 +184,22 @@ Day-by-day planning lives on the **Plan** (`itinerary`) consumer tab — not a h
 **I2 — Vertical timeline, inline expand**  
 Each trip day is one collapsed row. Tap expands details inline below the row — not a modal. Full editing opens only via **Edit plan**.
 
-**I3 — Status dots are deterministic**  
-Gray = empty · Emerald = covered · Amber = needs booking · Red = gap/integrity issue on that day.
+**I3 — Status dots are meaningful or absent**  
+Emerald = fully sorted · Amber = action needed (no hotel, gap) · Blue = travel day · Red = problem detected. Gray dots with no meaning are banned.
 
-**I4 — Calendar and timeline stay in sync**  
-Active day and highlighted leg sync via shared `selectedDateKey` / `highlightedLegId` in the travel-assistant shell. Tapping a calendar day scrolls the Plan timeline; legend clicks jump to Plan and scroll to the leg start.
+**I4 — Calendar and timeline stay in sync (SYNC LAW)**  
+Tapping any calendar day must scroll the Trip timeline to that exact date. Tapping a timeline day must highlight that date in the calendar. These views are always in sync via shared `selectedDateKey` / `highlightedLegId` / `scrollToDateKey` in the travel-assistant shell.
 
-**I8 — Calendar leg colors from trip data**  
-Leg colors are derived from `buildTripLegModel()` — chronological destination legs from stay cities and reservations. Never hardcode colors to specific city names.
+**I8 — Calendar leg colors from trip data (COLOR LAW)**  
+Trip leg colors are derived from the order legs appear in trip data via `buildTripLegs()`. Travel days are always `#4A6FA5`. Stay legs cycle the palette. Colors are never hardcoded to specific city names.
 
-**Test:** `src/lib/travelAssistant/tripLegColors.test.ts`
+**Test:** `src/lib/travelAssistant/tripLegColors.test.ts`, `src/lib/travelAssistant/buildTripLegs.test.ts`
+
+**I10 — Never "nothing planned yet" on Plan tab**  
+Every day within the trip window shows context: travel days show flight cards; stay days show destination and weather. The phrase "nothing planned yet" is permanently banned from the Plan timeline.
+
+**I11 — Plan tab uses destination blocks**  
+The Plan timeline renders travel cards (navy, departure-board typography) and collapsible destination blocks (leg-colored left border, photo header, day sub-rows with weather + hotel). Mission cards for unbooked hotels appear inside the relevant destination block — not stacked above the timeline.
 
 **I9 — Calendar is its own tab**  
 The leg-colored calendar lives on the **Calendar** consumer tab at full width — not split beside the Plan timeline on the same view.
@@ -260,5 +266,6 @@ Resend emails use `@react-email/render` → `html:` — never `react:` prop or `
 | G8 | `src/lib/travelAssistant/dayPlanLines.test.ts` |
 | G10 | `src/lib/travelAssistant/tripActionItems.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
+| I8, I10 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
 
 New laws must add a row here when a test exists.
