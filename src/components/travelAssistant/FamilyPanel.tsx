@@ -332,7 +332,7 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
             </p>
             <p className={`text-xs mt-0.5 ${sharingLocation ? "text-emerald-100" : "text-slate-500 dark:text-slate-400"}`}>
               {sharingLocation
-                ? "Live · updates every 30s"
+                ? "Live · precise GPS only (ignores coarse Wi‑Fi guesses)"
                 : "Tap to share — stays on when you navigate away"}
             </p>
           </div>
@@ -361,6 +361,21 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
                 Sharing preference saved — will resume automatically when GPS is available.
               </p>
             )}
+          </div>
+        )}
+        {sharingLocation && (
+          <div className={`mx-4 mb-4 rounded-2xl px-3 py-2.5 text-[11px] leading-relaxed ${
+            sharingLocation ? "bg-white/15 text-emerald-50" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+          }`}>
+            <p className="font-semibold">iPhone while locked</p>
+            <p className="mt-1 opacity-90">
+              Safari and home-screen web apps cannot keep GPS running when the screen locks — that is an Apple limit, not something we can fix in JavaScript alone.
+            </p>
+            <ul className="mt-2 space-y-1 list-disc pl-4 opacity-90">
+              <li>Settings → Privacy → Location Services → Safari (or Kepi) → <strong>While Using</strong> + turn on <strong>Precise Location</strong></li>
+              <li>Disable Low Power Mode while traveling — it delays GPS updates</li>
+              <li>For true &quot;Always&quot; tracking with the screen off, install the native Kepi app (coming soon) and choose <strong>Always Allow</strong> location</li>
+            </ul>
           </div>
         )}
       </div>

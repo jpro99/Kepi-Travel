@@ -3,6 +3,10 @@ import {
   isFamilySharingOptedOut,
   setFamilySharingOptedOut,
 } from "@/lib/family/locationSharingPrefs";
+import {
+  resetGeolocationQualityState,
+  shouldAcceptGeolocationFix,
+} from "@/lib/family/geolocationQuality";
 
 /** Show green / live for 30 minutes — phones pause GPS in background. */
 export const FAMILY_LOCATION_STALE_MS = 30 * 60_000;
@@ -27,6 +31,7 @@ async function pushLocation(lat: number, lon: number, accuracy?: number): Promis
 }
 
 function readPosition(pos: GeolocationPosition): void {
+  if (!shouldAcceptGeolocationFix(pos.coords, pos.timestamp)) return;
   void pushLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
 }
 
@@ -36,6 +41,25 @@ export function setFamilyLocationSender(fn: LocationSender | null): void {
 
 export function isFamilyLocationWatchActive(): boolean {
   return watchId !== null;
+}
+
+const WATCH_OPTIONS: PositionOptions = {
+  enableHighAccuracy: true,
+  maximumAge: 5_000,
+  timeout: 30_000,
+};
+
+const BURST_OPTIONS: PositionOptions = {
+  enableHighAccuracy: true,
+  maximumAge: 0,
+  timeout: 20_000,
+};
+
+/** One high-accuracy fix — use after screen unlock or opening Live Map. */
+export function burstFamilyLocationFix(): void {
+  if (typeof window === "undefined" || !navigator.geolocation) return;
+  if (isFamilySharingOptedOut()) return;
+  navigator.geolocation.getCurrentPosition(readPosition, () => null, BURST_OPTIONS);
 }
 
 export function startPersistentFamilyLocationWatch(): void {
@@ -57,29 +81,23 @@ export function startPersistentFamilyLocationWatch(): void {
       }
       window.setTimeout(() => startPersistentFamilyLocationWatch(), 30_000);
     },
-    { enableHighAccuracy: true, maximumAge: 10_000, timeout: 30_000 },
+    WATCH_OPTIONS,
   );
 
+  // High-accuracy heartbeat — never fall back to coarse Wi‑Fi/cell guesses.
   if (heartbeatId === null) {
     heartbeatId = window.setInterval(() => {
       if (isFamilySharingOptedOut()) return;
-      navigator.geolocation.getCurrentPosition(readPosition, () => null, {
-        enableHighAccuracy: false,
-        maximumAge: 60_000,
-        timeout: 20_000,
-      });
+      burstFamilyLocationFix();
     }, 45_000);
   }
 
-  navigator.geolocation.getCurrentPosition(readPosition, () => null, {
-    enableHighAccuracy: true,
-    maximumAge: 0,
-    timeout: 15_000,
-  });
+  burstFamilyLocationFix();
 }
 
 export function stopPersistentFamilyLocationWatch(): void {
   setFamilySharingOptedOut(true);
+  resetGeolocationQualityState();
   if (watchId !== null) {
     navigator.geolocation.clearWatch(watchId);
     watchId = null;
@@ -92,5 +110,6 @@ export function stopPersistentFamilyLocationWatch(): void {
 
 export function resumePersistentFamilyLocationWatch(): void {
   setFamilySharingOptedOut(false);
+  resetGeolocationQualityState();
   startPersistentFamilyLocationWatch();
 }

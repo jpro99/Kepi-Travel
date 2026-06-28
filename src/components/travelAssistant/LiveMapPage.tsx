@@ -11,6 +11,12 @@ import {
   useNavigatorCredentials,
 } from "@/lib/travelAssistant/useActiveFlight";
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
+import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
+import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
+import {
+  shouldAcceptGeolocationFix,
+  shouldDisplayGeolocationFix,
+} from "@/lib/family/geolocationQuality";
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface LocationPoint {
@@ -53,36 +59,11 @@ function timeAgo(iso: string): string {
 function isStale(iso: string) { return Date.now() - Date.parse(iso) > 10 * 60_000; }
 
 /* ─── Map style builders ─────────────────────────────────────── */
-// Rewrite all MapTiler URLs in a style object to go through our server proxy.
-// This keeps the API key server-side and avoids the host_not_allowed 403.
-async function loadProxiedStyle(styleUrl: string): Promise<Record<string, unknown>> {
-  // Fetch the style JSON through our proxy (direct MapTiler fetch is blocked).
-  // We do NOT rewrite URLs inside the style — transformRequest handles all
-  // subsequent MapTiler requests that MapLibre makes after loading the style.
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const clean = styleUrl.replace(/[?&]key=[^&]*/g, "").replace(/\?$/, "");
-  const proxiedUrl = `${origin}/api/maptiles?url=${encodeURIComponent(clean)}`;
-  const res = await fetch(proxiedUrl);
-  if (!res.ok) throw new Error(`Style fetch failed: ${res.status}`);
-  return res.json() as Promise<Record<string, unknown>>;
-}
-
-function streetsStyleUrl(key: string) {
-  return `https://api.maptiler.com/maps/streets-v2/style.json?key=${key}`;
-}
-function darkStyleUrl(key: string) {
-  // Premium concierge default — minimal, high-contrast, lets member colors pop
-  return `https://api.maptiler.com/maps/dataviz-dark/style.json?key=${key}`;
-}
 type MapStyleId = "dark" | "streets" | "satellite";
-function styleUrlFor(styleId: MapStyleId, key: string): string {
-  if (styleId === "satellite") return satelliteStyleUrl(key);
-  if (styleId === "streets") return streetsStyleUrl(key);
-  return darkStyleUrl(key);
-}
-function satelliteStyleUrl(key: string) {
-  // Use satellite-v2 style which has higher quality raster tiles vs hybrid
-  return `https://api.maptiler.com/maps/satellite/style.json?key=${key}`;
+function stylePathFor(styleId: MapStyleId): string {
+  if (styleId === "satellite") return "satellite";
+  if (styleId === "streets") return "streets-v2";
+  return "dataviz-dark";
 }
 
 /* ─── Component ──────────────────────────────────────────────── */
@@ -155,7 +136,7 @@ export function LiveMapPage() {
 
       (group?.members ?? []).forEach(member => {
         const loc = locations[member.id];
-        if (!loc) return;
+        if (!loc || !shouldDisplayGeolocationFix(loc.accuracy)) return;
         const stale = isStale(loc.updatedAt);
 
         if (existing[member.id]) {
@@ -165,13 +146,12 @@ export function LiveMapPage() {
           // Consumer GPS drifts 10-30m even when standing still
           const dLng = Math.abs(loc.lon - from.lng);
           const dLat = Math.abs(loc.lat - from.lat);
-          if (dLng < 0.00015 && dLat < 0.00015) return;
-          // Smooth to a weighted average of current position and new reading
-          // This prevents jumping to raw GPS coordinates (which are noisy)
-          // Weight: 70% new reading, 30% current — smooths noise but stays accurate
+          const minDelta = (loc.accuracy ?? 30) > 50 ? 0.0004 : 0.00015;
+          if (dLng < minDelta && dLat < minDelta) return;
+          const smoothWeight = (loc.accuracy ?? 30) <= 35 ? 0.7 : 0.95;
           const to = {
-            lng: from.lng * 0.3 + loc.lon * 0.7,
-            lat: from.lat * 0.3 + loc.lat * 0.7,
+            lng: from.lng * (1 - smoothWeight) + loc.lon * smoothWeight,
+            lat: from.lat * (1 - smoothWeight) + loc.lat * smoothWeight,
           };
           const dur = 3000; // slower animation = less jumpy appearance
           const t0 = performance.now();
@@ -299,28 +279,9 @@ export function LiveMapPage() {
         const center: [number, number] = locs.length > 0
           ? [locs.reduce((s, l) => s + l.lon, 0) / locs.length, locs.reduce((s, l) => s + l.lat, 0) / locs.length]
           : [-118.2437, 34.0522];
-        const zoom = locs.length === 1 ? 14 : locs.length > 1 ? 11 : 4;
-        const key = encodeURIComponent(maptilerKey);
+        const zoom = locs.length === 1 ? 16 : locs.length > 1 ? 12 : 4;
 
-        const styleUrl = styleUrlFor(mapStyle, key);
-        const style = await loadProxiedStyle(styleUrl);
-
-        const origin = window.location.origin;
-
-        // transformRequest intercepts EVERY network request MapLibre makes.
-        // This catches tile URLs that come from tiles.json (which our style rewrite never sees).
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const transformRequest = (url: string, resourceType: string): { url: string } | undefined => {
-          if (!url.includes("api.maptiler.com")) return undefined;
-          const clean = url.replace(/[?&]key=[^&]*/g, "").replace(/\?$/, "");
-          const tokenMatch = clean.match(/^(.*?)(\{[^}]+\}.*)$/);
-          if (tokenMatch) {
-            const base = tokenMatch[1].replace(/\/$/, "");
-            const suffix = tokenMatch[2];
-            return { url: `${origin}/api/maptiles?url=${encodeURIComponent(base)}&suffix=${suffix}` };
-          }
-          return { url: `${origin}/api/maptiles?url=${encodeURIComponent(clean)}` };
-        };
+        const style = maptilerStyleUrl(stylePathFor(mapStyle), maptilerKey);
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const map = new (ml as any).Map({
@@ -328,9 +289,12 @@ export function LiveMapPage() {
           style,
           center, zoom,
           maxZoom: 20,
+          pixelRatio: getMapPixelRatio(),
           attributionControl: false,
-          transformRequest,
+          fadeDuration: 0,
+          transformRequest: directMaptilerTransformRequest(maptilerKey),
         });
+        const unbindResize = bindMapResize(mapEl.current, map);
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         map.addControl(new (ml as any).NavigationControl({ showCompass: true }), "top-right");
@@ -351,6 +315,7 @@ export function LiveMapPage() {
         });
 
         mapRef.current = map;
+        map.on("remove", () => unbindResize());
       } catch (err) {
         if (!cancelled) { setIsError(true); setErrorMsg(err instanceof Error ? err.message : String(err)); }
       }
@@ -377,13 +342,8 @@ export function LiveMapPage() {
   /* ── Satellite toggle — swap style without reinitialising map ── */
   useEffect(() => {
     if (!mapRef.current || !maptilerKey || !isLoaded) return;
-    const key = encodeURIComponent(maptilerKey);
-    const styleUrl = styleUrlFor(mapStyle, key);
-    void loadProxiedStyle(styleUrl).then(style => {
-      if (!mapRef.current) return;
-      mapRef.current.setStyle(style);
-      mapRef.current.once("styledata", () => { if (mapRef.current) placeMarkers(mapRef.current); });
-    });
+    mapRef.current.setStyle(maptilerStyleUrl(stylePathFor(mapStyle), maptilerKey));
+    mapRef.current.once("styledata", () => { if (mapRef.current) placeMarkers(mapRef.current); });
   }, [mapStyle, maptilerKey, isLoaded, placeMarkers]);
 
   /* ── Fit all members ── */
@@ -392,13 +352,13 @@ export function LiveMapPage() {
     const locs = Object.values(locations);
     if (!locs.length) return;
     if (locs.length === 1) {
-      mapRef.current.flyTo({ center: [locs[0].lon, locs[0].lat], zoom: 15, essential: true });
+      mapRef.current.flyTo({ center: [locs[0].lon, locs[0].lat], zoom: 17, essential: true });
       return;
     }
     import("maplibre-gl").then(({ LngLatBounds }) => {
       const b = new LngLatBounds();
       locs.forEach(l => b.extend([l.lon, l.lat]));
-      mapRef.current?.fitBounds(b, { padding: 80, maxZoom: 14, duration: 800 });
+      mapRef.current?.fitBounds(b, { padding: 80, maxZoom: 16, duration: 800 });
     }).catch(console.error);
   }, [locations]);
 
@@ -474,6 +434,7 @@ export function LiveMapPage() {
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       pos => {
+        if (!shouldAcceptGeolocationFix(pos.coords, pos.timestamp)) return;
         const { latitude: lat, longitude: lon, accuracy } = pos.coords;
 
         // FIX: correct endpoint is POST /api/family with action:"update-location"
@@ -493,7 +454,7 @@ export function LiveMapPage() {
           // Only center map on first GPS fix, not every update (prevents jumpiness)
           if (mapRef.current && !firstFixRef.current) {
             firstFixRef.current = true;
-            mapRef.current.easeTo({ center: [lon, lat], zoom: 15, duration: 1200 });
+            mapRef.current.easeTo({ center: [lon, lat], zoom: 17, duration: 1200 });
           }
         }
       },

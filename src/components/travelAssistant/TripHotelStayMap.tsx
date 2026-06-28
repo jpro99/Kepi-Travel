@@ -5,6 +5,7 @@ import "@/lib/maplibreCspWorker";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
+import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import type { PlannedStayCity } from "@/lib/travelAssistant/tripPlanBooking";
 import {
   HOTEL_STAY_LINE_SOURCE,
@@ -160,7 +161,7 @@ export function TripHotelStayMap({
     }
     map.fitBounds(bounds, {
       padding: 72,
-      maxZoom: stayPoints.length === 1 ? 10 : 6,
+      maxZoom: stayPoints.length === 1 ? 14 : 10,
       duration,
       essential: true,
     });
@@ -273,9 +274,13 @@ export function TripHotelStayMap({
         style: initialStyle,
         center: [points[0]?.lon ?? 0, points[0]?.lat ?? 20],
         zoom: 4,
+        maxZoom: 18,
+        pixelRatio: getMapPixelRatio(),
         attributionControl: false,
+        fadeDuration: 0,
         ...(maptilerKey ? { transformRequest: directMaptilerTransformRequest(maptilerKey) } : {}),
       });
+      const unbindResize = bindMapResize(containerRef.current, map);
 
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
       map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
@@ -289,6 +294,7 @@ export function TripHotelStayMap({
         void fitWholeTrip(0);
         void renderStayMarkers();
       });
+      map.on("remove", () => unbindResize());
     })();
 
     return () => {

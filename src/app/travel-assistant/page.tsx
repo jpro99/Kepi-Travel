@@ -40,6 +40,14 @@ import {
 } from "@/lib/travelAssistant/clientSessionState";
 import { scheduleLocalNotification, triggerHaptic } from "@/lib/native/capacitorBridge";
 import {
+  burstFamilyLocationFix,
+  resumePersistentFamilyLocationWatch,
+  setFamilyLocationSender,
+  startPersistentFamilyLocationWatch,
+  stopPersistentFamilyLocationWatch,
+} from "@/lib/family/familyLocationWatch";
+import { shouldAcceptGeolocationFix } from "@/lib/family/geolocationQuality";
+import {
   buildIncidentAutopilotPlan,
   type IncidentAutopilotAction,
   type IncidentAutopilotRecommendation,
@@ -1960,7 +1968,6 @@ export default function TravelAssistantPage() {
   const [guidanceUserLat, setGuidanceUserLat] = useState<number | null>(null);
   const [guidanceUserLon, setGuidanceUserLon] = useState<number | null>(null);
   const guidanceGpsWatchRef = useRef<number | null>(null);
-  const familyWatchRef = useRef<number | null>(null);
   const familySendingRef = useRef(false);
 
   const sendFamilyLocation = useCallback(async (lat: number, lon: number, accuracy?: number) => {
@@ -1974,60 +1981,50 @@ export default function TravelAssistantPage() {
     } catch { /* silent */ } finally { familySendingRef.current = false; }
   }, []);
 
-  const startFamilyWatch = useCallback(() => {
-    if (familyWatchRef.current !== null) return;
-    if (!localStorage.getItem(FAMILY_SHARING_PREF_KEY)) return;
-    if (!navigator.geolocation) return;
-    familyWatchRef.current = navigator.geolocation.watchPosition(
-      pos => { void sendFamilyLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy); },
-      (err) => {
-        if (familyWatchRef.current !== null) { navigator.geolocation.clearWatch(familyWatchRef.current); familyWatchRef.current = null; }
-        if (err.code !== 1) { setTimeout(startFamilyWatch, 30_000); } // retry unless permission denied
-        else { localStorage.removeItem(FAMILY_SHARING_PREF_KEY); }
-      },
-      { enableHighAccuracy: true, maximumAge: 5_000, timeout: 30_000 },
-    );
-  }, [sendFamilyLocation]);
-
-  const stopFamilyWatch = useCallback(() => {
-    localStorage.removeItem(FAMILY_SHARING_PREF_KEY);
-    if (familyWatchRef.current !== null) { navigator.geolocation.clearWatch(familyWatchRef.current); familyWatchRef.current = null; }
-  }, []);
-
   useEffect(() => {
-    // Start guidance GPS
-    if (!navigator.geolocation) return;
-    guidanceGpsWatchRef.current = navigator.geolocation.watchPosition(
-      pos => { setGuidanceUserLat(pos.coords.latitude); setGuidanceUserLon(pos.coords.longitude); },
-      () => null,
-      { enableHighAccuracy: false, maximumAge: 60_000, timeout: 30_000 },
-    );
+    setFamilyLocationSender(sendFamilyLocation);
 
-    // Start family sharing if preference saved (survives tab switches)
-    startFamilyWatch();
+    // Start guidance GPS (high accuracy for on-trip proximity)
+    if (navigator.geolocation) {
+      guidanceGpsWatchRef.current = navigator.geolocation.watchPosition(
+        (pos) => {
+          if (!shouldAcceptGeolocationFix(pos.coords, pos.timestamp)) return;
+          setGuidanceUserLat(pos.coords.latitude);
+          setGuidanceUserLon(pos.coords.longitude);
+        },
+        () => null,
+        { enableHighAccuracy: true, maximumAge: 15_000, timeout: 30_000 },
+      );
+    }
 
-    // Restart after iOS background kill / screen lock
+    // Persistent family sharing — survives tab switches
+    startPersistentFamilyLocationWatch();
+
+    // Burst a fresh GPS fix when returning from lock screen / background
     const onVisible = () => {
       if (document.visibilityState === "visible") {
-        if (localStorage.getItem(FAMILY_SHARING_PREF_KEY) && familyWatchRef.current === null) startFamilyWatch();
+        startPersistentFamilyLocationWatch();
+        burstFamilyLocationFix();
       }
     };
     document.addEventListener("visibilitychange", onVisible);
 
-    // Listen for UI events from FamilyPanel
-    const onStart = () => { localStorage.setItem(FAMILY_SHARING_PREF_KEY, "1"); startFamilyWatch(); };
-    const onStop = () => stopFamilyWatch();
+    const onStart = () => resumePersistentFamilyLocationWatch();
+    const onStop = () => stopPersistentFamilyLocationWatch();
     window.addEventListener("kepi:family-start-sharing", onStart);
     window.addEventListener("kepi:family-stop-sharing", onStop);
 
     return () => {
+      setFamilyLocationSender(null);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("kepi:family-start-sharing", onStart);
       window.removeEventListener("kepi:family-stop-sharing", onStop);
-      if (familyWatchRef.current !== null) { navigator.geolocation.clearWatch(familyWatchRef.current); familyWatchRef.current = null; }
-      if (guidanceGpsWatchRef.current !== null) { navigator.geolocation.clearWatch(guidanceGpsWatchRef.current); guidanceGpsWatchRef.current = null; }
+      if (guidanceGpsWatchRef.current !== null) {
+        navigator.geolocation.clearWatch(guidanceGpsWatchRef.current);
+        guidanceGpsWatchRef.current = null;
+      }
     };
-  }, [startFamilyWatch, stopFamilyWatch]);
+  }, [sendFamilyLocation]);
 
   useEffect(() => {
     if (!user?.id) {

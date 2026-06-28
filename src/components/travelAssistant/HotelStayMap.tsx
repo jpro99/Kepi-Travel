@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fitScoreRange, hotelMapPinStyle } from "@/lib/hotels/hotelMapColors";
 import type { MapBounds } from "@/lib/hotels/hotelCoordinates";
 import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
+import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import type { HotelPayMode } from "@/lib/hotels/hotelPointsDisplay";
 import { resolveHotelMapPinLabel } from "@/lib/hotels/hotelPointsDisplay";
 import type { TransitKind, TransitStop } from "@/lib/hotels/nearbyTransit";
@@ -237,10 +238,14 @@ export function HotelStayMap({
         container: containerRef.current,
         style,
         center: [centerLng, centerLat],
-        zoom: 13,
+        zoom: 14,
+        maxZoom: 18,
+        pixelRatio: getMapPixelRatio(),
         attributionControl: false,
+        fadeDuration: 0,
         ...(maptilerKey ? { transformRequest: directMaptilerTransformRequest(maptilerKey) } : {}),
       });
+      const unbindResize = bindMapResize(containerRef.current, map);
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
       mapRef.current = map;
 
@@ -251,6 +256,7 @@ export function HotelStayMap({
           scheduleTransitFetch(centerLat, centerLng);
         }
       });
+      map.on("remove", () => unbindResize());
       map.on("moveend", () => {
         emitBounds(map);
         const center = map.getCenter();

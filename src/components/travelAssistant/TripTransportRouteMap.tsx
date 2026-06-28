@@ -19,6 +19,7 @@ import {
   segmentBounds,
 } from "@/lib/travelAssistant/tripRouteMapGeo";
 import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
+import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import type { PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
 
 interface TripTransportRouteMapProps {
@@ -177,7 +178,7 @@ export function TripTransportRouteMap({
     for (const point of points) {
       bounds.extend([point.lon, point.lat]);
     }
-    map.fitBounds(bounds, { padding: 72, maxZoom: points.length <= 3 ? 7 : 5, duration, essential: true });
+    map.fitBounds(bounds, { padding: 72, maxZoom: points.length <= 3 ? 10 : 8, duration, essential: true });
   }, []);
 
   const focusSegment = useCallback(async (segment: TripTransportSegment) => {
@@ -190,7 +191,7 @@ export function TripTransportRouteMap({
       [bounds.west, bounds.south],
       [bounds.east, bounds.north],
     );
-    map.fitBounds(box, { padding: 100, maxZoom: 8, duration: 700, essential: true });
+    map.fitBounds(box, { padding: 100, maxZoom: 12, duration: 700, essential: true });
   }, []);
 
   const handleSegmentSelect = useCallback(
@@ -340,9 +341,13 @@ export function TripTransportRouteMap({
         style: initialStyle,
         center: [geoPoints[0]?.lon ?? 0, geoPoints[0]?.lat ?? 20],
         zoom: 3,
+        maxZoom: 18,
+        pixelRatio: getMapPixelRatio(),
         attributionControl: false,
+        fadeDuration: 0,
         ...(maptilerKey ? { transformRequest: directMaptilerTransformRequest(maptilerKey) } : {}),
       });
+      const unbindResize = bindMapResize(containerRef.current, map);
 
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
       map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
@@ -356,6 +361,7 @@ export function TripTransportRouteMap({
         void fitWholeTrip(0);
         void renderAirportMarkers();
       });
+      map.on("remove", () => unbindResize());
 
       map.on("click", "trip-route-hit", (event) => {
         const feature = event.features?.[0];
