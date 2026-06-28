@@ -33,7 +33,14 @@ export interface ReservationDraftLike {
 }
 
 function isValidTimezone(timezone: string): boolean {
-  if (!timezone || !timezone.includes("/")) {
+  const normalized = timezone.trim();
+  if (!normalized) {
+    return false;
+  }
+  if (normalized === "UTC" || normalized === "GMT") {
+    return true;
+  }
+  if (!normalized.includes("/")) {
     return false;
   }
   try {
@@ -45,7 +52,10 @@ function isValidTimezone(timezone: string): boolean {
 }
 
 function isStrictDateTime(value: string): boolean {
-  const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(value.trim());
+  const trimmed = value.trim();
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(trimmed) ??
+    /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):\d{2}$/.exec(trimmed);
   if (!match) return false;
   const [, y, m, d, hh, mm] = match;
   const year = Number(y);

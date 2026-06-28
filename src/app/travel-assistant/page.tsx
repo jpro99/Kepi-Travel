@@ -1778,6 +1778,32 @@ function LoyaltyWalletSection() {
   return <LoyaltyWallet balances={balances} onUpdate={handleUpdate} />;
 }
 
+type ToastTone = "error" | "success" | "info";
+
+function classifyToastTone(message: string): ToastTone {
+  if (
+    /\b(couldn'?t|cannot|still needs|failed|error|blocked|missing|invalid|please complete|integrity|network error|unable to|could not|duplicate found)\b/i.test(
+      message,
+    )
+  ) {
+    return "error";
+  }
+  if (/\b(added|saved|success|confirmed|✓|synced|cleared)\b/i.test(message)) {
+    return "success";
+  }
+  return "info";
+}
+
+function toastPanelClassName(tone: ToastTone): string {
+  if (tone === "error") {
+    return "fixed bottom-20 left-3 right-3 z-[160] mx-auto max-w-md rounded-xl border-2 border-rose-600 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-950 shadow-2xl ring-4 ring-rose-500/20 md:left-auto md:right-4";
+  }
+  if (tone === "success") {
+    return "fixed bottom-20 left-3 right-3 z-[160] mx-auto max-w-md rounded-xl border-2 border-emerald-600 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-950 shadow-2xl md:left-auto md:right-4";
+  }
+  return "fixed bottom-20 left-3 right-3 z-[160] mx-auto max-w-md rounded-xl border-2 border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-2xl md:left-auto md:right-4";
+}
+
 export default function TravelAssistantPage() {
   const clerk = useClerk();
   const { user } = useUser();
@@ -1831,6 +1857,7 @@ export default function TravelAssistantPage() {
   const [autoTransportUpdates, setAutoTransportUpdates] = useState(true);
   const [isProviderCheckRunning, setIsProviderCheckRunning] = useState(false);
   const [toast, setToastRaw] = useState<string | null>(null);
+  const [toastTone, setToastTone] = useState<ToastTone>("info");
   const [guidanceTone, setGuidanceTone] = useState<GuidanceTone>("subtle");
   const [suppressedNudgeCount, setSuppressedNudgeCount] = useState(0);
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
@@ -2469,7 +2496,7 @@ export default function TravelAssistantPage() {
     toastPolicyRef.current.tone = guidanceTone;
   }, [guidanceTone]);
 
-  const setToast = useCallback((message: string | null, options?: { force?: boolean }): void => {
+  const setToast = useCallback((message: string | null, options?: { force?: boolean; tone?: ToastTone }): void => {
     if (message === null) {
       setToastRaw(null);
       return;
@@ -2483,7 +2510,8 @@ export default function TravelAssistantPage() {
     const cooldownMs = policy.tone === "subtle" ? 3_200 : 1_500;
     const isDuplicate = normalized === policy.lastMessage && now - policy.lastShownAtMs < dedupeWindowMs;
     const isCoolingDown = now - policy.lastShownAtMs < cooldownMs;
-    const isCritical = /\b(error|failed|cannot|unauthorized|blocked|timeout)\b/i.test(normalized);
+    const resolvedTone = options?.tone ?? classifyToastTone(normalized);
+    const isCritical = resolvedTone === "error" || /\b(error|failed|cannot|unauthorized|blocked|timeout)\b/i.test(normalized);
     if (!options?.force && !isCritical && (isDuplicate || isCoolingDown)) {
       setSuppressedNudgeCount((count) => count + 1);
       return;
@@ -2491,6 +2519,7 @@ export default function TravelAssistantPage() {
 
     policy.lastMessage = normalized;
     policy.lastShownAtMs = now;
+    setToastTone(resolvedTone);
     setToastRaw(normalized);
   }, []);
 
@@ -3332,10 +3361,10 @@ export default function TravelAssistantPage() {
 
   useEffect(() => {
     if (!toast) return;
-    const timeoutMs = guidanceTone === "subtle" ? 2000 : 2800;
+    const timeoutMs = toastTone === "error" ? 10_000 : guidanceTone === "subtle" ? 2000 : 4000;
     const timeout = window.setTimeout(() => setToastRaw(null), timeoutMs);
     return () => window.clearTimeout(timeout);
-  }, [guidanceTone, toast]);
+  }, [guidanceTone, toast, toastTone]);
 
   useEffect(() => {
     try {
@@ -6919,9 +6948,9 @@ export default function TravelAssistantPage() {
     );
   };
 
-  const acceptReviewWithDraft = (reviewId: string, draftOverride?: ReservationDraft): void => {
+  const acceptReviewWithDraft = (reviewId: string, draftOverride?: ReservationDraft): boolean => {
     const target = reviewQueue.find((item) => item.id === reviewId);
-    if (!target) return;
+    if (!target) return false;
     const draft = prepareReviewDraftForAccept({
       ...(draftOverride ?? target.draft),
       type: (draftOverride ?? target.draft).type,
@@ -6954,10 +6983,11 @@ export default function TravelAssistantPage() {
       if (activeDrawer?.kind === "review" && activeDrawer.id === reviewId) {
         closeDrawer();
       }
-      return;
+      return false;
     }
     const integrity = evaluateReservationIntegrity(draft);
     if (!integrity.safeForLive) {
+      const blockers = summarizeIntegrityBlockers(integrity.issues) || "check title, route, and departure time.";
       const nextQueue = reviewQueue.map((item) =>
         item.id === reviewId
           ? {
@@ -6978,8 +7008,13 @@ export default function TravelAssistantPage() {
       setReviewQueue(nextQueue);
       persistReviewQueueToTrip(nextQueue, { reviewId, source: "integrity-blocked" });
       setDrawerDraft(draft);
-      setToast(`Still needs info: ${summarizeIntegrityBlockers(integrity.issues) || "check title, route, and departure time."}`);
-      return;
+      openDrawer("review", reviewId);
+      setConsumerTab("flights");
+      setToast(`Couldn't add this booking: ${blockers} We opened the form — fix the highlighted fields and tap Save + accept.`, {
+        force: true,
+        tone: "error",
+      });
+      return false;
     }
     pushUndoSnapshot("Review item accepted");
     const quotedPriceUsd = resolveReservationCashUsd({
@@ -7026,11 +7061,12 @@ export default function TravelAssistantPage() {
       detail: `${newReservation.provider || newReservation.title} is on your flights timeline.`,
       syncedToTrip: true,
     });
-    setToast(`${newReservation.type === "flight" ? "Flight" : "Reservation"} added to your trip ✓`);
+    setToast(`${newReservation.type === "flight" ? "Flight" : "Reservation"} added to your trip ✓`, { tone: "success" });
+    return true;
   };
 
-  const handleAcceptReview = (reviewId: string): void => {
-    acceptReviewWithDraft(reviewId);
+  const handleAcceptReview = (reviewId: string): boolean => {
+    return acceptReviewWithDraft(reviewId);
   };
 
   const handleConfirmIncompleteReview = (reviewId: string, updates: Partial<ReservationDraft>): void => {
@@ -7650,7 +7686,10 @@ export default function TravelAssistantPage() {
       return;
     }
     if (action === "accept") {
-      handleAcceptReview(currentItem.id);
+      const accepted = handleAcceptReview(currentItem.id);
+      if (!accepted) {
+        return;
+      }
     } else {
       handleRejectReview(currentItem.id);
     }
@@ -8025,6 +8064,16 @@ export default function TravelAssistantPage() {
           <p className="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950">
             Check the fields below, then tap <strong>Save + accept</strong> to add this to your Flights tab.
           </p>
+        ) : null}
+        {activeDrawer.kind === "review" &&
+        reviewQueue.find((item) => item.id === activeDrawer.id)?.parsingStatus === "needs-user-input" ? (
+          <div
+            role="alert"
+            className="mt-3 rounded-xl border-2 border-rose-600 bg-rose-50 px-3 py-3 text-sm font-semibold text-rose-950"
+          >
+            Something is still missing. Check route, departure time (YYYY-MM-DD HH:MM), and timezone — then tap{" "}
+            <strong>Save + accept</strong>.
+          </div>
         ) : null}
         <div className="mt-4 space-y-3 text-sm">
           <label className="block">
@@ -9623,11 +9672,12 @@ export default function TravelAssistantPage() {
         {deleteConfirmationDialog}
         {toast ? (
           <div
-            role="status"
-            aria-live="polite"
+            role={toastTone === "error" ? "alert" : "status"}
+            aria-live={toastTone === "error" ? "assertive" : "polite"}
             aria-atomic="true"
-            className="fixed bottom-20 right-4 z-50 max-w-sm rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-xl dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            className={toastPanelClassName(toastTone)}
           >
+            {toastTone === "error" ? "⚠ " : toastTone === "success" ? "✓ " : null}
             {toast}
           </div>
         ) : null}
@@ -10513,15 +10563,12 @@ export default function TravelAssistantPage() {
 
       {toast ? (
         <div
-          role="status"
-          aria-live="polite"
+          role={toastTone === "error" ? "alert" : "status"}
+          aria-live={toastTone === "error" ? "assertive" : "polite"}
           aria-atomic="true"
-          className={`fixed bottom-4 right-4 z-50 max-w-sm rounded-lg px-3 py-2 text-sm shadow-xl ${
-            guidanceTone === "subtle"
-              ? "border border-slate-600 bg-slate-900/90 text-slate-100"
-              : "bg-slate-100 font-medium text-slate-900"
-          }`}
+          className={toastPanelClassName(toastTone)}
         >
+          {toastTone === "error" ? "⚠ " : toastTone === "success" ? "✓ " : null}
           {toast}
         </div>
       ) : null}
