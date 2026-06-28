@@ -302,6 +302,17 @@ export function HotelDetailSheet({
               </div>
             )}
 
+            {book.bookingComUrl ? (
+              <a
+                href={book.bookingComUrl}
+                target="_blank"
+                rel="noopener noreferrer sponsored"
+                className="flex w-full items-center justify-center rounded-xl border border-indigo-200 bg-indigo-50 py-2.5 text-sm font-bold text-indigo-900 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-100"
+              >
+                Also compare on Booking.com →
+              </a>
+            ) : null}
+
             {kepiBookable && !checkoutOpen ? (
               <button
                 type="button"

@@ -241,6 +241,8 @@ interface ReservationDraft {
   checkOutDate?: string;
   roomType?: string;
   trainNumber?: string;
+  /** City searched when hotel was saved from Kepi hotel search. */
+  hotelSearchCity?: string;
 }
 
 interface Reservation extends ReservationDraft {
@@ -4256,6 +4258,7 @@ export default function TravelAssistantPage() {
             location: reservation.location,
             localTime: reservation.localTime,
             checkOutDate: reservation.checkOutDate,
+            hotelSearchCity: reservation.hotelSearchCity,
           })),
         manualSegments: activeTripId ? manualStaySegmentsByTrip[activeTripId] ?? [] : [],
         stayDecisions: activeTripId ? tripStayDecisionsByTrip[activeTripId] ?? {} : {},
@@ -4305,6 +4308,7 @@ export default function TravelAssistantPage() {
             provider: reservation.provider,
             localTime: reservation.localTime,
             checkOutDate: reservation.checkOutDate,
+            hotelSearchCity: reservation.hotelSearchCity,
           })),
       ),
     [consumerReservationsSorted, effectiveStopRanges],
@@ -5417,6 +5421,11 @@ export default function TravelAssistantPage() {
 
   const handleAddHotelFromSearch = useCallback(
     (hotel: HotelSearchResult): void => {
+      const searchCity =
+        hotelSearchSegment?.city ||
+        effectiveHotelSearchDefaults.city ||
+        hotel.city ||
+        "";
       const reservation: Reservation = {
         id: nextId("res"),
         type: "hotel",
@@ -5424,7 +5433,8 @@ export default function TravelAssistantPage() {
         provider: hotel.chainName?.trim() || "Hotel",
         localTime: `${hotel.checkIn}T15:00:00`,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Etc/UTC",
-        location: hotel.address ? `${hotel.address}, ${hotel.city}` : hotel.city,
+        location: hotel.address ? `${hotel.address}, ${searchCity}` : searchCity,
+        hotelSearchCity: searchCity,
         confirmationCode: "",
         assignedTo: [selectedFamilyMember.id],
         stage: "readiness",
@@ -5468,7 +5478,7 @@ export default function TravelAssistantPage() {
       setToast(`${hotel.name} added to your trip ✓`);
       setHotelSearchSegment(null);
     },
-    [activeTripId, pushUndoSnapshot, queueMutation, selectedFamilyMember.id, setToast, trips],
+    [activeTripId, effectiveHotelSearchDefaults.city, hotelSearchSegment?.city, pushUndoSnapshot, queueMutation, selectedFamilyMember.id, setToast, trips],
   );
 
   const handleImportParsedReservations = useCallback(

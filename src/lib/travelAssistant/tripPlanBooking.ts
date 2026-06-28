@@ -4,6 +4,7 @@ import type { FlightLegPlan, TripIntent } from "@/lib/decision/types";
 import type { StopDateRange } from "@/lib/decision/stopDates";
 import { mergeStopRanges, pickPrimaryStayPerCity } from "@/lib/travelAssistant/dayNoteStopRanges";
 import { formatHotelSearchCityLabel } from "@/lib/hotels/tripSearchContext";
+import { hotelReservationMatchesCity } from "@/lib/hotels/hotelStayMatch";
 import { parseDayIntentFromLines } from "@/lib/travelAssistant/dayPlanLines";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 
@@ -31,6 +32,7 @@ interface TripHotelInput {
   provider?: string;
   localTime?: string;
   checkOutDate?: string;
+  hotelSearchCity?: string;
 }
 
 interface TripFlightInput {
@@ -49,11 +51,10 @@ function hotelMatchesCity(
   cityName: string,
   formattedCity: string,
 ): boolean {
-  const blob = `${hotel.location ?? ""} ${hotel.title ?? ""} ${hotel.provider ?? ""}`.toLowerCase();
-  const keys = [cityName, formattedCity.split("(")[0]?.trim() ?? formattedCity]
-    .map((value) => value.toLowerCase())
-    .filter(Boolean);
-  return keys.some((key) => key.length >= 3 && blob.includes(key));
+  return (
+    hotelReservationMatchesCity(hotel, cityName) ||
+    hotelReservationMatchesCity(hotel, formattedCity)
+  );
 }
 
 function flightDateKey(flight: TripFlightInput): string | null {

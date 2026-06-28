@@ -1,5 +1,10 @@
 /** Resolve where the traveler should purchase — guide links, not Kepi checkout. */
 
+import {
+  appendGoogleHotelsAffiliateParams,
+  buildBookingComSearchUrl,
+} from "@/lib/hotels/hotelAffiliateLinks";
+
 const AIRLINE_HOME: Record<string, string> = {
   alaska: "https://www.alaskaair.com",
   "alaska airlines": "https://www.alaskaair.com",
@@ -171,10 +176,14 @@ export function buildGoogleHotelsUrl(input: {
   }
 
   if (destination) {
-    return `https://www.google.com/travel/hotels/${encodeURIComponent(destination)}?q=${encodeURIComponent(query)}`;
+    return appendGoogleHotelsAffiliateParams(
+      `https://www.google.com/travel/hotels/${encodeURIComponent(destination)}?q=${encodeURIComponent(query)}`,
+    );
   }
 
-  return `https://www.google.com/travel/hotels?q=${encodeURIComponent(query)}`;
+  return appendGoogleHotelsAffiliateParams(
+    `https://www.google.com/travel/hotels?q=${encodeURIComponent(query)}`,
+  );
 }
 
 function normalizeGoogleHotelsDestination(raw: string): string {
@@ -218,7 +227,7 @@ export function resolveHotelBookUrl(input: {
   checkOutDate: string;
   quotedPriceUsd?: number;
   quoteId?: string;
-}): { url: string; label: string } {
+}): { url: string; label: string; bookingComUrl?: string } {
   const googleUrl = buildGoogleHotelsUrl({
     propertyName: input.propertyName,
     destination: input.destination ?? input.location,
@@ -226,6 +235,13 @@ export function resolveHotelBookUrl(input: {
     checkInDate: input.checkInDate,
     checkOutDate: input.checkOutDate,
   });
+  const bookingComUrl =
+    buildBookingComSearchUrl({
+      destination: input.destination ?? input.location ?? "",
+      checkInDate: input.checkInDate,
+      checkOutDate: input.checkOutDate,
+      propertyName: input.propertyName,
+    }) ?? undefined;
   const isLiveQuote = Boolean(input.quoteId?.trim() && !input.quoteId.startsWith("est-"));
 
   if (isLiveQuote || input.quotedPriceUsd !== undefined) {
@@ -239,6 +255,7 @@ export function resolveHotelBookUrl(input: {
     return {
       url: googleUrl,
       label: `${shortName} on Google Hotels${priceBit} ↗`,
+      bookingComUrl,
     };
   }
 
@@ -247,11 +264,13 @@ export function resolveHotelBookUrl(input: {
     return {
       url: chainUrl,
       label: `Book on ${input.chainName?.split(" ")[0] ?? "chain"} ↗`,
+      bookingComUrl,
     };
   }
 
   return {
     url: googleUrl,
     label: "Search on Google Hotels ↗",
+    bookingComUrl,
   };
 }

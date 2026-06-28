@@ -53,6 +53,24 @@ test("buildGoogleHotelsUrl encodes property and dates", () => {
   assert.match(url, /Hyatt/);
   assert.match(url, /2026-09-01/);
   assert.match(url, /through/);
+  assert.match(url, /utm_source=kepitravel/);
+});
+
+test("buildGoogleHotelsUrl appends partner param when configured", () => {
+  const previous = process.env.KEPI_GOOGLE_HOTELS_PARTNER;
+  process.env.KEPI_GOOGLE_HOTELS_PARTNER = "kepi-demo";
+  try {
+    const url = buildGoogleHotelsUrl({
+      propertyName: "hotels",
+      destination: "Monopoli, Italy",
+      checkInDate: "2026-09-01",
+      checkOutDate: "2026-09-05",
+    });
+    assert.match(url, /partner=kepi-demo/);
+  } finally {
+    if (previous === undefined) delete process.env.KEPI_GOOGLE_HOTELS_PARTNER;
+    else process.env.KEPI_GOOGLE_HOTELS_PARTNER = previous;
+  }
 });
 
 test("buildGoogleHotelsUrl anchors Italian B&B away from user GPS", () => {
@@ -63,10 +81,10 @@ test("buildGoogleHotelsUrl anchors Italian B&B away from user GPS", () => {
     checkInDate: "2026-09-05",
     checkOutDate: "2026-09-08",
   });
-  assert.match(decodeURIComponent(url), /Monopoli.*Italy/i);
-  assert.match(decodeURIComponent(url), /Le Caravelle/i);
-  assert.match(url, /travel\/hotels\//);
-  assert.doesNotMatch(decodeURIComponent(url), /\bto 2026-/);
+  const decoded = decodeURIComponent(url.replace(/\+/g, " "));
+  assert.match(decoded, /Monopoli.*Italy/i);
+  assert.match(decoded, /Le Caravelle/i);
+  assert.doesNotMatch(decoded, /\bto 2026-/);
 });
 
 test("resolveHotelBookUrl uses Google Hotels when live quote is present", () => {

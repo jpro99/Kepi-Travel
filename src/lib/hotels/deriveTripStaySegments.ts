@@ -1,5 +1,6 @@
 import { formatHotelSearchCityLabel } from "@/lib/hotels/tripSearchContext";
 import { resolveHotelDestination } from "@/lib/hotels/resolveDestination";
+import { resolveHotelForStaySegment } from "@/lib/hotels/hotelStayMatch";
 import {
   classifyStayStop,
   resolveStayIntent,
@@ -53,6 +54,7 @@ export interface DeriveTripStaySegmentsInput {
     location?: string;
     localTime?: string;
     checkOutDate?: string;
+    hotelSearchCity?: string;
   }>;
   manualSegments?: TripStaySegmentInput[];
   /** Per-segment user decisions keyed by segment id. */
@@ -97,51 +99,11 @@ function flightMs(f: DeriveTripStaySegmentsInput["flights"][0], kind: "arrival" 
   return Number.isNaN(ms) ? null : ms;
 }
 
-function hotelCheckout(h: DeriveTripStaySegmentsInput["hotels"][0]): string | null {
-  return isoDate(h.checkOutDate);
-}
-
-function locationHaystack(h: DeriveTripStaySegmentsInput["hotels"][0]): string {
-  return `${h.location ?? ""} ${h.title ?? ""} ${h.provider ?? ""}`.toLowerCase();
-}
-
-function cityMatchesHotel(city: string, hotel: DeriveTripStaySegmentsInput["hotels"][0]): boolean {
-  const cityLower = city.toLowerCase();
-  const stem = cityLower.split(",")[0]?.trim() ?? cityLower;
-  const haystack = locationHaystack(hotel);
-  return haystack.includes(stem) || (stem.length >= 4 && haystack.includes(stem.slice(0, 4)));
-}
-
 function segmentBookingStatus(
   segment: TripStaySegmentInput,
   hotels: DeriveTripStaySegmentsInput["hotels"],
 ): Pick<TripStaySegment, "status" | "reservationId" | "reservationTitle"> {
-  for (const hotel of hotels) {
-    const checkIn = isoDate(hotel.localTime);
-    const checkOut = hotelCheckout(hotel) ?? (checkIn ? addDays(checkIn, 1) : null);
-    if (!checkIn || !checkOut) continue;
-    if (!cityMatchesHotel(segment.city, hotel)) continue;
-
-    const coversStart = checkIn <= segment.checkIn && checkOut > segment.checkIn;
-    const coversEnd = checkIn < segment.checkOut && checkOut >= segment.checkOut;
-    const fullyCovers = checkIn <= segment.checkIn && checkOut >= segment.checkOut;
-
-    if (fullyCovers) {
-      return {
-        status: "booked",
-        reservationId: hotel.id,
-        reservationTitle: hotel.title ?? hotel.provider ?? "Hotel",
-      };
-    }
-    if (coversStart || coversEnd) {
-      return {
-        status: "partial",
-        reservationId: hotel.id,
-        reservationTitle: hotel.title ?? hotel.provider ?? "Hotel",
-      };
-    }
-  }
-  return { status: "missing" };
+  return resolveHotelForStaySegment(segment, hotels);
 }
 
 function buildSegmentLabel(
@@ -292,7 +254,7 @@ export function segmentsNeedingHotel(segments: TripStaySegment[]): TripStaySegme
   return segments.filter(
     (segment) =>
       segment.stayIntent === "needs_hotel" &&
-      (segment.status === "missing" || segment.status === "partial"),
+      segment.status === "missing",
   );
 }
 

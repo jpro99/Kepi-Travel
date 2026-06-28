@@ -165,6 +165,28 @@ test("segmentsAwaitingDecision includes overnight layovers", () => {
   );
 });
 
+test("deriveTripStaySegments marks booked hotels with hotelSearchCity", () => {
+  const segments = deriveTripStaySegments({
+    tripDestination: "Monopoli, Italy",
+    tripStartDate: "2027-06-10",
+    tripEndDate: "2027-06-20",
+    flights: [],
+    hotels: [
+      {
+        id: "h1",
+        title: "Hyatt Centric Monopoli",
+        location: "Via Example 1",
+        localTime: "2027-06-12T15:00:00",
+        checkOutDate: "2027-06-18",
+        hotelSearchCity: "Monopoli, Italy",
+      },
+    ],
+  });
+
+  assert.equal(segments[0]?.status, "booked");
+  assert.equal(nextMissingStaySegment(segments), null);
+});
+
 test("deriveTripStaySegments marks booked hotels", () => {
   const segments = deriveTripStaySegments({
     tripDestination: "Monopoli, Italy",

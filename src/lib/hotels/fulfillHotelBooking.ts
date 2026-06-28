@@ -9,6 +9,7 @@ import {
   updatePendingHotelCheckout,
 } from "@/lib/hotels/hotelBookingStore";
 import { bookLiteApiPrebook } from "@/lib/providers/liteapi/bookHotel";
+import { recordHotelBookingAnalytics } from "@/lib/hotels/hotelBookingAnalytics";
 import { createTrip, getActiveTrip, updateTrip } from "@/lib/travelAssistant/tripStore";
 import type { SessionReservation } from "@/lib/travelAssistant/clientSessionState";
 import { generateId } from "@/lib/utils/generateId";
@@ -81,6 +82,18 @@ export async function fulfillHotelCheckout(input: {
   await updatePendingHotelCheckout(pending);
   await markHotelCheckoutFulfilled(input.stripeSessionId, bookingReference);
 
+  await recordHotelBookingAnalytics({
+    userId: input.userId,
+    hotelName: pending.hotel.name,
+    city: pending.hotel.city,
+    checkIn: pending.hotel.checkIn,
+    checkOut: pending.hotel.checkOut,
+    netTotalUsd: pending.netTotalUsd,
+    guestTotalUsd: pending.guestTotalUsd,
+    isMemberRate: pending.isMemberRate,
+    bookingReference,
+  }).catch(() => {});
+
   const reservation: SessionReservation = {
     id: generateId(),
     type: "hotel",
@@ -97,6 +110,7 @@ export async function fulfillHotelCheckout(input: {
     notes: `Booked via Kepi · ${pending.guestTotalUsd.toLocaleString()} ${pending.currency}`,
     source: "imported",
     checkOutDate: pending.hotel.checkOut,
+    hotelSearchCity: pending.hotel.city,
   };
 
   const activeTrip = await getActiveTrip(input.userId);
