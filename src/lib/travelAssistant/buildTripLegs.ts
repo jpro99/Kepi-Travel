@@ -3,14 +3,14 @@ import { buildFullTripDayKeys } from "@/lib/travelAssistant/tripTimelinePlanning
 
 export const TRAVEL_LEG_COLOR = "#4A6FA5";
 
+/** Stay legs cycle in order — visually distinct at a glance (see KEPI_DESIGN_LAW I8). */
 export const STAY_LEG_PALETTE = [
   "#C17F59",
-  "#2E9E8F",
-  "#4A7C59",
-  "#8B3A52",
+  "#2D8A6E",
   "#7B68C8",
   "#C4943A",
-  "#4A8B8B",
+  "#8B3A52",
+  "#2E9E8F",
 ] as const;
 
 export type TripLegType = "travel" | "stay";
@@ -468,12 +468,41 @@ export function formatLegChipRange(leg: BuiltTripLeg): string {
     new Date(`${key}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   if (leg.startDate === leg.endDate) return fmt(leg.startDate);
   const endFmt = new Date(`${leg.endDate}T12:00:00`).toLocaleDateString("en-US", { day: "numeric" });
-  return `${fmt(leg.startDate)}-${endFmt}`;
+  return `${fmt(leg.startDate)}–${endFmt}`;
 }
 
+/** Hotel-style nights: checkout − check-in in whole days (not inclusive day count). */
 export function countNights(start: string, end: string): number {
   const ms = Date.parse(`${end}T12:00:00Z`) - Date.parse(`${start}T12:00:00Z`);
-  return Math.max(1, Math.round(ms / 86_400_000));
+  const diff = Math.round(ms / 86_400_000);
+  if (diff <= 0) return 1;
+  return diff;
+}
+
+export function flightDedupeKey(f: {
+  flightNumber?: string;
+  flightDepartureTime?: string;
+  localTime: string;
+}): string {
+  const fn = (f.flightNumber ?? "").trim().toUpperCase();
+  const dep = (f.flightDepartureTime ?? f.localTime ?? "").trim();
+  return `${fn}|${dep}`;
+}
+
+export function dedupeFlights<T extends {
+  flightNumber?: string;
+  flightDepartureTime?: string;
+  localTime: string;
+}>(flights: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const f of flights) {
+    const key = flightDedupeKey(f);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(f);
+  }
+  return out;
 }
 
 export function legColorForDate(model: TripLegCalendarModel, dateKey: string): string | null {

@@ -61,6 +61,12 @@ function isToday(dateKey: string): boolean {
   return dateKey === dateKeyFromParts(today.getFullYear(), today.getMonth(), today.getDate());
 }
 
+function cellSubLabel(cell: DayLegCell | null): string | null {
+  if (!cell || cell.kind === "empty") return null;
+  if (cell.kind === "travel" || cell.flightSummary) return "✈";
+  return cell.cityName?.split(" ")[0] ?? null;
+}
+
 function CalendarCell({
   cell,
   dayNumber,
@@ -83,15 +89,16 @@ function CalendarCell({
   const filled = cell && cell.kind !== "empty";
   const pos = ribbonPosition === "none" ? "none" : ribbonPosition;
   const radiusClass = filled ? ribbonRadiusClass(pos) : "rounded-none";
+  const subLabel = cellSubLabel(cell);
 
   return (
     <button
       type="button"
       onClick={onSelect}
-      className={`relative flex min-h-[52px] flex-col items-center justify-center transition ${radiusClass} ${
+      className={`relative flex min-h-[72px] flex-col items-start justify-start p-2.5 transition ${radiusClass} ${
         filled ? "text-white" : inTripWindow ? "text-[#4A5568]" : "text-[#4A5568]/50"
       } ${isHighlightedLeg && !isSelected ? "ring-2 ring-white ring-offset-0" : ""} ${
-        isTodayCell ? "font-bold shadow-[0_0_0_2px_#fff,0_0_0_6px_rgba(255,255,255,0.3)]" : ""
+        isTodayCell ? "shadow-[0_0_0_2px_#fff,0_0_0_6px_rgba(255,255,255,0.3)]" : ""
       } ${isSelected ? "ring-2 ring-[#f4c95d]" : ""}`}
       style={
         cell && filled
@@ -100,11 +107,16 @@ function CalendarCell({
       }
     >
       {cell?.kind === "transition" ? (
-        <span className="pointer-events-none absolute inset-y-0 left-1/2 z-10 -translate-x-1/2 text-[10px] text-white">
+        <span className="pointer-events-none absolute inset-y-0 left-1/2 z-10 flex -translate-x-1/2 items-center text-xs text-white">
           ✈
         </span>
       ) : null}
-      <span className={`text-sm font-bold ${isTodayCell ? "font-extrabold" : ""}`}>{dayNumber}</span>
+      <span className={`text-[20px] font-bold leading-none ${isTodayCell ? "font-extrabold" : ""}`}>
+        {dayNumber}
+      </span>
+      {subLabel && cell?.kind !== "transition" ? (
+        <span className="mt-auto max-w-full truncate text-[10px] font-semibold text-white/60">{subLabel}</span>
+      ) : null}
     </button>
   );
 }
@@ -195,6 +207,12 @@ function DayDetailPanel({
   );
 }
 
+function ganttLabel(leg: BuiltTripLeg, nights: number): string {
+  if (leg.type === "travel") return "✈";
+  if (nights <= 2) return leg.label.split(" ")[0]?.slice(0, 3).toUpperCase() ?? leg.label;
+  return `${leg.label.split(" ")[0]?.toUpperCase() ?? leg.label} ${nights}`;
+}
+
 export function TripLegCalendar({
   tripName,
   tripStartDate,
@@ -238,14 +256,7 @@ export function TripLegCalendar({
     [model.dayCells],
   );
   const totalTripDays = tripDayKeys.length;
-
-  const destinationStats = useMemo(() => {
-    const stays = model.legs.filter((l) => l.type === "stay");
-    return stays.map((leg) => ({
-      city: leg.label,
-      nights: countNights(leg.startDate, leg.endDate),
-    }));
-  }, [model.legs]);
+  const destinationCount = model.legs.filter((l) => l.type === "stay").length;
 
   const handleLegLegendClick = (leg: BuiltTripLeg): void => {
     onHighlightedLegIdChange?.(leg.id);
@@ -268,8 +279,8 @@ export function TripLegCalendar({
   ];
 
   return (
-    <section className="space-y-5">
-      <header className="rounded-3xl bg-[#0F1923] px-5 py-5 shadow-xl">
+    <section className="flex w-full min-h-[calc(100dvh-12rem)] flex-col space-y-5">
+      <header className="w-full rounded-3xl bg-[#0F1923] px-5 py-5 shadow-xl">
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f4c95d]">Calendar</p>
         <h1 className="mt-1 text-2xl font-extrabold text-white">{tripName}</h1>
         {tripStart && tripEnd ? (
@@ -279,7 +290,7 @@ export function TripLegCalendar({
         ) : null}
       </header>
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex w-full flex-wrap items-center justify-between gap-2">
         <div className="inline-flex rounded-2xl bg-[#162030] p-1">
           {(["month", "trip", "day"] as LegCalendarViewMode[]).map((mode) => (
             <button
@@ -318,17 +329,17 @@ export function TripLegCalendar({
       </div>
 
       {viewMode === "month" ? (
-        <div className="overflow-hidden rounded-3xl bg-[#0F1923] p-3 shadow-xl">
-          <div className="grid grid-cols-7 gap-1 pb-2">
+        <div className="w-full flex-1 overflow-hidden rounded-3xl bg-[#0F1923] p-6 shadow-xl">
+          <div className="grid grid-cols-7 gap-2 pb-2">
             {DAY_HEADERS.map((d) => (
               <div key={d} className="py-1 text-center text-[11px] font-semibold uppercase tracking-wider text-[#4A5568]">
                 {d}
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-7 gap-1 rounded-2xl bg-[#162030] p-2">
+          <div className="grid grid-cols-7 gap-2 rounded-2xl bg-[#162030] p-2">
             {monthCells.map((day, idx) => {
-              if (!day) return <div key={`blank-${idx}`} className="min-h-[52px]" />;
+              if (!day) return <div key={`blank-${idx}`} className="min-h-[72px]" />;
               const dateKey = dateKeyFromParts(year, month, day);
               const cell = model.dayCells.get(dateKey) ?? null;
               const inTrip = tripStart && tripEnd ? dateKey >= tripStart && dateKey <= tripEnd : false;
@@ -357,45 +368,39 @@ export function TripLegCalendar({
       ) : null}
 
       {viewMode === "trip" && tripStart && tripEnd ? (
-        <div className="rounded-3xl bg-[#0F1923] p-5 shadow-xl">
-          <div className="relative h-14 overflow-hidden rounded-xl bg-[#162030]">
+        <div className="w-full rounded-3xl bg-[#0F1923] p-6 shadow-xl">
+          <div className="relative h-[56px] w-full overflow-hidden rounded-xl bg-[#162030]">
             {model.legs.map((leg) => {
               const tripLen = totalTripDays || 1;
               const legKeys = tripDayKeys.filter((k) => k >= leg.startDate && k <= leg.endDate);
               const startIdx = tripDayKeys.indexOf(legKeys[0] ?? leg.startDate);
-              const widthPct = Math.max((legKeys.length / tripLen) * 100, leg.type === "travel" ? 3 : 6);
+              const widthPct = Math.max((legKeys.length / tripLen) * 100, leg.type === "travel" ? 2.5 : 5);
               const leftPct = startIdx >= 0 ? (startIdx / tripLen) * 100 : 0;
               const isTravel = leg.type === "travel";
+              const nights = countNights(leg.startDate, leg.endDate);
               return (
                 <button
                   key={leg.id}
                   type="button"
                   onClick={() => handleLegLegendClick(leg)}
-                  className={`absolute top-1 flex h-12 items-center justify-center overflow-hidden px-1 text-[10px] font-extrabold text-white transition hover:brightness-110 ${
+                  className={`absolute top-0 flex h-full items-center justify-center overflow-hidden px-1 text-[11px] font-extrabold text-white transition hover:brightness-110 ${
                     highlightedLegId === leg.id ? "ring-2 ring-white" : ""
-                  } ${isTravel ? "rounded-full" : "rounded-lg"}`}
+                  } ${isTravel ? "rounded-full" : "rounded-md"}`}
                   style={{
                     left: `${leftPct}%`,
                     width: `${widthPct}%`,
-                    backgroundColor: `${leg.color}E6`,
+                    backgroundColor: leg.color,
                   }}
                   title={leg.label}
                 >
-                  {isTravel && legKeys.length <= 2 ? "✈" : <span className="truncate px-1">{leg.label}</span>}
+                  <span className="truncate px-1">{ganttLabel(leg, nights)}</span>
                 </button>
               );
             })}
           </div>
-          <div className="mt-4 flex flex-wrap justify-center gap-4 text-center text-xs text-white/80">
-            {destinationStats.map((s) => (
-              <span key={s.city}>
-                {s.city}: <strong className="text-white">{s.nights} nights</strong>
-              </span>
-            ))}
-            <span>
-              Total: <strong className="text-white">{totalTripDays} days</strong>
-            </span>
-          </div>
+          <p className="mt-4 text-center text-sm text-white/80">
+            {totalTripDays} days total · {destinationCount} destinations
+          </p>
         </div>
       ) : null}
 
@@ -410,20 +415,21 @@ export function TripLegCalendar({
         <p className="text-center text-sm text-[#4A5568]">Select a colored day on the month view.</p>
       ) : null}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="mt-4 flex w-full flex-wrap gap-2">
         {model.legs.map((leg) => (
           <button
             key={leg.id}
             type="button"
             onClick={() => handleLegLegendClick(leg)}
-            className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium text-white transition ${
+            className={`inline-flex min-h-8 items-center gap-2 rounded-full px-3.5 py-2 text-[13px] font-semibold text-white transition ${
               highlightedLegId === leg.id ? "ring-2 ring-white" : ""
             }`}
             style={{ backgroundColor: `${leg.color}33` }}
           >
             <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: leg.color }} />
-            {leg.type === "travel" ? "✈ " : null}
-            {leg.label} · {formatLegChipRange(leg)}
+            <span>
+              {leg.type === "travel" ? "✈ Home" : leg.label} {formatLegChipRange(leg)}
+            </span>
           </button>
         ))}
       </div>

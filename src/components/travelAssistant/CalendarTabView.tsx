@@ -1,6 +1,7 @@
 "use client";
 
 import { TripLegCalendar } from "@/components/travelAssistant/TripLegCalendar";
+
 interface CalendarTabViewProps {
   tripName: string;
   tripStartDate: string | null;
@@ -24,33 +25,13 @@ interface CalendarTabViewProps {
   onSelectedDateKeyChange?: (dateKey: string) => void;
   onHighlightedLegIdChange?: (legId: string | null) => void;
   onScrollToTimeline?: (dateKey: string) => void;
-  onPlanHotel?: (dateKey: string, city: string) => void;}
+  onPlanHotel?: (dateKey: string, city: string) => void;
+}
 
-export function CalendarTabView({
-  tripName,
-  tripStartDate,
-  tripEndDate,
-  reservations,
-  selectedDateKey,
-  highlightedLegId,
-  onSelectedDateKeyChange,
-  onHighlightedLegIdChange,
-  onScrollToTimeline,
-  onReservationTap,
-  onPlanHotel,
-}: CalendarTabViewProps) {
+export function CalendarTabView(props: CalendarTabViewProps) {
   return (
-    <TripLegCalendar
-      tripName={tripName}
-      tripStartDate={tripStartDate}
-      tripEndDate={tripEndDate}
-      reservations={reservations}
-      selectedDateKey={selectedDateKey}
-      highlightedLegId={highlightedLegId}
-      onSelectedDateKeyChange={onSelectedDateKeyChange}
-      onHighlightedLegIdChange={onHighlightedLegIdChange}
-      onScrollToTimelineDate={onScrollToTimeline}
-      onPlanHotel={onPlanHotel}
-    />
+    <div className="w-full">
+      <TripLegCalendar {...props} onScrollToTimelineDate={props.onScrollToTimeline} />
+    </div>
   );
 }

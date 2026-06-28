@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ItineraryDayDrawer } from "@/components/travelAssistant/ItineraryDayDrawer";
 import {
-  airportToCity,
-  cityToCountry,
   buildTripLegCalendarModel,
+  countNights,
+  dedupeFlights,
   type BuiltTripLeg,
+  cityToCountry,
 } from "@/lib/travelAssistant/buildTripLegs";
-import { cityPhotoUrl } from "@/lib/travelAssistant/cityPhotos";
-import { fetchCityWeather, type CityWeatherSnapshot } from "@/lib/travelAssistant/cityWeather";
+import { cityPhotoPicsumUrl, cityPhotoSourceUrl } from "@/lib/travelAssistant/cityPhotos";
+import { fetchCityWeatherForecast, type DailyWeather } from "@/lib/travelAssistant/cityWeather";
 import { buildGapDateKeys, computeItineraryDayStatus } from "@/lib/travelAssistant/itineraryDayStatus";
 import { buildFullTripDayKeys } from "@/lib/travelAssistant/tripTimelinePlanning";
 import type { TripActionItem } from "@/lib/travelAssistant/tripActionItems";
@@ -49,7 +50,7 @@ interface ItineraryTimelineProps {
   missionItems?: TripActionItem[];
   onMissionAction?: (item: TripActionItem) => void;
   dayNotes: Record<string, string>;
-}
+};
 
 function reservationDateKey(reservation: TimelineReservation): string {
   if (reservation.type === "flight" && reservation.flightDate) return reservation.flightDate.slice(0, 10);
@@ -89,6 +90,10 @@ function flightDuration(dep: string | undefined, arr: string | undefined): strin
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+function formatTimeRange(dep: string, arr: string | undefined): string {
+  return `${extractTime(dep)} → ${extractTime(arr)}`;
+}
+
 function statusDotClass(args: {
   isTravel: boolean;
   status: ReturnType<typeof computeItineraryDayStatus>;
@@ -114,22 +119,26 @@ function missionsForCity(missions: TripActionItem[], city: string): TripActionIt
   });
 }
 
-function WeatherLine({ city, dateKey }: { city: string; dateKey: string }) {
-  const [weather, setWeather] = useState<CityWeatherSnapshot | null>(null);
+function CityPhotoBackground({ city }: { city: string }) {
+  const [src, setSrc] = useState(() => cityPhotoSourceUrl(city));
   useEffect(() => {
-    let cancelled = false;
-    void fetchCityWeather(city, dateKey).then((w) => {
-      if (!cancelled) setWeather(w);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [city, dateKey]);
-  if (!weather) return <span className="text-slate-400">…</span>;
+    setSrc(cityPhotoSourceUrl(city));
+  }, [city]);
   return (
-    <span className="text-[13px] text-slate-600">
-      {weather.icon} {weather.highTemp}
-    </span>
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt=""
+        className="hidden"
+        onError={() => setSrc(cityPhotoPicsumUrl(city))}
+      />
+      <div
+        className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-[0.15]"
+        style={{ backgroundImage: `url(${src})` }}
+        aria-hidden
+      />
+    </>
   );
 }
 
@@ -144,12 +153,13 @@ function TravelCard({
   gapDateKeys: Set<string>;
   onReservationTap: (id: string) => void;
 }) {
-  const hasWarning = flights.some((f) => gapDateKeys.has(reservationDateKey(f)));
+  const uniqueFlights = dedupeFlights(flights);
+  const hasWarning = uniqueFlights.some((f) => gapDateKeys.has(reservationDateKey(f)));
 
   return (
     <article
       className="overflow-hidden rounded-2xl bg-[#0F1923] shadow-lg"
-      style={{ borderLeft: "4px solid #4A6FA5" }}
+      style={{ borderLeft: "3px solid #4A6FA5" }}
     >
       <div className="px-5 py-4">
         <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[#4A6FA5]">
@@ -161,7 +171,7 @@ function TravelCard({
           <p className="mt-2 text-xs font-semibold text-amber-400">⚠ Check connection timing</p>
         ) : null}
         <ul className="mt-4 space-y-3">
-          {flights.map((f) => (
+          {uniqueFlights.map((f) => (
             <li key={f.id}>
               <button
                 type="button"
@@ -190,10 +200,6 @@ function TravelCard({
   );
 }
 
-function formatTimeRange(dep: string, arr: string | undefined): string {
-  return `${extractTime(dep)} → ${extractTime(arr)}`;
-}
-
 function DestinationBlock({
   leg,
   dayKeys,
@@ -208,7 +214,6 @@ function DestinationBlock({
   onMissionAction,
   onSelectedDateKeyChange,
   onPlanHotel,
-  onReservationTap,
   onEditDay,
   blockRef,
 }: {
@@ -225,15 +230,25 @@ function DestinationBlock({
   onMissionAction?: (item: TripActionItem) => void;
   onSelectedDateKeyChange?: (dateKey: string) => void;
   onPlanHotel?: (dateKey: string, city: string) => void;
-  onReservationTap: (id: string) => void;
   onEditDay: (dateKey: string) => void;
   blockRef: (node: HTMLDivElement | null) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [forecast, setForecast] = useState<Map<string, DailyWeather>>(new Map());
   const cityMissions = missionsForCity(missions, leg.label);
-  const photo = cityPhotoUrl(leg.label);
-  const nights = dayKeys.length;
-  const country = cityToCountry(leg.label) || "";
+  const nights = countNights(leg.startDate, leg.endDate);
+  const country = (cityToCountry(leg.label) || "Destination").toUpperCase();
+
+  useEffect(() => {
+    if (!expanded) return;
+    let cancelled = false;
+    void fetchCityWeatherForecast(leg.label).then((map) => {
+      if (!cancelled) setForecast(map);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [expanded, leg.label]);
 
   const hotelForDay = (dateKey: string): TimelineReservation | null => {
     for (const r of reservations) {
@@ -245,34 +260,50 @@ function DestinationBlock({
     return null;
   };
 
+  const weatherForDay = (dateKey: string): DailyWeather | null => {
+    const direct = forecast.get(dateKey);
+    if (direct) return direct;
+    const keys = [...forecast.keys()].sort();
+    if (keys.length === 0) return null;
+    const idx = Math.min(
+      Math.max(
+        0,
+        Math.round(
+          (Date.parse(`${dateKey}T12:00:00Z`) - Date.parse(`${keys[0]!}T12:00:00Z`)) / 86_400_000,
+        ),
+      ),
+      keys.length - 1,
+    );
+    return forecast.get(keys[idx]!) ?? null;
+  };
+
   return (
     <article
       ref={blockRef}
-      className="overflow-hidden rounded-2xl shadow-sm ring-1 ring-black/[0.04]"
-      style={{ borderLeft: `4px solid ${leg.color}` }}
+      className="overflow-hidden rounded-2xl bg-[#FAFAF8] shadow-sm ring-1 ring-black/[0.04]"
+      style={{ borderLeft: `3px solid ${leg.color}` }}
     >
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="relative w-full overflow-hidden px-5 py-4 text-left"
-        style={{ backgroundColor: `${leg.color}1A` }}
+        className="relative flex w-full items-center gap-3 overflow-hidden px-5 py-5 text-left"
       >
-        <div
-          className="pointer-events-none absolute inset-0 opacity-[0.15]"
-          style={{
-            backgroundImage: `url(${photo})`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-          }}
-          aria-hidden
-        />
-        <div className="relative">
-          <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">
-            {country || "Destination"} · {nights} {nights === 1 ? "night" : "nights"}
+        <CityPhotoBackground city={leg.label} />
+        <div className="relative min-w-0 flex-1">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+            {country} · {nights} {nights === 1 ? "NIGHT" : "NIGHTS"}
           </p>
-          <h3 className="text-lg font-bold text-slate-900">{leg.label}</h3>
-          <p className="mt-0.5 text-sm text-slate-600">{formatDateRange(leg.startDate, leg.endDate)}</p>
+          <h3 className="mt-0.5 text-2xl font-extrabold leading-tight text-[#1A1A2E]">{leg.label}</h3>
+          <p className="mt-1 text-[13px] text-slate-500">{formatDateRange(leg.startDate, leg.endDate)}</p>
         </div>
+        <span
+          className={`relative shrink-0 text-slate-400 transition-transform duration-200 ease-in-out ${
+            expanded ? "rotate-180" : ""
+          }`}
+          aria-hidden
+        >
+          ▼
+        </span>
       </button>
 
       {cityMissions.length > 0 && onMissionAction ? (
@@ -292,76 +323,83 @@ function DestinationBlock({
         </div>
       ) : null}
 
-      {expanded ? (
-        <ul className="divide-y divide-slate-100 bg-white">
-          {dayKeys.map((dateKey, idx) => {
-            const hotel = hotelForDay(dateKey);
-            const status = computeItineraryDayStatus({
-              dateKey,
-              dayNotes,
-              stopRanges: [],
-              tripStartDate,
-              tripEndDate,
-              reservations,
-              gapDateKeys,
-            });
-            const dotClass = statusDotClass({ isTravel: false, status });
-            const isSelected = selectedDateKey === dateKey;
-            const isLegHighlighted = highlightedLegId === leg.id;
+      <div
+        className="grid transition-[grid-template-rows] duration-200 ease-in-out"
+        style={{ gridTemplateRows: expanded ? "1fr" : "0fr" }}
+      >
+        <div className="overflow-hidden">
+          <ul className="divide-y divide-slate-100 bg-white">
+            {dayKeys.map((dateKey, idx) => {
+              const hotel = hotelForDay(dateKey);
+              const status = computeItineraryDayStatus({
+                dateKey,
+                dayNotes,
+                stopRanges: [],
+                tripStartDate,
+                tripEndDate,
+                reservations,
+                gapDateKeys,
+              });
+              const dotClass = statusDotClass({ isTravel: false, status });
+              const isSelected = selectedDateKey === dateKey;
+              const isLegHighlighted = highlightedLegId === leg.id;
+              const wx = weatherForDay(dateKey);
 
-            return (
-              <li key={dateKey}>
-                <button
-                  type="button"
-                  onClick={() => onSelectedDateKeyChange?.(dateKey)}
-                  className={`flex h-10 w-full items-center gap-3 px-4 text-left transition ${
-                    isSelected || isLegHighlighted ? "bg-slate-50 ring-1 ring-inset ring-[#f4c95d]/40" : "hover:bg-slate-50/80"
-                  }`}
-                >
-                  {dotClass ? (
-                    <span className={`h-2 w-2 shrink-0 rounded-full ${dotClass}`} aria-hidden />
-                  ) : (
-                    <span className="h-2 w-2 shrink-0" aria-hidden />
-                  )}
-                  <span className="w-16 shrink-0 text-[12px] font-semibold uppercase tracking-wide text-slate-500">
-                    Day {idx + 1}
-                  </span>
-                  <span className="w-28 shrink-0 text-xs text-slate-600">{formatDayLabel(dateKey)}</span>
-                  <span className="min-w-0 flex-1">
-                    <WeatherLine city={leg.label} dateKey={dateKey} />
-                  </span>
-                  {hotel ? (
-                    <span className="max-w-[8rem] truncate text-xs font-medium text-slate-700">
-                      {hotel.provider || hotel.title}
+              return (
+                <li key={dateKey}>
+                  <button
+                    type="button"
+                    onClick={() => onSelectedDateKeyChange?.(dateKey)}
+                    className={`flex min-h-10 w-full items-center gap-3 px-4 py-2 text-left transition ${
+                      isSelected || isLegHighlighted
+                        ? "bg-slate-50 ring-1 ring-inset ring-[#f4c95d]/40"
+                        : "hover:bg-slate-50/80"
+                    }`}
+                  >
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      {dotClass ? (
+                        <span className={`h-2 w-2 shrink-0 rounded-full ${dotClass}`} aria-hidden />
+                      ) : (
+                        <span className="h-2 w-2 shrink-0" aria-hidden />
+                      )}
+                      <span className="shrink-0 text-[12px] font-semibold uppercase tracking-wide text-slate-500">
+                        Day {idx + 1}
+                      </span>
+                      <span className="shrink-0 text-xs text-slate-600">{formatDayLabel(dateKey)}</span>
+                    </div>
+                    <span className="shrink-0 text-[13px] text-slate-600">
+                      {wx ? (
+                        <>
+                          {wx.icon} {wx.highTemp}
+                        </>
+                      ) : (
+                        <span className="text-slate-400">…</span>
+                      )}
                     </span>
-                  ) : (
+                    {hotel ? (
+                      <span className="max-w-[9rem] shrink-0 truncate text-xs font-medium text-slate-700">
+                        {hotel.provider || hotel.title}
+                      </span>
+                    ) : (
+                      <span className="shrink-0 text-xs font-semibold text-amber-600">No hotel</span>
+                    )}
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onPlanHotel?.(dateKey, leg.label);
+                        onEditDay(dateKey);
                       }}
-                      className="text-xs font-semibold text-amber-600"
+                      className="shrink-0 text-[10px] text-slate-400 hover:text-slate-600"
                     >
-                      Book hotel →
+                      Edit
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onEditDay(dateKey);
-                    }}
-                    className="text-[10px] text-slate-400 hover:text-slate-600"
-                  >
-                    Edit
                   </button>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </div>
     </article>
   );
 }
@@ -401,8 +439,10 @@ export function ItineraryTimeline({
       const dayKeys = allDayKeys.filter((k) => k >= leg.startDate && k <= leg.endDate);
       const flights =
         leg.type === "travel"
-          ? reservations.filter(
-              (r) => r.type === "flight" && dayKeys.includes(reservationDateKey(r)),
+          ? dedupeFlights(
+              reservations.filter(
+                (r) => r.type === "flight" && dayKeys.includes(reservationDateKey(r)),
+              ),
             )
           : [];
       return { leg, dayKeys, flights };
@@ -435,13 +475,12 @@ export function ItineraryTimeline({
   const editNote = editRowDateKey ? dayNotes[editRowDateKey] ?? "" : "";
   const editReservations = editRowDateKey
     ? reservations.filter((r) => {
-        const key = reservationDateKey(r);
         if (r.type === "hotel") {
           const start = r.localTime.trim().slice(0, 10);
           const end = r.checkOutDate?.slice(0, 10) ?? start;
           return start <= editRowDateKey && editRowDateKey <= end;
         }
-        return key === editRowDateKey;
+        return reservationDateKey(r) === editRowDateKey;
       })
     : [];
 
@@ -475,7 +514,6 @@ export function ItineraryTimeline({
             onMissionAction={onMissionAction}
             onSelectedDateKeyChange={onSelectedDateKeyChange}
             onPlanHotel={onPlanHotel}
-            onReservationTap={onReservationTap}
             onEditDay={setEditDateKey}
             blockRef={(node) => {
               if (node) blockRefs.current.set(block.leg.id, node);

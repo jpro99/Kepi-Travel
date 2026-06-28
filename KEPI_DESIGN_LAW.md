@@ -201,6 +201,20 @@ Every day within the trip window shows context: travel days show flight cards; s
 **I11 — Plan tab uses destination blocks**  
 The Plan timeline renders travel cards (navy, departure-board typography) and collapsible destination blocks (leg-colored left border, photo header, day sub-rows with weather + hotel). Mission cards for unbooked hotels appear inside the relevant destination block — not stacked above the timeline.
 
+**I12 — No duplicate flights in travel blocks**  
+Duplicate flights must never appear. Always deduplicate by `flightNumber` + `departureTime` before rendering travel cards.
+
+**Test:** `src/lib/travelAssistant/buildTripLegs.test.ts`
+
+**I13 — Destination block photos required**  
+Destination blocks must always show city photos at 15% opacity. Primary: `source.unsplash.com`; if it fails, use `picsum.photos/seed/{city}` fallback.
+
+**I14 — Destination border matches calendar leg color**  
+Left border color on destination blocks must always match the calendar leg color for that destination (3px solid, same hex as `buildTripLegs` assignment).
+
+**I15 — Stay night counts use checkout math**  
+Display nights as `(checkOut − checkIn)` in whole days — not inclusive calendar day count. A stay Sep 12–Sep 24 shows 12 nights, not 13.
+
 **I9 — Calendar is its own tab**  
 The leg-colored calendar lives on the **Calendar** consumer tab at full width — not split beside the Plan timeline on the same view.
 
@@ -266,6 +280,6 @@ Resend emails use `@react-email/render` → `html:` — never `react:` prop or `
 | G8 | `src/lib/travelAssistant/dayPlanLines.test.ts` |
 | G10 | `src/lib/travelAssistant/tripActionItems.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
-| I8, I10 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
+| I8, I10, I12, I15 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
 
 New laws must add a row here when a test exists.
