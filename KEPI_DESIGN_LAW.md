@@ -181,14 +181,22 @@ When a more accurate GPS reading arrives (e.g. house after Wi‑Fi placed the pi
 **I1 — Plan is a first-class tab**  
 Day-by-day planning lives on the **Plan** (`itinerary`) consumer tab — not a hidden sidebar. Trip tab stays operational (countdown, Next Up); Plan tab owns timeline + calendar.
 
-**I2 — Vertical timeline, collapsed by default**  
-Each trip day is one collapsed row: date, one-line summary, status dot. Tap opens an edit drawer — no column-table spreadsheet layout.
+**I2 — Vertical timeline, inline expand**  
+Each trip day is one collapsed row. Tap expands details inline below the row — not a modal. Full editing opens only via **Edit plan**.
 
 **I3 — Status dots are deterministic**  
 Gray = empty · Emerald = covered · Amber = needs booking · Red = gap/integrity issue on that day.
 
-**I4 — Calendar syncs with timeline**  
-Selecting a day on the calendar scrolls/highlights the same day on the timeline (shared `selectedDateKey`).
+**I4 — Calendar and timeline stay in sync**  
+Active day and highlighted leg sync via shared `selectedDateKey` / `highlightedLegId` in the travel-assistant shell. Tapping a calendar day scrolls the Plan timeline; legend clicks jump to Plan and scroll to the leg start.
+
+**I8 — Calendar leg colors from trip data**  
+Leg colors are derived from `buildTripLegModel()` — chronological destination legs from stay cities and reservations. Never hardcode colors to specific city names.
+
+**Test:** `src/lib/travelAssistant/tripLegColors.test.ts`
+
+**I9 — Calendar is its own tab**  
+The leg-colored calendar lives on the **Calendar** consumer tab at full width — not split beside the Plan timeline on the same view.
 
 **I5 — Mission cards for unbooked stays**  
 Unbooked hotel gaps render as photo-backed mission cards with one gold CTA — not inline to-do rows.
@@ -251,5 +259,6 @@ Resend emails use `@react-email/render` → `html:` — never `react:` prop or `
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |
 | G8 | `src/lib/travelAssistant/dayPlanLines.test.ts` |
 | G10 | `src/lib/travelAssistant/tripActionItems.test.ts` |
+| I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 
 New laws must add a row here when a test exists.

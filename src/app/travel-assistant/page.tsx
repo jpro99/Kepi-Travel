@@ -120,6 +120,7 @@ import {
 } from "@/components/travelAssistant/ManualReservationEntryModal";
 import { useItineraryPanelPrefs } from "@/components/travelAssistant/TripItineraryPanel";
 import { ItineraryTabView } from "@/components/travelAssistant/ItineraryTabView";
+import { CalendarTabView } from "@/components/travelAssistant/CalendarTabView";
 import { NextUpCard } from "@/components/travelAssistant/NextUpCard";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
@@ -1965,6 +1966,9 @@ export default function TravelAssistantPage() {
   }, []);
   const [manualReservationDefaultDateTime, setManualReservationDefaultDateTime] = useState<string | null>(null);
   const itineraryPrefs = useItineraryPanelPrefs(activeTripId);
+  const [itinerarySelectedDateKey, setItinerarySelectedDateKey] = useState<string | null>(null);
+  const [itineraryHighlightedLegId, setItineraryHighlightedLegId] = useState<string | null>(null);
+  const [itineraryScrollToDateKey, setItineraryScrollToDateKey] = useState<string | null>(null);
   const [travelStyleProfile, setTravelStyleProfile] = useState<TravelStyleProfile | null>(null);
   const [travelStyleQuizOpen, setTravelStyleQuizOpen] = useState(false);
   const travelStyleFetchedRef = useRef(false);
@@ -2321,7 +2325,7 @@ export default function TravelAssistantPage() {
     const timeout = window.setTimeout(() => {
       const params = new URLSearchParams(window.location.search);
       const tab = params.get("tab");
-      if (tab === "trip" || tab === "itinerary" || tab === "flights" || tab === "hotels" || tab === "map" || tab === "more") {
+      if (tab === "trip" || tab === "itinerary" || tab === "calendar" || tab === "flights" || tab === "hotels" || tab === "map" || tab === "more") {
         setConsumerTab(tab);
       }
       const gmailStatus = params.get("gmail");
@@ -4274,6 +4278,12 @@ export default function TravelAssistantPage() {
     const currentStartDate = activeTrip?.startDate?.trim() ?? "";
     return currentStartDate || null;
   }, [activeTrip?.startDate, derivedTripStartDate]);
+
+  useEffect(() => {
+    const start = (consumerTripStartDate ?? activeTrip?.startDate)?.slice(0, 10) ?? null;
+    if (!start) return;
+    setItinerarySelectedDateKey((current) => current ?? start);
+  }, [activeTrip?.startDate, consumerTripStartDate]);
 
   const hotelSearchDefaults = useMemo(
     () =>
@@ -8590,6 +8600,20 @@ export default function TravelAssistantPage() {
     </>
   );
 
+  const handleItineraryDateSelect = useCallback((dateKey: string): void => {
+    setItinerarySelectedDateKey(dateKey);
+    setItineraryScrollToDateKey(null);
+  }, []);
+
+  const handleCalendarJumpToTimeline = useCallback(
+    (dateKey: string): void => {
+      setItinerarySelectedDateKey(dateKey);
+      setItineraryScrollToDateKey(dateKey);
+      navigateToConsumerTab("itinerary");
+    },
+    [navigateToConsumerTab],
+  );
+
   const handleItineraryGapAction = useCallback(
     (tab: string): void => {
       if (tab === "reservations") {
@@ -9218,13 +9242,16 @@ export default function TravelAssistantPage() {
             </section>
           ) : consumerTab === "itinerary" ? (
             <ItineraryTabView
-              tripId={activeTripId}
               tripName={activeTrip?.name ?? "Your trip"}
               tripStartDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
               tripEndDate={activeTrip?.endDate ?? null}
               reservations={consumerReservationsSorted}
               dayNotes={itineraryPrefs.dayNotes}
               stopRanges={effectiveStopRanges}
+              selectedDateKey={itinerarySelectedDateKey}
+              highlightedLegId={itineraryHighlightedLegId}
+              scrollToDateKey={itineraryScrollToDateKey}
+              onSelectedDateKeyChange={handleItineraryDateSelect}
               onDayNoteChange={itineraryPrefs.updateDayNote}
               onPlanDay={handlePlanDay}
               onReservationTap={(id) => openDrawer("reservation", id)}
@@ -9232,14 +9259,24 @@ export default function TravelAssistantPage() {
               onPrint={handleConsumerItineraryPrint}
               onExportPdf={handleConsumerItineraryPdf}
               onShareLink={handleShareItineraryLink}
-              plannedStayCities={plannedStayCities}
-              plannedFlightLegs={plannedFlightLegs}
-              onPickPlannedCity={openHotelSearchForPlannedCity}
-              onSearchFlights={handleFlightSearchPlan}
-              onOpenHotelsTab={() => navigateToConsumerTab("hotels")}
-              onOpenFlightsTab={() => navigateToConsumerTab("flights")}
               missionItems={tripPlanningActions}
               onMissionAction={handleTripPlanningAction}
+              onPlanHotel={handleItineraryPlanHotel}
+            />
+          ) : consumerTab === "calendar" ? (
+            <CalendarTabView
+              tripName={activeTrip?.name ?? "Your trip"}
+              tripStartDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
+              tripEndDate={activeTrip?.endDate ?? null}
+              reservations={consumerReservationsSorted}
+              dayNotes={itineraryPrefs.dayNotes}
+              stopRanges={effectiveStopRanges}
+              selectedDateKey={itinerarySelectedDateKey}
+              highlightedLegId={itineraryHighlightedLegId}
+              onSelectedDateKeyChange={handleItineraryDateSelect}
+              onHighlightedLegIdChange={setItineraryHighlightedLegId}
+              onScrollToTimeline={handleCalendarJumpToTimeline}
+              onReservationTap={(id) => openDrawer("reservation", id)}
               onPlanHotel={handleItineraryPlanHotel}
             />
           ) : consumerTab === "flights" ? (

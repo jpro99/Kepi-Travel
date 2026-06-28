@@ -2,14 +2,18 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ItineraryDayDrawer } from "@/components/travelAssistant/ItineraryDayDrawer";
-import { buildFullTripDayKeys } from "@/lib/travelAssistant/tripTimelinePlanning";
-import { parseDayIntentFromLines, resolveStayCityForDay } from "@/lib/travelAssistant/dayPlanLines";
+import { parseDayLines, parseDayIntentFromLines, resolveStayCityForDay } from "@/lib/travelAssistant/dayPlanLines";
 import {
   buildGapDateKeys,
   computeItineraryDayStatus,
   dayStatusDotClass,
 } from "@/lib/travelAssistant/itineraryDayStatus";
-import { cityPhotoUrl } from "@/lib/travelAssistant/cityPhotos";
+import { buildFullTripDayKeys } from "@/lib/travelAssistant/tripTimelinePlanning";
+import {
+  buildTripLegModel,
+  legColorForDate,
+  type TripLegModel,
+} from "@/lib/travelAssistant/tripLegColors";
 import type { StopDateRange } from "@/lib/decision/stopDates";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
@@ -37,11 +41,13 @@ interface ItineraryTimelineProps {
   dayNotes: Record<string, string>;
   stopRanges?: StopDateRange[];
   selectedDateKey?: string | null;
+  highlightedLegId?: string | null;
   onSelectedDateKeyChange?: (dateKey: string) => void;
   onDayNoteChange: (dateKey: string, value: string) => void;
   onReservationTap: (id: string) => void;
   onPlanDay: (dateKey: string, intent: ParsedDayIntent, mode: DayPlanMode) => void;
   onPlanHotel?: (dateKey: string, city: string) => void;
+  scrollToDateKey?: string | null;
 }
 
 function reservationDateKey(reservation: TimelineReservation): string {
@@ -67,7 +73,6 @@ function summarizeDay(reservation: TimelineReservation): string {
 }
 
 function oneLineSummary(args: {
-  dateKey: string;
   note: string;
   stayCity: string | null;
   dayReservations: TimelineReservation[];
@@ -87,6 +92,14 @@ function oneLineSummary(args: {
   return "Nothing planned yet";
 }
 
+function legForSection(model: TripLegModel, city: string, startKey: string): { color: string; label: string } | null {
+  const leg = model.legs.find(
+    (l) => l.kind === "destination" && l.label === city && l.startDateKey === startKey,
+  );
+  if (!leg) return null;
+  return { color: leg.color, label: leg.label };
+}
+
 export function ItineraryTimeline({
   tripStartDate,
   tripEndDate = null,
@@ -94,14 +107,29 @@ export function ItineraryTimeline({
   dayNotes,
   stopRanges = [],
   selectedDateKey,
+  highlightedLegId,
   onSelectedDateKeyChange,
   onDayNoteChange,
   onReservationTap,
   onPlanDay,
   onPlanHotel,
+  scrollToDateKey,
 }: ItineraryTimelineProps) {
-  const [expandedDateKey, setExpandedDateKey] = useState<string | null>(null);
-  const rowRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const [expandedDateKeys, setExpandedDateKeys] = useState<Set<string>>(new Set());
+  const [editDateKey, setEditDateKey] = useState<string | null>(null);
+  const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  const legModel = useMemo(
+    () =>
+      buildTripLegModel({
+        tripStartDate,
+        tripEndDate,
+        dayNotes,
+        stopRanges,
+        reservations,
+      }),
+    [dayNotes, reservations, stopRanges, tripEndDate, tripStartDate],
+  );
 
   const gapDateKeys = useMemo(() => buildGapDateKeys(reservations), [reservations]);
 
@@ -126,22 +154,27 @@ export function ItineraryTimeline({
         reservations,
         gapDateKeys,
       });
+      const legCell = legModel.dayCells.get(dateKey);
       return {
         dateKey,
         note,
         stayCity,
         dayReservations,
         status,
-        summary: oneLineSummary({ dateKey, note, stayCity, dayReservations }),
+        legColor: legColorForDate(legModel, dateKey),
+        legId: legCell?.legId ?? null,
+        summary: oneLineSummary({ note, stayCity, dayReservations }),
+        planLines: parseDayLines(note),
       };
     });
-  }, [dayNotes, gapDateKeys, reservations, stopRanges, tripEndDate, tripStartDate]);
+  }, [dayNotes, gapDateKeys, legModel, reservations, stopRanges, tripEndDate, tripStartDate]);
 
   const destinationSections = useMemo(() => {
-    const sections: Array<{ city: string; startKey: string; endKey: string }> = [];
-    let current: { city: string; startKey: string; endKey: string } | null = null;
+    const sections: Array<{ city: string; startKey: string; endKey: string; color: string }> = [];
+    let current: { city: string; startKey: string; endKey: string; color: string } | null = null;
     for (const row of rows) {
       const city = row.stayCity?.split("(")[0]?.trim();
+      const color = row.legColor ?? "#64748b";
       if (!city) {
         if (current) sections.push(current);
         current = null;
@@ -151,7 +184,7 @@ export function ItineraryTimeline({
         current.endKey = row.dateKey;
       } else {
         if (current) sections.push(current);
-        current = { city, startKey: row.dateKey, endKey: row.dateKey };
+        current = { city, startKey: row.dateKey, endKey: row.dateKey, color };
       }
     }
     if (current) sections.push(current);
@@ -165,11 +198,23 @@ export function ItineraryTimeline({
     return null;
   };
 
+  const scrollTarget = scrollToDateKey ?? selectedDateKey;
+
   useEffect(() => {
-    if (!selectedDateKey) return;
-    const node = rowRefs.current.get(selectedDateKey);
+    if (!scrollTarget) return;
+    const node = rowRefs.current.get(scrollTarget);
     node?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, [selectedDateKey]);
+  }, [scrollTarget]);
+
+  const toggleExpand = (dateKey: string): void => {
+    onSelectedDateKeyChange?.(dateKey);
+    setExpandedDateKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(dateKey)) next.delete(dateKey);
+      else next.add(dateKey);
+      return next;
+    });
+  };
 
   if (rows.length === 0) {
     return (
@@ -182,7 +227,7 @@ export function ItineraryTimeline({
     );
   }
 
-  const expandedRow = rows.find((row) => row.dateKey === expandedDateKey);
+  const editRow = rows.find((row) => row.dateKey === editDateKey);
 
   return (
     <div className="relative">
@@ -194,86 +239,141 @@ export function ItineraryTimeline({
           const prevCity = index > 0 ? cityForDateKey(rows[index - 1]!.dateKey) : null;
           const showSectionHeader = sectionCity && sectionCity !== prevCity;
           const isSelected = selectedDateKey === row.dateKey;
-          const photoUrl = sectionCity ? cityPhotoUrl(sectionCity) : null;
+          const isExpanded = expandedDateKeys.has(row.dateKey);
+          const isLegHighlighted = Boolean(highlightedLegId && row.legId === highlightedLegId);
+          const sectionLeg = showSectionHeader && sectionCity
+            ? legForSection(legModel, sectionCity, row.dateKey)
+            : null;
 
           return (
-            <div key={row.dateKey}>
+            <div
+              key={row.dateKey}
+              ref={(node) => {
+                if (node) rowRefs.current.set(row.dateKey, node);
+                else rowRefs.current.delete(row.dateKey);
+              }}
+            >
               {showSectionHeader && sectionCity ? (
                 <div
                   className="relative mb-2 mt-4 overflow-hidden rounded-2xl px-4 py-3"
-                  style={
-                    photoUrl
-                      ? {
-                          backgroundImage: `linear-gradient(to right, rgba(15,25,35,0.88), rgba(15,25,35,0.72)), url(${photoUrl})`,
-                          backgroundSize: "cover",
-                          backgroundPosition: "center",
-                        }
-                      : undefined
-                  }
+                  style={{
+                    backgroundColor: sectionLeg?.color ?? row.legColor ?? "#0F1923",
+                    backgroundImage: sectionLeg
+                      ? `linear-gradient(135deg, ${sectionLeg.color}E6, ${sectionLeg.color}CC)`
+                      : undefined,
+                  }}
                 >
-                  {!photoUrl ? (
-                    <div className="absolute inset-0 bg-[#0F1923]/90 dark:bg-[#0F1923]" aria-hidden />
-                  ) : null}
-                  <p className="relative text-[10px] font-semibold uppercase tracking-[0.18em] text-[#f4c95d]">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/80">
                     Destination
                   </p>
-                  <p className="relative text-lg font-extrabold text-white">{sectionCity}</p>
+                  <p className="text-lg font-extrabold text-white">{sectionCity}</p>
                 </div>
               ) : null}
 
-              <button
-                ref={(node) => {
-                  if (node) rowRefs.current.set(row.dateKey, node);
-                  else rowRefs.current.delete(row.dateKey);
-                }}
-                type="button"
-                onClick={() => {
-                  onSelectedDateKeyChange?.(row.dateKey);
-                  setExpandedDateKey(row.dateKey);
-                }}
-                className={`group relative flex w-full items-start gap-3 rounded-2xl px-1 py-2.5 text-left transition ${
-                  isSelected
-                    ? "bg-slate-100/90 dark:bg-slate-800/80"
-                    : "hover:bg-slate-50 dark:hover:bg-slate-900/60"
+              <div
+                className={`overflow-hidden rounded-2xl transition ${
+                  isSelected || isLegHighlighted ? "ring-2 ring-[#f4c95d]/60" : ""
                 }`}
+                style={row.legColor ? { borderLeft: `4px solid ${row.legColor}` } : undefined}
               >
-                <span
-                  className={`relative z-10 mt-1.5 h-3 w-3 shrink-0 rounded-full ring-4 ${dayStatusDotClass(row.status)}`}
-                  aria-hidden
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    {formatDayLabel(row.dateKey)}
-                  </p>
-                  <p className="mt-0.5 truncate text-sm font-semibold text-slate-900 dark:text-white">
-                    {row.summary}
-                  </p>
-                </div>
-                <span className="mt-1 shrink-0 text-slate-400 opacity-0 transition group-hover:opacity-100">›</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(row.dateKey)}
+                  className={`group relative flex w-full items-start gap-3 px-2 py-2.5 text-left transition ${
+                    isExpanded ? "bg-slate-100/90 dark:bg-slate-800/80" : "hover:bg-slate-50 dark:hover:bg-slate-900/60"
+                  }`}
+                >
+                  <span
+                    className={`relative z-10 mt-1.5 h-3 w-3 shrink-0 rounded-full ring-4 ${
+                      row.legColor ? "" : dayStatusDotClass(row.status)
+                    }`}
+                    style={row.legColor ? { backgroundColor: row.legColor, boxShadow: `0 0 0 4px ${row.legColor}33` } : undefined}
+                    aria-hidden
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      {formatDayLabel(row.dateKey)}
+                    </p>
+                    <p className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-white">{row.summary}</p>
+                  </div>
+                  <span className={`mt-1 shrink-0 text-slate-400 transition ${isExpanded ? "rotate-90" : ""}`}>›</span>
+                </button>
+
+                {isExpanded ? (
+                  <div className="space-y-3 border-t border-slate-200/80 px-4 pb-4 pt-3 dark:border-slate-700/80">
+                    {row.dayReservations.length > 0 ? (
+                      <ul className="space-y-2">
+                        {row.dayReservations.map((reservation) => (
+                          <li key={reservation.id}>
+                            <button
+                              type="button"
+                              onClick={() => onReservationTap(reservation.id)}
+                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                            >
+                              {reservation.type === "flight" ? "✈ " : reservation.type === "hotel" ? "🏨 " : "• "}
+                              {summarizeDay(reservation)}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+
+                    {row.planLines.length > 0 ? (
+                      <ul className="space-y-1">
+                        {row.planLines.map((line) => (
+                          <li key={line} className="text-sm text-slate-600 dark:text-slate-300">
+                            {line}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-slate-400">No plan notes yet.</p>
+                    )}
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditDateKey(row.dateKey)}
+                        className="rounded-xl bg-[#0F1923] px-3 py-1.5 text-xs font-semibold text-white dark:bg-[#f4c95d] dark:text-[#0F1923]"
+                      >
+                        Edit plan
+                      </button>
+                      {onPlanHotel && row.stayCity ? (
+                        <button
+                          type="button"
+                          onClick={() => onPlanHotel(row.dateKey, row.stayCity!)}
+                          className="rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold dark:border-slate-600"
+                        >
+                          Find hotel
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             </div>
           );
         })}
       </div>
 
-      {expandedRow ? (
+      {editRow ? (
         <ItineraryDayDrawer
           open
-          dateKey={expandedRow.dateKey}
-          dateLabel={formatDayLabel(expandedRow.dateKey)}
-          note={expandedRow.note}
-          stayCity={expandedRow.stayCity}
+          dateKey={editRow.dateKey}
+          dateLabel={formatDayLabel(editRow.dateKey)}
+          note={editRow.note}
+          stayCity={editRow.stayCity}
           tripStartDate={tripStartDate}
           tripEndDate={tripEndDate}
-          onClose={() => setExpandedDateKey(null)}
-          onChange={(value) => onDayNoteChange(expandedRow.dateKey, value)}
+          onClose={() => setEditDateKey(null)}
+          onChange={(value) => onDayNoteChange(editRow.dateKey, value)}
           onPlanDay={onPlanDay}
           onPlanHotel={
-            onPlanHotel && expandedRow.stayCity
-              ? () => onPlanHotel(expandedRow.dateKey, expandedRow.stayCity!)
+            onPlanHotel && editRow.stayCity
+              ? () => onPlanHotel(editRow.dateKey, editRow.stayCity!)
               : undefined
           }
-          bookedItems={expandedRow.dayReservations.map((reservation) => ({
+          bookedItems={editRow.dayReservations.map((reservation) => ({
             id: reservation.id,
             label:
               reservation.type === "flight"
