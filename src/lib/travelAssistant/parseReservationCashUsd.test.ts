@@ -26,6 +26,12 @@ test("resolveReservationCashUsd falls back to originalEmailText", () => {
   assert.equal(usd, 457);
 });
 
+test("parseCashUsdFromText reads totals from HTML confirmation bodies", () => {
+  const html =
+    "<div>Ticket summary</div><div>Grand Total:&nbsp;&#36;1,284.50</div><div>Taxes included</div>";
+  assert.equal(parseCashUsdFromText(html), 1285);
+});
+
 test("resolveReservationCashUsd prefers stored quotedPriceUsd", () => {
   assert.equal(
     resolveReservationCashUsd({

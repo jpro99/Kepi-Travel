@@ -1,5 +1,6 @@
 import { isPlaceholderConfirmation } from "@/lib/travelAssistant/placeholderReservations";
 import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
+import { hydrateReservationQuotedPrice } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 
 export interface TripSpendReservation {
   id: string;
@@ -70,7 +71,8 @@ export function computeTripSpend(reservations: TripSpendReservation[]): TripSpen
 
   const countedEmailTotals = new Set<string>();
 
-  for (const reservation of reservations) {
+  for (const raw of reservations) {
+    const reservation = hydrateReservationQuotedPrice(raw);
     if (!isSpendTrackedReservation(reservation)) continue;
 
     const type = reservation.type?.trim() || "other";

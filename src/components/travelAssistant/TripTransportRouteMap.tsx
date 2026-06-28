@@ -67,25 +67,25 @@ function SegmentCard({
           {segmentKindEmoji(segment.kind)}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-black text-white">{segment.headline}</p>
-          <p className="truncate text-[10px] text-sky-100/60">
+          <p className="truncate text-sm font-black text-white">{segment.headline}</p>
+          <p className="truncate text-xs text-sky-50/80">
             {segment.fromCode} → {segment.toCode}
           </p>
         </div>
         <span className="text-[10px] font-bold text-sky-200/50">#{index + 1}</span>
       </div>
-      <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-semibold">
+      <div className="mt-2 flex flex-wrap gap-1.5 text-xs font-semibold">
         {segment.dateDisplay ? (
-          <span className="rounded-full bg-white/10 px-2 py-0.5 text-sky-100/80">{segment.dateDisplay}</span>
+          <span className="rounded-full bg-white/15 px-2 py-0.5 text-sky-50">{segment.dateDisplay}</span>
         ) : null}
         {segment.departDisplay !== "TBD" ? (
-          <span className="rounded-full bg-white/10 px-2 py-0.5 text-sky-100/80">Dep {segment.departDisplay}</span>
+          <span className="rounded-full bg-white/15 px-2 py-0.5 text-sky-50">Dep {segment.departDisplay}</span>
         ) : null}
         {segment.arriveDisplay ? (
-          <span className="rounded-full bg-white/10 px-2 py-0.5 text-sky-100/80">Arr {segment.arriveDisplay}</span>
+          <span className="rounded-full bg-white/15 px-2 py-0.5 text-sky-50">Arr {segment.arriveDisplay}</span>
         ) : null}
       </div>
-      <p className="mt-2 text-[10px] leading-snug text-sky-100/55">{segment.connectionIssue ?? segment.subline}</p>
+      <p className="mt-2 text-xs leading-snug text-sky-50/75">{segment.connectionIssue ?? segment.subline}</p>
     </button>
   );
 }
@@ -218,30 +218,66 @@ export function TripTransportRouteMap({
       (map.getSource(ROUTE_SOURCE) as import("maplibre-gl").GeoJSONSource).setData(routeData);
     }
 
+    if (!map.getLayer("trip-route-unbooked")) {
+      map.addLayer({
+        id: "trip-route-unbooked",
+        type: "line",
+        source: ROUTE_SOURCE,
+        filter: ["any", ["!", ["get", "booked"]], ["get", "dashed"]],
+        paint: {
+          "line-color": "#94a3b8",
+          "line-width": 4,
+          "line-opacity": 0.95,
+          "line-dasharray": [2, 2],
+        },
+      });
+    }
+
+    if (!map.getLayer("trip-route-booked")) {
+      map.addLayer({
+        id: "trip-route-booked",
+        type: "line",
+        source: ROUTE_SOURCE,
+        filter: ["all", ["get", "booked"], ["!", ["get", "dashed"]], ["!=", ["get", "status"], "conflict"]],
+        paint: {
+          "line-color": ["get", "color"],
+          "line-width": 3.5,
+          "line-opacity": 0.95,
+        },
+      });
+    }
+
+    if (!map.getLayer("trip-route-conflict")) {
+      map.addLayer({
+        id: "trip-route-conflict",
+        type: "line",
+        source: ROUTE_SOURCE,
+        filter: ["==", ["get", "status"], "conflict"],
+        paint: {
+          "line-color": "#ef4444",
+          "line-width": 4.5,
+          "line-opacity": 1,
+          "line-dasharray": [2, 2],
+        },
+      });
+    }
+
     if (!map.getLayer("trip-route-hit")) {
       map.addLayer({
         id: "trip-route-hit",
         type: "line",
         source: ROUTE_SOURCE,
         paint: {
-          "line-width": 14,
+          "line-width": 16,
           "line-opacity": 0,
         },
       });
+    } else {
+      map.moveLayer("trip-route-hit");
     }
 
-    if (!map.getLayer("trip-route-lines")) {
-      map.addLayer({
-        id: "trip-route-lines",
-        type: "line",
-        source: ROUTE_SOURCE,
-        paint: {
-          "line-color": ["get", "color"],
-          "line-width": 3,
-          "line-opacity": ["case", ["get", "booked"], 0.92, 0.55],
-          "line-dasharray": ["case", ["get", "dashed"], ["literal", [2, 2]], ["literal", [1, 0]]],
-        },
-      });
+    if (map.getLayer("trip-route-lines")) {
+      map.removeLayer("trip-route-lines");
     }
 
     if (!map.getSource(AIRPORT_SOURCE)) {
@@ -355,13 +391,17 @@ export function TripTransportRouteMap({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapReady || !map.getLayer("trip-route-lines")) return;
-    map.setPaintProperty("trip-route-lines", "line-width", [
-      "case",
-      ["==", ["get", "segmentId"], selectedSegmentId ?? ""],
-      5,
-      3,
-    ]);
+    if (!map || !mapReady) return;
+    const layers = ["trip-route-conflict", "trip-route-booked", "trip-route-unbooked"];
+    for (const layerId of layers) {
+      if (!map.getLayer(layerId)) continue;
+      map.setPaintProperty(layerId, "line-width", [
+        "case",
+        ["==", ["get", "segmentId"], selectedSegmentId ?? ""],
+        layerId === "trip-route-unbooked" ? 6 : 5,
+        layerId === "trip-route-unbooked" ? 4 : 3.5,
+      ]);
+    }
   }, [selectedSegmentId, mapReady]);
 
   useEffect(() => {
@@ -453,12 +493,12 @@ export function TripTransportRouteMap({
       )}
 
       <div className="px-5 py-4">
-        <div className="mb-3 flex flex-wrap gap-3 text-[10px] font-bold uppercase tracking-wider text-sky-100/50">
-          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-6 rounded-full bg-emerald-500" /> Flight booked</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-6 rounded-full bg-slate-500" /> Not booked</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-6 rounded-full bg-red-500" /> Problem</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-6 rounded-full bg-teal-500" /> Train</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-6 rounded-full bg-amber-500" /> Ride</span>
+        <div className="mb-3 flex flex-wrap gap-3 text-xs font-bold uppercase tracking-wider text-sky-50/80">
+          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-7 rounded-full bg-emerald-500" /> Flight booked</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-7 rounded-full bg-slate-400" /> Not booked</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-7 rounded-full bg-red-500" /> Problem</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-7 rounded-full bg-teal-500" /> Train</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-7 rounded-full bg-amber-500" /> Ride</span>
         </div>
 
         <div className="relative mb-4 hidden sm:block">

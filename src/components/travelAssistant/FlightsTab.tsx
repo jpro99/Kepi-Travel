@@ -10,6 +10,11 @@ import {
   formatReservationCostLine,
   reservationMissingPrice,
 } from "@/lib/travelAssistant/tripSpendSummary";
+import {
+  reservationAttentionBadge,
+  reservationAttentionKind,
+  reservationAttentionRingClass,
+} from "@/lib/travelAssistant/reservationAttention";
 import { TripTransportRouteMap } from "@/components/travelAssistant/TripTransportRouteMap";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 
@@ -43,6 +48,7 @@ interface FlightsTabProps {
   reservations: Reservation[];
   transportReservations?: TransportRouteReservation[];
   plannedFlightLegs?: PlannedFlightLeg[];
+  transportConflictIds?: Set<string>;
   tripName?: string | null;
   onSearchFlights?: (plan: FlightSearchPlan, selectedLegs: PlannedFlightLeg[]) => void;
   liveStatus?: Record<string, LiveStatusResult>;
@@ -429,6 +435,7 @@ export function FlightsTab({
   reservations,
   transportReservations,
   plannedFlightLegs = [],
+  transportConflictIds,
   tripName,
   onSearchFlights,
   liveStatus = {}, locationStatus = "unknown", nearestAirport = "",
@@ -567,15 +574,23 @@ export function FlightsTab({
           const date = fmtDate(r.flightDate ? r.flightDate + " 00:00" : r.localTime ?? "");
           const missingPrice = reservationMissingPrice(r);
           const costLine = formatReservationCostLine(r);
+          const attention = reservationAttentionKind(r, transportConflictIds);
+          const attentionBadge = reservationAttentionBadge(attention, {
+            connectionIssue: Boolean(transportConflictIds?.has(r.id)),
+            flightDelayed:
+              attention === "problem" &&
+              !transportConflictIds?.has(r.id) &&
+              (Boolean(live?.delayMinutes && live.delayMinutes > 0) ||
+                /cancel|delay|divert/iu.test(live?.flightStatus || r.flightStatus || "")),
+          });
 
           return (
             <div
               key={r.id}
               className={`overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-sm ring-1 transition-all ${
-                isPast ? "ring-slate-100 dark:ring-slate-800 opacity-55"
-                : missingPrice ? "ring-yellow-400 bg-yellow-50/30 dark:ring-yellow-500/60 dark:bg-yellow-500/5"
-                : isNext && !showGuide ? "ring-[#007AFF]/40 dark:ring-[#0A84FF]/30 shadow-blue-500/10"
-                : "ring-black/[0.06] dark:ring-white/[0.08]"
+                isNext && !showGuide && attention === "none"
+                  ? "ring-[#007AFF]/40 dark:ring-[#0A84FF]/30 shadow-blue-500/10"
+                  : reservationAttentionRingClass(attention, isPast)
               }`}
             >
               {/* Tap to expand */}
@@ -593,12 +608,10 @@ export function FlightsTab({
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    {missingPrice && !isPast ? (
-                      <span className="rounded-full bg-yellow-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-yellow-900 dark:bg-yellow-500/30 dark:text-yellow-100">
-                        Add cost
-                      </span>
+                    {attentionBadge && !isPast ? (
+                      <span className={attentionBadge.className}>{attentionBadge.label}</span>
                     ) : costLine ? (
-                      <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200">{costLine}</span>
+                      <span className="text-xs font-bold text-slate-700 dark:text-slate-200">{costLine}</span>
                     ) : null}
                     <StatusBadge r={r} live={live} />
                     <span className="text-slate-300 dark:text-slate-600 text-sm">{isOpen ? "▲" : "▼"}</span>
@@ -642,14 +655,14 @@ export function FlightsTab({
                   { label: "CONF", value: r.confirmationCode?.slice(0, 7) || "—" },
                 ].map(({ label, value, highlight }) => (
                   <div key={label}>
-                    <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">{label}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">{label}</p>
                     <p className={`text-sm font-bold mt-0.5 ${highlight ? "text-[#007AFF] dark:text-[#0A84FF]" : "text-slate-900 dark:text-white"}`}>
                       {value}
                     </p>
                   </div>
                 ))}
               </div>
-              {missingPrice && !isPast ? (
+              {attention === "missing-price" && !isPast ? (
                 <div className="border-t border-yellow-200 px-5 py-2 dark:border-yellow-500/30">
                   <button
                     type="button"
@@ -657,6 +670,16 @@ export function FlightsTab({
                     className="text-xs font-bold text-yellow-900 dark:text-yellow-200"
                   >
                     Tap to add cash or points spent →
+                  </button>
+                </div>
+              ) : attention === "problem" && !isPast ? (
+                <div className="border-t border-red-200 px-5 py-2 dark:border-red-500/30">
+                  <button
+                    type="button"
+                    onClick={() => onReservationTap(r.id)}
+                    className="text-xs font-bold text-red-800 dark:text-red-200"
+                  >
+                    {transportConflictIds?.has(r.id) ? "Connection problem — tap to review →" : "Flight issue — tap to review →"}
                   </button>
                 </div>
               ) : null}

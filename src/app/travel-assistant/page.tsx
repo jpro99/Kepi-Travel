@@ -102,6 +102,8 @@ import { TripCalendarView } from "@/components/travelAssistant/TripCalendarView"
 import { NextUpCard } from "@/components/travelAssistant/NextUpCard";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
+import { hydrateReservationsQuotedPrices } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
+import { buildTransportConflictReservationIds } from "@/lib/travelAssistant/reservationAttention";
 import { computeTripSpend } from "@/lib/travelAssistant/tripSpendSummary";
 import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
 import { TripItineraryPanel, useItineraryPanelPrefs } from "@/components/travelAssistant/TripItineraryPanel";
@@ -2604,7 +2606,10 @@ export default function TravelAssistantPage() {
     setTripStatus((previous) => (previous === trip.tripStatus ? previous : trip.tripStatus));
     setMinutesToDeparture((previous) => (previous === trip.minutesToDeparture ? previous : trip.minutesToDeparture));
     setActiveScenario((previous) => (previous === trip.activeScenario ? previous : trip.activeScenario));
-    setReservations((previous) => (areSnapshotsEqual(previous, trip.reservations) ? previous : trip.reservations));
+    setReservations((previous) => {
+      const hydrated = hydrateReservationsQuotedPrices(trip.reservations);
+      return areSnapshotsEqual(previous, hydrated) ? previous : hydrated;
+    });
     setReviewQueue((previous) => (areSnapshotsEqual(previous, trip.reviewQueue) ? previous : trip.reviewQueue));
     setReadinessItems((previous) => (areSnapshotsEqual(previous, trip.readinessItems) ? previous : trip.readinessItems));
     // Mark checklist as initialized from server — prevents useEffect from overwriting with auto-computed values
@@ -3993,11 +3998,31 @@ export default function TravelAssistantPage() {
       ) ?? null,
     [flightLiveStatusByReservationId, reservations],
   );
+  const transportRouteReservations = useMemo(
+    () =>
+      reservations.filter(
+        (reservation) =>
+          reservation.type === "flight" || reservation.type === "train" || reservation.type === "ride",
+      ),
+    [reservations],
+  );
+
+  const transportConflictReservationIds = useMemo(
+    () => buildTransportConflictReservationIds(transportRouteReservations),
+    [transportRouteReservations],
+  );
+
   const consumerStatus = useMemo(() => {
-    if (tripStatus === "red" || activeScenario !== "none" || delayedFlight) {
+    const connectionIssues = transportConflictReservationIds.size;
+    if (tripStatus === "red" || activeScenario !== "none" || delayedFlight || connectionIssues > 0) {
       return {
-        title: "Flight delayed 🔴",
-        detail: delayedFlight ? `${delayedFlight.provider} needs attention.` : "Something changed. Kepi can help fix it.",
+        title: connectionIssues > 0 ? "Connection problem 🔴" : "Flight delayed 🔴",
+        detail:
+          connectionIssues > 0
+            ? `${connectionIssues} connection issue${connectionIssues === 1 ? "" : "s"} on your route — check Flights.`
+            : delayedFlight
+              ? `${delayedFlight.provider} needs attention.`
+              : "Something changed. Kepi can help fix it.",
         tone: "border-red-200 bg-red-50 text-red-950 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-50",
       };
     }
@@ -4024,12 +4049,13 @@ export default function TravelAssistantPage() {
     activeScenario,
     blockingIssueCount,
     delayedFlight,
+    transportConflictReservationIds.size,
     tripStatus,
     unresolvedReadinessCount,
     unresolvedReviewCount,
   ]);
   const consumerHeroStatus = useMemo(() => {
-    if (tripStatus === "red" || activeScenario !== "none" || delayedFlight) {
+    if (tripStatus === "red" || activeScenario !== "none" || delayedFlight || transportConflictReservationIds.size > 0) {
       return {
         label: "Urgent",
         className: "bg-red-500/15 text-red-700 ring-1 ring-red-500/30 dark:text-red-200",
@@ -4045,7 +4071,7 @@ export default function TravelAssistantPage() {
       label: "All good",
       className: "bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/30 dark:text-emerald-200",
     };
-  }, [activeScenario, blockingIssueCount, delayedFlight, tripStatus, unresolvedReadinessCount, unresolvedReviewCount]);
+  }, [activeScenario, blockingIssueCount, delayedFlight, transportConflictReservationIds.size, tripStatus, unresolvedReadinessCount, unresolvedReviewCount]);
   const consumerReservationsSorted = useMemo(() => {
     // Convert local departure time + timezone to UTC ms for correct ordering.
     // Without this, HND 21:20 JST sorts after HNL 13:41 HST even though
@@ -6114,7 +6140,8 @@ export default function TravelAssistantPage() {
       drawerDraft.type === "flight" ||
       /\bflight\b/iu.test(`${drawerDraft.title} ${drawerDraft.provider}`) ||
       /\b[A-Z]{2,3}\s?\d{1,4}[A-Z]?\b/u.test(drawerDraft.title);
-    if (!activeDrawer || activeDrawer.kind !== "review" || !looksLikeFlightDraft) {
+    if (!activeDrawer || !looksLikeFlightDraft) {
+      setFlightLookupError("Open a flight reservation to look up schedule details.");
       return;
     }
     const flightNumber = drawerDraft.flightNumber?.trim() ?? "";
@@ -8236,7 +8263,10 @@ export default function TravelAssistantPage() {
               </div>
               <div className="flex items-center gap-2 sm:gap-3">
                 {!showUnconfiguredTripShell && activeTrip ? (
-                  <TripSpendBadge summary={tripSpendSummary} />
+                  <TripSpendBadge
+                    summary={tripSpendSummary}
+                    problemCount={transportConflictReservationIds.size}
+                  />
                 ) : null}
                 <div className="relative">
                 <button
@@ -8858,10 +8888,9 @@ export default function TravelAssistantPage() {
           ) : consumerTab === "flights" ? (
             <FlightsTab
               reservations={consumerReservationsSorted.filter(r => r.type === "flight")}
-              transportReservations={consumerReservationsSorted.filter(
-                (r) => r.type === "flight" || r.type === "train" || r.type === "ride",
-              )}
+              transportReservations={transportRouteReservations}
               plannedFlightLegs={plannedFlightLegs}
+              transportConflictIds={transportConflictReservationIds}
               tripName={activeTrip?.name}
               onSearchFlights={handleFlightSearchPlan}
               liveStatus={flightStatusCheckByReservationId}

@@ -4,10 +4,22 @@
  */
 
 const TOTAL_CONTEXT =
-  /\b(?:grand\s+total|total\s+(?:amount|price|cost|paid|charge|due|fare)|amount\s+(?:paid|charged|due)|you\s+paid|price\s+paid|ticket\s+total|trip\s+total|booking\s+total|reservation\s+total|payment\s+total)\b/iu;
+  /\b(?:grand\s+total|total\s+(?:amount|price|cost|paid|charge|due|fare|for\s+trip|purchase\s+price)|amount\s+(?:paid|charged|due)|you\s+paid|price\s+paid|ticket\s+total|trip\s+total|booking\s+total|reservation\s+total|payment\s+total|purchase\s+total|charged\s+today|credit\s+card\s+charge)\b/iu;
 
 const PENALTY_CONTEXT =
   /\b(?:per\s+night|\/\s*night|nightly|tax(?:es)?|fee(?:s)?|surcharge|gratuity|tip|deposit|balance\s+due|estimated|approx|points|miles|award|per\s+person|\/\s*pax|each)\b/iu;
+
+function normalizeEmailText(text: string): string {
+  return text
+    .replace(/<[^>]+>/gu, " ")
+    .replace(/&nbsp;/giu, " ")
+    .replace(/&#(\d+);/gu, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&amp;/giu, "&")
+    .replace(/&quot;/giu, '"')
+    .replace(/&#36;|&dollar;/giu, "$")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
 
 function parseDollarAmount(raw: string): number | undefined {
   const cleaned = raw.replace(/,/g, "").trim();
@@ -35,12 +47,13 @@ function scoreAmountMatch(fullText: string, start: number, end: number, usd: num
 
 /** Parse the best-effort total cash amount from confirmation email text. */
 export function parseCashUsdFromText(text: string): number | undefined {
-  const haystack = text.replace(/\s+/gu, " ").trim();
+  const haystack = normalizeEmailText(text);
   if (!haystack) return undefined;
 
   const scored: ScoredAmount[] = [];
 
   const patterns: RegExp[] = [
+    /\b(?:grand\s+total|total(?:\s+(?:amount|price|cost|paid|charge|due|fare))?|amount\s+(?:paid|charged|due)|you\s+paid|purchase\s+total|ticket\s+total|trip\s+total|payment\s+total)\b[^$\d]{0,24}\$?\s*([\d,]+(?:\.\d{2})?)/giu,
     /\b(?:USD|US\$)\s*([\d,]+(?:\.\d{2})?)/giu,
     /\$\s*([\d,]+(?:\.\d{2})?)(?:\s*USD)?/giu,
     /\b([\d,]+(?:\.\d{2})?)\s*(?:USD|US\s*dollars?)\b/giu,
@@ -62,6 +75,14 @@ export function parseCashUsdFromText(text: string): number | undefined {
 
   scored.sort((a, b) => b.score - a.score || b.usd - a.usd);
   const best = scored[0];
+  if (best.score >= 40) return Math.round(best.usd);
+
+  const viable = scored.filter((entry) => entry.score >= 0 && entry.usd >= 20);
+  if (viable.length > 0) {
+    const top = viable.sort((a, b) => b.usd - a.usd)[0];
+    if (top && top.score >= 0) return Math.round(top.usd);
+  }
+
   if (best.score < 0) return undefined;
   return Math.round(best.usd);
 }

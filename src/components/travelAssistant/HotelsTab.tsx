@@ -283,19 +283,19 @@ export function HotelsTab({
               <div className="flex flex-wrap items-start gap-4 px-5 pb-4">
                 {r.confirmationCode && (
                   <div>
-                    <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Confirmation</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Confirmation</p>
                     <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">{r.confirmationCode}</p>
                   </div>
                 )}
                 {r.roomType && r.roomType !== "Not set" && (
                   <div>
-                    <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Room type</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Room type</p>
                     <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">{r.roomType}</p>
                   </div>
                 )}
                 {costLine ? (
                   <div>
-                    <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Trip cost</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Trip cost</p>
                     <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">{costLine}</p>
                   </div>
                 ) : missingPrice && !past ? (
