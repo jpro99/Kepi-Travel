@@ -49,8 +49,8 @@ export function buildFlightLegsFromIntent(
       toIata: toStop.iata.toUpperCase(),
       fromLabel: fromStop.name,
       toLabel: toStop.name,
-      enabled: false,
-      optional: true,
+      enabled: true,
+      optional: false,
       departureDate: range?.checkOut ?? intent.startDate,
     });
   }

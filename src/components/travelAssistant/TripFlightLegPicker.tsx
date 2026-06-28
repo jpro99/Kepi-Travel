@@ -49,11 +49,13 @@ export function TripFlightLegPicker({ legs, tripName, onSearch }: TripFlightLegP
       <div className="rounded-[23px] bg-gradient-to-br from-[#071526] via-[#0b2344] to-slate-950 px-4 py-4">
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-sky-300/90">Flight plan</p>
         <h3 className="mt-1 text-lg font-black text-white">
-          {bookedCount === legs.length ? "You're airborne — all set ✈️" : "Pick the flights you want to book"}
+          {bookedCount === legs.length ? "You're airborne — all set ✈️" : "Search for a new flight"}
         </h3>
         <p className="mt-1 text-xs text-sky-100/75">
           {tripName ? `${tripName} · ` : ""}
-          Green checks are already on your trip. Select the rest, then search — we&apos;ll detect round-trip vs multi-city.
+          {bookedCount === legs.length
+            ? "Every leg on your plan is booked."
+            : "Select the legs you still need, then search — we'll open Google Flights for each hop."}
         </p>
 
         <ul className="mt-4 space-y-2">
@@ -100,7 +102,9 @@ export function TripFlightLegPicker({ legs, tripName, onSearch }: TripFlightLegP
                     {isBooked && leg.bookedSummary ? (
                       <span className="mt-1 block text-[10px] font-semibold text-emerald-200">{leg.bookedSummary}</span>
                     ) : leg.role === "connector" ? (
-                      <span className="mt-1 block text-[10px] text-sky-200/70">✈ Flight or 🚆 train — check to search flights</span>
+                      <span className="mt-1 block text-[10px] text-amber-200/90">
+                        How are you getting from {leg.fromLabel} to {leg.toLabel}?
+                      </span>
                     ) : null}
                   </span>
                 </button>

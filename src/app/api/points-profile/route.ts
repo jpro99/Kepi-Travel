@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { getPointsTravelProfile, savePointsTravelProfile } from "@/lib/memory/pointsTravelProfile";
+import { syncTravelProfileBenefits } from "@/lib/travelAssistant/persistTravelBenefitsSync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,5 +60,6 @@ export async function POST(req: Request) {
 
   const existing = await getPointsTravelProfile(userId);
   const saved = await savePointsTravelProfile({ ...existing, ...parsed.data, userId }, userId);
+  await syncTravelProfileBenefits(userId).catch(() => null);
   return NextResponse.json({ ok: true, profile: saved });
 }

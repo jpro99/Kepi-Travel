@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { normalizeLoyaltyBalances } from "@/lib/loyalty/walletBalances";
 import { getKvIntegrationHealth } from "@/lib/travelAssistant/kvStore";
 import { getTravelerGenome, saveTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
+import { syncTravelProfileBenefits } from "@/lib/travelAssistant/persistTravelBenefitsSync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,6 +52,7 @@ export async function POST(req: Request) {
 
   try {
     const saved = await saveTravelerGenome({ ...genome, loyaltyBalances: balances }, userId);
+    await syncTravelProfileBenefits(userId).catch(() => null);
     return NextResponse.json({
       ok: true,
       balances: normalizeLoyaltyBalances(saved.loyaltyBalances ?? balances),

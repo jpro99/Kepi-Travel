@@ -3,6 +3,8 @@
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { TripFlightLegPicker } from "@/components/travelAssistant/TripFlightLegPicker";
+import { InterCityTransportPrompts } from "@/components/travelAssistant/InterCityTransportPrompts";
+import { FlightSearchLauncher, type FlightSearchDefaults } from "@/components/travelAssistant/FlightSearchLauncher";
 import { FlightSearchModal } from "@/components/travelAssistant/FlightSearchModal";
 import type { FlightSearchPlan, PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
 import { buildGateInstructions, getAirportNav, buildArrivalGuide } from "@/lib/travelAssistant/airportNavigation";
@@ -53,7 +55,7 @@ interface FlightsTabProps {
   itinerarySelfCheck?: ItinerarySelfCheckResult;
   transportConflictIds?: Set<string>;
   tripName?: string | null;
-  onSearchFlights?: (plan: FlightSearchPlan, selectedLegs: PlannedFlightLeg[]) => void;
+  flightSearchDefaults?: FlightSearchDefaults;
   liveStatus?: Record<string, LiveStatusResult>;
   locationStatus?: "away" | "at-airport" | "in-terminal" | "airborne" | "unknown";
   nearestAirport?: string;
@@ -313,7 +315,7 @@ function AirportGuideCard({
           <p className="text-2xl font-black text-white mt-1 leading-tight">
             {flight.flightAirline ?? flight.provider}{flight.flightNumber ? ` ${flight.flightNumber}` : ""}
           </p>
-          <p className="text-sky-200/70 text-sm mt-0.5">{fmt12(flight.flightDepartureTime ?? flight.localTime ?? "")} · {fmtDate(flight.flightDate ? flight.flightDate + " 00:00" : flight.localTime ?? "")}</p>
+          <p className="text-sky-100 text-base font-semibold mt-1">{fmt12(flight.flightDepartureTime ?? flight.localTime ?? "")} · {fmtDate(flight.flightDate ? flight.flightDate + " 00:00" : flight.localTime ?? "")}</p>
         </div>
         <StatusBadge r={flight} live={live} />
       </div>
@@ -441,7 +443,7 @@ export function FlightsTab({
   itinerarySelfCheck,
   transportConflictIds,
   tripName,
-  onSearchFlights,
+  flightSearchDefaults,
   liveStatus = {}, locationStatus = "unknown", nearestAirport = "",
   onReservationTap, onCheckStatus, onDelete, onAdd,
 }: FlightsTabProps) {
@@ -503,13 +505,11 @@ export function FlightsTab({
 
   return (
     <section className="space-y-4 pb-6">
-      {plannedFlightLegs.length > 0 ? (
-        <TripFlightLegPicker
-          legs={plannedFlightLegs}
-          tripName={tripName}
-          onSearch={handleFlightSearch}
-        />
-      ) : null}
+      <FlightSearchLauncher
+        tripName={tripName}
+        defaults={flightSearchDefaults}
+        onSearch={handleFlightSearch}
+      />
 
       <FlightSearchModal
         open={flightSearchOpen}
@@ -535,20 +535,30 @@ export function FlightsTab({
         />
       )}
 
+      <InterCityTransportPrompts
+        legs={plannedFlightLegs}
+        onSearchFlights={handleFlightSearch}
+        onAddTransport={onAdd}
+      />
+
+      {plannedFlightLegs.some((leg) => leg.status === "needed") ? (
+        <TripFlightLegPicker legs={plannedFlightLegs} tripName={tripName} onSearch={handleFlightSearch} />
+      ) : null}
+
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Flights</h2>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Your flights</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            {upcoming.length} upcoming{past.length > 0 ? ` · ${past.length} past` : ""}
+            {upcoming.length} booked{past.length > 0 ? ` · ${past.length} past` : ""}
           </p>
         </div>
         <button
           type="button"
           onClick={onAdd}
-          className="flex items-center gap-1.5 rounded-full bg-[#007AFF] px-4 py-2 text-sm font-semibold text-white shadow-sm active:opacity-80"
+          className="shrink-0 rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300"
         >
-          <span className="text-base leading-none">+</span> Add
+          Add existing
         </button>
       </div>
 
@@ -557,8 +567,32 @@ export function FlightsTab({
         <div className="rounded-3xl border border-dashed border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-10 text-center">
           <p className="text-4xl mb-3">🛫</p>
           <p className="font-semibold text-slate-900 dark:text-white">No flights yet</p>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">Forward a confirmation email or add manually</p>
-          <button type="button" onClick={onAdd} className="rounded-full bg-[#007AFF] px-6 py-2.5 text-sm font-bold text-white">Add flight</button>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">
+            Use the search box above to find and book a flight, or add one you already booked.
+          </p>
+          <button
+            type="button"
+            onClick={() =>
+              handleFlightSearch(
+                {
+                  mode: "oneway",
+                  summary: "Custom flight search",
+                  url: "",
+                },
+                [],
+              )
+            }
+            className="mb-3 w-full rounded-full bg-[#007AFF] px-6 py-2.5 text-sm font-bold text-white"
+          >
+            Search flights
+          </button>
+          <button
+            type="button"
+            onClick={onAdd}
+            className="rounded-full border border-slate-300 px-6 py-2.5 text-sm font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-200"
+          >
+            Add existing booking
+          </button>
         </div>
       )}
 
@@ -628,13 +662,13 @@ export function FlightsTab({
                     <p className="text-4xl font-black text-slate-900 dark:text-white tracking-tight leading-none">{dep}</p>
                     <p className="text-base font-semibold text-slate-900 dark:text-white mt-1">{depTime}</p>
                   </div>
-                  <div className="flex flex-col items-center gap-1 shrink-0 px-2">
-                    <div className="flex items-center gap-1">
-                      <div className="h-px w-8 bg-slate-300 dark:bg-slate-600" />
-                      <span className="text-slate-400 text-sm">✈</span>
-                      <div className="h-px w-8 bg-slate-300 dark:bg-slate-600" />
+                  <div className="flex flex-col items-center gap-1.5 shrink-0 px-2 min-w-[5.75rem]">
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-px w-10 bg-slate-300 dark:bg-slate-600" />
+                      <span className="text-slate-500 dark:text-slate-400 text-lg leading-none" aria-hidden>✈</span>
+                      <div className="h-px w-10 bg-slate-300 dark:bg-slate-600" />
                     </div>
-                    <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">{date}</p>
+                    <p className="text-sm font-bold text-slate-700 dark:text-slate-200 text-center leading-tight whitespace-nowrap">{date}</p>
                   </div>
                   <div className="flex-1 min-w-0 text-right">
                     <p className="text-4xl font-black text-slate-900 dark:text-white tracking-tight leading-none">{arr}</p>

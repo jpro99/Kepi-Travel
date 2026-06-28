@@ -161,6 +161,7 @@ import { BagControl } from "@/components/travelAssistant/BagControl";
 import { AirportMode } from "@/components/travelAssistant/AirportMode";
 import { ArrivalMode } from "@/components/travelAssistant/ArrivalMode";
 import { FlightsTab } from "@/components/travelAssistant/FlightsTab";
+import type { FlightSearchDefaults } from "@/components/travelAssistant/FlightSearchLauncher";
 import { HotelsTab } from "@/components/travelAssistant/HotelsTab";
 import { ShareTripCard } from "@/components/travelAssistant/ShareTripCard";
 import { TravelDayView } from "@/components/travelAssistant/TravelDayView";
@@ -4350,6 +4351,21 @@ export default function TravelAssistantPage() {
     ],
   );
 
+  const flightSearchDefaults = useMemo((): FlightSearchDefaults | undefined => {
+    const needed = plannedFlightLegs.filter((leg) => leg.status === "needed");
+    const outbound = needed.find((leg) => leg.role === "outbound") ?? needed[0];
+    if (!outbound) return undefined;
+    const returnLeg = needed.find((leg) => leg.role === "return");
+    return {
+      fromIata: outbound.fromIata,
+      toIata: outbound.toIata,
+      fromLabel: outbound.fromLabel,
+      toLabel: outbound.toLabel,
+      departDate: outbound.departureDate,
+      returnDate: returnLeg?.departureDate,
+    };
+  }, [plannedFlightLegs]);
+
   const itinerarySelfCheck = useMemo(
     () =>
       reconcileTripItinerary({
@@ -5471,6 +5487,39 @@ export default function TravelAssistantPage() {
     setHotelSearchSegment(segment);
     setHotelSearchModalOpen(true);
   }, []);
+
+  const launchCustomHotelSearch = useCallback(
+    (params: { city: string; cityIata?: string; checkIn: string; checkOut: string }): void => {
+      const shortCity = params.city.split("(")[0]?.trim() || params.city;
+      const nights = Math.max(
+        1,
+        Math.round(
+          (Date.parse(`${params.checkOut.slice(0, 10)}T12:00:00`) -
+            Date.parse(`${params.checkIn.slice(0, 10)}T12:00:00`)) /
+            86_400_000,
+        ),
+      );
+      setHotelSearchSegment({
+        id: "custom-hotel-search",
+        city: params.city,
+        cityIata: params.cityIata,
+        checkIn: params.checkIn.slice(0, 10),
+        checkOut: params.checkOut.slice(0, 10),
+        source: "manual",
+        nights,
+        status: "missing",
+        label: `${shortCity} · ${params.checkIn.slice(0, 10)}`,
+        stopKind: "destination",
+        stayIntent: "needs_hotel",
+        suggestedIntent: "needs_hotel",
+        intentReason: "Custom hotel search",
+        connectionHours: null,
+        needsDecision: false,
+      });
+      setHotelSearchModalOpen(true);
+    },
+    [],
+  );
 
   const handleAddCityStay = useCallback(
     (input: { city: string; checkIn: string; checkOut: string }) => {
@@ -9029,7 +9078,7 @@ export default function TravelAssistantPage() {
               itinerarySelfCheck={itinerarySelfCheck}
               transportConflictIds={transportConflictReservationIds}
               tripName={activeTrip?.name}
-              onSearchFlights={handleFlightSearchPlan}
+              flightSearchDefaults={flightSearchDefaults}
               liveStatus={flightStatusCheckByReservationId}
               locationStatus={guidanceLocationStatus}
               nearestAirport={guidanceNearestAirport}
@@ -9052,6 +9101,13 @@ export default function TravelAssistantPage() {
               onCheckStatus={(id) => void handleCheckFlightStatus(id)}
               onDelete={(id) => void handleDeleteReservation(id)}
               onAdd={openManualHotelReservation}
+              hotelSearchDefaults={{
+                city: hotelSearchDefaults.city,
+                cityIata: hotelSearchDefaults.cityIata,
+                checkIn: hotelSearchDefaults.checkIn,
+                checkOut: hotelSearchDefaults.checkOut,
+              }}
+              onLaunchHotelSearch={launchCustomHotelSearch}
               onSearchHotels={openHotelSearchForTrip}
               onSearchSegment={openHotelSearchForSegment}
               onAddCityStay={handleAddCityStay}

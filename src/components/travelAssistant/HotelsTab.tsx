@@ -5,6 +5,7 @@ import { TripHotelStayMap } from "@/components/travelAssistant/TripHotelStayMap"
 import { TravelFitEarnBar } from "@/components/travelAssistant/TravelFitEarnBar";
 import { TripStayPlanner } from "@/components/travelAssistant/TripStayPlanner";
 import { TripHotelCityPicker } from "@/components/travelAssistant/TripHotelCityPicker";
+import { HotelSearchLauncher, type HotelSearchDefaults } from "@/components/travelAssistant/HotelSearchLauncher";
 import type { PlannedStayCity } from "@/lib/travelAssistant/tripPlanBooking";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 import { segmentsNeedingHotel } from "@/lib/hotels/deriveTripStaySegments";
@@ -41,6 +42,8 @@ interface HotelsTabProps {
   onCheckStatus: (id: string) => void;
   onDelete: (id: string) => void;
   onAdd: () => void;
+  hotelSearchDefaults?: HotelSearchDefaults;
+  onLaunchHotelSearch?: (params: { city: string; cityIata?: string; checkIn: string; checkOut: string }) => void;
   onSearchHotels?: () => void;
   onSearchSegment?: (segment: TripStaySegment) => void;
   onAddCityStay?: (input: { city: string; checkIn: string; checkOut: string }) => void;
@@ -111,6 +114,8 @@ export function HotelsTab({
   onCheckStatus,
   onDelete,
   onAdd,
+  hotelSearchDefaults,
+  onLaunchHotelSearch,
   onSearchHotels,
   onSearchSegment,
   onAddCityStay,
@@ -132,32 +137,29 @@ export function HotelsTab({
 
   return (
     <section className="space-y-4 pb-6">
+      {onLaunchHotelSearch ? (
+        <HotelSearchLauncher
+          tripName={tripName}
+          defaults={hotelSearchDefaults}
+          onSearch={onLaunchHotelSearch}
+        />
+      ) : null}
+
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Hotels</h2>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Your hotels</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            {upcoming.length} upcoming{past.length > 0 ? ` · ${past.length} past` : ""}
+            {upcoming.length} booked{past.length > 0 ? ` · ${past.length} past` : ""}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {onSearchHotels ? (
-            <button
-              type="button"
-              onClick={onSearchHotels}
-              className="flex items-center gap-1.5 rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm active:opacity-80 transition-opacity"
-            >
-              Search
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={onAdd}
-            className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm active:opacity-80 transition-opacity dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
-          >
-            <span className="text-base leading-none">+</span> Add
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="shrink-0 rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300"
+        >
+          Add existing
+        </button>
       </div>
 
       {travelFitReservations.some((r) => r.type === "hotel") && plannedStayCities.length === 0 ? (
@@ -190,13 +192,28 @@ export function HotelsTab({
           <p className="text-4xl mb-3">🏨</p>
           <p className="font-semibold text-slate-900 dark:text-white">No hotels yet</p>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">
-            Search for a hotel in your destination or forward a confirmation email
+            Use the search box above to find and book a hotel, or add one you already booked.
           </p>
-          {onSearchHotels ? (
+          {onLaunchHotelSearch ? (
+            <button
+              type="button"
+              onClick={() =>
+                onLaunchHotelSearch({
+                  city: hotelSearchDefaults?.city ?? "",
+                  cityIata: hotelSearchDefaults?.cityIata,
+                  checkIn: hotelSearchDefaults?.checkIn ?? "",
+                  checkOut: hotelSearchDefaults?.checkOut ?? "",
+                })
+              }
+              className="mb-3 w-full rounded-full bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white"
+            >
+              Search hotels
+            </button>
+          ) : onSearchHotels ? (
             <button
               type="button"
               onClick={onSearchHotels}
-              className="mb-3 w-full rounded-full bg-sky-600 px-6 py-2.5 text-sm font-semibold text-white"
+              className="mb-3 w-full rounded-full bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white"
             >
               Search hotels
             </button>
@@ -204,9 +221,9 @@ export function HotelsTab({
           <button
             type="button"
             onClick={onAdd}
-            className="rounded-full bg-[#007AFF] px-6 py-2.5 text-sm font-semibold text-white"
+            className="rounded-full border border-slate-300 px-6 py-2.5 text-sm font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-200"
           >
-            Add hotel
+            Add existing booking
           </button>
         </div>
       )}

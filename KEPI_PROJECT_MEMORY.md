@@ -55,6 +55,12 @@ Last updated: 2026-06-15
 - Cares about: elevator/no stairs, ocean proximity, train/metro, quality/cleanliness, breakfast nice-to-have
 - Example trip search: **Monopoli, Italy**
 
+## Itinerary transport rule (product)
+
+- When consecutive stay cities appear on the trip plan (e.g. Lecce → Venice → Cortina) and no flight/train/ride is booked for that hop, **Flights tab must prompt**: “How are you getting from [A] to [B]?” with **Search flights** and **Add train or transfer**.
+- Connector legs are enabled by default in `buildPlannedFlightLegs` / `buildFlightLegsFromStopRanges`.
+- City→airport resolution uses `resolveHotelDestinationSync` (Lecce→BDS, Cortina→VCE, Venice→VCE).
+
 ---
 
 ## AI domain bots (Cursor skills)

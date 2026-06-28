@@ -73,6 +73,7 @@ function iataForKnownKey(key: string): string | undefined {
   if (key.length === 3) return key;
   if (key === "MONOPOLI" || key === "POLIGNANO") return "BRI";
   if (key === "LECCE") return "BDS";
+  if (key === "CORTINA" || key === "ORTISEI") return "VCE";
   return undefined;
 }
 

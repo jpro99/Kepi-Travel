@@ -12,6 +12,8 @@ import { pointsPerNight } from "@/lib/hotels/hotelPointsDisplay";
 import { hasDisplayNightlyRate, hasKepiBookableLiveRate } from "@/lib/hotels/hotelLiveRate";
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
 import { HotelPhotoGallery } from "@/components/travelAssistant/HotelPhotoGallery";
+import type { TravelProfile } from "@/app/api/travel-profile/route";
+import { hotelCheckInGuidance } from "@/lib/travelAssistant/syncTravelBenefits";
 
 interface HotelDetailSheetProps {
   hotel: RankedHotelSearchResult;
@@ -49,6 +51,14 @@ export function HotelDetailSheet({
   const [detailMedia, setDetailMedia] = useState<HotelDetailMedia>(() =>
     mergeHotelDetailMedia(null, hotel.photos.filter(Boolean)),
   );
+  const [travelProfile, setTravelProfile] = useState<TravelProfile | null>(null);
+
+  useEffect(() => {
+    void fetch("/api/travel-profile", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { profile?: TravelProfile } | null) => setTravelProfile(data?.profile ?? null))
+      .catch(() => null);
+  }, []);
 
   useEffect(() => {
     setMounted(true);
@@ -128,6 +138,8 @@ export function HotelDetailSheet({
   const kepiBookable = Boolean(hotel.kepiBookable && hotel.bookOfferId && kepiLiveRate) && payMode !== "points";
   const nightlyPts = pointsPerNight(hotel);
   const pointsMode = payMode === "points";
+  const hotelChain = hotel.chainName ?? (hotel.name.toLowerCase().includes("hyatt") ? "Hyatt" : "");
+  const eliteCheckInTip = hotelChain ? hotelCheckInGuidance(travelProfile, hotelChain) : null;
 
   const startKepiCheckout = async (): Promise<void> => {
     if (!hotel.bookOfferId) return;
@@ -204,6 +216,11 @@ export function HotelDetailSheet({
                   {hotel.name}
                 </h3>
                 {hotel.chainName ? <p className="text-xs text-slate-500">{hotel.chainName}</p> : null}
+                {eliteCheckInTip ? (
+                  <p className="mt-2 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-2 text-xs text-indigo-800 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200">
+                    🏨 {eliteCheckInTip}
+                  </p>
+                ) : null}
                 {hotel.address ? <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{hotel.address}</p> : null}
               </div>
               <div className="text-right">

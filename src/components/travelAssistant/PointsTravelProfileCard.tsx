@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { CARD_CATALOG, findCard } from "@/lib/points/cardEarnRules";
+import { getCardBenefitProfile, listBenefitsForOwnedCards, summarizeCardBenefits } from "@/lib/points/cardBenefits";
 import type { PointsTravelProfile, SavedInvitationCode } from "@/lib/memory/pointsTravelProfile";
 import { generateId } from "@/lib/utils/generateId";
 
@@ -58,7 +59,7 @@ export function PointsTravelProfileCard() {
         ...data.profile,
         invitationCodes: data.profile.invitationCodes ?? [],
       });
-      setMessage("Saved — Kepi will use this for earn suggestions.");
+      setMessage("Saved — Kepi updated your travel benefits for Airport Mode.");
     } catch {
       setMessage("Could not save. Try again.");
     } finally {
@@ -142,12 +143,16 @@ export function PointsTravelProfileCard() {
 
   const customCards = profile.ownedCards.filter((c) => c.cardId.startsWith("custom-"));
   const catalogActive = profile.ownedCards.filter((c) => !c.cardId.startsWith("custom-"));
+  const activeBenefits = summarizeCardBenefits(
+    listBenefitsForOwnedCards(profile.ownedCards.map((c) => c.cardId)),
+  );
 
   return (
     <div className="space-y-4">
       <p className="text-xs text-slate-500">
-        Card names and last-four digits only — never full numbers on Kepi servers. Used to suggest which card earns
-        the most for each trip.
+        Pick your card from the list — we never store full card numbers. The first 6 digits (BIN) can identify
+        issuer and product, but Kepi uses your explicit card choice plus optional last-four for labeling only.
+        Benefits sync to Airport Mode and hotel check-in guidance.
       </p>
 
       <div>
@@ -155,12 +160,14 @@ export function PointsTravelProfileCard() {
         <div className="mt-2 flex flex-wrap gap-2">
           {CARD_CATALOG.map((card) => {
             const active = profile.ownedCards.some((c) => c.cardId === card.id);
+            const benefits = getCardBenefitProfile(card.id);
             return (
               <button
                 key={card.id}
                 type="button"
                 disabled={saving}
                 onClick={() => toggleCard(card.id)}
+                title={benefits?.guidance[0]}
                 className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
                   active
                     ? "bg-sky-600 text-white"
@@ -197,6 +204,21 @@ export function PointsTravelProfileCard() {
               />
             </div>
           ))}
+        </div>
+      ) : null}
+
+      {activeBenefits.length > 0 ? (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-500/30 dark:bg-sky-500/10">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-sky-700 dark:text-sky-300">
+            Travel benefits from your cards
+          </p>
+          <ul className="mt-2 space-y-1">
+            {activeBenefits.slice(0, 6).map((line) => (
+              <li key={line} className="text-xs text-sky-800 dark:text-sky-200">
+                • {line}
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
 

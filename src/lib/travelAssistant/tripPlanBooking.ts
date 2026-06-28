@@ -4,6 +4,7 @@ import type { FlightLegPlan, TripIntent } from "@/lib/decision/types";
 import type { StopDateRange } from "@/lib/decision/stopDates";
 import { mergeStopRanges, pickPrimaryStayPerCity } from "@/lib/travelAssistant/dayNoteStopRanges";
 import { formatHotelSearchCityLabel } from "@/lib/hotels/tripSearchContext";
+import { resolveHotelDestinationSync } from "@/lib/hotels/resolveDestination";
 import {
   citiesLikelySame,
   deriveHotelSearchCityFromReservation,
@@ -181,7 +182,18 @@ export function buildPlannedFlightLegs(
 }
 
 function iataForCity(city: string): string | undefined {
-  return formatHotelSearchCityLabel(city).iata || undefined;
+  const sync = resolveHotelDestinationSync(city);
+  if (sync?.iata?.trim()) return sync.iata.trim().toUpperCase();
+  const formatted = formatHotelSearchCityLabel(city);
+  return formatted.iata?.trim() ? formatted.iata.trim().toUpperCase() : undefined;
+}
+
+function resolveStopEndpoints(stop: { name: string; iata?: string }): { iata: string; label: string } {
+  const sync = resolveHotelDestinationSync(stop.name);
+  const formatted = formatHotelSearchCityLabel(stop.name);
+  const iata = stop.iata?.trim().toUpperCase() || sync?.iata?.trim().toUpperCase() || formatted.iata?.trim().toUpperCase() || "";
+  const label = sync?.displayName || formatted.label || stop.name;
+  return { iata, label };
 }
 
 function homeFromDayNotes(dayNotes: Record<string, string>, tripStart?: string): { city: string; iata?: string } | null {
@@ -246,18 +258,18 @@ export function buildFlightLegsFromStopRanges(
   for (let index = 0; index < ranges.length - 1; index += 1) {
     const fromStop = ranges[index]!;
     const toStop = ranges[index + 1]!;
-    const fromIata = fromStop.stop.iata?.toUpperCase() ?? iataForCity(fromStop.stop.name)?.toUpperCase();
-    const toIata = toStop.stop.iata?.toUpperCase() ?? iataForCity(toStop.stop.name)?.toUpperCase();
-    if (!fromIata || !toIata) continue;
+    const from = resolveStopEndpoints(fromStop.stop);
+    const to = resolveStopEndpoints(toStop.stop);
+    if (!from.iata && !to.iata) continue;
     legs.push({
       id: `connector-${index}`,
       role: "connector",
-      fromIata,
-      toIata,
-      fromLabel: fromStop.stop.name,
-      toLabel: toStop.stop.name,
-      enabled: false,
-      optional: true,
+      fromIata: from.iata || from.label.slice(0, 3).toUpperCase(),
+      toIata: to.iata || to.label.slice(0, 3).toUpperCase(),
+      fromLabel: from.label,
+      toLabel: to.label,
+      enabled: true,
+      optional: false,
       departureDate: fromStop.checkOut,
     });
   }
