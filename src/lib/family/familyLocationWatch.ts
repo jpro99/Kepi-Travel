@@ -5,6 +5,7 @@ import {
 } from "@/lib/family/locationSharingPrefs";
 import {
   resetGeolocationQualityState,
+  resolveLiveCoordinates,
   shouldAcceptGeolocationFix,
 } from "@/lib/family/geolocationQuality";
 
@@ -31,8 +32,9 @@ async function pushLocation(lat: number, lon: number, accuracy?: number): Promis
 }
 
 function readPosition(pos: GeolocationPosition): void {
-  if (!shouldAcceptGeolocationFix(pos.coords, pos.timestamp)) return;
-  void pushLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+  const resolved = resolveLiveCoordinates(pos.coords, pos.timestamp);
+  if (!resolved) return;
+  void pushLocation(resolved.lat, resolved.lon, resolved.accuracy);
 }
 
 export function setFamilyLocationSender(fn: LocationSender | null): void {
@@ -45,21 +47,50 @@ export function isFamilyLocationWatchActive(): boolean {
 
 const WATCH_OPTIONS: PositionOptions = {
   enableHighAccuracy: true,
-  maximumAge: 5_000,
-  timeout: 30_000,
+  maximumAge: 0,
+  timeout: 25_000,
 };
 
 const BURST_OPTIONS: PositionOptions = {
   enableHighAccuracy: true,
   maximumAge: 0,
-  timeout: 20_000,
+  timeout: 18_000,
 };
 
-/** One high-accuracy fix — use after screen unlock or opening Live Map. */
+/** Take several high-accuracy samples and keep the best one. */
 export function burstFamilyLocationFix(): void {
   if (typeof window === "undefined" || !navigator.geolocation) return;
   if (isFamilySharingOptedOut()) return;
-  navigator.geolocation.getCurrentPosition(readPosition, () => null, BURST_OPTIONS);
+
+  let best: GeolocationPosition | null = null;
+  let attemptsLeft = 3;
+
+  const attempt = (): void => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (
+          !best ||
+          (pos.coords.accuracy ?? 999) < (best.coords.accuracy ?? 999)
+        ) {
+          best = pos;
+        }
+        attemptsLeft -= 1;
+        if (attemptsLeft > 0) {
+          window.setTimeout(attempt, 900);
+          return;
+        }
+        if (best) readPosition(best);
+      },
+      () => {
+        attemptsLeft -= 1;
+        if (attemptsLeft > 0) window.setTimeout(attempt, 900);
+        else if (best) readPosition(best);
+      },
+      BURST_OPTIONS,
+    );
+  };
+
+  attempt();
 }
 
 export function startPersistentFamilyLocationWatch(): void {
@@ -84,12 +115,11 @@ export function startPersistentFamilyLocationWatch(): void {
     WATCH_OPTIONS,
   );
 
-  // High-accuracy heartbeat — never fall back to coarse Wi‑Fi/cell guesses.
   if (heartbeatId === null) {
     heartbeatId = window.setInterval(() => {
       if (isFamilySharingOptedOut()) return;
       burstFamilyLocationFix();
-    }, 45_000);
+    }, 30_000);
   }
 
   burstFamilyLocationFix();

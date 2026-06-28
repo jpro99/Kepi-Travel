@@ -17,6 +17,7 @@ import {
 } from "@/lib/travelAssistant/reservationAttention";
 import { TripTransportRouteMap } from "@/components/travelAssistant/TripTransportRouteMap";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
+import type { ItinerarySelfCheckResult } from "@/lib/travelAssistant/itinerarySelfCheck";
 
 /* ─── Types ──────────────────────────────────────────────────── */
 interface Reservation {
@@ -48,6 +49,7 @@ interface FlightsTabProps {
   reservations: Reservation[];
   transportReservations?: TransportRouteReservation[];
   plannedFlightLegs?: PlannedFlightLeg[];
+  itinerarySelfCheck?: ItinerarySelfCheckResult;
   transportConflictIds?: Set<string>;
   tripName?: string | null;
   onSearchFlights?: (plan: FlightSearchPlan, selectedLegs: PlannedFlightLeg[]) => void;
@@ -435,6 +437,7 @@ export function FlightsTab({
   reservations,
   transportReservations,
   plannedFlightLegs = [],
+  itinerarySelfCheck,
   transportConflictIds,
   tripName,
   onSearchFlights,
@@ -736,6 +739,7 @@ export function FlightsTab({
       <TripTransportRouteMap
         reservations={transportReservations ?? reservations}
         plannedFlightLegs={plannedFlightLegs}
+        selfCheck={itinerarySelfCheck}
         onSegmentTap={onReservationTap}
       />
     </section>

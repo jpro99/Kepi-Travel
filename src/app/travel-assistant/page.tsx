@@ -46,7 +46,8 @@ import {
   startPersistentFamilyLocationWatch,
   stopPersistentFamilyLocationWatch,
 } from "@/lib/family/familyLocationWatch";
-import { shouldAcceptGeolocationFix } from "@/lib/family/geolocationQuality";
+import { resolveLiveCoordinates } from "@/lib/family/geolocationQuality";
+import { reconcileTripItinerary } from "@/lib/travelAssistant/itinerarySelfCheck";
 import {
   buildIncidentAutopilotPlan,
   type IncidentAutopilotAction,
@@ -1988,9 +1989,10 @@ export default function TravelAssistantPage() {
     if (navigator.geolocation) {
       guidanceGpsWatchRef.current = navigator.geolocation.watchPosition(
         (pos) => {
-          if (!shouldAcceptGeolocationFix(pos.coords, pos.timestamp)) return;
-          setGuidanceUserLat(pos.coords.latitude);
-          setGuidanceUserLon(pos.coords.longitude);
+          const resolved = resolveLiveCoordinates(pos.coords, pos.timestamp);
+          if (!resolved) return;
+          setGuidanceUserLat(resolved.lat);
+          setGuidanceUserLon(resolved.lon);
         },
         () => null,
         { enableHighAccuracy: true, maximumAge: 15_000, timeout: 30_000 },
@@ -4379,6 +4381,15 @@ export default function TravelAssistantPage() {
       itineraryPrefs.dayNotes,
       storedTripPlan?.intent,
     ],
+  );
+
+  const itinerarySelfCheck = useMemo(
+    () =>
+      reconcileTripItinerary({
+        reservations: transportRouteReservations,
+        plannedFlightLegs,
+      }).selfCheck,
+    [plannedFlightLegs, transportRouteReservations],
   );
 
   useEffect(() => {
@@ -8887,6 +8898,7 @@ export default function TravelAssistantPage() {
               reservations={consumerReservationsSorted.filter(r => r.type === "flight")}
               transportReservations={transportRouteReservations}
               plannedFlightLegs={plannedFlightLegs}
+              itinerarySelfCheck={itinerarySelfCheck}
               transportConflictIds={transportConflictReservationIds}
               tripName={activeTrip?.name}
               onSearchFlights={handleFlightSearchPlan}

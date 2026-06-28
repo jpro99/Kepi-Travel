@@ -6,6 +6,7 @@ import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 import { logger } from "@/lib/logger";
 import { generateId } from "@/lib/utils/generateId";
 import { getResendClient, getResendFromEmail, isResendConfigured } from "@/lib/email/resendClient";
+import { haversineMeters } from "@/lib/geo/haversineMeters";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -316,6 +317,27 @@ export async function POST(request: Request) {
   // ── update-location ───────────────────────────────────────────────────────
   if (d.action === "update-location") {
     if (d.lat === undefined || d.lon === undefined) return NextResponse.json({ error: "lat and lon required" }, { status: 400 });
+
+    let ns = userId;
+    const rawMem = await kvStoreGet<unknown>(FAMILY_MEMBERSHIP_KEY, { userId });
+    const mem = resolveMembership(rawMem, userId);
+    if (mem) ns = mem.ownerId;
+
+    const prev = await kvStoreGet<z.infer<typeof LocationSchema>>(FAMILY_LOCATION_KEY(userId), { userId: ns });
+    const incomingAccuracy = d.accuracy ?? Number.POSITIVE_INFINITY;
+
+    if (prev && incomingAccuracy > 80) {
+      const jumpM = haversineMeters(prev.lat, prev.lon, d.lat, d.lon);
+      const prevAcc = prev.accuracy ?? 999;
+      if (jumpM > 150 && incomingAccuracy > prevAcc && prevAcc <= 60) {
+        return NextResponse.json({ ok: true, location: prev, skipped: true });
+      }
+    }
+    if (incomingAccuracy > 200) {
+      if (prev) return NextResponse.json({ ok: true, location: prev, skipped: true });
+      return NextResponse.json({ ok: true, skipped: true });
+    }
+
     const loc: z.infer<typeof LocationSchema> = {
       lat: d.lat, lon: d.lon,
       accuracy: d.accuracy,
@@ -323,10 +345,6 @@ export async function POST(request: Request) {
       memberId: userId,
       label: d.label,
     };
-    let ns = userId;
-    const rawMem = await kvStoreGet<unknown>(FAMILY_MEMBERSHIP_KEY, { userId });
-    const mem = resolveMembership(rawMem, userId);
-    if (mem) ns = mem.ownerId;
     await kvStoreSet(FAMILY_LOCATION_KEY(userId), loc, { userId: ns });
     return NextResponse.json({ ok: true, location: loc });
   }

@@ -14,9 +14,10 @@ import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
 import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import {
-  shouldAcceptGeolocationFix,
+  resolveLiveCoordinates,
   shouldDisplayGeolocationFix,
 } from "@/lib/family/geolocationQuality";
+import { resolveLocationForMapDisplay } from "@/lib/family/locationDisplayCache";
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface LocationPoint {
@@ -103,27 +104,43 @@ export function LiveMapPage() {
       .then(r => r.json())
       .then((d: { group: FamilyGroup; locations: Record<string, LocationPoint>; myMemberId?: string }) => {
         setGroup(d.group);
-        setLocations(d.locations ?? {});
         if (d.myMemberId) {
           setMyMemberId(d.myMemberId);
           myMemberIdRef.current = d.myMemberId;
+        }
+        if (d.locations) {
+          const next: Record<string, LocationPoint> = {};
+          for (const [memberId, loc] of Object.entries(d.locations)) {
+            const resolved = resolveLocationForMapDisplay(memberId, loc);
+            if (resolved) next[memberId] = { ...loc, ...resolved };
+          }
+          setLocations(next);
         }
       })
       .catch(() => null);
   }, []);
 
   /* ── Poll locations every 10 s (faster than before) ── */
+  const mergePolledLocations = useCallback((incoming: Record<string, LocationPoint>) => {
+    const next: Record<string, LocationPoint> = {};
+    for (const [memberId, loc] of Object.entries(incoming)) {
+      const resolved = resolveLocationForMapDisplay(memberId, loc);
+      if (resolved) next[memberId] = { ...loc, ...resolved };
+    }
+    setLocations((prev) => ({ ...prev, ...next }));
+  }, []);
+
   useEffect(() => {
     const id = setInterval(() => {
       void fetch("/api/family", { cache: "no-store" })
         .then(r => r.json())
         .then((d: { locations?: Record<string, LocationPoint> }) => {
-          if (d.locations) setLocations(d.locations);
+          if (d.locations) mergePolledLocations(d.locations);
         })
         .catch(() => null);
     }, 10_000);
     return () => clearInterval(id);
-  }, []);
+  }, [mergePolledLocations]);
 
   /* ── Place/update markers (move existing ones, no full rebuild) ── */
   const placeMarkers = useCallback((map: unknown) => {
@@ -434,8 +451,13 @@ export function LiveMapPage() {
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       pos => {
-        if (!shouldAcceptGeolocationFix(pos.coords, pos.timestamp)) return;
-        const { latitude: lat, longitude: lon, accuracy } = pos.coords;
+        const resolved = resolveLiveCoordinates(pos.coords, pos.timestamp);
+        if (!resolved) return;
+        const { latitude: lat, longitude: lon, accuracy } = {
+          latitude: resolved.lat,
+          longitude: resolved.lon,
+          accuracy: resolved.accuracy,
+        };
 
         // FIX: correct endpoint is POST /api/family with action:"update-location"
         void fetch("/api/family", {

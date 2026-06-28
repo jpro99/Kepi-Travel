@@ -6,6 +6,7 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import { shouldDisplayGeolocationFix } from "@/lib/family/geolocationQuality";
+import { resolveLocationForMapDisplay } from "@/lib/family/locationDisplayCache";
 
 interface LocationPoint {
   lat: number;
@@ -60,8 +61,11 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
       const existing: Record<string, any> = (map as any)._kepiMarkers ?? {};
 
       members.forEach(member => {
-        const loc = locations[member.id];
-        if (!loc || !shouldDisplayGeolocationFix(loc.accuracy)) return;
+        const raw = locations[member.id];
+        if (!raw) return;
+        const resolved = resolveLocationForMapDisplay(member.id, raw);
+        if (!resolved || !shouldDisplayGeolocationFix(resolved.accuracy)) return;
+        const loc = { ...raw, ...resolved };
 
         const stale = isStale(loc.updatedAt);
 

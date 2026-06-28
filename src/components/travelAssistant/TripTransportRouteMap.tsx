@@ -21,10 +21,12 @@ import {
 import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import type { PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
+import type { ItinerarySelfCheckResult } from "@/lib/travelAssistant/itinerarySelfCheck";
 
 interface TripTransportRouteMapProps {
   reservations: TransportRouteReservation[];
   plannedFlightLegs?: PlannedFlightLeg[];
+  selfCheck?: ItinerarySelfCheckResult;
   onSegmentTap?: (reservationId: string) => void;
 }
 
@@ -121,6 +123,7 @@ function createAirportMarker(code: string, visitCount: number): HTMLDivElement {
 export function TripTransportRouteMap({
   reservations,
   plannedFlightLegs = [],
+  selfCheck,
   onSegmentTap,
 }: TripTransportRouteMapProps) {
   const route = useMemo(
@@ -454,6 +457,39 @@ export function TripTransportRouteMap({
               : `${route.summary.unbooked} to book`}
         </div>
       </div>
+
+      {selfCheck ? (
+        <div
+          className={`mx-5 mb-3 rounded-2xl border px-4 py-3 ${
+            selfCheck.passed
+              ? "border-emerald-400/30 bg-emerald-500/10"
+              : "border-amber-400/30 bg-amber-500/10"
+          }`}
+        >
+          <p className={`text-xs font-bold ${selfCheck.passed ? "text-emerald-100" : "text-amber-100"}`}>
+            {selfCheck.passed ? "✓ Trip verified" : "Trip self-check"}
+          </p>
+          <p className="mt-1 text-[11px] leading-relaxed text-sky-50/80">{selfCheck.summary}</p>
+          <ul className="mt-2 space-y-1">
+            {selfCheck.items.slice(0, 4).map((item) => (
+              <li key={item.id} className="text-[10px] text-sky-100/70">
+                <span
+                  className={
+                    item.status === "pass"
+                      ? "text-emerald-300"
+                      : item.status === "warn"
+                        ? "text-amber-300"
+                        : "text-red-300"
+                  }
+                >
+                  {item.status === "pass" ? "✓" : item.status === "warn" ? "·" : "!"}
+                </span>{" "}
+                {item.question} — {item.answer}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {hasGeo ? (
         <div className="relative px-2 pt-2">
