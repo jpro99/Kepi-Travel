@@ -176,6 +176,31 @@ When a more accurate GPS reading arrives (e.g. house after Wi‑Fi placed the pi
 
 ---
 
+## ITINERARY LAWS
+
+**I1 — Plan is a first-class tab**  
+Day-by-day planning lives on the **Plan** (`itinerary`) consumer tab — not a hidden sidebar. Trip tab stays operational (countdown, Next Up); Plan tab owns timeline + calendar.
+
+**I2 — Vertical timeline, collapsed by default**  
+Each trip day is one collapsed row: date, one-line summary, status dot. Tap opens an edit drawer — no column-table spreadsheet layout.
+
+**I3 — Status dots are deterministic**  
+Gray = empty · Emerald = covered · Amber = needs booking · Red = gap/integrity issue on that day.
+
+**I4 — Calendar syncs with timeline**  
+Selecting a day on the calendar scrolls/highlights the same day on the timeline (shared `selectedDateKey`).
+
+**I5 — Mission cards for unbooked stays**  
+Unbooked hotel gaps render as photo-backed mission cards with one gold CTA — not inline to-do rows.
+
+**I6 — Connection warnings slide in**  
+Gap/connection alerts on Plan tab are slide-in banners (auto-dismiss ~8s), not permanent inline boxes.
+
+**I7 — City photos are curated only**  
+Destination backgrounds use static Unsplash photo IDs from `cityPhotos.ts` — never live random Unsplash source URLs.
+
+---
+
 ## DATA / API LAWS
 
 **D1 — Build gate**  

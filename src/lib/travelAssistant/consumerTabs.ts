@@ -1,7 +1,17 @@
 /** Bottom-nav and orientation card tabs in the travel assistant consumer shell. */
-export type ConsumerTab = "trip" | "flights" | "hotels" | "map" | "more";
+export type ConsumerTab = "trip" | "itinerary" | "flights" | "hotels" | "map" | "more";
 
-export const CONSUMER_TABS: ConsumerTab[] = ["trip", "flights", "hotels", "map", "more"];
+export const CONSUMER_TABS: ConsumerTab[] = ["trip", "itinerary", "flights", "hotels", "map", "more"];
+
+/** Tab bar labels/icons — shared by desktop and mobile nav. */
+export const CONSUMER_TAB_BAR: ReadonlyArray<readonly [ConsumerTab, string, string]> = [
+  ["trip", "Trip", "✈️"],
+  ["itinerary", "Plan", "📅"],
+  ["flights", "Flights", "🛫"],
+  ["hotels", "Hotels", "🏨"],
+  ["map", "Map", "🗺"],
+  ["more", "More", "···"],
+];
 
 export function isConsumerTab(value: string): value is ConsumerTab {
   return (CONSUMER_TABS as string[]).includes(value);

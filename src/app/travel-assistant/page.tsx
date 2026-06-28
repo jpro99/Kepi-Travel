@@ -118,7 +118,8 @@ import {
   ManualReservationEntryModal,
   type ManualReservationFormValue,
 } from "@/components/travelAssistant/ManualReservationEntryModal";
-import { TripCalendarView } from "@/components/travelAssistant/TripCalendarView";
+import { useItineraryPanelPrefs } from "@/components/travelAssistant/TripItineraryPanel";
+import { ItineraryTabView } from "@/components/travelAssistant/ItineraryTabView";
 import { NextUpCard } from "@/components/travelAssistant/NextUpCard";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
@@ -126,8 +127,6 @@ import { hydrateReservationsPricing, applyAcceptedReservationPricing } from "@/l
 import { buildTransportConflictReservationIds } from "@/lib/travelAssistant/reservationAttention";
 import { computeTripSpend } from "@/lib/travelAssistant/tripSpendSummary";
 import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
-import { TripItineraryPanel, useItineraryPanelPrefs } from "@/components/travelAssistant/TripItineraryPanel";
-import { ResizableItineraryPane } from "@/components/travelAssistant/ResizableItineraryPane";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
 import { RecordTripModal } from "@/components/decision/RecordTripModal";
@@ -199,7 +198,11 @@ import { Logo } from "@/components/ui/Logo";
 import { JourneyFlowPanel } from "./components/JourneyFlowPanel";
 import { TravelAssistantTopControls } from "./components/TravelAssistantTopControls";
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
-import type { ConsumerTab } from "@/lib/travelAssistant/consumerTabs";
+import {
+  CONSUMER_TAB_BAR,
+  orientationTabToConsumerTab,
+  type ConsumerTab,
+} from "@/lib/travelAssistant/consumerTabs";
 
 const OpsPanel = lazy(async () => {
   const loadedModule = await import("@/components/travelAssistant/OpsPanel");
@@ -1953,7 +1956,6 @@ export default function TravelAssistantPage() {
   const [timelineSectionTab, setTimelineSectionTab] = useState<TimelineSectionTab>("reservations");
   const [, setPackingCompletionPercent] = useState(0);
   const [consumerTab, setConsumerTab] = useState<ConsumerTab>("trip");
-  const [itineraryPanelOpen, setItineraryPanelOpen] = useState(false);
   const [manualReservationDefaultDateTime, setManualReservationDefaultDateTime] = useState<string | null>(null);
   const itineraryPrefs = useItineraryPanelPrefs(activeTripId);
   const [travelStyleProfile, setTravelStyleProfile] = useState<TravelStyleProfile | null>(null);
@@ -2135,10 +2137,11 @@ export default function TravelAssistantPage() {
   }, [searchParams, user?.id]);
 
   useEffect(() => {
-    if (searchParams.get("itinerary") !== "1") return;
-    setItineraryPanelOpen(true);
+    if (searchParams.get("itinerary") !== "1" && searchParams.get("tab") !== "itinerary") return;
+    setConsumerTab("itinerary");
     const url = new URL(window.location.href);
     url.searchParams.delete("itinerary");
+    url.searchParams.set("tab", "itinerary");
     window.history.replaceState({}, "", url.toString());
   }, [searchParams]);
 
@@ -2222,7 +2225,6 @@ export default function TravelAssistantPage() {
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushMessage, setPushMessage] = useState<string | null>(null);
-  const [reservationsCalendarView, setReservationsCalendarView] = useState(false);
   const [talkPlannerOpen, setTalkPlannerOpen] = useState(false);
   const [talkPlannerLoading, setTalkPlannerLoading] = useState(false);
   const [bookFlightsWizardOpen, setBookFlightsWizardOpen] = useState(false);
@@ -2312,7 +2314,7 @@ export default function TravelAssistantPage() {
     const timeout = window.setTimeout(() => {
       const params = new URLSearchParams(window.location.search);
       const tab = params.get("tab");
-      if (tab === "trip" || tab === "flights" || tab === "hotels" || tab === "map" || tab === "more") {
+      if (tab === "trip" || tab === "itinerary" || tab === "flights" || tab === "hotels" || tab === "map" || tab === "more") {
         setConsumerTab(tab);
       }
       const gmailStatus = params.get("gmail");
@@ -7460,7 +7462,7 @@ export default function TravelAssistantPage() {
 
   const handleShareItineraryLink = (): void => {
     const url = new URL(window.location.href);
-    url.searchParams.set("itinerary", "1");
+    url.searchParams.set("tab", "itinerary");
     const link = url.toString();
     void (async () => {
       try {
@@ -7505,16 +7507,14 @@ export default function TravelAssistantPage() {
           return;
         }
         setTalkPlannerOpen(false);
-        itineraryPrefs.setViewMode("calendar");
-        setReservationsCalendarView(true);
-        setItineraryPanelOpen(true);
+        navigateToConsumerTab("itinerary");
         setBookFlightsWizardOpen(true);
         setToast("Your trip is on the calendar — pick flights when you're ready.");
       } finally {
         setTalkPlannerLoading(false);
       }
     },
-    [handleSaveTripPlanningSetup, itineraryPrefs.setViewMode],
+    [handleSaveTripPlanningSetup, navigateToConsumerTab],
   );
 
   useEffect(() => {
@@ -8591,58 +8591,43 @@ export default function TravelAssistantPage() {
     </>
   );
 
-  if (!advancedWorkspaceEnabled) {
-    const itineraryPanel = (
-      <TripItineraryPanel
-        tripId={activeTripId}
-        tripName={activeTrip?.name ?? "Your trip"}
-        tripStartDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
-        tripEndDate={activeTrip?.endDate ?? null}
-        tripDaysAway={tripDaysAway}
-        reservations={consumerReservationsSorted}
-        dayNotes={itineraryPrefs.dayNotes}
-        stopRanges={effectiveStopRanges}
-        onDayNoteChange={itineraryPrefs.updateDayNote}
-        onPlanDay={handlePlanDay}
-        viewMode={itineraryPrefs.viewMode}
-        onViewModeChange={itineraryPrefs.setViewMode}
-        onClose={() => setItineraryPanelOpen(false)}
-        onReservationTap={(id) => openDrawer("reservation", id)}
-        onGapActionTap={(tab) => navigateToConsumerTab(tab as ConsumerTab)}
-        onPrint={handleConsumerItineraryPrint}
-        onExportPdf={handleConsumerItineraryPdf}
-        onShareLink={handleShareItineraryLink}
-        plannedStayCities={plannedStayCities}
-        plannedFlightLegs={plannedFlightLegs}
-        onPickPlannedCity={openHotelSearchForPlannedCity}
-        onSearchFlights={handleFlightSearchPlan}
-        onOpenHotelsTab={() => navigateToConsumerTab("hotels")}
-        onOpenFlightsTab={() => navigateToConsumerTab("flights")}
-      />
-    );
+  const handleItineraryGapAction = useCallback(
+    (tab: string): void => {
+      if (tab === "reservations") {
+        navigateToConsumerTab("flights");
+        return;
+      }
+      navigateToConsumerTab(orientationTabToConsumerTab(tab));
+    },
+    [navigateToConsumerTab],
+  );
 
+  const handleItineraryPlanHotel = useCallback(
+    (dateKey: string, city: string): void => {
+      handlePlanDay(
+        dateKey,
+        {
+          kind: "stay",
+          raw: `Stay in ${city}`,
+          stayCity: city,
+          toCity: city,
+          needsTransport: false,
+          needsHotelCheckout: false,
+          needsHotelCheckin: true,
+          summary: `Stay in ${city}`,
+        },
+        "hotel",
+      );
+    },
+    [handlePlanDay],
+  );
+
+  if (!advancedWorkspaceEnabled) {
     return (
       <main className="relative min-h-screen overflow-x-hidden bg-[var(--bg-base)] pb-24 text-[var(--text-primary)]">
-        {itineraryPanelOpen ? (
-          <div className="fixed inset-0 z-50 lg:hidden">{itineraryPanel}</div>
-        ) : null}
         <div className="relative z-10 flex min-h-screen">
-          {itineraryPanelOpen ? (
-            <ResizableItineraryPane
-              width={itineraryPrefs.panelWidth}
-              onWidthChange={itineraryPrefs.setPanelWidth}
-            >
-              {itineraryPanel}
-            </ResizableItineraryPane>
-          ) : null}
           <div className="min-w-0 flex-1">
-        <div
-          className={`mx-auto space-y-3 px-3 py-3 sm:px-4 lg:px-5 ${
-            itineraryPanelOpen
-              ? "w-full max-w-none"
-              : "max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl"
-          }`}
-        >
+        <div className="mx-auto max-w-3xl space-y-3 px-3 py-3 sm:max-w-4xl sm:px-4 lg:max-w-6xl lg:px-5 xl:max-w-7xl">
           <header className="sticky top-0 z-30 -mx-4 border-b border-slate-200/70 bg-slate-50/90 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
@@ -8654,19 +8639,6 @@ export default function TravelAssistantPage() {
                 >
                   Trips{trips.length > 0 ? ` (${trips.length})` : ""}
                 </button>
-                {!showUnconfiguredTripShell && activeTrip ? (
-                  <button
-                    type="button"
-                    onClick={() => setItineraryPanelOpen((value) => !value)}
-                    className={`rounded-full border px-3 py-1.5 text-xs font-bold shadow-sm ${
-                      itineraryPanelOpen
-                        ? "border-sky-400 bg-sky-600 text-white dark:border-sky-500"
-                        : "border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-700 dark:bg-sky-950 dark:text-sky-200"
-                    }`}
-                  >
-                    {itineraryPanelOpen ? "Hide itinerary" : "Itinerary"}
-                  </button>
-                ) : null}
               </div>
               <div className="flex items-center gap-2 sm:gap-3">
                 {!showUnconfiguredTripShell && activeTrip ? (
@@ -8747,19 +8719,13 @@ export default function TravelAssistantPage() {
           </header>
 
           {/* Apple-style tab bar */}
-          <div className="relative flex items-stretch rounded-2xl bg-white/90 shadow-sm ring-1 ring-black/[0.06] dark:bg-slate-900/90 dark:ring-white/[0.08] overflow-hidden">
-            {([
-              ["trip",    "Trip",    "✈️"],
-              ["flights", "Flights", "🛫"],
-              ["hotels",  "Hotels",  "🏨"],
-              ["map",     "Map",     "🗺"],
-              ["more",    "More",    "···"],
-            ] as const).map(([tab, label, icon]) => (
+          <div className="relative flex items-stretch overflow-x-auto rounded-2xl bg-white/90 shadow-sm ring-1 ring-black/[0.06] dark:bg-slate-900/90 dark:ring-white/[0.08]">
+            {CONSUMER_TAB_BAR.map(([tab, label, icon]) => (
               <button
                 key={tab}
                 type="button"
-                onClick={() => tab === "map" ? router.push("/travel-assistant/live-map") : navigateToConsumerTab(tab as ConsumerTab)}
-                className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 transition-all ${
+                onClick={() => tab === "map" ? router.push("/travel-assistant/live-map") : navigateToConsumerTab(tab)}
+                className={`relative flex min-w-[4.5rem] flex-1 flex-col items-center justify-center gap-0.5 py-2.5 transition-all ${
                   consumerTab === tab
                     ? "text-[#007AFF] dark:text-[#0A84FF]"
                     : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
@@ -8768,7 +8734,7 @@ export default function TravelAssistantPage() {
                 <span className="text-[15px] leading-none">{icon}</span>
                 <span className={`text-[10px] font-semibold tracking-tight ${consumerTab === tab ? "text-[#007AFF] dark:text-[#0A84FF]" : ""}`}>{label}</span>
                 {consumerTab === tab && (
-                  <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-[2.5px] w-8 rounded-full bg-[#007AFF] dark:bg-[#0A84FF]" />
+                  <span className="absolute bottom-0 left-1/2 h-[2.5px] w-8 -translate-x-1/2 rounded-full bg-[#007AFF] dark:bg-[#0A84FF]" />
                 )}
               </button>
             ))}
@@ -8866,20 +8832,6 @@ export default function TravelAssistantPage() {
                       })()}
                     </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setItineraryPanelOpen(true)}
-                        className="shrink-0 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-bold text-white hover:bg-white/20 lg:hidden"
-                      >
-                        Itinerary
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setItineraryPanelOpen((value) => !value)}
-                        className="hidden shrink-0 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-bold text-white hover:bg-white/20 lg:inline-flex"
-                      >
-                        {itineraryPanelOpen ? "Hide itinerary" : "Itinerary"}
-                      </button>
                   </div>
                   </div>
 
@@ -9039,13 +8991,6 @@ export default function TravelAssistantPage() {
                         {activeTrip?.name ?? "Your next trip"}
                       </h1>
                       <div className="flex shrink-0 items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setItineraryPanelOpen((value) => !value)}
-                          className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-800 dark:border-sky-700 dark:bg-sky-950 dark:text-sky-200"
-                        >
-                          {itineraryPanelOpen ? "Hide itinerary" : "Itinerary"}
-                        </button>
                       {activeTrip && (
                         <button
                           type="button"
@@ -9149,18 +9094,16 @@ export default function TravelAssistantPage() {
                 </div>
               ) : null}
 
-              {!itineraryPanelOpen ? (
-                <button
-                  type="button"
-                  onClick={() => setItineraryPanelOpen(true)}
-                  className="w-full rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-50 to-white px-4 py-4 text-left shadow-sm dark:border-sky-800 dark:from-sky-950/40 dark:to-slate-900"
-                >
-                  <p className="text-sm font-bold text-sky-900 dark:text-sky-100">Open your itinerary</p>
-                  <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
-                    Day-by-day plan, print or send to your phone, and review gaps when you&apos;re ready.
-                  </p>
-                </button>
-              ) : null}
+              <button
+                type="button"
+                onClick={() => navigateToConsumerTab("itinerary")}
+                className="w-full rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-50 to-white px-4 py-4 text-left shadow-sm dark:border-sky-800 dark:from-sky-950/40 dark:to-slate-900"
+              >
+                <p className="text-sm font-bold text-sky-900 dark:text-sky-100">Open your itinerary</p>
+                <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
+                  Day-by-day timeline, calendar, print or share — all on the Plan tab.
+                </p>
+              </button>
 
               {activeTrip && isTripShellConfigured(activeTrip) ? (
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -9191,34 +9134,13 @@ export default function TravelAssistantPage() {
                       )}
                       <button
                         type="button"
-                        onClick={() => setReservationsCalendarView((value) => !value)}
-                        className="rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-200"
+                        onClick={() => navigateToConsumerTab("itinerary")}
+                        className="rounded-xl bg-[#0F1923] px-3 py-1.5 text-xs font-bold text-white dark:bg-[#f4c95d] dark:text-[#0F1923]"
                       >
-                        {reservationsCalendarView ? "Hide calendar" : "Show calendar"}
+                        Open Plan tab
                       </button>
                     </div>
                   </div>
-                  {reservationsCalendarView ? (
-                    <div className="mt-4">
-                      <TripCalendarView
-                        reservations={consumerReservationsSorted}
-                        tripStartDate={activeTrip.startDate}
-                        tripEndDate={activeTrip.endDate}
-                        tripName={activeTrip.name}
-                        dayNotes={itineraryPrefs.dayNotes}
-                        stopRanges={effectiveStopRanges}
-                        onDayNoteChange={itineraryPrefs.updateDayNote}
-                        onReservationTap={(id) => openDrawer("reservation", id)}
-                        onPlanDay={handlePlanDay}
-                        plannedStayCities={plannedStayCities}
-                        plannedFlightLegs={plannedFlightLegs}
-                        onPickCity={openHotelSearchForPlannedCity}
-                        onSearchFlights={handleFlightSearchPlan}
-                        onOpenHotelsTab={() => navigateToConsumerTab("hotels")}
-                        onOpenFlightsTab={() => navigateToConsumerTab("flights")}
-                      />
-                    </div>
-                  ) : null}
                 </section>
               ) : null}
 
@@ -9295,6 +9217,32 @@ export default function TravelAssistantPage() {
               </>
               ) : null}
             </section>
+          ) : consumerTab === "itinerary" ? (
+            <ItineraryTabView
+              tripId={activeTripId}
+              tripName={activeTrip?.name ?? "Your trip"}
+              tripStartDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
+              tripEndDate={activeTrip?.endDate ?? null}
+              reservations={consumerReservationsSorted}
+              dayNotes={itineraryPrefs.dayNotes}
+              stopRanges={effectiveStopRanges}
+              onDayNoteChange={itineraryPrefs.updateDayNote}
+              onPlanDay={handlePlanDay}
+              onReservationTap={(id) => openDrawer("reservation", id)}
+              onGapActionTap={handleItineraryGapAction}
+              onPrint={handleConsumerItineraryPrint}
+              onExportPdf={handleConsumerItineraryPdf}
+              onShareLink={handleShareItineraryLink}
+              plannedStayCities={plannedStayCities}
+              plannedFlightLegs={plannedFlightLegs}
+              onPickPlannedCity={openHotelSearchForPlannedCity}
+              onSearchFlights={handleFlightSearchPlan}
+              onOpenHotelsTab={() => navigateToConsumerTab("hotels")}
+              onOpenFlightsTab={() => navigateToConsumerTab("flights")}
+              missionItems={tripPlanningActions}
+              onMissionAction={handleTripPlanningAction}
+              onPlanHotel={handleItineraryPlanHotel}
+            />
           ) : consumerTab === "flights" ? (
             <FlightsTab
               reservations={consumerReservationsSorted.filter(r => r.type === "flight")}
@@ -9650,20 +9598,14 @@ export default function TravelAssistantPage() {
           </div>
         </div>
 
-        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--border-default)] bg-[var(--bg-card)]/95 px-3 py-2 shadow-2xl backdrop-blur md:hidden">
-          <div className="mx-auto grid max-w-md grid-cols-5 gap-0.5 text-[11px] font-semibold">
-            {([
-              ["trip",    "Trip",    "✈️"],
-              ["flights", "Flights", "🛫"],
-              ["hotels",  "Hotels",  "🏨"],
-              ["map",     "Map",     "🗺"],
-              ["more",    "More",    "···"],
-            ] as const).map(([tab, label, icon]) => (
+        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--border-default)] bg-[var(--bg-card)]/95 px-2 py-2 shadow-2xl backdrop-blur md:hidden">
+          <div className="mx-auto flex max-w-lg gap-0.5 overflow-x-auto text-[11px] font-semibold">
+            {CONSUMER_TAB_BAR.map(([tab, label, icon]) => (
               <button
                 key={tab}
                 type="button"
-                onClick={() => tab === "map" ? router.push("/travel-assistant/live-map") : navigateToConsumerTab(tab as ConsumerTab)}
-                className={`relative flex flex-1 flex-col items-center justify-center gap-0.5 py-2 transition-all ${
+                onClick={() => tab === "map" ? router.push("/travel-assistant/live-map") : navigateToConsumerTab(tab)}
+                className={`relative flex min-w-[3.4rem] flex-1 flex-col items-center justify-center gap-0.5 py-2 transition-all ${
                   consumerTab === tab
                     ? "text-[#007AFF] dark:text-[#0A84FF]"
                     : "text-slate-400 dark:text-slate-500"
@@ -9672,7 +9614,7 @@ export default function TravelAssistantPage() {
                 <span className="text-[15px] leading-none">{icon}</span>
                 <span className="text-[10px] font-semibold tracking-tight">{label}</span>
                 {consumerTab === tab && (
-                  <span className="absolute top-0 left-1/2 -translate-x-1/2 h-[2.5px] w-8 rounded-full bg-[#007AFF] dark:bg-[#0A84FF]" />
+                  <span className="absolute top-0 left-1/2 h-[2.5px] w-8 -translate-x-1/2 rounded-full bg-[#007AFF] dark:bg-[#0A84FF]" />
                 )}
               </button>
             ))}
