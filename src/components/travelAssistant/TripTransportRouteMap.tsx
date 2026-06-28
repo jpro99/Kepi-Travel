@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import "maplibre-gl/dist/maplibre-gl.css";
+import "@/lib/maplibreCspWorker";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildTripTransportRoute,
   segmentKindEmoji,
@@ -8,6 +10,15 @@ import {
   type TripTransportSegment,
   type TransportRouteReservation,
 } from "@/lib/travelAssistant/tripTransportRoute";
+import {
+  AIRPORT_SOURCE,
+  ROUTE_SOURCE,
+  buildAirportGeoJson,
+  buildRouteSegmentGeoJson,
+  collectRouteMapPoints,
+  segmentBounds,
+} from "@/lib/travelAssistant/tripRouteMapGeo";
+import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
 import type { PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
 
 interface TripTransportRouteMapProps {
@@ -16,80 +27,36 @@ interface TripTransportRouteMapProps {
   onSegmentTap?: (reservationId: string) => void;
 }
 
-interface MapPoint {
-  code: string;
-  label: string;
-  lat: number;
-  lon: number;
-}
-
-function collectGeoPoints(segments: TripTransportSegment[]): MapPoint[] {
-  const points: MapPoint[] = [];
-  const seen = new Set<string>();
-
-  for (const segment of segments) {
-    if (segment.lat != null && segment.lon != null && !seen.has(segment.fromCode)) {
-      seen.add(segment.fromCode);
-      points.push({ code: segment.fromCode, label: segment.fromLabel, lat: segment.lat, lon: segment.lon });
-    }
-    if (segment.toLat != null && segment.toLon != null && !seen.has(segment.toCode)) {
-      seen.add(segment.toCode);
-      points.push({ code: segment.toCode, label: segment.toLabel, lat: segment.toLat, lon: segment.toLon });
-    }
-  }
-  return points;
-}
-
-function projectPoint(
-  lat: number,
-  lon: number,
-  bounds: { minLat: number; maxLat: number; minLon: number; maxLon: number },
-  width: number,
-  height: number,
-  pad: number,
-): { x: number; y: number } {
-  const lonSpan = Math.max(bounds.maxLon - bounds.minLon, 8);
-  const latSpan = Math.max(bounds.maxLat - bounds.minLat, 6);
-  const x = pad + ((lon - bounds.minLon) / lonSpan) * (width - pad * 2);
-  const y = pad + ((bounds.maxLat - lat) / latSpan) * (height - pad * 2);
-  return { x, y };
-}
-
-function arcPath(x1: number, y1: number, x2: number, y2: number): string {
-  const mx = (x1 + x2) / 2;
-  const my = (y1 + y2) / 2;
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const dist = Math.hypot(dx, dy) || 1;
-  const nx = -dy / dist;
-  const ny = dx / dist;
-  const bulge = Math.min(dist * 0.22, 72);
-  return `M ${x1} ${y1} Q ${mx + nx * bulge} ${my + ny * bulge} ${x2} ${y2}`;
-}
-
 function SegmentCard({
   segment,
   index,
+  selected,
+  cardRef,
   onTap,
 }: {
   segment: TripTransportSegment;
   index: number;
-  onTap?: (id: string) => void;
+  selected: boolean;
+  cardRef?: (el: HTMLButtonElement | null) => void;
+  onTap?: (segment: TripTransportSegment) => void;
 }) {
   const color = segmentStrokeColor(segment);
-  const clickable = Boolean(segment.reservationId && onTap);
+  const clickable = Boolean(onTap);
 
   return (
     <button
+      ref={cardRef}
       type="button"
       disabled={!clickable}
-      onClick={() => segment.reservationId && onTap?.(segment.reservationId)}
+      onClick={() => onTap?.(segment)}
       className={`min-w-[11rem] shrink-0 rounded-2xl border p-3 text-left transition ${
-        segment.status === "conflict"
-          ? "border-red-400/60 bg-red-500/10"
-          : segment.booked
-            ? "border-white/10 bg-white/5 hover:bg-white/10"
-            : "border-white/10 bg-white/[0.03] opacity-80"
+        selected
+          ? "border-sky-400/70 bg-sky-500/15 ring-1 ring-sky-400/40"
+          : segment.status === "conflict"
+            ? "border-red-400/60 bg-red-500/10"
+            : segment.booked
+              ? "border-white/10 bg-white/5 hover:bg-white/10"
+              : "border-white/10 bg-white/[0.03] opacity-80"
       } ${clickable ? "cursor-pointer" : "cursor-default"}`}
     >
       <div className="flex items-center gap-2">
@@ -123,6 +90,33 @@ function SegmentCard({
   );
 }
 
+function createAirportMarker(code: string, visitCount: number): HTMLDivElement {
+  const wrap = document.createElement("div");
+  wrap.className = "flex flex-col items-center pointer-events-none";
+  wrap.style.zIndex = "10";
+
+  const badge = document.createElement("div");
+  badge.className =
+    "rounded-lg bg-slate-950/90 px-2 py-0.5 text-[11px] font-black text-white shadow-lg ring-1 ring-white/30";
+  badge.textContent = code;
+
+  const dot = document.createElement("div");
+  dot.className = "mt-0.5 h-2.5 w-2.5 rounded-full bg-sky-400 ring-2 ring-white/80";
+
+  wrap.append(badge, dot);
+
+  if (visitCount > 1) {
+    const count = document.createElement("span");
+    count.className =
+      "absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-black text-slate-950";
+    count.textContent = String(visitCount);
+    badge.style.position = "relative";
+    badge.append(count);
+  }
+
+  return wrap;
+}
+
 export function TripTransportRouteMap({
   reservations,
   plannedFlightLegs = [],
@@ -133,30 +127,256 @@ export function TripTransportRouteMap({
     [plannedFlightLegs, reservations],
   );
 
-  if (route.segments.length === 0) return null;
-
-  const geoPoints = collectGeoPoints(route.segments);
+  const geoPoints = useMemo(() => collectRouteMapPoints(route.segments), [route.segments]);
+  const routeGeoJson = useMemo(() => buildRouteSegmentGeoJson(route.segments), [route.segments]);
+  const airportGeoJson = useMemo(() => buildAirportGeoJson(geoPoints), [geoPoints]);
   const hasGeo = geoPoints.length >= 2;
 
-  const svgWidth = 760;
-  const svgHeight = 280;
-  const pad = 36;
+  const routeGeoJsonRef = useRef(routeGeoJson);
+  const airportGeoJsonRef = useRef(airportGeoJson);
+  routeGeoJsonRef.current = routeGeoJson;
+  airportGeoJsonRef.current = airportGeoJson;
 
-  const bounds = hasGeo
-    ? {
-        minLat: Math.min(...geoPoints.map((p) => p.lat)) - 4,
-        maxLat: Math.max(...geoPoints.map((p) => p.lat)) + 4,
-        minLon: Math.min(...geoPoints.map((p) => p.lon)) - 6,
-        maxLon: Math.max(...geoPoints.map((p) => p.lon)) + 6,
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<import("maplibre-gl").Map | null>(null);
+  const airportMarkersRef = useRef<import("maplibre-gl").Marker[]>([]);
+  const cardRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const ribbonRef = useRef<HTMLDivElement>(null);
+
+  const [mapReady, setMapReady] = useState(false);
+  const [maptilerKey, setMaptilerKey] = useState("");
+  const [mapStyle, setMapStyle] = useState<"streets" | "hybrid">("streets");
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
+  const appliedStyleRef = useRef<"streets" | "hybrid" | null>(null);
+  const routeRef = useRef(route);
+  routeRef.current = route;
+
+  useEffect(() => {
+    void fetch("/api/config")
+      .then((res) => (res.ok ? res.json() : {}))
+      .then((data: { maptilerKey?: string }) => {
+        if (data.maptilerKey) setMaptilerKey(data.maptilerKey);
+      })
+      .catch(() => {});
+  }, []);
+
+  const styleUrl = useMemo(() => {
+    if (!maptilerKey) return "https://demotiles.maplibre.org/style.json";
+    return maptilerStyleUrl(mapStyle === "hybrid" ? "hybrid" : "streets-v2", maptilerKey);
+  }, [mapStyle, maptilerKey]);
+
+  const geoPointsRef = useRef(geoPoints);
+  geoPointsRef.current = geoPoints;
+
+  const fitWholeTrip = useCallback(async (duration = 900) => {
+    const map = mapRef.current;
+    const points = geoPointsRef.current;
+    if (!map || points.length === 0) return;
+    const maplibregl = await import("maplibre-gl");
+    const bounds = new maplibregl.LngLatBounds();
+    for (const point of points) {
+      bounds.extend([point.lon, point.lat]);
+    }
+    map.fitBounds(bounds, { padding: 72, maxZoom: points.length <= 3 ? 7 : 5, duration, essential: true });
+  }, []);
+
+  const focusSegment = useCallback(async (segment: TripTransportSegment) => {
+    const map = mapRef.current;
+    if (!map) return;
+    const bounds = segmentBounds(segment);
+    if (!bounds) return;
+    const maplibregl = await import("maplibre-gl");
+    const box = new maplibregl.LngLatBounds(
+      [bounds.west, bounds.south],
+      [bounds.east, bounds.north],
+    );
+    map.fitBounds(box, { padding: 100, maxZoom: 8, duration: 700, essential: true });
+  }, []);
+
+  const handleSegmentSelect = useCallback(
+    (segment: TripTransportSegment, options?: { openReservation?: boolean }) => {
+      setSelectedSegmentId(segment.id);
+      void focusSegment(segment);
+      cardRefs.current[segment.id]?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+      if (options?.openReservation && segment.reservationId && onSegmentTap) {
+        onSegmentTap(segment.reservationId);
       }
-    : { minLat: 0, maxLat: 1, minLon: 0, maxLon: 1 };
-
-  const pointByCode = new Map(
-    geoPoints.map((p) => [
-      p.code,
-      projectPoint(p.lat, p.lon, bounds, svgWidth, svgHeight, pad),
-    ]),
+    },
+    [focusSegment, onSegmentTap],
   );
+
+  const handleSegmentSelectRef = useRef(handleSegmentSelect);
+  handleSegmentSelectRef.current = handleSegmentSelect;
+
+  const installRouteLayers = useCallback((map: import("maplibre-gl").Map) => {
+    const routeData = routeGeoJsonRef.current;
+    const airportData = airportGeoJsonRef.current;
+
+    if (!map.getSource(ROUTE_SOURCE)) {
+      map.addSource(ROUTE_SOURCE, { type: "geojson", data: routeData });
+    } else {
+      (map.getSource(ROUTE_SOURCE) as import("maplibre-gl").GeoJSONSource).setData(routeData);
+    }
+
+    if (!map.getLayer("trip-route-hit")) {
+      map.addLayer({
+        id: "trip-route-hit",
+        type: "line",
+        source: ROUTE_SOURCE,
+        paint: {
+          "line-width": 14,
+          "line-opacity": 0,
+        },
+      });
+    }
+
+    if (!map.getLayer("trip-route-lines")) {
+      map.addLayer({
+        id: "trip-route-lines",
+        type: "line",
+        source: ROUTE_SOURCE,
+        paint: {
+          "line-color": ["get", "color"],
+          "line-width": 3,
+          "line-opacity": ["case", ["get", "booked"], 0.92, 0.55],
+          "line-dasharray": ["case", ["get", "dashed"], ["literal", [2, 2]], ["literal", [1, 0]]],
+        },
+      });
+    }
+
+    if (!map.getSource(AIRPORT_SOURCE)) {
+      map.addSource(AIRPORT_SOURCE, { type: "geojson", data: airportData });
+    } else {
+      (map.getSource(AIRPORT_SOURCE) as import("maplibre-gl").GeoJSONSource).setData(airportData);
+    }
+
+    if (!map.getLayer("trip-route-airport-glow")) {
+      map.addLayer({
+        id: "trip-route-airport-glow",
+        type: "circle",
+        source: AIRPORT_SOURCE,
+        paint: {
+          "circle-radius": 10,
+          "circle-color": "#38bdf8",
+          "circle-opacity": 0.25,
+          "circle-stroke-width": 0,
+        },
+      });
+    }
+  }, []);
+
+  const renderAirportMarkers = useCallback(async () => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const maplibregl = await import("maplibre-gl");
+    for (const marker of airportMarkersRef.current) marker.remove();
+    airportMarkersRef.current = [];
+
+    for (const point of geoPointsRef.current) {
+      const el = createAirportMarker(point.code, point.visitCount);
+      const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
+        .setLngLat([point.lon, point.lat])
+        .addTo(map);
+      airportMarkersRef.current.push(marker);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasGeo || !containerRef.current) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      const maplibregl = await import("maplibre-gl");
+      if (cancelled || !containerRef.current) return;
+
+      const initialStyle = maptilerKey
+        ? maptilerStyleUrl("streets-v2", maptilerKey)
+        : "https://demotiles.maplibre.org/style.json";
+
+      const map = new maplibregl.Map({
+        container: containerRef.current,
+        style: initialStyle,
+        center: [geoPoints[0]?.lon ?? 0, geoPoints[0]?.lat ?? 20],
+        zoom: 3,
+        attributionControl: false,
+        ...(maptilerKey ? { transformRequest: directMaptilerTransformRequest(maptilerKey) } : {}),
+      });
+
+      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+      map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+      mapRef.current = map;
+
+      map.on("load", () => {
+        if (cancelled) return;
+        appliedStyleRef.current = "streets";
+        installRouteLayers(map);
+        setMapReady(true);
+        void fitWholeTrip(0);
+        void renderAirportMarkers();
+      });
+
+      map.on("click", "trip-route-hit", (event) => {
+        const feature = event.features?.[0];
+        const segmentId = feature?.properties?.segmentId as string | undefined;
+        if (!segmentId) return;
+        const segment = routeRef.current.segments.find((s) => s.id === segmentId);
+        if (segment) handleSegmentSelectRef.current(segment);
+      });
+
+      map.on("mouseenter", "trip-route-hit", () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", "trip-route-hit", () => {
+        map.getCanvas().style.cursor = "";
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+      for (const marker of airportMarkersRef.current) marker.remove();
+      airportMarkersRef.current = [];
+      mapRef.current?.remove();
+      mapRef.current = null;
+      setMapReady(false);
+    };
+  }, [hasGeo, maptilerKey]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    if (map.getStyle()?.sprite !== undefined || map.isStyleLoaded()) {
+      installRouteLayers(map);
+      void renderAirportMarkers();
+      void fitWholeTrip();
+    }
+  }, [routeGeoJson, airportGeoJson, installRouteLayers, renderAirportMarkers, fitWholeTrip, mapReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !map.getLayer("trip-route-lines")) return;
+    map.setPaintProperty("trip-route-lines", "line-width", [
+      "case",
+      ["==", ["get", "segmentId"], selectedSegmentId ?? ""],
+      5,
+      3,
+    ]);
+  }, [selectedSegmentId, mapReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !maptilerKey) return;
+    if (appliedStyleRef.current === mapStyle) return;
+    appliedStyleRef.current = mapStyle;
+    map.setStyle(styleUrl);
+    map.once("idle", () => {
+      installRouteLayers(map);
+      void renderAirportMarkers();
+    });
+  }, [mapStyle, mapReady, maptilerKey, styleUrl, installRouteLayers, renderAirportMarkers]);
+
+  if (route.segments.length === 0) return null;
 
   return (
     <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#0c2447] via-[#0f172a] to-[#020617] shadow-xl ring-1 ring-white/10">
@@ -165,7 +385,7 @@ export function TripTransportRouteMap({
           <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-sky-300/80">Trip route map</p>
           <h3 className="mt-1 text-lg font-black text-white">Your whole journey at a glance</h3>
           <p className="mt-1 text-xs text-sky-100/60">
-            Green flights are booked · gray still needs booking · red means a connection problem
+            Drag to pan · scroll or pinch to zoom · tap a route or leg below
           </p>
         </div>
         <div
@@ -187,81 +407,43 @@ export function TripTransportRouteMap({
 
       {hasGeo ? (
         <div className="relative px-2 pt-2">
-          <svg
-            viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-            className="mx-auto block h-auto w-full max-w-3xl"
-            role="img"
-            aria-label="Trip route map"
-          >
-            <defs>
-              <radialGradient id="routeMapGlow" cx="50%" cy="40%" r="65%">
-                <stop offset="0%" stopColor="#1d4ed8" stopOpacity="0.35" />
-                <stop offset="100%" stopColor="#020617" stopOpacity="0" />
-              </radialGradient>
-              <filter id="routeLineGlow" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="2.5" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            </defs>
-
-            <rect width={svgWidth} height={svgHeight} fill="url(#routeMapGlow)" rx="16" />
-
-            {Array.from({ length: 7 }).map((_, i) => (
-              <line
-                key={`lat-${i}`}
-                x1={pad}
-                x2={svgWidth - pad}
-                y1={pad + ((svgHeight - pad * 2) / 6) * i}
-                y2={pad + ((svgHeight - pad * 2) / 6) * i}
-                stroke="rgba(148,163,184,0.08)"
-                strokeWidth="1"
-              />
-            ))}
-
-            {route.segments.map((segment) => {
-              const from = pointByCode.get(segment.fromCode);
-              const to = pointByCode.get(segment.toCode);
-              if (!from || !to) return null;
-              const color = segmentStrokeColor(segment);
-              const dashed = !segment.booked || segment.status === "conflict";
-              return (
-                <path
-                  key={`path-${segment.id}`}
-                  d={arcPath(from.x, from.y, to.x, to.y)}
-                  fill="none"
-                  stroke={color}
-                  strokeWidth={segment.status === "conflict" ? 3.5 : 2.5}
-                  strokeDasharray={dashed ? "7 6" : undefined}
-                  opacity={segment.booked ? 0.95 : 0.55}
-                  filter="url(#routeLineGlow)"
-                />
-              );
-            })}
-
-            {geoPoints.map((point) => {
-              const pos = pointByCode.get(point.code);
-              if (!pos) return null;
-              return (
-                <g key={point.code}>
-                  <circle cx={pos.x} cy={pos.y} r="14" fill="rgba(15,23,42,0.85)" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
-                  <circle cx={pos.x} cy={pos.y} r="5.5" fill="#38bdf8" />
-                  <text
-                    x={pos.x}
-                    y={pos.y - 18}
-                    textAnchor="middle"
-                    fill="#e2e8f0"
-                    fontSize="11"
-                    fontWeight="800"
-                  >
-                    {point.code}
-                  </text>
-                </g>
-              );
-            })}
-          </svg>
+          <div className="absolute left-4 top-4 z-10 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void fitWholeTrip()}
+              className="rounded-full bg-slate-950/80 px-3 py-1.5 text-[11px] font-bold text-white shadow ring-1 ring-white/20 backdrop-blur"
+            >
+              Fit whole trip
+            </button>
+            {maptilerKey ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setMapStyle("streets")}
+                  className={`rounded-full px-3 py-1.5 text-[11px] font-bold shadow backdrop-blur ${
+                    mapStyle === "streets" ? "bg-sky-600 text-white" : "bg-slate-950/80 text-white ring-1 ring-white/20"
+                  }`}
+                >
+                  Map
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMapStyle("hybrid")}
+                  className={`rounded-full px-3 py-1.5 text-[11px] font-bold shadow backdrop-blur ${
+                    mapStyle === "hybrid" ? "bg-sky-600 text-white" : "bg-slate-950/80 text-white ring-1 ring-white/20"
+                  }`}
+                >
+                  Satellite
+                </button>
+              </>
+            ) : null}
+          </div>
+          <div
+            ref={containerRef}
+            className="h-64 w-full overflow-hidden rounded-2xl ring-1 ring-white/10 md:h-80 lg:h-96"
+            role="application"
+            aria-label="Interactive trip route map — drag to pan, scroll to zoom"
+          />
         </div>
       ) : (
         <div className="mx-5 mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-6 text-center">
@@ -270,7 +452,6 @@ export function TripTransportRouteMap({
         </div>
       )}
 
-      {/* Timeline ribbon */}
       <div className="px-5 py-4">
         <div className="mb-3 flex flex-wrap gap-3 text-[10px] font-bold uppercase tracking-wider text-sky-100/50">
           <span className="inline-flex items-center gap-1.5"><span className="h-2 w-6 rounded-full bg-emerald-500" /> Flight booked</span>
@@ -282,13 +463,21 @@ export function TripTransportRouteMap({
 
         <div className="relative mb-4 hidden sm:block">
           <div className="absolute left-0 right-0 top-1/2 h-0.5 -translate-y-1/2 bg-white/10" />
-          <div className="relative flex items-center justify-between gap-2">
+          <div ref={ribbonRef} className="relative flex items-center justify-between gap-2">
             {route.segments.map((segment, index) => {
               const color = segmentStrokeColor(segment);
+              const selected = selectedSegmentId === segment.id;
               return (
-                <div key={`node-${segment.id}`} className="flex min-w-0 flex-1 flex-col items-center">
+                <button
+                  key={`node-${segment.id}`}
+                  type="button"
+                  onClick={() => handleSegmentSelect(segment)}
+                  className="flex min-w-0 flex-1 flex-col items-center rounded-lg p-1 transition hover:bg-white/5"
+                >
                   <div
-                    className="relative z-10 flex h-9 w-9 items-center justify-center rounded-full text-sm shadow-lg ring-2 ring-[#0f172a]"
+                    className={`relative z-10 flex h-9 w-9 items-center justify-center rounded-full text-sm shadow-lg ring-2 ${
+                      selected ? "ring-sky-400 scale-110" : "ring-[#0f172a]"
+                    }`}
                     style={{ backgroundColor: `${color}33`, boxShadow: `0 0 18px ${color}55` }}
                   >
                     {segmentKindEmoji(segment.kind)}
@@ -297,7 +486,7 @@ export function TripTransportRouteMap({
                   {index === route.segments.length - 1 ? (
                     <p className="mt-1 truncate text-[10px] font-black text-white">{segment.toCode}</p>
                   ) : null}
-                </div>
+                </button>
               );
             })}
           </div>
@@ -305,7 +494,16 @@ export function TripTransportRouteMap({
 
         <div className="flex gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {route.segments.map((segment, index) => (
-            <SegmentCard key={segment.id} segment={segment} index={index} onTap={onSegmentTap} />
+            <SegmentCard
+              key={segment.id}
+              segment={segment}
+              index={index}
+              selected={selectedSegmentId === segment.id}
+              cardRef={(el) => {
+                cardRefs.current[segment.id] = el;
+              }}
+              onTap={(seg) => handleSegmentSelect(seg, { openReservation: Boolean(seg.reservationId && onSegmentTap) })}
+            />
           ))}
         </div>
       </div>
