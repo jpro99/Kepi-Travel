@@ -309,6 +309,9 @@ export function TripHotelSearch({
   const openDetail = (hotel: RankedHotelSearchResult): void => {
     setMapSelectedId(hotel.id);
     setDetailHotelId(hotel.id);
+    requestAnimationFrame(() => {
+      document.querySelector(`[data-hotel-id="${hotel.id}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
   };
 
   const handleSaveToTrip = (hotel: RankedHotelSearchResult): void => {
@@ -411,8 +414,8 @@ export function TripHotelSearch({
               <p className="text-[11px] text-slate-500">
                 {checkIn} → {checkOut} ·{" "}
                 {mapBounds && resultsView === "map"
-                  ? `${hotelsInView.length} in view · ${visibleResults.length} total`
-                  : `${visibleResults.length} results`}
+                  ? `${visibleResults.length} hotels · ${hotelsInView.length} on map`
+                  : `${visibleResults.length} hotels`}
               </p>
             </div>
             <div className="flex gap-1.5">
@@ -464,58 +467,74 @@ export function TripHotelSearch({
           {!loading ? renderErrorWithSuggestions() : null}
 
           {!loading && showResults && resultsView === "map" && cityCenter ? (
-            <div className="flex flex-col gap-3">
-              <HotelStayMap
-                city={resolvedCity ?? city}
-                centerLat={cityCenter.lat}
-                centerLng={cityCenter.lng}
-                hotels={mappedHotels}
-                selectedId={mapSelectedId}
-                onSelect={openDetail}
-                onBoundsChange={setMapBounds}
-                expanded
-              />
-              {visibleResults.length === 0 ? (
-                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                  {error ?? "No hotels matched these dates. Try different dates or tap Edit to change the destination."}
-                </p>
-              ) : (
-                <>
-                  {detailHotel ? (
-                    <HotelDetailSheet
-                      hotel={detailHotel}
-                      allHotels={visibleResults}
-                      city={resolvedCity ?? city}
-                      saved={savedHotelIds.has(detailHotel.id)}
-                      onSaveToTrip={() => handleSaveToTrip(detailHotel)}
-                      onClose={() => setDetailHotelId(null)}
-                    />
-                  ) : (
-                    <p className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-center text-[11px] text-slate-500 dark:border-slate-700">
-                      Tap a price pin or hotel below to see photos, rooms, and booking options.
-                    </p>
-                  )}
-                  <div className="space-y-2">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                      {mapBounds ? `${hotelsInView.length} in this area` : `${mappedHotels.length} on map`}
-                    </p>
-                    <div className="max-h-64 space-y-1.5 overflow-y-auto lg:max-h-72">
-                      {(mapBounds ? hotelsInView : mappedHotels).map((hotel) => (
-                        <HotelRankCard
+            <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(17rem,22rem)_1fr] lg:items-start lg:gap-4">
+              {/* Left: full scrollable list — always every hotel in this search */}
+              <div className="order-2 flex min-h-0 flex-col lg:order-1 lg:max-h-[58vh]">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    {visibleResults.length} hotel{visibleResults.length === 1 ? "" : "s"}
+                    {mapBounds && hotelsInView.length < mappedHotels.length
+                      ? ` · ${hotelsInView.length} on map`
+                      : ""}
+                  </p>
+                </div>
+                {visibleResults.length === 0 ? (
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                    {error ?? "No hotels matched these dates. Try different dates or tap Edit to change the destination."}
+                  </p>
+                ) : (
+                  <div className="min-h-[12rem] flex-1 space-y-1.5 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50/80 p-2 dark:border-slate-700 dark:bg-slate-900/40 lg:max-h-[58vh]">
+                    {mappedHotels.map((hotel) => {
+                      const inView = !mapBounds || hotelsInView.some((row) => row.id === hotel.id);
+                      return (
+                        <div
                           key={hotel.id}
-                          hotel={hotel}
-                          totalInSearch={results.length}
-                          compact
-                          selected={mapSelectedId === hotel.id}
-                          onSelect={() => openDetail(hotel)}
-                          onAdd={() => openDetail(hotel)}
-                          onDismiss={() => handleDismiss(hotel)}
-                        />
-                      ))}
-                    </div>
+                          data-hotel-id={hotel.id}
+                          className={inView ? "" : "opacity-55"}
+                        >
+                          <HotelRankCard
+                            hotel={hotel}
+                            totalInSearch={results.length}
+                            compact
+                            selected={mapSelectedId === hotel.id}
+                            onSelect={() => openDetail(hotel)}
+                            onAdd={() => openDetail(hotel)}
+                            onDismiss={() => handleDismiss(hotel)}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
-                </>
-              )}
+                )}
+              </div>
+
+              {/* Right: map + detail */}
+              <div className="order-1 space-y-3 lg:order-2 lg:min-w-0">
+                <HotelStayMap
+                  city={resolvedCity ?? city}
+                  centerLat={cityCenter.lat}
+                  centerLng={cityCenter.lng}
+                  hotels={mappedHotels}
+                  selectedId={mapSelectedId}
+                  onSelect={openDetail}
+                  onBoundsChange={setMapBounds}
+                  expanded
+                />
+                {detailHotel ? (
+                  <HotelDetailSheet
+                    hotel={detailHotel}
+                    allHotels={visibleResults}
+                    city={resolvedCity ?? city}
+                    saved={savedHotelIds.has(detailHotel.id)}
+                    onSaveToTrip={() => handleSaveToTrip(detailHotel)}
+                    onClose={() => setDetailHotelId(null)}
+                  />
+                ) : visibleResults.length > 0 ? (
+                  <p className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-center text-[11px] text-slate-500 dark:border-slate-700">
+                    Select a hotel from the list or tap a price pin on the map.
+                  </p>
+                ) : null}
+              </div>
             </div>
           ) : null}
 
