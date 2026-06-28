@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { TripHotelStayMap } from "@/components/travelAssistant/TripHotelStayMap";
 import { TravelFitEarnBar } from "@/components/travelAssistant/TravelFitEarnBar";
 import { TripStayPlanner } from "@/components/travelAssistant/TripStayPlanner";
 import { TripHotelCityPicker } from "@/components/travelAssistant/TripHotelCityPicker";
@@ -31,6 +32,7 @@ interface Reservation {
 
 interface HotelsTabProps {
   reservations: Reservation[];
+  mapReservations?: Reservation[];
   tripName?: string | null;
   staySegments?: TripStaySegment[];
   plannedStayCities?: PlannedStayCity[];
@@ -100,6 +102,7 @@ function cityEmoji(location: string): string {
 
 export function HotelsTab({
   reservations,
+  mapReservations,
   tripName,
   staySegments = [],
   plannedStayCities = [],
@@ -351,6 +354,22 @@ export function HotelsTab({
           {showPast ? "Hide past stays" : `Show ${past.length} past stay${past.length > 1 ? "s" : ""}`}
         </button>
       )}
+
+      <TripHotelStayMap
+        reservations={mapReservations ?? reservations}
+        staySegments={staySegments}
+        plannedStayCities={plannedStayCities}
+        onStayTap={(point) => {
+          if (point.reservationId) {
+            onReservationTap(point.reservationId);
+            return;
+          }
+          if (point.segmentId && onSearchSegment) {
+            const segment = staySegments.find((entry) => entry.id === point.segmentId);
+            if (segment) onSearchSegment(segment);
+          }
+        }}
+      />
     </section>
   );
 }

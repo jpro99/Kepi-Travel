@@ -170,6 +170,13 @@ async function geocodeWithNominatim(query: string, countryHint?: string): Promis
   }
 }
 
+/** Resolve coordinates synchronously from known city/airport catalog (no network). */
+export function resolveHotelDestinationSync(input: string): ResolvedHotelDestination | null {
+  const { query, correctedFrom } = normalizeHotelDestinationQuery(input);
+  if (!query) return null;
+  return matchKnownCity(query, correctedFrom);
+}
+
 /** Resolve a free-text city or airport into coordinates for hotel search. */
 export async function resolveHotelDestination(input: string): Promise<ResolvedHotelDestination | null> {
   const { query, correctedFrom } = normalizeHotelDestinationQuery(input);

@@ -8904,6 +8904,7 @@ export default function TravelAssistantPage() {
                     ) : consumerTab === "hotels" ? (
             <HotelsTab
               reservations={consumerReservationsSorted.filter(r => r.type === "hotel")}
+              mapReservations={reservations.filter((r) => r.type === "hotel")}
               tripName={activeTrip?.name}
               tripId={activeTripId}
               usuallySkipsConnections={usuallySkipsConnections}
