@@ -6,6 +6,12 @@ import { TripFlightLegPicker } from "@/components/travelAssistant/TripFlightLegP
 import { FlightSearchModal } from "@/components/travelAssistant/FlightSearchModal";
 import type { FlightSearchPlan, PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
 import { buildGateInstructions, getAirportNav, buildArrivalGuide } from "@/lib/travelAssistant/airportNavigation";
+import {
+  formatReservationCostLine,
+  reservationMissingPrice,
+} from "@/lib/travelAssistant/tripSpendSummary";
+import { TripTransportRouteMap } from "@/components/travelAssistant/TripTransportRouteMap";
+import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 
 /* ─── Types ──────────────────────────────────────────────────── */
 interface Reservation {
@@ -19,6 +25,10 @@ interface Reservation {
   flightArrivalGate?: string; flightArrivalTerminal?: string;
   flightDelayMinutes?: number; flightOnTime?: boolean; flightStatus?: string;
   flightSeatNumber?: string;
+  plannedOnly?: boolean;
+  quotedPriceUsd?: number;
+  quotedPointsMiles?: number;
+  pointsProgram?: string;
 }
 
 interface LiveStatusResult {
@@ -31,6 +41,7 @@ interface LiveStatusResult {
 
 interface FlightsTabProps {
   reservations: Reservation[];
+  transportReservations?: TransportRouteReservation[];
   plannedFlightLegs?: PlannedFlightLeg[];
   tripName?: string | null;
   onSearchFlights?: (plan: FlightSearchPlan, selectedLegs: PlannedFlightLeg[]) => void;
@@ -416,6 +427,7 @@ function AirportGuideCard({
 /* ─── Main component ──────────────────────────────────────────── */
 export function FlightsTab({
   reservations,
+  transportReservations,
   plannedFlightLegs = [],
   tripName,
   onSearchFlights,
@@ -553,12 +565,15 @@ export function FlightsTab({
           const depTime = fmt12(r.flightDepartureTime ?? r.localTime ?? "");
           const arrTime = fmt12(r.flightArrivalTime ?? "");
           const date = fmtDate(r.flightDate ? r.flightDate + " 00:00" : r.localTime ?? "");
+          const missingPrice = reservationMissingPrice(r);
+          const costLine = formatReservationCostLine(r);
 
           return (
             <div
               key={r.id}
               className={`overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-sm ring-1 transition-all ${
                 isPast ? "ring-slate-100 dark:ring-slate-800 opacity-55"
+                : missingPrice ? "ring-yellow-400 bg-yellow-50/30 dark:ring-yellow-500/60 dark:bg-yellow-500/5"
                 : isNext && !showGuide ? "ring-[#007AFF]/40 dark:ring-[#0A84FF]/30 shadow-blue-500/10"
                 : "ring-black/[0.06] dark:ring-white/[0.08]"
               }`}
@@ -578,6 +593,13 @@ export function FlightsTab({
                     )}
                   </div>
                   <div className="flex items-center gap-2">
+                    {missingPrice && !isPast ? (
+                      <span className="rounded-full bg-yellow-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-yellow-900 dark:bg-yellow-500/30 dark:text-yellow-100">
+                        Add cost
+                      </span>
+                    ) : costLine ? (
+                      <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200">{costLine}</span>
+                    ) : null}
                     <StatusBadge r={r} live={live} />
                     <span className="text-slate-300 dark:text-slate-600 text-sm">{isOpen ? "▲" : "▼"}</span>
                   </div>
@@ -627,6 +649,17 @@ export function FlightsTab({
                   </div>
                 ))}
               </div>
+              {missingPrice && !isPast ? (
+                <div className="border-t border-yellow-200 px-5 py-2 dark:border-yellow-500/30">
+                  <button
+                    type="button"
+                    onClick={() => onReservationTap(r.id)}
+                    className="text-xs font-bold text-yellow-900 dark:text-yellow-200"
+                  >
+                    Tap to add cash or points spent →
+                  </button>
+                </div>
+              ) : null}
 
               {/* Live status error — shown inline, never alarming */}
               {live?.error && !live.busy && (
@@ -676,6 +709,12 @@ export function FlightsTab({
           {showPast ? "Hide past flights" : `Show ${past.length} past flight${past.length > 1 ? "s" : ""}`}
         </button>
       )}
+
+      <TripTransportRouteMap
+        reservations={transportReservations ?? reservations}
+        plannedFlightLegs={plannedFlightLegs}
+        onSegmentTap={onReservationTap}
+      />
     </section>
   );
 }

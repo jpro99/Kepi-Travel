@@ -11,6 +11,7 @@ import {
   isPlannedReservation,
   isPlaceholderScheduleTime,
 } from "@/lib/travelAssistant/plannedReservationMatch";
+import { reservationMissingPrice } from "@/lib/travelAssistant/tripSpendSummary";
 import { ReservationQuickLinks } from "@/components/travelAssistant/ReservationQuickLinks";
 import type { ReservationLinkInput } from "@/lib/travelAssistant/reservationLinks";
 
@@ -38,6 +39,8 @@ interface TimelineReservation extends ReservationLinkInput {
   plannedOnly?: boolean;
   bookUrl?: string;
   quotedPriceUsd?: number;
+  quotedPointsMiles?: number;
+  pointsProgram?: string;
   flightAirline?: string;
 }
 
@@ -185,12 +188,13 @@ function ReservationCard({
   const isFlight = reservation.type === "flight";
   const isHotel = reservation.type === "hotel";
   const isPlanned = isPlannedReservation(reservation);
+  const missingPrice = reservationMissingPrice(reservation);
   const showScheduleTime =
     !isPlanned || (!isPlaceholderScheduleTime(reservation.localTime) && !isPlaceholderScheduleTime(reservation.flightDepartureTime));
 
   return (
     <div
-      className={`group relative w-full overflow-hidden rounded-2xl border text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg ${cfg.card} ${isPast ? "opacity-70 grayscale-[20%]" : ""} ${isPlanned && !isPast ? "border-dashed border-amber-400/70 bg-amber-950/20 dark:border-amber-500/50 dark:bg-amber-950/30" : ""}`}
+      className={`group relative w-full overflow-hidden rounded-2xl border text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg ${cfg.card} ${isPast ? "opacity-70 grayscale-[20%]" : ""} ${isPlanned && !isPast ? "border-dashed border-amber-400/70 bg-amber-950/20 dark:border-amber-500/50 dark:bg-amber-950/30" : ""} ${missingPrice && !isPast ? "border-yellow-400 bg-yellow-50/40 ring-1 ring-yellow-300/80 dark:border-yellow-500/70 dark:bg-yellow-500/10 dark:ring-yellow-500/40" : ""}`}
     >
       <button type="button" onClick={onTap} className="w-full text-left">
       <div className={`h-0.5 w-full ${isPast ? "bg-slate-400" : isPlanned ? "bg-amber-400" : cfg.dot}`} />
@@ -200,15 +204,30 @@ function ReservationCard({
             {cfg.emoji} {cfg.label}
             {isPlanned && !isPast ? " · To book" : isPast ? " · Completed" : ""}
           </span>
-          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-            {isFlight
-              ? showScheduleTime
-                ? formatTime(reservation.flightDepartureTime ?? reservation.localTime)
-                : reservationFlightDateLabel(reservation)
-              : showScheduleTime
-                ? formatTime(reservation.localTime)
-                : reservation.localTime.trim().slice(0, 10)}
-          </span>
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            {missingPrice && !isPast ? (
+              <span className="rounded-full bg-yellow-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-yellow-900 dark:bg-yellow-500/30 dark:text-yellow-100">
+                Add cost
+              </span>
+            ) : reservation.quotedPriceUsd || reservation.quotedPointsMiles ? (
+              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                {reservation.quotedPriceUsd ? `$${reservation.quotedPriceUsd.toLocaleString()}` : null}
+                {reservation.quotedPriceUsd && reservation.quotedPointsMiles ? " · " : null}
+                {reservation.quotedPointsMiles
+                  ? `${reservation.quotedPointsMiles.toLocaleString()} pts${reservation.pointsProgram ? ` (${reservation.pointsProgram})` : ""}`
+                  : null}
+              </span>
+            ) : null}
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              {isFlight
+                ? showScheduleTime
+                  ? formatTime(reservation.flightDepartureTime ?? reservation.localTime)
+                  : reservationFlightDateLabel(reservation)
+                : showScheduleTime
+                  ? formatTime(reservation.localTime)
+                  : reservation.localTime.trim().slice(0, 10)}
+            </span>
+          </div>
         </div>
 
         {isFlight ? (
@@ -302,9 +321,22 @@ function ReservationCard({
                   <span className="ml-1 font-semibold">${reservation.quotedPriceUsd.toLocaleString()} quoted</span>
                 ) : null}
               </p>
-            ) : reservation.confirmationCode ? (
-              <p className="mt-2 text-xs font-mono font-semibold text-amber-700 dark:text-amber-300">{reservation.confirmationCode}</p>
-            ) : null}
+            ) : (
+              <>
+                {reservation.confirmationCode ? (
+                  <p className="mt-2 text-xs font-mono font-semibold text-amber-700 dark:text-amber-300">{reservation.confirmationCode}</p>
+                ) : null}
+                {!isPlanned && (reservation.quotedPriceUsd || reservation.quotedPointsMiles) ? (
+                  <p className="mt-2 text-xs font-semibold text-amber-800 dark:text-amber-200">
+                    {reservation.quotedPriceUsd ? `$${reservation.quotedPriceUsd.toLocaleString()} total` : null}
+                    {reservation.quotedPriceUsd && reservation.quotedPointsMiles ? " · " : null}
+                    {reservation.quotedPointsMiles
+                      ? `${reservation.quotedPointsMiles.toLocaleString()} pts${reservation.pointsProgram ? ` (${reservation.pointsProgram})` : ""}`
+                      : null}
+                  </p>
+                ) : null}
+              </>
+            )}
           </>
         ) : (
           <>

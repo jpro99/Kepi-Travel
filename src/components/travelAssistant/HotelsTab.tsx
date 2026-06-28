@@ -7,6 +7,10 @@ import { TripHotelCityPicker } from "@/components/travelAssistant/TripHotelCityP
 import type { PlannedStayCity } from "@/lib/travelAssistant/tripPlanBooking";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 import { segmentsNeedingHotel } from "@/lib/hotels/deriveTripStaySegments";
+import {
+  formatReservationCostLine,
+  reservationMissingPrice,
+} from "@/lib/travelAssistant/tripSpendSummary";
 
 interface Reservation {
   id: string;
@@ -19,6 +23,10 @@ interface Reservation {
   roomType?: string;
   checkOutDate?: string;
   notes?: string;
+  plannedOnly?: boolean;
+  quotedPriceUsd?: number;
+  quotedPointsMiles?: number;
+  pointsProgram?: string;
 }
 
 interface HotelsTabProps {
@@ -209,12 +217,18 @@ export function HotelsTab({
           const past = isPastCheckout(checkOut);
           const isOpen = expanded === r.id;
           const emoji = cityEmoji(r.location ?? "");
+          const missingPrice = reservationMissingPrice(r);
+          const costLine = formatReservationCostLine(r);
 
           return (
             <div
               key={r.id}
               className={`overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-sm ring-1 transition-all ${
-                past ? "ring-slate-100 dark:ring-slate-800 opacity-60" : "ring-black/[0.06] dark:ring-white/[0.08]"
+                past
+                  ? "ring-slate-100 dark:ring-slate-800 opacity-60"
+                  : missingPrice
+                    ? "ring-yellow-400 bg-yellow-50/30 dark:ring-yellow-500/60 dark:bg-yellow-500/5"
+                    : "ring-black/[0.06] dark:ring-white/[0.08]"
               }`}
             >
               {/* Card tap area */}
@@ -231,7 +245,16 @@ export function HotelsTab({
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-slate-900 dark:text-white text-base leading-snug truncate">{r.title}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-bold text-slate-900 dark:text-white text-base leading-snug truncate">{r.title}</p>
+                      {missingPrice && !past ? (
+                        <span className="shrink-0 rounded-full bg-yellow-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-yellow-900 dark:bg-yellow-500/30 dark:text-yellow-100">
+                          Add cost
+                        </span>
+                      ) : costLine ? (
+                        <span className="shrink-0 text-xs font-bold text-slate-700 dark:text-slate-200">{costLine}</span>
+                      ) : null}
+                    </div>
                     <p className="text-sm text-slate-500 dark:text-slate-400 truncate mt-0.5">{r.location}</p>
                     <div className="flex items-center gap-2 mt-2">
                       <div className="rounded-lg bg-slate-100 dark:bg-slate-800 px-2.5 py-1">
@@ -256,8 +279,8 @@ export function HotelsTab({
                 </div>
               </button>
 
-              {/* Confirmation + room */}
-              <div className="flex items-center gap-4 px-5 pb-4">
+              {/* Confirmation + room + cost */}
+              <div className="flex flex-wrap items-start gap-4 px-5 pb-4">
                 {r.confirmationCode && (
                   <div>
                     <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Confirmation</p>
@@ -270,6 +293,21 @@ export function HotelsTab({
                     <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">{r.roomType}</p>
                   </div>
                 )}
+                {costLine ? (
+                  <div>
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Trip cost</p>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">{costLine}</p>
+                  </div>
+                ) : missingPrice && !past ? (
+                  <button
+                    type="button"
+                    onClick={() => onReservationTap(r.id)}
+                    className="rounded-lg bg-yellow-100 px-2.5 py-1.5 text-left dark:bg-yellow-500/20"
+                  >
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-yellow-800 dark:text-yellow-200">Trip cost</p>
+                    <p className="text-xs font-bold text-yellow-900 dark:text-yellow-100 mt-0.5">Tap to add price</p>
+                  </button>
+                ) : null}
               </div>
 
               {/* Expanded actions */}

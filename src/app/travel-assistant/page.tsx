@@ -101,6 +101,8 @@ import {
 import { TripCalendarView } from "@/components/travelAssistant/TripCalendarView";
 import { NextUpCard } from "@/components/travelAssistant/NextUpCard";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
+import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
+import { computeTripSpend } from "@/lib/travelAssistant/tripSpendSummary";
 import { TripItineraryPanel, useItineraryPanelPrefs } from "@/components/travelAssistant/TripItineraryPanel";
 import { ResizableItineraryPane } from "@/components/travelAssistant/ResizableItineraryPane";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
@@ -243,6 +245,10 @@ interface ReservationDraft {
   trainNumber?: string;
   /** City searched when hotel was saved from Kepi hotel search. */
   hotelSearchCity?: string;
+  quotedPriceUsd?: number;
+  quotedPointsMiles?: number;
+  pointsProgram?: string;
+  plannedOnly?: boolean;
 }
 
 interface Reservation extends ReservationDraft {
@@ -4078,6 +4084,11 @@ export default function TravelAssistantPage() {
     });
   }, [consumerDisplayReservations]);
 
+  const tripSpendSummary = useMemo(
+    () => computeTripSpend(advancedWorkspaceEnabled ? reservations : consumerReservationsSorted),
+    [advancedWorkspaceEnabled, consumerReservationsSorted, reservations],
+  );
+
   // Derive location status for AI guidance — must be after consumerReservationsSorted
   const guidanceLocationStatus = useMemo((): "away" | "at-airport" | "in-terminal" | "airborne" | "unknown" => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -5444,6 +5455,7 @@ export default function TravelAssistantPage() {
         source: "manual",
         checkOutDate: hotel.checkOut,
         roomType: `${hotel.guests} guest${hotel.guests === 1 ? "" : "s"}`,
+        quotedPriceUsd: hotel.browseOnly ? undefined : Math.round(hotel.totalPrice),
       };
       pushUndoSnapshot("Hotel added from search");
       const existingReservations = trips.find((trip) => trip.id === (activeTripId ?? trips[0]?.id))?.reservations ?? [];
@@ -5894,6 +5906,10 @@ export default function TravelAssistantPage() {
             checkOutDate: reservation.checkOutDate,
             roomType: reservation.roomType,
             trainNumber: reservation.trainNumber,
+            hotelSearchCity: reservation.hotelSearchCity,
+            quotedPriceUsd: reservation.quotedPriceUsd,
+            quotedPointsMiles: reservation.quotedPointsMiles,
+            pointsProgram: reservation.pointsProgram,
           });
         }
       } else {
@@ -7883,6 +7899,60 @@ export default function TravelAssistantPage() {
               ) : null}
             </div>
           </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-slate-300">Cash spent (USD)</span>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={drawerDraft.quotedPriceUsd ?? ""}
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  setDrawerDraft((prev) => ({
+                    ...prev,
+                    quotedPriceUsd:
+                      raw.trim() === "" ? undefined : Math.max(0, Math.round(Number(raw) || 0)),
+                  }));
+                }}
+                placeholder="Total cash for this booking"
+                className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-slate-300">Points / miles used</span>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={drawerDraft.quotedPointsMiles ?? ""}
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  setDrawerDraft((prev) => ({
+                    ...prev,
+                    quotedPointsMiles:
+                      raw.trim() === "" ? undefined : Math.max(0, Math.round(Number(raw) || 0)),
+                  }));
+                }}
+                placeholder="e.g. 35000"
+                className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
+              />
+            </label>
+          </div>
+          <label className="block">
+            <span className="mb-1 block text-slate-300">Points program (optional)</span>
+            <input
+              value={drawerDraft.pointsProgram ?? ""}
+              onChange={(event) =>
+                setDrawerDraft((prev) => ({
+                  ...prev,
+                  pointsProgram: event.target.value.trim() || undefined,
+                }))
+              }
+              placeholder="United, Hyatt, Amex…"
+              className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
+            />
+          </label>
           <label className="block">
             <span className="mb-1 block text-slate-300">Notes</span>
             <textarea
@@ -8158,7 +8228,11 @@ export default function TravelAssistantPage() {
                   </button>
                 ) : null}
               </div>
-              <div className="relative">
+              <div className="flex items-center gap-2 sm:gap-3">
+                {!showUnconfiguredTripShell && activeTrip ? (
+                  <TripSpendBadge summary={tripSpendSummary} />
+                ) : null}
+                <div className="relative">
                 <button
                   type="button"
                   onClick={() => setConsumerAvatarMenuOpen((value) => !value)}
@@ -8224,6 +8298,7 @@ export default function TravelAssistantPage() {
                     </button>
                   </div>
                 ) : null}
+                </div>
               </div>
             </div>
           </header>
@@ -8777,6 +8852,9 @@ export default function TravelAssistantPage() {
           ) : consumerTab === "flights" ? (
             <FlightsTab
               reservations={consumerReservationsSorted.filter(r => r.type === "flight")}
+              transportReservations={consumerReservationsSorted.filter(
+                (r) => r.type === "flight" || r.type === "train" || r.type === "ride",
+              )}
               plannedFlightLegs={plannedFlightLegs}
               tripName={activeTrip?.name}
               onSearchFlights={handleFlightSearchPlan}
@@ -9328,6 +9406,7 @@ export default function TravelAssistantPage() {
             minutesToDeparture={minutesToDeparture}
             onMinutesToDepartureChange={setMinutesToDeparture}
             onEvaluateStatus={evaluateStatus}
+            tripSpendSummary={tripSpendSummary}
           />
         </header>
         <QuickAddLane

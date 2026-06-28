@@ -253,7 +253,8 @@ export function TripHotelSearch({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ destination, checkIn, checkOut, guests, rooms }),
       });
-      const payload = (await response.json()) as {
+      const rawBody = await response.text();
+      let payload: {
         error?: string;
         suggestions?: string[];
         detail?: { errors?: Array<{ message?: string }> };
@@ -266,7 +267,17 @@ export function TripHotelSearch({
         inCityCount?: number;
         memberHotelPricing?: boolean;
         resolved?: { lat: number; lng: number; iata?: string | null };
-      };
+      } = {};
+      try {
+        payload = rawBody ? (JSON.parse(rawBody) as typeof payload) : {};
+      } catch {
+        setError(
+          response.ok
+            ? "Hotel search returned an unexpected response."
+            : `Hotel search failed (${response.status}). Try again.`,
+        );
+        return;
+      }
       if (!response.ok) {
         setError(payload.error ?? payload.detail?.errors?.[0]?.message ?? "Hotel search failed.");
         setErrorSuggestions(payload.suggestions ?? []);
@@ -322,8 +333,11 @@ export function TripHotelSearch({
       if (!payload.resolved?.lat && payload.city) {
         setError((prev) => prev ?? `Could not place ${payload.city} on the map. Try an airport code (e.g. MUC).`);
       }
-    } catch {
-      setError("Connection error — try again.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Connection error";
+      setError(message.includes("fetch") || message.includes("network")
+        ? "Connection error — try again."
+        : `Hotel search failed — ${message}`);
     } finally {
       setLoading(false);
     }

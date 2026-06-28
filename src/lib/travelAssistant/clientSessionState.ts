@@ -39,6 +39,8 @@ export interface SessionReservation {
   /** Where to purchase (airline, Google Flights, Seats.aero). */
   bookUrl?: string;
   quotedPriceUsd?: number;
+  quotedPointsMiles?: number;
+  pointsProgram?: string;
   /** Forwarded confirmation metadata */
   sourceEmailId?: string;
   sourceEmailSubject?: string;

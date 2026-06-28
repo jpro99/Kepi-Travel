@@ -16,6 +16,8 @@ export interface PlannedMatchableReservation {
   checkOutDate?: string;
   bookUrl?: string;
   quotedPriceUsd?: number;
+  quotedPointsMiles?: number;
+  pointsProgram?: string;
   notes?: string;
   source?: string;
 }
@@ -130,6 +132,8 @@ export function mergeIncomingOverPlanned<T extends PlannedMatchableReservation>(
     plannedOnly: false,
     bookUrl: planned.bookUrl ?? incoming.bookUrl ?? extractBookUrlFromNotes(planned.notes),
     quotedPriceUsd: incoming.quotedPriceUsd ?? planned.quotedPriceUsd,
+    quotedPointsMiles: incoming.quotedPointsMiles ?? planned.quotedPointsMiles,
+    pointsProgram: incoming.pointsProgram ?? planned.pointsProgram,
     confirmationCode:
       incoming.confirmationCode?.trim() && !isPlaceholderConfirmation(incoming.confirmationCode)
         ? incoming.confirmationCode

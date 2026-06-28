@@ -7,6 +7,9 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Logo } from "@/components/ui/Logo";
 
+import type { TripSpendSummary } from "@/lib/travelAssistant/tripSpendSummary";
+import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
+
 type TripStage = "readiness" | "pre-departure" | "airport" | "arrival" | "recovery";
 type TripStatus = "green" | "yellow" | "red";
 type GuidanceTone = "subtle" | "standard";
@@ -32,6 +35,7 @@ interface TravelAssistantTopControlsProps {
   onMinutesToDepartureChange: (minutes: number) => void;
   onEvaluateStatus: () => void;
   toggleDisruption: () => void; // Added for testing
+  tripSpendSummary?: TripSpendSummary;
 }
 
 export function TravelAssistantTopControls({
@@ -49,6 +53,7 @@ export function TravelAssistantTopControls({
   lastSessionRestoreAt,
   formatClock,
   toggleDisruption,
+  tripSpendSummary,
 }: TravelAssistantTopControlsProps) {
   const { user } = useUser();
   const clerk = useClerk();
@@ -99,6 +104,7 @@ export function TravelAssistantTopControls({
                   Admin
                 </Link>
               ) : null}
+              {tripSpendSummary ? <TripSpendBadge summary={tripSpendSummary} /> : null}
               <div className="relative">
                 <button
                   type="button"
