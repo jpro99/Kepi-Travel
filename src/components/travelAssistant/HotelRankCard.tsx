@@ -1,12 +1,26 @@
 "use client";
 
+import { Wifi, Coffee, Car, Waves, Dumbbell, ArrowUpDown } from "lucide-react";
+import {
+  formatHotelNightlyPrice,
+  formatHotelTotalPrice,
+  primaryMatchReason,
+  resolveHotelHeroVisual,
+  topAmenityIcons,
+} from "@/lib/hotels/hotelCardDisplay";
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
 import type { HotelPayMode } from "@/lib/hotels/hotelPointsDisplay";
 import { pointsPerNight } from "@/lib/hotels/hotelPointsDisplay";
 
-function starLabel(count: number): string {
-  const rounded = Math.max(0, Math.min(5, Math.round(count)));
-  return "★".repeat(rounded) + "☆".repeat(5 - rounded);
+function AmenityIcon({ kind }: { kind: string }) {
+  const className = "h-4 w-4 text-slate-400";
+  if (kind === "wifi") return <Wifi className={className} aria-hidden />;
+  if (kind === "breakfast") return <Coffee className={className} aria-hidden />;
+  if (kind === "parking") return <Car className={className} aria-hidden />;
+  if (kind === "pool") return <Waves className={className} aria-hidden />;
+  if (kind === "gym") return <Dumbbell className={className} aria-hidden />;
+  if (kind === "elevator") return <ArrowUpDown className={className} aria-hidden />;
+  return null;
 }
 
 interface HotelRankCardProps {
@@ -14,9 +28,10 @@ interface HotelRankCardProps {
   totalInSearch: number;
   featured?: boolean;
   compact?: boolean;
+  premium?: boolean;
   selected?: boolean;
   onAdd: () => void;
-  onDismiss: () => void;
+  onDismiss?: () => void;
   onSelect?: () => void;
   payMode?: HotelPayMode;
 }
@@ -24,8 +39,8 @@ interface HotelRankCardProps {
 export function HotelRankCard({
   hotel,
   totalInSearch,
-  featured = false,
   compact = false,
+  premium = false,
   selected = false,
   onAdd,
   onDismiss,
@@ -34,6 +49,79 @@ export function HotelRankCard({
 }: HotelRankCardProps) {
   const nightlyPts = pointsPerNight(hotel);
   const showPoints = payMode === "points" || payMode === "any";
+  const hero = resolveHotelHeroVisual(hotel);
+  const nightlyLabel = formatHotelNightlyPrice(hotel);
+  const totalLabel = formatHotelTotalPrice(hotel);
+  const guestScore = hotel.rating !== undefined ? hotel.rating.toFixed(1) : `${hotel.stars}.0`;
+  const amenityIcons = topAmenityIcons(hotel.amenities);
+  const matchReason = primaryMatchReason(hotel);
+
+  if (premium) {
+    return (
+      <article
+        className={`overflow-hidden rounded-2xl bg-white shadow-[0_8px_30px_rgba(15,23,42,0.08)] transition dark:bg-[#0f2744] ${
+          selected ? "ring-2 ring-[#f4c95d]" : ""
+        }`}
+      >
+        {hero.kind === "photo" && hero.url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={hero.url} alt="" className="h-44 w-full object-cover" />
+        ) : (
+          <div
+            className="flex h-44 w-full items-center justify-center"
+            style={{ background: hero.gradient }}
+          >
+            <span className="text-4xl font-black tracking-wide text-[#f4c95d]">{hero.initials}</span>
+          </div>
+        )}
+
+        <div className="space-y-4 p-5">
+          <div>
+            <h3 className="text-xl font-black leading-tight text-slate-900 dark:text-white">{hotel.name}</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              {"★".repeat(Math.round(hotel.stars))} · {guestScore} guest score
+              {hotel.chainName ? ` · ${hotel.chainName}` : ""}
+            </p>
+          </div>
+
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              {payMode === "points" && nightlyPts ? (
+                <>
+                  <p className="text-2xl font-black text-[#f4c95d]">{nightlyPts.toLocaleString()}</p>
+                  <p className="text-sm text-slate-500">points / night</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-2xl font-black text-[#f4c95d]">{nightlyLabel}</p>
+                  <p className="text-sm text-slate-500">{nightlyLabel === "Check site" ? "See booking site" : "/ night"}</p>
+                </>
+              )}
+            </div>
+            {totalLabel ? <p className="text-right text-sm text-slate-500">{totalLabel}</p> : null}
+          </div>
+
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">{matchReason}</p>
+
+          {amenityIcons.length > 0 ? (
+            <div className="flex gap-3">
+              {amenityIcons.map((kind) => (
+                <AmenityIcon key={kind} kind={kind} />
+              ))}
+            </div>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={onAdd}
+            className="w-full rounded-2xl bg-[#f4c95d] py-3.5 text-sm font-black text-[#0b1f3a] hover:bg-[#e8bc4a]"
+          >
+            Select →
+          </button>
+        </div>
+      </article>
+    );
+  }
 
   if (compact) {
     return (
@@ -42,52 +130,16 @@ export function HotelRankCard({
         tabIndex={onSelect ? 0 : undefined}
         onClick={onSelect}
         onKeyDown={onSelect ? (event) => event.key === "Enter" && onSelect() : undefined}
-        className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 transition ${
-          selected
-            ? "border-emerald-500 bg-emerald-50 dark:border-emerald-600 dark:bg-emerald-950/30"
-            : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900"
+        className={`flex items-center gap-3 rounded-2xl bg-white px-3 py-3 shadow-sm transition dark:bg-[#0f2744] ${
+          selected ? "ring-2 ring-[#f4c95d]" : ""
         }`}
       >
-        <span
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-black ${
-            hotel.tier === "kepi_pick" || hotel.tier === "personal"
-              ? "bg-emerald-800 text-white"
-              : hotel.tier === "best_value"
-                ? "bg-amber-500 text-slate-900"
-                : "bg-orange-600 text-white"
-          }`}
-        >
-          #{hotel.rank}
-        </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-bold text-slate-900 dark:text-white">{hotel.name}</p>
-          <p className="truncate text-[10px] text-slate-500">
-            {hotel.inSearchCity === false ? "Nearby · " : ""}
-            {hotel.chainName ? `${hotel.chainName} · ` : ""}
-            {hotel.rating !== undefined ? `${hotel.rating.toFixed(1)}★` : `${hotel.stars}★`}
+          <p className="truncate text-sm font-bold text-slate-900 dark:text-white">{hotel.name}</p>
+          <p className="truncate text-xs text-slate-500">
+            {guestScore} · {nightlyLabel}
+            {showPoints && nightlyPts ? ` · ${nightlyPts.toLocaleString()} pts` : ""}
           </p>
-        </div>
-        <div className="shrink-0 text-right">
-          {hotel.browseOnly || hotel.pricePerNight <= 0 ? (
-            <>
-              <p className="text-[11px] font-black text-sky-700 dark:text-sky-300">Google</p>
-              <p className="text-[9px] text-slate-400">check price</p>
-            </>
-          ) : payMode === "points" && nightlyPts ? (
-            <>
-              <p className="text-sm font-black text-violet-700 dark:text-violet-300">{nightlyPts.toLocaleString()}</p>
-              <p className="text-[9px] text-slate-400">pts / night</p>
-              <p className="text-[9px] text-slate-500">${Math.round(hotel.pricePerNight)} cash</p>
-            </>
-          ) : (
-            <>
-              <p className="text-sm font-black text-slate-900 dark:text-white">${Math.round(hotel.pricePerNight)}</p>
-              <p className="text-[9px] text-slate-400">/ night</p>
-              {showPoints && nightlyPts ? (
-                <p className="text-[9px] font-semibold text-violet-700 dark:text-violet-300">{nightlyPts.toLocaleString()} pts</p>
-              ) : null}
-            </>
-          )}
         </div>
         <button
           type="button"
@@ -95,141 +147,45 @@ export function HotelRankCard({
             event.stopPropagation();
             onAdd();
           }}
-          className="shrink-0 rounded-lg bg-sky-600 px-2 py-1.5 text-[10px] font-bold text-white"
+          className="shrink-0 rounded-xl bg-[#f4c95d] px-3 py-2 text-xs font-black text-[#0b1f3a]"
         >
-          View
+          Select
         </button>
       </article>
     );
   }
 
-  const isKepiPick = hotel.tier === "kepi_pick";
-  const cpp = hotel.pointsOption?.cppAchieved;
-
   return (
-    <article
-      className={`overflow-hidden rounded-2xl border ${
-        featured && isKepiPick
-          ? "border-[#f4c95d] bg-gradient-to-br from-[#0b1f3a] to-[#123456] text-white shadow-md"
-          : featured
-            ? "border-sky-300 bg-white shadow-sm dark:border-sky-700 dark:bg-slate-900"
-            : "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-950/50"
-      }`}
-    >
-      {hotel.photos[0] ? (
+    <article className="overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-[#0f2744]">
+      {hero.kind === "photo" && hero.url ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={hotel.photos[0]} alt="" className={`w-full object-cover ${featured ? "h-36 md:h-44" : "h-24"}`} />
-      ) : null}
-
-      <div className="p-4">
+        <img src={hero.url} alt="" className="h-36 w-full object-cover" />
+      ) : (
+        <div className="flex h-36 items-center justify-center" style={{ background: hero.gradient }}>
+          <span className="text-3xl font-black text-[#f4c95d]">{hero.initials}</span>
+        </div>
+      )}
+      <div className="space-y-3 p-5">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-600 text-sm font-black text-white">
-            #{hotel.rank}
+          <div>
+            <p className="font-bold text-slate-900 dark:text-white">{hotel.name}</p>
+            <p className="text-xs text-slate-500">#{hotel.rank} of {totalInSearch}</p>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className={`font-bold leading-snug ${featured && isKepiPick ? "text-white" : "text-slate-900 dark:text-white"}`}>
-              {hotel.name}
-            </p>
-            {hotel.chainName ? (
-              <p className={`text-xs ${featured && isKepiPick ? "text-slate-300" : "text-slate-500"}`}>{hotel.chainName}</p>
-            ) : null}
-          </div>
-          <div className="shrink-0 text-right">
-            {payMode === "points" && nightlyPts ? (
-              <>
-                <p className={`text-lg font-black ${featured && isKepiPick ? "text-[#f4c95d]" : "text-violet-700 dark:text-violet-300"}`}>
-                  {nightlyPts.toLocaleString()}
-                </p>
-                <p className={`text-[10px] ${featured && isKepiPick ? "text-slate-400" : "text-slate-500"}`}>pts / night</p>
-                <p className={`text-[10px] ${featured && isKepiPick ? "text-slate-400" : "text-slate-500"}`}>
-                  ${Math.round(hotel.totalPrice)} cash total
-                </p>
-              </>
-            ) : (
-              <>
-                <p className={`text-lg font-black ${featured && isKepiPick ? "text-[#f4c95d]" : "text-slate-900 dark:text-white"}`}>
-                  ${Math.round(hotel.pricePerNight)}
-                </p>
-                <p className={`text-[10px] ${featured && isKepiPick ? "text-slate-400" : "text-slate-500"}`}>/ night</p>
-                {showPoints && nightlyPts ? (
-                  <p className={`text-[10px] font-semibold ${featured && isKepiPick ? "text-violet-200" : "text-violet-700 dark:text-violet-300"}`}>
-                    {hotel.pointsOption?.milesNeeded.toLocaleString()} pts total
-                  </p>
-                ) : null}
-              </>
-            )}
-          </div>
+          <p className="text-lg font-black text-[#f4c95d]">{nightlyLabel}</p>
         </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <StatChip
-            label="Stars"
-            value={starLabel(hotel.stars)}
-            dark={featured && isKepiPick}
-          />
-          <StatChip
-            label="Guest score"
-            value={hotel.rating !== undefined ? hotel.rating.toFixed(1) : "—"}
-            dark={featured && isKepiPick}
-          />
-          <StatChip
-            label="¢ / point"
-            value={cpp !== undefined ? `${cpp.toFixed(1)}¢` : "Cash best"}
-            dark={featured && isKepiPick}
-          />
-          <StatChip
-            label="City rank"
-            value={`${hotel.rank} of ${totalInSearch}`}
-            dark={featured && isKepiPick}
-          />
-        </div>
-
-        {hotel.cityRankLabel ? (
-          <p className={`mt-2 text-xs ${featured && isKepiPick ? "text-sky-200" : "text-sky-700 dark:text-sky-300"}`}>
-            {hotel.cityRankLabel}
-          </p>
-        ) : null}
-        {hotel.whyLine ? (
-          <p className={`mt-1 text-xs ${featured && isKepiPick ? "text-slate-300" : "text-slate-600 dark:text-slate-400"}`}>
-            {hotel.whyLine}
-          </p>
-        ) : null}
-
-        <div className="mt-3 flex gap-2">
-          <button
-            type="button"
-            onClick={onAdd}
-            className={`flex-1 rounded-xl py-2.5 text-sm font-bold ${
-              featured && isKepiPick ? "bg-[#f4c95d] text-[#0b1f3a]" : "bg-[#0b1f3a] text-[#f4c95d]"
-            }`}
-          >
-            View rooms &amp; prices
+        <p className="text-sm text-emerald-700 dark:text-emerald-300">{matchReason}</p>
+        <div className="flex gap-2">
+          <button type="button" onClick={onAdd} className="flex-1 rounded-xl bg-[#f4c95d] py-2.5 text-sm font-black text-[#0b1f3a]">
+            Select →
           </button>
-          <button
-            type="button"
-            onClick={onDismiss}
-            className={`rounded-xl border px-3 py-2.5 text-xs font-semibold ${
-              featured && isKepiPick
-                ? "border-slate-500 text-slate-300"
-                : "border-slate-300 text-slate-600 dark:border-slate-600 dark:text-slate-300"
-            }`}
-          >
-            Not for me
-          </button>
+          {onDismiss ? (
+            <button type="button" onClick={onDismiss} className="rounded-xl px-3 py-2.5 text-xs text-slate-500">
+              Skip
+            </button>
+          ) : null}
         </div>
       </div>
     </article>
-  );
-}
-
-function StatChip({ label, value, dark }: { label: string; value: string; dark?: boolean }) {
-  return (
-    <div className={`rounded-lg px-2 py-1.5 ${dark ? "bg-white/10" : "bg-white dark:bg-slate-800"}`}>
-      <p className={`text-[9px] font-bold uppercase tracking-wide ${dark ? "text-slate-400" : "text-slate-500"}`}>
-        {label}
-      </p>
-      <p className={`text-xs font-bold ${dark ? "text-white" : "text-slate-900 dark:text-white"}`}>{value}</p>
-    </div>
   );
 }
 

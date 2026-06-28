@@ -2,12 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { HotelDetailSheet } from "@/components/travelAssistant/HotelDetailSheet";
-import { HotelRankCard } from "@/components/travelAssistant/HotelRankCard";
+import { HotelRankCard, pickFeaturedHotels } from "@/components/travelAssistant/HotelRankCard";
 import { HotelStayMap } from "@/components/travelAssistant/HotelStayMap";
 import {
   attachHotelCoordinates,
-  hotelInBounds,
-  type MapBounds,
+  filterHotelsWithinRenderDistance,
 } from "@/lib/hotels/hotelCoordinates";
 import { suggestAirports, type AirportResult } from "@/lib/airports/lookup";
 import { suggestHotelDestinations } from "@/lib/hotels/destinationAliases";
@@ -17,7 +16,6 @@ import {
   SEARCH_PRIMARY_BUTTON,
 } from "@/lib/ui/searchResponsive";
 import type { HotelSearchResult, RankedHotelSearchResult } from "@/lib/hotels/types";
-import { HotelChainFilterBar } from "@/components/travelAssistant/ChainFilterBar";
 import {
   enabledHotelChainIds,
   loadHotelChainToggles,
@@ -25,12 +23,8 @@ import {
   type ChainToggleMap,
 } from "@/lib/loyalty/chainFilterPrefs";
 import { HotelFilteredOutSheet, type FilteredHotelRow } from "@/components/travelAssistant/HotelFilteredOutSheet";
-import { HotelStayPreferencesSheet } from "@/components/travelAssistant/HotelStayPreferencesSheet";
-import {
-  computeLivePriceBounds,
-  evaluateHotelMatch,
-  hotelPassesFilters,
-} from "@/lib/hotels/hotelSearchFilters";
+import { HotelRefineSheet } from "@/components/travelAssistant/HotelRefineSheet";
+import { computeLivePriceBounds, resolveHotelDisplay } from "@/lib/hotels/hotelSearchFilters";
 import type { HotelStayProfile } from "@/lib/memory/hotelStayProfile";
 import { hotelParticipatesInPoints, matchHotelChain, type HotelChainId } from "@/lib/loyalty/chainRegistry";
 
@@ -138,7 +132,7 @@ function CityInput({
               }}
               className="flex w-full items-center gap-3 border-b border-slate-100 px-3 py-2.5 text-left last:border-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800"
             >
-              <span className="w-10 shrink-0 text-xs font-black text-sky-600">{airport.iata}</span>
+              <span className="w-10 shrink-0 text-xs font-black text-slate-600">{airport.iata}</span>
               <span>
                 <p className="text-sm font-semibold text-slate-900 dark:text-white">{airport.city}</p>
                 <p className="text-xs text-slate-500">{airport.name}</p>
@@ -155,10 +149,8 @@ function CityInput({
               }}
               className="flex w-full items-center gap-3 border-b border-slate-100 px-3 py-2.5 text-left last:border-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800"
             >
-              <span className="w-10 shrink-0 text-xs font-black text-emerald-600">City</span>
-              <span>
-                <p className="text-sm font-semibold text-slate-900 dark:text-white">{hint}</p>
-              </span>
+              <span className="w-10 shrink-0 text-xs font-black text-slate-500">City</span>
+              <p className="text-sm font-semibold text-slate-900 dark:text-white">{hint}</p>
             </button>
           ))}
         </div>
@@ -196,23 +188,22 @@ export function TripHotelSearch({
   const [inventoryNote, setInventoryNote] = useState<string | null>(null);
   const [googleHotelsUrl, setGoogleHotelsUrl] = useState<string | null>(null);
   const [inCityCount, setInCityCount] = useState(0);
-  const [resultsView, setResultsView] = useState<ResultsView>("map");
+  const [resultsView, setResultsView] = useState<ResultsView>("list");
   const [mapSelectedId, setMapSelectedId] = useState<string | null>(null);
   const [detailHotelId, setDetailHotelId] = useState<string | null>(null);
   const [savedHotelIds, setSavedHotelIds] = useState<Set<string>>(new Set());
-  const [mapBounds, setMapBounds] = useState<MapBounds | null>(null);
   const [hotelsWithCoords, setHotelsWithCoords] = useState<Array<RankedHotelSearchResult & { lat: number; lng: number }>>([]);
   const [learningNote, setLearningNote] = useState<string | null>(null);
   const [memberHotelPricing, setMemberHotelPricing] = useState(false);
   const [cityCenter, setCityCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [chainToggles, setChainToggles] = useState<ChainToggleMap<HotelChainId>>(() => loadHotelChainToggles());
-  const [chainFilterCollapsed, setChainFilterCollapsed] = useState(true);
   const [stayProfile, setStayProfile] = useState<HotelStayProfile | null>(null);
   const [priceMin, setPriceMin] = useState(0);
   const [priceMax, setPriceMax] = useState(500);
   const [priceBounds, setPriceBounds] = useState({ min: 0, max: 500, hasLiveRates: false });
-  const [prefsOpen, setPrefsOpen] = useState(false);
+  const [refineOpen, setRefineOpen] = useState(false);
   const [hiddenOpen, setHiddenOpen] = useState(false);
+  const [strictStyleFilter, setStrictStyleFilter] = useState(false);
   const autoSearchKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -253,6 +244,7 @@ export function TripHotelSearch({
     setResults([]);
     setDismissedIds(new Set());
     setPreferenceInsight(null);
+    setStrictStyleFilter(false);
     setShowResults(true);
 
     try {
@@ -272,7 +264,6 @@ export function TripHotelSearch({
         inventoryNote?: string | null;
         googleHotelsUrl?: string | null;
         inCityCount?: number;
-        nearbyCount?: number;
         memberHotelPricing?: boolean;
         resolved?: { lat: number; lng: number; iata?: string | null };
       };
@@ -281,8 +272,17 @@ export function TripHotelSearch({
         setErrorSuggestions(payload.suggestions ?? []);
         return;
       }
-      setResults(payload.hotels ?? []);
-      const bounds = computeLivePriceBounds(payload.hotels ?? []);
+
+      let hotels = payload.hotels ?? [];
+      if (payload.resolved?.lat && payload.resolved?.lng) {
+        hotels = filterHotelsWithinRenderDistance(hotels, {
+          lat: payload.resolved.lat,
+          lng: payload.resolved.lng,
+        });
+      }
+
+      setResults(hotels);
+      const bounds = computeLivePriceBounds(hotels);
       setPriceBounds(bounds);
       setPriceMin(bounds.min);
       setPriceMax(bounds.max);
@@ -299,13 +299,13 @@ export function TripHotelSearch({
         setCityCenter({ lat: payload.resolved.lat, lng: payload.resolved.lng });
         setHotelsWithCoords(
           attachHotelCoordinates(
-            payload.hotels ?? [],
+            hotels,
             payload.resolved.lat,
             payload.resolved.lng,
             payload.city ?? resolvedCity ?? city,
           ),
         );
-      } else if ((payload.hotels?.length ?? 0) > 0) {
+      } else if (hotels.length > 0) {
         setCityCenter(null);
         setHotelsWithCoords([]);
       } else {
@@ -313,15 +313,14 @@ export function TripHotelSearch({
         setHotelsWithCoords([]);
       }
       setLearningNote(null);
-      setResultsView("map");
-      setMapSelectedId(payload.hotels?.[0]?.id ?? null);
+      setResultsView("list");
+      setMapSelectedId(hotels[0]?.id ?? null);
       setDetailHotelId(null);
-      setMapBounds(null);
-      if ((payload.hotels?.length ?? 0) === 0) {
+      if (hotels.length === 0) {
         setError(payload.error ?? `No hotels found near ${payload.city ?? destination}.`);
       }
       if (!payload.resolved?.lat && payload.city) {
-        setError((prev) => prev ?? `Could not place ${payload.city} on the map. Try an airport code (e.g. BRI).`);
+        setError((prev) => prev ?? `Could not place ${payload.city} on the map. Try an airport code (e.g. MUC).`);
       }
     } catch {
       setError("Connection error — try again.");
@@ -389,32 +388,27 @@ export function TripHotelSearch({
     return rows;
   }, [results, dismissedIds, payMode, sortMode, showNearby, enabledChains]);
 
-  const visibleResults = useMemo(() => {
-    return chainFilteredResults.filter((hotel) =>
-      hotelPassesFilters(hotel, stayProfile, priceMin, priceMax, priceBounds),
-    );
-  }, [chainFilteredResults, stayProfile, priceMin, priceMax, priceBounds]);
-
-  const hiddenRows: FilteredHotelRow[] = useMemo(() => {
-    const visibleIds = new Set(visibleResults.map((hotel) => hotel.id));
-    return chainFilteredResults
-      .filter((hotel) => !visibleIds.has(hotel.id))
-      .map((hotel) => ({
-        hotel,
-        evaluation: evaluateHotelMatch(hotel, stayProfile, priceMin, priceMax, {
-          catalogMin: priceBounds.min,
-          catalogMax: priceBounds.max,
-        }),
-      }));
-  }, [chainFilteredResults, visibleResults, stayProfile, priceMin, priceMax, priceBounds]);
-
-  const inCityHotels = useMemo(
-    () => visibleResults.filter((hotel) => hotel.inSearchCity !== false),
-    [visibleResults],
+  const displayResult = useMemo(
+    () =>
+      resolveHotelDisplay(chainFilteredResults, {
+        profile: stayProfile,
+        priceMin,
+        priceMax,
+        catalogBounds: priceBounds,
+        strictStyleFilter,
+      }),
+    [chainFilteredResults, stayProfile, priceMin, priceMax, priceBounds, strictStyleFilter],
   );
-  const nearbyHotels = useMemo(
-    () => visibleResults.filter((hotel) => hotel.inSearchCity === false),
-    [visibleResults],
+
+  const visibleResults = displayResult.visible;
+  const hiddenRows: FilteredHotelRow[] = displayResult.hidden;
+  const relaxedNote = displayResult.relaxedNote;
+
+  const featuredHotels = useMemo(() => pickFeaturedHotels(visibleResults, 3), [visibleResults]);
+  const featuredIds = useMemo(() => new Set(featuredHotels.map((h) => h.id)), [featuredHotels]);
+  const remainingHotels = useMemo(
+    () => visibleResults.filter((hotel) => !featuredIds.has(hotel.id)),
+    [visibleResults, featuredIds],
   );
 
   const mappedHotels = useMemo(() => {
@@ -424,12 +418,7 @@ export function TripHotelSearch({
     }
     if (!cityCenter) return [];
     return attachHotelCoordinates(visibleResults, cityCenter.lat, cityCenter.lng, resolvedCity ?? city);
-  }, [cityCenter, hotelsWithCoords, visibleResults]);
-
-  const hotelsInView = useMemo(() => {
-    if (!mapBounds) return mappedHotels;
-    return mappedHotels.filter((hotel) => hotelInBounds(hotel, mapBounds));
-  }, [mappedHotels, mapBounds]);
+  }, [cityCenter, hotelsWithCoords, visibleResults, resolvedCity, city]);
 
   const detailHotel = results.find((row) => row.id === detailHotelId && !dismissedIds.has(row.id)) ?? null;
 
@@ -467,7 +456,7 @@ export function TripHotelSearch({
     if (!error) return null;
     return (
       <div className="space-y-2">
-        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">{error}</p>
+        <p className="rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-800 dark:bg-slate-800 dark:text-slate-100">{error}</p>
         {errorSuggestions.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {errorSuggestions.map((suggestion) => (
@@ -475,7 +464,7 @@ export function TripHotelSearch({
                 key={suggestion}
                 type="button"
                 onClick={() => applyDestinationSuggestion(suggestion)}
-                className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800"
+                className="rounded-full bg-[#f4c95d] px-4 py-2 text-sm font-semibold text-[#0b1f3a]"
               >
                 {suggestion}
               </button>
@@ -486,41 +475,10 @@ export function TripHotelSearch({
     );
   };
 
-  const renderHotelRow = (hotel: RankedHotelSearchResult): ReactNode => (
-    <div key={hotel.id} data-hotel-id={hotel.id}>
-      <HotelRankCard
-        hotel={hotel}
-        totalInSearch={results.length}
-        compact
-        payMode={payMode}
-        selected={mapSelectedId === hotel.id || detailHotelId === hotel.id}
-        onSelect={() => openDetail(hotel)}
-        onAdd={() => openDetail(hotel)}
-        onDismiss={() => handleDismiss(hotel)}
-      />
-    </div>
-  );
-
-  const renderHotelListSections = (): ReactNode => {
-    if (showNearby && nearbyHotels.length > 0 && inCityHotels.length > 0) {
-      return (
-        <>
-          <p className="px-1 text-[9px] font-bold uppercase tracking-wider text-slate-500">
-            In {resolvedCity?.split(",")[0]?.trim() ?? "town"} ({inCityHotels.length})
-          </p>
-          {inCityHotels.map((hotel) => renderHotelRow(hotel))}
-          <p className="mt-2 px-1 text-[9px] font-bold uppercase tracking-wider text-slate-500">
-            Nearby ({nearbyHotels.length})
-          </p>
-          {nearbyHotels.map((hotel) => renderHotelRow(hotel))}
-        </>
-      );
-    }
-    return visibleResults.map((hotel) => renderHotelRow(hotel));
-  };
+  const nearbyCount = Math.max(0, results.length - inCityCount);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {!showResults ? (
         <>
           <CityInput
@@ -530,9 +488,9 @@ export function TripHotelSearch({
               setCity(display);
               setCityIata(iata);
             }}
-            placeholder="e.g. Rome, Venice, New York"
+            placeholder="e.g. Munich, Rome, New York"
           />
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <div>
               <label className={SEARCH_LABEL}>Check-in</label>
               <input type="date" value={checkIn} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setCheckIn(e.target.value)} className={SEARCH_INPUT_LIGHT} />
@@ -559,209 +517,158 @@ export function TripHotelSearch({
             </div>
           </div>
           {error ? renderErrorWithSuggestions() : null}
-          <button type="button" disabled={loading} onClick={() => void runSearch()} className={`${SEARCH_PRIMARY_BUTTON} bg-sky-600 text-white disabled:opacity-60`}>
+          <button type="button" disabled={loading} onClick={() => void runSearch()} className={`${SEARCH_PRIMARY_BUTTON} bg-[#0b1f3a] text-[#f4c95d] disabled:opacity-60`}>
             {loading ? "Searching…" : "Search hotels"}
           </button>
         </>
       ) : (
-        <>
-          <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="rounded-3xl bg-[#fafafa] p-4 dark:bg-[#0b1f3a] md:p-6">
+          <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-bold text-slate-900 dark:text-white">{resolvedCity ?? city}</p>
-              <p className="text-[11px] text-slate-500">
-                {checkIn} → {checkOut} ·{" "}
-                {mapBounds && resultsView === "map"
-                  ? `${visibleResults.length} hotels · map shows all pins`
-                  : `${visibleResults.length} hotels`}
+              <h2 className="text-2xl font-black text-slate-900 dark:text-white">{resolvedCity ?? city}</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                {checkIn} → {checkOut} · {visibleResults.length} hotel{visibleResults.length === 1 ? "" : "s"}
               </p>
             </div>
-            <div className="flex gap-1.5">
-              <button type="button" onClick={() => setResultsView("map")} className={`rounded-lg px-2.5 py-1 text-[11px] font-bold ${resultsView === "map" ? "bg-sky-600 text-white" : "border border-slate-300 text-slate-600"}`}>Map</button>
-              <button type="button" onClick={() => setResultsView("list")} className={`rounded-lg px-2.5 py-1 text-[11px] font-bold ${resultsView === "list" ? "bg-sky-600 text-white" : "border border-slate-300 text-slate-600"}`}>List</button>
-              <button type="button" onClick={() => { setShowResults(false); setError(null); }} className="rounded-lg border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-600">Edit</button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setRefineOpen(true)}
+                className="rounded-full bg-white px-4 py-2 text-sm font-bold text-slate-800 shadow-sm dark:bg-slate-800 dark:text-slate-100"
+              >
+                Refine
+              </button>
+              <button
+                type="button"
+                onClick={() => setResultsView((view) => (view === "map" ? "list" : "map"))}
+                className="rounded-full bg-[#f4c95d] px-4 py-2 text-sm font-bold text-[#0b1f3a]"
+              >
+                {resultsView === "map" ? "List" : "Map"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowResults(false);
+                  setError(null);
+                }}
+                className="rounded-full px-3 py-2 text-sm text-slate-500"
+              >
+                Edit
+              </button>
             </div>
           </div>
 
           {correctedFrom ? (
-            <p className="text-[11px] text-emerald-700 dark:text-emerald-300">Showing hotels near <strong>{resolvedCity}</strong> (corrected from &ldquo;{correctedFrom}&rdquo;).</p>
+            <p className="mb-4 text-sm text-slate-500">
+              Showing hotels near <strong>{resolvedCity}</strong> (corrected from &ldquo;{correctedFrom}&rdquo;).
+            </p>
+          ) : null}
+
+          {relaxedNote ? (
+            <p className="mb-4 text-sm text-slate-500">{relaxedNote}</p>
+          ) : null}
+
+          {(preferenceInsight || learningNote) && !inventoryNote ? (
+            <p className="mb-4 text-sm text-slate-500">{learningNote ?? preferenceInsight}</p>
+          ) : null}
+
+          {savedHotelIds.size > 0 ? (
+            <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">
+              {savedHotelIds.size} saved to your trip — keep comparing or pick another.
+            </p>
           ) : null}
 
           {inventoryNote ? (
-            <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40">
-              <p className="text-[11px] leading-relaxed text-amber-950 dark:text-amber-100">{inventoryNote}</p>
+            <div className="mb-4 space-y-2 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-slate-900/50">
+              <p className="text-sm text-slate-600 dark:text-slate-300">{inventoryNote}</p>
               {googleHotelsUrl ? (
-                <a
-                  href={googleHotelsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex text-[11px] font-bold text-sky-700 underline dark:text-sky-300"
-                >
-                  Browse all hotels on Google →
+                <a href={googleHotelsUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-[#0b1f3a] underline dark:text-[#f4c95d]">
+                  Browse all on Google →
                 </a>
               ) : null}
             </div>
           ) : null}
 
-          {(preferenceInsight || learningNote) && !inventoryNote ? (
-            <p className="rounded-lg border border-sky-200/80 bg-sky-50/80 px-3 py-2 text-[11px] leading-relaxed text-sky-950 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">
-              {learningNote ?? preferenceInsight}
-            </p>
-          ) : null}
-
-          {savedHotelIds.size > 0 ? (
-            <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
-              {savedHotelIds.size} hotel{savedHotelIds.size === 1 ? "" : "s"} saved to your trip — search stays open so you can compare more.
-            </p>
-          ) : null}
-
-          <div className="flex flex-wrap items-center gap-1.5">
-            {(
-              [
-                ["any", "Cash + points"],
-                ["cash", "Cash"],
-                ["points", "Points"],
-              ] as const
-            ).map(([mode, label]) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => {
-                  setPayMode(mode);
-                  if (mode === "points") setSortMode("points");
-                  else if (sortMode === "points") setSortMode("browse");
-                }}
-                className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
-                  payMode === mode ? "bg-emerald-600 text-white" : "border border-slate-300 text-slate-600"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1.5">
-            {(
-              [
-                ["browse", "Browse all"],
-                ["price", "Lowest price"],
-                ["rating", "Top rated"],
-                ["match", "Best match"],
-                ...(payMode === "points" || payMode === "any" ? ([["points", "Best points"]] as const) : []),
-              ] as const
-            ).map(([mode, label]) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setSortMode(mode)}
-                className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
-                  sortMode === mode ? "bg-slate-800 text-white" : "border border-slate-300 text-slate-600"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-            {(results.length - inCityCount) > 0 ? (
-              <button
-                type="button"
-                onClick={() => setShowNearby((value) => !value)}
-                className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
-                  showNearby ? "bg-sky-600 text-white" : "border border-sky-300 text-sky-700"
-                }`}
-              >
-                {showNearby ? "In town only" : `+ Nearby (${results.length - inCityCount})`}
-              </button>
-            ) : null}
-          </div>
-
-          <HotelChainFilterBar
-            toggles={chainToggles}
-            onChange={handleChainToggle}
-            collapsed={chainFilterCollapsed}
-            onToggleCollapse={() => setChainFilterCollapsed((value) => !value)}
-          />
-
-          {payMode === "points" ? (
-            <p className="text-[11px] text-emerald-800 dark:text-emerald-200">
-              Points mode shows Hyatt, Marriott, Hilton, and IHG hotels on the map. Uncheck chains you don&apos;t want — booking opens their site with your dates filled in.
-            </p>
-          ) : null}
-
           {loading ? (
-            <div className="space-y-2">
-              {[1, 2, 3, 4].map((key) => (
-                <div key={key} className="h-10 animate-pulse rounded-lg bg-slate-100 dark:bg-slate-800" />
+            <div className="space-y-4">
+              {[1, 2, 3].map((key) => (
+                <div key={key} className="h-64 animate-pulse rounded-2xl bg-slate-200/80 dark:bg-slate-800" />
               ))}
             </div>
           ) : null}
 
           {!loading ? renderErrorWithSuggestions() : null}
 
-          {!loading && showResults && resultsView === "map" && cityCenter ? (
-            <div className="-mx-1 flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(18rem,340px)_1fr] xl:items-start">
-              <div className="order-2 flex min-h-0 flex-col xl:order-1 xl:max-h-[min(72vh,42rem)]">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                    {visibleResults.length} match
-                    {hiddenRows.length > 0 ? ` · ${hiddenRows.length} hidden` : ""}
-                  </p>
-                  {hiddenRows.length > 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => setHiddenOpen(true)}
-                      className="text-[11px] font-bold text-amber-800 underline dark:text-amber-200"
-                    >
-                      Why hidden?
-                    </button>
-                  ) : null}
-                </div>
-                {visibleResults.length === 0 ? (
-                  <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                    No hotels match ${priceMin}–${priceMax}/night with your stay style. Widen the budget or tap <strong>Stay style</strong> on the map.
-                  </p>
-                ) : (
-                  <div className="min-h-[14rem] flex-1 space-y-2 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-700 dark:bg-slate-900/40 xl:max-h-[min(72vh,42rem)]">
-                    {renderHotelListSections()}
-                  </div>
-                )}
+          {!loading && visibleResults.length > 0 ? (
+            <>
+              <div className="space-y-4">
+                {featuredHotels.map((hotel) => (
+                  <HotelRankCard
+                    key={hotel.id}
+                    hotel={hotel}
+                    totalInSearch={results.length}
+                    premium
+                    payMode={payMode}
+                    onAdd={() => openDetail(hotel)}
+                  />
+                ))}
               </div>
 
-              <div className="order-1 min-w-0 xl:order-2">
-                <HotelStayMap
-                  city={resolvedCity ?? city}
-                  centerLat={cityCenter.lat}
-                  centerLng={cityCenter.lng}
-                  hotels={mappedHotels}
-                  selectedId={mapSelectedId}
-                  onSelect={openDetail}
-                  onBoundsChange={setMapBounds}
-                  payMode={payMode}
-                  expanded
-                  priceMin={priceMin}
-                  priceMax={priceMax}
-                  priceBounds={{ min: priceBounds.min, max: priceBounds.max }}
-                  onPriceRangeChange={(min, max) => {
-                    setPriceMin(min);
-                    setPriceMax(max);
-                  }}
-                  onOpenPreferences={() => setPrefsOpen(true)}
-                  hiddenCount={hiddenRows.length}
-                  onShowHidden={() => setHiddenOpen(true)}
-                />
-                {detailHotel ? null : visibleResults.length > 0 ? (
-                  <p className="mt-2 rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-center text-sm text-slate-500 dark:border-slate-700">
-                    Tap a price pin or pick from the list — green pins are your best Kepi matches.
-                  </p>
-                ) : null}
-              </div>
-            </div>
+              {resultsView === "map" && cityCenter ? (
+                <div className="mt-6">
+                  <HotelStayMap
+                    city={resolvedCity ?? city}
+                    centerLat={cityCenter.lat}
+                    centerLng={cityCenter.lng}
+                    hotels={mappedHotels}
+                    selectedId={mapSelectedId}
+                    onSelect={openDetail}
+                    payMode={payMode}
+                    expanded
+                    priceMin={priceMin}
+                    priceMax={priceMax}
+                    priceBounds={{ min: priceBounds.min, max: priceBounds.max }}
+                    onPriceRangeChange={(min, max) => {
+                      setPriceMin(min);
+                      setPriceMax(max);
+                    }}
+                    onOpenPreferences={() => setRefineOpen(true)}
+                  />
+                </div>
+              ) : null}
+
+              {resultsView === "list" && remainingHotels.length > 0 ? (
+                <div className="mt-6 space-y-3">
+                  <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">More options</p>
+                  {remainingHotels.map((hotel) => (
+                    <HotelRankCard
+                      key={hotel.id}
+                      hotel={hotel}
+                      totalInSearch={results.length}
+                      compact
+                      payMode={payMode}
+                      selected={detailHotelId === hotel.id}
+                      onSelect={() => openDetail(hotel)}
+                      onAdd={() => openDetail(hotel)}
+                    />
+                  ))}
+                </div>
+              ) : null}
+
+              {hiddenRows.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setHiddenOpen(true)}
+                  className="mt-4 text-sm text-slate-500 underline"
+                >
+                  {hiddenRows.length} filtered — see why
+                </button>
+              ) : null}
+            </>
           ) : null}
 
-          {!loading && visibleResults.length > 0 && resultsView === "list" ? (
-            <div className="space-y-3">
-              <div className="max-h-[28rem] space-y-1.5 overflow-y-auto">
-                {visibleResults.map((hotel) => renderHotelRow(hotel))}
-              </div>
-            </div>
+          {!loading && chainFilteredResults.length === 0 && results.length > 0 ? (
+            <p className="text-sm text-slate-500">No hotels match your chain filters — open Refine to adjust.</p>
           ) : null}
 
           {detailHotel ? (
@@ -778,9 +685,18 @@ export function TripHotelSearch({
             />
           ) : null}
 
-          <HotelStayPreferencesSheet
-            open={prefsOpen}
-            onClose={() => setPrefsOpen(false)}
+          <HotelRefineSheet
+            open={refineOpen}
+            onClose={() => setRefineOpen(false)}
+            payMode={payMode}
+            onPayModeChange={setPayMode}
+            sortMode={sortMode}
+            onSortModeChange={setSortMode}
+            showNearby={showNearby}
+            onShowNearbyChange={setShowNearby}
+            nearbyCount={nearbyCount}
+            chainToggles={chainToggles}
+            onChainToggle={handleChainToggle}
             priceMin={priceMin}
             priceMax={priceMax}
             priceBounds={{ min: priceBounds.min, max: priceBounds.max }}
@@ -792,17 +708,16 @@ export function TripHotelSearch({
               setStayProfile(profile);
               setPreferenceInsight(null);
             }}
-            hiddenCount={hiddenRows.length}
-            onShowHidden={() => setHiddenOpen(true)}
+            onApplyStrictStyle={() => setStrictStyleFilter(true)}
           />
 
           <HotelFilteredOutSheet
             open={hiddenOpen}
             onClose={() => setHiddenOpen(false)}
             rows={hiddenRows}
-            onAdjustPreferences={() => setPrefsOpen(true)}
+            onAdjustPreferences={() => setRefineOpen(true)}
           />
-        </>
+        </div>
       )}
     </div>
   );

@@ -94,6 +94,12 @@ For each finding:
 - Read and update `KEPI_PROJECT_MEMORY.md` for durable facts (provider status, completed setup, do-not-repeat advice).
 - Rule: `.cursor/rules/30-project-memory.mdc` (always apply).
 
+## Kepi Design Law (hotels)
+
+- Read `KEPI_DESIGN_LAW.md` before hotel search, card, map, or filter changes.
+- Every hotel bug fix must append a one-line law and add/update a test in `src/lib/hotels/__tests__/`.
+- Laws are enforced on every build: `npm run test:hotels` (runs in `prebuild`).
+
 ## Domain bot skills (Cursor)
 
 | Skill | Path |

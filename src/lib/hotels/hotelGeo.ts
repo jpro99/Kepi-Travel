@@ -29,6 +29,18 @@ export function maxTrustedCoordKm(searchCity: string): number {
   return isSmallDestination(searchCity) ? 1.6 : 10;
 }
 
+/** LAW 1 — hard cap: never render a hotel pin beyond this distance from search center. */
+export const MAX_HOTEL_RENDER_DISTANCE_KM = 50;
+
+export function distanceFromCenterKm(lat: number, lng: number, center: SearchCenter): number {
+  return haversineKm(center.lat, center.lng, lat, lng);
+}
+
+export function isWithinRenderDistance(lat: number, lng: number, center: SearchCenter): boolean {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return true;
+  return distanceFromCenterKm(lat, lng, center) <= MAX_HOTEL_RENDER_DISTANCE_KM;
+}
+
 /** Providers sometimes swap lat/lng — common cause of pins in the ocean. */
 export function fixPossibleLatLngSwap(
   lat: number,

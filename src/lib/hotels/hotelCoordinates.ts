@@ -3,6 +3,7 @@ import {
   fixPossibleLatLngSwap,
   haversineKm,
   isSmallDestination,
+  isWithinRenderDistance,
   maxTrustedCoordKm,
   type SearchCenter,
 } from "@/lib/hotels/hotelGeo";
@@ -116,6 +117,17 @@ export function resolveHotelMapPosition(input: {
 
   const synthetic = coordinateForHotel(hotel.id, index, total, center.lat, center.lng, searchCity);
   return { lat: synthetic.lat, lng: synthetic.lng, usedProviderCoords: false };
+}
+
+export function filterHotelsWithinRenderDistance<T extends HotelSearchResult>(
+  hotels: T[],
+  center: SearchCenter,
+): T[] {
+  return hotels.filter((hotel) => {
+    if (!isFiniteCoord(hotel.lat, hotel.lng)) return true;
+    const fixed = fixPossibleLatLngSwap(hotel.lat, hotel.lng, center);
+    return isWithinRenderDistance(fixed.lat, fixed.lng, center);
+  });
 }
 
 export function attachHotelCoordinates<T extends HotelSearchResult>(
