@@ -13,11 +13,10 @@ import {
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
 import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
-import {
-  resolveLiveCoordinates,
-  shouldDisplayGeolocationFix,
-} from "@/lib/family/geolocationQuality";
+import { resolveLiveCoordinates } from "@/lib/family/geolocationQuality";
 import { resolveLocationForMapDisplay } from "@/lib/family/locationDisplayCache";
+import { isFamilySharingActive } from "@/lib/family/locationSharingPrefs";
+import { burstFamilyLocationFix } from "@/lib/family/familyLocationWatch";
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface LocationPoint {
@@ -93,7 +92,20 @@ export function LiveMapPage() {
   const [sharingLocation, setSharingLocation] = useState(false);
   const [myMemberId, setMyMemberId] = useState<string | null>(null);
 
-  /* ── Load group + config ── */
+  useEffect(() => {
+    if (isFamilySharingActive()) {
+      setSharingLocation(true);
+      burstFamilyLocationFix();
+    }
+    const onStart = () => setSharingLocation(true);
+    const onStop = () => setSharingLocation(false);
+    window.addEventListener("kepi:family-start-sharing", onStart);
+    window.addEventListener("kepi:family-stop-sharing", onStop);
+    return () => {
+      window.removeEventListener("kepi:family-start-sharing", onStart);
+      window.removeEventListener("kepi:family-stop-sharing", onStop);
+    };
+  }, []);
   useEffect(() => {
     void fetch("/api/config", { cache: "no-store" })
       .then(r => r.json())
@@ -153,7 +165,7 @@ export function LiveMapPage() {
 
       (group?.members ?? []).forEach(member => {
         const loc = locations[member.id];
-        if (!loc || !shouldDisplayGeolocationFix(loc.accuracy)) return;
+        if (!loc) return;
         const stale = isStale(loc.updatedAt);
 
         if (existing[member.id]) {
@@ -436,58 +448,82 @@ export function LiveMapPage() {
   const navMinutesToDeparture = activeFlight ? (activeFlight.utcMs - Date.now()) / 60_000 : 0;
 
   /* ── Share my location ── */
-  const shareLocation = useCallback(() => {
-    if (sharingLocation) {
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-        watchIdRef.current = null;
-      }
-      firstFixRef.current = false;
-      setSharingLocation(false);
-      return;
+  const stopLocalLocationWatch = useCallback(() => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
     }
-    if (!navigator.geolocation) { alert("Geolocation not supported on this device."); return; }
-    setSharingLocation(true);
+    firstFixRef.current = false;
+  }, []);
+
+  const startLocalLocationWatch = useCallback(() => {
+    if (!navigator.geolocation || watchIdRef.current !== null) return;
 
     watchIdRef.current = navigator.geolocation.watchPosition(
-      pos => {
+      (pos) => {
         const resolved = resolveLiveCoordinates(pos.coords, pos.timestamp);
         if (!resolved) return;
-        const { latitude: lat, longitude: lon, accuracy } = {
-          latitude: resolved.lat,
-          longitude: resolved.lon,
-          accuracy: resolved.accuracy,
-        };
+        const { lat, lon, accuracy } = resolved;
 
-        // FIX: correct endpoint is POST /api/family with action:"update-location"
         void fetch("/api/family", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "update-location", lat, lon, accuracy }),
         }).catch(() => null);
 
-        // FIX: update own pin immediately without waiting for next poll
         const memberId = myMemberIdRef.current;
         if (memberId) {
-          setLocations(prev => ({
+          setLocations((prev) => ({
             ...prev,
-            [memberId]: { lat, lon, accuracy, updatedAt: new Date().toISOString(), memberId },
+            [memberId]: {
+              lat,
+              lon,
+              accuracy,
+              updatedAt: new Date().toISOString(),
+              memberId,
+            },
           }));
-          // Only center map on first GPS fix, not every update (prevents jumpiness)
           if (mapRef.current && !firstFixRef.current) {
             firstFixRef.current = true;
             mapRef.current.easeTo({ center: [lon, lat], zoom: 17, duration: 1200 });
           }
         }
       },
-      () => setSharingLocation(false),
-      { enableHighAccuracy: true, maximumAge: 3000, timeout: 10_000 }
+      (err) => {
+        stopLocalLocationWatch();
+        if (err.code === 1) {
+          window.dispatchEvent(new CustomEvent("kepi:family-sharing-permission-denied"));
+          return;
+        }
+        window.setTimeout(() => {
+          if (isFamilySharingActive()) startLocalLocationWatch();
+        }, 15_000);
+      },
+      { enableHighAccuracy: true, maximumAge: 10_000, timeout: 45_000 },
     );
+  }, [stopLocalLocationWatch]);
+
+  useEffect(() => {
+    if (sharingLocation) startLocalLocationWatch();
+    else stopLocalLocationWatch();
+    return () => stopLocalLocationWatch();
+  }, [sharingLocation, startLocalLocationWatch, stopLocalLocationWatch]);
+
+  const shareLocation = useCallback(() => {
+    if (sharingLocation) {
+      setSharingLocation(false);
+      window.dispatchEvent(new CustomEvent("kepi:family-stop-sharing"));
+      return;
+    }
+    if (!navigator.geolocation) {
+      alert("Geolocation not supported on this device.");
+      return;
+    }
+    setSharingLocation(true);
+    window.dispatchEvent(new CustomEvent("kepi:family-start-sharing"));
   }, [sharingLocation]);
 
-  useEffect(() => () => {
-    if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
-  }, []);
+  useEffect(() => () => stopLocalLocationWatch(), [stopLocalLocationWatch]);
 
   /* ── Derived ── */
   const members = group?.members ?? [];

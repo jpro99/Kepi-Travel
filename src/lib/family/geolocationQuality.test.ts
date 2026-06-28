@@ -6,7 +6,7 @@ import {
   shouldDisplayGeolocationFix,
 } from "./geolocationQuality";
 
-function coords(lat: number, lon: number, accuracy: number): GeolocationCoordinates {
+function coords(lat: number, lon: number, accuracy?: number): GeolocationCoordinates {
   return {
     latitude: lat,
     longitude: lon,
@@ -28,14 +28,20 @@ describe("geolocationQuality", () => {
     assert.equal(shouldDisplayGeolocationFix(12), true);
   });
 
-  it("rejects coarse Wi-Fi guesses", () => {
-    assert.equal(shouldAcceptGeolocationFix(coords(34.05, -118.24, 400)), false);
+  it("bootstrap accepts first fix without accuracy", () => {
+    assert.equal(shouldAcceptGeolocationFix(coords(34.05, -118.24)), true);
+    assert.equal(shouldDisplayGeolocationFix(undefined), true);
+  });
+
+  it("rejects coarse Wi-Fi guesses after a good fix exists", () => {
+    assert.equal(shouldAcceptGeolocationFix(coords(34.05, -118.24, 15)), true);
+    assert.equal(shouldAcceptGeolocationFix(coords(34.12, -118.31, 400)), false);
     assert.equal(shouldDisplayGeolocationFix(400), false);
   });
 
   it("allows soft fix while GPS warms up", () => {
-    assert.equal(shouldAcceptGeolocationFix(coords(34.05, -118.24, 60)), true);
-    assert.equal(shouldAcceptGeolocationFix(coords(34.05, -118.24, 60)), false);
+    assert.equal(shouldAcceptGeolocationFix(coords(34.05, -118.24, 80)), true);
+    assert.equal(shouldAcceptGeolocationFix(coords(34.05, -118.24, 80)), false);
   });
 
   it("rejects teleports to a distant mis-pin", () => {

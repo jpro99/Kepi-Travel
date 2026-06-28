@@ -5,7 +5,6 @@ import "@/lib/maplibreCspWorker";
 import { useEffect, useRef, useCallback, useState } from "react";
 import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
-import { shouldDisplayGeolocationFix } from "@/lib/family/geolocationQuality";
 import { resolveLocationForMapDisplay } from "@/lib/family/locationDisplayCache";
 
 interface LocationPoint {
@@ -64,7 +63,7 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
         const raw = locations[member.id];
         if (!raw) return;
         const resolved = resolveLocationForMapDisplay(member.id, raw);
-        if (!resolved || !shouldDisplayGeolocationFix(resolved.accuracy)) return;
+        if (!resolved) return;
         const loc = { ...raw, ...resolved };
 
         const stale = isStale(loc.updatedAt);

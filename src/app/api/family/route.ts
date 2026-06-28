@@ -324,18 +324,33 @@ export async function POST(request: Request) {
     if (mem) ns = mem.ownerId;
 
     const prev = await kvStoreGet<z.infer<typeof LocationSchema>>(FAMILY_LOCATION_KEY(userId), { userId: ns });
-    const incomingAccuracy = d.accuracy ?? Number.POSITIVE_INFINITY;
+    const hasAccuracy = typeof d.accuracy === "number" && Number.isFinite(d.accuracy) && d.accuracy > 0;
+    const incomingAccuracy = hasAccuracy ? d.accuracy! : null;
 
-    if (prev && incomingAccuracy > 80) {
+    // Always accept the first fix — otherwise the member never appears on the map.
+    if (!prev) {
+      const loc: z.infer<typeof LocationSchema> = {
+        lat: d.lat,
+        lon: d.lon,
+        accuracy: d.accuracy,
+        updatedAt: new Date().toISOString(),
+        memberId: userId,
+        label: d.label,
+      };
+      await kvStoreSet(FAMILY_LOCATION_KEY(userId), loc, { userId: ns });
+      return NextResponse.json({ ok: true, location: loc });
+    }
+
+    if (incomingAccuracy != null && incomingAccuracy > 200) {
+      return NextResponse.json({ ok: true, location: prev, skipped: true });
+    }
+
+    if (incomingAccuracy != null && incomingAccuracy > 80) {
       const jumpM = haversineMeters(prev.lat, prev.lon, d.lat, d.lon);
       const prevAcc = prev.accuracy ?? 999;
       if (jumpM > 150 && incomingAccuracy > prevAcc && prevAcc <= 60) {
         return NextResponse.json({ ok: true, location: prev, skipped: true });
       }
-    }
-    if (incomingAccuracy > 200) {
-      if (prev) return NextResponse.json({ ok: true, location: prev, skipped: true });
-      return NextResponse.json({ ok: true, skipped: true });
     }
 
     const loc: z.infer<typeof LocationSchema> = {

@@ -47,6 +47,10 @@ import {
   stopPersistentFamilyLocationWatch,
 } from "@/lib/family/familyLocationWatch";
 import { resolveLiveCoordinates } from "@/lib/family/geolocationQuality";
+import {
+  ensureDefaultFamilySharingOn,
+  isFamilySharingActive,
+} from "@/lib/family/locationSharingPrefs";
 import { reconcileTripItinerary } from "@/lib/travelAssistant/itinerarySelfCheck";
 import {
   buildIncidentAutopilotPlan,
@@ -2000,12 +2004,16 @@ export default function TravelAssistantPage() {
       );
     }
 
-    // Persistent family sharing — survives tab switches
-    startPersistentFamilyLocationWatch();
+    ensureDefaultFamilySharingOn();
+
+    // Persistent family sharing — default on until user explicitly stops
+    if (isFamilySharingActive()) {
+      startPersistentFamilyLocationWatch();
+    }
 
     // Burst a fresh GPS fix when returning from lock screen / background
     const onVisible = () => {
-      if (document.visibilityState === "visible") {
+      if (document.visibilityState === "visible" && isFamilySharingActive()) {
         startPersistentFamilyLocationWatch();
         burstFamilyLocationFix();
       }

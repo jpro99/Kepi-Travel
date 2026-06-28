@@ -1,16 +1,16 @@
 import { haversineMeters } from "@/lib/geo/haversineMeters";
 
-/** Reject coarse Wi‑Fi/cell fixes that pin people blocks away. */
-export const MAX_SHARE_ACCURACY_M = 50;
+/** Prefer precise fixes but allow typical phone GPS indoors. */
+export const MAX_SHARE_ACCURACY_M = 100;
 
-/** Show on map only when fix is reasonably precise. */
-export const MAX_DISPLAY_ACCURACY_M = 65;
+/** Show on map when accuracy is reasonable or unknown. */
+export const MAX_DISPLAY_ACCURACY_M = 150;
 
-/** Never accept a fix worse than this — usually a cell/Wi‑Fi guess. */
-export const HARD_REJECT_ACCURACY_M = 120;
+/** Reject only obvious cell/Wi‑Fi mis-pins. */
+export const HARD_REJECT_ACCURACY_M = 250;
 
 /** Reject jumps larger than this unless the new reading is very precise. */
-export const MAX_TELEPORT_M = 150;
+export const MAX_TELEPORT_M = 200;
 
 export interface GeolocationFix {
   lat: number;
@@ -25,9 +25,9 @@ export function resetGeolocationQualityState(): void {
   lastGoodFix = null;
 }
 
-function normalizeAccuracy(accuracy?: number): number {
+function normalizeAccuracy(accuracy?: number): number | null {
   if (typeof accuracy !== "number" || !Number.isFinite(accuracy) || accuracy <= 0) {
-    return Number.POSITIVE_INFINITY;
+    return null;
   }
   return accuracy;
 }
@@ -46,12 +46,24 @@ function isTeleportFromLastGood(
     coords.latitude,
     coords.longitude,
   );
-  const allowedDrift = Math.max(lastGoodFix.accuracy, accuracy, 25) * 2.5;
+  const allowedDrift = Math.max(lastGoodFix.accuracy, accuracy, 40) * 2.5;
   if (jumpM <= allowedDrift) return false;
 
-  // Large jump with mediocre accuracy = Wi‑Fi/cell mis-pin (e.g. park blocks away).
-  if (jumpM > MAX_TELEPORT_M && accuracy > 30) return true;
-  return jumpM > allowedDrift + 80 && accuracy >= lastGoodFix.accuracy;
+  if (jumpM > MAX_TELEPORT_M && accuracy > 45) return true;
+  return jumpM > allowedDrift + 100 && accuracy >= lastGoodFix.accuracy;
+}
+
+function rememberFix(
+  coords: GeolocationCoordinates,
+  timestamp: number,
+  accuracy: number,
+): void {
+  lastGoodFix = {
+    lat: coords.latitude,
+    lon: coords.longitude,
+    accuracy,
+    timestamp,
+  };
 }
 
 export function shouldAcceptGeolocationFix(
@@ -59,27 +71,32 @@ export function shouldAcceptGeolocationFix(
   timestamp = Date.now(),
 ): boolean {
   const accuracy = normalizeAccuracy(coords.accuracy);
+
+  // Bootstrap — always accept the first reading unless it is absurdly coarse.
+  if (!lastGoodFix) {
+    if (accuracy == null || accuracy <= HARD_REJECT_ACCURACY_M) {
+      rememberFix(coords, timestamp, accuracy ?? MAX_SHARE_ACCURACY_M);
+      return true;
+    }
+    return false;
+  }
+
+  if (accuracy == null) {
+    rememberFix(coords, timestamp, lastGoodFix.accuracy);
+    return true;
+  }
+
   if (accuracy > HARD_REJECT_ACCURACY_M) return false;
   if (isTeleportFromLastGood(coords, accuracy)) return false;
 
   if (accuracy <= MAX_SHARE_ACCURACY_M) {
-    lastGoodFix = {
-      lat: coords.latitude,
-      lon: coords.longitude,
-      accuracy,
-      timestamp,
-    };
+    rememberFix(coords, timestamp, accuracy);
     return true;
   }
 
-  const staleGood = !lastGoodFix || timestamp - lastGoodFix.timestamp > 90_000;
+  const staleGood = timestamp - lastGoodFix.timestamp > 90_000;
   if (staleGood && accuracy <= MAX_DISPLAY_ACCURACY_M) {
-    lastGoodFix = {
-      lat: coords.latitude,
-      lon: coords.longitude,
-      accuracy,
-      timestamp,
-    };
+    rememberFix(coords, timestamp, accuracy);
     return true;
   }
 
@@ -88,8 +105,11 @@ export function shouldAcceptGeolocationFix(
 
 export function shouldDisplayGeolocationFix(accuracy?: number): boolean {
   const normalized = normalizeAccuracy(accuracy);
+  if (normalized == null) return true;
   if (normalized <= MAX_DISPLAY_ACCURACY_M) return true;
-  if (lastGoodFix && Date.now() - lastGoodFix.timestamp < 20 * 60_000) return false;
+  if (lastGoodFix && Date.now() - lastGoodFix.timestamp < 20 * 60_000) {
+    return normalized <= HARD_REJECT_ACCURACY_M;
+  }
   return normalized <= HARD_REJECT_ACCURACY_M;
 }
 
@@ -106,7 +126,7 @@ export function resolveLiveCoordinates(
     return {
       lat: coords.latitude,
       lon: coords.longitude,
-      accuracy: coords.accuracy ?? MAX_SHARE_ACCURACY_M,
+      accuracy: normalizeAccuracy(coords.accuracy) ?? lastGoodFix?.accuracy ?? MAX_SHARE_ACCURACY_M,
     };
   }
   if (lastGoodFix && Date.now() - lastGoodFix.timestamp < 30 * 60_000) {

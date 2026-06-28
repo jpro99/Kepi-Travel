@@ -14,34 +14,39 @@ const cache = new Map<string, CachedMapLocation>();
 const CACHE_TTL_MS = 45 * 60_000;
 
 /** Reject map jumps larger than this unless the new fix is very precise. */
-const MAX_JUMP_WITHOUT_PRECISION_M = 120;
+const MAX_JUMP_WITHOUT_PRECISION_M = 150;
 
 export function resolveLocationForMapDisplay(
   memberId: string,
   incoming: CachedMapLocation,
 ): CachedMapLocation | null {
-  const cached = cache.get(memberId);
-  const incomingOk = shouldDisplayGeolocationFix(incoming.accuracy);
+  if (!Number.isFinite(incoming.lat) || !Number.isFinite(incoming.lon)) return null;
 
+  const cached = cache.get(memberId);
   if (cached && Date.now() - Date.parse(cached.updatedAt) > CACHE_TTL_MS) {
     cache.delete(memberId);
   }
 
   const freshCached = cache.get(memberId);
 
+  // Always show the first pin for a member — nothing to compare against yet.
+  if (!freshCached) {
+    cache.set(memberId, incoming);
+    return incoming;
+  }
+
+  const incomingOk = shouldDisplayGeolocationFix(incoming.accuracy);
   if (incomingOk) {
-    if (freshCached) {
-      const jump = haversineMeters(freshCached.lat, freshCached.lon, incoming.lat, incoming.lon);
-      const incomingAcc = incoming.accuracy ?? 999;
-      if (jump > MAX_JUMP_WITHOUT_PRECISION_M && incomingAcc > 35) {
-        return freshCached;
-      }
+    const jump = haversineMeters(freshCached.lat, freshCached.lon, incoming.lat, incoming.lon);
+    const incomingAcc = incoming.accuracy ?? 999;
+    if (jump > MAX_JUMP_WITHOUT_PRECISION_M && incomingAcc > 50) {
+      return freshCached;
     }
     cache.set(memberId, incoming);
     return incoming;
   }
 
-  return freshCached ?? null;
+  return freshCached;
 }
 
 export function clearLocationDisplayCache(memberId?: string): void {

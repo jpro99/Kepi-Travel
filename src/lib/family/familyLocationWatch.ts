@@ -47,8 +47,8 @@ export function isFamilyLocationWatchActive(): boolean {
 
 const WATCH_OPTIONS: PositionOptions = {
   enableHighAccuracy: true,
-  maximumAge: 0,
-  timeout: 25_000,
+  maximumAge: 10_000,
+  timeout: 45_000,
 };
 
 const BURST_OPTIONS: PositionOptions = {
@@ -106,8 +106,9 @@ export function startPersistentFamilyLocationWatch(): void {
         navigator.geolocation.clearWatch(watchId);
         watchId = null;
       }
+      // Never persist opt-out on GPS errors — user may still want sharing on after refresh.
       if (err.code === 1) {
-        setFamilySharingOptedOut(true);
+        window.dispatchEvent(new CustomEvent("kepi:family-sharing-permission-denied"));
         return;
       }
       window.setTimeout(() => startPersistentFamilyLocationWatch(), 30_000);

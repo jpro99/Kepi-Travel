@@ -22,7 +22,10 @@ interface FamilyPanelProps {
   onUpgrade: () => void;
 }
 
-const SHARING_PREF_KEY = "kepi:family-sharing-active";
+import {
+  ensureDefaultFamilySharingOn,
+  isFamilySharingActive,
+} from "@/lib/family/locationSharingPrefs";
 
 function timeAgo(iso: string): string {
   const d = Math.floor((Date.now() - Date.parse(iso)) / 60_000);
@@ -80,11 +83,27 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
   const [newGroupName, setNewGroupName] = useState("");
 
   // ── Location sharing — GPS is managed at page.tsx level, never unmounts ─────
-  // FamilyPanel just controls the preference; page.tsx does the actual watching.
-  const [sharingLocation, setSharingLocation] = useState(
-    typeof window !== "undefined" && localStorage.getItem("kepi:family-sharing-active") === "1"
-  );
-  const [locationError] = useState<string | null>(null);
+  const [sharingLocation, setSharingLocation] = useState(true);
+  const [locationError, setLocationError] = useState<string | null>(null);
+
+  useEffect(() => {
+    ensureDefaultFamilySharingOn();
+    setSharingLocation(isFamilySharingActive());
+
+    const onStarted = () => setSharingLocation(true);
+    const onStopped = () => setSharingLocation(false);
+    const onDenied = () => {
+      setLocationError("Location permission denied — enable in Settings to share your position.");
+    };
+    window.addEventListener("kepi:family-start-sharing", onStarted);
+    window.addEventListener("kepi:family-stop-sharing", onStopped);
+    window.addEventListener("kepi:family-sharing-permission-denied", onDenied);
+    return () => {
+      window.removeEventListener("kepi:family-start-sharing", onStarted);
+      window.removeEventListener("kepi:family-stop-sharing", onStopped);
+      window.removeEventListener("kepi:family-sharing-permission-denied", onDenied);
+    };
+  }, []);
 
   const activeGroup = useMemo(
     () => groups.find(g => g.id === activeGroupId) ?? groups[0] ?? null,
@@ -266,7 +285,6 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
       setGroupRole("member"); setJoiningGroup(false); setJoinCode(""); setJoinName("");
       setMessage("✅ Joined! Starting location sharing automatically…");
       setSharingLocation(true);
-      localStorage.setItem(SHARING_PREF_KEY, "1");
       window.dispatchEvent(new CustomEvent("kepi:family-start-sharing"));
     } catch { setMessage("Failed to join."); }
     finally { setBusy(false); }
@@ -279,7 +297,6 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
       await fetch("/api/family", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "leave-group" }) });
       setGroupRole("owner");
       setSharingLocation(false);
-      localStorage.removeItem(SHARING_PREF_KEY);
       window.dispatchEvent(new CustomEvent("kepi:family-stop-sharing"));
       void load();
     } catch { setMessage("Failed."); }
