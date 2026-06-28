@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useUser } from "@clerk/nextjs";
 import { resolveHotelBookUrl } from "@/lib/decision/bookingLinks";
 import { hotelMapPinStyle, fitScoreRange } from "@/lib/hotels/hotelMapColors";
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
@@ -10,6 +11,7 @@ interface HotelDetailSheetProps {
   hotel: RankedHotelSearchResult;
   allHotels: RankedHotelSearchResult[];
   city: string;
+  memberHotelPricing?: boolean;
   saved?: boolean;
   onSaveToTrip: () => void;
   onClose: () => void;
@@ -19,15 +21,30 @@ export function HotelDetailSheet({
   hotel,
   allHotels,
   city,
+  memberHotelPricing = false,
   saved = false,
   onSaveToTrip,
   onClose,
 }: HotelDetailSheetProps) {
+  const { user } = useUser();
   const [mounted, setMounted] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    setFirstName(user?.firstName ?? "");
+    setLastName(user?.lastName ?? "");
+    setEmail(user?.primaryEmailAddress?.emailAddress ?? "");
+  }, [user?.firstName, user?.lastName, user?.primaryEmailAddress?.emailAddress]);
 
   useEffect(() => {
     const previous = document.body.style.overflow;
@@ -51,6 +68,46 @@ export function HotelDetailSheet({
   const pinStyle = hotelMapPinStyle(hotel, fitScoreRange(allHotels));
   const photos = hotel.photos.filter(Boolean);
   const hasLiveRate = !hotel.browseOnly && hotel.pricePerNight > 0;
+  const kepiBookable = Boolean(hotel.kepiBookable && hotel.bookOfferId && hasLiveRate);
+
+  const startKepiCheckout = async (): Promise<void> => {
+    if (!hotel.bookOfferId) return;
+    setCheckoutBusy(true);
+    setCheckoutError(null);
+    try {
+      const response = await fetch("/api/hotels/checkout/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          offerId: hotel.bookOfferId,
+          hotel: {
+            id: hotel.id,
+            name: hotel.name,
+            chainName: hotel.chainName,
+            address: hotel.address,
+            city: hotel.city,
+            checkIn: hotel.checkIn,
+            checkOut: hotel.checkOut,
+            guests: hotel.guests,
+            rooms: hotel.rooms,
+            nights: hotel.nights,
+            totalPrice: hotel.totalPrice,
+          },
+          guest: { firstName, lastName, email, phone: phone || undefined },
+        }),
+      });
+      const payload = (await response.json()) as { error?: string; checkoutUrl?: string };
+      if (!response.ok || !payload.checkoutUrl) {
+        setCheckoutError(payload.error ?? "Could not start checkout.");
+        return;
+      }
+      window.location.href = payload.checkoutUrl;
+    } catch {
+      setCheckoutError("Connection error — try again.");
+    } finally {
+      setCheckoutBusy(false);
+    }
+  };
 
   if (!mounted) return null;
 
@@ -103,6 +160,13 @@ export function HotelDetailSheet({
                   <>
                     <p className="text-xl font-black text-slate-900 dark:text-white">${Math.round(hotel.pricePerNight)}</p>
                     <p className="text-[10px] text-slate-500">/ night · ${Math.round(hotel.totalPrice)} total</p>
+                    {memberHotelPricing ? (
+                      <p className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">Member rate</p>
+                    ) : hotel.memberTotalPrice ? (
+                      <p className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+                        Pro: ${Math.round(hotel.memberTotalPrice)} at cost
+                      </p>
+                    ) : null}
                   </>
                 ) : (
                   <>
@@ -144,29 +208,117 @@ export function HotelDetailSheet({
               room{hotel.rooms === 1 ? "" : "s"}
             </p>
 
-            <div className="grid gap-2 sm:grid-cols-2">
-              <a
-                href={book.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center rounded-xl bg-sky-600 py-3 text-sm font-black text-white hover:bg-sky-500"
-              >
-                View rooms &amp; prices →
-              </a>
+            {kepiBookable && checkoutOpen ? (
+              <div className="space-y-2 rounded-xl border border-sky-200 bg-sky-50/60 p-3 dark:border-sky-900 dark:bg-sky-950/40">
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Guest details for booking</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <input
+                    type="text"
+                    placeholder="First name"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Last name"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
+                  />
+                </div>
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
+                />
+                <input
+                  type="tel"
+                  placeholder="Phone (optional)"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
+                />
+                {checkoutError ? <p className="text-xs text-red-600">{checkoutError}</p> : null}
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    disabled={checkoutBusy}
+                    onClick={() => void startKepiCheckout()}
+                    className="rounded-xl bg-sky-600 py-3 text-sm font-black text-white hover:bg-sky-500 disabled:opacity-60"
+                  >
+                    {checkoutBusy ? "Preparing…" : `Pay $${Math.round(hotel.totalPrice)} with Stripe →`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCheckoutOpen(false)}
+                    className="rounded-xl border border-slate-300 py-3 text-sm font-bold text-slate-700 dark:border-slate-600 dark:text-slate-200"
+                  >
+                    Back
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {kepiBookable ? (
+                  <button
+                    type="button"
+                    onClick={() => setCheckoutOpen(true)}
+                    className="flex items-center justify-center rounded-xl bg-sky-600 py-3 text-sm font-black text-white hover:bg-sky-500"
+                  >
+                    Book with Kepi · ${Math.round(hotel.totalPrice)}
+                  </button>
+                ) : (
+                  <a
+                    href={book.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center rounded-xl bg-sky-600 py-3 text-sm font-black text-white hover:bg-sky-500"
+                  >
+                    View rooms &amp; prices →
+                  </a>
+                )}
+                {kepiBookable ? (
+                  <a
+                    href={book.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center rounded-xl border border-slate-300 py-3 text-sm font-bold text-slate-800 dark:border-slate-600 dark:text-slate-100"
+                  >
+                    Compare on Google →
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onSaveToTrip}
+                    disabled={saved}
+                    className="rounded-xl border border-slate-300 py-3 text-sm font-bold text-slate-800 disabled:border-emerald-400 disabled:bg-emerald-50 disabled:text-emerald-800 dark:border-slate-600 dark:text-slate-100"
+                  >
+                    {saved ? "Saved to your trip ✓" : "Save to my trip"}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {kepiBookable && !checkoutOpen ? (
               <button
                 type="button"
                 onClick={onSaveToTrip}
                 disabled={saved}
-                className="rounded-xl border border-slate-300 py-3 text-sm font-bold text-slate-800 disabled:border-emerald-400 disabled:bg-emerald-50 disabled:text-emerald-800 dark:border-slate-600 dark:text-slate-100"
+                className="w-full rounded-xl border border-slate-300 py-2.5 text-sm font-bold text-slate-800 disabled:border-emerald-400 disabled:bg-emerald-50 disabled:text-emerald-800 dark:border-slate-600 dark:text-slate-100"
               >
-                {saved ? "Saved to your trip ✓" : "Save to my trip"}
+                {saved ? "Saved to your trip ✓" : "Save to my trip (no payment)"}
               </button>
-            </div>
+            ) : null}
 
             <p className="text-[10px] leading-relaxed text-slate-400">
-              {hasLiveRate
-                ? "Book on Google Hotels or the hotel chain to see live room types, photos, and cancellation rules. Saving here adds it to your Kepi itinerary."
-                : "Kepi could not fetch a live rate for these dates — Google Hotels shows pricing from many booking sites. Saving here adds the hotel to your itinerary."}
+              {kepiBookable
+                ? "Book in Kepi with Stripe — your confirmation is saved to your trip automatically. Google Hotels is still available to compare room types and cancellation rules."
+                : hasLiveRate
+                  ? "Book on Google Hotels or the hotel chain to see live room types, photos, and cancellation rules. Saving here adds it to your Kepi itinerary."
+                  : "Kepi could not fetch a live rate for these dates — Google Hotels shows pricing from many booking sites. Saving here adds the hotel to your itinerary."}
             </p>
           </div>
         </div>

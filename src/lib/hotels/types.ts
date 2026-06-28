@@ -23,6 +23,16 @@ export interface HotelSearchResult {
   lng?: number;
   /** No live rate in Kepi — open Google Hotels for pricing. */
   browseOnly?: boolean;
+  /** Provider used for in-app checkout. */
+  bookProvider?: "liteapi" | "duffel";
+  /** Live bookable rate token (LiteAPI offerId or Duffel quote id). */
+  bookOfferId?: string;
+  /** Net wholesale total — never sent to browser; server-side only. */
+  netTotalPrice?: number;
+  /** Member at-cost total shown to free users as upsell comparison. */
+  memberTotalPrice?: number;
+  /** Whether Kepi can checkout this property in-app. */
+  kepiBookable?: boolean;
 }
 
 export type HotelSearchTier =

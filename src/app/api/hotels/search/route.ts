@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { rankHotelSearchResults } from "@/lib/hotels/intelligentRanking";
+import { applyRankedHotelPricing } from "@/lib/hotels/applyHotelPricing";
 import { partitionHotelsBySearchCity } from "@/lib/hotels/hotelCityScope";
+import { userHasMemberHotelPricing } from "@/lib/billing/memberHotelPricing";
 import { buildGoogleHotelsUrl } from "@/lib/decision/bookingLinks";
 import { resolveHotelDestination, suggestHotelDestinations } from "@/lib/hotels/resolveDestination";
 import { searchHotelsLiveOrEstimated } from "@/lib/hotels/searchHotels";
@@ -82,15 +84,19 @@ export async function POST(req: Request) {
     const memory = await getHotelStayMemory(userId);
     const stayProfile = await getHotelStayProfile(userId);
     const loyaltyBalances = normalizeLoyaltyBalances(genome.loyaltyBalances ?? []);
-    const ranked = rankHotelSearchResults({
-      hotels: searchResult.hotels,
-      genome,
-      memory,
-      loyaltyBalances,
-      stayProfile,
-      searchCity: resolved.displayName,
-      searchCenter: { lat: resolved.lat, lng: resolved.lng },
-    });
+    const isMember = await userHasMemberHotelPricing(userId);
+    const ranked = applyRankedHotelPricing(
+      rankHotelSearchResults({
+        hotels: searchResult.hotels,
+        genome,
+        memory,
+        loyaltyBalances,
+        stayProfile,
+        searchCity: resolved.displayName,
+        searchCenter: { lat: resolved.lat, lng: resolved.lng },
+      }),
+      isMember,
+    );
 
     const { inCity, nearby } = partitionHotelsBySearchCity(ranked, resolved.displayName, {
       lat: resolved.lat,
@@ -134,6 +140,7 @@ export async function POST(req: Request) {
         checkOutDate: checkOut,
       }),
       inventoryNote,
+      memberHotelPricing: isMember,
       preferenceInsight: buildHotelPreferenceInsight(
         memory,
         genome.hotelChainPriority ?? [],

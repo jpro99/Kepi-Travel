@@ -2106,6 +2106,46 @@ export default function TravelAssistantPage() {
     }).catch((err: unknown) => setToastRaw(`Family join error: ${err instanceof Error ? err.message : "Network error"}`));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, user]);
+
+  useEffect(() => {
+    const bookingStatus = searchParams.get("hotelBooking");
+    if (!bookingStatus || !user?.id) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("hotelBooking");
+    const pendingId = url.searchParams.get("pendingId");
+    const sessionId = url.searchParams.get("session_id");
+    url.searchParams.delete("pendingId");
+    url.searchParams.delete("session_id");
+    window.history.replaceState({}, "", url.toString());
+
+    if (bookingStatus === "cancelled") {
+      setToastRaw("Hotel checkout cancelled.");
+      return;
+    }
+    if (bookingStatus !== "success" || !pendingId || !sessionId) return;
+
+    void fetch("/api/hotels/checkout/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pendingId, sessionId }),
+    })
+      .then((r) => r.json())
+      .then((d: { success?: boolean; bookingReference?: string; error?: string; alreadyFulfilled?: boolean }) => {
+        if (d.success && d.bookingReference) {
+          setToastRaw(
+            d.alreadyFulfilled
+              ? `✅ Hotel already confirmed · ref ${d.bookingReference}`
+              : `✅ Hotel booked · confirmation ${d.bookingReference}`,
+          );
+          window.dispatchEvent(new CustomEvent("kepi:trip-reload"));
+        } else {
+          setToastRaw(`Hotel booking pending or failed: ${d.error ?? "check email or try again"}`);
+        }
+      })
+      .catch(() => setToastRaw("Could not confirm hotel booking — we will retry via webhook."));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, user?.id]);
+
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushMessage, setPushMessage] = useState<string | null>(null);

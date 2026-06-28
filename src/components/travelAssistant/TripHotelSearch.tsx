@@ -187,6 +187,7 @@ export function TripHotelSearch({
   const [mapBounds, setMapBounds] = useState<MapBounds | null>(null);
   const [hotelsWithCoords, setHotelsWithCoords] = useState<Array<RankedHotelSearchResult & { lat: number; lng: number }>>([]);
   const [learningNote, setLearningNote] = useState<string | null>(null);
+  const [memberHotelPricing, setMemberHotelPricing] = useState(false);
   const [cityCenter, setCityCenter] = useState<{ lat: number; lng: number } | null>(null);
   const autoSearchKeyRef = useRef<string | null>(null);
 
@@ -239,6 +240,7 @@ export function TripHotelSearch({
         googleHotelsUrl?: string | null;
         inCityCount?: number;
         nearbyCount?: number;
+        memberHotelPricing?: boolean;
         resolved?: { lat: number; lng: number; iata?: string | null };
       };
       if (!response.ok) {
@@ -253,6 +255,7 @@ export function TripHotelSearch({
       setInventoryNote(payload.inventoryNote ?? null);
       setGoogleHotelsUrl(payload.googleHotelsUrl ?? null);
       setInCityCount(payload.inCityCount ?? 0);
+      setMemberHotelPricing(Boolean(payload.memberHotelPricing));
       setShowNearby(false);
       setSortMode("browse");
       if (payload.resolved?.lat && payload.resolved?.lng) {
@@ -627,6 +630,7 @@ export function TripHotelSearch({
               hotel={detailHotel}
               allHotels={visibleResults}
               city={resolvedCity ?? city}
+              memberHotelPricing={memberHotelPricing}
               saved={savedHotelIds.has(detailHotel.id)}
               onSaveToTrip={() => handleSaveToTrip(detailHotel)}
               onClose={() => setDetailHotelId(null)}

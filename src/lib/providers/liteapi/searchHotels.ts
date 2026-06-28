@@ -28,6 +28,9 @@ interface LiteApiRateRow {
   hotelId: string;
   roomTypes?: Array<{
     rates?: Array<{
+      offerId?: string;
+      rateId?: string;
+      id?: string;
       name?: string;
       boardName?: string;
       retailRate?: {
@@ -38,17 +41,21 @@ interface LiteApiRateRow {
   }>;
 }
 
-function pickCheapestTotal(rateRow: LiteApiRateRow): { total: number; currency: string; roomName?: string } | null {
-  let best: { total: number; currency: string; roomName?: string } | null = null;
+function pickCheapestRate(
+  rateRow: LiteApiRateRow,
+): { total: number; currency: string; offerId: string; roomName?: string } | null {
+  let best: { total: number; currency: string; offerId: string; roomName?: string } | null = null;
 
   for (const roomType of rateRow.roomTypes ?? []) {
     for (const rate of roomType.rates ?? []) {
+      const offerId = rate.offerId ?? rate.rateId ?? rate.id;
+      if (!offerId?.trim()) continue;
       const totalEntry = rate.retailRate?.total?.[0];
       const amount = totalEntry?.amount;
       if (amount === undefined || !Number.isFinite(amount) || amount <= 0) continue;
       const currency = totalEntry?.currency ?? "USD";
       if (!best || amount < best.total) {
-        best = { total: amount, currency, roomName: rate.name ?? rate.boardName };
+        best = { total: amount, currency, offerId: offerId.trim(), roomName: rate.name ?? rate.boardName };
       }
     }
   }
@@ -66,7 +73,7 @@ function mapLiteApiToHotel(input: {
   rooms: number;
   guests: number;
 }): HotelSearchResult | null {
-  const pricing = pickCheapestTotal(input.rateRow);
+  const pricing = pickCheapestRate(input.rateRow);
   if (!pricing) return null;
 
   const hotelId = input.rateRow.hotelId;
@@ -99,6 +106,8 @@ function mapLiteApiToHotel(input: {
     rooms: input.rooms,
     guests: input.guests,
     cancellable: true,
+    bookProvider: "liteapi",
+    bookOfferId: pricing.offerId,
     ...(Number.isFinite(input.meta?.latitude) && Number.isFinite(input.meta?.longitude)
       ? { lat: input.meta!.latitude!, lng: input.meta!.longitude! }
       : {}),
