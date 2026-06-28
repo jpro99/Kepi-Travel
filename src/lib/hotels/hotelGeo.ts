@@ -26,7 +26,7 @@ export function inCityRadiusKm(searchCity: string): number {
 
 /** Max distance from search center to trust provider lat/lng for map placement. */
 export function maxTrustedCoordKm(searchCity: string): number {
-  return isSmallDestination(searchCity) ? 2.5 : 12;
+  return isSmallDestination(searchCity) ? 1.6 : 10;
 }
 
 /** Providers sometimes swap lat/lng — common cause of pins in the ocean. */

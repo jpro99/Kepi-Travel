@@ -11,6 +11,8 @@ import { resolveHotelMapPinLabel } from "@/lib/hotels/hotelPointsDisplay";
 import type { TransitKind, TransitStop } from "@/lib/hotels/nearbyTransit";
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
 
+import { HotelPriceRangeSlider } from "@/components/travelAssistant/HotelPriceRangeSlider";
+
 interface HotelWithCoords extends RankedHotelSearchResult {
   lat: number;
   lng: number;
@@ -26,6 +28,13 @@ interface HotelStayMapProps {
   onBoundsChange?: (bounds: MapBounds) => void;
   expanded?: boolean;
   payMode?: HotelPayMode;
+  priceMin?: number;
+  priceMax?: number;
+  priceBounds?: { min: number; max: number };
+  onPriceRangeChange?: (min: number, max: number) => void;
+  onOpenPreferences?: () => void;
+  hiddenCount?: number;
+  onShowHidden?: () => void;
 }
 
 function createPricePin(
@@ -96,6 +105,13 @@ export function HotelStayMap({
   onBoundsChange,
   expanded = false,
   payMode = "any",
+  priceMin,
+  priceMax,
+  priceBounds,
+  onPriceRangeChange,
+  onOpenPreferences,
+  hiddenCount = 0,
+  onShowHidden,
 }: HotelStayMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import("maplibre-gl").Map | null>(null);
@@ -286,7 +302,7 @@ export function HotelStayMap({
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[10px] dark:border-slate-700 dark:bg-slate-900/50">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-[10px] dark:border-slate-700 dark:bg-slate-900/50">
         <div className="flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-1 font-semibold text-slate-600 dark:text-slate-300">
             <span className="h-2.5 w-2.5 rounded-sm bg-emerald-800" /> Best match
@@ -303,7 +319,37 @@ export function HotelStayMap({
             Train
           </span>
         </div>
-        <div className="flex items-center gap-1.5">
+
+        {priceBounds && priceMin != null && priceMax != null && onPriceRangeChange ? (
+          <HotelPriceRangeSlider
+            minBound={priceBounds.min}
+            maxBound={priceBounds.max}
+            valueMin={priceMin}
+            valueMax={priceMax}
+            onChange={onPriceRangeChange}
+            disabled={!priceBounds.max}
+          />
+        ) : null}
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          {onOpenPreferences ? (
+            <button
+              type="button"
+              onClick={onOpenPreferences}
+              className="rounded-lg bg-slate-900 px-2.5 py-1 font-bold text-white dark:bg-slate-100 dark:text-slate-900"
+            >
+              Stay style
+            </button>
+          ) : null}
+          {hiddenCount > 0 && onShowHidden ? (
+            <button
+              type="button"
+              onClick={onShowHidden}
+              className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 font-bold text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+            >
+              {hiddenCount} hidden
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => setShowTransit((value) => !value)}
@@ -331,7 +377,7 @@ export function HotelStayMap({
       <div
         ref={containerRef}
         className={`w-full overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 ${
-          expanded ? "h-[52vh] min-h-[22rem] md:h-[58vh] lg:min-h-[28rem]" : "h-64 md:h-80 lg:h-[28rem]"
+          expanded ? "h-[min(72vh,42rem)] min-h-[24rem]" : "h-64 md:h-80 lg:h-[28rem]"
         }`}
       />
 
