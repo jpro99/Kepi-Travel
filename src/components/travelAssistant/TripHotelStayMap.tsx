@@ -8,9 +8,7 @@ import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/mapt
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import type { PlannedStayCity } from "@/lib/travelAssistant/tripPlanBooking";
 import {
-  HOTEL_STAY_LINE_SOURCE,
   HOTEL_STAY_SOURCE,
-  buildHotelStayLineGeoJson,
   buildHotelStayMapPoints,
   buildHotelStayPointGeoJson,
   hotelStayStrokeColor,
@@ -114,12 +112,9 @@ export function TripHotelStayMap({
   );
 
   const pointGeoJson = useMemo(() => buildHotelStayPointGeoJson(points), [points]);
-  const lineGeoJson = useMemo(() => buildHotelStayLineGeoJson(points), [points]);
 
   const pointGeoJsonRef = useRef(pointGeoJson);
-  const lineGeoJsonRef = useRef(lineGeoJson);
   pointGeoJsonRef.current = pointGeoJson;
-  lineGeoJsonRef.current = lineGeoJson;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import("maplibre-gl").Map | null>(null);
@@ -169,47 +164,11 @@ export function TripHotelStayMap({
 
   const installStayLayers = useCallback((map: import("maplibre-gl").Map) => {
     const stays = pointGeoJsonRef.current;
-    const lines = lineGeoJsonRef.current;
-
-    if (!map.getSource(HOTEL_STAY_LINE_SOURCE)) {
-      map.addSource(HOTEL_STAY_LINE_SOURCE, { type: "geojson", data: lines });
-    } else {
-      (map.getSource(HOTEL_STAY_LINE_SOURCE) as import("maplibre-gl").GeoJSONSource).setData(lines);
-    }
 
     if (!map.getSource(HOTEL_STAY_SOURCE)) {
       map.addSource(HOTEL_STAY_SOURCE, { type: "geojson", data: stays });
     } else {
       (map.getSource(HOTEL_STAY_SOURCE) as import("maplibre-gl").GeoJSONSource).setData(stays);
-    }
-
-    if (!map.getLayer("trip-hotel-lines-unbooked")) {
-      map.addLayer({
-        id: "trip-hotel-lines-unbooked",
-        type: "line",
-        source: HOTEL_STAY_LINE_SOURCE,
-        filter: ["!", ["get", "booked"]],
-        paint: {
-          "line-color": "#94a3b8",
-          "line-width": 3,
-          "line-opacity": 0.85,
-          "line-dasharray": [2, 2],
-        },
-      });
-    }
-
-    if (!map.getLayer("trip-hotel-lines-booked")) {
-      map.addLayer({
-        id: "trip-hotel-lines-booked",
-        type: "line",
-        source: HOTEL_STAY_LINE_SOURCE,
-        filter: ["get", "booked"],
-        paint: {
-          "line-color": "#22c55e",
-          "line-width": 3,
-          "line-opacity": 0.9,
-        },
-      });
     }
 
     if (!map.getLayer("trip-hotel-stay-glow")) {
@@ -313,7 +272,7 @@ export function TripHotelStayMap({
     installStayLayers(map);
     void renderStayMarkers();
     void fitWholeTrip();
-  }, [pointGeoJson, lineGeoJson, installStayLayers, renderStayMarkers, fitWholeTrip, mapReady]);
+  }, [pointGeoJson, installStayLayers, renderStayMarkers, fitWholeTrip, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -336,7 +295,7 @@ export function TripHotelStayMap({
           <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-sky-300/80">Stay map</p>
           <h3 className="mt-1 text-lg font-black text-white">Where you&apos;re staying</h3>
           <p className="mt-1 text-xs text-sky-100/60">
-            Drag to pan · scroll or pinch to zoom · green = booked, gray = still needed
+            Drag to pan · scroll or pinch to zoom · pins only (no flight routes)
           </p>
         </div>
         <div

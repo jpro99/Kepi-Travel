@@ -1,4 +1,5 @@
 import { isPlaceholderConfirmation } from "@/lib/travelAssistant/placeholderReservations";
+import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
 
 export interface PlannedMatchableReservation {
   id?: string;

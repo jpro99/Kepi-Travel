@@ -45,10 +45,10 @@ const SPENT_PATTERNS: RegExp[] = [
 ];
 
 const EARNED_PATTERNS: RegExp[] = [
-  /\b(?:earn(?:ed|ing)?|credit(?:ed)?|awarded|accrued|bonus)\s*[:\-]?\s*([0-9,]+)\s*(?:miles?|points?)\b/giu,
+  /\b(?:earn(?:ed|ing)?|credit(?:ed)?|awarded|accrued|bonus)\s*[:\-]?\s*([0-9,]+)\s*(?:bonus\s+)?(?:miles?|points?)\b/giu,
   /\b([0-9,]+)\s*(?:bonus\s+)?(?:miles?|points?)\s*(?:earn(?:ed|ing)?|credit(?:ed)?|awarded|accrued)\b/giu,
   /\b(?:miles?|points?)\s*(?:earn(?:ed|ing)?|credit(?:ed)?|awarded)[:\-]?\s*([0-9,]+)\b/giu,
-  /\b(?:you\s+(?:will|have|'ll)\s+earn)\s*[:\-]?\s*([0-9,]+)\s*(?:miles?|points?)\b/giu,
+  /\b(?:you\s+(?:will|have|'ll)\s+earn)\s*[:\-]?\s*([0-9,]+)\s*(?:bonus\s+)?(?:miles?|points?)\b/giu,
 ];
 
 export interface ParsedMilesFromText {
@@ -76,7 +76,7 @@ export function parseMilesFromText(text: string): ParsedMilesFromText {
     for (const match of haystack.matchAll(pattern)) {
       const parsed = parseMilesNumber(match[1]);
       if (parsed != null) {
-        milesEarned = (milesEarned ?? 0) + parsed;
+        milesEarned = milesEarned == null ? parsed : Math.max(milesEarned, parsed);
       }
     }
   }

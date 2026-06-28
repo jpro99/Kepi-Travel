@@ -577,7 +577,7 @@ export function FlightsTab({
           const arrTime = fmt12(r.flightArrivalTime ?? "");
           const date = fmtDate(r.flightDate ? r.flightDate + " 00:00" : r.localTime ?? "");
           const missingPrice = reservationMissingPrice(r);
-          const costLine = formatReservationCostLine(r);
+          const costLine = formatReservationCostLine(r, { allReservations: shown });
           const attention = reservationAttentionKind(r, transportConflictIds);
           const attentionBadge = reservationAttentionBadge(attention, {
             connectionIssue: Boolean(transportConflictIds?.has(r.id)),

@@ -2594,6 +2594,9 @@ export default function TravelAssistantPage() {
 
   const applyManagedTripToState = useCallback((trip: ManagedTrip, options?: { resetHighlight?: boolean }): void => {
     applyingTripStateRef.current = true;
+    const hydratedReservations = hydrateReservationsPricing(trip.reservations);
+    const tripForState =
+      hydratedReservations === trip.reservations ? trip : { ...trip, reservations: hydratedReservations };
     setTrips((previous) => {
       const index = previous.findIndex((entry) => entry.id === trip.id);
       if (index < 0) {
@@ -2602,21 +2605,21 @@ export default function TravelAssistantPage() {
       const current = previous[index]!;
       const merged: ManagedTrip = {
         ...current,
-        name: trip.name,
-        destination: trip.destination,
-        startDate: trip.startDate,
-        endDate: trip.endDate,
-        stage: trip.stage,
-        tripStatus: trip.tripStatus,
-        minutesToDeparture: trip.minutesToDeparture,
-        activeScenario: trip.activeScenario,
-        bookingWizard: trip.bookingWizard ?? current.bookingWizard,
-        reservations: trip.reservations,
-        reviewQueue: trip.reviewQueue,
-        readinessItems: trip.readinessItems,
-        updateFeed: trip.updateFeed,
-        airportTransport: trip.airportTransport,
-        hotelArrivalTime: trip.hotelArrivalTime,
+        name: tripForState.name,
+        destination: tripForState.destination,
+        startDate: tripForState.startDate,
+        endDate: tripForState.endDate,
+        stage: tripForState.stage,
+        tripStatus: tripForState.tripStatus,
+        minutesToDeparture: tripForState.minutesToDeparture,
+        activeScenario: tripForState.activeScenario,
+        bookingWizard: tripForState.bookingWizard ?? current.bookingWizard,
+        reservations: tripForState.reservations,
+        reviewQueue: tripForState.reviewQueue,
+        readinessItems: tripForState.readinessItems,
+        updateFeed: tripForState.updateFeed,
+        airportTransport: tripForState.airportTransport,
+        hotelArrivalTime: tripForState.hotelArrivalTime,
       };
       if (areSnapshotsEqual(current, merged)) {
         return previous;
@@ -2630,8 +2633,7 @@ export default function TravelAssistantPage() {
     setMinutesToDeparture((previous) => (previous === trip.minutesToDeparture ? previous : trip.minutesToDeparture));
     setActiveScenario((previous) => (previous === trip.activeScenario ? previous : trip.activeScenario));
     setReservations((previous) => {
-      const hydrated = hydrateReservationsPricing(trip.reservations);
-      return areSnapshotsEqual(previous, hydrated) ? previous : hydrated;
+      return areSnapshotsEqual(previous, hydratedReservations) ? previous : hydratedReservations;
     });
     setReviewQueue((previous) => (areSnapshotsEqual(previous, trip.reviewQueue) ? previous : trip.reviewQueue));
     setReadinessItems((previous) => (areSnapshotsEqual(previous, trip.readinessItems) ? previous : trip.readinessItems));

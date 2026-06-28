@@ -44,3 +44,25 @@ test("computeTripSpend reads total from forwarded email text once per confirmati
   assert.equal(summary.cashTotalUsd, 892);
   assert.equal(summary.missingPriceCount, 0);
 });
+
+test("computeTripSpend inherits email pricing from sibling leg with same confirmation", () => {
+  const email =
+    "New Ticket Value: $1,386.43\nNew Ticket Value: $1,386.43\nTotal charges for air travel: USD $0.00";
+  const summary = computeTripSpend([
+    {
+      id: "f1",
+      type: "flight",
+      title: "SEA-ONT",
+      confirmationCode: "AS123",
+      originalEmailText: email,
+    },
+    {
+      id: "f2",
+      type: "flight",
+      title: "ONT-SEA",
+      confirmationCode: "AS123",
+    },
+  ]);
+  assert.equal(summary.cashTotalUsd, 2773);
+  assert.equal(summary.missingPriceCount, 0);
+});

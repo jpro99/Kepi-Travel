@@ -13,6 +13,7 @@ import {
   detectFlightScheduleChange,
   expandTripWindowIfNeeded,
   mergeFlightReservationUpdate,
+  mergeReservationPricingFields,
   resolveTargetTripForEmailForward,
 } from "@/lib/travelAssistant/tripEmailAttach";
 import { reservationPrimaryDate, computeMinutesToDeparture } from "@/lib/travelAssistant/tripWindow";
@@ -813,6 +814,25 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         }
       }
       if (hasMatchingReservation || hasMatchingQueuedDraft) {
+        // Merge pricing / email source when the same booking is forwarded again.
+        if (hasMatchingReservation) {
+          const existing = nextReservations[matchingReservationIndex] as SessionReservation;
+          const incoming = parsedReservation as SessionReservation;
+          const pricingMerged = mergeReservationPricingFields(existing, incoming);
+          if (pricingMerged !== existing) {
+            nextReservations = nextReservations.map((reservation, index) =>
+              index === matchingReservationIndex ? pricingMerged : reservation,
+            );
+            acceptedDraftCount += 1;
+            routeLogger.info("Duplicate reservation merged with pricing from forwarded email.", {
+              userId: targetUserId,
+              tripId: targetTrip.id,
+              type: parserType,
+              provider: parserProvider || null,
+            });
+            continue;
+          }
+        }
         // For hotels: merge new info into existing reservation rather than dropping
         // This handles the case where user forwards the same email again with more info
         if (hasMatchingReservation && parserType === "hotel") {

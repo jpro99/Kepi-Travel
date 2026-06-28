@@ -221,7 +221,7 @@ export function HotelsTab({
           const isOpen = expanded === r.id;
           const emoji = cityEmoji(r.location ?? "");
           const missingPrice = reservationMissingPrice(r);
-          const costLine = formatReservationCostLine(r);
+          const costLine = formatReservationCostLine(r, { allReservations: shown });
 
           return (
             <div

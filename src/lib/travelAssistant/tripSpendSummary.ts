@@ -1,6 +1,9 @@
 import { isPlaceholderConfirmation } from "@/lib/travelAssistant/placeholderReservations";
 import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
-import { hydrateReservationQuotedPrice, hydrateReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
+import {
+  enrichReservationFromTripPeers,
+  hydrateReservationPricing,
+} from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 
 export interface TripSpendReservation {
   id: string;
@@ -73,7 +76,7 @@ export function computeTripSpend(reservations: TripSpendReservation[]): TripSpen
   const countedEmailTotals = new Set<string>();
 
   for (const raw of reservations) {
-    const reservation = hydrateReservationPricing(raw);
+    const reservation = hydrateReservationPricing(enrichReservationFromTripPeers(raw, reservations));
     if (!isSpendTrackedReservation(reservation)) continue;
 
     const type = reservation.type?.trim() || "other";
@@ -133,23 +136,53 @@ export function formatTripPointsTotal(points: number): string {
   return `${points.toLocaleString("en-US")} pts`;
 }
 
-export function formatReservationCostLine(reservation: TripSpendReservation): string | null {
+function shouldShowSharedEmailCashOnLeg(
+  reservation: TripSpendReservation,
+  cashUsd: number,
+  allReservations: TripSpendReservation[],
+): boolean {
+  if (!reservation.originalEmailText?.trim()) return true;
+  const dedupeKey = `${reservation.originalEmailText.trim().slice(0, 256)}::${cashUsd}`;
+  const sorted = [...allReservations].sort((left, right) =>
+    (left.id ?? "").localeCompare(right.id ?? ""),
+  );
+  const firstLeg = sorted.find((candidate) => {
+    const hydrated = hydrateReservationPricing(enrichReservationFromTripPeers(candidate, allReservations));
+    if (resolveReservationCashUsd(hydrated) !== cashUsd) return false;
+    if (!hydrated.originalEmailText?.trim()) return false;
+    return `${hydrated.originalEmailText.trim().slice(0, 256)}::${cashUsd}` === dedupeKey;
+  });
+  return !firstLeg || firstLeg.id === reservation.id;
+}
+
+export function formatReservationCostLine(
+  reservation: TripSpendReservation,
+  options?: { allReservations?: TripSpendReservation[] },
+): string | null {
+  const peers = options?.allReservations ?? [];
+  const hydrated = hydrateReservationPricing(
+    peers.length > 0 ? enrichReservationFromTripPeers(reservation, peers) : reservation,
+  );
   const parts: string[] = [];
-  const cashUsd = resolveReservationCashUsd(reservation);
-  if (cashUsd != null && cashUsd > 0) {
+  const cashUsd = resolveReservationCashUsd(hydrated);
+  if (
+    cashUsd != null &&
+    cashUsd > 0 &&
+    (peers.length === 0 || shouldShowSharedEmailCashOnLeg(hydrated, cashUsd, peers))
+  ) {
     parts.push(formatTripCashTotal(cashUsd));
   }
-  if (hasPointsPrice(reservation)) {
-    const pts = `${reservation.quotedPointsMiles!.toLocaleString("en-US")} mi spent`;
-    parts.push(reservation.pointsProgram ? `${pts} (${reservation.pointsProgram})` : pts);
+  if (hasPointsPrice(hydrated)) {
+    const pts = `${hydrated.quotedPointsMiles!.toLocaleString("en-US")} mi spent`;
+    parts.push(hydrated.pointsProgram ? `${pts} (${hydrated.pointsProgram})` : pts);
   }
   if (
-    typeof reservation.quotedMilesEarned === "number" &&
-    Number.isFinite(reservation.quotedMilesEarned) &&
-    reservation.quotedMilesEarned > 0
+    typeof hydrated.quotedMilesEarned === "number" &&
+    Number.isFinite(hydrated.quotedMilesEarned) &&
+    hydrated.quotedMilesEarned > 0
   ) {
-    const earned = `${reservation.quotedMilesEarned.toLocaleString("en-US")} mi earned`;
-    parts.push(reservation.pointsProgram ? `${earned} (${reservation.pointsProgram})` : earned);
+    const earned = `${hydrated.quotedMilesEarned.toLocaleString("en-US")} mi earned`;
+    parts.push(hydrated.pointsProgram ? `${earned} (${hydrated.pointsProgram})` : earned);
   }
   return parts.length > 0 ? parts.join(" · ") : null;
 }

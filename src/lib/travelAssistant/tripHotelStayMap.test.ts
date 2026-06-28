@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { buildHotelStayMapPoints } from "@/lib/travelAssistant/tripHotelStayMap";
 
 describe("buildHotelStayMapPoints", () => {
-  it("includes booked hotels and missing stay segments", () => {
+  it("includes booked hotels and planned stay cities only (no flight airport segments)", () => {
     const points = buildHotelStayMapPoints({
       reservations: [
         {
@@ -18,20 +18,30 @@ describe("buildHotelStayMapPoints", () => {
       ],
       staySegments: [
         {
-          id: "seg-bari",
-          city: "Bari",
-          checkIn: "2026-09-06",
-          checkOut: "2026-09-09",
-          nights: 3,
+          id: "seg-sea",
+          city: "Seattle",
+          checkIn: "2026-09-01",
+          checkOut: "2026-09-02",
+          nights: 1,
           status: "missing",
-          label: "Bari stay",
+          label: "Seattle connection",
           source: "flight",
-          stopKind: "destination",
+          stopKind: "connection",
           stayIntent: "needs_hotel",
           suggestedIntent: "needs_hotel",
           intentReason: "Overnight",
           connectionHours: null,
           needsDecision: false,
+        },
+      ],
+      plannedStayCities: [
+        {
+          id: "plan-bari",
+          city: "Bari",
+          cityIata: "BRI",
+          checkIn: "2026-09-06",
+          checkOut: "2026-09-09",
+          status: "needs_hotel",
         },
       ],
     });
@@ -41,5 +51,6 @@ describe("buildHotelStayMapPoints", () => {
     assert.equal(points[1]?.booked, false);
     assert.match(points[0]?.city ?? "", /Rome/iu);
     assert.match(points[1]?.city ?? "", /Bari/iu);
+    assert.ok(!points.some((point) => /Seattle/iu.test(point.city)));
   });
 });

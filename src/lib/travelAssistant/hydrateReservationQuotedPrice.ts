@@ -7,6 +7,31 @@ import {
   type MilesResolvable,
 } from "@/lib/travelAssistant/parseReservationMiles";
 
+export interface PricingPeerResolvable extends CashUsdResolvable {
+  id?: string;
+  confirmationCode?: string | null;
+}
+
+/** When multi-leg bookings share one confirmation, copy email pricing text from a sibling leg. */
+export function enrichReservationFromTripPeers<T extends PricingPeerResolvable>(
+  reservation: T,
+  peers: T[],
+): T {
+  if (reservation.originalEmailText?.trim()) return reservation;
+  const code = reservation.confirmationCode?.trim();
+  if (!code) return reservation;
+
+  const donor = peers.find((peer) => {
+    if (peer === reservation) return false;
+    if (peer.id != null && reservation.id != null && peer.id === reservation.id) return false;
+    if (peer.confirmationCode?.trim() !== code) return false;
+    return Boolean(peer.originalEmailText?.trim());
+  });
+
+  if (!donor?.originalEmailText?.trim()) return reservation;
+  return { ...reservation, originalEmailText: donor.originalEmailText };
+}
+
 export function hydrateReservationQuotedPrice<T extends CashUsdResolvable>(reservation: T): T {
   if (
     typeof reservation.quotedPriceUsd === "number" &&
@@ -57,12 +82,13 @@ export function hydrateReservationsQuotedPrices<T extends CashUsdResolvable>(res
   return changed ? next : reservations;
 }
 
-export function hydrateReservationsPricing<T extends CashUsdResolvable & MilesResolvable>(
+export function hydrateReservationsPricing<T extends CashUsdResolvable & MilesResolvable & PricingPeerResolvable>(
   reservations: T[],
 ): T[] {
   let changed = false;
   const next = reservations.map((reservation) => {
-    const hydrated = hydrateReservationPricing(reservation);
+    const peerEnriched = enrichReservationFromTripPeers(reservation, reservations);
+    const hydrated = hydrateReservationPricing(peerEnriched);
     if (hydrated !== reservation) changed = true;
     return hydrated;
   });

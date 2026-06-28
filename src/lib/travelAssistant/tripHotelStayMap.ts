@@ -159,11 +159,6 @@ export function buildHotelStayMapPoints(input: {
     if (point) points.push(point);
   }
 
-  for (const segment of input.staySegments ?? []) {
-    const point = pointFromStaySegment(segment);
-    if (point && !overlapsExisting(point, points)) points.push(point);
-  }
-
   for (const city of input.plannedStayCities ?? []) {
     const point = pointFromPlannedCity(city);
     if (point && !overlapsExisting(point, points)) points.push(point);
