@@ -34,6 +34,7 @@ interface Reservation {
   plannedOnly?: boolean;
   quotedPriceUsd?: number;
   quotedPointsMiles?: number;
+  quotedMilesEarned?: number;
   pointsProgram?: string;
 }
 

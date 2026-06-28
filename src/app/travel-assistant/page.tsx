@@ -111,7 +111,7 @@ import { TripCalendarView } from "@/components/travelAssistant/TripCalendarView"
 import { NextUpCard } from "@/components/travelAssistant/NextUpCard";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
-import { hydrateReservationsQuotedPrices } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
+import { hydrateReservationsPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import { buildTransportConflictReservationIds } from "@/lib/travelAssistant/reservationAttention";
 import { computeTripSpend } from "@/lib/travelAssistant/tripSpendSummary";
 import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
@@ -259,6 +259,7 @@ interface ReservationDraft {
   hotelSearchCity?: string;
   quotedPriceUsd?: number;
   quotedPointsMiles?: number;
+  quotedMilesEarned?: number;
   pointsProgram?: string;
   plannedOnly?: boolean;
 }
@@ -2606,7 +2607,7 @@ export default function TravelAssistantPage() {
     setMinutesToDeparture((previous) => (previous === trip.minutesToDeparture ? previous : trip.minutesToDeparture));
     setActiveScenario((previous) => (previous === trip.activeScenario ? previous : trip.activeScenario));
     setReservations((previous) => {
-      const hydrated = hydrateReservationsQuotedPrices(trip.reservations);
+      const hydrated = hydrateReservationsPricing(trip.reservations);
       return areSnapshotsEqual(previous, hydrated) ? previous : hydrated;
     });
     setReviewQueue((previous) => (areSnapshotsEqual(previous, trip.reviewQueue) ? previous : trip.reviewQueue));
@@ -7976,6 +7977,25 @@ export default function TravelAssistantPage() {
                   }));
                 }}
                 placeholder="e.g. 35000"
+                className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-slate-300">Miles earned</span>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={drawerDraft.quotedMilesEarned ?? ""}
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  setDrawerDraft((prev) => ({
+                    ...prev,
+                    quotedMilesEarned:
+                      raw.trim() === "" ? undefined : Math.max(0, Math.round(Number(raw) || 0)),
+                  }));
+                }}
+                placeholder="e.g. 2500"
                 className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
               />
             </label>

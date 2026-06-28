@@ -21,7 +21,7 @@ import {
   mergeIncomingOverPlanned,
 } from "@/lib/travelAssistant/plannedReservationMatch";
 import { extractReservationSourceLinks } from "@/lib/travelAssistant/reservationLinks";
-import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
+import { resolveReservationPricing } from "@/lib/travelAssistant/parseReservationMiles";
 import { generateId } from "@/lib/utils/generateId";
 
 const AttachmentSchema = z.object({
@@ -712,6 +712,11 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         ? (isEmailProviderName && iataPrefix.length === 2 ? `${iataPrefix} Airlines` : rawAirline || "Unknown Airline")
         : "";
 
+      const emailPricing = resolveReservationPricing({
+        notes: parserNotesText,
+        originalEmailText: parserOriginalEmailText,
+      });
+
       const parsedReservation = {
         id: `res-email-${generateId()}`,
         type: parserType,
@@ -728,10 +733,10 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         notes: parserNotesText,
         source: "imported" as const,
         plannedOnly: false,
-        quotedPriceUsd: resolveReservationCashUsd({
-          notes: parserNotesText,
-          originalEmailText: parserOriginalEmailText,
-        }),
+        quotedPriceUsd: emailPricing.cashUsd,
+        quotedPointsMiles: emailPricing.milesSpent,
+        quotedMilesEarned: emailPricing.milesEarned,
+        pointsProgram: emailPricing.program,
         flightNumber: parserType === "flight" ? parserFlightNumber : "",
         flightAirline: resolvedAirline,
         flightDate: parserType === "flight" ? parserLocalTime.slice(0, 10) : "",

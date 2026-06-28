@@ -1,6 +1,6 @@
 import { isPlaceholderConfirmation } from "@/lib/travelAssistant/placeholderReservations";
 import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
-import { hydrateReservationQuotedPrice } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
+import { hydrateReservationQuotedPrice, hydrateReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 
 export interface TripSpendReservation {
   id: string;
@@ -10,6 +10,7 @@ export interface TripSpendReservation {
   confirmationCode?: string | null;
   quotedPriceUsd?: number;
   quotedPointsMiles?: number;
+  quotedMilesEarned?: number;
   pointsProgram?: string;
   notes?: string;
   originalEmailText?: string;
@@ -72,7 +73,7 @@ export function computeTripSpend(reservations: TripSpendReservation[]): TripSpen
   const countedEmailTotals = new Set<string>();
 
   for (const raw of reservations) {
-    const reservation = hydrateReservationQuotedPrice(raw);
+    const reservation = hydrateReservationPricing(raw);
     if (!isSpendTrackedReservation(reservation)) continue;
 
     const type = reservation.type?.trim() || "other";
@@ -139,8 +140,16 @@ export function formatReservationCostLine(reservation: TripSpendReservation): st
     parts.push(formatTripCashTotal(cashUsd));
   }
   if (hasPointsPrice(reservation)) {
-    const pts = `${reservation.quotedPointsMiles!.toLocaleString("en-US")} pts`;
+    const pts = `${reservation.quotedPointsMiles!.toLocaleString("en-US")} mi spent`;
     parts.push(reservation.pointsProgram ? `${pts} (${reservation.pointsProgram})` : pts);
+  }
+  if (
+    typeof reservation.quotedMilesEarned === "number" &&
+    Number.isFinite(reservation.quotedMilesEarned) &&
+    reservation.quotedMilesEarned > 0
+  ) {
+    const earned = `${reservation.quotedMilesEarned.toLocaleString("en-US")} mi earned`;
+    parts.push(reservation.pointsProgram ? `${earned} (${reservation.pointsProgram})` : earned);
   }
   return parts.length > 0 ? parts.join(" · ") : null;
 }

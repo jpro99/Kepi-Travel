@@ -1,13 +1,22 @@
 /**
  * Extract cash totals from confirmation email text / reservation notes.
- * Prefer explicit "total" lines over incidental dollar amounts (tax, per-night, etc.).
+ * Handles exchange/reissue emails where "Total due" is $0 but ticket value is listed.
  */
 
 const TOTAL_CONTEXT =
-  /\b(?:grand\s+total|total\s+(?:amount|price|cost|paid|charge|due|fare|for\s+trip|purchase\s+price)|amount\s+(?:paid|charged|due)|you\s+paid|price\s+paid|ticket\s+total|trip\s+total|booking\s+total|reservation\s+total|payment\s+total|purchase\s+total|charged\s+today|credit\s+card\s+charge)\b/iu;
+  /\b(?:grand\s+total|total\s+(?:amount|price|cost|paid|charge|due|fare|for\s+trip|purchase\s+price)|amount\s+(?:paid|charged|due)|you\s+paid|price\s+paid|ticket\s+total|trip\s+total|booking\s+total|reservation\s+total|payment\s+total|purchase\s+total|charged\s+today|credit\s+card\s+charge|total\s+charges\s+for\s+air\s+travel)\b/iu;
+
+const TICKET_VALUE_CONTEXT =
+  /\b(?:new\s+ticket\s+value|ticket\s+value|original\s+ticket\s+value|fare\s+amount|airfare(?:\s+charges)?|summary\s+of\s+airfare)\b/iu;
+
+const ZERO_DUE_CONTEXT =
+  /\b(?:additional\s+amount\s+due|amount\s+due|per\s+person\s+total|total\s+charges\s+for\s+air\s+travel)\b[^$\d]{0,16}\$?\s*0(?:\.00)?\b/iu;
 
 const PENALTY_CONTEXT =
-  /\b(?:per\s+night|\/\s*night|nightly|tax(?:es)?|fee(?:s)?|surcharge|gratuity|tip|deposit|balance\s+due|estimated|approx|points|miles|award|per\s+person|\/\s*pax|each)\b/iu;
+  /\b(?:per\s+night|\/\s*night|nightly|tax(?:es)?|fee(?:s)?|surcharge|gratuity|tip|deposit|balance\s+due|estimated|approx|award|\/\s*pax|each)\b/iu;
+
+const TICKET_VALUE_LINE =
+  /\b(?:new\s+ticket\s+value|ticket\s+value|original\s+ticket\s+value|total\s+fare)\b[^$\d]{0,24}\$?\s*([\d,]+(?:\.\d{2})?)/giu;
 
 function normalizeEmailText(text: string): string {
   return text
@@ -33,22 +42,44 @@ interface ScoredAmount {
   score: number;
 }
 
-function scoreAmountMatch(fullText: string, start: number, end: number, usd: number): number {
-  const windowStart = Math.max(0, start - 80);
-  const windowEnd = Math.min(fullText.length, end + 80);
+function scoreAmountMatch(fullText: string, start: number, end: number): number {
+  const windowStart = Math.max(0, start - 90);
+  const windowEnd = Math.min(fullText.length, end + 90);
   const context = fullText.slice(windowStart, windowEnd);
   let score = 10;
+  if (TICKET_VALUE_CONTEXT.test(context)) score += 140;
   if (TOTAL_CONTEXT.test(context)) score += 100;
-  if (PENALTY_CONTEXT.test(context)) score -= 60;
+  if (ZERO_DUE_CONTEXT.test(context)) score -= 150;
+  if (PENALTY_CONTEXT.test(context) && !TICKET_VALUE_CONTEXT.test(context)) score -= 60;
+  if (/\b(?:miles?|points?)\b/iu.test(context) && !TICKET_VALUE_CONTEXT.test(context)) score -= 40;
   if (/\bUSD\b/u.test(context)) score += 5;
   if (/\$\s*[\d,]+(?:\.\d{2})?\s*(?:USD)?/u.test(context)) score += 3;
   return score;
+}
+
+/** Sum all "New Ticket Value" lines (multi-passenger Alaska-style receipts). */
+function sumTicketValuesFromText(haystack: string): number | undefined {
+  const amounts: number[] = [];
+  for (const match of haystack.matchAll(TICKET_VALUE_LINE)) {
+    const raw = match[1];
+    if (!raw) continue;
+    const usd = parseDollarAmount(raw);
+    if (usd != null) amounts.push(usd);
+  }
+  if (amounts.length === 0) return undefined;
+  const total = amounts.reduce((sum, value) => sum + value, 0);
+  return Math.round(total);
 }
 
 /** Parse the best-effort total cash amount from confirmation email text. */
 export function parseCashUsdFromText(text: string): number | undefined {
   const haystack = normalizeEmailText(text);
   if (!haystack) return undefined;
+
+  const ticketValueTotal = sumTicketValuesFromText(haystack);
+  if (ticketValueTotal != null && ticketValueTotal > 0) {
+    return ticketValueTotal;
+  }
 
   const scored: ScoredAmount[] = [];
 
@@ -67,7 +98,7 @@ export function parseCashUsdFromText(text: string): number | undefined {
       if (usd == null) continue;
       const start = match.index ?? 0;
       const end = start + match[0].length;
-      scored.push({ usd, score: scoreAmountMatch(haystack, start, end, usd) });
+      scored.push({ usd, score: scoreAmountMatch(haystack, start, end) });
     }
   }
 

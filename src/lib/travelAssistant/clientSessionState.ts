@@ -40,6 +40,7 @@ export interface SessionReservation {
   bookUrl?: string;
   quotedPriceUsd?: number;
   quotedPointsMiles?: number;
+  quotedMilesEarned?: number;
   pointsProgram?: string;
   /** Forwarded confirmation metadata */
   sourceEmailId?: string;

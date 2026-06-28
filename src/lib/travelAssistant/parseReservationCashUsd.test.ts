@@ -19,6 +19,11 @@ test("parseCashUsdFromText handles Alaska-style totals", () => {
   assert.equal(parseCashUsdFromText(text), 892);
 });
 
+test("parseCashUsdFromText reads single New Ticket Value", () => {
+  const text = "Summary of airfare charges New Ticket Value: $1,386.43 Total charges USD $0.00";
+  assert.equal(parseCashUsdFromText(text), 1386);
+});
+
 test("resolveReservationCashUsd falls back to originalEmailText", () => {
   const usd = resolveReservationCashUsd({
     originalEmailText: "Grand Total: $456.78",
