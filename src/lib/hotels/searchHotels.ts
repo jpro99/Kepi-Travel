@@ -164,7 +164,7 @@ async function searchDuffelHotels(input: {
               latitude: input.resolved.lat,
               longitude: input.resolved.lng,
             },
-            radius: 15,
+            radius: 20,
             distance_unit: "km",
           },
         },
@@ -193,7 +193,7 @@ async function searchDuffelHotels(input: {
     const data = (await response.json()) as { data?: { results?: Record<string, unknown>[] } };
     const results = data?.data?.results ?? [];
     const hotels: HotelSearchResult[] = [];
-    for (const row of results.slice(0, 50)) {
+    for (const row of results.slice(0, 80)) {
       const mapped = mapDuffelRowToHotel({
         row,
         nights: input.nights,
@@ -204,7 +204,7 @@ async function searchDuffelHotels(input: {
         guests: input.guests,
       });
       if (mapped) hotels.push(mapped);
-      if (hotels.length >= 50) break;
+      if (hotels.length >= 80) break;
     }
 
     if (hotels.length === 0 && results.length > 0) {
@@ -225,7 +225,7 @@ async function searchDuffelHotels(input: {
   }
 }
 
-/** Duffel Stays → LiteAPI → estimated fallback. */
+/** Duffel Stays → LiteAPI (multi-pass) → estimated fallback. */
 export async function searchHotelsLiveOrEstimated(input: {
   resolved: ResolvedHotelDestination;
   checkIn: string;
@@ -240,30 +240,57 @@ export async function searchHotelsLiveOrEstimated(input: {
     ? { hotels: [], error: "Mock stays mode" }
     : await searchDuffelHotels(input);
 
-  if (duffel.hotels.length > 0) {
-    return { hotels: duffel.hotels, source: "duffel" };
+  let merged = mergeHotelResults(duffel.hotels);
+  let liteApiError = duffel.error;
+
+  if (!mockMode && isLiteApiConfigured()) {
+    const liteInput = {
+      resolved: input.resolved,
+      checkIn: input.checkIn,
+      checkOut: input.checkOut,
+      nights: input.nights,
+      guests: input.guests,
+      rooms: input.rooms,
+    };
+
+    const primary = await searchLiteApiHotels(liteInput, { limit: 120, radiusMeters: 25_000 });
+    merged = mergeHotelResults(merged, primary.hotels);
+    liteApiError = primary.error ?? liteApiError;
+
+    if (merged.length < 35) {
+      const wide = await searchLiteApiHotels(liteInput, {
+        limit: 120,
+        radiusMeters: 40_000,
+        minRating: 2,
+      });
+      merged = mergeHotelResults(merged, wide.hotels);
+      liteApiError = wide.error ?? liteApiError;
+    }
+
+    const nearbyIata = pickFallbackIata(input.resolved);
+    if (merged.length < 35 && nearbyIata) {
+      const byAirport = await searchLiteApiHotels(liteInput, {
+        limit: 120,
+        forceIata: nearbyIata,
+      });
+      merged = mergeHotelResults(merged, byAirport.hotels);
+      liteApiError = byAirport.error ?? liteApiError;
+    }
   }
 
-  const liteApi = await searchLiteApiHotels({
-    resolved: input.resolved,
-    checkIn: input.checkIn,
-    checkOut: input.checkOut,
-    nights: input.nights,
-    guests: input.guests,
-    rooms: input.rooms,
-    iata: input.resolved.iata,
-  });
-
-  if (liteApi.hotels.length > 0) {
+  if (merged.length > 0) {
+    const source: HotelSearchSource = duffel.hotels.length > 0 ? "duffel" : "liteapi";
     const notice =
       duffel.error?.includes("Stays not enabled") || duffel.error?.includes("403")
         ? "Live rates via LiteAPI — Duffel Stays will take over when enabled on your account."
-        : undefined;
+        : merged.length > 40
+          ? `Showing ${merged.length} properties in the area (includes nearby towns).`
+          : undefined;
     return {
-      hotels: liteApi.hotels,
-      source: "liteapi",
+      hotels: merged.slice(0, 80),
+      source,
       notice,
-      duffelError: duffel.error,
+      duffelError: duffel.error ?? liteApiError,
     };
   }
 
@@ -287,11 +314,33 @@ export async function searchHotelsLiveOrEstimated(input: {
     }),
   );
 
-  const notice = estimatedStaysNotice(duffel.error ?? liteApi.error, mockMode);
+  const notice = estimatedStaysNotice(duffel.error ?? liteApiError, mockMode);
   return {
     hotels,
     source: "estimated",
     notice,
-    duffelError: duffel.error ?? liteApi.error,
+    duffelError: duffel.error ?? liteApiError,
   };
+}
+
+function hotelDedupeKey(hotel: HotelSearchResult): string {
+  const name = hotel.name.trim().toLowerCase().replace(/\s+/g, " ");
+  const price = Math.round(hotel.pricePerNight);
+  return `${name}|${price}`;
+}
+
+function mergeHotelResults(...groups: HotelSearchResult[][]): HotelSearchResult[] {
+  const merged: HotelSearchResult[] = [];
+  const seen = new Set<string>();
+
+  for (const group of groups) {
+    for (const hotel of group) {
+      const key = hotelDedupeKey(hotel);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(hotel);
+    }
+  }
+
+  return merged.sort((a, b) => a.pricePerNight - b.pricePerNight);
 }

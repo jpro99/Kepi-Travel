@@ -104,16 +104,30 @@ function mapLiteApiToHotel(input: {
   };
 }
 
+export interface LiteApiSearchOptions {
+  /** Max properties to return (default 120). */
+  limit?: number;
+  /** Geo radius in meters when searching by lat/lng (default 25_000). */
+  radiusMeters?: number;
+  /** Minimum guest rating filter; omit for no filter. */
+  minRating?: number;
+  /** Force IATA search instead of coordinates. */
+  forceIata?: string;
+}
+
 /** Live hotel rates via LiteAPI / Nuitée (server-side only). */
-export async function searchLiteApiHotels(input: {
-  resolved: ResolvedHotelDestination;
-  checkIn: string;
-  checkOut: string;
-  nights: number;
-  guests: number;
-  rooms: number;
-  iata?: string;
-}): Promise<{ hotels: HotelSearchResult[]; error?: string }> {
+export async function searchLiteApiHotels(
+  input: {
+    resolved: ResolvedHotelDestination;
+    checkIn: string;
+    checkOut: string;
+    nights: number;
+    guests: number;
+    rooms: number;
+    iata?: string;
+  },
+  options: LiteApiSearchOptions = {},
+): Promise<{ hotels: HotelSearchResult[]; error?: string }> {
   const apiKey = resolveLiteApiKey();
   if (!apiKey) {
     return { hotels: [], error: "LiteAPI not configured" };
@@ -122,25 +136,33 @@ export async function searchLiteApiHotels(input: {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 28_000);
 
+  const limit = options.limit ?? 120;
+  const radiusMeters = options.radiusMeters ?? 25_000;
+  const forcedIata = options.forceIata?.trim().toUpperCase();
+  const searchIata = forcedIata || (input.iata && input.iata.length === 3 ? input.iata.toUpperCase() : null);
+
   const body: Record<string, unknown> = {
     occupancies: [{ adults: Math.max(1, input.guests) }],
     currency: "USD",
     guestNationality: "US",
     checkin: input.checkIn,
     checkout: input.checkOut,
-    maxRatesPerHotel: 2,
+    maxRatesPerHotel: 3,
     roomMapping: true,
     includeHotelData: true,
-    limit: 50,
-    minRating: 3,
+    limit,
   };
 
-  if (input.iata && input.iata.length === 3) {
-    body.iataCode = input.iata.toUpperCase();
+  if (options.minRating !== undefined) {
+    body.minRating = options.minRating;
+  }
+
+  if (searchIata) {
+    body.iataCode = searchIata;
   } else {
     body.latitude = input.resolved.lat;
     body.longitude = input.resolved.lng;
-    body.radius = 12_000;
+    body.radius = radiusMeters;
   }
 
   try {
@@ -188,7 +210,7 @@ export async function searchLiteApiHotels(input: {
         guests: input.guests,
       });
       if (mapped) hotels.push(mapped);
-      if (hotels.length >= 50) break;
+      if (hotels.length >= limit) break;
     }
 
     if (hotels.length === 0) {

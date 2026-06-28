@@ -69,6 +69,13 @@ export interface ResolvedHotelDestination {
   correctedFrom?: string;
 }
 
+function iataForKnownKey(key: string): string | undefined {
+  if (key.length === 3) return key;
+  if (key === "MONOPOLI" || key === "POLIGNANO") return "BRI";
+  if (key === "LECCE") return "BDS";
+  return undefined;
+}
+
 function matchKnownCity(input: string, correctedFrom?: string): ResolvedHotelDestination | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
@@ -83,7 +90,7 @@ function matchKnownCity(input: string, correctedFrom?: string): ResolvedHotelDes
       lat: hit.lat,
       lng: hit.lng,
       displayName: hit.name,
-      iata: upper.length === 3 ? upper : upper === "MONOPOLI" ? "BRI" : undefined,
+      iata: iataForKnownKey(upper),
     });
   }
 
@@ -107,7 +114,7 @@ function matchKnownCity(input: string, correctedFrom?: string): ResolvedHotelDes
         lat: hit.lat,
         lng: hit.lng,
         displayName: hit.name,
-        iata: key.length === 3 ? key : key === "MONOPOLI" ? "BRI" : undefined,
+        iata: iataForKnownKey(key),
       });
     }
   }

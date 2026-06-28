@@ -86,7 +86,7 @@ function diversifyRankedResults(results: RankedHotelSearchResult[]): RankedHotel
   const usedIds = new Set<string>();
   const chainCounts = new Map<string, number>();
 
-  const tryAdd = (hotel: RankedHotelSearchResult, maxPerChain = 2): boolean => {
+  const tryAdd = (hotel: RankedHotelSearchResult, maxPerChain = 4): boolean => {
     if (usedIds.has(hotel.id)) return false;
     const key = chainGroupKey(hotel);
     const count = chainCounts.get(key) ?? 0;

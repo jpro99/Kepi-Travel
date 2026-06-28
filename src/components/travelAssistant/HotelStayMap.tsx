@@ -132,6 +132,19 @@ export function HotelStayMap({
     }
   }, [ready, hotels, selectedId, onSelect, scoreRange]);
 
+  useEffect(() => {
+    if (!ready || !mapRef.current || hotels.length === 0) return;
+    void (async () => {
+      const maplibregl = await import("maplibre-gl");
+      const bounds = new maplibregl.LngLatBounds();
+      bounds.extend([centerLng, centerLat]);
+      for (const hotel of hotels) {
+        bounds.extend([hotel.lng, hotel.lat]);
+      }
+      mapRef.current?.fitBounds(bounds, { padding: 56, maxZoom: 15, duration: 500 });
+    })();
+  }, [ready, hotels, centerLat, centerLng]);
+
   const applyMapStyle = useCallback(
     (nextStyle: "hybrid" | "streets") => {
       if (!mapRef.current || !maptilerKey) return;
@@ -269,7 +282,7 @@ export function HotelStayMap({
       />
 
       <p className="text-[10px] text-slate-500">
-        {city} · {hotels.length} on map · zoom in/out to filter the list · purple <strong>M</strong> = metro / rail
+        {city} · {hotels.length} pins · purple <strong>M</strong> = metro / rail
       </p>
     </div>
   );

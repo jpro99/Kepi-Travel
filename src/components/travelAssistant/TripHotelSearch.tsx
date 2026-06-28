@@ -414,7 +414,7 @@ export function TripHotelSearch({
               <p className="text-[11px] text-slate-500">
                 {checkIn} → {checkOut} ·{" "}
                 {mapBounds && resultsView === "map"
-                  ? `${visibleResults.length} hotels · ${hotelsInView.length} on map`
+                  ? `${visibleResults.length} hotels · map shows all pins`
                   : `${visibleResults.length} hotels`}
               </p>
             </div>
@@ -474,7 +474,7 @@ export function TripHotelSearch({
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                     {visibleResults.length} hotel{visibleResults.length === 1 ? "" : "s"}
                     {mapBounds && hotelsInView.length < mappedHotels.length
-                      ? ` · ${hotelsInView.length} on map`
+                      ? ` · zoomed to ${hotelsInView.length}`
                       : ""}
                   </p>
                 </div>
@@ -484,26 +484,19 @@ export function TripHotelSearch({
                   </p>
                 ) : (
                   <div className="min-h-[12rem] flex-1 space-y-1.5 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50/80 p-2 dark:border-slate-700 dark:bg-slate-900/40 lg:max-h-[58vh]">
-                    {mappedHotels.map((hotel) => {
-                      const inView = !mapBounds || hotelsInView.some((row) => row.id === hotel.id);
-                      return (
-                        <div
-                          key={hotel.id}
-                          data-hotel-id={hotel.id}
-                          className={inView ? "" : "opacity-55"}
-                        >
-                          <HotelRankCard
-                            hotel={hotel}
-                            totalInSearch={results.length}
-                            compact
-                            selected={mapSelectedId === hotel.id}
-                            onSelect={() => openDetail(hotel)}
-                            onAdd={() => openDetail(hotel)}
-                            onDismiss={() => handleDismiss(hotel)}
-                          />
-                        </div>
-                      );
-                    })}
+                    {mappedHotels.map((hotel) => (
+                      <div key={hotel.id} data-hotel-id={hotel.id}>
+                        <HotelRankCard
+                          hotel={hotel}
+                          totalInSearch={results.length}
+                          compact
+                          selected={mapSelectedId === hotel.id}
+                          onSelect={() => openDetail(hotel)}
+                          onAdd={() => openDetail(hotel)}
+                          onDismiss={() => handleDismiss(hotel)}
+                        />
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
