@@ -1,9 +1,11 @@
+export type TransitKind = "metro" | "train" | "tram" | "bus";
+
 export interface TransitStop {
   id: string;
   name: string;
   lat: number;
   lng: number;
-  kind: "metro" | "bus";
+  kind: TransitKind;
 }
 
 const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
@@ -24,7 +26,7 @@ function dedupeStops(stops: TransitStop[], minMeters = 80): TransitStop[] {
 
 function parseOverpassElements(
   elements: Array<{ id: number; lat?: number; lon?: number; tags?: Record<string, string> }>,
-  kind: "metro" | "bus",
+  kind: TransitKind,
 ): TransitStop[] {
   const stops: TransitStop[] = [];
   for (const element of elements) {
@@ -32,7 +34,13 @@ function parseOverpassElements(
     const name =
       element.tags?.name ??
       element.tags?.["name:en"] ??
-      (kind === "metro" ? "Metro station" : "Bus stop");
+      (kind === "metro"
+        ? "Metro station"
+        : kind === "train"
+          ? "Train station"
+          : kind === "tram"
+            ? "Tram stop"
+            : "Bus stop");
     stops.push({
       id: `${kind}-${element.id}`,
       name,
@@ -61,10 +69,10 @@ async function runOverpass(
   return payload.elements ?? [];
 }
 
-/** Fetch metro/rail stations near a hotel search center (OpenStreetMap via Overpass). */
-export async function fetchMetroStopsNear(lat: number, lng: number, radiusM = 6500): Promise<TransitStop[]> {
+/** Fetch metro/subway/light-rail stops near a hotel search center. */
+export async function fetchMetroStopsNear(lat: number, lng: number, radiusM = 8000): Promise<TransitStop[]> {
   const query = `
-[out:json][timeout:12];
+[out:json][timeout:14];
 (
   node(around:${radiusM},${lat},${lng})["railway"="subway_entrance"];
   node(around:${radiusM},${lat},${lng})["station"="subway"];
@@ -72,11 +80,41 @@ export async function fetchMetroStopsNear(lat: number, lng: number, radiusM = 65
   node(around:${radiusM},${lat},${lng})["railway"="station"]["subway"="yes"];
   node(around:${radiusM},${lat},${lng})["public_transport"="stop_position"]["subway"="yes"];
   node(around:${radiusM},${lat},${lng})["railway"="station"]["light_rail"="yes"];
+  node(around:${radiusM},${lat},${lng})["railway"="tram_stop"];
+  node(around:${radiusM},${lat},${lng})["public_transport"="platform"]["tram"="yes"];
 );
-out body 35;
+out body 40;
 `;
   const elements = await runOverpass(query);
-  return dedupeStops(parseOverpassElements(elements, "metro"), 120).slice(0, 28);
+  const metro = parseOverpassElements(
+    elements.filter((element) => element.tags?.railway !== "tram_stop" && element.tags?.tram !== "yes"),
+    "metro",
+  );
+  const tram = parseOverpassElements(
+    elements.filter((element) => element.tags?.railway === "tram_stop" || element.tags?.tram === "yes"),
+    "tram",
+  );
+  return dedupeStops([...metro, ...tram], 120).slice(0, 24);
+}
+
+/** Regional and commuter rail stations — important in towns without subway. */
+export async function fetchTrainStopsNear(lat: number, lng: number, radiusM = 12000): Promise<TransitStop[]> {
+  const query = `
+[out:json][timeout:14];
+(
+  node(around:${radiusM},${lat},${lng})["railway"="station"];
+  node(around:${radiusM},${lat},${lng})["railway"="halt"];
+  node(around:${radiusM},${lat},${lng})["public_transport"="station"]["train"="yes"];
+  node(around:${radiusM},${lat},${lng})["public_transport"="stop_position"]["train"="yes"];
+);
+out body 45;
+`;
+  const elements = await runOverpass(query);
+  const trains = parseOverpassElements(elements, "train");
+  return dedupeStops(
+    trains.filter((stop) => !/subway|metro|tram|light_rail/i.test(stop.name)),
+    150,
+  ).slice(0, 20);
 }
 
 /** Fetch bus stops near center — optional layer on the hotel map. */
@@ -97,14 +135,17 @@ out body 45;
 export async function fetchNearbyTransit(
   lat: number,
   lng: number,
-  kinds: Array<"metro" | "bus">,
+  kinds: Array<TransitKind>,
 ): Promise<TransitStop[]> {
   const results: TransitStop[] = [];
-  if (kinds.includes("metro")) {
+  if (kinds.includes("metro") || kinds.includes("tram")) {
     results.push(...(await fetchMetroStopsNear(lat, lng)));
+  }
+  if (kinds.includes("train")) {
+    results.push(...(await fetchTrainStopsNear(lat, lng)));
   }
   if (kinds.includes("bus")) {
     results.push(...(await fetchBusStopsNear(lat, lng)));
   }
-  return results;
+  return dedupeStops(results, 100);
 }

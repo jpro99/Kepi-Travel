@@ -8,7 +8,7 @@ import type { MapBounds } from "@/lib/hotels/hotelCoordinates";
 import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
 import type { HotelPayMode } from "@/lib/hotels/hotelPointsDisplay";
 import { resolveHotelMapPinLabel } from "@/lib/hotels/hotelPointsDisplay";
-import type { TransitStop } from "@/lib/hotels/nearbyTransit";
+import type { TransitKind, TransitStop } from "@/lib/hotels/nearbyTransit";
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
 
 interface HotelWithCoords extends RankedHotelSearchResult {
@@ -39,6 +39,7 @@ function createPricePin(
   const pin = resolveHotelMapPinLabel(hotel, payMode);
   el.title = pin.title;
   el.className = "flex flex-col items-center border-0 bg-transparent p-0";
+  el.style.zIndex = selected ? "30" : "20";
 
   const badge = document.createElement("span");
   badge.className = `rounded-lg px-1.5 py-0.5 text-[10px] font-black shadow-md ${selected ? "ring-2 ring-white scale-110" : ""}`;
@@ -55,21 +56,31 @@ function createPricePin(
   return el;
 }
 
-function createMetroMarker(name: string): HTMLButtonElement {
+function transitMarkerStyle(kind: TransitKind): { label: string; bg: string } {
+  if (kind === "train") return { label: "T", bg: "#0c4a6e" };
+  if (kind === "tram") return { label: "♦", bg: "#0369a1" };
+  if (kind === "bus") return { label: "B", bg: "#475569" };
+  return { label: "M", bg: "#0284c7" };
+}
+
+function createTransitMarker(stop: TransitStop): HTMLButtonElement {
+  const style = transitMarkerStyle(stop.kind);
   const wrap = document.createElement("button");
   wrap.type = "button";
-  wrap.title = name;
+  wrap.title = stop.name;
   wrap.className = "group flex flex-col items-center border-0 bg-transparent p-0";
+  wrap.style.zIndex = "10";
 
   const badge = document.createElement("span");
   badge.className =
-    "flex h-6 w-6 items-center justify-center rounded-full bg-violet-600 text-[10px] font-black text-white shadow ring-2 ring-white";
-  badge.textContent = "M";
+    "flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black text-white shadow ring-2 ring-white";
+  badge.style.backgroundColor = style.bg;
+  badge.textContent = style.label;
 
   const label = document.createElement("span");
   label.className =
-    "mt-0.5 max-w-[5rem] truncate rounded bg-violet-950/90 px-1 py-0.5 text-[8px] font-semibold text-violet-100 opacity-0 group-hover:opacity-100";
-  label.textContent = name;
+    "mt-0.5 max-w-[6rem] truncate rounded bg-slate-950/90 px-1 py-0.5 text-[8px] font-semibold text-white opacity-0 group-hover:opacity-100";
+  label.textContent = stop.name;
 
   wrap.append(badge, label);
   return wrap;
@@ -90,10 +101,13 @@ export function HotelStayMap({
   const mapRef = useRef<import("maplibre-gl").Map | null>(null);
   const hotelMarkersRef = useRef<import("maplibre-gl").Marker[]>([]);
   const transitMarkersRef = useRef<import("maplibre-gl").Marker[]>([]);
+  const transitFetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [ready, setReady] = useState(false);
   const [maptilerKey, setMaptilerKey] = useState("");
-  const [mapStyle, setMapStyle] = useState<"hybrid" | "streets">("hybrid");
-  const [metroStops, setMetroStops] = useState<TransitStop[]>([]);
+  const [mapStyle, setMapStyle] = useState<"hybrid" | "streets">("streets");
+  const [showTransit, setShowTransit] = useState(true);
+  const [transitStops, setTransitStops] = useState<TransitStop[]>([]);
+  const [transitCenter, setTransitCenter] = useState({ lat: centerLat, lng: centerLng });
 
   const scoreRange = useMemo(() => fitScoreRange(hotels), [hotels]);
 
@@ -138,6 +152,33 @@ export function HotelStayMap({
     }
   }, [ready, hotels, selectedId, onSelect, scoreRange, payMode]);
 
+  const renderTransitMarkers = useCallback(async () => {
+    if (!ready || !mapRef.current || !showTransit) {
+      for (const marker of transitMarkersRef.current) marker.remove();
+      transitMarkersRef.current = [];
+      return;
+    }
+
+    const maplibregl = await import("maplibre-gl");
+    for (const marker of transitMarkersRef.current) marker.remove();
+    transitMarkersRef.current = [];
+
+    for (const stop of transitStops) {
+      const el = createTransitMarker(stop);
+      const marker = new maplibregl.Marker({ element: el, anchor: "center" })
+        .setLngLat([stop.lng, stop.lat])
+        .addTo(mapRef.current);
+      transitMarkersRef.current.push(marker);
+    }
+  }, [ready, showTransit, transitStops]);
+
+  const scheduleTransitFetch = useCallback((lat: number, lng: number) => {
+    if (transitFetchTimerRef.current) clearTimeout(transitFetchTimerRef.current);
+    transitFetchTimerRef.current = setTimeout(() => {
+      setTransitCenter({ lat, lng });
+    }, 450);
+  }, []);
+
   useEffect(() => {
     if (!ready || !mapRef.current || hotels.length === 0) return;
     void (async () => {
@@ -159,10 +200,11 @@ export function HotelStayMap({
       mapRef.current.setStyle(style);
       mapRef.current.once("idle", () => {
         void renderHotelMarkers();
+        void renderTransitMarkers();
         if (mapRef.current) emitBounds(mapRef.current);
       });
     },
-    [emitBounds, maptilerKey, renderHotelMarkers],
+    [emitBounds, maptilerKey, renderHotelMarkers, renderTransitMarkers],
   );
 
   useEffect(() => {
@@ -172,7 +214,7 @@ export function HotelStayMap({
       if (cancelled || !containerRef.current) return;
 
       const style = maptilerKey
-        ? maptilerStyleUrl("hybrid", maptilerKey)
+        ? maptilerStyleUrl("streets-v2", maptilerKey)
         : "https://demotiles.maplibre.org/style.json";
 
       const map = new maplibregl.Map({
@@ -190,13 +232,19 @@ export function HotelStayMap({
         if (!cancelled) {
           setReady(true);
           emitBounds(map);
+          scheduleTransitFetch(centerLat, centerLng);
         }
       });
-      map.on("moveend", () => emitBounds(map));
+      map.on("moveend", () => {
+        emitBounds(map);
+        const center = map.getCenter();
+        scheduleTransitFetch(center.lat, center.lng);
+      });
     })();
 
     return () => {
       cancelled = true;
+      if (transitFetchTimerRef.current) clearTimeout(transitFetchTimerRef.current);
       for (const marker of hotelMarkersRef.current) marker.remove();
       for (const marker of transitMarkersRef.current) marker.remove();
       hotelMarkersRef.current = [];
@@ -205,48 +253,36 @@ export function HotelStayMap({
       mapRef.current = null;
       setReady(false);
     };
-  }, [centerLat, centerLng, maptilerKey, emitBounds]);
+  }, [centerLat, centerLng, maptilerKey, emitBounds, scheduleTransitFetch]);
 
   useEffect(() => {
     let cancelled = false;
-    void fetch(`/api/hotels/transit-nearby?lat=${centerLat}&lng=${centerLng}&kind=metro`, { cache: "no-store" })
+    void fetch(
+      `/api/hotels/transit-nearby?lat=${transitCenter.lat}&lng=${transitCenter.lng}&kind=all`,
+      { cache: "no-store" },
+    )
       .then((res) => (res.ok ? res.json() : { stops: [] }))
       .then((data: { stops?: TransitStop[] }) => {
-        if (!cancelled) setMetroStops(Array.isArray(data.stops) ? data.stops : []);
+        if (!cancelled) setTransitStops(Array.isArray(data.stops) ? data.stops : []);
       })
       .catch(() => {
-        if (!cancelled) setMetroStops([]);
+        if (!cancelled) setTransitStops([]);
       });
     return () => {
       cancelled = true;
     };
-  }, [centerLat, centerLng]);
+  }, [transitCenter.lat, transitCenter.lng]);
 
   useEffect(() => {
     void renderHotelMarkers();
   }, [renderHotelMarkers]);
 
   useEffect(() => {
-    if (!ready || !mapRef.current) return;
-    void (async () => {
-      const maplibregl = await import("maplibre-gl");
-      for (const marker of transitMarkersRef.current) marker.remove();
-      transitMarkersRef.current = [];
+    void renderTransitMarkers();
+  }, [renderTransitMarkers]);
 
-      for (const stop of metroStops) {
-        const el = createMetroMarker(stop.name);
-        const marker = new maplibregl.Marker({ element: el, anchor: "center" })
-          .setLngLat([stop.lng, stop.lat])
-          .addTo(mapRef.current!);
-        transitMarkersRef.current.push(marker);
-      }
-    })();
-
-    return () => {
-      for (const marker of transitMarkersRef.current) marker.remove();
-      transitMarkersRef.current = [];
-    };
-  }, [ready, metroStops]);
+  const trainCount = transitStops.filter((stop) => stop.kind === "train").length;
+  const metroCount = transitStops.filter((stop) => stop.kind === "metro" || stop.kind === "tram").length;
 
   return (
     <div className="space-y-2">
@@ -259,16 +295,21 @@ export function HotelStayMap({
             <span className="h-2.5 w-2.5 rounded-sm bg-amber-500" /> Good fit
           </span>
           <span className="inline-flex items-center gap-1 font-semibold text-slate-600 dark:text-slate-300">
-            <span className="h-2.5 w-2.5 rounded-sm bg-violet-600" /> M Metro
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-sky-600 text-[8px] font-black text-white">M</span>{" "}
+            Metro
+          </span>
+          <span className="inline-flex items-center gap-1 font-semibold text-slate-600 dark:text-slate-300">
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-sky-900 text-[8px] font-black text-white">T</span>{" "}
+            Train
           </span>
         </div>
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            onClick={() => applyMapStyle("hybrid")}
-            className={`rounded-md px-2 py-0.5 font-bold ${mapStyle === "hybrid" ? "bg-sky-600 text-white" : "text-slate-600"}`}
+            onClick={() => setShowTransit((value) => !value)}
+            className={`rounded-md px-2 py-0.5 font-bold ${showTransit ? "bg-sky-600 text-white" : "text-slate-600"}`}
           >
-            Satellite
+            Transit {showTransit ? "on" : "off"}
           </button>
           <button
             type="button"
@@ -276,6 +317,13 @@ export function HotelStayMap({
             className={`rounded-md px-2 py-0.5 font-bold ${mapStyle === "streets" ? "bg-sky-600 text-white" : "text-slate-600"}`}
           >
             Streets
+          </button>
+          <button
+            type="button"
+            onClick={() => applyMapStyle("hybrid")}
+            className={`rounded-md px-2 py-0.5 font-bold ${mapStyle === "hybrid" ? "bg-sky-600 text-white" : "text-slate-600"}`}
+          >
+            Satellite
           </button>
         </div>
       </div>
@@ -288,7 +336,7 @@ export function HotelStayMap({
       />
 
       <p className="text-[10px] text-slate-500">
-        {city} · {hotels.length} pins · purple <strong>M</strong> = metro / rail
+        {city} · {hotels.length} hotels · {showTransit ? `${metroCount} metro/tram · ${trainCount} rail` : "transit hidden"} · Streets view shows rail lines
       </p>
     </div>
   );

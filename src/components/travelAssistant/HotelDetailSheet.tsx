@@ -5,9 +5,12 @@ import { createPortal } from "react-dom";
 import { useUser } from "@clerk/nextjs";
 import { resolveHotelBookUrl, resolveHotelPointsBookUrl } from "@/lib/decision/bookingLinks";
 import { hotelMapPinStyle, fitScoreRange } from "@/lib/hotels/hotelMapColors";
+import type { HotelDetailMedia } from "@/lib/hotels/hotelMedia";
+import { extractLiteApiHotelId, mergeHotelDetailMedia } from "@/lib/hotels/hotelMedia";
 import type { HotelPayMode } from "@/lib/hotels/hotelPointsDisplay";
 import { pointsPerNight } from "@/lib/hotels/hotelPointsDisplay";
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
+import { HotelPhotoGallery } from "@/components/travelAssistant/HotelPhotoGallery";
 
 interface HotelDetailSheetProps {
   hotel: RankedHotelSearchResult;
@@ -41,6 +44,10 @@ export function HotelDetailSheet({
   const [phone, setPhone] = useState("");
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [detailMedia, setDetailMedia] = useState<HotelDetailMedia>(() =>
+    mergeHotelDetailMedia(null, hotel.photos.filter(Boolean)),
+  );
 
   useEffect(() => {
     setMounted(true);
@@ -59,6 +66,36 @@ export function HotelDetailSheet({
       document.body.style.overflow = previous;
     };
   }, []);
+
+  useEffect(() => {
+    const liteApiId = extractLiteApiHotelId(hotel.id);
+    const fallback = mergeHotelDetailMedia(null, hotel.photos.filter(Boolean));
+    setDetailMedia(fallback);
+
+    if (!liteApiId) return;
+
+    let cancelled = false;
+    setMediaLoading(true);
+    void fetch(`/api/hotels/details?hotelId=${encodeURIComponent(liteApiId)}`, { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) return null;
+        return (await res.json()) as HotelDetailMedia;
+      })
+      .then((payload) => {
+        if (cancelled) return;
+        setDetailMedia(mergeHotelDetailMedia(payload, hotel.photos.filter(Boolean)));
+      })
+      .catch(() => {
+        if (!cancelled) setDetailMedia(fallback);
+      })
+      .finally(() => {
+        if (!cancelled) setMediaLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hotel.id, hotel.photos]);
 
   const book = resolveHotelBookUrl({
     propertyName: hotel.name,
@@ -85,7 +122,6 @@ export function HotelDetailSheet({
   });
 
   const pinStyle = hotelMapPinStyle(hotel, fitScoreRange(allHotels));
-  const photos = hotel.photos.filter(Boolean);
   const hasLiveRate = !hotel.browseOnly && hotel.pricePerNight > 0;
   const kepiBookable = Boolean(hotel.kepiBookable && hotel.bookOfferId && hasLiveRate) && payMode !== "points";
   const nightlyPts = pointsPerNight(hotel);
@@ -154,20 +190,12 @@ export function HotelDetailSheet({
         </div>
 
         <div className="max-h-[calc(88vh-2.5rem)] overflow-y-auto">
-          {photos.length > 0 ? (
-            <div className="flex gap-2 overflow-x-auto px-4 py-3">
-              {photos.map((url) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img key={url} src={url} alt="" className="h-36 w-52 shrink-0 rounded-xl object-cover" />
-              ))}
-            </div>
-          ) : (
-            <div className="mx-4 mt-3 flex h-28 items-center justify-center rounded-xl bg-slate-100 text-sm text-slate-500 dark:bg-slate-900">
-              Photos load when you open the booking site
-            </div>
-          )}
+          <HotelPhotoGallery media={detailMedia} loading={mediaLoading} hotelName={hotel.name} />
 
           <div className="space-y-3 px-4 pb-4">
+            {detailMedia.description ? (
+              <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">{detailMedia.description}</p>
+            ) : null}
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 id="hotel-detail-title" className="text-lg font-black text-slate-900 dark:text-white">

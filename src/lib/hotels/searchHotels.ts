@@ -61,7 +61,7 @@ function mapDuffelRowToHotel(input: {
   if (!prop || !Number.isFinite(total) || total <= 0) return null;
 
   const amenities = (prop.amenities as { type: string }[] | undefined)?.map((entry) => entry.type).slice(0, 8) ?? [];
-  const photos = (prop.photos as { url: string }[] | undefined)?.map((entry) => entry.url).slice(0, 8) ?? [];
+  const photos = (prop.photos as { url: string }[] | undefined)?.map((entry) => entry.url).slice(0, 20) ?? [];
   const addressRecord = prop.address as Record<string, unknown> | undefined;
   const locationRecord = prop.location as Record<string, unknown> | undefined;
   const geo =

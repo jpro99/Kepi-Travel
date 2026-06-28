@@ -82,7 +82,7 @@ function mapLiteApiToHotel(input: {
   if (input.meta?.thumbnail && !photos.includes(input.meta.thumbnail)) photos.push(input.meta.thumbnail);
   for (const image of input.meta?.images ?? []) {
     if (image && !photos.includes(image)) photos.push(image);
-    if (photos.length >= 8) break;
+    if (photos.length >= 20) break;
   }
 
   const amenities = (input.meta?.hotelFacilities ?? []).slice(0, 8);
