@@ -282,7 +282,48 @@ function legMatchesSegment(leg: PlannedFlightLeg, segment: TripTransportSegment)
   return legFrom === segment.fromCode && legTo === segment.toCode;
 }
 
+/** After-evening arrivals often pair with departures stored on the wrong calendar day (12:10 AM). */
+function normalizeOvernightConnections(segments: TripTransportSegment[]): TripTransportSegment[] {
+  const out = segments.map((segment) => ({ ...segment }));
+
+  for (let i = 1; i < out.length; i++) {
+    const prev = out[i - 1];
+    const next = out[i];
+    if (prev.toCode !== next.fromCode || prev.arriveMs == null || next.departMs == null) continue;
+    if (next.departMs >= prev.arriveMs) continue;
+
+    const rolledDepart = next.departMs + 86_400_000;
+    const rolledArrive = next.arriveMs != null ? next.arriveMs + 86_400_000 : null;
+    if (rolledDepart <= prev.arriveMs) continue;
+
+    out[i] = {
+      ...next,
+      departMs: rolledDepart,
+      arriveMs: rolledArrive,
+      departDisplay: fmtTime12(rolledDepart),
+      arriveDisplay: rolledArrive != null ? fmtTime12(rolledArrive) : next.arriveDisplay,
+      dateDisplay: fmtDateShort(rolledDepart),
+    };
+  }
+
+  return out;
+}
+
+function shouldEvaluateConnection(prev: TripTransportSegment, next: TripTransportSegment): boolean {
+  if (prev.arriveMs == null || next.departMs == null) return false;
+
+  const gapMs = next.departMs - prev.arriveMs;
+  const sameAirport = prev.toCode === next.fromCode;
+
+  // Return legs or repositioning days later — not a same-day connection.
+  if (!sameAirport && gapMs > 36 * 3_600_000) return false;
+  if (sameAirport && gapMs > 72 * 3_600_000) return false;
+
+  return true;
+}
+
 function evaluateConnection(prev: TripTransportSegment, next: TripTransportSegment): string | null {
+  if (!shouldEvaluateConnection(prev, next)) return null;
   if (prev.arriveMs == null || next.departMs == null) return null;
 
   if (next.departMs < prev.arriveMs) {
@@ -338,6 +379,9 @@ export function buildTripTransportRoute(
   segments = segments.sort(
     (a, b) => a.sortKey.localeCompare(b.sortKey) || (a.departMs ?? 0) - (b.departMs ?? 0),
   );
+
+  segments = normalizeOvernightConnections(segments);
+  segments = segments.sort((a, b) => (a.departMs ?? 0) - (b.departMs ?? 0));
 
   for (let i = 0; i < segments.length; i++) {
     const next = segments[i + 1];

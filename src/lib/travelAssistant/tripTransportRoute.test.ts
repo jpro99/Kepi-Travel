@@ -2,6 +2,85 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildTripTransportRoute } from "@/lib/travelAssistant/tripTransportRoute";
 
+test("buildTripTransportRoute rolls overnight hub departures to the next calendar day", () => {
+  const route = buildTripTransportRoute([
+    {
+      id: "f1",
+      type: "flight",
+      title: "Feeder",
+      provider: "Alaska",
+      localTime: "2026-09-01 19:00",
+      timezone: "America/Los_Angeles",
+      confirmationCode: "AAA111",
+      flightDepartureAirport: "ONT",
+      flightArrivalAirport: "SEA",
+      flightDepartureTime: "2026-09-01T19:00",
+      flightArrivalTime: "2026-09-01T21:43",
+      flightDate: "2026-09-01",
+      flightAirline: "Alaska",
+      flightNumber: "AS654",
+    },
+    {
+      id: "f2",
+      type: "flight",
+      title: "Long haul",
+      provider: "Alaska",
+      localTime: "2026-09-01 00:10",
+      timezone: "America/Los_Angeles",
+      confirmationCode: "BBB222",
+      flightDepartureAirport: "SEA",
+      flightArrivalAirport: "FCO",
+      flightDepartureTime: "2026-09-01T00:10",
+      flightArrivalTime: "2026-09-01T11:15",
+      flightDate: "2026-09-01",
+      flightAirline: "Alaska",
+      flightNumber: "AS180",
+    },
+  ]);
+
+  assert.equal(route.summary.conflicts, 0);
+  assert.equal(route.segments[1]?.status, "booked");
+});
+
+test("buildTripTransportRoute ignores return legs weeks after a prior arrival", () => {
+  const route = buildTripTransportRoute([
+    {
+      id: "f1",
+      type: "flight",
+      title: "Italy hop",
+      provider: "ITA",
+      localTime: "2026-09-02 09:35",
+      timezone: "Europe/Rome",
+      confirmationCode: "CCC333",
+      flightDepartureAirport: "FCO",
+      flightArrivalAirport: "BRI",
+      flightDepartureTime: "2026-09-02T09:35",
+      flightArrivalTime: "2026-09-02T11:35",
+      flightDate: "2026-09-02",
+      flightAirline: "ITA",
+      flightNumber: "AZ1607",
+    },
+    {
+      id: "f2",
+      type: "flight",
+      title: "Return",
+      provider: "Lufthansa",
+      localTime: "2026-09-25 10:00",
+      timezone: "Europe/Berlin",
+      confirmationCode: "DDD444",
+      flightDepartureAirport: "MUC",
+      flightArrivalAirport: "ONT",
+      flightDepartureTime: "2026-09-25T10:00",
+      flightArrivalTime: "2026-09-25T20:00",
+      flightDate: "2026-09-25",
+      flightAirline: "Lufthansa",
+      flightNumber: "LH450",
+    },
+  ]);
+
+  assert.equal(route.summary.conflicts, 0);
+});
+
 test("buildTripTransportRoute flags impossible connection when next departs before arrival", () => {
   const route = buildTripTransportRoute([
     {
