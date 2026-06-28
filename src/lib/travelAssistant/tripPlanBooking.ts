@@ -4,6 +4,12 @@ import type { FlightLegPlan, TripIntent } from "@/lib/decision/types";
 import type { StopDateRange } from "@/lib/decision/stopDates";
 import { mergeStopRanges, pickPrimaryStayPerCity } from "@/lib/travelAssistant/dayNoteStopRanges";
 import { formatHotelSearchCityLabel } from "@/lib/hotels/tripSearchContext";
+import {
+  citiesLikelySame,
+  deriveHotelSearchCityFromReservation,
+  enrichHotelReservationForMatching,
+  singleStayHotelFallback,
+} from "@/lib/hotels/hotelReservationCity";
 import { hotelReservationMatchesCity } from "@/lib/hotels/hotelStayMatch";
 import { parseDayIntentFromLines } from "@/lib/travelAssistant/dayPlanLines";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
@@ -46,17 +52,6 @@ interface TripFlightInput {
   provider?: string;
 }
 
-function hotelMatchesCity(
-  hotel: TripHotelInput,
-  cityName: string,
-  formattedCity: string,
-): boolean {
-  return (
-    hotelReservationMatchesCity(hotel, cityName) ||
-    hotelReservationMatchesCity(hotel, formattedCity)
-  );
-}
-
 function flightDateKey(flight: TripFlightInput): string | null {
   return (
     flight.flightDate?.slice(0, 10) ??
@@ -81,10 +76,19 @@ export function buildPlannedStayCities(
   hotels: TripHotelInput[],
 ): PlannedStayCity[] {
   const merged = pickPrimaryStayPerCity(mergeStopRanges(stopRanges));
+  const enrichedHotels = hotels.map(enrichHotelReservationForMatching);
+  const fallbackHotel = singleStayHotelFallback(enrichedHotels, merged.length);
+
   return merged.map((range, index) => {
     const formatted = formatHotelSearchCityLabel(range.stop.name);
     const city = formatted.label || range.stop.name;
-    const match = hotels.find((hotel) => hotelMatchesCity(hotel, range.stop.name, city));
+    let match = enrichedHotels.find((hotel) => hotelReservationMatchesCity(hotel, range.stop.name) || hotelReservationMatchesCity(hotel, city));
+    if (!match && fallbackHotel) {
+      match = fallbackHotel;
+    }
+    if (!match && fallbackHotel && citiesLikelySame(deriveHotelSearchCityFromReservation(fallbackHotel) ?? "", range.stop.name)) {
+      match = fallbackHotel;
+    }
     return {
       id: `plan-stay-${index}-${range.checkIn}`,
       city,

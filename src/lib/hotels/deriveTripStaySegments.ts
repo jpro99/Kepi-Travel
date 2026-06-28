@@ -1,5 +1,6 @@
 import { formatHotelSearchCityLabel } from "@/lib/hotels/tripSearchContext";
 import { resolveHotelDestination } from "@/lib/hotels/resolveDestination";
+import { enrichHotelReservationForMatching } from "@/lib/hotels/hotelReservationCity";
 import { resolveHotelForStaySegment } from "@/lib/hotels/hotelStayMatch";
 import {
   classifyStayStop,
@@ -103,7 +104,8 @@ function segmentBookingStatus(
   segment: TripStaySegmentInput,
   hotels: DeriveTripStaySegmentsInput["hotels"],
 ): Pick<TripStaySegment, "status" | "reservationId" | "reservationTitle"> {
-  return resolveHotelForStaySegment(segment, hotels);
+  const enriched = hotels.map(enrichHotelReservationForMatching);
+  return resolveHotelForStaySegment(segment, enriched);
 }
 
 function buildSegmentLabel(

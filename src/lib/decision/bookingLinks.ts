@@ -367,3 +367,46 @@ export function resolveHotelBookUrl(input: {
     bookingComUrl,
   };
 }
+
+/** Link-out for redeeming hotel points on the chain site (not Kepi checkout). */
+export function resolveHotelPointsBookUrl(input: {
+  propertyName: string;
+  chainName?: string;
+  programName?: string;
+  destination?: string;
+  address?: string;
+  checkInDate: string;
+  checkOutDate: string;
+}): { url: string; label: string; bookingComUrl?: string } {
+  const chainUrl = input.chainName ? resolveHotelChainHomeUrl(input.chainName) : null;
+  const chainLabel = input.programName ?? input.chainName?.split(" ")[0] ?? "Hotel";
+  const bookingComUrl =
+    buildBookingComSearchUrl({
+      destination: input.destination ?? "",
+      checkInDate: input.checkInDate,
+      checkOutDate: input.checkOutDate,
+      propertyName: input.propertyName,
+    }) ?? undefined;
+
+  if (chainUrl) {
+    return {
+      url: chainUrl,
+      label: `Redeem ${chainLabel} points on ${chainLabel}.com ↗`,
+      bookingComUrl,
+    };
+  }
+
+  const googleUrl = buildGoogleHotelsUrl({
+    propertyName: input.propertyName,
+    destination: input.destination,
+    address: input.address,
+    checkInDate: input.checkInDate,
+    checkOutDate: input.checkOutDate,
+  });
+
+  return {
+    url: googleUrl,
+    label: "Compare cash vs points on Google ↗",
+    bookingComUrl,
+  };
+}

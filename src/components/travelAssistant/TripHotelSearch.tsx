@@ -339,6 +339,7 @@ export function TripHotelSearch({
       rows = rows.filter((hotel) => hotel.inSearchCity !== false);
     }
     if (sortMode === "points" || payMode === "points") {
+      rows = rows.filter((hotel) => hotel.pointsOption && hotel.pointsOption.milesNeeded > 0);
       rows.sort((a, b) => {
         const aCpp = a.pointsOption?.cppAchieved ?? 0;
         const bCpp = b.pointsOption?.cppAchieved ?? 0;
@@ -445,6 +446,7 @@ export function TripHotelSearch({
         hotel={hotel}
         totalInSearch={results.length}
         compact
+        payMode={payMode}
         selected={mapSelectedId === hotel.id || detailHotelId === hotel.id}
         onSelect={() => openDetail(hotel)}
         onAdd={() => openDetail(hotel)}
@@ -569,6 +571,7 @@ export function TripHotelSearch({
           <div className="flex flex-wrap items-center gap-1.5">
             {(
               [
+                ["any", "Cash + points"],
                 ["cash", "Cash"],
                 ["points", "Points"],
               ] as const
@@ -581,20 +584,23 @@ export function TripHotelSearch({
                   if (mode === "points") setSortMode("points");
                   else if (sortMode === "points") setSortMode("browse");
                 }}
-                className={`rounded-full px-3 py-1 text-[10px] font-bold ${
+                className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
                   payMode === mode ? "bg-emerald-600 text-white" : "border border-slate-300 text-slate-600"
                 }`}
               >
                 {label}
               </button>
             ))}
-            <span className="text-[10px] text-slate-400">|</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
             {(
               [
                 ["browse", "Browse all"],
                 ["price", "Lowest price"],
                 ["rating", "Top rated"],
                 ["match", "Best match"],
+                ...(payMode === "points" || payMode === "any" ? ([["points", "Best points"]] as const) : []),
               ] as const
             ).map(([mode, label]) => (
               <button
@@ -676,6 +682,7 @@ export function TripHotelSearch({
                   selectedId={mapSelectedId}
                   onSelect={openDetail}
                   onBoundsChange={setMapBounds}
+                  payMode={payMode}
                   expanded
                 />
                 {detailHotel ? null : visibleResults.length > 0 ? (
@@ -701,6 +708,7 @@ export function TripHotelSearch({
               allHotels={visibleResults}
               city={resolvedCity ?? city}
               memberHotelPricing={memberHotelPricing}
+              payMode={payMode}
               saved={savedHotelIds.has(detailHotel.id)}
               usePoints={payMode === "points"}
               onSaveToTrip={() => handleSaveToTrip(detailHotel)}

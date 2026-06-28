@@ -22,10 +22,27 @@ function cityEmoji(city: string): string {
 }
 
 export function TripHotelCityPicker({ cities, tripName, onPickCity }: TripHotelCityPickerProps) {
+  const needed = cities.filter((city) => city.status === "needed");
+  const booked = cities.filter((city) => city.status === "booked");
+
   if (cities.length === 0) return null;
 
-  const booked = cities.filter((city) => city.status === "booked").length;
-  const needed = cities.length - booked;
+  if (needed.length === 0) {
+    return (
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/30">
+        <p className="text-sm font-bold text-emerald-900 dark:text-emerald-100">
+          {tripName ? `${tripName} · ` : ""}Your hotel{booked.length === 1 ? "" : "s"} {booked.length === 1 ? "is" : "are"} set ✓
+        </p>
+        {booked.map((city) => (
+          <p key={city.id} className="mt-1 text-xs text-emerald-800 dark:text-emerald-200">
+            {city.city.split("(")[0]?.trim()} · {city.hotelName ?? "Booked"}
+          </p>
+        ))}
+      </div>
+    );
+  }
+
+  const bookedCount = booked.length;
 
   return (
     <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-sky-600 to-cyan-500 p-[1px] shadow-lg">
@@ -36,13 +53,12 @@ export function TripHotelCityPicker({ cities, tripName, onPickCity }: TripHotelC
         </h3>
         <p className="mt-1 text-xs leading-relaxed text-sky-100/75">
           {tripName ? `${tripName} · ` : ""}
-          {booked > 0 ? `${booked} booked` : ""}
-          {booked > 0 && needed > 0 ? " · " : ""}
-          {needed > 0 ? `${needed} ready to search` : " — tap a city to browse again"}
+          {bookedCount > 0 ? `${bookedCount} booked · ` : ""}
+          {needed.length} still need{needed.length === 1 ? "s" : ""} a hotel
         </p>
 
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          {cities.map((city) => {
+          {needed.map((city) => {
             const isBooked = city.status === "booked";
             return (
               <button

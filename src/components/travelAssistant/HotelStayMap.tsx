@@ -6,6 +6,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fitScoreRange, hotelMapPinStyle } from "@/lib/hotels/hotelMapColors";
 import type { MapBounds } from "@/lib/hotels/hotelCoordinates";
 import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
+import type { HotelPayMode } from "@/lib/hotels/hotelPointsDisplay";
+import { resolveHotelMapPinLabel } from "@/lib/hotels/hotelPointsDisplay";
 import type { TransitStop } from "@/lib/hotels/nearbyTransit";
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
 
@@ -23,19 +25,19 @@ interface HotelStayMapProps {
   onSelect: (hotel: RankedHotelSearchResult) => void;
   onBoundsChange?: (bounds: MapBounds) => void;
   expanded?: boolean;
+  payMode?: HotelPayMode;
 }
 
 function createPricePin(
   hotel: RankedHotelSearchResult,
   selected: boolean,
   style: ReturnType<typeof hotelMapPinStyle>,
+  payMode: HotelPayMode,
 ): HTMLButtonElement {
   const el = document.createElement("button");
   el.type = "button";
-  const hasLiveRate = !hotel.browseOnly && hotel.pricePerNight > 0;
-  el.title = hasLiveRate
-    ? `${hotel.name} · $${Math.round(hotel.pricePerNight)}/night`
-    : `${hotel.name} · check price on Google`;
+  const pin = resolveHotelMapPinLabel(hotel, payMode);
+  el.title = pin.title;
   el.className = "flex flex-col items-center border-0 bg-transparent p-0";
 
   const badge = document.createElement("span");
@@ -43,7 +45,7 @@ function createPricePin(
   badge.style.backgroundColor = style.bg;
   badge.style.color = style.text;
   if (selected) badge.style.boxShadow = `0 0 0 2px ${style.ring}`;
-  badge.textContent = hasLiveRate ? `$${Math.round(hotel.pricePerNight)}` : "G";
+  badge.textContent = pin.text;
 
   const dot = document.createElement("span");
   dot.className = "mt-0.5 h-1.5 w-1.5 rounded-full";
@@ -82,6 +84,7 @@ export function HotelStayMap({
   onSelect,
   onBoundsChange,
   expanded = false,
+  payMode = "any",
 }: HotelStayMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import("maplibre-gl").Map | null>(null);
@@ -125,7 +128,7 @@ export function HotelStayMap({
 
     for (const hotel of hotels) {
       const style = hotelMapPinStyle(hotel, scoreRange);
-      const el = createPricePin(hotel, selectedId === hotel.id, style);
+      const el = createPricePin(hotel, selectedId === hotel.id, style, payMode);
       el.onclick = () => onSelect(hotel);
 
       const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
@@ -133,7 +136,7 @@ export function HotelStayMap({
         .addTo(mapRef.current);
       hotelMarkersRef.current.push(marker);
     }
-  }, [ready, hotels, selectedId, onSelect, scoreRange]);
+  }, [ready, hotels, selectedId, onSelect, scoreRange, payMode]);
 
   useEffect(() => {
     if (!ready || !mapRef.current || hotels.length === 0) return;

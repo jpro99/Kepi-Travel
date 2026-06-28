@@ -1,6 +1,8 @@
 "use client";
 
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
+import type { HotelPayMode } from "@/lib/hotels/hotelPointsDisplay";
+import { pointsPerNight } from "@/lib/hotels/hotelPointsDisplay";
 
 function starLabel(count: number): string {
   const rounded = Math.max(0, Math.min(5, Math.round(count)));
@@ -16,6 +18,7 @@ interface HotelRankCardProps {
   onAdd: () => void;
   onDismiss: () => void;
   onSelect?: () => void;
+  payMode?: HotelPayMode;
 }
 
 export function HotelRankCard({
@@ -27,7 +30,11 @@ export function HotelRankCard({
   onAdd,
   onDismiss,
   onSelect,
+  payMode = "any",
 }: HotelRankCardProps) {
+  const nightlyPts = pointsPerNight(hotel);
+  const showPoints = payMode === "points" || payMode === "any";
+
   if (compact) {
     return (
       <article
@@ -66,10 +73,19 @@ export function HotelRankCard({
               <p className="text-[11px] font-black text-sky-700 dark:text-sky-300">Google</p>
               <p className="text-[9px] text-slate-400">check price</p>
             </>
+          ) : payMode === "points" && nightlyPts ? (
+            <>
+              <p className="text-sm font-black text-violet-700 dark:text-violet-300">{nightlyPts.toLocaleString()}</p>
+              <p className="text-[9px] text-slate-400">pts / night</p>
+              <p className="text-[9px] text-slate-500">${Math.round(hotel.pricePerNight)} cash</p>
+            </>
           ) : (
             <>
               <p className="text-sm font-black text-slate-900 dark:text-white">${Math.round(hotel.pricePerNight)}</p>
               <p className="text-[9px] text-slate-400">/ night</p>
+              {showPoints && nightlyPts ? (
+                <p className="text-[9px] font-semibold text-violet-700 dark:text-violet-300">{nightlyPts.toLocaleString()} pts</p>
+              ) : null}
             </>
           )}
         </div>
@@ -119,10 +135,29 @@ export function HotelRankCard({
             ) : null}
           </div>
           <div className="shrink-0 text-right">
-            <p className={`text-lg font-black ${featured && isKepiPick ? "text-[#f4c95d]" : "text-slate-900 dark:text-white"}`}>
-              ${Math.round(hotel.pricePerNight)}
-            </p>
-            <p className={`text-[10px] ${featured && isKepiPick ? "text-slate-400" : "text-slate-500"}`}>/ night</p>
+            {payMode === "points" && nightlyPts ? (
+              <>
+                <p className={`text-lg font-black ${featured && isKepiPick ? "text-[#f4c95d]" : "text-violet-700 dark:text-violet-300"}`}>
+                  {nightlyPts.toLocaleString()}
+                </p>
+                <p className={`text-[10px] ${featured && isKepiPick ? "text-slate-400" : "text-slate-500"}`}>pts / night</p>
+                <p className={`text-[10px] ${featured && isKepiPick ? "text-slate-400" : "text-slate-500"}`}>
+                  ${Math.round(hotel.totalPrice)} cash total
+                </p>
+              </>
+            ) : (
+              <>
+                <p className={`text-lg font-black ${featured && isKepiPick ? "text-[#f4c95d]" : "text-slate-900 dark:text-white"}`}>
+                  ${Math.round(hotel.pricePerNight)}
+                </p>
+                <p className={`text-[10px] ${featured && isKepiPick ? "text-slate-400" : "text-slate-500"}`}>/ night</p>
+                {showPoints && nightlyPts ? (
+                  <p className={`text-[10px] font-semibold ${featured && isKepiPick ? "text-violet-200" : "text-violet-700 dark:text-violet-300"}`}>
+                    {hotel.pointsOption?.milesNeeded.toLocaleString()} pts total
+                  </p>
+                ) : null}
+              </>
+            )}
           </div>
         </div>
 

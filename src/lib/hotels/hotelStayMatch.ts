@@ -1,3 +1,4 @@
+import { deriveHotelSearchCityFromReservation } from "@/lib/hotels/hotelReservationCity";
 import { formatHotelSearchCityLabel } from "@/lib/hotels/tripSearchContext";
 
 export interface HotelReservationMatchInput {
@@ -67,6 +68,21 @@ export function hotelReservationMatchesCity(
     if (savedKeys.some((saved) => targetKeys.some((target) => saved === target || saved.includes(target) || target.includes(saved)))) {
       return true;
     }
+  }
+
+  const derivedCity = deriveHotelSearchCityFromReservation(hotel);
+  if (
+    derivedCity &&
+    !hotel.hotelSearchCity?.trim() &&
+    hotelReservationMatchesCity({ ...hotel, hotelSearchCity: derivedCity }, targetCity)
+  ) {
+    return true;
+  }
+
+  const stem = normalizeCityKey(targetCity);
+  if (stem.length >= 4) {
+    const titleBlob = `${hotel.title ?? ""} ${hotel.provider ?? ""}`.toLowerCase();
+    if (titleBlob.includes(stem)) return true;
   }
 
   return cityMatchKeys(targetCity).some((key) => haystack.includes(key));

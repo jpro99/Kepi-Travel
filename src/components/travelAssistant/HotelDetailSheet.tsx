@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useUser } from "@clerk/nextjs";
-import { resolveHotelBookUrl } from "@/lib/decision/bookingLinks";
+import { resolveHotelBookUrl, resolveHotelPointsBookUrl } from "@/lib/decision/bookingLinks";
 import { hotelMapPinStyle, fitScoreRange } from "@/lib/hotels/hotelMapColors";
+import type { HotelPayMode } from "@/lib/hotels/hotelPointsDisplay";
+import { pointsPerNight } from "@/lib/hotels/hotelPointsDisplay";
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
 
 interface HotelDetailSheetProps {
@@ -12,6 +14,7 @@ interface HotelDetailSheetProps {
   allHotels: RankedHotelSearchResult[];
   city: string;
   memberHotelPricing?: boolean;
+  payMode?: HotelPayMode;
   saved?: boolean;
   usePoints?: boolean;
   onSaveToTrip: () => void;
@@ -23,6 +26,7 @@ export function HotelDetailSheet({
   allHotels,
   city,
   memberHotelPricing = false,
+  payMode = "any",
   saved = false,
   usePoints = false,
   onSaveToTrip,
@@ -70,10 +74,22 @@ export function HotelDetailSheet({
     usePoints,
   });
 
+  const pointsBook = resolveHotelPointsBookUrl({
+    propertyName: hotel.name,
+    chainName: hotel.chainName,
+    programName: hotel.pointsOption?.programName,
+    destination: city,
+    address: hotel.address,
+    checkInDate: hotel.checkIn,
+    checkOutDate: hotel.checkOut,
+  });
+
   const pinStyle = hotelMapPinStyle(hotel, fitScoreRange(allHotels));
   const photos = hotel.photos.filter(Boolean);
   const hasLiveRate = !hotel.browseOnly && hotel.pricePerNight > 0;
-  const kepiBookable = Boolean(hotel.kepiBookable && hotel.bookOfferId && hasLiveRate);
+  const kepiBookable = Boolean(hotel.kepiBookable && hotel.bookOfferId && hasLiveRate) && payMode !== "points";
+  const nightlyPts = pointsPerNight(hotel);
+  const pointsMode = payMode === "points";
 
   const startKepiCheckout = async (): Promise<void> => {
     if (!hotel.bookOfferId) return;
@@ -163,11 +179,28 @@ export function HotelDetailSheet({
               <div className="text-right">
                 {hasLiveRate ? (
                   <>
-                    <p className="text-xl font-black text-slate-900 dark:text-white">${Math.round(hotel.pricePerNight)}</p>
-                    <p className="text-[10px] text-slate-500">/ night · ${Math.round(hotel.totalPrice)} total</p>
-                    {memberHotelPricing ? (
+                    {pointsMode && nightlyPts ? (
+                      <>
+                        <p className="text-xl font-black text-violet-700 dark:text-violet-300">{nightlyPts.toLocaleString()}</p>
+                        <p className="text-[10px] text-slate-500">pts / night · {hotel.pointsOption?.programName}</p>
+                        <p className="text-[10px] font-semibold text-slate-600 dark:text-slate-300">
+                          ${Math.round(hotel.pricePerNight)}/night · ${Math.round(hotel.totalPrice)} cash
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xl font-black text-slate-900 dark:text-white">${Math.round(hotel.pricePerNight)}</p>
+                        <p className="text-[10px] text-slate-500">/ night · ${Math.round(hotel.totalPrice)} total</p>
+                        {nightlyPts ? (
+                          <p className="text-[10px] font-semibold text-violet-700 dark:text-violet-300">
+                            ~{hotel.pointsOption?.milesNeeded.toLocaleString()} {hotel.pointsOption?.programName} pts
+                          </p>
+                        ) : null}
+                      </>
+                    )}
+                    {memberHotelPricing && !pointsMode ? (
                       <p className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">Member rate</p>
-                    ) : hotel.memberTotalPrice ? (
+                    ) : hotel.memberTotalPrice && !pointsMode ? (
                       <p className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
                         Pro: ${Math.round(hotel.memberTotalPrice)} at cost
                       </p>
@@ -175,7 +208,7 @@ export function HotelDetailSheet({
                   </>
                 ) : (
                   <>
-                    <p className="text-sm font-black text-sky-700 dark:text-sky-300">Check Google</p>
+                    <p className="text-sm font-black text-sky-700 dark:text-sky-300">Check chain site</p>
                     <p className="text-[10px] text-slate-500">Live rate not in Kepi</p>
                   </>
                 )}
@@ -273,7 +306,16 @@ export function HotelDetailSheet({
               </div>
             ) : (
               <div className="grid gap-2 sm:grid-cols-2">
-                {kepiBookable ? (
+                {pointsMode || (payMode === "any" && nightlyPts && !kepiBookable) ? (
+                  <a
+                    href={pointsBook.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center rounded-xl bg-violet-700 py-3 text-sm font-black text-white hover:bg-violet-600"
+                  >
+                    {pointsBook.label}
+                  </a>
+                ) : kepiBookable ? (
                   <button
                     type="button"
                     onClick={() => setCheckoutOpen(true)}
@@ -288,17 +330,37 @@ export function HotelDetailSheet({
                     rel="noopener noreferrer"
                     className="flex items-center justify-center rounded-xl bg-sky-600 py-3 text-sm font-black text-white hover:bg-sky-500"
                   >
-                    {usePoints ? "Book with points on chain site →" : "View rooms & prices →"}
+                    {book.label}
                   </a>
                 )}
-                {kepiBookable ? (
+                {pointsMode ? (
+                  hasLiveRate ? (
+                    <a
+                      href={book.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center rounded-xl border border-slate-300 py-3 text-sm font-bold text-slate-800 dark:border-slate-600 dark:text-slate-100"
+                    >
+                      ${Math.round(hotel.totalPrice)} cash on Google →
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={onSaveToTrip}
+                      disabled={saved}
+                      className="rounded-xl border border-slate-300 py-3 text-sm font-bold text-slate-800 disabled:border-emerald-400 disabled:bg-emerald-50 disabled:text-emerald-800 dark:border-slate-600 dark:text-slate-100"
+                    >
+                      {saved ? "Saved to your trip ✓" : "Save to my trip"}
+                    </button>
+                  )
+                ) : kepiBookable ? (
                   <a
-                    href={book.url}
+                    href={pointsBook.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center justify-center rounded-xl border border-slate-300 py-3 text-sm font-bold text-slate-800 dark:border-slate-600 dark:text-slate-100"
+                    className="flex items-center justify-center rounded-xl border border-violet-300 py-3 text-sm font-bold text-violet-900 dark:border-violet-800 dark:text-violet-100"
                   >
-                    Compare on Google →
+                    {nightlyPts ? `Redeem ~${nightlyPts.toLocaleString()} pts/night ↗` : pointsBook.label}
                   </a>
                 ) : (
                   <button
@@ -336,11 +398,13 @@ export function HotelDetailSheet({
             ) : null}
 
             <p className="text-[10px] leading-relaxed text-slate-400">
-              {kepiBookable
-                ? "Book in Kepi with Stripe — your confirmation is saved to your trip automatically. Google Hotels is still available to compare room types and cancellation rules."
-                : hasLiveRate
-                  ? "Book on Google Hotels or the hotel chain to see live room types, photos, and cancellation rules. Saving here adds it to your Kepi itinerary."
-                  : "Kepi could not fetch a live rate for these dates — Google Hotels shows pricing from many booking sites. Saving here adds the hotel to your itinerary."}
+              {pointsMode
+                ? "Point estimates use your loyalty wallet and typical cents-per-point values. Redeem on the hotel chain site for full elite benefits — Kepi cash checkout does not earn chain points."
+                : kepiBookable
+                  ? "Book in Kepi with Stripe — your confirmation is saved to your trip automatically. Use Redeem points for chain loyalty stays."
+                  : hasLiveRate
+                    ? "Book on the hotel chain or Google for live room types and loyalty credit. Saving here adds it to your Kepi itinerary."
+                    : "Kepi could not fetch a live rate for these dates — open the chain site or Google Hotels for pricing."}
             </p>
           </div>
         </div>

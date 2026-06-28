@@ -6,6 +6,7 @@ import { TripStayPlanner } from "@/components/travelAssistant/TripStayPlanner";
 import { TripHotelCityPicker } from "@/components/travelAssistant/TripHotelCityPicker";
 import type { PlannedStayCity } from "@/lib/travelAssistant/tripPlanBooking";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
+import { segmentsNeedingHotel } from "@/lib/hotels/deriveTripStaySegments";
 
 interface Reservation {
   id: string;
@@ -116,6 +117,7 @@ export function HotelsTab({
   }), [reservations]);
 
   const shown = showPast ? [...upcoming, ...past] : upcoming;
+  const staySegmentsNeedingHotel = segmentsNeedingHotel(staySegments);
 
   return (
     <section className="space-y-4 pb-6">
@@ -159,7 +161,7 @@ export function HotelsTab({
         />
       ) : null}
 
-      {staySegments.length > 0 && onSearchSegment && plannedStayCities.length === 0 ? (
+      {staySegmentsNeedingHotel.length > 0 && onSearchSegment && plannedStayCities.length === 0 ? (
         <TripStayPlanner
           segments={staySegments}
           tripName={tripName}
