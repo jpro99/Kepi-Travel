@@ -5882,7 +5882,7 @@ export default function TravelAssistantPage() {
       setTicketScanBusy(true);
       try {
         const formData = new FormData();
-        formData.append("image", file);
+        formData.append("file", file);
         const response = await fetch("/api/travel-updates?action=ticket-scan", {
           method: "POST",
           body: formData,
@@ -5892,6 +5892,7 @@ export default function TravelAssistantPage() {
         const payload = (await response.json()) as {
           error?: string;
           draft?: ReservationDraft;
+          scanKind?: "pdf" | "image";
         };
         if (!response.ok || !payload.draft) {
           throw new Error(payload.error ?? `Ticket scan failed (${response.status})`);
@@ -5915,8 +5916,15 @@ export default function TravelAssistantPage() {
         };
         const reviewItem: ReviewItem = {
           id: nextId("review"),
-          reasons: ["Scanned from ticket image. Confirm details before publishing."],
-          impact: "Ticket details were extracted from a photo and need confirmation.",
+          reasons: [
+            payload.scanKind === "pdf"
+              ? "Read from confirmation PDF. Confirm details before publishing."
+              : "Scanned from ticket image. Confirm details before publishing.",
+          ],
+          impact:
+            payload.scanKind === "pdf"
+              ? "Reservation details were extracted from a PDF and need confirmation."
+              : "Ticket details were extracted from a photo and need confirmation.",
           sourceEmailSubject: `Scanned ticket: ${file.name || "image upload"}`,
           sourceChannel: "manual",
           parseConfidenceScore: 55,
@@ -5934,7 +5942,11 @@ export default function TravelAssistantPage() {
         setFlightLookupBusy(false);
         setActiveDrawer({ kind: "review", id: reviewItem.id });
         setConsumerTab("flights");
-        setToast("Ticket scanned. Review and confirm before saving.");
+        setToast(
+          payload.scanKind === "pdf"
+            ? "PDF read. Review and confirm before saving."
+            : "Ticket scanned. Review and confirm before saving.",
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : "Ticket scan failed.";
         setToast(message);
@@ -9090,6 +9102,8 @@ export default function TravelAssistantPage() {
               flightSearchDefaults={flightSearchDefaults}
               pendingForwardReview={firstForwardedFlightReview}
               onOpenForwardReview={(reviewId) => openDrawer("review", reviewId)}
+              onImportConfirmation={(file) => void handleTicketScanUpload(file)}
+              importConfirmationBusy={ticketScanBusy}
               liveStatus={flightStatusCheckByReservationId}
               locationStatus={guidanceLocationStatus}
               nearestAirport={guidanceNearestAirport}

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { TripFlightLegPicker } from "@/components/travelAssistant/TripFlightLegPicker";
 import { InterCityTransportPrompts } from "@/components/travelAssistant/InterCityTransportPrompts";
 import { FlightSearchLauncher, type FlightSearchDefaults } from "@/components/travelAssistant/FlightSearchLauncher";
+import { ImportConfirmationDropzone } from "@/components/travelAssistant/ImportConfirmationDropzone";
 import { FlightSearchModal } from "@/components/travelAssistant/FlightSearchModal";
 import type { FlightSearchPlan, PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
 import { buildGateInstructions, getAirportNav, buildArrivalGuide } from "@/lib/travelAssistant/airportNavigation";
@@ -58,6 +59,8 @@ interface FlightsTabProps {
   flightSearchDefaults?: FlightSearchDefaults;
   pendingForwardReview?: { id: string; reason: string; subject?: string } | null;
   onOpenForwardReview?: (reviewId: string) => void;
+  onImportConfirmation?: (file: File) => void;
+  importConfirmationBusy?: boolean;
   liveStatus?: Record<string, LiveStatusResult>;
   locationStatus?: "away" | "at-airport" | "in-terminal" | "airborne" | "unknown";
   nearestAirport?: string;
@@ -448,6 +451,8 @@ export function FlightsTab({
   flightSearchDefaults,
   pendingForwardReview,
   onOpenForwardReview,
+  onImportConfirmation,
+  importConfirmationBusy = false,
   liveStatus = {}, locationStatus = "unknown", nearestAirport = "",
   onReservationTap, onCheckStatus, onDelete, onAdd,
 }: FlightsTabProps) {
@@ -531,6 +536,13 @@ export function FlightsTab({
             Tap to confirm and add to your flights →
           </p>
         </button>
+      ) : null}
+
+      {onImportConfirmation ? (
+        <ImportConfirmationDropzone
+          busy={importConfirmationBusy}
+          onFile={onImportConfirmation}
+        />
       ) : null}
 
       <FlightSearchModal
