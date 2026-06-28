@@ -19,6 +19,7 @@ import {
 import type { HotelSearchResult, RankedHotelSearchResult } from "@/lib/hotels/types";
 
 type PayMode = "any" | "cash" | "points";
+type SortMode = "browse" | "price" | "rating" | "match" | "points";
 type ResultsView = "map" | "list";
 
 async function recordHotelMemory(event: {
@@ -174,6 +175,11 @@ export function TripHotelSearch({
   const [showResults, setShowResults] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [payMode, setPayMode] = useState<PayMode>("any");
+  const [sortMode, setSortMode] = useState<SortMode>("browse");
+  const [showNearby, setShowNearby] = useState(false);
+  const [inventoryNote, setInventoryNote] = useState<string | null>(null);
+  const [googleHotelsUrl, setGoogleHotelsUrl] = useState<string | null>(null);
+  const [inCityCount, setInCityCount] = useState(0);
   const [resultsView, setResultsView] = useState<ResultsView>("map");
   const [mapSelectedId, setMapSelectedId] = useState<string | null>(null);
   const [detailHotelId, setDetailHotelId] = useState<string | null>(null);
@@ -229,6 +235,10 @@ export function TripHotelSearch({
         city?: string;
         correctedFrom?: string | null;
         preferenceInsight?: string | null;
+        inventoryNote?: string | null;
+        googleHotelsUrl?: string | null;
+        inCityCount?: number;
+        nearbyCount?: number;
         resolved?: { lat: number; lng: number; iata?: string | null };
       };
       if (!response.ok) {
@@ -240,6 +250,11 @@ export function TripHotelSearch({
       setResolvedCity(payload.city ?? destination);
       setCorrectedFrom(payload.correctedFrom ?? null);
       setPreferenceInsight(payload.preferenceInsight ?? null);
+      setInventoryNote(payload.inventoryNote ?? null);
+      setGoogleHotelsUrl(payload.googleHotelsUrl ?? null);
+      setInCityCount(payload.inCityCount ?? 0);
+      setShowNearby(false);
+      setSortMode("browse");
       if (payload.resolved?.lat && payload.resolved?.lng) {
         setCityCenter({ lat: payload.resolved.lat, lng: payload.resolved.lng });
         setHotelsWithCoords(
@@ -281,14 +296,30 @@ export function TripHotelSearch({
 
   const visibleResults = useMemo(() => {
     let rows = results.filter((hotel) => !dismissedIds.has(hotel.id));
-    if (payMode === "points") {
+    if (!showNearby) {
+      rows = rows.filter((hotel) => hotel.inSearchCity !== false);
+    }
+    if (sortMode === "points" || payMode === "points") {
       rows = rows.filter((hotel) => hotel.pointsOption && hotel.pointsOption.cppAchieved >= 0.8);
       rows.sort((a, b) => (b.pointsOption?.cppAchieved ?? 0) - (a.pointsOption?.cppAchieved ?? 0));
-    } else if (payMode === "cash") {
+    } else if (sortMode === "price" || sortMode === "browse" || payMode === "cash") {
       rows.sort((a, b) => a.pricePerNight - b.pricePerNight);
+    } else if (sortMode === "rating") {
+      rows.sort((a, b) => (b.rating ?? b.stars) - (a.rating ?? a.stars));
+    } else if (sortMode === "match") {
+      rows.sort((a, b) => a.rank - b.rank);
     }
     return rows;
-  }, [results, dismissedIds, payMode]);
+  }, [results, dismissedIds, payMode, sortMode, showNearby]);
+
+  const inCityHotels = useMemo(
+    () => visibleResults.filter((hotel) => hotel.inSearchCity !== false),
+    [visibleResults],
+  );
+  const nearbyHotels = useMemo(
+    () => visibleResults.filter((hotel) => hotel.inSearchCity === false),
+    [visibleResults],
+  );
 
   const mappedHotels = useMemo(() => {
     if (hotelsWithCoords.length > 0) {
@@ -362,6 +393,38 @@ export function TripHotelSearch({
     );
   };
 
+  const renderHotelRow = (hotel: RankedHotelSearchResult): ReactNode => (
+    <div key={hotel.id} data-hotel-id={hotel.id}>
+      <HotelRankCard
+        hotel={hotel}
+        totalInSearch={results.length}
+        compact
+        selected={mapSelectedId === hotel.id || detailHotelId === hotel.id}
+        onSelect={() => openDetail(hotel)}
+        onAdd={() => openDetail(hotel)}
+        onDismiss={() => handleDismiss(hotel)}
+      />
+    </div>
+  );
+
+  const renderHotelListSections = (): ReactNode => {
+    if (showNearby && nearbyHotels.length > 0 && inCityHotels.length > 0) {
+      return (
+        <>
+          <p className="px-1 text-[9px] font-bold uppercase tracking-wider text-slate-500">
+            In {resolvedCity?.split(",")[0]?.trim() ?? "town"} ({inCityHotels.length})
+          </p>
+          {inCityHotels.map((hotel) => renderHotelRow(hotel))}
+          <p className="mt-2 px-1 text-[9px] font-bold uppercase tracking-wider text-slate-500">
+            Nearby ({nearbyHotels.length})
+          </p>
+          {nearbyHotels.map((hotel) => renderHotelRow(hotel))}
+        </>
+      );
+    }
+    return mappedHotels.map((hotel) => renderHotelRow(hotel));
+  };
+
   return (
     <div className="space-y-3">
       {!showResults ? (
@@ -429,7 +492,23 @@ export function TripHotelSearch({
             <p className="text-[11px] text-emerald-700 dark:text-emerald-300">Showing hotels near <strong>{resolvedCity}</strong> (corrected from &ldquo;{correctedFrom}&rdquo;).</p>
           ) : null}
 
-          {(preferenceInsight || learningNote) ? (
+          {inventoryNote ? (
+            <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40">
+              <p className="text-[11px] leading-relaxed text-amber-950 dark:text-amber-100">{inventoryNote}</p>
+              {googleHotelsUrl ? (
+                <a
+                  href={googleHotelsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex text-[11px] font-bold text-sky-700 underline dark:text-sky-300"
+                >
+                  Browse all hotels on Google →
+                </a>
+              ) : null}
+            </div>
+          ) : null}
+
+          {(preferenceInsight || learningNote) && !inventoryNote ? (
             <p className="rounded-lg border border-sky-200/80 bg-sky-50/80 px-3 py-2 text-[11px] leading-relaxed text-sky-950 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">
               {learningNote ?? preferenceInsight}
             </p>
@@ -441,19 +520,37 @@ export function TripHotelSearch({
             </p>
           ) : null}
 
-          <div className="flex flex-wrap gap-1.5">
-            {(["any", "cash", "points"] as PayMode[]).map((mode) => (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(
+              [
+                ["browse", "Browse all"],
+                ["price", "Lowest price"],
+                ["rating", "Top rated"],
+                ["match", "Best match"],
+              ] as const
+            ).map(([mode, label]) => (
               <button
                 key={mode}
                 type="button"
-                onClick={() => setPayMode(mode)}
+                onClick={() => setSortMode(mode)}
                 className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
-                  payMode === mode ? "bg-slate-800 text-white" : "border border-slate-300 text-slate-600"
+                  sortMode === mode ? "bg-slate-800 text-white" : "border border-slate-300 text-slate-600"
                 }`}
               >
-                {mode === "any" ? "Best fit" : mode === "cash" ? "Lowest cash" : "Points"}
+                {label}
               </button>
             ))}
+            {(results.length - inCityCount) > 0 ? (
+              <button
+                type="button"
+                onClick={() => setShowNearby((value) => !value)}
+                className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                  showNearby ? "bg-sky-600 text-white" : "border border-sky-300 text-sky-700"
+                }`}
+              >
+                {showNearby ? "In town only" : `+ Nearby (${results.length - inCityCount})`}
+              </button>
+            ) : null}
           </div>
 
           {loading ? (
@@ -472,10 +569,9 @@ export function TripHotelSearch({
               <div className="order-2 flex min-h-0 flex-col lg:order-1 lg:max-h-[58vh]">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                    {visibleResults.length} hotel{visibleResults.length === 1 ? "" : "s"}
-                    {mapBounds && hotelsInView.length < mappedHotels.length
-                      ? ` · zoomed to ${hotelsInView.length}`
-                      : ""}
+                    {showNearby
+                      ? `${visibleResults.length} hotels`
+                      : `${inCityHotels.length} in ${resolvedCity?.split(",")[0]?.trim() ?? "town"}`}
                   </p>
                 </div>
                 {visibleResults.length === 0 ? (
@@ -484,19 +580,7 @@ export function TripHotelSearch({
                   </p>
                 ) : (
                   <div className="min-h-[12rem] flex-1 space-y-1.5 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50/80 p-2 dark:border-slate-700 dark:bg-slate-900/40 lg:max-h-[58vh]">
-                    {mappedHotels.map((hotel) => (
-                      <div key={hotel.id} data-hotel-id={hotel.id}>
-                        <HotelRankCard
-                          hotel={hotel}
-                          totalInSearch={results.length}
-                          compact
-                          selected={mapSelectedId === hotel.id}
-                          onSelect={() => openDetail(hotel)}
-                          onAdd={() => openDetail(hotel)}
-                          onDismiss={() => handleDismiss(hotel)}
-                        />
-                      </div>
-                    ))}
+                    {renderHotelListSections()}
                   </div>
                 )}
               </div>
@@ -534,18 +618,7 @@ export function TripHotelSearch({
           {!loading && visibleResults.length > 0 && resultsView === "list" ? (
             <div className="space-y-3">
               <div className="max-h-[28rem] space-y-1.5 overflow-y-auto">
-                {visibleResults.map((hotel) => (
-                  <HotelRankCard
-                    key={hotel.id}
-                    hotel={hotel}
-                    totalInSearch={results.length}
-                    compact
-                    selected={detailHotelId === hotel.id}
-                    onSelect={() => openDetail(hotel)}
-                    onAdd={() => openDetail(hotel)}
-                    onDismiss={() => handleDismiss(hotel)}
-                  />
-                ))}
+                {visibleResults.map((hotel) => renderHotelRow(hotel))}
               </div>
               {detailHotel ? (
                 <HotelDetailSheet

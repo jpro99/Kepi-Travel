@@ -1,6 +1,7 @@
 import type { ResolvedHotelDestination } from "@/lib/hotels/resolveDestination";
 import { HOTEL_CITY_COORDS } from "@/lib/hotels/resolveDestination";
 import type { HotelSearchResult } from "@/lib/hotels/types";
+import { isSmallDestination } from "@/lib/hotels/hotelCityScope";
 import {
   buildEstimatedStays,
   estimatedStaysNotice,
@@ -253,24 +254,31 @@ export async function searchHotelsLiveOrEstimated(input: {
       rooms: input.rooms,
     };
 
-    const primary = await searchLiteApiHotels(liteInput, { limit: 120, radiusMeters: 25_000 });
+    const primary = await searchLiteApiHotels(liteInput, { limit: 150, radiusMeters: 12_000 });
     merged = mergeHotelResults(merged, primary.hotels);
     liteApiError = primary.error ?? liteApiError;
 
-    if (merged.length < 35) {
+    if (isSmallDestination(input.resolved.displayName)) {
+      for (const radius of [3_000, 6_000, 10_000, 18_000, 28_000]) {
+        const batch = await searchLiteApiHotels(liteInput, { limit: 150, radiusMeters: radius });
+        merged = mergeHotelResults(merged, batch.hotels);
+        liteApiError = batch.error ?? liteApiError;
+      }
+    }
+
+    if (merged.length < 40) {
       const wide = await searchLiteApiHotels(liteInput, {
-        limit: 120,
-        radiusMeters: 40_000,
-        minRating: 2,
+        limit: 150,
+        radiusMeters: 45_000,
       });
       merged = mergeHotelResults(merged, wide.hotels);
       liteApiError = wide.error ?? liteApiError;
     }
 
     const nearbyIata = pickFallbackIata(input.resolved);
-    if (merged.length < 35 && nearbyIata) {
+    if (merged.length < 40 && nearbyIata) {
       const byAirport = await searchLiteApiHotels(liteInput, {
-        limit: 120,
+        limit: 150,
         forceIata: nearbyIata,
       });
       merged = mergeHotelResults(merged, byAirport.hotels);
@@ -283,11 +291,9 @@ export async function searchHotelsLiveOrEstimated(input: {
     const notice =
       duffel.error?.includes("Stays not enabled") || duffel.error?.includes("403")
         ? "Live rates via LiteAPI — Duffel Stays will take over when enabled on your account."
-        : merged.length > 40
-          ? `Showing ${merged.length} properties in the area (includes nearby towns).`
-          : undefined;
+        : undefined;
     return {
-      hotels: merged.slice(0, 80),
+      hotels: merged.slice(0, 100),
       source,
       notice,
       duffelError: duffel.error ?? liteApiError,

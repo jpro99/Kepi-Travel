@@ -53,4 +53,6 @@ export interface RankedHotelSearchResult extends HotelSearchResult {
   pointsOption?: HotelPointsOption;
   /** Human label for rank within this search (e.g. "#1 for your search"). */
   cityRankLabel?: string;
+  /** Property sits in the town the user searched (vs wider area inventory). */
+  inSearchCity?: boolean;
 }

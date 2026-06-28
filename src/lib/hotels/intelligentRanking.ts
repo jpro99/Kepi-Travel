@@ -69,46 +69,30 @@ function pickTier(args: {
   return "solid";
 }
 
-function chainGroupKey(hotel: HotelSearchResult): string {
-  const chain = hotel.chainName?.trim().toLowerCase();
-  if (chain) return chain;
-  if (/masseria|trullo|boutique|b&b|guesthouse|inn|apartment|palazzo/i.test(hotel.name)) {
-    return "independent";
-  }
-  return "other";
-}
-
-/** Keep Kepi Pick smart but surface chain variety — not three of the same brand. */
+/** Keep Kepi Pick at the top but return every property — user can browse the full list. */
 function diversifyRankedResults(results: RankedHotelSearchResult[]): RankedHotelSearchResult[] {
-  if (results.length <= 4) return results;
+  if (results.length <= 1) return results;
 
   const picked: RankedHotelSearchResult[] = [];
   const usedIds = new Set<string>();
-  const chainCounts = new Map<string, number>();
 
-  const tryAdd = (hotel: RankedHotelSearchResult, maxPerChain = 4): boolean => {
-    if (usedIds.has(hotel.id)) return false;
-    const key = chainGroupKey(hotel);
-    const count = chainCounts.get(key) ?? 0;
-    if (count >= maxPerChain) return false;
+  const add = (hotel: RankedHotelSearchResult): void => {
+    if (usedIds.has(hotel.id)) return;
     picked.push(hotel);
     usedIds.add(hotel.id);
-    chainCounts.set(key, count + 1);
-    return true;
   };
 
-  if (results[0]) tryAdd(results[0], 1);
+  if (results[0]) add(results[0]);
 
   const bestValue = results.find((row) => row.tier === "best_value" || row.badges.includes("Best value"));
   const bestQuality = results.find((row) => row.tier === "best_quality" || row.badges.includes("Top quality"));
   const pointsPlay = results.find((row) => row.tier === "points_play");
-  if (bestValue) tryAdd(bestValue);
-  if (bestQuality) tryAdd(bestQuality);
-  if (pointsPlay) tryAdd(pointsPlay);
+  if (bestValue) add(bestValue);
+  if (bestQuality) add(bestQuality);
+  if (pointsPlay) add(pointsPlay);
 
   for (const row of results) {
-    if (picked.length >= 50) break;
-    tryAdd(row);
+    add(row);
   }
 
   const total = picked.length;
@@ -122,7 +106,7 @@ function diversifyRankedResults(results: RankedHotelSearchResult[]): RankedHotel
           ? `Top ${Math.min(25, Math.round(((index + 1) / total) * 100))}% in city`
           : index < Math.ceil(total * 0.5)
             ? "Mid-range for this search"
-            : "Further from top picks",
+            : undefined,
   }));
 }
 

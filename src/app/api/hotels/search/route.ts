@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { rankHotelSearchResults } from "@/lib/hotels/intelligentRanking";
+import { hotelInSearchCity, partitionHotelsBySearchCity } from "@/lib/hotels/hotelCityScope";
+import { buildGoogleHotelsUrl } from "@/lib/decision/bookingLinks";
 import { resolveHotelDestination, suggestHotelDestinations } from "@/lib/hotels/resolveDestination";
 import { searchHotelsLiveOrEstimated } from "@/lib/hotels/searchHotels";
 import { isLiteApiConfigured } from "@/lib/providers/liteapi/searchHotels";
@@ -86,7 +88,12 @@ export async function POST(req: Request) {
       memory,
       loyaltyBalances,
       stayProfile,
-    });
+    }).map((hotel) => ({
+      ...hotel,
+      inSearchCity: hotelInSearchCity(hotel, resolved.displayName),
+    }));
+
+    const { inCity, nearby } = partitionHotelsBySearchCity(ranked, resolved.displayName);
 
     saveHotelStayMemory(
       learnFromHotelEvent(memory, {
@@ -96,11 +103,27 @@ export async function POST(req: Request) {
       userId,
     ).catch(() => {});
 
+    const inventoryNote =
+      inCity.length <= 3 && nearby.length > 0
+        ? `Only ${inCity.length} live rate${inCity.length === 1 ? "" : "s"} in ${resolved.displayName.split(",")[0]?.trim() ?? resolved.displayName} for these dates. ${nearby.length} more nearby — toggle "Include nearby" or browse all on Google Hotels.`
+        : inCity.length <= 3
+          ? `Only ${inCity.length} property${inCity.length === 1 ? "" : "ies"} returned live rates in ${resolved.displayName.split(",")[0]?.trim() ?? resolved.displayName} for these dates. More hotels exist — use Google Hotels for the full list.`
+          : null;
+
     return NextResponse.json({
       hotels: ranked,
       total: ranked.length,
+      inCityCount: inCity.length,
+      nearbyCount: nearby.length,
       city: resolved.displayName,
       correctedFrom: resolved.correctedFrom ?? null,
+      googleHotelsUrl: buildGoogleHotelsUrl({
+        propertyName: "hotels",
+        location: resolved.displayName,
+        checkInDate: checkIn,
+        checkOutDate: checkOut,
+      }),
+      inventoryNote,
       preferenceInsight: buildHotelPreferenceInsight(
         memory,
         genome.hotelChainPriority ?? [],
