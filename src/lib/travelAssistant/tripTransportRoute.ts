@@ -106,6 +106,15 @@ function fmtDateShort(ms: number): string {
   return new Date(ms).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
+function fmtSchedulePoint(ms: number | null, airportCode: string): string | null {
+  if (ms == null || !Number.isFinite(ms) || !airportCode || airportCode === "???") return null;
+  return `${fmtDateShort(ms)} ${fmtTime12(ms)} ${airportCode}`;
+}
+
+function hasConfirmedSchedule(ms: number | null): boolean {
+  return ms != null && Number.isFinite(ms);
+}
+
 function normalizeIata(code: string | undefined): string {
   return code?.trim().toUpperCase() ?? "";
 }
@@ -257,7 +266,6 @@ function segmentFromPlannedLeg(leg: PlannedFlightLeg): TripTransportSegment {
   const toCode = normalizeIata(leg.toIata) || leg.toLabel.slice(0, 3).toUpperCase();
   const fromAirport = getAirportByIata(fromCode);
   const toAirport = getAirportByIata(toCode);
-  const departMs = Date.parse(`${leg.departureDate}T09:00:00`);
 
   return {
     id: `planned-${leg.id}`,
@@ -268,7 +276,7 @@ function segmentFromPlannedLeg(leg: PlannedFlightLeg): TripTransportSegment {
     toCode,
     fromLabel: leg.fromLabel,
     toLabel: leg.toLabel,
-    departMs: Number.isFinite(departMs) ? departMs : null,
+    departMs: null,
     arriveMs: null,
     departDisplay: "TBD",
     arriveDisplay: "",
@@ -328,15 +336,9 @@ function normalizeOvernightConnections(segments: TripTransportSegment[]): TripTr
 }
 
 function shouldEvaluateConnection(prev: TripTransportSegment, next: TripTransportSegment): boolean {
-  if (prev.arriveMs == null || next.departMs == null) return false;
-
-  const gapMs = next.departMs - prev.arriveMs;
-  const sameAirport = prev.toCode === next.fromCode;
-
-  // Return legs or repositioning days later — not a same-day connection.
-  if (!sameAirport && gapMs > 36 * 3_600_000) return false;
-  if (sameAirport && gapMs > 72 * 3_600_000) return false;
-
+  if (!hasConfirmedSchedule(prev.arriveMs) || !hasConfirmedSchedule(next.departMs)) return false;
+  if (prev.toCode !== next.fromCode) return false;
+  if (prev.toCode === "???" || next.fromCode === "???") return false;
   return true;
 }
 
@@ -344,29 +346,19 @@ function evaluateConnection(prev: TripTransportSegment, next: TripTransportSegme
   if (!shouldEvaluateConnection(prev, next)) return null;
   if (prev.arriveMs == null || next.departMs == null) return null;
 
-  if (next.departMs < prev.arriveMs) {
-    const land = prev.arriveDisplay || "arrival";
-    const leave = next.departDisplay || "departure";
-    return `Next leg departs at ${leave} but you land at ${land} — connection doesn't work.`;
-  }
+  const landing = fmtSchedulePoint(prev.arriveMs, prev.toCode);
+  const departure = fmtSchedulePoint(next.departMs, next.fromCode);
+  if (!landing || !departure) return null;
 
-  const fromAirport = prev.toCode;
-  const toAirport = next.fromCode;
-  if (
-    fromAirport &&
-    toAirport &&
-    fromAirport !== "???" &&
-    toAirport !== "???" &&
-    fromAirport !== toAirport
-  ) {
-    return `Arrive ${fromAirport} but next leg leaves ${toAirport}.`;
+  if (next.departMs < prev.arriveMs) {
+    return `Can't make this connection: land at ${landing}, but your next flight departs ${departure}.`;
   }
 
   if (prev.kind === "flight" && next.kind === "flight") {
     const gapMins = (next.departMs - prev.arriveMs) / 60_000;
     const minConnection = prev.toCode === "HNL" ? 150 : 75;
     if (gapMins > 0 && gapMins < minConnection) {
-      return `Only ${Math.round(gapMins)} min to connect — may be too tight.`;
+      return `Tight connection: only ${Math.round(gapMins)} min between landing at ${landing} and departing ${departure}.`;
     }
   }
 
@@ -399,7 +391,9 @@ export function buildTripTransportRoute(
   );
 
   segments = normalizeOvernightConnections(segments);
-  segments = segments.sort((a, b) => (a.departMs ?? 0) - (b.departMs ?? 0));
+  segments = segments.sort(
+    (a, b) => a.sortKey.localeCompare(b.sortKey) || (a.departMs ?? 0) - (b.departMs ?? 0),
+  );
 
   for (let i = 0; i < segments.length; i++) {
     const next = segments[i + 1];

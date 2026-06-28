@@ -119,8 +119,104 @@ test("buildTripTransportRoute flags impossible connection when next departs befo
 
   assert.equal(route.segments.length, 2);
   assert.equal(route.segments[1]?.status, "conflict");
-  assert.match(route.segments[1]?.connectionIssue ?? "", /doesn't work/iu);
+  assert.match(route.segments[1]?.connectionIssue ?? "", /Can't make this connection/iu);
   assert.equal(route.summary.conflicts, 1);
+});
+
+test("buildTripTransportRoute ignores unrelated same-day legs at different airports", () => {
+  const route = buildTripTransportRoute([
+    {
+      id: "f1",
+      type: "flight",
+      title: "Return from Europe",
+      provider: "Alaska",
+      localTime: "2026-09-25 06:15",
+      timezone: "Europe/Rome",
+      confirmationCode: "AAA111",
+      flightDepartureAirport: "FCO",
+      flightArrivalAirport: "SEA",
+      flightDepartureTime: "2026-09-25T06:15",
+      flightArrivalTime: "2026-09-25T09:15",
+      flightDate: "2026-09-25",
+      flightAirline: "Alaska",
+      flightNumber: "AS181",
+    },
+    {
+      id: "f2",
+      type: "flight",
+      title: "Munich hop",
+      provider: "Lufthansa",
+      localTime: "2026-09-25",
+      timezone: "Europe/Berlin",
+      confirmationCode: "PENDING",
+      flightDepartureAirport: "MUC",
+      flightArrivalAirport: "ONT",
+      flightDate: "2026-09-25",
+      flightAirline: "Lufthansa",
+      flightNumber: "LH450",
+      plannedOnly: true,
+    },
+    {
+      id: "f3",
+      type: "flight",
+      title: "Final hop",
+      provider: "Alaska",
+      localTime: "2026-09-25 20:43",
+      timezone: "America/Los_Angeles",
+      confirmationCode: "BBB222",
+      flightDepartureAirport: "SEA",
+      flightArrivalAirport: "ONT",
+      flightDepartureTime: "2026-09-25T20:43",
+      flightArrivalTime: "2026-09-25T23:43",
+      flightDate: "2026-09-25",
+      flightAirline: "Alaska",
+      flightNumber: "AS489",
+    },
+  ]);
+
+  assert.equal(route.summary.conflicts, 0);
+});
+
+test("buildTripTransportRoute uses exact schedule times in conflict copy", () => {
+  const route = buildTripTransportRoute([
+    {
+      id: "f1",
+      type: "flight",
+      title: "Leg 1",
+      provider: "Delta",
+      localTime: "2026-09-10 08:00",
+      timezone: "Europe/Rome",
+      confirmationCode: "ABC123",
+      flightDepartureAirport: "JFK",
+      flightArrivalAirport: "FCO",
+      flightDepartureTime: "2026-09-10T08:00",
+      flightArrivalTime: "2026-09-10T13:00",
+      flightDate: "2026-09-10",
+      flightAirline: "Delta",
+      flightNumber: "DL100",
+    },
+    {
+      id: "f2",
+      type: "flight",
+      title: "Leg 2",
+      provider: "ITA",
+      localTime: "2026-09-10 11:00",
+      timezone: "Europe/Rome",
+      confirmationCode: "XYZ789",
+      flightDepartureAirport: "FCO",
+      flightArrivalAirport: "VCE",
+      flightDepartureTime: "2026-09-10T11:00",
+      flightArrivalTime: "2026-09-10T12:15",
+      flightDate: "2026-09-10",
+      flightAirline: "ITA",
+      flightNumber: "AZ1234",
+    },
+  ]);
+
+  assert.equal(route.segments[1]?.status, "conflict");
+  assert.match(route.segments[1]?.connectionIssue ?? "", /land at .*FCO/iu);
+  assert.match(route.segments[1]?.connectionIssue ?? "", /departs .*FCO/iu);
+  assert.doesNotMatch(route.segments[1]?.connectionIssue ?? "", /TBD/iu);
 });
 
 test("buildTripTransportRoute marks unbooked planned legs as gray segments", () => {

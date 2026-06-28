@@ -223,7 +223,7 @@ export function TripTransportRouteMap({
         id: "trip-route-unbooked",
         type: "line",
         source: ROUTE_SOURCE,
-        filter: ["any", ["!", ["get", "booked"]], ["get", "dashed"]],
+        filter: ["all", ["any", ["!", ["get", "booked"]], ["get", "dashed"]], ["!=", ["get", "status"], "conflict"]],
         paint: {
           "line-color": "#94a3b8",
           "line-width": 4,
@@ -255,11 +255,15 @@ export function TripTransportRouteMap({
         filter: ["==", ["get", "status"], "conflict"],
         paint: {
           "line-color": "#ef4444",
-          "line-width": 4.5,
+          "line-width": 6,
           "line-opacity": 1,
-          "line-dasharray": [2, 2],
+          "line-dasharray": [1.5, 1.5],
         },
       });
+    }
+
+    if (map.getLayer("trip-route-conflict")) {
+      map.moveLayer("trip-route-conflict");
     }
 
     if (!map.getLayer("trip-route-hit")) {
