@@ -1956,6 +1956,13 @@ export default function TravelAssistantPage() {
   const [timelineSectionTab, setTimelineSectionTab] = useState<TimelineSectionTab>("reservations");
   const [, setPackingCompletionPercent] = useState(0);
   const [consumerTab, setConsumerTab] = useState<ConsumerTab>("trip");
+  const navigateToConsumerTab = useCallback((nextTab: ConsumerTab): void => {
+    setConsumerTab(nextTab);
+    const params = new URLSearchParams(window.location.search);
+    params.set("tab", nextTab);
+    const nextUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState({}, "", nextUrl);
+  }, []);
   const [manualReservationDefaultDateTime, setManualReservationDefaultDateTime] = useState<string | null>(null);
   const itineraryPrefs = useItineraryPanelPrefs(activeTripId);
   const [travelStyleProfile, setTravelStyleProfile] = useState<TravelStyleProfile | null>(null);
@@ -7718,14 +7725,6 @@ export default function TravelAssistantPage() {
     }
     return undefined;
   }, [consumerReviewQueueSession.open, reviewQueue.length]);
-
-  const navigateToConsumerTab = useCallback((nextTab: ConsumerTab): void => {
-    setConsumerTab(nextTab);
-    const params = new URLSearchParams(window.location.search);
-    params.set("tab", nextTab);
-    const nextUrl = `${window.location.pathname}?${params.toString()}`;
-    window.history.replaceState({}, "", nextUrl);
-  }, []);
 
   const handleTripPlanningAction = useCallback(
     (item: TripActionItem): void => {
