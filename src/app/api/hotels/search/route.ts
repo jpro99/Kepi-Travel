@@ -129,7 +129,7 @@ export async function POST(req: Request) {
       correctedFrom: resolved.correctedFrom ?? null,
       googleHotelsUrl: buildGoogleHotelsUrl({
         propertyName: "hotels",
-        location: resolved.displayName,
+        destination: resolved.displayName,
         checkInDate: checkIn,
         checkOutDate: checkOut,
       }),

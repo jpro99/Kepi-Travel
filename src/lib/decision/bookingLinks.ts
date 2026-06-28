@@ -143,13 +143,61 @@ const HOTEL_CHAIN_HOME: Record<string, string> = {
 
 export function buildGoogleHotelsUrl(input: {
   propertyName: string;
+  /** City/region with country — anchors Google away from the user's GPS. */
   location?: string;
+  destination?: string;
+  /** Optional street address; never used alone without destination. */
+  address?: string;
   checkInDate: string;
   checkOutDate: string;
 }): string {
-  const locationBit = input.location?.trim() ? ` ${input.location.trim()}` : "";
-  const query = `${input.propertyName}${locationBit} ${input.checkInDate} to ${input.checkOutDate}`;
+  const destination = normalizeGoogleHotelsDestination(input.destination ?? input.location ?? "");
+  const propertyName = input.propertyName.trim();
+  const address = input.address?.trim();
+  const dates = `on ${input.checkInDate} through ${input.checkOutDate}`;
+
+  let query: string;
+  const isAreaSearch = /^(hotels?)$/i.test(propertyName);
+  if (isAreaSearch) {
+    query = destination ? `Hotels in ${destination} ${dates}` : `Hotels ${dates}`;
+  } else if (destination) {
+    query = `${propertyName} ${destination} ${dates}`;
+    const destStem = destination.split(",")[0]?.trim().toLowerCase() ?? "";
+    if (address && destStem && !address.toLowerCase().includes(destStem)) {
+      query = `${propertyName} ${address} ${destination} ${dates}`;
+    }
+  } else {
+    query = `${propertyName} ${dates}`;
+  }
+
+  if (destination) {
+    return `https://www.google.com/travel/hotels/${encodeURIComponent(destination)}?q=${encodeURIComponent(query)}`;
+  }
+
   return `https://www.google.com/travel/hotels?q=${encodeURIComponent(query)}`;
+}
+
+function normalizeGoogleHotelsDestination(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return trimmed;
+
+  if (/,/.test(trimmed)) return trimmed;
+
+  if (
+    /\b(italy|italia|france|spain|greece|portugal|germany|uk|united kingdom|usa|united states)\b/i.test(trimmed)
+  ) {
+    return trimmed;
+  }
+
+  if (
+    /\b(monopoli|polignano|bari|lecce|matera|alberobello|ostuni|rome|venice|florence|naples|milan|amalfi|positano)\b/i.test(
+      trimmed,
+    )
+  ) {
+    return `${trimmed}, Italy`;
+  }
+
+  return trimmed;
 }
 
 export function resolveHotelChainHomeUrl(chainName: string): string | null {
@@ -164,12 +212,20 @@ export function resolveHotelBookUrl(input: {
   propertyName: string;
   chainName?: string;
   location?: string;
+  destination?: string;
+  address?: string;
   checkInDate: string;
   checkOutDate: string;
   quotedPriceUsd?: number;
   quoteId?: string;
 }): { url: string; label: string } {
-  const googleUrl = buildGoogleHotelsUrl(input);
+  const googleUrl = buildGoogleHotelsUrl({
+    propertyName: input.propertyName,
+    destination: input.destination ?? input.location,
+    address: input.address,
+    checkInDate: input.checkInDate,
+    checkOutDate: input.checkOutDate,
+  });
   const isLiveQuote = Boolean(input.quoteId?.trim() && !input.quoteId.startsWith("est-"));
 
   if (isLiveQuote || input.quotedPriceUsd !== undefined) {

@@ -44,13 +44,29 @@ test("resolveCashBookUrl falls back to airline home without offerId", () => {
 test("buildGoogleHotelsUrl encodes property and dates", () => {
   const url = buildGoogleHotelsUrl({
     propertyName: "Hyatt Regency Rome",
-    location: "Rome",
+    destination: "Rome, Italy",
     checkInDate: "2026-09-01",
     checkOutDate: "2026-09-05",
   });
-  assert.match(url, /google\.com\/travel\/hotels/);
+  assert.match(url, /google\.com\/travel\/hotels\//);
+  assert.match(decodeURIComponent(url), /Rome.*Italy/i);
   assert.match(url, /Hyatt/);
   assert.match(url, /2026-09-01/);
+  assert.match(url, /through/);
+});
+
+test("buildGoogleHotelsUrl anchors Italian B&B away from user GPS", () => {
+  const url = buildGoogleHotelsUrl({
+    propertyName: "Le Caravelle Bed and Breakfast",
+    destination: "Monopoli, Italy",
+    address: "Via Cavaliere 14, 70044 Polignano a Mare",
+    checkInDate: "2026-09-05",
+    checkOutDate: "2026-09-08",
+  });
+  assert.match(decodeURIComponent(url), /Monopoli.*Italy/i);
+  assert.match(decodeURIComponent(url), /Le Caravelle/i);
+  assert.match(url, /travel\/hotels\//);
+  assert.doesNotMatch(decodeURIComponent(url), /\bto 2026-/);
 });
 
 test("resolveHotelBookUrl uses Google Hotels when live quote is present", () => {

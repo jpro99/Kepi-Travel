@@ -40,7 +40,8 @@ export function HotelDetailSheet({
   const book = resolveHotelBookUrl({
     propertyName: hotel.name,
     chainName: hotel.chainName,
-    location: hotel.address || city,
+    destination: city,
+    address: hotel.address,
     checkInDate: hotel.checkIn,
     checkOutDate: hotel.checkOut,
     quotedPriceUsd: hotel.browseOnly ? undefined : hotel.totalPrice,

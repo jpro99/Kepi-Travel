@@ -1,24 +1,17 @@
 import { normalizeStayCityKey } from "@/lib/travelAssistant/dayNoteStopRanges";
+import {
+  areCoordsTrusted,
+  fixPossibleLatLngSwap,
+  haversineKm,
+  inCityRadiusKm,
+  isSmallDestination,
+} from "@/lib/hotels/hotelGeo";
+import type { SearchCenter } from "@/lib/hotels/hotelGeo";
 import type { HotelSearchResult } from "@/lib/hotels/types";
 
-export interface SearchCityCenter {
-  lat: number;
-  lng: number;
-}
+export type { SearchCenter };
 
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function inCityRadiusKm(searchCity: string): number {
-  return isSmallDestination(searchCity) ? 5.5 : 10;
-}
+export { isSmallDestination };
 
 /** Parse a city name from a postal address when provider metadata is missing. */
 export function cityFromAddress(address: string | undefined): string {
@@ -40,7 +33,7 @@ export function cityFromAddress(address: string | undefined): string {
 export function hotelInSearchCity(
   hotel: HotelSearchResult,
   searchCity: string,
-  searchCenter?: SearchCityCenter,
+  searchCenter?: SearchCenter,
 ): boolean {
   const key = normalizeStayCityKey(searchCity);
   if (!key) return true;
@@ -52,7 +45,10 @@ export function hotelInSearchCity(
     Number.isFinite(searchCenter.lat) &&
     Number.isFinite(searchCenter.lng)
   ) {
-    return haversineKm(searchCenter.lat, searchCenter.lng, hotel.lat!, hotel.lng!) <= inCityRadiusKm(searchCity);
+    const fixed = fixPossibleLatLngSwap(hotel.lat!, hotel.lng!, searchCenter);
+    if (areCoordsTrusted(fixed.lat, fixed.lng, searchCenter, searchCity)) {
+      return haversineKm(searchCenter.lat, searchCenter.lng, fixed.lat, fixed.lng) <= inCityRadiusKm(searchCity);
+    }
   }
 
   const searchLabel = searchCity.toLowerCase().trim();
@@ -77,7 +73,7 @@ export function hotelInSearchCity(
 export function partitionHotelsBySearchCity<T extends HotelSearchResult & { inSearchCity?: boolean }>(
   hotels: T[],
   searchCity: string,
-  searchCenter?: SearchCityCenter,
+  searchCenter?: SearchCenter,
 ): { inCity: T[]; nearby: T[] } {
   const inCity: T[] = [];
   const nearby: T[] = [];
@@ -88,11 +84,4 @@ export function partitionHotelsBySearchCity<T extends HotelSearchResult & { inSe
     else nearby.push(hotel);
   }
   return { inCity, nearby };
-}
-
-export function isSmallDestination(displayName: string): boolean {
-  const lower = displayName.toLowerCase();
-  return /monopoli|polignano|positano|amalfi|ravello|manarola|monterosso|cefalù|cefalu|ortisei|sperlonga|tropea|matera|alberobello|locorotondo|ostuni|gallipoli|otranto|leuca/.test(
-    lower,
-  );
 }

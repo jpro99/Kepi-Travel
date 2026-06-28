@@ -258,7 +258,12 @@ export function TripHotelSearch({
       if (payload.resolved?.lat && payload.resolved?.lng) {
         setCityCenter({ lat: payload.resolved.lat, lng: payload.resolved.lng });
         setHotelsWithCoords(
-          attachHotelCoordinates(payload.hotels ?? [], payload.resolved.lat, payload.resolved.lng),
+          attachHotelCoordinates(
+            payload.hotels ?? [],
+            payload.resolved.lat,
+            payload.resolved.lng,
+            payload.city ?? resolvedCity ?? city,
+          ),
         );
       } else if ((payload.hotels?.length ?? 0) > 0) {
         setCityCenter(null);
@@ -333,7 +338,7 @@ export function TripHotelSearch({
       return hotelsWithCoords.filter((row) => visibleIds.has(row.id));
     }
     if (!cityCenter) return [];
-    return attachHotelCoordinates(visibleResults, cityCenter.lat, cityCenter.lng);
+    return attachHotelCoordinates(visibleResults, cityCenter.lat, cityCenter.lng, resolvedCity ?? city);
   }, [cityCenter, hotelsWithCoords, visibleResults]);
 
   const hotelsInView = useMemo(() => {
