@@ -1,4 +1,5 @@
 import { shouldDisplayGeolocationFix } from "@/lib/family/geolocationQuality";
+import { shouldAllowMapJump } from "@/lib/family/locationFixUpgrade";
 import { haversineMeters } from "@/lib/geo/haversineMeters";
 
 export interface CachedMapLocation {
@@ -40,7 +41,7 @@ export function resolveLocationForMapDisplay(
     const jump = haversineMeters(freshCached.lat, freshCached.lon, incoming.lat, incoming.lon);
     const incomingAcc = incoming.accuracy ?? 999;
     if (jump > MAX_JUMP_WITHOUT_PRECISION_M && incomingAcc > 50) {
-      return freshCached;
+      if (!shouldAllowMapJump(freshCached, incoming, jump)) return freshCached;
     }
     cache.set(memberId, incoming);
     return incoming;

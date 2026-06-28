@@ -29,7 +29,8 @@ describe("geolocationQuality", () => {
   });
 
   it("bootstrap accepts first fix without accuracy", () => {
-    assert.equal(shouldAcceptGeolocationFix(coords(34.05, -118.24)), true);
+    assert.equal(shouldAcceptGeolocationFix(coords(34.05, -118.24)), false);
+    assert.equal(shouldAcceptGeolocationFix(coords(34.05, -118.24, 55)), true);
     assert.equal(shouldDisplayGeolocationFix(undefined), true);
   });
 
@@ -47,5 +48,10 @@ describe("geolocationQuality", () => {
   it("rejects teleports to a distant mis-pin", () => {
     assert.equal(shouldAcceptGeolocationFix(coords(34.05, -118.24, 15)), true);
     assert.equal(shouldAcceptGeolocationFix(coords(34.12, -118.31, 80)), false);
+  });
+
+  it("accepts a precise correction after a coarse bootstrap mis-pin", () => {
+    assert.equal(shouldAcceptGeolocationFix(coords(34.05, -118.24, 55)), true);
+    assert.equal(shouldAcceptGeolocationFix(coords(34.0516, -118.2418, 22)), true);
   });
 });

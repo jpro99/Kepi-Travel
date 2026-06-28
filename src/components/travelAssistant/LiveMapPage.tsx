@@ -13,10 +13,10 @@ import {
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
 import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
-import { resolveLiveCoordinates } from "@/lib/family/geolocationQuality";
-import { resolveLocationForMapDisplay } from "@/lib/family/locationDisplayCache";
+import { resolveLiveCoordinates, resetGeolocationQualityState } from "@/lib/family/geolocationQuality";
+import { clearLocationDisplayCache, resolveLocationForMapDisplay } from "@/lib/family/locationDisplayCache";
 import { isFamilySharingActive } from "@/lib/family/locationSharingPrefs";
-import { burstFamilyLocationFix } from "@/lib/family/familyLocationWatch";
+import { burstFamilyLocationFix, refreshFamilyLocationFix } from "@/lib/family/familyLocationWatch";
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface LocationPoint {
@@ -91,6 +91,7 @@ export function LiveMapPage() {
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [sharingLocation, setSharingLocation] = useState(false);
   const [myMemberId, setMyMemberId] = useState<string | null>(null);
+  const [gpsRefreshing, setGpsRefreshing] = useState(false);
 
   useEffect(() => {
     if (isFamilySharingActive()) {
@@ -523,11 +524,22 @@ export function LiveMapPage() {
     window.dispatchEvent(new CustomEvent("kepi:family-start-sharing"));
   }, [sharingLocation]);
 
+  const refreshGps = useCallback(() => {
+    if (!navigator.geolocation || gpsRefreshing) return;
+    setGpsRefreshing(true);
+    if (myMemberId) clearLocationDisplayCache(myMemberId);
+    resetGeolocationQualityState();
+    refreshFamilyLocationFix();
+    window.setTimeout(() => setGpsRefreshing(false), 8_000);
+  }, [gpsRefreshing, myMemberId]);
+
   useEffect(() => () => stopLocalLocationWatch(), [stopLocalLocationWatch]);
 
   /* ── Derived ── */
   const members = group?.members ?? [];
   const liveCount = members.filter(m => locations[m.id] && !isStale(locations[m.id].updatedAt)).length;
+  const myLoc = myMemberId ? locations[myMemberId] : null;
+  const myAccuracyM = myLoc?.accuracy;
   const selMember = selected ? members.find(m => m.id === selected) : null;
   const selLoc = selected ? locations[selected] : null;
 
@@ -762,19 +774,41 @@ export function LiveMapPage() {
                 </p>
                 <p className="text-white/40 text-[11px] mt-0.5">{members.length} member{members.length !== 1 ? "s" : ""}</p>
               </div>
-              <button
-                type="button"
-                onClick={shareLocation}
-                className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-bold shadow transition-all ${
-                  sharingLocation
-                    ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                    : "bg-sky-600 text-white"
-                }`}
-              >
-                <span>{sharingLocation ? "🟢" : "📍"}</span>
-                {sharingLocation ? "Sharing" : "Share me"}
-              </button>
+              <div className="flex items-center gap-2">
+                {sharingLocation && (
+                  <button
+                    type="button"
+                    onClick={refreshGps}
+                    disabled={gpsRefreshing}
+                    className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-[11px] font-bold text-white/80 disabled:opacity-50"
+                    title="Take fresh GPS samples — use on your phone outdoors for best accuracy"
+                  >
+                    {gpsRefreshing ? "Locating…" : "Refresh GPS"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={shareLocation}
+                  className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-bold shadow transition-all ${
+                    sharingLocation
+                      ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                      : "bg-sky-600 text-white"
+                  }`}
+                >
+                  <span>{sharingLocation ? "🟢" : "📍"}</span>
+                  {sharingLocation ? "Sharing" : "Share me"}
+                </button>
+              </div>
             </div>
+
+            {sharingLocation && myAccuracyM != null && myAccuracyM > 45 && (
+              <p className="px-4 pb-2 text-[10px] leading-relaxed text-amber-300/90">
+                Position may be off by ~{Math.round(myAccuracyM)}m.
+                {typeof window !== "undefined" && !/iPhone|iPad|Android/i.test(navigator.userAgent)
+                  ? " Desktop browsers use Wi‑Fi guessing — open on your phone for house-level accuracy."
+                  : " Step outside or tap Refresh GPS for a tighter fix."}
+              </p>
+            )}
 
             <div className="overflow-y-auto max-h-[200px] divide-y divide-white/5">
               {members.length === 0 && (

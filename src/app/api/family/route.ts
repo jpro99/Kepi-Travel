@@ -7,6 +7,11 @@ import { logger } from "@/lib/logger";
 import { generateId } from "@/lib/utils/generateId";
 import { getResendClient, getResendFromEmail, isResendConfigured } from "@/lib/email/resendClient";
 import { haversineMeters } from "@/lib/geo/haversineMeters";
+import {
+  effectiveAccuracyMeters,
+  MIN_BOOTSTRAP_ACCURACY_M,
+  shouldPreferIncomingLocationFix,
+} from "@/lib/family/locationFixUpgrade";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -327,8 +332,12 @@ export async function POST(request: Request) {
     const hasAccuracy = typeof d.accuracy === "number" && Number.isFinite(d.accuracy) && d.accuracy > 0;
     const incomingAccuracy = hasAccuracy ? d.accuracy! : null;
 
-    // Always accept the first fix — otherwise the member never appears on the map.
+    // First fix — only persist when accuracy is usable (avoids locking a Wi‑Fi mis-pin).
     if (!prev) {
+      const incAcc = effectiveAccuracyMeters(d.accuracy);
+      if (incAcc > MIN_BOOTSTRAP_ACCURACY_M) {
+        return NextResponse.json({ ok: true, skipped: true, reason: "awaiting_precise_fix" });
+      }
       const loc: z.infer<typeof LocationSchema> = {
         lat: d.lat,
         lon: d.lon,
@@ -339,6 +348,24 @@ export async function POST(request: Request) {
       };
       await kvStoreSet(FAMILY_LOCATION_KEY(userId), loc, { userId: ns });
       return NextResponse.json({ ok: true, location: loc });
+    }
+
+    if (
+      shouldPreferIncomingLocationFix(
+        { lat: prev.lat, lon: prev.lon, accuracy: prev.accuracy },
+        { lat: d.lat, lon: d.lon, accuracy: d.accuracy },
+      )
+    ) {
+      const loc: z.infer<typeof LocationSchema> = {
+        lat: d.lat,
+        lon: d.lon,
+        accuracy: d.accuracy,
+        updatedAt: new Date().toISOString(),
+        memberId: userId,
+        label: d.label,
+      };
+      await kvStoreSet(FAMILY_LOCATION_KEY(userId), loc, { userId: ns });
+      return NextResponse.json({ ok: true, location: loc, upgraded: true });
     }
 
     if (incomingAccuracy != null && incomingAccuracy > 200) {

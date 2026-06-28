@@ -63,27 +63,25 @@ export function burstFamilyLocationFix(): void {
   if (isFamilySharingOptedOut()) return;
 
   let best: GeolocationPosition | null = null;
-  let attemptsLeft = 3;
+  let attemptsLeft = 6;
 
   const attempt = (): void => {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        if (
-          !best ||
-          (pos.coords.accuracy ?? 999) < (best.coords.accuracy ?? 999)
-        ) {
+        const acc = pos.coords.accuracy ?? 999;
+        if (!best || acc < (best.coords.accuracy ?? 999)) {
           best = pos;
         }
         attemptsLeft -= 1;
         if (attemptsLeft > 0) {
-          window.setTimeout(attempt, 900);
+          window.setTimeout(attempt, 1_200);
           return;
         }
         if (best) readPosition(best);
       },
       () => {
         attemptsLeft -= 1;
-        if (attemptsLeft > 0) window.setTimeout(attempt, 900);
+        if (attemptsLeft > 0) window.setTimeout(attempt, 1_200);
         else if (best) readPosition(best);
       },
       BURST_OPTIONS,
@@ -91,6 +89,12 @@ export function burstFamilyLocationFix(): void {
   };
 
   attempt();
+}
+
+/** Clear cached quality state and take fresh high-accuracy samples. */
+export function refreshFamilyLocationFix(): void {
+  resetGeolocationQualityState();
+  burstFamilyLocationFix();
 }
 
 export function startPersistentFamilyLocationWatch(): void {

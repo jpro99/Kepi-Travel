@@ -1,4 +1,9 @@
 import { haversineMeters } from "@/lib/geo/haversineMeters";
+import {
+  MIN_BOOTSTRAP_ACCURACY_M,
+  PRECISE_FIX_ACCURACY_M,
+  shouldPreferIncomingLocationFix,
+} from "@/lib/family/locationFixUpgrade";
 
 /** Prefer precise fixes but allow typical phone GPS indoors. */
 export const MAX_SHARE_ACCURACY_M = 100;
@@ -37,6 +42,19 @@ function isTeleportFromLastGood(
   accuracy: number,
 ): boolean {
   if (!lastGoodFix) return false;
+
+  const incoming = {
+    lat: coords.latitude,
+    lon: coords.longitude,
+    accuracy,
+  };
+  const prev = {
+    lat: lastGoodFix.lat,
+    lon: lastGoodFix.lon,
+    accuracy: lastGoodFix.accuracy,
+  };
+  if (shouldPreferIncomingLocationFix(prev, incoming)) return false;
+
   const ageMs = Date.now() - lastGoodFix.timestamp;
   if (ageMs > 20 * 60_000) return false;
 
@@ -72,13 +90,13 @@ export function shouldAcceptGeolocationFix(
 ): boolean {
   const accuracy = normalizeAccuracy(coords.accuracy);
 
-  // Bootstrap — always accept the first reading unless it is absurdly coarse.
+  // Bootstrap — wait for a usable fix; don't lock a Wi‑Fi mis-pin at session start.
   if (!lastGoodFix) {
-    if (accuracy == null || accuracy <= HARD_REJECT_ACCURACY_M) {
-      rememberFix(coords, timestamp, accuracy ?? MAX_SHARE_ACCURACY_M);
-      return true;
-    }
-    return false;
+    const normalized = normalizeAccuracy(coords.accuracy);
+    if (normalized == null) return false;
+    if (normalized > MIN_BOOTSTRAP_ACCURACY_M) return false;
+    rememberFix(coords, timestamp, normalized);
+    return true;
   }
 
   if (accuracy == null) {
@@ -90,6 +108,18 @@ export function shouldAcceptGeolocationFix(
   if (isTeleportFromLastGood(coords, accuracy)) return false;
 
   if (accuracy <= MAX_SHARE_ACCURACY_M) {
+    rememberFix(coords, timestamp, accuracy);
+    return true;
+  }
+
+  if (
+    lastGoodFix &&
+    accuracy <= PRECISE_FIX_ACCURACY_M + 20 &&
+    shouldPreferIncomingLocationFix(
+      { lat: lastGoodFix.lat, lon: lastGoodFix.lon, accuracy: lastGoodFix.accuracy },
+      { lat: coords.latitude, lon: coords.longitude, accuracy },
+    )
+  ) {
     rememberFix(coords, timestamp, accuracy);
     return true;
   }
