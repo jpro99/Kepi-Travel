@@ -131,7 +131,13 @@ export function mergeIncomingOverPlanned<T extends PlannedMatchableReservation>(
     id: planned.id,
     plannedOnly: false,
     bookUrl: planned.bookUrl ?? incoming.bookUrl ?? extractBookUrlFromNotes(planned.notes),
-    quotedPriceUsd: incoming.quotedPriceUsd ?? planned.quotedPriceUsd,
+    quotedPriceUsd:
+      incoming.quotedPriceUsd ??
+      planned.quotedPriceUsd ??
+      resolveReservationCashUsd({
+        notes: incoming.notes ?? planned.notes,
+        originalEmailText: (incoming as { originalEmailText?: string }).originalEmailText,
+      }),
     quotedPointsMiles: incoming.quotedPointsMiles ?? planned.quotedPointsMiles,
     pointsProgram: incoming.pointsProgram ?? planned.pointsProgram,
     confirmationCode:

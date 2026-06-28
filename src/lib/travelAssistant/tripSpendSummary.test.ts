@@ -34,3 +34,13 @@ test("reservationHasAnyPrice treats points-only as priced", () => {
   assert.equal(reservationHasAnyPrice(reservation), true);
   assert.equal(reservationMissingPrice(reservation), false);
 });
+
+test("computeTripSpend reads total from forwarded email text once per confirmation", () => {
+  const email = "Confirmation AS 654. Total amount: $892.00 USD. Thank you.";
+  const summary = computeTripSpend([
+    { id: "f1", type: "flight", title: "ONT-SEA", confirmationCode: "ABC123", originalEmailText: email },
+    { id: "f2", type: "flight", title: "SEA-FCO", confirmationCode: "ABC123", originalEmailText: email },
+  ]);
+  assert.equal(summary.cashTotalUsd, 892);
+  assert.equal(summary.missingPriceCount, 0);
+});

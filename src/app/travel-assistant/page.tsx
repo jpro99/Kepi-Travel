@@ -103,6 +103,7 @@ import { NextUpCard } from "@/components/travelAssistant/NextUpCard";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
 import { computeTripSpend } from "@/lib/travelAssistant/tripSpendSummary";
+import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
 import { TripItineraryPanel, useItineraryPanelPrefs } from "@/components/travelAssistant/TripItineraryPanel";
 import { ResizableItineraryPane } from "@/components/travelAssistant/ResizableItineraryPane";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
@@ -6723,10 +6724,15 @@ export default function TravelAssistantPage() {
       return;
     }
     pushUndoSnapshot("Review item accepted");
+    const quotedPriceUsd = resolveReservationCashUsd({
+      ...draft,
+      originalEmailText: target.originalEmailText,
+    });
     const newReservation: Reservation = {
       ...draft,
       id: nextId("res"),
       source: "review-accepted",
+      quotedPriceUsd,
       sourceEmailId: target.sourceEmailId,
       sourceEmailSubject: target.sourceEmailSubject,
       originalEmailText: target.originalEmailText,

@@ -1,4 +1,5 @@
 import { isPlaceholderConfirmation } from "@/lib/travelAssistant/placeholderReservations";
+import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
 
 export interface TripSpendReservation {
   id: string;
@@ -9,6 +10,8 @@ export interface TripSpendReservation {
   quotedPriceUsd?: number;
   quotedPointsMiles?: number;
   pointsProgram?: string;
+  notes?: string;
+  originalEmailText?: string;
 }
 
 export interface TripSpendSummary {
@@ -37,11 +40,7 @@ export function isSpendTrackedReservation(reservation: TripSpendReservation): bo
 }
 
 function hasCashPrice(reservation: TripSpendReservation): boolean {
-  return (
-    typeof reservation.quotedPriceUsd === "number" &&
-    Number.isFinite(reservation.quotedPriceUsd) &&
-    reservation.quotedPriceUsd > 0
-  );
+  return resolveReservationCashUsd(reservation) != null;
 }
 
 function hasPointsPrice(reservation: TripSpendReservation): boolean {
@@ -69,6 +68,8 @@ export function computeTripSpend(reservations: TripSpendReservation[]): TripSpen
   const missingPriceIds: string[] = [];
   const byType: TripSpendSummary["byType"] = {};
 
+  const countedEmailTotals = new Set<string>();
+
   for (const reservation of reservations) {
     if (!isSpendTrackedReservation(reservation)) continue;
 
@@ -78,7 +79,15 @@ export function computeTripSpend(reservations: TripSpendReservation[]): TripSpen
     }
     byType[type].count += 1;
 
-    const cash = hasCashPrice(reservation) ? Math.round(reservation.quotedPriceUsd!) : 0;
+    let cash = resolveReservationCashUsd(reservation) ?? 0;
+    if (cash > 0 && reservation.originalEmailText?.trim()) {
+      const dedupeKey = `${reservation.originalEmailText.trim().slice(0, 256)}::${cash}`;
+      if (countedEmailTotals.has(dedupeKey)) {
+        cash = 0;
+      } else {
+        countedEmailTotals.add(dedupeKey);
+      }
+    }
     const points = hasPointsPrice(reservation) ? Math.round(reservation.quotedPointsMiles!) : 0;
 
     if (cash > 0) {
@@ -123,8 +132,9 @@ export function formatTripPointsTotal(points: number): string {
 
 export function formatReservationCostLine(reservation: TripSpendReservation): string | null {
   const parts: string[] = [];
-  if (hasCashPrice(reservation)) {
-    parts.push(formatTripCashTotal(Math.round(reservation.quotedPriceUsd!)));
+  const cashUsd = resolveReservationCashUsd(reservation);
+  if (cashUsd != null && cashUsd > 0) {
+    parts.push(formatTripCashTotal(cashUsd));
   }
   if (hasPointsPrice(reservation)) {
     const pts = `${reservation.quotedPointsMiles!.toLocaleString("en-US")} pts`;
