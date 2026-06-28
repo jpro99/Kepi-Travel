@@ -7,7 +7,7 @@
     "copy-maplibre-worker": "node scripts/copy-maplibre-worker.cjs",
     "predev": "node scripts/copy-maplibre-worker.cjs",
     "prebuild": "node scripts/copy-maplibre-worker.cjs && npm run test:hotels",
-    "test:hotels": "node --import tsx --test src/lib/hotels/__tests__/*.test.ts",
+    "test:hotels": "node --import tsx --test src/lib/hotels/__tests__/*.test.ts src/lib/travelAssistant/dayPlanLines.test.ts",
     "verify:ship": "node scripts/copy-maplibre-worker.cjs && npm run build && npm run test:adapters",
     "dev": "next dev",
     "build": "node scripts/copy-maplibre-worker.cjs && next build",

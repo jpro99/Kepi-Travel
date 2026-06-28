@@ -12,6 +12,7 @@ export interface ClassifiedDayLine {
 
 const LINE_SPLIT = /\r?\n|;/u;
 
+/** Trimmed lines for parsing intent — not for live text editing. */
 export function parseDayLines(note: string): string[] {
   return note
     .split(LINE_SPLIT)
@@ -19,8 +20,22 @@ export function parseDayLines(note: string): string[] {
     .filter(Boolean);
 }
 
+/** Preserve spaces while the user types (do not trim line bodies). */
+export function parseDayLinesForEditor(note: string): string[] {
+  if (!note) return [""];
+  const split = note.split(LINE_SPLIT);
+  return split.length > 0 ? split : [""];
+}
+
 export function serializeDayLines(lines: string[]): string {
   return lines.map((line) => line.trim()).filter(Boolean).join("\n");
+}
+
+/** Join editor lines without stripping interior or trailing spaces mid-word. */
+export function serializeDayLinesForEditor(lines: string[]): string {
+  if (lines.length === 0) return "";
+  if (lines.length === 1) return lines[0] ?? "";
+  return lines.join("\n");
 }
 
 export function classifyDayLine(text: string): ClassifiedDayLine {

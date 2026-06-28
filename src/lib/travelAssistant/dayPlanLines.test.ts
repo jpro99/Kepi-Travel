@@ -3,13 +3,22 @@ import assert from "node:assert/strict";
 import {
   classifyDayLine,
   parseDayLines,
+  parseDayLinesForEditor,
   resolveStayCityForDay,
   serializeDayLines,
+  serializeDayLinesForEditor,
 } from "./dayPlanLines";
 
 test("parseDayLines splits on newlines and semicolons", () => {
   assert.deepEqual(parseDayLines("In Rome\nDinner at Roscioli"), ["In Rome", "Dinner at Roscioli"]);
   assert.equal(serializeDayLines(["A", "B"]), "A\nB");
+});
+
+test("editor serializers preserve spaces while typing", () => {
+  assert.equal(serializeDayLinesForEditor(["Go to Munich"]), "Go to Munich");
+  assert.equal(serializeDayLinesForEditor(["Stay in ", "Monopoli"]), "Stay in \nMonopoli");
+  assert.deepEqual(parseDayLinesForEditor("Go to Munich"), ["Go to Munich"]);
+  assert.equal(parseDayLinesForEditor("Go to Munich")[0], "Go to Munich");
 });
 
 test("classifyDayLine detects dining and travel", () => {

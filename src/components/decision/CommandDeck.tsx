@@ -1192,7 +1192,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
     recognition.onresult = (event: any) => {
       const text = Array.from(event.results as ArrayLike<{ 0?: { transcript?: string } }>)
         .map((result) => result[0]?.transcript ?? "")
-        .join("")
+        .join(" ")
         .trim();
       setTranscript(text);
       const last = event.results[event.results.length - 1];

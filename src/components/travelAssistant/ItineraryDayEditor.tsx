@@ -5,7 +5,9 @@ import {
   classifyDayLine,
   parseDayIntentFromLines,
   parseDayLines,
+  parseDayLinesForEditor,
   serializeDayLines,
+  serializeDayLinesForEditor,
 } from "@/lib/travelAssistant/dayPlanLines";
 import { buildDayStayTimeline } from "@/lib/travelAssistant/dayStayTimeline";
 
@@ -45,7 +47,10 @@ export function ItineraryDayEditor({
   onPlanHotel,
 }: ItineraryDayEditorProps) {
   const lines = parseDayLines(value);
-  const displayLines = lines.length > 0 ? lines : [""];
+  const displayLines = useMemo(() => {
+    const editorLines = parseDayLinesForEditor(value);
+    return editorLines.length > 0 ? editorLines : [""];
+  }, [value]);
   const parsedIntent = useMemo(() => parseDayIntentFromLines(value), [value]);
 
   const daySnapshot = useMemo(() => {
@@ -54,7 +59,7 @@ export function ItineraryDayEditor({
   }, [dateKey, tripEndDate, tripStartDate, value]);
 
   const updateLines = (nextLines: string[]): void => {
-    onChange(serializeDayLines(nextLines.filter((line, index) => line.trim() || index < nextLines.length - 1)));
+    onChange(serializeDayLinesForEditor(nextLines));
   };
 
   const setLine = (index: number, text: string): void => {
@@ -68,7 +73,7 @@ export function ItineraryDayEditor({
       seed === "Hotel in " && stayCity
         ? `Hotel in ${stayCity}`
         : seed;
-    onChange(serializeDayLines([...lines.filter(Boolean), text]));
+    onChange(serializeDayLinesForEditor([...parseDayLinesForEditor(value).filter((line) => line.trim()), text]));
   };
 
   const removeLine = (index: number): void => {
