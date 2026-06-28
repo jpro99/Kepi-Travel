@@ -13,6 +13,12 @@ import {
 import { hotelReservationMatchesCity } from "@/lib/hotels/hotelStayMatch";
 import { parseDayIntentFromLines } from "@/lib/travelAssistant/dayPlanLines";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
+import {
+  describeBookedAirportPath,
+  hasBookedAirportPath,
+  legDepartureAlignedWithBookedPath,
+  type ItineraryPathSegment,
+} from "@/lib/travelAssistant/itineraryPathCoverage";
 
 export interface PlannedStayCity {
   id: string;
@@ -71,6 +77,48 @@ function legMatchesFlight(leg: FlightLegPlan, flight: TripFlightInput): boolean 
   return diffDays <= 4;
 }
 
+function flightToPathHop(flight: TripFlightInput): ItineraryPathSegment | null {
+  const dep = flight.flightDepartureAirport?.trim().toUpperCase();
+  const arr = flight.flightArrivalAirport?.trim().toUpperCase();
+  if (!dep || !arr) return null;
+  const date = flightDateKey(flight);
+  return {
+    fromCode: dep,
+    toCode: arr,
+    booked: true,
+    departMs: date ? Date.parse(`${date}T12:00:00`) : null,
+  };
+}
+
+function legCoveredByFlights(
+  leg: FlightLegPlan,
+  flights: TripFlightInput[],
+): { covered: boolean; summary?: string; reservationId?: string } {
+  const direct = flights.find((flight) => legMatchesFlight(leg, flight));
+  if (direct) {
+    const fn = direct.flightNumber?.trim();
+    return {
+      covered: true,
+      summary: [fn, `${direct.flightDepartureAirport}→${direct.flightArrivalAirport}`].filter(Boolean).join(" · "),
+      reservationId: direct.id,
+    };
+  }
+
+  const hops = flights.map(flightToPathHop).filter((hop): hop is ItineraryPathSegment => hop !== null);
+  if (!hasBookedAirportPath(hops, leg.fromIata, leg.toIata)) return { covered: false };
+  if (!legDepartureAlignedWithBookedPath(hops, leg.fromIata, leg.departureDate)) return { covered: false };
+
+  const path = describeBookedAirportPath(hops, leg.fromIata, leg.toIata);
+  const firstHop = flights.find(
+    (flight) => flight.flightDepartureAirport?.trim().toUpperCase() === leg.fromIata.toUpperCase(),
+  );
+  return {
+    covered: true,
+    summary: path ? `Booked ${path}` : "Booked via connections",
+    reservationId: firstHop?.id,
+  };
+}
+
 export function buildPlannedStayCities(
   stopRanges: StopDateRange[],
   hotels: TripHotelInput[],
@@ -117,16 +165,17 @@ export function buildPlannedFlightLegs(
       ? buildFlightLegsFromIntent(intent)
       : buildFlightLegsFromStopRanges(stopRanges, start, end, dayNotes);
   return legs.map((leg) => {
-    const match = flights.find((flight) => legMatchesFlight(leg, flight));
+    const coverage = legCoveredByFlights(leg, flights);
+    const match = coverage.covered ? flights.find((flight) => legMatchesFlight(leg, flight)) : undefined;
     const fn = match?.flightNumber?.trim();
-    const summary = match
+    const summary = coverage.summary ?? (match
       ? [fn, `${match.flightDepartureAirport}→${match.flightArrivalAirport}`].filter(Boolean).join(" · ")
-      : undefined;
+      : undefined);
     return {
       ...leg,
-      status: match ? "booked" : "needed",
+      status: coverage.covered ? "booked" : "needed",
       bookedSummary: summary,
-      reservationId: match?.id,
+      reservationId: coverage.reservationId ?? match?.id,
     };
   });
 }

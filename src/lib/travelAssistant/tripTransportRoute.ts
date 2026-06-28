@@ -1,3 +1,9 @@
+import {
+  hasBookedAirportPath,
+  isDirectLegCoveredByConnections,
+  legDepartureAlignedWithBookedPath,
+  type ItineraryPathSegment,
+} from "@/lib/travelAssistant/itineraryPathCoverage";
 import { getAirportByIata } from "@/lib/travelAssistant/airportGeo";
 import { isPlannedReservation, parseAirportsFromLocation } from "@/lib/travelAssistant/plannedReservationMatch";
 import type { PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
@@ -298,6 +304,39 @@ function segmentFromPlannedLeg(leg: PlannedFlightLeg): TripTransportSegment {
   };
 }
 
+function segmentToPathHop(segment: TripTransportSegment): ItineraryPathSegment {
+  return {
+    fromCode: segment.fromCode,
+    toCode: segment.toCode,
+    booked: segment.booked,
+    departMs: segment.departMs,
+  };
+}
+
+function shouldSuppressRedundantUnbookedSegment(
+  segment: TripTransportSegment,
+  allSegments: TripTransportSegment[],
+): boolean {
+  if (segment.booked) return false;
+  const booked = allSegments.filter((s) => s.booked).map(segmentToPathHop);
+  if (!hasBookedAirportPath(booked, segment.fromCode, segment.toCode)) return false;
+  const legDate = segment.dateDisplay
+    ? new Date(segment.sortKey.slice(0, 10) + "T12:00:00").toISOString().slice(0, 10)
+    : segment.sortKey.slice(0, 10);
+  return legDepartureAlignedWithBookedPath(booked, segment.fromCode, legDate);
+}
+
+function plannedLegCoveredBySegments(leg: PlannedFlightLeg, segments: TripTransportSegment[]): boolean {
+  const fromCode = normalizeIata(leg.fromIata) || leg.fromLabel.slice(0, 3).toUpperCase();
+  const toCode = normalizeIata(leg.toIata) || leg.toLabel.slice(0, 3).toUpperCase();
+  return isDirectLegCoveredByConnections({
+    fromCode,
+    toCode,
+    legDate: leg.departureDate,
+    segments: segments.map(segmentToPathHop),
+  });
+}
+
 function legMatchesSegment(leg: PlannedFlightLeg, segment: TripTransportSegment): boolean {
   const legFrom = normalizeIata(leg.fromIata) || leg.fromLabel.slice(0, 3).toUpperCase();
   const legTo = normalizeIata(leg.toIata) || leg.toLabel.slice(0, 3).toUpperCase();
@@ -378,12 +417,15 @@ export function buildTripTransportRoute(
     .filter((segment): segment is TripTransportSegment => segment !== null)
     .sort((a, b) => a.sortKey.localeCompare(b.sortKey) || (a.departMs ?? 0) - (b.departMs ?? 0));
 
+  segments = segments.filter(
+    (segment) => !shouldSuppressRedundantUnbookedSegment(segment, segments),
+  );
+
   for (const leg of plannedFlightLegs) {
     if (leg.status === "booked") continue;
     const alreadyCovered = segments.some((segment) => legMatchesSegment(leg, segment) && segment.booked);
-    if (!alreadyCovered) {
-      segments.push(segmentFromPlannedLeg(leg));
-    }
+    if (alreadyCovered || plannedLegCoveredBySegments(leg, segments)) continue;
+    segments.push(segmentFromPlannedLeg(leg));
   }
 
   segments = segments.sort(

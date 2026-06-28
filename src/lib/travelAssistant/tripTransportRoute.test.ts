@@ -123,6 +123,79 @@ test("buildTripTransportRoute flags impossible connection when next departs befo
   assert.equal(route.summary.conflicts, 1);
 });
 
+test("buildTripTransportRoute hides return-home stub when connections are booked", () => {
+  const route = buildTripTransportRoute(
+    [
+      {
+        id: "f1",
+        type: "flight",
+        title: "Munich to Rome",
+        provider: "ITA",
+        localTime: "2026-09-25 02:00",
+        timezone: "Europe/Berlin",
+        confirmationCode: "ITA437",
+        flightDepartureAirport: "MUC",
+        flightArrivalAirport: "FCO",
+        flightDepartureTime: "2026-09-25T02:00",
+        flightArrivalTime: "2026-09-25T05:00",
+        flightDate: "2026-09-25",
+        flightAirline: "ITA",
+        flightNumber: "AZ437",
+      },
+      {
+        id: "f2",
+        type: "flight",
+        title: "Rome to Seattle",
+        provider: "Alaska",
+        localTime: "2026-09-25 06:15",
+        timezone: "Europe/Rome",
+        confirmationCode: "ASA181",
+        flightDepartureAirport: "FCO",
+        flightArrivalAirport: "SEA",
+        flightDepartureTime: "2026-09-25T06:15",
+        flightArrivalTime: "2026-09-25T09:15",
+        flightDate: "2026-09-25",
+        flightAirline: "Alaska",
+        flightNumber: "AS181",
+      },
+      {
+        id: "f3",
+        type: "flight",
+        title: "Seattle to Ontario",
+        provider: "Alaska",
+        localTime: "2026-09-25 20:43",
+        timezone: "America/Los_Angeles",
+        confirmationCode: "ASA489",
+        flightDepartureAirport: "SEA",
+        flightArrivalAirport: "ONT",
+        flightDepartureTime: "2026-09-25T20:43",
+        flightArrivalTime: "2026-09-25T23:43",
+        flightDate: "2026-09-25",
+        flightAirline: "Alaska",
+        flightNumber: "AS489",
+      },
+    ],
+    [
+      {
+        id: "return",
+        role: "return",
+        fromIata: "MUC",
+        toIata: "ONT",
+        fromLabel: "Munich",
+        toLabel: "Ontario",
+        enabled: true,
+        optional: false,
+        departureDate: "2026-09-25",
+        status: "needed",
+      },
+    ],
+  );
+
+  assert.equal(route.segments.some((segment) => segment.fromCode === "MUC" && segment.toCode === "ONT" && !segment.booked), false);
+  assert.equal(route.summary.unbooked, 0);
+  assert.equal(route.summary.conflicts, 0);
+});
+
 test("buildTripTransportRoute ignores unrelated same-day legs at different airports", () => {
   const route = buildTripTransportRoute([
     {
