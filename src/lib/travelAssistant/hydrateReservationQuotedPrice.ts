@@ -94,3 +94,24 @@ export function hydrateReservationsPricing<T extends CashUsdResolvable & MilesRe
   });
   return changed ? next : reservations;
 }
+
+/** Normalize cash + miles fields when accepting a review item or saving a reservation. */
+export function applyAcceptedReservationPricing<T extends CashUsdResolvable & MilesResolvable>(
+  draft: T,
+  context?: { originalEmailText?: string },
+): T {
+  const merged = {
+    ...draft,
+    originalEmailText: context?.originalEmailText?.trim() || draft.originalEmailText,
+  };
+  const hydrated = hydrateReservationPricing(merged);
+  const cashUsd = resolveReservationCashUsd(hydrated);
+  const miles = resolveReservationMiles(hydrated);
+  return {
+    ...hydrated,
+    quotedPriceUsd: cashUsd != null && cashUsd > 0 ? cashUsd : undefined,
+    quotedPointsMiles: miles.milesSpent,
+    quotedMilesEarned: miles.milesEarned,
+    pointsProgram: miles.program ?? hydrated.pointsProgram,
+  };
+}

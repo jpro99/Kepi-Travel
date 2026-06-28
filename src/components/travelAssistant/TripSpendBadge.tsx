@@ -13,9 +13,16 @@ interface TripSpendBadgeProps {
 }
 
 export function TripSpendBadge({ summary, problemCount = 0, className = "" }: TripSpendBadgeProps) {
-  const hasSpend = summary.cashTotalUsd > 0 || summary.pointsTotal > 0;
+  const hasCash = summary.cashTotalUsd > 0;
+  const hasPoints = summary.pointsTotal > 0;
+  const hasSpend = hasCash || hasPoints;
   const needsAttention = summary.missingPriceCount > 0;
   const hasProblems = problemCount > 0;
+  const cashLabel = hasCash
+    ? formatTripCashTotal(summary.cashTotalUsd)
+    : hasPoints
+      ? "$0 cash"
+      : "$0";
 
   return (
     <div
@@ -30,17 +37,17 @@ export function TripSpendBadge({ summary, problemCount = 0, className = "" }: Tr
         hasProblems
           ? `${problemCount} trip issue${problemCount === 1 ? "" : "s"} — check flights or connections.`
           : needsAttention
-            ? `${summary.missingPriceCount} reservation${summary.missingPriceCount === 1 ? "" : "s"} need a cost — tap a highlighted item to add it.`
-            : "Trip spend tracked from reservation costs"
+            ? `${summary.missingPriceCount} reservation${summary.missingPriceCount === 1 ? "" : "s"} need miles or cash logged — tap a highlighted item.`
+            : "Trip spend tracked from cash and points on your reservations"
       }
     >
       <div className="flex flex-col items-end gap-0.5">
         <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-0.5 text-xs font-bold leading-tight text-slate-800 dark:text-slate-100 sm:text-sm">
           <span className="whitespace-nowrap">
-            {hasSpend ? formatTripCashTotal(summary.cashTotalUsd) : "$0"}
+            {cashLabel}
             <span className="font-medium text-slate-500 dark:text-slate-400"> spent</span>
           </span>
-          {summary.pointsTotal > 0 ? (
+          {hasPoints ? (
             <span className="whitespace-nowrap text-violet-700 dark:text-violet-300">
               {formatTripPointsTotal(summary.pointsTotal)}
             </span>
@@ -52,7 +59,11 @@ export function TripSpendBadge({ summary, problemCount = 0, className = "" }: Tr
           </span>
         ) : needsAttention ? (
           <span className="text-[10px] font-bold uppercase tracking-wide text-yellow-900 dark:text-yellow-200">
-            {summary.missingPriceCount} need cost
+            {summary.missingPriceCount} need pricing
+          </span>
+        ) : hasPoints && !hasCash ? (
+          <span className="text-[10px] font-bold uppercase tracking-wide text-violet-700 dark:text-violet-300">
+            Award trip
           </span>
         ) : null}
       </div>

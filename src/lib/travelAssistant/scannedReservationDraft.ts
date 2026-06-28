@@ -20,6 +20,10 @@ export interface ScannedReservationDraft {
   flightArrivalAirport: string;
   checkOutDate: string;
   roomType: string;
+  quotedPriceUsd?: number;
+  quotedPointsMiles?: number;
+  quotedMilesEarned?: number;
+  pointsProgram?: string;
 }
 
 export function normalizeScannedReservationType(rawType: unknown): ScannedReservationType {
@@ -147,6 +151,26 @@ export function buildScannedReservationDraft(reservationNode: Record<string, unk
   const checkOutDate = normalizeScannedDate(
     typeof reservationNode.checkOutDate === "string" ? reservationNode.checkOutDate : "",
   );
+  const quotedPriceUsdRaw =
+    typeof reservationNode.cashUsd === "number"
+      ? reservationNode.cashUsd
+      : typeof reservationNode.quotedPriceUsd === "number"
+        ? reservationNode.quotedPriceUsd
+        : undefined;
+  const quotedPointsMilesRaw =
+    typeof reservationNode.pointsMiles === "number"
+      ? reservationNode.pointsMiles
+      : typeof reservationNode.quotedPointsMiles === "number"
+        ? reservationNode.quotedPointsMiles
+        : undefined;
+  const quotedMilesEarnedRaw =
+    typeof reservationNode.milesEarned === "number"
+      ? reservationNode.milesEarned
+      : typeof reservationNode.quotedMilesEarned === "number"
+        ? reservationNode.quotedMilesEarned
+        : undefined;
+  const pointsProgram =
+    typeof reservationNode.pointsProgram === "string" ? reservationNode.pointsProgram.trim() : "";
 
   return {
     type: scannedType,
@@ -168,6 +192,19 @@ export function buildScannedReservationDraft(reservationNode: Record<string, unk
     flightArrivalAirport: scannedType === "flight" ? arrivalAirport : "",
     checkOutDate: scannedType === "hotel" ? checkOutDate : "",
     roomType: scannedType === "hotel" ? roomType : "",
+    quotedPriceUsd:
+      typeof quotedPriceUsdRaw === "number" && Number.isFinite(quotedPriceUsdRaw) && quotedPriceUsdRaw > 0
+        ? Math.round(quotedPriceUsdRaw)
+        : undefined,
+    quotedPointsMiles:
+      typeof quotedPointsMilesRaw === "number" && Number.isFinite(quotedPointsMilesRaw) && quotedPointsMilesRaw > 0
+        ? Math.round(quotedPointsMilesRaw)
+        : undefined,
+    quotedMilesEarned:
+      typeof quotedMilesEarnedRaw === "number" && Number.isFinite(quotedMilesEarnedRaw) && quotedMilesEarnedRaw > 0
+        ? Math.round(quotedMilesEarnedRaw)
+        : undefined,
+    pointsProgram: pointsProgram || undefined,
   };
 }
 

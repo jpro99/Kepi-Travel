@@ -61,6 +61,14 @@ Last updated: 2026-06-15
 - Connector legs are enabled by default in `buildPlannedFlightLegs` / `buildFlightLegsFromStopRanges`.
 - City→airport resolution uses `resolveHotelDestinationSync` (Lecce→BDS, Cortina→VCE, Venice→VCE).
 
+## Trip pricing — cash vs points (product)
+
+- **Jeff's trips include award/points-only flights** (e.g. Alaska Atmos). Do **not** require a dollar amount when miles/points are logged.
+- **Points-only = priced:** `quotedPointsMiles` + optional `pointsProgram` satisfies trip spend tracking; `reservationMissingPrice` is false without `quotedPriceUsd`.
+- **Award + $0 due:** When confirmation text shows miles redeemed and total due $0, do **not** impute cash from “ticket value” lines — use miles for trip total instead.
+- **UI:** Review/confirm drawer labels cash as **optional**; header spend badge shows `$0 cash` + points total and “Award trip” when applicable.
+- **Parsing:** `applyAcceptedReservationPricing` / `hydrateReservationPricing` on accept and trip load; PDF scan extracts `pointsMiles` + `pointsProgram` when visible.
+
 ---
 
 ## AI domain bots (Cursor skills)

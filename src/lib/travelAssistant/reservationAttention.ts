@@ -84,7 +84,7 @@ export function reservationAttentionBadge(
   }
   if (kind === "missing-price") {
     return {
-      label: "Add cost",
+      label: "Add miles/cash",
       className:
         "rounded-full bg-yellow-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-yellow-900 dark:bg-yellow-500/30 dark:text-yellow-100",
     };

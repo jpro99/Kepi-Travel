@@ -122,7 +122,7 @@ import { TripCalendarView } from "@/components/travelAssistant/TripCalendarView"
 import { NextUpCard } from "@/components/travelAssistant/NextUpCard";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
-import { hydrateReservationsPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
+import { hydrateReservationsPricing, applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import { buildTransportConflictReservationIds } from "@/lib/travelAssistant/reservationAttention";
 import { computeTripSpend } from "@/lib/travelAssistant/tripSpendSummary";
 import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
@@ -6951,7 +6951,8 @@ export default function TravelAssistantPage() {
   const acceptReviewWithDraft = (reviewId: string, draftOverride?: ReservationDraft): boolean => {
     const target = reviewQueue.find((item) => item.id === reviewId);
     if (!target) return false;
-    const draft = prepareReviewDraftForAccept({
+    const draft = applyAcceptedReservationPricing(
+      prepareReviewDraftForAccept({
       ...(draftOverride ?? target.draft),
       type: (draftOverride ?? target.draft).type,
       title: (draftOverride ?? target.draft).title,
@@ -6966,7 +6967,15 @@ export default function TravelAssistantPage() {
       flightDepartureAirport: (draftOverride ?? target.draft).flightDepartureAirport,
       flightArrivalAirport: (draftOverride ?? target.draft).flightArrivalAirport,
       flightDepartureTime: (draftOverride ?? target.draft).flightDepartureTime,
-    });
+      quotedPriceUsd: (draftOverride ?? target.draft).quotedPriceUsd,
+      quotedPointsMiles: (draftOverride ?? target.draft).quotedPointsMiles,
+      quotedMilesEarned: (draftOverride ?? target.draft).quotedMilesEarned,
+      pointsProgram: (draftOverride ?? target.draft).pointsProgram,
+      notes: (draftOverride ?? target.draft).notes,
+      originalEmailText: target.originalEmailText,
+    }),
+      { originalEmailText: target.originalEmailText },
+    );
     const duplicateReservation = reservations.find((reservation) => isDuplicateReservation(reservation, draft));
     if (duplicateReservation) {
       pushUndoSnapshot("Duplicate review item skipped");
@@ -7017,15 +7026,11 @@ export default function TravelAssistantPage() {
       return false;
     }
     pushUndoSnapshot("Review item accepted");
-    const quotedPriceUsd = resolveReservationCashUsd({
-      ...draft,
-      originalEmailText: target.originalEmailText,
-    });
+    const pricedDraft = applyAcceptedReservationPricing(draft, { originalEmailText: target.originalEmailText });
     const newReservation: Reservation = {
-      ...draft,
+      ...pricedDraft,
       id: nextId("res"),
       source: "review-accepted",
-      quotedPriceUsd,
       sourceEmailId: target.sourceEmailId,
       sourceEmailSubject: target.sourceEmailSubject,
       originalEmailText: target.originalEmailText,
@@ -8306,9 +8311,16 @@ export default function TravelAssistantPage() {
               ) : null}
             </div>
           </label>
+          <section className="rounded-xl border border-violet-200 bg-violet-50 p-4 space-y-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-violet-900">What you paid</p>
+              <p className="mt-1 text-xs text-violet-800">
+                Award ticket? Leave cash blank and enter miles below — that counts toward your trip total.
+              </p>
+            </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-sm font-semibold text-slate-800">Cash spent (USD)</span>
+              <span className="mb-1 block text-sm font-semibold text-slate-800">Cash spent (optional)</span>
               <input
                 type="number"
                 min={0}
@@ -8322,7 +8334,7 @@ export default function TravelAssistantPage() {
                       raw.trim() === "" ? undefined : Math.max(0, Math.round(Number(raw) || 0)),
                   }));
                 }}
-                placeholder="Total cash for this booking"
+                placeholder="Leave blank for award tickets"
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-400"
               />
             </label>
@@ -8375,10 +8387,11 @@ export default function TravelAssistantPage() {
                   pointsProgram: event.target.value.trim() || undefined,
                 }))
               }
-              placeholder="United, Hyatt, Amex…"
+              placeholder="United, Atmos, Hyatt…"
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-400"
             />
           </label>
+          </section>
           <label className="block">
             <span className="mb-1 block text-sm font-semibold text-slate-800">Notes</span>
             <textarea

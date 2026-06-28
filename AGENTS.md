@@ -122,3 +122,4 @@ These are agent playbooks, not autonomous runtime bots. Jeff instructs the condu
 - Hotel stay profile, trip stay planner, LiteAPI fallback, `KEPI_PROJECT_MEMORY.md`
 - Duffel Stays emails already sent by owner — do not re-suggest unless asked
 - Travelpayouts Drive skipped (no sitewide install)
+- **Award/points flights:** trip spend counts miles without requiring cash; drawer cash field optional; don't impute ticket value when miles + $0 due

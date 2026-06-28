@@ -42,6 +42,8 @@ const SPENT_PATTERNS: RegExp[] = [
   /\b([0-9,]+)\s*(?:miles?|points?)\s*(?:redeem(?:ed)?|used|spent|deducted|applied)\b/giu,
   /\b(?:miles?|points?)\s*(?:redeem(?:ed)?|used|spent|deducted)[:\-]?\s*([0-9,]+)\b/giu,
   /\b(?:award\s+(?:travel|ticket|redemption))[^0-9]{0,24}([0-9,]+)\s*(?:miles?|points?)\b/giu,
+  /\b(?:redemption|redeemed)[:\s]+([0-9,]+)\s*(?:miles?|points?)\b/giu,
+  /\b([0-9,]+)\s*(?:miles?|points?)\s*(?:\+|\s)?(?:taxes?|fees?|surcharge)\b/giu,
 ];
 
 const EARNED_PATTERNS: RegExp[] = [

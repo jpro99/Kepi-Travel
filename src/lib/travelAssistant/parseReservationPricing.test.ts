@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseCashUsdFromText } from "@/lib/travelAssistant/parseReservationCashUsd";
+import { parseCashUsdFromText, resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
 import {
   parseMilesFromText,
   resolveReservationPricing,
@@ -34,6 +34,18 @@ test("parseCashUsdFromText ignores zero-dollar total due on exchanges", () => {
 test("parseMilesFromText detects Atmos Rewards program", () => {
   const parsed = parseMilesFromText(ALASKA_EXCHANGE_EMAIL);
   assert.equal(parsed.program, "Atmos Rewards");
+});
+
+test("resolveReservationCashUsd skips ticket value for miles-only award with zero due", () => {
+  const text =
+    "Award travel confirmation. You redeemed 60,000 miles. Total amount due: $0.00. New Ticket Value: $1,386.43";
+  assert.equal(parseCashUsdFromText(text), undefined);
+  assert.equal(
+    resolveReservationCashUsd({
+      originalEmailText: text,
+    }),
+    undefined,
+  );
 });
 
 test("parseMilesFromText reads miles spent and earned when present", () => {
