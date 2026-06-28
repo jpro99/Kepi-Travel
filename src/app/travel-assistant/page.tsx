@@ -132,12 +132,19 @@ import {
 } from "@/components/travelAssistant/BookFlightsWizard";
 import { buildTripPlanFromIntent } from "@/lib/travelAssistant/tripPlanFromIntent";
 import {
+  buildFlightSearchPlan,
   buildPlannedFlightLegs,
   buildPlannedStayCities,
   plannedStayCityToSegment,
   type FlightSearchPlan,
   type PlannedStayCity,
 } from "@/lib/travelAssistant/tripPlanBooking";
+import { buildTripActionItems, type TripActionItem } from "@/lib/travelAssistant/tripActionItems";
+import { TripActionList } from "@/components/travelAssistant/TripActionList";
+import {
+  PostBookingConfirmation,
+  type PostBookingConfirmationData,
+} from "@/components/travelAssistant/PostBookingConfirmation";
 import { resolveEffectiveStopRanges } from "@/lib/travelAssistant/dayNoteStopRanges";
 import { allocateStopDates } from "@/lib/decision/stopDates";
 import { resolveStayCityForDay } from "@/lib/travelAssistant/dayPlanLines";
@@ -1956,6 +1963,7 @@ export default function TravelAssistantPage() {
   const [manualReservationPresetType, setManualReservationPresetType] = useState<"flight" | "hotel" | null>(null);
   const [hotelSearchModalOpen, setHotelSearchModalOpen] = useState(false);
   const [hotelSearchSegment, setHotelSearchSegment] = useState<TripStaySegment | null>(null);
+  const [postBookingConfirmation, setPostBookingConfirmation] = useState<PostBookingConfirmationData | null>(null);
   const [manualStaySegmentsByTrip, setManualStaySegmentsByTrip] = useState<Record<string, TripStaySegmentInput[]>>({});
   const [tripStayDecisionsByTrip, setTripStayDecisionsByTrip] = useState<
     Record<string, Record<string, "needs_hotel" | "skip">>
@@ -2151,6 +2159,13 @@ export default function TravelAssistantPage() {
       .then((r) => r.json())
       .then((d: { success?: boolean; bookingReference?: string; error?: string; alreadyFulfilled?: boolean }) => {
         if (d.success && d.bookingReference) {
+          setPostBookingConfirmation({
+            kind: "hotel",
+            title: d.alreadyFulfilled ? "Hotel already confirmed" : "Hotel booked",
+            confirmationCode: d.bookingReference,
+            detail: "Your stay is on the timeline. Check Hotels for details and check-in notes.",
+            syncedToTrip: true,
+          });
           setToastRaw(
             d.alreadyFulfilled
               ? `✅ Hotel already confirmed · ref ${d.bookingReference}`
@@ -4020,66 +4035,6 @@ export default function TravelAssistantPage() {
     [transportRouteReservations],
   );
 
-  const consumerStatus = useMemo(() => {
-    const connectionIssues = transportConflictReservationIds.size;
-    if (tripStatus === "red" || activeScenario !== "none" || delayedFlight || connectionIssues > 0) {
-      return {
-        title: connectionIssues > 0 ? "Connection problem 🔴" : "Flight delayed 🔴",
-        detail:
-          connectionIssues > 0
-            ? `${connectionIssues} connection issue${connectionIssues === 1 ? "" : "s"} on your route — check Flights.`
-            : delayedFlight
-              ? `${delayedFlight.provider} needs attention.`
-              : "Something changed. Kepi can help fix it.",
-        tone: "border-red-200 bg-red-50 text-red-950 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-50",
-      };
-    }
-    if (unresolvedReviewCount > 0 || unresolvedReadinessCount > 0 || blockingIssueCount > 0 || tripStatus === "yellow") {
-      return {
-        title: "Action needed ⚠️",
-        detail:
-          unresolvedReviewCount > 0
-            ? `${unresolvedReviewCount} email${unresolvedReviewCount === 1 ? "" : "s"} to review.`
-            : unresolvedReadinessCount > 0
-              ? `${unresolvedReadinessCount} checklist item${unresolvedReadinessCount === 1 ? "" : "s"} left.`
-              : blockingIssueCount > 0
-                ? `${blockingIssueCount} blocker${blockingIssueCount === 1 ? "" : "s"} to clear.`
-                : "Action needed to keep this trip on track.",
-        tone: "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-50",
-      };
-    }
-    return {
-      title: "You're ready ✅",
-      detail: "Everything important looks set.",
-      tone: "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-50",
-    };
-  }, [
-    activeScenario,
-    blockingIssueCount,
-    delayedFlight,
-    transportConflictReservationIds.size,
-    tripStatus,
-    unresolvedReadinessCount,
-    unresolvedReviewCount,
-  ]);
-  const consumerHeroStatus = useMemo(() => {
-    if (tripStatus === "red" || activeScenario !== "none" || delayedFlight || transportConflictReservationIds.size > 0) {
-      return {
-        label: "Urgent",
-        className: "bg-red-500/15 text-red-700 ring-1 ring-red-500/30 dark:text-red-200",
-      };
-    }
-    if (tripStatus === "yellow" || unresolvedReviewCount > 0 || unresolvedReadinessCount > 0 || blockingIssueCount > 0) {
-      return {
-        label: "Action needed",
-        className: "bg-amber-500/15 text-amber-700 ring-1 ring-amber-500/30 dark:text-amber-200",
-      };
-    }
-    return {
-      label: "All good",
-      className: "bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/30 dark:text-emerald-200",
-    };
-  }, [activeScenario, blockingIssueCount, delayedFlight, transportConflictReservationIds.size, tripStatus, unresolvedReadinessCount, unresolvedReviewCount]);
   const consumerReservationsSorted = useMemo(() => {
     // Convert local departure time + timezone to UTC ms for correct ordering.
     // Without this, HND 21:20 JST sorts after HNL 13:41 HST even though
@@ -4400,6 +4355,103 @@ export default function TravelAssistantPage() {
       }).selfCheck,
     [plannedFlightLegs, transportRouteReservations],
   );
+
+  const tripPlanningActions = useMemo(
+    () =>
+      buildTripActionItems({
+        plannedStayCities,
+        tripStaySegments,
+        plannedFlightLegs,
+        transportReservations: transportRouteReservations,
+      }),
+    [plannedFlightLegs, plannedStayCities, transportRouteReservations, tripStaySegments],
+  );
+
+  const consumerStatus = useMemo(() => {
+    const connectionIssues = transportConflictReservationIds.size;
+    if (tripStatus === "red" || activeScenario !== "none" || delayedFlight || connectionIssues > 0) {
+      return {
+        title: connectionIssues > 0 ? "Connection problem 🔴" : "Flight delayed 🔴",
+        detail:
+          connectionIssues > 0
+            ? `${connectionIssues} connection issue${connectionIssues === 1 ? "" : "s"} on your route — check Flights.`
+            : delayedFlight
+              ? `${delayedFlight.provider} needs attention.`
+              : "Something changed. Kepi can help fix it.",
+        tone: "border-red-200 bg-red-50 text-red-950 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-50",
+      };
+    }
+    if (unresolvedReviewCount > 0 || unresolvedReadinessCount > 0 || blockingIssueCount > 0 || tripStatus === "yellow") {
+      return {
+        title: "Action needed ⚠️",
+        detail:
+          unresolvedReviewCount > 0
+            ? `${unresolvedReviewCount} email${unresolvedReviewCount === 1 ? "" : "s"} to review.`
+            : unresolvedReadinessCount > 0
+              ? `${unresolvedReadinessCount} checklist item${unresolvedReadinessCount === 1 ? "" : "s"} left.`
+              : blockingIssueCount > 0
+                ? `${blockingIssueCount} blocker${blockingIssueCount === 1 ? "" : "s"} to clear.`
+                : "Action needed to keep this trip on track.",
+        tone: "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-50",
+      };
+    }
+    if (tripPlanningActions.length > 0) {
+      return {
+        title: `${activeTrip?.name ?? "Your trip"} · action needed`,
+        detail: `${tripPlanningActions.length} booking${tripPlanningActions.length === 1 ? "" : "s"} still to do.`,
+        tone: "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-50",
+      };
+    }
+    return {
+      title: "You're ready ✅",
+      detail: "Everything important looks set.",
+      tone: "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-50",
+    };
+  }, [
+    activeScenario,
+    activeTrip?.name,
+    blockingIssueCount,
+    delayedFlight,
+    transportConflictReservationIds.size,
+    tripPlanningActions.length,
+    tripStatus,
+    unresolvedReadinessCount,
+    unresolvedReviewCount,
+  ]);
+
+  const consumerHeroStatus = useMemo(() => {
+    if (tripStatus === "red" || activeScenario !== "none" || delayedFlight || transportConflictReservationIds.size > 0) {
+      return {
+        label: "Urgent",
+        className: "bg-red-500/15 text-red-700 ring-1 ring-red-500/30 dark:text-red-200",
+      };
+    }
+    if (
+      tripStatus === "yellow" ||
+      unresolvedReviewCount > 0 ||
+      unresolvedReadinessCount > 0 ||
+      blockingIssueCount > 0 ||
+      tripPlanningActions.length > 0
+    ) {
+      return {
+        label: "Action needed",
+        className: "bg-amber-500/15 text-amber-700 ring-1 ring-amber-500/30 dark:text-amber-200",
+      };
+    }
+    return {
+      label: "All good",
+      className: "bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/30 dark:text-emerald-200",
+    };
+  }, [
+    activeScenario,
+    blockingIssueCount,
+    delayedFlight,
+    transportConflictReservationIds.size,
+    tripPlanningActions.length,
+    tripStatus,
+    unresolvedReadinessCount,
+    unresolvedReviewCount,
+  ]);
 
   useEffect(() => {
     if (!activeTripId) return;
@@ -5365,6 +5417,15 @@ export default function TravelAssistantPage() {
       setManualReservationModalOpen(false);
       setManualReservationPresetType(null);
       setToast("Reservation added ✓");
+      if (reservation.confirmationCode?.trim()) {
+        setPostBookingConfirmation({
+          kind: reservation.type === "hotel" ? "hotel" : reservation.type === "flight" ? "flight" : "import",
+          title: `${reservation.type === "hotel" ? "Hotel" : reservation.type === "flight" ? "Flight" : "Booking"} added`,
+          confirmationCode: reservation.confirmationCode.trim(),
+          detail: `${reservation.provider || reservation.title || "Reservation"} is on your timeline.`,
+          syncedToTrip: true,
+        });
+      }
     },
     [activeTripId, pushUndoSnapshot, queueMutation, setToast, trips],
   );
@@ -5407,6 +5468,63 @@ export default function TravelAssistantPage() {
     setHotelSearchSegment(segment);
     setHotelSearchModalOpen(true);
   }, []);
+
+  const handleTripPlanningAction = useCallback(
+    (item: TripActionItem): void => {
+      if (item.kind === "hotel") {
+        const planned = item.plannedCityId
+          ? plannedStayCities.find((city) => city.id === item.plannedCityId)
+          : undefined;
+        if (planned) {
+          openHotelSearchForPlannedCity(planned);
+        } else {
+          const segment = item.segmentId
+            ? tripStaySegments.find((seg) => seg.id === item.segmentId)
+            : undefined;
+          if (segment) openHotelSearchForSegment(segment);
+        }
+        navigateToConsumerTab("hotels");
+        return;
+      }
+      if (item.kind === "flight") {
+        const leg = item.flightLegId
+          ? plannedFlightLegs.find((l) => l.id === item.flightLegId)
+          : plannedFlightLegs.find((l) => l.status === "needed");
+        if (leg) {
+          const plan = buildFlightSearchPlan([leg]);
+          if (plan) {
+            handleFlightSearchPlan(plan);
+            return;
+          }
+        }
+        setBookFlightsWizardOpen(true);
+        navigateToConsumerTab("flights");
+        return;
+      }
+      if (item.kind === "transport") {
+        setManualReservationPresetType("ride");
+        setManualReservationModalOpen(true);
+        navigateToConsumerTab("flights");
+        return;
+      }
+      if (item.kind === "import") {
+        navigateToConsumerTab("trip");
+        setToast("Forward booking emails or use Import to add confirmations.");
+        return;
+      }
+      navigateToConsumerTab("flights");
+    },
+    [
+      handleFlightSearchPlan,
+      navigateToConsumerTab,
+      openHotelSearchForPlannedCity,
+      openHotelSearchForSegment,
+      plannedFlightLegs,
+      plannedStayCities,
+      setToast,
+      tripStaySegments,
+    ],
+  );
 
   const handleAddCityStay = useCallback(
     (input: { city: string; checkIn: string; checkOut: string }) => {
@@ -8557,6 +8675,9 @@ export default function TravelAssistantPage() {
                     locationStatus={guidanceLocationStatus}
                     nearestAirport={guidanceNearestAirport}
                   />
+                  {tripPlanningActions.length > 0 ? (
+                    <TripActionList items={tripPlanningActions} onAction={handleTripPlanningAction} />
+                  ) : null}
                   <OnTrackButton
                     reservations={consumerReservationsSorted}
                     tripName={activeTrip?.name ?? "Your trip"}
@@ -10226,6 +10347,11 @@ export default function TravelAssistantPage() {
             setGmailScopeModalOpen(false);
           });
         }}
+      />
+      <PostBookingConfirmation
+        data={postBookingConfirmation}
+        onDismiss={() => setPostBookingConfirmation(null)}
+        onViewTrip={() => navigateToConsumerTab("trip")}
       />
       <InstallPrompt />
       {travelStyleQuizOpen ? (

@@ -40,6 +40,14 @@ Free-text inputs (itinerary day lines, trip prompts, stay-style notes) must pres
 
 **Test:** `src/lib/travelAssistant/dayPlanLines.test.ts`
 
+**G10 — Trip tab shows actionable booking gaps**  
+When hotels, flights, or transport are still unbooked, the Trips header must list clickable fix items (e.g. "Book hotel in Monopoli") — never "all good" while planning gaps remain.
+
+**Test:** `src/lib/travelAssistant/tripActionItems.test.ts`
+
+**G11 — Post-booking confirmation**  
+After a successful hotel checkout or manual reservation with a confirmation code, show a confirmation card with ref # and "Added to your trip timeline" — not toast alone.
+
 ---
 
 ## FLIGHTS LAWS
@@ -217,5 +225,6 @@ Resend emails use `@react-email/render` → `html:` — never `react:` prop or `
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |
 | G8 | `src/lib/travelAssistant/dayPlanLines.test.ts` |
+| G10 | `src/lib/travelAssistant/tripActionItems.test.ts` |
 
 New laws must add a row here when a test exists.
