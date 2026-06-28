@@ -13,6 +13,7 @@ interface HotelDetailSheetProps {
   city: string;
   memberHotelPricing?: boolean;
   saved?: boolean;
+  usePoints?: boolean;
   onSaveToTrip: () => void;
   onClose: () => void;
 }
@@ -23,6 +24,7 @@ export function HotelDetailSheet({
   city,
   memberHotelPricing = false,
   saved = false,
+  usePoints = false,
   onSaveToTrip,
   onClose,
 }: HotelDetailSheetProps) {
@@ -61,8 +63,11 @@ export function HotelDetailSheet({
     address: hotel.address,
     checkInDate: hotel.checkIn,
     checkOutDate: hotel.checkOut,
+    guests: hotel.guests,
+    rooms: hotel.rooms,
     quotedPriceUsd: hotel.browseOnly ? undefined : hotel.totalPrice,
     quoteId: hotel.browseOnly ? undefined : hotel.id,
+    usePoints,
   });
 
   const pinStyle = hotelMapPinStyle(hotel, fitScoreRange(allHotels));
@@ -199,6 +204,12 @@ export function HotelDetailSheet({
 
             <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">{hotel.whyLine}</p>
 
+            {hotel.pointsOption && usePoints ? (
+              <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
+                {hotel.pointsOption.reason} — book on the chain site with points prefilled.
+              </p>
+            ) : null}
+
             {hotel.amenities.length > 0 ? (
               <p className="text-[11px] text-slate-500">{hotel.amenities.slice(0, 6).join(" · ")}</p>
             ) : null}
@@ -277,7 +288,7 @@ export function HotelDetailSheet({
                     rel="noopener noreferrer"
                     className="flex items-center justify-center rounded-xl bg-sky-600 py-3 text-sm font-black text-white hover:bg-sky-500"
                   >
-                    View rooms &amp; prices →
+                    {usePoints ? "Book with points on chain site →" : "View rooms & prices →"}
                   </a>
                 )}
                 {kepiBookable ? (

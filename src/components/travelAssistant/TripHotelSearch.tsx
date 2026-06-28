@@ -17,6 +17,14 @@ import {
   SEARCH_PRIMARY_BUTTON,
 } from "@/lib/ui/searchResponsive";
 import type { HotelSearchResult, RankedHotelSearchResult } from "@/lib/hotels/types";
+import { HotelChainFilterBar } from "@/components/travelAssistant/ChainFilterBar";
+import {
+  enabledHotelChainIds,
+  loadHotelChainToggles,
+  saveHotelChainToggles,
+  type ChainToggleMap,
+} from "@/lib/loyalty/chainFilterPrefs";
+import { hotelParticipatesInPoints, matchHotelChain, type HotelChainId } from "@/lib/loyalty/chainRegistry";
 
 type PayMode = "any" | "cash" | "points";
 type SortMode = "browse" | "price" | "rating" | "match" | "points";
@@ -189,6 +197,8 @@ export function TripHotelSearch({
   const [learningNote, setLearningNote] = useState<string | null>(null);
   const [memberHotelPricing, setMemberHotelPricing] = useState(false);
   const [cityCenter, setCityCenter] = useState<{ lat: number; lng: number } | null>(null);
+  const [chainToggles, setChainToggles] = useState<ChainToggleMap<HotelChainId>>(() => loadHotelChainToggles());
+  const [chainFilterCollapsed, setChainFilterCollapsed] = useState(true);
   const autoSearchKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -302,14 +312,39 @@ export function TripHotelSearch({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultCity, defaultCityIata, defaultCheckIn, defaultCheckOut]);
 
+  const enabledChains = useMemo(() => new Set(enabledHotelChainIds(chainToggles)), [chainToggles]);
+
+  const handleChainToggle = (id: HotelChainId, enabled: boolean): void => {
+    setChainToggles((prev) => {
+      const next = { ...prev, [id]: enabled };
+      saveHotelChainToggles(next);
+      return next;
+    });
+  };
+
   const visibleResults = useMemo(() => {
     let rows = results.filter((hotel) => !dismissedIds.has(hotel.id));
+
+    if (payMode === "points") {
+      rows = rows.filter((hotel) => hotelParticipatesInPoints(hotel.chainName, hotel.name));
+    }
+
+    rows = rows.filter((hotel) => {
+      const chainId = matchHotelChain(hotel.chainName, hotel.name);
+      if (!chainId) return payMode !== "points";
+      return enabledChains.has(chainId);
+    });
+
     if (!showNearby) {
       rows = rows.filter((hotel) => hotel.inSearchCity !== false);
     }
     if (sortMode === "points" || payMode === "points") {
-      rows = rows.filter((hotel) => hotel.pointsOption && hotel.pointsOption.cppAchieved >= 0.8);
-      rows.sort((a, b) => (b.pointsOption?.cppAchieved ?? 0) - (a.pointsOption?.cppAchieved ?? 0));
+      rows.sort((a, b) => {
+        const aCpp = a.pointsOption?.cppAchieved ?? 0;
+        const bCpp = b.pointsOption?.cppAchieved ?? 0;
+        if (aCpp !== bCpp) return bCpp - aCpp;
+        return a.rank - b.rank;
+      });
     } else if (sortMode === "price" || sortMode === "browse" || payMode === "cash") {
       rows.sort((a, b) => {
         const aLive = !a.browseOnly && a.pricePerNight > 0;
@@ -324,7 +359,7 @@ export function TripHotelSearch({
       rows.sort((a, b) => a.rank - b.rank);
     }
     return rows;
-  }, [results, dismissedIds, payMode, sortMode, showNearby]);
+  }, [results, dismissedIds, payMode, sortMode, showNearby, enabledChains]);
 
   const inCityHotels = useMemo(
     () => visibleResults.filter((hotel) => hotel.inSearchCity !== false),
@@ -534,6 +569,28 @@ export function TripHotelSearch({
           <div className="flex flex-wrap items-center gap-1.5">
             {(
               [
+                ["cash", "Cash"],
+                ["points", "Points"],
+              ] as const
+            ).map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => {
+                  setPayMode(mode);
+                  if (mode === "points") setSortMode("points");
+                  else if (sortMode === "points") setSortMode("browse");
+                }}
+                className={`rounded-full px-3 py-1 text-[10px] font-bold ${
+                  payMode === mode ? "bg-emerald-600 text-white" : "border border-slate-300 text-slate-600"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+            <span className="text-[10px] text-slate-400">|</span>
+            {(
+              [
                 ["browse", "Browse all"],
                 ["price", "Lowest price"],
                 ["rating", "Top rated"],
@@ -563,6 +620,19 @@ export function TripHotelSearch({
               </button>
             ) : null}
           </div>
+
+          <HotelChainFilterBar
+            toggles={chainToggles}
+            onChange={handleChainToggle}
+            collapsed={chainFilterCollapsed}
+            onToggleCollapse={() => setChainFilterCollapsed((value) => !value)}
+          />
+
+          {payMode === "points" ? (
+            <p className="text-[11px] text-emerald-800 dark:text-emerald-200">
+              Points mode shows Hyatt, Marriott, Hilton, and IHG hotels on the map. Uncheck chains you don&apos;t want — booking opens their site with your dates filled in.
+            </p>
+          ) : null}
 
           {loading ? (
             <div className="space-y-2">
@@ -632,6 +702,7 @@ export function TripHotelSearch({
               city={resolvedCity ?? city}
               memberHotelPricing={memberHotelPricing}
               saved={savedHotelIds.has(detailHotel.id)}
+              usePoints={payMode === "points"}
               onSaveToTrip={() => handleSaveToTrip(detailHotel)}
               onClose={() => setDetailHotelId(null)}
             />

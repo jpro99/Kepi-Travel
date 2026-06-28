@@ -4,6 +4,17 @@ import {
   appendGoogleHotelsAffiliateParams,
   buildBookingComSearchUrl,
 } from "@/lib/hotels/hotelAffiliateLinks";
+import {
+  buildAirlineBookUrl,
+  buildHotelChainBookUrl,
+  matchAirlineChain,
+  matchHotelChain,
+  resolveAirlineChainBookUrl,
+  resolveHotelChainBookUrl,
+  AIRLINE_CHAINS,
+  type AirlineChainId,
+  type HotelChainId,
+} from "@/lib/loyalty/chainRegistry";
 
 const AIRLINE_HOME: Record<string, string> = {
   alaska: "https://www.alaskaair.com",
@@ -51,12 +62,23 @@ export function resolveCashBookUrl(input: {
   origin: string;
   destination: string;
   departureDate: string;
+  returnDate?: string;
+  passengers?: number;
   airline?: string;
+  airlineIata?: string;
   /** Present when Duffel returned a live offer — prefer route-specific Google Flights. */
   offerId?: string;
   quotedPriceUsd?: number;
   flightNumber?: string;
 }): { url: string; label: string } {
+  const chainLink = resolveAirlineChainBookUrl(input.airline, input.airlineIata, {
+    origin: input.origin,
+    destination: input.destination,
+    departureDate: input.departureDate,
+    returnDate: input.returnDate,
+    passengers: input.passengers,
+    usePoints: false,
+  });
   const googleUrl = buildGoogleFlightsUrl(input);
 
   if (input.offerId?.trim()) {
@@ -67,9 +89,13 @@ export function resolveCashBookUrl(input: {
         ? ` · $${Math.round(input.quotedPriceUsd).toLocaleString()} verified`
         : " · live quote";
     return {
-      url: googleUrl,
-      label: `${airlineBit}${flightBit} on Google Flights${priceBit} ↗`,
+      url: chainLink?.url ?? googleUrl,
+      label: `${airlineBit}${flightBit} on ${chainLink ? chainLink.label.replace(" ↗", "") : "Google Flights"}${priceBit} ↗`,
     };
+  }
+
+  if (chainLink) {
+    return { url: chainLink.url, label: chainLink.label };
   }
 
   const airlineUrl = input.airline ? resolveAirlineHomeUrl(input.airline) : null;
@@ -103,9 +129,32 @@ export function resolveAwardBookUrl(input: {
   origin: string;
   destination: string;
   departureDate: string;
+  returnDate?: string;
+  passengers?: number;
   milesCost: number;
   verifyUrl?: string;
 }): { url: string; label: string } {
+  const programKey = input.program.toLowerCase();
+  const chainFromId = AIRLINE_CHAINS.find((chain) => chain.id === programKey)?.id;
+  const chainId = chainFromId ?? matchAirlineChain(input.program);
+  const chainLink =
+    chainId &&
+    buildAirlineBookUrl(chainId, {
+      origin: input.origin,
+      destination: input.destination,
+      departureDate: input.departureDate,
+      returnDate: input.returnDate,
+      passengers: input.passengers,
+      usePoints: true,
+    });
+
+  if (chainLink) {
+    return {
+      url: chainLink,
+      label: `Book ${input.milesCost.toLocaleString()} mi on ${input.program} ↗`,
+    };
+  }
+
   const programUrl = AWARD_PROGRAM_BOOK[input.program.toLowerCase()];
   if (programUrl) {
     return {
@@ -124,6 +173,7 @@ export function resolveAwardBookUrl(input: {
       origin: input.origin,
       destination: input.destination,
       departureDate: input.departureDate,
+      returnDate: input.returnDate,
     }),
     label: "Search award space ↗",
   };
@@ -225,24 +275,54 @@ export function resolveHotelBookUrl(input: {
   address?: string;
   checkInDate: string;
   checkOutDate: string;
+  guests?: number;
+  rooms?: number;
   quotedPriceUsd?: number;
   quoteId?: string;
-}): { url: string; label: string; bookingComUrl?: string } {
+  usePoints?: boolean;
+}): { url: string; label: string; bookingComUrl?: string; chainBookUrl?: string } {
+  const destination = input.destination ?? input.location ?? "";
+  const chainLink = resolveHotelChainBookUrl(input.chainName, input.propertyName, {
+    propertyName: input.propertyName,
+    city: destination,
+    checkIn: input.checkInDate,
+    checkOut: input.checkOutDate,
+    guests: input.guests,
+    rooms: input.rooms,
+    usePoints: input.usePoints,
+  });
+
   const googleUrl = buildGoogleHotelsUrl({
     propertyName: input.propertyName,
-    destination: input.destination ?? input.location,
+    destination,
     address: input.address,
     checkInDate: input.checkInDate,
     checkOutDate: input.checkOutDate,
   });
   const bookingComUrl =
     buildBookingComSearchUrl({
-      destination: input.destination ?? input.location ?? "",
+      destination,
       checkInDate: input.checkInDate,
       checkOutDate: input.checkOutDate,
       propertyName: input.propertyName,
     }) ?? undefined;
   const isLiveQuote = Boolean(input.quoteId?.trim() && !input.quoteId.startsWith("est-"));
+
+  if (chainLink) {
+    const shortName = input.propertyName.split(/\s+/).slice(0, 4).join(" ");
+    const priceBit =
+      input.quotedPriceUsd !== undefined
+        ? ` · $${Math.round(input.quotedPriceUsd).toLocaleString()}`
+        : isLiveQuote
+          ? " · live quote"
+          : "";
+    return {
+      url: chainLink.url,
+      label: input.usePoints ? chainLink.label : `${shortName} on ${chainLink.label.replace(" ↗", "")}${priceBit} ↗`,
+      bookingComUrl,
+      chainBookUrl: chainLink.url,
+    };
+  }
 
   if (isLiveQuote || input.quotedPriceUsd !== undefined) {
     const shortName = input.propertyName.split(/\s+/).slice(0, 4).join(" ");
@@ -261,10 +341,23 @@ export function resolveHotelBookUrl(input: {
 
   const chainUrl = input.chainName ? resolveHotelChainHomeUrl(input.chainName) : null;
   if (chainUrl) {
+    const chainId = matchHotelChain(input.chainName, input.propertyName);
+    const prefilled =
+      chainId &&
+      buildHotelChainBookUrl(chainId, {
+        propertyName: input.propertyName,
+        city: destination,
+        checkIn: input.checkInDate,
+        checkOut: input.checkOutDate,
+        guests: input.guests,
+        rooms: input.rooms,
+        usePoints: input.usePoints,
+      });
     return {
-      url: chainUrl,
+      url: prefilled ?? chainUrl,
       label: `Book on ${input.chainName?.split(" ")[0] ?? "chain"} ↗`,
       bookingComUrl,
+      chainBookUrl: prefilled ?? chainUrl,
     };
   }
 

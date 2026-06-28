@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { TripFlightLegPicker } from "@/components/travelAssistant/TripFlightLegPicker";
+import { FlightSearchModal } from "@/components/travelAssistant/FlightSearchModal";
 import type { FlightSearchPlan, PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
 import { buildGateInstructions, getAirportNav, buildArrivalGuide } from "@/lib/travelAssistant/airportNavigation";
 
@@ -423,6 +424,15 @@ export function FlightsTab({
 }: FlightsTabProps) {
   const [showPast, setShowPast] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [flightSearchOpen, setFlightSearchOpen] = useState(false);
+  const [flightSearchPlan, setFlightSearchPlan] = useState<FlightSearchPlan | null>(null);
+  const [flightSearchLegs, setFlightSearchLegs] = useState<PlannedFlightLeg[]>([]);
+
+  const handleFlightSearch = (plan: FlightSearchPlan, selectedLegs: PlannedFlightLeg[]): void => {
+    setFlightSearchPlan(plan);
+    setFlightSearchLegs(selectedLegs);
+    setFlightSearchOpen(true);
+  };
 
   // Dedup by flightNumber + date, then split upcoming/past
   const { upcoming, past, nextFlight } = useMemo(() => {
@@ -470,13 +480,21 @@ export function FlightsTab({
 
   return (
     <section className="space-y-4 pb-6">
-      {plannedFlightLegs.length > 0 && onSearchFlights ? (
+      {plannedFlightLegs.length > 0 ? (
         <TripFlightLegPicker
           legs={plannedFlightLegs}
           tripName={tripName}
-          onSearch={onSearchFlights}
+          onSearch={handleFlightSearch}
         />
       ) : null}
+
+      <FlightSearchModal
+        open={flightSearchOpen}
+        tripName={tripName}
+        plan={flightSearchPlan}
+        selectedLegs={flightSearchLegs}
+        onClose={() => setFlightSearchOpen(false)}
+      />
 
       {/* ── ARRIVAL GUIDE — shown when airborne or just landed ── */}
       {/* Apple: when you're on a plane, show where you're going, not where you left */}
