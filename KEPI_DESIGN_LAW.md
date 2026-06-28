@@ -215,6 +215,14 @@ Left border color on destination blocks must always match the calendar leg color
 **I15 — Stay night counts use checkout math**  
 Display nights as `(checkOut − checkIn)` in whole days — not inclusive calendar day count. A stay Sep 12–Sep 24 shows 12 nights, not 13.
 
+**I16 — Light theme by default**  
+Kepi uses a light theme by default. Dark backgrounds are used only for the trip header banner. All content cards are white or `#F5F5F7`. Color is an accent, never a background fill.
+
+**I17 — Calendar auto height and leg color separation**  
+Calendar container height must always be auto — never fixed. It shrinks to its content. No two adjacent trip legs may use visually similar colors. Colors must be distinguishable at a glance without reading the labels.
+
+**Test:** `src/lib/travelAssistant/buildTripLegs.test.ts`
+
 **I9 — Calendar is its own tab**  
 The leg-colored calendar lives on the **Calendar** consumer tab at full width — not split beside the Plan timeline on the same view.
 
@@ -280,6 +288,6 @@ Resend emails use `@react-email/render` → `html:` — never `react:` prop or `
 | G8 | `src/lib/travelAssistant/dayPlanLines.test.ts` |
 | G10 | `src/lib/travelAssistant/tripActionItems.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
-| I8, I10, I12, I15 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
+| I8, I10, I12, I15, I17 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
 
 New laws must add a row here when a test exists.

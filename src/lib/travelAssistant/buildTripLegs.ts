@@ -3,15 +3,24 @@ import { buildFullTripDayKeys } from "@/lib/travelAssistant/tripTimelinePlanning
 
 export const TRAVEL_LEG_COLOR = "#4A6FA5";
 
-/** Stay legs cycle in order — visually distinct at a glance (see KEPI_DESIGN_LAW I8). */
+/** Stay legs cycle in order — six distinguishable hues (see KEPI_DESIGN_LAW I8, I17). */
 export const STAY_LEG_PALETTE = [
   "#C17F59",
   "#2D8A6E",
   "#7B68C8",
   "#C4943A",
-  "#8B3A52",
-  "#2E9E8F",
 ] as const;
+
+export interface LegendLegChip {
+  id: string;
+  label: string;
+  color: string;
+  startDate: string;
+  endDate: string;
+  legIds: string[];
+  isTravel: boolean;
+  isReturn?: boolean;
+}
 
 export type TripLegType = "travel" | "stay";
 
@@ -507,4 +516,66 @@ export function dedupeFlights<T extends {
 
 export function legColorForDate(model: TripLegCalendarModel, dateKey: string): string | null {
   return model.dayCells.get(dateKey)?.color ?? null;
+}
+
+function mergeTravelLegendGroup(
+  group: BuiltTripLeg[],
+  label: string,
+  id: string,
+  isReturn = false,
+): LegendLegChip {
+  return {
+    id,
+    label,
+    color: TRAVEL_LEG_COLOR,
+    startDate: group[0]!.startDate,
+    endDate: group[group.length - 1]!.endDate,
+    legIds: group.map((g) => g.id),
+    isTravel: true,
+    isReturn,
+  };
+}
+
+/** At most one outbound travel chip, each stay, one return travel chip — max ~6 legend items. */
+export function buildLegendLegs(legs: BuiltTripLeg[]): LegendLegChip[] {
+  const sorted = [...legs].sort((a, b) => a.startDate.localeCompare(b.startDate));
+  if (sorted.length === 0) return [];
+
+  const chips: LegendLegChip[] = [];
+  const firstStayIdx = sorted.findIndex((l) => l.type === "stay");
+  const lastStayIdx = sorted.reduce((acc, l, i) => (l.type === "stay" ? i : acc), -1);
+
+  if (firstStayIdx > 0) {
+    const outbound = sorted.slice(0, firstStayIdx).filter((l) => l.type === "travel");
+    if (outbound.length > 0) chips.push(mergeTravelLegendGroup(outbound, "Travel", "legend-travel-out"));
+  } else if (firstStayIdx === -1) {
+    const allTravel = sorted.filter((l) => l.type === "travel");
+    if (allTravel.length > 0) {
+      chips.push(mergeTravelLegendGroup(allTravel, "Travel", "legend-travel-out"));
+    }
+    return chips;
+  }
+
+  for (const leg of sorted) {
+    if (leg.type === "stay") {
+      chips.push({
+        id: leg.id,
+        label: leg.label,
+        color: leg.color,
+        startDate: leg.startDate,
+        endDate: leg.endDate,
+        legIds: [leg.id],
+        isTravel: false,
+      });
+    }
+  }
+
+  if (lastStayIdx >= 0 && lastStayIdx < sorted.length - 1) {
+    const ret = sorted.slice(lastStayIdx + 1).filter((l) => l.type === "travel");
+    if (ret.length > 0) {
+      chips.push(mergeTravelLegendGroup(ret, "Return", "legend-travel-return", true));
+    }
+  }
+
+  return chips;
 }

@@ -17,6 +17,11 @@ import type { TripActionItem } from "@/lib/travelAssistant/tripActionItems";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
 
+const SYSTEM_FONT =
+  '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif';
+
+const CARD_SHADOW = "0 1px 3px rgba(0,0,0,0.08)";
+
 type TimelineReservation = {
   id: string;
   type: string;
@@ -119,26 +124,21 @@ function missionsForCity(missions: TripActionItem[], city: string): TripActionIt
   });
 }
 
-function CityPhotoBackground({ city }: { city: string }) {
+function CityPhotoThumb({ city }: { city: string }) {
   const [src, setSrc] = useState(() => cityPhotoSourceUrl(city));
   useEffect(() => {
     setSrc(cityPhotoSourceUrl(city));
   }, [city]);
   return (
-    <>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={src}
-        alt=""
-        className="hidden"
-        onError={() => setSrc(cityPhotoPicsumUrl(city))}
-      />
-      <div
-        className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-[0.15]"
-        style={{ backgroundImage: `url(${src})` }}
-        aria-hidden
-      />
-    </>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      width={80}
+      height={60}
+      className="h-[60px] w-[80px] shrink-0 rounded-lg object-cover"
+      onError={() => setSrc(cityPhotoPicsumUrl(city))}
+    />
   );
 }
 
@@ -158,37 +158,42 @@ function TravelCard({
 
   return (
     <article
-      className="overflow-hidden rounded-2xl bg-[#0F1923] shadow-lg"
-      style={{ borderLeft: "3px solid #4A6FA5" }}
+      className="overflow-hidden rounded-2xl bg-[#F5F5F7]"
+      style={{ borderLeft: "4px solid #4A6FA5", boxShadow: CARD_SHADOW, fontFamily: SYSTEM_FONT }}
     >
-      <div className="px-5 py-4">
-        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[#4A6FA5]">
-          Travel
-        </p>
-        <h3 className="mt-1 font-mono text-xl font-bold tracking-wide text-white">{leg.label}</h3>
-        <p className="mt-0.5 font-mono text-xs text-slate-400">{formatDateRange(leg.startDate, leg.endDate)}</p>
+      <div className="px-5 py-5">
+        <h3 className="text-[18px] font-bold leading-snug text-[#1D1D1F]">
+          <span className="mr-2" aria-hidden>
+            ✈
+          </span>
+          {leg.label}
+        </h3>
+        <p className="mt-1 text-[13px] text-[#6E6E73]">{formatDateRange(leg.startDate, leg.endDate)}</p>
         {hasWarning ? (
-          <p className="mt-2 text-xs font-semibold text-amber-400">⚠ Check connection timing</p>
+          <p className="mt-3 border-l-4 border-amber-400 pl-3 text-[13px] font-medium text-amber-700">
+            Check connection timing
+          </p>
         ) : null}
-        <ul className="mt-4 space-y-3">
-          {uniqueFlights.map((f) => (
-            <li key={f.id}>
+        <ul className="mt-4 overflow-hidden rounded-xl bg-white">
+          {uniqueFlights.map((f, idx) => (
+            <li key={f.id} className={idx < uniqueFlights.length - 1 ? "border-b border-[#E5E5EA]" : ""}>
               <button
                 type="button"
                 onClick={() => onReservationTap(f.id)}
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
+                className="w-full px-4 py-3 text-left text-[14px] text-[#1D1D1F]"
               >
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="font-mono text-sm font-bold text-white">
+                  <span className="font-semibold">
                     {f.flightNumber ?? f.title} · {f.flightDepartureAirport} → {f.flightArrivalAirport}
                   </span>
-                  <span className="font-mono text-xs text-slate-400">
+                  <span className="text-[13px] text-[#6E6E73]">
                     {formatTimeRange(f.flightDepartureTime ?? f.localTime, f.flightArrivalTime)}
                   </span>
                 </div>
                 {flightDuration(f.flightDepartureTime, f.flightArrivalTime) ? (
-                  <p className="mt-1 font-mono text-[11px] text-slate-500">
-                    {flightDuration(f.flightDepartureTime, f.flightArrivalTime)} · {f.flightAirline ?? f.provider}
+                  <p className="mt-1 text-[13px] text-[#6E6E73]">
+                    {flightDuration(f.flightDepartureTime, f.flightArrivalTime)} ·{" "}
+                    {f.flightAirline ?? f.provider}
                   </p>
                 ) : null}
               </button>
@@ -213,7 +218,6 @@ function DestinationBlock({
   missions,
   onMissionAction,
   onSelectedDateKeyChange,
-  onPlanHotel,
   onEditDay,
   blockRef,
 }: {
@@ -229,7 +233,6 @@ function DestinationBlock({
   missions: TripActionItem[];
   onMissionAction?: (item: TripActionItem) => void;
   onSelectedDateKeyChange?: (dateKey: string) => void;
-  onPlanHotel?: (dateKey: string, city: string) => void;
   onEditDay: (dateKey: string) => void;
   blockRef: (node: HTMLDivElement | null) => void;
 }) {
@@ -280,24 +283,24 @@ function DestinationBlock({
   return (
     <article
       ref={blockRef}
-      className="overflow-hidden rounded-2xl bg-[#FAFAF8] shadow-sm ring-1 ring-black/[0.04]"
-      style={{ borderLeft: `3px solid ${leg.color}` }}
+      className="overflow-hidden rounded-2xl bg-white"
+      style={{ borderLeft: `4px solid ${leg.color}`, boxShadow: CARD_SHADOW, fontFamily: SYSTEM_FONT }}
     >
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="relative flex w-full items-center gap-3 overflow-hidden px-5 py-5 text-left"
+        className="flex w-full items-center gap-4 px-5 py-5 text-left"
       >
-        <CityPhotoBackground city={leg.label} />
-        <div className="relative min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6E6E73]">
             {country} · {nights} {nights === 1 ? "NIGHT" : "NIGHTS"}
           </p>
-          <h3 className="mt-0.5 text-2xl font-extrabold leading-tight text-[#1A1A2E]">{leg.label}</h3>
-          <p className="mt-1 text-[13px] text-slate-500">{formatDateRange(leg.startDate, leg.endDate)}</p>
+          <h3 className="mt-0.5 text-[22px] font-bold leading-tight text-[#1D1D1F]">{leg.label}</h3>
+          <p className="mt-1 text-[13px] text-[#6E6E73]">{formatDateRange(leg.startDate, leg.endDate)}</p>
         </div>
+        <CityPhotoThumb city={leg.label} />
         <span
-          className={`relative shrink-0 text-slate-400 transition-transform duration-200 ease-in-out ${
+          className={`shrink-0 text-[#6E6E73] transition-transform duration-200 ease-in-out ${
             expanded ? "rotate-180" : ""
           }`}
           aria-hidden
@@ -307,14 +310,14 @@ function DestinationBlock({
       </button>
 
       {cityMissions.length > 0 && onMissionAction ? (
-        <div className="sticky top-0 z-10 border-b border-amber-200/60 bg-amber-50 px-4 py-3">
+        <div className="border-t border-[#E5E5EA] px-5 py-3">
           {cityMissions.map((item) => (
             <div key={item.id} className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-amber-900">{item.label}</p>
+              <p className="text-[13px] font-medium text-amber-700">{item.label}</p>
               <button
                 type="button"
                 onClick={() => onMissionAction(item)}
-                className="shrink-0 rounded-xl bg-[#f4c95d] px-3 py-1.5 text-xs font-extrabold text-[#0F1923]"
+                className="shrink-0 rounded-xl bg-[#f4c95d] px-3 py-1.5 text-xs font-extrabold text-[#1D1D1F]"
               >
                 Book hotel →
               </button>
@@ -328,7 +331,7 @@ function DestinationBlock({
         style={{ gridTemplateRows: expanded ? "1fr" : "0fr" }}
       >
         <div className="overflow-hidden">
-          <ul className="divide-y divide-slate-100 bg-white">
+          <ul className="divide-y divide-[#E5E5EA] border-t border-[#E5E5EA] bg-white">
             {dayKeys.map((dateKey, idx) => {
               const hotel = hotelForDay(dateKey);
               const status = computeItineraryDayStatus({
@@ -350,10 +353,10 @@ function DestinationBlock({
                   <button
                     type="button"
                     onClick={() => onSelectedDateKeyChange?.(dateKey)}
-                    className={`flex min-h-10 w-full items-center gap-3 px-4 py-2 text-left transition ${
+                    className={`flex min-h-10 w-full items-center gap-3 px-5 py-2 text-left transition ${
                       isSelected || isLegHighlighted
-                        ? "bg-slate-50 ring-1 ring-inset ring-[#f4c95d]/40"
-                        : "hover:bg-slate-50/80"
+                        ? "bg-[#F5F5F7] ring-1 ring-inset ring-[#f4c95d]/50"
+                        : "hover:bg-[#FAFAFA]"
                     }`}
                   >
                     <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -362,22 +365,22 @@ function DestinationBlock({
                       ) : (
                         <span className="h-2 w-2 shrink-0" aria-hidden />
                       )}
-                      <span className="shrink-0 text-[12px] font-semibold uppercase tracking-wide text-slate-500">
+                      <span className="shrink-0 text-[12px] font-semibold uppercase tracking-wide text-[#6E6E73]">
                         Day {idx + 1}
                       </span>
-                      <span className="shrink-0 text-xs text-slate-600">{formatDayLabel(dateKey)}</span>
+                      <span className="shrink-0 text-xs text-[#6E6E73]">{formatDayLabel(dateKey)}</span>
                     </div>
-                    <span className="shrink-0 text-[13px] text-slate-600">
+                    <span className="shrink-0 text-[13px] text-[#1D1D1F]">
                       {wx ? (
                         <>
                           {wx.icon} {wx.highTemp}
                         </>
                       ) : (
-                        <span className="text-slate-400">…</span>
+                        <span className="text-[#6E6E73]">…</span>
                       )}
                     </span>
                     {hotel ? (
-                      <span className="max-w-[9rem] shrink-0 truncate text-xs font-medium text-slate-700">
+                      <span className="max-w-[9rem] shrink-0 truncate text-xs font-medium text-[#1D1D1F]">
                         {hotel.provider || hotel.title}
                       </span>
                     ) : (
@@ -389,7 +392,7 @@ function DestinationBlock({
                         e.stopPropagation();
                         onEditDay(dateKey);
                       }}
-                      className="shrink-0 text-[10px] text-slate-400 hover:text-slate-600"
+                      className="shrink-0 text-[10px] text-[#6E6E73] hover:text-[#1D1D1F]"
                     >
                       Edit
                     </button>
@@ -464,9 +467,12 @@ export function ItineraryTimeline({
 
   if (blocks.length === 0) {
     return (
-      <div className="rounded-3xl border border-dashed border-slate-300 bg-white/80 px-5 py-8 text-center">
-        <p className="text-base font-extrabold text-slate-900">Set trip dates to start planning</p>
-        <p className="mt-2 text-sm text-slate-500">Your day-by-day timeline appears here once dates are set.</p>
+      <div
+        className="rounded-2xl border border-dashed border-[#E5E5EA] bg-[#F5F5F7] px-5 py-8 text-center"
+        style={{ fontFamily: SYSTEM_FONT }}
+      >
+        <p className="text-base font-bold text-[#1D1D1F]">Set trip dates to start planning</p>
+        <p className="mt-2 text-sm text-[#6E6E73]">Your day-by-day timeline appears here once dates are set.</p>
       </div>
     );
   }
@@ -485,7 +491,7 @@ export function ItineraryTimeline({
     : [];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3" style={{ fontFamily: SYSTEM_FONT }}>
       {blocks.map((block) => {
         if (block.leg.type === "travel") {
           return (
@@ -513,7 +519,6 @@ export function ItineraryTimeline({
             missions={missionItems}
             onMissionAction={onMissionAction}
             onSelectedDateKeyChange={onSelectedDateKeyChange}
-            onPlanHotel={onPlanHotel}
             onEditDay={setEditDateKey}
             blockRef={(node) => {
               if (node) blockRefs.current.set(block.leg.id, node);

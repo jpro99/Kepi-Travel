@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  buildLegendLegs,
   buildTripLegCalendarModel,
   cellFillStyle,
   countNights,
@@ -11,6 +12,7 @@ import {
   TRAVEL_LEG_COLOR,
   type BuiltTripLeg,
   type DayLegCell,
+  type LegendLegChip,
 } from "@/lib/travelAssistant/buildTripLegs";
 import { fetchCityWeatherSimple } from "@/lib/travelAssistant/cityWeather";
 
@@ -32,6 +34,7 @@ type CalendarReservation = {
 };
 
 export type LegCalendarViewMode = "month" | "trip" | "day";
+type CalendarTheme = "light" | "dark";
 
 interface TripLegCalendarProps {
   tripName: string;
@@ -52,6 +55,9 @@ const MONTH_NAMES = [
 ];
 const DAY_HEADERS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
+const SYSTEM_FONT =
+  '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif';
+
 function dateKeyFromParts(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
@@ -67,6 +73,13 @@ function cellSubLabel(cell: DayLegCell | null): string | null {
   return cell.cityName?.split(" ")[0] ?? null;
 }
 
+function legendChipLabel(chip: LegendLegChip): string {
+  if (chip.isTravel) {
+    return chip.isReturn ? "✈ Return" : "✈ Travel";
+  }
+  return `${chip.label} ${formatLegChipRange(chip)}`;
+}
+
 function CalendarCell({
   cell,
   dayNumber,
@@ -75,6 +88,7 @@ function CalendarCell({
   isHighlightedLeg,
   isTodayCell,
   ribbonPosition,
+  theme,
   onSelect,
 }: {
   cell: DayLegCell | null;
@@ -84,26 +98,48 @@ function CalendarCell({
   isHighlightedLeg: boolean;
   isTodayCell: boolean;
   ribbonPosition: ReturnType<typeof ribbonPositionForGridCell> | "none";
+  theme: CalendarTheme;
   onSelect: () => void;
 }) {
   const filled = cell && cell.kind !== "empty";
   const pos = ribbonPosition === "none" ? "none" : ribbonPosition;
   const radiusClass = filled ? ribbonRadiusClass(pos) : "rounded-none";
   const subLabel = cellSubLabel(cell);
+  const isLight = theme === "light";
 
   return (
     <button
       type="button"
       onClick={onSelect}
       className={`relative flex min-h-[72px] flex-col items-start justify-start p-2.5 transition ${radiusClass} ${
-        filled ? "text-white" : inTripWindow ? "text-[#4A5568]" : "text-[#4A5568]/50"
-      } ${isHighlightedLeg && !isSelected ? "ring-2 ring-white ring-offset-0" : ""} ${
-        isTodayCell ? "shadow-[0_0_0_2px_#fff,0_0_0_6px_rgba(255,255,255,0.3)]" : ""
+        filled
+          ? "text-white"
+          : isLight
+            ? inTripWindow
+              ? "text-[#1D1D1F]"
+              : "text-[#6E6E73]/50"
+            : inTripWindow
+              ? "text-[#4A5568]"
+              : "text-[#4A5568]/50"
+      } ${isHighlightedLeg && !isSelected ? (isLight ? "ring-2 ring-[#1D1D1F]/25" : "ring-2 ring-white") : ""} ${
+        isTodayCell
+          ? isLight
+            ? "shadow-[0_0_0_2px_#fff,0_0_0_4px_rgba(74,111,165,0.45)]"
+            : "shadow-[0_0_0_2px_#fff,0_0_0_6px_rgba(255,255,255,0.3)]"
+          : ""
       } ${isSelected ? "ring-2 ring-[#f4c95d]" : ""}`}
       style={
         cell && filled
           ? cellFillStyle(cell)
-          : { backgroundColor: inTripWindow ? "#1A2535" : "transparent" }
+          : {
+              backgroundColor: filled
+                ? undefined
+                : isLight
+                  ? "#FFFFFF"
+                  : inTripWindow
+                    ? "#1A2535"
+                    : "transparent",
+            }
       }
     >
       {cell?.kind === "transition" ? (
@@ -146,7 +182,7 @@ function DayDetailPanel({
     };
   }, [city]);
 
-  const bg = cell.transitionToColor ?? cell.color ?? TRAVEL_LEG_COLOR;
+  const accent = cell.color ?? TRAVEL_LEG_COLOR;
   const dateLabel = new Date(`${cell.dateKey}T12:00:00`).toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
@@ -154,33 +190,36 @@ function DayDetailPanel({
   });
 
   return (
-    <div className="rounded-2xl p-5 shadow-2xl" style={{ backgroundColor: bg }}>
+    <div
+      className="rounded-2xl border border-[#E5E5EA] bg-white p-5 shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
+      style={{ fontFamily: SYSTEM_FONT, borderLeft: `4px solid ${accent}` }}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-white/70">{dateLabel}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6E6E73]">{dateLabel}</p>
           {cell.cityName ? (
-            <p className="mt-1 text-2xl font-extrabold text-white">{cell.cityName}</p>
+            <p className="mt-1 text-2xl font-bold text-[#1D1D1F]">{cell.cityName}</p>
           ) : cell.flightSummary ? (
-            <p className="mt-1 text-2xl font-extrabold text-white">{cell.flightSummary}</p>
+            <p className="mt-1 text-2xl font-bold text-[#1D1D1F]">{cell.flightSummary}</p>
           ) : (
-            <p className="mt-1 text-2xl font-extrabold text-white">Travel day</p>
+            <p className="mt-1 text-2xl font-bold text-[#1D1D1F]">Travel day</p>
           )}
           {cell.cityName && cell.legDayCount > 0 ? (
-            <p className="mt-1 text-sm text-white/85">
+            <p className="mt-1 text-sm text-[#6E6E73]">
               Day {cell.dayIndexInLeg} of {cell.legDayCount} in {cell.cityName}
             </p>
           ) : null}
-          {weatherLine ? <p className="mt-2 text-sm text-white/90">{weatherLine}</p> : null}
+          {weatherLine ? <p className="mt-2 text-sm text-[#1D1D1F]">{weatherLine}</p> : null}
           {cell.hotelName ? (
-            <p className="mt-2 text-sm font-semibold text-white">🏨 {cell.hotelName}</p>
+            <p className="mt-2 text-sm font-semibold text-[#1D1D1F]">🏨 {cell.hotelName}</p>
           ) : cell.hotelNeeded ? (
-            <p className="mt-2 text-sm font-semibold text-amber-200">No hotel booked</p>
+            <p className="mt-2 text-sm font-semibold text-amber-600">No hotel booked</p>
           ) : null}
           {cell.flightSummary ? (
-            <p className="mt-1 text-sm text-white/90">✈ {cell.flightSummary}</p>
+            <p className="mt-1 text-sm text-[#6E6E73]">✈ {cell.flightSummary}</p>
           ) : null}
         </div>
-        <button type="button" onClick={onClose} className="text-white/70 hover:text-white" aria-label="Close">
+        <button type="button" onClick={onClose} className="text-[#6E6E73] hover:text-[#1D1D1F]" aria-label="Close">
           ✕
         </button>
       </div>
@@ -189,7 +228,7 @@ function DayDetailPanel({
           <button
             type="button"
             onClick={() => onPlanHotel(cell.dateKey, cell.cityName!)}
-            className="rounded-xl bg-[#f4c95d] px-4 py-2 text-sm font-extrabold text-[#0F1923]"
+            className="rounded-xl bg-[#f4c95d] px-4 py-2 text-sm font-extrabold text-[#1D1D1F]"
           >
             Fix → Find hotels
           </button>
@@ -197,7 +236,7 @@ function DayDetailPanel({
           <button
             type="button"
             onClick={onViewTimeline}
-            className="rounded-xl bg-[#f4c95d] px-4 py-2 text-sm font-extrabold text-[#0F1923]"
+            className="rounded-xl bg-[#f4c95d] px-4 py-2 text-sm font-extrabold text-[#1D1D1F]"
           >
             View on timeline
           </button>
@@ -229,6 +268,7 @@ export function TripLegCalendar({
   const tripEnd = tripEndDate?.slice(0, 10) ?? null;
 
   const [viewMode, setViewMode] = useState<LegCalendarViewMode>("month");
+  const [theme, setTheme] = useState<CalendarTheme>("light");
   const [viewMonth, setViewMonth] = useState(() => {
     if (tripStart) return new Date(`${tripStart}T12:00:00`);
     return new Date(new Date().getFullYear(), new Date().getMonth(), 1);
@@ -239,6 +279,8 @@ export function TripLegCalendar({
     () => buildTripLegCalendarModel(reservations, tripStart, tripEnd),
     [reservations, tripEnd, tripStart],
   );
+
+  const legendChips = useMemo(() => buildLegendLegs(model.legs), [model.legs]);
 
   const year = viewMonth.getFullYear();
   const month = viewMonth.getMonth();
@@ -258,10 +300,13 @@ export function TripLegCalendar({
   const totalTripDays = tripDayKeys.length;
   const destinationCount = model.legs.filter((l) => l.type === "stay").length;
 
-  const handleLegLegendClick = (leg: BuiltTripLeg): void => {
-    onHighlightedLegIdChange?.(leg.id);
-    onSelectedDateKeyChange?.(leg.startDate);
-    onScrollToTimelineDate?.(leg.startDate);
+  const isLight = theme === "light";
+
+  const handleLegendClick = (chip: LegendLegChip): void => {
+    const legId = chip.legIds[0] ?? chip.id;
+    onHighlightedLegIdChange?.(legId);
+    onSelectedDateKeyChange?.(chip.startDate);
+    onScrollToTimelineDate?.(chip.startDate);
   };
 
   const handleDaySelect = (dateKey: string): void => {
@@ -278,11 +323,17 @@ export function TripLegCalendar({
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
   ];
 
+  const chipHighlighted = (chip: LegendLegChip): boolean =>
+    Boolean(highlightedLegId && chip.legIds.includes(highlightedLegId));
+
   return (
-    <section className="flex w-full min-h-[calc(100dvh-12rem)] flex-col space-y-5">
-      <header className="w-full rounded-3xl bg-[#0F1923] px-5 py-5 shadow-xl">
+    <section
+      className="flex h-auto w-full flex-col space-y-5 bg-white"
+      style={{ fontFamily: SYSTEM_FONT }}
+    >
+      <header className="w-full rounded-2xl bg-[#0F1923] px-5 py-5 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f4c95d]">Calendar</p>
-        <h1 className="mt-1 text-2xl font-extrabold text-white">{tripName}</h1>
+        <h1 className="mt-1 text-2xl font-bold text-white">{tripName}</h1>
         {tripStart && tripEnd ? (
           <p className="mt-1 text-sm text-slate-300">
             {tripStart} → {tripEnd}
@@ -291,53 +342,104 @@ export function TripLegCalendar({
       </header>
 
       <div className="flex w-full flex-wrap items-center justify-between gap-2">
-        <div className="inline-flex rounded-2xl bg-[#162030] p-1">
+        <div
+          className={`inline-flex rounded-2xl p-1 ${isLight ? "bg-[#F5F5F7]" : "bg-[#162030]"}`}
+        >
           {(["month", "trip", "day"] as LegCalendarViewMode[]).map((mode) => (
             <button
               key={mode}
               type="button"
               onClick={() => setViewMode(mode)}
               className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold capitalize ${
-                viewMode === mode ? "bg-[#4A6FA5] text-white" : "text-[#4A5568] hover:text-white"
+                viewMode === mode
+                  ? "bg-[#4A6FA5] text-white"
+                  : isLight
+                    ? "text-[#6E6E73] hover:text-[#1D1D1F]"
+                    : "text-[#4A5568] hover:text-white"
               }`}
             >
               {mode === "trip" ? "Full trip" : mode}
             </button>
           ))}
         </div>
-        {viewMode === "month" ? (
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setViewMonth(new Date(year, month - 1, 1))}
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-lg text-white/60 hover:text-white"
-            >
-              ‹
-            </button>
-            <span className="min-w-[10rem] text-center text-[28px] font-bold text-white">
-              {MONTH_NAMES[month]} {year}
-            </span>
-            <button
-              type="button"
-              onClick={() => setViewMonth(new Date(year, month + 1, 1))}
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-lg text-white/60 hover:text-white"
-            >
-              ›
-            </button>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <div
+            className={`inline-flex rounded-xl p-0.5 text-[11px] font-semibold ${
+              isLight ? "bg-[#F5F5F7]" : "bg-[#162030]"
+            }`}
+          >
+            {(["light", "dark"] as CalendarTheme[]).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTheme(t)}
+                className={`rounded-lg px-2.5 py-1 capitalize ${
+                  theme === t
+                    ? "bg-[#4A6FA5] text-white"
+                    : isLight
+                      ? "text-[#6E6E73]"
+                      : "text-[#4A5568]"
+                }`}
+              >
+                {t}
+              </button>
+            ))}
           </div>
-        ) : null}
+
+          {viewMode === "month" ? (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setViewMonth(new Date(year, month - 1, 1))}
+                className={`flex h-9 w-9 items-center justify-center rounded-xl text-lg ${
+                  isLight ? "text-[#6E6E73] hover:text-[#1D1D1F]" : "text-white/60 hover:text-white"
+                }`}
+              >
+                ‹
+              </button>
+              <span
+                className={`min-w-[10rem] text-center text-[28px] font-bold ${
+                  isLight ? "text-[#1D1D1F]" : "text-white"
+                }`}
+              >
+                {MONTH_NAMES[month]} {year}
+              </span>
+              <button
+                type="button"
+                onClick={() => setViewMonth(new Date(year, month + 1, 1))}
+                className={`flex h-9 w-9 items-center justify-center rounded-xl text-lg ${
+                  isLight ? "text-[#6E6E73] hover:text-[#1D1D1F]" : "text-white/60 hover:text-white"
+                }`}
+              >
+                ›
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {viewMode === "month" ? (
-        <div className="w-full flex-1 overflow-hidden rounded-3xl bg-[#0F1923] p-6 shadow-xl">
+        <div
+          className="h-auto w-full rounded-2xl p-6 shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
+          style={{ backgroundColor: isLight ? "#F5F5F7" : "#0F1923" }}
+        >
           <div className="grid grid-cols-7 gap-2 pb-2">
             {DAY_HEADERS.map((d) => (
-              <div key={d} className="py-1 text-center text-[11px] font-semibold uppercase tracking-wider text-[#4A5568]">
+              <div
+                key={d}
+                className={`py-1 text-center text-[11px] font-semibold uppercase tracking-wider ${
+                  isLight ? "text-[#6E6E73]" : "text-[#4A5568]"
+                }`}
+              >
                 {d}
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-7 gap-2 rounded-2xl bg-[#162030] p-2">
+          <div
+            className="grid grid-cols-7 gap-2 rounded-2xl p-2"
+            style={{ backgroundColor: isLight ? "#FFFFFF" : "#162030" }}
+          >
             {monthCells.map((day, idx) => {
               if (!day) return <div key={`blank-${idx}`} className="min-h-[72px]" />;
               const dateKey = dateKeyFromParts(year, month, day);
@@ -359,6 +461,7 @@ export function TripLegCalendar({
                   isHighlightedLeg={Boolean(highlightedLegId && legId === highlightedLegId)}
                   isTodayCell={isToday(dateKey)}
                   ribbonPosition={ribbonPos}
+                  theme={theme}
                   onSelect={() => handleDaySelect(dateKey)}
                 />
               );
@@ -368,8 +471,14 @@ export function TripLegCalendar({
       ) : null}
 
       {viewMode === "trip" && tripStart && tripEnd ? (
-        <div className="w-full rounded-3xl bg-[#0F1923] p-6 shadow-xl">
-          <div className="relative h-[56px] w-full overflow-hidden rounded-xl bg-[#162030]">
+        <div
+          className="h-auto w-full rounded-2xl p-6 shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
+          style={{ backgroundColor: isLight ? "#F5F5F7" : "#0F1923" }}
+        >
+          <div
+            className="relative h-[56px] w-full overflow-hidden rounded-xl"
+            style={{ backgroundColor: isLight ? "#E5E5EA" : "#162030" }}
+          >
             {model.legs.map((leg) => {
               const tripLen = totalTripDays || 1;
               const legKeys = tripDayKeys.filter((k) => k >= leg.startDate && k <= leg.endDate);
@@ -382,7 +491,11 @@ export function TripLegCalendar({
                 <button
                   key={leg.id}
                   type="button"
-                  onClick={() => handleLegLegendClick(leg)}
+                  onClick={() => {
+                    onHighlightedLegIdChange?.(leg.id);
+                    onSelectedDateKeyChange?.(leg.startDate);
+                    onScrollToTimelineDate?.(leg.startDate);
+                  }}
                   className={`absolute top-0 flex h-full items-center justify-center overflow-hidden px-1 text-[11px] font-extrabold text-white transition hover:brightness-110 ${
                     highlightedLegId === leg.id ? "ring-2 ring-white" : ""
                   } ${isTravel ? "rounded-full" : "rounded-md"}`}
@@ -398,7 +511,7 @@ export function TripLegCalendar({
               );
             })}
           </div>
-          <p className="mt-4 text-center text-sm text-white/80">
+          <p className={`mt-4 text-center text-sm ${isLight ? "text-[#6E6E73]" : "text-white/80"}`}>
             {totalTripDays} days total · {destinationCount} destinations
           </p>
         </div>
@@ -412,24 +525,25 @@ export function TripLegCalendar({
           onViewTimeline={() => onScrollToTimelineDate?.(detailCell.dateKey)}
         />
       ) : viewMode === "day" ? (
-        <p className="text-center text-sm text-[#4A5568]">Select a colored day on the month view.</p>
+        <p className="text-center text-sm text-[#6E6E73]">Select a colored day on the month view.</p>
       ) : null}
 
-      <div className="mt-4 flex w-full flex-wrap gap-2">
-        {model.legs.map((leg) => (
+      <div className="mt-4 flex h-auto w-full flex-wrap gap-2">
+        {legendChips.map((chip) => (
           <button
-            key={leg.id}
+            key={chip.id}
             type="button"
-            onClick={() => handleLegLegendClick(leg)}
-            className={`inline-flex min-h-8 items-center gap-2 rounded-full px-3.5 py-2 text-[13px] font-semibold text-white transition ${
-              highlightedLegId === leg.id ? "ring-2 ring-white" : ""
-            }`}
-            style={{ backgroundColor: `${leg.color}33` }}
+            onClick={() => handleLegendClick(chip)}
+            className={`inline-flex min-h-9 items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold transition ${
+              chipHighlighted(chip) ? "ring-2 ring-[#4A6FA5]" : ""
+            } ${isLight ? "text-[#1D1D1F]" : "text-white"}`}
+            style={{ backgroundColor: `${chip.color}${isLight ? "22" : "33"}` }}
           >
-            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: leg.color }} />
-            <span>
-              {leg.type === "travel" ? "✈ Home" : leg.label} {formatLegChipRange(leg)}
-            </span>
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: chip.color }}
+            />
+            <span>{legendChipLabel(chip)}</span>
           </button>
         ))}
       </div>

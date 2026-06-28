@@ -53,7 +53,6 @@ export function ItineraryTabView({
   tripEndDate,
   reservations,
   dayNotes,
-  stopRanges = [],
   selectedDateKey,
   highlightedLegId,
   scrollToDateKey,
@@ -90,14 +89,19 @@ export function ItineraryTabView({
   };
 
   return (
-    <section className="relative space-y-4">
+    <section
+      className="relative space-y-3 bg-white"
+      style={{
+        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif',
+      }}
+    >
       <ItinerarySlideBanners reservations={reservations} onActionTap={onGapActionTap} />
 
-      <header className="rounded-3xl bg-[#0F1923] px-5 py-5 shadow-xl">
+      <header className="rounded-2xl bg-[#0F1923] px-5 py-5 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f4c95d]">Plan</p>
-        <h1 className="mt-1 text-2xl font-extrabold text-white">{tripName}</h1>
+        <h1 className="mt-1 text-2xl font-bold text-white">{tripName}</h1>
         {hasTripDates ? (
-          <p className="mt-1 text-sm font-normal text-slate-300">
+          <p className="mt-1 text-sm text-slate-300">
             {tripStartDate} → {tripEndDate}
           </p>
         ) : (
@@ -121,7 +125,7 @@ export function ItineraryTabView({
           <button
             type="button"
             onClick={onShareLink}
-            className="rounded-xl bg-[#f4c95d] px-3 py-1.5 text-[11px] font-extrabold text-[#0F1923]"
+            className="rounded-xl bg-[#f4c95d] px-3 py-1.5 text-[11px] font-extrabold text-[#1D1D1F]"
           >
             Share
           </button>
@@ -135,10 +139,7 @@ export function ItineraryTabView({
         </div>
       </header>
 
-      <div ref={timelineRef} className="rounded-3xl bg-[#FAFAF8] p-4 shadow-sm ring-1 ring-black/[0.04] lg:p-5">
-        <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-          Trip blocks · tap destination to expand days
-        </p>
+      <div ref={timelineRef}>
         <ItineraryTimeline
           tripStartDate={tripStartDate}
           tripEndDate={tripEndDate}

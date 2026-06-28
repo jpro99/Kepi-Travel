@@ -5,6 +5,8 @@ import {
   airportToCity,
   countNights,
   dedupeFlights,
+  buildLegendLegs,
+  STAY_LEG_PALETTE,
 } from "@/lib/travelAssistant/buildTripLegs";
 
 test("airportToCity resolves common IATA codes", () => {
@@ -44,6 +46,26 @@ test("dedupeFlights removes identical flightNumber + departureTime", () => {
   assert.equal(flights.length, 2);
   assert.equal(flights[0]!.id, "a");
   assert.equal(flights[1]!.id, "c");
+});
+
+test("fourth stay palette slot is amber for Munich", () => {
+  assert.equal(STAY_LEG_PALETTE[3], "#C4943A");
+});
+
+test("buildLegendLegs merges travel into outbound and return chips", () => {
+  const chips = buildLegendLegs([
+    { id: "t1", type: "travel", label: "ONT → FCO", startDate: "2026-09-01", endDate: "2026-09-02", color: "#4A6FA5" },
+    { id: "s1", type: "stay", label: "Rome", startDate: "2026-09-02", endDate: "2026-09-03", color: "#C17F59" },
+    { id: "s2", type: "stay", label: "Bari", startDate: "2026-09-03", endDate: "2026-09-12", color: "#2D8A6E" },
+    { id: "t2", type: "travel", label: "BRI → VCE", startDate: "2026-09-12", endDate: "2026-09-12", color: "#4A6FA5" },
+    { id: "s3", type: "stay", label: "Venice", startDate: "2026-09-12", endDate: "2026-09-24", color: "#7B68C8" },
+    { id: "s4", type: "stay", label: "Munich", startDate: "2026-09-20", endDate: "2026-09-25", color: "#C4943A" },
+    { id: "t3", type: "travel", label: "MUC → Home", startDate: "2026-09-25", endDate: "2026-09-25", color: "#4A6FA5" },
+  ]);
+  assert.equal(chips.length, 6);
+  assert.equal(chips[0]!.label, "Travel");
+  assert.equal(chips[chips.length - 1]!.label, "Return");
+  assert.ok(!chips.some((c) => c.label.includes("BRI → VCE")));
 });
 
 test("buildTripLegs creates travel and stay legs from flight gaps", () => {
