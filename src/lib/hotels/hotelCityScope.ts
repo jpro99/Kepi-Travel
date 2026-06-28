@@ -45,7 +45,7 @@ export function hotelInSearchCity(
     Number.isFinite(searchCenter.lat) &&
     Number.isFinite(searchCenter.lng)
   ) {
-    const fixed = fixPossibleLatLngSwap(hotel.lat!, hotel.lng!, searchCenter);
+    const fixed = fixPossibleLatLngSwap(hotel.lat!, hotel.lng!, searchCenter, searchCity);
     if (areCoordsTrusted(fixed.lat, fixed.lng, searchCenter, searchCity)) {
       return haversineKm(searchCenter.lat, searchCenter.lng, fixed.lat, fixed.lng) <= inCityRadiusKm(searchCity);
     }

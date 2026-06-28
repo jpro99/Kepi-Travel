@@ -2,6 +2,7 @@ import {
   areCoordsTrusted,
   fixPossibleLatLngSwap,
   haversineKm,
+  isLikelyOffshorePin,
   isSmallDestination,
   isWithinRenderDistance,
   maxTrustedCoordKm,
@@ -44,7 +45,7 @@ export function coordinateForHotel(
   const angle = ((seed % 360) / 360) * Math.PI * 2 + (index / Math.max(total, 1)) * 0.65;
   const tight = searchCity ? isSmallDestination(searchCity) : false;
   const ring = tight
-    ? 0.0015 + (seed % 9) * 0.0012 + (index % 7) * 0.0008
+    ? 0.00035 + (seed % 7) * 0.00028 + (index % 5) * 0.0002
     : 0.008 + (seed % 11) * 0.004 + (index % 9) * 0.003;
   return {
     lat: centerLat + Math.sin(angle) * ring,
@@ -92,6 +93,10 @@ function nudgeAwayFromNeighbors(
     nextLat = lat + Math.sin(angle) * offset;
     nextLng = lng + Math.cos(angle) * offset;
   }
+  if (isLikelyOffshorePin(nextLat, nextLng, center, searchCity)) {
+    nextLat = center.lat + (nextLat - center.lat) * 0.35;
+    nextLng = center.lng + (nextLng - center.lng) * 0.35;
+  }
   return clampToMaxRadius(nextLat, nextLng, center, searchCity);
 }
 
@@ -105,7 +110,7 @@ export function resolveHotelMapPosition(input: {
   const { hotel, index, total, center, searchCity } = input;
 
   if (isFiniteCoord(hotel.lat, hotel.lng)) {
-    const fixed = fixPossibleLatLngSwap(hotel.lat, hotel.lng, center);
+    const fixed = fixPossibleLatLngSwap(hotel.lat, hotel.lng, center, searchCity);
     if (areCoordsTrusted(fixed.lat, fixed.lng, center, searchCity)) {
       return {
         lat: fixed.lat,
@@ -125,7 +130,7 @@ export function filterHotelsWithinRenderDistance<T extends HotelSearchResult>(
 ): T[] {
   return hotels.filter((hotel) => {
     if (!isFiniteCoord(hotel.lat, hotel.lng)) return true;
-    const fixed = fixPossibleLatLngSwap(hotel.lat, hotel.lng, center);
+    const fixed = fixPossibleLatLngSwap(hotel.lat, hotel.lng, center, searchCity);
     return isWithinRenderDistance(fixed.lat, fixed.lng, center);
   });
 }

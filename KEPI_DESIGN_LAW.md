@@ -128,9 +128,9 @@ Same as **H1**: no pin or list item beyond 50 km from search center. Enforced in
 **Test:** `src/lib/hotels/__tests__/hotelDistance.test.ts`
 
 **M2 — Reject untrusted provider coordinates**  
-If provider lat/lng fails trust check (ocean, swapped lat/lng, too far), use synthetic placement near city center — never plot in water.
+If provider lat/lng fails trust check (ocean, swapped lat/lng, too far), use synthetic placement near city center — never plot in water. Offshore drift within the trust radius (common at Polignano / Monopoli) is rejected via `isLikelyOffshorePin`.
 
-**Test:** `src/lib/hotels/hotelCoordinates.test.ts`
+**Test:** `src/lib/hotels/hotelCoordinates.test.ts`, `src/lib/hotels/__tests__/hotelOffshore.test.ts`
 
 **M3 — Small towns use tight radius**  
 Destinations like Monopoli use **≤1.6 km** trusted coord radius; synthetic pins stay in town, not the Adriatic.

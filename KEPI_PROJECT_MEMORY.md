@@ -96,8 +96,23 @@ Project skills live in `.cursor/skills/` — these are **playbooks for Cursor ag
 
 ---
 
+## Agent workflow — screenshots (mandatory)
+
+When Jeff posts a **map or UI screenshot**, the agent must:
+
+1. **Name what is wrong in the image first** (e.g. pins in the ocean) — not only issues from chat history
+2. Fix **data/map correctness before chrome** (slider, buttons)
+3. Regression cities for hotel pins: **Polignano a Mare**, Monopoli, Munich
+
+Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
+
+**Failure logged 2026-06-15:** Polignano map showed hotel pins in the Adriatic; agent fixed slider instead. Root cause: LiteAPI coords ~0.5–1.5 km east of town passed `areCoordsTrusted` but were offshore. Fixed with `isLikelyOffshorePin` in `hotelGeo.ts`.
+
+---
+
 ## Changelog
 
 | Date | Note |
 |------|------|
+| 2026-06-15 | Screenshot triage rule + Polignano offshore pin fix (`isLikelyOffshorePin`) |
 | 2026-06-15 | Created memory file; documented Duffel emails sent, LiteAPI key set, Travelpayouts Drive skipped, domain bot skills |
