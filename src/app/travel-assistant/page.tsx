@@ -21,6 +21,10 @@ import {
 } from "@/lib/travelAssistant/safetyPolicy";
 import { evaluateReservationIntegrity } from "@/lib/travelAssistant/reservationIntegrity";
 import {
+  prepareReviewDraftForAccept,
+  summarizeIntegrityBlockers,
+} from "@/lib/travelAssistant/prepareReviewDraftForAccept";
+import {
   nextTripStage,
   shouldQuickAddGoToReview,
   shouldShowFocusPanel,
@@ -5898,7 +5902,7 @@ export default function TravelAssistantPage() {
           throw new Error(payload.error ?? `Ticket scan failed (${response.status})`);
         }
 
-        const scannedDraft: ReservationDraft = {
+        const scannedDraft: ReservationDraft = prepareReviewDraftForAccept({
           ...EMPTY_DRAFT,
           ...payload.draft,
           type: payload.draft.type,
@@ -5913,7 +5917,13 @@ export default function TravelAssistantPage() {
           critical: payload.draft.critical,
           confidence: payload.draft.confidence,
           notes: payload.draft.notes.trim(),
-        };
+          flightNumber: payload.draft.flightNumber ?? "",
+          flightAirline: payload.draft.flightAirline ?? payload.draft.provider ?? "",
+          flightDate: payload.draft.flightDate ?? payload.draft.localTime.slice(0, 10),
+          flightDepartureAirport: payload.draft.flightDepartureAirport ?? "",
+          flightArrivalAirport: payload.draft.flightArrivalAirport ?? "",
+          flightDepartureTime: payload.draft.flightDepartureTime ?? payload.draft.localTime,
+        });
         const reviewItem: ReviewItem = {
           id: nextId("review"),
           reasons: [
@@ -5932,7 +5942,23 @@ export default function TravelAssistantPage() {
           reviewStatus: "pending",
           draft: scannedDraft,
         };
-        setReviewQueue((prev) => [reviewItem, ...prev]);
+        const nextQueue = [reviewItem, ...reviewQueue];
+        setReviewQueue(nextQueue);
+        const targetTripId = activeTripId ?? trips[0]?.id ?? null;
+        if (targetTripId) {
+          void fetch(TRIP_API_ROUTE, {
+            method: "PUT",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "update",
+              id: targetTripId,
+              patch: { reviewQueue: nextQueue },
+            }),
+          }).catch(() => {
+            setToast("Could not save review queue.");
+          });
+        }
         queueMutation("Ticket scan added to review queue.", {
           key: "ticket-scan-review",
           fingerprint: `ticket-scan:${reviewItem.id}`,
@@ -5954,7 +5980,7 @@ export default function TravelAssistantPage() {
         setTicketScanBusy(false);
       }
     },
-    [queueMutation, setToast, ticketScanBusy],
+    [activeTripId, queueMutation, reviewQueue, setToast, ticketScanBusy, trips],
   );
 
   const handleTicketScanFileSelected = useCallback(
@@ -6404,6 +6430,57 @@ export default function TravelAssistantPage() {
     [activeTripId, setToast, trips],
   );
 
+  const persistTripReservationsAndReviewQueue = useCallback(
+    (nextReservations: Reservation[], nextQueue: ReviewItem[]): void => {
+      const targetTripId = activeTripId ?? trips[0]?.id ?? null;
+      if (!targetTripId) {
+        return;
+      }
+      setTrips((previous) =>
+        previous.map((trip) =>
+          trip.id === targetTripId
+            ? {
+                ...trip,
+                reservations: nextReservations,
+                reviewQueue: nextQueue,
+              }
+            : trip,
+        ),
+      );
+      void fetch(TRIP_API_ROUTE, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update",
+          id: targetTripId,
+          patch: {
+            reservations: nextReservations,
+            reviewQueue: nextQueue,
+          },
+        }),
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            const payload = (await response.json().catch(() => ({}))) as { error?: string };
+            setToast(payload.error ?? "Could not save reservation to your trip.");
+            return;
+          }
+          const payload = (await response.json()) as { trips?: unknown[] };
+          if (Array.isArray(payload.trips)) {
+            const parsedTrips = payload.trips
+              .map((trip) => normalizeManagedTrip(trip))
+              .filter((trip): trip is ManagedTrip => trip !== null);
+            setTrips(parsedTrips);
+          }
+        })
+        .catch(() => {
+          setToast("Network error while saving reservation.");
+        });
+    },
+    [activeTripId, setToast, trips],
+  );
+
   const handleDeleteReservation = useCallback(
     (reservationId: string): void => {
       const reservation = reservations.find((item) => item.id === reservationId);
@@ -6839,11 +6916,28 @@ export default function TravelAssistantPage() {
   const acceptReviewWithDraft = (reviewId: string, draftOverride?: ReservationDraft): void => {
     const target = reviewQueue.find((item) => item.id === reviewId);
     if (!target) return;
-    const draft = draftOverride ?? target.draft;
+    const draft = prepareReviewDraftForAccept({
+      ...(draftOverride ?? target.draft),
+      type: (draftOverride ?? target.draft).type,
+      title: (draftOverride ?? target.draft).title,
+      provider: (draftOverride ?? target.draft).provider,
+      localTime: (draftOverride ?? target.draft).localTime,
+      timezone: (draftOverride ?? target.draft).timezone,
+      location: (draftOverride ?? target.draft).location,
+      confirmationCode: (draftOverride ?? target.draft).confirmationCode,
+      flightNumber: (draftOverride ?? target.draft).flightNumber,
+      flightAirline: (draftOverride ?? target.draft).flightAirline,
+      flightDate: (draftOverride ?? target.draft).flightDate,
+      flightDepartureAirport: (draftOverride ?? target.draft).flightDepartureAirport,
+      flightArrivalAirport: (draftOverride ?? target.draft).flightArrivalAirport,
+      flightDepartureTime: (draftOverride ?? target.draft).flightDepartureTime,
+    });
     const duplicateReservation = reservations.find((reservation) => isDuplicateReservation(reservation, draft));
     if (duplicateReservation) {
       pushUndoSnapshot("Duplicate review item skipped");
-      setReviewQueue((prev) => prev.filter((item) => item.id !== reviewId));
+      const nextQueue = reviewQueue.filter((item) => item.id !== reviewId);
+      setReviewQueue(nextQueue);
+      persistReviewQueueToTrip(nextQueue, { reviewId, source: "duplicate-skip" });
       queueMutation("Duplicate review item skipped.", {
         key: "review-duplicate-skip",
         reservationId: duplicateReservation.id,
@@ -6851,30 +6945,34 @@ export default function TravelAssistantPage() {
       setToast(
         `Possible duplicate found (${duplicateReservation.title || duplicateReservation.provider || "existing reservation"}) — skipped this review item.`,
       );
+      if (activeDrawer?.kind === "review" && activeDrawer.id === reviewId) {
+        closeDrawer();
+      }
       return;
     }
     const integrity = evaluateReservationIntegrity(draft);
     if (!integrity.safeForLive) {
-      setReviewQueue((prev) =>
-        prev.map((item) =>
-          item.id === reviewId
-            ? {
-                ...item,
-                draft: item.id === reviewId ? draft : item.draft,
-                parsingStatus: "needs-user-input",
-                reviewStatus: "incomplete",
-                reasons: [
-                  ...new Set([
-                    ...item.reasons,
-                    ...integrity.issues.map((issue) => issue.message),
-                    "Still blocked: resolve integrity issues before accepting to live trip.",
-                  ]),
-                ],
-              }
-            : item,
-        ),
+      const nextQueue = reviewQueue.map((item) =>
+        item.id === reviewId
+          ? {
+              ...item,
+              draft,
+              parsingStatus: "needs-user-input" as const,
+              reviewStatus: "incomplete" as const,
+              reasons: [
+                ...new Set([
+                  ...item.reasons,
+                  ...integrity.issues.map((issue) => issue.message),
+                  summarizeIntegrityBlockers(integrity.issues) || "Fill in the highlighted fields, then accept again.",
+                ]),
+              ],
+            }
+          : item,
       );
-      setToast("Cannot accept review item: integrity checks still failing.");
+      setReviewQueue(nextQueue);
+      persistReviewQueueToTrip(nextQueue, { reviewId, source: "integrity-blocked" });
+      setDrawerDraft(draft);
+      setToast(`Still needs info: ${summarizeIntegrityBlockers(integrity.issues) || "check title, route, and departure time."}`);
       return;
     }
     pushUndoSnapshot("Review item accepted");
@@ -6893,16 +6991,36 @@ export default function TravelAssistantPage() {
       hasPdfAttachment: target.hasPdfAttachment,
       manageUrl: target.manageUrl,
       sourceLinks: target.sourceLinks,
+      flightNumber: draft.flightNumber ?? "",
+      flightAirline: draft.flightAirline ?? draft.provider,
+      flightDate: draft.flightDate ?? draft.localTime.slice(0, 10),
+      flightDepartureAirport: draft.flightDepartureAirport ?? "",
+      flightArrivalAirport: draft.flightArrivalAirport ?? "",
+      flightDepartureTime: draft.flightDepartureTime ?? draft.localTime,
     };
     const nextReservations = [newReservation, ...reservations];
-    setReservations((prev) => [newReservation, ...prev]);
-    setReviewQueue((prev) => prev.filter((item) => item.id !== reviewId));
+    const nextQueue = reviewQueue.filter((item) => item.id !== reviewId);
+    setReservations(nextReservations);
+    setReviewQueue(nextQueue);
+    persistTripReservationsAndReviewQueue(nextReservations, nextQueue);
     void triggerHaptic("medium");
     queueMutation("Review item accepted into live trip.", {
       key: "review-accept",
       reservationId: newReservation.id,
     });
     void syncReservationsToGoogleCalendar(nextReservations, "review-accept");
+    if (activeDrawer?.kind === "review" && activeDrawer.id === reviewId) {
+      closeDrawer();
+    }
+    setConsumerTab("flights");
+    setPostBookingConfirmation({
+      kind: newReservation.type === "hotel" ? "hotel" : newReservation.type === "flight" ? "flight" : "import",
+      title: `${newReservation.type === "hotel" ? "Hotel" : newReservation.type === "flight" ? "Flight" : "Booking"} added`,
+      confirmationCode: newReservation.confirmationCode?.trim() || undefined,
+      detail: `${newReservation.provider || newReservation.title} is on your flights timeline.`,
+      syncedToTrip: true,
+    });
+    setToast(`${newReservation.type === "flight" ? "Flight" : "Reservation"} added to your trip ✓`);
   };
 
   const handleAcceptReview = (reviewId: string): void => {
@@ -7871,40 +7989,45 @@ export default function TravelAssistantPage() {
         aria-modal="true"
         aria-labelledby="travel-assistant-drawer-title"
         tabIndex={-1}
-        className="h-full w-full max-w-xl overflow-y-auto rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 text-[var(--text-primary)] md:max-h-[92vh]"
+        className="h-full w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 text-slate-900 shadow-2xl dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 md:max-h-[92vh]"
       >
-        <div className="flex items-center justify-between">
-          <h2 id="travel-assistant-drawer-title" className="text-lg font-semibold">
-            {activeDrawer.kind === "reservation" ? "Reservation details" : "Review item details"}
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="travel-assistant-drawer-title" className="text-lg font-bold text-slate-900 dark:text-white">
+            {activeDrawer.kind === "reservation" ? "Reservation details" : "Confirm this booking"}
           </h2>
           <button
             ref={drawerCloseButtonRef}
             type="button"
             onClick={closeDrawer}
             aria-label="Close details drawer"
-            className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] px-2 py-1 text-sm hover:opacity-80"
+            className="rounded-md border border-slate-300 bg-slate-100 px-2 py-1 text-sm font-semibold text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
           >
             Close
           </button>
         </div>
+        {activeDrawer.kind === "review" ? (
+          <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
+            Check the fields below, then tap <strong>Save + accept</strong> to add this to your Flights tab.
+          </p>
+        ) : null}
         <div className="mt-4 space-y-3 text-sm">
           <label className="block">
-            <span className="mb-1 block text-slate-300">Title</span>
+            <span className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-300">Title</span>
             <input
               value={drawerDraft.title}
               onChange={(event) => setDrawerDraft((prev) => ({ ...prev, title: event.target.value }))}
-              className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
             />
           </label>
           <div className="grid gap-3 md:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-slate-300">Type</span>
+              <span className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-300">Type</span>
               <select
                 value={drawerDraft.type}
                 onChange={(event) =>
                   setDrawerDraft((prev) => ({ ...prev, type: event.target.value as ReservationType }))
                 }
-                className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
               >
                 {(Object.keys(RESERVATION_TYPE_LABEL) as ReservationType[]).map((type) => (
                   <option key={type} value={type}>
@@ -7914,47 +8037,49 @@ export default function TravelAssistantPage() {
               </select>
             </label>
             <label className="block">
-              <span className="mb-1 block text-slate-300">Provider</span>
+              <span className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-300">Provider</span>
               <input
                 value={drawerDraft.provider}
                 onChange={(event) => setDrawerDraft((prev) => ({ ...prev, provider: event.target.value }))}
-                className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-slate-300">Local time</span>
+              <span className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-300">Local time</span>
               <input
                 value={drawerDraft.localTime}
                 onChange={(event) => setDrawerDraft((prev) => ({ ...prev, localTime: event.target.value }))}
-                className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
+                placeholder="2026-09-12 09:40"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-slate-300">Timezone</span>
+              <span className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-300">Timezone</span>
               <input
                 value={formatTimezoneForDisplay(drawerDraft.timezone) === "Not set" ? "" : drawerDraft.timezone}
                 onChange={(event) => setDrawerDraft((prev) => ({ ...prev, timezone: event.target.value }))}
-                placeholder="Not set"
-                className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
+                placeholder="Europe/Rome"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
               />
             </label>
           </div>
           <label className="block">
-            <span className="mb-1 block text-slate-300">Location</span>
+            <span className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-300">Location</span>
             <input
               value={drawerDraft.location}
               onChange={(event) => setDrawerDraft((prev) => ({ ...prev, location: event.target.value }))}
-              className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
+              placeholder="BRI -> VCE"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-slate-300">Confirmation code</span>
+            <span className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-300">Confirmation code</span>
             <input
               value={drawerDraft.confirmationCode}
               onChange={(event) =>
                 setDrawerDraft((prev) => ({ ...prev, confirmationCode: event.target.value }))
               }
-              className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
             />
           </label>
           {(drawerDraft.type === "flight" ||
@@ -7971,7 +8096,7 @@ export default function TravelAssistantPage() {
                       setDrawerDraft((prev) => ({ ...prev, flightNumber: event.target.value.trim().toUpperCase() }))
                     }
                     placeholder="AA123"
-                    className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)] text-sm"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
                   />
                 </label>
                 <label className="block">
@@ -7982,7 +8107,7 @@ export default function TravelAssistantPage() {
                       setDrawerDraft((prev) => ({ ...prev, flightAirline: event.target.value }))
                     }
                     placeholder="American Airlines"
-                    className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)] text-sm"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
                   />
                 </label>
                 <label className="block">
@@ -7993,7 +8118,7 @@ export default function TravelAssistantPage() {
                     onChange={(event) =>
                       setDrawerDraft((prev) => ({ ...prev, flightDate: event.target.value }))
                     }
-                    className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)] text-sm"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
                   />
                 </label>
                 <label className="block">
@@ -8002,7 +8127,7 @@ export default function TravelAssistantPage() {
                     value={drawerDraft.flightDepartureAirport ?? ""}
                     onChange={(event) => setDrawerDraft((prev) => ({ ...prev, flightDepartureAirport: event.target.value.toUpperCase() }))}
                     placeholder="HND"
-                    className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)] text-sm font-mono"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
                   />
                 </label>
                 <label className="block">
@@ -8011,7 +8136,7 @@ export default function TravelAssistantPage() {
                     value={drawerDraft.flightArrivalAirport ?? ""}
                     onChange={(event) => setDrawerDraft((prev) => ({ ...prev, flightArrivalAirport: event.target.value.toUpperCase() }))}
                     placeholder="ONT"
-                    className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)] text-sm font-mono"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
                   />
                 </label>
                 <label className="block">
@@ -8020,7 +8145,7 @@ export default function TravelAssistantPage() {
                     value={drawerDraft.flightDepartureTime ?? ""}
                     onChange={(event) => setDrawerDraft((prev) => ({ ...prev, flightDepartureTime: event.target.value }))}
                     placeholder="2026-05-29 21:20"
-                    className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)] text-sm"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
                   />
                 </label>
                 <label className="block">
@@ -8029,7 +8154,7 @@ export default function TravelAssistantPage() {
                     value={drawerDraft.flightArrivalTime ?? ""}
                     onChange={(event) => setDrawerDraft((prev) => ({ ...prev, flightArrivalTime: event.target.value }))}
                     placeholder="2026-05-30 08:00"
-                    className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)] text-sm"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
                   />
                 </label>
                 <label className="block">
@@ -8038,7 +8163,7 @@ export default function TravelAssistantPage() {
                     value={drawerDraft.flightDepartureGate ?? ""}
                     onChange={(event) => setDrawerDraft((prev) => ({ ...prev, flightDepartureGate: event.target.value.toUpperCase() }))}
                     placeholder="A14"
-                    className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)] text-sm"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
                   />
                 </label>
                 <label className="block">
@@ -8047,7 +8172,7 @@ export default function TravelAssistantPage() {
                     value={drawerDraft.flightDepartureTerminal ?? ""}
                     onChange={(event) => setDrawerDraft((prev) => ({ ...prev, flightDepartureTerminal: event.target.value.toUpperCase() }))}
                     placeholder="2"
-                    className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)] text-sm"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
                   />
                 </label>
                 <label className="block col-span-2">
@@ -8056,7 +8181,7 @@ export default function TravelAssistantPage() {
                     value={drawerDraft.flightSeatNumber ?? ""}
                     onChange={(event) => setDrawerDraft((prev) => ({ ...prev, flightSeatNumber: event.target.value.toUpperCase() }))}
                     placeholder="14A"
-                    className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)] text-sm font-mono"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
                   />
                 </label>
               </div>
@@ -8069,13 +8194,13 @@ export default function TravelAssistantPage() {
                   flightLookupBusy ||
                   !(drawerDraft.flightNumber?.trim() && drawerDraft.flightAirline?.trim() && drawerDraft.flightDate?.trim())
                 }
-                className="mt-3 rounded-lg bg-cyan-400 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-3 rounded-lg bg-cyan-600 px-3 py-2 text-sm font-semibold text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {flightLookupBusy ? "Looking up..." : "Look up flight"}
               </button>
-              {flightLookupError ? <p className="mt-2 text-xs text-rose-300">{flightLookupError}</p> : null}
+              {flightLookupError ? <p className="mt-2 text-xs font-medium text-rose-700 dark:text-rose-300">{flightLookupError}</p> : null}
               {drawerDraft.flightDepartureAirport || drawerDraft.flightArrivalAirport || drawerDraft.flightStatus ? (
-                <div className="mt-3 space-y-1 text-xs text-cyan-50">
+                <div className="mt-3 space-y-1 text-xs text-sky-900 dark:text-cyan-100">
                   <p>
                     <span className="font-semibold">Departure:</span>{" "}
                     {drawerDraft.flightDepartureAirport || "Unknown"} {drawerDraft.flightDepartureTime ? `• ${drawerDraft.flightDepartureTime}` : ""}
@@ -8092,8 +8217,8 @@ export default function TravelAssistantPage() {
             </section>
           ) : null}
           <label className="block">
-            <span className="mb-1 block text-slate-300">Assigned people</span>
-            <div className="grid gap-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-muted)] p-3 text-xs">
+            <span className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-300">Assigned people</span>
+            <div className="grid gap-2 rounded-lg border border-slate-300 bg-slate-50 p-3 text-xs text-slate-800 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-200">
               {assignmentTravelerOptions.map((member) => (
                 <label key={member.id} className="flex items-center gap-2">
                   <input
@@ -8118,7 +8243,7 @@ export default function TravelAssistantPage() {
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-slate-300">Cash spent (USD)</span>
+              <span className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-300">Cash spent (USD)</span>
               <input
                 type="number"
                 min={0}
@@ -8133,11 +8258,11 @@ export default function TravelAssistantPage() {
                   }));
                 }}
                 placeholder="Total cash for this booking"
-                className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-slate-300">Points / miles used</span>
+              <span className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-300">Points / miles used</span>
               <input
                 type="number"
                 min={0}
@@ -8152,11 +8277,11 @@ export default function TravelAssistantPage() {
                   }));
                 }}
                 placeholder="e.g. 35000"
-                className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-slate-300">Miles earned</span>
+              <span className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-300">Miles earned</span>
               <input
                 type="number"
                 min={0}
@@ -8171,12 +8296,12 @@ export default function TravelAssistantPage() {
                   }));
                 }}
                 placeholder="e.g. 2500"
-                className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
               />
             </label>
           </div>
           <label className="block">
-            <span className="mb-1 block text-slate-300">Points program (optional)</span>
+            <span className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-300">Points program (optional)</span>
             <input
               value={drawerDraft.pointsProgram ?? ""}
               onChange={(event) =>
@@ -8186,15 +8311,15 @@ export default function TravelAssistantPage() {
                 }))
               }
               placeholder="United, Hyatt, Amex…"
-              className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-slate-300">Notes</span>
+            <span className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-300">Notes</span>
             <textarea
               value={drawerDraft.notes}
               onChange={(event) => setDrawerDraft((prev) => ({ ...prev, notes: event.target.value }))}
-              className="h-24 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text-primary)]"
+              className="h-24 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
             />
           </label>
         </div>
@@ -8237,9 +8362,8 @@ export default function TravelAssistantPage() {
               type="button"
               onClick={() => {
                 acceptReviewWithDraft(activeDrawer.id, drawerDraft);
-                closeDrawer();
               }}
-              className="rounded-lg bg-emerald-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
+              className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
             >
               Save + accept review
             </button>
