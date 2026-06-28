@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { rankHotelSearchResults } from "@/lib/hotels/intelligentRanking";
-import { hotelInSearchCity, partitionHotelsBySearchCity } from "@/lib/hotels/hotelCityScope";
+import { partitionHotelsBySearchCity } from "@/lib/hotels/hotelCityScope";
 import { buildGoogleHotelsUrl } from "@/lib/decision/bookingLinks";
 import { resolveHotelDestination, suggestHotelDestinations } from "@/lib/hotels/resolveDestination";
 import { searchHotelsLiveOrEstimated } from "@/lib/hotels/searchHotels";
@@ -88,12 +88,14 @@ export async function POST(req: Request) {
       memory,
       loyaltyBalances,
       stayProfile,
-    }).map((hotel) => ({
-      ...hotel,
-      inSearchCity: hotelInSearchCity(hotel, resolved.displayName),
-    }));
+      searchCity: resolved.displayName,
+      searchCenter: { lat: resolved.lat, lng: resolved.lng },
+    });
 
-    const { inCity, nearby } = partitionHotelsBySearchCity(ranked, resolved.displayName);
+    const { inCity, nearby } = partitionHotelsBySearchCity(ranked, resolved.displayName, {
+      lat: resolved.lat,
+      lng: resolved.lng,
+    });
 
     saveHotelStayMemory(
       learnFromHotelEvent(memory, {
@@ -103,12 +105,20 @@ export async function POST(req: Request) {
       userId,
     ).catch(() => {});
 
+    const liveInCity = inCity.filter((hotel) => !hotel.browseOnly && hotel.pricePerNight > 0).length;
+    const browseInCity = inCity.filter((hotel) => hotel.browseOnly).length;
+    const cityLabel = resolved.displayName.split(",")[0]?.trim() ?? resolved.displayName;
+
     const inventoryNote =
-      inCity.length <= 3 && nearby.length > 0
-        ? `Only ${inCity.length} live rate${inCity.length === 1 ? "" : "s"} in ${resolved.displayName.split(",")[0]?.trim() ?? resolved.displayName} for these dates. ${nearby.length} more nearby — toggle "Include nearby" or browse all on Google Hotels.`
-        : inCity.length <= 3
-          ? `Only ${inCity.length} property${inCity.length === 1 ? "" : "ies"} returned live rates in ${resolved.displayName.split(",")[0]?.trim() ?? resolved.displayName} for these dates. More hotels exist — use Google Hotels for the full list.`
-          : null;
+      liveInCity <= 3 && browseInCity > 0
+        ? `${liveInCity} live rate${liveInCity === 1 ? "" : "s"} and ${browseInCity} more propert${browseInCity === 1 ? "y" : "ies"} to browse in ${cityLabel} for these dates. Hotels marked "Google" need pricing on Google Hotels — Kepi lists them so you can pick your own.`
+        : liveInCity <= 3 && nearby.length > 0
+          ? `Only ${liveInCity} live rate${liveInCity === 1 ? "" : "s"} in ${cityLabel} for these dates. ${nearby.length} more nearby — toggle "+ Nearby" or browse all on Google Hotels.`
+          : liveInCity <= 3
+            ? `Only ${liveInCity} live rate${liveInCity === 1 ? "" : "s"} in ${cityLabel} for these dates. More hotels exist — use Google Hotels for the full list or browse catalog results below.`
+            : browseInCity > 0
+              ? `${liveInCity} with live Kepi rates · ${browseInCity} more to browse (check price on Google).`
+              : null;
 
     return NextResponse.json({
       hotels: ranked,

@@ -1,9 +1,10 @@
 import type { ResolvedHotelDestination } from "@/lib/hotels/resolveDestination";
+import { cityFromAddress } from "@/lib/hotels/hotelCityScope";
 import type { HotelSearchResult } from "@/lib/hotels/types";
 
 const LITEAPI_BASE = "https://api.liteapi.travel/v3.0";
 
-function resolveLiteApiKey(): string | null {
+export function resolveLiteApiKey(): string | null {
   return process.env.LITEAPI_KEY?.trim() || process.env.LITE_API_KEY?.trim() || null;
 }
 
@@ -90,7 +91,7 @@ function mapLiteApiToHotel(input: {
     currency: pricing.currency,
     nights: input.nights,
     address: input.meta?.address ?? input.resolved.displayName,
-    city: input.resolved.displayName,
+    city: cityFromAddress(input.meta?.address) || input.resolved.displayName.split(",")[0]?.trim() || input.resolved.displayName,
     checkIn: input.checkIn,
     checkOut: input.checkOut,
     amenities,

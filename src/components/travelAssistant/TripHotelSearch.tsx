@@ -303,7 +303,13 @@ export function TripHotelSearch({
       rows = rows.filter((hotel) => hotel.pointsOption && hotel.pointsOption.cppAchieved >= 0.8);
       rows.sort((a, b) => (b.pointsOption?.cppAchieved ?? 0) - (a.pointsOption?.cppAchieved ?? 0));
     } else if (sortMode === "price" || sortMode === "browse" || payMode === "cash") {
-      rows.sort((a, b) => a.pricePerNight - b.pricePerNight);
+      rows.sort((a, b) => {
+        const aLive = !a.browseOnly && a.pricePerNight > 0;
+        const bLive = !b.browseOnly && b.pricePerNight > 0;
+        if (aLive !== bLive) return aLive ? -1 : 1;
+        if (!aLive) return (b.rating ?? b.stars) - (a.rating ?? a.stars);
+        return a.pricePerNight - b.pricePerNight;
+      });
     } else if (sortMode === "rating") {
       rows.sort((a, b) => (b.rating ?? b.stars) - (a.rating ?? a.stars));
     } else if (sortMode === "match") {
@@ -335,14 +341,11 @@ export function TripHotelSearch({
     return mappedHotels.filter((hotel) => hotelInBounds(hotel, mapBounds));
   }, [mappedHotels, mapBounds]);
 
-  const detailHotel = visibleResults.find((row) => row.id === detailHotelId) ?? null;
+  const detailHotel = results.find((row) => row.id === detailHotelId && !dismissedIds.has(row.id)) ?? null;
 
   const openDetail = (hotel: RankedHotelSearchResult): void => {
     setMapSelectedId(hotel.id);
     setDetailHotelId(hotel.id);
-    requestAnimationFrame(() => {
-      document.querySelector(`[data-hotel-id="${hotel.id}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    });
   };
 
   const handleSaveToTrip = (hotel: RankedHotelSearchResult): void => {
@@ -422,7 +425,7 @@ export function TripHotelSearch({
         </>
       );
     }
-    return mappedHotels.map((hotel) => renderHotelRow(hotel));
+    return visibleResults.map((hotel) => renderHotelRow(hotel));
   };
 
   return (
@@ -597,16 +600,7 @@ export function TripHotelSearch({
                   onBoundsChange={setMapBounds}
                   expanded
                 />
-                {detailHotel ? (
-                  <HotelDetailSheet
-                    hotel={detailHotel}
-                    allHotels={visibleResults}
-                    city={resolvedCity ?? city}
-                    saved={savedHotelIds.has(detailHotel.id)}
-                    onSaveToTrip={() => handleSaveToTrip(detailHotel)}
-                    onClose={() => setDetailHotelId(null)}
-                  />
-                ) : visibleResults.length > 0 ? (
+                {detailHotel ? null : visibleResults.length > 0 ? (
                   <p className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-center text-[11px] text-slate-500 dark:border-slate-700">
                     Select a hotel from the list or tap a price pin on the map.
                   </p>
@@ -620,17 +614,18 @@ export function TripHotelSearch({
               <div className="max-h-[28rem] space-y-1.5 overflow-y-auto">
                 {visibleResults.map((hotel) => renderHotelRow(hotel))}
               </div>
-              {detailHotel ? (
-                <HotelDetailSheet
-                  hotel={detailHotel}
-                  allHotels={visibleResults}
-                  city={resolvedCity ?? city}
-                  saved={savedHotelIds.has(detailHotel.id)}
-                  onSaveToTrip={() => handleSaveToTrip(detailHotel)}
-                  onClose={() => setDetailHotelId(null)}
-                />
-              ) : null}
             </div>
+          ) : null}
+
+          {detailHotel ? (
+            <HotelDetailSheet
+              hotel={detailHotel}
+              allHotels={visibleResults}
+              city={resolvedCity ?? city}
+              saved={savedHotelIds.has(detailHotel.id)}
+              onSaveToTrip={() => handleSaveToTrip(detailHotel)}
+              onClose={() => setDetailHotelId(null)}
+            />
           ) : null}
         </>
       )}

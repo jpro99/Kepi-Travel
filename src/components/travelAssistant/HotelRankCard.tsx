@@ -55,13 +55,23 @@ export function HotelRankCard({
         <div className="min-w-0 flex-1">
           <p className="truncate text-xs font-bold text-slate-900 dark:text-white">{hotel.name}</p>
           <p className="truncate text-[10px] text-slate-500">
+            {hotel.inSearchCity === false ? "Nearby · " : ""}
             {hotel.chainName ? `${hotel.chainName} · ` : ""}
             {hotel.rating !== undefined ? `${hotel.rating.toFixed(1)}★` : `${hotel.stars}★`}
           </p>
         </div>
         <div className="shrink-0 text-right">
-          <p className="text-sm font-black text-slate-900 dark:text-white">${Math.round(hotel.pricePerNight)}</p>
-          <p className="text-[9px] text-slate-400">/ night</p>
+          {hotel.browseOnly || hotel.pricePerNight <= 0 ? (
+            <>
+              <p className="text-[11px] font-black text-sky-700 dark:text-sky-300">Google</p>
+              <p className="text-[9px] text-slate-400">check price</p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-black text-slate-900 dark:text-white">${Math.round(hotel.pricePerNight)}</p>
+              <p className="text-[9px] text-slate-400">/ night</p>
+            </>
+          )}
         </div>
         <button
           type="button"

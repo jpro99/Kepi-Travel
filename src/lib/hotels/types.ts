@@ -21,6 +21,8 @@ export interface HotelSearchResult {
   cancellationDeadline?: string;
   lat?: number;
   lng?: number;
+  /** No live rate in Kepi — open Google Hotels for pricing. */
+  browseOnly?: boolean;
 }
 
 export type HotelSearchTier =

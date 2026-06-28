@@ -1,12 +1,13 @@
 import type { ResolvedHotelDestination } from "@/lib/hotels/resolveDestination";
 import { HOTEL_CITY_COORDS } from "@/lib/hotels/resolveDestination";
 import type { HotelSearchResult } from "@/lib/hotels/types";
-import { isSmallDestination } from "@/lib/hotels/hotelCityScope";
+import { cityFromAddress, isSmallDestination } from "@/lib/hotels/hotelCityScope";
 import {
   buildEstimatedStays,
   estimatedStaysNotice,
   resolveStaysMode,
 } from "@/lib/providers/duffel/fallbackStays";
+import { listLiteApiHotelCatalog } from "@/lib/providers/liteapi/listHotelCatalog";
 import { isLiteApiConfigured, searchLiteApiHotels } from "@/lib/providers/liteapi/searchHotels";
 import type { DuffelStayQuote } from "@/lib/providers/duffel/types";
 
@@ -83,7 +84,7 @@ function mapDuffelRowToHotel(input: {
     currency: (row.cheapest_rate_currency ?? "USD") as string,
     nights,
     address: (addressRecord?.line_one as string | undefined) ?? "",
-    city: resolved.displayName,
+    city: cityFromAddress((addressRecord?.line_one as string | undefined) ?? "") || resolved.displayName.split(",")[0]?.trim() || resolved.displayName,
     checkIn,
     checkOut,
     amenities,
@@ -117,7 +118,7 @@ function mapEstimatedQuoteToHotel(input: {
     currency: quote.currency,
     nights,
     address: quote.area ?? resolved.displayName,
-    city: resolved.displayName,
+    city: cityFromAddress(quote.area) || resolved.displayName.split(",")[0]?.trim() || resolved.displayName,
     checkIn,
     checkOut,
     amenities: [],
@@ -284,6 +285,20 @@ export async function searchHotelsLiveOrEstimated(input: {
       merged = mergeHotelResults(merged, byAirport.hotels);
       liteApiError = byAirport.error ?? liteApiError;
     }
+
+    const liveCount = merged.filter((hotel) => !hotel.browseOnly && hotel.pricePerNight > 0).length;
+    if (liveCount < 50) {
+      for (const radius of [5_000, 8_000, 12_000, 20_000]) {
+        const catalog = await listLiteApiHotelCatalog({
+          ...liteInput,
+          radiusMeters: radius,
+          maxResults: 150,
+        });
+        merged = mergeHotelResults(merged, catalog.hotels);
+        liteApiError = catalog.error ?? liteApiError;
+        if (merged.length >= 50) break;
+      }
+    }
   }
 
   if (merged.length > 0) {
@@ -293,7 +308,7 @@ export async function searchHotelsLiveOrEstimated(input: {
         ? "Live rates via LiteAPI — Duffel Stays will take over when enabled on your account."
         : undefined;
     return {
-      hotels: merged.slice(0, 100),
+      hotels: merged.slice(0, 150),
       source,
       notice,
       duffelError: duffel.error ?? liteApiError,
@@ -329,24 +344,39 @@ export async function searchHotelsLiveOrEstimated(input: {
   };
 }
 
-function hotelDedupeKey(hotel: HotelSearchResult): string {
+function hotelIdentityKey(hotel: HotelSearchResult): string {
+  const catalogMatch = hotel.id.match(/^liteapi-(?:catalog-)?(.+)$/);
+  if (catalogMatch?.[1]) return `liteapi:${catalogMatch[1]}`;
   const name = hotel.name.trim().toLowerCase().replace(/\s+/g, " ");
-  const price = Math.round(hotel.pricePerNight);
-  return `${name}|${price}`;
+  return `name:${name}`;
 }
 
 function mergeHotelResults(...groups: HotelSearchResult[][]): HotelSearchResult[] {
-  const merged: HotelSearchResult[] = [];
-  const seen = new Set<string>();
+  const byIdentity = new Map<string, HotelSearchResult>();
 
   for (const group of groups) {
     for (const hotel of group) {
-      const key = hotelDedupeKey(hotel);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      merged.push(hotel);
+      const key = hotelIdentityKey(hotel);
+      const existing = byIdentity.get(key);
+      if (!existing) {
+        byIdentity.set(key, hotel);
+        continue;
+      }
+      const existingLive = !existing.browseOnly && existing.pricePerNight > 0;
+      const incomingLive = !hotel.browseOnly && hotel.pricePerNight > 0;
+      if (!existingLive && incomingLive) {
+        byIdentity.set(key, hotel);
+      } else if (existingLive && incomingLive && hotel.pricePerNight < existing.pricePerNight) {
+        byIdentity.set(key, hotel);
+      }
     }
   }
 
-  return merged.sort((a, b) => a.pricePerNight - b.pricePerNight);
+  return [...byIdentity.values()].sort((a, b) => {
+    const aLive = !a.browseOnly && a.pricePerNight > 0;
+    const bLive = !b.browseOnly && b.pricePerNight > 0;
+    if (aLive !== bLive) return aLive ? -1 : 1;
+    if (aLive && bLive) return a.pricePerNight - b.pricePerNight;
+    return (b.rating ?? b.stars) - (a.rating ?? a.stars);
+  });
 }

@@ -32,7 +32,10 @@ function createPricePin(
 ): HTMLButtonElement {
   const el = document.createElement("button");
   el.type = "button";
-  el.title = `${hotel.name} · $${Math.round(hotel.pricePerNight)}/night`;
+  const hasLiveRate = !hotel.browseOnly && hotel.pricePerNight > 0;
+  el.title = hasLiveRate
+    ? `${hotel.name} · $${Math.round(hotel.pricePerNight)}/night`
+    : `${hotel.name} · check price on Google`;
   el.className = "flex flex-col items-center border-0 bg-transparent p-0";
 
   const badge = document.createElement("span");
@@ -40,7 +43,7 @@ function createPricePin(
   badge.style.backgroundColor = style.bg;
   badge.style.color = style.text;
   if (selected) badge.style.boxShadow = `0 0 0 2px ${style.ring}`;
-  badge.textContent = `$${Math.round(hotel.pricePerNight)}`;
+  badge.textContent = hasLiveRate ? `$${Math.round(hotel.pricePerNight)}` : "G";
 
   const dot = document.createElement("span");
   dot.className = "mt-0.5 h-1.5 w-1.5 rounded-full";
