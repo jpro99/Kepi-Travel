@@ -5469,63 +5469,6 @@ export default function TravelAssistantPage() {
     setHotelSearchModalOpen(true);
   }, []);
 
-  const handleTripPlanningAction = useCallback(
-    (item: TripActionItem): void => {
-      if (item.kind === "hotel") {
-        const planned = item.plannedCityId
-          ? plannedStayCities.find((city) => city.id === item.plannedCityId)
-          : undefined;
-        if (planned) {
-          openHotelSearchForPlannedCity(planned);
-        } else {
-          const segment = item.segmentId
-            ? tripStaySegments.find((seg) => seg.id === item.segmentId)
-            : undefined;
-          if (segment) openHotelSearchForSegment(segment);
-        }
-        navigateToConsumerTab("hotels");
-        return;
-      }
-      if (item.kind === "flight") {
-        const leg = item.flightLegId
-          ? plannedFlightLegs.find((l) => l.id === item.flightLegId)
-          : plannedFlightLegs.find((l) => l.status === "needed");
-        if (leg) {
-          const plan = buildFlightSearchPlan([leg]);
-          if (plan) {
-            handleFlightSearchPlan(plan);
-            return;
-          }
-        }
-        setBookFlightsWizardOpen(true);
-        navigateToConsumerTab("flights");
-        return;
-      }
-      if (item.kind === "transport") {
-        setManualReservationPresetType("ride");
-        setManualReservationModalOpen(true);
-        navigateToConsumerTab("flights");
-        return;
-      }
-      if (item.kind === "import") {
-        navigateToConsumerTab("trip");
-        setToast("Forward booking emails or use Import to add confirmations.");
-        return;
-      }
-      navigateToConsumerTab("flights");
-    },
-    [
-      handleFlightSearchPlan,
-      navigateToConsumerTab,
-      openHotelSearchForPlannedCity,
-      openHotelSearchForSegment,
-      plannedFlightLegs,
-      plannedStayCities,
-      setToast,
-      tripStaySegments,
-    ],
-  );
-
   const handleAddCityStay = useCallback(
     (input: { city: string; checkIn: string; checkOut: string }) => {
       if (!activeTripId) return;
@@ -7566,6 +7509,63 @@ export default function TravelAssistantPage() {
     const nextUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, "", nextUrl);
   }, []);
+
+  const handleTripPlanningAction = useCallback(
+    (item: TripActionItem): void => {
+      if (item.kind === "hotel") {
+        const planned = item.plannedCityId
+          ? plannedStayCities.find((city) => city.id === item.plannedCityId)
+          : undefined;
+        if (planned) {
+          openHotelSearchForPlannedCity(planned);
+        } else {
+          const segment = item.segmentId
+            ? tripStaySegments.find((seg) => seg.id === item.segmentId)
+            : undefined;
+          if (segment) openHotelSearchForSegment(segment);
+        }
+        navigateToConsumerTab("hotels");
+        return;
+      }
+      if (item.kind === "flight") {
+        const leg = item.flightLegId
+          ? plannedFlightLegs.find((l) => l.id === item.flightLegId)
+          : plannedFlightLegs.find((l) => l.status === "needed");
+        if (leg) {
+          const plan = buildFlightSearchPlan([leg]);
+          if (plan) {
+            handleFlightSearchPlan(plan);
+            return;
+          }
+        }
+        setBookFlightsWizardOpen(true);
+        navigateToConsumerTab("flights");
+        return;
+      }
+      if (item.kind === "transport") {
+        setManualReservationPresetType("ride");
+        setManualReservationModalOpen(true);
+        navigateToConsumerTab("flights");
+        return;
+      }
+      if (item.kind === "import") {
+        navigateToConsumerTab("trip");
+        setToast("Forward booking emails or use Import to add confirmations.");
+        return;
+      }
+      navigateToConsumerTab("flights");
+    },
+    [
+      handleFlightSearchPlan,
+      navigateToConsumerTab,
+      openHotelSearchForPlannedCity,
+      openHotelSearchForSegment,
+      plannedFlightLegs,
+      plannedStayCities,
+      setToast,
+      tripStaySegments,
+    ],
+  );
 
   const addDay = useCallback((dateKey: string, days: number): string => {
     const ms = Date.parse(`${dateKey}T12:00:00Z`) + days * 86_400_000;
