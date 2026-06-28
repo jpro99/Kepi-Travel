@@ -157,11 +157,25 @@ function endpointsForReservation(reservation: TransportRouteReservation): {
   };
 }
 
+function parseLocalHour(timeStr: string): number | null {
+  const match = /T(\d{2}):/u.exec(timeStr) ?? /\s(\d{2}):/u.exec(timeStr);
+  if (!match?.[1]) return null;
+  const hour = Number(match[1]);
+  return Number.isFinite(hour) ? hour : null;
+}
+
+/** Tickets often label 12:10 AM long-hauls on the prior calendar date (Sep 1 → actually Sep 2 00:10). */
+function rollEarlyMorningDepartureMs(ms: number, timeStr: string): number {
+  const hour = parseLocalHour(timeStr);
+  if (hour == null || hour >= 3) return ms;
+  return ms + 86_400_000;
+}
+
 function departMsForReservation(reservation: TransportRouteReservation): number {
   if (reservation.type === "flight") {
     const dep = reservation.flightDepartureTime ?? reservation.localTime ?? "";
     const ms = toUtcMs(dep, reservation.timezone);
-    if (Number.isFinite(ms)) return ms;
+    if (Number.isFinite(ms)) return rollEarlyMorningDepartureMs(ms, dep);
   }
   return toUtcMs(reservation.localTime ?? "", reservation.timezone);
 }
@@ -171,7 +185,7 @@ function arriveMsForReservation(reservation: TransportRouteReservation): number 
     const arr = reservation.flightArrivalTime ?? "";
     if (arr.trim()) {
       const ms = toUtcMs(arr, reservation.timezone);
-      if (Number.isFinite(ms)) return ms;
+      if (Number.isFinite(ms)) return rollEarlyMorningDepartureMs(ms, arr);
     }
     const depMs = departMsForReservation(reservation);
     if (Number.isFinite(depMs)) return depMs + 3 * 3_600_000;
@@ -291,6 +305,10 @@ function normalizeOvernightConnections(segments: TripTransportSegment[]): TripTr
     const next = out[i];
     if (prev.toCode !== next.fromCode || prev.arriveMs == null || next.departMs == null) continue;
     if (next.departMs >= prev.arriveMs) continue;
+
+    const backwardsGapMs = prev.arriveMs - next.departMs;
+    // Only roll when the departure is on the wrong calendar day (12+ hours "before" arrival).
+    if (backwardsGapMs < 12 * 3_600_000) continue;
 
     const rolledDepart = next.departMs + 86_400_000;
     const rolledArrive = next.arriveMs != null ? next.arriveMs + 86_400_000 : null;
