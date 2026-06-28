@@ -695,6 +695,8 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         "air france": "AF", "emirates": "EK",
         "cathay pacific": "CX", "singapore airlines": "SQ",
         "qantas": "QF", "air canada": "AC",
+        "ita airways": "AZ", "ita": "AZ", "alitalia": "AZ", "italian airways": "AZ",
+        "ryanair": "FR", "easyjet": "U2", "wizz air": "W4", "vueling": "VY",
       };
       const hasIataPrefix = /^[A-Z]{2}\d/i.test(rawFlightNumber);
       let parserFlightNumber = rawFlightNumber.toUpperCase();
@@ -875,8 +877,13 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
 
       // Smart routing: high confidence = auto-accept. Low confidence or missing
       // critical fields = review queue so user can fix the specific problem.
-      const isCriticalFieldMissing = !parserLocalTime.trim() ||
-        (parserType === "flight" && !parserFlightNumber.trim());
+      const hasFlightRoute =
+        parserType === "flight" &&
+        parsedReservation.flightDepartureAirport.trim().length > 0 &&
+        parsedReservation.flightArrivalAirport.trim().length > 0;
+      const isCriticalFieldMissing =
+        !parserLocalTime.trim() ||
+        (parserType === "flight" && !parserFlightNumber.trim() && !hasFlightRoute);
       const needsReview = isCriticalFieldMissing ||
         parserParsingStatus === "needs-user-input" ||
         parserConfidenceScore < 40;

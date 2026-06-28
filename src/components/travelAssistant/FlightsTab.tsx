@@ -56,6 +56,8 @@ interface FlightsTabProps {
   transportConflictIds?: Set<string>;
   tripName?: string | null;
   flightSearchDefaults?: FlightSearchDefaults;
+  pendingForwardReview?: { id: string; reason: string; subject?: string } | null;
+  onOpenForwardReview?: (reviewId: string) => void;
   liveStatus?: Record<string, LiveStatusResult>;
   locationStatus?: "away" | "at-airport" | "in-terminal" | "airborne" | "unknown";
   nearestAirport?: string;
@@ -444,6 +446,8 @@ export function FlightsTab({
   transportConflictIds,
   tripName,
   flightSearchDefaults,
+  pendingForwardReview,
+  onOpenForwardReview,
   liveStatus = {}, locationStatus = "unknown", nearestAirport = "",
   onReservationTap, onCheckStatus, onDelete, onAdd,
 }: FlightsTabProps) {
@@ -510,6 +514,24 @@ export function FlightsTab({
         defaults={flightSearchDefaults}
         onSearch={handleFlightSearch}
       />
+
+      {pendingForwardReview && onOpenForwardReview ? (
+        <button
+          type="button"
+          onClick={() => onOpenForwardReview(pendingForwardReview.id)}
+          className="w-full rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-left shadow-sm transition hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-500/15 dark:hover:bg-amber-500/20"
+        >
+          <p className="text-sm font-bold text-amber-900 dark:text-amber-100">
+            Forwarded flight waiting for you
+          </p>
+          <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-200">
+            {pendingForwardReview.reason}
+          </p>
+          <p className="mt-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
+            Tap to confirm and add to your flights →
+          </p>
+        </button>
+      ) : null}
 
       <FlightSearchModal
         open={flightSearchOpen}

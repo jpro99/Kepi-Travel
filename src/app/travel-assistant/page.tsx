@@ -4139,6 +4139,15 @@ export default function TravelAssistantPage() {
     [reviewQueue],
   );
   const firstForwardedReviewItem = forwardedReviewItems[0] ?? null;
+  const firstForwardedFlightReview = useMemo(() => {
+    const flightItem = forwardedReviewItems.find((item) => item.draft.type === "flight");
+    if (!flightItem) return null;
+    return {
+      id: flightItem.id,
+      reason: flightItem.reasons[0] ?? "Tap to confirm this forwarded flight.",
+      subject: flightItem.sourceEmailSubject,
+    };
+  }, [forwardedReviewItems]);
   const pendingForwardedReservations = useMemo(
     () =>
       forwardedReviewItems.map(
@@ -8871,7 +8880,7 @@ export default function TravelAssistantPage() {
               ) : reviewQueue.length > 0 ? (
                 <button
                   type="button"
-                  onClick={() => navigateToConsumerTab("flights")}
+                  onClick={() => openDrawer("review", reviewQueue[0].id)}
                   className="w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm text-amber-900 shadow-sm transition hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-100 dark:hover:bg-amber-500/20"
                 >
                   {reviewQueue.length} reservation{reviewQueue.length === 1 ? "" : "s"} need{reviewQueue.length === 1 ? "s" : ""} your input — tap to review
@@ -9079,6 +9088,8 @@ export default function TravelAssistantPage() {
               transportConflictIds={transportConflictReservationIds}
               tripName={activeTrip?.name}
               flightSearchDefaults={flightSearchDefaults}
+              pendingForwardReview={firstForwardedFlightReview}
+              onOpenForwardReview={(reviewId) => openDrawer("review", reviewId)}
               liveStatus={flightStatusCheckByReservationId}
               locationStatus={guidanceLocationStatus}
               nearestAirport={guidanceNearestAirport}
