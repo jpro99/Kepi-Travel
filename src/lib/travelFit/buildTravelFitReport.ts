@@ -2,6 +2,8 @@ import { analyzeTravelHabits, habitsLearningCopy } from "@/lib/travelFit/analyze
 import { hubFitScore, isWestCoastHome, WEST_COAST_HUBS } from "@/lib/travelFit/hubKnowledge";
 import { buildStatusProjections } from "@/lib/travelFit/statusProjection";
 import { suggestEarnStack } from "@/lib/points/earnStack";
+import type { LoyaltyBalance } from "@/lib/loyalty/optimizer";
+import { normalizeLoyaltyBalances } from "@/lib/loyalty/walletBalances";
 import type { PointsTravelProfile } from "@/lib/memory/pointsTravelProfile";
 import type {
   LearnedTravelHabits,
@@ -124,6 +126,7 @@ export function buildTravelFitReport(input: {
   genome: TravelerGenome;
   pointsProfile?: PointsTravelProfile | null;
   storedHabits?: Partial<LearnedTravelHabits> | null;
+  loyaltyBalances?: LoyaltyBalance[] | null;
 }): TravelFitReport {
   const homeAirports = input.genome.geoCluster.map((a) => a.iata);
   const habits = analyzeTravelHabits({
@@ -140,13 +143,14 @@ export function buildTravelFitReport(input: {
   const airlineFit = scoreAirlinePrograms(habits, input.genome);
   const hotelFit = scoreHotelPrograms(habits, input.genome);
 
-  const alaskaSegments = habits.topAirlines.find((a) => a.airlineCode === "AS")?.segmentCount ?? 0;
-  const hyattNights = habits.topHotelChains.find((h) => h.chain === "Hyatt")?.stayCount ?? habits.hotelStayCount;
+  const loyaltyBalances = normalizeLoyaltyBalances(
+    input.loyaltyBalances ?? input.genome.loyaltyBalances ?? [],
+  );
 
   const statusProjections = buildStatusProjections({
+    loyaltyBalances,
+    reservations: input.reservations,
     statuses: input.genome.statuses,
-    hotelNightsThisYear: hyattNights,
-    alaskaSegmentsThisYear: alaskaSegments,
     typicalNightlyUsd: habits.typicalHotelNightlyUsd,
   });
 

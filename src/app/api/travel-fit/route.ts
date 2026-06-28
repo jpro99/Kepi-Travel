@@ -7,6 +7,7 @@ import { getHotelStayMemory } from "@/lib/memory/hotelMemory";
 import { getTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
 import { buildTravelFitReport } from "@/lib/travelFit/buildTravelFitReport";
 import type { TravelFitReservation } from "@/lib/travelFit/types";
+import { normalizeLoyaltyBalances } from "@/lib/loyalty/walletBalances";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,6 +53,7 @@ export async function GET() {
     genome,
     pointsProfile: mergedProfile,
     storedHabits,
+    loyaltyBalances: normalizeLoyaltyBalances(genome.loyaltyBalances ?? []),
   });
 
   return NextResponse.json({ report, genome: { homeRegion: genome.homeRegion, geoCluster: genome.geoCluster } });
@@ -94,6 +96,7 @@ export async function POST(req: Request) {
     genome,
     pointsProfile: mergedProfile,
     storedHabits,
+    loyaltyBalances: normalizeLoyaltyBalances(genome.loyaltyBalances ?? []),
   });
 
   return NextResponse.json({ report });

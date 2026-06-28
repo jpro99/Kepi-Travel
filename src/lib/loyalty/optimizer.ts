@@ -7,6 +7,12 @@ export interface LoyaltyBalance {
   miles: number;
   tier?: string;
   memberNumber?: string;
+  /** Segments already flown this calendar year before Kepi tracking */
+  segmentsYtd?: number;
+  /** Qualifying hotel nights already earned this calendar year before Kepi */
+  nightsYtd?: number;
+  /** When the YTD baseline was last saved — Kepi counts activity after this */
+  progressBaselineAt?: string;
 }
 
 export interface CostOption {

@@ -10,11 +10,21 @@ interface LoyaltyWalletProps {
   onUpdate: (balances: LoyaltyBalance[]) => Promise<void>;
 }
 
+function parseCountInput(raw: string): number | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  const value = Math.round(Number(trimmed.replace(/,/g, "")));
+  if (!Number.isFinite(value) || value < 0) return undefined;
+  return value;
+}
+
 export function LoyaltyWallet({ balances, onUpdate }: LoyaltyWalletProps) {
   const [editing, setEditing] = useState<string | null>(null);
   const [tempMiles, setTempMiles] = useState("");
   const [tempTier, setTempTier] = useState("");
   const [tempMemberNumber, setTempMemberNumber] = useState("");
+  const [tempSegmentsYtd, setTempSegmentsYtd] = useState("");
+  const [tempNightsYtd, setTempNightsYtd] = useState("");
   const [saving, setSaving] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
 
@@ -26,6 +36,8 @@ export function LoyaltyWallet({ balances, onUpdate }: LoyaltyWalletProps) {
     setTempMiles(bal?.miles ? bal.miles.toLocaleString() : "");
     setTempTier(bal?.tier ?? "");
     setTempMemberNumber(bal?.memberNumber ?? "");
+    setTempSegmentsYtd(bal?.segmentsYtd != null ? String(bal.segmentsYtd) : "");
+    setTempNightsYtd(bal?.nightsYtd != null ? String(bal.nightsYtd) : "");
   };
 
   const save = async (programId: string) => {
@@ -34,7 +46,22 @@ export function LoyaltyWallet({ balances, onUpdate }: LoyaltyWalletProps) {
     if (Number.isNaN(miles) || miles < 0) return;
     const memberNumber = tempMemberNumber.trim();
     const tier = tempTier.trim();
-    if (miles === 0 && !memberNumber && !tier) return;
+    const segmentsYtd = parseCountInput(tempSegmentsYtd);
+    const nightsYtd = parseCountInput(tempNightsYtd);
+    const existing = getBalance(programId);
+
+    if (
+      miles === 0 &&
+      !memberNumber &&
+      !tier &&
+      segmentsYtd == null &&
+      nightsYtd == null
+    ) {
+      return;
+    }
+
+    const progressChanged =
+      segmentsYtd !== existing?.segmentsYtd || nightsYtd !== existing?.nightsYtd;
 
     setSaving(true);
     try {
@@ -44,6 +71,12 @@ export function LoyaltyWallet({ balances, onUpdate }: LoyaltyWalletProps) {
         miles,
         tier: tier || undefined,
         memberNumber: memberNumber || undefined,
+        ...(segmentsYtd != null ? { segmentsYtd } : {}),
+        ...(nightsYtd != null ? { nightsYtd } : {}),
+        progressBaselineAt:
+          progressChanged || !existing?.progressBaselineAt
+            ? new Date().toISOString()
+            : existing.progressBaselineAt,
       });
       await onUpdate(next);
       setEditing(null);
@@ -76,13 +109,16 @@ export function LoyaltyWallet({ balances, onUpdate }: LoyaltyWalletProps) {
   const editingProgram = editing ? LOYALTY_PROGRAMS.find((p) => p.id === editing) : null;
   const editingExisting = editing ? getBalance(editing) : undefined;
 
-  const renderEditForm = (programId: string, progName: string, progEmoji: string) => (
+  const renderEditForm = (programId: string, progName: string, progEmoji: string, progType: string) => (
     <div className="rounded-2xl border border-sky-500/40 bg-slate-900/80">
       <div className="flex items-center gap-3 px-4 py-3.5 border-b border-slate-700">
         <span className="text-2xl">{progEmoji}</span>
         <p className="text-sm font-bold text-white">{progName}</p>
       </div>
       <div className="px-4 py-3 space-y-2">
+        <p className="text-xs text-slate-400">
+          Tell Kepi where you are today — we&apos;ll add new bookings from here forward.
+        </p>
         <div>
           <label className="text-[10px] font-bold uppercase text-slate-500">Member / account number</label>
           <input
@@ -94,7 +130,7 @@ export function LoyaltyWallet({ balances, onUpdate }: LoyaltyWalletProps) {
           />
         </div>
         <div>
-          <label className="text-[10px] font-bold uppercase text-slate-500">Balance (optional)</label>
+          <label className="text-[10px] font-bold uppercase text-slate-500">Miles / points balance (optional)</label>
           <input
             type="text"
             value={tempMiles}
@@ -109,10 +145,46 @@ export function LoyaltyWallet({ balances, onUpdate }: LoyaltyWalletProps) {
             type="text"
             value={tempTier}
             onChange={(e) => setTempTier(e.target.value)}
-            placeholder="e.g. MVP Gold, 1K, Diamond"
+            placeholder="e.g. MVP Gold, 1K, Globalist"
             className="mt-1 w-full rounded-xl bg-slate-800 border border-slate-600 px-3 py-2 text-sm text-white focus:outline-none focus:border-[#f4c95d]/50"
           />
         </div>
+        {progType === "airline" ? (
+          <div>
+            <label className="text-[10px] font-bold uppercase text-slate-500">
+              Segments flown this year (before Kepi)
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={tempSegmentsYtd}
+              onChange={(e) => setTempSegmentsYtd(e.target.value.replace(/[^\d]/g, ""))}
+              placeholder="e.g. 18"
+              className="mt-1 w-full rounded-xl bg-slate-800 border border-slate-600 px-3 py-2 text-sm text-white focus:outline-none focus:border-[#f4c95d]/50"
+            />
+            <p className="mt-1 text-[10px] text-slate-500">
+              Check your airline account — Kepi adds new flights you forward or book here.
+            </p>
+          </div>
+        ) : null}
+        {progType === "hotel" ? (
+          <div>
+            <label className="text-[10px] font-bold uppercase text-slate-500">
+              Qualifying nights this year (before Kepi)
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={tempNightsYtd}
+              onChange={(e) => setTempNightsYtd(e.target.value.replace(/[^\d]/g, ""))}
+              placeholder="e.g. 12"
+              className="mt-1 w-full rounded-xl bg-slate-800 border border-slate-600 px-3 py-2 text-sm text-white focus:outline-none focus:border-[#f4c95d]/50"
+            />
+            <p className="mt-1 text-[10px] text-slate-500">
+              From your hotel program account — Kepi adds stays you book through the app.
+            </p>
+          </div>
+        ) : null}
         <div className="flex gap-2 pt-1">
           <button
             type="button"
@@ -157,7 +229,9 @@ export function LoyaltyWallet({ balances, onUpdate }: LoyaltyWalletProps) {
         </div>
       )}
 
-      {editing && editingProgram && !editingExisting && renderEditForm(editing, editingProgram.name, editingProgram.emoji)}
+      {editing && editingProgram && !editingExisting
+        ? renderEditForm(editing, editingProgram.name, editingProgram.emoji, editingProgram.type)
+        : null}
 
       {activePrograms.length > 0 && (
         <div className="space-y-2">
@@ -169,7 +243,7 @@ export function LoyaltyWallet({ balances, onUpdate }: LoyaltyWalletProps) {
             return (
               <div key={prog.id} className="rounded-2xl border border-slate-700 bg-[#111e33]">
                 {isEdit ? (
-                  renderEditForm(prog.id, prog.shortName, prog.emoji)
+                  renderEditForm(prog.id, prog.shortName, prog.emoji, prog.type)
                 ) : (
                   <>
                     <div className="flex items-center gap-3 px-4 py-3.5">
@@ -180,6 +254,12 @@ export function LoyaltyWallet({ balances, onUpdate }: LoyaltyWalletProps) {
                           <p className="text-xs text-slate-400 font-mono">#{bal.memberNumber}</p>
                         ) : null}
                         {bal.tier ? <p className="text-xs text-[#f4c95d]">{bal.tier}</p> : null}
+                        {prog.type === "airline" && bal.segmentsYtd != null ? (
+                          <p className="text-xs text-sky-300">{bal.segmentsYtd} segments YTD baseline</p>
+                        ) : null}
+                        {prog.type === "hotel" && bal.nightsYtd != null ? (
+                          <p className="text-xs text-sky-300">{bal.nightsYtd} nights YTD baseline</p>
+                        ) : null}
                       </div>
                       <div className="text-right">
                         {bal.miles > 0 ? (

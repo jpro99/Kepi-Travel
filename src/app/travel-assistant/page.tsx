@@ -169,6 +169,7 @@ import { DisruptionAlert } from "@/components/travelAssistant/DisruptionAlert";
 import { TripReview } from "@/components/travelAssistant/TripReview";
 import { SmartPackingList } from "@/components/travelAssistant/SmartPackingList";
 import { LoyaltyWallet } from "@/components/loyalty/LoyaltyWallet";
+import type { LoyaltyBalance } from "@/lib/loyalty/optimizer";
 import { PointsTravelProfileCard } from "@/components/travelAssistant/PointsTravelProfileCard";
 import { TravelFitCard } from "@/components/travelAssistant/TravelFitCard";
 import {
@@ -1743,9 +1744,7 @@ function defaultTripFromCurrentState(input: {
 
 
 function LoyaltyWalletSection() {
-  const [balances, setBalances] = useState<
-    { programId: string; miles: number; tier?: string; memberNumber?: string }[]
-  >([]);
+  const [balances, setBalances] = useState<LoyaltyBalance[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -1756,7 +1755,7 @@ function LoyaltyWalletSection() {
       .finally(() => setLoaded(true));
   }, []);
 
-  const handleUpdate = async (next: typeof balances) => {
+  const handleUpdate = async (next: LoyaltyBalance[]) => {
     const res = await fetch("/api/loyalty", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1765,7 +1764,7 @@ function LoyaltyWalletSection() {
     if (!res.ok) {
       throw new Error("Failed to save loyalty wallet");
     }
-    const data = (await res.json()) as { balances?: typeof balances };
+    const data = (await res.json()) as { balances?: LoyaltyBalance[] };
     setBalances(Array.isArray(data.balances) ? data.balances : next);
   };
 

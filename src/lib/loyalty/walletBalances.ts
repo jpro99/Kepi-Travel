@@ -1,8 +1,30 @@
 import { getProgramById } from "@/lib/loyalty/programs";
 import type { LoyaltyBalance } from "@/lib/loyalty/optimizer";
 
-export function hasStoredLoyaltyEntry(balance: Pick<LoyaltyBalance, "miles" | "tier" | "memberNumber">): boolean {
-  return balance.miles > 0 || Boolean(balance.tier?.trim()) || Boolean(balance.memberNumber?.trim());
+export function hasStoredLoyaltyEntry(
+  balance: Pick<
+    LoyaltyBalance,
+    "miles" | "tier" | "memberNumber" | "segmentsYtd" | "nightsYtd"
+  >,
+): boolean {
+  return (
+    balance.miles > 0 ||
+    Boolean(balance.tier?.trim()) ||
+    Boolean(balance.memberNumber?.trim()) ||
+    (typeof balance.segmentsYtd === "number" && balance.segmentsYtd >= 0) ||
+    (typeof balance.nightsYtd === "number" && balance.nightsYtd >= 0)
+  );
+}
+
+function parseOptionalCount(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return Math.round(value);
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Math.round(Number(value.replace(/,/g, "")));
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return undefined;
 }
 
 /** Normalize wallet entries; drops empty rows and unknown program ids. */
@@ -27,14 +49,23 @@ export function normalizeLoyaltyBalances(raw: unknown): LoyaltyBalance[] {
 
     const tier = typeof record.tier === "string" ? record.tier.trim() : "";
     const memberNumber = typeof record.memberNumber === "string" ? record.memberNumber.trim() : "";
+    const segmentsYtd = parseOptionalCount(record.segmentsYtd);
+    const nightsYtd = parseOptionalCount(record.nightsYtd);
+    const progressBaselineAt =
+      typeof record.progressBaselineAt === "string" && record.progressBaselineAt.trim().length > 0
+        ? record.progressBaselineAt.trim()
+        : undefined;
 
-    if (!hasStoredLoyaltyEntry({ miles, tier, memberNumber })) continue;
+    if (!hasStoredLoyaltyEntry({ miles, tier, memberNumber, segmentsYtd, nightsYtd })) continue;
 
     byProgramId.set(programId, {
       programId,
       miles,
       tier: tier || undefined,
       memberNumber: memberNumber || undefined,
+      ...(segmentsYtd != null ? { segmentsYtd } : {}),
+      ...(nightsYtd != null ? { nightsYtd } : {}),
+      ...(progressBaselineAt ? { progressBaselineAt } : {}),
     });
   }
 

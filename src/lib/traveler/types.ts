@@ -87,7 +87,15 @@ export interface TravelStyleProfile {
 
 export interface TravelerGenome {
   /** Loyalty program balances — updated by user */
-  loyaltyBalances?: { programId: string; miles: number; tier?: string; memberNumber?: string }[];
+  loyaltyBalances?: {
+    programId: string;
+    miles: number;
+    tier?: string;
+    memberNumber?: string;
+    segmentsYtd?: number;
+    nightsYtd?: number;
+    progressBaselineAt?: string;
+  }[];
   /** Post-trip feedback used by the trip-learning engine — see src/lib/learning/tripInsights.ts */
   tripRatings?: import("@/lib/learning/tripInsights").TripRating[];
   /** Prefilled from the most recent checkout — see src/app/api/orders/create/route.ts */
