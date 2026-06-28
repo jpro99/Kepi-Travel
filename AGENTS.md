@@ -99,8 +99,8 @@ For each finding:
 - Read `KEPI_DESIGN_LAW.md` before any UI, map, flight, hotel, or API change.
 - Structure: **GLOBAL** · **FLIGHTS** · **HOTELS** · **MAP** · **DATA / API** — append laws to the correct section only.
 - **Screenshot/map from user:** read `.cursor/rules/40-screenshot-triage.mdc` first — describe the image defect before coding.
-- Every hotel bug fix must append a one-line law and add/update a test in `src/lib/hotels/__tests__/`.
-- Laws are enforced on every build: `npm run test:hotels` (runs in `prebuild`).
+- Every bug fix in a covered domain must append a one-line law and add/update a test; add a row to the Test index.
+- Laws are enforced on every build: `npm run test:laws` (runs in `prebuild`). Ship gate: `npm run verify:ship`.
 
 ## Domain bot skills (Cursor)
 

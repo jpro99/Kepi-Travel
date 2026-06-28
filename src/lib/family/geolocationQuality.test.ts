@@ -40,9 +40,9 @@ describe("geolocationQuality", () => {
     assert.equal(shouldDisplayGeolocationFix(400), false);
   });
 
-  it("allows soft fix while GPS warms up", () => {
-    assert.equal(shouldAcceptGeolocationFix(coords(34.05, -118.24, 80)), true);
-    assert.equal(shouldAcceptGeolocationFix(coords(34.05, -118.24, 80)), false);
+  it("rejects coarse duplicate after precise fix is locked", () => {
+    assert.equal(shouldAcceptGeolocationFix(coords(34.05, -118.24, 25)), true);
+    assert.equal(shouldAcceptGeolocationFix(coords(34.05, -118.24, 120)), false);
   });
 
   it("rejects teleports to a distant mis-pin", () => {

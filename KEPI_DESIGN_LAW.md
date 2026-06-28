@@ -62,6 +62,16 @@ When flights change, hotel stay segments recompute via shared trip modules (`der
 **F6 — Status polling scope**  
 Auto flight-status polling only for flights within 24h; must not spam or crash when provider is down.
 
+**F7 — Multi-hop bookings satisfy planned legs**  
+A booked path (e.g. MUC→FCO→SEA→ONT) must satisfy a planned direct leg (MUC→ONT) in itinerary self-check — never flag as unbooked when a valid connection chain exists.
+
+**Test:** `src/lib/travelAssistant/itineraryPathCoverage.test.ts`, `src/lib/travelAssistant/itinerarySelfCheck.test.ts`
+
+**F8 — Email pricing parses exchange totals**  
+Forwarded airline exchange emails must surface **New Ticket Value** per passenger even when **Total due = $0**; miles spent/earned parsed when present.
+
+**Test:** `src/lib/travelAssistant/parseReservationCashUsd.test.ts`
+
 ---
 
 ## HOTELS LAWS
@@ -146,12 +156,25 @@ Gold + grayscale only on map chrome. Transit toggles and Refine — no competing
 **M6 — Streets default for hotel stay map**  
 Hotel search map defaults to streets view (rail/transit readable); satellite is optional toggle.
 
+**M7 — Family sharing survives refresh**  
+GPS permission errors or transient watch failures must **never** persist `kepi:family-sharing-off`. Only an explicit user **Stop sharing** may opt out.
+
+**Test:** `src/lib/family/geolocationQuality.test.ts`
+
+**M8 — Precise fix replaces coarse mis-pin**  
+When a more accurate GPS reading arrives (e.g. house after Wi‑Fi placed the pin in a park), accept the correction even after a large jump. Never lock the first coarse bootstrap pin when a precise fix is available.
+
+**Test:** `src/lib/family/locationFixUpgrade.test.ts`, `src/lib/family/geolocationQuality.test.ts`
+
 ---
 
 ## DATA / API LAWS
 
 **D1 — Build gate**  
-Hotel design-law tests run on every build: `npm run test:hotels` (wired into `prebuild`). Failed law test = failed build.
+Design-law tests run on every build: `npm run test:laws` (wired into `prebuild`). Failed law test = failed build. CI ship-gate runs the same bundle.
+
+**D9 — Verification gate before ship**  
+`npm run verify:ship` must pass locally before push: design-law tests + full production build. No exceptions — failed Vercel builds cost real credits.
 
 **D2 — Redis lazy init**  
 No `Redis.fromEnv()` at module top level. All KV access inside lazy functions with try/catch degrade.
@@ -183,7 +206,16 @@ Resend emails use `@react-email/render` → `html:` — never `react:` prop or `
 | H1, M1 | `src/lib/hotels/__tests__/hotelDistance.test.ts` |
 | H2, H5 | `src/lib/hotels/__tests__/hotelSearchFilters.test.ts` |
 | H3, H4 | `src/lib/hotels/__tests__/hotelCardDisplay.test.ts` |
+| H10 | `src/lib/hotels/__tests__/hotelLiveRate.test.ts` |
+| H11 | `src/lib/hotels/__tests__/priceRangeSlider.test.ts` |
+| H12 | `src/lib/hotels/__tests__/hotelPointsEstimate.test.ts` |
 | M2, M3 | `src/lib/hotels/hotelCoordinates.test.ts` |
+| M2 | `src/lib/hotels/__tests__/hotelOffshore.test.ts` |
+| M7, M8 | `src/lib/family/geolocationQuality.test.ts` |
+| M8 | `src/lib/family/locationFixUpgrade.test.ts` |
+| F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
+| F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
+| F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |
 | G8 | `src/lib/travelAssistant/dayPlanLines.test.ts` |
 
 New laws must add a row here when a test exists.
