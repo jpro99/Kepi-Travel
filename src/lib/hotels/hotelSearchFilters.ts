@@ -1,5 +1,6 @@
 import type { HotelStayProfile } from "@/lib/memory/hotelStayProfile";
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
+import { hasDisplayNightlyRate } from "@/lib/hotels/hotelLiveRate";
 
 export interface HotelMatchEvaluation {
   passes: boolean;
@@ -24,7 +25,7 @@ export interface ResolvedHotelDisplay {
 
 export function computeLivePriceBounds(hotels: RankedHotelSearchResult[]): PriceBounds {
   const nightlies = hotels
-    .filter((hotel) => !hotel.browseOnly && hotel.pricePerNight > 0)
+    .filter((hotel) => hasDisplayNightlyRate(hotel))
     .map((hotel) => Math.round(hotel.pricePerNight));
 
   if (nightlies.length === 0) {
@@ -83,7 +84,7 @@ export function evaluateHotelMatch(
   const blockers: string[] = [];
   const haystack = hotelHaystack(hotel);
 
-  if (!hotel.browseOnly && hotel.pricePerNight > 0) {
+  if (hasDisplayNightlyRate(hotel)) {
     const nightly = Math.round(hotel.pricePerNight);
     if (nightly >= priceMin && nightly <= priceMax) {
       reasons.push(`$${nightly}/night fits your budget`);

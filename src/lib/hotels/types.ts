@@ -33,6 +33,8 @@ export interface HotelSearchResult {
   memberTotalPrice?: number;
   /** Whether Kepi can checkout this property in-app. */
   kepiBookable?: boolean;
+  /** Room/rate label from the live provider (e.g. "Standard King"). */
+  rateRoomName?: string;
 }
 
 export type HotelSearchTier =

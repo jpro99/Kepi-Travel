@@ -1,5 +1,7 @@
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
 import { bestHotelProgramForChain } from "@/lib/hotels/hotelPointsEstimate";
+import { formatHotelNightlyPrice } from "@/lib/hotels/hotelCardDisplay";
+import { hasDisplayNightlyRate } from "@/lib/hotels/hotelLiveRate";
 
 export type HotelPayMode = "any" | "cash" | "points";
 
@@ -19,9 +21,10 @@ export function resolveHotelMapPinLabel(
   hotel: RankedHotelSearchResult,
   payMode: HotelPayMode,
 ): { text: string; title: string } {
-  const hasLiveRate = !hotel.browseOnly && hotel.pricePerNight > 0;
+  const hasLiveRate = hasDisplayNightlyRate(hotel);
   const nightlyPts = pointsPerNight(hotel);
   const program = hotel.pointsOption?.programName ?? bestHotelProgramForChain(hotel.chainName, hotel.name)?.shortName;
+  const nightlyLabel = formatHotelNightlyPrice(hotel);
 
   if (payMode === "points" && nightlyPts) {
     const suffix = program ? ` ${program}` : " pts";
@@ -37,15 +40,15 @@ export function resolveHotelMapPinLabel(
 
   if (payMode === "any" && nightlyPts && hasLiveRate) {
     return {
-      text: `$${Math.round(hotel.pricePerNight)}`,
-      title: `${hotel.name} · $${Math.round(hotel.pricePerNight)}/night · ~${nightlyPts.toLocaleString()} pts/night`,
+      text: nightlyLabel.startsWith("$") || nightlyLabel.startsWith("From") ? nightlyLabel.replace("From ", "") : nightlyLabel,
+      title: `${hotel.name} · ${nightlyLabel}/night · ~${nightlyPts.toLocaleString()} pts/night`,
     };
   }
 
   if (hasLiveRate) {
     return {
-      text: `$${Math.round(hotel.pricePerNight)}`,
-      title: `${hotel.name} · $${Math.round(hotel.pricePerNight)}/night`,
+      text: nightlyLabel.replace("From ", ""),
+      title: `${hotel.name} · ${nightlyLabel}/night`,
     };
   }
 

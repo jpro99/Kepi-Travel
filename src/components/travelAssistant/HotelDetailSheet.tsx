@@ -9,6 +9,7 @@ import type { HotelDetailMedia } from "@/lib/hotels/hotelMedia";
 import { extractLiteApiHotelId, mergeHotelDetailMedia } from "@/lib/hotels/hotelMedia";
 import type { HotelPayMode } from "@/lib/hotels/hotelPointsDisplay";
 import { pointsPerNight } from "@/lib/hotels/hotelPointsDisplay";
+import { hasDisplayNightlyRate, hasKepiBookableLiveRate } from "@/lib/hotels/hotelLiveRate";
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
 import { HotelPhotoGallery } from "@/components/travelAssistant/HotelPhotoGallery";
 
@@ -122,8 +123,9 @@ export function HotelDetailSheet({
   });
 
   const pinStyle = hotelMapPinStyle(hotel, fitScoreRange(allHotels));
-  const hasLiveRate = !hotel.browseOnly && hotel.pricePerNight > 0;
-  const kepiBookable = Boolean(hotel.kepiBookable && hotel.bookOfferId && hasLiveRate) && payMode !== "points";
+  const hasLiveRate = hasDisplayNightlyRate(hotel);
+  const kepiLiveRate = hasKepiBookableLiveRate(hotel);
+  const kepiBookable = Boolean(hotel.kepiBookable && hotel.bookOfferId && kepiLiveRate) && payMode !== "points";
   const nightlyPts = pointsPerNight(hotel);
   const pointsMode = payMode === "points";
 
@@ -218,7 +220,13 @@ export function HotelDetailSheet({
                     ) : (
                       <>
                         <p className="text-xl font-black text-slate-900 dark:text-white">${Math.round(hotel.pricePerNight)}</p>
-                        <p className="text-[10px] text-slate-500">/ night · ${Math.round(hotel.totalPrice)} total</p>
+                        <p className="text-[10px] text-slate-500">
+                          / night · ${Math.round(hotel.totalPrice)} total
+                          {kepiLiveRate ? " · Kepi live rate" : " · verify before booking"}
+                        </p>
+                        {hotel.rateRoomName ? (
+                          <p className="text-[10px] font-medium text-slate-600 dark:text-slate-300">{hotel.rateRoomName}</p>
+                        ) : null}
                         {nightlyPts ? (
                           <p className="text-[10px] font-semibold text-violet-700 dark:text-violet-300">
                             ~{hotel.pointsOption?.milesNeeded.toLocaleString()} {hotel.pointsOption?.programName} pts
@@ -264,6 +272,24 @@ export function HotelDetailSheet({
             </div>
 
             <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">{hotel.whyLine}</p>
+
+            {hotel.chainName && hasLiveRate ? (
+              <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
+                {kepiLiveRate
+                  ? "This is Kepi's live checkout rate"
+                  : "This is an indicative rate from our search partner"}
+                {hotel.rateRoomName ? ` for ${hotel.rateRoomName}` : ""}. Chain sites like{" "}
+                {hotel.chainName.split(" ")[0]} may show different room types or member pricing.{" "}
+                <a
+                  href={book.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-sky-700 underline dark:text-sky-300"
+                >
+                  Compare on {hotel.chainName.split(" ")[0]} →
+                </a>
+              </p>
+            ) : null}
 
             {hotel.pointsOption && usePoints ? (
               <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">

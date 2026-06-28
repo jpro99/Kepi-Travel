@@ -103,6 +103,16 @@ Elevator, transit, ocean, budget preferences persist in `hotelStayProfile` and a
 **H9 — Chain diversity**  
 Never stack 3+ results from the same chain in top picks; diversify in ranking.
 
+**H10 — Live price honesty**  
+Dollar amounts on cards require a **bookable offer id** (`bookOfferId`). Indicative partner rates show **"From $X"**. Estimated/catalog inventory shows **"Check site"** — never a fake nightly price.
+
+**Test:** `src/lib/hotels/__tests__/hotelLiveRate.test.ts`, `src/lib/hotels/__tests__/hotelCardDisplay.test.ts`
+
+**H11 — Budget slider moves both ways**  
+The nightly budget slider uses independent draggable thumbs (min and max). Neither thumb may steal pointer events from the other.
+
+**Test:** `src/lib/hotels/__tests__/priceRangeSlider.test.ts`
+
 ---
 
 ## MAP LAWS

@@ -41,10 +41,10 @@ interface LiteApiRateRow {
   }>;
 }
 
-function pickCheapestRate(
-  rateRow: LiteApiRateRow,
-): { total: number; currency: string; offerId: string; roomName?: string } | null {
-  let best: { total: number; currency: string; offerId: string; roomName?: string } | null = null;
+type LiteApiPickedRate = { total: number; currency: string; offerId: string; roomName?: string };
+
+function collectBookableRates(rateRow: LiteApiRateRow): LiteApiPickedRate[] {
+  const rates: LiteApiPickedRate[] = [];
 
   for (const roomType of rateRow.roomTypes ?? []) {
     for (const rate of roomType.rates ?? []) {
@@ -53,14 +53,42 @@ function pickCheapestRate(
       const totalEntry = rate.retailRate?.total?.[0];
       const amount = totalEntry?.amount;
       if (amount === undefined || !Number.isFinite(amount) || amount <= 0) continue;
-      const currency = totalEntry?.currency ?? "USD";
-      if (!best || amount < best.total) {
-        best = { total: amount, currency, offerId: offerId.trim(), roomName: rate.name ?? rate.boardName };
-      }
+      rates.push({
+        total: amount,
+        currency: totalEntry?.currency ?? "USD",
+        offerId: offerId.trim(),
+        roomName: rate.name ?? rate.boardName,
+      });
     }
   }
 
-  return best;
+  return rates;
+}
+
+/** Prefer standard/flexible room types so chain-site comparisons are closer. */
+export function pickDisplayRate(rateRow: LiteApiRateRow): LiteApiPickedRate | null {
+  const rates = collectBookableRates(rateRow);
+  if (rates.length === 0) return null;
+  if (rates.length === 1) return rates[0];
+
+  const standardLike = rates.filter((rate) => {
+    const name = (rate.roomName ?? "").toLowerCase();
+    return /standard|classic|flexible|best available|superior|deluxe king|deluxe queen/.test(name);
+  });
+
+  const restricted = (rate: LiteApiPickedRate) =>
+    /advance|prepay|pre-pay|non.?refund|room only|restricted|saver|basic economy/.test(
+      (rate.roomName ?? "").toLowerCase(),
+    );
+
+  const pool =
+    standardLike.length > 0
+      ? standardLike
+      : rates.filter((rate) => !restricted(rate)).length > 0
+        ? rates.filter((rate) => !restricted(rate))
+        : rates;
+
+  return pool.reduce((best, rate) => (!best || rate.total < best.total ? rate : best));
 }
 
 function mapLiteApiToHotel(input: {
@@ -73,7 +101,7 @@ function mapLiteApiToHotel(input: {
   rooms: number;
   guests: number;
 }): HotelSearchResult | null {
-  const pricing = pickCheapestRate(input.rateRow);
+  const pricing = pickDisplayRate(input.rateRow);
   if (!pricing) return null;
 
   const hotelId = input.rateRow.hotelId;
@@ -108,6 +136,7 @@ function mapLiteApiToHotel(input: {
     cancellable: true,
     bookProvider: "liteapi",
     bookOfferId: pricing.offerId,
+    rateRoomName: pricing.roomName,
     ...(Number.isFinite(input.meta?.latitude) && Number.isFinite(input.meta?.longitude)
       ? { lat: input.meta!.latitude!, lng: input.meta!.longitude! }
       : {}),
@@ -157,7 +186,7 @@ export async function searchLiteApiHotels(
     guestNationality: "US",
     checkin: input.checkIn,
     checkout: input.checkOut,
-    maxRatesPerHotel: 3,
+    maxRatesPerHotel: 12,
     roomMapping: true,
     includeHotelData: true,
     limit,

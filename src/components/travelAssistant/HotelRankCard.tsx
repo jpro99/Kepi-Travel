@@ -3,6 +3,7 @@
 import { Wifi, Coffee, Car, Waves, Dumbbell, ArrowUpDown } from "lucide-react";
 import {
   formatHotelNightlyPrice,
+  formatHotelNightlyPriceCaption,
   formatHotelTotalPrice,
   primaryMatchReason,
   resolveHotelHeroVisual,
@@ -51,6 +52,7 @@ export function HotelRankCard({
   const showPoints = payMode === "points" || payMode === "any";
   const hero = resolveHotelHeroVisual(hotel);
   const nightlyLabel = formatHotelNightlyPrice(hotel);
+  const nightlyCaption = formatHotelNightlyPriceCaption(hotel);
   const totalLabel = formatHotelTotalPrice(hotel);
   const guestScore = hotel.rating !== undefined ? hotel.rating.toFixed(1) : `${hotel.stars}.0`;
   const amenityIcons = topAmenityIcons(hotel.amenities);
@@ -94,7 +96,7 @@ export function HotelRankCard({
               ) : (
                 <>
                   <p className="text-2xl font-black text-[#f4c95d]">{nightlyLabel}</p>
-                  <p className="text-sm text-slate-500">{nightlyLabel === "Check site" ? "See booking site" : "/ night"}</p>
+                  <p className="text-sm text-slate-500">{nightlyCaption}</p>
                 </>
               )}
             </div>

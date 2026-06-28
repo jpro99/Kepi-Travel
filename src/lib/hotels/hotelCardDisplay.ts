@@ -1,4 +1,5 @@
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
+import { hasDisplayNightlyRate, hasKepiBookableLiveRate } from "@/lib/hotels/hotelLiveRate";
 
 export const KEPI_GOLD = "#f4c95d";
 export const KEPI_NAVY = "#0b1f3a";
@@ -42,17 +43,32 @@ export function resolveHotelHeroVisual(hotel: RankedHotelSearchResult): HotelHer
   return { kind: "gradient", initials, gradient };
 }
 
-export function formatHotelNightlyPrice(hotel: Pick<RankedHotelSearchResult, "browseOnly" | "pricePerNight">): string {
+export function formatHotelNightlyPrice(
+  hotel: Pick<RankedHotelSearchResult, "browseOnly" | "bookOfferId" | "pricePerNight">,
+): string {
   if (hotel.browseOnly) return "Check site";
   const nightly = hotel.pricePerNight;
   if (!Number.isFinite(nightly) || nightly <= 0) return "Check site";
-  return `$${Math.round(nightly)}`;
+  if (hasKepiBookableLiveRate(hotel)) return `$${Math.round(nightly)}`;
+  if (hasDisplayNightlyRate(hotel)) return `From $${Math.round(nightly)}`;
+  return "Check site";
+}
+
+export function formatHotelNightlyPriceCaption(
+  hotel: Pick<RankedHotelSearchResult, "browseOnly" | "bookOfferId" | "pricePerNight" | "rateRoomName">,
+): string {
+  if (hasKepiBookableLiveRate(hotel)) {
+    const room = hotel.rateRoomName?.trim();
+    return room ? `/ night · ${room}` : "/ night · Kepi live rate";
+  }
+  if (hasDisplayNightlyRate(hotel)) return "/ night · verify before booking";
+  return "See booking site";
 }
 
 export function formatHotelTotalPrice(
-  hotel: Pick<RankedHotelSearchResult, "browseOnly" | "totalPrice" | "nights">,
+  hotel: Pick<RankedHotelSearchResult, "browseOnly" | "bookOfferId" | "totalPrice" | "nights">,
 ): string {
-  if (hotel.browseOnly) return "";
+  if (hotel.browseOnly || !hasDisplayNightlyRate(hotel)) return "";
   const total = hotel.totalPrice;
   if (!Number.isFinite(total) || total <= 0) return "";
   const nights = hotel.nights > 0 ? hotel.nights : 1;

@@ -1,6 +1,7 @@
 import type { ResolvedHotelDestination } from "@/lib/hotels/resolveDestination";
 import { HOTEL_CITY_COORDS } from "@/lib/hotels/resolveDestination";
 import type { HotelSearchResult } from "@/lib/hotels/types";
+import { hasDisplayNightlyRate, hasKepiBookableLiveRate } from "@/lib/hotels/hotelLiveRate";
 import { cityFromAddress, isSmallDestination } from "@/lib/hotels/hotelCityScope";
 import {
   buildEstimatedStays,
@@ -113,8 +114,8 @@ function mapEstimatedQuoteToHotel(input: {
     chainName: quote.chainName,
     stars: quote.ratingStars ?? 3,
     rating: quote.reviewScore,
-    pricePerNight: quote.nightlyUsd,
-    totalPrice: quote.totalAmountUsd,
+    pricePerNight: 0,
+    totalPrice: 0,
     currency: quote.currency,
     nights,
     address: quote.area ?? resolved.displayName,
@@ -126,6 +127,7 @@ function mapEstimatedQuoteToHotel(input: {
     rooms,
     guests,
     cancellable: true,
+    browseOnly: true,
   };
 }
 
@@ -286,7 +288,7 @@ export async function searchHotelsLiveOrEstimated(input: {
       liteApiError = byAirport.error ?? liteApiError;
     }
 
-    const liveCount = merged.filter((hotel) => !hotel.browseOnly && hotel.pricePerNight > 0).length;
+    const liveCount = merged.filter((hotel) => hasKepiBookableLiveRate(hotel)).length;
     if (liveCount < 50) {
       for (const radius of [5_000, 8_000, 12_000, 20_000]) {
         const catalog = await listLiteApiHotelCatalog({
@@ -351,6 +353,36 @@ function hotelIdentityKey(hotel: HotelSearchResult): string {
   return `name:${name}`;
 }
 
+function mergeHotelEntry(existing: HotelSearchResult, incoming: HotelSearchResult): HotelSearchResult {
+  const existingBookable = hasKepiBookableLiveRate(existing);
+  const incomingBookable = hasKepiBookableLiveRate(incoming);
+
+  if (!existingBookable && incomingBookable) return incoming;
+  if (existingBookable && !incomingBookable) return existing;
+
+  const existingLive = hasDisplayNightlyRate(existing);
+  const incomingLive = hasDisplayNightlyRate(incoming);
+
+  if (!existingLive && incomingLive) return incoming;
+  if (existingLive && incomingLive && incoming.pricePerNight < existing.pricePerNight) {
+    return {
+      ...incoming,
+      photos: incoming.photos.length > 0 ? incoming.photos : existing.photos,
+      amenities: incoming.amenities.length > 0 ? incoming.amenities : existing.amenities,
+      rateRoomName: incoming.rateRoomName ?? existing.rateRoomName,
+    };
+  }
+
+  return {
+    ...existing,
+    photos: existing.photos.length > 0 ? existing.photos : incoming.photos,
+    amenities: existing.amenities.length > 0 ? existing.amenities : incoming.amenities,
+    rateRoomName: existing.rateRoomName ?? incoming.rateRoomName,
+    bookOfferId: existing.bookOfferId ?? incoming.bookOfferId,
+    bookProvider: existing.bookProvider ?? incoming.bookProvider,
+  };
+}
+
 function mergeHotelResults(...groups: HotelSearchResult[][]): HotelSearchResult[] {
   const byIdentity = new Map<string, HotelSearchResult>();
 
@@ -362,19 +394,13 @@ function mergeHotelResults(...groups: HotelSearchResult[][]): HotelSearchResult[
         byIdentity.set(key, hotel);
         continue;
       }
-      const existingLive = !existing.browseOnly && existing.pricePerNight > 0;
-      const incomingLive = !hotel.browseOnly && hotel.pricePerNight > 0;
-      if (!existingLive && incomingLive) {
-        byIdentity.set(key, hotel);
-      } else if (existingLive && incomingLive && hotel.pricePerNight < existing.pricePerNight) {
-        byIdentity.set(key, hotel);
-      }
+      byIdentity.set(key, mergeHotelEntry(existing, hotel));
     }
   }
 
   return [...byIdentity.values()].sort((a, b) => {
-    const aLive = !a.browseOnly && a.pricePerNight > 0;
-    const bLive = !b.browseOnly && b.pricePerNight > 0;
+    const aLive = hasDisplayNightlyRate(a);
+    const bLive = hasDisplayNightlyRate(b);
     if (aLive !== bLive) return aLive ? -1 : 1;
     if (aLive && bLive) return a.pricePerNight - b.pricePerNight;
     return (b.rating ?? b.stars) - (a.rating ?? a.stars);

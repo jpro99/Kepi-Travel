@@ -53,9 +53,10 @@ test("LAW 3 — every card resolves to photo or gradient fallback", () => {
 test("LAW 4 — price labels never contain undefined, NaN, or empty strings", () => {
   const cases = [
     stubHotel(),
-    stubHotel({ pricePerNight: NaN, totalPrice: NaN }),
-    stubHotel({ pricePerNight: 0, browseOnly: true }),
-    stubHotel({ pricePerNight: -1 }),
+    stubHotel({ pricePerNight: NaN, totalPrice: NaN, bookOfferId: undefined }),
+    stubHotel({ pricePerNight: 0, browseOnly: true, bookOfferId: undefined }),
+    stubHotel({ pricePerNight: -1, bookOfferId: undefined }),
+    stubHotel({ bookOfferId: undefined, pricePerNight: 220 }),
   ];
 
   for (const hotel of cases) {

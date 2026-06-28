@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { rankHotelSearchResults } from "@/lib/hotels/intelligentRanking";
 import { applyRankedHotelPricing } from "@/lib/hotels/applyHotelPricing";
+import { hasKepiBookableLiveRate } from "@/lib/hotels/hotelLiveRate";
 import { partitionHotelsBySearchCity } from "@/lib/hotels/hotelCityScope";
 import { userHasMemberHotelPricing } from "@/lib/billing/memberHotelPricing";
 import { buildGoogleHotelsUrl } from "@/lib/decision/bookingLinks";
@@ -111,7 +112,7 @@ export async function POST(req: Request) {
       userId,
     ).catch(() => {});
 
-    const liveInCity = inCity.filter((hotel) => !hotel.browseOnly && hotel.pricePerNight > 0).length;
+    const liveInCity = inCity.filter((hotel) => hasKepiBookableLiveRate(hotel)).length;
     const browseInCity = inCity.filter((hotel) => hotel.browseOnly).length;
     const cityLabel = resolved.displayName.split(",")[0]?.trim() ?? resolved.displayName;
 
