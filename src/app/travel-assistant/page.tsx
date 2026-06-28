@@ -7393,7 +7393,13 @@ export default function TravelAssistantPage() {
       const city =
         intent.toCity ??
         intent.stayCity ??
-        resolveStayCityForDay(dateKey, itineraryPrefs.dayNotes, effectiveStopRanges);
+        resolveStayCityForDay(
+          dateKey,
+          itineraryPrefs.dayNotes,
+          effectiveStopRanges,
+          consumerTripStartDate ?? activeTrip?.startDate,
+          activeTrip?.endDate,
+        );
       if (mode === "hotel" && city) {
         const formatted = formatHotelSearchCityLabel(city);
         handleAddCityStay({

@@ -1,3 +1,5 @@
+import { normalizeDayPlanCity, stripTrailingDateNoise } from "@/lib/travelAssistant/normalizeDayPlanCity";
+
 export type DayIntentKind = "stay" | "move" | "arrive" | "depart" | "unknown";
 
 export interface ParsedDayIntent {
@@ -13,36 +15,41 @@ export interface ParsedDayIntent {
 }
 
 function cleanCity(fragment: string): string {
-  return fragment
-    .replace(/\bon\b.*$/iu, "")
-    .replace(/\bthis day\b/iu, "")
-    .replace(/[.,!?]+$/u, "")
-    .trim();
-}
-
-function titleCase(city: string): string {
-  return city
-    .split(/\s+/u)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(" ");
+  return normalizeDayPlanCity(stripTrailingDateNoise(fragment));
 }
 
 export function parseDayIntent(text: string): ParsedDayIntent | null {
   const raw = text.trim();
   if (!raw) return null;
 
+  const goToMatch = raw.match(/\bgo(?:\s+to)?\s+(.+)/iu);
+  if (goToMatch?.[1] && !/\bleave\b/iu.test(raw)) {
+    const stayCity = cleanCity(goToMatch[1]);
+    if (stayCity.length >= 2) {
+      return {
+        kind: "arrive",
+        raw,
+        stayCity,
+        toCity: stayCity,
+        needsTransport: true,
+        needsHotelCheckout: false,
+        needsHotelCheckin: true,
+        summary: `Go to ${stayCity}`,
+      };
+    }
+  }
+
   const movePatterns = [
-    /\bleave\s+(.+?)[,\s]+(?:and\s+)?(?:go(?:\s+to)?|head(?:\s+to)?|travel(?:\s+to)?|get(?:\s+to)?)\s+(.+)/iu,
-    /\b(?:from|leaving)\s+(.+?)\s+(?:to|→|-)\s+(.+)/iu,
-    /^(.+?)\s+(?:to|→|-)\s+(.+)$/iu,
+    /\bleave(?:ing)?\s+(.+?)[,\s]+(?:and\s+)?(?:go(?:\s+to)?|head(?:\s+to)?|travel(?:\s+to)?|get(?:\s+to)?|for)\s+(.+)/iu,
+    /\bleave(?:ing)?\s+(.+?)\s+(?:to|→|->)\s+(.+)/iu,
+    /\b(?:from|leaving)\s+(.+?)\s+(?:to|→|->|-)\s+(.+)/iu,
   ];
 
   for (const pattern of movePatterns) {
     const match = pattern.exec(raw);
     if (match?.[1] && match[2]) {
-      const fromCity = titleCase(cleanCity(match[1]));
-      const toCity = titleCase(cleanCity(match[2]));
+      const fromCity = cleanCity(match[1]);
+      const toCity = cleanCity(match[2]);
       if (fromCity.length >= 2 && toCity.length >= 2 && fromCity.toLowerCase() !== toCity.toLowerCase()) {
         return {
           kind: "move",
@@ -69,33 +76,58 @@ export function parseDayIntent(text: string): ParsedDayIntent | null {
     };
   }
 
-  if (/\b(?:arrive|arriving|land in|get to|go to|stay in|staying in)\b/iu.test(raw)) {
-    const cityMatch = raw.match(/\b(?:arrive(?:\s+in)?|arriving(?:\s+in)?|land in|get to|go to|stay in|staying in)\s+(.+)/iu);
-    const stayCity = titleCase(cleanCity(cityMatch?.[1] ?? raw));
-    return {
-      kind: "arrive",
-      raw,
-      stayCity,
-      toCity: stayCity,
-      needsTransport: /\b(?:arrive|land|fly)\b/iu.test(raw),
-      needsHotelCheckout: false,
-      needsHotelCheckin: true,
-      summary: `Stay in ${stayCity}`,
-    };
+  const leaveOnly = raw.match(/\bleave(?:ing)?\s+(.+)/iu);
+  if (
+    leaveOnly?.[1] &&
+    !/\b(?:go(?:\s+to)?|head(?:\s+to)?|travel(?:\s+to)?|get(?:\s+to)?|for)\s+\S/iu.test(raw)
+  ) {
+    const fromCity = cleanCity(leaveOnly[1]);
+    if (fromCity.length >= 2) {
+      return {
+        kind: "depart",
+        raw,
+        fromCity,
+        needsTransport: true,
+        needsHotelCheckout: true,
+        needsHotelCheckin: false,
+        summary: `Leave ${fromCity}`,
+      };
+    }
+  }
+
+  if (/\b(?:arrive(?:\s+in)?|arriving(?:\s+in)?|land in|get to|stay in|staying in)\b/iu.test(raw)) {
+    const cityMatch = raw.match(
+      /\b(?:arrive(?:\s+in)?|arriving(?:\s+in)?|land in|get to|stay in|staying in)\s+(.+)/iu,
+    );
+    const stayCity = cleanCity(cityMatch?.[1] ?? raw);
+    if (stayCity.length >= 2) {
+      return {
+        kind: "arrive",
+        raw,
+        stayCity,
+        toCity: stayCity,
+        needsTransport: /\b(?:arrive|land|fly)\b/iu.test(raw),
+        needsHotelCheckout: false,
+        needsHotelCheckin: true,
+        summary: `Stay in ${stayCity}`,
+      };
+    }
   }
 
   if (/^in\s+/iu.test(raw)) {
-    const stayCity = titleCase(cleanCity(raw.replace(/^in\s+/iu, "")));
-    return {
-      kind: "stay",
-      raw,
-      stayCity,
-      toCity: stayCity,
-      needsTransport: false,
-      needsHotelCheckout: false,
-      needsHotelCheckin: false,
-      summary: `In ${stayCity}`,
-    };
+    const stayCity = cleanCity(raw.replace(/^in\s+/iu, ""));
+    if (stayCity.length >= 2) {
+      return {
+        kind: "stay",
+        raw,
+        stayCity,
+        toCity: stayCity,
+        needsTransport: false,
+        needsHotelCheckout: false,
+        needsHotelCheckin: false,
+        summary: `In ${stayCity}`,
+      };
+    }
   }
 
   return {

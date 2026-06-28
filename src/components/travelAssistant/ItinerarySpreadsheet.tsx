@@ -131,7 +131,7 @@ export function ItinerarySpreadsheet({
     }
     return dayKeys.map((dateKey) => {
       const note = dayNotes[dateKey] ?? "";
-      const stayCity = resolveStayCityForDay(dateKey, dayNotes, stopRanges);
+      const stayCity = resolveStayCityForDay(dateKey, dayNotes, stopRanges, tripStartDate, tripEndDate);
       const intent = parseDayIntentFromLines(note);
       return {
         dateKey,
@@ -145,7 +145,7 @@ export function ItinerarySpreadsheet({
 
   const openPlan = (dateKey: string, mode?: DayPlanMode): void => {
     const note = dayNotes[dateKey] ?? "";
-    const stayCity = resolveStayCityForDay(dateKey, dayNotes, stopRanges);
+    const stayCity = resolveStayCityForDay(dateKey, dayNotes, stopRanges, tripStartDate, tripEndDate);
     let intent = parseDayIntentFromLines(note);
     if (mode === "hotel" && stayCity) {
       intent = {
@@ -179,8 +179,8 @@ export function ItinerarySpreadsheet({
   return (
     <div className="overflow-x-auto">
       <p className="mb-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-        One row per day — use <span className="font-semibold">+ Dinner</span> or <span className="font-semibold">+ Line</span> for
-        multiple items. Switch to <span className="font-semibold">Brief</span> for the polished view.
+        One row per day — use large text fields and quick chips like <span className="font-semibold">Travel to…</span> or{" "}
+        <span className="font-semibold">Staying in…</span>. Kepi shows what it read under each day.
       </p>
       <table className="w-full min-w-[520px] border-collapse text-left text-[12px]">
         <thead>
@@ -200,6 +200,8 @@ export function ItinerarySpreadsheet({
                   dateKey={dateKey}
                   value={note}
                   stayCity={stayCity}
+                  tripStartDate={tripStartDate}
+                  tripEndDate={tripEndDate}
                   onChange={(value) => onDayNoteChange(dateKey, value)}
                   onPlanDay={intent ? () => openPlan(dateKey) : undefined}
                   onPlanHotel={
@@ -250,7 +252,7 @@ export function ItinerarySpreadsheet({
       {planningDate ? (
         <DayPlanOverlay
           dateKey={planningDate}
-          stayCity={resolveStayCityForDay(planningDate, dayNotes, stopRanges)}
+          stayCity={resolveStayCityForDay(planningDate, dayNotes, stopRanges, tripStartDate, tripEndDate)}
           intent={parseDayIntentFromLines(dayNotes[planningDate] ?? "")}
           onClose={() => setPlanningDate(null)}
           onSelectMode={(mode) => {

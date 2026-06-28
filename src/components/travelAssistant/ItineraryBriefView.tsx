@@ -83,7 +83,7 @@ export function ItineraryBriefView({
     return dayKeys.map((dateKey) => ({
       dateKey,
       heading: formatDayHeading(dateKey),
-      stayCity: resolveStayCityForDay(dateKey, dayNotes, stopRanges),
+      stayCity: resolveStayCityForDay(dateKey, dayNotes, stopRanges, tripStartDate, tripEndDate),
       lines: parseDayLines(dayNotes[dateKey] ?? "").map(classifyDayLine),
       intent: parseDayIntentFromLines(dayNotes[dateKey] ?? ""),
       booked: byDay.get(dateKey) ?? [],

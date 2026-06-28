@@ -13,6 +13,7 @@ export const HOTEL_DESTINATION_ALIASES: Record<string, string> = {
   lecce: "lecce",
   "lecce italy": "lecce",
   ortisei: "ortisei",
+  ortese: "ortisei",
   ortesei: "ortisei",
   "ortesei italy": "ortisei",
   "cortina d ampezzo": "cortina",

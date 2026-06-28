@@ -110,7 +110,10 @@ function monthRange(startIso: string, endIso: string): Array<{ year: number; mon
 function shortCity(name: string | null): string {
   if (!name) return "";
   const short = name.split("(")[0]?.trim() ?? name;
-  return short.length > 8 ? `${short.slice(0, 7)}…` : short;
+  if (short.length <= 14) return short;
+  const words = short.split(/\s+/);
+  if (words.length > 1 && words[0]!.length <= 10) return words[0]!;
+  return `${short.slice(0, 12)}…`;
 }
 
 function MonthGrid({
@@ -166,7 +169,7 @@ function MonthGrid({
           const isToday = sameDay(cellDate, today);
           const isSelected = selectedDate ? sameDay(cellDate, selectedDate) : false;
           const planNote = dayNotes[dateKey]?.trim();
-          const stayCity = resolveStayCityForDay(dateKey, dayNotes, stopRanges);
+          const stayCity = resolveStayCityForDay(dateKey, dayNotes, stopRanges, tripStartDate, tripEndDate);
           const cityColor = stayCity ? cityColorByName.get(stayCity) : undefined;
           const inTripWindow =
             tripStartDate && tripEndDate
@@ -279,7 +282,7 @@ export function TripCalendarView({
     const cities = new Set<string>();
     for (const range of stopRanges) cities.add(range.stop.name);
     for (const key of buildFullTripDayKeys(tripStart, tripEnd, [])) {
-      const city = resolveStayCityForDay(key, dayNotes, stopRanges);
+      const city = resolveStayCityForDay(key, dayNotes, stopRanges, tripStart, tripEnd);
       if (city) cities.add(city);
     }
     [...cities].forEach((city, index) => {
@@ -296,7 +299,7 @@ export function TripCalendarView({
   const selectedKey = selectedDate ? dateKeyFromDate(selectedDate) : null;
   const selectedNote = selectedKey ? dayNotes[selectedKey] ?? "" : "";
   const selectedStayCity = selectedKey
-    ? resolveStayCityForDay(selectedKey, dayNotes, stopRanges)
+    ? resolveStayCityForDay(selectedKey, dayNotes, stopRanges, tripStart, tripEnd)
     : null;
 
   const weekDays = useMemo(() => {
@@ -392,7 +395,7 @@ export function TripCalendarView({
         <div className="grid grid-cols-7 gap-1">
           {weekDays.map((day) => {
             const key = dateKeyFromDate(day);
-            const stayCity = resolveStayCityForDay(key, dayNotes, stopRanges);
+            const stayCity = resolveStayCityForDay(key, dayNotes, stopRanges, tripStart, tripEnd);
             const isSelected = selectedDate ? sameDay(day, selectedDate) : false;
             return (
               <button
@@ -459,6 +462,8 @@ export function TripCalendarView({
             dateKey={selectedKey!}
             value={selectedNote}
             stayCity={selectedStayCity}
+            tripStartDate={tripStart}
+            tripEndDate={tripEnd}
             onChange={(value) => onDayNoteChange(selectedKey!, value)}
             onPlanDay={onPlanDay ? () => onPlanDay(selectedKey!, { kind: "unknown", raw: selectedNote, needsTransport: false, needsHotelCheckout: false, needsHotelCheckin: false, summary: selectedNote }, "activities") : undefined}
             onPlanHotel={onPickCity && selectedStayCity ? () => {

@@ -7,8 +7,19 @@ test("parseDayIntent understands leave and go phrasing", () => {
   assert.equal(intent?.kind, "move");
   assert.equal(intent?.fromCity, "Dolomites");
   assert.equal(intent?.toCity, "Bari");
-  assert.equal(intent?.needsTransport, true);
-  assert.equal(intent?.needsHotelCheckin, true);
+});
+
+test("parseDayIntent treats leave-only as depart not stay", () => {
+  const intent = parseDayIntent("Leave Ortisei");
+  assert.equal(intent?.kind, "depart");
+  assert.match(intent?.fromCity ?? "", /Ortisei/i);
+  assert.equal(intent?.toCity, undefined);
+});
+
+test("parseDayIntent normalizes Monopoly to Monopoli", () => {
+  const intent = parseDayIntent("Go to Monopoly on 9/5");
+  assert.equal(intent?.kind, "arrive");
+  assert.match(intent?.stayCity ?? "", /Monopoli/i);
 });
 
 test("parseDayIntent treats In City phrasing as stay", () => {

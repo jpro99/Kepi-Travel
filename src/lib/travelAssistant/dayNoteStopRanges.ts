@@ -2,7 +2,8 @@ import type { StopDateRange } from "@/lib/decision/stopDates";
 import type { TripStop } from "@/lib/decision/types";
 import { normalizeHotelDestinationQuery } from "@/lib/hotels/destinationAliases";
 import { formatHotelSearchCityLabel } from "@/lib/hotels/tripSearchContext";
-import { parseDayIntentFromLines } from "@/lib/travelAssistant/dayPlanLines";
+import { parseDayIntentFromLines, parseDayLines } from "@/lib/travelAssistant/dayPlanLines";
+import { normalizeDayPlanCity, stripTrailingDateNoise } from "@/lib/travelAssistant/normalizeDayPlanCity";
 import { buildFullTripDayKeys } from "@/lib/travelAssistant/tripTimelinePlanning";
 
 function addDays(isoDate: string, days: number): string {
@@ -47,18 +48,27 @@ function canonicalCityName(raw: string): string {
 
 function extractCityFromNote(text: string): string | null {
   const intent = parseDayIntentFromLines(text);
+  if (intent?.kind === "depart") return null;
+  if (intent?.kind === "move" && intent.toCity) return intent.toCity;
   if (intent?.stayCity) return intent.stayCity;
-  if (intent?.toCity && intent.kind !== "depart") return intent.toCity;
-  if (intent?.fromCity && intent.kind === "move") return intent.toCity;
+  if (intent?.toCity) return intent.toCity;
 
-  const inMatch = text.match(/\b(?:in|at|near|around)\s+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'-]{2,40})/iu);
+  if (/^\s*leave(?:ing)?\b/iu.test(text)) return null;
+
+  const inMatch = text.match(/\b(?:in|at|near|around|stay(?:ing)? in)\s+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'-]{2,48})/iu);
   if (inMatch?.[1]) {
-    return inMatch[1].replace(/[.,!?]+$/u, "").trim();
+    return normalizeDayPlanCity(stripTrailingDateNoise(inMatch[1]));
   }
 
   const beforeDates = text.split(/\b(?:arrive|get there|check[\s-]?in|from|leave|depart|check[\s-]?out)\b/iu)[0]?.trim();
-  if (beforeDates && beforeDates.length >= 3 && beforeDates.length <= 48 && !/\d/u.test(beforeDates)) {
-    return beforeDates.replace(/[.,!?]+$/u, "").trim();
+  if (
+    beforeDates &&
+    beforeDates.length >= 3 &&
+    beforeDates.length <= 48 &&
+    !/\d/u.test(beforeDates) &&
+    !/^\s*leave(?:ing)?\b/iu.test(text)
+  ) {
+    return normalizeDayPlanCity(beforeDates);
   }
 
   return null;
@@ -203,15 +213,47 @@ export function deriveStopRangesFromDayNotes(
   };
 
   for (const dayKey of dayKeys) {
-    const rawCity = resolveStayCityForDayStrict(dayKey, dayNotes);
-    if (!rawCity) continue;
-    const city = canonicalCityName(rawCity);
-    if (!currentCity || !citiesSame(currentCity, city)) {
-      if (currentCity && currentCheckIn) {
-        flush(dayKey);
-      }
-      currentCity = city;
+    const note = dayNotes[dayKey]?.trim() ?? "";
+    const intent = note ? parseDayIntentFromLines(note) : null;
+
+    if (intent?.kind === "depart") {
+      flush(dayKey);
+      currentCity = null;
+      currentCheckIn = null;
+      continue;
+    }
+
+    if (intent?.kind === "move" && intent.toCity) {
+      flush(dayKey);
+      currentCity = canonicalCityName(intent.toCity);
       currentCheckIn = dayKey;
+      continue;
+    }
+
+    const explicitCity =
+      intent?.stayCity ??
+      (intent?.toCity && intent.kind !== "depart" ? intent.toCity : null) ??
+      (note
+        ? parseDayLines(note)
+            .map((line) => {
+              const inMatch = line.match(/\b(?:in|stay(?:ing)? in)\s+(.+)/iu);
+              return inMatch?.[1] ? normalizeDayPlanCity(stripTrailingDateNoise(inMatch[1])) : null;
+            })
+            .find(Boolean) ?? null
+        : null);
+
+    if (explicitCity) {
+      const city = canonicalCityName(explicitCity);
+      if (!currentCity || !citiesSame(currentCity, city)) {
+        flush(dayKey);
+        currentCity = city;
+        currentCheckIn = dayKey;
+      }
+      continue;
+    }
+
+    if (!note && currentCity && currentCheckIn) {
+      continue;
     }
   }
 
@@ -220,34 +262,6 @@ export function deriveStopRangesFromDayNotes(
   }
 
   return mergeStopRanges(ranges);
-}
-
-function resolveStayCityForDayStrict(dateKey: string, dayNotes: Record<string, string>): string | null {
-  const direct = parseDayIntentFromLines(dayNotes[dateKey] ?? "");
-  if (direct?.stayCity) return direct.stayCity;
-  if (direct?.toCity && direct.kind === "move") return direct.toCity;
-  if (direct?.toCity && (direct.kind === "arrive" || direct.kind === "stay")) return direct.toCity;
-
-  const sortedKeys = Object.keys(dayNotes)
-    .filter((key) => key <= dateKey)
-    .sort();
-
-  for (let i = sortedKeys.length - 1; i >= 0; i -= 1) {
-    const key = sortedKeys[i]!;
-    const note = dayNotes[key] ?? "";
-    const intent = parseDayIntentFromLines(note);
-    if (intent?.stayCity && key <= dateKey) return intent.stayCity;
-    if (intent?.toCity && intent.kind === "move" && key === dateKey) return intent.toCity;
-    if (intent?.toCity && (intent.kind === "arrive" || intent.kind === "stay") && key <= dateKey) {
-      return intent.toCity;
-    }
-    const inMatch = note.match(/\b(?:in|stay in|staying in)\s+(.+)/iu);
-    if (inMatch?.[1] && key <= dateKey) {
-      return inMatch[1].replace(/[.,!?]+$/u, "").trim();
-    }
-  }
-
-  return null;
 }
 
 /**

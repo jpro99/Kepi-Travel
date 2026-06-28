@@ -1,5 +1,6 @@
 import { parseDayIntent } from "@/lib/travelAssistant/parseDayIntent";
 import type { StopDateRange } from "@/lib/decision/stopDates";
+import { buildDayStayTimeline } from "@/lib/travelAssistant/dayStayTimeline";
 
 export type DayLineKind = "travel" | "hotel" | "dining" | "activity" | "note";
 
@@ -39,13 +40,20 @@ export function classifyDayLine(text: string): ClassifiedDayLine {
   return { text, kind: "note", icon: "•" };
 }
 
-/** Combined intent from all lines on a day (first strong match wins). */
+/** Combined intent from all lines on a day (travel/move lines win over generic notes). */
 export function parseDayIntentFromLines(note: string) {
   const lines = parseDayLines(note);
+  let best: ReturnType<typeof parseDayIntent> = null;
+
   for (const line of lines) {
     const intent = parseDayIntent(line);
-    if (intent && intent.kind !== "unknown") return intent;
+    if (!intent || intent.kind === "unknown") continue;
+    if (intent.kind === "move" || intent.kind === "depart") return intent;
+    if (intent.kind === "arrive" && (!best || best.kind === "stay")) best = intent;
+    if (intent.kind === "stay" && !best) best = intent;
   }
+
+  if (best) return best;
   return parseDayIntent(note);
 }
 
@@ -53,6 +61,8 @@ export function resolveStayCityForDay(
   dateKey: string,
   dayNotes: Record<string, string>,
   stopRanges: StopDateRange[] = [],
+  tripStartDate?: string | null,
+  tripEndDate?: string | null,
 ): string | null {
   for (const range of stopRanges) {
     if (dateKey >= range.checkIn && dateKey < range.checkOut) {
@@ -60,28 +70,17 @@ export function resolveStayCityForDay(
     }
   }
 
-  const direct = parseDayIntentFromLines(dayNotes[dateKey] ?? "");
-  if (direct?.stayCity) return direct.stayCity;
-  if (direct?.toCity && direct.kind !== "depart") return direct.toCity;
-
-  const sortedKeys = Object.keys(dayNotes)
-    .filter((key) => key <= dateKey)
-    .sort();
-  for (let i = sortedKeys.length - 1; i >= 0; i -= 1) {
-    const key = sortedKeys[i]!;
-    const intent = parseDayIntentFromLines(dayNotes[key] ?? "");
-    if (intent?.stayCity && key <= dateKey) return intent.stayCity;
-    if (intent?.toCity && intent.kind === "move" && key === dateKey) return intent.toCity;
-    if (intent?.toCity && (intent.kind === "arrive" || intent.kind === "stay") && key <= dateKey) {
-      return intent.toCity;
-    }
-    for (const line of parseDayLines(dayNotes[key] ?? "")) {
-      const match = line.match(/\b(?:in|stay in|staying in)\s+(.+)/iu);
-      if (match?.[1] && key <= dateKey) {
-        return match[1].replace(/[.,!?]+$/u, "").trim();
-      }
-    }
+  if (tripStartDate && tripEndDate) {
+    const timeline = buildDayStayTimeline(tripStartDate, tripEndDate, dayNotes, stopRanges);
+    const snapshot = timeline.get(dateKey);
+    if (snapshot) return snapshot.stayCity;
   }
+
+  const direct = parseDayIntentFromLines(dayNotes[dateKey] ?? "");
+  if (direct?.kind === "depart") return null;
+  if (direct?.stayCity) return direct.stayCity;
+  if (direct?.toCity && direct.kind === "move") return direct.toCity;
+  if (direct?.toCity && direct.kind !== "depart") return direct.toCity;
 
   return null;
 }
