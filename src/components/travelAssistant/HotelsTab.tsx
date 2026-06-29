@@ -13,6 +13,7 @@ import {
   formatReservationCostLine,
   reservationMissingPrice,
 } from "@/lib/travelAssistant/tripSpendSummary";
+import { hotelCardTypography } from "@/lib/ui/mobileTypography";
 
 interface Reservation {
   id: string;
@@ -53,6 +54,8 @@ interface HotelsTabProps {
   ) => void | Promise<void>;
   tripId?: string | null;
   usuallySkipsConnections?: boolean;
+  /** Trips tab on phone: bigger type, fewer widgets. */
+  simplifiedMobile?: boolean;
   travelFitReservations?: Array<{
     id: string;
     type: string;
@@ -122,8 +125,10 @@ export function HotelsTab({
   onSetStayIntent,
   tripId,
   usuallySkipsConnections,
+  simplifiedMobile = false,
   travelFitReservations = [],
 }: HotelsTabProps) {
+  const type = hotelCardTypography(simplifiedMobile);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showPast, setShowPast] = useState(false);
 
@@ -136,8 +141,8 @@ export function HotelsTab({
   const staySegmentsNeedingHotel = segmentsNeedingHotel(staySegments);
 
   return (
-    <section className="space-y-4 pb-6">
-      {onLaunchHotelSearch ? (
+    <section className={`space-y-4 pb-6 ${type.section}`}>
+      {!simplifiedMobile && onLaunchHotelSearch ? (
         <HotelSearchLauncher
           tripName={tripName}
           defaults={hotelSearchDefaults}
@@ -148,25 +153,25 @@ export function HotelsTab({
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Your hotels</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+          <h2 className={type.heading}>Your hotels</h2>
+          <p className={type.subheading}>
             {upcoming.length} booked{past.length > 0 ? ` · ${past.length} past` : ""}
           </p>
         </div>
         <button
           type="button"
           onClick={onAdd}
-          className="shrink-0 rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300"
+          className={`shrink-0 rounded-full border border-slate-300 bg-white font-semibold text-slate-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 ${type.addBtn}`}
         >
           Add existing
         </button>
       </div>
 
-      {travelFitReservations.some((r) => r.type === "hotel") && plannedStayCities.length === 0 ? (
+      {!simplifiedMobile && travelFitReservations.some((r) => r.type === "hotel") && plannedStayCities.length === 0 ? (
         <TravelFitEarnBar reservations={travelFitReservations.filter((r) => r.type === "hotel")} />
       ) : null}
 
-      {plannedStayCities.length > 0 && onPickPlannedCity ? (
+      {!simplifiedMobile && plannedStayCities.length > 0 && onPickPlannedCity ? (
         <TripHotelCityPicker
           cities={plannedStayCities}
           tripName={tripName}
@@ -174,7 +179,7 @@ export function HotelsTab({
         />
       ) : null}
 
-      {staySegmentsNeedingHotel.length > 0 && onSearchSegment && plannedStayCities.length === 0 ? (
+      {!simplifiedMobile && staySegmentsNeedingHotel.length > 0 && onSearchSegment && plannedStayCities.length === 0 ? (
         <TripStayPlanner
           segments={staySegments}
           tripName={tripName}
@@ -266,30 +271,30 @@ export function HotelsTab({
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="font-bold text-slate-900 dark:text-white text-base leading-snug truncate">{r.title}</p>
+                      <p className={type.title}>{r.title}</p>
                       {missingPrice && !past ? (
-                        <span className="shrink-0 rounded-full bg-yellow-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-yellow-900 dark:bg-yellow-500/30 dark:text-yellow-100">
+                        <span className="shrink-0 rounded-full bg-yellow-200 px-2 py-0.5 text-xs lg:text-[10px] font-bold uppercase tracking-wide text-yellow-900 dark:bg-yellow-500/30 dark:text-yellow-100">
                           Add cost
                         </span>
                       ) : costLine ? (
-                        <span className="shrink-0 text-xs font-bold text-slate-700 dark:text-slate-200">{costLine}</span>
+                        <span className={`shrink-0 font-bold text-slate-700 dark:text-slate-200 ${simplifiedMobile ? "text-sm" : "text-sm lg:text-xs"}`}>{costLine}</span>
                       ) : null}
                     </div>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 truncate mt-0.5">{r.location}</p>
+                    <p className={type.location}>{r.location}</p>
                     <div className="flex items-center gap-2 mt-2">
-                      <div className="rounded-lg bg-slate-100 dark:bg-slate-800 px-2.5 py-1">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Check-in</p>
-                        <p className="text-xs font-bold text-slate-900 dark:text-white">{fmtDate(checkIn)}</p>
+                      <div className={`rounded-lg bg-slate-100 dark:bg-slate-800 ${simplifiedMobile ? "px-3 py-2" : "px-3 py-2 lg:px-2.5 lg:py-1"}`}>
+                        <p className={type.detailLabel}>Check-in</p>
+                        <p className={type.detailValue}>{fmtDate(checkIn)}</p>
                       </div>
                       {checkOut && (
-                        <div className="rounded-lg bg-slate-100 dark:bg-slate-800 px-2.5 py-1">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Check-out</p>
-                          <p className="text-xs font-bold text-slate-900 dark:text-white">{fmtDate(checkOut)}</p>
+                        <div className={`rounded-lg bg-slate-100 dark:bg-slate-800 ${simplifiedMobile ? "px-3 py-2" : "px-3 py-2 lg:px-2.5 lg:py-1"}`}>
+                          <p className={type.detailLabel}>Check-out</p>
+                          <p className={type.detailValue}>{fmtDate(checkOut)}</p>
                         </div>
                       )}
                       {nights > 0 && (
                         <div className="rounded-lg bg-indigo-50 dark:bg-indigo-500/20 px-2.5 py-1">
-                          <p className="text-xs font-bold text-indigo-700 dark:text-indigo-300">{nights}N</p>
+                          <p className={`font-bold text-indigo-700 dark:text-indigo-300 ${simplifiedMobile ? "text-sm" : "text-sm lg:text-xs"}`}>{nights}N</p>
                         </div>
                       )}
                     </div>
@@ -303,20 +308,20 @@ export function HotelsTab({
               <div className="flex flex-wrap items-start gap-4 px-5 pb-4">
                 {r.confirmationCode && (
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Confirmation</p>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">{r.confirmationCode}</p>
+                    <p className={type.detailLabel}>Confirmation</p>
+                    <p className={`${type.detailValue} mt-0.5`}>{r.confirmationCode}</p>
                   </div>
                 )}
                 {r.roomType && r.roomType !== "Not set" && (
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Room type</p>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">{r.roomType}</p>
+                    <p className={type.detailLabel}>Room type</p>
+                    <p className={`${type.detailValue} mt-0.5`}>{r.roomType}</p>
                   </div>
                 )}
                 {costLine ? (
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Trip cost</p>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">{costLine}</p>
+                    <p className={type.detailLabel}>Trip cost</p>
+                    <p className={`${type.detailValue} mt-0.5`}>{costLine}</p>
                   </div>
                 ) : missingPrice && !past ? (
                   <button
@@ -331,31 +336,29 @@ export function HotelsTab({
               </div>
 
               {/* Expanded actions */}
-              {isOpen && (
-                <div className="border-t border-slate-100 dark:border-slate-800 px-5 py-3 flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onReservationTap(r.id)}
-                    className="flex-1 rounded-xl bg-slate-100 dark:bg-slate-800 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 active:opacity-70"
-                  >
-                    View details
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onCheckStatus(r.id)}
-                    className="flex-1 rounded-xl bg-[#007AFF]/10 dark:bg-[#0A84FF]/20 py-2 text-sm font-semibold text-[#007AFF] dark:text-[#0A84FF] active:opacity-70"
-                  >
-                    Check status
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { if (window.confirm("Delete this hotel?")) onDelete(r.id); }}
-                    className="rounded-xl bg-red-50 dark:bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-600 dark:text-red-400 active:opacity-70"
-                  >
-                    Delete
-                  </button>
-                </div>
-              )}
+              <div className="border-t border-slate-100 dark:border-slate-800 px-5 py-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onReservationTap(r.id)}
+                  className={`${type.actionBtn} bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200`}
+                >
+                  View details
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onCheckStatus(r.id)}
+                  className={`${type.actionBtn} bg-[#007AFF]/10 dark:bg-[#0A84FF]/20 text-[#007AFF] dark:text-[#0A84FF]`}
+                >
+                  Check status
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { if (window.confirm("Delete this hotel?")) onDelete(r.id); }}
+                  className={`${type.actionBtn} max-w-[33%] bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400`}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           );
         })}
@@ -372,6 +375,7 @@ export function HotelsTab({
         </button>
       )}
 
+      {!simplifiedMobile ? (
       <TripHotelStayMap
         reservations={mapReservations ?? reservations}
         staySegments={staySegments}
@@ -387,6 +391,7 @@ export function HotelsTab({
           }
         }}
       />
+      ) : null}
     </section>
   );
 }

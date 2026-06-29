@@ -24,14 +24,14 @@ export function MobileTabBar({ activeTab, onSelectTab, className = "" }: MobileT
               key={id}
               type="button"
               onClick={() => onSelectTab(id)}
-              className={`flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-2 transition-colors ${
+              className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-2 transition-colors ${
                 active
                   ? "text-[#007AFF] dark:text-[#0A84FF]"
                   : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
               }`}
               aria-current={active ? "page" : undefined}
             >
-              <span className={`text-[15px] font-bold tracking-tight ${active ? "" : "font-semibold"}`}>
+              <span className={`font-bold tracking-tight ${active ? "text-[17px]" : "text-[16px]"}`}>
                 {label}
               </span>
               {active ? (

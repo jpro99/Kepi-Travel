@@ -8857,7 +8857,7 @@ export default function TravelAssistantPage() {
                 }`}
               >
                 <span className="text-[15px] leading-none">{icon}</span>
-                <span className={`text-[10px] font-semibold tracking-tight ${consumerTab === tab ? "text-[#007AFF] dark:text-[#0A84FF]" : ""}`}>{label}</span>
+                <span className={`text-sm font-semibold tracking-tight lg:text-[10px] ${consumerTab === tab ? "text-[#007AFF] dark:text-[#0A84FF]" : ""}`}>{label}</span>
                 {consumerTab === tab && (
                   <span className="absolute bottom-0 left-1/2 h-[2.5px] w-8 -translate-x-1/2 rounded-full bg-[#007AFF] dark:bg-[#0A84FF]" />
                 )}

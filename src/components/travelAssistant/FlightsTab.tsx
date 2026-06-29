@@ -21,6 +21,7 @@ import {
 import { TripTransportRouteMap } from "@/components/travelAssistant/TripTransportRouteMap";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import type { ItinerarySelfCheckResult } from "@/lib/travelAssistant/itinerarySelfCheck";
+import { flightCardTypography, guideCardTypography } from "@/lib/ui/mobileTypography";
 
 /* ─── Types ──────────────────────────────────────────────────── */
 interface Reservation {
@@ -68,6 +69,8 @@ interface FlightsTabProps {
   onCheckStatus: (id: string) => void;
   onDelete: (id: string) => void;
   onAdd: () => void;
+  /** Trips tab on phone: bigger type, fewer widgets. */
+  simplifiedMobile?: boolean;
 }
 
 /* ─── Helpers ────────────────────────────────────────────────── */
@@ -142,22 +145,22 @@ function StatusBadge({ r, live }: { r: Reservation; live?: LiveStatusResult }) {
   const s = status.toLowerCase();
 
   if (live?.busy) return (
-    <span className="rounded-full bg-slate-100 dark:bg-slate-700 px-2.5 py-0.5 text-[10px] font-bold text-slate-500 animate-pulse">
+    <span className="rounded-full bg-slate-100 dark:bg-slate-700 px-2.5 py-0.5 text-xs lg:text-[10px] font-bold text-slate-500 animate-pulse">
       Checking…
     </span>
   );
   if (s === "cancelled") return (
-    <span className="rounded-full bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 px-2.5 py-0.5 text-[10px] font-bold">
+    <span className="rounded-full bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 px-2.5 py-0.5 text-xs lg:text-[10px] font-bold">
       CANCELLED
     </span>
   );
   if (delay > 0 || s === "delayed") return (
-    <span className="rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 px-2.5 py-0.5 text-[10px] font-bold">
+    <span className="rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 px-2.5 py-0.5 text-xs lg:text-[10px] font-bold">
       +{delay || "?"}m DELAY
     </span>
   );
   if (onTime === true || s === "scheduled" || s === "active" || s === "en-route") return (
-    <span className="rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 px-2.5 py-0.5 text-[10px] font-bold">
+    <span className="rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 px-2.5 py-0.5 text-xs lg:text-[10px] font-bold">
       ON TIME
     </span>
   );
@@ -166,7 +169,7 @@ function StatusBadge({ r, live }: { r: Reservation; live?: LiveStatusResult }) {
 
 
 /* ─── Arrival guide card — universal, works for all airports ────── */
-function ArrivalGuideCard({ flight }: { flight: Reservation }) {
+function ArrivalGuideCard({ flight, simplifiedMobile = false }: { flight: Reservation; simplifiedMobile?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const iata = flight.flightArrivalAirport ?? "";
   if (!iata) return null;
@@ -182,7 +185,7 @@ function ArrivalGuideCard({ flight }: { flight: Reservation }) {
       {/* Header */}
       <div className="px-5 pt-4 pb-2 flex items-center justify-between">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-300/70">
+          <p className={`font-bold uppercase tracking-wide text-emerald-300/70 ${simplifiedMobile ? "text-sm" : "text-sm lg:text-[10px] lg:tracking-widest"}`}>
             Arriving · {iata} · {guide.airportName}
           </p>
           <p className="text-xl font-black text-white mt-0.5">Landing guide</p>
@@ -202,7 +205,7 @@ function ArrivalGuideCard({ flight }: { flight: Reservation }) {
 
       {/* Baggage claim — always visible */}
       <div className="mx-4 mb-2 rounded-2xl bg-white/10 border border-white/[0.08] px-4 py-3">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-200/60 mb-2">
+        <p className={`font-bold uppercase tracking-wide text-emerald-200/60 mb-2 ${simplifiedMobile ? "text-sm" : "text-sm lg:text-[10px] lg:tracking-widest"}`}>
           🧳 {guide.baggage.heading}
         </p>
         {guide.baggage.steps.map((step, i) => (
@@ -216,7 +219,7 @@ function ArrivalGuideCard({ flight }: { flight: Reservation }) {
 
       {/* Exit directions — always visible */}
       <div className="mx-4 mb-2 rounded-2xl bg-white/10 border border-white/[0.08] px-4 py-3">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-200/60 mb-2">
+        <p className={`font-bold uppercase tracking-wide text-emerald-200/60 mb-2 ${simplifiedMobile ? "text-sm" : "text-sm lg:text-[10px] lg:tracking-widest"}`}>
           🚪 {guide.exit.heading}
         </p>
         {guide.exit.steps.map((step, i) => (
@@ -229,7 +232,7 @@ function ArrivalGuideCard({ flight }: { flight: Reservation }) {
 
       {/* Rideshare — always visible */}
       <div className="mx-4 mb-2 rounded-2xl bg-white/10 border border-white/[0.08] px-4 py-3">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-200/60 mb-2">
+        <p className={`font-bold uppercase tracking-wide text-emerald-200/60 mb-2 ${simplifiedMobile ? "text-sm" : "text-sm lg:text-[10px] lg:tracking-widest"}`}>
           🚗 {guide.rideshare.heading}
         </p>
         <p className="text-white/90 text-sm leading-snug">{guide.rideshare.instructions}</p>
@@ -265,13 +268,15 @@ function ArrivalGuideCard({ flight }: { flight: Reservation }) {
 
 /* ─── Airport guide card ─────────────────────────────────────── */
 function AirportGuideCard({
-  flight, live, locationStatus, onCheckStatus,
+  flight, live, locationStatus, onCheckStatus, simplifiedMobile = false,
 }: {
   flight: Reservation;
   live?: LiveStatusResult;
   locationStatus: string;
   onCheckStatus: (id: string) => void;
+  simplifiedMobile?: boolean;
 }) {
+  const guideType = guideCardTypography(simplifiedMobile);
   const gate = live?.departureGate || flight.flightDepartureGate || "";
   const terminal = live?.departureTerminal || flight.flightDepartureTerminal || "";
   const iata = flight.flightDepartureAirport ?? "";
@@ -314,7 +319,7 @@ function AirportGuideCard({
       {/* Header */}
       <div className="px-5 pt-4 pb-3 flex items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-sky-300/70">
+          <p className={guideType.eyebrow}>
             {isAirside ? "You're airside ·" : isAtAirport ? "You're at the airport ·" : "Next flight ·"} {iata} → {flight.flightArrivalAirport ?? ""}
           </p>
           <p className="text-2xl font-black text-white mt-1 leading-tight">
@@ -326,18 +331,18 @@ function AirportGuideCard({
       </div>
 
       {/* Gate · Terminal · Seat row */}
-      <div className="mx-4 mb-4 grid grid-cols-3 gap-2">
+      <div className={`mx-4 mb-4 grid grid-cols-3 gap-3`}>
         {[
           { label: "GATE", value: gate || "—", highlight: Boolean(gate), loading: live?.busy && !gate },
           { label: "TERMINAL", value: terminal || "—", highlight: Boolean(terminal) },
           { label: "SEAT", value: flight.flightSeatNumber || "—", highlight: Boolean(flight.flightSeatNumber) },
         ].map(({ label, value, highlight, loading }) => (
-          <div key={label} className="rounded-2xl bg-white/10 p-3 text-center">
-            <p className="text-[9px] font-bold uppercase tracking-widest text-sky-200/50">{label}</p>
+          <div key={label} className={`rounded-2xl bg-white/10 text-center ${guideType.gatePad}`}>
+            <p className={guideType.gateLabel}>{label}</p>
             {loading ? (
               <p className="text-sm text-white/40 animate-pulse mt-1">…</p>
             ) : (
-              <p className={`text-xl font-black mt-0.5 ${highlight ? "text-white" : "text-white/30"}`}>{value}</p>
+              <p className={`${guideType.gateValue} ${highlight ? "text-white" : "text-white/30"}`}>{value}</p>
             )}
           </div>
         ))}
@@ -355,11 +360,11 @@ function AirportGuideCard({
       {isAtAirport && gate && steps.length > 0 && (
         <div className="mx-4 mb-4 rounded-2xl bg-white/8 border border-white/10 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-2 border-b border-white/10">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-sky-200/70">
+            <p className={`font-bold uppercase tracking-wider text-sky-200/70 ${simplifiedMobile ? "text-sm" : "text-sm lg:text-[10px]"}`}>
               {hasNav ? `Route to Gate ${gate}` : `Getting to Gate ${gate}`}
             </p>
             {totalMinutes > 0 && (
-              <span className="text-[10px] text-sky-200/50 font-medium">~{totalMinutes} min</span>
+              <span className={`font-medium text-sky-200/50 ${simplifiedMobile ? "text-sm" : "text-sm lg:text-[10px]"}`}>~{totalMinutes} min</span>
             )}
           </div>
           <div className="divide-y divide-white/5">
@@ -423,7 +428,7 @@ function AirportGuideCard({
           type="button"
           onClick={() => onCheckStatus(flight.id)}
           disabled={live?.busy}
-          className="w-full rounded-2xl bg-white/10 border border-white/15 py-2.5 text-xs font-bold text-white/80 hover:bg-white/15 disabled:opacity-50 transition flex items-center justify-center gap-2"
+          className={`w-full rounded-2xl bg-white/10 border border-white/15 font-bold text-white/80 hover:bg-white/15 disabled:opacity-50 transition flex items-center justify-center gap-2 ${guideType.refreshBtn}`}
         >
           {live?.busy ? (
             <><span className="animate-spin inline-block">↻</span> Checking live status…</>
@@ -455,7 +460,16 @@ export function FlightsTab({
   importConfirmationBusy = false,
   liveStatus = {}, locationStatus = "unknown", nearestAirport = "",
   onReservationTap, onCheckStatus, onDelete, onAdd,
+  simplifiedMobile = false,
 }: FlightsTabProps) {
+  const type = flightCardTypography(simplifiedMobile);
+  const detailLabel = type.detailLabel;
+  const detailValue = type.detailValue;
+  const actionBtn = type.actionBtn;
+  const airportCode = type.airportCode;
+  const timeText = type.timeText;
+  const dateText = type.dateText;
+
   const [showPast, setShowPast] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [flightSearchOpen, setFlightSearchOpen] = useState(false);
@@ -513,7 +527,9 @@ export function FlightsTab({
   const showGuide = Boolean(nextFlight) && !airborneOnFlight;
 
   return (
-    <section className="space-y-4 pb-6">
+    <section className={`space-y-4 pb-6 ${type.section}`}>
+      {!simplifiedMobile ? (
+        <>
       <FlightSearchLauncher
         tripName={tripName}
         defaults={flightSearchDefaults}
@@ -544,6 +560,8 @@ export function FlightsTab({
           onFile={onImportConfirmation}
         />
       ) : null}
+        </>
+      ) : null}
 
       <FlightSearchModal
         open={flightSearchOpen}
@@ -556,7 +574,7 @@ export function FlightsTab({
       {/* ── ARRIVAL GUIDE — shown when airborne or just landed ── */}
       {/* Apple: when you're on a plane, show where you're going, not where you left */}
       {showArrivalGuide && arrivalFlight && (
-        <ArrivalGuideCard flight={arrivalFlight} />
+        <ArrivalGuideCard flight={arrivalFlight} simplifiedMobile={simplifiedMobile} />
       )}
 
       {/* ── DEPARTURE GUIDE — gate/terminal/seat for next flight ── */}
@@ -566,9 +584,12 @@ export function FlightsTab({
           live={liveStatus[nextFlight.id]}
           locationStatus={locationStatus}
           onCheckStatus={onCheckStatus}
+          simplifiedMobile={simplifiedMobile}
         />
       )}
 
+      {!simplifiedMobile ? (
+        <>
       <InterCityTransportPrompts
         legs={plannedFlightLegs}
         onSearchFlights={handleFlightSearch}
@@ -578,19 +599,21 @@ export function FlightsTab({
       {plannedFlightLegs.some((leg) => leg.status === "needed") ? (
         <TripFlightLegPicker legs={plannedFlightLegs} tripName={tripName} onSearch={handleFlightSearch} />
       ) : null}
+        </>
+      ) : null}
 
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Your flights</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+          <h2 className={type.heading}>Your flights</h2>
+          <p className={type.subheading}>
             {upcoming.length} booked{past.length > 0 ? ` · ${past.length} past` : ""}
           </p>
         </div>
         <button
           type="button"
           onClick={onAdd}
-          className="shrink-0 rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300"
+          className={`shrink-0 rounded-full border border-slate-300 bg-white font-semibold text-slate-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 ${type.addBtn}`}
         >
           Add existing
         </button>
@@ -670,11 +693,11 @@ export function FlightsTab({
                 {/* Airline strip */}
                 <div className="flex items-center justify-between px-5 pt-4 pb-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    <span className={type.airline}>
                       {r.flightAirline ?? r.provider}
                     </span>
                     {r.flightNumber && (
-                      <span className="rounded-md bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                      <span className={type.flightNum}>
                         {r.flightNumber}
                       </span>
                     )}
@@ -693,20 +716,20 @@ export function FlightsTab({
                 {/* Route */}
                 <div className="flex items-center px-5 pb-4 gap-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-4xl font-black text-slate-900 dark:text-white tracking-tight leading-none">{dep}</p>
-                    <p className="text-base font-semibold text-slate-900 dark:text-white mt-1">{depTime}</p>
+                    <p className={airportCode}>{dep}</p>
+                    <p className={timeText}>{depTime}</p>
                   </div>
-                  <div className="flex flex-col items-center gap-1.5 shrink-0 px-2 min-w-[5.75rem]">
+                  <div className={`flex flex-col items-center gap-1.5 shrink-0 px-2 ${type.routeMid}`}>
                     <div className="flex items-center gap-1.5">
                       <div className="h-px w-10 bg-slate-300 dark:bg-slate-600" />
-                      <span className="text-slate-500 dark:text-slate-400 text-lg leading-none" aria-hidden>✈</span>
+                      <span className="text-slate-500 dark:text-slate-400 text-xl leading-none" aria-hidden>✈</span>
                       <div className="h-px w-10 bg-slate-300 dark:bg-slate-600" />
                     </div>
-                    <p className="text-sm font-bold text-slate-700 dark:text-slate-200 text-center leading-tight whitespace-nowrap">{date}</p>
+                    <p className={dateText}>{date}</p>
                   </div>
                   <div className="flex-1 min-w-0 text-right">
-                    <p className="text-4xl font-black text-slate-900 dark:text-white tracking-tight leading-none">{arr}</p>
-                    <p className="text-base font-semibold text-slate-900 dark:text-white mt-1">{arrTime || "—"}</p>
+                    <p className={airportCode}>{arr}</p>
+                    <p className={timeText}>{arrTime || "—"}</p>
                   </div>
                 </div>
               </button>
@@ -719,7 +742,7 @@ export function FlightsTab({
               </div>
 
               {/* Bottom details */}
-              <div className="grid grid-cols-4 gap-3 px-5 py-3">
+              <div className={`grid grid-cols-4 gap-3 px-5 ${type.detailsPad}`}>
                 {[
                   { label: "TERMINAL", value: terminal || "—" },
                   { label: "GATE", value: gate || "—", highlight: Boolean(gate) },
@@ -727,8 +750,8 @@ export function FlightsTab({
                   { label: "CONF", value: r.confirmationCode?.slice(0, 7) || "—" },
                 ].map(({ label, value, highlight }) => (
                   <div key={label}>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">{label}</p>
-                    <p className={`text-sm font-bold mt-0.5 ${highlight ? "text-[#007AFF] dark:text-[#0A84FF]" : "text-slate-900 dark:text-white"}`}>
+                    <p className={detailLabel}>{label}</p>
+                    <p className={`${detailValue} ${highlight ? "text-[#007AFF] dark:text-[#0A84FF]" : "text-slate-900 dark:text-white"}`}>
                       {value}
                     </p>
                   </div>
@@ -779,16 +802,16 @@ export function FlightsTab({
               {/* Quick delete — always visible */}
               <div className="border-t border-slate-100 dark:border-slate-800 px-5 py-3 flex items-center gap-2">
                 <button type="button" onClick={() => onReservationTap(r.id)}
-                  className="flex-1 rounded-xl bg-slate-100 dark:bg-slate-800 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 active:opacity-70">
+                  className={`${actionBtn} bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200`}>
                   Edit
                 </button>
                 <button type="button" onClick={() => onCheckStatus(r.id)} disabled={live?.busy}
-                  className="flex-1 rounded-xl bg-[#007AFF]/10 dark:bg-[#0A84FF]/20 py-2 text-sm font-semibold text-[#007AFF] dark:text-[#0A84FF] active:opacity-70 disabled:opacity-50">
+                  className={`${actionBtn} bg-[#007AFF]/10 dark:bg-[#0A84FF]/20 text-[#007AFF] dark:text-[#0A84FF] disabled:opacity-50`}>
                   {live?.busy ? "Checking…" : "Status"}
                 </button>
                 <button type="button"
                   onClick={() => { if (window.confirm("Delete this flight?")) onDelete(r.id); }}
-                  className="rounded-xl bg-red-50 dark:bg-red-500/10 px-3 py-2 text-sm font-bold text-red-600 dark:text-red-400 active:opacity-70">
+                  className={type.deleteBtn}>
                   🗑
                 </button>
               </div>
@@ -805,12 +828,14 @@ export function FlightsTab({
         </button>
       )}
 
+      {!simplifiedMobile ? (
       <TripTransportRouteMap
         reservations={transportReservations ?? reservations}
         plannedFlightLegs={plannedFlightLegs}
         selfCheck={itinerarySelfCheck}
         onSegmentTap={onReservationTap}
       />
+      ) : null}
     </section>
   );
 }

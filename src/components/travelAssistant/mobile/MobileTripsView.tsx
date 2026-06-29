@@ -181,11 +181,11 @@ export function MobileTripsView({
             key={id}
             type="button"
             onClick={() => setSegment(id)}
-            className={`min-h-[44px] flex-1 rounded-xl text-[15px] font-bold transition ${
+            className={`min-h-[48px] flex-1 rounded-xl font-bold transition ${
               segment === id
                 ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-white"
                 : "text-slate-500 dark:text-slate-400"
-            }`}
+            } ${segment === id ? "text-[17px]" : "text-[16px]"}`}
           >
             {label}
           </button>
@@ -202,6 +202,7 @@ export function MobileTripsView({
           onCheckStatus={onCheckStatus}
           onDelete={onDelete}
           onAdd={onAddBooking}
+          simplifiedMobile
         />
       ) : segment === "hotels" ? (
         <HotelsTab
@@ -210,6 +211,7 @@ export function MobileTripsView({
           onCheckStatus={onCheckStatus}
           onDelete={onDelete}
           onAdd={onAddBooking}
+          simplifiedMobile
         />
       ) : tickets.length > 0 ? (
         <div className="space-y-3">
