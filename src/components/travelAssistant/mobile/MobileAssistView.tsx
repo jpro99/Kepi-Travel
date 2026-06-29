@@ -42,21 +42,21 @@ export function MobileAssistView({
   return (
     <section className="space-y-4">
       {journeyPhase.kind === "airborne" ? (
-        <div className="rounded-3xl overflow-hidden bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 p-5 shadow-xl">
-          <p className="text-xs font-bold uppercase tracking-widest text-sky-300/70">In flight</p>
-          <p className="mt-2 text-2xl font-black text-white leading-tight">
+        <div className="rounded-3xl overflow-hidden bg-[var(--bg-card)] p-5 shadow-lg ring-1 ring-[var(--border-default)]">
+          <p className="text-xs font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400">In flight</p>
+          <p className="mt-2 text-2xl font-black text-[var(--text-primary)] leading-tight">
             {(journeyPhase.onFlight as Reservation & { flightDepartureAirport?: string }).flightDepartureAirport ?? ""} →{" "}
             {journeyPhase.landingAt}
           </p>
-          <p className="mt-2 text-sm text-sky-200/70">
+          <p className="mt-2 text-sm text-[var(--text-muted)]">
             Landing in {journeyPhase.landingIn}
           </p>
         </div>
       ) : journeyPhase.kind === "just-landed" ? (
-        <div className="rounded-3xl overflow-hidden bg-gradient-to-br from-emerald-900 via-teal-950 to-slate-900 p-5 shadow-xl">
-          <p className="text-xs font-bold uppercase tracking-widest text-emerald-300/70">Welcome</p>
-          <p className="mt-2 text-2xl font-black text-white">You&apos;ve landed</p>
-          <p className="mt-2 text-sm text-emerald-200/70">
+        <div className="rounded-3xl overflow-hidden bg-[var(--bg-card)] p-5 shadow-lg ring-1 ring-[var(--border-default)]">
+          <p className="text-xs font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Welcome</p>
+          <p className="mt-2 text-2xl font-black text-[var(--text-primary)]">You&apos;ve landed</p>
+          <p className="mt-2 text-sm text-[var(--text-muted)]">
             {journeyPhase.landedMinutesAgo < 2 ? "Just now" : `${journeyPhase.landedMinutesAgo} min ago`}
           </p>
         </div>
@@ -82,7 +82,7 @@ export function MobileAssistView({
         </Link>
       ) : null}
 
-      <div className="rounded-3xl bg-white p-1 shadow-sm ring-1 ring-black/[0.06] dark:bg-slate-900 dark:ring-white/[0.08]">
+      <div className="rounded-3xl bg-[var(--bg-card)] p-1 shadow-sm ring-1 ring-[var(--border-default)]">
         <NextUpCard
           reservations={reservations}
           tripName={tripName}

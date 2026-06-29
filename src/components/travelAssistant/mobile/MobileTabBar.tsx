@@ -12,7 +12,7 @@ interface MobileTabBarProps {
 export function MobileTabBar({ activeTab, onSelectTab, className = "" }: MobileTabBarProps) {
   return (
     <nav
-      className={`fixed inset-x-0 bottom-0 z-50 border-t border-black/[0.06] bg-white/95 px-2 pt-1 shadow-[0_-8px_32px_rgba(0,0,0,0.08)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-slate-950/95 md:hidden ${className}`}
+      className={`fixed inset-x-0 bottom-0 z-50 border-t border-[var(--border-default)] bg-[var(--bg-card)]/95 px-2 pt-1 shadow-[0_-8px_32px_rgba(0,0,0,0.08)] backdrop-blur-xl md:hidden ${className}`}
       style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
       aria-label="Main navigation"
     >
@@ -26,8 +26,8 @@ export function MobileTabBar({ activeTab, onSelectTab, className = "" }: MobileT
               onClick={() => onSelectTab(id)}
               className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-2 transition-colors ${
                 active
-                  ? "text-[#007AFF] dark:text-[#0A84FF]"
-                  : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                  ? "text-[#007AFF]"
+                  : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
               }`}
               aria-current={active ? "page" : undefined}
             >
@@ -35,7 +35,7 @@ export function MobileTabBar({ activeTab, onSelectTab, className = "" }: MobileT
                 {label}
               </span>
               {active ? (
-                <span className="h-[3px] w-10 rounded-full bg-[#007AFF] dark:bg-[#0A84FF]" />
+                <span className="h-[3px] w-10 rounded-full bg-[#007AFF]" />
               ) : (
                 <span className="h-[3px] w-10 rounded-full bg-transparent" />
               )}

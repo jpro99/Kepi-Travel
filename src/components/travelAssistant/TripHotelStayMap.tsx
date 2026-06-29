@@ -31,13 +31,16 @@ function StayCard({
   index,
   selected,
   onTap,
+  cardStyle = "dark",
 }: {
   point: HotelStayMapPoint;
   index: number;
   selected: boolean;
   onTap?: (point: HotelStayMapPoint) => void;
+  cardStyle?: "dark" | "card";
 }) {
   const color = hotelStayStrokeColor(point.booked);
+  const isCard = cardStyle === "card";
 
   return (
     <button
@@ -47,8 +50,12 @@ function StayCard({
         selected
           ? "border-sky-400/70 bg-sky-500/15 ring-1 ring-sky-400/40"
           : point.booked
-            ? "border-white/10 bg-white/5 hover:bg-white/10"
-            : "border-white/10 bg-white/[0.03] opacity-85"
+            ? isCard
+              ? "border-[var(--border-default)] bg-[var(--bg-muted)] hover:opacity-90"
+              : "border-white/10 bg-white/5 hover:bg-white/10"
+            : isCard
+              ? "border-[var(--border-default)] bg-[var(--bg-card)] opacity-85"
+              : "border-white/10 bg-white/[0.03] opacity-85"
       }`}
     >
       <div className="flex items-center gap-2">
@@ -59,17 +66,17 @@ function StayCard({
           🏨
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-black text-white">{point.label}</p>
-          <p className="truncate text-xs text-sky-50/80">{point.city}</p>
+          <p className={`truncate text-sm font-black ${isCard ? "text-[var(--text-primary)]" : "text-white"}`}>{point.label}</p>
+          <p className={`truncate text-xs ${isCard ? "text-[var(--text-muted)]" : "text-sky-50/80"}`}>{point.city}</p>
         </div>
-        <span className="text-[10px] font-bold text-sky-200/50">#{index + 1}</span>
+        <span className={`text-[10px] font-bold ${isCard ? "text-[var(--text-muted)]" : "text-sky-200/50"}`}>#{index + 1}</span>
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5 text-xs font-semibold">
         {point.dateLabel ? (
-          <span className="rounded-full bg-white/15 px-2 py-0.5 text-sky-50">In {point.dateLabel}</span>
+          <span className={`rounded-full px-2 py-0.5 ${isCard ? "bg-[var(--bg-muted)] text-[var(--text-primary)]" : "bg-white/15 text-sky-50"}`}>In {point.dateLabel}</span>
         ) : null}
         {point.checkOut ? (
-          <span className="rounded-full bg-white/15 px-2 py-0.5 text-sky-50">
+          <span className={`rounded-full px-2 py-0.5 ${isCard ? "bg-[var(--bg-muted)] text-[var(--text-primary)]" : "bg-white/15 text-sky-50"}`}>
             Out {new Date(`${point.checkOut.slice(0, 10)}T12:00:00`).toLocaleDateString("en-US", {
               month: "short",
               day: "numeric",
@@ -77,7 +84,7 @@ function StayCard({
           </span>
         ) : null}
       </div>
-      <p className="mt-2 text-xs leading-snug text-sky-50/75">
+      <p className={`mt-2 text-xs leading-snug ${isCard ? "text-[var(--text-muted)]" : "text-sky-50/75"}`}>
         {point.booked ? "Booked stay" : "Hotel not booked yet"}
       </p>
     </button>
@@ -299,7 +306,7 @@ export function TripHotelStayMap({
   const sectionShell = expanded
     ? "fixed inset-0 z-[9000] flex max-h-[100dvh] flex-col overflow-hidden bg-slate-950"
     : mobileLight
-      ? "overflow-hidden rounded-3xl bg-white shadow-lg ring-1 ring-black/[0.06] scroll-mt-4"
+      ? "overflow-hidden rounded-3xl bg-[var(--bg-card)] shadow-lg ring-1 ring-[var(--border-default)] scroll-mt-4"
       : "overflow-hidden rounded-3xl bg-gradient-to-br from-[#0c2447] via-[#0f172a] to-[#020617] shadow-xl ring-1 ring-white/10 scroll-mt-4";
 
   return (
@@ -327,12 +334,12 @@ export function TripHotelStayMap({
           </button>
         </div>
       ) : (
-      <div className={`flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4 ${mobileLight ? "border-slate-200" : "border-white/10"}`}>
+      <div className={`flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4 ${mobileLight ? "border-[var(--border-default)]" : "border-white/10"}`}>
         <div>
           <p
             className={`font-bold uppercase tracking-wide ${
               mobileLight
-                ? "text-sm text-sky-700"
+                ? "text-sm text-sky-700 dark:text-sky-400"
                 : mobileProminent
                   ? "text-base text-sky-300/80"
                   : "text-[10px] tracking-[0.22em] text-sky-300/80"
@@ -340,10 +347,10 @@ export function TripHotelStayMap({
           >
             Stay map
           </p>
-          <h3 className={`mt-1 font-black ${mobileLight ? "text-2xl text-slate-900" : mobileProminent ? "text-2xl text-white" : "text-lg text-white"}`}>
+          <h3 className={`mt-1 font-black ${mobileLight ? "text-2xl text-[var(--text-primary)]" : mobileProminent ? "text-2xl text-white" : "text-lg text-white"}`}>
             Where you&apos;re staying
           </h3>
-          <p className={`mt-1 ${mobileLight ? "text-[16px] text-slate-600" : mobileProminent ? "text-[15px] text-sky-100/60" : "text-xs text-sky-100/60"}`}>
+          <p className={`mt-1 ${mobileLight ? "text-[16px] text-[var(--text-muted)]" : mobileProminent ? "text-[15px] text-sky-100/60" : "text-xs text-sky-100/60"}`}>
             {mobileProminent ? "Tap map for full screen · pinch to zoom" : "Drag to pan · pinch to zoom"}
           </p>
         </div>
@@ -434,7 +441,7 @@ export function TripHotelStayMap({
       </div>
 
       <div className={`${expanded ? "shrink-0 border-t border-white/10" : ""} px-5 py-4`}>
-        <div className={`mb-3 flex flex-wrap gap-3 text-xs font-bold uppercase tracking-wider ${mobileLight ? "text-slate-600" : "text-sky-50/80"}`}>
+        <div className={`mb-3 flex flex-wrap gap-3 text-xs font-bold uppercase tracking-wider ${mobileLight ? "text-[var(--text-muted)]" : "text-sky-50/80"}`}>
           <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-7 rounded-full bg-emerald-500" /> Booked</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-7 rounded-full bg-slate-400" /> Not booked</span>
         </div>
@@ -446,11 +453,12 @@ export function TripHotelStayMap({
               point={point}
               index={index}
               selected={selectedStayId === point.id}
+              cardStyle={mobileLight ? "card" : "dark"}
               onTap={handleStaySelect}
             />
           ))}
         </div>
-        <p className={`mt-3 text-xs ${mobileLight ? "text-slate-500" : "text-sky-100/55"}`}>
+        <p className={`mt-3 text-xs ${mobileLight ? "text-[var(--text-muted)]" : "text-sky-100/55"}`}>
           {bookedCount} booked · {unbookedCount} still needed · {points.length} stop{points.length === 1 ? "" : "s"} on map
         </p>
       </div>

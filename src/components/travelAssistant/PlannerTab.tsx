@@ -76,24 +76,24 @@ export function PlannerTab({
 
   return (
     <section className="space-y-4">
-      <article className="overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-blue-950 to-sky-900 p-5 text-white shadow-xl">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-sky-200/80">Plan</p>
-        <h1 className="mt-1 text-2xl font-black leading-tight">Build your next trip</h1>
-        <p className="mt-2 text-sm leading-relaxed text-sky-100/80">
+      <article className="overflow-hidden rounded-3xl bg-[var(--bg-card)] p-5 shadow-lg ring-1 ring-[var(--border-default)]">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400">Plan</p>
+        <h1 className="mt-1 text-2xl font-black leading-tight text-[var(--text-primary)]">Build your next trip</h1>
+        <p className="mt-2 text-sm leading-relaxed text-[var(--text-muted)]">
           Add flights, hotels, rides, and key plans. Kepi turns them into one live timeline.
         </p>
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
           <button
             type="button"
             onClick={onAddBooking}
-            className="rounded-2xl bg-white px-4 py-3 text-sm font-bold text-slate-950 transition hover:bg-sky-50"
+            className="rounded-2xl bg-[#007AFF] px-4 py-3 text-sm font-bold text-white transition hover:opacity-90"
           >
             + Add booking
           </button>
           <button
             type="button"
             onClick={onCreateTrip}
-            className="rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-bold text-white transition hover:bg-white/15"
+            className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-muted)] px-4 py-3 text-sm font-bold text-[var(--text-primary)] transition hover:opacity-90"
           >
             New trip
           </button>

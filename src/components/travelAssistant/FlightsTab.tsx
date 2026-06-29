@@ -183,16 +183,16 @@ function ArrivalGuideCard({ flight, simplifiedMobile = false }: { flight: Reserv
   return (
     <div className={`rounded-3xl overflow-hidden shadow-xl ${
       simplifiedMobile
-        ? "bg-white ring-1 ring-black/[0.06]"
+        ? "bg-[var(--bg-card)] ring-1 ring-[var(--border-default)]"
         : "bg-gradient-to-br from-emerald-900 via-teal-950 to-slate-900"
     }`}>
       {/* Header */}
       <div className="px-5 pt-4 pb-2 flex items-center justify-between">
         <div>
-          <p className={`font-bold uppercase tracking-wide ${simplifiedMobile ? "text-sm text-emerald-700" : "text-sm lg:text-[10px] lg:tracking-widest text-emerald-300/70"}`}>
+          <p className={`font-bold uppercase tracking-wide ${simplifiedMobile ? "text-sm text-emerald-700 dark:text-emerald-400" : "text-sm lg:text-[10px] lg:tracking-widest text-emerald-300/70"}`}>
             Arriving · {iata} · {guide.airportName}
           </p>
-          <p className={`text-xl font-black mt-0.5 ${simplifiedMobile ? "text-slate-900" : "text-white"}`}>Landing guide</p>
+          <p className={`text-xl font-black mt-0.5 ${simplifiedMobile ? "text-[var(--text-primary)]" : "text-white"}`}>Landing guide</p>
         </div>
         <span className="text-3xl">🛬</span>
       </div>
@@ -201,45 +201,45 @@ function ArrivalGuideCard({ flight, simplifiedMobile = false }: { flight: Reserv
       <div className="flex gap-0 mx-4 mb-3">
         {["🧳 Bags", "🚪 Exit", "🚗 Ride"].map((label, i) => (
           <div key={i} className="flex-1 text-center">
-            <div className={`h-1 rounded-full mx-0.5 ${i === 0 ? "bg-emerald-400" : simplifiedMobile ? "bg-slate-200" : "bg-white/20"}`} />
-            <p className={`text-[9px] mt-1 font-medium ${simplifiedMobile ? "text-slate-500" : "text-white/40"}`}>{label}</p>
+            <div className={`h-1 rounded-full mx-0.5 ${i === 0 ? "bg-emerald-400" : simplifiedMobile ? "bg-[var(--bg-muted)]" : "bg-white/20"}`} />
+            <p className={`text-[9px] mt-1 font-medium ${simplifiedMobile ? "text-[var(--text-muted)]" : "text-white/40"}`}>{label}</p>
           </div>
         ))}
       </div>
 
       {/* Baggage claim — always visible */}
-      <div className={`mx-4 mb-2 rounded-2xl px-4 py-3 ${simplifiedMobile ? "bg-slate-50 border border-slate-200" : "bg-white/10 border border-white/[0.08]"}`}>
-        <p className={`font-bold uppercase tracking-wide mb-2 ${simplifiedMobile ? "text-sm text-emerald-800" : "text-sm lg:text-[10px] lg:tracking-widest text-emerald-200/60"}`}>
+      <div className={`mx-4 mb-2 rounded-2xl px-4 py-3 ${simplifiedMobile ? "bg-[var(--bg-muted)] border border-[var(--border-default)]" : "bg-white/10 border border-white/[0.08]"}`}>
+        <p className={`font-bold uppercase tracking-wide mb-2 ${simplifiedMobile ? "text-sm text-emerald-800 dark:text-emerald-300" : "text-sm lg:text-[10px] lg:tracking-widest text-emerald-200/60"}`}>
           🧳 {guide.baggage.heading}
         </p>
         {guide.baggage.steps.map((step, i) => (
           <div key={i} className="flex gap-2.5 mb-1.5 last:mb-0">
-            <span className="text-emerald-600 text-xs font-bold shrink-0 mt-0.5">{i + 1}</span>
-            <p className={`text-sm leading-snug ${simplifiedMobile ? "text-slate-800" : "text-white/90"}`}>{step}</p>
+            <span className="text-emerald-600 dark:text-emerald-400 text-xs font-bold shrink-0 mt-0.5">{i + 1}</span>
+            <p className={`text-sm leading-snug ${simplifiedMobile ? "text-[var(--text-primary)]" : "text-white/90"}`}>{step}</p>
           </div>
         ))}
-        <p className={`text-[11px] mt-2 ${simplifiedMobile ? "text-slate-500" : "text-emerald-200/40"}`}>~{guide.baggage.walkMinutes} min from gate to carousel</p>
+        <p className={`text-[11px] mt-2 ${simplifiedMobile ? "text-[var(--text-muted)]" : "text-emerald-200/40"}`}>~{guide.baggage.walkMinutes} min from gate to carousel</p>
       </div>
 
       {/* Exit directions — always visible */}
-      <div className={`mx-4 mb-2 rounded-2xl px-4 py-3 ${simplifiedMobile ? "bg-slate-50 border border-slate-200" : "bg-white/10 border border-white/[0.08]"}`}>
-        <p className={`font-bold uppercase tracking-wide mb-2 ${simplifiedMobile ? "text-sm text-emerald-800" : "text-sm lg:text-[10px] lg:tracking-widest text-emerald-200/60"}`}>
+      <div className={`mx-4 mb-2 rounded-2xl px-4 py-3 ${simplifiedMobile ? "bg-[var(--bg-muted)] border border-[var(--border-default)]" : "bg-white/10 border border-white/[0.08]"}`}>
+        <p className={`font-bold uppercase tracking-wide mb-2 ${simplifiedMobile ? "text-sm text-emerald-800 dark:text-emerald-300" : "text-sm lg:text-[10px] lg:tracking-widest text-emerald-200/60"}`}>
           🚪 {guide.exit.heading}
         </p>
         {guide.exit.steps.map((step, i) => (
           <div key={i} className="flex gap-2.5 mb-1.5 last:mb-0">
-            <span className="text-emerald-600 text-xs font-bold shrink-0 mt-0.5">{i + 1}</span>
-            <p className={`text-sm leading-snug ${simplifiedMobile ? "text-slate-800" : "text-white/90"}`}>{step}</p>
+            <span className="text-emerald-600 dark:text-emerald-400 text-xs font-bold shrink-0 mt-0.5">{i + 1}</span>
+            <p className={`text-sm leading-snug ${simplifiedMobile ? "text-[var(--text-primary)]" : "text-white/90"}`}>{step}</p>
           </div>
         ))}
       </div>
 
       {/* Rideshare — always visible */}
-      <div className={`mx-4 mb-2 rounded-2xl px-4 py-3 ${simplifiedMobile ? "bg-slate-50 border border-slate-200" : "bg-white/10 border border-white/[0.08]"}`}>
-        <p className={`font-bold uppercase tracking-wide mb-2 ${simplifiedMobile ? "text-sm text-emerald-800" : "text-sm lg:text-[10px] lg:tracking-widest text-emerald-200/60"}`}>
+      <div className={`mx-4 mb-2 rounded-2xl px-4 py-3 ${simplifiedMobile ? "bg-[var(--bg-muted)] border border-[var(--border-default)]" : "bg-white/10 border border-white/[0.08]"}`}>
+        <p className={`font-bold uppercase tracking-wide mb-2 ${simplifiedMobile ? "text-sm text-emerald-800 dark:text-emerald-300" : "text-sm lg:text-[10px] lg:tracking-widest text-emerald-200/60"}`}>
           🚗 {guide.rideshare.heading}
         </p>
-        <p className={`text-sm leading-snug ${simplifiedMobile ? "text-slate-800" : "text-white/90"}`}>{guide.rideshare.instructions}</p>
+        <p className={`text-sm leading-snug ${simplifiedMobile ? "text-[var(--text-primary)]" : "text-white/90"}`}>{guide.rideshare.instructions}</p>
       </div>
 
       {/* Tips — collapsible */}
@@ -248,16 +248,16 @@ function ArrivalGuideCard({ flight, simplifiedMobile = false }: { flight: Reserv
           <button
             type="button"
             onClick={() => setExpanded(v => !v)}
-            className={`w-full px-4 py-2 text-center text-xs font-semibold transition ${simplifiedMobile ? "text-emerald-700 hover:text-emerald-900" : "text-emerald-300/60 hover:text-emerald-200"}`}
+            className={`w-full px-4 py-2 text-center text-xs font-semibold transition ${simplifiedMobile ? "text-emerald-700 dark:text-emerald-400 hover:text-emerald-900" : "text-emerald-300/60 hover:text-emerald-200"}`}
           >
             {expanded ? "▲ Hide tips" : `▼ ${guide.tips.length} tip${guide.tips.length > 1 ? "s" : ""} for this airport`}
           </button>
           {expanded && (
-            <div className={`mx-4 mb-4 rounded-2xl px-4 py-3 space-y-2 ${simplifiedMobile ? "bg-slate-50 border border-slate-200" : "bg-white/[0.06] border border-white/[0.06]"}`}>
+            <div className={`mx-4 mb-4 rounded-2xl px-4 py-3 space-y-2 ${simplifiedMobile ? "bg-[var(--bg-muted)] border border-[var(--border-default)]" : "bg-white/[0.06] border border-white/[0.06]"}`}>
               {guide.tips.map((tip, i) => (
                 <div key={i} className="flex gap-2">
-                  <span className="text-emerald-600 shrink-0">💡</span>
-                  <p className={`text-xs leading-relaxed ${simplifiedMobile ? "text-slate-700" : "text-white/70"}`}>{tip}</p>
+                  <span className="text-emerald-600 dark:text-emerald-400 shrink-0">💡</span>
+                  <p className={`text-xs leading-relaxed ${simplifiedMobile ? "text-[var(--text-muted)]" : "text-white/70"}`}>{tip}</p>
                 </div>
               ))}
             </div>
@@ -321,7 +321,7 @@ function AirportGuideCard({
   return (
     <div className={`rounded-3xl overflow-hidden shadow-xl ${
       cancelled
-        ? simplifiedMobile ? "bg-red-50 ring-1 ring-red-200" : "bg-red-950"
+        ? "bg-red-50 ring-1 ring-red-200 dark:bg-red-950 dark:ring-red-900"
         : simplifiedMobile
           ? guideType.shell
           : "bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900"
@@ -350,9 +350,9 @@ function AirportGuideCard({
           <div key={label} className={`${guideType.gateBox} ${guideType.gatePad}`}>
             <p className={guideType.gateLabel}>{label}</p>
             {loading ? (
-              <p className={`text-sm animate-pulse mt-1 ${simplifiedMobile ? "text-slate-400" : "text-white/40"}`}>…</p>
+              <p className="text-sm text-[var(--text-muted)] animate-pulse mt-1">…</p>
             ) : (
-              <p className={`${guideType.gateValue} ${highlight ? (simplifiedMobile ? "text-slate-900" : "text-white") : simplifiedMobile ? "text-slate-300" : "text-white/30"}`}>{value}</p>
+              <p className={`${guideType.gateValue} ${highlight ? "text-[var(--text-primary)]" : "text-[var(--text-muted)] opacity-60"}`}>{value}</p>
             )}
           </div>
         ))}
@@ -369,7 +369,7 @@ function AirportGuideCard({
       {/* Step-by-step nav to gate */}
       {isAtAirport && gate && steps.length > 0 && (
         <div className={`mx-4 mb-4 ${guideType.panel}`}>
-          <div className={`flex items-center justify-between px-4 py-2 border-b ${simplifiedMobile ? "border-slate-200" : "border-white/10"}`}>
+          <div className={`flex items-center justify-between px-4 py-2 border-b ${simplifiedMobile ? "border-[var(--border-default)]" : "border-white/10"}`}>
             <p className={guideType.panelHeader}>
               {hasNav ? `Route to Gate ${gate}` : `Getting to Gate ${gate}`}
             </p>
@@ -377,14 +377,14 @@ function AirportGuideCard({
               <span className={`font-medium ${guideType.mutedText} ${simplifiedMobile ? "text-sm" : "text-sm lg:text-[10px]"}`}>~{totalMinutes} min</span>
             )}
           </div>
-          <div className={`divide-y ${simplifiedMobile ? "divide-slate-200" : "divide-white/5"}`}>
+          <div className={`divide-y ${simplifiedMobile ? "divide-[var(--border-default)]" : "divide-white/5"}`}>
             {steps.map((step, i) => (
               <div key={i} className="flex items-start gap-3 px-4 py-2.5">
                 <span className="text-sm shrink-0 mt-0.5">{step.icon}</span>
                 <div className="flex-1 min-w-0">
                   <p className={`text-xs leading-snug ${guideType.bodyText}`}>{step.text}</p>
                   {step.detail && <p className={`text-[10px] mt-0.5 ${guideType.mutedText}`}>{step.detail}</p>}
-                  {step.minutes > 0 && <p className={`text-[10px] mt-0.5 ${simplifiedMobile ? "text-sky-700" : "text-sky-300/50"}`}>~{step.minutes} min</p>}
+                  {step.minutes > 0 && <p className="text-[10px] mt-0.5 text-sky-600 dark:text-sky-400">~{step.minutes} min</p>}
                 </div>
               </div>
             ))}
@@ -440,7 +440,7 @@ function AirportGuideCard({
           disabled={live?.busy}
           className={`w-full rounded-2xl font-bold disabled:opacity-50 transition flex items-center justify-center gap-2 ${guideType.refreshBtn} ${
             simplifiedMobile
-              ? "bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200"
+              ? "bg-[var(--bg-muted)] border border-[var(--border-default)] text-[var(--text-primary)] hover:opacity-90"
               : "bg-white/10 border border-white/15 text-white/80 hover:bg-white/15"
           }`}
         >
@@ -706,7 +706,7 @@ export function FlightsTab({
           return (
             <div
               key={r.id}
-              className={`overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-sm ring-1 transition-all ${
+              className={`overflow-hidden rounded-3xl bg-[var(--bg-card)] shadow-sm ring-1 transition-all ${
                 isNext && !showGuide && attention === "none"
                   ? "ring-[#007AFF]/40 dark:ring-[#0A84FF]/30 shadow-blue-500/10"
                   : reservationAttentionRingClass(attention, isPast)
@@ -760,9 +760,9 @@ export function FlightsTab({
 
               {/* Perforated divider */}
               <div className="flex items-center px-4 py-0">
-                <div className="h-4 w-4 rounded-full bg-slate-100 dark:bg-slate-800 -ml-6 shrink-0" />
-                <div className="flex-1 border-t-2 border-dashed border-slate-100 dark:border-slate-800 mx-1" />
-                <div className="h-4 w-4 rounded-full bg-slate-100 dark:bg-slate-800 -mr-6 shrink-0" />
+                <div className="h-4 w-4 rounded-full bg-[var(--bg-base)] -ml-6 shrink-0" />
+                <div className="flex-1 border-t-2 border-dashed border-[var(--border-default)] mx-1" />
+                <div className="h-4 w-4 rounded-full bg-[var(--bg-base)] -mr-6 shrink-0" />
               </div>
 
               {/* Bottom details */}

@@ -59,7 +59,7 @@ export function ThemePicker() {
   };
 
   return (
-    <div className="flex gap-1.5 rounded-2xl bg-slate-100 p-1.5 dark:bg-slate-800">
+    <div className="flex gap-1.5 rounded-2xl bg-[var(--bg-muted)] p-1.5">
       {(["light", "dark"] as const).map((mode) => (
         <button
           key={mode}
@@ -67,8 +67,47 @@ export function ThemePicker() {
           onClick={() => pick(mode)}
           className={`min-h-[48px] flex-1 rounded-xl text-[17px] font-bold capitalize transition ${
             theme === mode
-              ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-white"
-              : "text-slate-600 dark:text-slate-400"
+              ? "bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm"
+              : "text-[var(--text-muted)]"
+          }`}
+        >
+          {mode}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Compact Light / Dark control for the mobile header. */
+export function ThemeHeaderPicker() {
+  const [theme, setThemeState] = useState<ThemeMode>(() => readStoredTheme());
+
+  useEffect(() => {
+    applyTheme(theme);
+    return subscribeTheme((next) => setThemeState(next));
+  }, [theme]);
+
+  const pick = (next: ThemeMode): void => {
+    setThemeState(next);
+    setTheme(next);
+  };
+
+  return (
+    <div
+      className="flex rounded-full bg-[var(--bg-muted)] p-0.5 ring-1 ring-[var(--border-default)]"
+      role="group"
+      aria-label="Appearance"
+    >
+      {(["light", "dark"] as const).map((mode) => (
+        <button
+          key={mode}
+          type="button"
+          onClick={() => pick(mode)}
+          aria-pressed={theme === mode}
+          className={`min-h-[36px] rounded-full px-3 text-[13px] font-bold capitalize transition ${
+            theme === mode
+              ? "bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm"
+              : "text-[var(--text-muted)]"
           }`}
         >
           {mode}

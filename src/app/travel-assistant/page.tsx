@@ -109,7 +109,7 @@ import {
   filterConsumerTimelineReservations,
   isOnboardingSetupPlaceholder,
 } from "@/lib/travelAssistant/consumerTimeline";
-import { ThemePicker, ThemeToggle } from "@/components/ThemeToggle";
+import { ThemeHeaderPicker, ThemePicker, ThemeToggle } from "@/components/ThemeToggle";
 import { QuickAddLane } from "@/components/travelAssistant/QuickAddLane";
 import { ReservationList } from "@/components/travelAssistant/ReservationList";
 import { ReviewQueue } from "@/components/travelAssistant/ReviewQueue";
@@ -8743,24 +8743,25 @@ export default function TravelAssistantPage() {
         <div className="relative z-10 flex min-h-screen">
           <div className="min-w-0 flex-1">
         <div className="mx-auto max-w-3xl space-y-3 px-3 py-3 sm:max-w-4xl sm:px-4 lg:max-w-6xl lg:px-5 xl:max-w-7xl">
-          <header className="sticky top-0 z-30 -mx-4 border-b border-slate-200/70 bg-slate-50/90 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
-            <div className="flex items-center justify-between gap-3">
+          <header className="sticky top-0 z-30 -mx-3 border-b border-[var(--border-default)] bg-[var(--bg-base)]/95 px-3 py-3 backdrop-blur-xl sm:-mx-4 sm:px-4">
+            <div className="flex items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-2">
                 <Logo size="sm" showWordmark={false} className="shrink-0" />
                 <button
                   type="button"
                   onClick={() => setMyTripsModalOpen(true)}
-                  className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                  className="rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-1.5 text-xs font-bold text-[var(--text-primary)] shadow-sm"
                 >
                   Trips{trips.length > 0 ? ` (${trips.length})` : ""}
                 </button>
               </div>
               <div className="flex items-center gap-2 sm:gap-3">
+                {isCompactViewport ? <ThemeHeaderPicker /> : null}
                 {isCompactViewport ? (
                   <button
                     type="button"
                     onClick={() => setMobileSearchOpen(true)}
-                    className="flex h-11 min-w-[44px] items-center justify-center rounded-full bg-white px-4 text-sm font-bold text-[#007AFF] shadow-sm ring-1 ring-black/[0.06] dark:bg-slate-900 dark:text-[#0A84FF] dark:ring-white/[0.08]"
+                    className="flex h-10 min-w-[44px] items-center justify-center rounded-full bg-[var(--bg-card)] px-3 text-sm font-bold text-[#007AFF] shadow-sm ring-1 ring-[var(--border-default)]"
                     aria-label="Search trips and reservations"
                   >
                     Search
@@ -8869,8 +8870,8 @@ export default function TravelAssistantPage() {
           {isCompactViewport ? (
             tripsLoading ? (
               <section className="space-y-4">
-                <div className="h-48 rounded-3xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800" />
-                <div className="h-28 rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800" />
+                <div className="h-48 rounded-3xl bg-[var(--bg-card)] shadow-sm ring-1 ring-[var(--border-default)]" />
+                <div className="h-28 rounded-2xl bg-[var(--bg-card)] shadow-sm ring-1 ring-[var(--border-default)]" />
               </section>
             ) : mobilePrimaryTab === "plan" ? (
               <PlannerTab

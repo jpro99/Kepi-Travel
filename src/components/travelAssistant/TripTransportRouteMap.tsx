@@ -40,15 +40,18 @@ function SegmentCard({
   selected,
   cardRef,
   onTap,
+  cardStyle = "dark",
 }: {
   segment: TripTransportSegment;
   index: number;
   selected: boolean;
   cardRef?: (el: HTMLButtonElement | null) => void;
   onTap?: (segment: TripTransportSegment) => void;
+  cardStyle?: "dark" | "card";
 }) {
   const color = segmentStrokeColor(segment);
   const clickable = Boolean(onTap);
+  const isCard = cardStyle === "card";
 
   return (
     <button
@@ -60,10 +63,16 @@ function SegmentCard({
         selected
           ? "border-sky-400/70 bg-sky-500/15 ring-1 ring-sky-400/40"
           : segment.status === "conflict"
-            ? "border-red-400/60 bg-red-500/10"
+            ? isCard
+              ? "border-red-300 bg-red-50"
+              : "border-red-400/60 bg-red-500/10"
             : segment.booked
-              ? "border-white/10 bg-white/5 hover:bg-white/10"
-              : "border-white/10 bg-white/[0.03] opacity-80"
+              ? isCard
+                ? "border-[var(--border-default)] bg-[var(--bg-muted)] hover:opacity-90"
+                : "border-white/10 bg-white/5 hover:bg-white/10"
+              : isCard
+                ? "border-[var(--border-default)] bg-[var(--bg-card)] opacity-90"
+                : "border-white/10 bg-white/[0.03] opacity-80"
       } ${clickable ? "cursor-pointer" : "cursor-default"}`}
     >
       <div className="flex items-center gap-2">
@@ -74,25 +83,25 @@ function SegmentCard({
           {segmentKindEmoji(segment.kind)}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-black text-white">{segment.headline}</p>
-          <p className="truncate text-xs text-sky-50/80">
+          <p className={`truncate text-sm font-black ${isCard ? "text-[var(--text-primary)]" : "text-white"}`}>{segment.headline}</p>
+          <p className={`truncate text-xs ${isCard ? "text-[var(--text-muted)]" : "text-sky-50/80"}`}>
             {segment.fromCode} → {segment.toCode}
           </p>
         </div>
-        <span className="text-[10px] font-bold text-sky-200/50">#{index + 1}</span>
+        <span className={`text-[10px] font-bold ${isCard ? "text-[var(--text-muted)]" : "text-sky-200/50"}`}>#{index + 1}</span>
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5 text-xs font-semibold">
         {segment.dateDisplay ? (
-          <span className="rounded-full bg-white/15 px-2 py-0.5 text-sky-50">{segment.dateDisplay}</span>
+          <span className={`rounded-full px-2 py-0.5 ${isCard ? "bg-[var(--bg-muted)] text-[var(--text-primary)]" : "bg-white/15 text-sky-50"}`}>{segment.dateDisplay}</span>
         ) : null}
         {segment.departDisplay !== "TBD" ? (
-          <span className="rounded-full bg-white/15 px-2 py-0.5 text-sky-50">Dep {segment.departDisplay}</span>
+          <span className={`rounded-full px-2 py-0.5 ${isCard ? "bg-[var(--bg-muted)] text-[var(--text-primary)]" : "bg-white/15 text-sky-50"}`}>Dep {segment.departDisplay}</span>
         ) : null}
         {segment.arriveDisplay ? (
-          <span className="rounded-full bg-white/15 px-2 py-0.5 text-sky-50">Arr {segment.arriveDisplay}</span>
+          <span className={`rounded-full px-2 py-0.5 ${isCard ? "bg-[var(--bg-muted)] text-[var(--text-primary)]" : "bg-white/15 text-sky-50"}`}>Arr {segment.arriveDisplay}</span>
         ) : null}
       </div>
-      <p className="mt-2 text-xs leading-snug text-sky-50/75">{segment.connectionIssue ?? segment.subline}</p>
+      <p className={`mt-2 text-xs leading-snug ${isCard ? "text-[var(--text-muted)]" : "text-sky-50/75"}`}>{segment.connectionIssue ?? segment.subline}</p>
     </button>
   );
 }
@@ -443,7 +452,7 @@ export function TripTransportRouteMap({
   const sectionShell = expanded
     ? "fixed inset-0 z-[9000] flex max-h-[100dvh] flex-col overflow-hidden bg-slate-950"
     : mobileLight
-      ? "overflow-hidden rounded-3xl bg-white shadow-lg ring-1 ring-black/[0.06] scroll-mt-4"
+      ? "overflow-hidden rounded-3xl bg-[var(--bg-card)] shadow-lg ring-1 ring-[var(--border-default)] scroll-mt-4"
       : "overflow-hidden rounded-3xl bg-gradient-to-br from-[#0c2447] via-[#0f172a] to-[#020617] shadow-xl ring-1 ring-white/10 scroll-mt-4";
 
   return (
@@ -471,12 +480,12 @@ export function TripTransportRouteMap({
           </button>
         </div>
       ) : (
-      <div className={`flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4 ${mobileLight ? "border-slate-200" : "border-white/10"}`}>
+      <div className={`flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4 ${mobileLight ? "border-[var(--border-default)]" : "border-white/10"}`}>
         <div>
           <p
             className={`font-bold uppercase tracking-wide ${
               mobileLight
-                ? "text-sm text-sky-700"
+                ? "text-sm text-sky-700 dark:text-sky-400"
                 : mobileProminent
                   ? "text-base text-sky-300/80"
                   : "text-[10px] tracking-[0.22em] text-sky-300/80"
@@ -484,10 +493,10 @@ export function TripTransportRouteMap({
           >
             Trip route map
           </p>
-          <h3 className={`mt-1 font-black ${mobileLight ? "text-2xl text-slate-900" : mobileProminent ? "text-2xl text-white" : "text-lg text-white"}`}>
+          <h3 className={`mt-1 font-black ${mobileLight ? "text-2xl text-[var(--text-primary)]" : mobileProminent ? "text-2xl text-white" : "text-lg text-white"}`}>
             Your whole journey at a glance
           </h3>
-          <p className={`mt-1 ${mobileLight ? "text-[16px] text-slate-600" : mobileProminent ? "text-[15px] text-sky-100/60" : "text-xs text-sky-100/60"}`}>
+          <p className={`mt-1 ${mobileLight ? "text-[16px] text-[var(--text-muted)]" : mobileProminent ? "text-[15px] text-sky-100/60" : "text-xs text-sky-100/60"}`}>
             {mobileProminent ? "Tap map for full screen · pinch to zoom" : "Drag to pan · pinch to zoom · tap a leg below"}
           </p>
         </div>
@@ -626,7 +635,7 @@ export function TripTransportRouteMap({
       )}
 
       <div className={`${expanded ? "shrink-0 border-t border-white/10" : ""} px-5 py-4`}>
-        <div className={`mb-3 flex flex-wrap gap-3 text-xs font-bold uppercase tracking-wider ${mobileLight ? "text-slate-600" : "text-sky-50/80"}`}>
+        <div className={`mb-3 flex flex-wrap gap-3 text-xs font-bold uppercase tracking-wider ${mobileLight ? "text-[var(--text-muted)]" : "text-sky-50/80"}`}>
           <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-7 rounded-full bg-emerald-500" /> Flight booked</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-7 rounded-full bg-slate-400" /> Not booked</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-7 rounded-full bg-red-500" /> Problem</span>
@@ -672,6 +681,7 @@ export function TripTransportRouteMap({
               segment={segment}
               index={index}
               selected={selectedSegmentId === segment.id}
+              cardStyle={mobileLight ? "card" : "dark"}
               cardRef={(el) => {
                 cardRefs.current[segment.id] = el;
               }}

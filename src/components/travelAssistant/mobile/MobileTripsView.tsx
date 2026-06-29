@@ -90,6 +90,8 @@ function formatTripDates(start: string, end: string): string {
   return startLabel || endLabel;
 }
 
+const CARD = "rounded-3xl bg-[var(--bg-card)] p-5 shadow-sm ring-1 ring-[var(--border-default)]";
+
 function TicketCard({
   reservation,
   onTap,
@@ -110,17 +112,13 @@ function TicketCard({
     <button
       type="button"
       onClick={() => onTap(reservation.id)}
-      className="w-full rounded-2xl bg-white p-4 text-left shadow-sm ring-1 ring-black/[0.06] transition active:scale-[0.99] dark:bg-slate-900 dark:ring-white/[0.08]"
+      className="w-full rounded-2xl bg-[var(--bg-card)] p-4 text-left shadow-sm ring-1 ring-[var(--border-default)] transition active:scale-[0.99]"
     >
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-        {typeLabel}
-      </p>
-      <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">{reservation.title}</p>
-      <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{reservation.provider}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">{typeLabel}</p>
+      <p className="mt-1 text-lg font-bold text-[var(--text-primary)]">{reservation.title}</p>
+      <p className="mt-1 text-sm text-[var(--text-muted)]">{reservation.provider}</p>
       {reservation.confirmationCode ? (
-        <p className="mt-2 text-sm font-medium text-[#007AFF] dark:text-[#0A84FF]">
-          {reservation.confirmationCode}
-        </p>
+        <p className="mt-2 text-sm font-medium text-[#007AFF]">{reservation.confirmationCode}</p>
       ) : null}
     </button>
   );
@@ -152,15 +150,15 @@ export function MobileTripsView({
   if (!hasActiveTrip) {
     return (
       <section className="space-y-4">
-        <div className="rounded-3xl bg-white p-6 text-center shadow-sm ring-1 ring-black/[0.06] dark:bg-slate-900 dark:ring-white/[0.08]">
-          <p className="text-2xl font-black text-slate-900 dark:text-white">Your trips live here</p>
-          <p className="mt-2 text-base text-slate-600 dark:text-slate-300">
+        <div className={`${CARD} p-6 text-center`}>
+          <p className="text-2xl font-black text-[var(--text-primary)]">Your trips live here</p>
+          <p className="mt-2 text-base text-[var(--text-muted)]">
             Create a trip to see flights, hotels, and tickets in one clean place.
           </p>
           <button
             type="button"
             onClick={onCreateTrip}
-            className="mt-6 min-h-[52px] w-full rounded-2xl bg-[#007AFF] px-6 text-[17px] font-bold text-white shadow-lg shadow-blue-500/25 active:scale-[0.99] dark:bg-[#0A84FF]"
+            className="mt-6 min-h-[52px] w-full rounded-2xl bg-[#007AFF] px-6 text-[17px] font-bold text-white shadow-lg shadow-blue-500/25 active:scale-[0.99]"
           >
             Create your trip
           </button>
@@ -171,14 +169,12 @@ export function MobileTripsView({
 
   return (
     <section className="space-y-4">
-      <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-black/[0.06] dark:bg-slate-900 dark:ring-white/[0.08]">
-        <p className="text-sm font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-          Active trip
-        </p>
-        <p className="mt-1 text-[1.75rem] font-black leading-tight text-slate-900 dark:text-white">
+      <div className={CARD}>
+        <p className="text-sm font-bold uppercase tracking-wide text-[var(--text-muted)]">Active trip</p>
+        <p className="mt-1 text-[1.75rem] font-black leading-tight text-[var(--text-primary)]">
           {trip?.name ?? "Your trip"}
         </p>
-        <p className="mt-1 text-[17px] text-slate-600 dark:text-slate-300">
+        <p className="mt-1 text-[17px] text-[var(--text-muted)]">
           {trip?.destination || "Destination TBD"}
           {trip?.startDate || trip?.endDate
             ? ` · ${formatTripDates(trip?.startDate ?? "", trip?.endDate ?? "")}`
@@ -187,7 +183,7 @@ export function MobileTripsView({
         <button
           type="button"
           onClick={() => setItineraryOpen(true)}
-          className="mt-4 flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-[#007AFF] text-[17px] font-bold text-white shadow-lg shadow-blue-500/20 active:scale-[0.99] dark:bg-[#0A84FF]"
+          className="mt-4 flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-[#007AFF] text-[17px] font-bold text-white shadow-lg shadow-blue-500/20 active:scale-[0.99]"
         >
           Read full itinerary
         </button>
@@ -206,7 +202,7 @@ export function MobileTripsView({
         onReservationTap={onReservationTap}
       />
 
-      <div className="flex gap-2 rounded-2xl bg-slate-100 p-1 dark:bg-slate-800/80">
+      <div className="flex gap-2 rounded-2xl bg-[var(--bg-muted)] p-1">
         {MOBILE_TRIPS_SEGMENTS.map(({ id, label }) => (
           <button
             key={id}
@@ -214,8 +210,8 @@ export function MobileTripsView({
             onClick={() => setSegment(id)}
             className={`min-h-[48px] flex-1 rounded-xl font-bold transition ${
               segment === id
-                ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-white"
-                : "text-slate-500 dark:text-slate-400"
+                ? "bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm"
+                : "text-[var(--text-muted)]"
             } ${segment === id ? "text-[17px]" : "text-[16px]"}`}
           >
             {label}
@@ -255,13 +251,13 @@ export function MobileTripsView({
           ))}
         </div>
       ) : (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center dark:border-slate-700 dark:bg-slate-900">
-          <p className="text-base font-semibold text-slate-700 dark:text-slate-200">No other tickets yet</p>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Trains, rides, and dining show up here.</p>
+        <div className="rounded-2xl border border-dashed border-[var(--border-default)] bg-[var(--bg-card)] p-6 text-center">
+          <p className="text-base font-semibold text-[var(--text-primary)]">No other tickets yet</p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Trains, rides, and dining show up here.</p>
           <button
             type="button"
             onClick={onAddBooking}
-            className="mt-4 min-h-[48px] rounded-xl bg-slate-900 px-5 text-[15px] font-bold text-white dark:bg-white dark:text-slate-900"
+            className="mt-4 min-h-[48px] rounded-xl bg-[var(--text-primary)] px-5 text-[15px] font-bold text-[var(--bg-base)]"
           >
             Add booking
           </button>
