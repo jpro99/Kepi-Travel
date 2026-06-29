@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { FlightsTab } from "@/components/travelAssistant/FlightsTab";
 import { HotelsTab } from "@/components/travelAssistant/HotelsTab";
+import { MobileItineraryReader } from "@/components/travelAssistant/mobile/MobileItineraryReader";
 import {
   MOBILE_TRIPS_SEGMENTS,
   type MobileTripsSegment,
 } from "@/components/travelAssistant/mobile/mobileShellTypes";
+import type { StopDateRange } from "@/lib/decision/stopDates";
 
 interface TripSummary {
   name: string;
@@ -69,6 +71,8 @@ interface MobileTripsViewProps {
   onReservationTap: (id: string) => void;
   onCheckStatus: (id: string) => void;
   onDelete: (id: string) => void;
+  dayNotes?: Record<string, string>;
+  stopRanges?: StopDateRange[];
 }
 
 function formatTripDates(start: string, end: string): string {
@@ -133,8 +137,11 @@ export function MobileTripsView({
   onReservationTap,
   onCheckStatus,
   onDelete,
+  dayNotes = {},
+  stopRanges = [],
 }: MobileTripsViewProps) {
   const [segment, setSegment] = useState<MobileTripsSegment>("flights");
+  const [itineraryOpen, setItineraryOpen] = useState(false);
 
   const flights = reservations.filter((r) => r.type === "flight");
   const hotels = reservations.filter((r) => r.type === "hotel");
@@ -163,17 +170,40 @@ export function MobileTripsView({
   return (
     <section className="space-y-4">
       <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-black/[0.06] dark:bg-slate-900 dark:ring-white/[0.08]">
-        <p className="text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
-          Active trip
-        </p>
-        <p className="mt-1 text-2xl font-black text-slate-900 dark:text-white">{trip?.name ?? "Your trip"}</p>
-        <p className="mt-1 text-base text-slate-600 dark:text-slate-300">
-          {trip?.destination || "Destination TBD"}
-          {trip?.startDate || trip?.endDate
-            ? ` · ${formatTripDates(trip?.startDate ?? "", trip?.endDate ?? "")}`
-            : ""}
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+              Active trip
+            </p>
+            <p className="mt-1 text-2xl font-black text-slate-900 dark:text-white">{trip?.name ?? "Your trip"}</p>
+            <p className="mt-1 text-base text-slate-600 dark:text-slate-300">
+              {trip?.destination || "Destination TBD"}
+              {trip?.startDate || trip?.endDate
+                ? ` · ${formatTripDates(trip?.startDate ?? "", trip?.endDate ?? "")}`
+                : ""}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setItineraryOpen(true)}
+            className="shrink-0 min-h-[48px] rounded-2xl bg-[#007AFF]/10 px-4 text-[15px] font-bold text-[#007AFF] active:opacity-70 dark:bg-[#0A84FF]/15 dark:text-[#0A84FF]"
+          >
+            Itinerary
+          </button>
+        </div>
       </div>
+
+      <MobileItineraryReader
+        open={itineraryOpen}
+        onClose={() => setItineraryOpen(false)}
+        tripName={trip?.name ?? "Your trip"}
+        tripStartDate={trip?.startDate ?? null}
+        tripEndDate={trip?.endDate ?? null}
+        reservations={reservations}
+        dayNotes={dayNotes}
+        stopRanges={stopRanges}
+        onReservationTap={onReservationTap}
+      />
 
       <div className="flex gap-2 rounded-2xl bg-slate-100 p-1 dark:bg-slate-800/80">
         {MOBILE_TRIPS_SEGMENTS.map(({ id, label }) => (
@@ -195,6 +225,9 @@ export function MobileTripsView({
       {segment === "flights" ? (
         <FlightsTab
           reservations={flights}
+          transportReservations={reservations.filter((r) =>
+            ["flight", "train", "ride"].includes(r.type),
+          )}
           liveStatus={liveStatus}
           locationStatus={locationStatus}
           nearestAirport={nearestAirport}
@@ -207,6 +240,7 @@ export function MobileTripsView({
       ) : segment === "hotels" ? (
         <HotelsTab
           reservations={hotels}
+          mapReservations={hotels}
           onReservationTap={onReservationTap}
           onCheckStatus={onCheckStatus}
           onDelete={onDelete}

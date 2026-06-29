@@ -375,11 +375,10 @@ export function HotelsTab({
         </button>
       )}
 
-      {!simplifiedMobile ? (
       <TripHotelStayMap
         reservations={mapReservations ?? reservations}
-        staySegments={staySegments}
-        plannedStayCities={plannedStayCities}
+        staySegments={simplifiedMobile ? [] : staySegments}
+        plannedStayCities={simplifiedMobile ? [] : plannedStayCities}
         onStayTap={(point) => {
           if (point.reservationId) {
             onReservationTap(point.reservationId);
@@ -391,7 +390,6 @@ export function HotelsTab({
           }
         }}
       />
-      ) : null}
     </section>
   );
 }

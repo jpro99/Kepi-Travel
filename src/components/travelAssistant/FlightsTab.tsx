@@ -828,14 +828,12 @@ export function FlightsTab({
         </button>
       )}
 
-      {!simplifiedMobile ? (
       <TripTransportRouteMap
         reservations={transportReservations ?? reservations}
         plannedFlightLegs={plannedFlightLegs}
-        selfCheck={itinerarySelfCheck}
+        selfCheck={simplifiedMobile ? undefined : itinerarySelfCheck}
         onSegmentTap={onReservationTap}
       />
-      ) : null}
     </section>
   );
 }

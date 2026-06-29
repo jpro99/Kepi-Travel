@@ -8926,6 +8926,8 @@ export default function TravelAssistantPage() {
                 liveStatus={flightStatusCheckByReservationId}
                 locationStatus={guidanceLocationStatus}
                 nearestAirport={guidanceNearestAirport}
+                dayNotes={itineraryPrefs.dayNotes}
+                stopRanges={itineraryStopRanges}
                 onCreateTrip={() => {
                   void handleCreateTrip();
                 }}

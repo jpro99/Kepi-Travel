@@ -47,6 +47,15 @@ export function HotelDetailSheet({
   const [phone, setPhone] = useState("");
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [verifiedQuote, setVerifiedQuote] = useState<{
+    guestTotalUsd: number;
+    netTotalUsd: number;
+    isMemberRate: boolean;
+    roomName: string | null;
+    priceChanged: boolean;
+    deltaUsd: number | null;
+  } | null>(null);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [detailMedia, setDetailMedia] = useState<HotelDetailMedia>(() =>
     mergeHotelDetailMedia(null, hotel.photos.filter(Boolean)),
@@ -138,6 +147,58 @@ export function HotelDetailSheet({
   const kepiBookable = Boolean(hotel.kepiBookable && hotel.bookOfferId && kepiLiveRate) && payMode !== "points";
   const nightlyPts = pointsPerNight(hotel);
   const pointsMode = payMode === "points";
+  const displayCheckoutTotal = verifiedQuote?.guestTotalUsd ?? hotel.totalPrice;
+
+  const fetchVerifiedQuote = async (): Promise<boolean> => {
+    if (!hotel.bookOfferId) return false;
+    setQuoteLoading(true);
+    setCheckoutError(null);
+    setVerifiedQuote(null);
+    try {
+      const response = await fetch("/api/hotels/checkout/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          offerId: hotel.bookOfferId,
+          searchTotalUsd: hotel.totalPrice,
+        }),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        guestTotalUsd?: number;
+        netTotalUsd?: number;
+        isMemberRate?: boolean;
+        roomName?: string | null;
+        priceChanged?: boolean;
+        deltaUsd?: number | null;
+      };
+      if (!response.ok || payload.guestTotalUsd === undefined) {
+        setCheckoutError(payload.error ?? "Could not verify live price.");
+        return false;
+      }
+      setVerifiedQuote({
+        guestTotalUsd: payload.guestTotalUsd,
+        netTotalUsd: payload.netTotalUsd ?? payload.guestTotalUsd,
+        isMemberRate: Boolean(payload.isMemberRate),
+        roomName: payload.roomName ?? null,
+        priceChanged: Boolean(payload.priceChanged),
+        deltaUsd: payload.deltaUsd ?? null,
+      });
+      return true;
+    } catch {
+      setCheckoutError("Connection error — try again.");
+      return false;
+    } finally {
+      setQuoteLoading(false);
+    }
+  };
+
+  const openKepiCheckout = (): void => {
+    void (async () => {
+      const ok = await fetchVerifiedQuote();
+      if (ok) setCheckoutOpen(true);
+    })();
+  };
   const hotelChain = hotel.chainName ?? (hotel.name.toLowerCase().includes("hyatt") ? "Hyatt" : "");
   const eliteCheckInTip = hotelChain ? hotelCheckInGuidance(travelProfile, hotelChain) : null;
 
@@ -325,6 +386,37 @@ export function HotelDetailSheet({
 
             {kepiBookable && checkoutOpen ? (
               <div className="space-y-2 rounded-xl border border-sky-200 bg-sky-50/60 p-3 dark:border-sky-900 dark:bg-sky-950/40">
+                {verifiedQuote ? (
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-900">
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Verified total</p>
+                    <p className="mt-1 text-2xl font-black text-slate-900 dark:text-white">
+                      ${Math.round(verifiedQuote.guestTotalUsd)}
+                    </p>
+                    {verifiedQuote.roomName ? (
+                      <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{verifiedQuote.roomName}</p>
+                    ) : null}
+                    {verifiedQuote.priceChanged && verifiedQuote.deltaUsd !== null ? (
+                      <p
+                        className={`mt-2 text-sm font-semibold ${
+                          verifiedQuote.deltaUsd > 0 ? "text-amber-700 dark:text-amber-300" : "text-emerald-700 dark:text-emerald-300"
+                        }`}
+                      >
+                        {verifiedQuote.deltaUsd > 0
+                          ? `Price updated +$${Math.round(verifiedQuote.deltaUsd)} since search — this is the live rate we'll charge.`
+                          : `Price dropped $${Math.abs(Math.round(verifiedQuote.deltaUsd))} — you're getting a better deal.`}
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">
+                        Live rate confirmed — matches search.
+                      </p>
+                    )}
+                    {verifiedQuote.isMemberRate ? (
+                      <p className="mt-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">Member at-cost rate</p>
+                    ) : null}
+                  </div>
+                ) : quoteLoading ? (
+                  <p className="text-sm text-slate-600 dark:text-slate-300">Checking live price…</p>
+                ) : null}
                 <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Guest details for booking</p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <input
@@ -360,15 +452,22 @@ export function HotelDetailSheet({
                 <div className="grid gap-2 sm:grid-cols-2">
                   <button
                     type="button"
-                    disabled={checkoutBusy}
+                    disabled={checkoutBusy || quoteLoading || !verifiedQuote}
                     onClick={() => void startKepiCheckout()}
                     className="rounded-xl bg-sky-600 py-3 text-sm font-black text-white hover:bg-sky-500 disabled:opacity-60"
                   >
-                    {checkoutBusy ? "Preparing…" : `Pay $${Math.round(hotel.totalPrice)} with Stripe →`}
+                    {checkoutBusy
+                      ? "Preparing…"
+                      : quoteLoading
+                        ? "Verifying price…"
+                        : `Pay $${Math.round(displayCheckoutTotal)} with Stripe →`}
                   </button>
                   <button
                     type="button"
-                    onClick={() => setCheckoutOpen(false)}
+                    onClick={() => {
+                      setCheckoutOpen(false);
+                      setVerifiedQuote(null);
+                    }}
                     className="rounded-xl border border-slate-300 py-3 text-sm font-bold text-slate-700 dark:border-slate-600 dark:text-slate-200"
                   >
                     Back
@@ -389,10 +488,11 @@ export function HotelDetailSheet({
                 ) : kepiBookable ? (
                   <button
                     type="button"
-                    onClick={() => setCheckoutOpen(true)}
-                    className="flex items-center justify-center rounded-xl bg-sky-600 py-3 text-sm font-black text-white hover:bg-sky-500"
+                    disabled={quoteLoading}
+                    onClick={openKepiCheckout}
+                    className="flex items-center justify-center rounded-xl bg-sky-600 py-3 text-sm font-black text-white hover:bg-sky-500 disabled:opacity-60"
                   >
-                    Book with Kepi · ${Math.round(hotel.totalPrice)}
+                    {quoteLoading ? "Checking price…" : `Book with Kepi · from $${Math.round(hotel.totalPrice)}`}
                   </button>
                 ) : (
                   <a
