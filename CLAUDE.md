@@ -83,3 +83,12 @@ Do not loop on the same failed fix. Do not touch unrelated files. Do not claim f
 - TDZ rule: never shadow function names with local variables in same scope
 - Clerk middleware: `src/proxy.ts` — add public routes there
 - MapLibre: inline style objects only (CSP)
+
+## Mobile UI rule (required)
+
+When building any mobile overlay, sheet, reader, or full-screen view:
+- Use full viewport height (`100dvh`) edge-to-edge — no cramped nested cards.
+- Use large, readable typography (20px+ body, 26px+ primary content) so users never need to pinch-zoom.
+- Provide one unified vertical scroll area with `-webkit-overflow-scrolling: touch`.
+- Never set `document.body.style.overflow = "hidden"` on mobile overlays — it breaks pinch-zoom scrolling on iOS.
+- Apple-style: clean headers, generous tap targets (48px+), cream/paper or system gray backgrounds.

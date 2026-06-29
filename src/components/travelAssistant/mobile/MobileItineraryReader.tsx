@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { MobileLinedDayEditor } from "@/components/travelAssistant/mobile/MobileLinedDayEditor";
 import type { StopDateRange } from "@/lib/decision/stopDates";
@@ -11,8 +11,10 @@ import {
 } from "@/lib/travelAssistant/dayPlanLines";
 import { buildFullTripDayKeys } from "@/lib/travelAssistant/tripTimelinePlanning";
 
-const APPLE_FONT =
-  '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", sans-serif';
+import {
+  MOBILE_OVERLAY_SCROLL,
+  MOBILE_OVERLAY_SHELL,
+} from "@/lib/ui/mobileFullscreen";
 
 type CalendarView = "daily" | "weekly" | "monthly";
 
@@ -177,21 +179,6 @@ export function MobileItineraryReader({
 
   const selectedDay = selectedDateKey ? dayByKey.get(selectedDateKey) : null;
 
-  useEffect(() => {
-    if (!open) {
-      setSelectedDateKey(null);
-      return;
-    }
-    const prevHtml = document.documentElement.style.overflow;
-    const prevBody = document.body.style.overflow;
-    document.documentElement.style.overflow = "hidden";
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.documentElement.style.overflow = prevHtml;
-      document.body.style.overflow = prevBody;
-    };
-  }, [open]);
-
   if (!open || typeof document === "undefined") return null;
 
   const openDay = (dateKey: string): void => setSelectedDateKey(dateKey);
@@ -199,62 +186,61 @@ export function MobileItineraryReader({
   return createPortal(
     <>
       <div
-        className="fixed inset-0 z-[120] flex h-[100dvh] max-h-[100dvh] flex-col bg-[#F2F2F7] dark:bg-black"
-        style={{ fontFamily: APPLE_FONT, paddingTop: "env(safe-area-inset-top)" }}
+        className="fixed inset-0 z-[120] flex flex-col bg-[#F2F2F7] dark:bg-black"
+        style={MOBILE_OVERLAY_SHELL}
         role="dialog"
         aria-modal="true"
         aria-label={`${tripName} itinerary`}
       >
-        <header className="shrink-0 border-b border-black/[0.08] bg-[#F2F2F7]/95 px-4 py-3 backdrop-blur-xl dark:border-white/[0.08] dark:bg-black/90">
-          <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
+        <header className="sticky top-0 z-10 shrink-0 border-b border-black/[0.08] bg-[#F2F2F7]/95 px-4 py-3 backdrop-blur-xl dark:border-white/[0.08] dark:bg-black/90">
+          <div className="flex items-center justify-between gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="min-h-[44px] rounded-full px-4 text-[17px] font-semibold text-[#007AFF]"
+              className="min-h-[52px] rounded-full px-4 text-[20px] font-semibold text-[#007AFF]"
             >
               Done
             </button>
-            <p className="text-[15px] font-bold text-slate-700 dark:text-slate-200">Itinerary</p>
-            <span className="w-[72px]" aria-hidden />
+            <p className="text-[18px] font-bold text-slate-700 dark:text-slate-200">Itinerary</p>
+            <span className="w-[80px]" aria-hidden />
           </div>
         </header>
 
-        <div className="shrink-0 px-4 pb-3 pt-4">
-          <h1 className="text-[32px] font-bold leading-tight text-slate-900 dark:text-white">{tripName}</h1>
-          {tripStartDate && tripEndDate ? (
-            <p className="mt-1 text-[17px] text-slate-600 dark:text-slate-300">
-              {formatDayHeading(tripStartDate).monthDay} – {formatDayHeading(tripEndDate).monthDay}
-              <span className="text-slate-400"> · {days.length} days</span>
-            </p>
-          ) : null}
+        <div className="min-h-0 flex-1" style={MOBILE_OVERLAY_SCROLL}>
+          <div className="px-4 pb-[calc(5rem+env(safe-area-inset-bottom))] pt-4">
+            <h1 className="text-[34px] font-bold leading-tight text-slate-900 dark:text-white">{tripName}</h1>
+            {tripStartDate && tripEndDate ? (
+              <p className="mt-1 text-[20px] text-slate-600 dark:text-slate-300">
+                {formatDayHeading(tripStartDate).monthDay} – {formatDayHeading(tripEndDate).monthDay}
+                <span className="text-slate-400"> · {days.length} days</span>
+              </p>
+            ) : null}
 
-          <div className="mt-4 flex gap-1 rounded-2xl bg-slate-200/80 p-1 dark:bg-slate-800">
-            {(["daily", "weekly", "monthly"] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setCalendarView(mode)}
-                className={`min-h-[44px] flex-1 rounded-xl text-[16px] font-bold capitalize transition ${
-                  calendarView === mode
-                    ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-white"
-                    : "text-slate-600 dark:text-slate-400"
-                }`}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
-        </div>
+            <div className="mt-4 flex gap-1.5 rounded-2xl bg-slate-200/80 p-1.5 dark:bg-slate-800">
+              {(["daily", "weekly", "monthly"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setCalendarView(mode)}
+                  className={`min-h-[50px] flex-1 rounded-xl text-[18px] font-bold capitalize transition ${
+                    calendarView === mode
+                      ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-white"
+                      : "text-slate-600 dark:text-slate-400"
+                  }`}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain touch-pan-y">
-          <div className="mx-auto max-w-lg px-4 pb-[calc(5rem+env(safe-area-inset-bottom))] pt-2">
+            <div className="pt-4">
             {days.length === 0 ? (
               <div className="rounded-2xl bg-white p-8 text-center dark:bg-slate-900">
-                <p className="text-[19px] font-semibold text-slate-800 dark:text-slate-100">Set trip dates first</p>
-                <p className="mt-2 text-[17px] text-slate-500">Your day-by-day notebook appears here.</p>
+                <p className="text-[22px] font-semibold text-slate-800 dark:text-slate-100">Set trip dates first</p>
+                <p className="mt-2 text-[19px] text-slate-500">Your day-by-day notebook appears here.</p>
               </div>
             ) : calendarView === "daily" ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {days.map((day) => (
                   <button
                     key={day.dateKey}
@@ -264,22 +250,22 @@ export function MobileItineraryReader({
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-[15px] font-bold text-[#007AFF]">Day {day.index + 1}</p>
-                        <p className="mt-0.5 text-[22px] font-bold text-slate-900 dark:text-white">
+                        <p className="text-[17px] font-bold text-[#007AFF]">Day {day.index + 1}</p>
+                        <p className="mt-0.5 text-[26px] font-bold text-slate-900 dark:text-white">
                           {day.heading.weekday}
                         </p>
-                        <p className="text-[17px] text-slate-600 dark:text-slate-300">{day.heading.monthDay}</p>
+                        <p className="text-[19px] text-slate-600 dark:text-slate-300">{day.heading.monthDay}</p>
                       </div>
-                      <span className="text-[22px] text-slate-300">›</span>
+                      <span className="text-[28px] text-slate-300">›</span>
                     </div>
                     {day.stayCity ? (
-                      <p className="mt-2 text-[16px] font-medium text-slate-600 dark:text-slate-300">📍 {day.stayCity}</p>
+                      <p className="mt-2 text-[18px] font-medium text-slate-600 dark:text-slate-300">📍 {day.stayCity}</p>
                     ) : null}
-                    <p className="mt-3 text-[18px] leading-snug text-slate-800 dark:text-slate-100">
+                    <p className="mt-3 text-[20px] leading-snug text-slate-800 dark:text-slate-100">
                       {dayPreview(day.note, day.booked.length)}
                     </p>
                     {day.booked.length > 0 ? (
-                      <p className="mt-2 text-[15px] font-semibold text-emerald-700 dark:text-emerald-400">
+                      <p className="mt-2 text-[17px] font-semibold text-emerald-700 dark:text-emerald-400">
                         {day.booked.length} confirmed · tap to edit on lined paper
                       </p>
                     ) : null}
@@ -311,10 +297,10 @@ export function MobileItineraryReader({
                                 : "bg-white text-slate-800 ring-1 ring-black/[0.06] dark:bg-slate-900 dark:text-white"
                             }`}
                           >
-                            <span className="text-[11px] font-bold uppercase opacity-80">
+                            <span className="text-[12px] font-bold uppercase opacity-80">
                               {day.heading.weekday.slice(0, 3)}
                             </span>
-                            <span className="text-[20px] font-black leading-none">
+                            <span className="text-[22px] font-black leading-none">
                               {new Date(`${dateKey}T12:00:00`).getDate()}
                             </span>
                           </button>
@@ -367,7 +353,7 @@ export function MobileItineraryReader({
                         type="button"
                         disabled={!active}
                         onClick={() => active && openDay(cell.dateKey)}
-                        className={`flex aspect-square flex-col items-center justify-center rounded-xl text-[18px] font-bold ${
+                        className={`flex aspect-square flex-col items-center justify-center rounded-xl text-[20px] font-bold ${
                           !active
                             ? "text-slate-300 dark:text-slate-700"
                             : day && (day.booked.length > 0 || day.planLines.length > 0)
@@ -382,6 +368,7 @@ export function MobileItineraryReader({
                 </div>
               </div>
             )}
+            </div>
           </div>
         </div>
       </div>
