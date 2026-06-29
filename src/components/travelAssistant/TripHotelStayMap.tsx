@@ -7,6 +7,7 @@ import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import { useMobileMapExpand, useMapResizeOnLayoutChange } from "@/lib/ui/useMobileMapExpand";
+import { useMapUserViewport } from "@/lib/ui/useMapUserViewport";
 import type { PlannedStayCity } from "@/lib/travelAssistant/tripPlanBooking";
 import {
   HOTEL_STAY_SOURCE,
@@ -24,6 +25,7 @@ interface TripHotelStayMapProps {
   onStayTap?: (point: HotelStayMapPoint) => void;
   mobileProminent?: boolean;
   sectionId?: string;
+  onOpenNotebook?: () => void;
 }
 
 function StayCard({
@@ -117,6 +119,7 @@ export function TripHotelStayMap({
   onStayTap,
   mobileProminent = false,
   sectionId,
+  onOpenNotebook,
 }: TripHotelStayMapProps) {
   const points = useMemo(
     () => buildHotelStayMapPoints({ reservations, staySegments, plannedStayCities }),
@@ -141,6 +144,13 @@ export function TripHotelStayMap({
   const appliedStyleRef = useRef<"streets" | "hybrid" | null>(null);
   const { expanded, expand, collapse } = useMobileMapExpand(mobileProminent);
   useMapResizeOnLayoutChange(expanded, mapRef);
+  const { bindUserInteraction, shouldAutoFit, allowManualFit } = useMapUserViewport();
+  const unbindInteractionRef = useRef<(() => void) | null>(null);
+
+  const pointsFingerprint = useMemo(
+    () => points.map((p) => `${p.id}:${p.lat}:${p.lon}`).join("|"),
+    [points],
+  );
 
   const bookedCount = points.filter((p) => p.booked).length;
   const unbookedCount = points.length - bookedCount;
@@ -217,17 +227,24 @@ export function TripHotelStayMap({
     }
   }, []);
 
+  const focusStay = useCallback(async (point: HotelStayMapPoint) => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.flyTo({
+      center: [point.lon, point.lat],
+      zoom: 14,
+      duration: 700,
+      essential: true,
+    });
+  }, []);
+
   const handleStaySelect = useCallback(
     (point: HotelStayMapPoint) => {
       setSelectedStayId(point.id);
-      void fitWholeTrip(700);
-      onStayTap?.(point);
+      void focusStay(point);
     },
-    [fitWholeTrip, onStayTap],
+    [focusStay],
   );
-
-  const handleStaySelectRef = useRef(handleStaySelect);
-  handleStaySelectRef.current = handleStaySelect;
 
   useEffect(() => {
     if (points.length === 0 || !containerRef.current) return;
@@ -263,30 +280,38 @@ export function TripHotelStayMap({
         if (cancelled) return;
         appliedStyleRef.current = "streets";
         installStayLayers(map);
+        unbindInteractionRef.current?.();
+        unbindInteractionRef.current = bindUserInteraction(map);
         setMapReady(true);
         void fitWholeTrip(0);
         void renderStayMarkers();
       });
-      map.on("remove", () => unbindResize());
+      map.on("remove", () => {
+        unbindInteractionRef.current?.();
+        unbindInteractionRef.current = null;
+        unbindResize();
+      });
     })();
 
     return () => {
       cancelled = true;
+      unbindInteractionRef.current?.();
+      unbindInteractionRef.current = null;
       for (const marker of markersRef.current) marker.remove();
       markersRef.current = [];
       mapRef.current?.remove();
       mapRef.current = null;
       setMapReady(false);
     };
-  }, [points.length, maptilerKey, fitWholeTrip, installStayLayers, renderStayMarkers]);
+  }, [points.length, maptilerKey, fitWholeTrip, installStayLayers, renderStayMarkers, bindUserInteraction]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
     installStayLayers(map);
     void renderStayMarkers();
-    void fitWholeTrip();
-  }, [pointGeoJson, installStayLayers, renderStayMarkers, fitWholeTrip, mapReady]);
+    if (shouldAutoFit(pointsFingerprint)) void fitWholeTrip();
+  }, [pointsFingerprint, installStayLayers, renderStayMarkers, fitWholeTrip, mapReady, shouldAutoFit]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -327,7 +352,10 @@ export function TripHotelStayMap({
           <p className="text-[17px] font-bold text-white">Stay map</p>
           <button
             type="button"
-            onClick={() => void fitWholeTrip()}
+            onClick={() => {
+              allowManualFit();
+              void fitWholeTrip();
+            }}
             className="min-h-[48px] rounded-full px-4 text-[16px] font-bold text-white/90"
           >
             Fit all
@@ -375,7 +403,10 @@ export function TripHotelStayMap({
           {!expanded ? (
           <button
             type="button"
-            onClick={() => void fitWholeTrip()}
+            onClick={() => {
+              allowManualFit();
+              void fitWholeTrip();
+            }}
             className={`rounded-full px-3 py-1.5 text-[11px] font-bold shadow backdrop-blur ${
               mobileLight ? "bg-white text-slate-800 ring-1 ring-black/10" : "bg-slate-950/80 text-white ring-1 ring-white/20"
             }`}
@@ -446,6 +477,16 @@ export function TripHotelStayMap({
           <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-7 rounded-full bg-slate-400" /> Not booked</span>
         </div>
 
+        {mobileProminent && onOpenNotebook ? (
+          <button
+            type="button"
+            onClick={onOpenNotebook}
+            className="mb-4 flex min-h-[56px] w-full items-center justify-center rounded-2xl bg-[#faf6ee] px-4 text-[18px] font-bold text-[#1c1917] shadow-md ring-2 ring-[#e8e0d0]"
+          >
+            📓 Open stay notebook — lined paper
+          </button>
+        ) : null}
+
         <div className="flex gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {points.map((point, index) => (
             <StayCard
@@ -454,7 +495,10 @@ export function TripHotelStayMap({
               index={index}
               selected={selectedStayId === point.id}
               cardStyle={mobileLight ? "card" : "dark"}
-              onTap={handleStaySelect}
+              onTap={(p) => {
+                handleStaySelect(p);
+                if (onStayTap && p.reservationId) onStayTap(p);
+              }}
             />
           ))}
         </div>

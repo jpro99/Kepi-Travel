@@ -251,6 +251,7 @@ export function useItineraryPanelPrefs(tripId: string | null) {
   const [viewMode, setViewMode] = useState<ItineraryViewMode>("edit");
   const [panelWidth, setPanelWidth] = useState(420);
   const [dayNotes, setDayNotes] = useState<Record<string, string>>({});
+  const [hotelNotebookNote, setHotelNotebookNote] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -267,8 +268,11 @@ export function useItineraryPanelPrefs(tripId: string | null) {
     try {
       const raw = window.localStorage.getItem(`kepi:day-notes:${tripId}`);
       if (raw) setDayNotes(JSON.parse(raw) as Record<string, string>);
+      const hotelRaw = window.localStorage.getItem(`kepi:hotel-notebook:${tripId}`);
+      if (hotelRaw) setHotelNotebookNote(hotelRaw);
     } catch {
       setDayNotes({});
+      setHotelNotebookNote("");
     }
   }, [tripId]);
 
@@ -302,6 +306,13 @@ export function useItineraryPanelPrefs(tripId: string | null) {
     [tripId],
   );
 
+  const updateHotelNotebookNote = (value: string): void => {
+    setHotelNotebookNote(value);
+    if (tripId && typeof window !== "undefined") {
+      window.localStorage.setItem(`kepi:hotel-notebook:${tripId}`, value);
+    }
+  };
+
   return {
     viewMode,
     setViewMode: persistViewMode,
@@ -310,5 +321,7 @@ export function useItineraryPanelPrefs(tripId: string | null) {
     dayNotes,
     updateDayNote,
     replaceDayNotes,
+    hotelNotebookNote,
+    updateHotelNotebookNote,
   };
 }

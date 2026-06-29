@@ -8930,6 +8930,8 @@ export default function TravelAssistantPage() {
                 dayNotes={itineraryPrefs.dayNotes}
                 stopRanges={itineraryStopRanges}
                 onDayNoteChange={itineraryPrefs.updateDayNote}
+                hotelNotebookNote={itineraryPrefs.hotelNotebookNote}
+                onHotelNotebookChange={itineraryPrefs.updateHotelNotebookNote}
                 onCreateTrip={() => {
                   void handleCreateTrip();
                 }}

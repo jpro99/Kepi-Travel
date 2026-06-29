@@ -21,6 +21,7 @@ import {
 import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import { useMobileMapExpand, useMapResizeOnLayoutChange } from "@/lib/ui/useMobileMapExpand";
+import { useMapUserViewport } from "@/lib/ui/useMapUserViewport";
 import type { PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
 import type { ItinerarySelfCheckResult } from "@/lib/travelAssistant/itinerarySelfCheck";
 
@@ -171,6 +172,13 @@ export function TripTransportRouteMap({
   routeRef.current = route;
   const { expanded, expand, collapse } = useMobileMapExpand(mobileProminent);
   useMapResizeOnLayoutChange(expanded, mapRef);
+  const { bindUserInteraction, shouldAutoFit, allowManualFit } = useMapUserViewport();
+  const unbindInteractionRef = useRef<(() => void) | null>(null);
+
+  const routeFingerprint = useMemo(
+    () => route.segments.map((s) => `${s.id}:${s.fromCode}:${s.toCode}`).join("|"),
+    [route.segments],
+  );
 
   useEffect(() => {
     void fetch("/api/config")
@@ -377,11 +385,17 @@ export function TripTransportRouteMap({
         if (cancelled) return;
         appliedStyleRef.current = "streets";
         installRouteLayers(map);
+        unbindInteractionRef.current?.();
+        unbindInteractionRef.current = bindUserInteraction(map);
         setMapReady(true);
         void fitWholeTrip(0);
         void renderAirportMarkers();
       });
-      map.on("remove", () => unbindResize());
+      map.on("remove", () => {
+        unbindInteractionRef.current?.();
+        unbindInteractionRef.current = null;
+        unbindResize();
+      });
 
       map.on("click", "trip-route-hit", (event) => {
         const feature = event.features?.[0];
@@ -401,13 +415,15 @@ export function TripTransportRouteMap({
 
     return () => {
       cancelled = true;
+      unbindInteractionRef.current?.();
+      unbindInteractionRef.current = null;
       for (const marker of airportMarkersRef.current) marker.remove();
       airportMarkersRef.current = [];
       mapRef.current?.remove();
       mapRef.current = null;
       setMapReady(false);
     };
-  }, [hasGeo, maptilerKey]);
+  }, [hasGeo, maptilerKey, bindUserInteraction, fitWholeTrip, installRouteLayers, renderAirportMarkers]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -415,9 +431,9 @@ export function TripTransportRouteMap({
     if (map.getStyle()?.sprite !== undefined || map.isStyleLoaded()) {
       installRouteLayers(map);
       void renderAirportMarkers();
-      void fitWholeTrip();
+      if (shouldAutoFit(routeFingerprint)) void fitWholeTrip();
     }
-  }, [routeGeoJson, airportGeoJson, installRouteLayers, renderAirportMarkers, fitWholeTrip, mapReady]);
+  }, [routeFingerprint, installRouteLayers, renderAirportMarkers, fitWholeTrip, mapReady, shouldAutoFit]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -473,7 +489,10 @@ export function TripTransportRouteMap({
           <p className="text-[17px] font-bold text-white">Route map</p>
           <button
             type="button"
-            onClick={() => void fitWholeTrip()}
+            onClick={() => {
+              allowManualFit();
+              void fitWholeTrip();
+            }}
             className="min-h-[48px] rounded-full px-4 text-[16px] font-bold text-white/90"
           >
             Fit trip
@@ -563,7 +582,10 @@ export function TripTransportRouteMap({
             {!expanded ? (
             <button
               type="button"
-              onClick={() => void fitWholeTrip()}
+              onClick={() => {
+              allowManualFit();
+              void fitWholeTrip();
+            }}
               className={`rounded-full px-3 py-1.5 text-[11px] font-bold shadow backdrop-blur ${
                 mobileLight ? "bg-white text-slate-800 ring-1 ring-black/10" : "bg-slate-950/80 text-white ring-1 ring-white/20"
               }`}

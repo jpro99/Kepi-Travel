@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { TripHotelStayMap } from "@/components/travelAssistant/TripHotelStayMap";
+import { MobileHotelStayNotebook } from "@/components/travelAssistant/mobile/MobileHotelStayNotebook";
 import { TravelFitEarnBar } from "@/components/travelAssistant/TravelFitEarnBar";
 import { TripStayPlanner } from "@/components/travelAssistant/TripStayPlanner";
 import { TripHotelCityPicker } from "@/components/travelAssistant/TripHotelCityPicker";
@@ -56,6 +58,8 @@ interface HotelsTabProps {
   usuallySkipsConnections?: boolean;
   /** Trips tab on phone: bigger type, fewer widgets. */
   simplifiedMobile?: boolean;
+  hotelNotebookNote?: string;
+  onHotelNotebookChange?: (value: string) => void;
   travelFitReservations?: Array<{
     id: string;
     type: string;
@@ -126,11 +130,14 @@ export function HotelsTab({
   tripId,
   usuallySkipsConnections,
   simplifiedMobile = false,
+  hotelNotebookNote = "",
+  onHotelNotebookChange,
   travelFitReservations = [],
 }: HotelsTabProps) {
   const type = hotelCardTypography(simplifiedMobile);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showPast, setShowPast] = useState(false);
+  const [notebookOpen, setNotebookOpen] = useState(false);
 
   const { upcoming, past } = useMemo(() => ({
     upcoming: reservations.filter(r => !isPastCheckout(r.checkOutDate ?? r.localTime ?? "")),
@@ -160,6 +167,7 @@ export function HotelsTab({
           }}
           mobileProminent
           sectionId="trip-hotel-map"
+          onOpenNotebook={() => setNotebookOpen(true)}
         />
       ) : null}
 
@@ -247,6 +255,16 @@ export function HotelsTab({
       )}
 
       {/* Hotel cards */}
+      {simplifiedMobile && onHotelNotebookChange ? (
+        <button
+          type="button"
+          onClick={() => setNotebookOpen(true)}
+          className="flex min-h-[56px] w-full items-center justify-center rounded-2xl bg-[#faf6ee] px-4 text-[18px] font-bold text-[#1c1917] shadow-md ring-2 ring-[#e8e0d0]"
+        >
+          📓 Your stays — open lined paper notebook
+        </button>
+      ) : null}
+
       <div className="space-y-3">
         {shown.map(r => {
           const checkIn = r.localTime ?? "";
@@ -405,6 +423,20 @@ export function HotelsTab({
         }}
       />
       ) : null}
+
+      {notebookOpen && onHotelNotebookChange && typeof document !== "undefined"
+        ? createPortal(
+            <MobileHotelStayNotebook
+              tripName={tripName ?? "Your trip"}
+              reservations={reservations}
+              savedNote={hotelNotebookNote}
+              onSave={onHotelNotebookChange}
+              onClose={() => setNotebookOpen(false)}
+              onReservationTap={onReservationTap}
+            />,
+            document.body,
+          )
+        : null}
     </section>
   );
 }

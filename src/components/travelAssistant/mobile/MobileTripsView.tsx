@@ -74,6 +74,8 @@ interface MobileTripsViewProps {
   dayNotes?: Record<string, string>;
   stopRanges?: StopDateRange[];
   onDayNoteChange?: (dateKey: string, value: string) => void;
+  hotelNotebookNote?: string;
+  onHotelNotebookChange?: (value: string) => void;
 }
 
 function formatTripDates(start: string, end: string): string {
@@ -139,6 +141,8 @@ export function MobileTripsView({
   dayNotes = {},
   stopRanges = [],
   onDayNoteChange,
+  hotelNotebookNote = "",
+  onHotelNotebookChange,
 }: MobileTripsViewProps) {
   const [segment, setSegment] = useState<MobileTripsSegment>("flights");
   const [itineraryOpen, setItineraryOpen] = useState(false);
@@ -238,11 +242,14 @@ export function MobileTripsView({
         <HotelsTab
           reservations={hotels}
           mapReservations={hotels}
+          tripName={trip?.name ?? null}
           onReservationTap={onReservationTap}
           onCheckStatus={onCheckStatus}
           onDelete={onDelete}
           onAdd={onAddBooking}
           simplifiedMobile
+          hotelNotebookNote={hotelNotebookNote}
+          onHotelNotebookChange={onHotelNotebookChange}
         />
       ) : tickets.length > 0 ? (
         <div className="space-y-3">
