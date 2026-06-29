@@ -1,37 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-type ThemeMode = "light" | "dark";
-const STORAGE_KEY = "kepi-theme";
-const META_COLORS = { dark: "#0d1117", light: "#f8f9fc" };
-
-function applyTheme(theme: ThemeMode): void {
-  if (theme === "dark") {
-    document.documentElement.classList.add("dark");
-  } else {
-    document.documentElement.classList.remove("dark");
-  }
-  // Update browser chrome color
-  const meta = document.querySelector("meta[name='theme-color']");
-  if (meta) meta.setAttribute("content", META_COLORS[theme]);
-}
+import {
+  applyTheme,
+  readStoredTheme,
+  setTheme,
+  subscribeTheme,
+  type ThemeMode,
+} from "@/lib/theme/kepiTheme";
 
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<ThemeMode>(() => {
-    if (typeof window === "undefined") return "light";
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored === "dark" || stored === "light") return stored;
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  });
+  const [theme, setThemeState] = useState<ThemeMode>(() => readStoredTheme());
 
-  useEffect(() => { applyTheme(theme); }, [theme]);
+  useEffect(() => {
+    applyTheme(theme);
+    return subscribeTheme((next) => setThemeState(next));
+  }, [theme]);
 
   const toggleTheme = (): void => {
     const next: ThemeMode = theme === "dark" ? "light" : "dark";
+    setThemeState(next);
     setTheme(next);
-    applyTheme(next);
-    window.localStorage.setItem(STORAGE_KEY, next);
   };
 
   return (
@@ -53,5 +42,38 @@ export function ThemeToggle() {
         </svg>
       )}
     </button>
+  );
+}
+
+export function ThemePicker() {
+  const [theme, setThemeState] = useState<ThemeMode>(() => readStoredTheme());
+
+  useEffect(() => {
+    applyTheme(theme);
+    return subscribeTheme((next) => setThemeState(next));
+  }, [theme]);
+
+  const pick = (next: ThemeMode): void => {
+    setThemeState(next);
+    setTheme(next);
+  };
+
+  return (
+    <div className="flex gap-1.5 rounded-2xl bg-slate-100 p-1.5 dark:bg-slate-800">
+      {(["light", "dark"] as const).map((mode) => (
+        <button
+          key={mode}
+          type="button"
+          onClick={() => pick(mode)}
+          className={`min-h-[48px] flex-1 rounded-xl text-[17px] font-bold capitalize transition ${
+            theme === mode
+              ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-white"
+              : "text-slate-600 dark:text-slate-400"
+          }`}
+        >
+          {mode}
+        </button>
+      ))}
+    </div>
   );
 }

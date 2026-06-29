@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
+import { useMobileMapExpand, useMapResizeOnLayoutChange } from "@/lib/ui/useMobileMapExpand";
 import type { PlannedStayCity } from "@/lib/travelAssistant/tripPlanBooking";
 import {
   HOTEL_STAY_SOURCE,
@@ -131,6 +132,8 @@ export function TripHotelStayMap({
   const [mapStyle, setMapStyle] = useState<"streets" | "hybrid">("streets");
   const [selectedStayId, setSelectedStayId] = useState<string | null>(null);
   const appliedStyleRef = useRef<"streets" | "hybrid" | null>(null);
+  const { expanded, expand, collapse } = useMobileMapExpand(mobileProminent);
+  useMapResizeOnLayoutChange(expanded, mapRef);
 
   const bookedCount = points.filter((p) => p.booked).length;
   const unbookedCount = points.length - bookedCount;
@@ -292,56 +295,98 @@ export function TripHotelStayMap({
 
   if (points.length === 0) return null;
 
+  const mobileLight = mobileProminent && !expanded;
+  const sectionShell = expanded
+    ? "fixed inset-0 z-[9000] flex max-h-[100dvh] flex-col overflow-hidden bg-slate-950"
+    : mobileLight
+      ? "overflow-hidden rounded-3xl bg-white shadow-lg ring-1 ring-black/[0.06] scroll-mt-4"
+      : "overflow-hidden rounded-3xl bg-gradient-to-br from-[#0c2447] via-[#0f172a] to-[#020617] shadow-xl ring-1 ring-white/10 scroll-mt-4";
+
   return (
     <section
-      id={sectionId}
-      className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#0c2447] via-[#0f172a] to-[#020617] shadow-xl ring-1 ring-white/10 scroll-mt-4"
+      id={expanded ? undefined : sectionId}
+      className={sectionShell}
+      style={expanded ? { height: "100dvh", paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" } : undefined}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 px-5 py-4">
+      {expanded ? (
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+          <button
+            type="button"
+            onClick={collapse}
+            className="min-h-[48px] rounded-full px-4 text-[18px] font-semibold text-[#007AFF]"
+          >
+            Close
+          </button>
+          <p className="text-[17px] font-bold text-white">Stay map</p>
+          <button
+            type="button"
+            onClick={() => void fitWholeTrip()}
+            className="min-h-[48px] rounded-full px-4 text-[16px] font-bold text-white/90"
+          >
+            Fit all
+          </button>
+        </div>
+      ) : (
+      <div className={`flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4 ${mobileLight ? "border-slate-200" : "border-white/10"}`}>
         <div>
           <p
-            className={`font-bold uppercase tracking-wide text-sky-300/80 ${
-              mobileProminent ? "text-base" : "text-[10px] tracking-[0.22em]"
+            className={`font-bold uppercase tracking-wide ${
+              mobileLight
+                ? "text-sm text-sky-700"
+                : mobileProminent
+                  ? "text-base text-sky-300/80"
+                  : "text-[10px] tracking-[0.22em] text-sky-300/80"
             }`}
           >
             Stay map
           </p>
-          <h3 className={`mt-1 font-black text-white ${mobileProminent ? "text-2xl" : "text-lg"}`}>
+          <h3 className={`mt-1 font-black ${mobileLight ? "text-2xl text-slate-900" : mobileProminent ? "text-2xl text-white" : "text-lg text-white"}`}>
             Where you&apos;re staying
           </h3>
-          <p className={`mt-1 text-sky-100/60 ${mobileProminent ? "text-[15px]" : "text-xs"}`}>
-            Drag to pan · pinch to zoom
+          <p className={`mt-1 ${mobileLight ? "text-[16px] text-slate-600" : mobileProminent ? "text-[15px] text-sky-100/60" : "text-xs text-sky-100/60"}`}>
+            {mobileProminent ? "Tap map for full screen · pinch to zoom" : "Drag to pan · pinch to zoom"}
           </p>
         </div>
         <div
           className={`rounded-full px-3 py-1.5 text-xs font-bold ${
             unbookedCount === 0
-              ? "bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-400/40"
-              : "bg-amber-500/15 text-amber-100 ring-1 ring-amber-400/30"
+              ? mobileLight
+                ? "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300"
+                : "bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-400/40"
+              : mobileLight
+                ? "bg-amber-100 text-amber-900 ring-1 ring-amber-300"
+                : "bg-amber-500/15 text-amber-100 ring-1 ring-amber-400/30"
           }`}
         >
-          {unbookedCount === 0
-            ? "All stays booked ✓"
-            : `${unbookedCount} to book`}
+          {unbookedCount === 0 ? "All stays booked ✓" : `${unbookedCount} to book`}
         </div>
       </div>
+      )}
 
-      <div className="relative px-2 pt-2">
+      <div className={`relative ${expanded ? "min-h-0 flex-1" : "px-2 pt-2"}`}>
         <div className="absolute left-4 top-4 z-10 flex flex-wrap gap-2">
+          {!expanded ? (
           <button
             type="button"
             onClick={() => void fitWholeTrip()}
-            className="rounded-full bg-slate-950/80 px-3 py-1.5 text-[11px] font-bold text-white shadow ring-1 ring-white/20 backdrop-blur"
+            className={`rounded-full px-3 py-1.5 text-[11px] font-bold shadow backdrop-blur ${
+              mobileLight ? "bg-white text-slate-800 ring-1 ring-black/10" : "bg-slate-950/80 text-white ring-1 ring-white/20"
+            }`}
           >
             Fit all stays
           </button>
+          ) : null}
           {maptilerKey ? (
             <>
               <button
                 type="button"
                 onClick={() => setMapStyle("streets")}
                 className={`rounded-full px-3 py-1.5 text-[11px] font-bold shadow backdrop-blur ${
-                  mapStyle === "streets" ? "bg-sky-600 text-white" : "bg-slate-950/80 text-white ring-1 ring-white/20"
+                  mapStyle === "streets"
+                    ? "bg-sky-600 text-white"
+                    : mobileLight
+                      ? "bg-white text-slate-800 ring-1 ring-black/10"
+                      : "bg-slate-950/80 text-white ring-1 ring-white/20"
                 }`}
               >
                 Map
@@ -350,7 +395,11 @@ export function TripHotelStayMap({
                 type="button"
                 onClick={() => setMapStyle("hybrid")}
                 className={`rounded-full px-3 py-1.5 text-[11px] font-bold shadow backdrop-blur ${
-                  mapStyle === "hybrid" ? "bg-sky-600 text-white" : "bg-slate-950/80 text-white ring-1 ring-white/20"
+                  mapStyle === "hybrid"
+                    ? "bg-sky-600 text-white"
+                    : mobileLight
+                      ? "bg-white text-slate-800 ring-1 ring-black/10"
+                      : "bg-slate-950/80 text-white ring-1 ring-white/20"
                 }`}
               >
                 Satellite
@@ -358,18 +407,34 @@ export function TripHotelStayMap({
             </>
           ) : null}
         </div>
-        <div
-          ref={containerRef}
-          className={`w-full overflow-hidden rounded-2xl ring-1 ring-white/10 ${
-            mobileProminent ? "h-80" : "h-64 md:h-80 lg:h-96"
-          }`}
-          role="application"
-          aria-label="Interactive hotel stay map"
-        />
+        <div className={`relative ${expanded ? "h-full w-full" : ""}`}>
+          <div
+            ref={containerRef}
+            className={`w-full overflow-hidden ${
+              expanded
+                ? "absolute inset-0"
+                : `rounded-2xl ring-1 ${mobileLight ? "ring-black/10" : "ring-white/10"} ${mobileProminent ? "h-80" : "h-64 md:h-80 lg:h-96"}`
+            }`}
+            role="application"
+            aria-label="Interactive hotel stay map"
+          />
+          {mobileProminent && !expanded ? (
+            <button
+              type="button"
+              onClick={expand}
+              className="absolute inset-0 z-[5] flex items-end justify-center rounded-2xl pb-4"
+              aria-label="Open full screen stay map"
+            >
+              <span className="rounded-full bg-slate-900/75 px-5 py-2.5 text-[16px] font-bold text-white shadow-lg backdrop-blur">
+                Tap for full screen map
+              </span>
+            </button>
+          ) : null}
+        </div>
       </div>
 
-      <div className="px-5 py-4">
-        <div className="mb-3 flex flex-wrap gap-3 text-xs font-bold uppercase tracking-wider text-sky-50/80">
+      <div className={`${expanded ? "shrink-0 border-t border-white/10" : ""} px-5 py-4`}>
+        <div className={`mb-3 flex flex-wrap gap-3 text-xs font-bold uppercase tracking-wider ${mobileLight ? "text-slate-600" : "text-sky-50/80"}`}>
           <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-7 rounded-full bg-emerald-500" /> Booked</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-7 rounded-full bg-slate-400" /> Not booked</span>
         </div>
@@ -385,7 +450,7 @@ export function TripHotelStayMap({
             />
           ))}
         </div>
-        <p className="mt-3 text-xs text-sky-100/55">
+        <p className={`mt-3 text-xs ${mobileLight ? "text-slate-500" : "text-sky-100/55"}`}>
           {bookedCount} booked · {unbookedCount} still needed · {points.length} stop{points.length === 1 ? "" : "s"} on map
         </p>
       </div>

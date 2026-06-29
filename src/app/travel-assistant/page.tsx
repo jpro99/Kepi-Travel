@@ -109,7 +109,7 @@ import {
   filterConsumerTimelineReservations,
   isOnboardingSetupPlaceholder,
 } from "@/lib/travelAssistant/consumerTimeline";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { ThemePicker, ThemeToggle } from "@/components/ThemeToggle";
 import { QuickAddLane } from "@/components/travelAssistant/QuickAddLane";
 import { ReservationList } from "@/components/travelAssistant/ReservationList";
 import { ReviewQueue } from "@/components/travelAssistant/ReviewQueue";
@@ -9752,10 +9752,11 @@ export default function TravelAssistantPage() {
               </article>
 
               <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <div className="flex items-center justify-between">
-                  <h2 className="font-semibold">Theme</h2>
-                  <ThemeToggle />
-                </div>
+                <h2 className="mb-3 font-semibold">Appearance</h2>
+                <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+                  Light is easier to read on your phone. Dark is available when you want it.
+                </p>
+                <ThemePicker />
               </section>
 
               <LanguageSettingsCard />

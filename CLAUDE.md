@@ -78,6 +78,7 @@ Do not loop on the same failed fix. Do not touch unrelated files. Do not claim f
 
 - Live repo: jpro99/Kepi-Travel (Vercel deploys kepitravel.com) — NEVER push to Kepi-Search
 - **Git delivery (owner preference):** Always commit and push directly to `main`. Do not open PRs or use feature branches unless the owner explicitly asks.
+- **Theme default:** Light mode unless user picks dark (`kepi-theme` in localStorage).
 - Rule Zero: `npm run build` passes before every push
 - TypeScript: `ignoreBuildErrors: true` in next.config — run `npx tsc --noEmit` on edited files
 - Redis: check BOTH `UPSTASH_REDIS_*` and `KV_REST_API_*`

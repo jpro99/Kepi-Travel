@@ -26,12 +26,37 @@ export function flightCardTypography(simplifiedMobile = false) {
 
 export function guideCardTypography(simplifiedMobile = false) {
   const phone = simplifiedMobile ? "" : "lg:";
+  if (simplifiedMobile) {
+    return {
+      eyebrow: "text-base font-bold uppercase tracking-wide text-sky-700",
+      gateLabel: "text-base font-bold uppercase tracking-wide text-slate-500",
+      gateValue: "text-4xl font-black mt-1 text-slate-900",
+      gatePad: "p-5",
+      refreshBtn: "py-4 text-[17px]",
+      shell: "bg-white ring-1 ring-black/[0.06] shadow-lg",
+      title: "text-slate-900",
+      subtitle: "text-slate-600",
+      gateBox: "rounded-2xl bg-slate-100 text-center",
+      panel: "rounded-2xl bg-slate-50 border border-slate-200 overflow-hidden",
+      panelHeader: "text-sm font-bold uppercase tracking-wider text-slate-500",
+      bodyText: "text-slate-800",
+      mutedText: "text-slate-500",
+    };
+  }
   return {
     eyebrow: `${phone === "" ? "text-base" : "text-base lg:text-[10px]"} font-bold uppercase tracking-wide text-sky-300/70`,
     gateLabel: `${phone === "" ? "text-base" : "text-base lg:text-[9px]"} font-bold uppercase tracking-wide text-sky-200/70`,
     gateValue: `${phone === "" ? "text-4xl" : "text-4xl lg:text-xl"} font-black mt-1`,
     gatePad: `${phone === "" ? "p-5" : "p-5 lg:p-3"}`,
     refreshBtn: `${phone === "" ? "py-4 text-[17px]" : "py-4 text-[17px] lg:py-2.5 lg:text-xs"}`,
+    shell: "",
+    title: "text-white",
+    subtitle: "text-sky-100",
+    gateBox: "rounded-2xl bg-white/10 text-center",
+    panel: "rounded-2xl bg-white/8 border border-white/10 overflow-hidden",
+    panelHeader: "text-sm font-bold uppercase tracking-wider text-sky-200/70",
+    bodyText: "text-white/90",
+    mutedText: "text-white/40",
   };
 }
 
