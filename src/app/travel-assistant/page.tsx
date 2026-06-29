@@ -4294,6 +4294,10 @@ export default function TravelAssistantPage() {
     const currentStartDate = activeTrip?.startDate?.trim() ?? "";
     return currentStartDate || null;
   }, [activeTrip?.startDate, derivedTripStartDate]);
+  const consumerTripEndDate = useMemo(() => {
+    const currentEndDate = activeTrip?.endDate?.trim() ?? "";
+    return currentEndDate || null;
+  }, [activeTrip?.endDate]);
 
   useEffect(() => {
     const start = (consumerTripStartDate ?? activeTrip?.startDate)?.slice(0, 10) ?? null;
