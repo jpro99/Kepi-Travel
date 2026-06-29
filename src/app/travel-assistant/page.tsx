@@ -204,6 +204,15 @@ import {
   orientationTabToConsumerTab,
   type ConsumerTab,
 } from "@/lib/travelAssistant/consumerTabs";
+import { PlannerTab } from "@/components/travelAssistant/PlannerTab";
+import { MobileAssistView } from "@/components/travelAssistant/mobile/MobileAssistView";
+import { MobileSearchOverlay } from "@/components/travelAssistant/mobile/MobileSearchOverlay";
+import { MobileTabBarNav } from "@/components/travelAssistant/mobile/useMobileTabNavigation";
+import { MobileTripsView } from "@/components/travelAssistant/mobile/MobileTripsView";
+import {
+  isMobilePrimaryTab,
+  type MobilePrimaryTab,
+} from "@/components/travelAssistant/mobile/mobileShellTypes";
 
 const OpsPanel = lazy(async () => {
   const loadedModule = await import("@/components/travelAssistant/OpsPanel");
@@ -1964,6 +1973,9 @@ export default function TravelAssistantPage() {
     const nextUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, "", nextUrl);
   }, []);
+  const [mobilePrimaryTab, setMobilePrimaryTab] = useState<MobilePrimaryTab>("trips");
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const airportAutoNavRef = useRef(false);
   const [manualReservationDefaultDateTime, setManualReservationDefaultDateTime] = useState<string | null>(null);
   const itineraryPrefs = useItineraryPanelPrefs(activeTripId);
   const [itinerarySelectedDateKey, setItinerarySelectedDateKey] = useState<string | null>(null);
@@ -2327,6 +2339,10 @@ export default function TravelAssistantPage() {
       const tab = params.get("tab");
       if (tab === "trip" || tab === "itinerary" || tab === "calendar" || tab === "flights" || tab === "hotels" || tab === "map" || tab === "more") {
         setConsumerTab(tab);
+      }
+      const mtab = params.get("mtab");
+      if (isMobilePrimaryTab(mtab)) {
+        setMobilePrimaryTab(mtab);
       }
       const gmailStatus = params.get("gmail");
       if (gmailStatus === "connected") {
@@ -4696,6 +4712,31 @@ export default function TravelAssistantPage() {
     return { kind: "no-trip" };
   }, [consumerReservationsSorted, consumerTripDestination, activeTrip?.destination,
       guidanceUserLat, guidanceUserLon, guidanceLocationStatus]);
+
+  useEffect(() => {
+    if (!isCompactViewport) {
+      airportAutoNavRef.current = false;
+      return;
+    }
+    const atAirport =
+      guidanceLocationStatus === "at-airport" || guidanceLocationStatus === "in-terminal";
+    if (!atAirport) {
+      airportAutoNavRef.current = false;
+      return;
+    }
+    if (
+      journeyPhase.kind === "no-trip" ||
+      journeyPhase.kind === "airborne"
+    ) {
+      return;
+    }
+    if (airportAutoNavRef.current) {
+      return;
+    }
+    airportAutoNavRef.current = true;
+    router.push("/travel-assistant/live-map?view=airport");
+  }, [guidanceLocationStatus, journeyPhase, isCompactViewport, router]);
+
   useEffect(() => {
     if (!tripsHydratedRef.current) return;
     if (!activeTripId) return;
@@ -6173,6 +6214,37 @@ export default function TravelAssistantPage() {
       }
     },
     [handleSwitchTrip, openDrawer],
+  );
+
+  const navigateMobilePrimaryTab = useCallback((nextTab: MobilePrimaryTab): void => {
+    if (nextTab === "map") {
+      router.push("/travel-assistant/live-map");
+      return;
+    }
+    setMobilePrimaryTab(nextTab);
+    const params = new URLSearchParams(window.location.search);
+    params.set("mtab", nextTab);
+    const nextUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState({}, "", nextUrl);
+  }, [router]);
+
+  const mobileSearchTrips = useMemo(
+    () =>
+      trips.map((trip) => ({
+        id: trip.id,
+        name: trip.name,
+        destination: trip.destination,
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+        reservations: trip.reservations.map((reservation) => ({
+          id: reservation.id,
+          type: reservation.type,
+          title: reservation.title,
+          confirmationCode: reservation.confirmationCode,
+          localTime: reservation.localTime,
+        })),
+      })),
+    [trips],
   );
 
   const closeDrawer = useCallback((): void => {
@@ -8645,6 +8717,15 @@ export default function TravelAssistantPage() {
     [handlePlanDay],
   );
 
+  const plannerFlightCount = consumerReservationsSorted.filter((reservation) => reservation.type === "flight").length;
+  const plannerHotelCount = consumerReservationsSorted.filter((reservation) => reservation.type === "hotel").length;
+  const plannerOtherBookingCount = consumerReservationsSorted.length - plannerFlightCount - plannerHotelCount;
+  const plannerReadyStepCount =
+    (activeTrip ? 1 : 0) +
+    (consumerTripStartDate && consumerTripEndDate ? 1 : 0) +
+    (plannerFlightCount > 0 ? 1 : 0) +
+    (plannerHotelCount > 0 ? 1 : 0);
+
   if (!advancedWorkspaceEnabled) {
     return (
       <main className="relative min-h-screen overflow-x-hidden bg-[var(--bg-base)] pb-24 text-[var(--text-primary)]">
@@ -8664,7 +8745,17 @@ export default function TravelAssistantPage() {
                 </button>
               </div>
               <div className="flex items-center gap-2 sm:gap-3">
-                {!showUnconfiguredTripShell && activeTrip ? (
+                {isCompactViewport ? (
+                  <button
+                    type="button"
+                    onClick={() => setMobileSearchOpen(true)}
+                    className="flex h-11 min-w-[44px] items-center justify-center rounded-full bg-white px-4 text-sm font-bold text-[#007AFF] shadow-sm ring-1 ring-black/[0.06] dark:bg-slate-900 dark:text-[#0A84FF] dark:ring-white/[0.08]"
+                    aria-label="Search trips and reservations"
+                  >
+                    Search
+                  </button>
+                ) : null}
+                {!isCompactViewport && !showUnconfiguredTripShell && activeTrip ? (
                   <TripSpendBadge
                     summary={tripSpendSummary}
                     problemCount={transportConflictReservationIds.size}
@@ -8741,7 +8832,7 @@ export default function TravelAssistantPage() {
             </div>
           </header>
 
-          {/* Apple-style tab bar */}
+          {!isCompactViewport ? (
           <div className="relative flex items-stretch overflow-x-auto rounded-2xl bg-white/90 shadow-sm ring-1 ring-black/[0.06] dark:bg-slate-900/90 dark:ring-white/[0.08]">
             {CONSUMER_TAB_BAR.map(([tab, label, icon]) => (
               <button
@@ -8762,8 +8853,80 @@ export default function TravelAssistantPage() {
               </button>
             ))}
           </div>
+          ) : null}
 
-          {tripsLoading ? (
+          {isCompactViewport ? (
+            tripsLoading ? (
+              <section className="space-y-4">
+                <div className="h-48 rounded-3xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800" />
+                <div className="h-28 rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800" />
+              </section>
+            ) : mobilePrimaryTab === "plan" ? (
+              <PlannerTab
+                tripName={activeTrip?.name ?? null}
+                destination={consumerTripDestination}
+                startDate={consumerTripStartDate}
+                endDate={consumerTripEndDate}
+                flightCount={plannerFlightCount}
+                hotelCount={plannerHotelCount}
+                otherBookingCount={plannerOtherBookingCount}
+                readyStepCount={plannerReadyStepCount}
+                forwardAddress={emptyStateForwardAddress}
+                canUseGmailImport={canUseGmailImport}
+                gmailImportBusy={gmailImportBusy}
+                onAddBooking={() => setManualReservationModalOpen(true)}
+                onCreateTrip={() => {
+                  void handleCreateTrip();
+                }}
+                onImportGmail={() => setGmailScopeModalOpen(true)}
+                onRequestGmailUpgrade={() =>
+                  openUpgradeModal("gmail-import", "Upgrade to Pro to import reservations from your connected email account.")
+                }
+                onCopyForwardAddress={() => {
+                  void handleCopyForwardAddress(emptyStateForwardAddress);
+                }}
+                onViewTrip={() => navigateMobilePrimaryTab("trips")}
+                onViewFlights={() => navigateMobilePrimaryTab("trips")}
+                onViewHotels={() => navigateMobilePrimaryTab("trips")}
+              />
+            ) : mobilePrimaryTab === "assist" ? (
+              <MobileAssistView
+                journeyPhase={journeyPhase}
+                reservations={consumerReservationsSorted}
+                tripName={activeTrip?.name ?? "Your trip"}
+                locationStatus={guidanceLocationStatus}
+                nearestAirport={guidanceNearestAirport}
+                onReservationTap={(id) => openDrawer("reservation", id)}
+              />
+            ) : (
+              <MobileTripsView
+                hasActiveTrip={Boolean(activeTrip)}
+                trip={
+                  activeTrip
+                    ? {
+                        name: activeTrip.name,
+                        destination: consumerTripDestination ?? activeTrip.destination,
+                        startDate: consumerTripStartDate ?? activeTrip.startDate,
+                        endDate: consumerTripEndDate ?? activeTrip.endDate,
+                      }
+                    : null
+                }
+                reservations={consumerReservationsSorted}
+                liveStatus={flightStatusCheckByReservationId}
+                locationStatus={guidanceLocationStatus}
+                nearestAirport={guidanceNearestAirport}
+                onCreateTrip={() => {
+                  void handleCreateTrip();
+                }}
+                onAddBooking={() => setManualReservationModalOpen(true)}
+                onReservationTap={(id) => openDrawer("reservation", id)}
+                onCheckStatus={(id) => void handleCheckFlightStatus(id)}
+                onDelete={(id) => void handleDeleteReservation(id)}
+              />
+            )
+          ) : null}
+
+          {!isCompactViewport && (tripsLoading ? (
             <section className="space-y-4">
               <div className="h-48 rounded-3xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800" />
               <div className="grid gap-3 sm:grid-cols-2">
@@ -9626,11 +9789,25 @@ export default function TravelAssistantPage() {
                 Sign out
               </button>
             </section>
-          )}
+          ))}
         </div>
           </div>
         </div>
 
+        {isCompactViewport ? (
+          <>
+            <MobileSearchOverlay
+              open={mobileSearchOpen}
+              trips={mobileSearchTrips}
+              onClose={() => setMobileSearchOpen(false)}
+              onSelectResult={async (selection) => {
+                await handleTripSearchSelection(selection);
+                navigateMobilePrimaryTab("trips");
+              }}
+            />
+            <MobileTabBarNav activeTab={mobilePrimaryTab} />
+          </>
+        ) : (
         <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--border-default)] bg-[var(--bg-card)]/95 px-2 py-2 shadow-2xl backdrop-blur md:hidden">
           <div className="mx-auto flex max-w-lg gap-0.5 overflow-x-auto text-[11px] font-semibold">
             {CONSUMER_TAB_BAR.map(([tab, label, icon]) => (
@@ -9653,6 +9830,7 @@ export default function TravelAssistantPage() {
             ))}
           </div>
         </nav>
+        )}
         <div aria-live="polite" aria-atomic="true" className="sr-only">
           {toast ?? ""}
         </div>

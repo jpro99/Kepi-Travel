@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@/lib/maplibreCspWorker";
@@ -17,6 +17,7 @@ import { resolveLiveCoordinates, resetGeolocationQualityState } from "@/lib/fami
 import { clearLocationDisplayCache, resolveLocationForMapDisplay } from "@/lib/family/locationDisplayCache";
 import { isFamilySharingActive } from "@/lib/family/locationSharingPrefs";
 import { burstFamilyLocationFix, refreshFamilyLocationFix } from "@/lib/family/familyLocationWatch";
+import { MobileTabBarNav } from "@/components/travelAssistant/mobile/useMobileTabNavigation";
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface LocationPoint {
@@ -875,12 +876,14 @@ export function LiveMapPage() {
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
-            className="absolute right-4 bottom-6 z-20 flex h-10 items-center gap-2 rounded-full bg-slate-900/90 backdrop-blur-md border border-white/10 px-4 shadow-xl text-white text-[11px] font-semibold"
+            className="absolute right-4 bottom-24 z-20 flex h-10 items-center gap-2 rounded-full bg-slate-900/90 backdrop-blur-md border border-white/10 px-4 shadow-xl text-white text-[11px] font-semibold"
           >
             <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
             {liveCount} live
           </button>
         )}
+
+        <MobileTabBarNav activeTab="map" />
       </div>
     </>
   );
