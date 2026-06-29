@@ -131,6 +131,14 @@ import {
 } from "@/lib/travelAssistant/tripTimelinePlanning";
 import { NewTripDatesCard } from "@/components/travelAssistant/NewTripDatesCard";
 import { PlannerTab } from "@/components/travelAssistant/PlannerTab";
+import { MobileAssistView } from "@/components/travelAssistant/mobile/MobileAssistView";
+import { MobileSearchOverlay } from "@/components/travelAssistant/mobile/MobileSearchOverlay";
+import { MobileTabBarNav } from "@/components/travelAssistant/mobile/useMobileTabNavigation";
+import { MobileTripsView } from "@/components/travelAssistant/mobile/MobileTripsView";
+import {
+  isMobilePrimaryTab,
+  type MobilePrimaryTab,
+} from "@/components/travelAssistant/mobile/mobileShellTypes";
 
 const OpsPanel = lazy(async () => {
   const loadedModule = await import("@/components/travelAssistant/OpsPanel");
@@ -1841,6 +1849,9 @@ export default function TravelAssistantPage() {
   const [timelineSectionTab, setTimelineSectionTab] = useState<TimelineSectionTab>("reservations");
   const [, setPackingCompletionPercent] = useState(0);
   const [consumerTab, setConsumerTab] = useState<ConsumerTab>("trip");
+  const [mobilePrimaryTab, setMobilePrimaryTab] = useState<MobilePrimaryTab>("trips");
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const airportAutoNavRef = useRef(false);
   const [pendingMoreScrollTarget, setPendingMoreScrollTarget] = useState<"readiness-checklist" | null>(null);
   const [emailForwardAddress, setEmailForwardAddress] = useState<string | null>(() => {
     const handle = getEmailHandleFromCookie();
@@ -2087,6 +2098,10 @@ export default function TravelAssistantPage() {
       const tab = params.get("tab");
       if (isConsumerTab(tab)) {
         setConsumerTab(tab);
+      }
+      const mtab = params.get("mtab");
+      if (isMobilePrimaryTab(mtab)) {
+        setMobilePrimaryTab(mtab);
       }
       const hadActivated = params.get("activated") === "1";
       const hadWalkthrough = params.get("walkthrough") === "1";
@@ -3949,9 +3964,45 @@ export default function TravelAssistantPage() {
       if (isConsumerTab(tab)) {
         return;
       }
+      const mtab = new URLSearchParams(window.location.search).get("mtab");
+      if (isMobilePrimaryTab(mtab)) {
+        return;
+      }
     }
     setConsumerTab(defaultConsumerTabForPhase(journeyPhase));
-  }, [journeyPhase]);
+    if (isCompactViewport) {
+      if (phaseKind === "airborne" || phaseKind === "just-landed") {
+        setMobilePrimaryTab("assist");
+      } else if (phaseKind === "pre-trip") {
+        setMobilePrimaryTab("trips");
+      }
+    }
+  }, [journeyPhase, isCompactViewport]);
+
+  useEffect(() => {
+    if (!isCompactViewport) {
+      airportAutoNavRef.current = false;
+      return;
+    }
+    const atAirport =
+      guidanceLocationStatus === "at-airport" || guidanceLocationStatus === "in-terminal";
+    if (!atAirport) {
+      airportAutoNavRef.current = false;
+      return;
+    }
+    if (
+      journeyPhase.kind === "post-trip" ||
+      journeyPhase.kind === "no-trip" ||
+      journeyPhase.kind === "airborne"
+    ) {
+      return;
+    }
+    if (airportAutoNavRef.current) {
+      return;
+    }
+    airportAutoNavRef.current = true;
+    router.push("/travel-assistant/live-map?view=airport");
+  }, [guidanceLocationStatus, journeyPhase, isCompactViewport, router]);
 
   const tripHasUpcomingEvents = useMemo(
     () => hasUpcomingTripEvents(consumerReservationsSorted),
@@ -6628,6 +6679,37 @@ export default function TravelAssistantPage() {
     window.history.replaceState({}, "", nextUrl);
   }, []);
 
+  const navigateMobilePrimaryTab = useCallback((nextTab: MobilePrimaryTab): void => {
+    if (nextTab === "map") {
+      router.push("/travel-assistant/live-map");
+      return;
+    }
+    setMobilePrimaryTab(nextTab);
+    const params = new URLSearchParams(window.location.search);
+    params.set("mtab", nextTab);
+    const nextUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState({}, "", nextUrl);
+  }, [router]);
+
+  const mobileSearchTrips = useMemo(
+    () =>
+      trips.map((trip) => ({
+        id: trip.id,
+        name: trip.name,
+        destination: trip.destination,
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+        reservations: trip.reservations.map((reservation) => ({
+          id: reservation.id,
+          type: reservation.type,
+          title: reservation.title,
+          confirmationCode: reservation.confirmationCode,
+          localTime: reservation.localTime,
+        })),
+      })),
+    [trips],
+  );
+
   const handleReservationsRefresh = useCallback(async (): Promise<void> => {
     if (reservationsRefreshing) {
       return;
@@ -7209,6 +7291,17 @@ export default function TravelAssistantPage() {
               <div className="flex min-w-0 items-center gap-2">
                 <Logo size="sm" showWordmark={false} className="shrink-0" />
               </div>
+              <div className="flex items-center gap-2">
+                {isCompactViewport ? (
+                  <button
+                    type="button"
+                    onClick={() => setMobileSearchOpen(true)}
+                    className="flex h-11 min-w-[44px] items-center justify-center rounded-full bg-white px-4 text-sm font-bold text-[#007AFF] shadow-sm ring-1 ring-black/[0.06] dark:bg-slate-900 dark:text-[#0A84FF] dark:ring-white/[0.08]"
+                    aria-label="Search trips and reservations"
+                  >
+                    Search
+                  </button>
+                ) : null}
               <div className="relative">
                 <button
                   type="button"
@@ -7276,6 +7369,7 @@ export default function TravelAssistantPage() {
                   </div>
                 ) : null}
               </div>
+              </div>
             </div>
             <div className="mt-3">
               <TripSwitcher
@@ -7300,7 +7394,7 @@ export default function TravelAssistantPage() {
             </div>
           </header>
 
-          {/* Apple-style tab bar */}
+          {!isCompactViewport ? (
           <div className="relative flex items-stretch rounded-2xl bg-white/90 shadow-sm ring-1 ring-black/[0.06] dark:bg-slate-900/90 dark:ring-white/[0.08] overflow-hidden">
             {CONSUMER_TABS.map(({ id: tab, label, icon }) => (
               <button
@@ -7321,8 +7415,80 @@ export default function TravelAssistantPage() {
               </button>
             ))}
           </div>
+          ) : null}
 
-          {tripsLoading ? (
+          {isCompactViewport ? (
+            tripsLoading ? (
+              <section className="space-y-4">
+                <div className="h-48 rounded-3xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800" />
+                <div className="h-28 rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800" />
+              </section>
+            ) : mobilePrimaryTab === "plan" ? (
+              <PlannerTab
+                tripName={activeTrip?.name ?? null}
+                destination={consumerTripDestination}
+                startDate={consumerTripStartDate}
+                endDate={consumerTripEndDate}
+                flightCount={plannerFlightCount}
+                hotelCount={plannerHotelCount}
+                otherBookingCount={plannerOtherBookingCount}
+                readyStepCount={plannerReadyStepCount}
+                forwardAddress={emptyStateForwardAddress}
+                canUseGmailImport={canUseGmailImport}
+                gmailImportBusy={gmailImportBusy}
+                onAddBooking={() => setManualReservationModalOpen(true)}
+                onCreateTrip={() => {
+                  void handleCreateTrip();
+                }}
+                onImportGmail={() => setGmailScopeModalOpen(true)}
+                onRequestGmailUpgrade={() =>
+                  openUpgradeModal("gmail-import", "Upgrade to Pro to import reservations from your connected email account.")
+                }
+                onCopyForwardAddress={() => {
+                  void handleCopyForwardAddress();
+                }}
+                onViewTrip={() => navigateMobilePrimaryTab("trips")}
+                onViewFlights={() => navigateMobilePrimaryTab("trips")}
+                onViewHotels={() => navigateMobilePrimaryTab("trips")}
+              />
+            ) : mobilePrimaryTab === "assist" ? (
+              <MobileAssistView
+                journeyPhase={journeyPhase}
+                reservations={consumerReservationsSorted}
+                tripName={activeTrip?.name ?? "Your trip"}
+                locationStatus={guidanceLocationStatus}
+                nearestAirport={guidanceNearestAirport}
+                onReservationTap={(id) => openDrawer("reservation", id)}
+              />
+            ) : (
+              <MobileTripsView
+                hasActiveTrip={Boolean(activeTrip)}
+                trip={
+                  activeTrip
+                    ? {
+                        name: activeTrip.name,
+                        destination: consumerTripDestination ?? activeTrip.destination,
+                        startDate: consumerTripStartDate ?? activeTrip.startDate,
+                        endDate: consumerTripEndDate ?? activeTrip.endDate,
+                      }
+                    : null
+                }
+                reservations={consumerReservationsSorted}
+                liveStatus={flightStatusCheckByReservationId}
+                locationStatus={guidanceLocationStatus}
+                nearestAirport={guidanceNearestAirport}
+                onCreateTrip={() => {
+                  void handleCreateTrip();
+                }}
+                onAddBooking={() => setManualReservationModalOpen(true)}
+                onReservationTap={(id) => openDrawer("reservation", id)}
+                onCheckStatus={(id) => void handleCheckFlightStatus(id)}
+                onDelete={(id) => void handleDeleteReservation(id)}
+              />
+            )
+          ) : null}
+
+          {!isCompactViewport && (tripsLoading ? (
             <section className="space-y-4">
               <div className="h-48 rounded-3xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800" />
               <div className="grid gap-3 sm:grid-cols-2">
@@ -7991,9 +8157,23 @@ export default function TravelAssistantPage() {
                 Sign out
               </button>
             </section>
-          )}
+          ))}
         </div>
 
+        {isCompactViewport ? (
+          <>
+            <MobileSearchOverlay
+              open={mobileSearchOpen}
+              trips={mobileSearchTrips}
+              onClose={() => setMobileSearchOpen(false)}
+              onSelectResult={async (selection) => {
+                await handleTripSearchSelection(selection);
+                navigateMobilePrimaryTab("trips");
+              }}
+            />
+            <MobileTabBarNav activeTab={mobilePrimaryTab} />
+          </>
+        ) : (
         <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--border-default)] bg-[var(--bg-card)]/95 px-3 py-2 shadow-2xl backdrop-blur md:hidden">
           <div className="mx-auto grid max-w-md grid-cols-6 gap-0.5 text-[11px] font-semibold">
             {CONSUMER_TABS.map(({ id: tab, label, icon }) => (
@@ -8016,6 +8196,7 @@ export default function TravelAssistantPage() {
             ))}
           </div>
         </nav>
+        )}
         <div aria-live="polite" aria-atomic="true" className="sr-only">
           {toast ?? ""}
         </div>

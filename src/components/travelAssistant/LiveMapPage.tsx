@@ -23,7 +23,7 @@ import {
   isFamilySharingOptedOut,
 } from "@/lib/family/locationSharingPrefs";
 import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
-import { fetchJson } from "@/lib/api/readJsonResponse";
+import { MobileTabBarNav } from "@/components/travelAssistant/mobile/useMobileTabNavigation";
 
 /* ΓöÇΓöÇΓöÇ Types ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
 interface LocationPoint {
@@ -834,12 +834,14 @@ export function LiveMapPage() {
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
-            className="absolute right-4 bottom-6 z-20 flex h-10 items-center gap-2 rounded-full bg-slate-900/90 backdrop-blur-md border border-white/10 px-4 shadow-xl text-white text-[11px] font-semibold"
+            className="absolute right-4 bottom-24 z-20 flex h-10 items-center gap-2 rounded-full bg-slate-900/90 backdrop-blur-md border border-white/10 px-4 shadow-xl text-white text-[11px] font-semibold"
           >
             <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
             {liveCount} live
           </button>
         )}
+
+        <MobileTabBarNav activeTab="map" />
       </div>
     </>
   );
