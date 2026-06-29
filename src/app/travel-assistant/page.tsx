@@ -3474,9 +3474,12 @@ export default function TravelAssistantPage() {
   }, []);
 
   useEffect(() => {
-    const media = window.matchMedia("(max-width: 767px)");
+    const widthMedia = window.matchMedia("(max-width: 1023px)");
+    const touchMedia = window.matchMedia("(hover: none) and (pointer: coarse)");
     const update = (): void => {
-      const compact = media.matches;
+      const forceMobile = new URLSearchParams(window.location.search).get("mobile") === "1";
+      const compact =
+        forceMobile || widthMedia.matches || (touchMedia.matches && window.innerWidth < 1280);
       setIsCompactViewport(compact);
       setMobileSimpleView(compact);
       setMobileViewPanel((previous) => {
@@ -3487,8 +3490,12 @@ export default function TravelAssistantPage() {
       });
     };
     update();
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
+    widthMedia.addEventListener("change", update);
+    touchMedia.addEventListener("change", update);
+    return () => {
+      widthMedia.removeEventListener("change", update);
+      touchMedia.removeEventListener("change", update);
+    };
   }, []);
 
   useEffect(() => {
