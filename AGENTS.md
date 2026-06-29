@@ -12,6 +12,7 @@ Primary goals:
 - keep changes safe, reversible, and testable
 
 Operating rules:
+- **Git delivery (owner preference):** Commit and push directly to `main`. No PRs or feature branches unless the owner explicitly asks.
 - Start with an audit plan before changing code.
 - Prefer read-only review first, then propose changes.
 - Never claim a bug is fixed until the relevant checks are run.
