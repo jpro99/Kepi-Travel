@@ -150,6 +150,19 @@ export function HotelsTab({
         />
       ) : null}
 
+      {simplifiedMobile ? (
+        <TripHotelStayMap
+          reservations={mapReservations ?? reservations}
+          onStayTap={(point) => {
+            if (point.reservationId) {
+              onReservationTap(point.reservationId);
+            }
+          }}
+          mobileProminent
+          sectionId="trip-hotel-map"
+        />
+      ) : null}
+
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
@@ -375,10 +388,11 @@ export function HotelsTab({
         </button>
       )}
 
+      {!simplifiedMobile ? (
       <TripHotelStayMap
         reservations={mapReservations ?? reservations}
-        staySegments={simplifiedMobile ? [] : staySegments}
-        plannedStayCities={simplifiedMobile ? [] : plannedStayCities}
+        staySegments={staySegments}
+        plannedStayCities={plannedStayCities}
         onStayTap={(point) => {
           if (point.reservationId) {
             onReservationTap(point.reservationId);
@@ -390,6 +404,7 @@ export function HotelsTab({
           }
         }}
       />
+      ) : null}
     </section>
   );
 }

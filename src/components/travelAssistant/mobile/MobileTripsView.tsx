@@ -170,27 +170,25 @@ export function MobileTripsView({
   return (
     <section className="space-y-4">
       <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-black/[0.06] dark:bg-slate-900 dark:ring-white/[0.08]">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
-              Active trip
-            </p>
-            <p className="mt-1 text-2xl font-black text-slate-900 dark:text-white">{trip?.name ?? "Your trip"}</p>
-            <p className="mt-1 text-base text-slate-600 dark:text-slate-300">
-              {trip?.destination || "Destination TBD"}
-              {trip?.startDate || trip?.endDate
-                ? ` · ${formatTripDates(trip?.startDate ?? "", trip?.endDate ?? "")}`
-                : ""}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setItineraryOpen(true)}
-            className="shrink-0 min-h-[48px] rounded-2xl bg-[#007AFF]/10 px-4 text-[15px] font-bold text-[#007AFF] active:opacity-70 dark:bg-[#0A84FF]/15 dark:text-[#0A84FF]"
-          >
-            Itinerary
-          </button>
-        </div>
+        <p className="text-sm font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          Active trip
+        </p>
+        <p className="mt-1 text-[1.75rem] font-black leading-tight text-slate-900 dark:text-white">
+          {trip?.name ?? "Your trip"}
+        </p>
+        <p className="mt-1 text-[17px] text-slate-600 dark:text-slate-300">
+          {trip?.destination || "Destination TBD"}
+          {trip?.startDate || trip?.endDate
+            ? ` · ${formatTripDates(trip?.startDate ?? "", trip?.endDate ?? "")}`
+            : ""}
+        </p>
+        <button
+          type="button"
+          onClick={() => setItineraryOpen(true)}
+          className="mt-4 flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-[#007AFF] text-[17px] font-bold text-white shadow-lg shadow-blue-500/20 active:scale-[0.99] dark:bg-[#0A84FF]"
+        >
+          Read full itinerary
+        </button>
       </div>
 
       <MobileItineraryReader

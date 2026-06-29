@@ -325,7 +325,7 @@ function AirportGuideCard({
           <p className="text-2xl font-black text-white mt-1 leading-tight">
             {flight.flightAirline ?? flight.provider}{flight.flightNumber ? ` ${flight.flightNumber}` : ""}
           </p>
-          <p className="text-sky-100 text-base font-semibold mt-1">{fmt12(flight.flightDepartureTime ?? flight.localTime ?? "")} · {fmtDate(flight.flightDate ? flight.flightDate + " 00:00" : flight.localTime ?? "")}</p>
+          <p className={`text-sky-100 font-semibold mt-1 ${simplifiedMobile ? "text-lg" : "text-base"}`}>{fmt12(flight.flightDepartureTime ?? flight.localTime ?? "")} · {fmtDate(flight.flightDate ? flight.flightDate + " 00:00" : flight.localTime ?? "")}</p>
         </div>
         <StatusBadge r={flight} live={live} />
       </div>
@@ -602,6 +602,16 @@ export function FlightsTab({
         </>
       ) : null}
 
+      {simplifiedMobile ? (
+        <TripTransportRouteMap
+          reservations={transportReservations ?? reservations}
+          plannedFlightLegs={plannedFlightLegs}
+          onSegmentTap={onReservationTap}
+          mobileProminent
+          sectionId="trip-route-map"
+        />
+      ) : null}
+
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
@@ -828,12 +838,14 @@ export function FlightsTab({
         </button>
       )}
 
+      {!simplifiedMobile ? (
       <TripTransportRouteMap
         reservations={transportReservations ?? reservations}
         plannedFlightLegs={plannedFlightLegs}
-        selfCheck={simplifiedMobile ? undefined : itinerarySelfCheck}
+        selfCheck={itinerarySelfCheck}
         onSegmentTap={onReservationTap}
       />
+      ) : null}
     </section>
   );
 }

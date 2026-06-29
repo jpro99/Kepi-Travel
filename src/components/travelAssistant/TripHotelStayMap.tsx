@@ -21,6 +21,8 @@ interface TripHotelStayMapProps {
   staySegments?: TripStaySegment[];
   plannedStayCities?: PlannedStayCity[];
   onStayTap?: (point: HotelStayMapPoint) => void;
+  mobileProminent?: boolean;
+  sectionId?: string;
 }
 
 function StayCard({
@@ -105,6 +107,8 @@ export function TripHotelStayMap({
   staySegments = [],
   plannedStayCities = [],
   onStayTap,
+  mobileProminent = false,
+  sectionId,
 }: TripHotelStayMapProps) {
   const points = useMemo(
     () => buildHotelStayMapPoints({ reservations, staySegments, plannedStayCities }),
@@ -289,13 +293,24 @@ export function TripHotelStayMap({
   if (points.length === 0) return null;
 
   return (
-    <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#0c2447] via-[#0f172a] to-[#020617] shadow-xl ring-1 ring-white/10">
+    <section
+      id={sectionId}
+      className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#0c2447] via-[#0f172a] to-[#020617] shadow-xl ring-1 ring-white/10 scroll-mt-4"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 px-5 py-4">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-sky-300/80">Stay map</p>
-          <h3 className="mt-1 text-lg font-black text-white">Where you&apos;re staying</h3>
-          <p className="mt-1 text-xs text-sky-100/60">
-            Drag to pan · scroll or pinch to zoom · pins only (no flight routes)
+          <p
+            className={`font-bold uppercase tracking-wide text-sky-300/80 ${
+              mobileProminent ? "text-base" : "text-[10px] tracking-[0.22em]"
+            }`}
+          >
+            Stay map
+          </p>
+          <h3 className={`mt-1 font-black text-white ${mobileProminent ? "text-2xl" : "text-lg"}`}>
+            Where you&apos;re staying
+          </h3>
+          <p className={`mt-1 text-sky-100/60 ${mobileProminent ? "text-[15px]" : "text-xs"}`}>
+            Drag to pan · pinch to zoom
           </p>
         </div>
         <div
@@ -345,7 +360,9 @@ export function TripHotelStayMap({
         </div>
         <div
           ref={containerRef}
-          className="h-64 w-full overflow-hidden rounded-2xl ring-1 ring-white/10 md:h-80 lg:h-96"
+          className={`w-full overflow-hidden rounded-2xl ring-1 ring-white/10 ${
+            mobileProminent ? "h-80" : "h-64 md:h-80 lg:h-96"
+          }`}
           role="application"
           aria-label="Interactive hotel stay map"
         />
