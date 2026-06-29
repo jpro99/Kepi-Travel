@@ -73,6 +73,7 @@ interface MobileTripsViewProps {
   onDelete: (id: string) => void;
   dayNotes?: Record<string, string>;
   stopRanges?: StopDateRange[];
+  onDayNoteChange?: (dateKey: string, value: string) => void;
 }
 
 function formatTripDates(start: string, end: string): string {
@@ -139,6 +140,7 @@ export function MobileTripsView({
   onDelete,
   dayNotes = {},
   stopRanges = [],
+  onDayNoteChange,
 }: MobileTripsViewProps) {
   const [segment, setSegment] = useState<MobileTripsSegment>("flights");
   const [itineraryOpen, setItineraryOpen] = useState(false);
@@ -200,6 +202,7 @@ export function MobileTripsView({
         reservations={reservations}
         dayNotes={dayNotes}
         stopRanges={stopRanges}
+        onDayNoteChange={onDayNoteChange}
         onReservationTap={onReservationTap}
       />
 

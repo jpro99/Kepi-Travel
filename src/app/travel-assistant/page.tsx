@@ -8928,6 +8928,7 @@ export default function TravelAssistantPage() {
                 nearestAirport={guidanceNearestAirport}
                 dayNotes={itineraryPrefs.dayNotes}
                 stopRanges={itineraryStopRanges}
+                onDayNoteChange={itineraryPrefs.updateDayNote}
                 onCreateTrip={() => {
                   void handleCreateTrip();
                 }}

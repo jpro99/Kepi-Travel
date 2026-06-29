@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { MobileLinedDayEditor } from "@/components/travelAssistant/mobile/MobileLinedDayEditor";
 import type { StopDateRange } from "@/lib/decision/stopDates";
 import {
-  classifyDayLine,
   formatDayHeading,
-  parseDayIntentFromLines,
   parseDayLines,
   resolveStayCityForDay,
 } from "@/lib/travelAssistant/dayPlanLines";
@@ -14,6 +13,8 @@ import { buildFullTripDayKeys } from "@/lib/travelAssistant/tripTimelinePlanning
 
 const APPLE_FONT =
   '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", sans-serif';
+
+type CalendarView = "daily" | "weekly" | "monthly";
 
 interface ReaderReservation {
   id: string;
@@ -43,6 +44,7 @@ interface MobileItineraryReaderProps {
   reservations: ReaderReservation[];
   dayNotes?: Record<string, string>;
   stopRanges?: StopDateRange[];
+  onDayNoteChange?: (dateKey: string, value: string) => void;
   onReservationTap: (id: string) => void;
 }
 
@@ -58,33 +60,18 @@ function fmtTime12(raw: string): string {
   return `${h % 12 || 12}:${m[2]} ${h >= 12 ? "PM" : "AM"}`;
 }
 
-function reservationHeadline(reservation: ReaderReservation): string {
+function bookedLineText(reservation: ReaderReservation): string {
   if (reservation.type === "flight") {
     const dep = reservation.flightDepartureAirport ?? "???";
     const arr = reservation.flightArrivalAirport ?? "???";
-    const airline = reservation.flightAirline ?? reservation.provider;
-    const num = reservation.flightNumber ?? "";
-    return `${dep} → ${arr}${num ? ` · ${airline} ${num}` : ""}`;
+    const time = fmtTime12(reservation.flightDepartureTime ?? reservation.localTime ?? "");
+    const fn = reservation.flightNumber ?? reservation.provider;
+    return `Fly ${dep} → ${arr}${fn ? ` · ${fn}` : ""}${time ? ` · ${time}` : ""}`;
   }
   if (reservation.type === "hotel") {
-    return reservation.title || reservation.provider || "Hotel stay";
+    return `Stay at ${reservation.title || reservation.provider}`;
   }
   return reservation.title || reservation.provider;
-}
-
-function reservationSubline(reservation: ReaderReservation): string {
-  if (reservation.type === "flight") {
-    const dep = fmtTime12(reservation.flightDepartureTime ?? reservation.localTime ?? "");
-    const arr = fmtTime12(reservation.flightArrivalTime ?? "");
-    const parts = [dep ? `Departs ${dep}` : null, arr ? `Arrives ${arr}` : null, reservation.flightSeatNumber ? `Seat ${reservation.flightSeatNumber}` : null];
-    return parts.filter(Boolean).join(" · ");
-  }
-  if (reservation.type === "hotel") {
-    const checkIn = reservation.localTime?.slice(0, 10);
-    const checkOut = reservation.checkOutDate?.slice(0, 10);
-    return [checkIn ? `Check-in ${checkIn}` : null, checkOut ? `Check-out ${checkOut}` : null, reservation.confirmationCode].filter(Boolean).join(" · ");
-  }
-  return [reservation.location, reservation.confirmationCode].filter(Boolean).join(" · ");
 }
 
 function typeEmoji(type: string): string {
@@ -96,6 +83,31 @@ function typeEmoji(type: string): string {
   return "🎫";
 }
 
+function weekStartMonday(dateKey: string): string {
+  const d = new Date(`${dateKey}T12:00:00`);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+function addDays(dateKey: string, days: number): string {
+  const d = new Date(`${dateKey}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function monthLabel(dateKey: string): string {
+  return new Date(`${dateKey}T12:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+function dayPreview(note: string, bookedCount: number): string {
+  const lines = parseDayLines(note);
+  if (lines[0]) return lines[0];
+  if (bookedCount > 0) return `${bookedCount} booking${bookedCount === 1 ? "" : "s"} confirmed`;
+  return "Tap to plan this day…";
+}
+
 export function MobileItineraryReader({
   open,
   onClose,
@@ -105,8 +117,13 @@ export function MobileItineraryReader({
   reservations,
   dayNotes = {},
   stopRanges = [],
+  onDayNoteChange,
   onReservationTap,
 }: MobileItineraryReaderProps) {
+  const [calendarView, setCalendarView] = useState<CalendarView>("daily");
+  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
+  const [monthCursor, setMonthCursor] = useState(tripStartDate ?? new Date().toISOString().slice(0, 10));
+
   const days = useMemo(() => {
     const dayKeys = buildFullTripDayKeys(tripStartDate, tripEndDate, reservations);
     const byDay = new Map<string, ReaderReservation[]>();
@@ -122,152 +139,274 @@ export function MobileItineraryReader({
       dateKey,
       heading: formatDayHeading(dateKey),
       stayCity: resolveStayCityForDay(dateKey, dayNotes, stopRanges, tripStartDate, tripEndDate),
-      lines: parseDayLines(dayNotes[dateKey] ?? "").map(classifyDayLine),
-      intent: parseDayIntentFromLines(dayNotes[dateKey] ?? ""),
+      note: dayNotes[dateKey] ?? "",
+      planLines: parseDayLines(dayNotes[dateKey] ?? ""),
       booked: byDay.get(dateKey) ?? [],
     }));
   }, [dayNotes, reservations, stopRanges, tripEndDate, tripStartDate]);
 
-  const contentDays = days.filter(
-    (day) => day.booked.length > 0 || day.lines.length > 0 || day.stayCity,
-  );
+  const dayByKey = useMemo(() => new Map(days.map((d) => [d.dateKey, d])), [days]);
+
+  const weeks = useMemo(() => {
+    if (days.length === 0) return [];
+    const groups = new Map<string, typeof days>();
+    for (const day of days) {
+      const ws = weekStartMonday(day.dateKey);
+      const list = groups.get(ws) ?? [];
+      list.push(day);
+      groups.set(ws, list);
+    }
+    return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [days]);
+
+  const monthGrid = useMemo(() => {
+    const cursor = new Date(`${monthCursor.slice(0, 7)}-01T12:00:00`);
+    const year = cursor.getFullYear();
+    const month = cursor.getMonth();
+    const firstDow = new Date(year, month, 1).getDay();
+    const startPad = firstDow === 0 ? 6 : firstDow - 1;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cells: Array<{ dateKey: string | null; inTrip: boolean }> = [];
+    for (let i = 0; i < startPad; i++) cells.push({ dateKey: null, inTrip: false });
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateKey = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      cells.push({ dateKey, inTrip: dayByKey.has(dateKey) });
+    }
+    return cells;
+  }, [dayByKey, monthCursor]);
+
+  const selectedDay = selectedDateKey ? dayByKey.get(selectedDateKey) : null;
 
   useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
+    if (!open) {
+      setSelectedDateKey(null);
+      return;
+    }
+    const prevHtml = document.documentElement.style.overflow;
+    const prevBody = document.body.style.overflow;
+    document.documentElement.style.overflow = "hidden";
     document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = prev;
+      document.documentElement.style.overflow = prevHtml;
+      document.body.style.overflow = prevBody;
     };
   }, [open]);
 
   if (!open || typeof document === "undefined") return null;
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[120] flex flex-col bg-[#F2F2F7] dark:bg-black"
-      style={{ fontFamily: APPLE_FONT, paddingTop: "env(safe-area-inset-top)" }}
-      role="dialog"
-      aria-modal="true"
-      aria-label={`${tripName} itinerary`}
-    >
-      <header className="sticky top-0 z-10 border-b border-black/[0.08] bg-[#F2F2F7]/95 px-4 py-3 backdrop-blur-xl dark:border-white/[0.08] dark:bg-black/90">
-        <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="min-h-[44px] rounded-full px-4 text-[17px] font-semibold text-[#007AFF] active:opacity-60"
-          >
-            Done
-          </button>
-          <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Itinerary
-          </p>
-          <span className="w-[72px]" aria-hidden />
-        </div>
-      </header>
+  const openDay = (dateKey: string): void => setSelectedDateKey(dateKey);
 
-      <div className="flex-1 overflow-y-auto overscroll-contain">
-        <div className="mx-auto max-w-lg px-5 pb-32 pt-6">
-          <p className="text-[15px] font-semibold text-slate-500 dark:text-slate-400">Your trip</p>
-          <h1 className="mt-1 text-[34px] font-bold leading-tight tracking-tight text-slate-900 dark:text-white">
-            {tripName}
-          </h1>
+  return createPortal(
+    <>
+      <div
+        className="fixed inset-0 z-[120] flex h-[100dvh] max-h-[100dvh] flex-col bg-[#F2F2F7] dark:bg-black"
+        style={{ fontFamily: APPLE_FONT, paddingTop: "env(safe-area-inset-top)" }}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${tripName} itinerary`}
+      >
+        <header className="shrink-0 border-b border-black/[0.08] bg-[#F2F2F7]/95 px-4 py-3 backdrop-blur-xl dark:border-white/[0.08] dark:bg-black/90">
+          <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="min-h-[44px] rounded-full px-4 text-[17px] font-semibold text-[#007AFF]"
+            >
+              Done
+            </button>
+            <p className="text-[15px] font-bold text-slate-700 dark:text-slate-200">Itinerary</p>
+            <span className="w-[72px]" aria-hidden />
+          </div>
+        </header>
+
+        <div className="shrink-0 px-4 pb-3 pt-4">
+          <h1 className="text-[32px] font-bold leading-tight text-slate-900 dark:text-white">{tripName}</h1>
           {tripStartDate && tripEndDate ? (
-            <p className="mt-2 text-[17px] text-slate-600 dark:text-slate-300">
+            <p className="mt-1 text-[17px] text-slate-600 dark:text-slate-300">
               {formatDayHeading(tripStartDate).monthDay} – {formatDayHeading(tripEndDate).monthDay}
+              <span className="text-slate-400"> · {days.length} days</span>
             </p>
           ) : null}
-          <p className="mt-1 text-[15px] text-slate-500 dark:text-slate-400">
-            {contentDays.length} day{contentDays.length === 1 ? "" : "s"} · scroll to read
-          </p>
 
-          <div className="mt-8 space-y-6">
-            {contentDays.length === 0 ? (
-              <div className="rounded-2xl bg-white p-6 text-center shadow-sm dark:bg-slate-900">
-                <p className="text-[17px] font-semibold text-slate-800 dark:text-slate-100">No itinerary yet</p>
-                <p className="mt-2 text-[15px] leading-relaxed text-slate-500 dark:text-slate-400">
-                  Add flights and hotels — they appear here day by day.
-                </p>
+          <div className="mt-4 flex gap-1 rounded-2xl bg-slate-200/80 p-1 dark:bg-slate-800">
+            {(["daily", "weekly", "monthly"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setCalendarView(mode)}
+                className={`min-h-[44px] flex-1 rounded-xl text-[16px] font-bold capitalize transition ${
+                  calendarView === mode
+                    ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-white"
+                    : "text-slate-600 dark:text-slate-400"
+                }`}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain touch-pan-y">
+          <div className="mx-auto max-w-lg px-4 pb-[calc(5rem+env(safe-area-inset-bottom))] pt-2">
+            {days.length === 0 ? (
+              <div className="rounded-2xl bg-white p-8 text-center dark:bg-slate-900">
+                <p className="text-[19px] font-semibold text-slate-800 dark:text-slate-100">Set trip dates first</p>
+                <p className="mt-2 text-[17px] text-slate-500">Your day-by-day notebook appears here.</p>
               </div>
-            ) : (
-              contentDays.map((day) => (
-                <article key={day.dateKey} className="scroll-mt-6">
-                  <div className="mb-3 flex items-end justify-between gap-3">
-                    <div>
-                      <p className="text-[13px] font-bold uppercase tracking-wide text-[#007AFF] dark:text-[#0A84FF]">
-                        Day {day.index + 1}
-                      </p>
-                      <h2 className="text-[22px] font-bold text-slate-900 dark:text-white">
-                        {day.heading.weekday}
-                      </h2>
-                      <p className="text-[17px] text-slate-600 dark:text-slate-300">{day.heading.monthDay}</p>
+            ) : calendarView === "daily" ? (
+              <div className="space-y-3">
+                {days.map((day) => (
+                  <button
+                    key={day.dateKey}
+                    type="button"
+                    onClick={() => openDay(day.dateKey)}
+                    className="w-full rounded-2xl bg-white p-5 text-left shadow-sm ring-1 ring-black/[0.04] active:scale-[0.99] dark:bg-slate-900 dark:ring-white/[0.06]"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[15px] font-bold text-[#007AFF]">Day {day.index + 1}</p>
+                        <p className="mt-0.5 text-[22px] font-bold text-slate-900 dark:text-white">
+                          {day.heading.weekday}
+                        </p>
+                        <p className="text-[17px] text-slate-600 dark:text-slate-300">{day.heading.monthDay}</p>
+                      </div>
+                      <span className="text-[22px] text-slate-300">›</span>
                     </div>
                     {day.stayCity ? (
-                      <span className="rounded-full bg-white px-3 py-1.5 text-[15px] font-semibold text-slate-700 shadow-sm dark:bg-slate-800 dark:text-slate-200">
-                        📍 {day.stayCity}
-                      </span>
+                      <p className="mt-2 text-[16px] font-medium text-slate-600 dark:text-slate-300">📍 {day.stayCity}</p>
                     ) : null}
-                  </div>
-
-                  {day.booked.length > 0 ? (
-                    <div className="space-y-2">
-                      {day.booked.map((reservation) => (
-                        <button
-                          key={reservation.id}
-                          type="button"
-                          onClick={() => {
-                            onReservationTap(reservation.id);
-                            onClose();
-                          }}
-                          className="w-full rounded-2xl bg-white p-4 text-left shadow-sm ring-1 ring-black/[0.04] active:scale-[0.99] dark:bg-slate-900 dark:ring-white/[0.06]"
-                        >
-                          <div className="flex items-start gap-3">
-                            <span className="text-2xl leading-none" aria-hidden>
-                              {typeEmoji(reservation.type)}
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-[17px] font-semibold leading-snug text-slate-900 dark:text-white">
-                                {reservationHeadline(reservation)}
-                              </p>
-                              {reservationSubline(reservation) ? (
-                                <p className="mt-1 text-[15px] leading-relaxed text-slate-500 dark:text-slate-400">
-                                  {reservationSubline(reservation)}
-                                </p>
-                              ) : null}
-                            </div>
-                            <span className="text-[15px] text-slate-300 dark:text-slate-600">›</span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {day.lines.length > 0 ? (
-                    <div className="mt-3 rounded-2xl bg-white p-4 shadow-sm dark:bg-slate-900">
-                      <p className="mb-2 text-[13px] font-bold uppercase tracking-wide text-slate-400">Plans</p>
-                      <ul className="space-y-3">
-                        {day.lines.map((line) => (
-                          <li
-                            key={line.text}
-                            className="flex items-start gap-3 text-[17px] leading-relaxed text-slate-800 dark:text-slate-100"
+                    <p className="mt-3 text-[18px] leading-snug text-slate-800 dark:text-slate-100">
+                      {dayPreview(day.note, day.booked.length)}
+                    </p>
+                    {day.booked.length > 0 ? (
+                      <p className="mt-2 text-[15px] font-semibold text-emerald-700 dark:text-emerald-400">
+                        {day.booked.length} confirmed · tap to edit on lined paper
+                      </p>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            ) : calendarView === "weekly" ? (
+              <div className="space-y-5">
+                {weeks.map(([weekStart, weekDays]) => (
+                  <section key={weekStart}>
+                    <p className="mb-2 text-[15px] font-bold text-slate-500">
+                      Week of {formatDayHeading(weekStart).monthDay}
+                    </p>
+                    <div className="grid grid-cols-7 gap-1.5">
+                      {Array.from({ length: 7 }, (_, i) => {
+                        const dateKey = addDays(weekStart, i);
+                        const day = dayByKey.get(dateKey);
+                        if (!day) {
+                          return <div key={dateKey} className="aspect-square rounded-xl bg-transparent" />;
+                        }
+                        return (
+                          <button
+                            key={dateKey}
+                            type="button"
+                            onClick={() => openDay(dateKey)}
+                            className={`flex aspect-square flex-col items-center justify-center rounded-xl text-center ${
+                              day.booked.length > 0 || day.planLines.length > 0
+                                ? "bg-[#007AFF] text-white shadow-md"
+                                : "bg-white text-slate-800 ring-1 ring-black/[0.06] dark:bg-slate-900 dark:text-white"
+                            }`}
                           >
-                            <span className="text-xl leading-none" aria-hidden>
-                              {line.icon}
+                            <span className="text-[11px] font-bold uppercase opacity-80">
+                              {day.heading.weekday.slice(0, 3)}
                             </span>
-                            <span>{line.text}</span>
-                          </li>
-                        ))}
-                      </ul>
+                            <span className="text-[20px] font-black leading-none">
+                              {new Date(`${dateKey}T12:00:00`).getDate()}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
-                  ) : null}
-                </article>
-              ))
+                  </section>
+                ))}
+              </div>
+            ) : (
+              <div>
+                <div className="mb-3 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = new Date(`${monthCursor.slice(0, 7)}-01T12:00:00`);
+                      d.setMonth(d.getMonth() - 1);
+                      setMonthCursor(d.toISOString().slice(0, 10));
+                    }}
+                    className="min-h-[44px] px-3 text-[17px] font-bold text-[#007AFF]"
+                  >
+                    ‹
+                  </button>
+                  <p className="text-[18px] font-bold text-slate-900 dark:text-white">{monthLabel(monthCursor)}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = new Date(`${monthCursor.slice(0, 7)}-01T12:00:00`);
+                      d.setMonth(d.getMonth() + 1);
+                      setMonthCursor(d.toISOString().slice(0, 10));
+                    }}
+                    className="min-h-[44px] px-3 text-[17px] font-bold text-[#007AFF]"
+                  >
+                    ›
+                  </button>
+                </div>
+                <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[13px] font-bold text-slate-500">
+                  {["M", "T", "W", "T", "F", "S", "S"].map((label) => (
+                    <span key={label}>{label}</span>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 gap-1.5">
+                  {monthGrid.map((cell, i) => {
+                    if (!cell.dateKey) return <div key={`empty-${i}`} className="aspect-square" />;
+                    const day = dayByKey.get(cell.dateKey);
+                    const active = Boolean(day);
+                    return (
+                      <button
+                        key={cell.dateKey}
+                        type="button"
+                        disabled={!active}
+                        onClick={() => active && openDay(cell.dateKey)}
+                        className={`flex aspect-square flex-col items-center justify-center rounded-xl text-[18px] font-bold ${
+                          !active
+                            ? "text-slate-300 dark:text-slate-700"
+                            : day && (day.booked.length > 0 || day.planLines.length > 0)
+                              ? "bg-[#007AFF] text-white shadow"
+                              : "bg-white text-slate-900 ring-1 ring-black/[0.06] dark:bg-slate-900 dark:text-white"
+                        }`}
+                      >
+                        {new Date(`${cell.dateKey}T12:00:00`).getDate()}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             )}
           </div>
         </div>
       </div>
-    </div>,
+
+      {selectedDay && onDayNoteChange ? (
+        <MobileLinedDayEditor
+          dateKey={selectedDay.dateKey}
+          dayIndex={selectedDay.index}
+          stayCity={selectedDay.stayCity}
+          savedNote={selectedDay.note}
+          bookedLines={selectedDay.booked.map((r) => ({
+            id: r.id,
+            text: bookedLineText(r),
+            emoji: typeEmoji(r.type),
+          }))}
+          onSave={(note) => onDayNoteChange(selectedDay.dateKey, note)}
+          onBack={() => setSelectedDateKey(null)}
+          onBookedTap={(id) => {
+            setSelectedDateKey(null);
+            onClose();
+            onReservationTap(id);
+          }}
+        />
+      ) : null}
+    </>,
     document.body,
   );
 }
