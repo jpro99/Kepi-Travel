@@ -43,6 +43,7 @@
     "@turf/helpers": "^7.3.5",
     "@turf/nearest-point-on-line": "^7.3.5",
     "@turf/turf": "^7.3.5",
+    "@types/three": "^0.185.0",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.0",
     "@vercel/analytics": "^2.0.1",
@@ -79,6 +80,7 @@
     "svix": "^1.94.0",
     "tailwind-merge": "^3.6.0",
     "tailwindcss-animate": "^1.0.7",
+    "three": "^0.185.0",
     "use-debounce": "^10.1.1",
     "web-push": "^3.6.7",
     "zod": "^4.3.6"

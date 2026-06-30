@@ -25,7 +25,7 @@ function readTabFromStorage(): MobilePrimaryTab | null {
 }
 
 function readInitialMobileTab(): MobilePrimaryTab {
-  return readTabFromUrl() ?? readTabFromStorage() ?? "planning";
+  return readTabFromUrl() ?? readTabFromStorage() ?? "home";
 }
 
 function writeTabToUrl(tab: MobilePrimaryTab): void {

@@ -155,8 +155,8 @@ import { allocateStopDates } from "@/lib/decision/stopDates";
 import { resolveStayCityForDay } from "@/lib/travelAssistant/dayPlanLines";
 import { buildFlightLegsFromIntent, defaultEnabledLegIds } from "@/lib/decision/flightLegPlanner";
 import { DesktopTripHomeView } from "@/components/travelAssistant/DesktopTripHomeView";
-import { MobilePlanNotebook } from "@/components/travelAssistant/mobile/MobilePlanNotebook";
-import { MobileTripShellHeader } from "@/components/travelAssistant/mobile/MobileTripShellHeader";
+import { MobileMapForwardShell } from "@/components/travelAssistant/mobile/MobileMapForwardShell";
+import { computeJourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 import { TripSearch, type TripSearchSelection } from "@/components/travelAssistant/TripSearch";
 import { TripSwitcher } from "@/components/travelAssistant/TripSwitcher";
 import { TripOrientationCard } from "@/components/travelAssistant/TripOrientationCard";
@@ -199,8 +199,6 @@ import {
   orientationTabToConsumerTab,
   type ConsumerTab,
 } from "@/lib/travelAssistant/consumerTabs";
-import { MobileItineraryReader } from "@/components/travelAssistant/mobile/MobileItineraryReader";
-import { MobileSettingsView } from "@/components/travelAssistant/mobile/MobileSettingsView";
 import { MobileSearchOverlay } from "@/components/travelAssistant/mobile/MobileSearchOverlay";
 import { MobileTabBarNav } from "@/components/travelAssistant/mobile/useMobileTabNavigation";
 import { isStandaloneApp } from "@/lib/ui/isStandaloneApp";
@@ -2362,7 +2360,7 @@ export default function TravelAssistantPage() {
   }, [refreshEmailForwardSetup]);
 
   useEffect(() => {
-    if (consumerTab !== "more" && mobilePrimaryTab !== "settings") {
+    if (consumerTab !== "more" && mobilePrimaryTab !== "more") {
       return;
     }
     const timeout = window.setTimeout(() => {
@@ -4712,6 +4710,15 @@ export default function TravelAssistantPage() {
     return { kind: "no-trip" };
   }, [consumerReservationsSorted, consumerTripDestination, activeTrip?.destination,
       guidanceUserLat, guidanceUserLon, guidanceLocationStatus]);
+
+  const mobileJourneyPhase = useMemo(
+    () =>
+      computeJourneyPhase({
+        reservations: consumerReservationsSorted,
+        tripDestination: consumerTripDestination ?? activeTrip?.destination ?? null,
+      }),
+    [consumerReservationsSorted, consumerTripDestination, activeTrip?.destination],
+  );
 
   useEffect(() => {
     if (!isCompactViewport) {
@@ -8842,138 +8849,53 @@ export default function TravelAssistantPage() {
                 <div className="h-28 rounded-2xl bg-[var(--bg-card)] shadow-sm ring-1 ring-[var(--border-default)]" />
               </section>
             ) : (
-              <>
-                {activeTrip ? (
-                  <MobileTripShellHeader
-                    tripName={activeTrip.name}
-                    destination={consumerTripDestination ?? activeTrip.destination}
-                    startDate={consumerTripStartDate ?? activeTrip.startDate}
-                    endDate={consumerTripEndDate ?? activeTrip.endDate}
-                  />
-                ) : null}
-
-                <div key={mobilePrimaryTab} className="space-y-4">
-                {mobilePrimaryTab === "planning" ? (
-                  <MobilePlanNotebook
-                    tripName={activeTrip?.name ?? "Your trip"}
-                    tripStartDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
-                    tripEndDate={consumerTripEndDate ?? activeTrip?.endDate ?? null}
-                    reservations={consumerReservationsSorted}
-                    dayNotes={itineraryPrefs.dayNotes}
-                    stopRanges={itineraryStopRanges}
-                    onDayNoteChange={itineraryPrefs.updateDayNote}
-                    onCreateTrip={() => {
-                      void handleCreateTrip();
-                    }}
-                  />
-                ) : mobilePrimaryTab === "itinerary" ? (
-                  <MobileItineraryReader
-                    embedded
-                    open
-                    onClose={() => {}}
-                    tripName={activeTrip?.name ?? "Your trip"}
-                    tripStartDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
-                    tripEndDate={consumerTripEndDate ?? activeTrip?.endDate ?? null}
-                    reservations={consumerReservationsSorted}
-                    dayNotes={itineraryPrefs.dayNotes}
-                    stopRanges={itineraryStopRanges}
-                    onDayNoteChange={itineraryPrefs.updateDayNote}
-                    onReservationTap={(id) => openDrawer("reservation", id)}
-                  />
-                ) : mobilePrimaryTab === "flights" ? (
-                  activeTrip ? (
-                    <FlightsTab
-                      reservations={consumerReservationsSorted.filter((r) => r.type === "flight")}
-                      transportReservations={consumerReservationsSorted.filter((r) =>
-                        ["flight", "train", "ride"].includes(r.type),
-                      )}
-                      liveStatus={flightStatusCheckByReservationId}
-                      locationStatus={guidanceLocationStatus}
-                      nearestAirport={guidanceNearestAirport}
-                      onReservationTap={(id) => openDrawer("reservation", id)}
-                      onCheckStatus={(id) => void handleCheckFlightStatus(id)}
-                      onDelete={(id) => void handleDeleteReservation(id)}
-                      onAdd={() => setManualReservationModalOpen(true)}
-                      simplifiedMobile
-                    />
-                  ) : (
-                    <section className="space-y-4">
-                      <div className="rounded-[var(--radius-card)] bg-[var(--bg-card)] p-6 text-center shadow-[var(--shadow-card)]">
-                        <p className="text-[22px] font-semibold text-[var(--text-primary)]">Your flights live here</p>
-                        <p className="mt-2 text-[15px] text-[var(--text-secondary)]">
-                          Create a trip to add and track your flights.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void handleCreateTrip();
-                          }}
-                          className="mt-6 min-h-[48px] w-full rounded-[var(--radius-button)] bg-[var(--accent)] px-6 text-[17px] font-semibold text-white transition-opacity duration-[220ms] ease-in-out active:opacity-80"
-                        >
-                          Create your trip
-                        </button>
-                      </div>
-                    </section>
-                  )
-                ) : mobilePrimaryTab === "hotels" ? (
-                  activeTrip ? (
-                    <HotelsTab
-                      reservations={consumerReservationsSorted.filter((r) => r.type === "hotel")}
-                      mapReservations={consumerReservationsSorted.filter((r) => r.type === "hotel")}
-                      tripName={activeTrip.name}
-                      onReservationTap={(id) => openDrawer("reservation", id)}
-                      onCheckStatus={(id) => void handleCheckFlightStatus(id)}
-                      onDelete={(id) => void handleDeleteReservation(id)}
-                      onAdd={() => setManualReservationModalOpen(true)}
-                      simplifiedMobile
-                      hotelNotebookNote={itineraryPrefs.hotelNotebookNote}
-                      onHotelNotebookChange={itineraryPrefs.updateHotelNotebookNote}
-                    />
-                  ) : (
-                    <section className="space-y-4">
-                      <div className="rounded-[var(--radius-card)] bg-[var(--bg-card)] p-6 text-center shadow-[var(--shadow-card)]">
-                        <p className="text-[22px] font-semibold text-[var(--text-primary)]">Your hotels live here</p>
-                        <p className="mt-2 text-[15px] text-[var(--text-secondary)]">
-                          Create a trip to add and track your stays.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void handleCreateTrip();
-                          }}
-                          className="mt-6 min-h-[48px] w-full rounded-[var(--radius-button)] bg-[var(--accent)] px-6 text-[17px] font-semibold text-white transition-opacity duration-[220ms] ease-in-out active:opacity-80"
-                        >
-                          Create your trip
-                        </button>
-                      </div>
-                    </section>
-                  )
-                ) : (
-                  <MobileSettingsView
-                    emailForwardAddress={emailForwardAddress}
-                    onCopyForwardAddress={() => {
-                      void handleCopyForwardAddress();
-                    }}
-                    pushSubscribed={pushSubscribed}
-                    pushBusy={pushBusy}
-                    pushMessage={pushMessage}
-                    onEnablePush={() => {
-                      void handleEnablePush();
-                    }}
-                    billingLoading={billingLoading}
-                    isLifetime={isLifetime}
-                    isTrial={isTrial}
-                    trialDaysRemaining={trialDaysRemaining}
-                    trialExpiresAt={trialExpiresAt}
-                    hasProAccess={hasProAccess}
-                    emailForwardSetupMessage={emailForwardSetupMessage}
-                    onSignOut={() => {
-                      void clerk.signOut();
-                    }}
-                  />
-                )}
-                </div>
-              </>
+              <MobileMapForwardShell
+                activeTab={mobilePrimaryTab}
+                onNavigateTab={navigateMobilePrimaryTab}
+                journeyPhase={mobileJourneyPhase}
+                tripName={activeTrip?.name ?? "Your trip"}
+                destination={consumerTripDestination ?? activeTrip?.destination ?? null}
+                startDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
+                endDate={consumerTripEndDate ?? activeTrip?.endDate ?? null}
+                hasActiveTrip={Boolean(activeTrip)}
+                reservations={consumerReservationsSorted}
+                liveStatus={flightStatusCheckByReservationId}
+                locationStatus={guidanceLocationStatus}
+                nearestAirport={guidanceNearestAirport}
+                dayNotes={itineraryPrefs.dayNotes}
+                stopRanges={itineraryStopRanges}
+                hotelNotebookNote={itineraryPrefs.hotelNotebookNote}
+                onDayNoteChange={itineraryPrefs.updateDayNote}
+                onHotelNotebookChange={itineraryPrefs.updateHotelNotebookNote}
+                onCreateTrip={() => {
+                  void handleCreateTrip();
+                }}
+                onReservationTap={(id) => openDrawer("reservation", id)}
+                onCheckStatus={(id) => void handleCheckFlightStatus(id)}
+                onDelete={(id) => void handleDeleteReservation(id)}
+                onAddBooking={() => setManualReservationModalOpen(true)}
+                onTalkPlanner={() => setTalkPlannerOpen(true)}
+                emailForwardAddress={emailForwardAddress}
+                onCopyForwardAddress={() => {
+                  void handleCopyForwardAddress();
+                }}
+                pushSubscribed={pushSubscribed}
+                pushBusy={pushBusy}
+                pushMessage={pushMessage}
+                onEnablePush={() => {
+                  void handleEnablePush();
+                }}
+                billingLoading={billingLoading}
+                isLifetime={isLifetime}
+                isTrial={isTrial}
+                trialDaysRemaining={trialDaysRemaining}
+                trialExpiresAt={trialExpiresAt}
+                hasProAccess={hasProAccess}
+                emailForwardSetupMessage={emailForwardSetupMessage}
+                onSignOut={() => {
+                  void clerk.signOut();
+                }}
+              />
             )
           ) : null}
 
@@ -9435,7 +9357,7 @@ export default function TravelAssistantPage() {
               onClose={() => setMobileSearchOpen(false)}
               onSelectResult={async (selection) => {
                 await handleTripSearchSelection(selection);
-                navigateMobilePrimaryTab("flights");
+                navigateMobilePrimaryTab("trip");
               }}
             />
             <MobileTabBarNav activeTab={mobilePrimaryTab} onSelectTab={navigateMobilePrimaryTab} />
