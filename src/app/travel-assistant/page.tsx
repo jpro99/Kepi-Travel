@@ -8721,7 +8721,7 @@ export default function TravelAssistantPage() {
 
   if (!advancedWorkspaceEnabled) {
     return (
-      <main className="relative min-h-screen overflow-x-hidden bg-[var(--bg-base)] pb-24 text-[var(--text-primary)]">
+      <main className="relative min-h-screen overflow-x-hidden bg-[var(--bg-base)] pb-28 text-[var(--text-primary)]">
         <div className="relative z-10 flex min-h-screen">
           <div className="min-w-0 flex-1">
         <div className="mx-auto max-w-3xl space-y-4 px-3 py-3 sm:max-w-4xl sm:px-4 lg:max-w-6xl lg:px-5 xl:max-w-7xl">

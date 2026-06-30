@@ -33,12 +33,10 @@ export function MobileTripShellHeader({
   const dates = formatTripDates(startDate ?? "", endDate ?? "");
 
   return (
-    <header className="mb-1">
-      <h1 className="text-[34px] font-semibold leading-tight tracking-tight text-[var(--text-primary)]">
-        {tripName}
-      </h1>
+    <header>
+      <h1 className="text-[1.75rem] font-black leading-tight text-[var(--text-primary)]">{tripName}</h1>
       {(destination || dates) ? (
-        <p className="mt-1 text-[15px] text-[var(--text-secondary)]">
+        <p className="mt-1 text-[17px] text-[var(--text-muted)]">
           {[destination || null, dates || null].filter(Boolean).join(" · ")}
         </p>
       ) : null}

@@ -302,7 +302,7 @@ export function MobilePlanNotebook({
 
   return (
     <section
-      className="overflow-hidden rounded-[var(--radius-card)] bg-[var(--bg-card)] shadow-[var(--shadow-card)]"
+      className="overflow-hidden rounded-3xl shadow-sm ring-1 ring-[#e8e0d0]"
       style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif' }}
     >
       <div ref={scrollRef} style={MOBILE_OVERLAY_SCROLL}>
@@ -312,28 +312,14 @@ export function MobilePlanNotebook({
             minHeight: `${paperMinHeight}px`,
             backgroundColor: MOBILE_NOTEBOOK.paper,
             backgroundImage: notebookRuleGradient(lineHeight),
-            boxShadow: `inset ${marginW}px 0 0 0 var(--bg-grouped)`,
+            boxShadow: `inset ${marginW}px 0 0 0 rgba(220, 80, 70, 0.08)`,
           }}
         >
           <div
-            className="pointer-events-none absolute bottom-0 top-0 w-px bg-[var(--border-default)]"
+            className="pointer-events-none absolute bottom-0 top-0 w-px bg-red-400/45"
             style={{ left: marginW - 10 }}
             aria-hidden
           />
-
-          <div
-            className="border-b border-[var(--border-default)] px-4 py-4"
-            style={{ marginLeft: marginW, paddingRight: 16 }}
-          >
-            <p className="text-[13px] font-medium text-[var(--text-tertiary)]">Itinerary</p>
-            <h2 className="mt-1 text-[22px] font-semibold leading-tight text-[var(--text-primary)]">{tripName}</h2>
-            {tripStartDate && tripEndDate ? (
-              <p className="mt-1 text-[15px] text-[var(--text-secondary)]">
-                {formatDayHeading(tripStartDate).monthDay} – {formatDayHeading(tripEndDate).monthDay}
-              </p>
-            ) : null}
-            <p className="mt-2 text-[13px] text-[var(--text-tertiary)]">Tap any line to edit</p>
-          </div>
 
           {days.map((day) =>
             onDayNoteChange ? (
