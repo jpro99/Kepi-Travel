@@ -600,7 +600,7 @@ export function TripTransportRouteMap({
               allowManualFit();
               void fitWholeTrip();
             }}
-              className={`rounded-full px-3 py-1.5 text-[11px] font-bold shadow backdrop-blur ${
+              className={`rounded-full px-3 py-2 text-[13px] font-bold shadow backdrop-blur ${
                 mobileLight ? "bg-white text-slate-800 ring-1 ring-black/10" : "bg-slate-950/80 text-white ring-1 ring-white/20"
               }`}
             >
@@ -644,7 +644,7 @@ export function TripTransportRouteMap({
               className={`w-full overflow-hidden ${
                 expanded
                   ? "absolute inset-0"
-                  : `rounded-2xl ring-1 ${mobileLight ? "ring-black/10" : "ring-white/10"} ${mobileProminent ? "h-80" : "h-64 md:h-80 lg:h-96"}`
+                  : `rounded-2xl ring-1 ${mobileLight ? "ring-black/10" : "ring-white/10"} ${mobileProminent ? (mobileLight ? "h-[min(52vw,22rem)] min-h-[16rem]" : "h-80") : "h-64 md:h-80 lg:h-96"}`
               }`}
               role="application"
               aria-label="Interactive trip route map — drag to pan, scroll to zoom"
@@ -656,7 +656,7 @@ export function TripTransportRouteMap({
                 className="absolute inset-0 z-[5] flex items-end justify-center rounded-2xl pb-4"
                 aria-label="Open full screen route map"
               >
-                <span className="rounded-full bg-slate-900/75 px-5 py-2.5 text-[16px] font-bold text-white shadow-lg backdrop-blur">
+                <span className="rounded-full bg-slate-900/75 px-5 py-3 text-[17px] font-bold text-white shadow-lg backdrop-blur">
                   Tap for full screen map
                 </span>
               </button>

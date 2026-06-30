@@ -640,15 +640,23 @@ export function FlightsTab({
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className={simplifiedMobile ? listType.heading : type.heading}>Your flights</h2>
-          <p className={simplifiedMobile ? listType.subheading : type.subheading}>
+          <h2
+            className={
+              simplifiedMobile
+                ? "text-[22px] font-bold tracking-tight text-[var(--text-primary)]"
+                : listType.heading
+            }
+          >
+            Your flights
+          </h2>
+          <p className={simplifiedMobile ? "mt-0.5 text-[15px] text-[var(--text-secondary)]" : listType.subheading}>
             {upcoming.length} booked{past.length > 0 ? ` · ${past.length} past` : ""}
           </p>
         </div>
         <button
           type="button"
           onClick={onAdd}
-          className={`shrink-0 ${type.addBtn}`}
+          className={`shrink-0 ${simplifiedMobile ? "rounded-[var(--radius-button)] border border-[var(--border-default)] bg-[var(--bg-card)] px-3.5 py-2.5 text-[15px] font-semibold text-[var(--text-primary)]" : type.addBtn}`}
         >
           Add existing
         </button>
@@ -723,6 +731,7 @@ export function FlightsTab({
             return (
               <FlightCard
                 key={r.id}
+                mobile
                 className={past ? "opacity-60" : ""}
                 airline={r.flightAirline ?? r.provider}
                 flightNumber={flightCardSubtitle(r.flightNumber, dep, arr)}

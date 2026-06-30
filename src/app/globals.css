@@ -160,6 +160,11 @@
     min-height: 100dvh;
     min-height: -webkit-fill-available;
   }
+
+  /* Installed app: match mobile browser type scale (17px Apple body) */
+  html.kepi-standalone {
+    font-size: 17px;
+  }
 }
 
 @layer components {
