@@ -48,6 +48,8 @@ interface MobileItineraryReaderProps {
   stopRanges?: StopDateRange[];
   onDayNoteChange?: (dateKey: string, value: string) => void;
   onReservationTap: (id: string) => void;
+  /** Render inside a tab instead of a full-screen modal */
+  embedded?: boolean;
 }
 
 function reservationDateKey(reservation: ReaderReservation): string {
@@ -121,6 +123,7 @@ export function MobileItineraryReader({
   stopRanges = [],
   onDayNoteChange,
   onReservationTap,
+  embedded = false,
 }: MobileItineraryReaderProps) {
   const [calendarView, setCalendarView] = useState<CalendarView>("daily");
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
@@ -179,19 +182,13 @@ export function MobileItineraryReader({
 
   const selectedDay = selectedDateKey ? dayByKey.get(selectedDateKey) : null;
 
-  if (!open || typeof document === "undefined") return null;
+  if (!embedded && (!open || typeof document === "undefined")) return null;
 
   const openDay = (dateKey: string): void => setSelectedDateKey(dateKey);
 
-  return createPortal(
+  const itineraryBody = (
     <>
-      <div
-        className="fixed inset-0 z-[120] flex flex-col bg-[#F2F2F7] dark:bg-black"
-        style={MOBILE_OVERLAY_SHELL}
-        role="dialog"
-        aria-modal="true"
-        aria-label={`${tripName} itinerary`}
-      >
+      {!embedded ? (
         <header className="sticky top-0 z-10 shrink-0 border-b border-black/[0.08] bg-[#F2F2F7]/95 px-4 py-3 backdrop-blur-xl dark:border-white/[0.08] dark:bg-black/90">
           <div className="flex items-center justify-between gap-3">
             <button
@@ -205,18 +202,21 @@ export function MobileItineraryReader({
             <span className="w-[80px]" aria-hidden />
           </div>
         </header>
+      ) : null}
 
-        <div className="min-h-0 flex-1" style={MOBILE_OVERLAY_SCROLL}>
-          <div className="px-4 pb-[calc(5rem+env(safe-area-inset-bottom))] pt-4">
+      <div className={embedded ? "" : "min-h-0 flex-1"} style={embedded ? undefined : MOBILE_OVERLAY_SCROLL}>
+        <div className={embedded ? "pb-4" : "px-4 pb-[calc(5rem+env(safe-area-inset-bottom))] pt-4"}>
+          {!embedded ? (
             <h1 className="text-[34px] font-bold leading-tight text-slate-900 dark:text-white">{tripName}</h1>
-            {tripStartDate && tripEndDate ? (
-              <p className="mt-1 text-[20px] text-slate-600 dark:text-slate-300">
-                {formatDayHeading(tripStartDate).monthDay} – {formatDayHeading(tripEndDate).monthDay}
-                <span className="text-slate-400"> · {days.length} days</span>
-              </p>
-            ) : null}
+          ) : null}
+          {!embedded && tripStartDate && tripEndDate ? (
+            <p className="mt-1 text-[20px] text-slate-600 dark:text-slate-300">
+              {formatDayHeading(tripStartDate).monthDay} – {formatDayHeading(tripEndDate).monthDay}
+              <span className="text-slate-400"> · {days.length} days</span>
+            </p>
+          ) : null}
 
-            <div className="mt-4 flex gap-1.5 rounded-2xl bg-slate-200/80 p-1.5 dark:bg-slate-800">
+          <div className={`flex gap-1.5 rounded-2xl bg-slate-200/80 p-1.5 dark:bg-slate-800 ${embedded ? "" : "mt-4"}`}>
               {(["daily", "weekly", "monthly"] as const).map((mode) => (
                 <button
                   key={mode}
@@ -371,7 +371,6 @@ export function MobileItineraryReader({
             </div>
           </div>
         </div>
-      </div>
 
       {selectedDay && onDayNoteChange ? (
         <MobileLinedDayEditor
@@ -388,12 +387,28 @@ export function MobileItineraryReader({
           onBack={() => setSelectedDateKey(null)}
           onBookedTap={(id) => {
             setSelectedDateKey(null);
-            onClose();
+            if (!embedded) onClose();
             onReservationTap(id);
           }}
         />
       ) : null}
-    </>,
+    </>
+  );
+
+  if (embedded) {
+    return itineraryBody;
+  }
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[120] flex flex-col bg-[#F2F2F7] dark:bg-black"
+      style={MOBILE_OVERLAY_SHELL}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${tripName} itinerary`}
+    >
+      {itineraryBody}
+    </div>,
     document.body,
   );
 }

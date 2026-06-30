@@ -4,7 +4,7 @@ import type { MobilePrimaryTab } from "@/components/travelAssistant/mobile/mobil
 import { MOBILE_PRIMARY_TABS } from "@/components/travelAssistant/mobile/mobileShellTypes";
 
 interface MobileTabBarProps {
-  activeTab: MobilePrimaryTab;
+  activeTab?: MobilePrimaryTab;
   onSelectTab: (tab: MobilePrimaryTab) => void;
   className?: string;
 }
@@ -16,7 +16,7 @@ export function MobileTabBar({ activeTab, onSelectTab, className = "" }: MobileT
       style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
       aria-label="Main navigation"
     >
-      <div className="mx-auto grid max-w-lg grid-cols-4 gap-1">
+      <div className="mx-auto grid max-w-lg grid-cols-5 gap-0.5">
         {MOBILE_PRIMARY_TABS.map(({ id, label }) => {
           const active = activeTab === id;
           return (

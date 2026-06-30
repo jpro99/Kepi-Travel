@@ -34,6 +34,8 @@ interface TripTransportRouteMapProps {
   mobileProminent?: boolean;
   /** Shorter map chrome when a route banner sits above the tab content */
   compactMobileHeader?: boolean;
+  /** Hide legend + horizontal segment cards (mobile flights strip) */
+  hideSegmentStrip?: boolean;
   sectionId?: string;
 }
 
@@ -143,6 +145,7 @@ export function TripTransportRouteMap({
   onSegmentTap,
   mobileProminent = false,
   compactMobileHeader = false,
+  hideSegmentStrip = false,
   sectionId,
 }: TripTransportRouteMapProps) {
   const route = useMemo(
@@ -667,6 +670,7 @@ export function TripTransportRouteMap({
         </div>
       )}
 
+      {!hideSegmentStrip ? (
       <div className={`${expanded ? "shrink-0 border-t border-white/10" : ""} px-5 py-4`}>
         <div className={`mb-3 flex flex-wrap gap-3 text-xs font-bold uppercase tracking-wider ${mobileLight ? "text-[var(--text-muted)]" : "text-sky-50/80"}`}>
           <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-7 rounded-full bg-emerald-500" /> Flight booked</span>
@@ -723,6 +727,7 @@ export function TripTransportRouteMap({
           ))}
         </div>
       </div>
+      ) : null}
     </section>
   );
 }

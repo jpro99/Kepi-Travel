@@ -623,6 +623,7 @@ export function FlightsTab({
           onSegmentTap={onReservationTap}
           mobileProminent
           compactMobileHeader
+          hideSegmentStrip
           sectionId="trip-route-map"
         />
       ) : null}

@@ -3,10 +3,14 @@
 import { useState } from "react";
 import { FlightsTab } from "@/components/travelAssistant/FlightsTab";
 import { HotelsTab } from "@/components/travelAssistant/HotelsTab";
-import {
-  MOBILE_TRIPS_SEGMENTS,
-  type MobileTripsSegment,
-} from "@/components/travelAssistant/mobile/mobileShellTypes";
+
+type MobileTripsSegment = "flights" | "hotels" | "tickets";
+
+const MOBILE_TRIPS_SEGMENTS: Array<{ id: MobileTripsSegment; label: string }> = [
+  { id: "flights", label: "Flights" },
+  { id: "hotels", label: "Hotels" },
+  { id: "tickets", label: "Tickets" },
+];
 
 interface TripSummary {
   name: string;

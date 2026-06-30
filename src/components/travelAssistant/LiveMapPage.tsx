@@ -18,6 +18,7 @@ import { clearLocationDisplayCache, resolveLocationForMapDisplay } from "@/lib/f
 import { isFamilySharingActive } from "@/lib/family/locationSharingPrefs";
 import { burstFamilyLocationFix, refreshFamilyLocationFix } from "@/lib/family/familyLocationWatch";
 import { MobileTabBarNav } from "@/components/travelAssistant/mobile/useMobileTabNavigation";
+import { Logo } from "@/components/ui/Logo";
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface LocationPoint {
@@ -626,25 +627,54 @@ export function LiveMapPage() {
           <div className="h-28 bg-gradient-to-b from-black/60 via-black/20 to-transparent" />
         </div>
 
-        {/* Back + title + style toggle */}
-        <div className="absolute top-0 left-0 right-0 z-30 flex items-center gap-3 px-4 pt-4 pb-2">
+        {/* Kepi header + map controls */}
+        <div
+          className="absolute top-0 left-0 right-0 z-30 flex items-center gap-3 px-4 pb-2 pt-4 md:hidden"
+          style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}
+        >
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <Logo size="sm" showWordmark={false} className="shrink-0 drop-shadow-lg" />
+            <button
+              type="button"
+              onClick={() => router.push("/travel-assistant")}
+              className="rounded-full border border-white/20 bg-black/40 px-3 py-1.5 text-xs font-bold text-white shadow-lg backdrop-blur-md"
+            >
+              Trips
+            </button>
+          </div>
+          <div className="flex overflow-hidden rounded-full border border-white/10 shadow-lg">
+            {([["dark", "Dark"], ["streets", "Map"], ["satellite", "Sat"]] as [MapStyleId, string][]).map(([styleId, styleLabel]) => (
+              <button
+                key={styleId}
+                type="button"
+                onClick={() => setMapStyle(styleId)}
+                className={`px-2.5 py-1.5 text-[11px] font-bold transition-all ${mapStyle === styleId ? "bg-white text-slate-900" : "bg-black/40 backdrop-blur-md text-white/80"}`}
+              >
+                {styleLabel}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Desktop back + title + style toggle */}
+        <div className="absolute top-0 left-0 right-0 z-30 hidden items-center gap-3 px-4 pb-2 pt-4 md:flex">
           <button
             type="button"
             onClick={() => router.back()}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-black/40 backdrop-blur-md text-white text-lg shadow-lg"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-lg text-white shadow-lg backdrop-blur-md"
             aria-label="Back"
           >
             ←
           </button>
-          <div className="flex-1 min-w-0">
-            <p className="text-white font-semibold text-sm leading-tight tracking-tight drop-shadow">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold leading-tight tracking-tight text-white drop-shadow">
               {group?.name ?? "Family"}
             </p>
-            <p className="text-white/60 text-[11px] leading-tight">
+            <p className="text-[11px] leading-tight text-white/60">
               {liveCount > 0 ? `${liveCount} live · updates every 10s` : "No live locations"}
             </p>
           </div>
-          <div className="flex rounded-full overflow-hidden shadow-lg border border-white/10">
+          <div className="flex overflow-hidden rounded-full border border-white/10 shadow-lg">
             {([["dark", "Dark"], ["streets", "Map"], ["satellite", "Sat"]] as [MapStyleId, string][]).map(([styleId, styleLabel]) => (
               <button
                 key={styleId}
@@ -883,7 +913,7 @@ export function LiveMapPage() {
           </button>
         )}
 
-        <MobileTabBarNav activeTab="map" />
+        <MobileTabBarNav />
       </div>
     </>
   );
