@@ -23,7 +23,7 @@ export function flightCardTypography(simplifiedMobile = false) {
     airportCode: `${phone === "" ? "text-[3.25rem]" : "text-[3.25rem] lg:text-4xl"} font-semibold text-[var(--text-primary)] tracking-tight leading-none`,
     timeText: `${phone === "" ? "text-[17px]" : "text-[17px] lg:text-base"} font-normal text-[var(--text-primary)]`,
     dateText: appleMetadata,
-    heading: `${phone === "" ? "text-[22px]" : "text-[22px] lg:text-xl"} font-semibold text-[var(--text-primary)] tracking-tight`,
+    heading: `apple-section-header ${phone === "" ? "" : "lg:text-xl"}`,
     subheading: appleMetadata,
     airline: appleCaption,
     flightNum: `${appleCaption} rounded-md bg-[var(--bg-grouped)] px-2 py-0.5 font-medium text-[var(--text-secondary)]`,
@@ -64,7 +64,7 @@ export function hotelCardTypography(simplifiedMobile = false) {
     section: simplifiedMobile
       ? "text-[17px] leading-snug"
       : "max-lg:text-[17px] max-lg:leading-snug",
-    heading: `${phone === "" ? "text-[22px]" : "text-[22px] lg:text-xl"} font-semibold text-[var(--text-primary)] tracking-tight`,
+    heading: `apple-section-header ${phone === "" ? "" : "lg:text-xl"}`,
     subheading: appleMetadata,
     detailLabel: appleLabel,
     detailValue: `${phone === "" ? "text-[17px]" : "text-[17px] lg:text-sm"} font-semibold text-[var(--text-primary)]`,

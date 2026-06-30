@@ -132,7 +132,7 @@ export default async function RootLayout({
         {process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ? (
           <meta name="vapid-public-key" content={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY} />
         ) : null}
-        <meta name="theme-color" content="#f5f5f7" />
+        <meta name="theme-color" content="#f9f9f9" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Kepi" />

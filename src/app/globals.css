@@ -5,25 +5,33 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Apple HIG — light */
-  --bg-base: #f5f5f7;
-  --bg-card: #ffffff;
+  /* Apple theme tokens */
+  --apple-bg: #f9f9f9;
+  --apple-card: #ffffff;
+  --apple-accent: #007aff;
+  --apple-text: #1c1c1e;
+  --apple-text-secondary: #8e8e93;
+  --apple-border: rgba(0, 0, 0, 0.08);
+
+  /* App tokens (alias Apple theme) */
+  --bg-base: var(--apple-bg);
+  --bg-card: var(--apple-card);
   --bg-secondary: #fafafb;
   --bg-grouped: #f2f2f7;
   --bg-muted: #f2f2f7;
-  --text-primary: #1d1d1f;
+  --text-primary: var(--apple-text);
   --text-secondary: #6e6e73;
   --text-muted: #6e6e73;
-  --text-tertiary: #8e8e93;
+  --text-tertiary: var(--apple-text-secondary);
   --text-disabled: #c7c7cc;
-  --accent: #007aff;
+  --accent: var(--apple-accent);
   --accent-foreground: #ffffff;
   --success: #34c759;
   --destructive: #ff3b30;
   --warning: #ff9f0a;
-  --border-default: rgba(60, 60, 67, 0.12);
-  --shadow-card: 0 2px 10px rgba(0, 0, 0, 0.05);
-  --radius-card: 14px;
+  --border-default: var(--apple-border);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
+  --radius-card: 18px;
   --radius-button: 10px;
 
   --background: hsl(0 0% 100%);
@@ -49,22 +57,29 @@
 }
 
 .dark {
-  --bg-base: #000000;
-  --bg-card: #1c1c1e;
+  --apple-bg: #000000;
+  --apple-card: #1c1c1e;
+  --apple-accent: #0a84ff;
+  --apple-text: #f5f5f7;
+  --apple-text-secondary: #8e8e93;
+  --apple-border: rgba(255, 255, 255, 0.1);
+
+  --bg-base: var(--apple-bg);
+  --bg-card: var(--apple-card);
   --bg-secondary: #2c2c2e;
   --bg-grouped: #1c1c1e;
   --bg-muted: #2c2c2e;
   --text-primary: #f5f5f7;
   --text-secondary: #98989d;
   --text-muted: #98989d;
-  --text-tertiary: #636366;
+  --text-tertiary: var(--apple-text-secondary);
   --text-disabled: #48484a;
-  --accent: #0a84ff;
+  --accent: var(--apple-accent);
   --accent-foreground: #ffffff;
   --success: #30d158;
   --destructive: #ff453a;
   --warning: #ff9f0a;
-  --border-default: rgba(255, 255, 255, 0.1);
+  --border-default: var(--apple-border);
   --shadow-card: 0 2px 10px rgba(0, 0, 0, 0.35);
 
   --background: hsl(240 10% 3.9%);
@@ -121,6 +136,38 @@
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background: var(--apple-bg);
+    color: var(--apple-text);
+  }
+}
+
+@layer components {
+  .apple-card {
+    background: var(--apple-card);
+    border-radius: 18px;
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.06),
+      0 4px 12px rgba(0, 0, 0, 0.04);
+    border: 1px solid var(--apple-border);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .apple-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.09);
+    }
+  }
+
+  .apple-accent {
+    color: var(--apple-accent);
+  }
+
+  .apple-section-header {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.4px;
+    color: var(--apple-text);
   }
 }
 

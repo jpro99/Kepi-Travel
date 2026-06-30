@@ -2,7 +2,7 @@ export type ThemeMode = "light" | "dark";
 
 export const THEME_STORAGE_KEY = "kepi-theme";
 export const THEME_EVENT = "kepi-theme-change";
-export const META_COLORS: Record<ThemeMode, string> = { dark: "#000000", light: "#f5f5f7" };
+export const META_COLORS: Record<ThemeMode, string> = { dark: "#000000", light: "#f9f9f9" };
 
 export function readStoredTheme(): ThemeMode {
   if (typeof window === "undefined") return "light";
