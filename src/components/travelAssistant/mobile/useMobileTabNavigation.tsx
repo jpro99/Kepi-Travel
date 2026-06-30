@@ -17,9 +17,9 @@ export function useMobileTabNavigation(
         onNavigate(tab);
         return;
       }
-      const params = new URLSearchParams(window.location.search);
+      const params = new URLSearchParams();
       params.set("mtab", tab);
-      router.replace(`/travel-assistant?${params.toString()}`, { scroll: false });
+      router.push(`/travel-assistant?${params.toString()}`);
     },
     [onNavigate, router],
   );

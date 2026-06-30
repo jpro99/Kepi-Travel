@@ -203,10 +203,7 @@ import { MobileItineraryReader } from "@/components/travelAssistant/mobile/Mobil
 import { MobileSettingsView } from "@/components/travelAssistant/mobile/MobileSettingsView";
 import { MobileSearchOverlay } from "@/components/travelAssistant/mobile/MobileSearchOverlay";
 import { MobileTabBarNav } from "@/components/travelAssistant/mobile/useMobileTabNavigation";
-import {
-  normalizeMobilePrimaryTab,
-  type MobilePrimaryTab,
-} from "@/components/travelAssistant/mobile/mobileShellTypes";
+import { useMobilePrimaryTab } from "@/components/travelAssistant/mobile/useMobilePrimaryTab";
 
 const OpsPanel = lazy(async () => {
   const loadedModule = await import("@/components/travelAssistant/OpsPanel");
@@ -1967,7 +1964,7 @@ export default function TravelAssistantPage() {
     const nextUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, "", nextUrl);
   }, []);
-  const [mobilePrimaryTab, setMobilePrimaryTab] = useState<MobilePrimaryTab>("planning");
+  const { mobilePrimaryTab, navigateMobilePrimaryTab } = useMobilePrimaryTab();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const airportAutoNavRef = useRef(false);
   const [manualReservationDefaultDateTime, setManualReservationDefaultDateTime] = useState<string | null>(null);
@@ -2333,11 +2330,6 @@ export default function TravelAssistantPage() {
       const tab = params.get("tab");
       if (tab === "trip" || tab === "itinerary" || tab === "calendar" || tab === "flights" || tab === "hotels" || tab === "map" || tab === "more") {
         setConsumerTab(tab);
-      }
-      const mtab = params.get("mtab");
-      const normalizedMtab = normalizeMobilePrimaryTab(mtab);
-      if (normalizedMtab) {
-        setMobilePrimaryTab(normalizedMtab);
       }
       const gmailStatus = params.get("gmail");
       if (gmailStatus === "connected") {
@@ -6222,29 +6214,6 @@ export default function TravelAssistantPage() {
     [handleSwitchTrip, openDrawer],
   );
 
-  const navigateMobilePrimaryTab = useCallback(
-    (nextTab: MobilePrimaryTab): void => {
-      setMobilePrimaryTab(nextTab);
-      const params = new URLSearchParams(window.location.search);
-      params.set("mtab", nextTab);
-      router.replace(`${window.location.pathname}?${params.toString()}`, { scroll: false });
-    },
-    [router],
-  );
-
-  useEffect(() => {
-    const syncMobileTabFromUrl = (): void => {
-      const normalized = normalizeMobilePrimaryTab(
-        new URLSearchParams(window.location.search).get("mtab"),
-      );
-      if (normalized) {
-        setMobilePrimaryTab(normalized);
-      }
-    };
-    window.addEventListener("popstate", syncMobileTabFromUrl);
-    return () => window.removeEventListener("popstate", syncMobileTabFromUrl);
-  }, []);
-
   const mobileSearchTrips = useMemo(
     () =>
       trips.map((trip) => ({
@@ -8737,8 +8706,8 @@ export default function TravelAssistantPage() {
   if (!advancedWorkspaceEnabled) {
     return (
       <main className="relative min-h-screen overflow-x-hidden bg-[var(--bg-base)] pb-28 text-[var(--text-primary)]">
-        <div className="relative z-10 flex min-h-screen">
-          <div className="min-w-0 flex-1">
+        <div className="relative z-10 flex min-h-screen pointer-events-none">
+          <div className="min-w-0 flex-1 pointer-events-auto">
         <div className="mx-auto max-w-3xl space-y-4 px-3 py-3 sm:max-w-4xl sm:px-4 lg:max-w-6xl lg:px-5 xl:max-w-7xl">
           <header className="sticky top-0 z-30 -mx-3 border-b border-[var(--border-default)] bg-[var(--bg-base)]/95 px-3 py-3 backdrop-blur-xl sm:-mx-4 sm:px-4">
             <div className="flex items-center justify-between gap-2">
@@ -8881,6 +8850,7 @@ export default function TravelAssistantPage() {
                   />
                 ) : null}
 
+                <div key={mobilePrimaryTab} className="space-y-4">
                 {mobilePrimaryTab === "planning" ? (
                   <MobilePlanNotebook
                     tripName={activeTrip?.name ?? "Your trip"}
@@ -9000,6 +8970,7 @@ export default function TravelAssistantPage() {
                     }}
                   />
                 )}
+                </div>
               </>
             )
           ) : null}
