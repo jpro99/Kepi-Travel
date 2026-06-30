@@ -18,7 +18,10 @@ export function TripRouteBanner({ transportReservations }: TripRouteBannerProps)
       route.segments.length === 1
         ? `${first.fromLabel} → ${first.toLabel}`
         : `${first.fromLabel} → ${last.toLabel}`;
-    const codes = route.segments.map((s) => `${s.fromCode} → ${s.toCode}`).join(" · ");
+    const codes =
+      route.segments.length === 1
+        ? `${first.fromCode} → ${first.toCode}`
+        : `${first.fromCode} → ${last.toCode}`;
     return { endToEnd, codes };
   }, [transportReservations]);
 

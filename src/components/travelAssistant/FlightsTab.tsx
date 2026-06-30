@@ -21,7 +21,7 @@ import {
 import { TripTransportRouteMap } from "@/components/travelAssistant/TripTransportRouteMap";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import type { ItinerarySelfCheckResult } from "@/lib/travelAssistant/itinerarySelfCheck";
-import { flightCardTypography, guideCardTypography } from "@/lib/ui/mobileTypography";
+import { flightCardTypography, guideCardTypography, hotelCardTypography } from "@/lib/ui/mobileTypography";
 
 /* ─── Types ──────────────────────────────────────────────────── */
 interface Reservation {
@@ -477,6 +477,7 @@ export function FlightsTab({
   simplifiedMobile = false,
 }: FlightsTabProps) {
   const type = flightCardTypography(simplifiedMobile);
+  const listType = hotelCardTypography(simplifiedMobile);
   const detailLabel = type.detailLabel;
   const detailValue = type.detailValue;
   const actionBtn = type.actionBtn;
@@ -586,13 +587,12 @@ export function FlightsTab({
       />
 
       {/* ── ARRIVAL GUIDE — shown when airborne or just landed ── */}
-      {/* Apple: when you're on a plane, show where you're going, not where you left */}
-      {showArrivalGuide && arrivalFlight && (
+      {!simplifiedMobile && showArrivalGuide && arrivalFlight && (
         <ArrivalGuideCard flight={arrivalFlight} simplifiedMobile={simplifiedMobile} />
       )}
 
       {/* ── DEPARTURE GUIDE — gate/terminal/seat for next flight ── */}
-      {showGuide && nextFlight && (
+      {!simplifiedMobile && showGuide && nextFlight && (
         <AirportGuideCard
           flight={nextFlight}
           live={liveStatus[nextFlight.id]}
@@ -622,6 +622,7 @@ export function FlightsTab({
           plannedFlightLegs={plannedFlightLegs}
           onSegmentTap={onReservationTap}
           mobileProminent
+          compactMobileHeader
           sectionId="trip-route-map"
         />
       ) : null}
@@ -629,8 +630,8 @@ export function FlightsTab({
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className={type.heading}>Your flights</h2>
-          <p className={type.subheading}>
+          <h2 className={simplifiedMobile ? listType.heading : type.heading}>Your flights</h2>
+          <p className={simplifiedMobile ? listType.subheading : type.subheading}>
             {upcoming.length} booked{past.length > 0 ? ` · ${past.length} past` : ""}
           </p>
         </div>
@@ -702,6 +703,118 @@ export function FlightsTab({
               (Boolean(live?.delayMinutes && live.delayMinutes > 0) ||
                 /cancel|delay|divert/iu.test(live?.flightStatus || r.flightStatus || "")),
           });
+
+          if (simplifiedMobile) {
+            return (
+              <div
+                key={r.id}
+                className={`overflow-hidden rounded-3xl bg-[var(--bg-card)] shadow-sm ring-1 transition-all ${
+                  past
+                    ? "ring-[var(--border-default)] opacity-60"
+                    : attention !== "none"
+                      ? reservationAttentionRingClass(attention, isPast)
+                      : "ring-[var(--border-default)]"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setExpanded(isOpen ? null : r.id)}
+                  className="w-full text-left"
+                >
+                  <div className="flex items-start gap-4 p-5">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-2xl shadow-sm">
+                      ✈️
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className={listType.title}>{r.flightAirline ?? r.provider}</p>
+                        {attentionBadge && !isPast ? (
+                          <span className={attentionBadge.className}>{attentionBadge.label}</span>
+                        ) : costLine ? (
+                          <span className={`shrink-0 font-bold text-[var(--text-primary)] ${listType.subheading}`}>
+                            {costLine}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className={listType.location}>
+                        {[r.flightNumber, `${dep} → ${arr}`].filter(Boolean).join(" · ")}
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <div className="rounded-lg bg-[var(--bg-muted)] px-3 py-2">
+                          <p className={listType.detailLabel}>Departs</p>
+                          <p className={listType.detailValue}>
+                            {date}
+                            {depTime ? ` · ${depTime}` : ""}
+                          </p>
+                        </div>
+                        {arrTime ? (
+                          <div className="rounded-lg bg-[var(--bg-muted)] px-3 py-2">
+                            <p className={listType.detailLabel}>Arrives</p>
+                            <p className={listType.detailValue}>{arrTime}</p>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                    <span className="mt-1 shrink-0 text-sm text-[var(--text-muted)]">{isOpen ? "▲" : "▼"}</span>
+                  </div>
+                </button>
+
+                <div className="flex flex-wrap items-start gap-4 px-5 pb-4">
+                  {terminal && terminal !== "—" ? (
+                    <div>
+                      <p className={listType.detailLabel}>Terminal</p>
+                      <p className={`${listType.detailValue} mt-0.5`}>{terminal}</p>
+                    </div>
+                  ) : null}
+                  {gate ? (
+                    <div>
+                      <p className={listType.detailLabel}>Gate</p>
+                      <p className={`${listType.detailValue} mt-0.5 text-[#007AFF] dark:text-[#0A84FF]`}>{gate}</p>
+                    </div>
+                  ) : null}
+                  {r.flightSeatNumber ? (
+                    <div>
+                      <p className={listType.detailLabel}>Seat</p>
+                      <p className={`${listType.detailValue} mt-0.5`}>{r.flightSeatNumber}</p>
+                    </div>
+                  ) : null}
+                  {r.confirmationCode ? (
+                    <div>
+                      <p className={listType.detailLabel}>Confirmation</p>
+                      <p className={`${listType.detailValue} mt-0.5`}>{r.confirmationCode}</p>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="flex items-center gap-2 border-t border-[var(--border-default)] px-5 py-3">
+                  <button
+                    type="button"
+                    onClick={() => onReservationTap(r.id)}
+                    className={`${listType.actionBtn} bg-[var(--bg-muted)] text-[var(--text-primary)]`}
+                  >
+                    View details
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onCheckStatus(r.id)}
+                    disabled={live?.busy}
+                    className={`${listType.actionBtn} bg-[#007AFF]/10 text-[#007AFF] dark:bg-[#0A84FF]/20 dark:text-[#0A84FF] disabled:opacity-50`}
+                  >
+                    {live?.busy ? "Checking…" : "Check status"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm("Delete this flight?")) onDelete(r.id);
+                    }}
+                    className={`${listType.actionBtn} max-w-[33%] bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400`}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            );
+          }
 
           return (
             <div

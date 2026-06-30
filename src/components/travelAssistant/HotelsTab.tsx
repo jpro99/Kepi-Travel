@@ -279,12 +279,12 @@ export function HotelsTab({
           return (
             <div
               key={r.id}
-              className={`overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-sm ring-1 transition-all ${
+              className={`overflow-hidden rounded-3xl bg-[var(--bg-card)] shadow-sm ring-1 transition-all ${
                 past
-                  ? "ring-slate-100 dark:ring-slate-800 opacity-60"
+                  ? "ring-[var(--border-default)] opacity-60"
                   : missingPrice
                     ? "ring-yellow-400 bg-yellow-50/30 dark:ring-yellow-500/60 dark:bg-yellow-500/5"
-                    : "ring-black/[0.06] dark:ring-white/[0.08]"
+                    : "ring-[var(--border-default)]"
               }`}
             >
               {/* Card tap area */}

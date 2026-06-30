@@ -121,7 +121,6 @@ import {
 import { useItineraryPanelPrefs } from "@/components/travelAssistant/TripItineraryPanel";
 import { ItineraryTabView } from "@/components/travelAssistant/ItineraryTabView";
 import { CalendarTabView } from "@/components/travelAssistant/CalendarTabView";
-import { NextUpCard } from "@/components/travelAssistant/NextUpCard";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
 import { hydrateReservationsPricing, applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
@@ -147,7 +146,6 @@ import {
   type PlannedStayCity,
 } from "@/lib/travelAssistant/tripPlanBooking";
 import { buildTripActionItems, type TripActionItem } from "@/lib/travelAssistant/tripActionItems";
-import { TripActionList } from "@/components/travelAssistant/TripActionList";
 import {
   PostBookingConfirmation,
   type PostBookingConfirmationData,
@@ -165,16 +163,12 @@ import { TripOrientationCard } from "@/components/travelAssistant/TripOrientatio
 import { DocumentVault } from "@/components/travelAssistant/DocumentVault";
 import { PackingList } from "@/components/travelAssistant/PackingList";
 import { BagControl } from "@/components/travelAssistant/BagControl";
-import { AirportMode } from "@/components/travelAssistant/AirportMode";
-import { ArrivalMode } from "@/components/travelAssistant/ArrivalMode";
 import { FlightsTab } from "@/components/travelAssistant/FlightsTab";
 import type { FlightSearchDefaults } from "@/components/travelAssistant/FlightSearchLauncher";
 import { HotelsTab } from "@/components/travelAssistant/HotelsTab";
 import { ShareTripCard } from "@/components/travelAssistant/ShareTripCard";
 import { TravelDayView } from "@/components/travelAssistant/TravelDayView";
 import { ShareModal } from "@/components/travelAssistant/ShareModal";
-import { DisruptionAlert } from "@/components/travelAssistant/DisruptionAlert";
-import { TripReview } from "@/components/travelAssistant/TripReview";
 import { SmartPackingList } from "@/components/travelAssistant/SmartPackingList";
 import { LoyaltyWallet } from "@/components/loyalty/LoyaltyWallet";
 import type { LoyaltyBalance } from "@/lib/loyalty/optimizer";
@@ -192,7 +186,6 @@ import { ReferralCard } from "@/components/referral/ReferralCard";
 import { WeatherCard } from "@/components/travelAssistant/WeatherCard";
 import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntelligencePanel";
 import { ConciergePanel } from "@/components/travelAssistant/ConciergePanel";
-import { ConciergeBar } from "@/components/travelAssistant/ConciergeBar";
 import { trackEvent } from "@/lib/analytics/trackEvent";
 import { useBilling } from "@/lib/billing/BillingContext";
 import type { PlanFeature } from "@/lib/billing/plans";
@@ -8873,7 +8866,6 @@ export default function TravelAssistantPage() {
                     destination={consumerTripDestination ?? activeTrip.destination}
                     startDate={consumerTripStartDate ?? activeTrip.startDate}
                     endDate={consumerTripEndDate ?? activeTrip.endDate}
-                    transportReservations={transportRouteReservations}
                   />
                 ) : null}
 
@@ -8925,6 +8917,7 @@ export default function TravelAssistantPage() {
                 onDelete={(id) => void handleDeleteReservation(id)}
                 hotelNotebookNote={itineraryPrefs.hotelNotebookNote}
                 onHotelNotebookChange={itineraryPrefs.updateHotelNotebookNote}
+                transportReservations={transportRouteReservations}
               />
             )}
               </>

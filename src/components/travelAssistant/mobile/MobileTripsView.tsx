@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { FlightsTab } from "@/components/travelAssistant/FlightsTab";
 import { HotelsTab } from "@/components/travelAssistant/HotelsTab";
+import { TripRouteBanner } from "@/components/travelAssistant/TripRouteBanner";
 import {
   MOBILE_TRIPS_SEGMENTS,
   type MobileTripsSegment,
 } from "@/components/travelAssistant/mobile/mobileShellTypes";
+import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 
 interface TripSummary {
   name: string;
@@ -71,6 +73,7 @@ interface MobileTripsViewProps {
   onDelete: (id: string) => void;
   hotelNotebookNote?: string;
   onHotelNotebookChange?: (value: string) => void;
+  transportReservations?: TransportRouteReservation[];
 }
 
 function TicketCard({
@@ -119,6 +122,7 @@ export function MobileTripsView({
   onDelete,
   hotelNotebookNote = "",
   onHotelNotebookChange,
+  transportReservations = [],
 }: MobileTripsViewProps) {
   const [segment, setSegment] = useState<MobileTripsSegment>("flights");
 
@@ -164,6 +168,10 @@ export function MobileTripsView({
           </button>
         ))}
       </div>
+
+      {segment === "flights" ? (
+        <TripRouteBanner transportReservations={transportReservations} />
+      ) : null}
 
       {segment === "flights" ? (
         <FlightsTab

@@ -1,14 +1,10 @@
 "use client";
 
-import { TripRouteBanner } from "@/components/travelAssistant/TripRouteBanner";
-import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
-
 interface MobileTripShellHeaderProps {
   tripName: string;
   destination?: string | null;
   startDate?: string | null;
   endDate?: string | null;
-  transportReservations: TransportRouteReservation[];
 }
 
 function formatTripDates(start: string, end: string): string {
@@ -28,27 +24,23 @@ function formatTripDates(start: string, end: string): string {
   return startLabel || endLabel;
 }
 
+/** Trip identity only — route summary lives below the Flights/Hotels picker. */
 export function MobileTripShellHeader({
   tripName,
   destination,
   startDate,
   endDate,
-  transportReservations,
 }: MobileTripShellHeaderProps) {
-  return (
-    <header className="space-y-3">
-      <div>
-        <p className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)]">Your trip</p>
-        <h1 className="mt-0.5 text-[1.75rem] font-black leading-tight text-[var(--text-primary)]">{tripName}</h1>
-        <p className="mt-1 text-[17px] text-[var(--text-muted)]">
-          {destination || "Destination TBD"}
-          {startDate || endDate
-            ? ` · ${formatTripDates(startDate ?? "", endDate ?? "")}`
-            : ""}
-        </p>
-      </div>
+  const dates = formatTripDates(startDate ?? "", endDate ?? "");
 
-      <TripRouteBanner transportReservations={transportReservations} />
+  return (
+    <header>
+      <h1 className="text-[1.75rem] font-black leading-tight text-[var(--text-primary)]">{tripName}</h1>
+      {(destination || dates) ? (
+        <p className="mt-1 text-[17px] text-[var(--text-muted)]">
+          {[destination || null, dates || null].filter(Boolean).join(" · ")}
+        </p>
+      ) : null}
     </header>
   );
 }

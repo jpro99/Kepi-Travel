@@ -32,6 +32,8 @@ interface TripTransportRouteMapProps {
   onSegmentTap?: (reservationId: string) => void;
   /** Taller map + larger labels on phone trip tab */
   mobileProminent?: boolean;
+  /** Shorter map chrome when a route banner sits above the tab content */
+  compactMobileHeader?: boolean;
   sectionId?: string;
 }
 
@@ -140,6 +142,7 @@ export function TripTransportRouteMap({
   selfCheck,
   onSegmentTap,
   mobileProminent = false,
+  compactMobileHeader = false,
   sectionId,
 }: TripTransportRouteMapProps) {
   const route = useMemo(
@@ -501,6 +504,8 @@ export function TripTransportRouteMap({
       ) : (
       <div className={`flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4 ${mobileLight ? "border-[var(--border-default)]" : "border-white/10"}`}>
         <div>
+          {!compactMobileHeader ? (
+            <>
           <p
             className={`font-bold uppercase tracking-wide ${
               mobileLight
@@ -515,6 +520,12 @@ export function TripTransportRouteMap({
           <h3 className={`mt-1 font-black ${mobileLight ? "text-2xl text-[var(--text-primary)]" : mobileProminent ? "text-2xl text-white" : "text-lg text-white"}`}>
             Your whole journey at a glance
           </h3>
+            </>
+          ) : (
+            <h3 className={`font-black ${mobileLight ? "text-xl text-[var(--text-primary)]" : "text-xl text-white"}`}>
+              Route map
+            </h3>
+          )}
           <p className={`mt-1 ${mobileLight ? "text-[16px] text-[var(--text-muted)]" : mobileProminent ? "text-[15px] text-sky-100/60" : "text-xs text-sky-100/60"}`}>
             {mobileProminent ? "Tap map for full screen · pinch to zoom" : "Drag to pan · pinch to zoom · tap a leg below"}
           </p>
