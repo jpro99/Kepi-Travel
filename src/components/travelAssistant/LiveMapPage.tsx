@@ -17,8 +17,8 @@ import { resolveLiveCoordinates, resetGeolocationQualityState } from "@/lib/fami
 import { clearLocationDisplayCache, resolveLocationForMapDisplay } from "@/lib/family/locationDisplayCache";
 import { isFamilySharingActive } from "@/lib/family/locationSharingPrefs";
 import { burstFamilyLocationFix, refreshFamilyLocationFix } from "@/lib/family/familyLocationWatch";
+import { readCompassHeading, requestDeviceOrientationPermission } from "@/lib/map/deviceCompass";
 import { MobileTabBarNav } from "@/components/travelAssistant/mobile/useMobileTabNavigation";
-import { Logo } from "@/components/ui/Logo";
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface LocationPoint {
@@ -82,10 +82,12 @@ export function LiveMapPage() {
   const [group, setGroup] = useState<FamilyGroup | null>(null);
   const [locations, setLocations] = useState<Record<string, LocationPoint>>({});
   const [maptilerKey, setMaptilerKey] = useState("");
-  const [mapStyle, setMapStyle] = useState<MapStyleId>("dark");
-  const [headingUp, setHeadingUp] = useState(false); // rotate map to match phone direction
-  const headingRef = useRef<number>(0); // current compass heading in degrees
-  const headingWatchRef = useRef<(() => void) | null>(null);
+  const [mapStyle, setMapStyle] = useState<MapStyleId>("streets");
+  const [headingUp, setHeadingUp] = useState(true);
+  const headingRef = useRef<number>(0);
+  const headingUpRef = useRef(true);
+  const coneElsRef = useRef<Map<string, HTMLElement>>(new Map());
+  const orientationListeningRef = useRef(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isError, setIsError] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -94,6 +96,60 @@ export function LiveMapPage() {
   const [sharingLocation, setSharingLocation] = useState(false);
   const [myMemberId, setMyMemberId] = useState<string | null>(null);
   const [gpsRefreshing, setGpsRefreshing] = useState(false);
+
+  useEffect(() => {
+    headingUpRef.current = headingUp;
+  }, [headingUp]);
+
+  const applyHeadingToUi = useCallback((heading: number) => {
+    headingRef.current = heading;
+    const coneRotation = headingUpRef.current ? 0 : heading;
+    coneElsRef.current.forEach((cone) => {
+      cone.style.transform = `translateX(-50%) rotate(${coneRotation}deg)`;
+    });
+    const map = mapRef.current;
+    if (!map || !isLoadedRef.current) return;
+    if (headingUpRef.current) {
+      map.easeTo({ bearing: -heading, duration: 120, essential: true });
+    } else if (Math.abs(map.getBearing?.() ?? 0) > 0.5) {
+      map.easeTo({ bearing: 0, duration: 120, essential: true });
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const onOrientation = (event: DeviceOrientationEvent): void => {
+      const heading = readCompassHeading(event);
+      if (heading == null) return;
+      applyHeadingToUi(heading);
+    };
+
+    const startListening = async (): Promise<void> => {
+      if (cancelled || orientationListeningRef.current) return;
+      const ok = await requestDeviceOrientationPermission();
+      if (!ok || cancelled) return;
+      window.addEventListener("deviceorientation", onOrientation, true);
+      orientationListeningRef.current = true;
+    };
+
+    void startListening();
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("deviceorientation", onOrientation, true);
+      orientationListeningRef.current = false;
+    };
+  }, [applyHeadingToUi]);
+
+  useEffect(() => {
+    if (!headingUp && mapRef.current && isLoaded) {
+      mapRef.current.easeTo({ bearing: 0, duration: 200, essential: true });
+      applyHeadingToUi(headingRef.current);
+    } else if (headingUp && isLoaded) {
+      applyHeadingToUi(headingRef.current);
+    }
+  }, [headingUp, isLoaded, applyHeadingToUi]);
 
   useEffect(() => {
     if (isFamilySharingActive()) {
@@ -208,22 +264,17 @@ export function LiveMapPage() {
           cone.id = `kepi-cone-${member.id}`;
           cone.style.cssText = [
             "position:absolute;width:0;height:0;",
-            "border-left:10px solid transparent;",
-            "border-right:10px solid transparent;",
-            `border-bottom:22px solid ${member.color};`,
-            "opacity:0.85;",
-            "top:-26px;left:50%;transform:translateX(-50%);",
-            `transform-origin:center 26px;`,
+            "border-left:14px solid transparent;",
+            "border-right:14px solid transparent;",
+            `border-bottom:30px solid ${member.color};`,
+            "opacity:0.9;",
+            "top:-34px;left:50%;transform:translateX(-50%);",
+            "transform-origin:center 34px;",
+            "filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35));",
           ].join("");
-          // Rotate cone to current heading
-          const updateCone = () => {
-            cone.style.transform = `translateX(-50%) rotate(${headingRef.current}deg)`;
-          };
-          // Update cone every 500ms when heading changes
-          const coneInterval = setInterval(updateCone, 500);
-          updateCone();
-          // Store interval cleanup on the element
-          (cone as HTMLDivElement & { _interval?: ReturnType<typeof setInterval> })._interval = coneInterval;
+          const coneRotation = headingUpRef.current ? 0 : headingRef.current;
+          cone.style.transform = `translateX(-50%) rotate(${coneRotation}deg)`;
+          coneElsRef.current.set(member.id, cone);
           wrap.style.position = "relative";
           wrap.appendChild(cone);
         }
@@ -248,17 +299,17 @@ export function LiveMapPage() {
         // Frosted name chip with live/stale dot — readable on dark and satellite
         const lbl = document.createElement("div");
         lbl.style.cssText = [
-          "display:flex;align-items:center;gap:4px;",
-          "background:rgba(10,16,28,0.72);border:1px solid rgba(255,255,255,0.14);",
-          "backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);",
-          "border-radius:9999px;padding:3px 9px;",
-          "font-size:11px;font-weight:700;color:#f8fafc;",
-          "box-shadow:0 3px 10px rgba(0,0,0,0.35);",
-          "white-space:nowrap;max-width:104px;overflow:hidden;text-overflow:ellipsis;",
+          "display:flex;align-items:center;gap:6px;",
+          "background:rgba(10,16,28,0.82);border:1px solid rgba(255,255,255,0.18);",
+          "backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);",
+          "border-radius:9999px;padding:6px 14px;",
+          "font-size:15px;font-weight:800;color:#f8fafc;",
+          "box-shadow:0 4px 14px rgba(0,0,0,0.35);",
+          "white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis;",
           "font-family:system-ui,sans-serif;letter-spacing:-0.01em;",
         ].join("");
         const liveDot = document.createElement("span");
-        liveDot.style.cssText = `width:6px;height:6px;border-radius:50%;flex-shrink:0;background:${stale ? "#64748b" : "#34d399"};${stale ? "" : "box-shadow:0 0 6px rgba(52,211,153,0.9);"}`;
+        liveDot.style.cssText = `width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${stale ? "#64748b" : "#34d399"};${stale ? "" : "box-shadow:0 0 8px rgba(52,211,153,0.9);"}`;
         lbl.appendChild(liveDot);
         lbl.appendChild(document.createTextNode(member.name));
         wrap.appendChild(lbl);
@@ -280,6 +331,7 @@ export function LiveMapPage() {
         if (!(group?.members ?? []).find(mb => mb.id === id)) {
           existing[id].remove();
           delete existing[id];
+          coneElsRef.current.delete(id);
         }
       });
 
@@ -468,6 +520,10 @@ export function LiveMapPage() {
         if (!resolved) return;
         const { lat, lon, accuracy } = resolved;
 
+        if (pos.coords.heading != null && Number.isFinite(pos.coords.heading) && pos.coords.heading >= 0) {
+          applyHeadingToUi(pos.coords.heading);
+        }
+
         void fetch("/api/family", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -504,7 +560,7 @@ export function LiveMapPage() {
       },
       { enableHighAccuracy: true, maximumAge: 10_000, timeout: 45_000 },
     );
-  }, [stopLocalLocationWatch]);
+  }, [stopLocalLocationWatch, applyHeadingToUi]);
 
   useEffect(() => {
     if (sharingLocation) startLocalLocationWatch();
@@ -544,6 +600,38 @@ export function LiveMapPage() {
   const myAccuracyM = myLoc?.accuracy;
   const selMember = selected ? members.find(m => m.id === selected) : null;
   const selLoc = selected ? locations[selected] : null;
+  const lightChrome = mapStyle === "streets";
+  const chromeBtnIdle = lightChrome
+    ? "bg-white/90 text-slate-800 border-slate-200"
+    : "bg-black/45 text-white border-white/15";
+  const chromeBtnActive = "bg-[#007AFF] text-white";
+  const styleToggleClass = (active: boolean) =>
+    `min-h-[44px] px-4 py-2.5 text-[15px] font-bold transition-all ${
+      active ? chromeBtnActive : `${chromeBtnIdle} backdrop-blur-md`
+    }`;
+
+  const enableCompass = useCallback(async () => {
+    const ok = await requestDeviceOrientationPermission();
+    if (!ok) return;
+    if (!orientationListeningRef.current) {
+      const onOrientation = (event: DeviceOrientationEvent): void => {
+        const heading = readCompassHeading(event);
+        if (heading == null) return;
+        applyHeadingToUi(heading);
+      };
+      window.addEventListener("deviceorientation", onOrientation, true);
+      orientationListeningRef.current = true;
+    }
+    setHeadingUp(true);
+  }, [applyHeadingToUi]);
+
+  const toggleHeadingUp = useCallback(() => {
+    setHeadingUp((current) => {
+      if (current) return false;
+      void enableCompass();
+      return true;
+    });
+  }, [enableCompass]);
 
   /* ── Render ── */
   return (
@@ -563,12 +651,12 @@ export function LiveMapPage() {
         }
         .lm-drawer { animation: lmslideup 0.28s cubic-bezier(0.32,0.72,0,1); }
         .lm-card   { animation: lmfadein 0.22s ease; }
-        .maplibregl-ctrl-attrib { font-size: 9px !important; opacity: 0.6; }
-        .maplibregl-ctrl-group { border-radius: 12px !important; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.25) !important; }
-        .maplibregl-ctrl button { width: 38px !important; height: 38px !important; }
+        .maplibregl-ctrl-attrib { font-size: 11px !important; opacity: 0.75; }
+        .maplibregl-ctrl-group { border-radius: 14px !important; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.2) !important; }
+        .maplibregl-ctrl button { width: 44px !important; height: 44px !important; }
       `}</style>
 
-      <div className="fixed inset-0 z-[100] flex flex-col bg-slate-950 overflow-hidden">
+      <div className={`fixed inset-0 z-[100] flex flex-col overflow-hidden ${lightChrome ? "bg-slate-100" : "bg-slate-950"}`}>
 
         {/* Map canvas */}
         <div ref={mapEl} className="absolute inset-0 w-full h-full" />
@@ -612,8 +700,8 @@ export function LiveMapPage() {
                 key={viewId}
                 type="button"
                 onClick={() => setMapView(viewId)}
-                className={`px-3.5 py-1.5 text-[11px] font-bold backdrop-blur-md transition-all ${
-                  mapView === viewId ? "bg-white text-slate-900" : "bg-black/45 text-white/85"
+                className={`px-4 py-2.5 text-[15px] font-bold backdrop-blur-md transition-all ${
+                  mapView === viewId ? "bg-white text-slate-900" : "bg-black/45 text-white/90"
                 }`}
               >
                 {viewLabel}
@@ -624,31 +712,49 @@ export function LiveMapPage() {
 
         {/* Top scrim */}
         <div className="absolute top-0 left-0 right-0 z-20 pointer-events-none">
-          <div className="h-28 bg-gradient-to-b from-black/60 via-black/20 to-transparent" />
+          <div className={`h-32 bg-gradient-to-b ${lightChrome ? "from-white/90 via-white/40" : "from-black/60 via-black/20"} to-transparent`} />
         </div>
 
-        {/* Kepi header + map controls */}
+        {/* Mobile header */}
         <div
-          className="absolute top-0 left-0 right-0 z-30 flex items-center gap-3 px-4 pb-2 pt-4 md:hidden"
-          style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}
+          className="absolute top-0 left-0 right-0 z-30 flex flex-col gap-3 px-4 pb-2 md:hidden"
+          style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
         >
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <Logo size="sm" showWordmark={false} className="shrink-0 drop-shadow-lg" />
+          <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => router.push("/travel-assistant")}
-              className="rounded-full border border-white/20 bg-black/40 px-3 py-1.5 text-xs font-bold text-white shadow-lg backdrop-blur-md"
+              onClick={() => router.push("/travel-assistant?mtab=map")}
+              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-[22px] font-bold shadow-lg backdrop-blur-md border ${chromeBtnIdle}`}
+              aria-label="Back"
             >
-              Trips
+              ←
+            </button>
+            <div className="min-w-0 flex-1">
+              <p className={`text-[20px] font-bold leading-tight truncate ${lightChrome ? "text-slate-900" : "text-white drop-shadow"}`}>
+                {group?.name ?? "My Family"}
+              </p>
+              <p className={`text-[15px] leading-snug ${lightChrome ? "text-slate-600" : "text-white/75"}`}>
+                {liveCount > 0 ? `${liveCount} live · updates every 10s` : "No live locations"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={toggleHeadingUp}
+              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-[22px] shadow-lg border ${
+                headingUp ? "bg-[#007AFF] text-white border-[#007AFF]" : chromeBtnIdle
+              }`}
+              title={headingUp ? "Heading up — tap for north up" : "North up — tap for heading up"}
+            >
+              {headingUp ? "🧭" : "⬆️"}
             </button>
           </div>
-          <div className="flex overflow-hidden rounded-full border border-white/10 shadow-lg">
+          <div className={`flex overflow-hidden rounded-2xl border shadow-lg self-end ${lightChrome ? "border-slate-200" : "border-white/15"}`}>
             {([["dark", "Dark"], ["streets", "Map"], ["satellite", "Sat"]] as [MapStyleId, string][]).map(([styleId, styleLabel]) => (
               <button
                 key={styleId}
                 type="button"
                 onClick={() => setMapStyle(styleId)}
-                className={`px-2.5 py-1.5 text-[11px] font-bold transition-all ${mapStyle === styleId ? "bg-white text-slate-900" : "bg-black/40 backdrop-blur-md text-white/80"}`}
+                className={styleToggleClass(mapStyle === styleId)}
               >
                 {styleLabel}
               </button>
@@ -661,16 +767,16 @@ export function LiveMapPage() {
           <button
             type="button"
             onClick={() => router.back()}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-lg text-white shadow-lg backdrop-blur-md"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-xl text-white shadow-lg backdrop-blur-md"
             aria-label="Back"
           >
             ←
           </button>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold leading-tight tracking-tight text-white drop-shadow">
+            <p className="text-[18px] font-bold leading-tight tracking-tight text-white drop-shadow">
               {group?.name ?? "Family"}
             </p>
-            <p className="text-[11px] leading-tight text-white/60">
+            <p className="text-[15px] leading-snug text-white/75">
               {liveCount > 0 ? `${liveCount} live · updates every 10s` : "No live locations"}
             </p>
           </div>
@@ -680,7 +786,7 @@ export function LiveMapPage() {
                 key={styleId}
                 type="button"
                 onClick={() => setMapStyle(styleId)}
-                className={`px-2.5 py-1.5 text-[11px] font-bold transition-all ${mapStyle === styleId ? "bg-white text-slate-900" : "bg-black/40 backdrop-blur-md text-white/80"}`}
+                className={styleToggleClass(mapStyle === styleId)}
               >
                 {styleLabel}
               </button>
@@ -689,8 +795,8 @@ export function LiveMapPage() {
           {/* Heading-up toggle */}
           <button
             type="button"
-            onClick={() => setHeadingUp(v => !v)}
-            className={`flex h-9 w-9 items-center justify-center rounded-full shadow-lg text-base transition-all ${
+            onClick={toggleHeadingUp}
+            className={`flex h-11 w-11 items-center justify-center rounded-full shadow-lg text-xl transition-all ${
               headingUp
                 ? "bg-[#007AFF] text-white shadow-blue-500/40"
                 : "bg-black/40 backdrop-blur-md text-white/80"
@@ -705,7 +811,7 @@ export function LiveMapPage() {
         {!isLoaded && !isError && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-slate-950/80">
             <div className="h-8 w-8 rounded-full border-2 border-sky-400 border-t-transparent animate-spin" />
-            <p className="text-white/60 text-xs">Loading map…</p>
+            <p className="text-white/70 text-[15px]">Loading map…</p>
           </div>
         )}
 
@@ -722,7 +828,7 @@ export function LiveMapPage() {
           <button
             type="button"
             onClick={fitAll}
-            className="absolute left-4 bottom-[220px] z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 backdrop-blur-md text-white shadow-lg text-base border border-white/10"
+            className="absolute left-4 bottom-[240px] z-20 flex h-12 w-12 items-center justify-center rounded-full bg-black/55 backdrop-blur-md text-white shadow-lg text-[22px] border border-white/15"
             title="Fit all members"
           >
             ⊙
@@ -735,11 +841,11 @@ export function LiveMapPage() {
             className="lm-card absolute left-4 right-4 z-20 rounded-2xl overflow-hidden shadow-2xl"
             style={{ bottom: drawerOpen ? "228px" : "24px" }}
           >
-            <div className="bg-slate-900/95 backdrop-blur-xl border border-white/10 p-4">
+            <div className={`backdrop-blur-xl border p-5 ${lightChrome ? "bg-white/95 border-slate-200" : "bg-slate-900/95 border-white/10"}`}>
               <div className="flex items-center gap-3">
                 <div className="relative shrink-0">
                   <div
-                    className="h-11 w-11 rounded-full flex items-center justify-center text-base font-bold text-white shadow-lg"
+                    className="h-14 w-14 rounded-full flex items-center justify-center text-[20px] font-bold text-white shadow-lg"
                     style={{ background: selMember.color }}
                   >
                     {selMember.name.charAt(0).toUpperCase()}
@@ -749,28 +855,28 @@ export function LiveMapPage() {
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-white font-semibold text-sm truncate">{selMember.name}</p>
-                  <p className="text-white/50 text-xs">
+                  <p className={`font-bold text-[19px] truncate ${lightChrome ? "text-slate-900" : "text-white"}`}>{selMember.name}</p>
+                  <p className={`text-[15px] mt-0.5 ${lightChrome ? "text-slate-600" : "text-white/60"}`}>
                     {isStale(selLoc.updatedAt)
                       ? `⚠ ${timeAgo(selLoc.updatedAt)} — may be outdated`
                       : `🟢 Live · ${timeAgo(selLoc.updatedAt)}`}
                   </p>
                   {selLoc.label && (
-                    <p className="text-white/40 text-[11px] mt-0.5 truncate">📍 {selLoc.label}</p>
+                    <p className={`text-[14px] mt-1 truncate ${lightChrome ? "text-slate-500" : "text-white/45"}`}>📍 {selLoc.label}</p>
                   )}
                 </div>
-                <div className="flex flex-col gap-1.5 shrink-0">
+                <div className="flex flex-col gap-2 shrink-0">
                   <button
                     type="button"
                     onClick={() => mapRef.current?.flyTo({ center: [selLoc.lon, selLoc.lat], zoom: 17, essential: true })}
-                    className="rounded-xl bg-sky-600 px-3 py-1.5 text-[11px] font-bold text-white shadow"
+                    className="rounded-xl bg-sky-600 px-4 py-2.5 text-[15px] font-bold text-white shadow min-h-[44px]"
                   >
                     Focus
                   </button>
                   <button
                     type="button"
                     onClick={() => setSelected(null)}
-                    className="rounded-xl bg-white/10 px-3 py-1.5 text-[11px] font-bold text-white/70"
+                    className={`rounded-xl px-4 py-2.5 text-[15px] font-bold min-h-[44px] ${lightChrome ? "bg-slate-100 text-slate-700" : "bg-white/10 text-white/80"}`}
                   >
                     Dismiss
                   </button>
@@ -785,25 +891,25 @@ export function LiveMapPage() {
           <button
             type="button"
             onClick={() => setDrawerOpen(v => !v)}
-            className="w-full flex justify-center pt-2 pb-1 bg-slate-900/95 backdrop-blur-xl"
+            className={`w-full flex justify-center pt-2 pb-1 backdrop-blur-xl ${lightChrome ? "bg-white/95" : "bg-slate-900/95"}`}
             aria-label="Toggle member list"
           >
             <div className="h-1 w-10 rounded-full bg-white/20" />
           </button>
 
-          <div className="bg-slate-900/95 backdrop-blur-xl border-t border-white/10 lm-drawer">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+          <div className={`backdrop-blur-xl border-t lm-drawer ${lightChrome ? "bg-white/95 border-slate-200" : "bg-slate-900/95 border-white/10"}`}>
+            <div className={`flex items-center justify-between px-4 py-4 border-b ${lightChrome ? "border-slate-200" : "border-white/5"}`}>
               <div>
-                <p className="text-white text-sm font-semibold">
+                <p className={`text-[19px] font-bold ${lightChrome ? "text-slate-900" : "text-white"}`}>
                   {group?.name ?? "Family"}
                   {liveCount > 0 && (
-                    <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-400">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="ml-2 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-1 text-[13px] font-bold text-emerald-500">
+                      <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
                       {liveCount} live
                     </span>
                   )}
                 </p>
-                <p className="text-white/40 text-[11px] mt-0.5">{members.length} member{members.length !== 1 ? "s" : ""}</p>
+                <p className={`text-[15px] mt-1 ${lightChrome ? "text-slate-600" : "text-white/50"}`}>{members.length} member{members.length !== 1 ? "s" : ""}</p>
               </div>
               <div className="flex items-center gap-2">
                 {sharingLocation && (
@@ -811,7 +917,9 @@ export function LiveMapPage() {
                     type="button"
                     onClick={refreshGps}
                     disabled={gpsRefreshing}
-                    className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-[11px] font-bold text-white/80 disabled:opacity-50"
+                    className={`rounded-xl border px-4 py-2.5 text-[15px] font-bold min-h-[48px] disabled:opacity-50 ${
+                      lightChrome ? "border-slate-200 bg-slate-50 text-slate-800" : "border-white/15 bg-white/5 text-white/85"
+                    }`}
                     title="Take fresh GPS samples — use on your phone outdoors for best accuracy"
                   >
                     {gpsRefreshing ? "Locating…" : "Refresh GPS"}
@@ -820,9 +928,9 @@ export function LiveMapPage() {
                 <button
                   type="button"
                   onClick={shareLocation}
-                  className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-bold shadow transition-all ${
+                  className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-[15px] font-bold shadow min-h-[48px] transition-all ${
                     sharingLocation
-                      ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                      ? "bg-emerald-500/20 text-emerald-500 border border-emerald-500/30"
                       : "bg-sky-600 text-white"
                   }`}
                 >
@@ -833,7 +941,7 @@ export function LiveMapPage() {
             </div>
 
             {sharingLocation && myAccuracyM != null && myAccuracyM > 45 && (
-              <p className="px-4 pb-2 text-[10px] leading-relaxed text-amber-300/90">
+              <p className="px-4 pb-2 text-[14px] leading-relaxed text-amber-600">
                 Position may be off by ~{Math.round(myAccuracyM)}m.
                 {typeof window !== "undefined" && !/iPhone|iPad|Android/i.test(navigator.userAgent)
                   ? " Desktop browsers use Wi‑Fi guessing — open on your phone for house-level accuracy."
@@ -841,9 +949,9 @@ export function LiveMapPage() {
               </p>
             )}
 
-            <div className="overflow-y-auto max-h-[200px] divide-y divide-white/5">
+            <div className="overflow-y-auto max-h-[240px] divide-y divide-slate-200/80">
               {members.length === 0 && (
-                <div className="px-4 py-6 text-center text-white/30 text-xs">No members yet</div>
+                <div className={`px-4 py-8 text-center text-[16px] ${lightChrome ? "text-slate-400" : "text-white/35"}`}>No members yet</div>
               )}
               {members.map(member => {
                 const loc = locations[member.id];
@@ -861,13 +969,13 @@ export function LiveMapPage() {
                         mapRef.current?.flyTo({ center: [loc.lon, loc.lat], zoom: 16, duration: 900, essential: true });
                       }
                     }}
-                    className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-all ${
-                      isSelected ? "bg-white/8" : "hover:bg-white/5"
+                    className={`w-full flex items-center gap-3 px-4 py-4 text-left transition-all min-h-[72px] ${
+                      isSelected ? (lightChrome ? "bg-sky-50" : "bg-white/8") : lightChrome ? "hover:bg-slate-50" : "hover:bg-white/5"
                     }`}
                   >
                     <div className="relative shrink-0">
                       <div
-                        className="h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold text-white"
+                        className="h-12 w-12 rounded-full flex items-center justify-center text-[18px] font-bold text-white"
                         style={{ background: live ? member.color : "#334155" }}
                       >
                         {member.name.charAt(0).toUpperCase()}
@@ -877,10 +985,10 @@ export function LiveMapPage() {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-white text-sm font-medium truncate">
+                      <p className={`text-[17px] font-semibold truncate ${lightChrome ? "text-slate-900" : "text-white"}`}>
                         {member.name}{isMe ? " (you)" : ""}
                       </p>
-                      <p className="text-white/40 text-[11px] truncate">
+                      <p className={`text-[15px] truncate mt-0.5 ${lightChrome ? "text-slate-600" : "text-white/45"}`}>
                         {loc
                           ? live
                             ? `🟢 Live · ${timeAgo(loc.updatedAt)}`
@@ -888,7 +996,7 @@ export function LiveMapPage() {
                           : "No location shared"}
                       </p>
                     </div>
-                    <span className="shrink-0 rounded-md bg-white/8 px-2 py-0.5 text-[10px] text-white/40 font-medium capitalize">
+                    <span className={`shrink-0 rounded-lg px-2.5 py-1 text-[13px] font-semibold capitalize ${lightChrome ? "bg-slate-100 text-slate-600" : "bg-white/8 text-white/45"}`}>
                       {member.role}
                     </span>
                     {isSelected && <span className="shrink-0 text-sky-400 text-xs">●</span>}
@@ -906,7 +1014,7 @@ export function LiveMapPage() {
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
-            className="absolute right-4 bottom-24 z-20 flex h-10 items-center gap-2 rounded-full bg-slate-900/90 backdrop-blur-md border border-white/10 px-4 shadow-xl text-white text-[11px] font-semibold"
+            className="absolute right-4 bottom-28 z-20 flex h-12 items-center gap-2 rounded-full bg-slate-900/90 backdrop-blur-md border border-white/10 px-5 shadow-xl text-white text-[15px] font-bold"
           >
             <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
             {liveCount} live
@@ -939,7 +1047,7 @@ function buildAvatar(member: { name: string; color: string }, stale: boolean): H
     `background:${stale ? "#334155" : member.color};`,
     stale ? "filter:saturate(0.4);" : "",
     "display:flex;align-items:center;justify-content:center;",
-    "font-size:17px;font-weight:800;color:white;",
+    "font-size:19px;font-weight:800;color:white;",
     "font-family:system-ui,sans-serif;letter-spacing:0.01em;",
     "text-shadow:0 1px 2px rgba(0,0,0,0.25);",
   ].join("");
