@@ -19,6 +19,7 @@ import {
   reservationAttentionRingClass,
 } from "@/lib/travelAssistant/reservationAttention";
 import { FlightCard } from "@/components/travelAssistant/FlightCard";
+import { TripTransportRouteMap } from "@/components/travelAssistant/TripTransportRouteMap";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import type { ItinerarySelfCheckResult } from "@/lib/travelAssistant/itinerarySelfCheck";
 import { flightCardTypography, guideCardTypography, hotelCardTypography } from "@/lib/ui/mobileTypography";
