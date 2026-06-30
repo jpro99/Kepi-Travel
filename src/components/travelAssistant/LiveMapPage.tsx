@@ -18,6 +18,11 @@ import { clearLocationDisplayCache, resolveLocationForMapDisplay } from "@/lib/f
 import { isFamilySharingActive } from "@/lib/family/locationSharingPrefs";
 import { burstFamilyLocationFix, refreshFamilyLocationFix } from "@/lib/family/familyLocationWatch";
 import { readCompassHeading, requestDeviceOrientationPermission } from "@/lib/map/deviceCompass";
+import {
+  createFollowCameraState,
+  pushFollowTarget,
+  stepFollowCamera,
+} from "@/lib/map/navigationCamera";
 import { MobileTabBarNav } from "@/components/travelAssistant/mobile/useMobileTabNavigation";
 
 /* ─── Types ─────────────────────────────────────────────────── */
@@ -88,12 +93,20 @@ export function LiveMapPage() {
   const headingUpRef = useRef(true);
   const coneElsRef = useRef<Map<string, HTMLElement>>(new Map());
   const orientationListeningRef = useRef(false);
+  const cameraStateRef = useRef(createFollowCameraState(17));
+  const cameraLoopRef = useRef<number>(0);
+  const userPannedRef = useRef(false);
+  const selfMarkerRef = useRef<{ setLngLat(coords: [number, number]): void } | null>(null);
+  const sharingLocationRef = useRef(false);
+  const selectedRef = useRef<string | null>(null);
+  const drawerOpenRef = useRef(true);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isError, setIsError] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [sharingLocation, setSharingLocation] = useState(false);
+  const [userPanned, setUserPanned] = useState(false);
   const [myMemberId, setMyMemberId] = useState<string | null>(null);
   const [gpsRefreshing, setGpsRefreshing] = useState(false);
 
@@ -101,20 +114,97 @@ export function LiveMapPage() {
     headingUpRef.current = headingUp;
   }, [headingUp]);
 
-  const applyHeadingToUi = useCallback((heading: number) => {
-    headingRef.current = heading;
+  useEffect(() => {
+    sharingLocationRef.current = sharingLocation;
+    if (sharingLocation) {
+      userPannedRef.current = false;
+      setUserPanned(false);
+      scheduleCameraLoopRef.current();
+    } else if (cameraLoopRef.current) {
+      cancelAnimationFrame(cameraLoopRef.current);
+      cameraLoopRef.current = 0;
+    }
+  }, [sharingLocation]);
+
+  useEffect(() => {
+    selectedRef.current = selected;
+  }, [selected]);
+
+  useEffect(() => {
+    drawerOpenRef.current = drawerOpen;
+    if (sharingLocationRef.current && !userPannedRef.current) {
+      scheduleCameraLoopRef.current();
+    }
+  }, [drawerOpen]);
+
+  const updateCones = useCallback((heading: number) => {
     const coneRotation = headingUpRef.current ? 0 : heading;
     coneElsRef.current.forEach((cone) => {
       cone.style.transform = `translateX(-50%) rotate(${coneRotation}deg)`;
     });
+  }, []);
+
+  const runCameraLoop = useCallback(() => {
+    cameraLoopRef.current = 0;
     const map = mapRef.current;
     if (!map || !isLoadedRef.current) return;
-    if (headingUpRef.current) {
-      map.easeTo({ bearing: -heading, duration: 120, essential: true });
-    } else if (Math.abs(map.getBearing?.() ?? 0) > 0.5) {
-      map.easeTo({ bearing: 0, duration: 120, essential: true });
+
+    const follow =
+      sharingLocationRef.current &&
+      !userPannedRef.current &&
+      (selectedRef.current == null || selectedRef.current === myMemberIdRef.current);
+
+    if (!follow) return;
+
+    const state = cameraStateRef.current;
+    if (state.lat == null || state.lon == null) {
+      cameraLoopRef.current = requestAnimationFrame(runCameraLoop);
+      return;
     }
+
+    stepFollowCamera(state);
+    headingRef.current = state.heading;
+    updateCones(state.heading);
+
+    if (selfMarkerRef.current) {
+      selfMarkerRef.current.setLngLat([state.lon, state.lat]);
+    }
+
+    map.jumpTo({
+      center: [state.lon, state.lat],
+      bearing: headingUpRef.current ? -state.heading : 0,
+      zoom: state.zoom,
+      padding: { top: 112, bottom: drawerOpenRef.current ? 250 : 96, left: 0, right: 0 },
+    });
+
+    cameraLoopRef.current = requestAnimationFrame(runCameraLoop);
+  }, [updateCones]);
+
+  const scheduleCameraLoopRef = useRef<() => void>(() => {});
+  scheduleCameraLoopRef.current = () => {
+    if (cameraLoopRef.current) return;
+    cameraLoopRef.current = requestAnimationFrame(runCameraLoop);
+  };
+
+  const pushCameraTarget = useCallback((patch: { lat?: number; lon?: number; heading?: number }) => {
+    pushFollowTarget(cameraStateRef.current, patch);
+    if (patch.heading != null) {
+      headingRef.current = cameraStateRef.current.targetHeading;
+    }
+    scheduleCameraLoopRef.current();
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (cameraLoopRef.current) cancelAnimationFrame(cameraLoopRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!headingUp && mapRef.current && isLoaded) {
+      pushCameraTarget({ heading: headingRef.current });
+    }
+  }, [headingUp, isLoaded, pushCameraTarget]);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,7 +212,7 @@ export function LiveMapPage() {
     const onOrientation = (event: DeviceOrientationEvent): void => {
       const heading = readCompassHeading(event);
       if (heading == null) return;
-      applyHeadingToUi(heading);
+      pushCameraTarget({ heading });
     };
 
     const startListening = async (): Promise<void> => {
@@ -140,16 +230,7 @@ export function LiveMapPage() {
       window.removeEventListener("deviceorientation", onOrientation, true);
       orientationListeningRef.current = false;
     };
-  }, [applyHeadingToUi]);
-
-  useEffect(() => {
-    if (!headingUp && mapRef.current && isLoaded) {
-      mapRef.current.easeTo({ bearing: 0, duration: 200, essential: true });
-      applyHeadingToUi(headingRef.current);
-    } else if (headingUp && isLoaded) {
-      applyHeadingToUi(headingRef.current);
-    }
-  }, [headingUp, isLoaded, applyHeadingToUi]);
+  }, [pushCameraTarget]);
 
   useEffect(() => {
     if (isFamilySharingActive()) {
@@ -229,6 +310,20 @@ export function LiveMapPage() {
 
         if (existing[member.id]) {
           const marker = existing[member.id];
+          const isMe = member.id === myMemberIdRef.current;
+          if (isMe) {
+            selfMarkerRef.current = marker;
+          }
+          const followSelf =
+            isMe &&
+            sharingLocationRef.current &&
+            !userPannedRef.current &&
+            (selectedRef.current == null || selectedRef.current === myMemberIdRef.current);
+
+          if (followSelf) {
+            return;
+          }
+
           const from = marker.getLngLat();
           // GPS noise filter — skip if moved less than ~15 metres
           // Consumer GPS drifts 10-30m even when standing still
@@ -317,12 +412,20 @@ export function LiveMapPage() {
         wrap.addEventListener("click", () => {
           setSelected(p => p === member.id ? null : member.id);
           setDrawerOpen(false);
+          userPannedRef.current = true;
+          setUserPanned(true);
           m.flyTo({ center: [loc.lon, loc.lat], zoom: 16, duration: 900, essential: true });
         });
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const marker = new (ml as any).Marker({ element: wrap, anchor: "bottom" })
+        const marker = new (ml as any).Marker({
+          element: wrap,
+          anchor: isMyMarker ? "center" : "bottom",
+        })
           .setLngLat([loc.lon, loc.lat]).addTo(m);
+        if (isMyMarker) {
+          selfMarkerRef.current = marker;
+        }
         existing[member.id] = marker;
       });
 
@@ -332,6 +435,9 @@ export function LiveMapPage() {
           existing[id].remove();
           delete existing[id];
           coneElsRef.current.delete(id);
+          if (id === myMemberIdRef.current) {
+            selfMarkerRef.current = null;
+          }
         }
       });
 
@@ -390,6 +496,14 @@ export function LiveMapPage() {
           isLoadedRef.current = true;
           setIsLoaded(true);
           placeMarkers(map);
+          map.on("dragstart", () => {
+            userPannedRef.current = true;
+            setUserPanned(true);
+            if (cameraLoopRef.current) {
+              cancelAnimationFrame(cameraLoopRef.current);
+              cameraLoopRef.current = 0;
+            }
+          });
         });
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         map.on("error", (e: any) => {
@@ -521,8 +635,13 @@ export function LiveMapPage() {
         const { lat, lon, accuracy } = resolved;
 
         if (pos.coords.heading != null && Number.isFinite(pos.coords.heading) && pos.coords.heading >= 0) {
-          applyHeadingToUi(pos.coords.heading);
+          const speed = pos.coords.speed;
+          if (speed == null || !Number.isFinite(speed) || speed > 1.2) {
+            pushCameraTarget({ heading: pos.coords.heading });
+          }
         }
+
+        pushCameraTarget({ lat, lon });
 
         void fetch("/api/family", {
           method: "POST",
@@ -542,9 +661,14 @@ export function LiveMapPage() {
               memberId,
             },
           }));
-          if (mapRef.current && !firstFixRef.current) {
+          if (!firstFixRef.current) {
             firstFixRef.current = true;
-            mapRef.current.easeTo({ center: [lon, lat], zoom: 17, duration: 1200 });
+            const state = cameraStateRef.current;
+            state.lat = lat;
+            state.lon = lon;
+            state.targetLat = lat;
+            state.targetLon = lon;
+            state.zoom = 17;
           }
         }
       },
@@ -560,7 +684,7 @@ export function LiveMapPage() {
       },
       { enableHighAccuracy: true, maximumAge: 10_000, timeout: 45_000 },
     );
-  }, [stopLocalLocationWatch, applyHeadingToUi]);
+  }, [stopLocalLocationWatch, pushCameraTarget]);
 
   useEffect(() => {
     if (sharingLocation) startLocalLocationWatch();
@@ -610,20 +734,41 @@ export function LiveMapPage() {
       active ? chromeBtnActive : `${chromeBtnIdle} backdrop-blur-md`
     }`;
 
+  useEffect(() => {
+    if (!myMemberId || !sharingLocation) return;
+    const loc = locations[myMemberId];
+    if (!loc) return;
+    pushCameraTarget({ lat: loc.lat, lon: loc.lon });
+  }, [locations, myMemberId, sharingLocation, pushCameraTarget]);
+
+  const recenterOnMe = useCallback(() => {
+    userPannedRef.current = false;
+    setUserPanned(false);
+    setSelected(null);
+    const id = myMemberIdRef.current;
+    if (!id) return;
+    const loc = locations[id];
+    if (!loc) return;
+    const state = cameraStateRef.current;
+    state.lat = loc.lat;
+    state.lon = loc.lon;
+    state.targetLat = loc.lat;
+    state.targetLon = loc.lon;
+    state.zoom = Math.max(state.zoom, 16);
+    if (selfMarkerRef.current) {
+      selfMarkerRef.current.setLngLat([loc.lon, loc.lat]);
+    }
+    scheduleCameraLoopRef.current();
+  }, [locations]);
+
   const enableCompass = useCallback(async () => {
     const ok = await requestDeviceOrientationPermission();
     if (!ok) return;
-    if (!orientationListeningRef.current) {
-      const onOrientation = (event: DeviceOrientationEvent): void => {
-        const heading = readCompassHeading(event);
-        if (heading == null) return;
-        applyHeadingToUi(heading);
-      };
-      window.addEventListener("deviceorientation", onOrientation, true);
-      orientationListeningRef.current = true;
-    }
+    userPannedRef.current = false;
+    setUserPanned(false);
     setHeadingUp(true);
-  }, [applyHeadingToUi]);
+    scheduleCameraLoopRef.current();
+  }, []);
 
   const toggleHeadingUp = useCallback(() => {
     setHeadingUp((current) => {
@@ -835,6 +980,23 @@ export function LiveMapPage() {
           </button>
         )}
 
+        {/* Re-center on me — shown after manual pan while sharing */}
+        {sharingLocation && userPanned && isLoaded && (
+          <button
+            type="button"
+            onClick={recenterOnMe}
+            className={`absolute left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full px-5 py-3 text-[15px] font-bold shadow-xl border min-h-[48px] ${
+              lightChrome
+                ? "bg-white text-slate-900 border-slate-200"
+                : "bg-slate-900/95 text-white border-white/15"
+            }`}
+            style={{ bottom: drawerOpen ? "248px" : "112px" }}
+          >
+            <span className="text-[18px]">◎</span>
+            Re-center on me
+          </button>
+        )}
+
         {/* Selected member card */}
         {selMember && selLoc && (
           <div
@@ -966,6 +1128,8 @@ export function LiveMapPage() {
                       if (loc) {
                         setSelected(member.id);
                         setDrawerOpen(false);
+                        userPannedRef.current = true;
+                        setUserPanned(true);
                         mapRef.current?.flyTo({ center: [loc.lon, loc.lat], zoom: 16, duration: 900, essential: true });
                       }
                     }}
