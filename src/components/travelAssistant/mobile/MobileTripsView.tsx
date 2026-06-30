@@ -75,6 +75,8 @@ interface MobileTripsViewProps {
   onDelete: (id: string) => void;
   hotelNotebookNote?: string;
   onHotelNotebookChange?: (value: string) => void;
+  /** Trip tab uses Map for routes — skip duplicate route map here */
+  hideRouteMap?: boolean;
 }
 
 function TicketCard({
@@ -123,6 +125,7 @@ export function MobileTripsView({
   onDelete,
   hotelNotebookNote = "",
   onHotelNotebookChange,
+  hideRouteMap = false,
 }: MobileTripsViewProps) {
   const [segment, setSegment] = useState<MobileTripsSegment>("flights");
 
@@ -134,14 +137,14 @@ export function MobileTripsView({
     return (
       <section className="space-y-4">
         <div className="rounded-[var(--radius-card)] bg-[var(--bg-card)] p-6 text-center shadow-[var(--shadow-card)]">
-          <p className="text-[22px] font-semibold text-[var(--text-primary)]">Your trips live here</p>
-          <p className="mt-2 text-[15px] text-[var(--text-secondary)]">
+          <p className="text-[26px] font-bold text-[var(--text-primary)]">Your trips live here</p>
+          <p className="mt-3 text-[19px] leading-snug text-[var(--text-secondary)]">
             Create a trip to see flights, hotels, and tickets in one clean place.
           </p>
           <button
             type="button"
             onClick={onCreateTrip}
-            className="mt-6 min-h-[48px] w-full rounded-[var(--radius-button)] bg-[var(--accent)] px-6 text-[17px] font-semibold text-white"
+            className="mt-6 min-h-[56px] w-full rounded-[var(--radius-button)] bg-[var(--accent)] px-6 text-[19px] font-bold text-white"
           >
             Create your trip
           </button>
@@ -152,17 +155,17 @@ export function MobileTripsView({
 
   return (
     <section className="space-y-4">
-      <div className="flex gap-2 rounded-2xl bg-[var(--bg-muted)] p-1">
+      <div className="flex gap-2 rounded-2xl bg-[var(--bg-muted)] p-1.5">
         {MOBILE_TRIPS_SEGMENTS.map(({ id, label }) => (
           <button
             key={id}
             type="button"
             onClick={() => setSegment(id)}
-            className={`min-h-[48px] flex-1 rounded-xl font-bold transition ${
+            className={`min-h-[52px] flex-1 rounded-xl font-bold transition touch-manipulation ${
               segment === id
-                ? "bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm"
-                : "text-[var(--text-muted)]"
-            } ${segment === id ? "text-[17px]" : "text-[16px]"}`}
+                ? "bg-[var(--bg-card)] text-[19px] text-[var(--text-primary)] shadow-sm"
+                : "text-[17px] text-[var(--text-muted)]"
+            }`}
           >
             {label}
           </button>
@@ -183,6 +186,7 @@ export function MobileTripsView({
           onDelete={onDelete}
           onAdd={onAddBooking}
           simplifiedMobile
+          hideRouteMap={hideRouteMap}
         />
       ) : segment === "hotels" ? (
         <HotelsTab
