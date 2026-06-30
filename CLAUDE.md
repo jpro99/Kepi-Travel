@@ -77,6 +77,7 @@ Do not loop on the same failed fix. Do not touch unrelated files. Do not claim f
 ## Project-specific constants
 
 - Live repo: jpro99/Kepi-Travel (Vercel deploys kepitravel.com) — NEVER push to Kepi-Search
+- **Discuss before code (Jeff):** If he asks what is wrong or how UI should look, analyze and propose only — no edits/push until he approves, unless he explicitly says to fix/push in that message. See `KEPI_PROJECT_MEMORY.md` § Jeff.
 - **Git delivery (owner preference):** Always commit and push directly to `main`. Do not open PRs or use feature branches unless the owner explicitly asks.
 - **Theme default:** Light mode unless user picks dark (`kepi-theme` in localStorage).
 - Rule Zero: `npm run build` passes before every push

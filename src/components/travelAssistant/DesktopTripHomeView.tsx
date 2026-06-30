@@ -1,8 +1,5 @@
 "use client";
 
-import { TripRouteBanner } from "@/components/travelAssistant/TripRouteBanner";
-import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
-
 interface TripReservation {
   id: string;
   type: string;
@@ -23,7 +20,6 @@ interface TripReservation {
 
 interface DesktopTripHomeViewProps {
   tripName: string;
-  transportReservations: TransportRouteReservation[];
   reservations: TripReservation[];
   onReservationTap: (id: string) => void;
 }
@@ -65,7 +61,6 @@ function hotelSummary(hotel: TripReservation): string {
 
 export function DesktopTripHomeView({
   tripName,
-  transportReservations,
   reservations,
   onReservationTap,
 }: DesktopTripHomeViewProps) {
@@ -75,8 +70,6 @@ export function DesktopTripHomeView({
   return (
     <section className="space-y-6">
       <h1 className="text-3xl font-black tracking-tight text-slate-950 dark:text-white">{tripName}</h1>
-
-      <TripRouteBanner transportReservations={transportReservations} />
 
       {flights.length > 0 ? (
         <section className="space-y-3">

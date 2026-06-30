@@ -8917,7 +8917,6 @@ export default function TravelAssistantPage() {
                 onDelete={(id) => void handleDeleteReservation(id)}
                 hotelNotebookNote={itineraryPrefs.hotelNotebookNote}
                 onHotelNotebookChange={itineraryPrefs.updateHotelNotebookNote}
-                transportReservations={transportRouteReservations}
               />
             )}
               </>
@@ -8978,7 +8977,6 @@ export default function TravelAssistantPage() {
             ) : (
               <DesktopTripHomeView
                 tripName={activeTrip?.name ?? "Your trip"}
-                transportReservations={transportRouteReservations}
                 reservations={consumerReservationsSorted}
                 onReservationTap={(id) => openDrawer("reservation", id)}
               />

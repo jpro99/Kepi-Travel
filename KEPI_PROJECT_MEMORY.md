@@ -3,7 +3,19 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-06-15
+Last updated: 2026-06-25
+
+---
+
+## Jeff — how to work with him (mandatory)
+
+- **Discuss first, code second.** If he asks "what would you fix?" or "does this match?" or "tell me before you change anything" — give analysis and a short plan only. Wait for explicit approval before editing, committing, or pushing.
+- **Do not burn credits** on unapproved refactors or "helpful" extra changes.
+- **Match his eye, not a generic template.** Hotels (Stays) tab on mobile is the reference for clean mobile trip UI: trip name → Flights/Hotels picker → map → list. No blue route banner strip on Flights (he removed it — "Ontario to Ontario" was wrong and not clean). Hotels stay as-is with no blue hero.
+- **Flights and Stays must feel the same** — same structure, card style, and chrome. Still a gap as of 2026-06-25; align only after he approves a written plan.
+- **Trip tab (desktop):** Trip name, then flights, then hotels — nothing else (no itinerary prompts, calendar, airport/hotel questionnaires).
+- **Plan tab:** Lined-paper itinerary, inline edit, no reservation popups on line tap.
+- Read this section before UI work on Trips / Flights / Hotels / Plan.
 
 ---
 

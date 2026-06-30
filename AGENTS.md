@@ -13,6 +13,7 @@ Primary goals:
 
 Operating rules:
 - **Git delivery (owner preference):** Commit and push directly to `main`. No PRs or feature branches unless the owner explicitly asks.
+- **Discuss before code (Jeff — mandatory):** When Jeff asks what is wrong, how things should look, or whether something matches his style, respond with analysis and a proposed plan only. Do **not** edit files, commit, or push until he explicitly approves after that discussion — unless he clearly says "fix it now" / "go ahead" / "push" in the same message.
 - Start with an audit plan before changing code.
 - Prefer read-only review first, then propose changes.
 - Never claim a bug is fixed until the relevant checks are run.
