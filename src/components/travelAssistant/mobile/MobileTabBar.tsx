@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import type { MobilePrimaryTab } from "@/components/travelAssistant/mobile/mobileShellTypes";
 import { MOBILE_PRIMARY_TABS } from "@/components/travelAssistant/mobile/mobileShellTypes";
 
@@ -10,9 +12,15 @@ interface MobileTabBarProps {
 }
 
 export function MobileTabBar({ activeTab, onSelectTab, className = "" }: MobileTabBarProps) {
-  return (
+  const [portalReady, setPortalReady] = useState(false);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  const bar = (
     <nav
-      className={`fixed inset-x-0 bottom-0 z-[100] border-t border-[var(--border-default)] bg-[var(--bg-card)]/95 px-2 pt-1 shadow-[0_-8px_32px_rgba(0,0,0,0.08)] backdrop-blur-xl ${className}`}
+      className={`fixed inset-x-0 bottom-0 z-[200] border-t border-[var(--border-default)] bg-[var(--bg-card)]/95 px-2 pt-1 shadow-[0_-8px_32px_rgba(0,0,0,0.08)] backdrop-blur-xl ${className}`}
       style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
       aria-label="Main navigation"
     >
@@ -24,7 +32,7 @@ export function MobileTabBar({ activeTab, onSelectTab, className = "" }: MobileT
               key={id}
               type="button"
               onClick={() => onSelectTab(id)}
-              className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-2 transition-colors ${
+              className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-2 transition-colors touch-manipulation ${
                 active
                   ? "text-[var(--accent)]"
                   : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
@@ -45,4 +53,10 @@ export function MobileTabBar({ activeTab, onSelectTab, className = "" }: MobileT
       </div>
     </nav>
   );
+
+  if (!portalReady) {
+    return null;
+  }
+
+  return createPortal(bar, document.body);
 }

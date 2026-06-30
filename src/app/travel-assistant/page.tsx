@@ -6222,20 +6222,28 @@ export default function TravelAssistantPage() {
     [handleSwitchTrip, openDrawer],
   );
 
-  const navigateMobilePrimaryTab = useCallback((nextTab: MobilePrimaryTab): void => {
-    setMobilePrimaryTab(nextTab);
-    const params = new URLSearchParams(window.location.search);
-    params.set("mtab", nextTab);
-    const nextUrl = `${window.location.pathname}?${params.toString()}`;
-    window.history.replaceState({}, "", nextUrl);
-  }, []);
+  const navigateMobilePrimaryTab = useCallback(
+    (nextTab: MobilePrimaryTab): void => {
+      setMobilePrimaryTab(nextTab);
+      const params = new URLSearchParams(window.location.search);
+      params.set("mtab", nextTab);
+      router.replace(`${window.location.pathname}?${params.toString()}`, { scroll: false });
+    },
+    [router],
+  );
 
   useEffect(() => {
-    const normalized = normalizeMobilePrimaryTab(searchParams.get("mtab"));
-    if (normalized) {
-      setMobilePrimaryTab(normalized);
-    }
-  }, [searchParams]);
+    const syncMobileTabFromUrl = (): void => {
+      const normalized = normalizeMobilePrimaryTab(
+        new URLSearchParams(window.location.search).get("mtab"),
+      );
+      if (normalized) {
+        setMobilePrimaryTab(normalized);
+      }
+    };
+    window.addEventListener("popstate", syncMobileTabFromUrl);
+    return () => window.removeEventListener("popstate", syncMobileTabFromUrl);
+  }, []);
 
   const mobileSearchTrips = useMemo(
     () =>
