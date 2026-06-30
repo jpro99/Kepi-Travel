@@ -51,6 +51,7 @@
     "autoprefixer": "^10.5.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "framer-motion": "^11.18.2",
     "geist": "^1.7.1",
     "geojson-path-finder": "^2.1.0",
     "googleapis": "^171.4.0",
