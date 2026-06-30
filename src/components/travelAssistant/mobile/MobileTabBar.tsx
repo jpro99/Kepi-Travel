@@ -12,7 +12,7 @@ interface MobileTabBarProps {
 export function MobileTabBar({ activeTab, onSelectTab, className = "" }: MobileTabBarProps) {
   return (
     <nav
-      className={`fixed inset-x-0 bottom-0 z-50 border-t border-[var(--border-default)] bg-[var(--bg-card)]/95 px-2 pt-1 shadow-[0_-8px_32px_rgba(0,0,0,0.08)] backdrop-blur-xl ${className}`}
+      className={`fixed inset-x-0 bottom-0 z-[100] border-t border-[var(--border-default)] bg-[var(--bg-card)]/95 px-2 pt-1 shadow-[0_-8px_32px_rgba(0,0,0,0.08)] backdrop-blur-xl ${className}`}
       style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
       aria-label="Main navigation"
     >

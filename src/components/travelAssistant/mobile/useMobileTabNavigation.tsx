@@ -4,10 +4,17 @@ import { useRouter } from "next/navigation";
 import { MobileTabBar } from "@/components/travelAssistant/mobile/MobileTabBar";
 import type { MobilePrimaryTab } from "@/components/travelAssistant/mobile/mobileShellTypes";
 
-export function useMobileTabNavigation(activeTab?: MobilePrimaryTab) {
+export function useMobileTabNavigation(
+  activeTab?: MobilePrimaryTab,
+  onNavigate?: (tab: MobilePrimaryTab) => void,
+) {
   const router = useRouter();
 
   const navigateMobileTab = (tab: MobilePrimaryTab): void => {
+    if (onNavigate) {
+      onNavigate(tab);
+      return;
+    }
     const params = new URLSearchParams();
     params.set("mtab", tab);
     router.push(`/travel-assistant?${params.toString()}`);
@@ -18,9 +25,11 @@ export function useMobileTabNavigation(activeTab?: MobilePrimaryTab) {
 
 interface MobileTabBarNavProps {
   activeTab?: MobilePrimaryTab;
+  /** When provided, updates tab state immediately (required on /travel-assistant). */
+  onSelectTab?: (tab: MobilePrimaryTab) => void;
 }
 
-export function MobileTabBarNav({ activeTab }: MobileTabBarNavProps) {
-  const { navigateMobileTab } = useMobileTabNavigation(activeTab);
+export function MobileTabBarNav({ activeTab, onSelectTab }: MobileTabBarNavProps) {
+  const { navigateMobileTab } = useMobileTabNavigation(activeTab, onSelectTab);
   return <MobileTabBar activeTab={activeTab} onSelectTab={navigateMobileTab} />;
 }

@@ -6230,6 +6230,13 @@ export default function TravelAssistantPage() {
     window.history.replaceState({}, "", nextUrl);
   }, []);
 
+  useEffect(() => {
+    const normalized = normalizeMobilePrimaryTab(searchParams.get("mtab"));
+    if (normalized) {
+      setMobilePrimaryTab(normalized);
+    }
+  }, [searchParams]);
+
   const mobileSearchTrips = useMemo(
     () =>
       trips.map((trip) => ({
@@ -9450,7 +9457,7 @@ export default function TravelAssistantPage() {
                 navigateMobilePrimaryTab("flights");
               }}
             />
-            <MobileTabBarNav activeTab={mobilePrimaryTab} />
+            <MobileTabBarNav activeTab={mobilePrimaryTab} onSelectTab={navigateMobilePrimaryTab} />
           </>
         ) : (
         <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--border-default)] bg-[var(--bg-card)]/95 px-2 py-2 shadow-2xl backdrop-blur md:hidden">
