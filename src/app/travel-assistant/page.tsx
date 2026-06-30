@@ -203,6 +203,7 @@ import { MobileItineraryReader } from "@/components/travelAssistant/mobile/Mobil
 import { MobileSettingsView } from "@/components/travelAssistant/mobile/MobileSettingsView";
 import { MobileSearchOverlay } from "@/components/travelAssistant/mobile/MobileSearchOverlay";
 import { MobileTabBarNav } from "@/components/travelAssistant/mobile/useMobileTabNavigation";
+import { isStandaloneApp } from "@/lib/ui/isStandaloneApp";
 import { useMobilePrimaryTab } from "@/components/travelAssistant/mobile/useMobilePrimaryTab";
 
 const OpsPanel = lazy(async () => {
@@ -3465,8 +3466,9 @@ export default function TravelAssistantPage() {
     const touchMedia = window.matchMedia("(hover: none) and (pointer: coarse)");
     const update = (): void => {
       const forceMobile = new URLSearchParams(window.location.search).get("mobile") === "1";
+      const standalone = isStandaloneApp();
       const compact =
-        forceMobile || widthMedia.matches || (touchMedia.matches && window.innerWidth < 1280);
+        forceMobile || standalone || widthMedia.matches || (touchMedia.matches && window.innerWidth < 1280);
       setIsCompactViewport(compact);
       setMobileSimpleView(compact);
       setMobileViewPanel((previous) => {

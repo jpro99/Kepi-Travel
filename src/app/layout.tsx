@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { ClerkProvider } from "@clerk/nextjs";
@@ -7,6 +7,7 @@ import { getLocale, getMessages } from "next-intl/server";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { SplashTransition } from "@/components/native/SplashTransition";
+import { StandaloneViewportFix } from "@/components/native/StandaloneViewportFix";
 import { SupportChat } from "@/components/support/SupportChat";
 import { BillingProvider } from "@/lib/billing/BillingContext";
 import { verifyEnvFromExampleAtBoot } from "../../scripts/verify-env";
@@ -101,6 +102,13 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#f9f9f9",
+};
+
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -132,13 +140,13 @@ export default async function RootLayout({
         {process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ? (
           <meta name="vapid-public-key" content={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY} />
         ) : null}
-        <meta name="theme-color" content="#f9f9f9" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Kepi" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
       <body className="min-h-full flex flex-col">
+        <StandaloneViewportFix />
         <ClerkProvider>
           <NextIntlClientProvider locale={locale} messages={messages}>
             <BillingProvider>
