@@ -90,6 +90,14 @@ function fmtDate(t: string): string {
   return `${days[d.getDay()]} ${months[d.getMonth()]} ${d.getDate()}`;
 }
 
+function flightCardSubtitle(flightNumber: string | undefined, dep: string, arr: string): string {
+  return [flightNumber, `${dep} → ${arr}`].filter(Boolean).join(" • ");
+}
+
+function flightCardDepartureTime(dateLabel: string, timeLabel: string): string {
+  return [dateLabel, timeLabel].filter(Boolean).join(" • ") || "—";
+}
+
 function parseFlightTimeMs(timeStr: string, timezone?: string): number {
   if (!timeStr) return NaN;
   // Normalize to "YYYY-MM-DDTHH:MM" format
@@ -716,18 +724,16 @@ export function FlightsTab({
                 key={r.id}
                 className={past ? "opacity-60" : ""}
                 airline={r.flightAirline ?? r.provider}
-                flightNumber={r.flightNumber ?? "—"}
+                flightNumber={flightCardSubtitle(r.flightNumber, dep, arr)}
                 departure={dep}
                 arrival={arr}
-                departureTime={[date, depTime].filter(Boolean).join(" · ") || "—"}
+                departureTime={flightCardDepartureTime(date, depTime)}
                 arrivalTime={arrTime || "—"}
-                price={!attentionBadge || isPast ? costLine ?? undefined : undefined}
+                price={attentionBadge && !isPast ? undefined : costLine ?? undefined}
                 addMiles={missingPrice && !past}
                 badge={
                   attentionBadge && !isPast ? (
                     <span className={attentionBadge.className}>{attentionBadge.label}</span>
-                  ) : costLine ? (
-                    <p className="text-[17px] font-semibold text-apple-text">{costLine}</p>
                   ) : undefined
                 }
                 gateLine={gateLine}
