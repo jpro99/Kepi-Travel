@@ -18,7 +18,7 @@ import {
   reservationAttentionKind,
   reservationAttentionRingClass,
 } from "@/lib/travelAssistant/reservationAttention";
-import { TripTransportRouteMap } from "@/components/travelAssistant/TripTransportRouteMap";
+import { FlightCard } from "@/components/travelAssistant/FlightCard";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import type { ItinerarySelfCheckResult } from "@/lib/travelAssistant/itinerarySelfCheck";
 import { flightCardTypography, guideCardTypography, hotelCardTypography } from "@/lib/ui/mobileTypography";
@@ -706,47 +706,35 @@ export function FlightsTab({
           });
 
           if (simplifiedMobile) {
-            const scheduleLine = [date, depTime, arrTime ? `→ ${arrTime}` : null].filter(Boolean).join(" · ");
+            const gateLine =
+              gate && gate !== "—"
+                ? `Gate ${gate}${terminal && terminal !== "—" ? ` · Terminal ${terminal}` : ""}`
+                : undefined;
 
             return (
-              <div
+              <FlightCard
                 key={r.id}
-                className={`${listType.card} overflow-hidden ${past ? "opacity-60" : ""}`}
+                className={past ? "opacity-60" : ""}
+                airline={r.flightAirline ?? r.provider}
+                flightNumber={r.flightNumber ?? "—"}
+                departure={dep}
+                arrival={arr}
+                departureTime={[date, depTime].filter(Boolean).join(" · ") || "—"}
+                arrivalTime={arrTime || "—"}
+                price={!attentionBadge || isPast ? costLine ?? undefined : undefined}
+                addMiles={missingPrice && !past}
+                badge={
+                  attentionBadge && !isPast ? (
+                    <span className={attentionBadge.className}>{attentionBadge.label}</span>
+                  ) : costLine ? (
+                    <p className="text-[17px] font-semibold text-apple-text">{costLine}</p>
+                  ) : undefined
+                }
+                gateLine={gateLine}
+                onClick={() => setExpanded(isOpen ? null : r.id)}
               >
-                <button
-                  type="button"
-                  onClick={() => setExpanded(isOpen ? null : r.id)}
-                  className="w-full p-4 text-left"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-[var(--bg-grouped)] text-[15px] font-semibold text-[var(--text-secondary)]">
-                      {dep}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className={listType.cardTitle}>{r.flightAirline ?? r.provider}</p>
-                        {attentionBadge && !isPast ? (
-                          <span className={attentionBadge.className}>{attentionBadge.label}</span>
-                        ) : costLine ? (
-                          <span className="shrink-0 text-[17px] font-semibold text-[var(--text-primary)]">{costLine}</span>
-                        ) : null}
-                      </div>
-                      <p className={listType.location}>
-                        {[r.flightNumber, `${dep} → ${arr}`].filter(Boolean).join(" · ")}
-                      </p>
-                      {scheduleLine ? <p className={`${listType.subheading} mt-1`}>{scheduleLine}</p> : null}
-                      {gate ? (
-                        <p className="mt-1 text-[15px] text-[var(--accent)]">
-                          Gate {gate}{terminal && terminal !== "—" ? ` · Terminal ${terminal}` : ""}
-                        </p>
-                      ) : null}
-                    </div>
-                    <span className="mt-1 shrink-0 text-[13px] text-[var(--text-tertiary)]">{isOpen ? "▲" : "▼"}</span>
-                  </div>
-                </button>
-
                 {isOpen ? (
-                  <div className="space-y-3 border-t border-[var(--border-default)] px-4 pb-4 pt-3">
+                  <div className="space-y-3 border-t border-[var(--border-default)] px-5 pb-4 pt-3">
                     {r.flightSeatNumber ? (
                       <div>
                         <p className={listType.detailLabel}>Seat</p>
@@ -787,7 +775,7 @@ export function FlightsTab({
                     </div>
                   </div>
                 ) : null}
-              </div>
+              </FlightCard>
             );
           }
 
