@@ -18,7 +18,7 @@ interface ItineraryDayDrawerProps {
   onChange: (value: string) => void;
   onPlanDay?: (dateKey: string, intent: ParsedDayIntent, mode: DayPlanMode) => void;
   onPlanHotel?: () => void;
-  bookedItems?: Array<{ id: string; label: string; onTap: () => void }>;
+  bookedItems?: Array<{ id: string; label: string; onTap?: () => void }>;
 }
 
 export function ItineraryDayDrawer({
@@ -101,13 +101,19 @@ export function ItineraryDayDrawer({
               <ul className="space-y-2">
                 {bookedItems.map((item) => (
                   <li key={item.id}>
-                    <button
-                      type="button"
-                      onClick={item.onTap}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 transition hover:border-[#f4c95d]/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                    >
-                      {item.label}
-                    </button>
+                    {item.onTap ? (
+                      <button
+                        type="button"
+                        onClick={item.onTap}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 transition hover:border-[#f4c95d]/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                      >
+                        {item.label}
+                      </button>
+                    ) : (
+                      <div className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                        {item.label}
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>

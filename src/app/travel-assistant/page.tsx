@@ -156,7 +156,8 @@ import { resolveEffectiveStopRanges } from "@/lib/travelAssistant/dayNoteStopRan
 import { allocateStopDates } from "@/lib/decision/stopDates";
 import { resolveStayCityForDay } from "@/lib/travelAssistant/dayPlanLines";
 import { buildFlightLegsFromIntent, defaultEnabledLegIds } from "@/lib/decision/flightLegPlanner";
-import { OnTrackButton } from "@/components/travelAssistant/OnTrackButton";
+import { MobilePlanNotebook } from "@/components/travelAssistant/mobile/MobilePlanNotebook";
+import { MobileTripShellHeader } from "@/components/travelAssistant/mobile/MobileTripShellHeader";
 import { TripSearch, type TripSearchSelection } from "@/components/travelAssistant/TripSearch";
 import { TripSwitcher } from "@/components/travelAssistant/TripSwitcher";
 import { TripOrientationCard } from "@/components/travelAssistant/TripOrientationCard";
@@ -204,7 +205,6 @@ import {
   orientationTabToConsumerTab,
   type ConsumerTab,
 } from "@/lib/travelAssistant/consumerTabs";
-import { PlannerTab } from "@/components/travelAssistant/PlannerTab";
 import { MobileAssistView } from "@/components/travelAssistant/mobile/MobileAssistView";
 import { MobileSearchOverlay } from "@/components/travelAssistant/mobile/MobileSearchOverlay";
 import { MobileTabBarNav } from "@/components/travelAssistant/mobile/useMobileTabNavigation";
@@ -8728,15 +8728,6 @@ export default function TravelAssistantPage() {
     [handlePlanDay],
   );
 
-  const plannerFlightCount = consumerReservationsSorted.filter((reservation) => reservation.type === "flight").length;
-  const plannerHotelCount = consumerReservationsSorted.filter((reservation) => reservation.type === "hotel").length;
-  const plannerOtherBookingCount = consumerReservationsSorted.length - plannerFlightCount - plannerHotelCount;
-  const plannerReadyStepCount =
-    (activeTrip ? 1 : 0) +
-    (consumerTripStartDate && consumerTripEndDate ? 1 : 0) +
-    (plannerFlightCount > 0 ? 1 : 0) +
-    (plannerHotelCount > 0 ? 1 : 0);
-
   if (!advancedWorkspaceEnabled) {
     return (
       <main className="relative min-h-screen overflow-x-hidden bg-[var(--bg-base)] pb-24 text-[var(--text-primary)]">
@@ -8873,35 +8864,32 @@ export default function TravelAssistantPage() {
                 <div className="h-48 rounded-3xl bg-[var(--bg-card)] shadow-sm ring-1 ring-[var(--border-default)]" />
                 <div className="h-28 rounded-2xl bg-[var(--bg-card)] shadow-sm ring-1 ring-[var(--border-default)]" />
               </section>
-            ) : mobilePrimaryTab === "plan" ? (
-              <PlannerTab
-                tripName={activeTrip?.name ?? null}
-                destination={consumerTripDestination}
-                startDate={consumerTripStartDate}
-                endDate={consumerTripEndDate}
-                flightCount={plannerFlightCount}
-                hotelCount={plannerHotelCount}
-                otherBookingCount={plannerOtherBookingCount}
-                readyStepCount={plannerReadyStepCount}
-                forwardAddress={emptyStateForwardAddress}
-                canUseGmailImport={canUseGmailImport}
-                gmailImportBusy={gmailImportBusy}
-                onAddBooking={() => setManualReservationModalOpen(true)}
-                onCreateTrip={() => {
-                  void handleCreateTrip();
-                }}
-                onImportGmail={() => setGmailScopeModalOpen(true)}
-                onRequestGmailUpgrade={() =>
-                  openUpgradeModal("gmail-import", "Upgrade to Pro to import reservations from your connected email account.")
-                }
-                onCopyForwardAddress={() => {
-                  void handleCopyForwardAddress(emptyStateForwardAddress);
-                }}
-                onViewTrip={() => navigateMobilePrimaryTab("trips")}
-                onViewFlights={() => navigateMobilePrimaryTab("trips")}
-                onViewHotels={() => navigateMobilePrimaryTab("trips")}
-              />
-            ) : mobilePrimaryTab === "assist" ? (
+            ) : (
+              <>
+                {activeTrip && mobilePrimaryTab === "trips" ? (
+                  <MobileTripShellHeader
+                    tripName={activeTrip.name}
+                    destination={consumerTripDestination ?? activeTrip.destination}
+                    startDate={consumerTripStartDate ?? activeTrip.startDate}
+                    endDate={consumerTripEndDate ?? activeTrip.endDate}
+                    transportReservations={transportRouteReservations}
+                  />
+                ) : null}
+
+                {mobilePrimaryTab === "plan" ? (
+                  <MobilePlanNotebook
+                    tripName={activeTrip?.name ?? "Your trip"}
+                    tripStartDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
+                    tripEndDate={consumerTripEndDate ?? activeTrip?.endDate ?? null}
+                    reservations={consumerReservationsSorted}
+                    dayNotes={itineraryPrefs.dayNotes}
+                    stopRanges={itineraryStopRanges}
+                    onDayNoteChange={itineraryPrefs.updateDayNote}
+                    onCreateTrip={() => {
+                      void handleCreateTrip();
+                    }}
+                  />
+                ) : mobilePrimaryTab === "assist" ? (
               <MobileAssistView
                 journeyPhase={journeyPhase}
                 reservations={consumerReservationsSorted}
@@ -8927,11 +8915,6 @@ export default function TravelAssistantPage() {
                 liveStatus={flightStatusCheckByReservationId}
                 locationStatus={guidanceLocationStatus}
                 nearestAirport={guidanceNearestAirport}
-                dayNotes={itineraryPrefs.dayNotes}
-                stopRanges={itineraryStopRanges}
-                onDayNoteChange={itineraryPrefs.updateDayNote}
-                hotelNotebookNote={itineraryPrefs.hotelNotebookNote}
-                onHotelNotebookChange={itineraryPrefs.updateHotelNotebookNote}
                 onCreateTrip={() => {
                   void handleCreateTrip();
                 }}
@@ -8939,7 +8922,11 @@ export default function TravelAssistantPage() {
                 onReservationTap={(id) => openDrawer("reservation", id)}
                 onCheckStatus={(id) => void handleCheckFlightStatus(id)}
                 onDelete={(id) => void handleDeleteReservation(id)}
+                hotelNotebookNote={itineraryPrefs.hotelNotebookNote}
+                onHotelNotebookChange={itineraryPrefs.updateHotelNotebookNote}
               />
+            )}
+              </>
             )
           ) : null}
 
@@ -9086,12 +9073,6 @@ export default function TravelAssistantPage() {
                   {tripPlanningActions.length > 0 ? (
                     <TripActionList items={tripPlanningActions} onAction={handleTripPlanningAction} />
                   ) : null}
-                  <OnTrackButton
-                    reservations={consumerReservationsSorted}
-                    tripName={activeTrip?.name ?? "Your trip"}
-                    locationStatus={guidanceLocationStatus}
-                    nearestAirport={guidanceNearestAirport}
-                  />
                   {journeyPhase.daysUntil <= 1 && (
                     <button
                       type="button"
@@ -9276,25 +9257,6 @@ export default function TravelAssistantPage() {
                   {pendingFlightChangeAlert.summary}
                   <span className="mt-1 block text-xs font-normal opacity-80">{pendingFlightChangeAlert.detail}</span>
                 </button>
-              ) : null}
-
-              {activeTrip && isTripShellConfigured(activeTrip) ? (
-                <div className="mb-4 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setManualReservationModalOpen(true)}
-                    className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-200"
-                  >
-                    + Add another flight
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleAdjustTripPlanning()}
-                    className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-200"
-                  >
-                    Adjust trip
-                  </button>
-                </div>
               ) : null}
 
               <button

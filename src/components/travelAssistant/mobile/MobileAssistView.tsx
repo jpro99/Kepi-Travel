@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { NextUpCard } from "@/components/travelAssistant/NextUpCard";
-import { OnTrackButton } from "@/components/travelAssistant/OnTrackButton";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 
 interface Reservation {
@@ -91,13 +90,6 @@ export function MobileAssistView({
           nearestAirport={nearestAirport}
         />
       </div>
-
-      <OnTrackButton
-        reservations={reservations}
-        tripName={tripName}
-        locationStatus={locationStatus}
-        nearestAirport={nearestAirport}
-      />
     </section>
   );
 }

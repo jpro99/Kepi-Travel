@@ -3,12 +3,10 @@
 import { useState } from "react";
 import { FlightsTab } from "@/components/travelAssistant/FlightsTab";
 import { HotelsTab } from "@/components/travelAssistant/HotelsTab";
-import { MobileItineraryReader } from "@/components/travelAssistant/mobile/MobileItineraryReader";
 import {
   MOBILE_TRIPS_SEGMENTS,
   type MobileTripsSegment,
 } from "@/components/travelAssistant/mobile/mobileShellTypes";
-import type { StopDateRange } from "@/lib/decision/stopDates";
 
 interface TripSummary {
   name: string;
@@ -71,28 +69,9 @@ interface MobileTripsViewProps {
   onReservationTap: (id: string) => void;
   onCheckStatus: (id: string) => void;
   onDelete: (id: string) => void;
-  dayNotes?: Record<string, string>;
-  stopRanges?: StopDateRange[];
-  onDayNoteChange?: (dateKey: string, value: string) => void;
   hotelNotebookNote?: string;
   onHotelNotebookChange?: (value: string) => void;
 }
-
-function formatTripDates(start: string, end: string): string {
-  const fmt = (value: string): string => {
-    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value ?? "");
-    if (!match) return "";
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    return `${months[Number(match[2]) - 1]} ${Number(match[3])}`;
-  };
-  const startLabel = fmt(start);
-  const endLabel = fmt(end);
-  if (!startLabel && !endLabel) return "Dates TBD";
-  if (startLabel && endLabel && start !== end) return `${startLabel} – ${endLabel}`;
-  return startLabel || endLabel;
-}
-
-const CARD = "rounded-3xl bg-[var(--bg-card)] p-5 shadow-sm ring-1 ring-[var(--border-default)]";
 
 function TicketCard({
   reservation,
@@ -138,14 +117,10 @@ export function MobileTripsView({
   onReservationTap,
   onCheckStatus,
   onDelete,
-  dayNotes = {},
-  stopRanges = [],
-  onDayNoteChange,
   hotelNotebookNote = "",
   onHotelNotebookChange,
 }: MobileTripsViewProps) {
   const [segment, setSegment] = useState<MobileTripsSegment>("flights");
-  const [itineraryOpen, setItineraryOpen] = useState(false);
 
   const flights = reservations.filter((r) => r.type === "flight");
   const hotels = reservations.filter((r) => r.type === "hotel");
@@ -154,7 +129,7 @@ export function MobileTripsView({
   if (!hasActiveTrip) {
     return (
       <section className="space-y-4">
-        <div className={`${CARD} p-6 text-center`}>
+        <div className="rounded-3xl bg-[var(--bg-card)] p-6 text-center shadow-sm ring-1 ring-[var(--border-default)]">
           <p className="text-2xl font-black text-[var(--text-primary)]">Your trips live here</p>
           <p className="mt-2 text-base text-[var(--text-muted)]">
             Create a trip to see flights, hotels, and tickets in one clean place.
@@ -173,39 +148,6 @@ export function MobileTripsView({
 
   return (
     <section className="space-y-4">
-      <div className={CARD}>
-        <p className="text-sm font-bold uppercase tracking-wide text-[var(--text-muted)]">Active trip</p>
-        <p className="mt-1 text-[1.75rem] font-black leading-tight text-[var(--text-primary)]">
-          {trip?.name ?? "Your trip"}
-        </p>
-        <p className="mt-1 text-[17px] text-[var(--text-muted)]">
-          {trip?.destination || "Destination TBD"}
-          {trip?.startDate || trip?.endDate
-            ? ` · ${formatTripDates(trip?.startDate ?? "", trip?.endDate ?? "")}`
-            : ""}
-        </p>
-        <button
-          type="button"
-          onClick={() => setItineraryOpen(true)}
-          className="mt-4 flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-[#007AFF] text-[17px] font-bold text-white shadow-lg shadow-blue-500/20 active:scale-[0.99]"
-        >
-          Read full itinerary
-        </button>
-      </div>
-
-      <MobileItineraryReader
-        open={itineraryOpen}
-        onClose={() => setItineraryOpen(false)}
-        tripName={trip?.name ?? "Your trip"}
-        tripStartDate={trip?.startDate ?? null}
-        tripEndDate={trip?.endDate ?? null}
-        reservations={reservations}
-        dayNotes={dayNotes}
-        stopRanges={stopRanges}
-        onDayNoteChange={onDayNoteChange}
-        onReservationTap={onReservationTap}
-      />
-
       <div className="flex gap-2 rounded-2xl bg-[var(--bg-muted)] p-1">
         {MOBILE_TRIPS_SEGMENTS.map(({ id, label }) => (
           <button

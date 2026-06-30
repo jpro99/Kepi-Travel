@@ -55,6 +55,7 @@ interface ItineraryTimelineProps {
   missionItems?: TripActionItem[];
   onMissionAction?: (item: TripActionItem) => void;
   dayNotes: Record<string, string>;
+  suppressPlanningAlerts?: boolean;
 };
 
 function reservationDateKey(reservation: TimelineReservation): string {
@@ -147,11 +148,13 @@ function TravelCard({
   flights,
   gapDateKeys,
   onReservationTap,
+  readOnly = false,
 }: {
   leg: BuiltTripLeg;
   flights: TimelineReservation[];
   gapDateKeys: Set<string>;
   onReservationTap: (id: string) => void;
+  readOnly?: boolean;
 }) {
   const uniqueFlights = dedupeFlights(flights);
   const hasWarning = uniqueFlights.some((f) => gapDateKeys.has(reservationDateKey(f)));
@@ -169,7 +172,7 @@ function TravelCard({
           {leg.label}
         </h3>
         <p className="mt-1 text-[13px] text-[#6E6E73]">{formatDateRange(leg.startDate, leg.endDate)}</p>
-        {hasWarning ? (
+        {hasWarning && !readOnly ? (
           <p className="mt-3 border-l-4 border-amber-400 pl-3 text-[13px] font-medium text-amber-700">
             Check connection timing
           </p>
@@ -177,6 +180,24 @@ function TravelCard({
         <ul className="mt-4 overflow-hidden rounded-xl bg-white">
           {uniqueFlights.map((f, idx) => (
             <li key={f.id} className={idx < uniqueFlights.length - 1 ? "border-b border-[#E5E5EA]" : ""}>
+              {readOnly ? (
+                <div className="w-full px-4 py-3 text-left text-[14px] text-[#1D1D1F]">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="font-semibold">
+                      {f.flightNumber ?? f.title} · {f.flightDepartureAirport} → {f.flightArrivalAirport}
+                    </span>
+                    <span className="text-[13px] text-[#6E6E73]">
+                      {formatTimeRange(f.flightDepartureTime ?? f.localTime, f.flightArrivalTime)}
+                    </span>
+                  </div>
+                  {flightDuration(f.flightDepartureTime, f.flightArrivalTime) ? (
+                    <p className="mt-1 text-[13px] text-[#6E6E73]">
+                      {flightDuration(f.flightDepartureTime, f.flightArrivalTime)} ·{" "}
+                      {f.flightAirline ?? f.provider}
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
               <button
                 type="button"
                 onClick={() => onReservationTap(f.id)}
@@ -197,6 +218,7 @@ function TravelCard({
                   </p>
                 ) : null}
               </button>
+              )}
             </li>
           ))}
         </ul>
@@ -220,6 +242,7 @@ function DestinationBlock({
   onSelectedDateKeyChange,
   onEditDay,
   blockRef,
+  suppressPlanningAlerts = false,
 }: {
   leg: BuiltTripLeg;
   dayKeys: string[];
@@ -235,6 +258,7 @@ function DestinationBlock({
   onSelectedDateKeyChange?: (dateKey: string) => void;
   onEditDay: (dateKey: string) => void;
   blockRef: (node: HTMLDivElement | null) => void;
+  suppressPlanningAlerts?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [forecast, setForecast] = useState<Map<string, DailyWeather>>(new Map());
@@ -309,7 +333,7 @@ function DestinationBlock({
         </span>
       </button>
 
-      {cityMissions.length > 0 && onMissionAction ? (
+      {cityMissions.length > 0 && onMissionAction && !suppressPlanningAlerts ? (
         <div className="border-t border-[#E5E5EA] px-5 py-3">
           {cityMissions.map((item) => (
             <div key={item.id} className="flex items-center justify-between gap-3">
@@ -383,7 +407,7 @@ function DestinationBlock({
                       <span className="max-w-[9rem] shrink-0 truncate text-xs font-medium text-[#1D1D1F]">
                         {hotel.provider || hotel.title}
                       </span>
-                    ) : (
+                    ) : suppressPlanningAlerts ? null : (
                       <span className="shrink-0 text-xs font-semibold text-amber-600">No hotel</span>
                     )}
                     <button
@@ -422,6 +446,7 @@ export function ItineraryTimeline({
   missionItems = [],
   onMissionAction,
   dayNotes,
+  suppressPlanningAlerts = false,
 }: ItineraryTimelineProps) {
   const [editDateKey, setEditDateKey] = useState<string | null>(null);
   const blockRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -501,6 +526,7 @@ export function ItineraryTimeline({
               flights={block.flights}
               gapDateKeys={gapDateKeys}
               onReservationTap={onReservationTap}
+              readOnly={suppressPlanningAlerts}
             />
           );
         }
@@ -524,6 +550,7 @@ export function ItineraryTimeline({
               if (node) blockRefs.current.set(block.leg.id, node);
               else blockRefs.current.delete(block.leg.id);
             }}
+            suppressPlanningAlerts={suppressPlanningAlerts}
           />
         );
       })}
@@ -553,7 +580,7 @@ export function ItineraryTimeline({
                 : reservation.type === "hotel"
                   ? `🏨 ${reservation.provider || reservation.title}`
                   : reservation.title,
-            onTap: () => onReservationTap(reservation.id),
+            onTap: suppressPlanningAlerts ? undefined : () => onReservationTap(reservation.id),
           }))}
         />
       ) : null}

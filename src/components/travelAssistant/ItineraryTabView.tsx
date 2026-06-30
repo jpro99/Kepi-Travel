@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ItineraryTimeline } from "@/components/travelAssistant/ItineraryTimeline";
-import { ItinerarySlideBanners } from "@/components/travelAssistant/ItinerarySlideBanners";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
 import type { StopDateRange } from "@/lib/decision/stopDates";
@@ -95,8 +94,6 @@ export function ItineraryTabView({
         fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif',
       }}
     >
-      <ItinerarySlideBanners reservations={reservations} onActionTap={onGapActionTap} />
-
       <header className="rounded-2xl bg-[#0F1923] px-5 py-5 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f4c95d]">Plan</p>
         <h1 className="mt-1 text-2xl font-bold text-white">{tripName}</h1>
@@ -153,8 +150,7 @@ export function ItineraryTabView({
           onReservationTap={onReservationTap}
           onPlanDay={onPlanDay}
           onPlanHotel={onPlanHotel}
-          missionItems={missionItems}
-          onMissionAction={onMissionAction}
+          suppressPlanningAlerts
         />
       </div>
     </section>
