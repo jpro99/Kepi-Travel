@@ -8724,7 +8724,7 @@ export default function TravelAssistantPage() {
       <main className="relative min-h-screen overflow-x-hidden bg-[var(--bg-base)] pb-24 text-[var(--text-primary)]">
         <div className="relative z-10 flex min-h-screen">
           <div className="min-w-0 flex-1">
-        <div className="mx-auto max-w-3xl space-y-3 px-3 py-3 sm:max-w-4xl sm:px-4 lg:max-w-6xl lg:px-5 xl:max-w-7xl">
+        <div className="mx-auto max-w-3xl space-y-4 px-3 py-3 sm:max-w-4xl sm:px-4 lg:max-w-6xl lg:px-5 xl:max-w-7xl">
           <header className="sticky top-0 z-30 -mx-3 border-b border-[var(--border-default)] bg-[var(--bg-base)]/95 px-3 py-3 backdrop-blur-xl sm:-mx-4 sm:px-4">
             <div className="flex items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-2">
@@ -8732,7 +8732,7 @@ export default function TravelAssistantPage() {
                 <button
                   type="button"
                   onClick={() => setMyTripsModalOpen(true)}
-                  className="rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-1.5 text-xs font-bold text-[var(--text-primary)] shadow-sm"
+                  className="rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-1.5 text-[13px] font-semibold text-[var(--text-primary)]"
                 >
                   Trips{trips.length > 0 ? ` (${trips.length})` : ""}
                 </button>
@@ -8743,7 +8743,7 @@ export default function TravelAssistantPage() {
                   <button
                     type="button"
                     onClick={() => setMobileSearchOpen(true)}
-                    className="flex h-10 min-w-[44px] items-center justify-center rounded-full bg-[var(--bg-card)] px-3 text-sm font-bold text-[#007AFF] shadow-sm ring-1 ring-[var(--border-default)]"
+                    className="flex h-10 min-w-[44px] items-center justify-center rounded-[var(--radius-button)] bg-[var(--bg-card)] px-3 text-[15px] font-semibold text-[var(--accent)]"
                     aria-label="Search trips and reservations"
                   >
                     Search
@@ -8759,7 +8759,7 @@ export default function TravelAssistantPage() {
                 <button
                   type="button"
                   onClick={() => setConsumerAvatarMenuOpen((value) => !value)}
-                  className="flex h-11 w-11 items-center justify-center rounded-full bg-cyan-500 text-base font-bold text-slate-950 shadow-sm ring-1 ring-cyan-300"
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--bg-grouped)] text-base font-semibold text-[var(--text-primary)]"
                   aria-label="Open account menu"
                 >
                   {selectedFamilyMember.name.slice(0, 1).toUpperCase()}
@@ -8911,9 +8911,9 @@ export default function TravelAssistantPage() {
                     />
                   ) : (
                     <section className="space-y-4">
-                      <div className="rounded-3xl bg-[var(--bg-card)] p-6 text-center shadow-sm ring-1 ring-[var(--border-default)]">
-                        <p className="text-2xl font-black text-[var(--text-primary)]">Your flights live here</p>
-                        <p className="mt-2 text-base text-[var(--text-muted)]">
+                      <div className="rounded-[var(--radius-card)] bg-[var(--bg-card)] p-6 text-center shadow-[var(--shadow-card)]">
+                        <p className="text-[22px] font-semibold text-[var(--text-primary)]">Your flights live here</p>
+                        <p className="mt-2 text-[15px] text-[var(--text-secondary)]">
                           Create a trip to add and track your flights.
                         </p>
                         <button
@@ -8921,7 +8921,7 @@ export default function TravelAssistantPage() {
                           onClick={() => {
                             void handleCreateTrip();
                           }}
-                          className="mt-6 min-h-[52px] w-full rounded-2xl bg-[#007AFF] px-6 text-[17px] font-bold text-white shadow-lg shadow-blue-500/25 active:scale-[0.99]"
+                          className="mt-6 min-h-[48px] w-full rounded-[var(--radius-button)] bg-[var(--accent)] px-6 text-[17px] font-semibold text-white transition-opacity duration-[220ms] ease-in-out active:opacity-80"
                         >
                           Create your trip
                         </button>
@@ -8944,9 +8944,9 @@ export default function TravelAssistantPage() {
                     />
                   ) : (
                     <section className="space-y-4">
-                      <div className="rounded-3xl bg-[var(--bg-card)] p-6 text-center shadow-sm ring-1 ring-[var(--border-default)]">
-                        <p className="text-2xl font-black text-[var(--text-primary)]">Your hotels live here</p>
-                        <p className="mt-2 text-base text-[var(--text-muted)]">
+                      <div className="rounded-[var(--radius-card)] bg-[var(--bg-card)] p-6 text-center shadow-[var(--shadow-card)]">
+                        <p className="text-[22px] font-semibold text-[var(--text-primary)]">Your hotels live here</p>
+                        <p className="mt-2 text-[15px] text-[var(--text-secondary)]">
                           Create a trip to add and track your stays.
                         </p>
                         <button
@@ -8954,7 +8954,7 @@ export default function TravelAssistantPage() {
                           onClick={() => {
                             void handleCreateTrip();
                           }}
-                          className="mt-6 min-h-[52px] w-full rounded-2xl bg-[#007AFF] px-6 text-[17px] font-bold text-white shadow-lg shadow-blue-500/25 active:scale-[0.99]"
+                          className="mt-6 min-h-[48px] w-full rounded-[var(--radius-button)] bg-[var(--accent)] px-6 text-[17px] font-semibold text-white transition-opacity duration-[220ms] ease-in-out active:opacity-80"
                         >
                           Create your trip
                         </button>

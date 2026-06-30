@@ -474,7 +474,7 @@ export function TripTransportRouteMap({
   const sectionShell = expanded
     ? "fixed inset-0 z-[9000] flex max-h-[100dvh] flex-col overflow-hidden bg-slate-950"
     : mobileLight
-      ? "overflow-hidden rounded-3xl bg-[var(--bg-card)] shadow-lg ring-1 ring-[var(--border-default)] scroll-mt-4"
+      ? "overflow-hidden rounded-[var(--radius-card)] bg-[var(--bg-card)] shadow-[var(--shadow-card)] scroll-mt-4"
       : "overflow-hidden rounded-3xl bg-gradient-to-br from-[#0c2447] via-[#0f172a] to-[#020617] shadow-xl ring-1 ring-white/10 scroll-mt-4";
 
   return (
@@ -505,14 +505,14 @@ export function TripTransportRouteMap({
           </button>
         </div>
       ) : (
-      <div className={`flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4 ${mobileLight ? "border-[var(--border-default)]" : "border-white/10"}`}>
+      <div className={`flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3 ${mobileLight ? "border-[var(--border-default)]" : "border-white/10"}`}>
         <div>
           {!compactMobileHeader ? (
             <>
           <p
-            className={`font-bold uppercase tracking-wide ${
+            className={`font-medium uppercase tracking-wide ${
               mobileLight
-                ? "text-sm text-sky-700 dark:text-sky-400"
+                ? "text-[13px] text-[var(--text-tertiary)]"
                 : mobileProminent
                   ? "text-base text-sky-300/80"
                   : "text-[10px] tracking-[0.22em] text-sky-300/80"
@@ -520,32 +520,32 @@ export function TripTransportRouteMap({
           >
             Trip route map
           </p>
-          <h3 className={`mt-1 font-black ${mobileLight ? "text-2xl text-[var(--text-primary)]" : mobileProminent ? "text-2xl text-white" : "text-lg text-white"}`}>
+          <h3 className={`mt-0.5 font-semibold ${mobileLight ? "text-[22px] text-[var(--text-primary)]" : mobileProminent ? "text-2xl text-white" : "text-lg text-white"}`}>
             Your whole journey at a glance
           </h3>
             </>
           ) : (
-            <h3 className={`font-black ${mobileLight ? "text-xl text-[var(--text-primary)]" : "text-xl text-white"}`}>
+            <h3 className={`font-semibold ${mobileLight ? "text-[22px] text-[var(--text-primary)]" : "text-xl text-white"}`}>
               Route map
             </h3>
           )}
-          <p className={`mt-1 ${mobileLight ? "text-[16px] text-[var(--text-muted)]" : mobileProminent ? "text-[15px] text-sky-100/60" : "text-xs text-sky-100/60"}`}>
+          <p className={`mt-1 ${mobileLight ? "text-[15px] text-[var(--text-secondary)]" : mobileProminent ? "text-[15px] text-sky-100/60" : "text-xs text-sky-100/60"}`}>
             {mobileProminent ? "Tap map for full screen · pinch to zoom" : "Drag to pan · pinch to zoom · tap a leg below"}
           </p>
         </div>
         <div
-          className={`rounded-full px-3 py-1.5 text-xs font-bold ${
+          className={`rounded-full px-3 py-1 text-[13px] font-medium ${
             route.summary.allSet
               ? mobileLight
-                ? "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300"
-                : "bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-400/40"
+                ? "text-[var(--success)]"
+                : "text-emerald-200"
               : route.summary.conflicts > 0
                 ? mobileLight
-                  ? "bg-red-100 text-red-800 ring-1 ring-red-300"
-                  : "bg-red-500/20 text-red-200 ring-1 ring-red-400/40"
+                  ? "text-[var(--destructive)]"
+                  : "text-red-200"
                 : mobileLight
-                  ? "bg-amber-100 text-amber-900 ring-1 ring-amber-300"
-                  : "bg-amber-500/15 text-amber-100 ring-1 ring-amber-400/30"
+                  ? "text-[var(--warning)]"
+                  : "text-amber-100"
           }`}
         >
           {route.summary.allSet

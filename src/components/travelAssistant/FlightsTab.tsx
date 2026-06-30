@@ -639,7 +639,7 @@ export function FlightsTab({
         <button
           type="button"
           onClick={onAdd}
-          className={`shrink-0 rounded-full border border-slate-300 bg-white font-semibold text-slate-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 ${type.addBtn}`}
+          className={`shrink-0 ${type.addBtn}`}
         >
           Add existing
         </button>
@@ -706,113 +706,87 @@ export function FlightsTab({
           });
 
           if (simplifiedMobile) {
+            const scheduleLine = [date, depTime, arrTime ? `→ ${arrTime}` : null].filter(Boolean).join(" · ");
+
             return (
               <div
                 key={r.id}
-                className={`overflow-hidden rounded-3xl bg-[var(--bg-card)] shadow-sm ring-1 transition-all ${
-                  past
-                    ? "ring-[var(--border-default)] opacity-60"
-                    : attention !== "none"
-                      ? reservationAttentionRingClass(attention, isPast)
-                      : "ring-[var(--border-default)]"
-                }`}
+                className={`${listType.card} overflow-hidden ${past ? "opacity-60" : ""}`}
               >
                 <button
                   type="button"
                   onClick={() => setExpanded(isOpen ? null : r.id)}
-                  className="w-full text-left"
+                  className="w-full p-4 text-left"
                 >
-                  <div className="flex items-start gap-4 p-5">
-                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-2xl shadow-sm">
-                      ✈️
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-[var(--bg-grouped)] text-[15px] font-semibold text-[var(--text-secondary)]">
+                      {dep}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
-                        <p className={listType.title}>{r.flightAirline ?? r.provider}</p>
+                        <p className={listType.cardTitle}>{r.flightAirline ?? r.provider}</p>
                         {attentionBadge && !isPast ? (
                           <span className={attentionBadge.className}>{attentionBadge.label}</span>
                         ) : costLine ? (
-                          <span className={`shrink-0 font-bold text-[var(--text-primary)] ${listType.subheading}`}>
-                            {costLine}
-                          </span>
+                          <span className="shrink-0 text-[17px] font-semibold text-[var(--text-primary)]">{costLine}</span>
                         ) : null}
                       </div>
                       <p className={listType.location}>
                         {[r.flightNumber, `${dep} → ${arr}`].filter(Boolean).join(" · ")}
                       </p>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <div className="rounded-lg bg-[var(--bg-muted)] px-3 py-2">
-                          <p className={listType.detailLabel}>Departs</p>
-                          <p className={listType.detailValue}>
-                            {date}
-                            {depTime ? ` · ${depTime}` : ""}
-                          </p>
-                        </div>
-                        {arrTime ? (
-                          <div className="rounded-lg bg-[var(--bg-muted)] px-3 py-2">
-                            <p className={listType.detailLabel}>Arrives</p>
-                            <p className={listType.detailValue}>{arrTime}</p>
-                          </div>
-                        ) : null}
-                      </div>
+                      {scheduleLine ? <p className={`${listType.subheading} mt-1`}>{scheduleLine}</p> : null}
+                      {gate ? (
+                        <p className="mt-1 text-[15px] text-[var(--accent)]">
+                          Gate {gate}{terminal && terminal !== "—" ? ` · Terminal ${terminal}` : ""}
+                        </p>
+                      ) : null}
                     </div>
-                    <span className="mt-1 shrink-0 text-sm text-[var(--text-muted)]">{isOpen ? "▲" : "▼"}</span>
+                    <span className="mt-1 shrink-0 text-[13px] text-[var(--text-tertiary)]">{isOpen ? "▲" : "▼"}</span>
                   </div>
                 </button>
 
-                <div className="flex flex-wrap items-start gap-4 px-5 pb-4">
-                  {terminal && terminal !== "—" ? (
-                    <div>
-                      <p className={listType.detailLabel}>Terminal</p>
-                      <p className={`${listType.detailValue} mt-0.5`}>{terminal}</p>
+                {isOpen ? (
+                  <div className="space-y-3 border-t border-[var(--border-default)] px-4 pb-4 pt-3">
+                    {r.flightSeatNumber ? (
+                      <div>
+                        <p className={listType.detailLabel}>Seat</p>
+                        <p className={`${listType.detailValue} mt-0.5`}>{r.flightSeatNumber}</p>
+                      </div>
+                    ) : null}
+                    {r.confirmationCode ? (
+                      <div>
+                        <p className={listType.detailLabel}>Confirmation</p>
+                        <p className={`${listType.detailValue} mt-0.5`}>{r.confirmationCode}</p>
+                      </div>
+                    ) : null}
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => onReservationTap(r.id)}
+                        className={`${listType.actionBtn} ${listType.secondaryBtn}`}
+                      >
+                        View details
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onCheckStatus(r.id)}
+                        disabled={live?.busy}
+                        className={`${listType.actionBtn} font-semibold text-[var(--accent)] disabled:opacity-50`}
+                      >
+                        {live?.busy ? "Checking…" : "Check status"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm("Delete this flight?")) onDelete(r.id);
+                        }}
+                        className={`${listType.actionBtn} ${listType.destructiveBtn}`}
+                      >
+                        Delete
+                      </button>
                     </div>
-                  ) : null}
-                  {gate ? (
-                    <div>
-                      <p className={listType.detailLabel}>Gate</p>
-                      <p className={`${listType.detailValue} mt-0.5 text-[#007AFF] dark:text-[#0A84FF]`}>{gate}</p>
-                    </div>
-                  ) : null}
-                  {r.flightSeatNumber ? (
-                    <div>
-                      <p className={listType.detailLabel}>Seat</p>
-                      <p className={`${listType.detailValue} mt-0.5`}>{r.flightSeatNumber}</p>
-                    </div>
-                  ) : null}
-                  {r.confirmationCode ? (
-                    <div>
-                      <p className={listType.detailLabel}>Confirmation</p>
-                      <p className={`${listType.detailValue} mt-0.5`}>{r.confirmationCode}</p>
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="flex items-center gap-2 border-t border-[var(--border-default)] px-5 py-3">
-                  <button
-                    type="button"
-                    onClick={() => onReservationTap(r.id)}
-                    className={`${listType.actionBtn} bg-[var(--bg-muted)] text-[var(--text-primary)]`}
-                  >
-                    View details
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onCheckStatus(r.id)}
-                    disabled={live?.busy}
-                    className={`${listType.actionBtn} bg-[#007AFF]/10 text-[#007AFF] dark:bg-[#0A84FF]/20 dark:text-[#0A84FF] disabled:opacity-50`}
-                  >
-                    {live?.busy ? "Checking…" : "Check status"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm("Delete this flight?")) onDelete(r.id);
-                    }}
-                    className={`${listType.actionBtn} max-w-[33%] bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400`}
-                  >
-                    Delete
-                  </button>
-                </div>
+                  </div>
+                ) : null}
               </div>
             );
           }

@@ -302,7 +302,7 @@ export function MobilePlanNotebook({
 
   return (
     <section
-      className="overflow-hidden rounded-3xl shadow-sm ring-1 ring-[#e8e0d0]"
+      className="overflow-hidden rounded-[var(--radius-card)] bg-[var(--bg-card)] shadow-[var(--shadow-card)]"
       style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif' }}
     >
       <div ref={scrollRef} style={MOBILE_OVERLAY_SCROLL}>
@@ -312,27 +312,27 @@ export function MobilePlanNotebook({
             minHeight: `${paperMinHeight}px`,
             backgroundColor: MOBILE_NOTEBOOK.paper,
             backgroundImage: notebookRuleGradient(lineHeight),
-            boxShadow: `inset ${marginW}px 0 0 0 rgba(220, 80, 70, 0.08)`,
+            boxShadow: `inset ${marginW}px 0 0 0 var(--bg-grouped)`,
           }}
         >
           <div
-            className="pointer-events-none absolute bottom-0 top-0 w-px bg-red-400/45"
+            className="pointer-events-none absolute bottom-0 top-0 w-px bg-[var(--border-default)]"
             style={{ left: marginW - 10 }}
             aria-hidden
           />
 
           <div
-            className="border-b border-[#e8e0d0] px-4 py-4"
+            className="border-b border-[var(--border-default)] px-4 py-4"
             style={{ marginLeft: marginW, paddingRight: 16 }}
           >
-            <p className="text-[13px] font-bold uppercase tracking-[0.2em] text-[#8a7f6e]">Itinerary</p>
-            <h2 className="mt-1 text-[28px] font-black leading-tight text-[#1c1917]">{tripName}</h2>
+            <p className="text-[13px] font-medium text-[var(--text-tertiary)]">Itinerary</p>
+            <h2 className="mt-1 text-[22px] font-semibold leading-tight text-[var(--text-primary)]">{tripName}</h2>
             {tripStartDate && tripEndDate ? (
-              <p className="mt-1 text-[18px] text-[#57534e]">
+              <p className="mt-1 text-[15px] text-[var(--text-secondary)]">
                 {formatDayHeading(tripStartDate).monthDay} – {formatDayHeading(tripEndDate).monthDay}
               </p>
             ) : null}
-            <p className="mt-2 text-[15px] text-[#78716c]">Tap any line to edit · prints exactly as shown</p>
+            <p className="mt-2 text-[13px] text-[var(--text-tertiary)]">Tap any line to edit</p>
           </div>
 
           {days.map((day) =>

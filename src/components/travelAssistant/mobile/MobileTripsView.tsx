@@ -133,15 +133,15 @@ export function MobileTripsView({
   if (!hasActiveTrip) {
     return (
       <section className="space-y-4">
-        <div className="rounded-3xl bg-[var(--bg-card)] p-6 text-center shadow-sm ring-1 ring-[var(--border-default)]">
-          <p className="text-2xl font-black text-[var(--text-primary)]">Your trips live here</p>
-          <p className="mt-2 text-base text-[var(--text-muted)]">
+        <div className="rounded-[var(--radius-card)] bg-[var(--bg-card)] p-6 text-center shadow-[var(--shadow-card)]">
+          <p className="text-[22px] font-semibold text-[var(--text-primary)]">Your trips live here</p>
+          <p className="mt-2 text-[15px] text-[var(--text-secondary)]">
             Create a trip to see flights, hotels, and tickets in one clean place.
           </p>
           <button
             type="button"
             onClick={onCreateTrip}
-            className="mt-6 min-h-[52px] w-full rounded-2xl bg-[#007AFF] px-6 text-[17px] font-bold text-white shadow-lg shadow-blue-500/25 active:scale-[0.99]"
+            className="mt-6 min-h-[48px] w-full rounded-[var(--radius-button)] bg-[var(--accent)] px-6 text-[17px] font-semibold text-white"
           >
             Create your trip
           </button>

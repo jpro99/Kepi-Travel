@@ -16,6 +16,7 @@ import {
   reservationMissingPrice,
 } from "@/lib/travelAssistant/tripSpendSummary";
 import { hotelCardTypography } from "@/lib/ui/mobileTypography";
+import { appleBtnText, appleWarningPill } from "@/lib/ui/appleDesign";
 
 interface Reservation {
   id: string;
@@ -79,6 +80,13 @@ function fmtDate(localTime: string): string {
   if (!m) return "—";
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   return `${months[+m[2]-1]} ${+m[3]}, ${m[1]}`;
+}
+
+function fmtDateShort(localTime: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(localTime ?? "");
+  if (!m) return "—";
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${months[+m[2]-1]} ${+m[3]}`;
 }
 
 function nightsCount(checkIn: string, checkOut: string): number {
@@ -182,7 +190,7 @@ export function HotelsTab({
         <button
           type="button"
           onClick={onAdd}
-          className={`shrink-0 rounded-full border border-slate-300 bg-white font-semibold text-slate-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 ${type.addBtn}`}
+          className={`shrink-0 ${type.addBtn}`}
         >
           Add existing
         </button>
@@ -259,9 +267,9 @@ export function HotelsTab({
         <button
           type="button"
           onClick={() => setNotebookOpen(true)}
-          className="flex min-h-[56px] w-full items-center justify-center rounded-2xl bg-[#faf6ee] px-4 text-[18px] font-bold text-[#1c1917] shadow-md ring-2 ring-[#e8e0d0]"
+          className={`flex min-h-[48px] w-full items-center justify-center px-4 text-[17px] font-semibold text-[var(--text-primary)] ${type.secondaryBtn}`}
         >
-          📓 Your stays — open lined paper notebook
+          Open stay notebook
         </button>
       ) : null}
 
@@ -275,6 +283,98 @@ export function HotelsTab({
           const emoji = cityEmoji(r.location ?? "");
           const missingPrice = reservationMissingPrice(r);
           const costLine = formatReservationCostLine(r, { allReservations: shown });
+
+          if (simplifiedMobile) {
+            const stayRange =
+              checkIn && checkOut
+                ? `${fmtDateShort(checkIn)} – ${fmtDateShort(checkOut)}${nights > 0 ? ` · ${nights} night${nights === 1 ? "" : "s"}` : ""}`
+                : checkIn
+                  ? fmtDateShort(checkIn)
+                  : null;
+
+            return (
+              <div
+                key={r.id}
+                className={`${type.card} overflow-hidden ${past ? "opacity-60" : ""}`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setExpanded(isOpen ? null : r.id)}
+                  className="w-full p-4 text-left"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-[var(--bg-grouped)] text-lg text-[var(--text-secondary)]">
+                      {emoji}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className={type.title}>{r.title}</p>
+                        {missingPrice && !past ? (
+                          <span className={appleWarningPill}>Add cost</span>
+                        ) : costLine ? (
+                          <span className="shrink-0 text-[17px] font-semibold text-[var(--text-primary)]">{costLine}</span>
+                        ) : null}
+                      </div>
+                      {r.location ? <p className={type.location}>{r.location}</p> : null}
+                      {stayRange ? <p className={`${type.metadata} mt-1`}>{stayRange}</p> : null}
+                    </div>
+                    <span className="mt-1 shrink-0 text-[13px] text-[var(--text-tertiary)]">{isOpen ? "▲" : "▼"}</span>
+                  </div>
+                </button>
+
+                {(isOpen || r.confirmationCode || (r.roomType && r.roomType !== "Not set")) && (
+                  <div className="space-y-3 border-t border-[var(--border-default)] px-4 pb-4 pt-3">
+                    {r.confirmationCode ? (
+                      <div>
+                        <p className={type.detailLabel}>Confirmation</p>
+                        <p className={`${type.detailValue} mt-0.5`}>{r.confirmationCode}</p>
+                      </div>
+                    ) : null}
+                    {r.roomType && r.roomType !== "Not set" ? (
+                      <div>
+                        <p className={type.detailLabel}>Room type</p>
+                        <p className={`${type.detailValue} mt-0.5`}>{r.roomType}</p>
+                      </div>
+                    ) : null}
+                    {costLine && !missingPrice ? (
+                      <div>
+                        <p className={type.detailLabel}>Trip cost</p>
+                        <p className={`${type.detailValue} mt-0.5`}>{costLine}</p>
+                      </div>
+                    ) : missingPrice && !past ? (
+                      <button
+                        type="button"
+                        onClick={() => onReservationTap(r.id)}
+                        className={`${appleBtnText} text-left`}
+                      >
+                        Tap to add trip cost
+                      </button>
+                    ) : null}
+                    {isOpen ? (
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => onReservationTap(r.id)}
+                          className={`${type.actionBtn} ${type.secondaryBtn}`}
+                        >
+                          View details
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm("Delete this hotel?")) onDelete(r.id);
+                          }}
+                          className={`${type.actionBtn} ${type.destructiveBtn}`}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            );
+          }
 
           return (
             <div

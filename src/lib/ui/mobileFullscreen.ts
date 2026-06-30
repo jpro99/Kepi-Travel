@@ -18,9 +18,9 @@ export const MOBILE_NOTEBOOK_NUM_FONT_PX = 20;
 export const MOBILE_MIN_NOTEBOOK_LINES = 24;
 
 export const MOBILE_NOTEBOOK = {
-  paper: "#faf6ee",
-  rule: "rgba(168, 158, 140, 0.55)",
-  margin: "rgba(220, 80, 70, 0.35)",
+  paper: "var(--bg-card)",
+  rule: "rgba(60, 60, 67, 0.08)",
+  margin: "rgba(60, 60, 67, 0.15)",
   marginWidthPx: 64,
 } as const;
 

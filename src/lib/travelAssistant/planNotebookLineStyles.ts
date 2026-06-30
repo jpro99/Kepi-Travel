@@ -3,15 +3,15 @@ import type { DayLineKind } from "@/lib/travelAssistant/dayPlanLines";
 export function dayLineColorClass(kind: DayLineKind): string {
   switch (kind) {
     case "travel":
-      return "text-[#1e4a7a]";
+      return "text-[var(--text-primary)]";
     case "hotel":
-      return "text-[#166534]";
+      return "text-[var(--text-primary)]";
     case "dining":
-      return "text-[#b45309]";
+      return "text-[var(--text-secondary)]";
     case "activity":
-      return "text-[#6d28d9]";
+      return "text-[var(--text-secondary)]";
     default:
-      return "text-[#1c1917]";
+      return "text-[var(--text-primary)]";
   }
 }
 

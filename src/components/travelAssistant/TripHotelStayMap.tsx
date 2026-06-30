@@ -331,7 +331,7 @@ export function TripHotelStayMap({
   const sectionShell = expanded
     ? "fixed inset-0 z-[9000] flex max-h-[100dvh] flex-col overflow-hidden bg-slate-950"
     : mobileLight
-      ? "overflow-hidden rounded-3xl bg-[var(--bg-card)] shadow-lg ring-1 ring-[var(--border-default)] scroll-mt-4"
+      ? "overflow-hidden rounded-[var(--radius-card)] bg-[var(--bg-card)] shadow-[var(--shadow-card)] scroll-mt-4"
       : "overflow-hidden rounded-3xl bg-gradient-to-br from-[#0c2447] via-[#0f172a] to-[#020617] shadow-xl ring-1 ring-white/10 scroll-mt-4";
 
   return (
@@ -362,12 +362,12 @@ export function TripHotelStayMap({
           </button>
         </div>
       ) : (
-      <div className={`flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4 ${mobileLight ? "border-[var(--border-default)]" : "border-white/10"}`}>
+      <div className={`flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3 ${mobileLight ? "border-[var(--border-default)]" : "border-white/10"}`}>
         <div>
           <p
-            className={`font-bold uppercase tracking-wide ${
+            className={`font-medium uppercase tracking-wide ${
               mobileLight
-                ? "text-sm text-sky-700 dark:text-sky-400"
+                ? "text-[13px] text-[var(--text-tertiary)]"
                 : mobileProminent
                   ? "text-base text-sky-300/80"
                   : "text-[10px] tracking-[0.22em] text-sky-300/80"
@@ -375,22 +375,22 @@ export function TripHotelStayMap({
           >
             Stay map
           </p>
-          <h3 className={`mt-1 font-black ${mobileLight ? "text-2xl text-[var(--text-primary)]" : mobileProminent ? "text-2xl text-white" : "text-lg text-white"}`}>
+          <h3 className={`mt-0.5 font-semibold ${mobileLight ? "text-[22px] text-[var(--text-primary)]" : mobileProminent ? "text-2xl text-white" : "text-lg text-white"}`}>
             Where you&apos;re staying
           </h3>
-          <p className={`mt-1 ${mobileLight ? "text-[16px] text-[var(--text-muted)]" : mobileProminent ? "text-[15px] text-sky-100/60" : "text-xs text-sky-100/60"}`}>
+          <p className={`mt-1 ${mobileLight ? "text-[15px] text-[var(--text-secondary)]" : mobileProminent ? "text-[15px] text-sky-100/60" : "text-xs text-sky-100/60"}`}>
             {mobileProminent ? "Tap map for full screen · pinch to zoom" : "Drag to pan · pinch to zoom"}
           </p>
         </div>
         <div
-          className={`rounded-full px-3 py-1.5 text-xs font-bold ${
+          className={`rounded-full px-3 py-1 text-[13px] font-medium ${
             unbookedCount === 0
               ? mobileLight
-                ? "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300"
-                : "bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-400/40"
+                ? "text-[var(--success)]"
+                : "text-emerald-200"
               : mobileLight
-                ? "bg-amber-100 text-amber-900 ring-1 ring-amber-300"
-                : "bg-amber-500/15 text-amber-100 ring-1 ring-amber-400/30"
+                ? "text-[var(--warning)]"
+                : "text-amber-100"
           }`}
         >
           {unbookedCount === 0 ? "All stays booked ✓" : `${unbookedCount} to book`}
@@ -471,23 +471,18 @@ export function TripHotelStayMap({
         </div>
       </div>
 
-      <div className={`${expanded ? "shrink-0 border-t border-white/10" : ""} px-5 py-4`}>
-        <div className={`mb-3 flex flex-wrap gap-3 text-xs font-bold uppercase tracking-wider ${mobileLight ? "text-[var(--text-muted)]" : "text-sky-50/80"}`}>
-          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-7 rounded-full bg-emerald-500" /> Booked</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-7 rounded-full bg-slate-400" /> Not booked</span>
-        </div>
-
+      <div className={`${expanded ? "shrink-0 border-t border-[var(--border-default)]" : ""} px-4 py-3`}>
         {mobileProminent && onOpenNotebook ? (
           <button
             type="button"
             onClick={onOpenNotebook}
-            className="mb-4 flex min-h-[56px] w-full items-center justify-center rounded-2xl bg-[#faf6ee] px-4 text-[18px] font-bold text-[#1c1917] shadow-md ring-2 ring-[#e8e0d0]"
+            className="mb-3 flex min-h-[48px] w-full items-center justify-center rounded-[var(--radius-button)] border border-[var(--border-default)] bg-[var(--bg-card)] px-4 text-[17px] font-semibold text-[var(--text-primary)]"
           >
-            📓 Open stay notebook — lined paper
+            Open stay notebook
           </button>
         ) : null}
 
-        <div className="flex gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {points.map((point, index) => (
             <StayCard
               key={point.id}
@@ -502,7 +497,7 @@ export function TripHotelStayMap({
             />
           ))}
         </div>
-        <p className={`mt-3 text-xs ${mobileLight ? "text-[var(--text-muted)]" : "text-sky-100/55"}`}>
+        <p className={`mt-2 text-[13px] ${mobileLight ? "text-[var(--text-tertiary)]" : "text-sky-100/55"}`}>
           {bookedCount} booked · {unbookedCount} still needed · {points.length} stop{points.length === 1 ? "" : "s"} on map
         </p>
       </div>

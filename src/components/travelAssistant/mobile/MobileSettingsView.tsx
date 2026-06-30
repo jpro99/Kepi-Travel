@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ThemePicker } from "@/components/ThemeToggle";
 import { LanguageSettingsCard } from "@/components/LanguageSettingsCard";
+import { appleBtnPrimary, appleCard, appleCaption, appleCardTitle, appleMetadata } from "@/lib/ui/appleDesign";
 
 interface MobileSettingsViewProps {
   emailForwardAddress: string | null;
@@ -38,38 +39,36 @@ export function MobileSettingsView({
   onSignOut,
 }: MobileSettingsViewProps) {
   return (
-    <section className="space-y-3 pb-4">
-      <article className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm dark:border-emerald-500/40 dark:bg-emerald-500/10">
-        <h2 className="font-semibold text-emerald-900 dark:text-emerald-100">Forward email address</h2>
+    <section className="space-y-4 pb-4">
+      <article className={`${appleCard} p-4`}>
+        <h2 className={appleCardTitle}>Forward email address</h2>
         {emailForwardAddress ? (
           <>
-            <p className="mt-1 text-sm text-emerald-900 dark:text-emerald-100">{emailForwardAddress}</p>
+            <p className={`${appleMetadata} mt-1`}>{emailForwardAddress}</p>
             <button
               type="button"
               onClick={onCopyForwardAddress}
-              className="mt-3 w-full rounded-lg bg-emerald-500 px-3 py-3 text-sm font-semibold text-white transition hover:bg-emerald-400"
+              className={`mt-3 w-full min-h-[44px] ${appleBtnPrimary}`}
             >
               Copy forward address
             </button>
-            <p className="mt-2 text-xs text-emerald-900/90 dark:text-emerald-100/90">
+            <p className={`${appleCaption} mt-2`}>
               Forward any flight, hotel, or booking confirmation from any email app to this address.
             </p>
           </>
         ) : (
-          <p className="mt-1 text-sm text-emerald-900 dark:text-emerald-100">Assigning your forwarding address...</p>
+          <p className={`${appleMetadata} mt-1`}>Assigning your forwarding address...</p>
         )}
       </article>
 
-      <article className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 shadow-sm">
+      <article className={`${appleCard} p-4`}>
         <div className="flex items-center justify-between gap-2">
-          <h2 className="font-semibold">Flight alerts</h2>
+          <h2 className={appleCardTitle}>Flight alerts</h2>
           {pushSubscribed ? (
-            <span className="rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-bold text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">
-              Active
-            </span>
+            <span className="text-[13px] font-medium text-[var(--success)]">Active</span>
           ) : null}
         </div>
-        <p className="mt-1 text-sm text-[var(--text-muted)]">
+        <p className={`${appleMetadata} mt-1`}>
           Get push alerts for gate changes, delays, and departure reminders — even when the app isn&apos;t open.
         </p>
         {!pushSubscribed ? (
@@ -77,19 +76,17 @@ export function MobileSettingsView({
             type="button"
             onClick={onEnablePush}
             disabled={pushBusy}
-            className="mt-3 w-full rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-sky-500 disabled:opacity-60"
+            className={`mt-3 w-full min-h-[44px] ${appleBtnPrimary} disabled:opacity-60`}
           >
             {pushBusy ? "Enabling..." : "Enable flight alerts"}
           </button>
         ) : (
-          <p className="mt-3 text-sm font-semibold text-emerald-600 dark:text-emerald-400">Alerts are on</p>
+          <p className="mt-3 text-[15px] font-medium text-[var(--success)]">Alerts are on</p>
         )}
         {pushMessage ? (
           <p
-            className={`mt-2 text-xs ${
-              pushMessage.startsWith("✅")
-                ? "text-emerald-700 dark:text-emerald-300"
-                : "text-rose-600 dark:text-rose-400"
+            className={`mt-2 text-[13px] ${
+              pushMessage.startsWith("✅") ? "text-[var(--success)]" : "text-[var(--destructive)]"
             }`}
           >
             {pushMessage}
@@ -97,14 +94,14 @@ export function MobileSettingsView({
         ) : null}
       </article>
 
-      <article className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 shadow-sm">
+      <article className={`${appleCard} p-4`}>
         <div className="flex items-center justify-between gap-2">
-          <h2 className="font-semibold">Plan status</h2>
-          <span className="rounded-full bg-[var(--text-primary)] px-2 py-1 text-xs font-semibold text-[var(--bg-base)]">
+          <h2 className={appleCardTitle}>Plan status</h2>
+          <span className="text-[13px] font-medium text-[var(--text-secondary)]">
             {isLifetime ? "Pro" : isTrial ? `Trial — ${trialDaysRemaining}d` : hasProAccess ? "Pro" : "Free"}
           </span>
         </div>
-        <p className="mt-2 text-sm text-[var(--text-muted)]">
+        <p className={`${appleMetadata} mt-2`}>
           {billingLoading
             ? "Loading your plan..."
             : isLifetime
@@ -117,9 +114,9 @@ export function MobileSettingsView({
         </p>
       </article>
 
-      <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 shadow-sm">
-        <h2 className="mb-3 font-semibold">Appearance</h2>
-        <p className="mb-3 text-sm text-[var(--text-muted)]">
+      <section className={`${appleCard} p-4`}>
+        <h2 className={appleCardTitle}>Appearance</h2>
+        <p className={`${appleMetadata} mb-3 mt-1`}>
           Light is easier to read on your phone. Dark is available when you want it.
         </p>
         <ThemePicker />
@@ -129,13 +126,13 @@ export function MobileSettingsView({
 
       <Link
         href="/support"
-        className="block rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 font-semibold shadow-sm transition hover:opacity-90"
+        className={`block p-4 font-semibold text-[var(--text-primary)] ${appleCard}`}
       >
         Support
       </Link>
 
       {emailForwardSetupMessage ? (
-        <p className="text-xs text-emerald-700 dark:text-emerald-300">{emailForwardSetupMessage}</p>
+        <p className="text-[13px] text-[var(--text-secondary)]">{emailForwardSetupMessage}</p>
       ) : null}
 
       <button
@@ -152,10 +149,10 @@ export function MobileSettingsView({
             void window.caches?.keys().then((keys) => Promise.all(keys.map((k) => window.caches.delete(k)))).then(doReload).catch(doReload);
           }
         }}
-        className="w-full rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 text-left font-semibold text-[var(--text-primary)] shadow-sm transition hover:opacity-90"
+        className={`w-full p-4 text-left ${appleCard}`}
       >
-        Clear cache &amp; refresh
-        <p className="mt-0.5 text-xs font-normal text-[var(--text-muted)]">
+        <span className={appleCardTitle}>Clear cache &amp; refresh</span>
+        <p className={`${appleCaption} mt-0.5`}>
           Fixes map issues, outdated screens, or loading problems
         </p>
       </button>
@@ -163,7 +160,7 @@ export function MobileSettingsView({
       <button
         type="button"
         onClick={onSignOut}
-        className="w-full rounded-2xl border border-red-200 bg-[var(--bg-card)] p-4 text-left font-semibold text-red-600 shadow-sm dark:border-red-500/30 dark:text-red-300"
+        className={`w-full p-4 text-left font-semibold text-[var(--destructive)] ${appleCard}`}
       >
         Sign out
       </button>

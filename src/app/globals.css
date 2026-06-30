@@ -5,60 +5,85 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* Apple HIG — light */
+  --bg-base: #f5f5f7;
+  --bg-card: #ffffff;
+  --bg-secondary: #fafafb;
+  --bg-grouped: #f2f2f7;
+  --bg-muted: #f2f2f7;
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-muted: #6e6e73;
+  --text-tertiary: #8e8e93;
+  --text-disabled: #c7c7cc;
+  --accent: #007aff;
+  --accent-foreground: #ffffff;
+  --success: #34c759;
+  --destructive: #ff3b30;
+  --warning: #ff9f0a;
+  --border-default: rgba(60, 60, 67, 0.12);
+  --shadow-card: 0 2px 10px rgba(0, 0, 0, 0.05);
+  --radius-card: 14px;
+  --radius-button: 10px;
+
   --background: hsl(0 0% 100%);
   --foreground: hsl(240 10% 3.9%);
-  --bg-base: #f2f2f7;
-  --bg-card: #ffffff;
-  --bg-muted: #e5e5ea;
-  --text-primary: #1c1c1e;
-  --text-muted: #636366;
-  --border-default: rgba(60, 60, 67, 0.12);
   --card: hsl(0 0% 100%);
   --card-foreground: hsl(240 10% 3.9%);
   --popover: hsl(0 0% 100%);
   --popover-foreground: hsl(240 10% 3.9%);
-  --primary: hsl(240 5.9% 10%);
-  --primary-foreground: hsl(0 0% 98%);
+  --primary: #007aff;
+  --primary-foreground: #ffffff;
   --secondary: hsl(240 4.8% 95.9%);
   --secondary-foreground: hsl(240 5.9% 10%);
   --muted: hsl(240 4.8% 95.9%);
   --muted-foreground: hsl(240 3.8% 46.1%);
-  --accent: hsl(240 4.8% 95.9%);
-  --accent-foreground: hsl(240 5.9% 10%);
-  --destructive: hsl(0 84.2% 60.2%);
+  --accent-hsl: hsl(211 100% 50%);
+  --accent-foreground-hsl: hsl(0 0% 100%);
+  --destructive-hsl: hsl(4 100% 59%);
   --destructive-foreground: hsl(0 0% 98%);
   --border: hsl(240 5.9% 90%);
   --input: hsl(240 5.9% 90%);
-  --ring: hsl(240 5.9% 10%);
-  --radius: 0.5rem;
+  --ring: #007aff;
+  --radius: 0.625rem;
 }
 
 .dark {
-  --background: hsl(240 10% 3.9%);
-  --foreground: hsl(0 0% 98%);
   --bg-base: #000000;
   --bg-card: #1c1c1e;
+  --bg-secondary: #2c2c2e;
+  --bg-grouped: #1c1c1e;
   --bg-muted: #2c2c2e;
   --text-primary: #f5f5f7;
+  --text-secondary: #98989d;
   --text-muted: #98989d;
+  --text-tertiary: #636366;
+  --text-disabled: #48484a;
+  --accent: #0a84ff;
+  --accent-foreground: #ffffff;
+  --success: #30d158;
+  --destructive: #ff453a;
+  --warning: #ff9f0a;
   --border-default: rgba(255, 255, 255, 0.1);
+  --shadow-card: 0 2px 10px rgba(0, 0, 0, 0.35);
+
+  --background: hsl(240 10% 3.9%);
+  --foreground: hsl(0 0% 98%);
   --card: hsl(240 10% 3.9%);
   --card-foreground: hsl(0 0% 98%);
   --popover: hsl(240 10% 3.9%);
   --popover-foreground: hsl(0 0% 98%);
-  --primary: hsl(0 0% 98%);
-  --primary-foreground: hsl(240 5.9% 10%);
+  --primary: #0a84ff;
+  --primary-foreground: #ffffff;
   --secondary: hsl(240 3.7% 15.9%);
   --secondary-foreground: hsl(0 0% 98%);
   --muted: hsl(240 3.7% 15.9%);
   --muted-foreground: hsl(240 5% 64.9%);
-  --accent: hsl(240 3.7% 15.9%);
-  --accent-foreground: hsl(0 0% 98%);
-  --destructive: hsl(0 62.8% 30.6%);
+  --destructive-hsl: hsl(4 100% 61%);
   --destructive-foreground: hsl(0 0% 98%);
   --border: hsl(240 3.7% 15.9%);
   --input: hsl(240 3.7% 15.9%);
-  --ring: hsl(240 4.9% 83.9%);
+  --ring: #0a84ff;
 }
 
 @theme inline {
@@ -76,7 +101,7 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
+  --color-destructive: var(--destructive-hsl);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
@@ -93,6 +118,9 @@
 
   body {
     @apply bg-background text-foreground;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
