@@ -72,6 +72,8 @@ interface FlightsTabProps {
   onAdd: () => void;
   /** Trips tab on phone: bigger type, fewer widgets. */
   simplifiedMobile?: boolean;
+  /** Mobile Trip tab — route map lives on Map/Home globe */
+  hideRouteMap?: boolean;
 }
 
 /* ─── Helpers ────────────────────────────────────────────────── */
@@ -484,6 +486,7 @@ export function FlightsTab({
   liveStatus = {}, locationStatus = "unknown", nearestAirport = "",
   onReservationTap, onCheckStatus, onDelete, onAdd,
   simplifiedMobile = false,
+  hideRouteMap = false,
 }: FlightsTabProps) {
   const type = flightCardTypography(simplifiedMobile);
   const listType = hotelCardTypography(simplifiedMobile);
@@ -625,7 +628,7 @@ export function FlightsTab({
         </>
       ) : null}
 
-      {simplifiedMobile ? (
+      {simplifiedMobile && !hideRouteMap ? (
         <TripTransportRouteMap
           reservations={transportReservations ?? reservations}
           plannedFlightLegs={plannedFlightLegs}
@@ -643,20 +646,20 @@ export function FlightsTab({
           <h2
             className={
               simplifiedMobile
-                ? "text-[22px] font-bold tracking-tight text-[var(--text-primary)]"
+                ? "text-[28px] font-black tracking-tight text-[var(--text-primary)]"
                 : listType.heading
             }
           >
             Your flights
           </h2>
-          <p className={simplifiedMobile ? "mt-0.5 text-[15px] text-[var(--text-secondary)]" : listType.subheading}>
+          <p className={simplifiedMobile ? "mt-1 text-[17px] text-[var(--text-secondary)]" : listType.subheading}>
             {upcoming.length} booked{past.length > 0 ? ` · ${past.length} past` : ""}
           </p>
         </div>
         <button
           type="button"
           onClick={onAdd}
-          className={`shrink-0 ${simplifiedMobile ? "rounded-[var(--radius-button)] border border-[var(--border-default)] bg-[var(--bg-card)] px-3.5 py-2.5 text-[15px] font-semibold text-[var(--text-primary)]" : type.addBtn}`}
+          className={`shrink-0 ${simplifiedMobile ? "rounded-[var(--radius-button)] border-2 border-[var(--border-default)] bg-[var(--bg-card)] px-4 py-3 text-[17px] font-bold text-[var(--text-primary)] min-h-[48px]" : type.addBtn}`}
         >
           Add existing
         </button>
@@ -697,7 +700,7 @@ export function FlightsTab({
       )}
 
       {/* Flight cards */}
-      <div className="space-y-3">
+      <div className={simplifiedMobile ? "space-y-4" : "space-y-3"}>
         {shown.map(r => {
           const dep = r.flightDepartureAirport ?? "---";
           const arr = r.flightArrivalAirport ?? "---";

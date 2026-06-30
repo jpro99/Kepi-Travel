@@ -165,9 +165,26 @@
   html.kepi-standalone {
     font-size: 17px;
   }
+
+  /* Phone browser: same readable base scale as PWA */
+  @media (max-width: 1023px) {
+    html {
+      font-size: 17px;
+    }
+  }
 }
 
 @layer components {
+  /* Mobile travel-assistant shell — big juicy type */
+  .kepi-mobile-shell {
+    font-size: 17px;
+    line-height: 1.45;
+  }
+
+  .kepi-mobile-shell .apple-card {
+    border-radius: 20px;
+  }
+
   .apple-card {
     background: var(--apple-card);
     border-radius: 18px;

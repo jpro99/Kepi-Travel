@@ -37,33 +37,33 @@ export function FlightCard({
   mobile = false,
 }: FlightCardProps) {
   const shell = `apple-card overflow-hidden ${className}`.trim();
-  const pad = mobile ? "p-4" : "p-5";
+  const pad = mobile ? "p-5" : "p-5";
 
   const header = mobile ? (
     <>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[17px] font-semibold leading-snug text-[var(--apple-text)]">{airline}</p>
-          <p className="mt-1 text-[15px] leading-snug text-[var(--apple-text-secondary)]">
+          <p className="text-[20px] font-bold leading-snug text-[var(--apple-text)]">{airline}</p>
+          <p className="mt-1.5 text-[17px] leading-snug text-[var(--apple-text-secondary)]">
             {flightNumber || `${departure} → ${arrival}`}
           </p>
         </div>
         <div className="shrink-0 text-right">
-          {badge ?? (price ? <p className="text-[17px] font-semibold text-[var(--apple-text)]">{price}</p> : null)}
+          {badge ?? (price ? <p className="text-[20px] font-bold text-[var(--apple-text)]">{price}</p> : null)}
         </div>
       </div>
 
-      <p className="mt-3 text-[17px] font-medium leading-snug text-[var(--apple-text)]">
+      <p className="mt-4 text-[19px] font-semibold leading-snug text-[var(--apple-text)]">
         {departureTime}
         {arrivalTime && arrivalTime !== "—" ? (
           <span className="font-normal text-[var(--apple-text-secondary)]"> → {arrivalTime}</span>
         ) : null}
       </p>
 
-      {gateLine ? <p className="mt-2 text-[15px] font-medium text-[var(--apple-accent)]">{gateLine}</p> : null}
+      {gateLine ? <p className="mt-2 text-[17px] font-semibold text-[var(--apple-accent)]">{gateLine}</p> : null}
 
       {addMiles ? (
-        <span className="mt-3 inline-block rounded-full bg-[var(--bg-grouped)] px-3 py-1.5 text-[13px] font-semibold text-[var(--apple-accent)]">
+        <span className="mt-3 inline-block rounded-full bg-[var(--bg-grouped)] px-3.5 py-2 text-[15px] font-bold text-[var(--apple-accent)]">
           Add Miles / Cash
         </span>
       ) : null}

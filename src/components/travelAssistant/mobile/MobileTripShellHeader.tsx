@@ -34,9 +34,9 @@ export function MobileTripShellHeader({
 
   return (
     <header>
-      <h1 className="text-[2rem] font-bold leading-tight tracking-tight text-[var(--text-primary)]">{tripName}</h1>
+      <h1 className="text-[2.125rem] font-bold leading-tight tracking-tight text-[var(--text-primary)]">{tripName}</h1>
       {(destination || dates) ? (
-        <p className="mt-1.5 text-[17px] leading-snug text-[var(--text-muted)]">
+        <p className="mt-2 text-[19px] leading-snug text-[var(--text-muted)]">
           {[destination || null, dates || null].filter(Boolean).join(" · ")}
         </p>
       ) : null}
