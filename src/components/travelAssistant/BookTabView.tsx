@@ -1,6 +1,7 @@
 "use client";
 
 import type { BookSubTab } from "@/lib/travelAssistant/consumerTabs";
+import { bookSubTabButtonClass, BOOK_SUBTAB_TOGGLE_CLASS } from "@/components/travelAssistant/bookTabStyles";
 import { FlightsTab } from "@/components/travelAssistant/FlightsTab";
 import { HotelsTab } from "@/components/travelAssistant/HotelsTab";
 import type { FlightSearchDefaults } from "@/components/travelAssistant/FlightSearchLauncher";
@@ -95,6 +96,8 @@ interface BookTabViewProps {
     intent: "needs_hotel" | "skip",
   ) => void | Promise<void>;
   travelFitReservations?: BookReservation[];
+  flightCount?: number;
+  hotelCount?: number;
 }
 
 export function BookTabView({
@@ -132,29 +135,31 @@ export function BookTabView({
   onAddCityStay,
   onSetStayIntent,
   travelFitReservations,
+  flightCount = 0,
+  hotelCount = 0,
 }: BookTabViewProps) {
   return (
     <section className="space-y-3">
-      <div className="flex rounded-2xl bg-slate-100 p-1 dark:bg-slate-900">
+      <header className="rounded-2xl bg-[#0F1923] px-5 py-4 shadow-sm">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f4c95d]">Book</p>
+        <h1 className="mt-1 text-xl font-bold text-white">{tripName ?? "Your trip"}</h1>
+        <p className="mt-1 text-sm text-slate-300">
+          {flightCount} flight{flightCount === 1 ? "" : "s"} · {hotelCount} hotel{hotelCount === 1 ? "" : "s"}
+        </p>
+      </header>
+
+      <div className={BOOK_SUBTAB_TOGGLE_CLASS}>
         <button
           type="button"
           onClick={() => onBookSubTabChange("flights")}
-          className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition ${
-            bookSubTab === "flights"
-              ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white"
-              : "text-slate-500 dark:text-slate-400"
-          }`}
+          className={bookSubTabButtonClass(bookSubTab === "flights")}
         >
           Flights
         </button>
         <button
           type="button"
           onClick={() => onBookSubTabChange("hotels")}
-          className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition ${
-            bookSubTab === "hotels"
-              ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white"
-              : "text-slate-500 dark:text-slate-400"
-          }`}
+          className={bookSubTabButtonClass(bookSubTab === "hotels")}
         >
           Hotels
         </button>

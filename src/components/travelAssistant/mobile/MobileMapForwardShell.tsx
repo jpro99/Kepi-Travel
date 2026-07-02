@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { MobileAssistView } from "@/components/travelAssistant/mobile/MobileAssistView";
+import { TripHealthStrip } from "@/components/travelAssistant/TripHealthStrip";
 import { MobileItineraryReader } from "@/components/travelAssistant/mobile/MobileItineraryReader";
 import { MobilePlanNotebook } from "@/components/travelAssistant/mobile/MobilePlanNotebook";
 import { MobileSettingsView } from "@/components/travelAssistant/mobile/MobileSettingsView";
@@ -94,6 +95,9 @@ interface MobileMapForwardShellProps {
   trialExpiresAt: string | null;
   hasProAccess: boolean;
   emailForwardSetupMessage?: string | null;
+  missingPriceCount?: number;
+  onReviewPricing?: () => void;
+  onGapActionTap?: (tab: string) => void;
   onSignOut: () => void;
 }
 
@@ -148,6 +152,9 @@ export function MobileMapForwardShell({
   trialExpiresAt,
   hasProAccess,
   emailForwardSetupMessage,
+  missingPriceCount = 0,
+  onReviewPricing,
+  onGapActionTap,
   onSignOut,
 }: MobileMapForwardShellProps) {
   const [planSegment, setPlanSegment] = useState<PlanSegment>("itinerary");
@@ -218,6 +225,15 @@ export function MobileMapForwardShell({
             </p>
           )}
         </header>
+
+        {hasActiveTrip ? (
+          <TripHealthStrip
+            reservations={reservations}
+            missingPriceCount={missingPriceCount}
+            onGapActionTap={onGapActionTap}
+            onReviewPricing={onReviewPricing}
+          />
+        ) : null}
 
         {!hasActiveTrip ? (
           <section className="space-y-3">

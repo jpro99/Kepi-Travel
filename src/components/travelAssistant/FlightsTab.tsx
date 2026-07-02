@@ -19,6 +19,7 @@ import {
   reservationAttentionRingClass,
 } from "@/lib/travelAssistant/reservationAttention";
 import { FlightCard } from "@/components/travelAssistant/FlightCard";
+import { BOOK_LIST_CARD_CLASS } from "@/components/travelAssistant/bookTabStyles";
 import { TripTransportRouteMap } from "@/components/travelAssistant/TripTransportRouteMap";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import type { ItinerarySelfCheckResult } from "@/lib/travelAssistant/itinerarySelfCheck";
@@ -801,11 +802,11 @@ export function FlightsTab({
           return (
             <div
               key={r.id}
-              className={`overflow-hidden rounded-3xl bg-[var(--bg-card)] shadow-sm ring-1 transition-all ${
+              className={`${BOOK_LIST_CARD_CLASS} ${
                 isNext && !showGuide && attention === "none"
                   ? "ring-[#007AFF]/40 dark:ring-[#0A84FF]/30 shadow-blue-500/10"
                   : reservationAttentionRingClass(attention, isPast)
-              }`}
+              } ${isPast ? "opacity-60" : ""}`}
             >
               {/* Tap to expand */}
               <button type="button" onClick={() => setExpanded(isOpen ? null : r.id)} className="w-full text-left">

@@ -15,6 +15,11 @@ import {
   formatReservationCostLine,
   reservationMissingPrice,
 } from "@/lib/travelAssistant/tripSpendSummary";
+import {
+  reservationAttentionKind,
+  reservationAttentionRingClass,
+} from "@/lib/travelAssistant/reservationAttention";
+import { BOOK_ICON_TILE_CLASS, BOOK_LIST_CARD_CLASS } from "@/components/travelAssistant/bookTabStyles";
 import { hotelCardTypography } from "@/lib/ui/mobileTypography";
 import { appleBtnText, appleWarningPill } from "@/lib/ui/appleDesign";
 
@@ -239,7 +244,7 @@ export function HotelsTab({
                   checkOut: hotelSearchDefaults?.checkOut ?? "",
                 })
               }
-              className="mb-3 w-full rounded-full bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white"
+              className="mb-3 w-full rounded-full bg-[#007AFF] px-6 py-2.5 text-sm font-bold text-white"
             >
               Search hotels
             </button>
@@ -247,7 +252,7 @@ export function HotelsTab({
             <button
               type="button"
               onClick={onSearchHotels}
-              className="mb-3 w-full rounded-full bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white"
+              className="mb-3 w-full rounded-full bg-[#007AFF] px-6 py-2.5 text-sm font-semibold text-white"
             >
               Search hotels
             </button>
@@ -283,6 +288,7 @@ export function HotelsTab({
           const emoji = cityEmoji(r.location ?? "");
           const missingPrice = reservationMissingPrice(r);
           const costLine = formatReservationCostLine(r, { allReservations: shown });
+          const attention = reservationAttentionKind(r);
 
           if (simplifiedMobile) {
             const stayRange =
@@ -379,13 +385,9 @@ export function HotelsTab({
           return (
             <div
               key={r.id}
-              className={`overflow-hidden rounded-3xl bg-[var(--bg-card)] shadow-sm ring-1 transition-all ${
-                past
-                  ? "ring-[var(--border-default)] opacity-60"
-                  : missingPrice
-                    ? "ring-yellow-400 bg-yellow-50/30 dark:ring-yellow-500/60 dark:bg-yellow-500/5"
-                    : "ring-[var(--border-default)]"
-              }`}
+              className={`${BOOK_LIST_CARD_CLASS} ${
+                past ? reservationAttentionRingClass("none", true) : reservationAttentionRingClass(attention, past)
+              } ${past ? "opacity-60" : ""}`}
             >
               {/* Card tap area */}
               <button
@@ -394,10 +396,7 @@ export function HotelsTab({
                 className="w-full text-left"
               >
                 <div className="flex items-start gap-4 p-5">
-                  {/* Emoji icon */}
-                  <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-2xl shrink-0 shadow-sm">
-                    {emoji}
-                  </div>
+                  <div className={BOOK_ICON_TILE_CLASS}>{emoji}</div>
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
@@ -412,26 +411,26 @@ export function HotelsTab({
                       ) : null}
                     </div>
                     <p className={type.location}>{r.location}</p>
-                    <div className="flex items-center gap-2 mt-2">
+                    <div className="mt-2 flex items-center gap-2">
                       <div className={`rounded-lg bg-slate-100 dark:bg-slate-800 ${simplifiedMobile ? "px-3 py-2" : "px-3 py-2 lg:px-2.5 lg:py-1"}`}>
                         <p className={type.detailLabel}>Check-in</p>
                         <p className={type.detailValue}>{fmtDate(checkIn)}</p>
                       </div>
-                      {checkOut && (
+                      {checkOut ? (
                         <div className={`rounded-lg bg-slate-100 dark:bg-slate-800 ${simplifiedMobile ? "px-3 py-2" : "px-3 py-2 lg:px-2.5 lg:py-1"}`}>
                           <p className={type.detailLabel}>Check-out</p>
                           <p className={type.detailValue}>{fmtDate(checkOut)}</p>
                         </div>
-                      )}
-                      {nights > 0 && (
-                        <div className="rounded-lg bg-indigo-50 dark:bg-indigo-500/20 px-2.5 py-1">
-                          <p className={`font-bold text-indigo-700 dark:text-indigo-300 ${simplifiedMobile ? "text-sm" : "text-sm lg:text-xs"}`}>{nights}N</p>
+                      ) : null}
+                      {nights > 0 ? (
+                        <div className="rounded-lg bg-sky-50 px-2.5 py-1 dark:bg-sky-500/15">
+                          <p className={`font-bold text-sky-800 dark:text-sky-300 ${simplifiedMobile ? "text-sm" : "text-sm lg:text-xs"}`}>{nights}N</p>
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   </div>
 
-                  <span className="text-slate-300 dark:text-slate-600 text-sm shrink-0 mt-1">{isOpen ? "▲" : "▼"}</span>
+                  <span className="mt-1 shrink-0 text-sm text-slate-300 dark:text-slate-600">{isOpen ? "▲" : "▼"}</span>
                 </div>
               </button>
 
@@ -461,10 +460,21 @@ export function HotelsTab({
                     className="rounded-lg bg-yellow-100 px-2.5 py-1.5 text-left dark:bg-yellow-500/20"
                   >
                     <p className="text-[9px] font-bold uppercase tracking-widest text-yellow-800 dark:text-yellow-200">Trip cost</p>
-                    <p className="text-xs font-bold text-yellow-900 dark:text-yellow-100 mt-0.5">Tap to add price</p>
+                    <p className="mt-0.5 text-xs font-bold text-yellow-900 dark:text-yellow-100">Tap to add price</p>
                   </button>
                 ) : null}
               </div>
+              {attention === "missing-price" && !past ? (
+                <div className="border-t border-yellow-200 px-5 py-2 dark:border-yellow-500/30">
+                  <button
+                    type="button"
+                    onClick={() => onReservationTap(r.id)}
+                    className="text-xs font-bold text-yellow-900 dark:text-yellow-200"
+                  >
+                    Tap to add cash or points spent →
+                  </button>
+                </div>
+              ) : null}
 
               {/* Expanded actions */}
               <div className="border-t border-slate-100 dark:border-slate-800 px-5 py-3 flex items-center gap-2">

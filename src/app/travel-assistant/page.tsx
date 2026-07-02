@@ -8746,6 +8746,11 @@ export default function TravelAssistantPage() {
                   <TripSpendBadge
                     summary={tripSpendSummary}
                     problemCount={transportConflictReservationIds.size}
+                    onClick={
+                      tripSpendSummary.missingPriceCount > 0 || transportConflictReservationIds.size > 0
+                        ? () => navigateToBook("flights")
+                        : undefined
+                    }
                   />
                 ) : null}
                 <div className="relative">
@@ -8892,6 +8897,9 @@ export default function TravelAssistantPage() {
                 trialExpiresAt={trialExpiresAt}
                 hasProAccess={hasProAccess}
                 emailForwardSetupMessage={emailForwardSetupMessage}
+                missingPriceCount={tripSpendSummary.missingPriceCount}
+                onReviewPricing={() => navigateToBook("flights")}
+                onGapActionTap={handleItineraryGapAction}
                 onSignOut={() => {
                   void clerk.signOut();
                 }}
@@ -9043,6 +9051,8 @@ export default function TravelAssistantPage() {
               onAddCityStay={handleAddCityStay}
               onSetStayIntent={handleSetStayIntent}
               travelFitReservations={travelFitReservations}
+              flightCount={wizardFlightCount}
+              hotelCount={wizardHotelCount}
             />
           ) : (
             <section className="space-y-3">

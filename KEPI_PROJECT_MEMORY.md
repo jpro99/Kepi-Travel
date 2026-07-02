@@ -83,7 +83,13 @@ Execute in this order; do not skip dedupe before polish.
 | **6** | **Destination feel** on Home — hero photo + embedded globe like mobile | Done |
 | **7** | Deploy + verify on kepitravel.com | Auto on push |
 
-Component map: `TripHealthStrip`, `dedupeConsumerReservations`, `DesktopTripHomeView`, `MobileMapForwardShell` (home), `ItineraryTabView` (plan).
+Component map: `TripHealthStrip`, `dedupeConsumerReservations`, `DesktopTripHomeView`, `MobileMapForwardShell` (home), `ItineraryTabView` (plan), `bookTabStyles`, `TripSpendBadge`.
+
+## Post–Home/Plan polish (Jeff, 2026-06-15)
+
+- **Spend badge tappable** — header `TripSpendBadge` opens Book when pricing/issues need attention
+- **Mobile Home trip health** — `TripHealthStrip` on mobile Home tab
+- **Book tab unified** — shared header, toggle chrome, matching flight/hotel list cards via `bookTabStyles.ts`
 
 ---
 
