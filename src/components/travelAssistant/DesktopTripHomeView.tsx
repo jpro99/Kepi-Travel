@@ -1,12 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import dynamic from "next/dynamic";
 import { MobileAssistView } from "@/components/travelAssistant/mobile/MobileAssistView";
 import type { GlobeArc } from "@/components/travelAssistant/mobile/TripGlobe";
 import { TripHealthStrip } from "@/components/travelAssistant/TripHealthStrip";
-import { airportToCity } from "@/lib/travelAssistant/buildTripLegs";
-import { cityPhotoPicsumUrl, cityPhotoUrl } from "@/lib/travelAssistant/cityPhotos";
+import { DestinationHeroPhoto, resolveHeroCity } from "@/components/travelAssistant/tripHeroVisuals";
 import { buildTripTransportRoute } from "@/lib/travelAssistant/tripTransportRoute";
 import { collectRouteMapPoints } from "@/lib/travelAssistant/tripRouteMapGeo";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
@@ -68,36 +67,6 @@ function formatDateRange(startDate: string | null | undefined, endDate: string |
       year: "numeric",
     });
   return `${fmt(startDate)} – ${fmt(endDate)}`;
-}
-
-function resolveHeroCity(destination: string | null | undefined, reservations: TripReservation[]): string {
-  if (destination?.trim()) {
-    return destination.split(/[,/]/u)[0]?.trim() || destination.trim();
-  }
-  const hotel = reservations.find((reservation) => reservation.type === "hotel" && reservation.location?.trim());
-  if (hotel?.location) {
-    return hotel.location.split(/[,/]/u)[0]?.trim() || hotel.location;
-  }
-  const flight = reservations.find(
-    (reservation) => reservation.type === "flight" && reservation.flightArrivalAirport?.trim(),
-  );
-  if (flight?.flightArrivalAirport) {
-    return airportToCity(flight.flightArrivalAirport);
-  }
-  return "Your destination";
-}
-
-function DestinationHeroPhoto({ city }: { city: string }) {
-  const [src, setSrc] = useState(() => cityPhotoUrl(city, 1200));
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={src}
-      alt=""
-      className="absolute inset-0 h-full w-full object-cover"
-      onError={() => setSrc(cityPhotoPicsumUrl(city))}
-    />
-  );
 }
 
 export function DesktopTripHomeView({

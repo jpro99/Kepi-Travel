@@ -214,6 +214,7 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 
 | Date | Note |
 |------|------|
+| 2026-06-15 | **Mobile polish:** cinematic Home hero (photo+globe), unified Book chrome (navy header, Flights\|Hotels toggle), tickets as footer; shared `tripHeroVisuals` |
 | 2026-06-15 | **Auto-push:** after lint+build pass, commit+push main without asking — Vercel → kepitravel.com |
 | 2026-06-15 | **Home+Plan build order** phases 2–4: dedupeConsumerReservations, TripHealthStrip, pricing wired on Home/Plan |
 | 2026-06-15 | **Home tab product law:** unified nav Home\|Plan\|Book\|Map\|More; Home = command center + route flow (not flat flight list); Book owns inventory; premium gaps documented |

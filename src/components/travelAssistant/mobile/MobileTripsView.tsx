@@ -4,13 +4,7 @@ import { useState } from "react";
 import { FlightsTab } from "@/components/travelAssistant/FlightsTab";
 import { HotelsTab } from "@/components/travelAssistant/HotelsTab";
 
-type MobileTripsSegment = "flights" | "hotels" | "tickets";
-
-const MOBILE_TRIPS_SEGMENTS: Array<{ id: MobileTripsSegment; label: string }> = [
-  { id: "flights", label: "Flights" },
-  { id: "hotels", label: "Hotels" },
-  { id: "tickets", label: "Tickets" },
-];
+type MobileTripsSegment = "flights" | "hotels";
 
 interface TripSummary {
   name: string;
@@ -77,6 +71,10 @@ interface MobileTripsViewProps {
   onHotelNotebookChange?: (value: string) => void;
   /** Trip tab uses Map for routes — skip duplicate route map here */
   hideRouteMap?: boolean;
+  /** When set, segment toggle is rendered by the parent (Book tab chrome). */
+  segment?: MobileTripsSegment;
+  onSegmentChange?: (segment: MobileTripsSegment) => void;
+  hideSegmentToggle?: boolean;
 }
 
 function TicketCard({
@@ -126,8 +124,13 @@ export function MobileTripsView({
   hotelNotebookNote = "",
   onHotelNotebookChange,
   hideRouteMap = false,
+  segment: segmentProp,
+  onSegmentChange,
+  hideSegmentToggle = false,
 }: MobileTripsViewProps) {
-  const [segment, setSegment] = useState<MobileTripsSegment>("flights");
+  const [internalSegment, setInternalSegment] = useState<MobileTripsSegment>("flights");
+  const segment = segmentProp ?? internalSegment;
+  const setSegment = onSegmentChange ?? setInternalSegment;
 
   const flights = reservations.filter((r) => r.type === "flight");
   const hotels = reservations.filter((r) => r.type === "hotel");
@@ -155,22 +158,24 @@ export function MobileTripsView({
 
   return (
     <section className="space-y-4">
-      <div className="flex gap-2 rounded-2xl bg-[var(--bg-muted)] p-1.5">
-        {MOBILE_TRIPS_SEGMENTS.map(({ id, label }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setSegment(id)}
-            className={`min-h-[52px] flex-1 rounded-xl font-bold transition touch-manipulation ${
-              segment === id
-                ? "bg-[var(--bg-card)] text-[19px] text-[var(--text-primary)] shadow-sm"
-                : "text-[17px] text-[var(--text-muted)]"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {!hideSegmentToggle ? (
+        <div className="flex gap-2 rounded-2xl bg-[var(--bg-muted)] p-1.5">
+          {(["flights", "hotels"] as const).map((id) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setSegment(id)}
+              className={`min-h-[52px] flex-1 rounded-xl font-bold capitalize transition touch-manipulation ${
+                segment === id
+                  ? "bg-[var(--bg-card)] text-[19px] text-[var(--text-primary)] shadow-sm"
+                  : "text-[17px] text-[var(--text-muted)]"
+              }`}
+            >
+              {id}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {segment === "flights" ? (
         <FlightsTab
@@ -188,7 +193,7 @@ export function MobileTripsView({
           simplifiedMobile
           hideRouteMap={hideRouteMap}
         />
-      ) : segment === "hotels" ? (
+      ) : (
         <HotelsTab
           reservations={hotels}
           mapReservations={hotels}
@@ -201,25 +206,16 @@ export function MobileTripsView({
           hotelNotebookNote={hotelNotebookNote}
           onHotelNotebookChange={onHotelNotebookChange}
         />
-      ) : tickets.length > 0 ? (
-        <div className="space-y-3">
+      )}
+
+      {tickets.length > 0 ? (
+        <div className="space-y-3 pt-2">
+          <p className="text-[13px] font-bold uppercase tracking-widest text-[var(--text-muted)]">Other bookings</p>
           {tickets.map((reservation) => (
             <TicketCard key={reservation.id} reservation={reservation} onTap={onReservationTap} />
           ))}
         </div>
-      ) : (
-        <div className="rounded-2xl border border-dashed border-[var(--border-default)] bg-[var(--bg-card)] p-6 text-center">
-          <p className="text-base font-semibold text-[var(--text-primary)]">No other tickets yet</p>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">Trains, rides, and dining show up here.</p>
-          <button
-            type="button"
-            onClick={onAddBooking}
-            className="mt-4 min-h-[48px] rounded-xl bg-[var(--text-primary)] px-5 text-[15px] font-bold text-[var(--bg-base)]"
-          >
-            Add booking
-          </button>
-        </div>
-      )}
+      ) : null}
     </section>
   );
 }

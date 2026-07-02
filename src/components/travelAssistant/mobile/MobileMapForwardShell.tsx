@@ -10,8 +10,10 @@ import { MobilePlanNotebook } from "@/components/travelAssistant/mobile/MobilePl
 import { MobileSettingsView } from "@/components/travelAssistant/mobile/MobileSettingsView";
 import { MobileTripShellHeader } from "@/components/travelAssistant/mobile/MobileTripShellHeader";
 import { MobileTripsView } from "@/components/travelAssistant/mobile/MobileTripsView";
+import { MobileBookHeader, MobileBookSegmentToggle } from "@/components/travelAssistant/mobile/MobileBookChrome";
 import type { GlobeArc } from "@/components/travelAssistant/mobile/TripGlobe";
 import type { MobilePrimaryTab } from "@/components/travelAssistant/mobile/mobileShellTypes";
+import { DestinationHeroPhoto, resolveHeroCity } from "@/components/travelAssistant/tripHeroVisuals";
 import { buildTripTransportRoute } from "@/lib/travelAssistant/tripTransportRoute";
 import { collectRouteMapPoints } from "@/lib/travelAssistant/tripRouteMapGeo";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
@@ -23,6 +25,7 @@ const TripGlobe = dynamic(
 );
 
 type PlanSegment = "itinerary" | "notebook";
+type BookSegment = "flights" | "hotels";
 
 interface Reservation {
   id: string;
@@ -108,6 +111,17 @@ function daysUntilTrip(startDate: string | null): number | null {
   return Math.max(0, Math.ceil((start - Date.now()) / 86_400_000));
 }
 
+function formatDateRange(startDate: string | null, endDate: string | null): string | null {
+  if (!startDate || !endDate) return null;
+  const fmt = (value: string) =>
+    new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  return `${fmt(startDate)} – ${fmt(endDate)}`;
+}
+
 const juicyBtn =
   "min-h-[56px] w-full rounded-[var(--radius-button)] text-[19px] font-bold transition active:scale-[0.98] touch-manipulation";
 const juicyBtnPrimary = `${juicyBtn} bg-[var(--accent)] text-white shadow-md`;
@@ -158,11 +172,19 @@ export function MobileMapForwardShell({
   onSignOut,
 }: MobileMapForwardShellProps) {
   const [planSegment, setPlanSegment] = useState<PlanSegment>("itinerary");
+  const [bookSegment, setBookSegment] = useState<BookSegment>("flights");
 
-  const { arcs, points } = useMemo(() => {
-    const route = buildTripTransportRoute(
-      reservations.filter((r) => ["flight", "train", "ride"].includes(r.type)),
-    );
+  const transportReservations = useMemo(
+    () => reservations.filter((r) => ["flight", "train", "ride"].includes(r.type)),
+    [reservations],
+  );
+  const flightCount = reservations.filter((r) => r.type === "flight").length;
+  const hotelCount = reservations.filter((r) => r.type === "hotel").length;
+  const heroCity = resolveHeroCity(destination, reservations);
+  const dateRange = formatDateRange(startDate, endDate);
+
+  const { arcs, points, hasRoute } = useMemo(() => {
+    const route = buildTripTransportRoute(transportReservations);
     const mapPoints = collectRouteMapPoints(route.segments);
     const globeArcs: GlobeArc[] = route.segments
       .filter((s) => s.lat != null && s.lon != null && s.toLat != null && s.toLon != null)
@@ -174,8 +196,8 @@ export function MobileMapForwardShell({
         toLon: s.toLon!,
         color: s.status === "conflict" ? "#ef4444" : s.booked ? "#007AFF" : "#64748b",
       }));
-    return { arcs: globeArcs, points: mapPoints };
-  }, [reservations]);
+    return { arcs: globeArcs, points: mapPoints, hasRoute: globeArcs.length > 0 };
+  }, [transportReservations]);
 
   const countdown = daysUntilTrip(startDate);
 
@@ -189,42 +211,63 @@ export function MobileMapForwardShell({
   ) : null;
 
   if (activeTab === "home") {
+    const subtitleParts = hasActiveTrip
+      ? [
+          destination ?? heroCity,
+          dateRange,
+          countdown != null && countdown > 0 ? `${countdown} day${countdown === 1 ? "" : "s"} away` : null,
+          flightCount > 0 || hotelCount > 0
+            ? `${flightCount} flight${flightCount === 1 ? "" : "s"} · ${hotelCount} hotel${hotelCount === 1 ? "" : "s"}`
+            : null,
+        ].filter(Boolean)
+      : [];
+
     return (
       <div className="kepi-mobile-shell space-y-5 pb-4">
-        <button
-          type="button"
-          onClick={() => onNavigateTab("map")}
-          className="relative block h-[220px] w-full overflow-hidden rounded-[var(--radius-card)] bg-[#020818] shadow-[var(--shadow-card)] ring-1 ring-[var(--border-default)]"
-          aria-label="Open full map"
-        >
-          <TripGlobe arcs={arcs} points={points} className="h-full" />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-4 pb-4 pt-10">
-            <p className="text-[15px] font-bold uppercase tracking-widest text-sky-300/90">Your route</p>
-            <p className="text-[19px] font-bold text-white">Tap for full 360° map</p>
-          </div>
-        </button>
+        {hasActiveTrip ? (
+          <button
+            type="button"
+            onClick={() => onNavigateTab("map")}
+            className="group relative block w-full overflow-hidden rounded-[var(--radius-card)] bg-[#020818] text-left shadow-[var(--shadow-card)] ring-1 ring-[var(--border-default)]"
+            aria-label="Open full map"
+          >
+            <div className="relative min-h-[200px]">
+              <DestinationHeroPhoto city={heroCity} />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/55 to-slate-900/30" />
+              <div className="relative flex h-full min-h-[200px] flex-col justify-end p-5">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-sky-300/90">Home</p>
+                <h1 className="mt-1 text-[2rem] font-black leading-tight tracking-tight text-white">{tripName}</h1>
+                <p className="mt-2 text-[17px] leading-snug text-sky-100/85">{subtitleParts.join(" · ")}</p>
+              </div>
+            </div>
 
-        <header className="rounded-[var(--radius-card)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-card)]">
-          <p className="text-[13px] font-bold uppercase tracking-widest text-[var(--accent)]">
-            {hasActiveTrip ? "Your trip" : "Welcome"}
-          </p>
-          <h1 className="mt-1 text-[2rem] font-black leading-tight tracking-tight text-[var(--text-primary)]">
-            {hasActiveTrip ? tripName : "Where to next?"}
-          </h1>
-          {hasActiveTrip ? (
-            <p className="mt-2 text-[19px] leading-snug text-[var(--text-secondary)]">
-              {destination ? `${destination} · ` : ""}
-              {startDate && endDate
-                ? `${new Date(`${startDate.slice(0, 10)}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(`${endDate.slice(0, 10)}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
-                : null}
-              {countdown != null && countdown > 0 ? ` · ${countdown} days away` : ""}
-            </p>
-          ) : (
+            <div className="relative min-h-[200px] border-t border-white/10">
+              {hasRoute ? (
+                <TripGlobe arcs={arcs} points={points} className="h-full min-h-[200px]" />
+              ) : (
+                <div className="flex h-full min-h-[200px] items-center justify-center bg-[#061428] px-6 text-center">
+                  <p className="text-sm text-sky-200/70">Add flights to see your route on the globe</p>
+                </div>
+              )}
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#020818] via-[#020818]/80 to-transparent px-4 pb-4 pt-12">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-sky-300/80">Your route</p>
+                <p className="mt-0.5 text-[17px] font-bold text-white group-hover:text-sky-200">
+                  Tap for full 360° map →
+                </p>
+              </div>
+            </div>
+          </button>
+        ) : (
+          <header className="rounded-[var(--radius-card)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-card)]">
+            <p className="text-[13px] font-bold uppercase tracking-widest text-[var(--accent)]">Welcome</p>
+            <h1 className="mt-1 text-[2rem] font-black leading-tight tracking-tight text-[var(--text-primary)]">
+              Where to next?
+            </h1>
             <p className="mt-2 text-[19px] leading-snug text-[var(--text-secondary)]">
               Tell us your dates — or forward a booking email.
             </p>
-          )}
-        </header>
+          </header>
+        )}
 
         {hasActiveTrip ? (
           <TripHealthStrip
@@ -303,7 +346,12 @@ export function MobileMapForwardShell({
   if (activeTab === "book") {
     return (
       <div className="kepi-mobile-shell space-y-5 pb-4">
-        {tripHeader}
+        {hasActiveTrip ? (
+          <>
+            <MobileBookHeader tripName={tripName} flightCount={flightCount} hotelCount={hotelCount} />
+            <MobileBookSegmentToggle active={bookSegment} onChange={setBookSegment} />
+          </>
+        ) : null}
         <MobileTripsView
           hasActiveTrip={hasActiveTrip}
           trip={
@@ -328,6 +376,9 @@ export function MobileMapForwardShell({
           hotelNotebookNote={hotelNotebookNote}
           onHotelNotebookChange={onHotelNotebookChange}
           hideRouteMap
+          segment={bookSegment}
+          onSegmentChange={setBookSegment}
+          hideSegmentToggle={hasActiveTrip}
         />
       </div>
     );

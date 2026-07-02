@@ -644,23 +644,15 @@ export function FlightsTab({
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2
-            className={
-              simplifiedMobile
-                ? "text-[28px] font-black tracking-tight text-[var(--text-primary)]"
-                : listType.heading
-            }
-          >
-            Your flights
-          </h2>
-          <p className={simplifiedMobile ? "mt-1 text-[17px] text-[var(--text-secondary)]" : listType.subheading}>
+          <h2 className={listType.heading}>Your flights</h2>
+          <p className={listType.subheading}>
             {upcoming.length} booked{past.length > 0 ? ` · ${past.length} past` : ""}
           </p>
         </div>
         <button
           type="button"
           onClick={onAdd}
-          className={`shrink-0 ${simplifiedMobile ? "rounded-[var(--radius-button)] border-2 border-[var(--border-default)] bg-[var(--bg-card)] px-4 py-3 text-[17px] font-bold text-[var(--text-primary)] min-h-[48px]" : type.addBtn}`}
+          className={`shrink-0 ${simplifiedMobile ? listType.addBtn : type.addBtn}`}
         >
           Add existing
         </button>
@@ -668,7 +660,13 @@ export function FlightsTab({
 
       {/* Empty */}
       {shown.length === 0 && !showGuide && (
-        <div className="rounded-3xl border border-dashed border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-10 text-center">
+        <div
+          className={
+            simplifiedMobile
+              ? "rounded-[var(--radius-card)] border border-dashed border-[var(--border-default)] bg-[var(--bg-card)] p-8 text-center"
+              : "rounded-3xl border border-dashed border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-10 text-center"
+          }
+        >
           <p className="text-4xl mb-3">🛫</p>
           <p className="font-semibold text-slate-900 dark:text-white">No flights yet</p>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">
