@@ -28,6 +28,13 @@ interface MobileAssistViewProps {
   locationStatus: "away" | "at-airport" | "in-terminal" | "airborne" | "unknown";
   nearestAirport: string;
   onReservationTap: (id: string) => void;
+  liveStatus?: Record<string, {
+    flightStatus: string;
+    delayMinutes: number | null;
+    departureGate: string;
+    departureTerminal: string;
+    onTime: boolean | null;
+  }>;
 }
 
 export function MobileAssistView({
@@ -37,6 +44,7 @@ export function MobileAssistView({
   locationStatus,
   nearestAirport,
   onReservationTap,
+  liveStatus,
 }: MobileAssistViewProps) {
   return (
     <section className="space-y-4">
@@ -81,15 +89,14 @@ export function MobileAssistView({
         </Link>
       ) : null}
 
-      <div className="rounded-3xl bg-[var(--bg-card)] p-1 shadow-sm ring-1 ring-[var(--border-default)]">
-        <NextUpCard
+      <NextUpCard
           reservations={reservations}
           tripName={tripName}
           onReservationTap={onReservationTap}
           locationStatus={locationStatus}
           nearestAirport={nearestAirport}
+          liveStatus={liveStatus}
         />
-      </div>
     </section>
   );
 }

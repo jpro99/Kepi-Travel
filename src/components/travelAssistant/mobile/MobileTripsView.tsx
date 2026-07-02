@@ -3,6 +3,11 @@
 import { useState } from "react";
 import { FlightsTab } from "@/components/travelAssistant/FlightsTab";
 import { HotelsTab } from "@/components/travelAssistant/HotelsTab";
+import type { FlightSearchDefaults } from "@/components/travelAssistant/FlightSearchLauncher";
+import type { HotelSearchDefaults } from "@/components/travelAssistant/HotelSearchLauncher";
+import type { PlannedFlightLeg, PlannedStayCity } from "@/lib/travelAssistant/tripPlanBooking";
+import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
+import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 
 type MobileTripsSegment = "flights" | "hotels";
 
@@ -40,6 +45,10 @@ interface Reservation {
   flightSeatNumber?: string;
   checkOutDate?: string;
   roomType?: string;
+  quotedPriceUsd?: number;
+  quotedPointsMiles?: number;
+  quotedMilesEarned?: number;
+  pointsProgram?: string;
 }
 
 interface LiveStatusResult {
@@ -75,6 +84,27 @@ interface MobileTripsViewProps {
   segment?: MobileTripsSegment;
   onSegmentChange?: (segment: MobileTripsSegment) => void;
   hideSegmentToggle?: boolean;
+  /** Full Book tab wiring — search, planners, loyalty. */
+  enableBookSearch?: boolean;
+  tripId?: string | null;
+  transportReservations?: TransportRouteReservation[];
+  plannedFlightLegs?: PlannedFlightLeg[];
+  flightSearchDefaults?: FlightSearchDefaults;
+  hotelSearchDefaults?: HotelSearchDefaults;
+  staySegments?: TripStaySegment[];
+  plannedStayCities?: PlannedStayCity[];
+  usuallySkipsConnections?: boolean;
+  onLaunchHotelSearch?: (params: { city: string; cityIata?: string; checkIn: string; checkOut: string }) => void;
+  onSearchHotels?: () => void;
+  onSearchSegment?: (segment: TripStaySegment) => void;
+  onPickPlannedCity?: (city: PlannedStayCity) => void;
+  onAddCityStay?: (input: { city: string; checkIn: string; checkOut: string }) => void;
+  onSetStayIntent?: (segment: TripStaySegment, intent: "needs_hotel" | "skip") => void | Promise<void>;
+  pendingForwardReview?: { id: string; reason: string; subject?: string } | null;
+  onOpenForwardReview?: (reviewId: string) => void;
+  onImportConfirmation?: (file: File) => void;
+  importConfirmationBusy?: boolean;
+  travelFitReservations?: Reservation[];
 }
 
 function TicketCard({
@@ -127,6 +157,26 @@ export function MobileTripsView({
   segment: segmentProp,
   onSegmentChange,
   hideSegmentToggle = false,
+  enableBookSearch = false,
+  tripId,
+  transportReservations,
+  plannedFlightLegs = [],
+  flightSearchDefaults,
+  hotelSearchDefaults,
+  staySegments = [],
+  plannedStayCities = [],
+  usuallySkipsConnections,
+  onLaunchHotelSearch,
+  onSearchHotels,
+  onSearchSegment,
+  onPickPlannedCity,
+  onAddCityStay,
+  onSetStayIntent,
+  pendingForwardReview,
+  onOpenForwardReview,
+  onImportConfirmation,
+  importConfirmationBusy,
+  travelFitReservations = [],
 }: MobileTripsViewProps) {
   const [internalSegment, setInternalSegment] = useState<MobileTripsSegment>("flights");
   const segment = segmentProp ?? internalSegment;
@@ -180,9 +230,16 @@ export function MobileTripsView({
       {segment === "flights" ? (
         <FlightsTab
           reservations={flights}
-          transportReservations={reservations.filter((r) =>
+          transportReservations={transportReservations ?? reservations.filter((r) =>
             ["flight", "train", "ride"].includes(r.type),
           )}
+          plannedFlightLegs={plannedFlightLegs}
+          tripName={trip?.name ?? null}
+          flightSearchDefaults={flightSearchDefaults}
+          pendingForwardReview={pendingForwardReview}
+          onOpenForwardReview={onOpenForwardReview}
+          onImportConfirmation={onImportConfirmation}
+          importConfirmationBusy={importConfirmationBusy}
           liveStatus={liveStatus}
           locationStatus={locationStatus}
           nearestAirport={nearestAirport}
@@ -191,6 +248,7 @@ export function MobileTripsView({
           onDelete={onDelete}
           onAdd={onAddBooking}
           simplifiedMobile
+          enableBookSearch={enableBookSearch}
           hideRouteMap={hideRouteMap}
         />
       ) : (
@@ -198,13 +256,26 @@ export function MobileTripsView({
           reservations={hotels}
           mapReservations={hotels}
           tripName={trip?.name ?? null}
+          tripId={tripId}
+          staySegments={staySegments}
+          plannedStayCities={plannedStayCities}
+          onPickPlannedCity={onPickPlannedCity}
           onReservationTap={onReservationTap}
           onCheckStatus={onCheckStatus}
           onDelete={onDelete}
           onAdd={onAddBooking}
           simplifiedMobile
+          enableBookSearch={enableBookSearch}
+          hotelSearchDefaults={hotelSearchDefaults}
+          onLaunchHotelSearch={onLaunchHotelSearch}
+          onSearchHotels={onSearchHotels}
+          onSearchSegment={onSearchSegment}
+          onAddCityStay={onAddCityStay}
+          onSetStayIntent={onSetStayIntent}
+          usuallySkipsConnections={usuallySkipsConnections}
           hotelNotebookNote={hotelNotebookNote}
           onHotelNotebookChange={onHotelNotebookChange}
+          travelFitReservations={travelFitReservations}
         />
       )}
 

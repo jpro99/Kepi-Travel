@@ -64,6 +64,8 @@ interface HotelsTabProps {
   usuallySkipsConnections?: boolean;
   /** Trips tab on phone: bigger type, fewer widgets. */
   simplifiedMobile?: boolean;
+  /** Mobile Book tab — show search launchers and stay planner. */
+  enableBookSearch?: boolean;
   hotelNotebookNote?: string;
   onHotelNotebookChange?: (value: string) => void;
   travelFitReservations?: Array<{
@@ -143,6 +145,7 @@ export function HotelsTab({
   tripId,
   usuallySkipsConnections,
   simplifiedMobile = false,
+  enableBookSearch = false,
   hotelNotebookNote = "",
   onHotelNotebookChange,
   travelFitReservations = [],
@@ -159,10 +162,11 @@ export function HotelsTab({
 
   const shown = showPast ? [...upcoming, ...past] : upcoming;
   const staySegmentsNeedingHotel = segmentsNeedingHotel(staySegments);
+  const showBookSearch = !simplifiedMobile || enableBookSearch;
 
   return (
     <section className={`space-y-4 pb-6 ${type.section}`}>
-      {!simplifiedMobile && onLaunchHotelSearch ? (
+      {showBookSearch && onLaunchHotelSearch ? (
         <HotelSearchLauncher
           tripName={tripName}
           defaults={hotelSearchDefaults}
@@ -185,27 +189,63 @@ export function HotelsTab({
       ) : null}
 
       {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className={type.heading}>Your hotels</h2>
-          <p className={type.subheading}>
-            {upcoming.length} booked{past.length > 0 ? ` · ${past.length} past` : ""}
-          </p>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className={type.heading}>Your hotels</h2>
+            <p className={type.subheading}>
+              {upcoming.length} booked{past.length > 0 ? ` · ${past.length} past` : ""}
+            </p>
+          </div>
+          {!enableBookSearch ? (
+            <button
+              type="button"
+              onClick={onAdd}
+              className={`shrink-0 ${type.addBtn}`}
+            >
+              Add existing
+            </button>
+          ) : null}
         </div>
-        <button
-          type="button"
-          onClick={onAdd}
-          className={`shrink-0 ${type.addBtn}`}
-        >
-          Add existing
-        </button>
+        {enableBookSearch ? (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (onSearchHotels) {
+                  onSearchHotels();
+                  return;
+                }
+                if (onLaunchHotelSearch) {
+                  onLaunchHotelSearch({
+                    city: hotelSearchDefaults?.city ?? "",
+                    cityIata: hotelSearchDefaults?.cityIata,
+                    checkIn: hotelSearchDefaults?.checkIn ?? "",
+                    checkOut: hotelSearchDefaults?.checkOut ?? "",
+                  });
+                }
+              }}
+              disabled={!onLaunchHotelSearch && !onSearchHotels}
+              className="min-h-[48px] flex-1 rounded-[var(--radius-button)] bg-[#007AFF] px-4 text-[17px] font-bold text-white disabled:opacity-50"
+            >
+              Search hotels
+            </button>
+            <button
+              type="button"
+              onClick={onAdd}
+              className={`min-h-[48px] shrink-0 ${type.addBtn}`}
+            >
+              Add existing
+            </button>
+          </div>
+        ) : null}
       </div>
 
-      {!simplifiedMobile && travelFitReservations.some((r) => r.type === "hotel") && plannedStayCities.length === 0 ? (
+      {showBookSearch && travelFitReservations.some((r) => r.type === "hotel") && plannedStayCities.length === 0 ? (
         <TravelFitEarnBar reservations={travelFitReservations.filter((r) => r.type === "hotel")} />
       ) : null}
 
-      {!simplifiedMobile && plannedStayCities.length > 0 && onPickPlannedCity ? (
+      {showBookSearch && plannedStayCities.length > 0 && onPickPlannedCity ? (
         <TripHotelCityPicker
           cities={plannedStayCities}
           tripName={tripName}
@@ -213,7 +253,7 @@ export function HotelsTab({
         />
       ) : null}
 
-      {!simplifiedMobile && staySegmentsNeedingHotel.length > 0 && onSearchSegment && plannedStayCities.length === 0 ? (
+      {showBookSearch && staySegmentsNeedingHotel.length > 0 && onSearchSegment && plannedStayCities.length === 0 ? (
         <TripStayPlanner
           segments={staySegments}
           tripName={tripName}
@@ -231,7 +271,9 @@ export function HotelsTab({
           <p className="text-4xl mb-3">🏨</p>
           <p className="font-semibold text-slate-900 dark:text-white">No hotels yet</p>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">
-            Use the search box above to find and book a hotel, or add one you already booked.
+            {enableBookSearch
+              ? "Search for a hotel below, or add one you already booked."
+              : "Use the search box above to find and book a hotel, or add one you already booked."}
           </p>
           {onLaunchHotelSearch ? (
             <button

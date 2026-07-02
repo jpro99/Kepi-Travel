@@ -28,6 +28,13 @@ interface NextUpCardProps {
   onReservationTap?: (id: string) => void;
   locationStatus?: "away" | "at-airport" | "in-terminal" | "airborne" | "unknown";
   nearestAirport?: string;
+  liveStatus?: Record<string, {
+    flightStatus: string;
+    delayMinutes: number | null;
+    departureGate: string;
+    departureTerminal: string;
+    onTime: boolean | null;
+  }>;
 }
 
 type GuidanceState =
@@ -182,7 +189,14 @@ ${lines.join("\n")}`;
 
 // ── component ─────────────────────────────────────────────────────────────────
 
-export function NextUpCard({ reservations, tripName, onReservationTap, locationStatus = "unknown", nearestAirport = "" }: NextUpCardProps) {
+export function NextUpCard({
+  reservations,
+  tripName,
+  onReservationTap,
+  locationStatus = "unknown",
+  nearestAirport = "",
+  liveStatus = {},
+}: NextUpCardProps) {
   const [guidance, setGuidance] = useState<GuidanceState>({ status: "idle" });
   const [lastFetchKey, setLastFetchKey] = useState("");
 
@@ -287,7 +301,27 @@ ${data.detail ?? ""}`,
 
   if (!nextReservation) return null;
 
-  const hours = hoursUntil(nextReservation.localTime, nextReservation.timezone);
+  const hours = hoursUntil(
+    nextReservation.flightDepartureTime ?? nextReservation.localTime,
+    nextReservation.timezone,
+  );
+  const live = liveStatus[nextReservation.id];
+  const isFlight = nextReservation.type === "flight";
+  const routeLine =
+    isFlight && nextReservation.flightDepartureAirport && nextReservation.flightArrivalAirport
+      ? `${nextReservation.flightDepartureAirport} → ${nextReservation.flightArrivalAirport}`
+      : null;
+  const timeLine = formatTime(nextReservation.flightDepartureTime ?? nextReservation.localTime);
+  const gateLine =
+    live?.departureGate && live.departureGate !== "—"
+      ? `Gate ${live.departureGate}${live.departureTerminal && live.departureTerminal !== "—" ? ` · Terminal ${live.departureTerminal}` : ""}`
+      : null;
+  const statusLine =
+    live?.flightStatus && live.flightStatus !== "—"
+      ? live.delayMinutes && live.delayMinutes > 0
+        ? `${live.flightStatus} · ${live.delayMinutes} min late`
+        : live.flightStatus
+      : null;
   const urgency = guidance.status === "done" ? guidance.urgency
     : hours < 4 ? "critical" : hours < 24 ? "warning" : "normal";
 
@@ -335,7 +369,7 @@ ${data.detail ?? ""}`,
           </p>
         </div>
         <p className={`text-xs font-semibold ${accentClass}`}>
-          {formatRelative(nextReservation.localTime, nextReservation.timezone)}
+          {formatRelative(nextReservation.flightDepartureTime ?? nextReservation.localTime, nextReservation.timezone)}
         </p>
       </div>
 
@@ -345,8 +379,11 @@ ${data.detail ?? ""}`,
         onClick={() => onReservationTap?.(nextReservation.id)}
         className="mt-3 w-full text-left"
       >
-        <p className="text-xl font-bold text-slate-900 dark:text-slate-100">
-          {typeEmoji(nextReservation.type)}{" "}
+        {routeLine ? (
+          <p className="text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100">{routeLine}</p>
+        ) : null}
+        <p className={`font-bold text-slate-900 dark:text-slate-100 ${routeLine ? "mt-1 text-lg" : "text-xl"}`}>
+          {!routeLine ? `${typeEmoji(nextReservation.type)} ` : null}
           {(() => {
             const p = nextReservation.provider ?? "";
             if (EMAIL_PROVIDER_NAMES.has(p.toLowerCase())) {
@@ -357,11 +394,17 @@ ${data.detail ?? ""}`,
             return p || nextReservation.title || "Reservation";
           })()}
         </p>
-        <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">
-          {formatTime(nextReservation.localTime)}
-          {nextReservation.flightNumber ? ` · ${nextReservation.flightNumber}` : ""}
-          {nextReservation.location ? ` · ${nextReservation.location}` : ""}
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+          {timeLine ? `${timeLine}` : ""}
+          {nextReservation.flightNumber && !routeLine ? ` · ${nextReservation.flightNumber}` : ""}
+          {!routeLine && nextReservation.location ? ` · ${nextReservation.location}` : ""}
         </p>
+        {gateLine ? (
+          <p className="mt-1 text-sm font-semibold text-[#007AFF] dark:text-[#0A84FF]">{gateLine}</p>
+        ) : null}
+        {statusLine ? (
+          <p className="mt-0.5 text-xs font-medium text-slate-500 dark:text-slate-400">{statusLine}</p>
+        ) : null}
       </button>
 
       {/* Claude guidance */}

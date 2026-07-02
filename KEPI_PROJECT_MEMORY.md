@@ -13,7 +13,7 @@ Last updated: 2026-06-15
 - **Auto-push after build (Jeff, 2026-06-15):** When you implement code and `npm run lint` + `npm run build` pass, **commit and push to `main` immediately** — do **not** ask "want me to push?" Production is kepitravel.com via Vercel on push to main.
 - **Do not burn credits** on unapproved refactors or "helpful" extra changes.
 - **Match his eye, not a generic template.** Hotels (Stays) tab on mobile is the reference for clean mobile trip UI: trip name → Flights/Hotels picker → map → list. No blue route banner strip on Flights (he removed it — "Ontario to Ontario" was wrong and not clean). Hotels stay as-is with no blue hero.
-- **Flights and Stays must feel the same** — same structure, card style, and chrome. Still a gap as of 2026-06-25; align only after he approves a written plan.
+- **Flights and Stays must feel the same** — same structure, card style, and chrome. Mobile Book now has search launchers + CTAs on both tabs (2026-06-15).
 - **Plan tab:** Lined-paper itinerary, inline edit, no reservation popups on line tap.
 - Read this section before UI work on Home / Trips / Flights / Hotels / Plan.
 
@@ -214,6 +214,7 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 
 | Date | Note |
 |------|------|
+| 2026-06-15 | **Book search + Next Up:** mobile Book wired to flight/hotel search (launchers, leg picker, stay planner); loyalty spend in Book header; Next Up shows route/gate/status |
 | 2026-06-15 | **Mobile polish:** cinematic Home hero (photo+globe), unified Book chrome (navy header, Flights\|Hotels toggle), tickets as footer; shared `tripHeroVisuals` |
 | 2026-06-15 | **Auto-push:** after lint+build pass, commit+push main without asking — Vercel → kepitravel.com |
 | 2026-06-15 | **Home+Plan build order** phases 2–4: dedupeConsumerReservations, TripHealthStrip, pricing wired on Home/Plan |

@@ -49,6 +49,13 @@ interface DesktopTripHomeViewProps {
   onOpenBook: () => void;
   onOpenPlan: () => void;
   onOpenMap: () => void;
+  liveStatus?: Record<string, {
+    flightStatus: string;
+    delayMinutes: number | null;
+    departureGate: string;
+    departureTerminal: string;
+    onTime: boolean | null;
+  }>;
 }
 
 function daysUntilTrip(startDate: string | null | undefined): number | null {
@@ -85,6 +92,7 @@ export function DesktopTripHomeView({
   onOpenBook,
   onOpenPlan,
   onOpenMap,
+  liveStatus,
 }: DesktopTripHomeViewProps) {
   const transportReservations = reservations.filter((reservation) =>
     ["flight", "train", "ride"].includes(reservation.type),
@@ -161,17 +169,6 @@ export function DesktopTripHomeView({
         </div>
       </button>
 
-      <TripHealthStrip
-        reservations={reservations.map((reservation) => ({
-          ...reservation,
-          provider: reservation.provider,
-          location: reservation.location ?? "",
-        }))}
-        missingPriceCount={missingPriceCount}
-        onGapActionTap={onGapActionTap}
-        onReviewPricing={onReviewPricing}
-      />
-
       <MobileAssistView
         journeyPhase={journeyPhase}
         reservations={reservations.map((reservation) => ({
@@ -183,6 +180,18 @@ export function DesktopTripHomeView({
         locationStatus={locationStatus}
         nearestAirport={nearestAirport}
         onReservationTap={onReservationTap}
+        liveStatus={liveStatus}
+      />
+
+      <TripHealthStrip
+        reservations={reservations.map((reservation) => ({
+          ...reservation,
+          provider: reservation.provider,
+          location: reservation.location ?? "",
+        }))}
+        missingPriceCount={missingPriceCount}
+        onGapActionTap={onGapActionTap}
+        onReviewPricing={onReviewPricing}
       />
 
       <div className="grid gap-3 sm:grid-cols-3">

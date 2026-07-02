@@ -73,6 +73,8 @@ interface FlightsTabProps {
   onAdd: () => void;
   /** Trips tab on phone: bigger type, fewer widgets. */
   simplifiedMobile?: boolean;
+  /** Mobile Book tab — show search launchers and leg picker. */
+  enableBookSearch?: boolean;
   /** Mobile Trip tab — route map lives on Map/Home globe */
   hideRouteMap?: boolean;
 }
@@ -487,8 +489,10 @@ export function FlightsTab({
   liveStatus = {}, locationStatus = "unknown", nearestAirport = "",
   onReservationTap, onCheckStatus, onDelete, onAdd,
   simplifiedMobile = false,
+  enableBookSearch = false,
   hideRouteMap = false,
 }: FlightsTabProps) {
+  const showBookSearch = !simplifiedMobile || enableBookSearch;
   const type = flightCardTypography(simplifiedMobile);
   const listType = hotelCardTypography(simplifiedMobile);
   const detailLabel = type.detailLabel;
@@ -556,7 +560,7 @@ export function FlightsTab({
 
   return (
     <section className={`space-y-4 pb-6 ${type.section}`}>
-      {!simplifiedMobile ? (
+      {showBookSearch ? (
         <>
       <FlightSearchLauncher
         tripName={tripName}
@@ -615,7 +619,7 @@ export function FlightsTab({
         />
       )}
 
-      {!simplifiedMobile ? (
+      {showBookSearch ? (
         <>
       <InterCityTransportPrompts
         legs={plannedFlightLegs}
@@ -642,20 +646,47 @@ export function FlightsTab({
       ) : null}
 
       {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className={listType.heading}>Your flights</h2>
-          <p className={listType.subheading}>
-            {upcoming.length} booked{past.length > 0 ? ` · ${past.length} past` : ""}
-          </p>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className={listType.heading}>Your flights</h2>
+            <p className={listType.subheading}>
+              {upcoming.length} booked{past.length > 0 ? ` · ${past.length} past` : ""}
+            </p>
+          </div>
+          {!enableBookSearch ? (
+            <button
+              type="button"
+              onClick={onAdd}
+              className={`shrink-0 ${simplifiedMobile ? listType.addBtn : type.addBtn}`}
+            >
+              Add existing
+            </button>
+          ) : null}
         </div>
-        <button
-          type="button"
-          onClick={onAdd}
-          className={`shrink-0 ${simplifiedMobile ? listType.addBtn : type.addBtn}`}
-        >
-          Add existing
-        </button>
+        {enableBookSearch ? (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                handleFlightSearch(
+                  { mode: "oneway", summary: "Custom flight search", url: "" },
+                  [],
+                )
+              }
+              className="min-h-[48px] flex-1 rounded-[var(--radius-button)] bg-[#007AFF] px-4 text-[17px] font-bold text-white"
+            >
+              Search flights
+            </button>
+            <button
+              type="button"
+              onClick={onAdd}
+              className={`min-h-[48px] shrink-0 ${listType.addBtn}`}
+            >
+              Add existing
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {/* Empty */}

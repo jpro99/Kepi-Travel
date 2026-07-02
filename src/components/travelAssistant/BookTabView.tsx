@@ -2,6 +2,8 @@
 
 import type { BookSubTab } from "@/lib/travelAssistant/consumerTabs";
 import { bookSubTabButtonClass, BOOK_SUBTAB_TOGGLE_CLASS } from "@/components/travelAssistant/bookTabStyles";
+import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
+import type { TripSpendSummary } from "@/lib/travelAssistant/tripSpendSummary";
 import { FlightsTab } from "@/components/travelAssistant/FlightsTab";
 import { HotelsTab } from "@/components/travelAssistant/HotelsTab";
 import type { FlightSearchDefaults } from "@/components/travelAssistant/FlightSearchLauncher";
@@ -98,6 +100,9 @@ interface BookTabViewProps {
   travelFitReservations?: BookReservation[];
   flightCount?: number;
   hotelCount?: number;
+  tripSpendSummary?: TripSpendSummary;
+  tripProblemCount?: number;
+  onReviewPricing?: () => void;
 }
 
 export function BookTabView({
@@ -137,15 +142,29 @@ export function BookTabView({
   travelFitReservations,
   flightCount = 0,
   hotelCount = 0,
+  tripSpendSummary,
+  tripProblemCount = 0,
+  onReviewPricing,
 }: BookTabViewProps) {
   return (
     <section className="space-y-3">
       <header className="rounded-2xl bg-[#0F1923] px-5 py-4 shadow-sm">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f4c95d]">Book</p>
-        <h1 className="mt-1 text-xl font-bold text-white">{tripName ?? "Your trip"}</h1>
-        <p className="mt-1 text-sm text-slate-300">
-          {flightCount} flight{flightCount === 1 ? "" : "s"} · {hotelCount} hotel{hotelCount === 1 ? "" : "s"}
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f4c95d]">Book</p>
+            <h1 className="mt-1 text-xl font-bold text-white">{tripName ?? "Your trip"}</h1>
+            <p className="mt-1 text-sm text-slate-300">
+              {flightCount} flight{flightCount === 1 ? "" : "s"} · {hotelCount} hotel{hotelCount === 1 ? "" : "s"}
+            </p>
+          </div>
+          {tripSpendSummary ? (
+            <TripSpendBadge
+              summary={tripSpendSummary}
+              problemCount={tripProblemCount}
+              onClick={onReviewPricing}
+            />
+          ) : null}
+        </div>
       </header>
 
       <div className={BOOK_SUBTAB_TOGGLE_CLASS}>

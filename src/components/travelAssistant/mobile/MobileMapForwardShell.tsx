@@ -18,6 +18,13 @@ import { buildTripTransportRoute } from "@/lib/travelAssistant/tripTransportRout
 import { collectRouteMapPoints } from "@/lib/travelAssistant/tripRouteMapGeo";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 import type { StopDateRange } from "@/lib/decision/stopDates";
+import type { BookSubTab } from "@/lib/travelAssistant/consumerTabs";
+import type { FlightSearchDefaults } from "@/components/travelAssistant/FlightSearchLauncher";
+import type { HotelSearchDefaults } from "@/components/travelAssistant/HotelSearchLauncher";
+import type { PlannedFlightLeg, PlannedStayCity } from "@/lib/travelAssistant/tripPlanBooking";
+import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
+import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
+import type { TripSpendSummary } from "@/lib/travelAssistant/tripSpendSummary";
 
 const TripGlobe = dynamic(
   () => import("@/components/travelAssistant/mobile/TripGlobe").then((m) => m.TripGlobe),
@@ -25,7 +32,6 @@ const TripGlobe = dynamic(
 );
 
 type PlanSegment = "itinerary" | "notebook";
-type BookSegment = "flights" | "hotels";
 
 interface Reservation {
   id: string;
@@ -102,6 +108,29 @@ interface MobileMapForwardShellProps {
   onReviewPricing?: () => void;
   onGapActionTap?: (tab: string) => void;
   onSignOut: () => void;
+  bookSubTab?: BookSubTab;
+  onBookSubTabChange?: (subTab: BookSubTab) => void;
+  tripId?: string | null;
+  transportReservations?: TransportRouteReservation[];
+  plannedFlightLegs?: PlannedFlightLeg[];
+  flightSearchDefaults?: FlightSearchDefaults;
+  hotelSearchDefaults?: HotelSearchDefaults;
+  staySegments?: TripStaySegment[];
+  plannedStayCities?: PlannedStayCity[];
+  usuallySkipsConnections?: boolean;
+  onLaunchHotelSearch?: (params: { city: string; cityIata?: string; checkIn: string; checkOut: string }) => void;
+  onSearchHotels?: () => void;
+  onSearchSegment?: (segment: TripStaySegment) => void;
+  onPickPlannedCity?: (city: PlannedStayCity) => void;
+  onAddCityStay?: (input: { city: string; checkIn: string; checkOut: string }) => void;
+  onSetStayIntent?: (segment: TripStaySegment, intent: "needs_hotel" | "skip") => void | Promise<void>;
+  pendingForwardReview?: { id: string; reason: string; subject?: string } | null;
+  onOpenForwardReview?: (reviewId: string) => void;
+  onImportConfirmation?: (file: File) => void;
+  importConfirmationBusy?: boolean;
+  travelFitReservations?: Reservation[];
+  tripSpendSummary?: TripSpendSummary;
+  tripProblemCount?: number;
 }
 
 function daysUntilTrip(startDate: string | null): number | null {
@@ -170,13 +199,39 @@ export function MobileMapForwardShell({
   onReviewPricing,
   onGapActionTap,
   onSignOut,
+  bookSubTab = "flights",
+  onBookSubTabChange,
+  tripId,
+  transportReservations: transportReservationsProp,
+  plannedFlightLegs = [],
+  flightSearchDefaults,
+  hotelSearchDefaults,
+  staySegments = [],
+  plannedStayCities = [],
+  usuallySkipsConnections,
+  onLaunchHotelSearch,
+  onSearchHotels,
+  onSearchSegment,
+  onPickPlannedCity,
+  onAddCityStay,
+  onSetStayIntent,
+  pendingForwardReview,
+  onOpenForwardReview,
+  onImportConfirmation,
+  importConfirmationBusy,
+  travelFitReservations = [],
+  tripSpendSummary,
+  tripProblemCount = 0,
 }: MobileMapForwardShellProps) {
   const [planSegment, setPlanSegment] = useState<PlanSegment>("itinerary");
-  const [bookSegment, setBookSegment] = useState<BookSegment>("flights");
+  const bookSegment = bookSubTab;
+  const setBookSegment = onBookSubTabChange ?? (() => {});
 
   const transportReservations = useMemo(
-    () => reservations.filter((r) => ["flight", "train", "ride"].includes(r.type)),
-    [reservations],
+    () =>
+      transportReservationsProp ??
+      reservations.filter((r) => ["flight", "train", "ride"].includes(r.type)),
+    [transportReservationsProp, reservations],
   );
   const flightCount = reservations.filter((r) => r.type === "flight").length;
   const hotelCount = reservations.filter((r) => r.type === "hotel").length;
@@ -270,6 +325,18 @@ export function MobileMapForwardShell({
         )}
 
         {hasActiveTrip ? (
+          <MobileAssistView
+            journeyPhase={journeyPhase}
+            reservations={reservations}
+            tripName={tripName}
+            locationStatus={locationStatus}
+            nearestAirport={nearestAirport}
+            onReservationTap={onReservationTap}
+            liveStatus={liveStatus}
+          />
+        ) : null}
+
+        {hasActiveTrip ? (
           <TripHealthStrip
             reservations={reservations}
             missingPriceCount={missingPriceCount}
@@ -289,16 +356,7 @@ export function MobileMapForwardShell({
               Set dates manually
             </button>
           </section>
-        ) : (
-          <MobileAssistView
-            journeyPhase={journeyPhase}
-            reservations={reservations}
-            tripName={tripName}
-            locationStatus={locationStatus}
-            nearestAirport={nearestAirport}
-            onReservationTap={onReservationTap}
-          />
-        )}
+        ) : null}
 
         {hasActiveTrip ? (
           <div className="grid grid-cols-2 gap-3">
@@ -348,7 +406,14 @@ export function MobileMapForwardShell({
       <div className="kepi-mobile-shell space-y-5 pb-4">
         {hasActiveTrip ? (
           <>
-            <MobileBookHeader tripName={tripName} flightCount={flightCount} hotelCount={hotelCount} />
+            <MobileBookHeader
+              tripName={tripName}
+              flightCount={flightCount}
+              hotelCount={hotelCount}
+              tripSpendSummary={tripSpendSummary}
+              problemCount={tripProblemCount}
+              onReviewPricing={onReviewPricing}
+            />
             <MobileBookSegmentToggle active={bookSegment} onChange={setBookSegment} />
           </>
         ) : null}
@@ -379,6 +444,26 @@ export function MobileMapForwardShell({
           segment={bookSegment}
           onSegmentChange={setBookSegment}
           hideSegmentToggle={hasActiveTrip}
+          enableBookSearch={hasActiveTrip}
+          tripId={tripId}
+          transportReservations={transportReservations}
+          plannedFlightLegs={plannedFlightLegs}
+          flightSearchDefaults={flightSearchDefaults}
+          hotelSearchDefaults={hotelSearchDefaults}
+          staySegments={staySegments}
+          plannedStayCities={plannedStayCities}
+          usuallySkipsConnections={usuallySkipsConnections}
+          onLaunchHotelSearch={onLaunchHotelSearch}
+          onSearchHotels={onSearchHotels}
+          onSearchSegment={onSearchSegment}
+          onPickPlannedCity={onPickPlannedCity}
+          onAddCityStay={onAddCityStay}
+          onSetStayIntent={onSetStayIntent}
+          pendingForwardReview={pendingForwardReview}
+          onOpenForwardReview={onOpenForwardReview}
+          onImportConfirmation={onImportConfirmation}
+          importConfirmationBusy={importConfirmationBusy}
+          travelFitReservations={travelFitReservations}
         />
       </div>
     );

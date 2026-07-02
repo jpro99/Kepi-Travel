@@ -1983,7 +1983,10 @@ export default function TravelAssistantPage() {
   }, [bookSubTab, planSubView]);
   const navigateToBook = useCallback((bookView: BookSubTab = "flights"): void => {
     navigateToConsumerTab("book", { bookView });
-  }, [navigateToConsumerTab]);
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches) {
+      navigateMobilePrimaryTab("book");
+    }
+  }, [navigateToConsumerTab, navigateMobilePrimaryTab]);
   const { mobilePrimaryTab, navigateMobilePrimaryTab } = useMobilePrimaryTab();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const airportAutoNavRef = useRef(false);
@@ -8903,6 +8906,34 @@ export default function TravelAssistantPage() {
                 onSignOut={() => {
                   void clerk.signOut();
                 }}
+                bookSubTab={bookSubTab}
+                onBookSubTabChange={(subTab) => navigateToConsumerTab("book", { bookView: subTab })}
+                tripId={activeTripId}
+                transportReservations={transportRouteReservations}
+                plannedFlightLegs={plannedFlightLegs}
+                flightSearchDefaults={flightSearchDefaults}
+                hotelSearchDefaults={{
+                  city: hotelSearchDefaults.city,
+                  cityIata: hotelSearchDefaults.cityIata,
+                  checkIn: hotelSearchDefaults.checkIn,
+                  checkOut: hotelSearchDefaults.checkOut,
+                }}
+                staySegments={tripStaySegments}
+                plannedStayCities={plannedStayCities}
+                usuallySkipsConnections={usuallySkipsConnections}
+                onLaunchHotelSearch={launchCustomHotelSearch}
+                onSearchHotels={openHotelSearchForTrip}
+                onSearchSegment={openHotelSearchForSegment}
+                onPickPlannedCity={openHotelSearchForPlannedCity}
+                onAddCityStay={handleAddCityStay}
+                onSetStayIntent={handleSetStayIntent}
+                pendingForwardReview={firstForwardedFlightReview}
+                onOpenForwardReview={(reviewId) => openDrawer("review", reviewId)}
+                onImportConfirmation={(file) => void handleTicketScanUpload(file)}
+                importConfirmationBusy={ticketScanBusy}
+                travelFitReservations={travelFitReservations}
+                tripSpendSummary={tripSpendSummary}
+                tripProblemCount={transportConflictReservationIds.size}
               />
             )
           ) : null}
@@ -8975,6 +9006,7 @@ export default function TravelAssistantPage() {
                 onOpenBook={() => navigateToBook("flights")}
                 onOpenPlan={() => navigateToConsumerTab("itinerary")}
                 onOpenMap={() => router.push("/travel-assistant/live-map")}
+                liveStatus={flightStatusCheckByReservationId}
               />
             )
           ) : consumerTab === "itinerary" ? (
@@ -9053,6 +9085,9 @@ export default function TravelAssistantPage() {
               travelFitReservations={travelFitReservations}
               flightCount={wizardFlightCount}
               hotelCount={wizardHotelCount}
+              tripSpendSummary={tripSpendSummary}
+              tripProblemCount={transportConflictReservationIds.size}
+              onReviewPricing={() => navigateToBook("flights")}
             />
           ) : (
             <section className="space-y-3">
