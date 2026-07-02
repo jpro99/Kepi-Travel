@@ -5,6 +5,10 @@ import type {
 } from "@/lib/travelAssistant/clientSessionState";
 import type { BookingWizardProgress } from "@/lib/travelAssistant/bookingWizard";
 import { normalizeBookingWizard } from "@/lib/travelAssistant/bookingWizard";
+import {
+  normalizeItineraryPlans,
+  type ItineraryPlansData,
+} from "@/lib/travelAssistant/itineraryDayPlan";
 import type { TripFlowStage } from "@/lib/travelAssistant/tripFlowControls";
 import { kvStoreDel, kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 import { generateId } from "@/lib/utils/generateId";
@@ -45,6 +49,7 @@ export interface TravelTrip {
   airportTransport?: TripAirportTransport | null;
   hotelArrivalTime?: string | null;
   bookingWizard?: BookingWizardProgress;
+  itineraryPlans?: ItineraryPlansData;
 }
 
 export interface CreateTripInput {
@@ -63,6 +68,7 @@ export interface CreateTripInput {
   airportTransport?: TripAirportTransport | null;
   hotelArrivalTime?: string | null;
   bookingWizard?: BookingWizardProgress;
+  itineraryPlans?: ItineraryPlansData;
 }
 
 export type UpdateTripInput = Partial<Omit<TravelTrip, "id" | "createdAt">>;
@@ -129,6 +135,7 @@ function sanitizeTrip(raw: unknown): TravelTrip | null {
     ? raw.hotelArrivalTime.trim()
     : null;
   const bookingWizard = raw.bookingWizard ? normalizeBookingWizard(raw.bookingWizard) : undefined;
+  const itineraryPlans = raw.itineraryPlans ? normalizeItineraryPlans(raw.itineraryPlans) : undefined;
 
   return {
     id: raw.id,
@@ -148,6 +155,7 @@ function sanitizeTrip(raw: unknown): TravelTrip | null {
     airportTransport,
     hotelArrivalTime,
     bookingWizard,
+    itineraryPlans,
   };
 }
 

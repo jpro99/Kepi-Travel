@@ -37,8 +37,13 @@ export interface DayLegCell {
   dayIndexInLeg: number;
   legDayCount: number;
   flightSummary: string | null;
+  flightPrimary: { number: string; depTime: string; route: string } | null;
+  flightExtraCount: number;
   hotelName: string | null;
+  hotelConfirmation: string | null;
   hotelNeeded: boolean;
+  hotelBooked: boolean;
+  locationOverride: string | null;
 }
 
 export interface TripLegModel {

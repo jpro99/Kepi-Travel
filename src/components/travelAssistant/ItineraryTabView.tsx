@@ -2,10 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ItineraryTimeline } from "@/components/travelAssistant/ItineraryTimeline";
+import { ItinerarySlideBanners } from "@/components/travelAssistant/ItinerarySlideBanners";
+import { TripLegCalendar } from "@/components/travelAssistant/TripLegCalendar";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
 import type { StopDateRange } from "@/lib/decision/stopDates";
 import type { TripActionItem } from "@/lib/travelAssistant/tripActionItems";
+import type { DayPlanRecord, ItineraryPlansData } from "@/lib/travelAssistant/itineraryDayPlan";
+import type { PlanSubView } from "@/lib/travelAssistant/consumerTabs";
 
 interface ItineraryTabViewProps {
   tripName: string;
@@ -29,12 +33,23 @@ interface ItineraryTabViewProps {
   }[];
   dayNotes: Record<string, string>;
   stopRanges?: StopDateRange[];
+  planSubView: PlanSubView;
+  onPlanSubViewChange: (view: PlanSubView) => void;
   selectedDateKey?: string | null;
   highlightedLegId?: string | null;
   scrollToDateKey?: string | null;
   onSelectedDateKeyChange?: (dateKey: string) => void;
   onHighlightedLegIdChange?: (legId: string | null) => void;
   onDayNoteChange: (dateKey: string, value: string) => void;
+  onSaveDayPlan: (dateKey: string, plan: DayPlanRecord, fallbackLocation: string) => void;
+  onApplyHotelToDays: (
+    dateKeys: string[],
+    hotel: Pick<DayPlanRecord, "hotelName" | "hotelConfirmation" | "hotelBooked">,
+    fallbackLocation: string,
+  ) => void;
+  onSaveLegLabel: (legId: string, label: string) => void;
+  getDayPlan: (dateKey: string, fallbackLocation: string) => DayPlanRecord;
+  itineraryPlans: ItineraryPlansData;
   onPlanDay: (dateKey: string, intent: ParsedDayIntent, mode: DayPlanMode) => void;
   onReservationTap: (id: string) => void;
   onGapActionTap?: (tab: string) => void;
@@ -52,11 +67,19 @@ export function ItineraryTabView({
   tripEndDate,
   reservations,
   dayNotes,
+  planSubView,
+  onPlanSubViewChange,
   selectedDateKey,
   highlightedLegId,
   scrollToDateKey,
   onSelectedDateKeyChange,
+  onHighlightedLegIdChange,
   onDayNoteChange,
+  onSaveDayPlan,
+  onApplyHotelToDays,
+  onSaveLegLabel,
+  getDayPlan,
+  itineraryPlans,
   onPlanDay,
   onReservationTap,
   onGapActionTap,
@@ -72,9 +95,9 @@ export function ItineraryTabView({
   const timelineRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!scrollToDateKey || !timelineRef.current) return;
+    if (!scrollToDateKey || planSubView !== "timeline" || !timelineRef.current) return;
     timelineRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [scrollToDateKey]);
+  }, [scrollToDateKey, planSubView]);
 
   useEffect(() => {
     if (!planSavedFlash) return;
@@ -87,6 +110,11 @@ export function ItineraryTabView({
     setPlanSavedFlash(true);
   };
 
+  const handleCalendarJumpToTimeline = (dateKey: string): void => {
+    onSelectedDateKeyChange?.(dateKey);
+    onPlanSubViewChange("timeline");
+  };
+
   return (
     <section
       className="relative space-y-3 bg-white"
@@ -94,6 +122,8 @@ export function ItineraryTabView({
         fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif',
       }}
     >
+      <ItinerarySlideBanners reservations={reservations} onActionTap={onGapActionTap} />
+
       <header className="rounded-2xl bg-[#0F1923] px-5 py-5 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f4c95d]">Plan</p>
         <h1 className="mt-1 text-2xl font-bold text-white">{tripName}</h1>
@@ -136,23 +166,70 @@ export function ItineraryTabView({
         </div>
       </header>
 
-      <div ref={timelineRef}>
-        <ItineraryTimeline
+      <div className="flex rounded-2xl bg-slate-100 p-1 dark:bg-slate-900">
+        <button
+          type="button"
+          onClick={() => onPlanSubViewChange("timeline")}
+          className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition ${
+            planSubView === "timeline"
+              ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white"
+              : "text-slate-500 dark:text-slate-400"
+          }`}
+        >
+          Timeline
+        </button>
+        <button
+          type="button"
+          onClick={() => onPlanSubViewChange("calendar")}
+          className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition ${
+            planSubView === "calendar"
+              ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white"
+              : "text-slate-500 dark:text-slate-400"
+          }`}
+        >
+          Calendar
+        </button>
+      </div>
+
+      {planSubView === "timeline" ? (
+        <div ref={timelineRef}>
+          <ItineraryTimeline
+            tripStartDate={tripStartDate}
+            tripEndDate={tripEndDate}
+            reservations={reservations}
+            dayNotes={dayNotes}
+            selectedDateKey={selectedDateKey}
+            highlightedLegId={highlightedLegId}
+            scrollToDateKey={scrollToDateKey}
+            onSelectedDateKeyChange={onSelectedDateKeyChange}
+            onDayNoteChange={handleDayNoteChange}
+            onReservationTap={onReservationTap}
+            onPlanDay={onPlanDay}
+            onPlanHotel={onPlanHotel}
+            missionItems={missionItems}
+            onMissionAction={onMissionAction}
+            suppressPlanningAlerts
+          />
+        </div>
+      ) : (
+        <TripLegCalendar
+          tripName={tripName}
           tripStartDate={tripStartDate}
           tripEndDate={tripEndDate}
-          reservations={reservations}
-          dayNotes={dayNotes}
+          reservations={reservations.map((reservation) => ({
+            ...reservation,
+            location: reservation.location ?? "",
+            confirmationCode: reservation.confirmationCode ?? "",
+          }))}
+          itineraryPlans={itineraryPlans}
           selectedDateKey={selectedDateKey}
           highlightedLegId={highlightedLegId}
-          scrollToDateKey={scrollToDateKey}
           onSelectedDateKeyChange={onSelectedDateKeyChange}
-          onDayNoteChange={handleDayNoteChange}
-          onReservationTap={onReservationTap}
-          onPlanDay={onPlanDay}
+          onHighlightedLegIdChange={onHighlightedLegIdChange}
+          onScrollToTimelineDate={handleCalendarJumpToTimeline}
           onPlanHotel={onPlanHotel}
-          suppressPlanningAlerts
         />
-      </div>
+      )}
     </section>
   );
 }

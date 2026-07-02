@@ -158,7 +158,7 @@ export async function sendGateChangeAlert(
   return sendPushNotification(userId, {
     title: `Gate changed for ${flightNumber}`,
     body: `Your gate is now ${newGate}. Open Kepi to review departure timing.`,
-    url: "/travel-assistant?tab=flights",
+    url: "/travel-assistant?tab=book&bookView=flights",
   });
 }
 
@@ -170,7 +170,7 @@ export async function sendDelayAlert(
   return sendPushNotification(userId, {
     title: `Delay alert for ${flightNumber}`,
     body: `${flightNumber} is delayed by ${delayMinutes} minutes. Check updated timeline now.`,
-    url: "/travel-assistant?tab=flights",
+    url: "/travel-assistant?tab=book&bookView=flights",
   });
 }
 

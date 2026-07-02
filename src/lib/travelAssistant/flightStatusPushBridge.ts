@@ -109,7 +109,7 @@ export async function maybeSendFlightStatusPushAlerts(
         next.flightStatus.includes("cancel")
           ? `${flightNumber} appears cancelled. Open Kepi for next steps.`
           : `${flightNumber} was diverted. Check your airline for updates.`,
-      url: "/travel-assistant?tab=flights",
+      url: "/travel-assistant?tab=book&bookView=flights",
     });
     if (ok) sent += 1;
   }

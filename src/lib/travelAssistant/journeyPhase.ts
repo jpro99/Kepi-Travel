@@ -27,19 +27,19 @@ export type JourneyPhase =
   | { kind: "no-trip" };
 
 /** Consumer shell tabs — phase picks the best default surface. */
-export type JourneyConsumerTab = "trip" | "flights" | "hotels" | "map" | "more";
+export type JourneyConsumerTab = "trip" | "book" | "map" | "more";
 
 export function defaultConsumerTabForPhase(phase: JourneyPhase, nowMs: number = Date.now()): JourneyConsumerTab {
   if (phase.kind === "airborne" || phase.kind === "just-landed") {
-    return "flights";
+    return "book";
   }
   if (phase.kind === "pre-trip") {
     const depMs = flightDepartureUtcMs(phase.nextFlight);
     if (!Number.isNaN(depMs)) {
       const hoursUntil = (depMs - nowMs) / (60 * 60 * 1000);
-      return hoursUntil <= 24 ? "flights" : "trip";
+      return hoursUntil <= 24 ? "book" : "trip";
     }
-    return phase.daysUntil <= 1 ? "flights" : "trip";
+    return phase.daysUntil <= 1 ? "book" : "trip";
   }
   return "trip";
 }

@@ -14,7 +14,8 @@ import {
   type DayLegCell,
   type LegendLegChip,
 } from "@/lib/travelAssistant/buildTripLegs";
-import { fetchCityWeatherSimple } from "@/lib/travelAssistant/cityWeather";
+import { fetchCityWeatherForecast, type DailyWeather } from "@/lib/travelAssistant/cityWeather";
+import type { ItineraryPlansData } from "@/lib/travelAssistant/itineraryDayPlan";
 
 type CalendarReservation = {
   id: string;
@@ -47,6 +48,7 @@ interface TripLegCalendarProps {
   onHighlightedLegIdChange?: (legId: string | null) => void;
   onScrollToTimelineDate?: (dateKey: string) => void;
   onPlanHotel?: (dateKey: string, city: string) => void;
+  itineraryPlans?: ItineraryPlansData;
 }
 
 const MONTH_NAMES = [
@@ -69,8 +71,37 @@ function isToday(dateKey: string): boolean {
 
 function cellSubLabel(cell: DayLegCell | null): string | null {
   if (!cell || cell.kind === "empty") return null;
-  if (cell.kind === "travel" || cell.flightSummary) return "✈";
-  return cell.cityName?.split(" ")[0] ?? null;
+  if (cell.kind === "travel" || cell.flightPrimary) {
+    const fp = cell.flightPrimary;
+    if (!fp) return "✈ Travel";
+    const time = fp.depTime ? ` · ${fp.depTime}` : "";
+    return `✈ ${fp.number}${time}`;
+  }
+  if (cell.hotelBooked && cell.hotelName) return `🏨 ${cell.hotelName}`;
+  if (cell.cityName) return cell.cityName;
+  return null;
+}
+
+function cellThirdLine(
+  cell: DayLegCell | null,
+  weather: DailyWeather | null,
+): { text: string; warning?: boolean } | null {
+  if (!cell || cell.kind === "empty") return null;
+  if (cell.kind === "travel" || cell.flightPrimary) {
+    const route = cell.flightPrimary?.route ?? cell.flightSummary ?? "Travel";
+    if (cell.flightExtraCount > 0) {
+      return { text: `${route} · +${cell.flightExtraCount} more` };
+    }
+    return { text: route };
+  }
+  if (cell.hotelBooked && weather) {
+    return { text: `${weather.icon} ${weather.highTemp}` };
+  }
+  if (cell.hotelNeeded) {
+    return { text: "⚠ No hotel", warning: true };
+  }
+  if (weather) return { text: `${weather.icon} ${weather.highTemp}` };
+  return cell.cityName ? { text: cell.cityName } : null;
 }
 
 function legendChipLabel(chip: LegendLegChip): string {
@@ -89,6 +120,7 @@ function CalendarCell({
   isTodayCell,
   ribbonPosition,
   theme,
+  weather,
   onSelect,
 }: {
   cell: DayLegCell | null;
@@ -99,61 +131,124 @@ function CalendarCell({
   isTodayCell: boolean;
   ribbonPosition: ReturnType<typeof ribbonPositionForGridCell> | "none";
   theme: CalendarTheme;
+  weather: DailyWeather | null;
   onSelect: () => void;
 }) {
+  const [popoverOpen, setPopoverOpen] = useState(false);
   const filled = cell && cell.kind !== "empty";
   const pos = ribbonPosition === "none" ? "none" : ribbonPosition;
   const radiusClass = filled ? ribbonRadiusClass(pos) : "rounded-none";
-  const subLabel = cellSubLabel(cell);
+  const line2 = cellSubLabel(cell);
+  const line3 = cellThirdLine(cell, weather);
   const isLight = theme === "light";
 
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={`relative flex min-h-[72px] flex-col items-start justify-start p-2.5 transition ${radiusClass} ${
-        filled
-          ? "text-white"
-          : isLight
-            ? inTripWindow
-              ? "text-[#1D1D1F]"
-              : "text-[#6E6E73]/50"
-            : inTripWindow
-              ? "text-[#4A5568]"
-              : "text-[#4A5568]/50"
-      } ${isHighlightedLeg && !isSelected ? (isLight ? "ring-2 ring-[#1D1D1F]/25" : "ring-2 ring-white") : ""} ${
-        isTodayCell
-          ? isLight
-            ? "shadow-[0_0_0_2px_#fff,0_0_0_4px_rgba(74,111,165,0.45)]"
-            : "shadow-[0_0_0_2px_#fff,0_0_0_6px_rgba(255,255,255,0.3)]"
-          : ""
-      } ${isSelected ? "ring-2 ring-[#f4c95d]" : ""}`}
-      style={
-        cell && filled
-          ? cellFillStyle(cell)
-          : {
-              backgroundColor: filled
-                ? undefined
-                : isLight
-                  ? "#FFFFFF"
-                  : inTripWindow
-                    ? "#1A2535"
-                    : "transparent",
-            }
-      }
-    >
-      {cell?.kind === "transition" ? (
-        <span className="pointer-events-none absolute inset-y-0 left-1/2 z-10 flex -translate-x-1/2 items-center text-xs text-white">
-          ✈
+    <div className="relative min-h-[5rem]">
+      <button
+        type="button"
+        onClick={() => {
+          onSelect();
+          setPopoverOpen((v) => !v);
+        }}
+        onMouseEnter={() => setPopoverOpen(true)}
+        onMouseLeave={() => setPopoverOpen(false)}
+        className={`relative flex h-full min-h-[5rem] w-full flex-col items-start justify-start p-2 transition ${radiusClass} ${
+          filled
+            ? "text-white"
+            : isLight
+              ? inTripWindow
+                ? "text-[#1D1D1F]"
+                : "text-[#6E6E73]/50"
+              : inTripWindow
+                ? "text-[#4A5568]"
+                : "text-[#4A5568]/50"
+        } ${isHighlightedLeg && !isSelected ? (isLight ? "ring-2 ring-[#1D1D1F]/25" : "ring-2 ring-white") : ""} ${
+          isTodayCell
+            ? isLight
+              ? "shadow-[0_0_0_2px_#fff,0_0_0_4px_rgba(74,111,165,0.45)]"
+              : "shadow-[0_0_0_2px_#fff,0_0_0_6px_rgba(255,255,255,0.3)]"
+            : ""
+        } ${isSelected ? "ring-2 ring-[#f4c95d]" : ""}`}
+        style={
+          cell && filled
+            ? cellFillStyle(cell)
+            : {
+                backgroundColor: filled
+                  ? undefined
+                  : isLight
+                    ? "#FFFFFF"
+                    : inTripWindow
+                      ? "#1A2535"
+                      : "transparent",
+              }
+        }
+      >
+        {cell?.kind === "transition" ? (
+          <span className="pointer-events-none absolute inset-y-0 left-1/2 z-10 flex -translate-x-1/2 items-center text-xs text-white">
+            ✈
+          </span>
+        ) : null}
+        <span
+          className="text-[0.9375rem] font-bold leading-none"
+          style={{ padding: "0.125rem 0" }}
+        >
+          {dayNumber}
         </span>
+        {line2 && cell?.kind !== "transition" ? (
+          <span className="mt-1 max-w-full truncate text-[0.625rem] leading-[1.3] text-white/85">
+            {line2}
+          </span>
+        ) : null}
+        {line3 && cell?.kind !== "transition" ? (
+          <span
+            className={`mt-auto max-w-full truncate text-[0.625rem] leading-[1.3] ${
+              line3.warning ? "text-[#FFD60A]" : "text-white/85"
+            }`}
+          >
+            {line3.text}
+          </span>
+        ) : null}
+      </button>
+      {popoverOpen && cell && filled ? (
+        <CellPopover cell={cell} weather={weather} />
       ) : null}
-      <span className={`text-[20px] font-bold leading-none ${isTodayCell ? "font-extrabold" : ""}`}>
-        {dayNumber}
-      </span>
-      {subLabel && cell?.kind !== "transition" ? (
-        <span className="mt-auto max-w-full truncate text-[10px] font-semibold text-white/60">{subLabel}</span>
+    </div>
+  );
+}
+
+function CellPopover({
+  cell,
+  weather,
+}: {
+  cell: DayLegCell;
+  weather: DailyWeather | null;
+}) {
+  const dateLabel = new Date(`${cell.dateKey}T12:00:00`).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+  const destination = cell.cityName
+    ? `${cell.cityName}${cell.legDayCount > 0 ? ` · Day ${cell.dayIndexInLeg} of ${cell.legDayCount}` : ""}`
+    : cell.flightSummary ?? "Travel day";
+
+  return (
+    <div className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 w-[min(16rem,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl bg-white p-4 text-left shadow-[0_8px_24px_rgba(0,0,0,0.12)]">
+      <p className="text-xs font-semibold text-[#6E6E73]">{dateLabel}</p>
+      <p className="mt-1 text-sm font-bold text-[#1D1D1F]">{destination}</p>
+      {weather ? <p className="mt-1 text-xs text-[#1D1D1F]">{weather.description ?? weather.highTemp}</p> : null}
+      {cell.hotelBooked && cell.hotelName ? (
+        <p className="mt-2 text-xs text-[#1D1D1F]">
+          🏨 {cell.hotelName}
+          {cell.hotelConfirmation ? ` · ${cell.hotelConfirmation}` : ""}
+        </p>
+      ) : cell.hotelNeeded ? (
+        <p className="mt-2 text-xs font-semibold text-amber-600">No hotel booked</p>
       ) : null}
-    </button>
+      {cell.flightSummary ? (
+        <p className="mt-1 text-xs text-[#6E6E73]">✈ {cell.flightSummary}</p>
+      ) : null}
+    </div>
   );
 }
 
@@ -174,13 +269,14 @@ function DayDetailPanel({
   useEffect(() => {
     if (!city) return;
     let cancelled = false;
-    void fetchCityWeatherSimple(city).then((line) => {
-      if (!cancelled) setWeatherLine(line);
+    void fetchCityWeatherForecast(city).then((map) => {
+      const wx = map.get(cell.dateKey);
+      if (!cancelled) setWeatherLine(wx ? `${wx.icon} ${wx.description ?? wx.highTemp}` : null);
     });
     return () => {
       cancelled = true;
     };
-  }, [city]);
+  }, [city, cell.dateKey]);
 
   const accent = cell.color ?? TRAVEL_LEG_COLOR;
   const dateLabel = new Date(`${cell.dateKey}T12:00:00`).toLocaleDateString("en-US", {
@@ -211,7 +307,10 @@ function DayDetailPanel({
           ) : null}
           {weatherLine ? <p className="mt-2 text-sm text-[#1D1D1F]">{weatherLine}</p> : null}
           {cell.hotelName ? (
-            <p className="mt-2 text-sm font-semibold text-[#1D1D1F]">🏨 {cell.hotelName}</p>
+            <p className="mt-2 text-sm font-semibold text-[#1D1D1F]">
+              🏨 {cell.hotelName}
+              {cell.hotelConfirmation ? ` · ${cell.hotelConfirmation}` : ""}
+            </p>
           ) : cell.hotelNeeded ? (
             <p className="mt-2 text-sm font-semibold text-amber-600">No hotel booked</p>
           ) : null}
@@ -263,6 +362,7 @@ export function TripLegCalendar({
   onHighlightedLegIdChange,
   onScrollToTimelineDate,
   onPlanHotel,
+  itineraryPlans,
 }: TripLegCalendarProps) {
   const tripStart = tripStartDate?.slice(0, 10) ?? null;
   const tripEnd = tripEndDate?.slice(0, 10) ?? null;
@@ -274,10 +374,15 @@ export function TripLegCalendar({
     return new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   });
   const [detailDateKey, setDetailDateKey] = useState<string | null>(null);
+  const [weatherByDate, setWeatherByDate] = useState<Map<string, DailyWeather>>(new Map());
 
   const model = useMemo(
-    () => buildTripLegCalendarModel(reservations, tripStart, tripEnd),
-    [reservations, tripEnd, tripStart],
+    () =>
+      buildTripLegCalendarModel(reservations, tripStart, tripEnd, {
+        dayPlans: itineraryPlans?.dayPlans,
+        legLabelOverrides: itineraryPlans?.legLabelOverrides,
+      }),
+    [reservations, tripEnd, tripStart, itineraryPlans?.dayPlans, itineraryPlans?.legLabelOverrides],
   );
 
   const legendChips = useMemo(() => buildLegendLegs(model.legs), [model.legs]);
@@ -301,6 +406,25 @@ export function TripLegCalendar({
   const destinationCount = model.legs.filter((l) => l.type === "stay").length;
 
   const isLight = theme === "light";
+
+  useEffect(() => {
+    const cities = new Set<string>();
+    for (const cell of model.dayCells.values()) {
+      if (cell.cityName) cities.add(cell.cityName);
+    }
+    let cancelled = false;
+    void Promise.all([...cities].map((city) => fetchCityWeatherForecast(city))).then((maps) => {
+      if (cancelled) return;
+      const merged = new Map<string, DailyWeather>();
+      for (const map of maps) {
+        for (const [key, value] of map) merged.set(key, value);
+      }
+      setWeatherByDate(merged);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [model.dayCells]);
 
   const handleLegendClick = (chip: LegendLegChip): void => {
     const legId = chip.legIds[0] ?? chip.id;
@@ -441,7 +565,7 @@ export function TripLegCalendar({
             style={{ backgroundColor: isLight ? "#FFFFFF" : "#162030" }}
           >
             {monthCells.map((day, idx) => {
-              if (!day) return <div key={`blank-${idx}`} className="min-h-[72px]" />;
+              if (!day) return <div key={`blank-${idx}`} className="min-h-[5rem]" />;
               const dateKey = dateKeyFromParts(year, month, day);
               const cell = model.dayCells.get(dateKey) ?? null;
               const inTrip = tripStart && tripEnd ? dateKey >= tripStart && dateKey <= tripEnd : false;
@@ -462,6 +586,7 @@ export function TripLegCalendar({
                   isTodayCell={isToday(dateKey)}
                   ribbonPosition={ribbonPos}
                   theme={theme}
+                  weather={weatherByDate.get(dateKey) ?? null}
                   onSelect={() => handleDaySelect(dateKey)}
                 />
               );

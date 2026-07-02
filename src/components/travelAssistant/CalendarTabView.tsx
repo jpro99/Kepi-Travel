@@ -1,6 +1,7 @@
 "use client";
 
 import { TripLegCalendar } from "@/components/travelAssistant/TripLegCalendar";
+import type { ItineraryPlansData } from "@/lib/travelAssistant/itineraryDayPlan";
 
 interface CalendarTabViewProps {
   tripName: string;
@@ -20,6 +21,7 @@ interface CalendarTabViewProps {
     flightDate?: string;
     checkOutDate?: string;
   }[];
+  itineraryPlans?: ItineraryPlansData;
   selectedDateKey?: string | null;
   highlightedLegId?: string | null;
   onSelectedDateKeyChange?: (dateKey: string) => void;

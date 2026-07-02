@@ -89,13 +89,13 @@ test("multi-leg trip between connections stays pre-trip for next flight", () => 
   }
 });
 
-test("defaultConsumerTabForPhase picks flights when departure is within 24h", () => {
+test("defaultConsumerTabForPhase picks book when departure is within 24h", () => {
   const nowMs = Date.parse("2026-05-29T06:00:00Z");
   const phase = computeJourneyPhase({
     reservations: honoluluTripFlights,
     nowMs,
   });
-  assert.equal(defaultConsumerTabForPhase(phase, nowMs), "flights");
+  assert.equal(defaultConsumerTabForPhase(phase, nowMs), "book");
 });
 
 test("defaultConsumerTabForPhase keeps trip tab when departure is more than a day out", () => {

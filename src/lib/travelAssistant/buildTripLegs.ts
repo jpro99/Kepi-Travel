@@ -1,5 +1,9 @@
 import { resolveAirport } from "@/lib/airports/lookup";
 import { buildFullTripDayKeys } from "@/lib/travelAssistant/tripTimelinePlanning";
+import {
+  displayHotelForDay,
+  type DayPlanRecord,
+} from "@/lib/travelAssistant/itineraryDayPlan";
 
 export const TRAVEL_LEG_COLOR = "#4A6FA5";
 
@@ -49,8 +53,13 @@ export interface DayLegCell {
   dayIndexInLeg: number;
   legDayCount: number;
   flightSummary: string | null;
+  flightPrimary: { number: string; depTime: string; route: string } | null;
+  flightExtraCount: number;
   hotelName: string | null;
+  hotelConfirmation: string | null;
   hotelNeeded: boolean;
+  hotelBooked: boolean;
+  locationOverride: string | null;
 }
 
 export interface TripLegCalendarModel {
@@ -73,6 +82,7 @@ type LegReservation = {
   flightDate?: string;
   checkOutDate?: string;
   location?: string;
+  confirmationCode?: string;
 };
 
 interface FlightDayGroup {
@@ -155,6 +165,41 @@ function summarizeFlights(flights: LegReservation[]): string {
   return route.join(" → ");
 }
 
+function formatFlightDepTime(raw: string | undefined): string {
+  if (!raw?.trim()) return "";
+  const match = raw.match(/(\d{1,2}):(\d{2})/);
+  if (!match) return "";
+  let hour = Number(match[1]);
+  const min = match[2]!;
+  const ampm = hour >= 12 ? "pm" : "am";
+  if (hour > 12) hour -= 12;
+  if (hour === 0) hour = 12;
+  return min === "00" ? `${hour}${ampm}` : `${hour}:${min}${ampm}`;
+}
+
+function flightPrimaryDetail(flights: LegReservation[]): {
+  primary: DayLegCell["flightPrimary"];
+  extraCount: number;
+} {
+  if (flights.length === 0) return { primary: null, extraCount: 0 };
+  const first = flights[0]!;
+  const dep = first.flightDepartureAirport?.toUpperCase() ?? "?";
+  const arr = first.flightArrivalAirport?.toUpperCase() ?? "?";
+  return {
+    primary: {
+      number: (first.flightNumber ?? first.title ?? "Flight").trim(),
+      depTime: formatFlightDepTime(first.flightDepartureTime ?? first.localTime),
+      route: `${dep} → ${arr}`,
+    },
+    extraCount: Math.max(0, flights.length - 1),
+  };
+}
+
+function stayColorForCity(city: string, index: number): string {
+  if (city === "Munich") return STAY_LEG_PALETTE[3]!;
+  return STAY_LEG_PALETTE[index % STAY_LEG_PALETTE.length]!;
+}
+
 function groupFlightsByDepartureDate(flights: LegReservation[]): FlightDayGroup[] {
   const byDate = new Map<string, LegReservation[]>();
   for (const f of flights) {
@@ -195,10 +240,30 @@ function legCoversDate(leg: BuiltTripLeg, dateKey: string): boolean {
 }
 
 function legForDate(legs: BuiltTripLeg[], dateKey: string): BuiltTripLeg | null {
-  for (const leg of legs) {
-    if (legCoversDate(leg, dateKey)) return leg;
+  return resolveLegForDate(legs, dateKey, false);
+}
+
+/** When legs overlap (e.g. Venice + Munich), prefer travel on flight days, else the stay that started most recently. */
+export function resolveLegForDate(
+  legs: BuiltTripLeg[],
+  dateKey: string,
+  hasFlight: boolean,
+): BuiltTripLeg | null {
+  const covering = legs.filter((leg) => legCoversDate(leg, dateKey));
+  if (covering.length === 0) return null;
+  if (covering.length === 1) return covering[0]!;
+
+  if (hasFlight) {
+    const travel = covering.find((l) => l.type === "travel");
+    if (travel) return travel;
   }
-  return null;
+
+  const stays = covering.filter((l) => l.type === "stay");
+  if (stays.length > 0) {
+    return stays.sort((a, b) => b.startDate.localeCompare(a.startDate))[0]!;
+  }
+
+  return covering.sort((a, b) => b.startDate.localeCompare(a.startDate))[0]!;
 }
 
 function mergeAdjacentLegs(legs: BuiltTripLeg[]): BuiltTripLeg[] {
@@ -253,17 +318,33 @@ function fillCoverageGaps(legs: BuiltTripLeg[], tripStart: string, tripEnd: stri
       .filter((l) => l.startDate > range.end)
       .sort((a, b) => compareDateKeys(a.startDate, b.startDate))[0];
 
-    if (before?.type === "stay") {
-      before.endDate = maxDateKey(before.endDate, range.end);
+    if (before?.type === "stay" && after?.type === "stay" && before.label !== after.label) {
+      const boundary = addDays(after.startDate, -1);
+      if (compareDateKeys(range.end, boundary) <= 0) {
+        before.endDate = maxDateKey(before.endDate, range.end);
+      } else if (compareDateKeys(range.start, after.startDate) >= 0) {
+        after.startDate = minDateKey(after.startDate, range.start);
+      } else {
+        if (compareDateKeys(range.start, boundary) <= 0) {
+          before.endDate = maxDateKey(before.endDate, boundary);
+        }
+        after.startDate = minDateKey(after.startDate, range.start);
+      }
       continue;
     }
+
     if (after?.type === "stay") {
       after.startDate = minDateKey(after.startDate, range.start);
       continue;
     }
 
+    if (before?.type === "stay" && !after) {
+      before.endDate = maxDateKey(before.endDate, range.end);
+      continue;
+    }
+
     const label = before?.label ?? after?.label ?? "Trip";
-    const color = STAY_LEG_PALETTE[stayColorIndex % STAY_LEG_PALETTE.length]!;
+    const color = stayColorForCity(label, stayColorIndex);
     stayColorIndex += 1;
     result.push({
       id: `leg-fill-${result.length}`,
@@ -276,6 +357,58 @@ function fillCoverageGaps(legs: BuiltTripLeg[], tripStart: string, tripEnd: stri
   }
 
   return mergeAdjacentLegs(result);
+}
+
+function trimOverlappingStays(legs: BuiltTripLeg[]): BuiltTripLeg[] {
+  const sorted = [...legs].sort((a, b) => compareDateKeys(a.startDate, b.startDate));
+  const stays = sorted.filter((l) => l.type === "stay");
+  for (let i = 0; i < stays.length; i += 1) {
+    for (let j = i + 1; j < stays.length; j += 1) {
+      const left = stays[i]!;
+      const right = stays[j]!;
+      if (left.label === right.label) continue;
+      if (compareDateKeys(left.endDate, right.startDate) >= 0) {
+        left.endDate = addDays(right.startDate, -1);
+      }
+    }
+  }
+  return sorted.filter((leg) => leg.type !== "stay" || compareDateKeys(leg.startDate, leg.endDate) <= 0);
+}
+
+function inferReturnCityStay(legs: BuiltTripLeg[], groups: FlightDayGroup[]): BuiltTripLeg[] {
+  if (groups.length < 2) return legs;
+  const last = groups[groups.length - 1]!;
+  const returnDep = last.flights[0]?.flightDepartureAirport ?? "";
+  const returnCity = airportToCity(returnDep);
+  const hasArrivalAtReturn = groups.slice(0, -1).some(
+    (g) => airportToCity(g.finalArrivalAirport) === returnCity,
+  );
+  if (hasArrivalAtReturn) return legs;
+
+  const lastStay = [...legs].reverse().find((l) => l.type === "stay");
+  if (!lastStay || lastStay.label === returnCity) return legs;
+
+  const stayEnd = addDays(last.depDate, -1);
+  let stayStart = addDays(stayEnd, -4);
+  if (compareDateKeys(stayStart, lastStay.startDate) < 0) {
+    stayStart = addDays(lastStay.startDate, 1);
+  }
+  const trimmedEnd = addDays(stayStart, -1);
+  if (compareDateKeys(trimmedEnd, lastStay.startDate) >= 0) {
+    lastStay.endDate = trimmedEnd;
+  }
+  if (compareDateKeys(stayEnd, stayStart) < 0) return legs;
+
+  const color = stayColorForCity(returnCity, legs.filter((l) => l.type === "stay").length);
+  legs.push({
+    id: `leg-stay-return-${returnCity}`,
+    type: "stay",
+    label: returnCity,
+    startDate: stayStart,
+    endDate: stayEnd,
+    color,
+  });
+  return legs;
 }
 
 export function buildTripLegs(
@@ -297,7 +430,7 @@ export function buildTripLegs(
   const addStay = (start: string, end: string, cityIata: string, suffix = ""): void => {
     if (compareDateKeys(start, end) > 0) return;
     const city = airportToCity(cityIata);
-    const color = STAY_LEG_PALETTE[stayColorIndex % STAY_LEG_PALETTE.length]!;
+    const color = stayColorForCity(city, stayColorIndex);
     stayColorIndex += 1;
     legs.push({
       id: `leg-stay-${legs.length}${suffix}`,
@@ -334,7 +467,7 @@ export function buildTripLegs(
     if (compareDateKeys(g.maxArrivalDate, tripEnd) < 0) {
       addStay(g.maxArrivalDate, tripEnd, g.finalArrivalAirport, "-solo");
     }
-    return fillCoverageGaps(legs, tripStart, tripEnd);
+    return trimOverlappingStays(fillCoverageGaps(inferReturnCityStay(legs, groups), tripStart, tripEnd));
   }
 
   const first = groups[0]!;
@@ -356,15 +489,30 @@ export function buildTripLegs(
     }
   }
 
-  return fillCoverageGaps(legs, tripStart, tripEnd);
+  return trimOverlappingStays(
+    fillCoverageGaps(
+      inferReturnCityStay(legs, groups),
+      tripStart,
+      tripEnd,
+    ),
+  );
+}
+
+export interface BuildTripLegCalendarOptions {
+  dayPlans?: Record<string, DayPlanRecord>;
+  legLabelOverrides?: Record<string, string>;
 }
 
 export function buildTripLegCalendarModel(
   reservations: LegReservation[],
   tripStartDate: string | null,
   tripEndDate: string | null,
+  options: BuildTripLegCalendarOptions = {},
 ): TripLegCalendarModel {
-  const legs = buildTripLegs(reservations, tripStartDate, tripEndDate);
+  const legs = buildTripLegs(reservations, tripStartDate, tripEndDate).map((leg) => {
+    const override = options.legLabelOverrides?.[leg.id];
+    return override ? { ...leg, label: override } : leg;
+  });
   const dayCells = new Map<string, DayLegCell>();
   const legById = new Map<string, BuiltTripLeg>();
   for (const leg of legs) legById.set(leg.id, leg);
@@ -374,11 +522,17 @@ export function buildTripLegCalendarModel(
 
   for (let i = 0; i < dayKeys.length; i += 1) {
     const dateKey = dayKeys[i]!;
-    const leg = legForDate(legs, dateKey);
-    const prevLeg = i > 0 ? legForDate(legs, dayKeys[i - 1]!) : null;
     const dayFlights = flightsOnDay(flights, dateKey);
-    const hotel = hotelOnDay(reservations, dateKey);
     const hasFlight = dayFlights.length > 0;
+    const leg = resolveLegForDate(legs, dateKey, hasFlight);
+    const prevDayFlights = i > 0 ? flightsOnDay(flights, dayKeys[i - 1]!) : [];
+    const prevLeg = i > 0 ? resolveLegForDate(legs, dayKeys[i - 1]!, prevDayFlights.length > 0) : null;
+    const hotel = hotelOnDay(reservations, dateKey);
+    const dayPlan = options.dayPlans?.[dateKey];
+    const reservationHotel = hotel ? hotel.provider || hotel.title || hotel.location || "Hotel" : null;
+    const hotelDisplay = displayHotelForDay({ plan: dayPlan, reservationHotel });
+    const flightDetail = flightPrimaryDetail(dayFlights);
+    const displayCity = dayPlan?.location?.trim() || (leg?.type === "stay" ? leg.label : null);
 
     let kind: DayCellKind = leg ? (leg.type === "travel" ? "travel" : "stay") : "empty";
     let transitionFromColor: string | null = null;
@@ -410,12 +564,17 @@ export function buildTripLegCalendarModel(
                 : "none",
       transitionFromColor,
       transitionToColor,
-      cityName: leg?.type === "stay" ? leg.label : null,
+      cityName: displayCity,
       dayIndexInLeg,
       legDayCount: legDays.length,
       flightSummary: hasFlight ? summarizeFlights(dayFlights) : null,
-      hotelName: hotel ? hotel.provider || hotel.title || hotel.location || "Hotel" : null,
-      hotelNeeded: Boolean(leg?.type === "stay" && !hotel),
+      flightPrimary: hasFlight ? flightDetail.primary : null,
+      flightExtraCount: hasFlight ? flightDetail.extraCount : 0,
+      hotelName: hotelDisplay.label || null,
+      hotelConfirmation: dayPlan?.hotelConfirmation?.trim() || hotel?.confirmationCode?.trim() || null,
+      hotelNeeded: Boolean(leg?.type === "stay" && !hotelDisplay.booked),
+      hotelBooked: Boolean(leg?.type === "stay" && hotelDisplay.booked),
+      locationOverride: dayPlan?.location?.trim() || null,
     });
   }
 

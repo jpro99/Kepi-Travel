@@ -113,3 +113,107 @@ test("buildTripLegs creates travel and stay legs from flight gaps", () => {
   assert.ok(stays.length >= 1);
   assert.ok(stays.some((s) => s.label === "Bari" || s.label.includes("Bari")));
 });
+
+test("buildTripLegs assigns Munich amber when return departs MUC without VCE-MUC flight", () => {
+  const legs = buildTripLegs(
+    [
+      {
+        id: "f1",
+        type: "flight",
+        title: "Outbound",
+        provider: "Alaska",
+        localTime: "2026-09-01 08:00",
+        flightDate: "2026-09-01",
+        flightDepartureAirport: "ONT",
+        flightArrivalAirport: "FCO",
+        flightArrivalTime: "2026-09-02 08:00",
+      },
+      {
+        id: "f2",
+        type: "flight",
+        title: "To Bari",
+        provider: "ITA",
+        localTime: "2026-09-02 14:00",
+        flightDate: "2026-09-02",
+        flightDepartureAirport: "FCO",
+        flightArrivalAirport: "BRI",
+      },
+      {
+        id: "f3",
+        type: "flight",
+        title: "To Venice",
+        provider: "ITA",
+        localTime: "2026-09-12 10:00",
+        flightDate: "2026-09-12",
+        flightDepartureAirport: "BRI",
+        flightArrivalAirport: "VCE",
+      },
+      {
+        id: "f4",
+        type: "flight",
+        title: "Return",
+        provider: "LH",
+        localTime: "2026-09-25 10:00",
+        flightDate: "2026-09-25",
+        flightDepartureAirport: "MUC",
+        flightArrivalAirport: "ONT",
+      },
+    ],
+    "2026-09-01",
+    "2026-09-25",
+  );
+
+  const munich = legs.find((l) => l.type === "stay" && l.label === "Munich");
+  assert.ok(munich, "Munich stay leg must exist");
+  assert.equal(munich!.color, "#C4943A");
+  assert.equal(munich!.startDate, "2026-09-20");
+  assert.equal(munich!.endDate, "2026-09-24");
+
+  const venice = legs.find((l) => l.type === "stay" && l.label === "Venice");
+  assert.ok(venice);
+  assert.equal(venice!.endDate, "2026-09-19");
+});
+
+test("buildTripLegs with VCE-MUC creates distinct Munich leg Sep 20-24", () => {
+  const legs = buildTripLegs(
+    [
+      {
+        id: "f1",
+        type: "flight",
+        title: "To Venice",
+        provider: "ITA",
+        localTime: "2026-09-12 10:00",
+        flightDate: "2026-09-12",
+        flightDepartureAirport: "BRI",
+        flightArrivalAirport: "VCE",
+      },
+      {
+        id: "f2",
+        type: "flight",
+        title: "To Munich",
+        provider: "LH",
+        localTime: "2026-09-20 09:00",
+        flightDate: "2026-09-20",
+        flightDepartureAirport: "VCE",
+        flightArrivalAirport: "MUC",
+      },
+      {
+        id: "f3",
+        type: "flight",
+        title: "Return",
+        provider: "LH",
+        localTime: "2026-09-25 10:00",
+        flightDate: "2026-09-25",
+        flightDepartureAirport: "MUC",
+        flightArrivalAirport: "ONT",
+      },
+    ],
+    "2026-09-12",
+    "2026-09-25",
+  );
+
+  const munich = legs.find((l) => l.label === "Munich");
+  assert.ok(munich);
+  assert.equal(munich!.color, "#C4943A");
+  assert.ok(munich!.startDate >= "2026-09-20");
+});

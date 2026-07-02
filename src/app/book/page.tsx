@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
+import { useAuth } from "@clerk/nextjs";
+import { useRouter, useSearchParams } from "next/navigation";
 import { CheckoutFlow } from "@/components/booking/CheckoutFlow";
 import {
   SEARCH_INPUT_DARK,
@@ -344,8 +346,10 @@ type FlightScreen = "search" | "results" | "detail" | "checkout";
 type HotelScreen = "search" | "results" | "detail" | "checkout";
 
 export default function BookPage() {
+  const { isSignedIn, isLoaded } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [tab, setTab] = useState<SearchTab>("flights");
-
   // ── FLIGHT STATE ──────────────────────────────────────────────────────────
   const [tripType, setTripType] = useState<"roundtrip"|"oneway">("roundtrip");
   const [fromDisplay, setFromDisplay] = useState("");  const [fromIata, setFromIata] = useState("");
@@ -377,6 +381,19 @@ export default function BookPage() {
   const [hotelCheckout, setHotelCheckout] = useState(false);
 
   useEffect(() => { fetch("/api/loyalty").then(r=>r.json()).then(d=>{ if(d.balances) setLoyaltyBalances(d.balances); }).catch(()=>{}); }, []);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    const params = new URLSearchParams(searchParams.toString());
+    const legacyTab = params.get("tab");
+    params.set("tab", "book");
+    if (legacyTab === "hotels") {
+      params.set("bookView", "hotels");
+    } else {
+      params.set("bookView", "flights");
+    }
+    router.replace(`/travel-assistant?${params.toString()}`);
+  }, [isLoaded, isSignedIn, router, searchParams]);
 
   const resolveIata = useCallback((display: string, known: string) => {
     if (known) return known;
@@ -648,6 +665,22 @@ export default function BookPage() {
   }
 
   // ── SEARCH SCREENS ────────────────────────────────────────────────────────
+  if (!isLoaded) {
+    return (
+      <div className={`${SEARCH_PAGE_SHELL} flex min-h-screen items-center justify-center text-slate-400`}>
+        Loading…
+      </div>
+    );
+  }
+
+  if (isSignedIn) {
+    return (
+      <div className={`${SEARCH_PAGE_SHELL} flex min-h-screen items-center justify-center text-slate-400`}>
+        Opening your trip…
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#0b1f3a]">
       <div className="flex items-center justify-between px-4 py-4 border-b border-slate-700/50">

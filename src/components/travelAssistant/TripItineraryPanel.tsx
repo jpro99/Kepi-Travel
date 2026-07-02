@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { GapAlerts } from "@/components/travelAssistant/GapAlerts";
 import { ItineraryBriefView } from "@/components/travelAssistant/ItineraryBriefView";
 import { ItinerarySpreadsheet } from "@/components/travelAssistant/ItinerarySpreadsheet";
@@ -10,6 +10,17 @@ import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
 import type { StopDateRange } from "@/lib/decision/stopDates";
 import type { FlightSearchPlan, PlannedFlightLeg, PlannedStayCity } from "@/lib/travelAssistant/tripPlanBooking";
+import {
+  dayPlanToNote,
+  emptyItineraryPlans,
+  mergeDayPlan,
+  normalizeItineraryPlans,
+  parseDayPlanFromNote,
+  type DayPlanRecord,
+  type ItineraryPlansData,
+} from "@/lib/travelAssistant/itineraryDayPlan";
+
+const TRIP_API_ROUTE = "/api/trips";
 
 export type ItineraryViewMode = "edit" | "brief" | "cards" | "calendar";
 
@@ -252,6 +263,8 @@ export function useItineraryPanelPrefs(tripId: string | null) {
   const [panelWidth, setPanelWidth] = useState(420);
   const [dayNotes, setDayNotes] = useState<Record<string, string>>({});
   const [hotelNotebookNote, setHotelNotebookNote] = useState("");
+  const [itineraryPlans, setItineraryPlans] = useState<ItineraryPlansData>(emptyItineraryPlans());
+  const persistTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -264,15 +277,26 @@ export function useItineraryPanelPrefs(tripId: string | null) {
   }, []);
 
   useEffect(() => {
-    if (!tripId || typeof window === "undefined") return;
+    if (!tripId || typeof window === "undefined") {
+      setDayNotes({});
+      setHotelNotebookNote("");
+      setItineraryPlans(emptyItineraryPlans());
+      return;
+    }
     try {
-      const raw = window.localStorage.getItem(`kepi:day-notes:${tripId}`);
-      if (raw) setDayNotes(JSON.parse(raw) as Record<string, string>);
+      const rawNotes = window.localStorage.getItem(`kepi:day-notes:${tripId}`);
+      if (rawNotes) setDayNotes(JSON.parse(rawNotes) as Record<string, string>);
+      else setDayNotes({});
       const hotelRaw = window.localStorage.getItem(`kepi:hotel-notebook:${tripId}`);
       if (hotelRaw) setHotelNotebookNote(hotelRaw);
+      else setHotelNotebookNote("");
+      const rawPlans = window.localStorage.getItem(`kepi:itinerary-plans:${tripId}`);
+      if (rawPlans) setItineraryPlans(normalizeItineraryPlans(JSON.parse(rawPlans)));
+      else setItineraryPlans(emptyItineraryPlans());
     } catch {
       setDayNotes({});
       setHotelNotebookNote("");
+      setItineraryPlans(emptyItineraryPlans());
     }
   }, [tripId]);
 
@@ -286,6 +310,56 @@ export function useItineraryPanelPrefs(tripId: string | null) {
     if (typeof window !== "undefined") window.localStorage.setItem("kepi:itinerary-panel-width", String(width));
   };
 
+  const queuePersistToTrip = useCallback(
+    (nextPlans: ItineraryPlansData, nextNotes: Record<string, string>): void => {
+      if (!tripId || typeof window === "undefined") return;
+      window.localStorage.setItem(`kepi:itinerary-plans:${tripId}`, JSON.stringify(nextPlans));
+      window.localStorage.setItem(`kepi:day-notes:${tripId}`, JSON.stringify(nextNotes));
+      if (persistTimerRef.current) window.clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = window.setTimeout(() => {
+        void fetch(TRIP_API_ROUTE, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "update",
+            id: tripId,
+            patch: { itineraryPlans: nextPlans },
+          }),
+        }).catch(() => undefined);
+      }, 400);
+    },
+    [tripId],
+  );
+
+  const hydrateFromTrip = useCallback(
+    (raw: unknown): void => {
+      if (!tripId || !raw) return;
+      const normalized = normalizeItineraryPlans(raw);
+      setItineraryPlans((local) => {
+        const localTime = Date.parse(local.updatedAt || "0");
+        const serverTime = Date.parse(normalized.updatedAt || "0");
+        if (Number.isFinite(localTime) && Number.isFinite(serverTime) && localTime >= serverTime) {
+          return local;
+        }
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(`kepi:itinerary-plans:${tripId}`, JSON.stringify(normalized));
+        }
+        setDayNotes((prev) => {
+          const next = { ...prev };
+          for (const [dateKey, plan] of Object.entries(normalized.dayPlans)) {
+            next[dateKey] = dayPlanToNote(plan);
+          }
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem(`kepi:day-notes:${tripId}`, JSON.stringify(next));
+          }
+          return next;
+        });
+        return normalized;
+      });
+    },
+    [tripId],
+  );
+
   const updateDayNote = (dateKey: string, value: string): void => {
     setDayNotes((prev) => {
       const next = { ...prev, [dateKey]: value };
@@ -295,6 +369,80 @@ export function useItineraryPanelPrefs(tripId: string | null) {
       return next;
     });
   };
+
+  const saveDayPlan = useCallback(
+    (dateKey: string, plan: DayPlanRecord, fallbackLocation: string): void => {
+      const merged = { ...mergeDayPlan(undefined, fallbackLocation), ...plan };
+      setItineraryPlans((prev) => {
+        const next: ItineraryPlansData = {
+          ...prev,
+          dayPlans: { ...prev.dayPlans, [dateKey]: merged },
+          updatedAt: new Date().toISOString(),
+        };
+        setDayNotes((notesPrev) => {
+          const nextNotes = { ...notesPrev, [dateKey]: dayPlanToNote(merged) };
+          queuePersistToTrip(next, nextNotes);
+          return nextNotes;
+        });
+        return next;
+      });
+    },
+    [queuePersistToTrip],
+  );
+
+  const applyHotelToDays = useCallback(
+    (dateKeys: string[], hotel: Pick<DayPlanRecord, "hotelName" | "hotelConfirmation" | "hotelBooked">, fallbackLocation: string): void => {
+      setItineraryPlans((prev) => {
+        const dayPlans = { ...prev.dayPlans };
+        for (const dateKey of dateKeys) {
+          const existing = dayPlans[dateKey] ?? mergeDayPlan(undefined, fallbackLocation);
+          dayPlans[dateKey] = {
+            ...existing,
+            hotelName: hotel.hotelName,
+            hotelConfirmation: hotel.hotelConfirmation,
+            hotelBooked: hotel.hotelBooked,
+          };
+        }
+        const next: ItineraryPlansData = { ...prev, dayPlans, updatedAt: new Date().toISOString() };
+        setDayNotes((notesPrev) => {
+          const nextNotes = { ...notesPrev };
+          for (const dateKey of dateKeys) {
+            nextNotes[dateKey] = dayPlanToNote(dayPlans[dateKey]!);
+          }
+          queuePersistToTrip(next, nextNotes);
+          return nextNotes;
+        });
+        return next;
+      });
+    },
+    [queuePersistToTrip],
+  );
+
+  const saveLegLabelOverride = useCallback(
+    (legId: string, label: string): void => {
+      setItineraryPlans((prev) => {
+        const next: ItineraryPlansData = {
+          ...prev,
+          legLabelOverrides: { ...prev.legLabelOverrides, [legId]: label.trim() },
+          updatedAt: new Date().toISOString(),
+        };
+        queuePersistToTrip(next, dayNotes);
+        return next;
+      });
+    },
+    [dayNotes, queuePersistToTrip],
+  );
+
+  const getDayPlan = useCallback(
+    (dateKey: string, fallbackLocation: string): DayPlanRecord => {
+      const stored = itineraryPlans.dayPlans[dateKey];
+      if (stored) return stored;
+      const note = dayNotes[dateKey];
+      if (note?.trim()) return parseDayPlanFromNote(note, fallbackLocation);
+      return mergeDayPlan(undefined, fallbackLocation);
+    },
+    [dayNotes, itineraryPlans.dayPlans],
+  );
 
   const replaceDayNotes = useCallback(
     (notes: Record<string, string>): void => {
@@ -323,5 +471,11 @@ export function useItineraryPanelPrefs(tripId: string | null) {
     replaceDayNotes,
     hotelNotebookNote,
     updateHotelNotebookNote,
+    itineraryPlans,
+    hydrateFromTrip,
+    saveDayPlan,
+    applyHotelToDays,
+    saveLegLabelOverride,
+    getDayPlan,
   };
 }

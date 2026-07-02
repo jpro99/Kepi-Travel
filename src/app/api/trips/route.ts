@@ -58,6 +58,7 @@ const TripPayloadSchema = z.object({
     z.string().trim().min(1).max(80).nullable().optional(),
   ),
   bookingWizard: z.any().optional(),
+  itineraryPlans: z.any().optional(),
 });
 
 const TripPatchSchema = z.object({
@@ -82,6 +83,7 @@ const TripPatchSchema = z.object({
     z.string().trim().min(1).max(80).nullable().optional(),
   ),
   bookingWizard: z.any().optional(),
+  itineraryPlans: z.any().optional(),
 });
 
 const PostBodySchema = z.object({

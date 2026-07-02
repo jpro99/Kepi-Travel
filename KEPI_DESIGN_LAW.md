@@ -223,8 +223,8 @@ Calendar container height must always be auto — never fixed. It shrinks to its
 
 **Test:** `src/lib/travelAssistant/buildTripLegs.test.ts`
 
-**I9 — Calendar is its own tab**  
-The leg-colored calendar lives on the **Calendar** consumer tab at full width — not split beside the Plan timeline on the same view.
+**I9 — Calendar is a Plan sub-view**  
+The leg-colored calendar lives inside the **Plan** tab as a Timeline | Calendar toggle — not a separate bottom-nav tab. Legacy `?tab=calendar` URLs must redirect to Plan with calendar view open.
 
 **I5 — Mission cards for unbooked stays**  
 Unbooked hotel gaps render as photo-backed mission cards with one gold CTA — not inline to-do rows.
@@ -234,6 +234,20 @@ Gap/connection alerts on Plan tab are slide-in banners (auto-dismiss ~8s), not p
 
 **I7 — City photos are curated only**  
 Destination backgrounds use static Unsplash photo IDs from `cityPhotos.ts` — never live random Unsplash source URLs.
+
+**I18 — Edit buttons must work**  
+Every Edit button must open an actual edit interface. No Edit button may exist without a wired action. An Edit button that does nothing when tapped is permanently banned.
+
+**I19 — Calendar cells show trip content**  
+Calendar cells must always show trip content — flights, hotel name, or warning — not just color. A colored empty cell is not acceptable.
+
+**I20 — Munich is a distinct amber leg**  
+Munich must always appear as a distinct leg in amber (`#C4943A`). It must never be merged visually with Venice or any adjacent leg.
+
+**I21 — Legend covers every itinerary leg**  
+Every trip leg that exists in the itinerary must appear in both the calendar AND the legend. If a destination is in the trip but not in the legend, that is a bug.
+
+**Test:** `src/lib/travelAssistant/buildTripLegs.test.ts`
 
 ---
 
@@ -288,6 +302,6 @@ Resend emails use `@react-email/render` → `html:` — never `react:` prop or `
 | G8 | `src/lib/travelAssistant/dayPlanLines.test.ts` |
 | G10 | `src/lib/travelAssistant/tripActionItems.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
-| I8, I10, I12, I15, I17 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
+| I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
 
 New laws must add a row here when a test exists.
