@@ -202,7 +202,7 @@ Trip leg colors are derived from the order legs appear in trip data via `buildTr
 Every day within the trip window shows context: travel days show flight cards; stay days show destination and weather. The phrase "nothing planned yet" is permanently banned from the Plan timeline.
 
 **I11 — Plan tab uses destination blocks**  
-The Plan timeline renders travel cards (navy, departure-board typography) and collapsible destination blocks (leg-colored left border, photo header, day sub-rows with weather + hotel). Mission cards for unbooked hotels appear inside the relevant destination block — not stacked above the timeline.
+The Plan timeline renders **place-first chapters**: a trip route overview (city names), then each destination block as the hero with inbound travel collapsed above it. Travel labels use city names (`Fly to Rome · 2 flights`, `Return home`) — never raw airport chains as headlines. Collapsible destination blocks (leg-colored left border, photo header, day sub-rows with weather + hotel). Mission cards for unbooked hotels appear inside the relevant destination block — not stacked above the timeline.
 
 **I12 — No duplicate flights in travel blocks**  
 Duplicate flights must never appear. Always deduplicate by `flightNumber` + `departureTime` before rendering travel cards.

@@ -165,6 +165,20 @@ function summarizeFlights(flights: LegReservation[]): string {
   return route.join(" → ");
 }
 
+/** Place-first Plan labels — city names, not raw airport chains (KEPI_DESIGN_LAW I11). */
+export function humanTravelLegLabel(
+  flights: LegReservation[],
+  options?: { isReturn?: boolean },
+): string {
+  if (options?.isReturn) return "Return home";
+  if (flights.length === 0) return "Travel day";
+  const last = flights[flights.length - 1]!;
+  const destCity = airportToCity(last.flightArrivalAirport);
+  if (flights.length > 1) return `Fly to ${destCity} · ${flights.length} flights`;
+  const fn = (last.flightNumber ?? "").trim();
+  return fn ? `Fly to ${destCity} · ${fn}` : `Fly to ${destCity}`;
+}
+
 function formatFlightDepTime(raw: string | undefined): string {
   if (!raw?.trim()) return "";
   const match = raw.match(/(\d{1,2}):(\d{2})/);
@@ -463,7 +477,7 @@ export function buildTripLegs(
 
   if (groups.length === 1) {
     const g = groups[0]!;
-    addTravel(tripStart, g.maxArrivalDate, summarizeFlights(g.flights), "outbound");
+    addTravel(tripStart, g.maxArrivalDate, humanTravelLegLabel(g.flights), "outbound");
     if (compareDateKeys(g.maxArrivalDate, tripEnd) < 0) {
       addStay(g.maxArrivalDate, tripEnd, g.finalArrivalAirport, "-solo");
     }
@@ -471,7 +485,7 @@ export function buildTripLegs(
   }
 
   const first = groups[0]!;
-  addTravel(tripStart, first.maxArrivalDate, summarizeFlights(first.flights), "outbound");
+  addTravel(tripStart, first.maxArrivalDate, humanTravelLegLabel(first.flights), "outbound");
 
   for (let i = 0; i < groups.length; i += 1) {
     const g = groups[i]!;
@@ -482,10 +496,9 @@ export function buildTripLegs(
       if (compareDateKeys(stayStart, stayEnd) <= 0) {
         addStay(stayStart, stayEnd, g.finalArrivalAirport, `-${i}`);
       }
-      addTravel(next.depDate, next.depDate, summarizeFlights(next.flights), `seg-${i + 1}`);
+      addTravel(next.depDate, next.depDate, humanTravelLegLabel(next.flights), `seg-${i + 1}`);
     } else {
-      const depCity = airportToCity(g.flights[0]?.flightDepartureAirport);
-      addTravel(g.depDate, g.depDate, `${depCity} → Home`, "return");
+      addTravel(g.depDate, g.depDate, humanTravelLegLabel(g.flights, { isReturn: true }), "return");
     }
   }
 

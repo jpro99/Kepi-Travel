@@ -149,35 +149,74 @@ function TravelCard({
   gapDateKeys,
   onReservationTap,
   readOnly = false,
+  defaultExpanded = false,
 }: {
   leg: BuiltTripLeg;
   flights: TimelineReservation[];
   gapDateKeys: Set<string>;
   onReservationTap: (id: string) => void;
   readOnly?: boolean;
+  defaultExpanded?: boolean;
 }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const uniqueFlights = dedupeFlights(flights);
   const hasWarning = uniqueFlights.some((f) => gapDateKeys.has(reservationDateKey(f)));
+
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[#E5E5EA] bg-[#F5F5F7] px-4 py-3 text-left transition hover:bg-[#EBEBEF]"
+        style={{ fontFamily: SYSTEM_FONT, boxShadow: CARD_SHADOW }}
+      >
+        <div className="min-w-0">
+          <p className="text-[14px] font-semibold text-[#1D1D1F]">
+            <span className="mr-1.5" aria-hidden>
+              ✈
+            </span>
+            {leg.label}
+          </p>
+          <p className="mt-0.5 text-[12px] text-[#6E6E73]">
+            {formatDateRange(leg.startDate, leg.endDate)}
+            {uniqueFlights.length > 0 ? ` · ${uniqueFlights.length} flight${uniqueFlights.length === 1 ? "" : "s"}` : ""}
+          </p>
+        </div>
+        <span className="shrink-0 text-[12px] font-semibold text-[#6E6E73]">Show</span>
+      </button>
+    );
+  }
 
   return (
     <article
       className="overflow-hidden rounded-2xl bg-[#F5F5F7]"
       style={{ borderLeft: "4px solid #4A6FA5", boxShadow: CARD_SHADOW, fontFamily: SYSTEM_FONT }}
     >
-      <div className="px-5 py-5">
-        <h3 className="text-[18px] font-bold leading-snug text-[#1D1D1F]">
-          <span className="mr-2" aria-hidden>
-            ✈
-          </span>
-          {leg.label}
-        </h3>
-        <p className="mt-1 text-[13px] text-[#6E6E73]">{formatDateRange(leg.startDate, leg.endDate)}</p>
+      <div className="px-5 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-[16px] font-bold leading-snug text-[#1D1D1F]">
+              <span className="mr-1.5" aria-hidden>
+                ✈
+              </span>
+              {leg.label}
+            </h3>
+            <p className="mt-0.5 text-[12px] text-[#6E6E73]">{formatDateRange(leg.startDate, leg.endDate)}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setExpanded(false)}
+            className="shrink-0 text-[12px] font-semibold text-[#6E6E73] hover:text-[#1D1D1F]"
+          >
+            Hide
+          </button>
+        </div>
         {hasWarning && !readOnly ? (
           <p className="mt-3 border-l-4 border-amber-400 pl-3 text-[13px] font-medium text-amber-700">
             Check connection timing
           </p>
         ) : null}
-        <ul className="mt-4 overflow-hidden rounded-xl bg-white">
+        <ul className="mt-3 overflow-hidden rounded-xl bg-white">
           {uniqueFlights.map((f, idx) => (
             <li key={f.id} className={idx < uniqueFlights.length - 1 ? "border-b border-[#E5E5EA]" : ""}>
               {readOnly ? (
@@ -243,6 +282,7 @@ function DestinationBlock({
   onEditDay,
   blockRef,
   suppressPlanningAlerts = false,
+  defaultExpanded = false,
 }: {
   leg: BuiltTripLeg;
   dayKeys: string[];
@@ -259,8 +299,9 @@ function DestinationBlock({
   onEditDay: (dateKey: string) => void;
   blockRef: (node: HTMLDivElement | null) => void;
   suppressPlanningAlerts?: boolean;
+  defaultExpanded?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const [forecast, setForecast] = useState<Map<string, DailyWeather>>(new Map());
   const cityMissions = missionsForCity(missions, leg.label);
   const nights = countNights(leg.startDate, leg.endDate);
@@ -431,6 +472,63 @@ function DestinationBlock({
   );
 }
 
+type TimelineBlock = {
+  leg: BuiltTripLeg;
+  dayKeys: string[];
+  flights: TimelineReservation[];
+};
+
+type PlaceChapter = {
+  id: string;
+  inboundTravel: TimelineBlock | null;
+  stay: TimelineBlock | null;
+};
+
+function organizePlaceFirstChapters(blocks: TimelineBlock[]): PlaceChapter[] {
+  const chapters: PlaceChapter[] = [];
+  let pendingTravel: TimelineBlock | null = null;
+
+  for (const block of blocks) {
+    if (block.leg.type === "travel") {
+      pendingTravel = block;
+      continue;
+    }
+    chapters.push({
+      id: block.leg.id,
+      inboundTravel: pendingTravel,
+      stay: block,
+    });
+    pendingTravel = null;
+  }
+
+  if (pendingTravel) {
+    chapters.push({
+      id: pendingTravel.leg.id,
+      inboundTravel: pendingTravel,
+      stay: null,
+    });
+  }
+
+  return chapters;
+}
+
+function TripRouteOverview({ stayLegs }: { stayLegs: BuiltTripLeg[] }) {
+  if (stayLegs.length === 0) return null;
+  const labels = stayLegs.map((leg) => leg.label);
+  return (
+    <div
+      className="rounded-2xl bg-[#F5F5F7] px-5 py-4"
+      style={{ fontFamily: SYSTEM_FONT, boxShadow: CARD_SHADOW }}
+    >
+      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#6E6E73]">Your trip</p>
+      <p className="mt-1 text-[18px] font-bold leading-snug text-[#1D1D1F]">{labels.join(" → ")}</p>
+      <p className="mt-1 text-[13px] text-[#6E6E73]">
+        {stayLegs.length} stop{stayLegs.length === 1 ? "" : "s"} · tap a city below for day-by-day details
+      </p>
+    </div>
+  );
+}
+
 export function ItineraryTimeline({
   tripStartDate,
   tripEndDate = null,
@@ -477,6 +575,9 @@ export function ItineraryTimeline({
     });
   }, [allDayKeys, legModel.legs, reservations]);
 
+  const placeChapters = useMemo(() => organizePlaceFirstChapters(blocks), [blocks]);
+  const stayLegs = useMemo(() => blocks.filter((b) => b.leg.type === "stay").map((b) => b.leg), [blocks]);
+
   const scrollTarget = scrollToDateKey ?? selectedDateKey;
 
   useEffect(() => {
@@ -516,44 +617,47 @@ export function ItineraryTimeline({
     : [];
 
   return (
-    <div className="space-y-3" style={{ fontFamily: SYSTEM_FONT }}>
-      {blocks.map((block) => {
-        if (block.leg.type === "travel") {
-          return (
+    <div className="space-y-4" style={{ fontFamily: SYSTEM_FONT }}>
+      <TripRouteOverview stayLegs={stayLegs} />
+
+      {placeChapters.map((chapter, chapterIndex) => (
+        <div key={chapter.id} className="space-y-2">
+          {chapter.inboundTravel ? (
             <TravelCard
-              key={block.leg.id}
-              leg={block.leg}
-              flights={block.flights}
+              leg={chapter.inboundTravel.leg}
+              flights={chapter.inboundTravel.flights}
               gapDateKeys={gapDateKeys}
               onReservationTap={onReservationTap}
               readOnly={suppressPlanningAlerts}
+              defaultExpanded={false}
             />
-          );
-        }
-        return (
-          <DestinationBlock
-            key={block.leg.id}
-            leg={block.leg}
-            dayKeys={block.dayKeys}
-            reservations={reservations}
-            dayNotes={dayNotes}
-            gapDateKeys={gapDateKeys}
-            tripStartDate={tripStartDate}
-            tripEndDate={tripEndDate}
-            selectedDateKey={selectedDateKey}
-            highlightedLegId={highlightedLegId}
-            missions={missionItems}
-            onMissionAction={onMissionAction}
-            onSelectedDateKeyChange={onSelectedDateKeyChange}
-            onEditDay={setEditDateKey}
-            blockRef={(node) => {
-              if (node) blockRefs.current.set(block.leg.id, node);
-              else blockRefs.current.delete(block.leg.id);
-            }}
-            suppressPlanningAlerts={suppressPlanningAlerts}
-          />
-        );
-      })}
+          ) : null}
+
+          {chapter.stay ? (
+            <DestinationBlock
+              leg={chapter.stay.leg}
+              dayKeys={chapter.stay.dayKeys}
+              reservations={reservations}
+              dayNotes={dayNotes}
+              gapDateKeys={gapDateKeys}
+              tripStartDate={tripStartDate}
+              tripEndDate={tripEndDate}
+              selectedDateKey={selectedDateKey}
+              highlightedLegId={highlightedLegId}
+              missions={missionItems}
+              onMissionAction={onMissionAction}
+              onSelectedDateKeyChange={onSelectedDateKeyChange}
+              onEditDay={setEditDateKey}
+              defaultExpanded={chapterIndex === 0}
+              blockRef={(node) => {
+                if (node) blockRefs.current.set(chapter.stay!.leg.id, node);
+                else blockRefs.current.delete(chapter.stay!.leg.id);
+              }}
+              suppressPlanningAlerts={suppressPlanningAlerts}
+            />
+          ) : null}
+        </div>
+      ))}
 
       {editRowDateKey ? (
         <ItineraryDayDrawer

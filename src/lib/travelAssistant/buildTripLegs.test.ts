@@ -6,8 +6,38 @@ import {
   countNights,
   dedupeFlights,
   buildLegendLegs,
+  humanTravelLegLabel,
   STAY_LEG_PALETTE,
 } from "@/lib/travelAssistant/buildTripLegs";
+
+test("humanTravelLegLabel uses city names not airport chains", () => {
+  assert.equal(
+    humanTravelLegLabel([
+      {
+        id: "1",
+        type: "flight",
+        title: "",
+        provider: "",
+        localTime: "2026-09-01",
+        flightNumber: "AS 654",
+        flightDepartureAirport: "ONT",
+        flightArrivalAirport: "SEA",
+      },
+      {
+        id: "2",
+        type: "flight",
+        title: "",
+        provider: "",
+        localTime: "2026-09-01",
+        flightNumber: "AS 180",
+        flightDepartureAirport: "SEA",
+        flightArrivalAirport: "FCO",
+      },
+    ]),
+    "Fly to Rome · 2 flights",
+  );
+  assert.equal(humanTravelLegLabel([], { isReturn: true }), "Return home");
+});
 
 test("airportToCity resolves common IATA codes", () => {
   assert.equal(airportToCity("BRI"), "Bari");
