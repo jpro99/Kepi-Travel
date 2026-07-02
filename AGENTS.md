@@ -13,7 +13,8 @@ Primary goals:
 
 Operating rules:
 - **Git delivery (owner preference):** Commit and push directly to `main`. No PRs or feature branches unless the owner explicitly asks.
-- **Discuss before code (Jeff — mandatory):** When Jeff asks what is wrong, how things should look, or whether something matches his style, respond with analysis and a proposed plan only. Do **not** edit files, commit, or push until he explicitly approves after that discussion — unless he clearly says "fix it now" / "go ahead" / "push" in the same message.
+- **Auto-push after build (Jeff, 2026-06-15):** After implementing changes, run `npm run lint` and `npm run build`. If both pass, commit and push to `main` without asking for push approval. Vercel deploys production from `main`.
+- **Discuss before code (Jeff — mandatory):** When Jeff asks what is wrong, how things should look, or whether something matches his style, respond with analysis and a proposed plan only. Do **not** edit files until he approves or says "go ahead" / "build it" — then implement and auto-push per above.
 - Start with an audit plan before changing code.
 - Prefer read-only review first, then propose changes.
 - Never claim a bug is fixed until the relevant checks are run.

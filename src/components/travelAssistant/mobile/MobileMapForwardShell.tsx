@@ -243,7 +243,7 @@ export function MobileMapForwardShell({
 
         {hasActiveTrip ? (
           <div className="grid grid-cols-2 gap-3">
-            <button type="button" onClick={() => onNavigateTab("trip")} className={quickActionBtn}>
+            <button type="button" onClick={() => onNavigateTab("book")} className={quickActionBtn}>
               <p className="text-[15px] font-semibold text-[var(--text-muted)]">Bookings</p>
               <p className="mt-1 text-[19px] font-bold text-[var(--text-primary)]">Flights & hotels</p>
             </button>
@@ -284,7 +284,7 @@ export function MobileMapForwardShell({
     );
   }
 
-  if (activeTab === "trip") {
+  if (activeTab === "book") {
     return (
       <div className="kepi-mobile-shell space-y-5 pb-4">
         {tripHeader}

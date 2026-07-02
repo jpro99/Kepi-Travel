@@ -1,10 +1,11 @@
-export type MobilePrimaryTab = "home" | "map" | "trip" | "plan" | "more";
+export type MobilePrimaryTab = "home" | "plan" | "book" | "map" | "more";
 
+/** Same mental model as desktop: Home → Plan → Book → Map → More */
 export const MOBILE_PRIMARY_TABS: Array<{ id: MobilePrimaryTab; label: string }> = [
   { id: "home", label: "Home" },
-  { id: "map", label: "Map" },
-  { id: "trip", label: "Trip" },
   { id: "plan", label: "Plan" },
+  { id: "book", label: "Book" },
+  { id: "map", label: "Map" },
   { id: "more", label: "More" },
 ];
 
@@ -12,9 +13,10 @@ const LEGACY_MOBILE_TAB_ALIASES: Record<string, MobilePrimaryTab> = {
   planning: "plan",
   plan: "plan",
   itinerary: "plan",
-  flights: "trip",
-  hotels: "trip",
-  trips: "trip",
+  trip: "book",
+  trips: "book",
+  flights: "book",
+  hotels: "book",
   assist: "home",
   settings: "more",
 };

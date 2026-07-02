@@ -3,19 +3,87 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-06-25
+Last updated: 2026-06-15
 
 ---
 
 ## Jeff — how to work with him (mandatory)
 
-- **Discuss first, code second.** If he asks "what would you fix?" or "does this match?" or "tell me before you change anything" — give analysis and a short plan only. Wait for explicit approval before editing, committing, or pushing.
+- **Discuss first, code second.** If he asks "what would you fix?" or "does this match?" or "tell me before you change anything" — give analysis and a short plan only. Wait for explicit approval before editing — unless he clearly says "fix it now" / "go ahead" / "build it."
+- **Auto-push after build (Jeff, 2026-06-15):** When you implement code and `npm run lint` + `npm run build` pass, **commit and push to `main` immediately** — do **not** ask "want me to push?" Production is kepitravel.com via Vercel on push to main.
 - **Do not burn credits** on unapproved refactors or "helpful" extra changes.
 - **Match his eye, not a generic template.** Hotels (Stays) tab on mobile is the reference for clean mobile trip UI: trip name → Flights/Hotels picker → map → list. No blue route banner strip on Flights (he removed it — "Ontario to Ontario" was wrong and not clean). Hotels stay as-is with no blue hero.
 - **Flights and Stays must feel the same** — same structure, card style, and chrome. Still a gap as of 2026-06-25; align only after he approves a written plan.
-- **Trip tab (desktop):** Trip name, then flights, then hotels — nothing else (no itinerary prompts, calendar, airport/hotel questionnaires).
 - **Plan tab:** Lined-paper itinerary, inline edit, no reservation popups on line tap.
-- Read this section before UI work on Trips / Flights / Hotels / Plan.
+- Read this section before UI work on Home / Trips / Flights / Hotels / Plan.
+
+---
+
+## Consumer nav — unified (Jeff, 2026-06-15)
+
+**Same mental model on phone and desktop:**
+
+| Order | Label | Job |
+|-------|-------|-----|
+| 1 | **Home** | Command center — where you are in the journey |
+| 2 | **Plan** | Day-by-day timeline + calendar |
+| 3 | **Book** | Flights, hotels, confirmations, search |
+| 4 | **Map** | Live/family map, airport mode |
+| 5 | **More** | Settings, family, loyalty, etc. |
+
+- **Map is not early in the bar** — it sits between Book and More. Users don't open a map first; they open Home.
+- **URL compat:** Desktop still uses `?tab=trip` internally for Home; label shown to user is **Home** not Trip.
+- **Mobile:** `?mtab=home|plan|book|map|more`. Legacy aliases: `trip`/`flights`/`hotels` → `book`; `itinerary`/`calendar` → `plan`.
+
+---
+
+## Home tab — product law (Jeff, 2026-06-15)
+
+**What Home is NOT (production bug / old design):**  
+A flat scroll of every flight row under the trip title (e.g. "Europe 2026" + Alaska/ITA list). That reads like an email parser dump — **not premium**, not "best travel app ever."
+
+**What Home IS:**  
+A **journey command center** that answers *"Where am I in this trip?"* before *"Here are all my bookings."*
+
+**Required Home content (desktop + mobile):**
+1. **Hero** — trip name, destination, dates, countdown (navy gradient header)
+2. **Route flow** — visual map/globe of legs (tap leg for details), not a laundry list
+3. **Journey assist** — phase-aware guidance (pre-trip, airport, in-air, etc.)
+4. **Quick actions** — cards/shortcuts to Book, Plan, Map
+5. **Next up** (still needed) — one prominent card: next flight/hotel with time, route, status when close
+
+**What belongs elsewhere:**
+- Full flight/hotel inventory → **Book**
+- Day-by-day planning → **Plan**
+- Family/live map → **Map** tab
+
+**Premium gaps Jeff called out (still to ship):**
+- Header badges like "$4,077 spent · 3 NEED PRICING" must be **actionable on Home**, not orphaned in the corner
+- **Deduped segments** — same leg must never appear twice (see KEPI_DESIGN_LAW I12)
+- **Destination feel** — photo or globe emotional hook, not airports-only text
+- Phone and desktop must show the **same five tabs in the same order**
+
+**Implementation note:** `DesktopTripHomeView` rewrite + `mobileShellTypes` unified tabs exist locally; **verify git push / Vercel** before assuming production matches. Old production Home = flat list + "Trip" tab label.
+
+**Supersedes:** Earlier note "Trip tab (desktop): trip name, then flights, then hotels — nothing else." Flight/hotel lists now live on **Book**; Home is command center + route flow.
+
+---
+
+## Home + Plan build order (Jeff approved 2026-06-15)
+
+Execute in this order; do not skip dedupe before polish.
+
+| Phase | Work | Status |
+|-------|------|--------|
+| **1** | Home command center — hero, route map, Next Up (`DesktopTripHomeView`, unified nav Home label) | In progress |
+| **2** | **Dedupe flights** at consumer shell — `dedupeConsumerReservations()` before sort/display | Done |
+| **3** | **Trip health strip** — one inline “Trip needs attention (N)” on Home + Plan; ban stacked floating gap toasts | Done |
+| **4** | Wire **NEED PRICING** into trip health → Book | Done |
+| **5** | **Plan = place-first** — destination chapters lead; raw segments collapsed | Next |
+| **6** | **Destination feel** on Home — hero photo or embedded globe like mobile | Next |
+| **7** | Deploy + verify on kepitravel.com | Pending push |
+
+Component map: `TripHealthStrip`, `dedupeConsumerReservations`, `DesktopTripHomeView`, `MobileMapForwardShell` (home), `ItineraryTabView` (plan).
 
 ---
 
@@ -140,5 +208,8 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 
 | Date | Note |
 |------|------|
+| 2026-06-15 | **Auto-push:** after lint+build pass, commit+push main without asking — Vercel → kepitravel.com |
+| 2026-06-15 | **Home+Plan build order** phases 2–4: dedupeConsumerReservations, TripHealthStrip, pricing wired on Home/Plan |
+| 2026-06-15 | **Home tab product law:** unified nav Home\|Plan\|Book\|Map\|More; Home = command center + route flow (not flat flight list); Book owns inventory; premium gaps documented |
 | 2026-06-15 | Screenshot triage rule + Polignano offshore pin fix (`isLikelyOffshorePin`) |
 | 2026-06-15 | Created memory file; documented Duffel emails sent, LiteAPI key set, Travelpayouts Drive skipped, domain bot skills |

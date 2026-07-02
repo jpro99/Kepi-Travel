@@ -48,6 +48,9 @@ When hotels, flights, or transport are still unbooked, the Trips header must lis
 **G11 — Post-booking confirmation**  
 After a successful hotel checkout or manual reservation with a confirmation code, show a confirmation card with ref # and "Added to your trip timeline" — not toast alone.
 
+**G12 — Trip health is one strip, not stacked toasts**  
+Gap alerts and missing-pricing counts merge into a single inline `TripHealthStrip` on Home and Plan — collapsed summary by default, expandable list. Never stack multiple fixed floating banners over content.
+
 ---
 
 ## FLIGHTS LAWS
@@ -178,8 +181,8 @@ When a more accurate GPS reading arrives (e.g. house after Wi‑Fi placed the pi
 
 ## ITINERARY LAWS
 
-**I1 — Plan is a first-class tab**  
-Day-by-day planning lives on the **Plan** (`itinerary`) consumer tab — not a hidden sidebar. Trip tab stays operational (countdown, Next Up); Plan tab owns timeline + calendar.
+**I1 — Home is a first-class tab**  
+Day-by-day planning lives on the **Plan** (`itinerary`) consumer tab — not a hidden sidebar. **Home** (`trip` URL param) stays operational: hero, route flow, journey assist, Next Up, quick actions to Book/Plan/Map. **Book** owns full flight/hotel inventory. Plan tab owns timeline + calendar. Never show a flat reservation dump on Home.
 
 **I2 — Vertical timeline, inline expand**  
 Each trip day is one collapsed row. Tap expands details inline below the row — not a modal. Full editing opens only via **Edit plan**.

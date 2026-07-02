@@ -9,7 +9,7 @@ export const CONSUMER_TABS: ConsumerTab[] = ["trip", "itinerary", "book", "map",
 
 /** Tab bar labels/icons — shared by desktop and mobile nav. */
 export const CONSUMER_TAB_BAR: ReadonlyArray<readonly [ConsumerTab, string, string]> = [
-  ["trip", "Trip", "✈️"],
+  ["trip", "Home", "🏠"],
   ["itinerary", "Plan", "📋"],
   ["book", "Book", "🎫"],
   ["map", "Map", "🗺"],

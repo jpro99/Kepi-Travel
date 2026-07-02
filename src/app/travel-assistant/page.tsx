@@ -110,6 +110,7 @@ import {
   filterConsumerTimelineReservations,
   isOnboardingSetupPlaceholder,
 } from "@/lib/travelAssistant/consumerTimeline";
+import { dedupeConsumerReservations } from "@/lib/travelAssistant/dedupeConsumerReservations";
 import { ThemeHeaderPicker, ThemePicker, ThemeToggle } from "@/components/ThemeToggle";
 import { QuickAddLane } from "@/components/travelAssistant/QuickAddLane";
 import { ReservationList } from "@/components/travelAssistant/ReservationList";
@@ -4072,7 +4073,7 @@ export default function TravelAssistantPage() {
 
   const advancedWorkspaceEnabled = advancedModeEnabled;
   const consumerDisplayReservations = useMemo(() => {
-    return filterConsumerTimelineReservations(reservations);
+    return dedupeConsumerReservations(filterConsumerTimelineReservations(reservations));
   }, [reservations]);
   const tripDaysAway = useMemo(() => {
     if (!activeTrip || consumerDisplayReservations.length === 0) {
@@ -8952,8 +8953,20 @@ export default function TravelAssistantPage() {
             ) : (
               <DesktopTripHomeView
                 tripName={activeTrip?.name ?? "Your trip"}
+                destination={consumerTripDestination ?? activeTrip?.destination ?? null}
+                startDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
+                endDate={consumerTripEndDate ?? activeTrip?.endDate ?? null}
+                journeyPhase={journeyPhase}
                 reservations={consumerReservationsSorted}
+                locationStatus={guidanceLocationStatus}
+                nearestAirport={guidanceNearestAirport}
+                missingPriceCount={tripSpendSummary.missingPriceCount}
+                onReviewPricing={() => navigateToBook("flights")}
+                onGapActionTap={handleItineraryGapAction}
                 onReservationTap={(id) => openDrawer("reservation", id)}
+                onOpenBook={() => navigateToBook("flights")}
+                onOpenPlan={() => navigateToConsumerTab("itinerary")}
+                onOpenMap={() => router.push("/travel-assistant/live-map")}
               />
             )
           ) : consumerTab === "itinerary" ? (
@@ -8961,6 +8974,8 @@ export default function TravelAssistantPage() {
               tripName={activeTrip?.name ?? "Your trip"}
               tripStartDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
               tripEndDate={activeTrip?.endDate ?? null}
+              missingPriceCount={tripSpendSummary.missingPriceCount}
+              onReviewPricing={() => navigateToBook("flights")}
               reservations={consumerReservationsSorted}
               dayNotes={itineraryPrefs.dayNotes}
               stopRanges={effectiveStopRanges}
@@ -9345,35 +9360,12 @@ export default function TravelAssistantPage() {
               onClose={() => setMobileSearchOpen(false)}
               onSelectResult={async (selection) => {
                 await handleTripSearchSelection(selection);
-                navigateMobilePrimaryTab("trip");
+                navigateMobilePrimaryTab("book");
               }}
             />
             <MobileTabBarNav activeTab={mobilePrimaryTab} onSelectTab={navigateMobilePrimaryTab} />
           </>
-        ) : (
-        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--border-default)] bg-[var(--bg-card)]/95 px-2 py-2 shadow-2xl backdrop-blur md:hidden">
-          <div className="mx-auto flex max-w-lg gap-0.5 overflow-x-auto text-[11px] font-semibold">
-            {CONSUMER_TAB_BAR.map(([tab, label, icon]) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => tab === "map" ? router.push("/travel-assistant/live-map") : navigateToConsumerTab(tab)}
-                className={`relative flex min-w-[3.4rem] flex-1 flex-col items-center justify-center gap-0.5 py-2 transition-all ${
-                  consumerTab === tab
-                    ? "text-[#007AFF] dark:text-[#0A84FF]"
-                    : "text-slate-400 dark:text-slate-500"
-                }`}
-              >
-                <span className="text-[15px] leading-none">{icon}</span>
-                <span className="text-[10px] font-semibold tracking-tight">{label}</span>
-                {consumerTab === tab && (
-                  <span className="absolute top-0 left-1/2 h-[2.5px] w-8 -translate-x-1/2 rounded-full bg-[#007AFF] dark:bg-[#0A84FF]" />
-                )}
-              </button>
-            ))}
-          </div>
-        </nav>
-        )}
+        ) : null}
         <div aria-live="polite" aria-atomic="true" className="sr-only">
           {toast ?? ""}
         </div>

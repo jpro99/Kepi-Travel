@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ItineraryTimeline } from "@/components/travelAssistant/ItineraryTimeline";
-import { ItinerarySlideBanners } from "@/components/travelAssistant/ItinerarySlideBanners";
+import { TripHealthStrip } from "@/components/travelAssistant/TripHealthStrip";
 import { TripLegCalendar } from "@/components/travelAssistant/TripLegCalendar";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
@@ -15,6 +15,8 @@ interface ItineraryTabViewProps {
   tripName: string;
   tripStartDate: string | null;
   tripEndDate?: string | null;
+  missingPriceCount?: number;
+  onReviewPricing?: () => void;
   reservations: {
     id: string;
     type: string;
@@ -65,6 +67,8 @@ export function ItineraryTabView({
   tripName,
   tripStartDate,
   tripEndDate,
+  missingPriceCount = 0,
+  onReviewPricing,
   reservations,
   dayNotes,
   planSubView,
@@ -122,7 +126,15 @@ export function ItineraryTabView({
         fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif',
       }}
     >
-      <ItinerarySlideBanners reservations={reservations} onActionTap={onGapActionTap} />
+      <TripHealthStrip
+        reservations={reservations.map((reservation) => ({
+          ...reservation,
+          location: reservation.location ?? "",
+        }))}
+        missingPriceCount={missingPriceCount}
+        onGapActionTap={onGapActionTap}
+        onReviewPricing={onReviewPricing}
+      />
 
       <header className="rounded-2xl bg-[#0F1923] px-5 py-5 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f4c95d]">Plan</p>
