@@ -1981,13 +1981,13 @@ export default function TravelAssistantPage() {
     const nextUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, "", nextUrl);
   }, [bookSubTab, planSubView]);
+  const { mobilePrimaryTab, navigateMobilePrimaryTab } = useMobilePrimaryTab();
   const navigateToBook = useCallback((bookView: BookSubTab = "flights"): void => {
     navigateToConsumerTab("book", { bookView });
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches) {
       navigateMobilePrimaryTab("book");
     }
   }, [navigateToConsumerTab, navigateMobilePrimaryTab]);
-  const { mobilePrimaryTab, navigateMobilePrimaryTab } = useMobilePrimaryTab();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const airportAutoNavRef = useRef(false);
   const [manualReservationDefaultDateTime, setManualReservationDefaultDateTime] = useState<string | null>(null);
