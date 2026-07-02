@@ -182,7 +182,7 @@ When a more accurate GPS reading arrives (e.g. house after Wi‑Fi placed the pi
 ## ITINERARY LAWS
 
 **I1 — Home is a first-class tab**  
-Day-by-day planning lives on the **Plan** (`itinerary`) consumer tab — not a hidden sidebar. **Home** (`trip` URL param) stays operational: hero, route flow, journey assist, Next Up, quick actions to Book/Plan/Map. **Book** owns full flight/hotel inventory. Plan tab owns timeline + calendar. Never show a flat reservation dump on Home.
+Day-by-day planning lives on the **Plan** (`itinerary`) consumer tab — not a hidden sidebar. **Home** (`trip` URL param) stays operational: cinematic hero (destination photo + route globe), journey assist, Next Up, trip health strip, quick actions to Book/Plan/Map. **Book** owns full flight/hotel inventory. Plan tab owns timeline + calendar. Never show a flat reservation dump on Home.
 
 **I2 — Vertical timeline, inline expand**  
 Each trip day is one collapsed row. Tap expands details inline below the row — not a modal. Full editing opens only via **Edit plan**.

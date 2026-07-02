@@ -80,7 +80,7 @@ Execute in this order; do not skip dedupe before polish.
 | **3** | **Trip health strip** — one inline “Trip needs attention (N)” on Home + Plan; ban stacked floating gap toasts | Done |
 | **4** | Wire **NEED PRICING** into trip health → Book | Done |
 | **5** | **Plan = place-first** — destination chapters lead; raw segments collapsed | Done |
-| **6** | **Destination feel** on Home — hero photo or embedded globe like mobile | Next |
+| **6** | **Destination feel** on Home — hero photo + embedded globe like mobile | Done |
 | **7** | Deploy + verify on kepitravel.com | Auto on push |
 
 Component map: `TripHealthStrip`, `dedupeConsumerReservations`, `DesktopTripHomeView`, `MobileMapForwardShell` (home), `ItineraryTabView` (plan).

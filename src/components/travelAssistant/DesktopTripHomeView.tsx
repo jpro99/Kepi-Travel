@@ -1,9 +1,20 @@
 "use client";
 
+import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { MobileAssistView } from "@/components/travelAssistant/mobile/MobileAssistView";
+import type { GlobeArc } from "@/components/travelAssistant/mobile/TripGlobe";
 import { TripHealthStrip } from "@/components/travelAssistant/TripHealthStrip";
-import { TripTransportRouteMap } from "@/components/travelAssistant/TripTransportRouteMap";
+import { airportToCity } from "@/lib/travelAssistant/buildTripLegs";
+import { cityPhotoPicsumUrl, cityPhotoUrl } from "@/lib/travelAssistant/cityPhotos";
+import { buildTripTransportRoute } from "@/lib/travelAssistant/tripTransportRoute";
+import { collectRouteMapPoints } from "@/lib/travelAssistant/tripRouteMapGeo";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
+
+const TripGlobe = dynamic(
+  () => import("@/components/travelAssistant/mobile/TripGlobe").then((m) => m.TripGlobe),
+  { ssr: false, loading: () => <div className="h-full w-full animate-pulse bg-[#061428]" /> },
+);
 
 interface TripReservation {
   id: string;
@@ -59,6 +70,36 @@ function formatDateRange(startDate: string | null | undefined, endDate: string |
   return `${fmt(startDate)} – ${fmt(endDate)}`;
 }
 
+function resolveHeroCity(destination: string | null | undefined, reservations: TripReservation[]): string {
+  if (destination?.trim()) {
+    return destination.split(/[,/]/u)[0]?.trim() || destination.trim();
+  }
+  const hotel = reservations.find((reservation) => reservation.type === "hotel" && reservation.location?.trim());
+  if (hotel?.location) {
+    return hotel.location.split(/[,/]/u)[0]?.trim() || hotel.location;
+  }
+  const flight = reservations.find(
+    (reservation) => reservation.type === "flight" && reservation.flightArrivalAirport?.trim(),
+  );
+  if (flight?.flightArrivalAirport) {
+    return airportToCity(flight.flightArrivalAirport);
+  }
+  return "Your destination";
+}
+
+function DestinationHeroPhoto({ city }: { city: string }) {
+  const [src, setSrc] = useState(() => cityPhotoUrl(city, 1200));
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      className="absolute inset-0 h-full w-full object-cover"
+      onError={() => setSrc(cityPhotoPicsumUrl(city))}
+    />
+  );
+}
+
 export function DesktopTripHomeView({
   tripName,
   destination,
@@ -83,21 +124,73 @@ export function DesktopTripHomeView({
   const hotelCount = reservations.filter((reservation) => reservation.type === "hotel").length;
   const countdown = daysUntilTrip(startDate);
   const dateRange = formatDateRange(startDate, endDate);
+  const heroCity = resolveHeroCity(destination, reservations);
+
+  const { arcs, points, hasRoute } = useMemo(() => {
+    const route = buildTripTransportRoute(transportReservations);
+    const mapPoints = collectRouteMapPoints(route.segments);
+    const globeArcs: GlobeArc[] = route.segments
+      .filter((segment) => segment.lat != null && segment.lon != null && segment.toLat != null && segment.toLon != null)
+      .map((segment) => ({
+        id: segment.id,
+        fromLat: segment.lat!,
+        fromLon: segment.lon!,
+        toLat: segment.toLat!,
+        toLon: segment.toLon!,
+        color: segment.status === "conflict" ? "#ef4444" : segment.booked ? "#007AFF" : "#64748b",
+      }));
+    return {
+      arcs: globeArcs,
+      points: mapPoints,
+      hasRoute: globeArcs.length > 0,
+    };
+  }, [transportReservations]);
+
+  const subtitleParts = [
+    destination ?? heroCity,
+    dateRange,
+    countdown != null && countdown > 0 ? `${countdown} day${countdown === 1 ? "" : "s"} away` : null,
+    flightCount > 0 || hotelCount > 0
+      ? `${flightCount} flight${flightCount === 1 ? "" : "s"} · ${hotelCount} hotel${hotelCount === 1 ? "" : "s"}`
+      : null,
+  ].filter(Boolean);
 
   return (
     <section className="space-y-5">
-      <header className="rounded-2xl bg-gradient-to-br from-slate-900 via-sky-950 to-slate-900 px-6 py-5 text-white shadow-lg">
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-sky-300/80">Home</p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight">{tripName}</h1>
-        <p className="mt-2 text-sm text-sky-100/80">
-          {destination ? `${destination}` : "Your trip"}
-          {dateRange ? ` · ${dateRange}` : ""}
-          {countdown != null && countdown > 0 ? ` · ${countdown} day${countdown === 1 ? "" : "s"} away` : ""}
-          {flightCount > 0 || hotelCount > 0
-            ? ` · ${flightCount} flight${flightCount === 1 ? "" : "s"} · ${hotelCount} hotel${hotelCount === 1 ? "" : "s"}`
-            : ""}
-        </p>
-      </header>
+      <button
+        type="button"
+        onClick={onOpenMap}
+        className="group relative block w-full overflow-hidden rounded-2xl bg-[#020818] text-left shadow-xl ring-1 ring-slate-800/80 transition hover:ring-sky-500/40"
+        aria-label="Open full trip map"
+      >
+        <div className="grid min-h-[280px] lg:min-h-[320px] lg:grid-cols-2">
+          <div className="relative min-h-[200px] lg:min-h-full">
+            <DestinationHeroPhoto city={heroCity} />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/55 to-slate-900/30" />
+            <div className="relative flex h-full flex-col justify-end p-6">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-sky-300/90">Home</p>
+              <h1 className="mt-1 text-3xl font-black tracking-tight text-white lg:text-4xl">{tripName}</h1>
+              <p className="mt-2 text-sm leading-relaxed text-sky-100/85">{subtitleParts.join(" · ")}</p>
+            </div>
+          </div>
+
+          <div className="relative min-h-[220px] border-t border-white/10 lg:min-h-full lg:border-l lg:border-t-0">
+            {hasRoute ? (
+              <TripGlobe arcs={arcs} points={points} className="h-full min-h-[220px] lg:min-h-[320px]" />
+            ) : (
+              <div className="flex h-full min-h-[220px] items-center justify-center bg-[#061428] px-6 text-center lg:min-h-[320px]">
+                <p className="text-sm text-sky-200/70">Add flights to see your route on the globe</p>
+              </div>
+            )}
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#020818] via-[#020818]/80 to-transparent px-5 pb-5 pt-12">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-sky-300/80">Your route</p>
+              <p className="mt-0.5 text-base font-bold text-white group-hover:text-sky-200">
+                Open live map & family view →
+              </p>
+            </div>
+          </div>
+        </div>
+      </button>
 
       <TripHealthStrip
         reservations={reservations.map((reservation) => ({
@@ -109,20 +202,6 @@ export function DesktopTripHomeView({
         onGapActionTap={onGapActionTap}
         onReviewPricing={onReviewPricing}
       />
-
-      {transportReservations.length > 0 ? (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Your route</p>
-            <p className="text-sm text-slate-600 dark:text-slate-300">Follow the trip flow — tap a leg for details</p>
-          </div>
-          <TripTransportRouteMap
-            reservations={transportReservations}
-            sectionId="desktop-home-route-map"
-            onSegmentTap={onReservationTap}
-          />
-        </div>
-      ) : null}
 
       <MobileAssistView
         journeyPhase={journeyPhase}
