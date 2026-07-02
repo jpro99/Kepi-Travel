@@ -8745,7 +8745,14 @@ export default function TravelAssistantPage() {
                     Search
                   </button>
                 ) : null}
-                {!isCompactViewport && !showUnconfiguredTripShell && activeTrip ? (
+                {isCompactViewport && !showUnconfiguredTripShell && activeTrip ? (
+                  <TripSpendBadge
+                    summary={tripSpendSummary}
+                    problemCount={transportConflictReservationIds.size}
+                    onClick={() => navigateToBook("flights")}
+                    alwaysActionable
+                  />
+                ) : !isCompactViewport && !showUnconfiguredTripShell && activeTrip ? (
                   <TripSpendBadge
                     summary={tripSpendSummary}
                     problemCount={transportConflictReservationIds.size}

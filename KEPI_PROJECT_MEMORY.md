@@ -50,18 +50,18 @@ A **journey command center** that answers *"Where am I in this trip?"* before *"
 2. **Route flow** — visual map/globe of legs (tap leg for details), not a laundry list
 3. **Journey assist** — phase-aware guidance (pre-trip, airport, in-air, etc.)
 4. **Quick actions** — cards/shortcuts to Book, Plan, Map
-5. **Next up** (still needed) — one prominent card: next flight/hotel with time, route, status when close
+5. **Next up** — prominent card on Home with route, gate, live status (`NextUpCard` + `MobileAssistView`)
 
 **What belongs elsewhere:**
 - Full flight/hotel inventory → **Book**
 - Day-by-day planning → **Plan**
 - Family/live map → **Map** tab
 
-**Premium gaps Jeff called out (still to ship):**
-- Header badges like "$4,077 spent · 3 NEED PRICING" must be **actionable on Home**, not orphaned in the corner
-- **Deduped segments** — same leg must never appear twice (see KEPI_DESIGN_LAW I12)
-- **Destination feel** — photo or globe emotional hook, not airports-only text
-- Phone and desktop must show the **same five tabs in the same order**
+**Premium gaps Jeff called out:**
+- ~~Header badges actionable on Home~~ — `TripSpendBadge` on mobile header + Home body (2026-06-15)
+- ~~Deduped segments~~ — Done (phase 2)
+- ~~Destination feel~~ — photo + globe on Home (phases 6 + mobile)
+- ~~Phone and desktop same five tabs~~ — Done
 
 **Implementation note:** `DesktopTripHomeView` rewrite + `mobileShellTypes` unified tabs exist locally; **verify git push / Vercel** before assuming production matches. Old production Home = flat list + "Trip" tab label.
 
@@ -75,7 +75,7 @@ Execute in this order; do not skip dedupe before polish.
 
 | Phase | Work | Status |
 |-------|------|--------|
-| **1** | Home command center — hero, route map, Next Up (`DesktopTripHomeView`, unified nav Home label) | In progress |
+| **1** | Home command center — hero, route map, Next Up (`DesktopTripHomeView`, unified nav Home label) | Done |
 | **2** | **Dedupe flights** at consumer shell — `dedupeConsumerReservations()` before sort/display | Done |
 | **3** | **Trip health strip** — one inline “Trip needs attention (N)” on Home + Plan; ban stacked floating gap toasts | Done |
 | **4** | Wire **NEED PRICING** into trip health → Book | Done |
@@ -90,6 +90,8 @@ Component map: `TripHealthStrip`, `dedupeConsumerReservations`, `DesktopTripHome
 - **Spend badge tappable** — header `TripSpendBadge` opens Book when pricing/issues need attention
 - **Mobile Home trip health** — `TripHealthStrip` on mobile Home tab
 - **Book tab unified** — shared header, toggle chrome, matching flight/hotel list cards via `bookTabStyles.ts`
+- **Book search on mobile** — flight/hotel launchers, leg picker, stay planner wired from `page.tsx`
+- **Flights/Hotels card parity** — mobile Book list cards share icon tile, expand chevron, cost/miles row
 
 ---
 
@@ -214,6 +216,7 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 
 | Date | Note |
 |------|------|
+| 2026-06-15 | **Home spend + card parity:** TripSpendBadge on mobile header/Home; mobile flight cards match hotel list chrome |
 | 2026-06-15 | **Book search + Next Up:** mobile Book wired to flight/hotel search (launchers, leg picker, stay planner); loyalty spend in Book header; Next Up shows route/gate/status |
 | 2026-06-15 | **Mobile polish:** cinematic Home hero (photo+globe), unified Book chrome (navy header, Flights\|Hotels toggle), tickets as footer; shared `tripHeroVisuals` |
 | 2026-06-15 | **Auto-push:** after lint+build pass, commit+push main without asking — Vercel → kepitravel.com |

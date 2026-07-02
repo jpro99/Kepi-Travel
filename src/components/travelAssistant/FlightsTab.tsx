@@ -18,12 +18,13 @@ import {
   reservationAttentionKind,
   reservationAttentionRingClass,
 } from "@/lib/travelAssistant/reservationAttention";
-import { FlightCard } from "@/components/travelAssistant/FlightCard";
+
 import { BOOK_LIST_CARD_CLASS } from "@/components/travelAssistant/bookTabStyles";
 import { TripTransportRouteMap } from "@/components/travelAssistant/TripTransportRouteMap";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import type { ItinerarySelfCheckResult } from "@/lib/travelAssistant/itinerarySelfCheck";
 import { flightCardTypography, guideCardTypography, hotelCardTypography } from "@/lib/ui/mobileTypography";
+import { appleBtnText, appleWarningPill } from "@/lib/ui/appleDesign";
 
 /* ─── Types ──────────────────────────────────────────────────── */
 interface Reservation {
@@ -730,7 +731,7 @@ export function FlightsTab({
       )}
 
       {/* Flight cards */}
-      <div className={simplifiedMobile ? "space-y-4" : "space-y-3"}>
+      <div className={simplifiedMobile ? "space-y-3" : "space-y-3"}>
         {shown.map(r => {
           const dep = r.flightDepartureAirport ?? "---";
           const arr = r.flightArrivalAirport ?? "---";
@@ -760,30 +761,50 @@ export function FlightsTab({
               gate && gate !== "—"
                 ? `Gate ${gate}${terminal && terminal !== "—" ? ` · Terminal ${terminal}` : ""}`
                 : undefined;
+            const routeLine = `${dep} → ${arr}`;
+            const timeLine = `${date} · ${depTime}${arrTime && arrTime !== "—" ? ` → ${arrTime}` : ""}`;
+            const flightTitle =
+              r.flightNumber?.trim() ||
+              r.title?.trim() ||
+              `${r.flightAirline ?? r.provider} flight`.trim();
 
             return (
-              <FlightCard
+              <div
                 key={r.id}
-                mobile
-                className={past ? "opacity-60" : ""}
-                airline={r.flightAirline ?? r.provider}
-                flightNumber={flightCardSubtitle(r.flightNumber, dep, arr)}
-                departure={dep}
-                arrival={arr}
-                departureTime={flightCardDepartureTime(date, depTime)}
-                arrivalTime={arrTime || "—"}
-                price={attentionBadge && !isPast ? undefined : costLine ?? undefined}
-                addMiles={missingPrice && !past}
-                badge={
-                  attentionBadge && !isPast ? (
-                    <span className={attentionBadge.className}>{attentionBadge.label}</span>
-                  ) : undefined
-                }
-                gateLine={gateLine}
-                onClick={() => setExpanded(isOpen ? null : r.id)}
+                className={`${listType.card} overflow-hidden ${past ? "opacity-60" : ""}`}
               >
-                {isOpen ? (
-                  <div className="space-y-3 border-t border-[var(--border-default)] px-5 pb-4 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setExpanded(isOpen ? null : r.id)}
+                  className="w-full p-4 text-left"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-[var(--bg-grouped)] text-lg text-[var(--text-secondary)]">
+                      ✈️
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className={listType.title}>{flightTitle}</p>
+                        {attentionBadge && !past ? (
+                          <span className={attentionBadge.className}>{attentionBadge.label}</span>
+                        ) : missingPrice && !past ? (
+                          <span className={appleWarningPill}>Add cost</span>
+                        ) : costLine ? (
+                          <span className="shrink-0 text-[17px] font-semibold text-[var(--text-primary)]">{costLine}</span>
+                        ) : null}
+                      </div>
+                      <p className={listType.location}>{routeLine}</p>
+                      <p className={`${listType.metadata} mt-1`}>{timeLine}</p>
+                      {gateLine ? (
+                        <p className="mt-1 text-[15px] font-semibold text-[var(--accent)]">{gateLine}</p>
+                      ) : null}
+                    </div>
+                    <span className="mt-1 shrink-0 text-[13px] text-[var(--text-tertiary)]">{isOpen ? "▲" : "▼"}</span>
+                  </div>
+                </button>
+
+                {(isOpen || r.confirmationCode || r.flightSeatNumber) && (
+                  <div className="space-y-3 border-t border-[var(--border-default)] px-4 pb-4 pt-3">
                     {r.flightSeatNumber ? (
                       <div>
                         <p className={listType.detailLabel}>Seat</p>
@@ -796,35 +817,51 @@ export function FlightsTab({
                         <p className={`${listType.detailValue} mt-0.5`}>{r.confirmationCode}</p>
                       </div>
                     ) : null}
-                    <div className="flex items-center gap-2 pt-1">
+                    {costLine && !missingPrice ? (
+                      <div>
+                        <p className={listType.detailLabel}>Trip cost</p>
+                        <p className={`${listType.detailValue} mt-0.5`}>{costLine}</p>
+                      </div>
+                    ) : missingPrice && !past ? (
                       <button
                         type="button"
                         onClick={() => onReservationTap(r.id)}
-                        className={`${listType.actionBtn} ${listType.secondaryBtn}`}
+                        className={`${appleBtnText} text-left`}
                       >
-                        View details
+                        Tap to add miles or cash
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => onCheckStatus(r.id)}
-                        disabled={live?.busy}
-                        className={`${listType.actionBtn} font-semibold text-[var(--accent)] disabled:opacity-50`}
-                      >
-                        {live?.busy ? "Checking…" : "Check status"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (window.confirm("Delete this flight?")) onDelete(r.id);
-                        }}
-                        className={`${listType.actionBtn} ${listType.destructiveBtn}`}
-                      >
-                        Delete
-                      </button>
-                    </div>
+                    ) : null}
+                    {isOpen ? (
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => onReservationTap(r.id)}
+                          className={`${listType.actionBtn} ${listType.secondaryBtn}`}
+                        >
+                          View details
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onCheckStatus(r.id)}
+                          disabled={live?.busy}
+                          className={`${listType.actionBtn} font-semibold text-[var(--accent)] disabled:opacity-50`}
+                        >
+                          {live?.busy ? "Checking…" : "Check status"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm("Delete this flight?")) onDelete(r.id);
+                          }}
+                          className={`${listType.actionBtn} ${listType.destructiveBtn}`}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
-                ) : null}
-              </FlightCard>
+                )}
+              </div>
             );
           }
 

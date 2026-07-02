@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { MobileAssistView } from "@/components/travelAssistant/mobile/MobileAssistView";
 import { TripHealthStrip } from "@/components/travelAssistant/TripHealthStrip";
+import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
 import { MobileItineraryReader } from "@/components/travelAssistant/mobile/MobileItineraryReader";
 import { MobilePlanNotebook } from "@/components/travelAssistant/mobile/MobilePlanNotebook";
 import { MobileSettingsView } from "@/components/travelAssistant/mobile/MobileSettingsView";
@@ -325,15 +326,27 @@ export function MobileMapForwardShell({
         )}
 
         {hasActiveTrip ? (
-          <MobileAssistView
-            journeyPhase={journeyPhase}
-            reservations={reservations}
-            tripName={tripName}
-            locationStatus={locationStatus}
-            nearestAirport={nearestAirport}
-            onReservationTap={onReservationTap}
-            liveStatus={liveStatus}
-          />
+          <>
+            <MobileAssistView
+              journeyPhase={journeyPhase}
+              reservations={reservations}
+              tripName={tripName}
+              locationStatus={locationStatus}
+              nearestAirport={nearestAirport}
+              onReservationTap={onReservationTap}
+              liveStatus={liveStatus}
+            />
+
+            {tripSpendSummary ? (
+              <TripSpendBadge
+                summary={tripSpendSummary}
+                problemCount={tripProblemCount}
+                onClick={() => onNavigateTab("book")}
+                alwaysActionable
+                className="w-full"
+              />
+            ) : null}
+          </>
         ) : null}
 
         {hasActiveTrip ? (

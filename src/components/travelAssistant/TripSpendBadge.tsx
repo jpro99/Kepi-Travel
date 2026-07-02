@@ -11,14 +11,22 @@ interface TripSpendBadgeProps {
   problemCount?: number;
   className?: string;
   onClick?: () => void;
+  /** Home tab — tap opens Book even when spend is fully tracked. */
+  alwaysActionable?: boolean;
 }
 
-export function TripSpendBadge({ summary, problemCount = 0, className = "", onClick }: TripSpendBadgeProps) {
+export function TripSpendBadge({
+  summary,
+  problemCount = 0,
+  className = "",
+  onClick,
+  alwaysActionable = false,
+}: TripSpendBadgeProps) {
   const hasCash = summary.cashTotalUsd > 0;
   const hasPoints = summary.pointsTotal > 0;
   const needsAttention = summary.missingPriceCount > 0;
   const hasProblems = problemCount > 0;
-  const isActionable = Boolean(onClick && (needsAttention || hasProblems));
+  const isActionable = Boolean(onClick && (alwaysActionable || needsAttention || hasProblems));
   const cashLabel = hasCash
     ? formatTripCashTotal(summary.cashTotalUsd)
     : hasPoints
