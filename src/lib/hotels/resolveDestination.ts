@@ -10,7 +10,7 @@ export { suggestHotelDestinations };
 /** Known city centers keyed by IATA or alias (uppercase). */
 export const HOTEL_CITY_COORDS: Record<string, { lat: number; lng: number; name: string }> = {
   LAX: { lat: 34.0522, lng: -118.2437, name: "Los Angeles" },
-  ONT: { lat: 34.0633, lng: -117.6509, name: "Ontario / Beaumont" },
+  ONT: { lat: 34.0633, lng: -117.6509, name: "Ontario, CA" },
   SNA: { lat: 33.6846, lng: -117.8265, name: "Orange County" },
   JFK: { lat: 40.7128, lng: -74.006, name: "New York" },
   NYC: { lat: 40.7128, lng: -74.006, name: "New York" },

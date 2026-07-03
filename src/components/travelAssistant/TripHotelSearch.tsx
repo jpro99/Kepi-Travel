@@ -8,8 +8,8 @@ import {
   attachHotelCoordinates,
   filterHotelsWithinRenderDistance,
 } from "@/lib/hotels/hotelCoordinates";
-import { suggestAirports, type AirportResult } from "@/lib/airports/lookup";
-import { suggestHotelDestinations } from "@/lib/hotels/destinationAliases";
+import { HotelCityField } from "@/components/travelAssistant/HotelCityField";
+import { useHotelSearchFields } from "@/lib/hotels/useHotelSearchFields";
 import {
   SEARCH_INPUT_LIGHT,
   SEARCH_LABEL,
@@ -69,96 +69,6 @@ export interface TripHotelSearchProps {
   onSavedToTrip?: (hotel: HotelSearchResult) => void;
 }
 
-function CityInput({
-  label,
-  value,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (display: string, iata: string) => void;
-  placeholder: string;
-}) {
-  const [suggestions, setSuggestions] = useState<AirportResult[]>([]);
-  const [cityHints, setCityHints] = useState<string[]>([]);
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClick = (event: MouseEvent) => {
-      if (!ref.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
-  return (
-    <div ref={ref} className="relative">
-      <label className={SEARCH_LABEL}>{label}</label>
-      <input
-        type="text"
-        value={value}
-        placeholder={placeholder}
-        onChange={(event) => {
-          const next = event.target.value;
-          onChange(next, "");
-          const matches = suggestAirports(next);
-          setSuggestions(matches);
-          const hints = matches.length === 0 && next.trim().length >= 3 ? suggestHotelDestinations(next) : [];
-          setCityHints(hints);
-          setOpen(matches.length > 0 || hints.length > 0);
-        }}
-        onFocus={() => {
-          if (value.length >= 2) {
-            const matches = suggestAirports(value);
-            setSuggestions(matches);
-            const hints = matches.length === 0 ? suggestHotelDestinations(value) : [];
-            setCityHints(hints);
-            setOpen(matches.length > 0 || hints.length > 0);
-          }
-        }}
-        className={SEARCH_INPUT_LIGHT}
-      />
-      {open && (suggestions.length > 0 || cityHints.length > 0) ? (
-        <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
-          {suggestions.map((airport) => (
-            <button
-              key={airport.iata}
-              type="button"
-              onMouseDown={() => {
-                onChange(`${airport.city} (${airport.iata})`, airport.iata);
-                setOpen(false);
-              }}
-              className="flex w-full items-center gap-3 border-b border-slate-100 px-3 py-2.5 text-left last:border-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800"
-            >
-              <span className="w-10 shrink-0 text-xs font-black text-slate-600">{airport.iata}</span>
-              <span>
-                <p className="text-sm font-semibold text-slate-900 dark:text-white">{airport.city}</p>
-                <p className="text-xs text-slate-500">{airport.name}</p>
-              </span>
-            </button>
-          ))}
-          {cityHints.map((hint) => (
-            <button
-              key={hint}
-              type="button"
-              onMouseDown={() => {
-                onChange(hint, "");
-                setOpen(false);
-              }}
-              className="flex w-full items-center gap-3 border-b border-slate-100 px-3 py-2.5 text-left last:border-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800"
-            >
-              <span className="w-10 shrink-0 text-xs font-black text-slate-500">City</span>
-              <p className="text-sm font-semibold text-slate-900 dark:text-white">{hint}</p>
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 export function TripHotelSearch({
   defaultCity = "",
   defaultCityIata = "",
@@ -167,10 +77,21 @@ export function TripHotelSearch({
   onAddHotel,
   onSavedToTrip,
 }: TripHotelSearchProps) {
-  const [city, setCity] = useState(defaultCity);
-  const [cityIata, setCityIata] = useState(defaultCityIata);
-  const [checkIn, setCheckIn] = useState(defaultCheckIn);
-  const [checkOut, setCheckOut] = useState(defaultCheckOut);
+  const {
+    city,
+    cityIata,
+    checkIn,
+    checkOut,
+    setCheckIn,
+    setCheckOut,
+    setCityField,
+    clearCityField,
+  } = useHotelSearchFields({
+    city: defaultCity,
+    cityIata: defaultCityIata,
+    checkIn: defaultCheckIn,
+    checkOut: defaultCheckOut,
+  });
   const [guests, setGuests] = useState(2);
   const [rooms, setRooms] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -217,13 +138,6 @@ export function TripHotelSearch({
       })
       .catch(() => {});
   }, []);
-
-  useEffect(() => {
-    setCity(defaultCity);
-    setCityIata(defaultCityIata);
-    setCheckIn(defaultCheckIn);
-    setCheckOut(defaultCheckOut);
-  }, [defaultCity, defaultCityIata, defaultCheckIn, defaultCheckOut]);
 
   const runSearch = async (): Promise<void> => {
     const destination = cityIata || city.trim();
@@ -509,13 +423,12 @@ export function TripHotelSearch({
     <div className="space-y-4">
       {!showResults ? (
         <>
-          <CityInput
+          <HotelCityField
             label="City or destination"
             value={city}
-            onChange={(display, iata) => {
-              setCity(display);
-              setCityIata(iata);
-            }}
+            cityIata={cityIata}
+            onChange={setCityField}
+            onClear={clearCityField}
             placeholder="e.g. Munich, Rome, New York"
           />
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

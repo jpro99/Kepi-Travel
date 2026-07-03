@@ -4,7 +4,7 @@
 const AIRPORTS: Record<string, { iata: string; name: string; city: string; country: string }> = {
   // California
   lax: { iata: "LAX", name: "Los Angeles International", city: "Los Angeles", country: "US" },
-  ont: { iata: "ONT", name: "Ontario International", city: "Ontario / Beaumont", country: "US" },
+  ont: { iata: "ONT", name: "Ontario International", city: "Ontario, CA", country: "US" },
   sna: { iata: "SNA", name: "John Wayne Airport", city: "Orange County / Irvine", country: "US" },
   sfo: { iata: "SFO", name: "San Francisco International", city: "San Francisco", country: "US" },
   san: { iata: "SAN", name: "San Diego International", city: "San Diego", country: "US" },

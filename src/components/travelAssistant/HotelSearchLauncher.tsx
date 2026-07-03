@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { suggestAirports, type AirportResult } from "@/lib/airports/lookup";
-import { suggestHotelDestinations } from "@/lib/hotels/destinationAliases";
+import { HotelCityField } from "@/components/travelAssistant/HotelCityField";
+import { useHotelSearchFields } from "@/lib/hotels/useHotelSearchFields";
 
 export interface HotelSearchDefaults {
   city?: string;
@@ -18,114 +18,18 @@ interface HotelSearchLauncherProps {
   onSearch: (params: { city: string; cityIata?: string; checkIn: string; checkOut: string }) => void;
 }
 
-function CityField({
-  label,
-  value,
-  cityIata,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  cityIata: string;
-  onChange: (display: string, iata: string) => void;
-  placeholder: string;
-}) {
-  const [suggestions, setSuggestions] = useState<AirportResult[]>([]);
-  const [cityHints, setCityHints] = useState<string[]>([]);
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClick = (event: MouseEvent): void => {
-      if (!ref.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
-  return (
-    <div ref={ref} className="relative min-w-0 flex-1">
-      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-        {label}
-      </label>
-      <input
-        type="text"
-        value={value}
-        placeholder={placeholder}
-        onChange={(event) => {
-          const next = event.target.value;
-          onChange(next, "");
-          const matches = suggestAirports(next);
-          setSuggestions(matches);
-          const hints = matches.length === 0 && next.trim().length >= 3 ? suggestHotelDestinations(next) : [];
-          setCityHints(hints);
-          setOpen(matches.length > 0 || hints.length > 0);
-        }}
-        onFocus={() => {
-          if (value.length >= 2) {
-            const matches = suggestAirports(value);
-            setSuggestions(matches);
-            const hints = matches.length === 0 ? suggestHotelDestinations(value) : [];
-            setCityHints(hints);
-            setOpen(matches.length > 0 || hints.length > 0);
-          }
-        }}
-        className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
-      />
-      {cityIata ? <p className="mt-0.5 text-[10px] font-bold text-sky-600 dark:text-sky-400">{cityIata}</p> : null}
-      {open && (suggestions.length > 0 || cityHints.length > 0) ? (
-        <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
-          {suggestions.map((airport) => (
-            <button
-              key={airport.iata}
-              type="button"
-              onMouseDown={() => {
-                onChange(`${airport.city} (${airport.iata})`, airport.iata);
-                setOpen(false);
-              }}
-              className="flex w-full items-center gap-2 border-b border-slate-100 px-3 py-2 text-left last:border-0 dark:border-slate-800"
-            >
-              <span className="w-9 shrink-0 text-xs font-black text-sky-600">{airport.iata}</span>
-              <span className="min-w-0">
-                <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{airport.city}</p>
-                <p className="truncate text-[10px] text-slate-500">{airport.name}</p>
-              </span>
-            </button>
-          ))}
-          {cityHints.map((hint) => (
-            <button
-              key={hint}
-              type="button"
-              onMouseDown={() => {
-                onChange(hint, "");
-                setOpen(false);
-              }}
-              className="flex w-full items-center gap-2 border-b border-slate-100 px-3 py-2 text-left last:border-0 dark:border-slate-800"
-            >
-              <span className="w-9 shrink-0 text-xs font-black text-slate-500">City</span>
-              <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{hint}</p>
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 export function HotelSearchLauncher({ tripName, defaults, onSearch }: HotelSearchLauncherProps) {
-  const [city, setCity] = useState("");
-  const [cityIata, setCityIata] = useState("");
-  const [checkIn, setCheckIn] = useState("");
-  const [checkOut, setCheckOut] = useState("");
+  const {
+    city,
+    cityIata,
+    checkIn,
+    checkOut,
+    setCityField,
+    clearCityField,
+    setCheckIn,
+    setCheckOut,
+  } = useHotelSearchFields(defaults ?? {});
   const [message, setMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (defaults?.city) setCity(defaults.city);
-    if (defaults?.cityIata) setCityIata(defaults.cityIata);
-    if (defaults?.checkIn) setCheckIn(defaults.checkIn.slice(0, 10));
-    if (defaults?.checkOut) setCheckOut(defaults.checkOut.slice(0, 10));
-  }, [defaults]);
 
   const launchSearch = (): void => {
     setMessage(null);
@@ -171,14 +75,13 @@ export function HotelSearchLauncher({ tripName, defaults, onSearch }: HotelSearc
       </div>
 
       <div className="mt-4">
-        <CityField
+        <HotelCityField
+          compact
           label="Destination"
           value={city}
           cityIata={cityIata}
-          onChange={(display, iata) => {
-            setCity(display);
-            setCityIata(iata);
-          }}
+          onChange={setCityField}
+          onClear={clearCityField}
           placeholder="Venice (VCE) or Cortina"
         />
       </div>
@@ -192,7 +95,7 @@ export function HotelSearchLauncher({ tripName, defaults, onSearch }: HotelSearc
             type="date"
             value={checkIn}
             onChange={(event) => setCheckIn(event.target.value)}
-            className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+            className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-base font-semibold text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
           />
         </div>
         <div>
@@ -203,19 +106,20 @@ export function HotelSearchLauncher({ tripName, defaults, onSearch }: HotelSearc
             type="date"
             value={checkOut}
             onChange={(event) => setCheckOut(event.target.value)}
-            className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+            className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-base font-semibold text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
           />
         </div>
       </div>
 
-      {message ? <p className="mt-3 text-xs font-semibold text-amber-700 dark:text-amber-300">{message}</p> : null}
+      {message ? <p className="mt-2 text-sm font-semibold text-amber-700 dark:text-amber-300">{message}</p> : null}
 
       <button
         type="button"
+        data-testid="hotel-search-launcher-submit"
         onClick={launchSearch}
-        className="mt-4 w-full rounded-full bg-emerald-600 px-5 py-3 text-sm font-black text-white shadow-sm active:opacity-80"
+        className="mt-4 w-full rounded-2xl bg-emerald-600 py-3 text-sm font-bold text-white shadow-md active:opacity-90"
       >
-        Search hotels & prices
+        Search hotels
       </button>
     </section>
   );
