@@ -51,16 +51,16 @@ export function PostBookingConfirmation({ data, onDismiss, onViewTrip }: PostBoo
         </div>
         <div className="mt-5 flex flex-wrap gap-2">
           {onViewTrip ? (
-            <button
-              type="button"
-              onClick={() => {
-                onViewTrip();
-                onDismiss();
-              }}
-              className="flex-1 rounded-2xl bg-[#f4c95d] px-4 py-3 text-sm font-bold text-[#0b1f3a]"
-            >
-              View trip
-            </button>
+          <button
+            type="button"
+            onClick={() => {
+              onViewTrip();
+              onDismiss();
+            }}
+            className="flex-1 rounded-2xl bg-[#f4c95d] px-4 py-3 text-sm font-bold text-[#0b1f3a]"
+          >
+            {data.kind === "hotel" ? "View in Hotels" : data.kind === "flight" ? "View in Flights" : "View trip"}
+          </button>
           ) : null}
           <button
             type="button"

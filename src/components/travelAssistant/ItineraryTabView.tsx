@@ -9,7 +9,8 @@ import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
 import type { StopDateRange } from "@/lib/decision/stopDates";
 import type { TripActionItem } from "@/lib/travelAssistant/tripActionItems";
 import type { DayPlanRecord, ItineraryPlansData } from "@/lib/travelAssistant/itineraryDayPlan";
-import type { PlanSubView } from "@/lib/travelAssistant/consumerTabs";
+import { InterCityTransportPrompts } from "@/components/travelAssistant/InterCityTransportPrompts";
+import type { FlightSearchPlan, PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
 
 interface ItineraryTabViewProps {
   tripName: string;
@@ -60,6 +61,9 @@ interface ItineraryTabViewProps {
   missionItems?: TripActionItem[];
   onMissionAction?: (item: TripActionItem) => void;
   onPlanHotel?: (dateKey: string, city: string) => void;
+  plannedFlightLegs?: PlannedFlightLeg[];
+  onSearchMissingFlights?: (plan: FlightSearchPlan, selectedLegs: PlannedFlightLeg[]) => void;
+  onAddTransport?: () => void;
 }
 
 export function ItineraryTabView({
@@ -91,6 +95,9 @@ export function ItineraryTabView({
   missionItems = [],
   onMissionAction,
   onPlanHotel,
+  plannedFlightLegs = [],
+  onSearchMissingFlights,
+  onAddTransport,
 }: ItineraryTabViewProps) {
   const hasTripDates = Boolean(tripStartDate && tripEndDate);
   const [planSavedFlash, setPlanSavedFlash] = useState(false);
@@ -133,6 +140,14 @@ export function ItineraryTabView({
         onGapActionTap={onGapActionTap}
         onReviewPricing={onReviewPricing}
       />
+
+      {plannedFlightLegs.length > 0 && onSearchMissingFlights && onAddTransport ? (
+        <InterCityTransportPrompts
+          legs={plannedFlightLegs}
+          onSearchFlights={onSearchMissingFlights}
+          onAddTransport={onAddTransport}
+        />
+      ) : null}
 
       <header className="rounded-2xl bg-[#0F1923] px-5 py-5 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f4c95d]">Plan</p>

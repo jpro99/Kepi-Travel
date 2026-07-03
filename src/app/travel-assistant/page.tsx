@@ -2216,11 +2216,6 @@ export default function TravelAssistantPage() {
             detail: "Your stay is on the timeline. Check Hotels for details and check-in notes.",
             syncedToTrip: true,
           });
-          setToastRaw(
-            d.alreadyFulfilled
-              ? `✅ Hotel already confirmed · ref ${d.bookingReference}`
-              : `✅ Hotel booked · confirmation ${d.bookingReference}`,
-          );
           navigateToConsumerTab("book", { bookView: "hotels" });
           if (typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches) {
             navigateMobilePrimaryTab("book");
@@ -5524,7 +5519,6 @@ export default function TravelAssistantPage() {
       });
       setManualReservationModalOpen(false);
       setManualReservationPresetType(null);
-      setToast("Reservation added ✓");
       if (reservation.confirmationCode?.trim()) {
         setPostBookingConfirmation({
           kind: reservation.type === "hotel" ? "hotel" : reservation.type === "flight" ? "flight" : "import",
@@ -5533,6 +5527,8 @@ export default function TravelAssistantPage() {
           detail: `${reservation.provider || reservation.title || "Reservation"} is on your timeline.`,
           syncedToTrip: true,
         });
+      } else {
+        setToast("Reservation added ✓");
       }
     },
     [activeTripId, pushUndoSnapshot, queueMutation, setToast, trips],
@@ -5733,9 +5729,14 @@ export default function TravelAssistantPage() {
         key: "hotel-search-add",
         reservationId: reservation.id,
       });
-      setToast(`${hotel.name} added to your trip ✓`);
+      setPostBookingConfirmation({
+        kind: "hotel",
+        title: `${hotel.name} added to your trip`,
+        detail: `Check-in ${hotel.checkIn} · ${searchCity}. Find it under Book → Hotels.`,
+        syncedToTrip: true,
+      });
     },
-    [activeTripId, effectiveHotelSearchDefaults.city, hotelSearchSegment?.city, pushUndoSnapshot, queueMutation, selectedFamilyMember.id, setToast, trips],
+    [activeTripId, effectiveHotelSearchDefaults.city, hotelSearchSegment?.city, pushUndoSnapshot, queueMutation, selectedFamilyMember.id, trips],
   );
 
   const handleImportParsedReservations = useCallback(
@@ -7128,7 +7129,6 @@ export default function TravelAssistantPage() {
       detail: `${newReservation.provider || newReservation.title} is on your flights timeline.`,
       syncedToTrip: true,
     });
-    setToast(`${newReservation.type === "flight" ? "Flight" : "Reservation"} added to your trip ✓`, { tone: "success" });
     return true;
   };
 
@@ -9025,6 +9025,12 @@ export default function TravelAssistantPage() {
               missionItems={tripPlanningActions}
               onMissionAction={handleTripPlanningAction}
               onPlanHotel={handleItineraryPlanHotel}
+              plannedFlightLegs={plannedFlightLegs}
+              onSearchMissingFlights={(plan) => handleFlightSearchPlan(plan)}
+              onAddTransport={() => {
+                setManualReservationPresetType("ride");
+                setManualReservationModalOpen(true);
+              }}
             />
           ) : consumerTab === "book" ? (
             <BookTabView
@@ -10325,7 +10331,23 @@ export default function TravelAssistantPage() {
       <PostBookingConfirmation
         data={postBookingConfirmation}
         onDismiss={() => setPostBookingConfirmation(null)}
-        onViewTrip={() => navigateToConsumerTab("trip")}
+        onViewTrip={() => {
+          if (postBookingConfirmation?.kind === "hotel") {
+            navigateToConsumerTab("book", { bookView: "hotels" });
+            if (typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches) {
+              navigateMobilePrimaryTab("book");
+            }
+            return;
+          }
+          if (postBookingConfirmation?.kind === "flight") {
+            navigateToConsumerTab("book", { bookView: "flights" });
+            if (typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches) {
+              navigateMobilePrimaryTab("book");
+            }
+            return;
+          }
+          navigateToConsumerTab("trip");
+        }}
       />
       <InstallPrompt />
       {travelStyleQuizOpen ? (
