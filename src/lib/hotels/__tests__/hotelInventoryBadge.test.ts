@@ -57,10 +57,10 @@ test("resolveHotelInventoryBadge returns user-facing labels", () => {
   assert.equal(sample.label, "Estimated sample");
 });
 
-test("buildHotelSearchProviderBody clarifies live vs browse inventory", () => {
+test("buildHotelSearchProviderBody clarifies trip-first booking flow", () => {
   const body = buildHotelSearchProviderBody({ source: "liteapi" });
-  assert.match(body, /Live in Kepi/i);
-  assert.match(body, /Browse on Google/i);
+  assert.match(body, /Google/i);
+  assert.match(body, /forward your confirmation/i);
 
   const estimated = buildHotelSearchProviderBody({ source: "estimated" });
   assert.match(estimated, /LiteAPI/i);
@@ -71,6 +71,6 @@ test("buildHotelSearchProviderHeadline distinguishes estimated from live", () =>
   assert.match(buildHotelSearchProviderHeadline({ source: "estimated", liveBookableCount: 0 }), /sample/i);
   assert.match(
     buildHotelSearchProviderHeadline({ source: "liteapi", liveBookableCount: 2 }),
-    /2 hotels ready to book/i,
+    /Google/i,
   );
 });

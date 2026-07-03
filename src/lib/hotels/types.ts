@@ -35,6 +35,9 @@ export interface HotelSearchResult {
   kepiBookable?: boolean;
   /** Room/rate label from the live provider (e.g. "Standard King"). */
   rateRoomName?: string;
+  /** Public benchmark total from LiteAPI suggested selling price (Google/Expedia). */
+  referenceTotalUsd?: number;
+  referencePriceSource?: string;
 }
 
 export type HotelSearchTier =

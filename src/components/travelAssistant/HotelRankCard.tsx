@@ -10,7 +10,7 @@ import {
   topAmenityIcons,
 } from "@/lib/hotels/hotelCardDisplay";
 import { resolveHotelChainPresentation } from "@/lib/hotels/hotelChainDisplay";
-import { buildHotelMatchSummary } from "@/lib/hotels/hotelMatchSummary";
+import { resolveHotelBookingStrategy } from "@/lib/hotels/hotelBookingStrategy";
 import type { HotelStayProfile } from "@/lib/memory/hotelStayProfile";
 import { hasKepiBookableLiveRate } from "@/lib/hotels/hotelLiveRate";
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
@@ -58,6 +58,7 @@ export function HotelRankCard({
   const chain = resolveHotelChainPresentation(hotel);
   const nightlyPts = pointsPerNight(hotel);
   const matchSummary = buildHotelMatchSummary(hotel, stayProfile, totalInSearch);
+  const bookingStrategy = resolveHotelBookingStrategy(hotel);
   const showPoints = payMode === "points" || payMode === "any";
   const hero = resolveHotelHeroVisual(hotel);
   const nightlyLabel = formatHotelNightlyPrice(hotel);
@@ -67,7 +68,7 @@ export function HotelRankCard({
   const amenityIcons = topAmenityIcons(hotel.amenities);
   const matchReason = primaryMatchReason(hotel);
   const kepiBookable = hasKepiBookableLiveRate(hotel);
-  const selectLabel = kepiBookable ? "View & book in Kepi →" : "Select →";
+  const selectLabel = bookingStrategy.cardSelectLabel;
 
   if (premium) {
     return (
@@ -164,10 +165,17 @@ export function HotelRankCard({
             </ul>
           ) : null}
           <p className="text-xs text-slate-500">{matchReason}</p>
+          {bookingStrategy.compareLine ? (
+            <p className="text-xs font-semibold text-sky-700 dark:text-sky-300">{bookingStrategy.compareLine}</p>
+          ) : null}
 
-          {kepiBookable ? (
+          {kepiBookable && bookingStrategy.kepiPrimary ? (
             <p className="text-xs font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-              Stripe checkout · saves to your trip
+              Competitive in Kepi · checkout available
+            </p>
+          ) : kepiBookable ? (
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+              Compare on Google first · Kepi checkout optional
             </p>
           ) : null}
 
@@ -236,7 +244,7 @@ export function HotelRankCard({
           }}
           className="shrink-0 rounded-xl bg-[#f4c95d] px-3 py-2 text-xs font-black text-[#0b1f3a]"
         >
-          {kepiBookable ? "Book" : "Select"}
+          {kepiBookable ? "View" : "Select"}
         </button>
       </article>
     );

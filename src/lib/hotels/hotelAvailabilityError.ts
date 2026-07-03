@@ -1,6 +1,8 @@
+import { readLiteApiErrorMessage } from "@/lib/providers/liteapi/readLiteApiError";
+
 /** User-facing copy when LiteAPI prebook/checkout fails. */
-export function normalizeHotelAvailabilityError(raw?: string | null): string {
-  const message = raw?.trim() ?? "";
+export function normalizeHotelAvailabilityError(raw?: unknown): string {
+  const message = readLiteApiErrorMessage(raw, "");
   if (!message) {
     return "This rate is no longer available for your dates. Try another hotel or check Google Hotels.";
   }

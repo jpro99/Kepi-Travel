@@ -31,6 +31,7 @@ import {
   buildHotelSearchProviderHeadline,
   hotelInventoryBadgeClassName,
 } from "@/lib/hotels/hotelInventoryBadge";
+import { buildHotelTripFirstBannerCopy } from "@/lib/hotels/hotelBookingStrategy";
 import type { HotelStayProfile } from "@/lib/memory/hotelStayProfile";
 import { hotelParticipatesInPoints, HOTEL_CHAINS, matchHotelChain, type HotelChainId } from "@/lib/loyalty/chainRegistry";
 import { isCompactViewportClient } from "@/lib/ui/isCompactViewport";
@@ -702,6 +703,13 @@ export function TripHotelSearch({
             <p className="mb-4 text-sm text-slate-500">
               Showing hotels near <strong>{resolvedCity}</strong> (corrected from &ldquo;{correctedFrom}&rdquo;).
             </p>
+          ) : null}
+
+          {searchSource && searchSource !== "estimated" ? (
+            <div className="mb-4 rounded-2xl border border-[#f4c95d]/40 bg-gradient-to-br from-[#0b1f3a] to-[#152238] px-4 py-4 text-white dark:border-[#f4c95d]/30">
+              <p className="text-sm font-black text-[#f4c95d]">{buildHotelTripFirstBannerCopy().headline}</p>
+              <p className="mt-2 text-sm leading-relaxed text-slate-200">{buildHotelTripFirstBannerCopy().body}</p>
+            </div>
           ) : null}
 
           {searchSource ? (

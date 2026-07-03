@@ -15,7 +15,7 @@ const BADGES: Record<HotelInventoryKind, HotelInventoryBadge> = {
     kind: "kepi_live",
     label: "Live in Kepi",
     shortLabel: "Live",
-    description: "Can checkout in Kepi — tap Book to verify the rate is still available before you pay.",
+    description: "Can checkout in Kepi when our rate is competitive — otherwise compare on Google first.",
   },
   browse_google: {
     kind: "browse_google",
@@ -86,7 +86,7 @@ export function buildHotelSearchProviderHeadline(input: {
     return "Sample listings — not live prices";
   }
   if (liveBookableCount > 0) {
-    return `${liveBookableCount} hotel${liveBookableCount === 1 ? "" : "s"} ready to book in Kepi`;
+    return `Pick your stay — book on Google when it’s cheaper, forward confirmation to Kepi`;
   }
   if (source === "duffel") {
     return "Live hotel rates via Duffel Stays";
@@ -105,7 +105,7 @@ export function buildHotelSearchProviderBody(input: {
     return "LiteAPI had no bookable rates for these dates. Duffel Stays is still pending on your account — live search runs through LiteAPI and does not require Duffel approval.";
   }
   if (input.source === "liteapi" || input.source === "duffel") {
-    return "Live in Kepi = can try checkout here (we verify before payment). Browse on Google / Sample = not bookable in Kepi. Sold-out rates disappear when you tap Book — pick another Live hotel.";
+    return "We rank hotels for your trip. Compare prices on Google or Booking.com, book where it’s cheapest, then forward your confirmation — Kepi tracks the stay on your timeline. Book in Kepi only when our live rate is within ~10% of public prices.";
   }
   return "Look for the Live in Kepi badge on each hotel card.";
 }

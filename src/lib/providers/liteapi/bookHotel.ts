@@ -1,3 +1,5 @@
+import { parseLiteApiCancellationPolicies, type HotelCancellationSummary } from "@/lib/hotels/hotelCancellation";
+import { readLiteApiErrorMessage } from "@/lib/providers/liteapi/readLiteApiError";
 import { resolveLiteApiKey } from "@/lib/providers/liteapi/searchHotels";
 
 const LITEAPI_BOOK_BASE = "https://book.liteapi.travel/v3.0";
@@ -12,12 +14,26 @@ export interface LiteApiPrebookResult {
   currency: string;
   hotelName?: string;
   roomName?: string;
+  cancellation?: HotelCancellationSummary | null;
+  referenceTotalUsd?: number;
+  referencePriceSource?: string;
 }
 
 export interface LiteApiBookResult {
   bookingId: string;
   confirmationCode?: string;
   status?: string;
+}
+
+function readSuggestedSellingFromRate(raw: unknown): { total: number; source?: string } | null {
+  if (!raw) return null;
+  const entry = Array.isArray(raw) ? raw[0] : raw;
+  if (!entry || typeof entry !== "object") return null;
+  const record = entry as { amount?: number; source?: string };
+  if (typeof record.amount !== "number" || !Number.isFinite(record.amount) || record.amount <= 0) {
+    return null;
+  }
+  return { total: record.amount, source: typeof record.source === "string" ? record.source : undefined };
 }
 
 function readTotalUsd(payload: Record<string, unknown>): number {
@@ -60,8 +76,9 @@ export async function prebookLiteApiOffer(offerId: string): Promise<LiteApiPrebo
 
     const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
     if (!response.ok) {
-      const err = payload as { message?: string; error?: string };
-      throw new Error(err.message ?? err.error ?? `Prebook failed (${response.status})`);
+      throw new Error(
+        readLiteApiErrorMessage(payload, `Prebook failed (${response.status})`),
+      );
     }
 
     const data = payload.data as Record<string, unknown> | undefined;
@@ -75,8 +92,17 @@ export async function prebookLiteApiOffer(offerId: string): Promise<LiteApiPrebo
       throw new Error("Prebook did not return a valid price");
     }
 
-    const roomTypes = data?.roomTypes as Array<{ rates?: Array<{ name?: string }> }> | undefined;
-    const roomName = roomTypes?.[0]?.rates?.[0]?.name;
+    const roomTypes = data?.roomTypes as Array<{
+      rates?: Array<{ name?: string; cancellationPolicies?: unknown; suggestedSellingPrice?: unknown }>;
+      suggestedSellingPrice?: unknown;
+    }> | undefined;
+    const firstRate = roomTypes?.[0]?.rates?.[0];
+    const roomName = firstRate?.name;
+    const cancellation = parseLiteApiCancellationPolicies(firstRate?.cancellationPolicies);
+    const reference =
+      readSuggestedSellingFromRate(firstRate?.suggestedSellingPrice) ??
+      readSuggestedSellingFromRate(roomTypes?.[0]?.suggestedSellingPrice) ??
+      readSuggestedSellingFromRate(data?.suggestedSellingPrice);
 
     return {
       prebookId,
@@ -84,6 +110,9 @@ export async function prebookLiteApiOffer(offerId: string): Promise<LiteApiPrebo
       currency: "USD",
       hotelName: typeof data?.hotelName === "string" ? data.hotelName : undefined,
       roomName,
+      cancellation,
+      referenceTotalUsd: reference?.total,
+      referencePriceSource: reference?.source,
     };
   } finally {
     clearTimeout(timer);
@@ -136,8 +165,9 @@ export async function bookLiteApiPrebook(input: {
 
     const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
     if (!response.ok) {
-      const err = payload as { message?: string; error?: string };
-      throw new Error(err.message ?? err.error ?? `Booking failed (${response.status})`);
+      throw new Error(
+        readLiteApiErrorMessage(payload, `Booking failed (${response.status})`),
+      );
     }
 
     const data = payload.data as Record<string, unknown> | undefined;

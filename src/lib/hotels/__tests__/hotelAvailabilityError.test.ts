@@ -11,3 +11,10 @@ test("normalizeHotelAvailabilityError explains sold out", () => {
 test("normalizeHotelAvailabilityError handles empty errors", () => {
   assert.match(normalizeHotelAvailabilityError(undefined), /no longer available/i);
 });
+
+test("normalizeHotelAvailabilityError handles nested LiteAPI errors", () => {
+  const message = normalizeHotelAvailabilityError({
+    error: { message: "Rate sold out for selected dates" },
+  });
+  assert.match(message, /sold out|no longer available/i);
+});

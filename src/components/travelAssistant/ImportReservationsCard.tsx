@@ -46,7 +46,7 @@ export function ImportReservationsCard({
     : "border-amber-200 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-500/10";
 
   const eyebrow = planSaved && highlighted ? "Plan saved" : highlighted ? "Trip activated" : "Next step";
-  const title = planSaved ? "Book your legs, then confirm here" : "Add your real confirmations";
+  const title = planSaved ? "Book your legs, then confirm here" : "Forward confirmations — Kepi runs the trip";
 
   return (
     <section className={`rounded-3xl border p-5 shadow-sm ${shell}`}>
@@ -65,8 +65,8 @@ export function ImportReservationsCard({
                 ? `${placeholderCount} leg${placeholderCount === 1 ? "" : "s"} still marked PLANNED. Purchase on the airline, then forward confirmations — Kepi replaces planned legs with real times and record locators.`
                 : `${placeholderCount} reservation${placeholderCount === 1 ? "" : "s"} ${placeholderCount === 1 ? "is" : "are"} still placeholders from planning. Forward booking emails or import from Gmail to replace them with live details.`
               : planSaved
-                ? "Forward any flight or hotel confirmation after you book — Kepi upgrades your timeline from planned to live."
-                : "Forward any flight or hotel confirmation so Kepi can track gates, times, and check-in for you."}
+                ? "Forward any flight or hotel confirmation after you book on Google, the airline, or Booking.com — Kepi upgrades your timeline from planned to live."
+                : "Book where the price is best, then forward confirmations so Kepi can track gates, times, hotel check-in, and trip gaps for you."}
           </p>
         </div>
         {onDismiss ? (

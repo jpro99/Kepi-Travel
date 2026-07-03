@@ -46,6 +46,9 @@ export async function POST(req: Request) {
       searchTotalUsd,
       deltaUsd,
       priceChanged,
+      cancellation: prebook.cancellation ?? null,
+      referenceTotalUsd: prebook.referenceTotalUsd ?? null,
+      referencePriceSource: prebook.referencePriceSource ?? null,
     });
   } catch (error) {
     const raw = error instanceof Error ? error.message : "Could not verify price";

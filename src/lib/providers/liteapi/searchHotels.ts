@@ -1,4 +1,5 @@
-import type { ResolvedHotelDestination } from "@/lib/hotels/resolveDestination";
+import { parseLiteApiCancellationPolicies } from "@/lib/hotels/hotelCancellation";
+import { readLiteApiErrorMessage } from "@/lib/providers/liteapi/readLiteApiError";
 import { cityFromAddress } from "@/lib/hotels/hotelCityScope";
 import type { HotelSearchResult } from "@/lib/hotels/types";
 
@@ -37,11 +38,31 @@ interface LiteApiRateRow {
         total?: Array<{ amount?: number; currency?: string }>;
       };
       cancellationPolicies?: { refundableTag?: string };
+      suggestedSellingPrice?: { amount?: number; currency?: string; source?: string } | Array<{ amount?: number; source?: string }>;
     }>;
   }>;
 }
 
-type LiteApiPickedRate = { total: number; currency: string; offerId: string; roomName?: string };
+type LiteApiPickedRate = {
+  total: number;
+  currency: string;
+  offerId: string;
+  roomName?: string;
+  cancellationPolicies?: unknown;
+  referenceTotalUsd?: number;
+  referencePriceSource?: string;
+};
+
+function readSuggestedSellingTotal(raw: unknown): { total: number; source?: string } | null {
+  if (!raw) return null;
+  const entry = Array.isArray(raw) ? raw[0] : raw;
+  if (!entry || typeof entry !== "object") return null;
+  const record = entry as { amount?: number; source?: string };
+  if (typeof record.amount !== "number" || !Number.isFinite(record.amount) || record.amount <= 0) {
+    return null;
+  }
+  return { total: record.amount, source: typeof record.source === "string" ? record.source : undefined };
+}
 
 function collectBookableRates(rateRow: LiteApiRateRow): LiteApiPickedRate[] {
   const rates: LiteApiPickedRate[] = [];
@@ -53,11 +74,15 @@ function collectBookableRates(rateRow: LiteApiRateRow): LiteApiPickedRate[] {
       const totalEntry = rate.retailRate?.total?.[0];
       const amount = totalEntry?.amount;
       if (amount === undefined || !Number.isFinite(amount) || amount <= 0) continue;
+      const reference = readSuggestedSellingTotal(rate.suggestedSellingPrice);
       rates.push({
         total: amount,
         currency: totalEntry?.currency ?? "USD",
         offerId: offerId.trim(),
         roomName: rate.name ?? rate.boardName,
+        cancellationPolicies: rate.cancellationPolicies,
+        referenceTotalUsd: reference?.total,
+        referencePriceSource: reference?.source,
       });
     }
   }
@@ -114,6 +139,7 @@ function mapLiteApiToHotel(input: {
   }
 
   const amenities = (input.meta?.hotelFacilities ?? []).slice(0, 8);
+  const cancellation = parseLiteApiCancellationPolicies(pricing.cancellationPolicies);
 
   return {
     id: `liteapi-${hotelId}`,
@@ -133,10 +159,13 @@ function mapLiteApiToHotel(input: {
     photos,
     rooms: input.rooms,
     guests: input.guests,
-    cancellable: true,
+    cancellable: cancellation?.cancellable ?? true,
+    cancellationDeadline: cancellation?.deadline,
     bookProvider: "liteapi",
     bookOfferId: pricing.offerId,
     rateRoomName: pricing.roomName,
+    referenceTotalUsd: pricing.referenceTotalUsd,
+    referencePriceSource: pricing.referencePriceSource,
     ...(Number.isFinite(input.meta?.latitude) && Number.isFinite(input.meta?.longitude)
       ? { lat: input.meta!.latitude!, lng: input.meta!.longitude! }
       : {}),
@@ -218,10 +247,10 @@ export async function searchLiteApiHotels(
     });
 
     if (!response.ok) {
-      const err = (await response.json().catch(() => ({}))) as { message?: string; error?: string };
+      const err = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       return {
         hotels: [],
-        error: err.message ?? err.error ?? `LiteAPI search failed (${response.status})`,
+        error: readLiteApiErrorMessage(err, `LiteAPI search failed (${response.status})`),
       };
     }
 
