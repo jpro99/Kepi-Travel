@@ -123,6 +123,7 @@ import {
 import { useItineraryPanelPrefs } from "@/components/travelAssistant/TripItineraryPanel";
 import { ItineraryTabView } from "@/components/travelAssistant/ItineraryTabView";
 import { BookTabView } from "@/components/travelAssistant/BookTabView";
+import { isExcursionReservation } from "@/lib/excursions/types";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
 import { hydrateReservationsPricing, applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
@@ -2011,7 +2012,9 @@ export default function TravelAssistantPage() {
   const [showAdvancedShortcut] = useState(false);
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [manualReservationModalOpen, setManualReservationModalOpen] = useState(false);
-  const [manualReservationPresetType, setManualReservationPresetType] = useState<"flight" | "hotel" | null>(null);
+  const [manualReservationPresetType, setManualReservationPresetType] = useState<
+    "flight" | "hotel" | "experience" | null
+  >(null);
   const [hotelSearchModalOpen, setHotelSearchModalOpen] = useState(false);
   const [hotelSearchSegment, setHotelSearchSegment] = useState<TripStaySegment | null>(null);
   const [postBookingConfirmation, setPostBookingConfirmation] = useState<PostBookingConfirmationData | null>(null);
@@ -4167,6 +4170,10 @@ export default function TravelAssistantPage() {
     () => consumerDisplayReservations.filter((reservation) => reservation.type === "hotel").length,
     [consumerDisplayReservations],
   );
+  const wizardExcursionCount = useMemo(
+    () => consumerDisplayReservations.filter((reservation) => isExcursionReservation(reservation.notes)).length,
+    [consumerDisplayReservations],
+  );
   const delayedFlight = useMemo(
     () =>
       reservations.find(
@@ -4406,6 +4413,15 @@ export default function TravelAssistantPage() {
       consumerTripDestination,
       consumerTripStartDate,
     ],
+  );
+
+  const excursionSearchDefaults = useMemo(
+    () => ({
+      city: hotelSearchDefaults.city,
+      cityIata: hotelSearchDefaults.cityIata,
+      date: hotelSearchDefaults.checkIn || activeTrip?.startDate?.slice(0, 10) || "",
+    }),
+    [activeTrip?.startDate, hotelSearchDefaults.checkIn, hotelSearchDefaults.city, hotelSearchDefaults.cityIata],
   );
 
   const tripStaySegments = useMemo(
@@ -5824,6 +5840,12 @@ export default function TravelAssistantPage() {
     setManualReservationPresetType("hotel");
     setManualReservationModalOpen(true);
   }, []);
+
+  const openManualExcursion = useCallback((): void => {
+    if (!guardTripEdit()) return;
+    setManualReservationPresetType("experience");
+    setManualReservationModalOpen(true);
+  }, [guardTripEdit]);
 
   const handleAddHotelFromSearch = useCallback(
     (hotel: HotelSearchResult): void => {
@@ -8751,7 +8773,12 @@ export default function TravelAssistantPage() {
         onAdjustTrip={() => void handleAdjustTripPlanning()}
         onCopyForward={() => void handleCopyForwardAddress(emptyStateForwardAddress)}
         onAddManual={() => {
-          const preset = tripPlanningWizardPhase === "hotels" ? "hotel" : "flight";
+          const preset =
+            tripPlanningWizardPhase === "hotels"
+              ? "hotel"
+              : tripPlanningWizardPhase === "excursions" || tripPlanningWizardPhase === "complete"
+                ? "experience"
+                : "flight";
           setTripPlanningWizardOpen(false);
           setManualReservationPresetType(preset);
           setManualReservationModalOpen(true);
@@ -8761,6 +8788,17 @@ export default function TravelAssistantPage() {
         hotelSearchCityIata={effectiveHotelSearchDefaults.cityIata}
         hotelSearchCheckIn={effectiveHotelSearchDefaults.checkIn}
         hotelSearchCheckOut={effectiveHotelSearchDefaults.checkOut}
+        excursionSearchCity={excursionSearchDefaults.city}
+        excursionSearchCityIata={excursionSearchDefaults.cityIata}
+        excursionSearchDate={excursionSearchDefaults.date}
+        onExcursionSearch={(params) => {
+          setTripPlanningWizardOpen(false);
+          navigateToConsumerTab("book", { bookView: "excursions" });
+        }}
+        onBrowseExcursions={() => {
+          setTripPlanningWizardOpen(false);
+          navigateToConsumerTab("book", { bookView: "excursions" });
+        }}
       />
       <RecordTripModal
         open={talkPlannerOpen}
@@ -9057,6 +9095,11 @@ export default function TravelAssistantPage() {
                   checkIn: hotelSearchDefaults.checkIn,
                   checkOut: hotelSearchDefaults.checkOut,
                 }}
+                excursionSearchDefaults={excursionSearchDefaults}
+                onExcursionBooked={() => {
+                  void refreshTripsFromServer();
+                }}
+                readOnly={tripCollaborationReadOnly}
                 staySegments={tripStaySegments}
                 plannedStayCities={plannedStayCities}
                 usuallySkipsConnections={usuallySkipsConnections}
@@ -9210,6 +9253,12 @@ export default function TravelAssistantPage() {
               onDelete={(id) => void handleDeleteReservation(id)}
               onAddFlight={() => setManualReservationModalOpen(true)}
               onAddHotel={openManualHotelReservation}
+              onAddExcursion={openManualExcursion}
+              onExcursionBooked={() => {
+                void refreshTripsFromServer();
+              }}
+              excursionSearchDefaults={excursionSearchDefaults}
+              readOnly={tripCollaborationReadOnly}
               onQuickGroundTransport={handleQuickGroundTransport}
               usuallySkipsConnections={usuallySkipsConnections}
               staySegments={tripStaySegments}
@@ -9229,6 +9278,7 @@ export default function TravelAssistantPage() {
               travelFitReservations={travelFitReservations}
               flightCount={wizardFlightCount}
               hotelCount={wizardHotelCount}
+              excursionCount={wizardExcursionCount}
               tripSpendSummary={tripSpendSummary}
               tripProblemCount={transportConflictReservationIds.size}
               onReviewPricing={() => navigateToBook("flights")}

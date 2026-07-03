@@ -1,7 +1,7 @@
 /** Bottom-nav and orientation card tabs in the travel assistant consumer shell. */
 export type ConsumerTab = "trip" | "itinerary" | "book" | "map" | "more";
 
-export type BookSubTab = "flights" | "hotels";
+export type BookSubTab = "flights" | "hotels" | "excursions";
 
 export type PlanSubView = "timeline" | "calendar";
 
@@ -24,14 +24,15 @@ export function isConsumerTab(value: string): value is ConsumerTab {
 export function normalizeConsumerTabParam(tab: string | null): ConsumerTab | null {
   if (!tab) return null;
   if (tab === "calendar") return "itinerary";
-  if (tab === "flights" || tab === "hotels") return "book";
+  if (tab === "flights" || tab === "hotels" || tab === "excursions") return "book";
   if (isConsumerTab(tab)) return tab;
   return null;
 }
 
 export function resolveBookSubTab(tab: string | null, bookView: string | null): BookSubTab {
-  if (bookView === "flights" || bookView === "hotels") return bookView;
+  if (bookView === "flights" || bookView === "hotels" || bookView === "excursions") return bookView;
   if (tab === "hotels") return "hotels";
+  if (tab === "excursions") return "excursions";
   return "flights";
 }
 
@@ -52,5 +53,6 @@ export function orientationTabToConsumerTab(tab: string): ConsumerTab {
 
 export function bookSubTabForOrientationTab(tab: string): BookSubTab {
   if (tab === "hotels") return "hotels";
+  if (tab === "excursions" || tab === "experiences") return "excursions";
   return "flights";
 }

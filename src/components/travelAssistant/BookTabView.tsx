@@ -7,6 +7,8 @@ import { BookTravelFitStrip } from "@/components/travelAssistant/BookTravelFitSt
 import type { TripSpendSummary } from "@/lib/travelAssistant/tripSpendSummary";
 import { FlightsTab } from "@/components/travelAssistant/FlightsTab";
 import { HotelsTab } from "@/components/travelAssistant/HotelsTab";
+import { ExcursionsTab, filterExcursionReservations } from "@/components/travelAssistant/ExcursionsTab";
+import type { ExcursionSearchDefaults } from "@/components/travelAssistant/ExcursionSearchLauncher";
 import type { FlightSearchDefaults } from "@/components/travelAssistant/FlightSearchLauncher";
 import type { HotelSearchDefaults } from "@/components/travelAssistant/HotelSearchLauncher";
 import type { PlannedFlightLeg, PlannedStayCity } from "@/lib/travelAssistant/tripPlanBooking";
@@ -87,6 +89,10 @@ interface BookTabViewProps {
   onDelete: (id: string) => void;
   onAddFlight: () => void;
   onAddHotel: () => void;
+  onAddExcursion?: () => void;
+  onExcursionBooked?: () => void;
+  excursionSearchDefaults?: ExcursionSearchDefaults;
+  readOnly?: boolean;
   onQuickGroundTransport?: (gap: InterCityTransportGap, mode: QuickGroundMode) => void;
   usuallySkipsConnections?: boolean;
   staySegments?: TripStaySegment[];
@@ -104,6 +110,7 @@ interface BookTabViewProps {
   travelFitReservations?: BookReservation[];
   flightCount?: number;
   hotelCount?: number;
+  excursionCount?: number;
   tripSpendSummary?: TripSpendSummary;
   tripProblemCount?: number;
   onReviewPricing?: () => void;
@@ -133,6 +140,10 @@ export function BookTabView({
   onDelete,
   onAddFlight,
   onAddHotel,
+  onAddExcursion,
+  onExcursionBooked,
+  excursionSearchDefaults,
+  readOnly = false,
   onQuickGroundTransport,
   usuallySkipsConnections,
   staySegments,
@@ -147,6 +158,7 @@ export function BookTabView({
   travelFitReservations,
   flightCount = 0,
   hotelCount = 0,
+  excursionCount = 0,
   tripSpendSummary,
   tripProblemCount = 0,
   onReviewPricing,
@@ -160,6 +172,9 @@ export function BookTabView({
             <h1 className="mt-1 text-xl font-bold text-white">{tripName ?? "Your trip"}</h1>
             <p className="mt-1 text-sm text-slate-300">
               {flightCount} flight{flightCount === 1 ? "" : "s"} · {hotelCount} hotel{hotelCount === 1 ? "" : "s"}
+              {excursionCount > 0
+                ? ` · ${excursionCount} experience${excursionCount === 1 ? "" : "s"}`
+                : ""}
             </p>
           </div>
           {tripSpendSummary ? (
@@ -186,6 +201,13 @@ export function BookTabView({
           className={bookSubTabButtonClass(bookSubTab === "hotels")}
         >
           Hotels
+        </button>
+        <button
+          type="button"
+          onClick={() => onBookSubTabChange("excursions")}
+          className={bookSubTabButtonClass(bookSubTab === "excursions")}
+        >
+          Experiences
         </button>
       </div>
 
@@ -215,7 +237,7 @@ export function BookTabView({
           onAdd={onAddFlight}
           onQuickGroundTransport={onQuickGroundTransport}
         />
-      ) : (
+      ) : bookSubTab === "hotels" ? (
         <HotelsTab
           reservations={reservations.filter((reservation) => reservation.type === "hotel")}
           mapReservations={mapReservations.filter((reservation) => reservation.type === "hotel")}
@@ -236,6 +258,19 @@ export function BookTabView({
           onAddCityStay={onAddCityStay}
           onSetStayIntent={onSetStayIntent}
           travelFitReservations={travelFitReservations}
+        />
+      ) : (
+        <ExcursionsTab
+          reservations={filterExcursionReservations(reservations)}
+          tripId={tripId}
+          tripName={tripName}
+          searchDefaults={excursionSearchDefaults}
+          onReservationTap={onReservationTap}
+          onDelete={onDelete}
+          onAddManual={onAddExcursion ?? onAddHotel}
+          onBooked={onExcursionBooked}
+          readOnly={readOnly}
+          enableBookSearch
         />
       )}
     </section>

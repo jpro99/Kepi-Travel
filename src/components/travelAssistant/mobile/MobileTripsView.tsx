@@ -4,13 +4,15 @@ import { useState } from "react";
 import { BookTravelFitStrip } from "@/components/travelAssistant/BookTravelFitStrip";
 import { FlightsTab } from "@/components/travelAssistant/FlightsTab";
 import { HotelsTab } from "@/components/travelAssistant/HotelsTab";
+import { ExcursionsTab } from "@/components/travelAssistant/ExcursionsTab";
 import type { FlightSearchDefaults } from "@/components/travelAssistant/FlightSearchLauncher";
 import type { HotelSearchDefaults } from "@/components/travelAssistant/HotelSearchLauncher";
+import type { ExcursionSearchDefaults } from "@/components/travelAssistant/ExcursionSearchLauncher";
 import type { PlannedFlightLeg, PlannedStayCity } from "@/lib/travelAssistant/tripPlanBooking";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 
-type MobileTripsSegment = "flights" | "hotels";
+type MobileTripsSegment = "flights" | "hotels" | "excursions";
 
 interface TripSummary {
   name: string;
@@ -92,6 +94,7 @@ interface MobileTripsViewProps {
   plannedFlightLegs?: PlannedFlightLeg[];
   flightSearchDefaults?: FlightSearchDefaults;
   hotelSearchDefaults?: HotelSearchDefaults;
+  excursionSearchDefaults?: ExcursionSearchDefaults;
   staySegments?: TripStaySegment[];
   plannedStayCities?: PlannedStayCity[];
   usuallySkipsConnections?: boolean;
@@ -101,6 +104,8 @@ interface MobileTripsViewProps {
   onPickPlannedCity?: (city: PlannedStayCity) => void;
   onAddCityStay?: (input: { city: string; checkIn: string; checkOut: string }) => void;
   onSetStayIntent?: (segment: TripStaySegment, intent: "needs_hotel" | "skip") => void | Promise<void>;
+  onExcursionBooked?: () => void;
+  readOnly?: boolean;
   pendingForwardReview?: { id: string; reason: string; subject?: string } | null;
   onOpenForwardReview?: (reviewId: string) => void;
   onImportConfirmation?: (file: File) => void;
@@ -164,6 +169,7 @@ export function MobileTripsView({
   plannedFlightLegs = [],
   flightSearchDefaults,
   hotelSearchDefaults,
+  excursionSearchDefaults,
   staySegments = [],
   plannedStayCities = [],
   usuallySkipsConnections,
@@ -173,6 +179,8 @@ export function MobileTripsView({
   onPickPlannedCity,
   onAddCityStay,
   onSetStayIntent,
+  onExcursionBooked,
+  readOnly = false,
   pendingForwardReview,
   onOpenForwardReview,
   onImportConfirmation,
@@ -185,7 +193,12 @@ export function MobileTripsView({
 
   const flights = reservations.filter((r) => r.type === "flight");
   const hotels = reservations.filter((r) => r.type === "hotel");
-  const tickets = reservations.filter((r) => r.type !== "flight" && r.type !== "hotel");
+  const tickets = reservations.filter(
+    (reservation) =>
+      reservation.type !== "flight" &&
+      reservation.type !== "hotel" &&
+      !reservation.notes?.includes("kepi-excursion:"),
+  );
 
   if (!hasActiveTrip) {
     return (
@@ -211,18 +224,18 @@ export function MobileTripsView({
     <section className="space-y-4">
       {!hideSegmentToggle ? (
         <div className="flex gap-2 rounded-2xl bg-[var(--bg-muted)] p-1.5">
-          {(["flights", "hotels"] as const).map((id) => (
+          {(["flights", "hotels", "excursions"] as const).map((id) => (
             <button
               key={id}
               type="button"
               onClick={() => setSegment(id)}
-              className={`min-h-[52px] flex-1 rounded-xl font-bold capitalize transition touch-manipulation ${
+              className={`min-h-[52px] flex-1 rounded-xl font-bold transition touch-manipulation ${
                 segment === id
                   ? "bg-[var(--bg-card)] text-[19px] text-[var(--text-primary)] shadow-sm"
                   : "text-[17px] text-[var(--text-muted)]"
               }`}
             >
-              {id}
+              {id === "excursions" ? "Experiences" : id.charAt(0).toUpperCase() + id.slice(1)}
             </button>
           ))}
         </div>
@@ -231,7 +244,7 @@ export function MobileTripsView({
       {enableBookSearch && travelFitReservations.length > 0 ? (
         <BookTravelFitStrip
           reservations={travelFitReservations}
-          bookSubTab={segment === "flights" ? "flights" : "hotels"}
+          bookSubTab={segment}
         />
       ) : null}
 
@@ -259,7 +272,7 @@ export function MobileTripsView({
           enableBookSearch={enableBookSearch}
           hideRouteMap={hideRouteMap}
         />
-      ) : (
+      ) : segment === "hotels" ? (
         <HotelsTab
           reservations={hotels}
           mapReservations={hotels}
@@ -284,6 +297,20 @@ export function MobileTripsView({
           hotelNotebookNote={hotelNotebookNote}
           onHotelNotebookChange={onHotelNotebookChange}
           travelFitReservations={travelFitReservations}
+        />
+      ) : (
+        <ExcursionsTab
+          reservations={reservations.filter((reservation) => reservation.notes?.includes("kepi-excursion:"))}
+          tripId={tripId}
+          tripName={trip?.name ?? null}
+          searchDefaults={excursionSearchDefaults}
+          onReservationTap={onReservationTap}
+          onDelete={onDelete}
+          onAddManual={onAddBooking}
+          onBooked={onExcursionBooked}
+          readOnly={readOnly}
+          simplifiedMobile
+          enableBookSearch={enableBookSearch}
         />
       )}
 
