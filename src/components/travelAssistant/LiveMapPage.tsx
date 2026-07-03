@@ -18,6 +18,8 @@ import { clearLocationDisplayCache, resolveLocationForMapDisplay } from "@/lib/f
 import { isFamilySharingActive } from "@/lib/family/locationSharingPrefs";
 import { burstFamilyLocationFix, refreshFamilyLocationFix } from "@/lib/family/familyLocationWatch";
 import { buildFamilyAirportPins } from "@/lib/family/familyAirportPins";
+import { useFamilyAirportSync } from "@/lib/family/useFamilyAirportSync";
+import { FamilyRallyStrip } from "@/components/travelAssistant/FamilyRallyStrip";
 import { readCompassHeading, requestDeviceOrientationPermission } from "@/lib/map/deviceCompass";
 import { MobileTabBarNav } from "@/components/travelAssistant/mobile/useMobileTabNavigation";
 
@@ -74,6 +76,7 @@ export function LiveMapPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlPrefersAirport = searchParams.get("view") === "airport";
+  const urlTripId = searchParams.get("tripId");
   const mapEl = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
@@ -99,6 +102,7 @@ export function LiveMapPage() {
   const [sharingLocation, setSharingLocation] = useState(false);
   const [myMemberId, setMyMemberId] = useState<string | null>(null);
   const [gpsRefreshing, setGpsRefreshing] = useState(false);
+  const [activeTripId, setActiveTripId] = useState<string | null>(urlTripId);
 
   useEffect(() => {
     headingUpRef.current = headingUp;
@@ -190,6 +194,15 @@ export function LiveMapPage() {
           }
           setLocations(next);
         }
+      })
+      .catch(() => null);
+  }, []);
+
+  useEffect(() => {
+    void fetch("/api/trips", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d: { activeTripId?: string; trips?: { id: string }[] }) => {
+        setActiveTripId((prev) => prev ?? d.activeTripId ?? d.trips?.[0]?.id ?? null);
       })
       .catch(() => null);
   }, []);
@@ -505,6 +518,32 @@ export function LiveMapPage() {
 
   const navMinutesToDeparture = activeFlight ? (activeFlight.utcMs - Date.now()) / 60_000 : 0;
 
+  const {
+    sync: airportSync,
+    groupBoarding,
+    setPhase: setFamilyJourneyPhase,
+    setRally: setFamilyRally,
+    cancelRally: cancelFamilyRally,
+    busy: familySyncBusy,
+  } = useFamilyAirportSync({
+    tripId: activeTripId,
+    groupId: group?.id ?? null,
+    minutesToDeparture: activeFlight ? navMinutesToDeparture : null,
+  });
+
+  const handleRallyAtGate = useCallback(() => {
+    if (!activeFlight) return;
+    const iata = activeFlight.f.flightDepartureAirport ?? "";
+    const gate = activeFlight.f.flightDepartureGate ?? null;
+    if (!iata || !gate) return;
+    void setFamilyRally({
+      kind: "gate",
+      iata,
+      gateCode: gate,
+      label: `Gate ${gate.toUpperCase()}`,
+    });
+  }, [activeFlight, setFamilyRally]);
+
   /* ── Share my location ── */
   const stopLocalLocationWatch = useCallback(() => {
     if (watchIdRef.current !== null) {
@@ -715,7 +754,28 @@ export function LiveMapPage() {
               onSwitchToFamilyView={() => setMapView("family")}
               familyPins={familyAirportPins}
               onFamilyPinTap={handleFamilyPinTap}
+              activeRally={airportSync?.rally?.status === "active" ? airportSync.rally : null}
             />
+            {members.length >= 2 ? (
+              <div
+                className="pointer-events-none absolute inset-x-0 z-50 px-3"
+                style={{ bottom: "max(6.5rem, calc(env(safe-area-inset-bottom) + 5.75rem))" }}
+              >
+                <FamilyRallyStrip
+                  members={members.map((m) => ({ id: m.id, name: m.name, color: m.color }))}
+                  myMemberId={myMemberId}
+                  sync={airportSync}
+                  groupBoarding={groupBoarding}
+                  activeRally={airportSync?.rally?.status === "active" ? airportSync.rally : null}
+                  gateCode={activeFlight.f.flightDepartureGate ?? null}
+                  iata={activeFlight.f.flightDepartureAirport ?? "—"}
+                  busy={familySyncBusy}
+                  onSetPhase={(phase) => void setFamilyJourneyPhase(phase)}
+                  onSetRallyAtGate={handleRallyAtGate}
+                  onCancelRally={() => void cancelFamilyRally()}
+                />
+              </div>
+            ) : null}
           </div>
         )}
 

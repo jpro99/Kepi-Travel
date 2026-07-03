@@ -174,6 +174,23 @@ export async function sendDelayAlert(
   });
 }
 
+export async function sendFamilyRallyNotification(
+  memberIds: string[],
+  opts: { fromName: string; label: string; tripId: string },
+): Promise<number> {
+  const url = `/travel-assistant/live-map?view=airport&tripId=${encodeURIComponent(opts.tripId)}`;
+  let sent = 0;
+  for (const memberId of memberIds) {
+    const ok = await sendPushNotification(memberId, {
+      title: `${opts.fromName} set a family rally`,
+      body: `Meet at ${opts.label}. Open the map to see everyone's path.`,
+      url,
+    });
+    if (ok) sent += 1;
+  }
+  return sent;
+}
+
 export async function sendDepartureSoonAlert(
   userId: string,
   flightNumber: string,

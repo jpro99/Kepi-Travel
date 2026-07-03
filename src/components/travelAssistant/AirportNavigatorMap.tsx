@@ -17,6 +17,7 @@ import {
 import { routeVoiceIntent } from "@/lib/airportNav/intentRouter";
 import { computeBoardingPressure, type BoardingPressure } from "@/lib/airportNav/boardingMath";
 import type { FamilyAirportPin } from "@/lib/family/familyAirportPins";
+import type { FamilyRally } from "@/lib/family/familyAirportSync";
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Kepi Airport Navigator — Phase 1 surface (spec §B/§C/§D4/§D5).
@@ -55,6 +56,7 @@ interface AirportNavigatorMapProps {
   /** Other family members at this airport (GPS-snapped to terminal graph when possible). */
   familyPins?: FamilyAirportPin[];
   onFamilyPinTap?: (memberId: string) => void;
+  activeRally?: FamilyRally | null;
 }
 
 const COLOR = {
@@ -131,6 +133,7 @@ export function AirportNavigatorMap({
   onSwitchToFamilyView,
   familyPins = [],
   onFamilyPinTap,
+  activeRally = null,
 }: AirportNavigatorMapProps) {
   const mapEl = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1449,6 +1452,18 @@ export function AirportNavigatorMap({
           </button>
         </div>
       )}
+
+      {activeRally?.status === "active" ? (
+        <div
+          data-testid="airport-rally-banner"
+          className="pointer-events-none absolute inset-x-3 z-20 flex justify-center"
+          style={{ top: "max(5.5rem, calc(env(safe-area-inset-top) + 5rem))" }}
+        >
+          <p className="rounded-full border border-[#f4c95d]/50 bg-[#f4c95d]/15 px-4 py-1.5 text-[11px] font-bold text-[#f4c95d] backdrop-blur">
+            📍 Rally: {activeRally.target.label}
+          </p>
+        </div>
+      ) : null}
 
       {familyPins.length > 0 && (
         <div
