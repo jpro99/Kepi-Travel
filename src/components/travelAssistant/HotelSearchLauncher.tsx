@@ -126,16 +126,21 @@ export function HotelSearchLauncher({ tripName, defaults, onSearch }: HotelSearc
   const defaultCityIata = defaults?.cityIata ?? "";
   const defaultCheckIn = defaults?.checkIn?.slice(0, 10) ?? "";
   const defaultCheckOut = defaults?.checkOut?.slice(0, 10) ?? "";
-  const defaultsSyncKey = `${defaultCity}|${defaultCityIata}|${defaultCheckIn}|${defaultCheckOut}`;
+  const cityDefaultsKey = `${defaultCity}|${defaultCityIata}`;
+  const dateDefaultsKey = `${defaultCheckIn}|${defaultCheckOut}`;
 
-  const applyDefaults = useCallback(() => {
+  const applyCityDefaults = useCallback(() => {
     if (defaultCity) setCity(defaultCity);
     if (defaultCityIata) setCityIata(defaultCityIata);
+  }, [defaultCity, defaultCityIata]);
+
+  const applyDateDefaults = useCallback(() => {
     if (defaultCheckIn) setCheckIn(defaultCheckIn);
     if (defaultCheckOut) setCheckOut(defaultCheckOut);
-  }, [defaultCheckIn, defaultCheckOut, defaultCity, defaultCityIata]);
+  }, [defaultCheckIn, defaultCheckOut]);
 
-  useStableDefaultSync(defaultsSyncKey, applyDefaults);
+  useStableDefaultSync(cityDefaultsKey, applyCityDefaults);
+  useStableDefaultSync(dateDefaultsKey, applyDateDefaults);
 
   const launchSearch = (): void => {
     setMessage(null);

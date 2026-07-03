@@ -210,7 +210,8 @@ export function TripHotelSearch({
   const [hiddenOpen, setHiddenOpen] = useState(false);
   const [strictStyleFilter, setStrictStyleFilter] = useState(false);
   const autoSearchKeyRef = useRef<string | null>(null);
-  const defaultsSyncKey = `${defaultCity}|${defaultCityIata}|${defaultCheckIn}|${defaultCheckOut}`;
+  const cityDefaultsKey = `${defaultCity}|${defaultCityIata}`;
+  const dateDefaultsKey = `${defaultCheckIn}|${defaultCheckOut}`;
 
   useEffect(() => {
     void fetch("/api/hotels/profile", { cache: "no-store" })
@@ -221,14 +222,18 @@ export function TripHotelSearch({
       .catch(() => {});
   }, []);
 
-  const applyDefaults = useCallback(() => {
+  const applyCityDefaults = useCallback(() => {
     setCity(defaultCity);
     setCityIata(defaultCityIata);
+  }, [defaultCity, defaultCityIata]);
+
+  const applyDateDefaults = useCallback(() => {
     setCheckIn(defaultCheckIn);
     setCheckOut(defaultCheckOut);
-  }, [defaultCheckIn, defaultCheckOut, defaultCity, defaultCityIata]);
+  }, [defaultCheckIn, defaultCheckOut]);
 
-  useStableDefaultSync(defaultsSyncKey, applyDefaults);
+  useStableDefaultSync(cityDefaultsKey, applyCityDefaults);
+  useStableDefaultSync(dateDefaultsKey, applyDateDefaults);
 
   const runSearch = async (): Promise<void> => {
     const destination = cityIata || city.trim();
