@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { BookTravelFitStrip } from "@/components/travelAssistant/BookTravelFitStrip";
 import { FlightsTab } from "@/components/travelAssistant/FlightsTab";
 import { HotelsTab } from "@/components/travelAssistant/HotelsTab";
 import type { FlightSearchDefaults } from "@/components/travelAssistant/FlightSearchLauncher";
@@ -225,6 +226,13 @@ export function MobileTripsView({
             </button>
           ))}
         </div>
+      ) : null}
+
+      {enableBookSearch && travelFitReservations.length > 0 ? (
+        <BookTravelFitStrip
+          reservations={travelFitReservations}
+          bookSubTab={segment === "flights" ? "flights" : "hotels"}
+        />
       ) : null}
 
       {segment === "flights" ? (

@@ -170,8 +170,7 @@ import { ShareTripCard } from "@/components/travelAssistant/ShareTripCard";
 import { TravelDayView } from "@/components/travelAssistant/TravelDayView";
 import { ShareModal } from "@/components/travelAssistant/ShareModal";
 import { SmartPackingList } from "@/components/travelAssistant/SmartPackingList";
-import { LoyaltyWallet } from "@/components/loyalty/LoyaltyWallet";
-import type { LoyaltyBalance } from "@/lib/loyalty/optimizer";
+import { LoyaltyWalletSection } from "@/components/loyalty/LoyaltyWalletSection";
 import { PointsTravelProfileCard } from "@/components/travelAssistant/PointsTravelProfileCard";
 import { TravelFitCard } from "@/components/travelAssistant/TravelFitCard";
 import {
@@ -1753,34 +1752,6 @@ function defaultTripFromCurrentState(input: {
 }
 
 
-function LoyaltyWalletSection() {
-  const [balances, setBalances] = useState<LoyaltyBalance[]>([]);
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    fetch("/api/loyalty")
-      .then((r) => r.json())
-      .then((d) => { if (d.balances) setBalances(d.balances); })
-      .catch(() => {})
-      .finally(() => setLoaded(true));
-  }, []);
-
-  const handleUpdate = async (next: LoyaltyBalance[]) => {
-    const res = await fetch("/api/loyalty", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ balances: next }),
-    });
-    if (!res.ok) {
-      throw new Error("Failed to save loyalty wallet");
-    }
-    const data = (await res.json()) as { balances?: LoyaltyBalance[] };
-    setBalances(Array.isArray(data.balances) ? data.balances : next);
-  };
-
-  if (!loaded) return <p className="text-sm text-slate-400 py-2">Loading wallet…</p>;
-  return <LoyaltyWallet balances={balances} onUpdate={handleUpdate} />;
-}
 
 type ToastTone = "error" | "success" | "info";
 
@@ -8946,6 +8917,8 @@ export default function TravelAssistantPage() {
                 travelFitReservations={travelFitReservations}
                 tripSpendSummary={tripSpendSummary}
                 tripProblemCount={transportConflictReservationIds.size}
+                userId={user?.id ?? null}
+                travelStyleProfile={travelStyleProfile}
               />
             )
           ) : null}

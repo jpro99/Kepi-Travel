@@ -26,7 +26,7 @@ export const HOTEL_CITY_COORDS: Record<string, { lat: number; lng: number; name:
   BRI: { lat: 41.1177, lng: 16.8512, name: "Bari" },
   BDS: { lat: 40.6383, lng: 17.9461, name: "Brindisi" },
   MONOPOLI: { lat: 40.9526, lng: 17.2972, name: "Monopoli, Italy" },
-  POLIGNANO: { lat: 40.995, lng: 17.217, name: "Polignano a Mare" },
+  POLIGNANO: { lat: 40.9961, lng: 17.2196, name: "Polignano a Mare" },
   LECCE: { lat: 40.3515, lng: 18.175, name: "Lecce, Italy" },
   CORTINA: { lat: 46.5369, lng: 12.1357, name: "Cortina d'Ampezzo" },
   ORTISEI: { lat: 46.576, lng: 11.671, name: "Ortisei" },

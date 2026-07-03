@@ -9,6 +9,11 @@ import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
 import { MobileItineraryReader } from "@/components/travelAssistant/mobile/MobileItineraryReader";
 import { MobilePlanNotebook } from "@/components/travelAssistant/mobile/MobilePlanNotebook";
 import { MobileSettingsView } from "@/components/travelAssistant/mobile/MobileSettingsView";
+import { PointsTravelProfileCard } from "@/components/travelAssistant/PointsTravelProfileCard";
+import { TravelFitCard } from "@/components/travelAssistant/TravelFitCard";
+import { TravelStyleBadge } from "@/components/travelAssistant/TravelStyleQuiz";
+import { LoyaltyWalletSection } from "@/components/loyalty/LoyaltyWalletSection";
+import type { TravelStyleProfile } from "@/lib/traveler/types";
 import { MobileTripShellHeader } from "@/components/travelAssistant/mobile/MobileTripShellHeader";
 import { MobileTripsView } from "@/components/travelAssistant/mobile/MobileTripsView";
 import { MobileBookHeader, MobileBookSegmentToggle } from "@/components/travelAssistant/mobile/MobileBookChrome";
@@ -132,6 +137,8 @@ interface MobileMapForwardShellProps {
   travelFitReservations?: Reservation[];
   tripSpendSummary?: TripSpendSummary;
   tripProblemCount?: number;
+  userId?: string | null;
+  travelStyleProfile?: TravelStyleProfile | null;
 }
 
 function daysUntilTrip(startDate: string | null): number | null {
@@ -223,6 +230,8 @@ export function MobileMapForwardShell({
   travelFitReservations = [],
   tripSpendSummary,
   tripProblemCount = 0,
+  userId = null,
+  travelStyleProfile = null,
 }: MobileMapForwardShellProps) {
   const [planSegment, setPlanSegment] = useState<PlanSegment>("itinerary");
   const bookSegment = bookSubTab;
@@ -545,6 +554,49 @@ export function MobileMapForwardShell({
       >
         Family map & live location
       </Link>
+
+      <div className="overflow-hidden rounded-2xl bg-[var(--bg-card)] ring-1 ring-[var(--border-default)]">
+        <div className="flex items-center gap-3 border-b border-[var(--border-default)] px-5 py-4">
+          <span className="text-xl">🎯</span>
+          <div>
+            <p className="text-[19px] font-bold text-[var(--text-primary)]">Travel Fit</p>
+            <p className="mt-0.5 text-[15px] text-[var(--text-secondary)]">
+              Airlines, hotels, and earn paths for your trips
+            </p>
+          </div>
+        </div>
+        <div className="space-y-3 px-4 py-4">
+          <TravelStyleBadge profile={travelStyleProfile} />
+          <TravelFitCard userId={userId} reservations={travelFitReservations} travelStyle={travelStyleProfile} />
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl bg-[var(--bg-card)] ring-1 ring-[var(--border-default)]">
+        <div className="flex items-center gap-3 border-b border-[var(--border-default)] px-5 py-4">
+          <span className="text-xl">💳</span>
+          <div>
+            <p className="text-[19px] font-bold text-[var(--text-primary)]">Card wallet</p>
+            <p className="mt-0.5 text-[15px] text-[var(--text-secondary)]">Cards you hold — names only</p>
+          </div>
+        </div>
+        <div className="px-4 py-4">
+          <PointsTravelProfileCard />
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl bg-[var(--bg-card)] ring-1 ring-[var(--border-default)]">
+        <div className="flex items-center gap-3 px-5 py-4">
+          <span className="text-xl">✈️</span>
+          <div>
+            <p className="text-[19px] font-bold text-[var(--text-primary)]">Loyalty wallet</p>
+            <p className="mt-0.5 text-[15px] text-[var(--text-secondary)]">Miles, points, and status</p>
+          </div>
+        </div>
+        <div className="border-t border-[var(--border-default)] px-4 py-4">
+          <LoyaltyWalletSection />
+        </div>
+      </div>
+
       <MobileSettingsView
         emailForwardAddress={emailForwardAddress}
         onCopyForwardAddress={onCopyForwardAddress}

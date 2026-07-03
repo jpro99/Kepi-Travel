@@ -4,7 +4,7 @@ import { attachHotelCoordinates, resolveHotelMapPosition } from "@/lib/hotels/ho
 import { areCoordsTrusted, isLikelyOffshorePin } from "@/lib/hotels/hotelGeo";
 import type { HotelSearchResult } from "@/lib/hotels/types";
 
-const POLIGNANO = { lat: 40.995, lng: 17.217 };
+const POLIGNANO = { lat: 40.9961, lng: 17.2196 };
 const SEARCH_CITY = "Polignano a Mare, Italy";
 
 function stubHotel(overrides: Partial<HotelSearchResult> = {}): HotelSearchResult {

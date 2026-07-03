@@ -4,7 +4,6 @@ import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { TripHotelStayMap } from "@/components/travelAssistant/TripHotelStayMap";
 import { MobileHotelStayNotebook } from "@/components/travelAssistant/mobile/MobileHotelStayNotebook";
-import { TravelFitEarnBar } from "@/components/travelAssistant/TravelFitEarnBar";
 import { TripStayPlanner } from "@/components/travelAssistant/TripStayPlanner";
 import { TripHotelCityPicker } from "@/components/travelAssistant/TripHotelCityPicker";
 import { HotelSearchLauncher, type HotelSearchDefaults } from "@/components/travelAssistant/HotelSearchLauncher";
@@ -240,10 +239,6 @@ export function HotelsTab({
           </div>
         ) : null}
       </div>
-
-      {showBookSearch && travelFitReservations.some((r) => r.type === "hotel") && plannedStayCities.length === 0 ? (
-        <TravelFitEarnBar reservations={travelFitReservations.filter((r) => r.type === "hotel")} />
-      ) : null}
 
       {showBookSearch && plannedStayCities.length > 0 && onPickPlannedCity ? (
         <TripHotelCityPicker

@@ -3,6 +3,7 @@
 import type { BookSubTab } from "@/lib/travelAssistant/consumerTabs";
 import { bookSubTabButtonClass, BOOK_SUBTAB_TOGGLE_CLASS } from "@/components/travelAssistant/bookTabStyles";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
+import { BookTravelFitStrip } from "@/components/travelAssistant/BookTravelFitStrip";
 import type { TripSpendSummary } from "@/lib/travelAssistant/tripSpendSummary";
 import { FlightsTab } from "@/components/travelAssistant/FlightsTab";
 import { HotelsTab } from "@/components/travelAssistant/HotelsTab";
@@ -183,6 +184,10 @@ export function BookTabView({
           Hotels
         </button>
       </div>
+
+      {travelFitReservations && travelFitReservations.length > 0 ? (
+        <BookTravelFitStrip reservations={travelFitReservations} bookSubTab={bookSubTab} />
+      ) : null}
 
       {bookSubTab === "flights" ? (
         <FlightsTab
