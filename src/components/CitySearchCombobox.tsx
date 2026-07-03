@@ -24,6 +24,7 @@ export function CitySearchCombobox({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -56,7 +57,10 @@ export function CitySearchCombobox({
 
   const scheduleClose = useCallback(() => {
     cancelBlur();
-    blurTimer.current = setTimeout(() => setOpen(false), 180);
+    blurTimer.current = setTimeout(() => {
+      setOpen(false);
+      setIsEditing(false);
+    }, 180);
   }, [cancelBlur]);
 
   useEffect(() => {
@@ -95,11 +99,12 @@ export function CitySearchCombobox({
         aria-autocomplete="list"
         autoComplete="off"
         placeholder={selected?.label ?? "Search cities…"}
-        value={open ? query : selected?.label ?? ""}
+        value={isEditing ? query : selected?.label ?? ""}
         onFocus={() => {
           cancelBlur();
           setOpen(true);
-          setQuery("");
+          setIsEditing(true);
+          setQuery(selected?.label ?? "");
         }}
         onChange={(e) => {
           setQuery(e.target.value);
@@ -127,6 +132,7 @@ export function CitySearchCombobox({
                 onClick={() => {
                   onSelect(c.id);
                   setOpen(false);
+                  setIsEditing(false);
                   setQuery("");
                 }}
               >
