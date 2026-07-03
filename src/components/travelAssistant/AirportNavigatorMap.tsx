@@ -1103,6 +1103,8 @@ export function AirportNavigatorMap({
 
   return (
     <div
+      data-testid="airport-nav-indoor-map"
+      data-map-ready={mapReady ? "true" : "false"}
       className={
         fill
           ? "relative h-full w-full overflow-hidden bg-[#0b1f3a]"
