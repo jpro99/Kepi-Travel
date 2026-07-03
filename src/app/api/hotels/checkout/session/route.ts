@@ -121,7 +121,7 @@ export async function POST(req: Request) {
           quantity: 1,
         },
       ],
-      success_url: `${appUrl}/travel-assistant?hotelBooking=success&pendingId=${encodeURIComponent(pendingId)}&session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${appUrl}/travel-assistant?hotelBooking=success&pendingId=${encodeURIComponent(pendingId)}&session_id={CHECKOUT_SESSION_ID}&tab=book&bookView=hotels&mtab=book`,
       cancel_url: `${appUrl}/travel-assistant?hotelBooking=cancelled`,
       client_reference_id: userId,
       customer_email: guest.email.trim(),

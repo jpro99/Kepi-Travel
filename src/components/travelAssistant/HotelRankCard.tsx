@@ -9,6 +9,7 @@ import {
   resolveHotelHeroVisual,
   topAmenityIcons,
 } from "@/lib/hotels/hotelCardDisplay";
+import { hasKepiBookableLiveRate } from "@/lib/hotels/hotelLiveRate";
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
 import type { HotelPayMode } from "@/lib/hotels/hotelPointsDisplay";
 import { pointsPerNight } from "@/lib/hotels/hotelPointsDisplay";
@@ -57,6 +58,8 @@ export function HotelRankCard({
   const guestScore = hotel.rating !== undefined ? hotel.rating.toFixed(1) : `${hotel.stars}.0`;
   const amenityIcons = topAmenityIcons(hotel.amenities);
   const matchReason = primaryMatchReason(hotel);
+  const kepiBookable = hasKepiBookableLiveRate(hotel);
+  const selectLabel = kepiBookable ? "View & book in Kepi →" : "Select →";
 
   if (premium) {
     return (
@@ -105,6 +108,12 @@ export function HotelRankCard({
 
           <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">{matchReason}</p>
 
+          {kepiBookable ? (
+            <p className="text-xs font-bold uppercase tracking-wide text-sky-700 dark:text-sky-300">
+              Book in Kepi · Stripe checkout
+            </p>
+          ) : null}
+
           {amenityIcons.length > 0 ? (
             <div className="flex gap-3">
               {amenityIcons.map((kind) => (
@@ -118,7 +127,7 @@ export function HotelRankCard({
             onClick={onAdd}
             className="w-full rounded-2xl bg-[#f4c95d] py-3.5 text-sm font-black text-[#0b1f3a] hover:bg-[#e8bc4a]"
           >
-            Select →
+            {selectLabel}
           </button>
         </div>
       </article>
@@ -151,7 +160,7 @@ export function HotelRankCard({
           }}
           className="shrink-0 rounded-xl bg-[#f4c95d] px-3 py-2 text-xs font-black text-[#0b1f3a]"
         >
-          Select
+          {kepiBookable ? "Book" : "Select"}
         </button>
       </article>
     );
@@ -178,7 +187,7 @@ export function HotelRankCard({
         <p className="text-sm text-emerald-700 dark:text-emerald-300">{matchReason}</p>
         <div className="flex gap-2">
           <button type="button" onClick={onAdd} className="flex-1 rounded-xl bg-[#f4c95d] py-2.5 text-sm font-black text-[#0b1f3a]">
-            Select →
+            {selectLabel}
           </button>
           {onDismiss ? (
             <button type="button" onClick={onDismiss} className="rounded-xl px-3 py-2.5 text-xs text-slate-500">

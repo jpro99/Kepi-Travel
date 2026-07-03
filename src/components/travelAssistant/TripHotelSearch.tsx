@@ -186,6 +186,9 @@ export function TripHotelSearch({
   const [sortMode, setSortMode] = useState<SortMode>("browse");
   const [showNearby, setShowNearby] = useState(false);
   const [inventoryNote, setInventoryNote] = useState<string | null>(null);
+  const [searchSource, setSearchSource] = useState<string | null>(null);
+  const [providerNotice, setProviderNotice] = useState<string | null>(null);
+  const [liveBookableCount, setLiveBookableCount] = useState(0);
   const [googleHotelsUrl, setGoogleHotelsUrl] = useState<string | null>(null);
   const [inCityCount, setInCityCount] = useState(0);
   const [resultsView, setResultsView] = useState<ResultsView>("list");
@@ -266,6 +269,9 @@ export function TripHotelSearch({
         googleHotelsUrl?: string | null;
         inCityCount?: number;
         memberHotelPricing?: boolean;
+        source?: string;
+        notice?: string | null;
+        liveBookableCount?: number;
         resolved?: { lat: number; lng: number; iata?: string | null };
       } = {};
       try {
@@ -301,6 +307,9 @@ export function TripHotelSearch({
       setCorrectedFrom(payload.correctedFrom ?? null);
       setPreferenceInsight(payload.preferenceInsight ?? null);
       setInventoryNote(payload.inventoryNote ?? null);
+      setSearchSource(payload.source ?? null);
+      setProviderNotice(payload.notice ?? null);
+      setLiveBookableCount(payload.liveBookableCount ?? 0);
       setGoogleHotelsUrl(payload.googleHotelsUrl ?? null);
       setInCityCount(payload.inCityCount ?? 0);
       setMemberHotelPricing(Boolean(payload.memberHotelPricing));
@@ -581,6 +590,20 @@ export function TripHotelSearch({
             <p className="mb-4 text-sm text-slate-500">
               Showing hotels near <strong>{resolvedCity}</strong> (corrected from &ldquo;{correctedFrom}&rdquo;).
             </p>
+          ) : null}
+
+          {searchSource === "liteapi" || providerNotice ? (
+            <div className="mb-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 dark:border-sky-900 dark:bg-sky-950/40">
+              <p className="text-sm font-semibold text-sky-900 dark:text-sky-100">
+                {liveBookableCount > 0
+                  ? `${liveBookableCount} hotel${liveBookableCount === 1 ? "" : "s"} ready to book in Kepi`
+                  : "Live hotel rates via LiteAPI"}
+              </p>
+              <p className="mt-1 text-sm text-sky-800 dark:text-sky-200">
+                {providerNotice ??
+                  "Tap a hotel → Book with Kepi → pay with Stripe. Your confirmation saves to the trip automatically."}
+              </p>
+            </div>
           ) : null}
 
           {relaxedNote ? (

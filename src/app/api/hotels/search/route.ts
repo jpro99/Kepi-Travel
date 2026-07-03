@@ -127,11 +127,16 @@ export async function POST(req: Request) {
               ? `${liveInCity} with live Kepi rates · ${browseInCity} more to browse (check price on Google).`
               : null;
 
+    const liveBookableCount = ranked.filter((hotel) => hasKepiBookableLiveRate(hotel)).length;
+
     return NextResponse.json({
       hotels: ranked,
       total: ranked.length,
       inCityCount: inCity.length,
       nearbyCount: nearby.length,
+      source: searchResult.source,
+      notice: searchResult.notice ?? null,
+      liveBookableCount,
       city: resolved.displayName,
       correctedFrom: resolved.correctedFrom ?? null,
       googleHotelsUrl: buildGoogleHotelsUrl({

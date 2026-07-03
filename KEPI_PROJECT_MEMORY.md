@@ -216,6 +216,7 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 
 | Date | Note |
 |------|------|
+| 2026-06-15 | **Hotel book funnel:** LiteAPI source banner, "Book in Kepi" card CTAs, Stripe return → Book/Hotels tab, save keeps search open |
 | 2026-06-15 | **Home spend + card parity:** TripSpendBadge on mobile header/Home; mobile flight cards match hotel list chrome |
 | 2026-06-15 | **Book search + Next Up:** mobile Book wired to flight/hotel search (launchers, leg picker, stay planner); loyalty spend in Book header; Next Up shows route/gate/status |
 | 2026-06-15 | **Mobile polish:** cinematic Home hero (photo+globe), unified Book chrome (navy header, Flights\|Hotels toggle), tickets as footer; shared `tripHeroVisuals` |

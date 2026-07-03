@@ -2250,6 +2250,12 @@ export default function TravelAssistantPage() {
               ? `✅ Hotel already confirmed · ref ${d.bookingReference}`
               : `✅ Hotel booked · confirmation ${d.bookingReference}`,
           );
+          navigateToConsumerTab("book", { bookView: "hotels" });
+          if (typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches) {
+            navigateMobilePrimaryTab("book");
+          }
+          setHotelSearchModalOpen(false);
+          setHotelSearchSegment(null);
           window.dispatchEvent(new CustomEvent("kepi:trip-reload"));
         } else {
           setToastRaw(`Hotel booking pending or failed: ${d.error ?? "check email or try again"}`);
@@ -5757,7 +5763,6 @@ export default function TravelAssistantPage() {
         reservationId: reservation.id,
       });
       setToast(`${hotel.name} added to your trip ✓`);
-      setHotelSearchSegment(null);
     },
     [activeTripId, effectiveHotelSearchDefaults.city, hotelSearchSegment?.city, pushUndoSnapshot, queueMutation, selectedFamilyMember.id, setToast, trips],
   );
