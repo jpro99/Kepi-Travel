@@ -12,6 +12,7 @@ import {
 import { cityPhotoPicsumUrl, cityPhotoSourceUrl } from "@/lib/travelAssistant/cityPhotos";
 import { fetchCityWeatherForecast, type DailyWeather } from "@/lib/travelAssistant/cityWeather";
 import { buildGapDateKeys, computeItineraryDayStatus } from "@/lib/travelAssistant/itineraryDayStatus";
+import { parseDayLines } from "@/lib/travelAssistant/dayPlanLines";
 import { buildFullTripDayKeys } from "@/lib/travelAssistant/tripTimelinePlanning";
 import type { TripActionItem } from "@/lib/travelAssistant/tripActionItems";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
@@ -123,6 +124,98 @@ function missionsForCity(missions: TripActionItem[], city: string): TripActionIt
     const c = cityFromMissionLabel(m.label).toLowerCase();
     return c.includes(key) || key.includes(c.split(" ")[0] ?? "");
   });
+}
+
+function reservationsForDay(dateKey: string, reservations: TimelineReservation[]): TimelineReservation[] {
+  return reservations.filter((r) => {
+    if (r.type === "hotel") {
+      const start = r.localTime.trim().slice(0, 10);
+      const end = r.checkOutDate?.slice(0, 10) ?? start;
+      return start <= dateKey && dateKey <= end;
+    }
+    return reservationDateKey(r) === dateKey;
+  });
+}
+
+function reservationInlineLabel(reservation: TimelineReservation): string {
+  if (reservation.type === "flight") {
+    return `${reservation.flightNumber ?? reservation.title} · ${reservation.flightDepartureAirport} → ${reservation.flightArrivalAirport}`;
+  }
+  if (reservation.type === "hotel") {
+    return reservation.provider || reservation.title;
+  }
+  return reservation.title || reservation.provider;
+}
+
+function reservationInlineMeta(reservation: TimelineReservation): string | null {
+  if (reservation.type === "flight") {
+    const time = formatTimeRange(reservation.flightDepartureTime ?? reservation.localTime, reservation.flightArrivalTime);
+    const duration = flightDuration(reservation.flightDepartureTime, reservation.flightArrivalTime);
+    const airline = reservation.flightAirline ?? reservation.provider;
+    return [time, duration, airline].filter(Boolean).join(" · ") || null;
+  }
+  if (reservation.confirmationCode?.trim()) {
+    return `Confirmation ${reservation.confirmationCode.trim()}`;
+  }
+  return reservation.location?.trim() || null;
+}
+
+function DayInlineDetails({
+  dateKey,
+  reservations,
+  dayNotes,
+  onEditPlan,
+}: {
+  dateKey: string;
+  reservations: TimelineReservation[];
+  dayNotes: Record<string, string>;
+  onEditPlan: (dateKey: string) => void;
+}) {
+  const dayReservations = reservationsForDay(dateKey, reservations);
+  const noteLines = parseDayLines(dayNotes[dateKey] ?? "");
+
+  return (
+    <div className="border-t border-[#E5E5EA] bg-[#FAFAFA] px-5 py-4">
+      {dayReservations.length > 0 ? (
+        <ul className="space-y-2">
+          {dayReservations.map((reservation) => (
+            <li
+              key={reservation.id}
+              className="rounded-xl bg-white px-4 py-3 ring-1 ring-[#E5E5EA]"
+            >
+              <p className="text-[14px] font-semibold text-[#1D1D1F]">
+                <span className="mr-1.5" aria-hidden>
+                  {reservation.type === "flight" ? "✈" : reservation.type === "hotel" ? "🏨" : "•"}
+                </span>
+                {reservationInlineLabel(reservation)}
+              </p>
+              {reservationInlineMeta(reservation) ? (
+                <p className="mt-1 text-[13px] text-[#6E6E73]">{reservationInlineMeta(reservation)}</p>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {noteLines.length > 0 ? (
+        <ul className={`space-y-1 ${dayReservations.length > 0 ? "mt-3" : ""}`}>
+          {noteLines.map((line) => (
+            <li key={line} className="text-[13px] leading-snug text-[#1D1D1F]">
+              {line}
+            </li>
+          ))}
+        </ul>
+      ) : dayReservations.length === 0 ? (
+        <p className="text-[13px] text-[#6E6E73]">Tap Edit plan to add notes and activities.</p>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => onEditPlan(dateKey)}
+        className="mt-4 rounded-xl bg-[#0F1923] px-4 py-2.5 text-[13px] font-semibold text-white"
+      >
+        Edit plan
+      </button>
+    </div>
+  );
 }
 
 function CityPhotoThumb({ city }: { city: string }) {
@@ -302,6 +395,7 @@ function DestinationBlock({
   defaultExpanded?: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
+  const [expandedDateKey, setExpandedDateKey] = useState<string | null>(null);
   const [forecast, setForecast] = useState<Map<string, DailyWeather>>(new Map());
   const cityMissions = missionsForCity(missions, leg.label);
   const nights = countNights(leg.startDate, leg.endDate);
@@ -317,6 +411,12 @@ function DestinationBlock({
       cancelled = true;
     };
   }, [expanded, leg.label]);
+
+  useEffect(() => {
+    if (selectedDateKey && dayKeys.includes(selectedDateKey)) {
+      setExpandedDateKey(selectedDateKey);
+    }
+  }, [selectedDateKey, dayKeys]);
 
   const hotelForDay = (dateKey: string): TimelineReservation | null => {
     for (const r of reservations) {
@@ -411,18 +511,23 @@ function DestinationBlock({
               const dotClass = statusDotClass({ isTravel: false, status });
               const isSelected = selectedDateKey === dateKey;
               const isLegHighlighted = highlightedLegId === leg.id;
+              const isDayExpanded = expandedDateKey === dateKey;
               const wx = weatherForDay(dateKey);
 
               return (
                 <li key={dateKey}>
                   <button
                     type="button"
-                    onClick={() => onSelectedDateKeyChange?.(dateKey)}
+                    onClick={() => {
+                      onSelectedDateKeyChange?.(dateKey);
+                      setExpandedDateKey((prev) => (prev === dateKey ? null : dateKey));
+                    }}
                     className={`flex min-h-10 w-full items-center gap-3 px-5 py-2 text-left transition ${
-                      isSelected || isLegHighlighted
+                      isSelected || isLegHighlighted || isDayExpanded
                         ? "bg-[#F5F5F7] ring-1 ring-inset ring-[#f4c95d]/50"
                         : "hover:bg-[#FAFAFA]"
                     }`}
+                    aria-expanded={isDayExpanded}
                   >
                     <div className="flex min-w-0 flex-1 items-center gap-3">
                       {dotClass ? (
@@ -451,17 +556,23 @@ function DestinationBlock({
                     ) : suppressPlanningAlerts ? null : (
                       <span className="shrink-0 text-xs font-semibold text-amber-600">No hotel</span>
                     )}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEditDay(dateKey);
-                      }}
-                      className="shrink-0 text-[10px] text-[#6E6E73] hover:text-[#1D1D1F]"
+                    <span
+                      className={`shrink-0 text-[10px] text-[#6E6E73] transition-transform ${
+                        isDayExpanded ? "rotate-180" : ""
+                      }`}
+                      aria-hidden
                     >
-                      Edit
-                    </button>
+                      ▼
+                    </span>
                   </button>
+                  {isDayExpanded ? (
+                    <DayInlineDetails
+                      dateKey={dateKey}
+                      reservations={reservations}
+                      dayNotes={dayNotes}
+                      onEditPlan={onEditDay}
+                    />
+                  ) : null}
                 </li>
               );
             })}
@@ -606,14 +717,7 @@ export function ItineraryTimeline({
   const editRowDateKey = editDateKey;
   const editNote = editRowDateKey ? dayNotes[editRowDateKey] ?? "" : "";
   const editReservations = editRowDateKey
-    ? reservations.filter((r) => {
-        if (r.type === "hotel") {
-          const start = r.localTime.trim().slice(0, 10);
-          const end = r.checkOutDate?.slice(0, 10) ?? start;
-          return start <= editRowDateKey && editRowDateKey <= end;
-        }
-        return reservationDateKey(r) === editRowDateKey;
-      })
+    ? reservationsForDay(editRowDateKey, reservations)
     : [];
 
   return (
@@ -684,7 +788,6 @@ export function ItineraryTimeline({
                 : reservation.type === "hotel"
                   ? `🏨 ${reservation.provider || reservation.title}`
                   : reservation.title,
-            onTap: suppressPlanningAlerts ? undefined : () => onReservationTap(reservation.id),
           }))}
         />
       ) : null}

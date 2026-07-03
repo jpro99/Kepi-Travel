@@ -505,6 +505,7 @@ export function MobileMapForwardShell({
         {planSegment === "itinerary" ? (
           <MobileItineraryReader
             embedded
+            inlineExpandOnly
             open
             onClose={() => {}}
             tripName={tripName}

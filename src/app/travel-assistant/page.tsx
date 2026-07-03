@@ -9045,7 +9045,6 @@ export default function TravelAssistantPage() {
               getDayPlan={itineraryPrefs.getDayPlan}
               itineraryPlans={itineraryPrefs.itineraryPlans}
               onPlanDay={handlePlanDay}
-              onReservationTap={(id) => openDrawer("reservation", id)}
               onGapActionTap={handleItineraryGapAction}
               onPrint={handleConsumerItineraryPrint}
               onExportPdf={handleConsumerItineraryPdf}

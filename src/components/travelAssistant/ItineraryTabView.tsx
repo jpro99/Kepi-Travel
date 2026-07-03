@@ -53,7 +53,6 @@ interface ItineraryTabViewProps {
   getDayPlan: (dateKey: string, fallbackLocation: string) => DayPlanRecord;
   itineraryPlans: ItineraryPlansData;
   onPlanDay: (dateKey: string, intent: ParsedDayIntent, mode: DayPlanMode) => void;
-  onReservationTap: (id: string) => void;
   onGapActionTap?: (tab: string) => void;
   onPrint: () => void;
   onExportPdf: () => void;
@@ -85,7 +84,6 @@ export function ItineraryTabView({
   getDayPlan,
   itineraryPlans,
   onPlanDay,
-  onReservationTap,
   onGapActionTap,
   onPrint,
   onExportPdf,
@@ -215,7 +213,7 @@ export function ItineraryTabView({
             scrollToDateKey={scrollToDateKey}
             onSelectedDateKeyChange={onSelectedDateKeyChange}
             onDayNoteChange={handleDayNoteChange}
-            onReservationTap={onReservationTap}
+            onReservationTap={() => undefined}
             onPlanDay={onPlanDay}
             onPlanHotel={onPlanHotel}
             missionItems={missionItems}

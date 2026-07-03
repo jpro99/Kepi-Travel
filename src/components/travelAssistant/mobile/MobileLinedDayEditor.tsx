@@ -257,38 +257,53 @@ export function MobileLinedDayEditor({
             </p>
           ) : null}
 
-          {bookedLines.map((booked, index) => (
-            <button
-              key={booked.id}
-              type="button"
-              onClick={() => onBookedTap?.(booked.id)}
-              className="flex w-full items-start gap-0 border-0 bg-transparent text-left"
-              style={{ minHeight: lineHeight }}
-            >
-              <span
-                className="shrink-0 text-right font-semibold tabular-nums text-[#78716c]"
-                style={{
-                  width: marginW - 10,
-                  fontSize: MOBILE_NOTEBOOK_NUM_FONT_PX,
-                  lineHeight: `${lineHeight}px`,
-                  paddingRight: 10,
-                }}
+          {bookedLines.map((booked, index) => {
+            const row = (
+              <>
+                <span
+                  className="shrink-0 text-right font-semibold tabular-nums text-[#78716c]"
+                  style={{
+                    width: marginW - 10,
+                    fontSize: MOBILE_NOTEBOOK_NUM_FONT_PX,
+                    lineHeight: `${lineHeight}px`,
+                    paddingRight: 10,
+                  }}
+                >
+                  {index + 1}
+                </span>
+                <span
+                  className="min-w-0 flex-1 break-words font-medium text-[#166534]"
+                  style={{
+                    fontSize: MOBILE_NOTEBOOK_FONT_PX,
+                    lineHeight: `${lineHeight}px`,
+                    paddingRight: 16,
+                    paddingTop: 2,
+                  }}
+                >
+                  {booked.emoji} {booked.text}
+                </span>
+              </>
+            );
+            return onBookedTap ? (
+              <button
+                key={booked.id}
+                type="button"
+                onClick={() => onBookedTap(booked.id)}
+                className="flex w-full items-start gap-0 border-0 bg-transparent text-left"
+                style={{ minHeight: lineHeight }}
               >
-                {index + 1}
-              </span>
-              <span
-                className="min-w-0 flex-1 break-words font-medium text-[#166534]"
-                style={{
-                  fontSize: MOBILE_NOTEBOOK_FONT_PX,
-                  lineHeight: `${lineHeight}px`,
-                  paddingRight: 16,
-                  paddingTop: 2,
-                }}
+                {row}
+              </button>
+            ) : (
+              <div
+                key={booked.id}
+                className="flex w-full items-start gap-0"
+                style={{ minHeight: lineHeight }}
               >
-                {booked.emoji} {booked.text}
-              </span>
-            </button>
-          ))}
+                {row}
+              </div>
+            );
+          })}
 
           {lines.map((line, index) => {
             const lineNum = bookedLines.length + index + 1;
