@@ -100,6 +100,23 @@ export function matchHotelChain(chainName?: string, hotelName?: string): HotelCh
   return null;
 }
 
+/** Map traveler genome hotelChainPriority labels to canonical chain ids. */
+export function chainIdsFromPriorityLabels(labels: string[]): HotelChainId[] {
+  const seen = new Set<HotelChainId>();
+  for (const label of labels) {
+    const trimmed = label.trim();
+    if (!trimmed) continue;
+    const byMatch = matchHotelChain(trimmed, trimmed);
+    if (byMatch) {
+      seen.add(byMatch);
+      continue;
+    }
+    const byLabel = HOTEL_CHAINS.find((chain) => chain.label.toLowerCase() === trimmed.toLowerCase());
+    if (byLabel) seen.add(byLabel.id);
+  }
+  return [...seen];
+}
+
 export function hotelParticipatesInPoints(chainName?: string, hotelName?: string): boolean {
   return matchHotelChain(chainName, hotelName) !== null;
 }
