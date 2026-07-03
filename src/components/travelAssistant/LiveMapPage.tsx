@@ -11,21 +11,19 @@ import {
   useNavigatorCredentials,
 } from "@/lib/travelAssistant/useActiveFlight";
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
-import {
-  resumePersistentFamilyLocationWatch,
-  setFamilyLocationSender,
-  startPersistentFamilyLocationWatch,
-  stopPersistentFamilyLocationWatch,
-  FAMILY_LOCATION_STALE_MS,
-} from "@/lib/family/familyLocationWatch";
-import {
-  ensureDefaultFamilySharingOn,
-  isFamilySharingOptedOut,
-} from "@/lib/family/locationSharingPrefs";
 import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
-import { fetchJson } from "@/lib/api/readJsonResponse";
+import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
+import { resolveLiveCoordinates, resetGeolocationQualityState } from "@/lib/family/geolocationQuality";
+import { clearLocationDisplayCache, resolveLocationForMapDisplay } from "@/lib/family/locationDisplayCache";
+import { isFamilySharingActive } from "@/lib/family/locationSharingPrefs";
+import { burstFamilyLocationFix, refreshFamilyLocationFix } from "@/lib/family/familyLocationWatch";
+import { buildFamilyAirportPins } from "@/lib/family/familyAirportPins";
+import { useFamilyAirportSync } from "@/lib/family/useFamilyAirportSync";
+import { FamilyRallyStrip } from "@/components/travelAssistant/FamilyRallyStrip";
+import { readCompassHeading, requestDeviceOrientationPermission } from "@/lib/map/deviceCompass";
+import { MobileTabBarNav } from "@/components/travelAssistant/mobile/useMobileTabNavigation";
 
-/* ΓöÇΓöÇΓöÇ Types ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+/* ─── Types ─────────────────────────────────────────────────── */
 interface LocationPoint {
   lat: number;
   lon: number;
@@ -55,7 +53,7 @@ interface FamilyGroup {
   createdAt: string;
 }
 
-/* ΓöÇΓöÇΓöÇ Helpers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+/* ─── Helpers ────────────────────────────────────────────────── */
 function timeAgo(iso: string): string {
   const d = Math.floor((Date.now() - Date.parse(iso)) / 60_000);
   if (d < 1) return "just now";
@@ -63,21 +61,22 @@ function timeAgo(iso: string): string {
   if (d < 1440) return `${Math.floor(d / 60)}h ago`;
   return `${Math.floor(d / 1440)}d ago`;
 }
-function isStale(iso: string) { return Date.now() - Date.parse(iso) > FAMILY_LOCATION_STALE_MS; }
+function isStale(iso: string) { return Date.now() - Date.parse(iso) > 10 * 60_000; }
 
-/* ─── Map style builders ─── */
+/* ─── Map style builders ─────────────────────────────────────── */
 type MapStyleId = "dark" | "streets" | "satellite";
-function styleUrlFor(styleId: MapStyleId, key: string): string {
-  if (styleId === "satellite") return maptilerStyleUrl("satellite", key);
-  if (styleId === "streets") return maptilerStyleUrl("streets-v2", key);
-  return maptilerStyleUrl("dataviz-dark", key);
+function stylePathFor(styleId: MapStyleId): string {
+  if (styleId === "satellite") return "satellite";
+  if (styleId === "streets") return "streets-v2";
+  return "dataviz-dark";
 }
 
-/* ΓöÇΓöÇΓöÇ Component ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+/* ─── Component ──────────────────────────────────────────────── */
 export function LiveMapPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialView = searchParams.get("view") === "airport" ? "airport" : "family";
+  const urlPrefersAirport = searchParams.get("view") === "airport";
+  const urlTripId = searchParams.get("tripId");
   const mapEl = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
@@ -89,71 +88,148 @@ export function LiveMapPage() {
   const [group, setGroup] = useState<FamilyGroup | null>(null);
   const [locations, setLocations] = useState<Record<string, LocationPoint>>({});
   const [maptilerKey, setMaptilerKey] = useState("");
-  const [mapStyle, setMapStyle] = useState<MapStyleId>("dark");
-  const [headingUp, setHeadingUp] = useState(false); // rotate map to match phone direction
-  const headingRef = useRef<number>(0); // current compass heading in degrees
-  const headingWatchRef = useRef<(() => void) | null>(null);
+  const [mapStyle, setMapStyle] = useState<MapStyleId>("streets");
+  const [headingUp, setHeadingUp] = useState(true);
+  const headingRef = useRef<number>(0);
+  const headingUpRef = useRef(true);
+  const coneElsRef = useRef<Map<string, HTMLElement>>(new Map());
+  const orientationListeningRef = useRef(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isError, setIsError] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [familyLoadError, setFamilyLoadError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [sharingLocation, setSharingLocation] = useState(false);
   const [myMemberId, setMyMemberId] = useState<string | null>(null);
+  const [gpsRefreshing, setGpsRefreshing] = useState(false);
+  const [activeTripId, setActiveTripId] = useState<string | null>(urlTripId);
 
-  /* ── Load group + config ── */
-  const loadFamilyState = useCallback(async (): Promise<void> => {
-    try {
-      const d = await fetchJson<{
-        group?: FamilyGroup;
-        locations?: Record<string, LocationPoint>;
-        myMemberId?: string;
-      }>("/api/family");
-      if (!d.group || !Array.isArray(d.group.members)) {
-        throw new Error("Family group data looks broken — pull down to refresh or sign in again.");
-      }
-      setFamilyLoadError(null);
-      setGroup(d.group);
-      setLocations(d.locations ?? {});
-      if (d.myMemberId) {
-        setMyMemberId(d.myMemberId);
-        myMemberIdRef.current = d.myMemberId;
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not load family group.";
-      setFamilyLoadError(message);
-      setGroup(null);
+  useEffect(() => {
+    headingUpRef.current = headingUp;
+  }, [headingUp]);
+
+  const applyHeadingToUi = useCallback((heading: number) => {
+    headingRef.current = heading;
+    const coneRotation = headingUpRef.current ? 0 : heading;
+    coneElsRef.current.forEach((cone) => {
+      cone.style.transform = `translateX(-50%) rotate(${coneRotation}deg)`;
+    });
+    const map = mapRef.current;
+    if (!map || !isLoadedRef.current) return;
+    if (headingUpRef.current) {
+      map.easeTo({ bearing: -heading, duration: 120, essential: true });
+    } else if (Math.abs(map.getBearing?.() ?? 0) > 0.5) {
+      map.easeTo({ bearing: 0, duration: 120, essential: true });
     }
   }, []);
 
   useEffect(() => {
-    void fetchJson<{ maptilerKey?: string }>("/api/config")
-      .then((d) => { if (d.maptilerKey) setMaptilerKey(d.maptilerKey); })
-      .catch(() => {
-        setIsError(true);
-        setErrorMsg("Map could not load — check your connection and try again.");
-      });
+    let cancelled = false;
 
-    void loadFamilyState();
+    const onOrientation = (event: DeviceOrientationEvent): void => {
+      const heading = readCompassHeading(event);
+      if (heading == null) return;
+      applyHeadingToUi(heading);
+    };
 
-    const onReload = (): void => { void loadFamilyState(); };
-    window.addEventListener("kepi:family-reload", onReload);
-    return () => window.removeEventListener("kepi:family-reload", onReload);
-  }, [loadFamilyState]);
+    const startListening = async (): Promise<void> => {
+      if (cancelled || orientationListeningRef.current) return;
+      const ok = await requestDeviceOrientationPermission();
+      if (!ok || cancelled) return;
+      window.addEventListener("deviceorientation", onOrientation, true);
+      orientationListeningRef.current = true;
+    };
+
+    void startListening();
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("deviceorientation", onOrientation, true);
+      orientationListeningRef.current = false;
+    };
+  }, [applyHeadingToUi]);
+
+  useEffect(() => {
+    if (!headingUp && mapRef.current && isLoaded) {
+      mapRef.current.easeTo({ bearing: 0, duration: 200, essential: true });
+      applyHeadingToUi(headingRef.current);
+    } else if (headingUp && isLoaded) {
+      applyHeadingToUi(headingRef.current);
+    }
+  }, [headingUp, isLoaded, applyHeadingToUi]);
+
+  useEffect(() => {
+    if (isFamilySharingActive()) {
+      setSharingLocation(true);
+      burstFamilyLocationFix();
+    }
+    const onStart = () => setSharingLocation(true);
+    const onStop = () => setSharingLocation(false);
+    window.addEventListener("kepi:family-start-sharing", onStart);
+    window.addEventListener("kepi:family-stop-sharing", onStop);
+    return () => {
+      window.removeEventListener("kepi:family-start-sharing", onStart);
+      window.removeEventListener("kepi:family-stop-sharing", onStop);
+    };
+  }, []);
+  useEffect(() => {
+    void fetch("/api/config", { cache: "no-store" })
+      .then(r => r.json())
+      .then((d: { maptilerKey?: string }) => { if (d.maptilerKey) setMaptilerKey(d.maptilerKey); })
+      .catch(() => null);
+
+    void fetch("/api/family", { cache: "no-store" })
+      .then(r => r.json())
+      .then((d: { group: FamilyGroup; locations: Record<string, LocationPoint>; myMemberId?: string }) => {
+        setGroup(d.group);
+        if (d.myMemberId) {
+          setMyMemberId(d.myMemberId);
+          myMemberIdRef.current = d.myMemberId;
+        }
+        if (d.locations) {
+          const next: Record<string, LocationPoint> = {};
+          for (const [memberId, loc] of Object.entries(d.locations)) {
+            const resolved = resolveLocationForMapDisplay(memberId, loc);
+            if (resolved) next[memberId] = { ...loc, ...resolved };
+          }
+          setLocations(next);
+        }
+      })
+      .catch(() => null);
+  }, []);
+
+  useEffect(() => {
+    void fetch("/api/trips", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d: { activeTripId?: string; trips?: { id: string }[] }) => {
+        setActiveTripId((prev) => prev ?? d.activeTripId ?? d.trips?.[0]?.id ?? null);
+      })
+      .catch(() => null);
+  }, []);
+
+  /* ── Poll locations every 10 s (faster than before) ── */
+  const mergePolledLocations = useCallback((incoming: Record<string, LocationPoint>) => {
+    const next: Record<string, LocationPoint> = {};
+    for (const [memberId, loc] of Object.entries(incoming)) {
+      const resolved = resolveLocationForMapDisplay(memberId, loc);
+      if (resolved) next[memberId] = { ...loc, ...resolved };
+    }
+    setLocations((prev) => ({ ...prev, ...next }));
+  }, []);
 
   useEffect(() => {
     const id = setInterval(() => {
-      void fetchJson<{ locations?: Record<string, LocationPoint> }>("/api/family")
-        .then((d) => {
-          if (d.locations) setLocations(d.locations);
+      void fetch("/api/family", { cache: "no-store" })
+        .then(r => r.json())
+        .then((d: { locations?: Record<string, LocationPoint> }) => {
+          if (d.locations) mergePolledLocations(d.locations);
         })
         .catch(() => null);
     }, 10_000);
     return () => clearInterval(id);
-  }, []);
+  }, [mergePolledLocations]);
 
-  /* ΓöÇΓöÇ Place/update markers (move existing ones, no full rebuild) ΓöÇΓöÇ */
+  /* ── Place/update markers (move existing ones, no full rebuild) ── */
   const placeMarkers = useCallback((map: unknown) => {
     if (!map) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -170,17 +246,16 @@ export function LiveMapPage() {
         if (existing[member.id]) {
           const marker = existing[member.id];
           const from = marker.getLngLat();
-          // GPS noise filter ΓÇö skip if moved less than ~15 metres
+          // GPS noise filter — skip if moved less than ~15 metres
           // Consumer GPS drifts 10-30m even when standing still
           const dLng = Math.abs(loc.lon - from.lng);
           const dLat = Math.abs(loc.lat - from.lat);
-          if (dLng < 0.00015 && dLat < 0.00015) return;
-          // Smooth to a weighted average of current position and new reading
-          // This prevents jumping to raw GPS coordinates (which are noisy)
-          // Weight: 70% new reading, 30% current ΓÇö smooths noise but stays accurate
+          const minDelta = (loc.accuracy ?? 30) > 50 ? 0.0004 : 0.00015;
+          if (dLng < minDelta && dLat < minDelta) return;
+          const smoothWeight = (loc.accuracy ?? 30) <= 35 ? 0.7 : 0.95;
           const to = {
-            lng: from.lng * 0.3 + loc.lon * 0.7,
-            lat: from.lat * 0.3 + loc.lat * 0.7,
+            lng: from.lng * (1 - smoothWeight) + loc.lon * smoothWeight,
+            lat: from.lat * (1 - smoothWeight) + loc.lat * smoothWeight,
           };
           const dur = 3000; // slower animation = less jumpy appearance
           const t0 = performance.now();
@@ -199,28 +274,23 @@ export function LiveMapPage() {
         const wrap = document.createElement("div");
         wrap.style.cssText = "cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;";
 
-        // Direction cone ΓÇö only on my marker, shows which way phone is pointing
+        // Direction cone — only on my marker, shows which way phone is pointing
         if (isMyMarker) {
           const cone = document.createElement("div");
           cone.id = `kepi-cone-${member.id}`;
           cone.style.cssText = [
             "position:absolute;width:0;height:0;",
-            "border-left:10px solid transparent;",
-            "border-right:10px solid transparent;",
-            `border-bottom:22px solid ${member.color};`,
-            "opacity:0.85;",
-            "top:-26px;left:50%;transform:translateX(-50%);",
-            `transform-origin:center 26px;`,
+            "border-left:14px solid transparent;",
+            "border-right:14px solid transparent;",
+            `border-bottom:30px solid ${member.color};`,
+            "opacity:0.9;",
+            "top:-34px;left:50%;transform:translateX(-50%);",
+            "transform-origin:center 34px;",
+            "filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35));",
           ].join("");
-          // Rotate cone to current heading
-          const updateCone = () => {
-            cone.style.transform = `translateX(-50%) rotate(${headingRef.current}deg)`;
-          };
-          // Update cone every 500ms when heading changes
-          const coneInterval = setInterval(updateCone, 500);
-          updateCone();
-          // Store interval cleanup on the element
-          (cone as HTMLDivElement & { _interval?: ReturnType<typeof setInterval> })._interval = coneInterval;
+          const coneRotation = headingUpRef.current ? 0 : headingRef.current;
+          cone.style.transform = `translateX(-50%) rotate(${coneRotation}deg)`;
+          coneElsRef.current.set(member.id, cone);
           wrap.style.position = "relative";
           wrap.appendChild(cone);
         }
@@ -242,20 +312,20 @@ export function LiveMapPage() {
           wrap.appendChild(buildAvatar(member, stale));
         }
 
-        // Frosted name chip with live/stale dot ΓÇö readable on dark and satellite
+        // Frosted name chip with live/stale dot — readable on dark and satellite
         const lbl = document.createElement("div");
         lbl.style.cssText = [
-          "display:flex;align-items:center;gap:4px;",
-          "background:rgba(10,16,28,0.72);border:1px solid rgba(255,255,255,0.14);",
-          "backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);",
-          "border-radius:9999px;padding:3px 9px;",
-          "font-size:11px;font-weight:700;color:#f8fafc;",
-          "box-shadow:0 3px 10px rgba(0,0,0,0.35);",
-          "white-space:nowrap;max-width:104px;overflow:hidden;text-overflow:ellipsis;",
+          "display:flex;align-items:center;gap:6px;",
+          "background:rgba(10,16,28,0.82);border:1px solid rgba(255,255,255,0.18);",
+          "backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);",
+          "border-radius:9999px;padding:6px 14px;",
+          "font-size:15px;font-weight:800;color:#f8fafc;",
+          "box-shadow:0 4px 14px rgba(0,0,0,0.35);",
+          "white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis;",
           "font-family:system-ui,sans-serif;letter-spacing:-0.01em;",
         ].join("");
         const liveDot = document.createElement("span");
-        liveDot.style.cssText = `width:6px;height:6px;border-radius:50%;flex-shrink:0;background:${stale ? "#64748b" : "#34d399"};${stale ? "" : "box-shadow:0 0 6px rgba(52,211,153,0.9);"}`;
+        liveDot.style.cssText = `width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${stale ? "#64748b" : "#34d399"};${stale ? "" : "box-shadow:0 0 8px rgba(52,211,153,0.9);"}`;
         lbl.appendChild(liveDot);
         lbl.appendChild(document.createTextNode(member.name));
         wrap.appendChild(lbl);
@@ -277,6 +347,7 @@ export function LiveMapPage() {
         if (!(group?.members ?? []).find(mb => mb.id === id)) {
           existing[id].remove();
           delete existing[id];
+          coneElsRef.current.delete(id);
         }
       });
 
@@ -284,7 +355,7 @@ export function LiveMapPage() {
     }).catch(console.error);
   }, [group, locations]);
 
-  /* ΓöÇΓöÇ Init map (only when maptilerKey first arrives) ΓöÇΓöÇ */
+  /* ── Init map (only when maptilerKey first arrives) ── */
   useEffect(() => {
     if (!maptilerKey || !mapEl.current) return;
     let cancelled = false;
@@ -308,18 +379,22 @@ export function LiveMapPage() {
         const center: [number, number] = locs.length > 0
           ? [locs.reduce((s, l) => s + l.lon, 0) / locs.length, locs.reduce((s, l) => s + l.lat, 0) / locs.length]
           : [-118.2437, 34.0522];
-        const zoom = locs.length === 1 ? 14 : locs.length > 1 ? 11 : 4;
-        const styleUrl = styleUrlFor(mapStyle, maptilerKey);
+        const zoom = locs.length === 1 ? 16 : locs.length > 1 ? 12 : 4;
+
+        const style = maptilerStyleUrl(stylePathFor(mapStyle), maptilerKey);
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const map = new (ml as any).Map({
           container: mapEl.current,
-          style: styleUrl,
+          style,
           center, zoom,
           maxZoom: 20,
+          pixelRatio: getMapPixelRatio(),
           attributionControl: false,
+          fadeDuration: 0,
           transformRequest: directMaptilerTransformRequest(maptilerKey),
         });
+        const unbindResize = bindMapResize(mapEl.current, map);
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         map.addControl(new (ml as any).NavigationControl({ showCompass: true }), "top-right");
@@ -340,6 +415,7 @@ export function LiveMapPage() {
         });
 
         mapRef.current = map;
+        map.on("remove", () => unbindResize());
       } catch (err) {
         if (!cancelled) { setIsError(true); setErrorMsg(err instanceof Error ? err.message : String(err)); }
       }
@@ -358,54 +434,46 @@ export function LiveMapPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [maptilerKey]);
 
-  /* ΓöÇΓöÇ Re-place/move markers when locations update ΓöÇΓöÇ */
+  /* ── Re-place/move markers when locations update ── */
   useEffect(() => {
     if (mapRef.current && isLoaded) placeMarkers(mapRef.current);
   }, [placeMarkers, isLoaded]);
 
-  /* ΓöÇΓöÇ Satellite toggle ΓÇö swap style without reinitialising map ΓöÇΓöÇ */
+  /* ── Satellite toggle — swap style without reinitialising map ── */
   useEffect(() => {
     if (!mapRef.current || !maptilerKey || !isLoaded) return;
-    mapRef.current.setStyle(styleUrlFor(mapStyle, maptilerKey));
+    mapRef.current.setStyle(maptilerStyleUrl(stylePathFor(mapStyle), maptilerKey));
     mapRef.current.once("styledata", () => { if (mapRef.current) placeMarkers(mapRef.current); });
   }, [mapStyle, maptilerKey, isLoaded, placeMarkers]);
 
-  /* ΓöÇΓöÇ Fit all members ΓöÇΓöÇ */
+  /* ── Fit all members ── */
   const fitAll = useCallback(() => {
     if (!mapRef.current) return;
     const locs = Object.values(locations);
     if (!locs.length) return;
     if (locs.length === 1) {
-      mapRef.current.flyTo({ center: [locs[0].lon, locs[0].lat], zoom: 15, essential: true });
+      mapRef.current.flyTo({ center: [locs[0].lon, locs[0].lat], zoom: 17, essential: true });
       return;
     }
     import("maplibre-gl").then(({ LngLatBounds }) => {
       const b = new LngLatBounds();
       locs.forEach(l => b.extend([l.lon, l.lat]));
-      mapRef.current?.fitBounds(b, { padding: 80, maxZoom: 14, duration: 800 });
+      mapRef.current?.fitBounds(b, { padding: 80, maxZoom: 16, duration: 800 });
     }).catch(console.error);
   }, [locations]);
 
-  /* ΓöÇΓöÇ Airport Navigator integration (shared selection ΓÇö Map button asks
-        the SAME question AirportMode does, via useActiveFlight) ΓöÇΓöÇ */
+  /* ── Airport Navigator integration (shared selection — Map button asks
+        the SAME question AirportMode does, via useActiveFlight) ── */
   const { activeFlight } = useActiveFlight();
   const { credentials: navCredentials, profile: navProfile, saveCredentials } = useNavigatorCredentials();
-  const [mapView, setMapView] = useState<"family" | "airport">(initialView);
+  const [mapView, setMapView] = useState<"family" | "airport">(urlPrefersAirport ? "airport" : "family");
   const [navLat, setNavLat] = useState<number | null>(null);
   const [navLon, setNavLon] = useState<number | null>(null);
   const navWatchRef = useRef<number | null>(null);
-  const autoAirportRef = useRef(initialView === "airport");
-  const [airportHandoffNote, setAirportHandoffNote] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (searchParams.get("view") === "airport") {
-      setMapView("airport");
-      autoAirportRef.current = true;
-    }
-  }, [searchParams]);
+  const autoAirportRef = useRef(urlPrefersAirport);
 
   // Passive low-accuracy watch for proximity + indoor snapping (separate from
-  // the consent-gated family location SHARING ΓÇö this never leaves the device)
+  // the consent-gated family location SHARING — this never leaves the device)
   useEffect(() => {
     if (!activeFlight || !navigator.geolocation) return;
     navWatchRef.current = navigator.geolocation.watchPosition(
@@ -433,12 +501,8 @@ export function LiveMapPage() {
     if (navProximity.status === "at-airport" || navProximity.status === "in-terminal") {
       autoAirportRef.current = true;
       setMapView("airport");
-      const code = navProximity.airport?.iata ?? activeFlight.f.flightDepartureAirport ?? "the airport";
-      setAirportHandoffNote(`You're at ${code} — terminal navigator is ready`);
-      const timer = window.setTimeout(() => setAirportHandoffNote(null), 8000);
-      return () => window.clearTimeout(timer);
     }
-  }, [navProximity.status, navProximity.airport?.iata, activeFlight]);
+  }, [navProximity.status, activeFlight]);
 
   const navEligibleLounges = useMemo(
     () =>
@@ -454,54 +518,188 @@ export function LiveMapPage() {
 
   const navMinutesToDeparture = activeFlight ? (activeFlight.utcMs - Date.now()) / 60_000 : 0;
 
-  /* ── Share my location (uses app-wide persistent watch) ── */
-  const shareLocation = useCallback(() => {
-    if (sharingLocation) {
-      stopPersistentFamilyLocationWatch();
-      firstFixRef.current = false;
-      setSharingLocation(false);
-      return;
-    }
-    if (!navigator.geolocation) { alert("Geolocation not supported on this device."); return; }
-    resumePersistentFamilyLocationWatch();
-    setSharingLocation(true);
-  }, [sharingLocation]);
+  const {
+    sync: airportSync,
+    groupBoarding,
+    setPhase: setFamilyJourneyPhase,
+    setRally: setFamilyRally,
+    cancelRally: cancelFamilyRally,
+    busy: familySyncBusy,
+  } = useFamilyAirportSync({
+    tripId: activeTripId,
+    groupId: group?.id ?? null,
+    minutesToDeparture: activeFlight ? navMinutesToDeparture : null,
+  });
 
-  useEffect(() => {
-    setFamilyLocationSender(async (lat, lon, accuracy) => {
-      await fetch("/api/family", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "update-location", lat, lon, accuracy }),
-      });
-      const memberId = myMemberIdRef.current;
-      if (memberId) {
-        setLocations((prev) => ({
-          ...prev,
-          [memberId]: { lat, lon, accuracy, updatedAt: new Date().toISOString(), memberId },
-        }));
-        if (mapRef.current && !firstFixRef.current) {
-          firstFixRef.current = true;
-          mapRef.current.easeTo({ center: [lon, lat], zoom: 15, duration: 1200 });
-        }
-      }
+  const handleRallyAtGate = useCallback(() => {
+    if (!activeFlight) return;
+    const iata = activeFlight.f.flightDepartureAirport ?? "";
+    const gate = activeFlight.f.flightDepartureGate ?? null;
+    if (!iata || !gate) return;
+    void setFamilyRally({
+      kind: "gate",
+      iata,
+      gateCode: gate,
+      label: `Gate ${gate.toUpperCase()}`,
     });
-    ensureDefaultFamilySharingOn();
-    if (!isFamilySharingOptedOut()) {
-      startPersistentFamilyLocationWatch();
-      setSharingLocation(true);
+  }, [activeFlight, setFamilyRally]);
+
+  /* ── Share my location ── */
+  const stopLocalLocationWatch = useCallback(() => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
     }
-    return () => setFamilyLocationSender(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    firstFixRef.current = false;
   }, []);
 
-  /* ΓöÇΓöÇ Derived ΓöÇΓöÇ */
+  const startLocalLocationWatch = useCallback(() => {
+    if (!navigator.geolocation || watchIdRef.current !== null) return;
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const resolved = resolveLiveCoordinates(pos.coords, pos.timestamp);
+        if (!resolved) return;
+        const { lat, lon, accuracy } = resolved;
+
+        if (pos.coords.heading != null && Number.isFinite(pos.coords.heading) && pos.coords.heading >= 0) {
+          applyHeadingToUi(pos.coords.heading);
+        }
+
+        void fetch("/api/family", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "update-location", lat, lon, accuracy }),
+        }).catch(() => null);
+
+        const memberId = myMemberIdRef.current;
+        if (memberId) {
+          setLocations((prev) => ({
+            ...prev,
+            [memberId]: {
+              lat,
+              lon,
+              accuracy,
+              updatedAt: new Date().toISOString(),
+              memberId,
+            },
+          }));
+          if (mapRef.current && !firstFixRef.current) {
+            firstFixRef.current = true;
+            mapRef.current.easeTo({ center: [lon, lat], zoom: 17, duration: 1200 });
+          }
+        }
+      },
+      (err) => {
+        stopLocalLocationWatch();
+        if (err.code === 1) {
+          window.dispatchEvent(new CustomEvent("kepi:family-sharing-permission-denied"));
+          return;
+        }
+        window.setTimeout(() => {
+          if (isFamilySharingActive()) startLocalLocationWatch();
+        }, 15_000);
+      },
+      { enableHighAccuracy: true, maximumAge: 10_000, timeout: 45_000 },
+    );
+  }, [stopLocalLocationWatch, applyHeadingToUi]);
+
+  useEffect(() => {
+    if (sharingLocation) startLocalLocationWatch();
+    else stopLocalLocationWatch();
+    return () => stopLocalLocationWatch();
+  }, [sharingLocation, startLocalLocationWatch, stopLocalLocationWatch]);
+
+  const shareLocation = useCallback(() => {
+    if (sharingLocation) {
+      setSharingLocation(false);
+      window.dispatchEvent(new CustomEvent("kepi:family-stop-sharing"));
+      return;
+    }
+    if (!navigator.geolocation) {
+      alert("Geolocation not supported on this device.");
+      return;
+    }
+    setSharingLocation(true);
+    window.dispatchEvent(new CustomEvent("kepi:family-start-sharing"));
+  }, [sharingLocation]);
+
+  const refreshGps = useCallback(() => {
+    if (!navigator.geolocation || gpsRefreshing) return;
+    setGpsRefreshing(true);
+    if (myMemberId) clearLocationDisplayCache(myMemberId);
+    resetGeolocationQualityState();
+    refreshFamilyLocationFix();
+    window.setTimeout(() => setGpsRefreshing(false), 8_000);
+  }, [gpsRefreshing, myMemberId]);
+
+  useEffect(() => () => stopLocalLocationWatch(), [stopLocalLocationWatch]);
+
+  /* ── Derived ── */
   const members = group?.members ?? [];
   const liveCount = members.filter(m => locations[m.id] && !isStale(locations[m.id].updatedAt)).length;
+
+  const familyAirportPins = useMemo(
+    () =>
+      activeFlight
+        ? buildFamilyAirportPins(members, locations, activeFlight.f.flightDepartureAirport ?? "", {
+            excludeMemberId: myMemberId,
+          })
+        : [],
+    [activeFlight, members, locations, myMemberId],
+  );
+
+  const handleFamilyPinTap = useCallback(
+    (memberId: string) => {
+      setMapView("family");
+      setSelected(memberId);
+      setDrawerOpen(false);
+      const loc = locations[memberId];
+      if (loc && mapRef.current) {
+        mapRef.current.flyTo({ center: [loc.lon, loc.lat], zoom: 16, duration: 900, essential: true });
+      }
+    },
+    [locations],
+  );
+
+  const myLoc = myMemberId ? locations[myMemberId] : null;
+  const myAccuracyM = myLoc?.accuracy;
   const selMember = selected ? members.find(m => m.id === selected) : null;
   const selLoc = selected ? locations[selected] : null;
+  const lightChrome = mapStyle === "streets";
+  const chromeBtnIdle = lightChrome
+    ? "bg-white/90 text-slate-800 border-slate-200"
+    : "bg-black/45 text-white border-white/15";
+  const chromeBtnActive = "bg-[#007AFF] text-white";
+  const styleToggleClass = (active: boolean) =>
+    `min-h-[44px] px-4 py-2.5 text-[15px] font-bold transition-all ${
+      active ? chromeBtnActive : `${chromeBtnIdle} backdrop-blur-md`
+    }`;
 
-  /* ΓöÇΓöÇ Render ΓöÇΓöÇ */
+  const enableCompass = useCallback(async () => {
+    const ok = await requestDeviceOrientationPermission();
+    if (!ok) return;
+    if (!orientationListeningRef.current) {
+      const onOrientation = (event: DeviceOrientationEvent): void => {
+        const heading = readCompassHeading(event);
+        if (heading == null) return;
+        applyHeadingToUi(heading);
+      };
+      window.addEventListener("deviceorientation", onOrientation, true);
+      orientationListeningRef.current = true;
+    }
+    setHeadingUp(true);
+  }, [applyHeadingToUi]);
+
+  const toggleHeadingUp = useCallback(() => {
+    setHeadingUp((current) => {
+      if (current) return false;
+      void enableCompass();
+      return true;
+    });
+  }, [enableCompass]);
+
+  /* ── Render ── */
   return (
     <>
       <style>{`
@@ -519,17 +717,17 @@ export function LiveMapPage() {
         }
         .lm-drawer { animation: lmslideup 0.28s cubic-bezier(0.32,0.72,0,1); }
         .lm-card   { animation: lmfadein 0.22s ease; }
-        .maplibregl-ctrl-attrib { font-size: 9px !important; opacity: 0.6; }
-        .maplibregl-ctrl-group { border-radius: 12px !important; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.25) !important; }
-        .maplibregl-ctrl button { width: 38px !important; height: 38px !important; }
+        .maplibregl-ctrl-attrib { font-size: 11px !important; opacity: 0.75; }
+        .maplibregl-ctrl-group { border-radius: 14px !important; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.2) !important; }
+        .maplibregl-ctrl button { width: 44px !important; height: 44px !important; }
       `}</style>
 
-      <div className="fixed inset-0 z-[100] flex flex-col bg-slate-950 overflow-hidden">
+      <div className={`fixed inset-0 z-[100] flex flex-col overflow-hidden ${lightChrome ? "bg-slate-100" : "bg-slate-950"}`}>
 
         {/* Map canvas */}
         <div ref={mapEl} className="absolute inset-0 w-full h-full" />
 
-        {/* Airport Navigator overlay ΓÇö full-bleed when at the airport view */}
+        {/* Airport Navigator overlay — full-bleed when at the airport view */}
         {mapView === "airport" && activeFlight && (
           <div className="absolute inset-0 z-40">
             <AirportNavigatorMap
@@ -553,11 +751,35 @@ export function LiveMapPage() {
               credentials={navCredentials}
               onCredentialsAnswer={saveCredentials}
               eligibleLoungeNames={navEligibleLounges}
+              onSwitchToFamilyView={() => setMapView("family")}
+              familyPins={familyAirportPins}
+              onFamilyPinTap={handleFamilyPinTap}
+              activeRally={airportSync?.rally?.status === "active" ? airportSync.rally : null}
             />
+            {members.length >= 2 ? (
+              <div
+                className="pointer-events-none absolute inset-x-0 z-50 px-3"
+                style={{ bottom: "max(6.5rem, calc(env(safe-area-inset-bottom) + 5.75rem))" }}
+              >
+                <FamilyRallyStrip
+                  members={members.map((m) => ({ id: m.id, name: m.name, color: m.color }))}
+                  myMemberId={myMemberId}
+                  sync={airportSync}
+                  groupBoarding={groupBoarding}
+                  activeRally={airportSync?.rally?.status === "active" ? airportSync.rally : null}
+                  gateCode={activeFlight.f.flightDepartureGate ?? null}
+                  iata={activeFlight.f.flightDepartureAirport ?? "—"}
+                  busy={familySyncBusy}
+                  onSetPhase={(phase) => void setFamilyJourneyPhase(phase)}
+                  onSetRallyAtGate={handleRallyAtGate}
+                  onCancelRally={() => void cancelFamilyRally()}
+                />
+              </div>
+            ) : null}
           </div>
         )}
 
-        {/* Airport Γçä Family view pill ΓÇö only when a flight is in the window */}
+        {/* Airport ⇄ Family view pill — only when a flight is in the window */}
         {activeFlight && (
           <div
             className="absolute left-1/2 z-50 flex -translate-x-1/2 overflow-hidden rounded-full border border-white/15 shadow-xl"
@@ -568,8 +790,8 @@ export function LiveMapPage() {
                 key={viewId}
                 type="button"
                 onClick={() => setMapView(viewId)}
-                className={`px-3.5 py-1.5 text-[11px] font-bold backdrop-blur-md transition-all ${
-                  mapView === viewId ? "bg-white text-slate-900" : "bg-black/45 text-white/85"
+                className={`px-4 py-2.5 text-[15px] font-bold backdrop-blur-md transition-all ${
+                  mapView === viewId ? "bg-white text-slate-900" : "bg-black/45 text-white/90"
                 }`}
               >
                 {viewLabel}
@@ -580,34 +802,81 @@ export function LiveMapPage() {
 
         {/* Top scrim */}
         <div className="absolute top-0 left-0 right-0 z-20 pointer-events-none">
-          <div className="h-28 bg-gradient-to-b from-black/60 via-black/20 to-transparent" />
+          <div className={`h-32 bg-gradient-to-b ${lightChrome ? "from-white/90 via-white/40" : "from-black/60 via-black/20"} to-transparent`} />
         </div>
 
-        {/* Back + title + style toggle */}
-        <div className="absolute top-0 left-0 right-0 z-30 flex items-center gap-3 px-4 pt-4 pb-2">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-black/40 backdrop-blur-md text-white text-lg shadow-lg"
-            aria-label="Back"
-          >
-            ←
-          </button>
-          <div className="flex-1 min-w-0">
-            <p className="text-white font-semibold text-sm leading-tight tracking-tight drop-shadow">
-              {group?.name ?? "Family"}
-            </p>
-            <p className="text-white/60 text-[11px] leading-tight">
-              {liveCount > 0 ? `${liveCount} live · updates every 10s` : "No live locations"}
-            </p>
+        {/* Mobile header */}
+        <div
+          className="absolute top-0 left-0 right-0 z-30 flex flex-col gap-3 px-4 pb-2 md:hidden"
+          style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
+        >
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => router.push("/travel-assistant?mtab=map")}
+              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-[22px] font-bold shadow-lg backdrop-blur-md border ${chromeBtnIdle}`}
+              aria-label="Back"
+            >
+              ←
+            </button>
+            <div className="min-w-0 flex-1">
+              <p className={`text-[20px] font-bold leading-tight truncate ${lightChrome ? "text-slate-900" : "text-white drop-shadow"}`}>
+                {group?.name ?? "My Family"}
+              </p>
+              <p className={`text-[15px] leading-snug ${lightChrome ? "text-slate-600" : "text-white/75"}`}>
+                {liveCount > 0 ? `${liveCount} live · updates every 10s` : "No live locations"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={toggleHeadingUp}
+              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-[22px] shadow-lg border ${
+                headingUp ? "bg-[#007AFF] text-white border-[#007AFF]" : chromeBtnIdle
+              }`}
+              title={headingUp ? "Heading up — tap for north up" : "North up — tap for heading up"}
+            >
+              {headingUp ? "🧭" : "⬆️"}
+            </button>
           </div>
-          <div className="flex rounded-full overflow-hidden shadow-lg border border-white/10">
+          <div className={`flex overflow-hidden rounded-2xl border shadow-lg self-end ${lightChrome ? "border-slate-200" : "border-white/15"}`}>
             {([["dark", "Dark"], ["streets", "Map"], ["satellite", "Sat"]] as [MapStyleId, string][]).map(([styleId, styleLabel]) => (
               <button
                 key={styleId}
                 type="button"
                 onClick={() => setMapStyle(styleId)}
-                className={`px-2.5 py-1.5 text-[11px] font-bold transition-all ${mapStyle === styleId ? "bg-white text-slate-900" : "bg-black/40 backdrop-blur-md text-white/80"}`}
+                className={styleToggleClass(mapStyle === styleId)}
+              >
+                {styleLabel}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Desktop back + title + style toggle */}
+        <div className="absolute top-0 left-0 right-0 z-30 hidden items-center gap-3 px-4 pb-2 pt-4 md:flex">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-xl text-white shadow-lg backdrop-blur-md"
+            aria-label="Back"
+          >
+            ←
+          </button>
+          <div className="min-w-0 flex-1">
+            <p className="text-[18px] font-bold leading-tight tracking-tight text-white drop-shadow">
+              {group?.name ?? "Family"}
+            </p>
+            <p className="text-[15px] leading-snug text-white/75">
+              {liveCount > 0 ? `${liveCount} live · updates every 10s` : "No live locations"}
+            </p>
+          </div>
+          <div className="flex overflow-hidden rounded-full border border-white/10 shadow-lg">
+            {([["dark", "Dark"], ["streets", "Map"], ["satellite", "Sat"]] as [MapStyleId, string][]).map(([styleId, styleLabel]) => (
+              <button
+                key={styleId}
+                type="button"
+                onClick={() => setMapStyle(styleId)}
+                className={styleToggleClass(mapStyle === styleId)}
               >
                 {styleLabel}
               </button>
@@ -616,8 +885,8 @@ export function LiveMapPage() {
           {/* Heading-up toggle */}
           <button
             type="button"
-            onClick={() => setHeadingUp(v => !v)}
-            className={`flex h-9 w-9 items-center justify-center rounded-full shadow-lg text-base transition-all ${
+            onClick={toggleHeadingUp}
+            className={`flex h-11 w-11 items-center justify-center rounded-full shadow-lg text-xl transition-all ${
               headingUp
                 ? "bg-[#007AFF] text-white shadow-blue-500/40"
                 : "bg-black/40 backdrop-blur-md text-white/80"
@@ -628,20 +897,11 @@ export function LiveMapPage() {
           </button>
         </div>
 
-        {airportHandoffNote ? (
-          <div
-            className="absolute left-1/2 z-50 max-w-sm -translate-x-1/2 rounded-2xl border border-sky-400/40 bg-sky-950/95 px-4 py-3 text-center text-sm font-semibold text-sky-100 shadow-xl"
-            style={{ top: "max(6.5rem, calc(env(safe-area-inset-top) + 5.5rem))" }}
-          >
-            {airportHandoffNote}
-          </div>
-        ) : null}
-
         {/* Loading overlay */}
         {!isLoaded && !isError && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-slate-950/80">
             <div className="h-8 w-8 rounded-full border-2 border-sky-400 border-t-transparent animate-spin" />
-            <p className="text-white/60 text-xs">Loading map…</p>
+            <p className="text-white/70 text-[15px]">Loading map…</p>
           </div>
         )}
 
@@ -653,26 +913,12 @@ export function LiveMapPage() {
           </div>
         )}
 
-        {familyLoadError && !group && (
-          <div className="absolute inset-x-4 top-20 z-10 rounded-2xl border border-amber-500/30 bg-slate-900/95 p-4 text-center shadow-xl">
-            <p className="text-amber-200 text-sm font-semibold">Family map unavailable</p>
-            <p className="text-white/60 text-xs mt-2 leading-relaxed">{familyLoadError}</p>
-            <button
-              type="button"
-              onClick={() => void loadFamilyState()}
-              className="mt-3 rounded-xl bg-sky-600 px-4 py-2 text-xs font-bold text-white"
-            >
-              Try again
-            </button>
-          </div>
-        )}
-
         {/* Fit-all FAB */}
         {Object.keys(locations).length > 0 && isLoaded && (
           <button
             type="button"
             onClick={fitAll}
-            className="absolute left-4 bottom-[220px] z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 backdrop-blur-md text-white shadow-lg text-base border border-white/10"
+            className="absolute left-4 bottom-[240px] z-20 flex h-12 w-12 items-center justify-center rounded-full bg-black/55 backdrop-blur-md text-white shadow-lg text-[22px] border border-white/15"
             title="Fit all members"
           >
             ⊙
@@ -685,11 +931,11 @@ export function LiveMapPage() {
             className="lm-card absolute left-4 right-4 z-20 rounded-2xl overflow-hidden shadow-2xl"
             style={{ bottom: drawerOpen ? "228px" : "24px" }}
           >
-            <div className="bg-slate-900/95 backdrop-blur-xl border border-white/10 p-4">
+            <div className={`backdrop-blur-xl border p-5 ${lightChrome ? "bg-white/95 border-slate-200" : "bg-slate-900/95 border-white/10"}`}>
               <div className="flex items-center gap-3">
                 <div className="relative shrink-0">
                   <div
-                    className="h-11 w-11 rounded-full flex items-center justify-center text-base font-bold text-white shadow-lg"
+                    className="h-14 w-14 rounded-full flex items-center justify-center text-[20px] font-bold text-white shadow-lg"
                     style={{ background: selMember.color }}
                   >
                     {selMember.name.charAt(0).toUpperCase()}
@@ -699,28 +945,28 @@ export function LiveMapPage() {
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-white font-semibold text-sm truncate">{selMember.name}</p>
-                  <p className="text-white/50 text-xs">
+                  <p className={`font-bold text-[19px] truncate ${lightChrome ? "text-slate-900" : "text-white"}`}>{selMember.name}</p>
+                  <p className={`text-[15px] mt-0.5 ${lightChrome ? "text-slate-600" : "text-white/60"}`}>
                     {isStale(selLoc.updatedAt)
                       ? `⚠ ${timeAgo(selLoc.updatedAt)} — may be outdated`
                       : `🟢 Live · ${timeAgo(selLoc.updatedAt)}`}
                   </p>
                   {selLoc.label && (
-                    <p className="text-white/40 text-[11px] mt-0.5 truncate">📍 {selLoc.label}</p>
+                    <p className={`text-[14px] mt-1 truncate ${lightChrome ? "text-slate-500" : "text-white/45"}`}>📍 {selLoc.label}</p>
                   )}
                 </div>
-                <div className="flex flex-col gap-1.5 shrink-0">
+                <div className="flex flex-col gap-2 shrink-0">
                   <button
                     type="button"
                     onClick={() => mapRef.current?.flyTo({ center: [selLoc.lon, selLoc.lat], zoom: 17, essential: true })}
-                    className="rounded-xl bg-sky-600 px-3 py-1.5 text-[11px] font-bold text-white shadow"
+                    className="rounded-xl bg-sky-600 px-4 py-2.5 text-[15px] font-bold text-white shadow min-h-[44px]"
                   >
                     Focus
                   </button>
                   <button
                     type="button"
                     onClick={() => setSelected(null)}
-                    className="rounded-xl bg-white/10 px-3 py-1.5 text-[11px] font-bold text-white/70"
+                    className={`rounded-xl px-4 py-2.5 text-[15px] font-bold min-h-[44px] ${lightChrome ? "bg-slate-100 text-slate-700" : "bg-white/10 text-white/80"}`}
                   >
                     Dismiss
                   </button>
@@ -735,43 +981,67 @@ export function LiveMapPage() {
           <button
             type="button"
             onClick={() => setDrawerOpen(v => !v)}
-            className="w-full flex justify-center pt-2 pb-1 bg-slate-900/95 backdrop-blur-xl"
+            className={`w-full flex justify-center pt-2 pb-1 backdrop-blur-xl ${lightChrome ? "bg-white/95" : "bg-slate-900/95"}`}
             aria-label="Toggle member list"
           >
             <div className="h-1 w-10 rounded-full bg-white/20" />
           </button>
 
-          <div className="bg-slate-900/95 backdrop-blur-xl border-t border-white/10 lm-drawer">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+          <div className={`backdrop-blur-xl border-t lm-drawer ${lightChrome ? "bg-white/95 border-slate-200" : "bg-slate-900/95 border-white/10"}`}>
+            <div className={`flex items-center justify-between px-4 py-4 border-b ${lightChrome ? "border-slate-200" : "border-white/5"}`}>
               <div>
-                <p className="text-white text-sm font-semibold">
+                <p className={`text-[19px] font-bold ${lightChrome ? "text-slate-900" : "text-white"}`}>
                   {group?.name ?? "Family"}
                   {liveCount > 0 && (
-                    <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-400">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="ml-2 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-1 text-[13px] font-bold text-emerald-500">
+                      <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
                       {liveCount} live
                     </span>
                   )}
                 </p>
-                <p className="text-white/40 text-[11px] mt-0.5">{members.length} member{members.length !== 1 ? "s" : ""}</p>
+                <p className={`text-[15px] mt-1 ${lightChrome ? "text-slate-600" : "text-white/50"}`}>{members.length} member{members.length !== 1 ? "s" : ""}</p>
               </div>
-              <button
-                type="button"
-                onClick={shareLocation}
-                className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-bold shadow transition-all ${
-                  sharingLocation
-                    ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                    : "bg-sky-600 text-white"
-                }`}
-              >
-                <span>{sharingLocation ? "🟢" : "📍"}</span>
-                {sharingLocation ? "Sharing" : "Share me"}
-              </button>
+              <div className="flex items-center gap-2">
+                {sharingLocation && (
+                  <button
+                    type="button"
+                    onClick={refreshGps}
+                    disabled={gpsRefreshing}
+                    className={`rounded-xl border px-4 py-2.5 text-[15px] font-bold min-h-[48px] disabled:opacity-50 ${
+                      lightChrome ? "border-slate-200 bg-slate-50 text-slate-800" : "border-white/15 bg-white/5 text-white/85"
+                    }`}
+                    title="Take fresh GPS samples — use on your phone outdoors for best accuracy"
+                  >
+                    {gpsRefreshing ? "Locating…" : "Refresh GPS"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={shareLocation}
+                  className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-[15px] font-bold shadow min-h-[48px] transition-all ${
+                    sharingLocation
+                      ? "bg-emerald-500/20 text-emerald-500 border border-emerald-500/30"
+                      : "bg-sky-600 text-white"
+                  }`}
+                >
+                  <span>{sharingLocation ? "🟢" : "📍"}</span>
+                  {sharingLocation ? "Sharing" : "Share me"}
+                </button>
+              </div>
             </div>
 
-            <div className="overflow-y-auto max-h-[200px] divide-y divide-white/5">
+            {sharingLocation && myAccuracyM != null && myAccuracyM > 45 && (
+              <p className="px-4 pb-2 text-[14px] leading-relaxed text-amber-600">
+                Position may be off by ~{Math.round(myAccuracyM)}m.
+                {typeof window !== "undefined" && !/iPhone|iPad|Android/i.test(navigator.userAgent)
+                  ? " Desktop browsers use Wi‑Fi guessing — open on your phone for house-level accuracy."
+                  : " Step outside or tap Refresh GPS for a tighter fix."}
+              </p>
+            )}
+
+            <div className="overflow-y-auto max-h-[240px] divide-y divide-slate-200/80">
               {members.length === 0 && (
-                <div className="px-4 py-6 text-center text-white/30 text-xs">No members yet</div>
+                <div className={`px-4 py-8 text-center text-[16px] ${lightChrome ? "text-slate-400" : "text-white/35"}`}>No members yet</div>
               )}
               {members.map(member => {
                 const loc = locations[member.id];
@@ -789,13 +1059,13 @@ export function LiveMapPage() {
                         mapRef.current?.flyTo({ center: [loc.lon, loc.lat], zoom: 16, duration: 900, essential: true });
                       }
                     }}
-                    className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-all ${
-                      isSelected ? "bg-white/8" : "hover:bg-white/5"
+                    className={`w-full flex items-center gap-3 px-4 py-4 text-left transition-all min-h-[72px] ${
+                      isSelected ? (lightChrome ? "bg-sky-50" : "bg-white/8") : lightChrome ? "hover:bg-slate-50" : "hover:bg-white/5"
                     }`}
                   >
                     <div className="relative shrink-0">
                       <div
-                        className="h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold text-white"
+                        className="h-12 w-12 rounded-full flex items-center justify-center text-[18px] font-bold text-white"
                         style={{ background: live ? member.color : "#334155" }}
                       >
                         {member.name.charAt(0).toUpperCase()}
@@ -805,10 +1075,10 @@ export function LiveMapPage() {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-white text-sm font-medium truncate">
+                      <p className={`text-[17px] font-semibold truncate ${lightChrome ? "text-slate-900" : "text-white"}`}>
                         {member.name}{isMe ? " (you)" : ""}
                       </p>
-                      <p className="text-white/40 text-[11px] truncate">
+                      <p className={`text-[15px] truncate mt-0.5 ${lightChrome ? "text-slate-600" : "text-white/45"}`}>
                         {loc
                           ? live
                             ? `🟢 Live · ${timeAgo(loc.updatedAt)}`
@@ -816,7 +1086,7 @@ export function LiveMapPage() {
                           : "No location shared"}
                       </p>
                     </div>
-                    <span className="shrink-0 rounded-md bg-white/8 px-2 py-0.5 text-[10px] text-white/40 font-medium capitalize">
+                    <span className={`shrink-0 rounded-lg px-2.5 py-1 text-[13px] font-semibold capitalize ${lightChrome ? "bg-slate-100 text-slate-600" : "bg-white/8 text-white/45"}`}>
                       {member.role}
                     </span>
                     {isSelected && <span className="shrink-0 text-sky-400 text-xs">●</span>}
@@ -834,20 +1104,22 @@ export function LiveMapPage() {
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
-            className="absolute right-4 bottom-6 z-20 flex h-10 items-center gap-2 rounded-full bg-slate-900/90 backdrop-blur-md border border-white/10 px-4 shadow-xl text-white text-[11px] font-semibold"
+            className="absolute right-4 bottom-28 z-20 flex h-12 items-center gap-2 rounded-full bg-slate-900/90 backdrop-blur-md border border-white/10 px-5 shadow-xl text-white text-[15px] font-bold"
           >
             <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
             {liveCount} live
           </button>
         )}
+
+        <MobileTabBarNav />
       </div>
     </>
   );
 }
 
-/* ΓöÇΓöÇΓöÇ Avatar DOM helper ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+/* ─── Avatar DOM helper ──────────────────────────────────────── */
 function buildAvatar(member: { name: string; color: string }, stale: boolean): HTMLElement {
-  // Premium puck: color gradient ring ΓåÆ white gap ΓåÆ colored face, deep soft shadow
+  // Premium puck: color gradient ring → white gap → colored face, deep soft shadow
   const ring = document.createElement("div");
   ring.style.cssText = [
     "width:50px;height:50px;border-radius:50%;padding:2.5px;",
@@ -865,7 +1137,7 @@ function buildAvatar(member: { name: string; color: string }, stale: boolean): H
     `background:${stale ? "#334155" : member.color};`,
     stale ? "filter:saturate(0.4);" : "",
     "display:flex;align-items:center;justify-content:center;",
-    "font-size:17px;font-weight:800;color:white;",
+    "font-size:19px;font-weight:800;color:white;",
     "font-family:system-ui,sans-serif;letter-spacing:0.01em;",
     "text-shadow:0 1px 2px rgba(0,0,0,0.25);",
   ].join("");

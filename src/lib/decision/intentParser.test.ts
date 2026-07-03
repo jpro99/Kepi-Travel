@@ -2,6 +2,49 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { parseTripIntent, RECORD_TRIP_EXAMPLE } from "./intentParser";
 
+test("parses Beaumont CA with comma after from and September 1st", () => {
+  const intent = parseTripIntent(
+    "I want to fly from, beaumont ca On September 1st and I have Alaska Gold :",
+    new Date("2026-06-01"),
+  );
+  assert.ok(intent.originAirports?.includes("ONT") || intent.originAirports?.includes("PSP"));
+  assert.equal(intent.originCity, "Beaumont, CA");
+  assert.equal(intent.startDate, "2026-09-01");
+  assert.ok(intent.loyaltyPrograms?.some((p) => p.includes("Alaska")));
+});
+
+test("parses Beaumont CA with period after from (voice dictation)", () => {
+  const intent = parseTripIntent(
+    "I want to fly from. beaumont ca On September 1st and I have Alaska Gold :",
+    new Date("2026-06-01"),
+  );
+  assert.ok(intent.originAirports?.includes("ONT") || intent.originAirports?.includes("PSP"));
+  assert.equal(intent.originCity, "Beaumont, CA");
+  assert.equal(intent.startDate, "2026-09-01");
+});
+
+test("parses origin with period after depart/leaving", () => {
+  const depart = parseTripIntent("depart. LAX to Rome in October", new Date("2026-06-01"));
+  assert.equal(depart.originAirports?.[0], "LAX");
+
+  const leaving = parseTripIntent("leaving. Seattle to Rome in October", new Date("2026-06-01"));
+  assert.equal(leaving.originCity, "Seattle");
+});
+
+test("flags destinationInferredDefault when no destination is stated, instead of silently assuming Italy", () => {
+  const intent = parseTripIntent(
+    "I want to fly from beaumont ca On September 1st and I have Alaska Gold",
+    new Date("2026-06-01"),
+  );
+  assert.equal(intent.destinationInferredDefault, true);
+});
+
+test("does not flag destinationInferredDefault when a destination is stated", () => {
+  const intent = parseTripIntent("I want to fly from beaumont ca to Rome in October", new Date("2026-06-01"));
+  assert.equal(intent.destinationInferredDefault, undefined);
+  assert.equal(intent.destinationIata, "FCO");
+});
+
 test("parses Italy in September intent", () => {
   const intent = parseTripIntent("I want to go to Italy in September");
   assert.equal(intent.region, "Italy");
@@ -13,13 +56,14 @@ test("parses multi-city Italy voice trip", () => {
   const intent = parseTripIntent(RECORD_TRIP_EXAMPLE, new Date("2026-06-01"));
   assert.equal(intent.isMultiCity, true);
   assert.ok(intent.stops && intent.stops.length >= 3);
-  assert.equal(intent.stops![0]?.name, "Bari");
+  assert.equal(intent.stops![0]?.name, "Rome");
   assert.ok(intent.stops!.some((s) => s.name === "Venice"));
   assert.ok(intent.stops!.some((s) => s.name === "Dolomites"));
-  assert.equal(intent.originCity, "West Coast");
-  assert.equal(intent.returnAirports?.[0], "MUC");
+  assert.equal(intent.originCity, "Ontario, CA");
+  assert.equal(intent.startDate, "2026-09-01");
+  assert.equal(intent.endDate, "2026-09-25");
   assert.ok(intent.loyaltyPrograms?.some((p) => p.includes("Alaska")));
-  assert.ok(intent.nights >= 10);
+  assert.ok(intent.nights >= 20);
 });
 
 test("parses open-jaw return from Munich", () => {

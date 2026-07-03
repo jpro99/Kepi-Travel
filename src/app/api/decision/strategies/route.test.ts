@@ -1,0 +1,87 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+test("decision strategies route returns fast brief without live provider blocking", async () => {
+  process.env.NODE_ENV = "test";
+  const { POST } = await import("./route");
+  const startedAt = Date.now();
+  const response = await POST(
+    new Request("http://localhost/api/decision/strategies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "on September 1st i want to fly from beaumont ca to new york",
+        comfortWeight: 0.55,
+        planMode: "flights",
+        paymentMode: "cash",
+      }),
+    }),
+  );
+
+  const elapsedMs = Date.now() - startedAt;
+  assert.equal(response.status, 200);
+  assert.ok(elapsedMs < 1_500, `expected fast response, got ${elapsedMs}ms`);
+
+  const payload = await response.json();
+  assert.ok(payload.brief);
+  assert.ok(Array.isArray(payload.brief.strategies));
+  assert.ok(payload.brief.strategies.length > 0);
+  assert.equal(payload.brief.topologySearch, undefined);
+  assert.equal(payload.brief.fusedFlightSearch, undefined);
+});
+
+test("decision strategies route returns ranked playbook in full plan mode", async () => {
+  process.env.NODE_ENV = "test";
+  const { POST } = await import("./route");
+  const response = await POST(
+    new Request("http://localhost/api/decision/strategies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "Beaumont California to Italy in September",
+        comfortWeight: 0.55,
+        planMode: "full",
+        paymentMode: "cash",
+      }),
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  const strategies = payload.brief.strategies as Array<{
+    valueRank?: number;
+    recommended?: boolean;
+    scores: { totalTripValue?: number };
+  }>;
+  assert.ok(strategies.length >= 2);
+  assert.equal(strategies[0]?.valueRank, 1);
+  assert.equal(strategies[0]?.recommended, true);
+  for (let i = 1; i < strategies.length; i += 1) {
+    const prev = strategies[i - 1]?.scores.totalTripValue ?? 0;
+    const next = strategies[i]?.scores.totalTripValue ?? 0;
+    assert.ok(next >= prev, "strategies should be ranked by ascending total trip value");
+  }
+});
+
+test("decision strategies route parses Ontario CA as ONT origin", async () => {
+  process.env.NODE_ENV = "test";
+  const { POST } = await import("./route");
+  const response = await POST(
+    new Request("http://localhost/api/decision/strategies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "i want a flight to go from Ontario ca to bari italy",
+        comfortWeight: 0.55,
+        planMode: "flights",
+        paymentMode: "cash",
+      }),
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.brief?.intent?.originCity, "Ontario, CA");
+  assert.deepEqual(payload.brief?.searchAirports, ["ONT"]);
+  assert.equal(payload.clarification, undefined);
+});

@@ -2,14 +2,19 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@clerk/nextjs/server";
-import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
+import { kvStoreGet } from "@/lib/travelAssistant/kvStore";
 import { enforceRateLimit } from "@/lib/rateLimit";
 import { generateId } from "@/lib/utils/generateId";
+import {
+  ensureTravelBenefitsFresh,
+  syncTravelProfileBenefits,
+  TRAVEL_PROFILE_KEY,
+} from "@/lib/travelAssistant/persistTravelBenefitsSync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const PROFILE_KEY = "travel-profile:v1";
+const PROFILE_KEY = TRAVEL_PROFILE_KEY;
 
 const AirlineStatusSchema = z.object({
   airline: z.string().min(1).max(60),
@@ -29,6 +34,13 @@ const CarRentalStatusSchema = z.object({
   tier: z.string().min(1).max(60),
 });
 
+const PaymentCardSchema = z.object({
+  id: z.string().min(1).max(80),
+  product: z.string().min(1).max(120),
+  network: z.string().min(1).max(60),
+  lastFour: z.string().max(4).optional(),
+});
+
 const TravelProfileSchema = z.object({
   airlineStatuses: z.array(AirlineStatusSchema).max(10),
   hotelStatuses: z.array(HotelStatusSchema).max(10).optional(),
@@ -36,6 +48,9 @@ const TravelProfileSchema = z.object({
   tsa_precheck: z.boolean().optional(),
   global_entry: z.boolean().optional(),
   clear: z.boolean().optional(),
+  paymentCards: z.array(PaymentCardSchema).max(20).optional(),
+  benefitSummary: z.array(z.string().max(240)).max(40).optional(),
+  cardsSyncedAt: z.string().optional(),
   updatedAt: z.string().optional(),
 });
 
@@ -53,8 +68,9 @@ async function authorize(req: Request) {
 export async function GET(req: Request) {
   const auth = await authorize(req);
   if (!auth.ok) return auth.response;
-  const profile = await kvStoreGet<TravelProfile>(PROFILE_KEY, { userId: auth.userId });
-  return NextResponse.json({ profile: profile ?? { airlineStatuses: [] } });
+  const stored = await kvStoreGet<TravelProfile>(PROFILE_KEY, { userId: auth.userId });
+  const profile = await ensureTravelBenefitsFresh(auth.userId, stored);
+  return NextResponse.json({ profile });
 }
 
 export async function POST(req: Request) {
@@ -64,7 +80,7 @@ export async function POST(req: Request) {
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
   const parsed = TravelProfileSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid", issues: parsed.error.issues.slice(0, 5) }, { status: 400 });
-  const profile: TravelProfile = { ...parsed.data, updatedAt: new Date().toISOString() };
-  await kvStoreSet(PROFILE_KEY, profile, { userId: auth.userId });
+  const manual: TravelProfile = { ...parsed.data, updatedAt: new Date().toISOString() };
+  const profile = await syncTravelProfileBenefits(auth.userId, manual);
   return NextResponse.json({ ok: true, profile });
 }

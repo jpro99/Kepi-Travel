@@ -72,6 +72,21 @@ At runtime, `scripts/verify-env.ts` checks `.env.example` and prints clear warni
 - Endpoint:
   - Ensure Inngest is configured to call `https://<your-domain>/api/inngest`
 
+### Duffel (flights + hotels)
+
+- Sign up: [app.duffel.com](https://app.duffel.com/)
+- Keys:
+  - `DUFFEL_ACCESS_TOKEN` — from **Developers → Access tokens** (test tokens start with `duffel_test_`)
+- **Flights** work with the token alone once the account is created.
+- **Stays (hotels)** require a separate product enablement step:
+  1. Log in to [Duffel Dashboard](https://app.duffel.com/)
+  2. Request **Stays** access (see [Getting Started with Stays](https://duffel.com/docs/guides/getting-started-with-stays))
+  3. Wait for Duffel to approve Stays on your account (403/404 on `/stays/search` means not enabled yet)
+  4. Add the same token (or a new read-write token) to Vercel as `DUFFEL_ACCESS_TOKEN`
+  5. Redeploy
+- Until Stays is enabled, Kepi shows **estimated** hotel rates (ranked by value/points/memory) so the Hotels tab still works.
+- Optional: `DUFFEL_STAYS_MODE=mock` forces estimated rates in dev.
+
 ### AviationStack (live flight status)
 
 - Create account: [aviationstack.com](https://aviationstack.com/)

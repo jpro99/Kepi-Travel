@@ -55,6 +55,11 @@ const AIRPORTS: AirportGeo[] = [
   { iata:"MAD", name:"Madrid",              lat:40.4936,  lon:-3.5668,   radiusKm:4.5, securityRadiusKm:1.5 },
   { iata:"BCN", name:"Barcelona",           lat:41.2971,  lon:2.0785,    radiusKm:4.0, securityRadiusKm:1.4 },
   { iata:"FCO", name:"Rome Fiumicino",      lat:41.8003,  lon:12.2389,   radiusKm:4.5, securityRadiusKm:1.5 },
+  { iata:"VCE", name:"Venice",              lat:45.5053,  lon:12.3519,   radiusKm:4.0, securityRadiusKm:1.4 },
+  { iata:"MXP", name:"Milan Malpensa",      lat:45.6306,  lon:8.7281,    radiusKm:4.5, securityRadiusKm:1.5 },
+  { iata:"NAP", name:"Naples",              lat:40.8860,  lon:14.2908,   radiusKm:4.0, securityRadiusKm:1.4 },
+  { iata:"BRI", name:"Bari",                lat:41.1386,  lon:16.7606,   radiusKm:3.5, securityRadiusKm:1.2 },
+  { iata:"FLR", name:"Florence",            lat:43.8100,  lon:11.2051,   radiusKm:3.5, securityRadiusKm:1.2 },
   { iata:"ZUR", name:"Zurich",              lat:47.4647,  lon:8.5492,    radiusKm:3.5, securityRadiusKm:1.2 },
   { iata:"VIE", name:"Vienna",              lat:48.1103,  lon:16.5697,   radiusKm:4.0, securityRadiusKm:1.4 },
   { iata:"CPH", name:"Copenhagen",          lat:55.6180,  lon:12.6561,   radiusKm:3.5, securityRadiusKm:1.2 },
@@ -83,6 +88,12 @@ const AIRPORTS: AirportGeo[] = [
 ];
 
 const AIRPORT_MAP = new Map(AIRPORTS.map(a => [a.iata, a]));
+
+export function getAirportByIata(iata: string | undefined | null): AirportGeo | undefined {
+  const code = iata?.trim().toUpperCase();
+  if (!code) return undefined;
+  return AIRPORT_MAP.get(code);
+}
 
 /** Haversine distance in km between two lat/lon points */
 export function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {

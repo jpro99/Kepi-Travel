@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
+import { requireDebugApiAccess } from "@/lib/admin/requireAdminApiAccess";
 import {
   getRawSubscriptionRecordForDebug,
   getSubscriptionRecord,
@@ -14,16 +14,14 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   const requestId = req.headers.get("x-request-id")?.trim() || generateId();
-  const userId = await resolveAuthenticatedUserId();
+  const access = await requireDebugApiAccess("/api/debug/billing");
+  if (!access.ok) return access.response;
+  const userId = access.userId;
   const routeLogger = logger.withContext({
     requestId,
     userId,
     route: "/api/debug/billing",
   });
-
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
 
   const rateLimit = await enforceRateLimit({
     policyName: "travel-updates-general",

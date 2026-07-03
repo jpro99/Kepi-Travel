@@ -17,12 +17,16 @@ export async function GET(req: Request) {
     routeLogger.warn("Unauthorized admin health request.");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const url = new URL(req.url);
   if (!isAdminUserId(userId)) {
+    // Return 200 for probes so non-admin users don't see 403 console noise.
+    if (url.searchParams.get("probe") === "1") {
+      return NextResponse.json({ ok: false, isAdmin: false });
+    }
     routeLogger.warn("Forbidden admin health request from non-admin user.");
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const url = new URL(req.url);
   if (url.searchParams.get("probe") === "1") {
     return NextResponse.json({ ok: true });
   }

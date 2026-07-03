@@ -41,6 +41,11 @@ export interface TripIntent {
   preferredAirlines?: string[];
   budgetHint?: string;
   isMultiCity?: boolean;
+  /** User asked to use Alaska (or other) upgrade certificate on this trip */
+  wantsAlaskaUpgrade?: boolean;
+  instrumentHints?: string[];
+  /** True when no destination was stated and Italy was used as a technical fallback — not a real inference. */
+  destinationInferredDefault?: boolean;
 }
 
 export interface FlightLegPlan {
@@ -163,6 +168,14 @@ export interface LivePricingSummary {
     departureDate?: string;
   }>;
   searchedOrigins?: string[];
+  /** Per-airport live cash — cheapest first. */
+  perOriginCash?: Array<{
+    origin: string;
+    amount: number;
+    airline: string;
+    stops: number;
+    offerId?: string;
+  }>;
   message?: string;
 }
 
@@ -175,6 +188,8 @@ export interface DecisionBrief {
   instrumentHighlights: string[];
   /** True when international trip has no parsed departure — user must name origin airport. */
   originRequired?: boolean;
+  /** True when no destination was stated — user must name a destination instead of defaulting to Italy. */
+  destinationRequired?: boolean;
   planMode?: PlanMode;
   paymentMode?: PaymentMode;
   /** Full ranked strategies before payment-mode filter (for UI toggles). */
@@ -249,6 +264,12 @@ export interface StrategyFlexOption {
   savingsVsBaseline?: number;
   verifyUrl?: string;
   benchmarkNote?: string;
+  originIata?: string;
+  destinationIata?: string;
+  airline?: string;
+  offerId?: string;
+  bookUrl?: string;
+  bookLabel?: string;
 }
 
 export interface StrategyFlexOptionsResult {

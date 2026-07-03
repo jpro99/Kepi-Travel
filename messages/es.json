@@ -3,6 +3,15 @@
     "english": "Inglés",
     "spanish": "Español"
   },
+  "LanguageSettings": {
+    "title": "Idioma",
+    "subtitle": "Elige tu idioma preferido. Kepi lo guardará en tu cuenta.",
+    "savedEnglish": "Idioma cambiado a inglés — recargando…",
+    "savedSpanish": "Idioma cambiado a español — recargando…",
+    "saveFailed": "No se pudo guardar el idioma. Inténtalo de nuevo.",
+    "activeEnglish": "Activo: inglés",
+    "activeSpanish": "Activo: español"
+  },
   "LandingPage": {
     "brand": "Kepi Asistente de Viaje",
     "title": "Ejecución premium de viajes, desde preparación hasta recuperación.",

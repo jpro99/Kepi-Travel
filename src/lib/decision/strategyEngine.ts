@@ -13,6 +13,7 @@ import { rankStrategiesByValue } from "@/lib/decision/strategyRanking";
 import { personalizeStrategiesForIntent } from "@/lib/decision/strategyPersonalization";
 import {
   originRequiredForIntent,
+  prefersCarrierFromIntentOrGenome,
   resolvePrimaryOrigin,
   resolveSearchAirports,
 } from "@/lib/decision/tripOrigins";
@@ -38,11 +39,8 @@ function isWestCoastMetroOrigin(iata: string): boolean {
   return WEST_COAST_METRO.has(iata.toUpperCase());
 }
 
-function prefersAlaska(intent: TripIntent): boolean {
-  return Boolean(
-    intent.preferredAirlines?.includes("Alaska") ||
-    intent.loyaltyPrograms?.some((program) => /alaska/i.test(program)),
-  );
+function prefersAlaska(intent: TripIntent, genome: TravelerGenome): boolean {
+  return prefersCarrierFromIntentOrGenome(intent, genome, "alaska");
 }
 
 function returnFlightSegment(intent: TripIntent, homeIata: string, costUsd = 650): TravelStrategy["segments"][number] | null {
@@ -140,7 +138,7 @@ function buildRouteStrategies(intent: TripIntent, genome: TravelerGenome): Trave
   const dest = intent.destinationIata.toUpperCase();
   const destLabel = intent.stops?.[0]?.name ?? intent.destination;
   const soCal = isSoCalOrigin(origin);
-  const preferAlaska = prefersAlaska(intent);
+  const preferAlaska = prefersAlaska(intent, genome);
   const westCoastMetro = isWestCoastMetroOrigin(origin);
   const repositionHub =
     preferAlaska && westCoastMetro && origin !== "SEA"
@@ -164,7 +162,7 @@ function buildRouteStrategies(intent: TripIntent, genome: TravelerGenome): Trave
     strategies.push({
       id: "reposition_award",
       kind: "reposition_award",
-      title: preferAlaska ? "Alaska Reposition Play" : "Reposition Play",
+      title: preferAlaska ? "Alaska Hometown Play" : soCal && repositionHub === "SEA" ? "West Coast Gateway Play" : "Reposition Play",
       headline: `${origin} → ${repositionHub} · partner J to ${destLabel}`,
       reasoning: preferAlaska
         ? `Feeder to ${repositionHub} then partner business ~70k miles. Alaska MVP Gold often sees upgrade space on ${repositionHub} long-hauls vs flying direct from ${origin}.`
@@ -287,10 +285,15 @@ function buildRouteStrategies(intent: TripIntent, genome: TravelerGenome): Trave
     {
       id: "instrument_play",
       kind: "instrument_play",
-      title: "Instrument Play",
-      headline: `${origin} → ${dest} · certs + points`,
+      title:
+        guestUpgrade && (preferAlaska || intent.wantsAlaskaUpgrade)
+          ? "Alaska Guest Upgrade Play"
+          : "Instrument Play",
+      headline: `${origin} → ${dest} · ${guestUpgrade ? "upgrade cert + cash" : "certs + points"}`,
       reasoning: guestUpgrade
-        ? `Use ${guestUpgrade.label} on ${origin}→${dest}. Burn suite cert at ${primaryHotel} ${destLabel} when face value is highest.`
+        ? intent.wantsAlaskaUpgrade
+          ? `You asked to use your ${guestUpgrade.label}. Book Alaska-metal economy/premium, then apply the cert for business. Live results below show eligible AS flights.`
+          : `Use ${guestUpgrade.label} on ${origin}→${dest}. Book Alaska metal in a lower cabin, apply cert at check-in. Burn suite cert at ${primaryHotel} ${destLabel} when face value is highest.`
         : `Combine upgrade instruments and hotel points for ${origin} → ${dest}.`,
       segments: [
         {
@@ -475,11 +478,12 @@ export function buildDecisionBrief(
   const planMode = options.planMode ?? "full";
   const searchAirports = resolveExpertSearchAirports(intent, genome, options.expert);
   const needsOrigin = planMode !== "hotels" && originRequiredForIntent(intent);
+  const needsDestination = planMode !== "hotels" && Boolean(intent.destinationInferredDefault);
 
   let flightLegs = buildFlightLegsFromIntent(intent, genome);
   flightLegs = applyLegEnabledOverrides(flightLegs, options.enabledLegIds);
   flightLegs = applyLegDateOverrides(flightLegs, options.expert?.legDateOverrides);
-  flightLegs = annotateLegLoyaltyNotes(flightLegs, intent);
+  flightLegs = annotateLegLoyaltyNotes(flightLegs, intent, genome);
 
   if (planMode === "hotels") {
     const hotelsBrief = buildHotelsOnlyBrief(intent, genome);
@@ -519,6 +523,36 @@ export function buildDecisionBrief(
           flipsRanking: true,
           options: [
             { id: "edit", label: "Add origin to your prompt (e.g. London Heathrow to Italy)" },
+          ],
+        },
+      ],
+      instrumentHighlights: instrumentHighlights(genome),
+      genomeSnapshot: {
+        homeRegion: genome.homeRegion,
+        decisionWeights: genome.decisionWeights,
+        hotelChainPriority: genome.hotelChainPriority,
+        tripCount: genome.tripCount,
+      },
+    };
+  }
+
+  if (needsDestination) {
+    return {
+      intent,
+      inferredSummary: "Name your destination — Kepi won't assume Italy.",
+      searchAirports,
+      strategies: [],
+      destinationRequired: true,
+      planMode,
+      flightLegs,
+      questions: [
+        {
+          id: "q-stated-destination",
+          prompt: "Where are you flying to?",
+          stakes: "Routes and live fares need a real destination — Kepi won't guess Italy.",
+          flipsRanking: true,
+          options: [
+            { id: "edit", label: "Add a destination to your prompt (e.g. to Rome, to Tokyo)" },
           ],
         },
       ],

@@ -1,0 +1,11 @@
+{
+  "name": "kepi-bot-deck",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local control panel for Kepi domain bots — not part of kepitravel.com",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs"
+  }
+}

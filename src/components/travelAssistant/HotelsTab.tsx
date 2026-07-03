@@ -1,6 +1,26 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { createPortal } from "react-dom";
+import { TripHotelStayMap } from "@/components/travelAssistant/TripHotelStayMap";
+import { MobileHotelStayNotebook } from "@/components/travelAssistant/mobile/MobileHotelStayNotebook";
+import { TripStayPlanner } from "@/components/travelAssistant/TripStayPlanner";
+import { TripHotelCityPicker } from "@/components/travelAssistant/TripHotelCityPicker";
+import { HotelSearchLauncher, type HotelSearchDefaults } from "@/components/travelAssistant/HotelSearchLauncher";
+import type { PlannedStayCity } from "@/lib/travelAssistant/tripPlanBooking";
+import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
+import { segmentsNeedingHotel } from "@/lib/hotels/deriveTripStaySegments";
+import {
+  formatReservationCostLine,
+  reservationMissingPrice,
+} from "@/lib/travelAssistant/tripSpendSummary";
+import {
+  reservationAttentionKind,
+  reservationAttentionRingClass,
+} from "@/lib/travelAssistant/reservationAttention";
+import { BOOK_ICON_TILE_CLASS, BOOK_LIST_CARD_CLASS } from "@/components/travelAssistant/bookTabStyles";
+import { hotelCardTypography } from "@/lib/ui/mobileTypography";
+import { appleBtnText, appleWarningPill } from "@/lib/ui/appleDesign";
 
 interface Reservation {
   id: string;
@@ -13,14 +33,52 @@ interface Reservation {
   roomType?: string;
   checkOutDate?: string;
   notes?: string;
+  plannedOnly?: boolean;
+  quotedPriceUsd?: number;
+  quotedPointsMiles?: number;
+  pointsProgram?: string;
 }
 
 interface HotelsTabProps {
   reservations: Reservation[];
+  mapReservations?: Reservation[];
+  tripName?: string | null;
+  staySegments?: TripStaySegment[];
+  plannedStayCities?: PlannedStayCity[];
+  onPickPlannedCity?: (city: PlannedStayCity) => void;
   onReservationTap: (id: string) => void;
   onCheckStatus: (id: string) => void;
   onDelete: (id: string) => void;
   onAdd: () => void;
+  hotelSearchDefaults?: HotelSearchDefaults;
+  onLaunchHotelSearch?: (params: { city: string; cityIata?: string; checkIn: string; checkOut: string }) => void;
+  onSearchHotels?: () => void;
+  onSearchSegment?: (segment: TripStaySegment) => void;
+  onAddCityStay?: (input: { city: string; checkIn: string; checkOut: string }) => void;
+  onSetStayIntent?: (
+    segment: TripStaySegment,
+    intent: "needs_hotel" | "skip",
+  ) => void | Promise<void>;
+  tripId?: string | null;
+  usuallySkipsConnections?: boolean;
+  /** Trips tab on phone: bigger type, fewer widgets. */
+  simplifiedMobile?: boolean;
+  /** Mobile Book tab — show search launchers and stay planner. */
+  enableBookSearch?: boolean;
+  hotelNotebookNote?: string;
+  onHotelNotebookChange?: (value: string) => void;
+  travelFitReservations?: Array<{
+    id: string;
+    type: string;
+    provider?: string;
+    title?: string;
+    location?: string;
+    localTime?: string;
+    checkOutDate?: string;
+    flightDepartureAirport?: string;
+    flightArrivalAirport?: string;
+    flightDate?: string;
+  }>;
 }
 
 function fmtDate(localTime: string): string {
@@ -28,6 +86,13 @@ function fmtDate(localTime: string): string {
   if (!m) return "—";
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   return `${months[+m[2]-1]} ${+m[3]}, ${m[1]}`;
+}
+
+function fmtDateShort(localTime: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(localTime ?? "");
+  if (!m) return "—";
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${months[+m[2]-1]} ${+m[3]}`;
 }
 
 function nightsCount(checkIn: string, checkOut: string): number {
@@ -59,9 +124,35 @@ function cityEmoji(location: string): string {
   return "🏨";
 }
 
-export function HotelsTab({ reservations, onReservationTap, onCheckStatus, onDelete, onAdd }: HotelsTabProps) {
+export function HotelsTab({
+  reservations,
+  mapReservations,
+  tripName,
+  staySegments = [],
+  plannedStayCities = [],
+  onPickPlannedCity,
+  onReservationTap,
+  onCheckStatus,
+  onDelete,
+  onAdd,
+  hotelSearchDefaults,
+  onLaunchHotelSearch,
+  onSearchHotels,
+  onSearchSegment,
+  onAddCityStay,
+  onSetStayIntent,
+  tripId,
+  usuallySkipsConnections,
+  simplifiedMobile = false,
+  enableBookSearch = false,
+  hotelNotebookNote = "",
+  onHotelNotebookChange,
+  travelFitReservations = [],
+}: HotelsTabProps) {
+  const type = hotelCardTypography(simplifiedMobile);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showPast, setShowPast] = useState(false);
+  const [notebookOpen, setNotebookOpen] = useState(false);
 
   const { upcoming, past } = useMemo(() => ({
     upcoming: reservations.filter(r => !isPastCheckout(r.checkOutDate ?? r.localTime ?? "")),
@@ -69,25 +160,105 @@ export function HotelsTab({ reservations, onReservationTap, onCheckStatus, onDel
   }), [reservations]);
 
   const shown = showPast ? [...upcoming, ...past] : upcoming;
+  const staySegmentsNeedingHotel = segmentsNeedingHotel(staySegments);
+  const showBookSearch = !simplifiedMobile || enableBookSearch;
 
   return (
-    <section className="space-y-4 pb-6">
+    <section className={`space-y-4 pb-6 ${type.section}`}>
+      {showBookSearch && onLaunchHotelSearch ? (
+        <HotelSearchLauncher
+          tripName={tripName}
+          defaults={hotelSearchDefaults}
+          onSearch={onLaunchHotelSearch}
+        />
+      ) : null}
+
+      {simplifiedMobile ? (
+        <TripHotelStayMap
+          reservations={mapReservations ?? reservations}
+          onStayTap={(point) => {
+            if (point.reservationId) {
+              onReservationTap(point.reservationId);
+            }
+          }}
+          mobileProminent
+          sectionId="trip-hotel-map"
+          onOpenNotebook={() => setNotebookOpen(true)}
+        />
+      ) : null}
+
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Hotels</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            {upcoming.length} upcoming{past.length > 0 ? ` · ${past.length} past` : ""}
-          </p>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className={type.heading}>Your hotels</h2>
+            <p className={type.subheading}>
+              {upcoming.length} booked{past.length > 0 ? ` · ${past.length} past` : ""}
+            </p>
+          </div>
+          {!enableBookSearch ? (
+            <button
+              type="button"
+              onClick={onAdd}
+              className={`shrink-0 ${type.addBtn}`}
+            >
+              Add existing
+            </button>
+          ) : null}
         </div>
-        <button
-          type="button"
-          onClick={onAdd}
-          className="flex items-center gap-1.5 rounded-full bg-[#007AFF] px-4 py-2 text-sm font-semibold text-white shadow-sm active:opacity-80 transition-opacity"
-        >
-          <span className="text-base leading-none">+</span> Add
-        </button>
+        {enableBookSearch ? (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (onSearchHotels) {
+                  onSearchHotels();
+                  return;
+                }
+                if (onLaunchHotelSearch) {
+                  onLaunchHotelSearch({
+                    city: hotelSearchDefaults?.city ?? "",
+                    cityIata: hotelSearchDefaults?.cityIata,
+                    checkIn: hotelSearchDefaults?.checkIn ?? "",
+                    checkOut: hotelSearchDefaults?.checkOut ?? "",
+                  });
+                }
+              }}
+              disabled={!onLaunchHotelSearch && !onSearchHotels}
+              className="min-h-[48px] flex-1 rounded-[var(--radius-button)] bg-[#007AFF] px-4 text-[17px] font-bold text-white disabled:opacity-50"
+            >
+              Search hotels
+            </button>
+            <button
+              type="button"
+              onClick={onAdd}
+              className={`min-h-[48px] shrink-0 ${type.addBtn}`}
+            >
+              Add existing
+            </button>
+          </div>
+        ) : null}
       </div>
+
+      {showBookSearch && plannedStayCities.length > 0 && onPickPlannedCity ? (
+        <TripHotelCityPicker
+          cities={plannedStayCities}
+          tripName={tripName}
+          onPickCity={onPickPlannedCity}
+        />
+      ) : null}
+
+      {showBookSearch && staySegmentsNeedingHotel.length > 0 && onSearchSegment && plannedStayCities.length === 0 ? (
+        <TripStayPlanner
+          segments={staySegments}
+          tripName={tripName}
+          tripId={tripId}
+          usuallySkipsConnections={usuallySkipsConnections}
+          onSearchSegment={onSearchSegment}
+          onAddCityStay={onAddCityStay}
+          onSetStayIntent={onSetStayIntent}
+        />
+      ) : null}
 
       {/* Empty state */}
       {shown.length === 0 && (
@@ -95,19 +266,55 @@ export function HotelsTab({ reservations, onReservationTap, onCheckStatus, onDel
           <p className="text-4xl mb-3">🏨</p>
           <p className="font-semibold text-slate-900 dark:text-white">No hotels yet</p>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">
-            Forward a hotel confirmation email or add manually
+            {enableBookSearch
+              ? "Search for a hotel below, or add one you already booked."
+              : "Use the search box above to find and book a hotel, or add one you already booked."}
           </p>
+          {onLaunchHotelSearch ? (
+            <button
+              type="button"
+              onClick={() =>
+                onLaunchHotelSearch({
+                  city: hotelSearchDefaults?.city ?? "",
+                  cityIata: hotelSearchDefaults?.cityIata,
+                  checkIn: hotelSearchDefaults?.checkIn ?? "",
+                  checkOut: hotelSearchDefaults?.checkOut ?? "",
+                })
+              }
+              className="mb-3 w-full rounded-full bg-[#007AFF] px-6 py-2.5 text-sm font-bold text-white"
+            >
+              Search hotels
+            </button>
+          ) : onSearchHotels ? (
+            <button
+              type="button"
+              onClick={onSearchHotels}
+              className="mb-3 w-full rounded-full bg-[#007AFF] px-6 py-2.5 text-sm font-semibold text-white"
+            >
+              Search hotels
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={onAdd}
-            className="rounded-full bg-[#007AFF] px-6 py-2.5 text-sm font-semibold text-white"
+            className="rounded-full border border-slate-300 px-6 py-2.5 text-sm font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-200"
           >
-            Add hotel
+            Add existing booking
           </button>
         </div>
       )}
 
       {/* Hotel cards */}
+      {simplifiedMobile && onHotelNotebookChange ? (
+        <button
+          type="button"
+          onClick={() => setNotebookOpen(true)}
+          className={`flex min-h-[48px] w-full items-center justify-center px-4 text-[17px] font-semibold text-[var(--text-primary)] ${type.secondaryBtn}`}
+        >
+          Open stay notebook
+        </button>
+      ) : null}
+
       <div className="space-y-3">
         {shown.map(r => {
           const checkIn = r.localTime ?? "";
@@ -116,13 +323,108 @@ export function HotelsTab({ reservations, onReservationTap, onCheckStatus, onDel
           const past = isPastCheckout(checkOut);
           const isOpen = expanded === r.id;
           const emoji = cityEmoji(r.location ?? "");
+          const missingPrice = reservationMissingPrice(r);
+          const costLine = formatReservationCostLine(r, { allReservations: shown });
+          const attention = reservationAttentionKind(r);
+
+          if (simplifiedMobile) {
+            const stayRange =
+              checkIn && checkOut
+                ? `${fmtDateShort(checkIn)} – ${fmtDateShort(checkOut)}${nights > 0 ? ` · ${nights} night${nights === 1 ? "" : "s"}` : ""}`
+                : checkIn
+                  ? fmtDateShort(checkIn)
+                  : null;
+
+            return (
+              <div
+                key={r.id}
+                className={`${type.card} overflow-hidden ${past ? "opacity-60" : ""}`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setExpanded(isOpen ? null : r.id)}
+                  className="w-full p-4 text-left"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-[var(--bg-grouped)] text-lg text-[var(--text-secondary)]">
+                      {emoji}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className={type.title}>{r.title}</p>
+                        {missingPrice && !past ? (
+                          <span className={appleWarningPill}>Add cost</span>
+                        ) : costLine ? (
+                          <span className="shrink-0 text-[17px] font-semibold text-[var(--text-primary)]">{costLine}</span>
+                        ) : null}
+                      </div>
+                      {r.location ? <p className={type.location}>{r.location}</p> : null}
+                      {stayRange ? <p className={`${type.metadata} mt-1`}>{stayRange}</p> : null}
+                    </div>
+                    <span className="mt-1 shrink-0 text-[13px] text-[var(--text-tertiary)]">{isOpen ? "▲" : "▼"}</span>
+                  </div>
+                </button>
+
+                {(isOpen || r.confirmationCode || (r.roomType && r.roomType !== "Not set")) && (
+                  <div className="space-y-3 border-t border-[var(--border-default)] px-4 pb-4 pt-3">
+                    {r.confirmationCode ? (
+                      <div>
+                        <p className={type.detailLabel}>Confirmation</p>
+                        <p className={`${type.detailValue} mt-0.5`}>{r.confirmationCode}</p>
+                      </div>
+                    ) : null}
+                    {r.roomType && r.roomType !== "Not set" ? (
+                      <div>
+                        <p className={type.detailLabel}>Room type</p>
+                        <p className={`${type.detailValue} mt-0.5`}>{r.roomType}</p>
+                      </div>
+                    ) : null}
+                    {costLine && !missingPrice ? (
+                      <div>
+                        <p className={type.detailLabel}>Trip cost</p>
+                        <p className={`${type.detailValue} mt-0.5`}>{costLine}</p>
+                      </div>
+                    ) : missingPrice && !past ? (
+                      <button
+                        type="button"
+                        onClick={() => onReservationTap(r.id)}
+                        className={`${appleBtnText} text-left`}
+                      >
+                        Tap to add trip cost
+                      </button>
+                    ) : null}
+                    {isOpen ? (
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => onReservationTap(r.id)}
+                          className={`${type.actionBtn} ${type.secondaryBtn}`}
+                        >
+                          View details
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm("Delete this hotel?")) onDelete(r.id);
+                          }}
+                          className={`${type.actionBtn} ${type.destructiveBtn}`}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            );
+          }
 
           return (
             <div
               key={r.id}
-              className={`overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-sm ring-1 transition-all ${
-                past ? "ring-slate-100 dark:ring-slate-800 opacity-60" : "ring-black/[0.06] dark:ring-white/[0.08]"
-              }`}
+              className={`${BOOK_LIST_CARD_CLASS} ${
+                past ? reservationAttentionRingClass("none", true) : reservationAttentionRingClass(attention, past)
+              } ${past ? "opacity-60" : ""}`}
             >
               {/* Card tap area */}
               <button
@@ -131,80 +433,110 @@ export function HotelsTab({ reservations, onReservationTap, onCheckStatus, onDel
                 className="w-full text-left"
               >
                 <div className="flex items-start gap-4 p-5">
-                  {/* Emoji icon */}
-                  <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-2xl shrink-0 shadow-sm">
-                    {emoji}
-                  </div>
+                  <div className={BOOK_ICON_TILE_CLASS}>{emoji}</div>
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-slate-900 dark:text-white text-base leading-snug truncate">{r.title}</p>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 truncate mt-0.5">{r.location}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <div className="rounded-lg bg-slate-100 dark:bg-slate-800 px-2.5 py-1">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Check-in</p>
-                        <p className="text-xs font-bold text-slate-900 dark:text-white">{fmtDate(checkIn)}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className={type.title}>{r.title}</p>
+                      {missingPrice && !past ? (
+                        <span className="shrink-0 rounded-full bg-yellow-200 px-2 py-0.5 text-xs lg:text-[10px] font-bold uppercase tracking-wide text-yellow-900 dark:bg-yellow-500/30 dark:text-yellow-100">
+                          Add cost
+                        </span>
+                      ) : costLine ? (
+                        <span className={`shrink-0 font-bold text-slate-700 dark:text-slate-200 ${simplifiedMobile ? "text-sm" : "text-sm lg:text-xs"}`}>{costLine}</span>
+                      ) : null}
+                    </div>
+                    <p className={type.location}>{r.location}</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <div className={`rounded-lg bg-slate-100 dark:bg-slate-800 ${simplifiedMobile ? "px-3 py-2" : "px-3 py-2 lg:px-2.5 lg:py-1"}`}>
+                        <p className={type.detailLabel}>Check-in</p>
+                        <p className={type.detailValue}>{fmtDate(checkIn)}</p>
                       </div>
-                      {checkOut && (
-                        <div className="rounded-lg bg-slate-100 dark:bg-slate-800 px-2.5 py-1">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Check-out</p>
-                          <p className="text-xs font-bold text-slate-900 dark:text-white">{fmtDate(checkOut)}</p>
+                      {checkOut ? (
+                        <div className={`rounded-lg bg-slate-100 dark:bg-slate-800 ${simplifiedMobile ? "px-3 py-2" : "px-3 py-2 lg:px-2.5 lg:py-1"}`}>
+                          <p className={type.detailLabel}>Check-out</p>
+                          <p className={type.detailValue}>{fmtDate(checkOut)}</p>
                         </div>
-                      )}
-                      {nights > 0 && (
-                        <div className="rounded-lg bg-indigo-50 dark:bg-indigo-500/20 px-2.5 py-1">
-                          <p className="text-xs font-bold text-indigo-700 dark:text-indigo-300">{nights}N</p>
+                      ) : null}
+                      {nights > 0 ? (
+                        <div className="rounded-lg bg-sky-50 px-2.5 py-1 dark:bg-sky-500/15">
+                          <p className={`font-bold text-sky-800 dark:text-sky-300 ${simplifiedMobile ? "text-sm" : "text-sm lg:text-xs"}`}>{nights}N</p>
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   </div>
 
-                  <span className="text-slate-300 dark:text-slate-600 text-sm shrink-0 mt-1">{isOpen ? "▲" : "▼"}</span>
+                  <span className="mt-1 shrink-0 text-sm text-slate-300 dark:text-slate-600">{isOpen ? "▲" : "▼"}</span>
                 </div>
               </button>
 
-              {/* Confirmation + room */}
-              <div className="flex items-center gap-4 px-5 pb-4">
+              {/* Confirmation + room + cost */}
+              <div className="flex flex-wrap items-start gap-4 px-5 pb-4">
                 {r.confirmationCode && (
                   <div>
-                    <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Confirmation</p>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">{r.confirmationCode}</p>
+                    <p className={type.detailLabel}>Confirmation</p>
+                    <p className={`${type.detailValue} mt-0.5`}>{r.confirmationCode}</p>
                   </div>
                 )}
                 {r.roomType && r.roomType !== "Not set" && (
                   <div>
-                    <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Room type</p>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">{r.roomType}</p>
+                    <p className={type.detailLabel}>Room type</p>
+                    <p className={`${type.detailValue} mt-0.5`}>{r.roomType}</p>
                   </div>
                 )}
-              </div>
-
-              {/* Expanded actions */}
-              {isOpen && (
-                <div className="border-t border-slate-100 dark:border-slate-800 px-5 py-3 flex items-center gap-2">
+                {costLine ? (
+                  <div>
+                    <p className={type.detailLabel}>Trip cost</p>
+                    <p className={`${type.detailValue} mt-0.5`}>{costLine}</p>
+                  </div>
+                ) : missingPrice && !past ? (
                   <button
                     type="button"
                     onClick={() => onReservationTap(r.id)}
-                    className="flex-1 rounded-xl bg-slate-100 dark:bg-slate-800 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 active:opacity-70"
+                    className="rounded-lg bg-yellow-100 px-2.5 py-1.5 text-left dark:bg-yellow-500/20"
                   >
-                    View details
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-yellow-800 dark:text-yellow-200">Trip cost</p>
+                    <p className="mt-0.5 text-xs font-bold text-yellow-900 dark:text-yellow-100">Tap to add price</p>
                   </button>
+                ) : null}
+              </div>
+              {attention === "missing-price" && !past ? (
+                <div className="border-t border-yellow-200 px-5 py-2 dark:border-yellow-500/30">
                   <button
                     type="button"
-                    onClick={() => onCheckStatus(r.id)}
-                    className="flex-1 rounded-xl bg-[#007AFF]/10 dark:bg-[#0A84FF]/20 py-2 text-sm font-semibold text-[#007AFF] dark:text-[#0A84FF] active:opacity-70"
+                    onClick={() => onReservationTap(r.id)}
+                    className="text-xs font-bold text-yellow-900 dark:text-yellow-200"
                   >
-                    Check status
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { if (window.confirm("Delete this hotel?")) onDelete(r.id); }}
-                    className="rounded-xl bg-red-50 dark:bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-600 dark:text-red-400 active:opacity-70"
-                  >
-                    Delete
+                    Tap to add cash or points spent →
                   </button>
                 </div>
-              )}
+              ) : null}
+
+              {/* Expanded actions */}
+              <div className="border-t border-slate-100 dark:border-slate-800 px-5 py-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onReservationTap(r.id)}
+                  className={`${type.actionBtn} bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200`}
+                >
+                  View details
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onCheckStatus(r.id)}
+                  className={`${type.actionBtn} bg-[#007AFF]/10 dark:bg-[#0A84FF]/20 text-[#007AFF] dark:text-[#0A84FF]`}
+                >
+                  Check status
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { if (window.confirm("Delete this hotel?")) onDelete(r.id); }}
+                  className={`${type.actionBtn} max-w-[33%] bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400`}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           );
         })}
@@ -220,6 +552,38 @@ export function HotelsTab({ reservations, onReservationTap, onCheckStatus, onDel
           {showPast ? "Hide past stays" : `Show ${past.length} past stay${past.length > 1 ? "s" : ""}`}
         </button>
       )}
+
+      {!simplifiedMobile ? (
+      <TripHotelStayMap
+        reservations={mapReservations ?? reservations}
+        staySegments={staySegments}
+        plannedStayCities={plannedStayCities}
+        onStayTap={(point) => {
+          if (point.reservationId) {
+            onReservationTap(point.reservationId);
+            return;
+          }
+          if (point.segmentId && onSearchSegment) {
+            const segment = staySegments.find((entry) => entry.id === point.segmentId);
+            if (segment) onSearchSegment(segment);
+          }
+        }}
+      />
+      ) : null}
+
+      {notebookOpen && onHotelNotebookChange && typeof document !== "undefined"
+        ? createPortal(
+            <MobileHotelStayNotebook
+              tripName={tripName ?? "Your trip"}
+              reservations={reservations}
+              savedNote={hotelNotebookNote}
+              onSave={onHotelNotebookChange}
+              onClose={() => setNotebookOpen(false)}
+              onReservationTap={onReservationTap}
+            />,
+            document.body,
+          )
+        : null}
     </section>
   );
 }

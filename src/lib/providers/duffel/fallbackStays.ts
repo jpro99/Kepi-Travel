@@ -12,6 +12,8 @@ const REGION_NIGHTLY: Record<string, { min: number; max: number }> = {
   FCO: { min: 220, max: 380 },
   VCE: { min: 240, max: 420 },
   BRI: { min: 160, max: 280 },
+  BDS: { min: 150, max: 260 },
+  MONOPOLI: { min: 145, max: 255 },
   FLR: { min: 195, max: 320 },
   MXP: { min: 210, max: 350 },
   CDG: { min: 240, max: 420 },
@@ -42,8 +44,30 @@ function boutiqueNames(city: string): Array<{ name: string; chainName?: string }
   return [
     { name: `${city} Boutique Hotel` },
     { name: `Central ${city} Inn` },
+    { name: `${city} Guesthouse` },
   ];
 }
+
+function regionalStays(city: string, iata: string): Array<{ name: string; chainName?: string }> {
+  const haystack = `${city} ${iata}`.toLowerCase();
+  if (/monopoli|bari|brindisi|puglia|bds|bri/.test(haystack)) {
+    return [
+      { name: `Masseria ${city}` },
+      { name: `${city} Old Town B&B` },
+      { name: `Trullo Stay — near ${city}` },
+      { name: `Seaside ${city} Apartment` },
+    ];
+  }
+  if (/rome|fco|florence|flr|venice|vce|naples|nap/.test(haystack)) {
+    return [
+      { name: `${city} Palazzo Guesthouse` },
+      { name: `Historic Center ${city}` },
+    ];
+  }
+  return [];
+}
+
+const DEFAULT_CHAINS = ["Hyatt", "Marriott", "Hilton", "IHG", "Accor"];
 
 /**
  * Synthetic stay quotes when Duffel Stays is disabled, unconfigured, or empty.
@@ -58,14 +82,27 @@ export function buildEstimatedStays(input: {
   const nights = Math.max(1, input.nights);
   const iata = input.destinationIata.toUpperCase();
   const city = input.destinationCity.trim() || iata;
-  const chains = input.chainPriority.filter(Boolean).slice(0, 3);
+  const preferred = input.chainPriority.filter(Boolean);
+  const chains = preferred.length > 0 ? preferred : DEFAULT_CHAINS;
 
   const candidates: Array<{ name: string; chainName?: string }> = [];
-  for (const chain of chains) {
+
+  // At most 2 stays from the traveler's top preferred chain — not the whole list.
+  const topChain = chains[0];
+  if (topChain) {
+    const names = CHAIN_HOTELS[topChain]?.(city) ?? [`${topChain} ${city}`];
+    candidates.push({ name: names[0], chainName: topChain });
+    if (names[1]) candidates.push({ name: names[1], chainName: topChain });
+  }
+
+  // One option each from other major chains for comparison.
+  for (const chain of DEFAULT_CHAINS) {
+    if (chain === topChain) continue;
     const names = CHAIN_HOTELS[chain]?.(city) ?? [`${chain} ${city}`];
     candidates.push({ name: names[0], chainName: chain });
-    if (names[1]) candidates.push({ name: names[1], chainName: chain });
   }
+
+  candidates.push(...regionalStays(city, iata));
   candidates.push(...boutiqueNames(city));
 
   const unique = candidates.filter(
@@ -73,7 +110,7 @@ export function buildEstimatedStays(input: {
   );
 
   const spread = Math.max(unique.length, 2);
-  return unique.slice(0, 4).map((item, index) => {
+  return unique.slice(0, 40).map((item, index) => {
     const nightlyUsd = nightlyForIndex(iata, index, spread);
     const totalAmountUsd = Math.round(nightlyUsd * nights * 100) / 100;
     const reviewScore = Math.round((7.8 + (spread - index) * 0.35) * 10) / 10;

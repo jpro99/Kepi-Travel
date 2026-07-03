@@ -1,5 +1,6 @@
 import { kvStoreGet } from "@/lib/travelAssistant/kvStore";
 import type { AwardOffer, CashOffer, LoyaltyProgram } from "./types";
+import { labelFor } from "./programLabels";
 
 const CPP_VALUATIONS_KEY = "flights:cpp_valuations";
 const GLOBAL_USER = "global";
@@ -129,25 +130,7 @@ function formatUsd(cents: number): string {
   }).format(cents / 100);
 }
 
-const PROGRAM_LABELS: Partial<Record<LoyaltyProgram, string>> = {
-  chase_ur: "Chase UR",
-  amex_mr: "Amex MR",
-  capitalone: "Capital One",
-  citi_typ: "Citi TYP",
-  united: "United",
-  american: "American",
-  delta: "Delta",
-  alaska: "Alaska",
-  aeroplan: "Aeroplan",
-  flyingblue: "Flying Blue",
-  avios_ba: "BA Avios",
-  lifemiles: "LifeMiles",
-  singapore_krisflyer: "Singapore",
-};
-
-export function labelFor(program: LoyaltyProgram): string {
-  return PROGRAM_LABELS[program] ?? program;
-}
+export { labelFor } from "./programLabels";
 
 export async function getProgramValuations(): Promise<Record<LoyaltyProgram, number>> {
   try {

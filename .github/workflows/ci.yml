@@ -29,8 +29,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Run lint
-        continue-on-error: true
         run: npm run lint
+
+  typecheck:
+    name: typecheck
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        run: npm ci
+      - name: Run typecheck
+        run: npm run typecheck
 
   test:
     name: test
@@ -53,6 +68,8 @@ jobs:
             ${{ runner.os }}-node22-
       - name: Install dependencies
         run: npm ci
+      - name: Run design-law tests
+        run: npm run verify:laws && npm run test:laws
       - name: Run adapter tests
         run: npm run test:adapters
 
@@ -94,7 +111,7 @@ jobs:
             echo "::error::Ship gate failed — fix tests or build before merge."
             exit 1
           fi
-          echo "Ship gate passed (test:adapters + npm run build)."
+          echo "Ship gate passed (verify:laws + test:laws + test:adapters + npm run build)."
 
   notify-failure:
     name: notify-failure

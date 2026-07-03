@@ -18,12 +18,15 @@ export function LanguageToggle() {
     }
     setBusy(true);
     try {
-      await fetch("/api/locale", {
+      const response = await fetch("/api/locale", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({ locale: nextLocale }),
       });
-      document.cookie = `kepi-locale=${nextLocale}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
+      if (!response.ok) {
+        return;
+      }
       window.location.reload();
     } finally {
       setBusy(false);

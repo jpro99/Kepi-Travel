@@ -1,14 +1,16 @@
-// @ts-nocheck
 "use client";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@/lib/maplibreCspWorker";
-import { useEffect, useRef, useCallback, useState, useMemo } from "react";
-import { directMaptilerTransformRequest } from "@/lib/map/maptilerClient";
+import { useEffect, useRef, useCallback, useState } from "react";
+import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
+import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
+import { resolveLocationForMapDisplay } from "@/lib/family/locationDisplayCache";
 
 interface LocationPoint {
   lat: number;
   lon: number;
+  accuracy?: number;
   updatedAt: string;
   memberId: string;
   label?: string;
@@ -50,9 +52,6 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
   const [selected, setSelected] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Stable style URLs — only recompute when key changes
-  const streetsUrl = useMemo(() => `https://api.maptiler.com/maps/streets-v2/style.json?key=${encodeURIComponent(maptilerKey)}`, [maptilerKey]);
-  const hybridUrl  = useMemo(() => `https://api.maptiler.com/maps/hybrid/style.json?key=${encodeURIComponent(maptilerKey)}`, [maptilerKey]);
 
   // Place/move markers — update existing ones in place (no flicker)
   const placeMarkers = useCallback((map: unknown) => {
@@ -61,8 +60,11 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
       const existing: Record<string, any> = (map as any)._kepiMarkers ?? {};
 
       members.forEach(member => {
-        const loc = locations[member.id];
-        if (!loc) return;
+        const raw = locations[member.id];
+        if (!raw) return;
+        const resolved = resolveLocationForMapDisplay(member.id, raw);
+        if (!resolved) return;
+        const loc = { ...raw, ...resolved };
 
         const stale = isStale(loc.updatedAt);
 
@@ -74,11 +76,11 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
           // Only animate if moved more than ~15m (consumer GPS drifts 10-30m standing still)
           const dLng = Math.abs(to.lng - from.lng);
           const dLat = Math.abs(to.lat - from.lat);
-          if (dLng < 0.00015 && dLat < 0.00015) return; // GPS noise, skip
-          // Smooth to weighted average — 70% new, 30% current — reduces jump to raw GPS
+          if (dLng < 0.00015 && dLat < 0.00015) return;
+          const smoothWeight = (loc.accuracy ?? 30) <= 35 ? 0.7 : 0.95;
           const smoothTo = {
-            lng: from.lng * 0.3 + to.lng * 0.7,
-            lat: from.lat * 0.3 + to.lat * 0.7,
+            lng: from.lng * (1 - smoothWeight) + to.lng * smoothWeight,
+            lat: from.lat * (1 - smoothWeight) + to.lat * smoothWeight,
           };
           const duration = 3000;
           const start = performance.now();
@@ -187,19 +189,21 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
       const center: [number, number] = knownLocs.length > 0
         ? [knownLocs.reduce((s, l) => s + l.lon, 0) / knownLocs.length, knownLocs.reduce((s, l) => s + l.lat, 0) / knownLocs.length]
         : [-118.2437, 34.0522];
-      const zoom = knownLocs.length === 1 ? 14 : knownLocs.length > 1 ? 10 : 4;
+      const zoom = knownLocs.length === 1 ? 16 : knownLocs.length > 1 ? 12 : 4;
 
-      const styleUrl = streetsUrl;
-
+      const style = maptilerStyleUrl("streets-v2", maptilerKey);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const map = new (ml as any).Map({
         container: mapEl.current,
-        style: styleUrl,
+        style,
         center, zoom,
+        maxZoom: 20,
+        pixelRatio: getMapPixelRatio(),
         attributionControl: false,
         fadeDuration: 0,
         transformRequest: directMaptilerTransformRequest(maptilerKey),
       });
+      const unbindResize = bindMapResize(mapEl.current, map);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       map.addControl(new (ml as any).NavigationControl({ showCompass: false }), "top-right");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -212,6 +216,7 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
       });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       map.on("error", (e: any) => { console.warn("[FamilyMap]", e?.error?.message ?? e?.message); });
+      map.on("remove", () => unbindResize());
       mapRef.current = map;
     })();
 
@@ -236,9 +241,9 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
   // Toggle satellite — swap style without reinitialising
   useEffect(() => {
     if (!mapRef.current || !isLoaded) return;
-    mapRef.current.setStyle(satellite ? hybridUrl : streetsUrl);
+    mapRef.current.setStyle(maptilerStyleUrl(satellite ? "hybrid" : "streets-v2", maptilerKey));
     mapRef.current.once("styledata", () => { if (mapRef.current) placeMarkers(mapRef.current); });
-  }, [satellite, hybridUrl, streetsUrl, isLoaded, placeMarkers]);
+  }, [satellite, maptilerKey, isLoaded, placeMarkers]);
 
   // Resize after fullscreen transition
   useEffect(() => {
@@ -254,7 +259,7 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
     import("maplibre-gl").then(({ LngLatBounds }) => {
       const b = new LngLatBounds();
       locs.forEach(l => b.extend([l.lon, l.lat]));
-      mapRef.current?.fitBounds(b, { padding: 60, maxZoom: 14, duration: 1500 });
+      mapRef.current?.fitBounds(b, { padding: 60, maxZoom: 16, duration: 1500 });
     }).catch(console.error);
   }, [members, locations]);
 

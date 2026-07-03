@@ -77,8 +77,28 @@ export function TripAlignmentBoard({ legs, strategyTitle, compact = false }: Tri
                   {leg.priceUsd !== undefined ? (
                     <p className="mt-1 text-xs font-bold text-slate-200">
                       ${leg.priceUsd.toLocaleString()}
-                      {leg.status === "verified" ? " · when Kepi searched" : ""}
+                      {leg.status === "verified" ? " · live quote" : ""}
                     </p>
+                  ) : null}
+                  {leg.bookUrl ? (
+                    <a
+                      href={leg.bookUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 inline-flex rounded-lg border border-emerald-500/40 bg-emerald-950/40 px-3 py-1.5 text-xs font-bold text-emerald-200 hover:bg-emerald-900/50"
+                    >
+                      {leg.bookLabel ?? "Book this flight ↗"}
+                    </a>
+                  ) : null}
+                  {leg.verifyUrl && !leg.bookUrl ? (
+                    <a
+                      href={leg.verifyUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 inline-flex text-xs font-bold text-sky-300 hover:text-sky-200"
+                    >
+                      Verify on Seats.aero ↗
+                    </a>
                   ) : null}
                 </div>
               </div>

@@ -48,6 +48,11 @@ IATA_TO_CITY.SFO = { city: "San Francisco", region: "California" };
 
 const STOP_ALIASES: Record<string, keyof typeof DESTINATION_MAP> = {
   bari: "bari",
+  // Common voice misrecognitions of "Bari"
+  party: "bari",
+  barry: "bari",
+  barri: "bari",
+  "bari italy": "bari",
   venice: "venice",
   venezia: "venice",
   dolomite: "dolomites",
@@ -66,13 +71,16 @@ const STOP_ALIASES: Record<string, keyof typeof DESTINATION_MAP> = {
 };
 
 const ORIGIN_MAP: Record<string, { city: string; region: string; airports: string[] }> = {
-  beaumont: { city: "Beaumont, CA", region: "California", airports: ["ONT", "LAX", "SNA"] },
+  beaumont: { city: "Beaumont, CA", region: "California", airports: ["ONT", "PSP", "SNA", "LAX"] },
+  ontario: { city: "Ontario, CA", region: "California", airports: ["ONT"] },
+  "ontario ca": { city: "Ontario, CA", region: "California", airports: ["ONT"] },
+  "ontario california": { city: "Ontario, CA", region: "California", airports: ["ONT"] },
   "los angeles": { city: "Los Angeles", region: "California", airports: ["LAX", "ONT", "SNA"] },
   orange: { city: "Orange County", region: "California", airports: ["SNA", "ONT", "LAX"] },
   "santa ana": { city: "Santa Ana", region: "California", airports: ["SNA", "ONT", "LAX"] },
   seattle: { city: "Seattle", region: "Washington", airports: ["SEA", "BFI"] },
   "san francisco": { city: "San Francisco", region: "California", airports: ["SFO", "OAK", "SJC"] },
-  california: { city: "Southern California", region: "California", airports: ["LAX", "ONT", "SNA"] },
+  california: { city: "Southern California", region: "California", airports: ["LAX", "ONT", "SNA", "PSP"] },
   "west coast": { city: "West Coast", region: "California", airports: ["LAX", "ONT", "SNA", "SEA", "SFO"] },
   london: { city: "London", region: "United Kingdom", airports: ["LHR", "LGW", "STN"] },
   heathrow: { city: "London Heathrow", region: "United Kingdom", airports: ["LHR"] },
@@ -103,8 +111,12 @@ function originFromIata(iata: string): ParsedOrigin | null {
   return { city: meta.city, region: meta.region, airports: [upper] };
 }
 
+function sanitizeOriginCapture(text: string): string {
+  return text.replace(/^[\s,;:–—-]+/, "").trim();
+}
+
 function matchOriginFromText(text: string): ParsedOrigin | null {
-  const normalized = text.toLowerCase().trim().replace(/\s+/g, " ");
+  const normalized = sanitizeOriginCapture(text.toLowerCase().trim().replace(/\s+/g, " "));
   if (!normalized) return null;
 
   const iataOnly = normalized.match(/^([a-z]{3})$/);
@@ -225,7 +237,24 @@ function parseFlightDates(
   monthIndex: number,
   year: number,
 ): { startDate: string; endDate: string; nights: number } | null {
+  const monthToken =
+    "(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)";
+  const betweenMatch = lower.match(
+    new RegExp(`between\\s+${monthToken}?\\s*(\\d{1,2})(?:st|nd|rd|th)?\\s+and\\s+${monthToken}?\\s*(\\d{1,2})(?:st|nd|rd|th)?`, "i"),
+  );
+  if (betweenMatch?.[1] && betweenMatch[2]) {
+    const startDay = parseDayToken(betweenMatch[1]);
+    const endDay = parseDayToken(betweenMatch[2]);
+    if (startDay && endDay && endDay > startDay) {
+      const startDate = formatIso(new Date(year, monthIndex, startDay));
+      const endDate = formatIso(new Date(year, monthIndex, endDay));
+      const nights = Math.max(1, Math.round((Date.parse(endDate) - Date.parse(startDate)) / 86_400_000));
+      return { startDate, endDate, nights };
+    }
+  }
+
   const departPatterns = [
+    /(?:on\s+)?(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?/i,
     /fly(?:\s+out|\s+from)?\s+(?:on|around)\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?/i,
     /leave(?:\s+on|\s+around)?\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?/i,
     /depart(?:\s+on|\s+around)?\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?/i,
@@ -288,6 +317,7 @@ function matchPlaceFromText(text: string): ParsedOrigin | null {
 function parseReturn(lower: string): ParsedOrigin | null {
   const normalized = stripOriginParseNoise(lower);
   const patterns = [
+    /(?:fly(?:\s+back|\s+home)|return(?:\s+home)?|head(?:\s+)?back)\s+(?:back\s+)?to\s+(.+?)(?:\s+the next|\s+back|\s+to|\s+and|\s*,|\.|$)/i,
     /(?:fly(?:\s+back|\s+home)|return(?:\s+home)?|head(?:\s+)?back)\s+(?:from|via|out of)\s+(.+?)(?:\s+back|\s+to|\s+and|\s*,|\.|$)/i,
     /(?:from)\s+(.+?)\s+(?:back|home)\s+to\s+(?:the\s+)?(?:united states|u\.?s\.?|america)/i,
     /(?:then\s+)?(?:fly|go)\s+(?:back|home)\s+(?:from|via)\s+(.+?)(?:\s+back|\s+to|\s*,|\.|$)/i,
@@ -305,6 +335,7 @@ function parseOrigin(lower: string): ParsedOrigin | null {
   const normalized = stripOriginParseNoise(lower);
   const stripped = normalized
     .replace(/^i\s+(want|wanna|would like|'d like)\s+to\s+(go\s+)?/i, "")
+    .replace(/^i\s+(want|wanna|would like|'d like)\s+(a\s+)?flight\s+to\s+(go\s+)?/i, "")
     .replace(/^plan\s+(a\s+)?trip\s+/i, "")
     .trim();
 
@@ -341,25 +372,28 @@ function parseOrigin(lower: string): ParsedOrigin | null {
   return null;
 }
 
-function parseStopNights(lower: string, stopKey: string): { nights?: number; nightsLabel?: string } {
+function parseStopNights(lower: string, stopKey: string, segmentStart = 0, segmentEnd?: number): { nights?: number; nightsLabel?: string } {
+  const segment = lower.slice(segmentStart, segmentEnd ?? lower.length);
   const num = `(\\d+|${Object.keys(WORD_NUMBERS).join("|")})`;
   const patterns = [
+    new RegExp(`${num}\\s*(?:or|to|-)\\s*${num}?\\s*nights?`, "i"),
+    new RegExp(`(?:stay(?:ing)?(?:\\s+there)?\\s+for\\s+)${num}\\s*(?:or|to|-)?\\s*${num}?\\s*nights?`, "i"),
     new RegExp(`${num}\\s*(?:or|to|-)\\s*${num}?\\s*days?\\s*(?:in|at|around|near)?\\s*${stopKey}`, "i"),
     new RegExp(`${num}\\s*days?\\s*(?:in|at|around|near)?\\s*${stopKey}`, "i"),
-    new RegExp(`${stopKey}[^.]{0,40}?${num}\\s*(?:or|to|-)\\s*${num}?\\s*days?`, "i"),
-    new RegExp(`(?:spend|staying)\\s*${num}\\s*(?:or|to|-)\\s*${num}?\\s*days?[^.]{0,30}?${stopKey}`, "i"),
+    new RegExp(`${stopKey}[^.]{0,60}?${num}\\s*(?:or|to|-)\\s*${num}?\\s*(?:nights?|days?)`, "i"),
+    new RegExp(`(?:spend|staying)\\s*${num}\\s*(?:or|to|-)\\s*${num}?\\s*(?:nights?|days?)[^.]{0,30}?${stopKey}`, "i"),
   ];
 
   for (const pattern of patterns) {
-    const match = lower.match(pattern);
+    const match = segment.match(pattern);
     if (!match) continue;
     const low = parseDayToken(match[1] ?? "");
     const high = match[2] ? parseDayToken(match[2]) : null;
     if (low === null) continue;
     if (high !== null && high !== low) {
-      return { nights: Math.round((low + high) / 2), nightsLabel: `${low}–${high} days` };
+      return { nights: Math.round((low + high) / 2), nightsLabel: `${low}–${high} nights` };
     }
-    return { nights: low, nightsLabel: `${low} days` };
+    return { nights: low, nightsLabel: `${low} nights` };
   }
   return {};
 }
@@ -373,14 +407,20 @@ function parseStops(lower: string): TripStop[] {
   found.sort((a, b) => a.index - b.index);
 
   const uniqueKeys: string[] = [];
+  const uniqueIndexes: number[] = [];
   for (const item of found) {
-    if (!uniqueKeys.includes(item.key)) uniqueKeys.push(item.key);
+    if (!uniqueKeys.includes(item.key)) {
+      uniqueKeys.push(item.key);
+      uniqueIndexes.push(item.index);
+    }
   }
 
-  return uniqueKeys.map((key) => {
+  return uniqueKeys.map((key, index) => {
     const dest = DESTINATION_MAP[key]!;
     const alias = Object.entries(STOP_ALIASES).find(([, v]) => v === key)?.[0] ?? key;
-    const duration = parseStopNights(lower, alias);
+    const segmentStart = uniqueIndexes[index] ?? 0;
+    const segmentEnd = uniqueIndexes[index + 1] ?? lower.length;
+    const duration = parseStopNights(lower, alias, segmentStart, segmentEnd);
     return {
       name: dest.city,
       region: dest.region,
@@ -414,6 +454,22 @@ function parseLoyalty(lower: string): { programs: string[]; airlines: string[] }
   return { programs, airlines };
 }
 
+function parseInstrumentHints(lower: string): { wantsAlaskaUpgrade: boolean; hints: string[] } {
+  const hints: string[] = [];
+  const mentionsUpgrade =
+    /upgrade\s*(?:cert(?:ificate)?|certificate)|guest\s*upgrade|apply\s*(?:my|an?)\s*upgrade/i.test(lower);
+  const mentionsAlaska = /alaska|as\s*(?:mvp|gold|75k|100k)/i.test(lower);
+
+  if (mentionsUpgrade && mentionsAlaska) {
+    hints.push("Alaska Guest Upgrade Certificate");
+    return { wantsAlaskaUpgrade: true, hints };
+  }
+  if (mentionsUpgrade) {
+    hints.push("Upgrade certificate");
+  }
+  return { wantsAlaskaUpgrade: false, hints };
+}
+
 function parseBudgetHint(lower: string): string | undefined {
   const rangeMatch = lower.match(/\$\s*([\d,]+)\s*(?:to|-)\s*\$\s*([\d,]+)/);
   if (rangeMatch) {
@@ -429,24 +485,39 @@ function parseBudgetHint(lower: string): string | undefined {
 }
 
 export function parseTripIntent(rawPrompt: string, referenceDate = new Date()): TripIntent {
-  const lower = rawPrompt.toLowerCase().trim();
+  // Normalize common voice/typing errors before parsing
+  const cleanPrompt = rawPrompt
+    .replace(/\bfky\b/gi, "fly").replace(/\bflky\b/gi, "fly")
+    .replace(/\bwnat\b/gi, "want").replace(/\bfomr\b/gi, "from")
+    .replace(/\bform\b/gi, "from").replace(/\badn\b/gi, "and");
+  const lower = cleanPrompt.toLowerCase().trim();
   const stops = parseStops(lower);
-  const origin = parseOrigin(lower);
+  let origin = parseOrigin(lower);
   const returnPlace = parseReturn(lower);
+  if (!origin && returnPlace) {
+    origin = returnPlace;
+  }
   const loyalty = parseLoyalty(lower);
   const budgetHint = parseBudgetHint(lower);
+  const instrument = parseInstrumentHints(lower);
 
   let destinationKey = "italy";
+  let destinationInferredDefault = false;
   if (stops.length > 0) {
     const last = stops[stops.length - 1]!;
     destinationKey =
       Object.entries(DESTINATION_MAP).find(([, d]) => d.city === last.name)?.[0] ?? "italy";
   } else {
+    destinationKey = "";
     for (const key of Object.keys(DESTINATION_MAP)) {
       if (lower.includes(key)) {
         destinationKey = key;
         break;
       }
+    }
+    if (!destinationKey) {
+      destinationKey = "italy";
+      destinationInferredDefault = true;
     }
   }
 
@@ -496,6 +567,7 @@ export function parseTripIntent(rawPrompt: string, referenceDate = new Date()): 
     destination: stops.length > 1 ? `${primaryLabel} + ${stops.length - 1} more` : primaryLabel,
     destinationIata: primaryIata,
     region: primaryRegion,
+    destinationInferredDefault: destinationInferredDefault || undefined,
     monthLabel,
     startDate,
     endDate,
@@ -512,6 +584,8 @@ export function parseTripIntent(rawPrompt: string, referenceDate = new Date()): 
     preferredAirlines: loyalty.airlines.length > 0 ? loyalty.airlines : undefined,
     budgetHint,
     isMultiCity: stops.length > 1,
+    wantsAlaskaUpgrade: instrument.wantsAlaskaUpgrade || undefined,
+    instrumentHints: instrument.hints.length > 0 ? instrument.hints : undefined,
   };
 }
 
@@ -539,4 +613,4 @@ export function buildInferredSummary(intent: TripIntent, searchAirports: string[
   return `${originPart}${intent.destination}${returnPart}, ${intent.monthLabel} ${intent.startDate.slice(0, 4)} · ${intent.nights} nights · Searching ${airportList}`;
 }
 
-export const RECORD_TRIP_EXAMPLE = `West Coast to Bari, then Venice, Dolomites, and Germany — fly home from Munich in September. Alaska MVP Gold.`;
+export const RECORD_TRIP_EXAMPLE = `Trip between September 1 and September 25. Fly from Ontario to Rome — stay 5 nights. Then Venice 4 nights, Dolomites 5 nights, Munich 3–4 nights. Fly home to Ontario. Alaska MVP Gold.`;

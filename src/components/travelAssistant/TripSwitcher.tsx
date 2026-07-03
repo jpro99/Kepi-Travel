@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ShareModal } from "@/components/travelAssistant/ShareModal";
+import { formatTripDateRange, formatTripListTitle } from "@/lib/travelAssistant/tripListDisplay";
 
 export interface TripSwitcherItem {
   id: string;
@@ -9,6 +10,7 @@ export interface TripSwitcherItem {
   destination: string;
   startDate: string;
   endDate: string;
+  reservationCount?: number;
 }
 
 interface TripSwitcherProps {
@@ -16,6 +18,7 @@ interface TripSwitcherProps {
   activeTripId: string | null;
   onSwitchTrip: (tripId: string) => Promise<void> | void;
   onCreateTrip: () => Promise<void> | void;
+  onManageTrips?: () => void;
   disabled?: boolean;
   creating?: boolean;
   canCreateTrip?: boolean;
@@ -23,17 +26,12 @@ interface TripSwitcherProps {
   createDisabledMessage?: string;
 }
 
-function formatTripDateRange(startDate: string, endDate: string): string {
-  const start = startDate?.trim() || "unknown";
-  const end = endDate?.trim() || "unknown";
-  return `${start} - ${end}`;
-}
-
 export function TripSwitcher({
   trips,
   activeTripId,
   onSwitchTrip,
   onCreateTrip,
+  onManageTrips,
   disabled = false,
   creating = false,
   canCreateTrip = true,
@@ -48,16 +46,31 @@ export function TripSwitcher({
     [activeTripId, trips],
   );
 
+  const activeLabel = activeTrip
+    ? formatTripListTitle({
+        name: activeTrip.name,
+        destination: activeTrip.destination,
+        startDate: activeTrip.startDate,
+        endDate: activeTrip.endDate,
+      })
+    : "Trips";
+
   return (
     <div className="relative flex items-center gap-2">
       <button
         type="button"
         disabled={disabled}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          if (onManageTrips) {
+            onManageTrips();
+            return;
+          }
+          setOpen((value) => !value);
+        }}
         className="inline-flex min-w-56 items-center justify-between gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-xs font-semibold text-slate-800 shadow-sm hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
       >
         <span className="truncate">
-          {activeTrip ? `${activeTrip.name} • ${activeTrip.destination}` : "Select trip"}
+          {trips.length > 0 ? `Trips (${trips.length}) · ${activeLabel}` : "Trips"}
         </span>
         <span aria-hidden>▾</span>
       </button>
@@ -70,7 +83,7 @@ export function TripSwitcher({
         Share Trip
       </button>
 
-      {open ? (
+      {open && !onManageTrips ? (
         <div className="absolute left-0 top-[calc(100%+0.4rem)] z-30 w-80 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">
           <ul className="max-h-80 overflow-y-auto p-2">
             {trips.length > 0 ? (
@@ -90,10 +103,20 @@ export function TripSwitcher({
                           : "hover:bg-slate-100 dark:hover:bg-slate-800"
                       }`}
                     >
-                      <p className="truncate font-semibold">{trip.name}</p>
+                      <p className="truncate font-semibold">
+                        {formatTripListTitle({
+                          name: trip.name,
+                          destination: trip.destination,
+                          startDate: trip.startDate,
+                          endDate: trip.endDate,
+                        })}
+                      </p>
                       <p className="truncate text-[11px] text-slate-600 dark:text-slate-300">{trip.destination}</p>
                       <p className="text-[11px] text-slate-500 dark:text-slate-400">
                         {formatTripDateRange(trip.startDate, trip.endDate)}
+                        {typeof trip.reservationCount === "number"
+                          ? ` · ${trip.reservationCount} booking${trip.reservationCount === 1 ? "" : "s"}`
+                          : ""}
                       </p>
                     </button>
                   </li>
@@ -119,7 +142,7 @@ export function TripSwitcher({
               disabled={disabled || creating}
               className="w-full rounded-lg bg-cyan-500 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {creating ? "Creating trip…" : canCreateTrip ? "New Trip" : "Plan new trip"}
+              {creating ? "Opening…" : canCreateTrip ? "Plan new trip" : "Plan new trip"}
             </button>
             {!canCreateTrip && createDisabledMessage ? (
               <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">

@@ -45,6 +45,12 @@ const nextConfig: NextConfig = {
   ...(isCapacitorBuild ? { output: "export" as const } : {}),
   images: {
     formats: ["image/avif", "image/webp"],
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+      },
+    ],
     ...(isCapacitorBuild ? { unoptimized: true } : {}),
   },
   experimental: {

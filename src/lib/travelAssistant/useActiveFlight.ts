@@ -21,6 +21,8 @@ import {
   getLoungesForAirport,
 } from "@/lib/travelAssistant/airlineStatus";
 import type { TravelProfile } from "@/app/api/travel-profile/route";
+import { evaluateLoungeEligibility, listLoungesForAirport } from "@/lib/airportNav/loungeRules";
+import { matchAirlineStatusForFlight } from "@/lib/travelAssistant/syncTravelBenefits";
 
 export interface FlightReservation {
   id: string;
@@ -206,17 +208,37 @@ export function useNavigatorCredentials(): {
   return { credentials, profile, saveCredentials };
 }
 
-/** Lounge names this traveler can access at an airport via airline status. */
+/** Lounge names this traveler can access at an airport via status or card wallet. */
 export function deriveEligibleLounges(
   profile: TravelProfile | null,
   airlineHint: string,
   iata: string,
 ): string[] {
-  const status = profile?.airlineStatuses?.[0];
-  if (!status || !iata) return [];
-  const program = findProgram(status.airline) ?? findProgram(airlineHint);
-  if (!program) return [];
-  const tier = findTier(program, status.tier);
-  if (!tier?.loungeAccess) return [];
-  return getLoungesForAirport(program, iata).map((lounge) => lounge.name);
+  if (!iata) return [];
+  const names = new Set<string>();
+
+  const status = matchAirlineStatusForFlight(profile, airlineHint);
+  if (status) {
+    const program = findProgram(status.airline) ?? findProgram(airlineHint);
+    const tier = program ? findTier(program, status.tier) : null;
+    if (tier?.loungeAccess && program) {
+      for (const lounge of getLoungesForAirport(program, iata)) names.add(lounge.name);
+    }
+  }
+
+  if (profile?.paymentCards?.length) {
+    const credentials = {
+      tsaPreCheck: Boolean(profile.tsa_precheck || profile.global_entry),
+      clear: Boolean(profile.clear),
+      paymentCards: profile.paymentCards,
+    };
+    const rules = listLoungesForAirport(iata);
+    for (const entry of evaluateLoungeEligibility(iata, credentials, airlineHint)) {
+      if (!entry.eligible) continue;
+      const rule = rules.find((r) => r.loungeId === entry.loungeId);
+      names.add(rule?.name ?? entry.loungeId);
+    }
+  }
+
+  return [...names];
 }

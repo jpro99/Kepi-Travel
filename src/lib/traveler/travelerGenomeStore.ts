@@ -6,12 +6,21 @@ import type { GenomeCorrection, TravelerGenome } from "@/lib/traveler/types";
 const GENOME_KEY = "traveler-genome";
 
 export async function getTravelerGenome(userId?: string): Promise<TravelerGenome> {
-  const existing = await kvStoreGet<TravelerGenome>(GENOME_KEY, { userId });
-  if (existing) return existing;
+  try {
+    // 3s timeout — if Redis hangs, fall back to sample genome immediately
+    const existing = await Promise.race([
+      kvStoreGet<TravelerGenome>(GENOME_KEY, { userId }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 3_000)),
+    ]);
+    if (existing) return existing;
+  } catch {
+    // Redis unavailable — use sample genome
+  }
 
   const namespace = userId?.trim() || "anonymous";
   const seeded = createSampleGenome(namespace);
-  await kvStoreSet(GENOME_KEY, seeded, { userId });
+  // Best-effort save — don't block on this
+  kvStoreSet(GENOME_KEY, seeded, { userId }).catch(() => {});
   return seeded;
 }
 

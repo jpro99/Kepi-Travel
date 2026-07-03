@@ -33,6 +33,26 @@ test("Italy without stated origin flags originRequired not SoCal airports", () =
   assert.equal(brief.searchAirports.includes("SNA"), false);
 });
 
+test("Alaska status saved on genome triggers Alaska Hometown Play without the prompt mentioning loyalty", () => {
+  const genome = createSampleGenome("test-user-genome-alaska"); // sampleGenome includes Alaska MVP Gold status
+  const brief = buildDecisionBrief("fly from San Francisco to Rome in October", genome);
+  const reposition = brief.strategies.find((s) => s.kind === "reposition_award");
+  assert.ok(reposition, "expected a reposition_award strategy from genome-saved Alaska status alone");
+  assert.equal(reposition?.title, "Alaska Hometown Play");
+});
+
+test("flights from Beaumont with no destination flags destinationRequired, not silent Italy", () => {
+  const genome = createSampleGenome("test-user-no-dest");
+  const brief = buildDecisionBrief(
+    "I want to fly from beaumont ca on September 1st and I have Alaska Gold",
+    genome,
+    { planMode: "flights" },
+  );
+  assert.equal(brief.destinationRequired, true);
+  assert.equal(brief.strategies.length, 0);
+  assert.equal(brief.originRequired, undefined);
+});
+
 test("returns up to 3 flight strategies in flights plan mode", () => {
   const genome = createSampleGenome("test-user");
   const brief = buildDecisionBrief("Beaumont California to Italy in September", genome, { planMode: "flights" });

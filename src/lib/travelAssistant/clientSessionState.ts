@@ -32,11 +32,23 @@ export interface SessionReservation {
   flightArrivalTerminal?: string;
   checkOutDate?: string;
   roomType?: string;
+  /** City searched when saved from Kepi hotel search. */
+  hotelSearchCity?: string;
   /** Planned leg from Command Deck — not a real confirmation yet. */
   plannedOnly?: boolean;
   /** Where to purchase (airline, Google Flights, Seats.aero). */
   bookUrl?: string;
   quotedPriceUsd?: number;
+  quotedPointsMiles?: number;
+  quotedMilesEarned?: number;
+  pointsProgram?: string;
+  /** Forwarded confirmation metadata */
+  sourceEmailId?: string;
+  sourceEmailSubject?: string;
+  originalEmailText?: string;
+  hasPdfAttachment?: boolean;
+  manageUrl?: string;
+  sourceLinks?: Array<{ label: string; url: string; kind: string }>;
 }
 
 export interface SessionReviewItem {
@@ -52,6 +64,10 @@ export interface SessionReviewItem {
   originalEmailText?: string;
   hasPdfAttachment?: boolean;
   imageBasedEmail?: boolean;
+  sourceEmailId?: string;
+  sourceEmailSubject?: string;
+  manageUrl?: string;
+  sourceLinks?: Array<{ label: string; url: string; kind: string }>;
   reviewStatus?: "pending" | "incomplete";
   parserNotes?: string[];
 }

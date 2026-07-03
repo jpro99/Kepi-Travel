@@ -17,6 +17,8 @@ export interface AdminHealthResponse {
     inngest: AdminSystemServiceHealth;
     aviationStack: AdminSystemServiceHealth;
     sentry: AdminSystemServiceHealth;
+    duffel: AdminSystemServiceHealth;
+    seatsAero: AdminSystemServiceHealth;
   };
 }
 

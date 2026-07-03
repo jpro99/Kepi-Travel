@@ -3,6 +3,7 @@ import {
   estimateAwardMiles,
   formatDateShiftLabel,
 } from "@/lib/decision/awardFlexEstimate";
+import { resolveCashBookUrl } from "@/lib/decision/bookingLinks";
 import type { StrategyFlexOption, StrategyKind, TravelStrategy, TripIntent } from "@/lib/decision/types";
 import {
   DEFAULT_DATE_SHIFTS,
@@ -189,25 +190,32 @@ async function buildDirectCashOptions(
   intent: TripIntent,
   searchAirports: string[],
   dateShifts: readonly number[] = DEFAULT_DATE_SHIFTS,
+  cabinClass: "economy" | "premium_economy" | "business" | "first" = "business",
 ): Promise<StrategyFlexOption[]> {
   const baseDate = intent.startDate;
   const hotelCash = hotelCashFromStrategy(strategy);
   const baselineCash = strategy.scores.trueOutOfPocket;
-  const cabin = strategy.segments.some((s) => s.detail.includes("premium"))
-    ? "premium_economy"
-    : "economy";
 
   const quotes = await searchDuffelAcrossDates({
-    origins: searchAirports.slice(0, 3),
+    origins: searchAirports.slice(0, 6),
     destination: intent.destinationIata,
     baseDepartureDate: baseDate,
-    cabinClass: cabin,
+    cabinClass,
     dateShifts,
   });
 
   const candidates: StrategyFlexOption[] = quotes.map((q) => {
     const trueOutOfPocket = Math.round(q.totalAmountUsd + hotelCash);
     const stopLabel = q.stops === 0 ? "nonstop" : `${q.stops} stop${q.stops > 1 ? "s" : ""}`;
+    const book = resolveCashBookUrl({
+      origin: q.origin,
+      destination: q.destination,
+      departureDate: q.departureDate,
+      airline: q.airline,
+      offerId: q.offerId,
+      quotedPriceUsd: q.totalAmountUsd,
+      flightNumber: q.flightNumber,
+    });
     return {
       rank: 0,
       departureDate: q.departureDate,
@@ -220,6 +228,12 @@ async function buildDirectCashOptions(
       detail: `${q.airline} · live Duffel ${q.cabinClass} · $${q.totalAmountUsd.toLocaleString()} fare`,
       savingsVsBaseline:
         q.dateShiftDays === 0 ? undefined : Math.round(baselineCash - trueOutOfPocket),
+      originIata: q.origin,
+      destinationIata: q.destination,
+      airline: q.airline,
+      offerId: q.offerId,
+      bookUrl: book.url,
+      bookLabel: book.label,
     };
   });
 
@@ -310,12 +324,13 @@ export async function buildStrategyFlexOptions(input: {
   intent: TripIntent;
   searchAirports: string[];
   dateFlexDays?: DateFlexDays;
+  cabinClass?: "economy" | "premium_economy" | "business" | "first";
 }): Promise<{
   options: StrategyFlexOption[];
   baselineDate: string;
   notice: string;
 }> {
-  const { strategy, kind, intent, searchAirports, dateFlexDays } = input;
+  const { strategy, kind, intent, searchAirports, dateFlexDays, cabinClass = "business" } = input;
   const dateShifts = dateFlexDays ? DATE_FLEX_SHIFTS[dateFlexDays] : DEFAULT_DATE_SHIFTS;
 
   let options: StrategyFlexOption[];
@@ -330,11 +345,11 @@ export async function buildStrategyFlexOptions(input: {
           : "Top 3 by lowest true cost. Feeder fares are live Duffel; partner award miles are date-modeled — verify on Seats.aero before booking.";
       break;
     case "direct_cash":
-      options = await buildDirectCashOptions(strategy, intent, searchAirports, dateShifts);
+      options = await buildDirectCashOptions(strategy, intent, searchAirports, dateShifts, cabinClass);
       notice =
         dateFlexDays && dateFlexDays > 3
-          ? `Expert flex ±${dateFlexDays} days — live Duffel cash across the window.`
-          : "All fares below are live Duffel cash quotes across nearby dates.";
+          ? `Expert flex ±${dateFlexDays} days — live Duffel ${cabinClass.replace("_", " ")} across nearby airports.`
+          : `Live Duffel ${cabinClass.replace("_", " ")} from ${searchAirports.slice(0, 6).join(", ")} across nearby dates. Tap Book to purchase.`;
       break;
     default:
       options = await buildInstrumentOrStatusOptions(strategy, intent, searchAirports, dateShifts);

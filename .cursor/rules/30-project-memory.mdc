@@ -1,0 +1,30 @@
+---
+description: Persistent project memory — read before advice on providers, setup steps, or repeated user context
+globs:
+alwaysApply: true
+---
+
+# Project memory (required)
+
+Before telling the user to sign up, email support, or redo a setup step:
+
+1. **Read** `KEPI_PROJECT_MEMORY.md` at the repo root
+2. **Do not repeat** actions already recorded there (e.g. Duffel Stays emails already sent)
+3. **Update** that file when the user states a durable fact, decision, or completed external step
+
+## Auto-push (Jeff, 2026-06-15)
+
+After **implementing** code (not discuss-only replies): run `npm run lint` and `npm run build`. If clean, **commit and push to `main` immediately** — never ask "should I push?" Production: kepitravel.com (Vercel).
+
+## Two kinds of memory
+
+| Kind | Where | For |
+|------|-------|-----|
+| **Project memory** | `KEPI_PROJECT_MEMORY.md` | Agents + Jeff — provider status, decisions, what's done |
+| **App user memory** | Redis via `/api/hotels/profile`, `hotelMemory`, traveler genome | End users of kepitravel.com — stay style, loyalty, learned picks |
+
+Do not confuse them. End-user hotel profile does not store "Jeff emailed Duffel."
+
+## Domain bots
+
+Specialist playbooks: `.cursor/skills/kepi-*-bot/SKILL.md` and `kepi-conductor`. Route hotel work to hotel bot skill; do not re-explain bot architecture from scratch if memory file is current.

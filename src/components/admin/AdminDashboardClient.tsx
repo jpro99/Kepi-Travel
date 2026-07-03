@@ -5,6 +5,7 @@ import { ActiveUsersCard } from "@/components/admin/ActiveUsersCard";
 import { ApiUsageCard } from "@/components/admin/ApiUsageCard";
 import { BackgroundJobsCard } from "@/components/admin/BackgroundJobsCard";
 import { InsightsCard } from "@/components/admin/InsightsCard";
+import { HotelBookingEconomicsCard } from "@/components/admin/HotelBookingEconomicsCard";
 import { RecentAlertsCard } from "@/components/admin/RecentAlertsCard";
 import { SystemHealthCard } from "@/components/admin/SystemHealthCard";
 import { openSupportChat } from "@/components/support/SupportChat";
@@ -404,7 +405,10 @@ export function AdminDashboardClient() {
           </div>
         </div>
       ) : activeTab === "insights" ? (
-        <InsightsCard insights={stats?.insights ?? null} loading={loadingStats} />
+        <div className="space-y-4">
+          <HotelBookingEconomicsCard />
+          <InsightsCard insights={stats?.insights ?? null} loading={loadingStats} />
+        </div>
       ) : activeTab === "users" ? (
         <section className="space-y-3 rounded-2xl border border-slate-200 bg-white/90 p-4 dark:border-slate-700 dark:bg-slate-900/70">
           <div className="flex items-center justify-between gap-3">

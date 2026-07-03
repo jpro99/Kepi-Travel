@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { trackServerEvent } from "@/lib/analytics/trackServerEvent";
 import { getStripeClient } from "@/lib/billing/stripeClient";
+import { fulfillHotelCheckoutFromStripeSession } from "@/lib/hotels/fulfillHotelBooking";
 import {
   getStripeCustomerOwner,
   getSubscriptionRecord,
@@ -15,10 +16,33 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 async function handleCheckoutCompleted(
-  _stripe: Stripe,
+  stripe: Stripe,
   session: Stripe.Checkout.Session,
   webhookLogger: ReturnType<typeof logger.withContext>,
 ): Promise<void> {
+  if (session.metadata?.kind === "hotel") {
+    try {
+      await fulfillHotelCheckoutFromStripeSession(session);
+      webhookLogger.info("Hotel checkout fulfilled from Stripe webhook.", {
+        sessionId: session.id,
+        userId: session.metadata?.userId,
+      });
+    } catch (error) {
+      webhookLogger.error(
+        "Hotel checkout fulfillment failed.",
+        error instanceof Error ? error : undefined,
+        { sessionId: session.id },
+      );
+      throw error;
+    }
+    return;
+  }
+
+  if (session.mode !== "subscription") {
+    webhookLogger.info("Ignoring non-subscription checkout session.", { mode: session.mode });
+    return;
+  }
+
   const userId = session.client_reference_id ?? session.metadata?.userId ?? null;
   if (!userId) {
     webhookLogger.warn("Stripe checkout session completed without a user id.");

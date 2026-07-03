@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0b1f3a" />
+  <title>Kepi Bot Deck</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="top">
+    <div>
+      <p class="eyebrow">Local only · not kepitravel.com</p>
+      <h1>🎯 Kepi Bot Deck</h1>
+    </div>
+    <button type="button" id="refreshBtn" class="icon-btn" title="Refresh">↻</button>
+  </header>
+
+  <section class="phones" id="phoneUrls"></section>
+
+  <nav class="tabs" role="tablist">
+    <button type="button" class="tab active" data-tab="dashboard">Bots</button>
+    <button type="button" class="tab" data-tab="instruct">Instruct</button>
+    <button type="button" class="tab" data-tab="tasks">Tasks</button>
+    <button type="button" class="tab" data-tab="messages">Messages</button>
+    <button type="button" class="tab" data-tab="memory">Memory</button>
+  </nav>
+
+  <main>
+    <section id="panel-dashboard" class="panel active"></section>
+    <section id="panel-instruct" class="panel">
+      <form id="instructForm" class="card">
+        <label>Send to bot</label>
+        <select id="instructBot" name="bot"></select>
+        <label>Instruction</label>
+        <textarea id="instructText" rows="4" placeholder="e.g. Wire LiteAPI booking — do not touch flights tab"></textarea>
+        <label>Credit / scope note (optional)</label>
+        <input id="creditNote" type="text" placeholder="e.g. small diff only, no refactor" />
+        <button type="submit" class="primary">Assign task</button>
+        <p id="cursorPrompt" class="cursor-prompt hidden"></p>
+      </form>
+    </section>
+    <section id="panel-tasks" class="panel"></section>
+    <section id="panel-messages" class="panel"></section>
+    <section id="panel-memory" class="panel">
+      <div class="card">
+        <label>Bot memory file</label>
+        <select id="memoryBot"></select>
+        <textarea id="memoryEditor" rows="14"></textarea>
+        <div class="row">
+          <button type="button" id="saveMemory" class="primary">Save memory</button>
+          <button type="button" id="appendNote" class="secondary">Append note only</button>
+        </div>
+      </div>
+      <details class="card">
+        <summary>Project memory (master)</summary>
+        <pre id="projectMemory" class="pre"></pre>
+      </details>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -16,9 +16,11 @@ Production: **https://kepitravel.com** (Vercel + Cloudflare DNS)
 npm run verify:ship
 ```
 
-Runs MapLibre worker copy → `npm run build` → `npm run test:adapters`.
+Runs design-law index check → `test:laws` → MapLibre worker copy → `npm run build` → `test:adapters`.
 
-GitHub Actions `.github/workflows/ci.yml` runs the same build + tests on every push/PR to `main`.
+Design-law tests also run automatically via `prebuild` on every production build.
+
+GitHub Actions `.github/workflows/ci.yml` runs the same bundle on every push/PR to `main`.
 
 ## Cost control
 

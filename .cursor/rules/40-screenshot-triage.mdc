@@ -1,0 +1,41 @@
+---
+description: Mandatory triage when the user posts a screenshot or map image — read before any fix
+globs:
+alwaysApply: true
+---
+
+# Screenshot & map triage (required)
+
+When the user attaches a **screenshot, map image, or UI photo** (with or without text):
+
+## Step 1 — Describe what you see (before coding)
+
+In your first response, explicitly list:
+
+1. **Primary defect** — what is wrong in the image (e.g. hotel pins in the ocean, zero results, wrong city)
+2. **Secondary issues** — anything else visible (slider, price labels, empty state copy)
+3. **Search context** — city, dates, mode (Cash / Points / Map) if readable
+
+Do **not** assume the user's message is only about a prior thread topic. **The image is the source of truth.**
+
+## Step 2 — Map images: hotel pin checklist (H1 / M2)
+
+If a hotel stay map is visible, verify and fix if needed:
+
+- [ ] Pins are **on land**, not in ocean/water (Polignano, Monopoli, Amalfi, Positano are regression cities)
+- [ ] Pins are **near the searched town**, not scattered across the region
+- [ ] Price labels on pins match live-rate rules (H10)
+- [ ] Map legend / slider / Refine are secondary — **never fix only the slider when pins are in the water**
+
+Relevant code: `src/lib/hotels/hotelGeo.ts` (`isLikelyOffshorePin`), `src/lib/hotels/hotelCoordinates.ts`, `KEPI_DESIGN_LAW.md` H1 + M2.
+
+## Step 3 — Fix order
+
+1. Data correctness (coords, prices, filters, zero results)
+2. UX copy / empty states
+3. Chrome (slider, buttons) — only after (1) is addressed or explicitly not shown in the image
+
+## Step 4 — After fix
+
+- Add or update a test in `src/lib/hotels/__tests__/` for the regression city shown in the screenshot when applicable
+- Append one line to `KEPI_PROJECT_MEMORY.md` if this was a repeated failure mode

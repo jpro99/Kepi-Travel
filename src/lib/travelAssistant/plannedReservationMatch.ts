@@ -1,4 +1,5 @@
 import { isPlaceholderConfirmation } from "@/lib/travelAssistant/placeholderReservations";
+import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
 
 export interface PlannedMatchableReservation {
   id?: string;
@@ -16,12 +17,18 @@ export interface PlannedMatchableReservation {
   checkOutDate?: string;
   bookUrl?: string;
   quotedPriceUsd?: number;
+  quotedPointsMiles?: number;
+  quotedMilesEarned?: number;
+  pointsProgram?: string;
   notes?: string;
   source?: string;
 }
 
 export function isPlannedReservation(reservation: PlannedMatchableReservation): boolean {
   if (reservation.plannedOnly === true) return true;
+  if (reservation.type === "flight" || reservation.type === "hotel") {
+    return isPlaceholderConfirmation(reservation.confirmationCode);
+  }
   const code = reservation.confirmationCode?.trim().toUpperCase() ?? "";
   return code === "PLANNED";
 }
@@ -126,7 +133,16 @@ export function mergeIncomingOverPlanned<T extends PlannedMatchableReservation>(
     id: planned.id,
     plannedOnly: false,
     bookUrl: planned.bookUrl ?? incoming.bookUrl ?? extractBookUrlFromNotes(planned.notes),
-    quotedPriceUsd: incoming.quotedPriceUsd ?? planned.quotedPriceUsd,
+    quotedPriceUsd:
+      incoming.quotedPriceUsd ??
+      planned.quotedPriceUsd ??
+      resolveReservationCashUsd({
+        notes: incoming.notes ?? planned.notes,
+        originalEmailText: (incoming as { originalEmailText?: string }).originalEmailText,
+      }),
+    quotedPointsMiles: incoming.quotedPointsMiles ?? planned.quotedPointsMiles,
+    quotedMilesEarned: incoming.quotedMilesEarned ?? planned.quotedMilesEarned,
+    pointsProgram: incoming.pointsProgram ?? planned.pointsProgram,
     confirmationCode:
       incoming.confirmationCode?.trim() && !isPlaceholderConfirmation(incoming.confirmationCode)
         ? incoming.confirmationCode

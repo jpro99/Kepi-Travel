@@ -69,6 +69,17 @@ function OptionCard({ option }: { option: StrategyFlexOption }) {
           Verify award on Seats.aero →
         </a>
       )}
+
+      {option.bookUrl && (
+        <a
+          href={option.bookUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-950/40 py-2.5 text-sm font-bold text-emerald-200 hover:bg-emerald-900/50"
+        >
+          {option.bookLabel ?? "Book this fare ↗"}
+        </a>
+      )}
     </article>
   );
 }

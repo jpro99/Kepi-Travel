@@ -88,6 +88,17 @@ function reservationDayKeys(r: TimelinePlanReservation): string[] {
   return key ? [key] : [];
 }
 
+function enumerateDayKeys(tripStart: string, tripEnd: string): string[] {
+  const keys: string[] = [];
+  const cursor = new Date(`${tripStart}T12:00:00`);
+  const endMs = new Date(`${tripEnd}T12:00:00`).getTime();
+  while (cursor.getTime() <= endMs) {
+    keys.push(cursor.toISOString().slice(0, 10));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return keys;
+}
+
 /** Only days that actually have plans — no empty “free day” filler. */
 export function buildCompactTimelineDayKeys(
   reservations: TimelinePlanReservation[],
@@ -98,16 +109,30 @@ export function buildCompactTimelineDayKeys(
   for (const r of reservations) {
     for (const key of reservationDayKeys(r)) keys.add(key);
   }
-  const tripStart = tripStartDate?.slice(0, 10);
-  const tripEnd = tripEndDate?.slice(0, 10);
-  if (tripStart) keys.add(tripStart);
-  if (tripEnd) keys.add(tripEnd);
+
+  if (keys.size === 0) return [];
 
   let sorted = [...keys].sort();
+  const tripStart = tripStartDate?.slice(0, 10);
+  const tripEnd = tripEndDate?.slice(0, 10);
   if (tripStart && tripEnd) {
     sorted = sorted.filter((key) => key >= tripStart && key <= tripEnd);
   }
   return sorted;
+}
+
+/** Every calendar day in the trip window — used for itinerary planning with visible gaps. */
+export function buildFullTripDayKeys(
+  tripStartDate?: string | null,
+  tripEndDate?: string | null,
+  reservations: TimelinePlanReservation[] = [],
+): string[] {
+  const tripStart = tripStartDate?.slice(0, 10);
+  const tripEnd = tripEndDate?.slice(0, 10);
+  if (tripStart && tripEnd && tripStart <= tripEnd) {
+    return enumerateDayKeys(tripStart, tripEnd);
+  }
+  return buildCompactTimelineDayKeys(reservations, tripStartDate, tripEndDate);
 }
 
 export function deriveTripDateRangeFromReservations(

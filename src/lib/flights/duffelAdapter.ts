@@ -20,10 +20,25 @@ function segmentFromQuote(
       destination: quote.destination,
       departingAt: `${quote.departureDate}T${String(departHour).padStart(2, "0")}:00:00Z`,
       arrivingAt: `${quote.departureDate}T${String(arriveHour).padStart(2, "0")}:00:00Z`,
-      marketingCarrier: quote.airline.slice(0, 2).toUpperCase() || "XX",
+      marketingCarrier: carrierIataFromAirline(quote.airline),
       flightNumber: quote.flightNumber ?? "—",
     },
   ];
+}
+
+function carrierIataFromAirline(airline: string): string {
+  const lower = airline.toLowerCase();
+  if (lower.includes("alaska")) return "AS";
+  if (lower.includes("american")) return "AA";
+  if (lower.includes("united")) return "UA";
+  if (lower.includes("delta")) return "DL";
+  if (lower.includes("jetblue")) return "B6";
+  if (lower.includes("southwest")) return "WN";
+  if (lower.includes("british")) return "BA";
+  if (lower.includes("lufthansa")) return "LH";
+  if (lower.includes("air france")) return "AF";
+  if (lower.includes("ita")) return "AZ";
+  return airline.slice(0, 2).toUpperCase() || "XX";
 }
 
 /** Wraps existing Command Deck Duffel search — maps quotes to v2 CashOffer. */
@@ -48,5 +63,6 @@ export async function fetchDuffelCashOffers(params: FusedSearchParams): Promise<
     cabin,
     segments: segmentFromQuote(quote, cabin),
     source: "duffel" as const,
+    airlineName: quote.airline,
   }));
 }

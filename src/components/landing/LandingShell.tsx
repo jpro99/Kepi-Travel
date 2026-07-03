@@ -83,7 +83,7 @@ function LandingShellInner({ userId, hasProAccess }: LandingShellProps) {
       {activeTab === "overview" ? (
         <LandingMarketing userId={userId} hasProAccess={hasProAccess} authCtaHref={authCtaHref} />
       ) : (
-        <section className="mx-auto w-full max-w-6xl px-4 pb-16 pt-2 sm:px-8">
+        <section className="mx-auto w-full max-w-6xl px-4 pb-16 pt-2 sm:px-8 lg:max-w-7xl">
           <div className="mb-6">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-700 dark:text-cyan-300">
               Command Deck

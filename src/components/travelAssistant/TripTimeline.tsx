@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   buildCompactTimelineDayKeys,
+  buildFullTripDayKeys,
   splitPastAndUpcomingReservations,
 } from "@/lib/travelAssistant/tripTimelinePlanning";
 import {
@@ -10,10 +11,13 @@ import {
   isPlannedReservation,
   isPlaceholderScheduleTime,
 } from "@/lib/travelAssistant/plannedReservationMatch";
+import { reservationMissingPrice } from "@/lib/travelAssistant/tripSpendSummary";
+import { ReservationQuickLinks } from "@/components/travelAssistant/ReservationQuickLinks";
+import type { ReservationLinkInput } from "@/lib/travelAssistant/reservationLinks";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface TimelineReservation {
+interface TimelineReservation extends ReservationLinkInput {
   id: string;
   type: string;
   title: string;
@@ -35,6 +39,9 @@ interface TimelineReservation {
   plannedOnly?: boolean;
   bookUrl?: string;
   quotedPriceUsd?: number;
+  quotedPointsMiles?: number;
+  pointsProgram?: string;
+  flightAirline?: string;
 }
 
 interface TripTimelineProps {
@@ -42,10 +49,16 @@ interface TripTimelineProps {
   tripName: string;
   tripStartDate: string | null;
   tripEndDate?: string | null;
-  tripDaysAway: number;
+  tripDaysAway: number | null;
   onReservationTap?: (id: string) => void;
   /** Hide "already mid-trip" banner when the trip is fully in the past. */
   suppressMidTripBanner?: boolean;
+  /** Show every day between trip start/end — surfaces empty days in itinerary view. */
+  showAllTripDays?: boolean;
+  /** Tighter layout for sidebar itinerary panel. */
+  compact?: boolean;
+  onEmptyDayTap?: (dateKey: string) => void;
+  tripId?: string | null;
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -169,21 +182,21 @@ function isPastDay(dateKey: string): boolean { return dateKey < getTodayKey(); }
 // ─── Reservation card ─────────────────────────────────────────────────────────
 
 function ReservationCard({
-  reservation, onTap, isPast,
-}: { reservation: TimelineReservation; onTap: () => void; isPast: boolean }) {
+  reservation, onTap, isPast, tripId,
+}: { reservation: TimelineReservation; onTap: () => void; isPast: boolean; tripId?: string | null }) {
   const cfg = typeConfig(reservation.type);
   const isFlight = reservation.type === "flight";
   const isHotel = reservation.type === "hotel";
   const isPlanned = isPlannedReservation(reservation);
+  const missingPrice = reservationMissingPrice(reservation);
   const showScheduleTime =
     !isPlanned || (!isPlaceholderScheduleTime(reservation.localTime) && !isPlaceholderScheduleTime(reservation.flightDepartureTime));
 
   return (
-    <button
-      type="button"
-      onClick={onTap}
-      className={`group relative w-full overflow-hidden rounded-2xl border text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg ${cfg.card} ${isPast ? "opacity-70 grayscale-[20%]" : ""} ${isPlanned && !isPast ? "border-dashed border-amber-400/70 bg-amber-950/20 dark:border-amber-500/50 dark:bg-amber-950/30" : ""}`}
+    <div
+      className={`group relative w-full overflow-hidden rounded-2xl border text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg ${cfg.card} ${isPast ? "opacity-70 grayscale-[20%]" : ""} ${isPlanned && !isPast ? "border-dashed border-amber-400/70 bg-amber-950/20 dark:border-amber-500/50 dark:bg-amber-950/30" : ""} ${missingPrice && !isPast ? "border-yellow-400 bg-yellow-50/40 ring-1 ring-yellow-300/80 dark:border-yellow-500/70 dark:bg-yellow-500/10 dark:ring-yellow-500/40" : ""}`}
     >
+      <button type="button" onClick={onTap} className="w-full text-left">
       <div className={`h-0.5 w-full ${isPast ? "bg-slate-400" : isPlanned ? "bg-amber-400" : cfg.dot}`} />
       <div className="p-4">
         <div className="flex items-center justify-between gap-2">
@@ -191,15 +204,30 @@ function ReservationCard({
             {cfg.emoji} {cfg.label}
             {isPlanned && !isPast ? " · To book" : isPast ? " · Completed" : ""}
           </span>
-          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-            {isFlight
-              ? showScheduleTime
-                ? formatTime(reservation.flightDepartureTime ?? reservation.localTime)
-                : reservationFlightDateLabel(reservation)
-              : showScheduleTime
-                ? formatTime(reservation.localTime)
-                : reservation.localTime.trim().slice(0, 10)}
-          </span>
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            {missingPrice && !isPast ? (
+              <span className="rounded-full bg-yellow-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-yellow-900 dark:bg-yellow-500/30 dark:text-yellow-100">
+                Add cost
+              </span>
+            ) : reservation.quotedPriceUsd || reservation.quotedPointsMiles ? (
+              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                {reservation.quotedPriceUsd ? `$${reservation.quotedPriceUsd.toLocaleString()}` : null}
+                {reservation.quotedPriceUsd && reservation.quotedPointsMiles ? " · " : null}
+                {reservation.quotedPointsMiles
+                  ? `${reservation.quotedPointsMiles.toLocaleString()} pts${reservation.pointsProgram ? ` (${reservation.pointsProgram})` : ""}`
+                  : null}
+              </span>
+            ) : null}
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              {isFlight
+                ? showScheduleTime
+                  ? formatTime(reservation.flightDepartureTime ?? reservation.localTime)
+                  : reservationFlightDateLabel(reservation)
+                : showScheduleTime
+                  ? formatTime(reservation.localTime)
+                  : reservation.localTime.trim().slice(0, 10)}
+            </span>
+          </div>
         </div>
 
         {isFlight ? (
@@ -293,9 +321,22 @@ function ReservationCard({
                   <span className="ml-1 font-semibold">${reservation.quotedPriceUsd.toLocaleString()} quoted</span>
                 ) : null}
               </p>
-            ) : reservation.confirmationCode ? (
-              <p className="mt-2 text-xs font-mono font-semibold text-amber-700 dark:text-amber-300">{reservation.confirmationCode}</p>
-            ) : null}
+            ) : (
+              <>
+                {reservation.confirmationCode ? (
+                  <p className="mt-2 text-xs font-mono font-semibold text-amber-700 dark:text-amber-300">{reservation.confirmationCode}</p>
+                ) : null}
+                {!isPlanned && (reservation.quotedPriceUsd || reservation.quotedPointsMiles) ? (
+                  <p className="mt-2 text-xs font-semibold text-amber-800 dark:text-amber-200">
+                    {reservation.quotedPriceUsd ? `$${reservation.quotedPriceUsd.toLocaleString()} total` : null}
+                    {reservation.quotedPriceUsd && reservation.quotedPointsMiles ? " · " : null}
+                    {reservation.quotedPointsMiles
+                      ? `${reservation.quotedPointsMiles.toLocaleString()} pts${reservation.pointsProgram ? ` (${reservation.pointsProgram})` : ""}`
+                      : null}
+                  </p>
+                ) : null}
+              </>
+            )}
           </>
         ) : (
           <>
@@ -311,7 +352,11 @@ function ReservationCard({
           </>
         )}
       </div>
-    </button>
+      </button>
+      <div className="px-4 pb-4">
+        <ReservationQuickLinks reservation={reservation} tripId={tripId} compact />
+      </div>
+    </div>
   );
 }
 
@@ -319,11 +364,13 @@ function ReservationCard({
 
 interface DayEntry { key: string; reservations: TimelineReservation[]; }
 
-function DayRow({ day, onReservationTap, showPastConfirmed, dimPast }: {
+function DayRow({ day, onReservationTap, showPastConfirmed, dimPast, onEmptyDayTap, tripId }: {
   day: DayEntry;
   onReservationTap: (id: string) => void;
   showPastConfirmed: boolean;
   dimPast: boolean;
+  onEmptyDayTap?: (dateKey: string) => void;
+  tripId?: string | null;
 }) {
   const past = isPastDay(day.key) && !isToday(day.key);
   const hasEvents = day.reservations.length > 0;
@@ -375,7 +422,7 @@ function DayRow({ day, onReservationTap, showPastConfirmed, dimPast }: {
         {hasEvents && expanded ? (
           <div className="mt-3 space-y-3">
             {day.reservations.map((r) => (
-              <ReservationCard key={r.id} reservation={r} onTap={() => onReservationTap(r.id)} isPast={past} />
+              <ReservationCard key={r.id} reservation={r} onTap={() => onReservationTap(r.id)} isPast={past} tripId={tripId} />
             ))}
           </div>
         ) : null}
@@ -386,7 +433,17 @@ function DayRow({ day, onReservationTap, showPastConfirmed, dimPast }: {
           </p>
         ) : null}
 
-        {!hasEvents ? <p className="mt-1.5 text-xs italic text-slate-300 dark:text-slate-600">Free day</p> : null}
+        {!hasEvents && onEmptyDayTap ? (
+          <button
+            type="button"
+            onClick={() => onEmptyDayTap(day.key)}
+            className="mt-2 w-full rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-left text-xs font-semibold text-slate-600 transition hover:border-sky-400 hover:bg-sky-50 hover:text-sky-800 dark:border-slate-600 dark:bg-slate-900/50 dark:text-slate-300 dark:hover:border-sky-500 dark:hover:bg-sky-950/30 dark:hover:text-sky-200"
+          >
+            + Add flight, hotel, or activity
+          </button>
+        ) : !hasEvents ? (
+          <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">Nothing planned yet</p>
+        ) : null}
       </div>
     </div>
   );
@@ -426,6 +483,10 @@ export function TripTimeline({
   tripDaysAway,
   onReservationTap,
   suppressMidTripBanner = false,
+  showAllTripDays = false,
+  compact = false,
+  onEmptyDayTap,
+  tripId = null,
 }: TripTimelineProps) {
   const [midTripConfirmed, setMidTripConfirmed] = useState(false);
   const [showPastArchive, setShowPastArchive] = useState(false);
@@ -436,6 +497,7 @@ export function TripTimeline({
   );
 
   const days = useMemo((): DayEntry[] => {
+    if (reservations.length === 0) return [];
     if (upcoming.length === 0 && !tripStartDate) return [];
 
     const seen = new Set<string>();
@@ -459,11 +521,14 @@ export function TripTimeline({
       map.set(key, [...arr].sort((a, b) => parseLocalMs(a.localTime) - parseLocalMs(b.localTime)));
     }
 
-    const dayKeys = buildCompactTimelineDayKeys(dedupedReservations, tripStartDate, tripEndDate);
+    const dayKeys = showAllTripDays
+      ? buildFullTripDayKeys(tripStartDate, tripEndDate, dedupedReservations)
+      : buildCompactTimelineDayKeys(dedupedReservations, tripStartDate, tripEndDate);
     return dayKeys.map((key) => ({ key, reservations: map.get(key) ?? [] }));
-  }, [upcoming, tripStartDate, tripEndDate]);
+  }, [reservations.length, upcoming, tripStartDate, tripEndDate, showAllTripDays]);
 
-  if (days.length === 0) return null;
+  if (!showAllTripDays && (reservations.length === 0 || days.length === 0)) return null;
+  if (showAllTripDays && days.length === 0) return null;
 
   const today = new Date().toISOString().slice(0, 10);
   const pastDaysWithEvents = days.filter((d) => d.key < today && d.reservations.length > 0);
@@ -479,11 +544,21 @@ export function TripTimeline({
   return (
     <div>
       {/* Stats bar */}
+      {!compact ? (
       <div className="mb-5 flex items-center gap-4 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] px-4 py-3 shadow-sm">
         <div className="text-center">
           <p className="text-xl font-black text-[var(--text-primary)]">{totalDays}</p>
           <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">Days</p>
         </div>
+        <div className="h-8 w-px bg-[var(--border-default)]" />
+        {tripDaysAway !== null ? (
+          <div className="text-center">
+            <p className="text-xl font-black text-[var(--text-primary)]">{tripDaysAway === 0 ? "NOW" : tripDaysAway}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
+              {tripDaysAway === 0 ? "Happening" : "Days away"}
+            </p>
+          </div>
+        ) : null}
         <div className="h-8 w-px bg-[var(--border-default)]" />
         <div className="text-center">
           <p className="text-xl font-black text-[var(--text-primary)]">{daysWithEvents}</p>
@@ -500,11 +575,6 @@ export function TripTimeline({
             </div>
           </>
         ) : null}
-        <div className="h-8 w-px bg-[var(--border-default)]" />
-        <div className="text-center">
-          <p className="text-xl font-black text-[var(--text-primary)]">{tripDaysAway === 0 ? "NOW" : tripDaysAway}</p>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">{tripDaysAway === 0 ? "Happening" : "Days away"}</p>
-        </div>
         <div className="ml-auto text-right">
           <p className="truncate max-w-28 text-xs font-bold text-[var(--text-primary)]">{tripName}</p>
           <div className="mt-1 flex items-center justify-end gap-1">
@@ -528,6 +598,19 @@ export function TripTimeline({
           ) : null}
         </div>
       </div>
+      ) : (
+        <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+          <span className="font-bold text-slate-800 dark:text-slate-200">{totalDays} days</span>
+          <span>·</span>
+          <span>{daysWithEvents} with plans</span>
+          {bookingProgress.total > 0 ? (
+            <>
+              <span>·</span>
+              <span>{bookingProgress.confirmed}/{bookingProgress.total} booked</span>
+            </>
+          ) : null}
+        </div>
+      )}
 
       {/* Timeline */}
       <div className="relative space-y-0">
@@ -538,6 +621,8 @@ export function TripTimeline({
             onReservationTap={onReservationTap ?? (() => undefined)}
             showPastConfirmed={midTripConfirmed}
             dimPast={false}
+            onEmptyDayTap={onEmptyDayTap}
+            tripId={tripId}
           />
         ))}
       </div>
@@ -552,6 +637,7 @@ export function TripTimeline({
                 reservation={reservation}
                 onTap={() => onReservationTap?.(reservation.id)}
                 isPast
+                tripId={tripId}
               />
             ))}
           </div>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState, useMemo } from "react";
+import { useMemo, useState } from "react";
+import { ImportConfirmationDropzone } from "@/components/travelAssistant/ImportConfirmationDropzone";
 
 type ManualReservationType = "flight" | "hotel" | "train" | "car" | "dinner" | "tour" | "experience" | "other";
 
@@ -26,6 +27,8 @@ interface FamilyMemberOption {
 interface ManualReservationEntryModalProps {
   familyMembers: FamilyMemberOption[];
   defaultAssignedTo: string[];
+  defaultReservationType?: ManualReservationType;
+  defaultLocalDateTime?: string;
   onClose: () => void;
   onSave: (value: ManualReservationFormValue) => void;
 }
@@ -76,6 +79,8 @@ function toDatetimeLocal(localTime: string): string {
 export function ManualReservationEntryModal({
   familyMembers,
   defaultAssignedTo,
+  defaultReservationType = "flight",
+  defaultLocalDateTime,
   onClose,
   onSave,
 }: ManualReservationEntryModalProps) {
@@ -84,10 +89,12 @@ export function ManualReservationEntryModal({
     [defaultAssignedTo, familyMembers],
   );
 
-  const [reservationType, setReservationType] = useState<ManualReservationType>("flight");
+  const [reservationType, setReservationType] = useState<ManualReservationType>(defaultReservationType);
   const [title, setTitle] = useState("");
   const [provider, setProvider] = useState("");
-  const [localDateTime, setLocalDateTime] = useState(localDateTimeDefault());
+  const [localDateTime, setLocalDateTime] = useState(
+    () => defaultLocalDateTime ?? localDateTimeDefault(),
+  );
   const [location, setLocation] = useState("");
   const [confirmationCode, setConfirmationCode] = useState("");
   const [notes, setNotes] = useState("");
@@ -98,7 +105,6 @@ export function ManualReservationEntryModal({
   const [formError, setFormError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scanMessage, setScanMessage] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleScanFile = async (file: File): Promise<void> => {
     setScanning(true);
@@ -106,7 +112,7 @@ export function ManualReservationEntryModal({
     setFormError(null);
     try {
       const formData = new FormData();
-      formData.append("image", file);
+      formData.append("file", file);
       const response = await fetch("/api/travel-updates?action=ticket-scan", {
         method: "POST",
         body: formData,
@@ -143,7 +149,7 @@ export function ManualReservationEntryModal({
       if (d.checkOutDate?.trim()) setCheckOutDate(d.checkOutDate.trim());
       if (d.roomType?.trim()) setRoomType(d.roomType.trim());
       if (d.flightNumber?.trim()) setFlightNumber(d.flightNumber.trim());
-      setScanMessage("✓ Fields filled from your photo — review and save.");
+      setScanMessage("✓ Fields filled from your file — review and save.");
     } catch {
       setScanMessage("Scan failed — please fill in the fields manually.");
     } finally {
@@ -159,7 +165,7 @@ export function ManualReservationEntryModal({
           <div className="min-w-0">
             <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Add reservation</h2>
             <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-              Scan a photo to auto-fill, or enter details manually.
+              Drop a PDF or screenshot to auto-fill, or enter details manually.
             </p>
           </div>
           <button
@@ -173,27 +179,12 @@ export function ManualReservationEntryModal({
 
         {/* ── Scrollable body ── */}
         <div className="flex-1 overflow-y-auto px-4 py-4">
-          {/* Scan button */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.currentTarget.value = "";
-              if (file) void handleScanFile(file);
-            }}
+          <ImportConfirmationDropzone
+            busy={scanning}
+            compact
+            className="mb-4"
+            onFile={(file) => void handleScanFile(file)}
           />
-          <button
-            type="button"
-            disabled={scanning}
-            onClick={() => fileInputRef.current?.click()}
-            className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-cyan-400 bg-cyan-50 px-4 py-3 text-sm font-semibold text-cyan-800 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-cyan-500/50 dark:bg-cyan-500/10 dark:text-cyan-200 dark:hover:bg-cyan-500/20"
-          >
-            <span className="text-lg">{scanning ? "⏳" : "📷"}</span>
-            {scanning ? "Scanning…" : "Scan ticket or screenshot"}
-          </button>
           {scanMessage ? (
             <p className={`-mt-2 mb-4 rounded-lg px-3 py-2 text-xs ${scanMessage.startsWith("✓") ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200" : "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300"}`}>
               {scanMessage}

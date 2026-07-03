@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 export default function WorkspacePage() {
-  return <h1>Hello Workspace</h1>;
+  redirect("/travel-assistant");
 }
