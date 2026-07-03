@@ -33,7 +33,11 @@ test("rankStays prefers traveler chain on estimated quotes", () => {
 test("estimatedStaysNotice explains Duffel Stays disabled", () => {
   assert.match(
     estimatedStaysNotice("Stays not enabled on this Duffel account yet."),
-    /estimated/i,
+    /sample/i,
+  );
+  assert.match(
+    estimatedStaysNotice("Stays not enabled on this Duffel account yet."),
+    /LiteAPI/i,
   );
   assert.match(estimatedStaysNotice(undefined, true), /mock mode/i);
 });
