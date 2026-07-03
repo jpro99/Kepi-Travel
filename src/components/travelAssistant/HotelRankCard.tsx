@@ -10,6 +10,7 @@ import {
   topAmenityIcons,
 } from "@/lib/hotels/hotelCardDisplay";
 import { resolveHotelChainPresentation } from "@/lib/hotels/hotelChainDisplay";
+import { buildHotelMatchSummary } from "@/lib/hotels/hotelMatchSummary";
 import { resolveHotelBookingStrategy } from "@/lib/hotels/hotelBookingStrategy";
 import type { HotelStayProfile } from "@/lib/memory/hotelStayProfile";
 import { hasKepiBookableLiveRate } from "@/lib/hotels/hotelLiveRate";
