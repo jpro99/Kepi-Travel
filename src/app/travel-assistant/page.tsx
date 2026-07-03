@@ -87,6 +87,7 @@ import { TripPlanningWizard } from "@/components/travelAssistant/TripPlanningWiz
 import { HotelSearchModal } from "@/components/travelAssistant/HotelSearchModal";
 import type { HotelSearchResult } from "@/lib/hotels/types";
 import { deriveHotelSearchContext, formatHotelSearchCityLabel } from "@/lib/hotels/tripSearchContext";
+import { resolveHotelDestinationSync } from "@/lib/hotels/resolveDestination";
 import {
   deriveTripStaySegments,
   nextMissingStaySegment,
@@ -2015,6 +2016,8 @@ export default function TravelAssistantPage() {
   const [manualReservationModalOpen, setManualReservationModalOpen] = useState(false);
   const [manualReservationPresetType, setManualReservationPresetType] = useState<"flight" | "hotel" | null>(null);
   const [hotelSearchModalOpen, setHotelSearchModalOpen] = useState(false);
+  const [inlineHotelSearchOpen, setInlineHotelSearchOpen] = useState(false);
+  const [hotelSearchGeneration, setHotelSearchGeneration] = useState(0);
   const [hotelSearchSegment, setHotelSearchSegment] = useState<TripStaySegment | null>(null);
   const [postBookingConfirmation, setPostBookingConfirmation] = useState<PostBookingConfirmationData | null>(null);
   const [manualStaySegmentsByTrip, setManualStaySegmentsByTrip] = useState<Record<string, TripStaySegmentInput[]>>({});
@@ -4657,6 +4660,39 @@ export default function TravelAssistantPage() {
     }
     return hotelSearchDefaults;
   }, [hotelSearchDefaults, hotelSearchSegment, tripStaySegments]);
+
+  const hotelSearchMapPreview = useMemo(() => {
+    if (!inlineHotelSearchOpen && !hotelSearchModalOpen) return null;
+    const city = effectiveHotelSearchDefaults.city?.trim();
+    if (!city) return null;
+    const resolved = resolveHotelDestinationSync(city);
+    if (!resolved) return null;
+    return { city: resolved.displayName, lat: resolved.lat, lng: resolved.lng };
+  }, [effectiveHotelSearchDefaults.city, hotelSearchModalOpen, inlineHotelSearchOpen]);
+
+  const closeHotelSearch = useCallback((): void => {
+    setHotelSearchModalOpen(false);
+    setInlineHotelSearchOpen(false);
+    setHotelSearchSegment(null);
+  }, []);
+
+  const openHotelSearchUi = useCallback(
+    (segment: TripStaySegment): void => {
+      setHotelSearchSegment(segment);
+      setHotelSearchGeneration((value) => value + 1);
+      if (isCompactViewport) {
+        setInlineHotelSearchOpen(true);
+        setHotelSearchModalOpen(false);
+        window.setTimeout(() => {
+          document.getElementById("inline-hotel-search-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 150);
+      } else {
+        setHotelSearchModalOpen(true);
+        setInlineHotelSearchOpen(false);
+      }
+    },
+    [isCompactViewport],
+  );
   const tripPlanningInitialDraft = useMemo(
     () => ({
       tripName: activeTrip?.name && !/^trip \d+$/iu.test(activeTrip.name.trim()) ? activeTrip.name : "",
@@ -5566,18 +5602,18 @@ export default function TravelAssistantPage() {
     const nextPlanned =
       plannedStayCities.find((city) => city.status === "needed") ?? plannedStayCities[0];
     if (nextPlanned) {
-      setHotelSearchSegment(plannedStayCityToSegment(nextPlanned));
-      setHotelSearchModalOpen(true);
+      openHotelSearchUi(plannedStayCityToSegment(nextPlanned));
       return;
     }
-    setHotelSearchSegment(nextMissingStaySegment(tripStaySegments));
-    setHotelSearchModalOpen(true);
-  }, [plannedStayCities, tripStaySegments]);
+    const nextMissing = nextMissingStaySegment(tripStaySegments);
+    if (nextMissing) {
+      openHotelSearchUi(nextMissing);
+    }
+  }, [openHotelSearchUi, plannedStayCities, tripStaySegments]);
 
   const openHotelSearchForPlannedCity = useCallback((city: PlannedStayCity): void => {
-    setHotelSearchSegment(plannedStayCityToSegment(city));
-    setHotelSearchModalOpen(true);
-  }, []);
+    openHotelSearchUi(plannedStayCityToSegment(city));
+  }, [openHotelSearchUi]);
 
   const handleFlightSearchPlan = useCallback(
     (plan: FlightSearchPlan): void => {
@@ -5652,9 +5688,8 @@ export default function TravelAssistantPage() {
   );
 
   const openHotelSearchForSegment = useCallback((segment: TripStaySegment): void => {
-    setHotelSearchSegment(segment);
-    setHotelSearchModalOpen(true);
-  }, []);
+    openHotelSearchUi(segment);
+  }, [openHotelSearchUi]);
 
   const launchCustomHotelSearch = useCallback(
     (params: { city: string; cityIata?: string; checkIn: string; checkOut: string }): void => {
@@ -5667,7 +5702,7 @@ export default function TravelAssistantPage() {
             86_400_000,
         ),
       );
-      setHotelSearchSegment({
+      openHotelSearchUi({
         id: "custom-hotel-search",
         city: params.city,
         cityIata: params.cityIata,
@@ -5684,9 +5719,8 @@ export default function TravelAssistantPage() {
         connectionHours: null,
         needsDecision: false,
       });
-      setHotelSearchModalOpen(true);
     },
-    [],
+    [openHotelSearchUi],
   );
 
   const handleAddCityStay = useCallback(
@@ -5818,8 +5852,9 @@ export default function TravelAssistantPage() {
         detail: `Check-in ${hotel.checkIn} · ${searchCity}. Find it under Book → Hotels.`,
         syncedToTrip: true,
       });
+      closeHotelSearch();
     },
-    [activeTripId, effectiveHotelSearchDefaults.city, hotelSearchSegment?.city, pushUndoSnapshot, queueMutation, selectedFamilyMember.id, trips],
+    [activeTripId, closeHotelSearch, effectiveHotelSearchDefaults.city, hotelSearchSegment?.city, pushUndoSnapshot, queueMutation, selectedFamilyMember.id, trips],
   );
 
   const handleImportParsedReservations = useCallback(
@@ -8710,17 +8745,15 @@ export default function TravelAssistantPage() {
         }}
       />
       <HotelSearchModal
-        open={hotelSearchModalOpen}
+        open={hotelSearchModalOpen && !isCompactViewport}
         tripName={activeTrip?.name}
         segmentLabel={hotelSearchSegment?.label}
         defaultCity={effectiveHotelSearchDefaults.city}
         defaultCityIata={effectiveHotelSearchDefaults.cityIata}
         defaultCheckIn={effectiveHotelSearchDefaults.checkIn}
         defaultCheckOut={effectiveHotelSearchDefaults.checkOut}
-        onClose={() => {
-          setHotelSearchModalOpen(false);
-          setHotelSearchSegment(null);
-        }}
+        searchGeneration={hotelSearchGeneration}
+        onClose={closeHotelSearch}
         onAddHotel={handleAddHotelFromSearch}
       />
     </>
@@ -8988,7 +9021,21 @@ export default function TravelAssistantPage() {
                 plannedStayCities={plannedStayCities}
                 usuallySkipsConnections={usuallySkipsConnections}
                 onLaunchHotelSearch={launchCustomHotelSearch}
-                onSearchHotels={openHotelSearchForTrip}
+                inlineHotelSearchActive={inlineHotelSearchOpen}
+                inlineHotelSearchDefaults={
+                  inlineHotelSearchOpen
+                    ? {
+                        city: effectiveHotelSearchDefaults.city,
+                        cityIata: effectiveHotelSearchDefaults.cityIata,
+                        checkIn: effectiveHotelSearchDefaults.checkIn,
+                        checkOut: effectiveHotelSearchDefaults.checkOut,
+                      }
+                    : undefined
+                }
+                hotelSearchGeneration={hotelSearchGeneration}
+                onCloseInlineHotelSearch={closeHotelSearch}
+                onAddHotelFromSearch={handleAddHotelFromSearch}
+                hotelSearchMapPreview={hotelSearchMapPreview}
                 onSearchSegment={openHotelSearchForSegment}
                 onPickPlannedCity={openHotelSearchForPlannedCity}
                 onAddCityStay={handleAddCityStay}
@@ -9149,7 +9196,21 @@ export default function TravelAssistantPage() {
                 checkOut: hotelSearchDefaults.checkOut,
               }}
               onLaunchHotelSearch={launchCustomHotelSearch}
-              onSearchHotels={openHotelSearchForTrip}
+              inlineHotelSearchActive={inlineHotelSearchOpen}
+              inlineHotelSearchDefaults={
+                inlineHotelSearchOpen
+                  ? {
+                      city: effectiveHotelSearchDefaults.city,
+                      cityIata: effectiveHotelSearchDefaults.cityIata,
+                      checkIn: effectiveHotelSearchDefaults.checkIn,
+                      checkOut: effectiveHotelSearchDefaults.checkOut,
+                    }
+                  : undefined
+              }
+              hotelSearchGeneration={hotelSearchGeneration}
+              onCloseInlineHotelSearch={closeHotelSearch}
+              onAddHotelFromSearch={handleAddHotelFromSearch}
+              hotelSearchMapPreview={hotelSearchMapPreview}
               onSearchSegment={openHotelSearchForSegment}
               onAddCityStay={handleAddCityStay}
               onSetStayIntent={handleSetStayIntent}

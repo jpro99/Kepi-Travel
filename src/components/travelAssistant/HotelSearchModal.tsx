@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { TripHotelSearch } from "@/components/travelAssistant/TripHotelSearch";
 import { SEARCH_MODAL_PANEL } from "@/lib/ui/searchResponsive";
 import type { HotelSearchResult } from "@/lib/hotels/types";
@@ -13,6 +12,7 @@ export interface HotelSearchModalProps {
   defaultCityIata?: string;
   defaultCheckIn?: string;
   defaultCheckOut?: string;
+  searchGeneration?: number;
   onClose: () => void;
   onAddHotel: (hotel: HotelSearchResult) => void;
 }
@@ -25,16 +25,10 @@ export function HotelSearchModal({
   defaultCityIata = "",
   defaultCheckIn = "",
   defaultCheckOut = "",
+  searchGeneration = 0,
   onClose,
   onAddHotel,
 }: HotelSearchModalProps) {
-  const [searchGeneration, setSearchGeneration] = useState(0);
-
-  useEffect(() => {
-    if (!open) return;
-    setSearchGeneration((value) => value + 1);
-  }, [open, defaultCity, defaultCityIata, defaultCheckIn, defaultCheckOut]);
-
   if (!open) return null;
 
   return (
@@ -74,6 +68,7 @@ export function HotelSearchModal({
             defaultCheckIn={defaultCheckIn}
             defaultCheckOut={defaultCheckOut}
             searchGeneration={searchGeneration}
+            listOnly
             onAddHotel={onAddHotel}
           />
         </div>

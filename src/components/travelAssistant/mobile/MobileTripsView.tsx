@@ -97,6 +97,12 @@ interface MobileTripsViewProps {
   usuallySkipsConnections?: boolean;
   onLaunchHotelSearch?: (params: { city: string; cityIata?: string; checkIn: string; checkOut: string }) => void;
   onSearchHotels?: () => void;
+  inlineHotelSearchActive?: boolean;
+  inlineHotelSearchDefaults?: HotelSearchDefaults;
+  hotelSearchGeneration?: number;
+  onCloseInlineHotelSearch?: () => void;
+  onAddHotelFromSearch?: (hotel: import("@/lib/hotels/types").HotelSearchResult) => void;
+  mapPreviewCenter?: { city: string; lat: number; lng: number } | null;
   onSearchSegment?: (segment: TripStaySegment) => void;
   onPickPlannedCity?: (city: PlannedStayCity) => void;
   onAddCityStay?: (input: { city: string; checkIn: string; checkOut: string }) => void;
@@ -169,6 +175,12 @@ export function MobileTripsView({
   usuallySkipsConnections,
   onLaunchHotelSearch,
   onSearchHotels,
+  inlineHotelSearchActive,
+  inlineHotelSearchDefaults,
+  hotelSearchGeneration,
+  onCloseInlineHotelSearch,
+  onAddHotelFromSearch,
+  mapPreviewCenter,
   onSearchSegment,
   onPickPlannedCity,
   onAddCityStay,
@@ -276,7 +288,12 @@ export function MobileTripsView({
           enableBookSearch={enableBookSearch}
           hotelSearchDefaults={hotelSearchDefaults}
           onLaunchHotelSearch={onLaunchHotelSearch}
-          onSearchHotels={onSearchHotels}
+          inlineHotelSearchActive={inlineHotelSearchActive}
+          inlineHotelSearchDefaults={inlineHotelSearchDefaults}
+          hotelSearchGeneration={hotelSearchGeneration}
+          onCloseInlineHotelSearch={onCloseInlineHotelSearch}
+          onAddHotelFromSearch={onAddHotelFromSearch}
+          mapPreviewCenter={mapPreviewCenter}
           onSearchSegment={onSearchSegment}
           onAddCityStay={onAddCityStay}
           onSetStayIntent={onSetStayIntent}

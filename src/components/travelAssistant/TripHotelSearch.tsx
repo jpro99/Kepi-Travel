@@ -70,6 +70,8 @@ export interface TripHotelSearchProps {
   onSavedToTrip?: (hotel: HotelSearchResult) => void;
   /** Increment when a parent modal opens with new search params to run one auto-search. */
   searchGeneration?: number;
+  /** Mobile / modal: list cards only — no map toggle (avoids empty-map dead ends). */
+  listOnly?: boolean;
 }
 
 function CityInput({
@@ -171,6 +173,7 @@ export function TripHotelSearch({
   onAddHotel,
   onSavedToTrip,
   searchGeneration = 0,
+  listOnly = false,
 }: TripHotelSearchProps) {
   const [city, setCity] = useState(defaultCity);
   const [cityIata, setCityIata] = useState(defaultCityIata);
@@ -242,7 +245,7 @@ export function TripHotelSearch({
   useStableDefaultSync(dateDefaultsKey, applyDateDefaults);
 
   const runSearch = async (): Promise<void> => {
-    const destination = cityIata || city.trim();
+    const destination = city.trim() || cityIata;
     if (!destination) {
       setError("Enter a city or destination.");
       return;
@@ -309,7 +312,7 @@ export function TripHotelSearch({
       let hotels = payload.hotels ?? [];
       const resolvedSearchCity = payload.city ?? destination;
       if (payload.resolved?.lat && payload.resolved?.lng) {
-        hotels = filterHotelsWithinRenderDistance(
+        const filtered = filterHotelsWithinRenderDistance(
           hotels,
           {
             lat: payload.resolved.lat,
@@ -317,6 +320,7 @@ export function TripHotelSearch({
           },
           resolvedSearchCity,
         );
+        hotels = filtered.length > 0 ? filtered : hotels;
       }
 
       setResults(hotels);
@@ -377,7 +381,6 @@ export function TripHotelSearch({
   useEffect(() => {
     if (searchGeneration <= 0 || searchGeneration === lastSearchGenerationRef.current) return;
     lastSearchGenerationRef.current = searchGeneration;
-    userEditedFieldsRef.current = false;
     if (!defaultCity.trim() || !defaultCheckIn || !defaultCheckOut) return;
     void runSearch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -453,6 +456,11 @@ export function TripHotelSearch({
   const visibleResults = displayResult.visible;
   const hiddenRows: FilteredHotelRow[] = displayResult.hidden;
   const relaxedNote = displayResult.relaxedNote;
+
+  useEffect(() => {
+    if (visibleResults.length > 0 || results.length === 0) return;
+    setShowNearby(true);
+  }, [results.length, visibleResults.length]);
 
   const featuredHotels = useMemo(() => pickFeaturedHotels(visibleResults, 3), [visibleResults]);
   const featuredIds = useMemo(() => new Set(featuredHotels.map((h) => h.id)), [featuredHotels]);
@@ -614,7 +622,7 @@ export function TripHotelSearch({
               >
                 Refine
               </button>
-              {visibleResults.length > 0 ? (
+              {visibleResults.length > 0 && !listOnly ? (
                 <button
                   type="button"
                   onClick={() => setResultsView((view) => (view === "map" ? "list" : "map"))}
@@ -705,7 +713,7 @@ export function TripHotelSearch({
                 ))}
               </div>
 
-              {resultsView === "map" && cityCenter ? (
+              {resultsView === "map" && cityCenter && !listOnly ? (
                 <div className="mt-6">
                   <HotelStayMap
                     city={resolvedCity ?? city}
