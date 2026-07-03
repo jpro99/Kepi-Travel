@@ -68,7 +68,7 @@ export function HotelSearchModal({
             defaultCheckIn={defaultCheckIn}
             defaultCheckOut={defaultCheckOut}
             searchGeneration={searchGeneration}
-            listOnly
+            preferMapOnMobile
             onAddHotel={onAddHotel}
           />
         </div>

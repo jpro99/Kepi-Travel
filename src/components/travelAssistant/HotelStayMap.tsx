@@ -52,7 +52,8 @@ function createPricePin(
   el.style.zIndex = selected ? "30" : "20";
 
   const badge = document.createElement("span");
-  badge.className = `rounded-lg px-1.5 py-0.5 text-[10px] font-black shadow-md ${selected ? "ring-2 ring-white scale-110" : ""}`;
+  const compact = typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches;
+  badge.className = `rounded-lg font-black shadow-md ${compact ? "px-2 py-1 text-[11px]" : "px-1.5 py-0.5 text-[10px]"} ${selected ? "ring-2 ring-white scale-110" : ""}`;
   badge.style.backgroundColor = style.bg;
   badge.style.color = style.text;
   if (selected) badge.style.boxShadow = `0 0 0 2px ${style.ring}`;

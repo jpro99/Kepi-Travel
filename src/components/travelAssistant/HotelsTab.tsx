@@ -212,8 +212,8 @@ export function HotelsTab({
             ) : null}
           </div>
           <TripHotelSearch
-            listOnly
             searchGeneration={hotelSearchGeneration}
+            preferMapOnMobile
             defaultCity={inlineHotelSearchDefaults.city ?? ""}
             defaultCityIata={inlineHotelSearchDefaults.cityIata ?? ""}
             defaultCheckIn={inlineHotelSearchDefaults.checkIn ?? ""}
@@ -223,7 +223,7 @@ export function HotelsTab({
         </section>
       ) : null}
 
-      {simplifiedMobile ? (
+      {simplifiedMobile && !inlineHotelSearchActive ? (
         <TripHotelStayMap
           reservations={mapReservations ?? reservations}
           staySegments={staySegments}

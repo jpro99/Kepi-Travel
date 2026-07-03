@@ -32,6 +32,7 @@ import {
 } from "@/lib/hotels/hotelInventoryBadge";
 import type { HotelStayProfile } from "@/lib/memory/hotelStayProfile";
 import { hotelParticipatesInPoints, HOTEL_CHAINS, matchHotelChain, type HotelChainId } from "@/lib/loyalty/chainRegistry";
+import { isCompactViewportClient } from "@/lib/ui/isCompactViewport";
 import { useStableDefaultSync } from "@/lib/ui/useStableDefaultSync";
 
 type PayMode = "any" | "cash" | "points";
@@ -75,8 +76,8 @@ export interface TripHotelSearchProps {
   onSavedToTrip?: (hotel: HotelSearchResult) => void;
   /** Increment when a parent modal opens with new search params to run one auto-search. */
   searchGeneration?: number;
-  /** Mobile / modal: list cards only — no map toggle (avoids empty-map dead ends). */
-  listOnly?: boolean;
+  /** On phone, open map view with priced pins after search (default true). */
+  preferMapOnMobile?: boolean;
 }
 
 function CityInput({
@@ -178,7 +179,7 @@ export function TripHotelSearch({
   onAddHotel,
   onSavedToTrip,
   searchGeneration = 0,
-  listOnly = false,
+  preferMapOnMobile = true,
 }: TripHotelSearchProps) {
   const [city, setCity] = useState(defaultCity);
   const [cityIata, setCityIata] = useState(defaultCityIata);
@@ -204,7 +205,9 @@ export function TripHotelSearch({
   const [liveBookableCount, setLiveBookableCount] = useState(0);
   const [googleHotelsUrl, setGoogleHotelsUrl] = useState<string | null>(null);
   const [inCityCount, setInCityCount] = useState(0);
-  const [resultsView, setResultsView] = useState<ResultsView>("list");
+  const [resultsView, setResultsView] = useState<ResultsView>(() =>
+    preferMapOnMobile && isCompactViewportClient() ? "map" : "list",
+  );
   const [mapSelectedId, setMapSelectedId] = useState<string | null>(null);
   const [detailHotelId, setDetailHotelId] = useState<string | null>(null);
   const [savedHotelIds, setSavedHotelIds] = useState<Set<string>>(new Set());
@@ -373,7 +376,18 @@ export function TripHotelSearch({
         setHotelsWithCoords([]);
       }
       setLearningNote(null);
-      setResultsView("list");
+      const canShowMap = Boolean(payload.resolved?.lat && payload.resolved?.lng && hotels.length > 0);
+      setResultsView(
+        canShowMap && preferMapOnMobile && isCompactViewportClient() ? "map" : "list",
+      );
+      if (canShowMap && preferMapOnMobile && isCompactViewportClient()) {
+        window.requestAnimationFrame(() => {
+          document.getElementById("hotel-search-map")?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        });
+      }
       setMapSelectedId(hotels[0]?.id ?? null);
       setDetailHotelId(null);
       if (hotels.length === 0) {
@@ -641,7 +655,7 @@ export function TripHotelSearch({
               >
                 Refine
               </button>
-              {visibleResults.length > 0 && !listOnly ? (
+              {visibleResults.length > 0 && cityCenter ? (
                 <button
                   type="button"
                   onClick={() => setResultsView((view) => (view === "map" ? "list" : "map"))}
@@ -751,21 +765,8 @@ export function TripHotelSearch({
 
           {!loading && visibleResults.length > 0 ? (
             <>
-              <div className="space-y-4">
-                {featuredHotels.map((hotel) => (
-                  <HotelRankCard
-                    key={hotel.id}
-                    hotel={hotel}
-                    totalInSearch={results.length}
-                    premium
-                    payMode={payMode}
-                    onAdd={() => openDetail(hotel)}
-                  />
-                ))}
-              </div>
-
-              {resultsView === "map" && cityCenter && !listOnly ? (
-                <div className="mt-6">
+              {resultsView === "map" && cityCenter ? (
+                <div id="hotel-search-map" className="mb-4 scroll-mt-24">
                   <HotelStayMap
                     city={resolvedCity ?? city}
                     centerLat={cityCenter.lat}
@@ -784,8 +785,41 @@ export function TripHotelSearch({
                     }}
                     onOpenPreferences={() => setRefineOpen(true)}
                   />
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                    Tap a price pin for hotel details · gold = best match for you
+                  </p>
                 </div>
               ) : null}
+
+              {resultsView === "list" ? (
+                <div className="space-y-4">
+                  {featuredHotels.map((hotel) => (
+                    <HotelRankCard
+                      key={hotel.id}
+                      hotel={hotel}
+                      totalInSearch={results.length}
+                      premium
+                      payMode={payMode}
+                      onAdd={() => openDetail(hotel)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {visibleResults.map((hotel) => (
+                    <HotelRankCard
+                      key={hotel.id}
+                      hotel={hotel}
+                      totalInSearch={results.length}
+                      compact
+                      payMode={payMode}
+                      selected={detailHotelId === hotel.id || mapSelectedId === hotel.id}
+                      onSelect={() => openDetail(hotel)}
+                      onAdd={() => openDetail(hotel)}
+                    />
+                  ))}
+                </div>
+              )}
 
               {resultsView === "list" && remainingHotels.length > 0 ? (
                 <div className="mt-6 space-y-3">
