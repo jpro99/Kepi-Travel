@@ -249,17 +249,26 @@ export function TripHotelSearch({
   useStableDefaultSync(cityDefaultsKey, applyCityDefaults);
   useStableDefaultSync(dateDefaultsKey, applyDateDefaults);
 
-  const runSearch = async (): Promise<void> => {
-    const destination = city.trim() || cityIata;
+  const runSearch = async (overrides?: {
+    city?: string;
+    cityIata?: string;
+    checkIn?: string;
+    checkOut?: string;
+  }): Promise<void> => {
+    const searchCity = overrides?.city ?? city;
+    const searchCityIata = overrides?.cityIata ?? cityIata;
+    const searchCheckIn = overrides?.checkIn ?? checkIn;
+    const searchCheckOut = overrides?.checkOut ?? checkOut;
+    const destination = searchCity.trim() || searchCityIata;
     if (!destination) {
       setError("Enter a city or destination.");
       return;
     }
-    if (!checkIn.trim() || !checkOut.trim()) {
+    if (!searchCheckIn.trim() || !searchCheckOut.trim()) {
       setError("Select check-in and check-out dates.");
       return;
     }
-    if (checkOut <= checkIn) {
+    if (searchCheckOut <= searchCheckIn) {
       setError("Check-out must be after check-in.");
       return;
     }
@@ -278,7 +287,7 @@ export function TripHotelSearch({
       const response = await fetch("/api/hotels/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ destination, checkIn, checkOut, guests, rooms }),
+        body: JSON.stringify({ destination, checkIn: searchCheckIn, checkOut: searchCheckOut, guests, rooms }),
       });
       const rawBody = await response.text();
       let payload: {
@@ -387,7 +396,12 @@ export function TripHotelSearch({
     if (searchGeneration <= 0 || searchGeneration === lastSearchGenerationRef.current) return;
     lastSearchGenerationRef.current = searchGeneration;
     if (!defaultCity.trim() || !defaultCheckIn || !defaultCheckOut) return;
-    void runSearch();
+    void runSearch({
+      city: defaultCity,
+      cityIata: defaultCityIata,
+      checkIn: defaultCheckIn,
+      checkOut: defaultCheckOut,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchGeneration]);
 
