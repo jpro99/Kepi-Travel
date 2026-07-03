@@ -144,6 +144,15 @@ function stayProfileBoost(
     }
   }
 
+  if (/air.?condition|a\/c|climate control|air conditioning/i.test(profile.freeTextSummary ?? "")) {
+    if (/air.?condition|a\/c|climate control|air conditioning/.test(haystack)) {
+      boost += 10;
+      badges.push("A/C");
+    } else {
+      boost -= 8;
+    }
+  }
+
   if (profile.prefersBalcony && /balcony|terrace|patio/.test(haystack)) {
     boost += 8;
     badges.push("Balcony");

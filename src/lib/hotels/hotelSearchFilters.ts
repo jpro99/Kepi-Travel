@@ -49,6 +49,11 @@ function hotelHaystack(hotel: RankedHotelSearchResult): string {
   return `${hotel.name} ${hotel.address} ${hotel.city} ${hotel.amenities.join(" ")}`.toLowerCase();
 }
 
+function profilePrefersAirConditioning(profile: HotelStayProfile | null | undefined): boolean {
+  if (!profile?.freeTextSummary?.trim()) return false;
+  return /air.?condition|a\/c|\bac\b|climate control/i.test(profile.freeTextSummary);
+}
+
 function profileHasHardPreferences(profile: HotelStayProfile | null | undefined): boolean {
   if (!profile) return false;
   return (
@@ -58,7 +63,8 @@ function profileHasHardPreferences(profile: HotelStayProfile | null | undefined)
     profile.prefersOceanView ||
     profile.prefersBreakfast === "required" ||
     profile.qualityFloor === "high" ||
-    profile.qualityFloor === "luxury"
+    profile.qualityFloor === "luxury" ||
+    profilePrefersAirConditioning(profile)
   );
 }
 
@@ -102,6 +108,14 @@ export function evaluateHotelMatch(
         reasons.push("Elevator or accessible access");
       } else if (/walk-up|stairs|no elevator|upper floor|without elevator/.test(haystack)) {
         blockers.push("May require stairs — you asked for elevator / no luggage upstairs");
+      }
+    }
+
+    if (profilePrefersAirConditioning(profile)) {
+      if (/air.?condition|a\/c|climate control|air conditioning/.test(haystack)) {
+        reasons.push("Air conditioning");
+      } else {
+        blockers.push("A/C not confirmed — you prefer air conditioning");
       }
     }
 

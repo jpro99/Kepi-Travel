@@ -8,6 +8,13 @@ import {
   HOTEL_CHAIN_MAP_COLORS,
   INDEPENDENT_HOTEL_MAP_COLOR,
 } from "@/lib/hotels/hotelChainDisplay";
+import type { HotelMapPinOptions } from "@/lib/hotels/hotelMapColors";
+import {
+  buildHotelStayDistrictGeoJson,
+  resolveHotelStayDistricts,
+  type HotelStayDistrict,
+} from "@/lib/hotels/hotelStayDistricts";
+import type { HotelChainId } from "@/lib/loyalty/chainRegistry";
 import type { MapBounds } from "@/lib/hotels/hotelCoordinates";
 import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
@@ -40,7 +47,11 @@ interface HotelStayMapProps {
   onOpenPreferences?: () => void;
   hiddenCount?: number;
   onShowHidden?: () => void;
+  enabledChains?: Set<HotelChainId>;
+  chainFilterActive?: boolean;
 }
+
+const DISTRICT_SOURCE = "hotel-stay-districts";
 
 function createPricePin(
   hotel: RankedHotelSearchResult,
@@ -70,6 +81,9 @@ function createPricePin(
   const dot = document.createElement("span");
   dot.className = "mt-0.5 h-1.5 w-1.5 rounded-full";
   dot.style.backgroundColor = style.bg;
+
+  el.style.opacity = style.dimmed ? "0.42" : "1";
+  el.style.filter = style.dimmed ? "saturate(0.85)" : "none";
 
   el.append(badge, dot);
   return el;
@@ -123,6 +137,8 @@ export function HotelStayMap({
   onOpenPreferences,
   hiddenCount = 0,
   onShowHidden,
+  enabledChains,
+  chainFilterActive = false,
 }: HotelStayMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import("maplibre-gl").Map | null>(null);
@@ -135,6 +151,15 @@ export function HotelStayMap({
   const [showTransit, setShowTransit] = useState(true);
   const [transitStops, setTransitStops] = useState<TransitStop[]>([]);
   const [transitCenter, setTransitCenter] = useState({ lat: centerLat, lng: centerLng });
+  const [selectedDistrict, setSelectedDistrict] = useState<HotelStayDistrict | null>(null);
+
+  const districts = useMemo(() => resolveHotelStayDistricts(city), [city]);
+  const districtGeoJson = useMemo(() => buildHotelStayDistrictGeoJson(districts), [districts]);
+
+  const pinOptions = useMemo<HotelMapPinOptions>(
+    () => ({ enabledChains, chainFilterActive }),
+    [enabledChains, chainFilterActive],
+  );
 
   const scoreRange = useMemo(() => fitScoreRange(hotels), [hotels]);
 
@@ -168,7 +193,7 @@ export function HotelStayMap({
     hotelMarkersRef.current = [];
 
     for (const hotel of hotels) {
-      const style = hotelMapPinStyle(hotel, scoreRange);
+      const style = hotelMapPinStyle(hotel, scoreRange, pinOptions);
       const el = createPricePin(hotel, selectedId === hotel.id, style, payMode);
       el.onclick = () => onSelect(hotel);
 
@@ -177,7 +202,50 @@ export function HotelStayMap({
         .addTo(mapRef.current);
       hotelMarkersRef.current.push(marker);
     }
-  }, [ready, hotels, selectedId, onSelect, scoreRange, payMode]);
+  }, [ready, hotels, selectedId, onSelect, scoreRange, payMode, pinOptions]);
+
+  const installDistrictLayers = useCallback(
+    (map: import("maplibre-gl").Map) => {
+      if (districts.length === 0) {
+        if (map.getLayer("hotel-district-fill")) map.removeLayer("hotel-district-fill");
+        if (map.getLayer("hotel-district-outline")) map.removeLayer("hotel-district-outline");
+        if (map.getSource(DISTRICT_SOURCE)) map.removeSource(DISTRICT_SOURCE);
+        return;
+      }
+
+      const data = districtGeoJson;
+      if (!map.getSource(DISTRICT_SOURCE)) {
+        map.addSource(DISTRICT_SOURCE, { type: "geojson", data });
+      } else {
+        (map.getSource(DISTRICT_SOURCE) as import("maplibre-gl").GeoJSONSource).setData(data);
+      }
+
+      if (!map.getLayer("hotel-district-fill")) {
+        map.addLayer({
+          id: "hotel-district-fill",
+          type: "fill",
+          source: DISTRICT_SOURCE,
+          paint: {
+            "fill-color": ["get", "color"],
+            "fill-opacity": 0.12,
+          },
+        });
+      }
+      if (!map.getLayer("hotel-district-outline")) {
+        map.addLayer({
+          id: "hotel-district-outline",
+          type: "line",
+          source: DISTRICT_SOURCE,
+          paint: {
+            "line-color": ["get", "color"],
+            "line-width": 2,
+            "line-opacity": 0.55,
+          },
+        });
+      }
+    },
+    [districtGeoJson, districts.length],
+  );
 
   const renderTransitMarkers = useCallback(async () => {
     if (!ready || !mapRef.current || !showTransit) {
@@ -226,12 +294,13 @@ export function HotelStayMap({
       const style = maptilerStyleUrl(nextStyle === "hybrid" ? "hybrid" : "streets-v2", maptilerKey);
       mapRef.current.setStyle(style);
       mapRef.current.once("idle", () => {
+        if (mapRef.current) installDistrictLayers(mapRef.current);
         void renderHotelMarkers();
         void renderTransitMarkers();
         if (mapRef.current) emitBounds(mapRef.current);
       });
     },
-    [emitBounds, maptilerKey, renderHotelMarkers, renderTransitMarkers],
+    [emitBounds, installDistrictLayers, maptilerKey, renderHotelMarkers, renderTransitMarkers],
   );
 
   useEffect(() => {
@@ -313,6 +382,47 @@ export function HotelStayMap({
     void renderTransitMarkers();
   }, [renderTransitMarkers]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+
+    installDistrictLayers(map);
+
+    const onDistrictClick = (event: import("maplibre-gl").MapMouseEvent): void => {
+      const features = map.queryRenderedFeatures(event.point, { layers: ["hotel-district-fill"] });
+      const props = features[0]?.properties as { id?: string } | undefined;
+      if (props?.id) {
+        const hit = districts.find((district) => district.id === props.id);
+        if (hit) {
+          setSelectedDistrict(hit);
+          return;
+        }
+      }
+      setSelectedDistrict(null);
+    };
+
+    const onEnter = (): void => {
+      map.getCanvas().style.cursor = "pointer";
+    };
+    const onLeave = (): void => {
+      map.getCanvas().style.cursor = "";
+    };
+
+    map.on("click", onDistrictClick);
+    map.on("mouseenter", "hotel-district-fill", onEnter);
+    map.on("mouseleave", "hotel-district-fill", onLeave);
+
+    return () => {
+      map.off("click", onDistrictClick);
+      map.off("mouseenter", "hotel-district-fill", onEnter);
+      map.off("mouseleave", "hotel-district-fill", onLeave);
+    };
+  }, [ready, installDistrictLayers, districts]);
+
+  useEffect(() => {
+    setSelectedDistrict(null);
+  }, [city]);
+
   const trainCount = transitStops.filter((stop) => stop.kind === "train").length;
   const metroCount = transitStops.filter((stop) => stop.kind === "metro" || stop.kind === "tram").length;
 
@@ -337,7 +447,16 @@ export function HotelStayMap({
             <span className="h-2.5 w-2.5 rounded-sm ring-2 ring-[#f4c95d] ring-offset-1" style={{ backgroundColor: "#5b21b6" }} />
             Gold ring = top match for you
           </span>
+          {chainFilterActive ? (
+            <span className="text-slate-500">Dimmed pins = chains you unchecked (still on map)</span>
+          ) : null}
         </div>
+
+        {districts.length > 0 ? (
+          <p className="w-full text-[10px] text-slate-500">
+            Tap a shaded district outline for area guide — where locals and travelers usually stay.
+          </p>
+        ) : null}
 
         <div className="flex flex-wrap items-center gap-3 text-slate-600 dark:text-slate-300">
           <span className="inline-flex items-center gap-1.5">
@@ -408,7 +527,32 @@ export function HotelStayMap({
 
       <p className="text-xs text-slate-500">
         {city} · {hotels.length} on map · {showTransit ? `${metroCount} metro · ${trainCount} rail` : "transit off"}
+        {districts.length > 0 ? ` · ${districts.length} districts` : ""}
       </p>
+
+      {selectedDistrict ? (
+        <div className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 dark:border-violet-900 dark:bg-violet-950/40">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700 dark:text-violet-300">
+                {selectedDistrict.name}
+              </p>
+              <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">{selectedDistrict.headline}</p>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{selectedDistrict.whyStay}</p>
+              <p className="mt-2 text-xs font-semibold text-violet-800 dark:text-violet-200">
+                {selectedDistrict.popularPick}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedDistrict(null)}
+              className="shrink-0 text-xs font-semibold text-slate-500"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

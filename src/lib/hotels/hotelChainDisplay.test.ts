@@ -57,6 +57,18 @@ test("hotelMapPinStyle uses chain color with gold ring for top match", () => {
   assert.equal(style.bg, "#5b21b6");
   assert.equal(style.ring, "#f4c95d");
   assert.equal(style.fitLabel, "Top match");
+  assert.equal(style.dimmed, false);
+});
+
+test("hotelMapPinStyle dims unchecked chains but keeps chain color", () => {
+  const style = hotelMapPinStyle(
+    stubHotel({ name: "Marriott Rome", chainName: "Marriott", tier: "solid", fitScore: 40, badges: [] }),
+    { min: 40, max: 90 },
+    { chainFilterActive: true, enabledChains: new Set(["hyatt"]) },
+  );
+  assert.equal(style.label, "Marriott");
+  assert.equal(style.bg, "#9f1239");
+  assert.equal(style.dimmed, true);
 });
 
 test("hotelMapPinStyle uses independent color for boutique hotels", () => {
@@ -66,4 +78,5 @@ test("hotelMapPinStyle uses independent color for boutique hotels", () => {
   );
   assert.equal(style.label, "Other");
   assert.equal(style.bg, "#64748b");
+  assert.equal(style.dimmed, false);
 });

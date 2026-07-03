@@ -423,6 +423,11 @@ export function TripHotelSearch({
     return new Set(ids.length > 0 ? ids : HOTEL_CHAINS.map((chain) => chain.id));
   }, [chainToggles]);
 
+  const allChainsEnabled = useMemo(
+    () => HOTEL_CHAINS.every((chain) => chainToggles[chain.id] !== false),
+    [chainToggles],
+  );
+
   const handleChainToggle = (id: HotelChainId, enabled: boolean): void => {
     setChainToggles((prev) => {
       const next = { ...prev, [id]: enabled };
@@ -501,14 +506,18 @@ export function TripHotelSearch({
     [visibleResults, featuredIds],
   );
 
-  const mappedHotels = useMemo(() => {
+  const mapHotels = useMemo(() => {
+    let rows = results.filter((hotel) => !dismissedIds.has(hotel.id));
+    if (!showNearby) {
+      rows = rows.filter((hotel) => hotel.inSearchCity !== false);
+    }
     if (hotelsWithCoords.length > 0) {
-      const visibleIds = new Set(visibleResults.map((row) => row.id));
-      return hotelsWithCoords.filter((row) => visibleIds.has(row.id));
+      const ids = new Set(rows.map((row) => row.id));
+      return hotelsWithCoords.filter((row) => ids.has(row.id));
     }
     if (!cityCenter) return [];
-    return attachHotelCoordinates(visibleResults, cityCenter.lat, cityCenter.lng, resolvedCity ?? city);
-  }, [cityCenter, hotelsWithCoords, visibleResults, resolvedCity, city]);
+    return attachHotelCoordinates(rows, cityCenter.lat, cityCenter.lng, resolvedCity ?? city);
+  }, [cityCenter, dismissedIds, hotelsWithCoords, results, resolvedCity, city, showNearby]);
 
   const chainCounts = useMemo(() => {
     const counts: Record<HotelChainId, number> = {
@@ -517,12 +526,12 @@ export function TripHotelSearch({
       hilton: 0,
       ihg: 0,
     };
-    for (const hotel of visibleResults) {
+    for (const hotel of results) {
       const chainId = matchHotelChain(hotel.chainName, hotel.name);
       if (chainId) counts[chainId] += 1;
     }
     return counts;
-  }, [visibleResults]);
+  }, [results]);
 
   const detailHotel = results.find((row) => row.id === detailHotelId && !dismissedIds.has(row.id)) ?? null;
 
@@ -782,21 +791,23 @@ export function TripHotelSearch({
                 <HotelChainFilterBar toggles={chainToggles} onChange={handleChainToggle} />
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   {HOTEL_CHAINS.map((chain) => `${chain.label} ${chainCounts[chain.id]}`).join(" · ")}
-                  {" · "}Uncheck a chain to hide its hotels (including sub-brands like Andaz or Moxy).
+                  {" · "}Filters the list below. Map keeps every chain color — checked chains stay bright.
                 </p>
               </div>
 
-              {cityCenter && mappedHotels.length > 0 ? (
+              {cityCenter && mapHotels.length > 0 ? (
                 <div id="hotel-search-map" className="mb-4 scroll-mt-24">
                   <HotelStayMap
                     city={resolvedCity ?? city}
                     centerLat={cityCenter.lat}
                     centerLng={cityCenter.lng}
-                    hotels={mappedHotels}
+                    hotels={mapHotels}
                     selectedId={mapSelectedId}
                     onSelect={openDetail}
                     payMode={payMode}
                     expanded={resultsView === "map"}
+                    enabledChains={enabledChains}
+                    chainFilterActive={!allChainsEnabled}
                     priceMin={priceMin}
                     priceMax={priceMax}
                     priceBounds={{ min: priceBounds.min, max: priceBounds.max }}
@@ -807,7 +818,7 @@ export function TripHotelSearch({
                     onOpenPreferences={() => setRefineOpen(true)}
                   />
                   <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    Pin color = hotel chain · gold ring = top match for you · M/T = metro and train
+                    Pin color = chain · gold ring = top match for your preferences · tap districts for area guides
                   </p>
                 </div>
               ) : null}
@@ -820,8 +831,9 @@ export function TripHotelSearch({
                       hotel={hotel}
                       totalInSearch={results.length}
                       premium
-                      payMode={payMode}
-                      onAdd={() => openDetail(hotel)}
+                    payMode={payMode}
+                    stayProfile={stayProfile}
+                    onAdd={() => openDetail(hotel)}
                     />
                   ))}
                 </div>
@@ -834,6 +846,7 @@ export function TripHotelSearch({
                       totalInSearch={results.length}
                       compact
                       payMode={payMode}
+                      stayProfile={stayProfile}
                       selected={detailHotelId === hotel.id || mapSelectedId === hotel.id}
                       onSelect={() => openDetail(hotel)}
                       onAdd={() => openDetail(hotel)}
@@ -852,6 +865,7 @@ export function TripHotelSearch({
                       totalInSearch={results.length}
                       compact
                       payMode={payMode}
+                      stayProfile={stayProfile}
                       selected={detailHotelId === hotel.id}
                       onSelect={() => openDetail(hotel)}
                       onAdd={() => openDetail(hotel)}

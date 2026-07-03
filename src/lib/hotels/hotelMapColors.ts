@@ -1,14 +1,19 @@
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
 import { resolveHotelChainMapColor } from "@/lib/hotels/hotelChainDisplay";
+import { matchHotelChain, type HotelChainId } from "@/lib/loyalty/chainRegistry";
 
 export interface HotelMapColorStyle {
   bg: string;
   text: string;
   ring: string;
-  /** Chain or independent bucket */
   label: string;
-  /** Fit quality when user needs both chain + match context */
   fitLabel: "Top match" | "Good fit" | "Other" | null;
+  dimmed: boolean;
+}
+
+export interface HotelMapPinOptions {
+  enabledChains?: Set<HotelChainId>;
+  chainFilterActive?: boolean;
 }
 
 export function fitScoreRange(hotels: RankedHotelSearchResult[]): { min: number; max: number } {
@@ -39,13 +44,25 @@ function isGoodFit(hotel: RankedHotelSearchResult, range: { min: number; max: nu
   return ratio >= 0.35;
 }
 
+function isChainHighlighted(
+  hotel: RankedHotelSearchResult,
+  options?: HotelMapPinOptions,
+): boolean {
+  if (!options?.chainFilterActive) return true;
+  const chainId = matchHotelChain(hotel.chainName, hotel.name);
+  if (!chainId) return true;
+  return options.enabledChains?.has(chainId) ?? true;
+}
+
 export function hotelMapPinStyle(
   hotel: RankedHotelSearchResult,
   range: { min: number; max: number },
+  options?: HotelMapPinOptions,
 ): HotelMapColorStyle {
   const chainColor = resolveHotelChainMapColor(hotel.chainName, hotel.name);
   const strongMatch = isStrongMatch(hotel, range);
   const goodFit = isGoodFit(hotel, range);
+  const highlighted = isChainHighlighted(hotel, options);
 
   return {
     bg: chainColor.bg,
@@ -53,5 +70,6 @@ export function hotelMapPinStyle(
     ring: strongMatch ? "#f4c95d" : goodFit ? "#ffffff" : "#e2e8f0",
     label: chainColor.label,
     fitLabel: strongMatch ? "Top match" : goodFit ? "Good fit" : "Other",
+    dimmed: !highlighted,
   };
 }

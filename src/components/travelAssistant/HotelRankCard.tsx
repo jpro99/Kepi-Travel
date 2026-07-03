@@ -10,6 +10,8 @@ import {
   topAmenityIcons,
 } from "@/lib/hotels/hotelCardDisplay";
 import { resolveHotelChainPresentation } from "@/lib/hotels/hotelChainDisplay";
+import { buildHotelMatchSummary } from "@/lib/hotels/hotelMatchSummary";
+import type { HotelStayProfile } from "@/lib/memory/hotelStayProfile";
 import { hasKepiBookableLiveRate } from "@/lib/hotels/hotelLiveRate";
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
 import { HotelInventoryBadgePill } from "@/components/travelAssistant/HotelInventoryBadgePill";
@@ -38,6 +40,7 @@ interface HotelRankCardProps {
   onDismiss?: () => void;
   onSelect?: () => void;
   payMode?: HotelPayMode;
+  stayProfile?: HotelStayProfile | null;
 }
 
 export function HotelRankCard({
@@ -50,9 +53,11 @@ export function HotelRankCard({
   onDismiss,
   onSelect,
   payMode = "any",
+  stayProfile = null,
 }: HotelRankCardProps) {
   const chain = resolveHotelChainPresentation(hotel);
   const nightlyPts = pointsPerNight(hotel);
+  const matchSummary = buildHotelMatchSummary(hotel, stayProfile, totalInSearch);
   const showPoints = payMode === "points" || payMode === "any";
   const hero = resolveHotelHeroVisual(hotel);
   const nightlyLabel = formatHotelNightlyPrice(hotel);
@@ -137,7 +142,28 @@ export function HotelRankCard({
             {totalLabel ? <p className="text-right text-sm text-slate-500">{totalLabel}</p> : null}
           </div>
 
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">{matchReason}</p>
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">{matchSummary.headline}</p>
+          {matchSummary.matches.length > 0 ? (
+            <ul className="space-y-1 text-xs text-slate-600 dark:text-slate-300">
+              {matchSummary.matches.map((item) => (
+                <li key={item} className="flex gap-2">
+                  <span className="text-emerald-600">✓</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {matchSummary.gaps.length > 0 ? (
+            <ul className="space-y-1 text-xs text-amber-800 dark:text-amber-200">
+              {matchSummary.gaps.map((item) => (
+                <li key={item} className="flex gap-2">
+                  <span>△</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <p className="text-xs text-slate-500">{matchReason}</p>
 
           {kepiBookable ? (
             <p className="text-xs font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
@@ -195,9 +221,12 @@ export function HotelRankCard({
           </div>
           <p className="truncate text-sm font-bold text-slate-900 dark:text-white">{hotel.name}</p>
           <p className="truncate text-xs text-slate-500">
-            {guestScore} · {nightlyLabel}
+            {matchSummary.headline} · {guestScore} · {nightlyLabel}
             {showPoints && nightlyPts ? ` · ${nightlyPts.toLocaleString()} pts` : ""}
           </p>
+          {matchSummary.matches[0] ? (
+            <p className="truncate text-[10px] text-emerald-700 dark:text-emerald-300">✓ {matchSummary.matches[0]}</p>
+          ) : null}
         </div>
         <button
           type="button"
