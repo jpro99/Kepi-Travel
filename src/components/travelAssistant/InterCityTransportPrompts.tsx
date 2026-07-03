@@ -46,7 +46,10 @@ export function InterCityTransportPrompts({
   };
 
   return (
-    <section className="overflow-hidden rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-sky-50 p-4 shadow-sm dark:border-amber-500/30 dark:from-amber-950/40 dark:via-slate-900 dark:to-sky-950/30">
+    <section
+      data-testid="inter-city-transport-prompts"
+      className="overflow-hidden rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-sky-50 p-4 shadow-sm dark:border-amber-500/30 dark:from-amber-950/40 dark:via-slate-900 dark:to-sky-950/30"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">
