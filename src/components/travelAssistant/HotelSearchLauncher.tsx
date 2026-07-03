@@ -121,6 +121,7 @@ export function HotelSearchLauncher({ tripName, defaults, onSearch }: HotelSearc
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const userEditedRef = useRef(false);
 
   const defaultCity = defaults?.city ?? "";
   const defaultCityIata = defaults?.cityIata ?? "";
@@ -130,11 +131,13 @@ export function HotelSearchLauncher({ tripName, defaults, onSearch }: HotelSearc
   const dateDefaultsKey = `${defaultCheckIn}|${defaultCheckOut}`;
 
   const applyCityDefaults = useCallback(() => {
+    if (userEditedRef.current) return;
     if (defaultCity) setCity(defaultCity);
     if (defaultCityIata) setCityIata(defaultCityIata);
   }, [defaultCity, defaultCityIata]);
 
   const applyDateDefaults = useCallback(() => {
+    if (userEditedRef.current) return;
     if (defaultCheckIn) setCheckIn(defaultCheckIn);
     if (defaultCheckOut) setCheckOut(defaultCheckOut);
   }, [defaultCheckIn, defaultCheckOut]);
@@ -191,11 +194,15 @@ export function HotelSearchLauncher({ tripName, defaults, onSearch }: HotelSearc
           value={city}
           cityIata={cityIata}
           onChange={(display, iata) => {
+            userEditedRef.current = true;
             setCity(display);
             setCityIata(iata);
           }}
-          placeholder="Venice (VCE) or Cortina"
+          placeholder="Lecce, Italy · Venice (VCE)"
         />
+        <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+          Type a city like Lecce, Italy — tap Search when ready.
+        </p>
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-3">
@@ -206,7 +213,10 @@ export function HotelSearchLauncher({ tripName, defaults, onSearch }: HotelSearc
           <input
             type="date"
             value={checkIn}
-            onChange={(event) => setCheckIn(event.target.value)}
+            onChange={(event) => {
+              userEditedRef.current = true;
+              setCheckIn(event.target.value);
+            }}
             className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
           />
         </div>
@@ -217,7 +227,10 @@ export function HotelSearchLauncher({ tripName, defaults, onSearch }: HotelSearc
           <input
             type="date"
             value={checkOut}
-            onChange={(event) => setCheckOut(event.target.value)}
+            onChange={(event) => {
+              userEditedRef.current = true;
+              setCheckOut(event.target.value);
+            }}
             className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
           />
         </div>
@@ -230,7 +243,7 @@ export function HotelSearchLauncher({ tripName, defaults, onSearch }: HotelSearc
         onClick={launchSearch}
         className="mt-4 w-full rounded-full bg-emerald-600 px-5 py-3 text-sm font-black text-white shadow-sm active:opacity-80"
       >
-        Search hotels & prices
+        Search hotels
       </button>
     </section>
   );

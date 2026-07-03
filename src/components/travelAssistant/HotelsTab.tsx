@@ -206,7 +206,7 @@ export function HotelsTab({
             </button>
           ) : null}
         </div>
-        {enableBookSearch ? (
+        {enableBookSearch && !(showBookSearch && onLaunchHotelSearch) ? (
           <div className="flex gap-2">
             <button
               type="button"

@@ -60,8 +60,11 @@ export function suggestHotelDestinations(raw: string): string[] {
   if (/monop|monopol/i.test(lower)) {
     suggestions.push("Monopoli, Italy", "Bari (BRI)", "Brindisi (BDS)");
   }
-  if (/puglia|salento/i.test(lower)) {
-    suggestions.push("Monopoli, Italy", "Bari (BRI)", "Brindisi (BDS)");
+  if (/lecce|salento/i.test(lower)) {
+    suggestions.push("Lecce, Italy", "Brindisi (BDS)", "Bari (BRI)");
+  }
+  if (/puglia/i.test(lower)) {
+    suggestions.push("Lecce, Italy", "Monopoli, Italy", "Bari (BRI)");
   }
   if (/\b(italy|italia)\b/i.test(lower) && suggestions.length === 0) {
     suggestions.push("Rome (FCO)", "Florence (FLR)", "Venice (VCE)", "Bari (BRI)");

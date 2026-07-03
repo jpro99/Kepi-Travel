@@ -127,6 +127,7 @@ export function resolveHotelMapPosition(input: {
 export function filterHotelsWithinRenderDistance<T extends HotelSearchResult>(
   hotels: T[],
   center: SearchCenter,
+  searchCity = "",
 ): T[] {
   return hotels.filter((hotel) => {
     if (!isFiniteCoord(hotel.lat, hotel.lng)) return true;

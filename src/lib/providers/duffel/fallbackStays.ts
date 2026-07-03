@@ -13,6 +13,7 @@ const REGION_NIGHTLY: Record<string, { min: number; max: number }> = {
   VCE: { min: 240, max: 420 },
   BRI: { min: 160, max: 280 },
   BDS: { min: 150, max: 260 },
+  LECCE: { min: 140, max: 250 },
   MONOPOLI: { min: 145, max: 255 },
   FLR: { min: 195, max: 320 },
   MXP: { min: 210, max: 350 },
@@ -50,8 +51,10 @@ function boutiqueNames(city: string): Array<{ name: string; chainName?: string }
 
 function regionalStays(city: string, iata: string): Array<{ name: string; chainName?: string }> {
   const haystack = `${city} ${iata}`.toLowerCase();
-  if (/monopoli|bari|brindisi|puglia|bds|bri/.test(haystack)) {
+  if (/monopoli|bari|brindisi|puglia|bds|bri|lecce|salento|ostuni|otranto/.test(haystack)) {
     return [
+      { name: `Palazzo ${city}` },
+      { name: `${city} Historical Center B&B` },
       { name: `Masseria ${city}` },
       { name: `${city} Old Town B&B` },
       { name: `Trullo Stay — near ${city}` },

@@ -68,6 +68,8 @@ export interface TripHotelSearchProps {
   defaultCheckOut?: string;
   onAddHotel: (hotel: HotelSearchResult) => void;
   onSavedToTrip?: (hotel: HotelSearchResult) => void;
+  /** Increment when a parent modal opens with new search params to run one auto-search. */
+  searchGeneration?: number;
 }
 
 function CityInput({
@@ -168,6 +170,7 @@ export function TripHotelSearch({
   defaultCheckOut = "",
   onAddHotel,
   onSavedToTrip,
+  searchGeneration = 0,
 }: TripHotelSearchProps) {
   const [city, setCity] = useState(defaultCity);
   const [cityIata, setCityIata] = useState(defaultCityIata);
@@ -182,7 +185,7 @@ export function TripHotelSearch({
   const [results, setResults] = useState<RankedHotelSearchResult[]>([]);
   const [resolvedCity, setResolvedCity] = useState<string | null>(null);
   const [preferenceInsight, setPreferenceInsight] = useState<string | null>(null);
-  const [showResults, setShowResults] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [payMode, setPayMode] = useState<PayMode>("any");
   const [sortMode, setSortMode] = useState<SortMode>("browse");
@@ -209,7 +212,8 @@ export function TripHotelSearch({
   const [refineOpen, setRefineOpen] = useState(false);
   const [hiddenOpen, setHiddenOpen] = useState(false);
   const [strictStyleFilter, setStrictStyleFilter] = useState(false);
-  const autoSearchKeyRef = useRef<string | null>(null);
+  const lastSearchGenerationRef = useRef(0);
+  const userEditedFieldsRef = useRef(false);
   const cityDefaultsKey = `${defaultCity}|${defaultCityIata}`;
   const dateDefaultsKey = `${defaultCheckIn}|${defaultCheckOut}`;
 
@@ -223,11 +227,13 @@ export function TripHotelSearch({
   }, []);
 
   const applyCityDefaults = useCallback(() => {
+    if (userEditedFieldsRef.current) return;
     setCity(defaultCity);
     setCityIata(defaultCityIata);
   }, [defaultCity, defaultCityIata]);
 
   const applyDateDefaults = useCallback(() => {
+    if (userEditedFieldsRef.current) return;
     setCheckIn(defaultCheckIn);
     setCheckOut(defaultCheckOut);
   }, [defaultCheckIn, defaultCheckOut]);
@@ -258,7 +264,7 @@ export function TripHotelSearch({
     setDismissedIds(new Set());
     setPreferenceInsight(null);
     setStrictStyleFilter(false);
-    setShowResults(true);
+    setHasSearched(true);
 
     try {
       const response = await fetch("/api/hotels/search", {
@@ -301,11 +307,16 @@ export function TripHotelSearch({
       }
 
       let hotels = payload.hotels ?? [];
+      const resolvedSearchCity = payload.city ?? destination;
       if (payload.resolved?.lat && payload.resolved?.lng) {
-        hotels = filterHotelsWithinRenderDistance(hotels, {
-          lat: payload.resolved.lat,
-          lng: payload.resolved.lng,
-        });
+        hotels = filterHotelsWithinRenderDistance(
+          hotels,
+          {
+            lat: payload.resolved.lat,
+            lng: payload.resolved.lng,
+          },
+          resolvedSearchCity,
+        );
       }
 
       setResults(hotels);
@@ -323,7 +334,8 @@ export function TripHotelSearch({
       setGoogleHotelsUrl(payload.googleHotelsUrl ?? null);
       setInCityCount(payload.inCityCount ?? 0);
       setMemberHotelPricing(Boolean(payload.memberHotelPricing));
-      setShowNearby(false);
+      const inCity = payload.inCityCount ?? 0;
+      setShowNearby(inCity === 0 && hotels.length > 0);
       setSortMode("browse");
       if (payload.resolved?.lat && payload.resolved?.lng) {
         setCityCenter({ lat: payload.resolved.lat, lng: payload.resolved.lng });
@@ -363,13 +375,13 @@ export function TripHotelSearch({
   };
 
   useEffect(() => {
-    const key = `${defaultCity}|${defaultCityIata}|${defaultCheckIn}|${defaultCheckOut}`;
+    if (searchGeneration <= 0 || searchGeneration === lastSearchGenerationRef.current) return;
+    lastSearchGenerationRef.current = searchGeneration;
+    userEditedFieldsRef.current = false;
     if (!defaultCity.trim() || !defaultCheckIn || !defaultCheckOut) return;
-    if (autoSearchKeyRef.current === key) return;
-    autoSearchKeyRef.current = key;
     void runSearch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultCity, defaultCityIata, defaultCheckIn, defaultCheckOut]);
+  }, [searchGeneration]);
 
   const enabledChains = useMemo(() => {
     const ids = enabledHotelChainIds(chainToggles);
@@ -487,7 +499,8 @@ export function TripHotelSearch({
     setCityIata(iataMatch?.[1] ?? "");
     setError(null);
     setErrorSuggestions([]);
-    setShowResults(false);
+    setHasSearched(false);
+    userEditedFieldsRef.current = true;
   };
 
   const renderErrorWithSuggestions = (): ReactNode => {
@@ -517,58 +530,83 @@ export function TripHotelSearch({
 
   return (
     <div className="space-y-4">
-      {!showResults ? (
-        <>
-          <CityInput
-            label="City or destination"
-            value={city}
-            onChange={(display, iata) => {
-              setCity(display);
-              setCityIata(iata);
-            }}
-            placeholder="e.g. Munich, Rome, New York"
-          />
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <div>
-              <label className={SEARCH_LABEL}>Check-in</label>
-              <input type="date" value={checkIn} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setCheckIn(e.target.value)} className={SEARCH_INPUT_LIGHT} />
-            </div>
-            <div>
-              <label className={SEARCH_LABEL}>Check-out</label>
-              <input type="date" value={checkOut} min={checkIn || new Date().toISOString().slice(0, 10)} onChange={(e) => setCheckOut(e.target.value)} className={SEARCH_INPUT_LIGHT} />
-            </div>
-            <div>
-              <label className={SEARCH_LABEL}>Guests</label>
-              <select value={guests} onChange={(e) => setGuests(Number(e.target.value))} className={SEARCH_INPUT_LIGHT}>
-                {[1, 2, 3, 4].map((n) => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={SEARCH_LABEL}>Rooms</label>
-              <select value={rooms} onChange={(e) => setRooms(Number(e.target.value))} className={SEARCH_INPUT_LIGHT}>
-                {[1, 2, 3].map((n) => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-              </select>
-            </div>
+      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900/60">
+        <CityInput
+          label="City or destination"
+          value={city}
+          onChange={(display, iata) => {
+            userEditedFieldsRef.current = true;
+            setCity(display);
+            setCityIata(iata);
+          }}
+          placeholder="e.g. Lecce, Italy · Munich (MUC)"
+        />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div>
+            <label className={SEARCH_LABEL}>Check-in</label>
+            <input
+              type="date"
+              value={checkIn}
+              min={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => {
+                userEditedFieldsRef.current = true;
+                setCheckIn(e.target.value);
+              }}
+              className={SEARCH_INPUT_LIGHT}
+            />
           </div>
-          {error ? renderErrorWithSuggestions() : null}
-          <button type="button" disabled={loading} onClick={() => void runSearch()} className={`${SEARCH_PRIMARY_BUTTON} bg-[#0b1f3a] text-[#f4c95d] disabled:opacity-60`}>
-            {loading ? "Searching…" : "Search hotels"}
-          </button>
-        </>
-      ) : (
+          <div>
+            <label className={SEARCH_LABEL}>Check-out</label>
+            <input
+              type="date"
+              value={checkOut}
+              min={checkIn || new Date().toISOString().slice(0, 10)}
+              onChange={(e) => {
+                userEditedFieldsRef.current = true;
+                setCheckOut(e.target.value);
+              }}
+              className={SEARCH_INPUT_LIGHT}
+            />
+          </div>
+          <div>
+            <label className={SEARCH_LABEL}>Guests</label>
+            <select value={guests} onChange={(e) => setGuests(Number(e.target.value))} className={SEARCH_INPUT_LIGHT}>
+              {[1, 2, 3, 4].map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={SEARCH_LABEL}>Rooms</label>
+            <select value={rooms} onChange={(e) => setRooms(Number(e.target.value))} className={SEARCH_INPUT_LIGHT}>
+              {[1, 2, 3].map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {!hasSearched && error ? renderErrorWithSuggestions() : null}
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => void runSearch()}
+          className={`${SEARCH_PRIMARY_BUTTON} bg-[#0b1f3a] text-[#f4c95d] disabled:opacity-60`}
+        >
+          {loading ? "Searching…" : "Search hotels"}
+        </button>
+      </section>
+
+      {hasSearched ? (
         <div className="rounded-3xl bg-[#fafafa] p-4 dark:bg-[#0b1f3a] md:p-6">
           <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-2xl font-black text-slate-900 dark:text-white">{resolvedCity ?? city}</h2>
               <p className="mt-1 text-sm text-slate-500">
                 {checkIn} → {checkOut} · {visibleResults.length} hotel{visibleResults.length === 1 ? "" : "s"}
+                {results.length > visibleResults.length ? ` (${results.length} total)` : ""}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setRefineOpen(true)}
@@ -576,23 +614,24 @@ export function TripHotelSearch({
               >
                 Refine
               </button>
-              <button
-                type="button"
-                onClick={() => setResultsView((view) => (view === "map" ? "list" : "map"))}
-                className="rounded-full bg-[#f4c95d] px-4 py-2 text-sm font-bold text-[#0b1f3a]"
-              >
-                {resultsView === "map" ? "List" : "Map"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowResults(false);
-                  setError(null);
-                }}
-                className="rounded-full px-3 py-2 text-sm text-slate-500"
-              >
-                Edit
-              </button>
+              {visibleResults.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setResultsView((view) => (view === "map" ? "list" : "map"))}
+                  className="rounded-full bg-[#f4c95d] px-4 py-2 text-sm font-bold text-[#0b1f3a]"
+                >
+                  {resultsView === "map" ? "List" : "Map"}
+                </button>
+              ) : null}
+              {inCityCount === 0 && results.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setShowNearby((value) => !value)}
+                  className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-200"
+                >
+                  {showNearby ? "In-city only" : `+ Nearby (${nearbyCount})`}
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -727,6 +766,24 @@ export function TripHotelSearch({
             </p>
           ) : null}
 
+          {!loading && visibleResults.length === 0 && results.length === 0 ? (
+            <div className="space-y-3 rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-5 dark:border-slate-600 dark:bg-slate-900/40">
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                No hotels loaded for this search. Edit the destination above and tap Search hotels again, or try a nearby airport code (e.g. BRI for Puglia).
+              </p>
+              {googleHotelsUrl ? (
+                <a
+                  href={googleHotelsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex text-sm font-semibold text-[#0b1f3a] underline dark:text-[#f4c95d]"
+                >
+                  Browse all on Google Hotels →
+                </a>
+              ) : null}
+            </div>
+          ) : null}
+
           {detailHotel ? (
             <HotelDetailSheet
               hotel={detailHotel}
@@ -774,7 +831,7 @@ export function TripHotelSearch({
             onAdjustPreferences={() => setRefineOpen(true)}
           />
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
