@@ -3,7 +3,7 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@/lib/maplibreCspWorker";
 import { useEffect, useRef, useCallback, useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AirportNavigatorMap } from "@/components/travelAssistant/AirportNavigatorMap";
 import {
   deriveEligibleLounges,
@@ -71,6 +71,8 @@ function stylePathFor(styleId: MapStyleId): string {
 /* ─── Component ──────────────────────────────────────────────── */
 export function LiveMapPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlPrefersAirport = searchParams.get("view") === "airport";
   const mapEl = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
@@ -450,11 +452,11 @@ export function LiveMapPage() {
         the SAME question AirportMode does, via useActiveFlight) ── */
   const { activeFlight } = useActiveFlight();
   const { credentials: navCredentials, profile: navProfile, saveCredentials } = useNavigatorCredentials();
-  const [mapView, setMapView] = useState<"family" | "airport">("family");
+  const [mapView, setMapView] = useState<"family" | "airport">(urlPrefersAirport ? "airport" : "family");
   const [navLat, setNavLat] = useState<number | null>(null);
   const [navLon, setNavLon] = useState<number | null>(null);
   const navWatchRef = useRef<number | null>(null);
-  const autoAirportRef = useRef(false);
+  const autoAirportRef = useRef(urlPrefersAirport);
 
   // Passive low-accuracy watch for proximity + indoor snapping (separate from
   // the consent-gated family location SHARING — this never leaves the device)
@@ -685,6 +687,7 @@ export function LiveMapPage() {
               credentials={navCredentials}
               onCredentialsAnswer={saveCredentials}
               eligibleLoungeNames={navEligibleLounges}
+              onSwitchToFamilyView={() => setMapView("family")}
             />
           </div>
         )}

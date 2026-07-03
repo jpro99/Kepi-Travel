@@ -18,3 +18,8 @@ export function getAirportLayout(iata: string | null | undefined): AirportLayout
 export function hasAirportLayout(iata: string | null | undefined): boolean {
   return getAirportLayout(iata) !== null;
 }
+
+/** Airports with curated indoor walkway graphs (turn-by-turn terminal map). */
+export function listSupportedIndoorAirports(): string[] {
+  return Object.keys(LAYOUTS);
+}

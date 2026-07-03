@@ -5,6 +5,7 @@ import "@/lib/maplibreCspWorker";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AirportLayout, ComputedRoute, PoiDefinition, SnappedPosition, TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
+import { AirportNavigatorFallback } from "@/components/travelAssistant/AirportNavigatorFallback";
 import {
   initialJourneyState,
   phaseStatusLine,
@@ -48,6 +49,8 @@ interface AirportNavigatorMapProps {
   onCredentialsAnswer: (creds: { tsaPreCheck: boolean; clear: boolean }) => void;
   /** Lounge names the traveler can access via airline status (AirportMode). */
   eligibleLoungeNames?: string[];
+  /** Switch Live Map back to family GPS view (unsupported-airport fallback). */
+  onSwitchToFamilyView?: () => void;
 }
 
 const COLOR = {
@@ -121,6 +124,7 @@ export function AirportNavigatorMap({
   flightDelayed = false,
   proximityStatus = "away",
   fill = false,
+  onSwitchToFamilyView,
 }: AirportNavigatorMapProps) {
   const mapEl = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -131,7 +135,7 @@ export function AirportNavigatorMap({
   const userMarkerRef = useRef<any>(null);
 
   const [layout, setLayout] = useState<AirportLayout | null>(null);
-  const [layoutError, setLayoutError] = useState(false);
+  const [layoutStatus, setLayoutStatus] = useState<"loading" | "ready" | "unsupported" | "error">("loading");
   const [mapReady, setMapReady] = useState(false);
   const [activeRoute, setActiveRoute] = useState<ComputedRoute | null>(null);
   const [activeDestName, setActiveDestName] = useState<string | null>(null);
@@ -252,14 +256,22 @@ export function AirportNavigatorMap({
   useEffect(() => {
     let cancelled = false;
     setLayout(null);
-    setLayoutError(false);
+    setLayoutStatus("loading");
     void fetch(`/api/airport-nav/${encodeURIComponent(iata)}/layout`)
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
-      .then((data: AirportLayout) => {
-        if (!cancelled) setLayout(data);
+      .then(async (res) => {
+        if (res.status === 404) {
+          if (!cancelled) setLayoutStatus("unsupported");
+          return;
+        }
+        if (!res.ok) throw new Error(String(res.status));
+        const data = (await res.json()) as AirportLayout;
+        if (!cancelled) {
+          setLayout(data);
+          setLayoutStatus("ready");
+        }
       })
       .catch(() => {
-        if (!cancelled) setLayoutError(true);
+        if (!cancelled) setLayoutStatus("error");
       });
     return () => {
       cancelled = true;
@@ -1060,7 +1072,30 @@ export function AirportNavigatorMap({
   }, [mapReady, activeRoute]);
 
   /* ── Render ─────────────────────────────────────────────────────────── */
-  if (layoutError) return null;
+  if (layoutStatus === "unsupported" || layoutStatus === "error") {
+    return (
+      <AirportNavigatorFallback
+        iata={iata}
+        gateCode={gateCode}
+        airlineName={airlineName}
+        flightNumber={flightNumber}
+        arrivalAirport={arrivalAirport}
+        departureTerminal={departureTerminal}
+        departureClockLabel={departureClockLabel}
+        flightStatusLabel={flightStatusLabel}
+        flightDelayed={flightDelayed}
+        minutesToDeparture={minutesToDeparture}
+        proximityStatus={proximityStatus}
+        userLat={userLat}
+        userLon={userLon}
+        credentials={credentials}
+        eligibleLoungeNames={eligibleLoungeNames}
+        fill={fill}
+        onSwitchToFamilyView={onSwitchToFamilyView}
+        layoutLoadFailed={layoutStatus === "error"}
+      />
+    );
+  }
 
   const quietMode = journeyPhase === "security";
   const nextInstruction = activeRoute?.instructions[Math.min(currentStepIdx, Math.max(0, (activeRoute?.instructions.length ?? 1) - 1))] ?? null;
@@ -1192,7 +1227,7 @@ export function AirportNavigatorMap({
       </div>
 
       {/* Loading */}
-      {!layout && !layoutError && (
+      {!layout && layoutStatus === "loading" && (
         <div className="absolute inset-0 flex items-center justify-center">
           <p className="text-xs font-semibold text-sky-200/80">Loading terminal map…</p>
         </div>
