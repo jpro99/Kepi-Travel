@@ -11,6 +11,8 @@ import type { TripActionItem } from "@/lib/travelAssistant/tripActionItems";
 import type { DayPlanRecord, ItineraryPlansData } from "@/lib/travelAssistant/itineraryDayPlan";
 import { InterCityTransportPrompts } from "@/components/travelAssistant/InterCityTransportPrompts";
 import type { FlightSearchPlan, PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
+import type { InterCityTransportGap } from "@/lib/travelAssistant/interCityTransport";
+import type { QuickGroundMode } from "@/lib/travelAssistant/quickGroundTransport";
 
 interface ItineraryTabViewProps {
   tripName: string;
@@ -63,7 +65,7 @@ interface ItineraryTabViewProps {
   onPlanHotel?: (dateKey: string, city: string) => void;
   plannedFlightLegs?: PlannedFlightLeg[];
   onSearchMissingFlights?: (plan: FlightSearchPlan, selectedLegs: PlannedFlightLeg[]) => void;
-  onAddTransport?: () => void;
+  onQuickGroundTransport?: (gap: InterCityTransportGap, mode: QuickGroundMode) => void;
 }
 
 export function ItineraryTabView({
@@ -97,7 +99,7 @@ export function ItineraryTabView({
   onPlanHotel,
   plannedFlightLegs = [],
   onSearchMissingFlights,
-  onAddTransport,
+  onQuickGroundTransport,
 }: ItineraryTabViewProps) {
   const hasTripDates = Boolean(tripStartDate && tripEndDate);
   const [planSavedFlash, setPlanSavedFlash] = useState(false);
@@ -141,11 +143,11 @@ export function ItineraryTabView({
         onReviewPricing={onReviewPricing}
       />
 
-      {plannedFlightLegs.length > 0 && onSearchMissingFlights && onAddTransport ? (
+      {plannedFlightLegs.length > 0 && onSearchMissingFlights && onQuickGroundTransport ? (
         <InterCityTransportPrompts
           legs={plannedFlightLegs}
           onSearchFlights={onSearchMissingFlights}
-          onAddTransport={onAddTransport}
+          onQuickGroundTransport={onQuickGroundTransport}
         />
       ) : null}
 

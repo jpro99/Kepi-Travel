@@ -148,6 +148,12 @@ import {
   type PlannedStayCity,
 } from "@/lib/travelAssistant/tripPlanBooking";
 import { buildTripActionItems, type TripActionItem } from "@/lib/travelAssistant/tripActionItems";
+import type { InterCityTransportGap } from "@/lib/travelAssistant/interCityTransport";
+import {
+  buildQuickGroundTransportReservation,
+  type QuickGroundMode,
+} from "@/lib/travelAssistant/quickGroundTransport";
+import { generateId } from "@/lib/utils/generateId";
 import {
   PostBookingConfirmation,
   type PostBookingConfirmationData,
@@ -4427,6 +4433,17 @@ export default function TravelAssistantPage() {
         itineraryPrefs.dayNotes,
         consumerTripStartDate ?? activeTrip?.startDate,
         activeTrip?.endDate,
+        consumerReservationsSorted
+          .filter((reservation) => reservation.type === "ride" || reservation.type === "train")
+          .map((reservation) => ({
+            id: reservation.id,
+            type: reservation.type,
+            location: reservation.location,
+            title: reservation.title,
+            provider: reservation.provider,
+            confirmationCode: reservation.confirmationCode,
+            plannedOnly: reservation.plannedOnly,
+          })),
       ),
     [
       activeTrip?.endDate,
@@ -5566,6 +5583,61 @@ export default function TravelAssistantPage() {
       setToast(`${modeLabel} ✓`);
     },
     [setToast],
+  );
+
+  const handleQuickGroundTransport = useCallback(
+    (gap: InterCityTransportGap, mode: QuickGroundMode): void => {
+      const draft = buildQuickGroundTransportReservation(gap, mode);
+      const reservation: Reservation = {
+        id: generateId(),
+        type: draft.type,
+        title: draft.title,
+        provider: draft.provider,
+        localTime: draft.localTime || `${gap.departureDate?.slice(0, 10) ?? ""} 09:00`.trim(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Etc/UTC",
+        location: draft.location,
+        confirmationCode: draft.confirmationCode,
+        assignedTo: selectedFamilyMember?.id ? [selectedFamilyMember.id] : [],
+        stage: draft.type === "train" ? "airport" : "arrival",
+        critical: true,
+        confidence: "high",
+        notes: draft.notes,
+        source: "manual",
+        trainNumber: draft.trainNumber,
+      };
+      pushUndoSnapshot(`${draft.provider} added for ${gap.fromLabel} → ${gap.toLabel}`);
+      const existingReservations = trips.find((t) => t.id === (activeTripId ?? trips[0]?.id))?.reservations ?? [];
+      const nextReservations = [reservation, ...existingReservations];
+      setReservations(nextReservations);
+      const targetTripId = activeTripId ?? trips[0]?.id ?? null;
+      if (targetTripId) {
+        void fetch(TRIP_API_ROUTE, {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "update",
+            id: targetTripId,
+            patch: { reservations: nextReservations },
+          }),
+        }).then(async (res) => {
+          if (!res.ok) return;
+          const payload = (await res.json()) as { trips?: unknown[] };
+          if (Array.isArray(payload.trips)) {
+            const parsedTrips = payload.trips
+              .map((t) => normalizeManagedTrip(t))
+              .filter((t): t is ManagedTrip => t !== null);
+            setTrips(parsedTrips);
+          }
+        });
+      }
+      queueMutation(`${draft.provider} added · ${gap.fromLabel} → ${gap.toLabel}`, {
+        key: "quick-ground-transport",
+        reservationId: reservation.id,
+      });
+      setToast(`${draft.provider} added · ${gap.fromLabel} → ${gap.toLabel} ✓`);
+    },
+    [activeTripId, pushUndoSnapshot, queueMutation, selectedFamilyMember?.id, setToast, trips],
   );
 
   const openHotelSearchForSegment = useCallback((segment: TripStaySegment): void => {
@@ -9027,10 +9099,7 @@ export default function TravelAssistantPage() {
               onPlanHotel={handleItineraryPlanHotel}
               plannedFlightLegs={plannedFlightLegs}
               onSearchMissingFlights={(plan) => handleFlightSearchPlan(plan)}
-              onAddTransport={() => {
-                setManualReservationPresetType("ride");
-                setManualReservationModalOpen(true);
-              }}
+              onQuickGroundTransport={handleQuickGroundTransport}
             />
           ) : consumerTab === "book" ? (
             <BookTabView
@@ -9057,6 +9126,7 @@ export default function TravelAssistantPage() {
               onDelete={(id) => void handleDeleteReservation(id)}
               onAddFlight={() => setManualReservationModalOpen(true)}
               onAddHotel={openManualHotelReservation}
+              onQuickGroundTransport={handleQuickGroundTransport}
               usuallySkipsConnections={usuallySkipsConnections}
               staySegments={tripStaySegments}
               plannedStayCities={plannedStayCities}

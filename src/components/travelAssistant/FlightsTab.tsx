@@ -8,6 +8,8 @@ import { FlightSearchLauncher, type FlightSearchDefaults } from "@/components/tr
 import { ImportConfirmationDropzone } from "@/components/travelAssistant/ImportConfirmationDropzone";
 import { FlightSearchModal } from "@/components/travelAssistant/FlightSearchModal";
 import type { FlightSearchPlan, PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
+import type { InterCityTransportGap } from "@/lib/travelAssistant/interCityTransport";
+import type { QuickGroundMode } from "@/lib/travelAssistant/quickGroundTransport";
 import { buildGateInstructions, getAirportNav, buildArrivalGuide } from "@/lib/travelAssistant/airportNavigation";
 import {
   formatReservationCostLine,
@@ -72,6 +74,7 @@ interface FlightsTabProps {
   onCheckStatus: (id: string) => void;
   onDelete: (id: string) => void;
   onAdd: () => void;
+  onQuickGroundTransport?: (gap: InterCityTransportGap, mode: QuickGroundMode) => void;
   /** Trips tab on phone: bigger type, fewer widgets. */
   simplifiedMobile?: boolean;
   /** Mobile Book tab — show search launchers and leg picker. */
@@ -488,7 +491,7 @@ export function FlightsTab({
   onImportConfirmation,
   importConfirmationBusy = false,
   liveStatus = {}, locationStatus = "unknown", nearestAirport = "",
-  onReservationTap, onCheckStatus, onDelete, onAdd,
+  onReservationTap, onCheckStatus, onDelete, onAdd, onQuickGroundTransport,
   simplifiedMobile = false,
   enableBookSearch = false,
   hideRouteMap = false,
@@ -620,12 +623,12 @@ export function FlightsTab({
         />
       )}
 
-      {showBookSearch ? (
+      {showBookSearch && onQuickGroundTransport ? (
         <>
       <InterCityTransportPrompts
         legs={plannedFlightLegs}
         onSearchFlights={handleFlightSearch}
-        onAddTransport={onAdd}
+        onQuickGroundTransport={onQuickGroundTransport}
       />
 
       {plannedFlightLegs.some((leg) => leg.status === "needed") ? (

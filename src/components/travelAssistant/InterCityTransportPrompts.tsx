@@ -11,12 +11,18 @@ import {
   listMissingTransportGaps,
   type InterCityTransportGap,
 } from "@/lib/travelAssistant/interCityTransport";
+import {
+  quickGroundModeEmoji,
+  type QuickGroundMode,
+} from "@/lib/travelAssistant/quickGroundTransport";
 
 interface InterCityTransportPromptsProps {
   legs: PlannedFlightLeg[];
   onSearchFlights: (plan: FlightSearchPlan, selectedLegs: PlannedFlightLeg[]) => void;
-  onAddTransport: () => void;
+  onQuickGroundTransport: (gap: InterCityTransportGap, mode: QuickGroundMode) => void;
 }
+
+const QUICK_GROUND_MODES: QuickGroundMode[] = ["uber", "taxi", "metro", "train"];
 
 function roleBadge(role: InterCityTransportGap["role"]): string {
   if (role === "outbound") return "Start of trip";
@@ -24,10 +30,17 @@ function roleBadge(role: InterCityTransportGap["role"]): string {
   return "Between cities";
 }
 
+function quickGroundLabel(mode: QuickGroundMode): string {
+  if (mode === "uber") return "Uber";
+  if (mode === "taxi") return "Taxi";
+  if (mode === "metro") return "Metro";
+  return "Train";
+}
+
 export function InterCityTransportPrompts({
   legs,
   onSearchFlights,
-  onAddTransport,
+  onQuickGroundTransport,
 }: InterCityTransportPromptsProps) {
   const gaps = listMissingTransportGaps(legs);
   if (gaps.length === 0) return null;
@@ -55,17 +68,17 @@ export function InterCityTransportPrompts({
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">
             Missing transport
           </p>
-          <h3 className="mt-1 text-lg font-black text-slate-900 dark:text-white">Search for a new flight</h3>
+          <h3 className="mt-1 text-lg font-black text-slate-900 dark:text-white">How are you getting there?</h3>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-            Your itinerary has {gaps.length} leg{gaps.length === 1 ? "" : "s"} without booked transport.
+            Tap Uber, taxi, or metro to mark a leg — or search flights when you need a plane.
           </p>
         </div>
         <button
           type="button"
           onClick={searchAll}
-          className="shrink-0 rounded-full bg-[#007AFF] px-4 py-2 text-sm font-bold text-white shadow-sm active:opacity-80"
+          className="shrink-0 rounded-full border border-sky-300 bg-white px-4 py-2 text-sm font-bold text-sky-800 shadow-sm active:opacity-80 dark:border-sky-600 dark:bg-slate-900 dark:text-sky-200"
         >
-          Search all missing
+          Search all flights
         </button>
       </div>
 
@@ -94,19 +107,23 @@ export function InterCityTransportPrompts({
               {gap.fromIata && gap.toIata ? ` · ${gap.fromIata} → ${gap.toIata}` : ""}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
+              {QUICK_GROUND_MODES.map((mode) => (
+                <button
+                  key={`${gap.id}-${mode}`}
+                  type="button"
+                  data-testid={`quick-ground-${mode}-${gap.id}`}
+                  onClick={() => onQuickGroundTransport(gap, mode)}
+                  className="rounded-full border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-bold text-slate-800 shadow-sm active:opacity-80 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                >
+                  {quickGroundModeEmoji(mode)} {quickGroundLabel(mode)}
+                </button>
+              ))}
               <button
                 type="button"
                 onClick={() => searchOne(gap)}
                 className="rounded-full bg-[#007AFF] px-4 py-2 text-xs font-bold text-white active:opacity-80"
               >
                 Search flights
-              </button>
-              <button
-                type="button"
-                onClick={onAddTransport}
-                className="rounded-full border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 active:opacity-80 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
-              >
-                Add train or transfer
               </button>
             </div>
           </li>

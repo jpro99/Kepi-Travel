@@ -27,12 +27,12 @@ export function interCityTransportQuestion(gap: InterCityTransportGap): string {
 
 export function interCityTransportDetail(gap: InterCityTransportGap): string {
   if (gap.role === "connector") {
-    return "Kepi doesn't see a flight, train, or transfer booked for this leg yet. Search flights or add ground transport.";
+    return "Tap Uber, taxi, or metro to mark this hop — no form needed. Search flights only if you're flying.";
   }
   if (gap.role === "outbound") {
-    return "Book how you're getting to the first stop on this trip.";
+    return "Flying is usual here — or tap Uber/taxi for a local ride to the airport.";
   }
-  return "Book how you're getting home from your last stop.";
+  return "Tap Uber, taxi, or metro for a ground leg — or search flights to get home.";
 }
 
 /** Every unbooked leg from the trip plan that still needs transport. */

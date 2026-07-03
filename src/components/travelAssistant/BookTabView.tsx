@@ -10,6 +10,8 @@ import { HotelsTab } from "@/components/travelAssistant/HotelsTab";
 import type { FlightSearchDefaults } from "@/components/travelAssistant/FlightSearchLauncher";
 import type { HotelSearchDefaults } from "@/components/travelAssistant/HotelSearchLauncher";
 import type { PlannedFlightLeg, PlannedStayCity } from "@/lib/travelAssistant/tripPlanBooking";
+import type { InterCityTransportGap } from "@/lib/travelAssistant/interCityTransport";
+import type { QuickGroundMode } from "@/lib/travelAssistant/quickGroundTransport";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import type { ItinerarySelfCheckResult } from "@/lib/travelAssistant/itinerarySelfCheck";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
@@ -85,6 +87,7 @@ interface BookTabViewProps {
   onDelete: (id: string) => void;
   onAddFlight: () => void;
   onAddHotel: () => void;
+  onQuickGroundTransport?: (gap: InterCityTransportGap, mode: QuickGroundMode) => void;
   usuallySkipsConnections?: boolean;
   staySegments?: TripStaySegment[];
   plannedStayCities?: PlannedStayCity[];
@@ -130,6 +133,7 @@ export function BookTabView({
   onDelete,
   onAddFlight,
   onAddHotel,
+  onQuickGroundTransport,
   usuallySkipsConnections,
   staySegments,
   plannedStayCities,
@@ -209,6 +213,7 @@ export function BookTabView({
           onCheckStatus={onCheckStatus}
           onDelete={onDelete}
           onAdd={onAddFlight}
+          onQuickGroundTransport={onQuickGroundTransport}
         />
       ) : (
         <HotelsTab

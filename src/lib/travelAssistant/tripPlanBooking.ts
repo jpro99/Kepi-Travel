@@ -20,6 +20,10 @@ import {
   legDepartureAlignedWithBookedPath,
   type ItineraryPathSegment,
 } from "@/lib/travelAssistant/itineraryPathCoverage";
+import {
+  legCoveredByGroundTransport,
+  type TripGroundTransportInput,
+} from "@/lib/travelAssistant/quickGroundTransport";
 
 export interface PlannedStayCity {
   id: string;
@@ -158,6 +162,7 @@ export function buildPlannedFlightLegs(
   dayNotes: Record<string, string> = {},
   tripStart?: string | null,
   tripEnd?: string | null,
+  groundTransport: TripGroundTransportInput[] = [],
 ): PlannedFlightLeg[] {
   const start = intent?.startDate ?? tripStart?.slice(0, 10) ?? stopRanges[0]?.checkIn;
   const end = intent?.endDate ?? tripEnd?.slice(0, 10) ?? stopRanges[stopRanges.length - 1]?.checkOut;
@@ -166,17 +171,22 @@ export function buildPlannedFlightLegs(
       ? buildFlightLegsFromIntent(intent)
       : buildFlightLegsFromStopRanges(stopRanges, start, end, dayNotes);
   return legs.map((leg) => {
-    const coverage = legCoveredByFlights(leg, flights);
-    const match = coverage.covered ? flights.find((flight) => legMatchesFlight(leg, flight)) : undefined;
+    const flightCoverage = legCoveredByFlights(leg, flights);
+    const groundCoverage = flightCoverage.covered
+      ? { covered: false as const }
+      : legCoveredByGroundTransport(leg, groundTransport);
+    const covered = flightCoverage.covered || groundCoverage.covered;
+    const match = flightCoverage.covered ? flights.find((flight) => legMatchesFlight(leg, flight)) : undefined;
     const fn = match?.flightNumber?.trim();
-    const summary = coverage.summary ?? (match
-      ? [fn, `${match.flightDepartureAirport}→${match.flightArrivalAirport}`].filter(Boolean).join(" · ")
-      : undefined);
+    const summary =
+      flightCoverage.summary ??
+      groundCoverage.summary ??
+      (match ? [fn, `${match.flightDepartureAirport}→${match.flightArrivalAirport}`].filter(Boolean).join(" · ") : undefined);
     return {
       ...leg,
-      status: coverage.covered ? "booked" : "needed",
+      status: covered ? "booked" : "needed",
       bookedSummary: summary,
-      reservationId: coverage.reservationId ?? match?.id,
+      reservationId: flightCoverage.reservationId ?? groundCoverage.reservationId ?? match?.id,
     };
   });
 }

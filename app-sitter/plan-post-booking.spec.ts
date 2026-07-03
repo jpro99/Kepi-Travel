@@ -104,7 +104,7 @@ test.describe("Plan tab — inter-city transport", () => {
     await expect(prompts).toBeVisible({ timeout: 30_000 });
     await expect(prompts.getByText("Missing transport")).toBeVisible();
     await expect(prompts.getByRole("button", { name: "Search all missing" })).toBeVisible();
-    await expect(prompts.getByRole("button", { name: "Search flights" }).first()).toBeVisible();
-    await expect(prompts.getByRole("button", { name: "Add train or transfer" }).first()).toBeVisible();
+    await expect(prompts.getByRole("button", { name: /Uber/i }).first()).toBeVisible();
+    await expect(prompts.getByRole("button", { name: /Search flights/i }).first()).toBeVisible();
   });
 });
