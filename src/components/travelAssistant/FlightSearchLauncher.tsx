@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { suggestAirports, type AirportResult } from "@/lib/airports/lookup";
 import {
@@ -8,6 +8,7 @@ import {
   type FlightSearchPlan,
   type PlannedFlightLeg,
 } from "@/lib/travelAssistant/tripPlanBooking";
+import { useStableDefaultSync } from "@/lib/ui/useStableDefaultSync";
 
 export interface FlightSearchDefaults {
   fromIata?: string;
@@ -58,6 +59,7 @@ function AirportField({
         type="text"
         value={value}
         placeholder={placeholder}
+        autoComplete="off"
         onChange={(event) => {
           onChange(event.target.value, "");
           const next = suggestAirports(event.target.value);
@@ -159,18 +161,35 @@ export function FlightSearchLauncher({ tripName, defaults, onSearch }: FlightSea
   const [returnDate, setReturnDate] = useState("");
   const [message, setMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (defaults?.fromIata) {
-      setFromIata(defaults.fromIata.toUpperCase());
-      setFromDisplay(defaults.fromLabel ? `${defaults.fromLabel} (${defaults.fromIata})` : defaults.fromIata);
+  const defaultFromIata = defaults?.fromIata?.toUpperCase() ?? "";
+  const defaultToIata = defaults?.toIata?.toUpperCase() ?? "";
+  const defaultFromLabel = defaults?.fromLabel ?? "";
+  const defaultToLabel = defaults?.toLabel ?? "";
+  const defaultDepartDate = defaults?.departDate?.slice(0, 10) ?? "";
+  const defaultReturnDate = defaults?.returnDate?.slice(0, 10) ?? "";
+  const defaultsSyncKey = `${defaultFromIata}|${defaultToIata}|${defaultFromLabel}|${defaultToLabel}|${defaultDepartDate}|${defaultReturnDate}`;
+
+  const applyDefaults = useCallback(() => {
+    if (defaultFromIata) {
+      setFromIata(defaultFromIata);
+      setFromDisplay(defaultFromLabel ? `${defaultFromLabel} (${defaultFromIata})` : defaultFromIata);
     }
-    if (defaults?.toIata) {
-      setToIata(defaults.toIata.toUpperCase());
-      setToDisplay(defaults.toLabel ? `${defaults.toLabel} (${defaults.toIata})` : defaults.toIata);
+    if (defaultToIata) {
+      setToIata(defaultToIata);
+      setToDisplay(defaultToLabel ? `${defaultToLabel} (${defaultToIata})` : defaultToIata);
     }
-    if (defaults?.departDate) setDepartDate(defaults.departDate.slice(0, 10));
-    if (defaults?.returnDate) setReturnDate(defaults.returnDate.slice(0, 10));
-  }, [defaults]);
+    if (defaultDepartDate) setDepartDate(defaultDepartDate);
+    if (defaultReturnDate) setReturnDate(defaultReturnDate);
+  }, [
+    defaultDepartDate,
+    defaultFromIata,
+    defaultFromLabel,
+    defaultReturnDate,
+    defaultToIata,
+    defaultToLabel,
+  ]);
+
+  useStableDefaultSync(defaultsSyncKey, applyDefaults);
 
   const launchSearch = (): void => {
     setMessage(null);

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { suggestAirports, type AirportResult } from "@/lib/airports/lookup";
 import { suggestHotelDestinations } from "@/lib/hotels/destinationAliases";
+import { useStableDefaultSync } from "@/lib/ui/useStableDefaultSync";
 
 export interface HotelSearchDefaults {
   city?: string;
@@ -53,6 +54,7 @@ function CityField({
         type="text"
         value={value}
         placeholder={placeholder}
+        autoComplete="off"
         onChange={(event) => {
           const next = event.target.value;
           onChange(next, "");
@@ -120,12 +122,20 @@ export function HotelSearchLauncher({ tripName, defaults, onSearch }: HotelSearc
   const [checkOut, setCheckOut] = useState("");
   const [message, setMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (defaults?.city) setCity(defaults.city);
-    if (defaults?.cityIata) setCityIata(defaults.cityIata);
-    if (defaults?.checkIn) setCheckIn(defaults.checkIn.slice(0, 10));
-    if (defaults?.checkOut) setCheckOut(defaults.checkOut.slice(0, 10));
-  }, [defaults]);
+  const defaultCity = defaults?.city ?? "";
+  const defaultCityIata = defaults?.cityIata ?? "";
+  const defaultCheckIn = defaults?.checkIn?.slice(0, 10) ?? "";
+  const defaultCheckOut = defaults?.checkOut?.slice(0, 10) ?? "";
+  const defaultsSyncKey = `${defaultCity}|${defaultCityIata}|${defaultCheckIn}|${defaultCheckOut}`;
+
+  const applyDefaults = useCallback(() => {
+    if (defaultCity) setCity(defaultCity);
+    if (defaultCityIata) setCityIata(defaultCityIata);
+    if (defaultCheckIn) setCheckIn(defaultCheckIn);
+    if (defaultCheckOut) setCheckOut(defaultCheckOut);
+  }, [defaultCheckIn, defaultCheckOut, defaultCity, defaultCityIata]);
+
+  useStableDefaultSync(defaultsSyncKey, applyDefaults);
 
   const launchSearch = (): void => {
     setMessage(null);

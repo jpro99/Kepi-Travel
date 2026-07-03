@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { HotelDetailSheet } from "@/components/travelAssistant/HotelDetailSheet";
 import { HotelRankCard, pickFeaturedHotels } from "@/components/travelAssistant/HotelRankCard";
 import { HotelStayMap } from "@/components/travelAssistant/HotelStayMap";
@@ -27,6 +27,7 @@ import { HotelRefineSheet } from "@/components/travelAssistant/HotelRefineSheet"
 import { computeLivePriceBounds, resolveHotelDisplay } from "@/lib/hotels/hotelSearchFilters";
 import type { HotelStayProfile } from "@/lib/memory/hotelStayProfile";
 import { hotelParticipatesInPoints, HOTEL_CHAINS, matchHotelChain, type HotelChainId } from "@/lib/loyalty/chainRegistry";
+import { useStableDefaultSync } from "@/lib/ui/useStableDefaultSync";
 
 type PayMode = "any" | "cash" | "points";
 type SortMode = "browse" | "price" | "rating" | "match" | "points";
@@ -100,6 +101,7 @@ function CityInput({
         type="text"
         value={value}
         placeholder={placeholder}
+        autoComplete="off"
         onChange={(event) => {
           const next = event.target.value;
           onChange(next, "");
@@ -208,6 +210,7 @@ export function TripHotelSearch({
   const [hiddenOpen, setHiddenOpen] = useState(false);
   const [strictStyleFilter, setStrictStyleFilter] = useState(false);
   const autoSearchKeyRef = useRef<string | null>(null);
+  const defaultsSyncKey = `${defaultCity}|${defaultCityIata}|${defaultCheckIn}|${defaultCheckOut}`;
 
   useEffect(() => {
     void fetch("/api/hotels/profile", { cache: "no-store" })
@@ -218,12 +221,14 @@ export function TripHotelSearch({
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
+  const applyDefaults = useCallback(() => {
     setCity(defaultCity);
     setCityIata(defaultCityIata);
     setCheckIn(defaultCheckIn);
     setCheckOut(defaultCheckOut);
-  }, [defaultCity, defaultCityIata, defaultCheckIn, defaultCheckOut]);
+  }, [defaultCheckIn, defaultCheckOut, defaultCity, defaultCityIata]);
+
+  useStableDefaultSync(defaultsSyncKey, applyDefaults);
 
   const runSearch = async (): Promise<void> => {
     const destination = cityIata || city.trim();
