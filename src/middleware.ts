@@ -10,6 +10,7 @@ const isPublicRoute = createRouteMatcher([
   "/refer(.*)",
   "/share(.*)",
   "/join-family(.*)",
+  "/join-trip(.*)",
   "/privacy(.*)",
   "/terms(.*)",
   "/billing(.*)",

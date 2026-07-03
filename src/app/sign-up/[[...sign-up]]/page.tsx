@@ -7,6 +7,7 @@ import Link from "next/link";
 
 function SignUpPageInner() {
   const searchParams = useSearchParams();
+  const tripInviteCode = (searchParams.get("tripInvite") ?? "").trim().toUpperCase();
   const inviteCode = (
     searchParams.get("code") ??
     searchParams.get("inviteCode") ??
@@ -14,9 +15,11 @@ function SignUpPageInner() {
     ""
   ).toUpperCase();
 
-  const forceRedirectUrl = inviteCode
-    ? `/travel-assistant?redeem=${encodeURIComponent(inviteCode)}`
-    : "/travel-assistant";
+  const forceRedirectUrl = tripInviteCode
+    ? `/travel-assistant?openTripInvite=${encodeURIComponent(tripInviteCode)}`
+    : inviteCode
+      ? `/travel-assistant?redeem=${encodeURIComponent(inviteCode)}`
+      : "/travel-assistant";
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-4 bg-[#f0f4f8] dark:bg-slate-950">
@@ -26,10 +29,14 @@ function SignUpPageInner() {
           <p className="mt-1 text-sm text-slate-500">Create your account</p>
         </div>
 
-        {inviteCode ? (
+        {(inviteCode || tripInviteCode) ? (
           <div className="mb-4 rounded-2xl bg-gradient-to-r from-sky-600 to-sky-500 px-5 py-3 text-center">
-            <p className="text-xs font-bold uppercase tracking-wider text-sky-100">Invite code applied</p>
-            <p className="font-mono text-lg font-black tracking-widest text-white">{inviteCode}</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-sky-100">
+              {tripInviteCode ? "Trip invite" : "Invite code applied"}
+            </p>
+            <p className="font-mono text-lg font-black tracking-widest text-white">
+              {tripInviteCode || inviteCode}
+            </p>
           </div>
         ) : null}
 

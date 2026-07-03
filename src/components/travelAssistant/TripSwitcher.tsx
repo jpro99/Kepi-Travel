@@ -22,6 +22,8 @@ interface TripSwitcherProps {
   disabled?: boolean;
   creating?: boolean;
   canCreateTrip?: boolean;
+  canShareTrip?: boolean;
+  onCollaboratorJoined?: () => void;
   onRequestUpgrade?: () => void;
   createDisabledMessage?: string;
 }
@@ -35,6 +37,8 @@ export function TripSwitcher({
   disabled = false,
   creating = false,
   canCreateTrip = true,
+  canShareTrip = true,
+  onCollaboratorJoined,
   onRequestUpgrade,
   createDisabledMessage,
 }: TripSwitcherProps) {
@@ -76,7 +80,7 @@ export function TripSwitcher({
       </button>
       <button
         type="button"
-        disabled={disabled || !activeTrip}
+        disabled={disabled || !activeTrip || !canShareTrip}
         onClick={() => setShareOpen(true)}
         className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
       >
@@ -168,6 +172,7 @@ export function TripSwitcher({
         tripId={activeTrip?.id ?? null}
         tripName={activeTrip?.name ?? null}
         onClose={() => setShareOpen(false)}
+        onCollaboratorJoined={onCollaboratorJoined}
       />
     </div>
   );

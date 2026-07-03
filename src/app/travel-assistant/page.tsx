@@ -123,6 +123,7 @@ import {
 import { useItineraryPanelPrefs } from "@/components/travelAssistant/TripItineraryPanel";
 import { ItineraryTabView } from "@/components/travelAssistant/ItineraryTabView";
 import { BookTabView } from "@/components/travelAssistant/BookTabView";
+import { isExcursionReservation } from "@/lib/excursions/types";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
 import { hydrateReservationsPricing, applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
@@ -2011,7 +2012,9 @@ export default function TravelAssistantPage() {
   const [showAdvancedShortcut] = useState(false);
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [manualReservationModalOpen, setManualReservationModalOpen] = useState(false);
-  const [manualReservationPresetType, setManualReservationPresetType] = useState<"flight" | "hotel" | null>(null);
+  const [manualReservationPresetType, setManualReservationPresetType] = useState<
+    "flight" | "hotel" | "experience" | null
+  >(null);
   const [hotelSearchModalOpen, setHotelSearchModalOpen] = useState(false);
   const [hotelSearchSegment, setHotelSearchSegment] = useState<TripStaySegment | null>(null);
   const [postBookingConfirmation, setPostBookingConfirmation] = useState<PostBookingConfirmationData | null>(null);
@@ -2025,6 +2028,11 @@ export default function TravelAssistantPage() {
   const [myTripsModalOpen, setMyTripsModalOpen] = useState(false);
   const [deletingTripId, setDeletingTripId] = useState<string | null>(null);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [tripCollaboration, setTripCollaboration] = useState<{
+    ownerUserId: string;
+    role: "viewer" | "editor";
+    isOwner: boolean;
+  } | null>(null);
   const [travelDayOpen, setTravelDayOpen] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -2728,20 +2736,32 @@ export default function TravelAssistantPage() {
   const applyServerTripsSnapshot = useCallback(
     (payload: {
       trips?: unknown[];
+      sharedTrips?: unknown[];
       activeTripId?: string | null;
       activeTrip?: unknown;
       trip?: unknown;
+      collaboration?: { ownerUserId: string; role: "viewer" | "editor"; isOwner: boolean } | null;
     }): number => {
       const parsedTrips = Array.isArray(payload.trips)
         ? payload.trips.map((trip) => normalizeManagedTrip(trip)).filter((trip): trip is ManagedTrip => trip !== null)
         : [];
+      const parsedSharedTrips = Array.isArray(payload.sharedTrips)
+        ? payload.sharedTrips.map((trip) => normalizeManagedTrip(trip)).filter((trip): trip is ManagedTrip => trip !== null)
+        : [];
+      const mergedTrips = [...parsedTrips];
+      for (const sharedTrip of parsedSharedTrips) {
+        if (!mergedTrips.some((trip) => trip.id === sharedTrip.id)) {
+          mergedTrips.push(sharedTrip);
+        }
+      }
       const payloadActiveTrip = normalizeManagedTrip(payload.activeTrip ?? payload.trip);
-      const resolvedActiveTripId = payloadActiveTrip?.id ?? payload.activeTripId ?? parsedTrips[0]?.id ?? null;
+      const resolvedActiveTripId = payloadActiveTrip?.id ?? payload.activeTripId ?? mergedTrips[0]?.id ?? null;
       const resolvedActiveTrip =
-        payloadActiveTrip ?? parsedTrips.find((trip) => trip.id === resolvedActiveTripId) ?? parsedTrips[0] ?? null;
+        payloadActiveTrip ?? mergedTrips.find((trip) => trip.id === resolvedActiveTripId) ?? mergedTrips[0] ?? null;
 
-      setTrips((previous) => (areSnapshotsEqual(previous, parsedTrips) ? previous : parsedTrips));
+      setTrips((previous) => (areSnapshotsEqual(previous, mergedTrips) ? previous : mergedTrips));
       setActiveTripId((previous) => (previous === resolvedActiveTripId ? previous : resolvedActiveTripId));
+      setTripCollaboration(payload.collaboration ?? null);
 
       if (resolvedActiveTrip) {
         applyManagedTripToState(resolvedActiveTrip, { resetHighlight: true });
@@ -2764,10 +2784,69 @@ export default function TravelAssistantPage() {
 
       tripsHydratedRef.current = true;
       setTripsLoading(false);
-      return parsedTrips.length;
+      return mergedTrips.length;
     },
     [applyManagedTripToState],
   );
+
+  const tripCollaborationReadOnly =
+    tripCollaboration !== null && !tripCollaboration.isOwner && tripCollaboration.role === "viewer";
+  const tripCollaborationReadOnlyRef = useRef(tripCollaborationReadOnly);
+  tripCollaborationReadOnlyRef.current = tripCollaborationReadOnly;
+  const canShareTrip = tripCollaboration === null || tripCollaboration.isOwner;
+
+  const guardTripEdit = useCallback((): boolean => {
+    if (tripCollaborationReadOnlyRef.current) {
+      setToastRaw("View-only — you cannot edit this trip.");
+      return false;
+    }
+    return true;
+  }, []);
+
+  useEffect(() => {
+    const inviteCode = searchParams.get("openTripInvite");
+    if (!inviteCode || !user) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("openTripInvite");
+    window.history.replaceState({}, "", url.toString());
+    void fetch("/api/trips/collaborate/redeem", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: inviteCode }),
+    })
+      .then((response) => response.json())
+      .then(
+        (payload: {
+          ok?: boolean;
+          error?: string;
+          trip?: unknown;
+          collaboration?: { ownerUserId: string; role: "viewer" | "editor"; isOwner: boolean };
+          tripName?: string;
+          alreadyMember?: boolean;
+        }) => {
+          if (!payload.ok || !payload.trip) {
+            setToastRaw(`Trip invite failed: ${payload.error ?? "Unknown error"}`);
+            return;
+          }
+          applyServerTripsSnapshot({
+            trip: payload.trip,
+            collaboration: payload.collaboration ?? null,
+          });
+          void refreshTripsFromServer().catch(() => {
+            // Full trip list refresh is best-effort after redeem.
+          });
+          setToastRaw(
+            payload.alreadyMember
+              ? `Opened ${payload.tripName ?? "shared trip"} (${payload.collaboration?.role === "editor" ? "can edit" : "view only"}).`
+              : `You're in — ${payload.tripName ?? "shared trip"} (${payload.collaboration?.role === "editor" ? "can edit" : "view only"}).`,
+          );
+        },
+      )
+      .catch((err: unknown) =>
+        setToastRaw(`Trip invite error: ${err instanceof Error ? err.message : "Network error"}`),
+      );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, user]);
 
   const refreshTripsFromServer = useCallback(async (): Promise<number> => {
     const response = await fetch(TRIP_API_ROUTE, {
@@ -2779,8 +2858,10 @@ export default function TravelAssistantPage() {
     }
     const payload = (await response.json()) as {
       trips?: unknown[];
+      sharedTrips?: unknown[];
       activeTripId?: string | null;
       activeTrip?: unknown;
+      collaboration?: { ownerUserId: string; role: "viewer" | "editor"; isOwner: boolean } | null;
       degraded?: boolean;
     };
 
@@ -2909,6 +2990,7 @@ export default function TravelAssistantPage() {
     if (!tripsHydratedRef.current) return;
     if (!activeTripId) return;
     if (applyingTripStateRef.current) return;
+    if (tripCollaborationReadOnly) return;
     // Debounce autosave writes to avoid trip PUT bursts.
     const timeout = window.setTimeout(() => {
       void fetch(TRIP_API_ROUTE, {
@@ -2935,7 +3017,7 @@ export default function TravelAssistantPage() {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [activeTripId, activeTripRuntimeSnapshot]);
+  }, [activeTripId, activeTripRuntimeSnapshot, tripCollaborationReadOnly]);
 
   const handleSwitchTrip = useCallback(
     async (tripId: string): Promise<void> => {
@@ -2958,27 +3040,22 @@ export default function TravelAssistantPage() {
         const payload = (await response.json()) as {
           activeTrip?: unknown;
           trips?: unknown[];
+          sharedTrips?: unknown[];
           activeTripId?: string;
+          collaboration?: { ownerUserId: string; role: "viewer" | "editor"; isOwner: boolean } | null;
         };
+        applyServerTripsSnapshot(payload);
         const nextActiveTrip = normalizeManagedTrip(payload.activeTrip);
         if (!nextActiveTrip) {
           setToast("Selected trip could not be loaded.");
           return;
         }
-        setActiveTripId(payload.activeTripId ?? nextActiveTrip.id);
-        if (Array.isArray(payload.trips)) {
-          const parsedTrips = payload.trips
-            .map((trip) => normalizeManagedTrip(trip))
-            .filter((trip): trip is ManagedTrip => trip !== null);
-          setTrips(parsedTrips);
-        }
-        applyManagedTripToState(nextActiveTrip, { resetHighlight: true });
         setToast(`Switched to ${nextActiveTrip.name}.`);
       } catch {
         setToast("Could not switch trips right now.");
       }
     },
-    [activeTripId, applyManagedTripToState, setToast],
+    [activeTripId, applyServerTripsSnapshot, setToast],
   );
 
   const resolveTripPlanningWizardPhase = useCallback((): BookingWizardPhase => {
@@ -3003,6 +3080,7 @@ export default function TravelAssistantPage() {
 
   const handleSaveTripPlanningSetup = useCallback(
     async (tripDraft: TripSetupDraft): Promise<boolean> => {
+      if (!guardTripEdit()) return false;
       const tripName = tripDraft.tripName.trim();
       const destination = tripDraft.destination.trim();
       const departureDate = tripDraft.departureDate.trim();
@@ -3196,6 +3274,7 @@ export default function TravelAssistantPage() {
       activeTrip,
       activeTripId,
       applyServerTripsSnapshot,
+      guardTripEdit,
       refreshGlobalBillingStatus,
       setToast,
       tripListRows,
@@ -3305,6 +3384,7 @@ export default function TravelAssistantPage() {
 
   const handleDeleteTripById = useCallback(
     async (tripId: string): Promise<void> => {
+      if (!guardTripEdit()) return;
       if (!tripId) return;
       setDeletingTripId(tripId);
       try {
@@ -3334,7 +3414,7 @@ export default function TravelAssistantPage() {
         setDeletingTripId(null);
       }
     },
-    [applyServerTripsSnapshot, setToast],
+    [applyServerTripsSnapshot, guardTripEdit, setToast],
   );
 
   const handleDeleteEmptyTrips = useCallback(async (): Promise<void> => {
@@ -4090,6 +4170,10 @@ export default function TravelAssistantPage() {
     () => consumerDisplayReservations.filter((reservation) => reservation.type === "hotel").length,
     [consumerDisplayReservations],
   );
+  const wizardExcursionCount = useMemo(
+    () => consumerDisplayReservations.filter((reservation) => isExcursionReservation(reservation.notes)).length,
+    [consumerDisplayReservations],
+  );
   const delayedFlight = useMemo(
     () =>
       reservations.find(
@@ -4329,6 +4413,15 @@ export default function TravelAssistantPage() {
       consumerTripDestination,
       consumerTripStartDate,
     ],
+  );
+
+  const excursionSearchDefaults = useMemo(
+    () => ({
+      city: hotelSearchDefaults.city,
+      cityIata: hotelSearchDefaults.cityIata,
+      date: hotelSearchDefaults.checkIn || activeTrip?.startDate?.slice(0, 10) || "",
+    }),
+    [activeTrip?.startDate, hotelSearchDefaults.checkIn, hotelSearchDefaults.city, hotelSearchDefaults.cityIata],
   );
 
   const tripStaySegments = useMemo(
@@ -5427,6 +5520,7 @@ export default function TravelAssistantPage() {
   };
 
   const handleQuickAdd = (source: "email-paste" | "manual"): void => {
+    if (!guardTripEdit()) return;
     const normalizedText = quickAddText.trim();
     if (!normalizedText) {
       setToast("Add a quick note first so we can route it safely.");
@@ -5478,6 +5572,7 @@ export default function TravelAssistantPage() {
 
   const handleSaveManualReservation = useCallback(
     (value: ManualReservationFormValue): void => {
+      if (!guardTripEdit()) return;
       const mappedType = mapManualReservationType(value.reservationType);
       const notesPrefix = value.reservationType === "other" ? "Manual type: Other." : `Manual type: ${value.reservationType}.`;
       const localTime = value.localDateTime.replace("T", " ");
@@ -5548,7 +5643,7 @@ export default function TravelAssistantPage() {
         setToast("Reservation added ✓");
       }
     },
-    [activeTripId, pushUndoSnapshot, queueMutation, setToast, trips],
+    [activeTripId, guardTripEdit, pushUndoSnapshot, queueMutation, setToast, trips],
   );
 
   const openHotelSearchForTrip = useCallback((): void => {
@@ -5680,6 +5775,7 @@ export default function TravelAssistantPage() {
 
   const handleAddCityStay = useCallback(
     (input: { city: string; checkIn: string; checkOut: string }) => {
+      if (!guardTripEdit()) return;
       if (!activeTripId) return;
       const formatted = formatHotelSearchCityLabel(input.city);
       const segment: TripStaySegmentInput = {
@@ -5695,11 +5791,12 @@ export default function TravelAssistantPage() {
         [activeTripId]: [...(prev[activeTripId] ?? []), segment],
       }));
     },
-    [activeTripId],
+    [activeTripId, guardTripEdit],
   );
 
   const handleSetStayIntent = useCallback(
     async (segment: TripStaySegment, intent: "needs_hotel" | "skip"): Promise<void> => {
+      if (!guardTripEdit()) return;
       if (!activeTripId) return;
       setTripStayDecisionsByTrip((prev) => ({
         ...prev,
@@ -5736,7 +5833,7 @@ export default function TravelAssistantPage() {
         /* optimistic UI already updated */
       }
     },
-    [activeTripId],
+    [activeTripId, guardTripEdit],
   );
 
   const openManualHotelReservation = useCallback((): void => {
@@ -5744,8 +5841,15 @@ export default function TravelAssistantPage() {
     setManualReservationModalOpen(true);
   }, []);
 
+  const openManualExcursion = useCallback((): void => {
+    if (!guardTripEdit()) return;
+    setManualReservationPresetType("experience");
+    setManualReservationModalOpen(true);
+  }, [guardTripEdit]);
+
   const handleAddHotelFromSearch = useCallback(
     (hotel: HotelSearchResult): void => {
+      if (!guardTripEdit()) return;
       const searchCity =
         hotelSearchSegment?.city ||
         effectiveHotelSearchDefaults.city ||
@@ -5808,7 +5912,7 @@ export default function TravelAssistantPage() {
         syncedToTrip: true,
       });
     },
-    [activeTripId, effectiveHotelSearchDefaults.city, hotelSearchSegment?.city, pushUndoSnapshot, queueMutation, selectedFamilyMember.id, trips],
+    [activeTripId, effectiveHotelSearchDefaults.city, guardTripEdit, hotelSearchSegment?.city, pushUndoSnapshot, queueMutation, selectedFamilyMember.id, trips],
   );
 
   const handleImportParsedReservations = useCallback(
@@ -6600,6 +6704,7 @@ export default function TravelAssistantPage() {
 
   const persistTripReservationsAndReviewQueue = useCallback(
     (nextReservations: Reservation[], nextQueue: ReviewItem[]): void => {
+      if (!guardTripEdit()) return;
       const targetTripId = activeTripId ?? trips[0]?.id ?? null;
       if (!targetTripId) {
         return;
@@ -6646,11 +6751,12 @@ export default function TravelAssistantPage() {
           setToast("Network error while saving reservation.");
         });
     },
-    [activeTripId, setToast, trips],
+    [activeTripId, guardTripEdit, setToast, trips],
   );
 
   const handleDeleteReservation = useCallback(
     (reservationId: string): void => {
+      if (!guardTripEdit()) return;
       const reservation = reservations.find((item) => item.id === reservationId);
       if (!reservation) {
         setToast("Reservation not found.");
@@ -6738,7 +6844,7 @@ export default function TravelAssistantPage() {
         reservationId,
       });
     },
-    [activeTripId, pushUndoSnapshot, queueMutation, reservations, setToast, trips],
+    [activeTripId, guardTripEdit, pushUndoSnapshot, queueMutation, reservations, setToast, trips],
   );
 
   const handleMoveReservationToTrip = useCallback(
@@ -8667,7 +8773,12 @@ export default function TravelAssistantPage() {
         onAdjustTrip={() => void handleAdjustTripPlanning()}
         onCopyForward={() => void handleCopyForwardAddress(emptyStateForwardAddress)}
         onAddManual={() => {
-          const preset = tripPlanningWizardPhase === "hotels" ? "hotel" : "flight";
+          const preset =
+            tripPlanningWizardPhase === "hotels"
+              ? "hotel"
+              : tripPlanningWizardPhase === "excursions" || tripPlanningWizardPhase === "complete"
+                ? "experience"
+                : "flight";
           setTripPlanningWizardOpen(false);
           setManualReservationPresetType(preset);
           setManualReservationModalOpen(true);
@@ -8677,6 +8788,17 @@ export default function TravelAssistantPage() {
         hotelSearchCityIata={effectiveHotelSearchDefaults.cityIata}
         hotelSearchCheckIn={effectiveHotelSearchDefaults.checkIn}
         hotelSearchCheckOut={effectiveHotelSearchDefaults.checkOut}
+        excursionSearchCity={excursionSearchDefaults.city}
+        excursionSearchCityIata={excursionSearchDefaults.cityIata}
+        excursionSearchDate={excursionSearchDefaults.date}
+        onExcursionSearch={(params) => {
+          setTripPlanningWizardOpen(false);
+          navigateToConsumerTab("book", { bookView: "excursions" });
+        }}
+        onBrowseExcursions={() => {
+          setTripPlanningWizardOpen(false);
+          navigateToConsumerTab("book", { bookView: "excursions" });
+        }}
       />
       <RecordTripModal
         open={talkPlannerOpen}
@@ -8973,6 +9095,11 @@ export default function TravelAssistantPage() {
                   checkIn: hotelSearchDefaults.checkIn,
                   checkOut: hotelSearchDefaults.checkOut,
                 }}
+                excursionSearchDefaults={excursionSearchDefaults}
+                onExcursionBooked={() => {
+                  void refreshTripsFromServer();
+                }}
+                readOnly={tripCollaborationReadOnly}
                 staySegments={tripStaySegments}
                 plannedStayCities={plannedStayCities}
                 usuallySkipsConnections={usuallySkipsConnections}
@@ -9126,6 +9253,12 @@ export default function TravelAssistantPage() {
               onDelete={(id) => void handleDeleteReservation(id)}
               onAddFlight={() => setManualReservationModalOpen(true)}
               onAddHotel={openManualHotelReservation}
+              onAddExcursion={openManualExcursion}
+              onExcursionBooked={() => {
+                void refreshTripsFromServer();
+              }}
+              excursionSearchDefaults={excursionSearchDefaults}
+              readOnly={tripCollaborationReadOnly}
               onQuickGroundTransport={handleQuickGroundTransport}
               usuallySkipsConnections={usuallySkipsConnections}
               staySegments={tripStaySegments}
@@ -9145,6 +9278,7 @@ export default function TravelAssistantPage() {
               travelFitReservations={travelFitReservations}
               flightCount={wizardFlightCount}
               hotelCount={wizardHotelCount}
+              excursionCount={wizardExcursionCount}
               tripSpendSummary={tripSpendSummary}
               tripProblemCount={transportConflictReservationIds.size}
               onReviewPricing={() => navigateToBook("flights")}
@@ -9530,6 +9664,9 @@ export default function TravelAssistantPage() {
             tripId={activeTripId}
             tripName={activeTrip?.name ?? null}
             onClose={() => setShareModalOpen(false)}
+            onCollaboratorJoined={() => {
+              void refreshTripsFromServer();
+            }}
           />
         )}
         {manualReservationModalOpen ? (
@@ -9578,6 +9715,19 @@ export default function TravelAssistantPage() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_10%,rgba(56,189,248,0.14),transparent_45%),radial-gradient(circle_at_85%_25%,rgba(129,140,248,0.18),transparent_42%),radial-gradient(circle_at_50%_100%,rgba(34,197,94,0.08),transparent_45%)]" />
       <div className="relative z-10 mx-auto max-w-[1400px] space-y-5 px-3 py-5 sm:space-y-6 sm:px-4 sm:py-6 md:px-6">
         <header className="space-y-3">
+          {tripCollaborationReadOnly ? (
+            <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-50">
+              <p className="font-bold">View-only trip</p>
+              <p className="mt-1 text-amber-900 dark:text-amber-100">
+                You can browse this itinerary but cannot make changes. Ask the owner for edit access if you need to update bookings.
+              </p>
+            </div>
+          ) : tripCollaboration && !tripCollaboration.isOwner ? (
+            <div className="rounded-2xl border border-sky-300 bg-sky-50 px-4 py-3 text-sm text-sky-950 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-50">
+              <p className="font-bold">Shared trip — you can edit</p>
+              <p className="mt-1">Changes you make update the owner&apos;s trip for everyone.</p>
+            </div>
+          ) : null}
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
             <TripSwitcher
               trips={trips.map((trip) => ({
@@ -9594,6 +9744,10 @@ export default function TravelAssistantPage() {
               onManageTrips={() => setMyTripsModalOpen(true)}
               disabled={tripsLoading}
               canCreateTrip={canCreateAdditionalTrips}
+              canShareTrip={canShareTrip}
+              onCollaboratorJoined={() => {
+                void refreshTripsFromServer();
+              }}
               createDisabledMessage="Free plan supports one trip."
               onRequestUpgrade={() =>
                 openUpgradeModal("multi-trip", "Upgrade to Pro to create and switch between multiple trips.")
@@ -9657,6 +9811,7 @@ export default function TravelAssistantPage() {
           />
         </header>
         <QuickAddLane
+          readOnly={tripCollaborationReadOnly}
           onEvaluateStatus={evaluateStatus}
           onRunSmartEscalation={runSmartEscalation}
           onTriggerReminderDispatch={triggerReminderDispatch}

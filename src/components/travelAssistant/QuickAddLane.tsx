@@ -6,6 +6,7 @@ type ReservationType = "flight" | "hotel" | "train" | "ride" | "dinner";
 type Confidence = "high" | "medium" | "low";
 
 interface QuickAddLaneProps {
+  readOnly?: boolean;
   onEvaluateStatus: () => void;
   onRunSmartEscalation: () => void;
   onTriggerReminderDispatch: () => void;
@@ -29,6 +30,7 @@ interface QuickAddLaneProps {
 }
 
 export function QuickAddLane({
+  readOnly = false,
   onEvaluateStatus,
   onRunSmartEscalation,
   onTriggerReminderDispatch,
@@ -54,6 +56,11 @@ export function QuickAddLane({
 
   return (
     <section className="sticky top-2 z-20 -mx-1 rounded-2xl border border-slate-200 bg-white/90 p-2 backdrop-blur dark:border-slate-700/80 dark:bg-slate-900/90 md:static md:mx-0">
+      {readOnly ? (
+        <p className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+          View-only trip — quick add and edits are disabled.
+        </p>
+      ) : null}
       <div className="flex gap-2 overflow-x-auto pb-1 text-xs">
         <button
           type="button"
@@ -65,14 +72,16 @@ export function QuickAddLane({
         <button
           type="button"
           onClick={onRunSmartEscalation}
-          className="shrink-0 rounded-full bg-indigo-500/90 px-3 py-1.5 font-semibold text-slate-100 hover:bg-indigo-400"
+          disabled={readOnly}
+          className="shrink-0 rounded-full bg-indigo-500/90 px-3 py-1.5 font-semibold text-slate-100 hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {t("smartEscalation")}
         </button>
         <button
           type="button"
           onClick={onTriggerReminderDispatch}
-          className="shrink-0 rounded-full bg-amber-500/90 px-3 py-1.5 font-semibold text-slate-900 hover:bg-amber-400"
+          disabled={readOnly}
+          className="shrink-0 rounded-full bg-amber-500/90 px-3 py-1.5 font-semibold text-slate-900 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {t("dispatchReminders")}
         </button>
@@ -94,15 +103,17 @@ export function QuickAddLane({
         <button
           type="button"
           onClick={onAdvanceTripStage}
-          className="shrink-0 rounded-full bg-emerald-500/80 px-3 py-1.5 font-semibold text-slate-950 hover:bg-emerald-400"
+          disabled={readOnly}
+          className="shrink-0 rounded-full bg-emerald-500/80 px-3 py-1.5 font-semibold text-slate-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {t("advanceStage")}
         </button>
         <button
           type="button"
           onClick={onUndoLastCriticalChange}
+          disabled={readOnly}
           aria-label={t("undoCriticalChange")}
-          className="shrink-0 rounded-full bg-rose-500/85 px-3 py-1.5 font-semibold text-slate-950 hover:bg-rose-400"
+          className="shrink-0 rounded-full bg-rose-500/85 px-3 py-1.5 font-semibold text-slate-950 hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {t("undoCriticalChange")}
         </button>
@@ -123,9 +134,10 @@ export function QuickAddLane({
           data-testid="quick-add-input-desktop"
           type="text"
           value={quickAddText}
+          disabled={readOnly}
           onChange={(event) => onQuickAddTextChange(event.target.value)}
           placeholder={t("desktopPlaceholder")}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
         />
         <label htmlFor="quick-add-type-desktop" className="sr-only">
           {t("quickAddTypeLabel")}
@@ -133,8 +145,9 @@ export function QuickAddLane({
         <select
           id="quick-add-type-desktop"
           value={quickAddType}
+          disabled={readOnly}
           onChange={(event) => onQuickAddTypeChange(event.target.value as ReservationType)}
-          className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs dark:border-slate-700 dark:bg-slate-900"
+          className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900"
         >
           {(Object.keys(reservationTypeLabelByType) as ReservationType[]).map((type) => (
             <option key={type} value={type}>
@@ -148,8 +161,9 @@ export function QuickAddLane({
         <select
           id="quick-add-confidence-desktop"
           value={quickAddConfidence}
+          disabled={readOnly}
           onChange={(event) => onQuickAddConfidenceChange(event.target.value as Confidence)}
-          className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs dark:border-slate-700 dark:bg-slate-900"
+          className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900"
         >
           <option value="high">{t("highConfidence")}</option>
           <option value="medium">{t("mediumConfidence")}</option>
@@ -158,14 +172,16 @@ export function QuickAddLane({
         <button
           type="button"
           onClick={onVoiceQuickCapture}
-          className="rounded-lg bg-violet-500/85 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-violet-400"
+          disabled={readOnly}
+          className="rounded-lg bg-violet-500/85 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {t("voice")}
         </button>
         <button
           type="button"
           onClick={() => onQuickAdd("email-paste")}
-          className="rounded-lg bg-cyan-500/85 px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-cyan-400"
+          disabled={readOnly}
+          className="rounded-lg bg-cyan-500/85 px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {t("addAsEmail")}
         </button>
@@ -173,7 +189,8 @@ export function QuickAddLane({
           data-testid="quick-add-manual-button-desktop"
           type="button"
           onClick={() => onQuickAdd("manual")}
-          className="rounded-lg bg-emerald-500/85 px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-emerald-400"
+          disabled={readOnly}
+          className="rounded-lg bg-emerald-500/85 px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {t("addManual")}
         </button>
@@ -191,15 +208,17 @@ export function QuickAddLane({
           data-testid="quick-add-input-mobile"
           type="text"
           value={quickAddText}
+          disabled={readOnly}
           onChange={(event) => onQuickAddTextChange(event.target.value)}
           placeholder={t("mobilePlaceholder")}
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
         />
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={onVoiceQuickCapture}
-            className="rounded-lg bg-violet-500/85 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-violet-400"
+            disabled={readOnly}
+            className="rounded-lg bg-violet-500/85 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {t("voice")}
           </button>
@@ -207,7 +226,8 @@ export function QuickAddLane({
           data-testid="quick-add-manual-button-mobile"
             type="button"
             onClick={() => onQuickAdd("manual")}
-            className="rounded-lg bg-emerald-500/85 px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-emerald-400"
+            disabled={readOnly}
+            className="rounded-lg bg-emerald-500/85 px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {t("addNow")}
           </button>

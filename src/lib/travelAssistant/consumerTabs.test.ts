@@ -19,8 +19,10 @@ test("normalizeConsumerTabParam maps legacy calendar and book tabs", () => {
 test("resolveBookSubTab prefers bookView then legacy tab", () => {
   assert.equal(resolveBookSubTab("flights", null), "flights");
   assert.equal(resolveBookSubTab("hotels", null), "hotels");
+  assert.equal(resolveBookSubTab("excursions", null), "excursions");
   assert.equal(resolveBookSubTab("book", "hotels"), "hotels");
   assert.equal(resolveBookSubTab("book", "flights"), "flights");
+  assert.equal(resolveBookSubTab("book", "excursions"), "excursions");
 });
 
 test("resolvePlanSubView prefers planView then legacy calendar tab", () => {

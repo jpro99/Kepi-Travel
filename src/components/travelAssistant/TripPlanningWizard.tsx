@@ -12,6 +12,7 @@ import {
 import type { BookingWizardPhase } from "@/lib/travelAssistant/bookingWizard";
 import type { HotelSearchResult } from "@/lib/hotels/types";
 import { TripHotelSearch } from "@/components/travelAssistant/TripHotelSearch";
+import { ExcursionSearchLauncher } from "@/components/travelAssistant/ExcursionSearchLauncher";
 
 export interface TripPlanningWizardProps {
   open: boolean;
@@ -32,6 +33,17 @@ export interface TripPlanningWizardProps {
   hotelSearchCityIata?: string;
   hotelSearchCheckIn?: string;
   hotelSearchCheckOut?: string;
+  excursionSearchCity?: string;
+  excursionSearchCityIata?: string;
+  excursionSearchDate?: string;
+  onExcursionSearch?: (params: {
+    destination: string;
+    cityIata?: string;
+    date: string;
+    category: "all" | "cooking-class" | "food-tour" | "wine-tasting" | "cultural-tour" | "outdoor-adventure";
+    query: string;
+  }) => void;
+  onBrowseExcursions?: () => void;
 }
 
 function phaseLabel(phase: BookingWizardPhase): string {
@@ -61,6 +73,11 @@ export function TripPlanningWizard({
   hotelSearchCityIata = "",
   hotelSearchCheckIn = "",
   hotelSearchCheckOut = "",
+  excursionSearchCity = "",
+  excursionSearchCityIata = "",
+  excursionSearchDate = "",
+  onExcursionSearch,
+  onBrowseExcursions,
 }: TripPlanningWizardProps) {
   const [draft, setDraft] = useState<TripSetupDraft>({
     ...EMPTY_TRIP_SETUP_DRAFT,
@@ -223,10 +240,29 @@ export function TripPlanningWizard({
           {wizardPhase === "excursions" || wizardPhase === "complete" ? (
             <div className="space-y-4">
               <p className="text-sm text-slate-600 dark:text-slate-300">
-                Add tours, dinners, trains, or rides. Forward emails or use + Add manually anytime.
+                Book cooking classes, food tours, wine tastings, and local adventures — or add manually.
               </p>
+              {onExcursionSearch ? (
+                <ExcursionSearchLauncher
+                  defaults={{
+                    city: excursionSearchCity || draft.destination,
+                    cityIata: excursionSearchCityIata,
+                    date: excursionSearchDate || draft.departureDate,
+                  }}
+                  onSearch={onExcursionSearch}
+                />
+              ) : null}
+              {onBrowseExcursions ? (
+                <button
+                  type="button"
+                  onClick={onBrowseExcursions}
+                  className="w-full rounded-2xl border border-sky-300 bg-sky-50 py-3 text-sm font-bold text-sky-800 dark:border-sky-600 dark:bg-sky-950/40 dark:text-sky-100"
+                >
+                  Open experiences in Book tab →
+                </button>
+              ) : null}
               <button type="button" onClick={onAddManual} className="w-full rounded-2xl border border-slate-300 py-3 text-sm font-semibold">
-                + Add excursion / activity
+                + Add excursion / activity manually
               </button>
               {wizardPhase === "complete" ? (
                 <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">

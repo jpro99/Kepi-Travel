@@ -16,6 +16,15 @@ import {
   updateTrip,
 } from "@/lib/travelAssistant/tripStore";
 import { MAX_MINUTES_TO_DEPARTURE } from "@/lib/travelAssistant/tripWindow";
+import {
+  assertTripEditAccess,
+  clearSharedActiveTripRef,
+  getSharedActiveTripRef,
+  getTripAccessGrant,
+  listSharedTrips,
+  resolveTripForUser,
+  setSharedActiveTripRef,
+} from "@/lib/travelAssistant/tripCollaborationStore";
 import { generateId } from "@/lib/utils/generateId";
 
 const TripStageSchema = z.enum(["readiness", "pre-departure", "airport", "arrival", "recovery"]);
@@ -118,6 +127,66 @@ const DeleteBodySchema = z.union([
   }),
 ]);
 
+async function buildCollaborationTripsPayload(userId: string): Promise<{
+  trips: Awaited<ReturnType<typeof listTrips>>;
+  sharedTrips: Array<
+    Awaited<ReturnType<typeof listTrips>>[number] & {
+      collaboration: { ownerUserId: string; role: "viewer" | "editor"; isOwner: boolean };
+    }
+  >;
+  activeTripId: string | null;
+  activeTrip: Awaited<ReturnType<typeof getActiveTrip>>;
+  collaboration: { ownerUserId: string; role: "viewer" | "editor"; isOwner: boolean } | null;
+}> {
+  const [ownedTrips, sharedRefs, ownedActive, sharedActiveRef] = await Promise.all([
+    listTrips(userId),
+    listSharedTrips(userId),
+    getActiveTrip(userId),
+    getSharedActiveTripRef(userId),
+  ]);
+
+  const sharedTrips: Array<
+    Awaited<ReturnType<typeof listTrips>>[number] & {
+      collaboration: { ownerUserId: string; role: "viewer" | "editor"; isOwner: boolean };
+    }
+  > = [];
+
+  for (const ref of sharedRefs) {
+    const resolved = await resolveTripForUser(userId, ref.tripId, ref.ownerUserId);
+    if (!resolved) continue;
+    sharedTrips.push({
+      ...resolved.trip,
+      collaboration: resolved.access,
+    });
+  }
+
+  let activeTrip = ownedActive;
+  let activeTripId = ownedActive?.id ?? null;
+  let collaboration: { ownerUserId: string; role: "viewer" | "editor"; isOwner: boolean } | null =
+    ownedActive ? { ownerUserId: userId, role: "editor", isOwner: true } : null;
+
+  if (sharedActiveRef) {
+    const resolved = await resolveTripForUser(
+      userId,
+      sharedActiveRef.tripId,
+      sharedActiveRef.ownerUserId,
+    );
+    if (resolved) {
+      activeTrip = resolved.trip;
+      activeTripId = resolved.trip.id;
+      collaboration = resolved.access;
+    }
+  }
+
+  return {
+    trips: ownedTrips,
+    sharedTrips,
+    activeTripId,
+    activeTrip,
+    collaboration,
+  };
+}
+
 async function authorize(req: Request): Promise<
   | {
       ok: true;
@@ -184,24 +253,26 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const tripId = url.searchParams.get("id")?.trim() ?? "";
     if (tripId) {
-      const trip = await getTrip(tripId, auth.userId);
+      const ownerHint = url.searchParams.get("owner")?.trim() ?? "";
+      const resolved = await resolveTripForUser(
+        auth.userId,
+        tripId,
+        ownerHint || undefined,
+      );
+      if (!resolved) {
+        return NextResponse.json({ error: "Trip not found" }, { status: 404, headers: auth.headers });
+      }
       return NextResponse.json(
         {
-          trip,
+          trip: resolved.trip,
+          collaboration: resolved.access,
         },
         { headers: auth.headers },
       );
     }
 
-    const [trips, activeTrip] = await Promise.all([listTrips(auth.userId), getActiveTrip(auth.userId)]);
-    return NextResponse.json(
-      {
-        trips,
-        activeTripId: activeTrip?.id ?? null,
-        activeTrip,
-      },
-      { headers: auth.headers },
-    );
+    const payload = await buildCollaborationTripsPayload(auth.userId);
+    return NextResponse.json(payload, { headers: auth.headers });
   } catch (error) {
     auth.routeLogger.error("Trips GET failed; returning empty fallback.", {
       error: error instanceof Error ? error.message : "unknown",
@@ -309,22 +380,57 @@ export async function PUT(req: Request) {
         userId: auth.userId,
         tripId: parsed.data.id,
       });
-      const activeTrip = await setActiveTrip(parsed.data.id, auth.userId);
-      if (!activeTrip) {
+      const ownedActive = await setActiveTrip(parsed.data.id, auth.userId);
+      if (ownedActive) {
+        await clearSharedActiveTripRef(auth.userId);
+        const payload = await buildCollaborationTripsPayload(auth.userId);
+        return NextResponse.json(
+          {
+            activeTrip: ownedActive,
+            activeTripId: ownedActive.id,
+            trips: payload.trips,
+            sharedTrips: payload.sharedTrips,
+            collaboration: { ownerUserId: auth.userId, role: "editor", isOwner: true },
+          },
+          { headers: auth.headers },
+        );
+      }
+
+      const grant = await getTripAccessGrant(auth.userId, parsed.data.id);
+      if (!grant || grant.isOwner) {
         return NextResponse.json({ error: "Trip not found" }, { status: 404, headers: auth.headers });
       }
-      const trips = await listTrips(auth.userId);
+      const sharedTrip = await getTrip(parsed.data.id, grant.ownerUserId);
+      if (!sharedTrip) {
+        return NextResponse.json({ error: "Trip not found" }, { status: 404, headers: auth.headers });
+      }
+      await setSharedActiveTripRef(auth.userId, {
+        tripId: parsed.data.id,
+        ownerUserId: grant.ownerUserId,
+      });
+      const payload = await buildCollaborationTripsPayload(auth.userId);
       return NextResponse.json(
         {
-          activeTrip,
-          activeTripId: activeTrip.id,
-          trips,
+          activeTrip: sharedTrip,
+          activeTripId: sharedTrip.id,
+          trips: payload.trips,
+          sharedTrips: payload.sharedTrips,
+          collaboration: grant,
         },
         { headers: auth.headers },
       );
     }
 
-    const existingTrip = await getTrip(parsed.data.id, auth.userId);
+    let editGrant;
+    try {
+      editGrant = await assertTripEditAccess(auth.userId, parsed.data.id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Trip not found";
+      const status = message.includes("View-only") ? 403 : 404;
+      return NextResponse.json({ error: message }, { status, headers: auth.headers });
+    }
+
+    const existingTrip = await getTrip(parsed.data.id, editGrant.ownerUserId);
     const patchReservationCount = Array.isArray(parsed.data.patch.reservations) ? parsed.data.patch.reservations.length : null;
     auth.routeLogger.info("[/api/trips] PUT update received.", {
       userId: auth.userId,
@@ -334,7 +440,7 @@ export async function PUT(req: Request) {
       patchReservationCount,
       patchKeys: Object.keys(parsed.data.patch),
     });
-    const updated = await updateTrip(parsed.data.id, parsed.data.patch, auth.userId);
+    const updated = await updateTrip(parsed.data.id, parsed.data.patch, editGrant.ownerUserId);
     if (!updated) {
       auth.routeLogger.warn("[/api/trips] PUT update failed: trip not found.", {
         userId: auth.userId,
@@ -402,13 +508,15 @@ export async function PUT(req: Request) {
       }
     }
 
-    const [trips, activeTrip] = await Promise.all([listTrips(auth.userId), getActiveTrip(auth.userId)]);
+    const payload = await buildCollaborationTripsPayload(auth.userId);
     return NextResponse.json(
       {
         trip: updated,
-        trips,
-        activeTripId: activeTrip?.id ?? null,
-        activeTrip,
+        trips: payload.trips,
+        sharedTrips: payload.sharedTrips,
+        activeTripId: payload.activeTripId,
+        activeTrip: payload.activeTrip,
+        collaboration: payload.collaboration,
       },
       { headers: auth.headers },
     );
@@ -451,12 +559,20 @@ export async function DELETE(req: Request) {
     });
     if ("action" in parsed.data && parsed.data.action === "delete-reservation") {
       const { tripId, reservationId } = parsed.data;
-      const tripsBeforeDelete = await listTrips(auth.userId);
-      const targetTrip = tripId
-        ? tripsBeforeDelete.find((trip) => trip.id === tripId) ?? null
-        : tripsBeforeDelete.find((trip) =>
-            trip.reservations.some((reservation) => reservation.id === reservationId),
-          ) ?? null;
+      if (!tripId) {
+        return NextResponse.json({ error: "tripId required." }, { status: 422, headers: auth.headers });
+      }
+
+      let editGrant;
+      try {
+        editGrant = await assertTripEditAccess(auth.userId, tripId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Trip not found";
+        const status = message.includes("View-only") ? 403 : 404;
+        return NextResponse.json({ error: message }, { status, headers: auth.headers });
+      }
+
+      const targetTrip = await getTrip(tripId, editGrant.ownerUserId);
       if (!targetTrip) {
         return NextResponse.json(
           { error: "Reservation not found in trip." },
@@ -472,11 +588,11 @@ export async function DELETE(req: Request) {
           { status: 404, headers: auth.headers },
         );
       }
-      const updatedTrip = await updateTrip(targetTrip.id, { reservations: nextReservations }, auth.userId);
+      const updatedTrip = await updateTrip(tripId, { reservations: nextReservations }, editGrant.ownerUserId);
       if (!updatedTrip) {
         return NextResponse.json({ error: "Trip not found" }, { status: 404, headers: auth.headers });
       }
-      const [trips, activeTrip] = await Promise.all([listTrips(auth.userId), getActiveTrip(auth.userId)]);
+      const payload = await buildCollaborationTripsPayload(auth.userId);
       auth.routeLogger.info("[/api/trips] DELETE reservation response sent.", {
         userId: auth.userId,
         tripId: updatedTrip.id,
@@ -488,9 +604,11 @@ export async function DELETE(req: Request) {
           ok: true,
           action: "delete-reservation",
           trip: updatedTrip,
-          trips,
-          activeTripId: activeTrip?.id ?? null,
-          activeTrip,
+          trips: payload.trips,
+          sharedTrips: payload.sharedTrips,
+          activeTripId: payload.activeTripId,
+          activeTrip: payload.activeTrip,
+          collaboration: payload.collaboration,
           removedReservationId: parsed.data.reservationId,
         },
         { headers: auth.headers },

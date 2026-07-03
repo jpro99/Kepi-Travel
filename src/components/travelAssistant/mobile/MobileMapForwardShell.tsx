@@ -27,6 +27,7 @@ import type { StopDateRange } from "@/lib/decision/stopDates";
 import type { BookSubTab } from "@/lib/travelAssistant/consumerTabs";
 import type { FlightSearchDefaults } from "@/components/travelAssistant/FlightSearchLauncher";
 import type { HotelSearchDefaults } from "@/components/travelAssistant/HotelSearchLauncher";
+import type { ExcursionSearchDefaults } from "@/components/travelAssistant/ExcursionSearchLauncher";
 import type { PlannedFlightLeg, PlannedStayCity } from "@/lib/travelAssistant/tripPlanBooking";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
@@ -121,6 +122,7 @@ interface MobileMapForwardShellProps {
   plannedFlightLegs?: PlannedFlightLeg[];
   flightSearchDefaults?: FlightSearchDefaults;
   hotelSearchDefaults?: HotelSearchDefaults;
+  excursionSearchDefaults?: ExcursionSearchDefaults;
   staySegments?: TripStaySegment[];
   plannedStayCities?: PlannedStayCity[];
   usuallySkipsConnections?: boolean;
@@ -130,6 +132,8 @@ interface MobileMapForwardShellProps {
   onPickPlannedCity?: (city: PlannedStayCity) => void;
   onAddCityStay?: (input: { city: string; checkIn: string; checkOut: string }) => void;
   onSetStayIntent?: (segment: TripStaySegment, intent: "needs_hotel" | "skip") => void | Promise<void>;
+  onExcursionBooked?: () => void;
+  readOnly?: boolean;
   pendingForwardReview?: { id: string; reason: string; subject?: string } | null;
   onOpenForwardReview?: (reviewId: string) => void;
   onImportConfirmation?: (file: File) => void;
@@ -214,6 +218,7 @@ export function MobileMapForwardShell({
   plannedFlightLegs = [],
   flightSearchDefaults,
   hotelSearchDefaults,
+  excursionSearchDefaults,
   staySegments = [],
   plannedStayCities = [],
   usuallySkipsConnections,
@@ -223,6 +228,8 @@ export function MobileMapForwardShell({
   onPickPlannedCity,
   onAddCityStay,
   onSetStayIntent,
+  onExcursionBooked,
+  readOnly = false,
   pendingForwardReview,
   onOpenForwardReview,
   onImportConfirmation,
@@ -245,6 +252,7 @@ export function MobileMapForwardShell({
   );
   const flightCount = reservations.filter((r) => r.type === "flight").length;
   const hotelCount = reservations.filter((r) => r.type === "hotel").length;
+  const excursionCount = reservations.filter((r) => r.notes?.includes("kepi-excursion:")).length;
   const heroCity = resolveHeroCity(destination, reservations);
   const dateRange = formatDateRange(startDate, endDate);
 
@@ -432,6 +440,7 @@ export function MobileMapForwardShell({
               tripName={tripName}
               flightCount={flightCount}
               hotelCount={hotelCount}
+              excursionCount={excursionCount}
               tripSpendSummary={tripSpendSummary}
               problemCount={tripProblemCount}
               onReviewPricing={onReviewPricing}
@@ -472,6 +481,7 @@ export function MobileMapForwardShell({
           plannedFlightLegs={plannedFlightLegs}
           flightSearchDefaults={flightSearchDefaults}
           hotelSearchDefaults={hotelSearchDefaults}
+          excursionSearchDefaults={excursionSearchDefaults}
           staySegments={staySegments}
           plannedStayCities={plannedStayCities}
           usuallySkipsConnections={usuallySkipsConnections}
@@ -481,6 +491,8 @@ export function MobileMapForwardShell({
           onPickPlannedCity={onPickPlannedCity}
           onAddCityStay={onAddCityStay}
           onSetStayIntent={onSetStayIntent}
+          onExcursionBooked={onExcursionBooked}
+          readOnly={readOnly}
           pendingForwardReview={pendingForwardReview}
           onOpenForwardReview={onOpenForwardReview}
           onImportConfirmation={onImportConfirmation}

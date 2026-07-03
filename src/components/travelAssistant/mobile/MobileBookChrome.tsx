@@ -11,6 +11,7 @@ interface MobileBookHeaderProps {
   tripName: string;
   flightCount: number;
   hotelCount: number;
+  excursionCount?: number;
   tripSpendSummary?: TripSpendSummary;
   problemCount?: number;
   onReviewPricing?: () => void;
@@ -20,6 +21,7 @@ export function MobileBookHeader({
   tripName,
   flightCount,
   hotelCount,
+  excursionCount = 0,
   tripSpendSummary,
   problemCount = 0,
   onReviewPricing,
@@ -57,6 +59,9 @@ export function MobileBookHeader({
       <h1 className="mt-1 text-[1.75rem] font-black leading-tight tracking-tight text-white">{tripName}</h1>
       <p className="mt-1 text-[17px] text-slate-300">
         {flightCount} flight{flightCount === 1 ? "" : "s"} · {hotelCount} hotel{hotelCount === 1 ? "" : "s"}
+        {excursionCount > 0
+          ? ` · ${excursionCount} experience${excursionCount === 1 ? "" : "s"}`
+          : ""}
       </p>
       {spendLine}
       {attentionLine}
@@ -65,8 +70,8 @@ export function MobileBookHeader({
 }
 
 interface MobileBookSegmentToggleProps {
-  active: "flights" | "hotels";
-  onChange: (segment: "flights" | "hotels") => void;
+  active: "flights" | "hotels" | "excursions";
+  onChange: (segment: "flights" | "hotels" | "excursions") => void;
 }
 
 export function MobileBookSegmentToggle({ active, onChange }: MobileBookSegmentToggleProps) {
@@ -85,6 +90,13 @@ export function MobileBookSegmentToggle({ active, onChange }: MobileBookSegmentT
         className={bookSubTabButtonClass(active === "hotels")}
       >
         Hotels
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("excursions")}
+        className={bookSubTabButtonClass(active === "excursions")}
+      >
+        Experiences
       </button>
     </div>
   );
