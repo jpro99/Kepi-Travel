@@ -3,13 +3,15 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@/lib/maplibreCspWorker";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { fitScoreRange, hotelMapPinStyle } from "@/lib/hotels/hotelMapColors";
+import { hotelMapPinStyle } from "@/lib/hotels/hotelMapColors";
+import { createTransitMarker } from "@/lib/hotels/hotelMapTransitMarkers";
 import type { MapBounds } from "@/lib/hotels/hotelCoordinates";
 import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import type { HotelPayMode } from "@/lib/hotels/hotelPointsDisplay";
 import { resolveHotelMapPinLabel } from "@/lib/hotels/hotelPointsDisplay";
-import type { TransitKind, TransitStop } from "@/lib/hotels/nearbyTransit";
+import type { TransitStop } from "@/lib/hotels/nearbyTransit";
+import type { HotelChainId } from "@/lib/loyalty/chainRegistry";
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
 
 import { HotelPriceRangeSlider } from "@/components/travelAssistant/HotelPriceRangeSlider";
@@ -36,6 +38,8 @@ interface HotelStayMapProps {
   onOpenPreferences?: () => void;
   hiddenCount?: number;
   onShowHidden?: () => void;
+  /** Loyalty chains the traveler prioritizes — pins use navy/gold for these. */
+  preferredChainIds?: HotelChainId[];
 }
 
 function createPricePin(
@@ -47,7 +51,7 @@ function createPricePin(
   const el = document.createElement("button");
   el.type = "button";
   const pin = resolveHotelMapPinLabel(hotel, payMode);
-  el.title = pin.title;
+  el.title = `${pin.title} · ${style.label}`;
   el.className = "flex flex-col items-center border-0 bg-transparent p-0";
   el.style.zIndex = selected ? "30" : "20";
 
@@ -67,36 +71,6 @@ function createPricePin(
   return el;
 }
 
-function transitMarkerStyle(kind: TransitKind): { label: string; bg: string } {
-  if (kind === "train") return { label: "T", bg: "#0c4a6e" };
-  if (kind === "tram") return { label: "♦", bg: "#0369a1" };
-  if (kind === "bus") return { label: "B", bg: "#475569" };
-  return { label: "M", bg: "#0284c7" };
-}
-
-function createTransitMarker(stop: TransitStop): HTMLButtonElement {
-  const style = transitMarkerStyle(stop.kind);
-  const wrap = document.createElement("button");
-  wrap.type = "button";
-  wrap.title = stop.name;
-  wrap.className = "group flex flex-col items-center border-0 bg-transparent p-0";
-  wrap.style.zIndex = "10";
-
-  const badge = document.createElement("span");
-  badge.className =
-    "flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black text-white shadow ring-2 ring-white";
-  badge.style.backgroundColor = style.bg;
-  badge.textContent = style.label;
-
-  const label = document.createElement("span");
-  label.className =
-    "mt-0.5 max-w-[6rem] truncate rounded bg-slate-950/90 px-1 py-0.5 text-[8px] font-semibold text-white opacity-0 group-hover:opacity-100";
-  label.textContent = stop.name;
-
-  wrap.append(badge, label);
-  return wrap;
-}
-
 export function HotelStayMap({
   city,
   centerLat,
@@ -114,6 +88,7 @@ export function HotelStayMap({
   onOpenPreferences,
   hiddenCount = 0,
   onShowHidden,
+  preferredChainIds = [],
 }: HotelStayMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import("maplibre-gl").Map | null>(null);
@@ -126,8 +101,11 @@ export function HotelStayMap({
   const [showTransit, setShowTransit] = useState(true);
   const [transitStops, setTransitStops] = useState<TransitStop[]>([]);
   const [transitCenter, setTransitCenter] = useState({ lat: centerLat, lng: centerLng });
+  const [mapZoom, setMapZoom] = useState(14);
 
-  const scoreRange = useMemo(() => fitScoreRange(hotels), [hotels]);
+  const pinOptions = useMemo(() => ({ preferredChainIds }), [preferredChainIds]);
+  const hasPreferredChains = preferredChainIds.length > 0;
+  const showTransitLabels = mapZoom >= 13.5;
 
   useEffect(() => {
     void fetch("/api/config")
@@ -159,7 +137,7 @@ export function HotelStayMap({
     hotelMarkersRef.current = [];
 
     for (const hotel of hotels) {
-      const style = hotelMapPinStyle(hotel, scoreRange);
+      const style = hotelMapPinStyle(hotel, pinOptions);
       const el = createPricePin(hotel, selectedId === hotel.id, style, payMode);
       el.onclick = () => onSelect(hotel);
 
@@ -168,7 +146,7 @@ export function HotelStayMap({
         .addTo(mapRef.current);
       hotelMarkersRef.current.push(marker);
     }
-  }, [ready, hotels, selectedId, onSelect, scoreRange, payMode]);
+  }, [ready, hotels, selectedId, onSelect, pinOptions, payMode]);
 
   const renderTransitMarkers = useCallback(async () => {
     if (!ready || !mapRef.current || !showTransit) {
@@ -182,13 +160,13 @@ export function HotelStayMap({
     transitMarkersRef.current = [];
 
     for (const stop of transitStops) {
-      const el = createTransitMarker(stop);
+      const el = createTransitMarker(stop, { showLabel: showTransitLabels });
       const marker = new maplibregl.Marker({ element: el, anchor: "center" })
         .setLngLat([stop.lng, stop.lat])
         .addTo(mapRef.current);
       transitMarkersRef.current.push(marker);
     }
-  }, [ready, showTransit, transitStops]);
+  }, [ready, showTransit, transitStops, showTransitLabels]);
 
   const scheduleTransitFetch = useCallback((lat: number, lng: number) => {
     if (transitFetchTimerRef.current) clearTimeout(transitFetchTimerRef.current);
@@ -253,6 +231,7 @@ export function HotelStayMap({
       map.on("load", () => {
         if (!cancelled) {
           setReady(true);
+          setMapZoom(map.getZoom());
           emitBounds(map);
           scheduleTransitFetch(centerLat, centerLng);
         }
@@ -261,7 +240,11 @@ export function HotelStayMap({
       map.on("moveend", () => {
         emitBounds(map);
         const center = map.getCenter();
+        setMapZoom(map.getZoom());
         scheduleTransitFetch(center.lat, center.lng);
+      });
+      map.on("zoomend", () => {
+        setMapZoom(map.getZoom());
       });
     })();
 
@@ -306,19 +289,29 @@ export function HotelStayMap({
 
   const trainCount = transitStops.filter((stop) => stop.kind === "train").length;
   const metroCount = transitStops.filter((stop) => stop.kind === "metro" || stop.kind === "tram").length;
+  const busCount = transitStops.filter((stop) => stop.kind === "bus").length;
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 overflow-visible rounded-2xl bg-white px-4 py-3 text-xs shadow-sm dark:bg-slate-900/60">
         <div className="flex flex-wrap items-center gap-3 text-slate-600 dark:text-slate-300">
+          {hasPreferredChains ? (
+            <>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-sm bg-[#0b1f3a] ring-1 ring-[#f4c95d]" /> Your program
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-sm bg-slate-500" /> Other chain
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-sm bg-orange-600" /> Independent
+              </span>
+            </>
+          ) : (
+            <span className="text-slate-500">Set hotel loyalty in your travel profile for color-coded pins</span>
+          )}
           <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm bg-[#f4c95d]" /> Best match
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm bg-slate-400" /> Good fit
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-slate-700 text-[8px] font-black text-white">M</span>
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-sky-600 text-[8px] font-black text-white">M</span>
             Metro
           </span>
           <span className="inline-flex items-center gap-1.5">
@@ -380,7 +373,11 @@ export function HotelStayMap({
       />
 
       <p className="text-xs text-slate-500">
-        {city} · {hotels.length} on map · {showTransit ? `${metroCount} metro · ${trainCount} rail` : "transit off"}
+        {city} · {hotels.length} on map
+        {showTransit
+          ? ` · ${metroCount} metro${metroCount === 1 ? "" : "s"}${trainCount > 0 ? ` · ${trainCount} rail` : ""}${busCount > 0 ? ` · ${busCount} bus` : ""}`
+          : " · transit off"}
+        {showTransit && metroCount === 0 && trainCount === 0 ? " · zoom or pan to load nearby stations" : ""}
       </p>
     </div>
   );

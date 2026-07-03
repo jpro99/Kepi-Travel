@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useUser } from "@clerk/nextjs";
 import { resolveHotelBookUrl, resolveHotelPointsBookUrl } from "@/lib/decision/bookingLinks";
-import { hotelMapPinStyle, fitScoreRange } from "@/lib/hotels/hotelMapColors";
+import { hotelMapPinStyle } from "@/lib/hotels/hotelMapColors";
 import type { HotelDetailMedia } from "@/lib/hotels/hotelMedia";
 import { extractLiteApiHotelId, mergeHotelDetailMedia } from "@/lib/hotels/hotelMedia";
 import type { HotelPayMode } from "@/lib/hotels/hotelPointsDisplay";
@@ -14,6 +14,7 @@ import { HotelInventoryBadgePill } from "@/components/travelAssistant/HotelInven
 import { resolveHotelInventoryBadge } from "@/lib/hotels/hotelInventoryBadge";
 import { normalizeHotelAvailabilityError } from "@/lib/hotels/hotelAvailabilityError";
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
+import type { HotelChainId } from "@/lib/loyalty/chainRegistry";
 import { HotelPhotoGallery } from "@/components/travelAssistant/HotelPhotoGallery";
 import type { TravelProfile } from "@/app/api/travel-profile/route";
 import { hotelCheckInGuidance } from "@/lib/travelAssistant/syncTravelBenefits";
@@ -24,6 +25,7 @@ interface HotelDetailSheetProps {
   city: string;
   memberHotelPricing?: boolean;
   payMode?: HotelPayMode;
+  preferredChainIds?: HotelChainId[];
   saved?: boolean;
   usePoints?: boolean;
   onSaveToTrip: () => void;
@@ -36,6 +38,7 @@ export function HotelDetailSheet({
   city,
   memberHotelPricing = false,
   payMode = "any",
+  preferredChainIds = [],
   saved = false,
   usePoints = false,
   onSaveToTrip,
@@ -145,7 +148,7 @@ export function HotelDetailSheet({
     checkOutDate: hotel.checkOut,
   });
 
-  const pinStyle = hotelMapPinStyle(hotel, fitScoreRange(allHotels));
+  const pinStyle = hotelMapPinStyle(hotel, { preferredChainIds });
   const hasLiveRate = hasDisplayNightlyRate(hotel);
   const kepiLiveRate = hasKepiBookableLiveRate(hotel);
   const kepiBookable = Boolean(hotel.kepiBookable && hotel.bookOfferId && kepiLiveRate) && payMode !== "points";

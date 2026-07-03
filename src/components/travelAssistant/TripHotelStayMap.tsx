@@ -8,6 +8,8 @@ import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/mapt
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import { useMobileMapExpand, useMapResizeOnLayoutChange } from "@/lib/ui/useMobileMapExpand";
 import { useMapUserViewport } from "@/lib/ui/useMapUserViewport";
+import { createTransitMarker } from "@/lib/hotels/hotelMapTransitMarkers";
+import type { TransitStop } from "@/lib/hotels/nearbyTransit";
 import type { PlannedStayCity } from "@/lib/travelAssistant/tripPlanBooking";
 import {
   HOTEL_STAY_SOURCE,
@@ -143,6 +145,8 @@ export function TripHotelStayMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import("maplibre-gl").Map | null>(null);
   const markersRef = useRef<import("maplibre-gl").Marker[]>([]);
+  const transitMarkersRef = useRef<import("maplibre-gl").Marker[]>([]);
+  const transitFetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pointsRef = useRef(points);
   pointsRef.current = points;
 
@@ -150,6 +154,10 @@ export function TripHotelStayMap({
   const [maptilerKey, setMaptilerKey] = useState("");
   const [mapStyle, setMapStyle] = useState<"streets" | "hybrid">("streets");
   const [selectedStayId, setSelectedStayId] = useState<string | null>(null);
+  const [showTransit, setShowTransit] = useState(true);
+  const [transitStops, setTransitStops] = useState<TransitStop[]>([]);
+  const [transitCenter, setTransitCenter] = useState<{ lat: number; lng: number } | null>(null);
+  const [mapZoom, setMapZoom] = useState(4);
   const appliedStyleRef = useRef<"streets" | "hybrid" | null>(null);
   const { expanded, expand, collapse } = useMobileMapExpand(mobileProminent);
   useMapResizeOnLayoutChange(expanded, mapRef);
@@ -163,6 +171,37 @@ export function TripHotelStayMap({
 
   const bookedCount = points.filter((p) => p.booked).length;
   const unbookedCount = points.length - bookedCount;
+  const showTransitLabels = mapZoom >= 13.5;
+  const metroCount = transitStops.filter((stop) => stop.kind === "metro" || stop.kind === "tram").length;
+  const trainCount = transitStops.filter((stop) => stop.kind === "train").length;
+
+  const scheduleTransitFetch = useCallback((lat: number, lng: number) => {
+    if (transitFetchTimerRef.current) clearTimeout(transitFetchTimerRef.current);
+    transitFetchTimerRef.current = setTimeout(() => {
+      setTransitCenter({ lat, lng });
+    }, 450);
+  }, []);
+
+  const renderTransitMarkers = useCallback(async () => {
+    const map = mapRef.current;
+    if (!map || !showTransit) {
+      for (const marker of transitMarkersRef.current) marker.remove();
+      transitMarkersRef.current = [];
+      return;
+    }
+
+    const maplibregl = await import("maplibre-gl");
+    for (const marker of transitMarkersRef.current) marker.remove();
+    transitMarkersRef.current = [];
+
+    for (const stop of transitStops) {
+      const el = createTransitMarker(stop, { showLabel: showTransitLabels });
+      const marker = new maplibregl.Marker({ element: el, anchor: "center" })
+        .setLngLat([stop.lng, stop.lat])
+        .addTo(map);
+      transitMarkersRef.current.push(marker);
+    }
+  }, [showTransit, showTransitLabels, transitStops]);
 
   useEffect(() => {
     void fetch("/api/config")
@@ -292,8 +331,20 @@ export function TripHotelStayMap({
         unbindInteractionRef.current?.();
         unbindInteractionRef.current = bindUserInteraction(map);
         setMapReady(true);
+        setMapZoom(map.getZoom());
+        const center = mapPreviewCenter ?? pointsRef.current[0];
+        if (center) scheduleTransitFetch(center.lat, center.lng);
         void fitWholeTrip(0);
         void renderStayMarkers();
+        void renderTransitMarkers();
+      });
+      map.on("moveend", () => {
+        const center = map.getCenter();
+        setMapZoom(map.getZoom());
+        scheduleTransitFetch(center.lat, center.lng);
+      });
+      map.on("zoomend", () => {
+        setMapZoom(map.getZoom());
       });
       map.on("remove", () => {
         unbindInteractionRef.current?.();
@@ -304,21 +355,25 @@ export function TripHotelStayMap({
 
     return () => {
       cancelled = true;
+      if (transitFetchTimerRef.current) clearTimeout(transitFetchTimerRef.current);
       unbindInteractionRef.current?.();
       unbindInteractionRef.current = null;
       for (const marker of markersRef.current) marker.remove();
+      for (const marker of transitMarkersRef.current) marker.remove();
       markersRef.current = [];
+      transitMarkersRef.current = [];
       mapRef.current?.remove();
       mapRef.current = null;
       setMapReady(false);
     };
-  }, [points.length, maptilerKey, fitWholeTrip, installStayLayers, renderStayMarkers, bindUserInteraction]);
+  }, [points.length, maptilerKey, fitWholeTrip, installStayLayers, renderStayMarkers, renderTransitMarkers, bindUserInteraction, scheduleTransitFetch]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
     installStayLayers(map);
     void renderStayMarkers();
+    void renderTransitMarkers();
     if (mapPreviewCenter) {
       map.flyTo({
         center: [mapPreviewCenter.lng, mapPreviewCenter.lat],
@@ -329,7 +384,30 @@ export function TripHotelStayMap({
       return;
     }
     if (shouldAutoFit(pointsFingerprint)) void fitWholeTrip();
-  }, [pointsFingerprint, installStayLayers, renderStayMarkers, fitWholeTrip, mapReady, shouldAutoFit, mapPreviewCenter]);
+  }, [pointsFingerprint, installStayLayers, renderStayMarkers, renderTransitMarkers, fitWholeTrip, mapReady, shouldAutoFit, mapPreviewCenter]);
+
+  useEffect(() => {
+    if (!transitCenter) return;
+    let cancelled = false;
+    void fetch(
+      `/api/hotels/transit-nearby?lat=${transitCenter.lat}&lng=${transitCenter.lng}&kind=all`,
+      { cache: "no-store" },
+    )
+      .then((res) => (res.ok ? res.json() : { stops: [] }))
+      .then((data: { stops?: TransitStop[] }) => {
+        if (!cancelled) setTransitStops(Array.isArray(data.stops) ? data.stops : []);
+      })
+      .catch(() => {
+        if (!cancelled) setTransitStops([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [transitCenter]);
+
+  useEffect(() => {
+    void renderTransitMarkers();
+  }, [renderTransitMarkers]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -351,8 +429,9 @@ export function TripHotelStayMap({
     map.once("idle", () => {
       installStayLayers(map);
       void renderStayMarkers();
+      void renderTransitMarkers();
     });
-  }, [mapStyle, mapReady, maptilerKey, styleUrl, installStayLayers, renderStayMarkers]);
+  }, [mapStyle, mapReady, maptilerKey, styleUrl, installStayLayers, renderStayMarkers, renderTransitMarkers]);
 
   if (points.length === 0) return null;
 
@@ -447,6 +526,19 @@ export function TripHotelStayMap({
             <>
               <button
                 type="button"
+                onClick={() => setShowTransit((value) => !value)}
+                className={`rounded-full px-3 py-1.5 text-[11px] font-bold shadow backdrop-blur ${
+                  showTransit
+                    ? "bg-sky-600 text-white"
+                    : mobileLight
+                      ? "bg-white text-slate-800 ring-1 ring-black/10"
+                      : "bg-slate-950/80 text-white ring-1 ring-white/20"
+                }`}
+              >
+                Transit {showTransit ? "on" : "off"}
+              </button>
+              <button
+                type="button"
                 onClick={() => setMapStyle("streets")}
                 className={`rounded-full px-3 py-1.5 text-[11px] font-bold shadow backdrop-blur ${
                   mapStyle === "streets"
@@ -528,6 +620,9 @@ export function TripHotelStayMap({
         </div>
         <p className={`mt-2 text-[13px] ${mobileLight ? "text-[var(--text-tertiary)]" : "text-sky-100/55"}`}>
           {bookedCount} booked · {unbookedCount} still needed · {points.length} stop{points.length === 1 ? "" : "s"} on map
+          {showTransit
+            ? ` · ${metroCount} metro${metroCount === 1 ? "" : "s"}${trainCount > 0 ? ` · ${trainCount} rail` : ""}`
+            : " · transit off"}
         </p>
       </div>
     </section>

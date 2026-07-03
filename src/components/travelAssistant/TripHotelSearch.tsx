@@ -31,7 +31,7 @@ import {
   hotelInventoryBadgeClassName,
 } from "@/lib/hotels/hotelInventoryBadge";
 import type { HotelStayProfile } from "@/lib/memory/hotelStayProfile";
-import { hotelParticipatesInPoints, HOTEL_CHAINS, matchHotelChain, type HotelChainId } from "@/lib/loyalty/chainRegistry";
+import { hotelParticipatesInPoints, HOTEL_CHAINS, chainIdsFromPriorityLabels, matchHotelChain, type HotelChainId } from "@/lib/loyalty/chainRegistry";
 import { isCompactViewportClient } from "@/lib/ui/isCompactViewport";
 import { useStableDefaultSync } from "@/lib/ui/useStableDefaultSync";
 
@@ -216,6 +216,7 @@ export function TripHotelSearch({
   const [memberHotelPricing, setMemberHotelPricing] = useState(false);
   const [cityCenter, setCityCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [chainToggles, setChainToggles] = useState<ChainToggleMap<HotelChainId>>(() => loadHotelChainToggles());
+  const [preferredChainIds, setPreferredChainIds] = useState<HotelChainId[]>([]);
   const [stayProfile, setStayProfile] = useState<HotelStayProfile | null>(null);
   const [priceMin, setPriceMin] = useState(0);
   const [priceMax, setPriceMax] = useState(500);
@@ -233,6 +234,16 @@ export function TripHotelSearch({
       .then((res) => (res.ok ? res.json() : null))
       .then((payload: { profile?: HotelStayProfile } | null) => {
         if (payload?.profile) setStayProfile(payload.profile);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    void fetch("/api/traveler/genome", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((payload: { genome?: { hotelChainPriority?: string[] } } | null) => {
+        const priority = payload?.genome?.hotelChainPriority ?? [];
+        setPreferredChainIds(chainIdsFromPriorityLabels(priority));
       })
       .catch(() => {});
   }, []);
@@ -776,6 +787,7 @@ export function TripHotelSearch({
                     onSelect={openDetail}
                     payMode={payMode}
                     expanded
+                    preferredChainIds={preferredChainIds}
                     priceMin={priceMin}
                     priceMax={priceMax}
                     priceBounds={{ min: priceBounds.min, max: priceBounds.max }}
@@ -786,7 +798,7 @@ export function TripHotelSearch({
                     onOpenPreferences={() => setRefineOpen(true)}
                   />
                   <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    Tap a price pin for hotel details · gold = best match for you
+                    Tap a price pin for details · navy = your loyalty program · gray = other chains · orange = independent
                   </p>
                 </div>
               ) : null}
@@ -884,6 +896,7 @@ export function TripHotelSearch({
               city={resolvedCity ?? city}
               memberHotelPricing={memberHotelPricing}
               payMode={payMode}
+              preferredChainIds={preferredChainIds}
               saved={savedHotelIds.has(detailHotel.id)}
               usePoints={payMode === "points"}
               onSaveToTrip={() => handleSaveToTrip(detailHotel)}

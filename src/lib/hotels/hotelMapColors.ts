@@ -1,10 +1,19 @@
+import type { HotelChainId } from "@/lib/loyalty/chainRegistry";
+import { matchHotelChain } from "@/lib/loyalty/chainRegistry";
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
+
+export type HotelMapPinCategory = "your_chain" | "other_chain" | "independent";
 
 export interface HotelMapColorStyle {
   bg: string;
   text: string;
   ring: string;
-  label: "Best match" | "Good fit" | "Other";
+  label: "Your program" | "Other chain" | "Independent";
+  category: HotelMapPinCategory;
+}
+
+export interface HotelMapPinStyleOptions {
+  preferredChainIds?: HotelChainId[];
 }
 
 export function fitScoreRange(hotels: RankedHotelSearchResult[]): { min: number; max: number } {
@@ -13,23 +22,45 @@ export function fitScoreRange(hotels: RankedHotelSearchResult[]): { min: number;
   return { min: Math.min(...scores), max: Math.max(...scores) };
 }
 
+export function hotelMapPinCategory(
+  hotel: RankedHotelSearchResult,
+  preferredChainIds: HotelChainId[] = [],
+): HotelMapPinCategory {
+  const chainId = matchHotelChain(hotel.chainName, hotel.name);
+  if (!chainId) return "independent";
+  if (preferredChainIds.includes(chainId)) return "your_chain";
+  return "other_chain";
+}
+
 export function hotelMapPinStyle(
   hotel: RankedHotelSearchResult,
-  range: { min: number; max: number },
+  options: HotelMapPinStyleOptions = {},
 ): HotelMapColorStyle {
-  const span = Math.max(1, range.max - range.min);
-  const ratio = (hotel.fitScore - range.min) / span;
-  const strongMatch =
-    hotel.tier === "kepi_pick" ||
-    hotel.tier === "personal" ||
-    hotel.badges.includes("Matches you") ||
-    ratio >= 0.62;
+  const category = hotelMapPinCategory(hotel, options.preferredChainIds ?? []);
 
-  if (strongMatch) {
-    return { bg: "#14532d", text: "#ffffff", ring: "#86efac", label: "Best match" };
+  if (category === "your_chain") {
+    return {
+      bg: "#0b1f3a",
+      text: "#f4c95d",
+      ring: "#f4c95d",
+      label: "Your program",
+      category,
+    };
   }
-  if (ratio >= 0.35) {
-    return { bg: "#f59e0b", text: "#1c1917", ring: "#fde68a", label: "Good fit" };
+  if (category === "other_chain") {
+    return {
+      bg: "#475569",
+      text: "#ffffff",
+      ring: "#94a3b8",
+      label: "Other chain",
+      category,
+    };
   }
-  return { bg: "#ea580c", text: "#ffffff", ring: "#fdba74", label: "Other" };
+  return {
+    bg: "#ea580c",
+    text: "#ffffff",
+    ring: "#fdba74",
+    label: "Independent",
+    category,
+  };
 }
