@@ -216,6 +216,7 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 
 | Date | Note |
 |------|------|
+| 2026-06-15 | **Plan calendar day editing:** tap day stays on calendar; inline Plan this day editor; plan lines preview on month cells; timeline via explicit button only |
 | 2026-06-15 | **Europe 2026 QA + Travel Fit:** trip map regression tests (Polignano/Monopoli/Munich); Book earn stack on Flights+Hotels; mobile More gets Travel Fit + wallets |
 | 2026-06-15 | **Plan inline expand (I2):** Day tap expands bookings + notes inline; Edit plan opens full editor; no reservation drawer on Plan tab |
 | 2026-06-15 | **Hotel book funnel:** LiteAPI source banner, "Book in Kepi" card CTAs, Stripe return → Book/Hotels tab, save keeps search open |

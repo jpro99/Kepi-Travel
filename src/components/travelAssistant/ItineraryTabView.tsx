@@ -232,6 +232,8 @@ export function ItineraryTabView({
             confirmationCode: reservation.confirmationCode ?? "",
           }))}
           itineraryPlans={itineraryPlans}
+          dayNotes={dayNotes}
+          onDayNoteChange={handleDayNoteChange}
           selectedDateKey={selectedDateKey}
           highlightedLegId={highlightedLegId}
           onSelectedDateKeyChange={onSelectedDateKeyChange}

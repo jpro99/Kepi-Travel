@@ -15,7 +15,9 @@ import {
   type LegendLegChip,
 } from "@/lib/travelAssistant/buildTripLegs";
 import { fetchCityWeatherForecast, type DailyWeather } from "@/lib/travelAssistant/cityWeather";
+import { parseDayLines } from "@/lib/travelAssistant/dayPlanLines";
 import type { ItineraryPlansData } from "@/lib/travelAssistant/itineraryDayPlan";
+import { ItineraryDayEditor } from "@/components/travelAssistant/ItineraryDayEditor";
 
 type CalendarReservation = {
   id: string;
@@ -49,6 +51,8 @@ interface TripLegCalendarProps {
   onScrollToTimelineDate?: (dateKey: string) => void;
   onPlanHotel?: (dateKey: string, city: string) => void;
   itineraryPlans?: ItineraryPlansData;
+  dayNotes?: Record<string, string>;
+  onDayNoteChange?: (dateKey: string, value: string) => void;
 }
 
 const MONTH_NAMES = [
@@ -69,7 +73,8 @@ function isToday(dateKey: string): boolean {
   return dateKey === dateKeyFromParts(today.getFullYear(), today.getMonth(), today.getDate());
 }
 
-function cellSubLabel(cell: DayLegCell | null): string | null {
+function cellSubLabel(cell: DayLegCell | null, planPreview: string | null): string | null {
+  if (planPreview) return planPreview.length > 28 ? `${planPreview.slice(0, 27)}…` : planPreview;
   if (!cell || cell.kind === "empty") return null;
   if (cell.kind === "travel" || cell.flightPrimary) {
     const fp = cell.flightPrimary;
@@ -121,6 +126,7 @@ function CalendarCell({
   ribbonPosition,
   theme,
   weather,
+  planPreview,
   onSelect,
 }: {
   cell: DayLegCell | null;
@@ -132,13 +138,14 @@ function CalendarCell({
   ribbonPosition: ReturnType<typeof ribbonPositionForGridCell> | "none";
   theme: CalendarTheme;
   weather: DailyWeather | null;
+  planPreview: string | null;
   onSelect: () => void;
 }) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const filled = cell && cell.kind !== "empty";
   const pos = ribbonPosition === "none" ? "none" : ribbonPosition;
   const radiusClass = filled ? ribbonRadiusClass(pos) : "rounded-none";
-  const line2 = cellSubLabel(cell);
+  const line2 = cellSubLabel(cell, planPreview);
   const line3 = cellThirdLine(cell, weather);
   const isLight = theme === "light";
 
@@ -254,14 +261,22 @@ function CellPopover({
 
 function DayDetailPanel({
   cell,
+  note,
+  tripStartDate,
+  tripEndDate,
   onClose,
   onPlanHotel,
   onViewTimeline,
+  onNoteChange,
 }: {
   cell: DayLegCell;
+  note: string;
+  tripStartDate: string | null;
+  tripEndDate: string | null;
   onClose: () => void;
   onPlanHotel?: (dateKey: string, city: string) => void;
   onViewTimeline: () => void;
+  onNoteChange?: (value: string) => void;
 }) {
   const [weatherLine, setWeatherLine] = useState<string | null>(null);
   const city = cell.cityName ?? cell.flightSummary?.split("→").pop()?.trim() ?? null;
@@ -331,16 +346,34 @@ function DayDetailPanel({
           >
             Fix → Find hotels
           </button>
-        ) : (
-          <button
-            type="button"
-            onClick={onViewTimeline}
-            className="rounded-xl bg-[#f4c95d] px-4 py-2 text-sm font-extrabold text-[#1D1D1F]"
-          >
-            View on timeline
-          </button>
-        )}
+        ) : null}
+        <button
+          type="button"
+          onClick={onViewTimeline}
+          className="rounded-xl border border-[#E5E5EA] bg-white px-4 py-2 text-sm font-semibold text-[#1D1D1F]"
+        >
+          View on timeline
+        </button>
       </div>
+      {onNoteChange ? (
+        <div className="mt-5 border-t border-[#E5E5EA] pt-4">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#6E6E73]">
+            Plan this day
+          </p>
+          <ItineraryDayEditor
+            dateKey={cell.dateKey}
+            value={note}
+            stayCity={cell.cityName}
+            tripStartDate={tripStartDate}
+            tripEndDate={tripEndDate}
+            onChange={onNoteChange}
+            onPlanHotel={
+              cell.cityName && onPlanHotel ? () => onPlanHotel(cell.dateKey, cell.cityName!) : undefined
+            }
+          />
+          <p className="mt-2 text-[11px] text-[#6E6E73]">Auto-saves as you type · synced with timeline</p>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -363,6 +396,8 @@ export function TripLegCalendar({
   onScrollToTimelineDate,
   onPlanHotel,
   itineraryPlans,
+  dayNotes = {},
+  onDayNoteChange,
 }: TripLegCalendarProps) {
   const tripStart = tripStartDate?.slice(0, 10) ?? null;
   const tripEnd = tripEndDate?.slice(0, 10) ?? null;
@@ -435,9 +470,13 @@ export function TripLegCalendar({
 
   const handleDaySelect = (dateKey: string): void => {
     onSelectedDateKeyChange?.(dateKey);
-    onScrollToTimelineDate?.(dateKey);
     setDetailDateKey(dateKey);
     if (viewMode !== "day") setViewMode("day");
+  };
+
+  const planPreviewForDate = (dateKey: string): string | null => {
+    const lines = parseDayLines(dayNotes[dateKey] ?? "");
+    return lines[0] ?? null;
   };
 
   const detailCell = detailDateKey ? model.dayCells.get(detailDateKey) ?? null : null;
@@ -587,6 +626,7 @@ export function TripLegCalendar({
                   ribbonPosition={ribbonPos}
                   theme={theme}
                   weather={weatherByDate.get(dateKey) ?? null}
+                  planPreview={inTrip ? planPreviewForDate(dateKey) : null}
                   onSelect={() => handleDaySelect(dateKey)}
                 />
               );
@@ -645,12 +685,18 @@ export function TripLegCalendar({
       {viewMode === "day" && detailCell ? (
         <DayDetailPanel
           cell={detailCell}
+          note={dayNotes[detailCell.dateKey] ?? ""}
+          tripStartDate={tripStart}
+          tripEndDate={tripEnd}
           onClose={() => setDetailDateKey(null)}
           onPlanHotel={onPlanHotel}
           onViewTimeline={() => onScrollToTimelineDate?.(detailCell.dateKey)}
+          onNoteChange={
+            onDayNoteChange ? (value) => onDayNoteChange(detailCell.dateKey, value) : undefined
+          }
         />
       ) : viewMode === "day" ? (
-        <p className="text-center text-sm text-[#6E6E73]">Select a colored day on the month view.</p>
+        <p className="text-center text-sm text-[#6E6E73]">Tap a trip day on the month view to plan it here.</p>
       ) : null}
 
       <div className="mt-4 flex h-auto w-full flex-wrap gap-2">
