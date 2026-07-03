@@ -16,6 +16,7 @@ import {
 } from "@/lib/airportNav/journeyMachine";
 import { routeVoiceIntent } from "@/lib/airportNav/intentRouter";
 import { computeBoardingPressure, type BoardingPressure } from "@/lib/airportNav/boardingMath";
+import type { FamilyAirportPin } from "@/lib/family/familyAirportPins";
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Kepi Airport Navigator — Phase 1 surface (spec §B/§C/§D4/§D5).
@@ -51,6 +52,9 @@ interface AirportNavigatorMapProps {
   eligibleLoungeNames?: string[];
   /** Switch Live Map back to family GPS view (unsupported-airport fallback). */
   onSwitchToFamilyView?: () => void;
+  /** Other family members at this airport (GPS-snapped to terminal graph when possible). */
+  familyPins?: FamilyAirportPin[];
+  onFamilyPinTap?: (memberId: string) => void;
 }
 
 const COLOR = {
@@ -125,6 +129,8 @@ export function AirportNavigatorMap({
   proximityStatus = "away",
   fill = false,
   onSwitchToFamilyView,
+  familyPins = [],
+  onFamilyPinTap,
 }: AirportNavigatorMapProps) {
   const mapEl = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -133,6 +139,8 @@ export function AirportNavigatorMap({
   const poiMarkersRef = useRef<Record<string, any>>({});
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const userMarkerRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const familyMarkersRef = useRef<Record<string, any>>({});
 
   const [layout, setLayout] = useState<AirportLayout | null>(null);
   const [layoutStatus, setLayoutStatus] = useState<"loading" | "ready" | "unsupported" | "error">("loading");
@@ -988,6 +996,84 @@ export function AirportNavigatorMap({
     });
   }, [mapReady, snapped]);
 
+  /* ── Family pins snapped to terminal graph (honest GPS — may be approximate) ─ */
+  const familySnapped = useMemo(() => {
+    if (!layout || familyPins.length === 0) return [];
+    return familyPins.flatMap((pin) => {
+      const snappedPin = snapToGraph(layout, pin.lon, pin.lat);
+      if (!snappedPin) return [];
+      return [{ pin, snapped: snappedPin }];
+    });
+  }, [layout, familyPins]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+
+    void import("maplibre-gl").then((ml) => {
+      const activeIds = new Set(familySnapped.map(({ pin }) => pin.memberId));
+
+      for (const [memberId, marker] of Object.entries(familyMarkersRef.current)) {
+        if (!activeIds.has(memberId)) {
+          marker.remove();
+          delete familyMarkersRef.current[memberId];
+        }
+      }
+
+      for (const { pin, snapped: snappedPin } of familySnapped) {
+        const pos = snappedPin.pos as [number, number];
+        let marker = familyMarkersRef.current[pin.memberId];
+
+        if (!marker) {
+          const wrap = document.createElement("div");
+          wrap.dataset.testid = `airport-family-marker-${pin.memberId}`;
+          wrap.style.cssText =
+            "cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;pointer-events:auto;";
+
+          const dotWrap = document.createElement("div");
+          dotWrap.style.cssText = "position:relative;width:36px;height:36px;display:flex;align-items:center;justify-content:center;";
+          const halo = document.createElement("div");
+          halo.style.cssText = `position:absolute;inset:0;border-radius:50%;background:${pin.color}33;border:1px solid ${pin.color}66;`;
+          const av = document.createElement("div");
+          av.style.cssText = [
+            `width:28px;height:28px;border-radius:50%;background:${pin.color};`,
+            "border:2px solid #fff;color:#fff;font:800 12px system-ui,sans-serif;",
+            "display:flex;align-items:center;justify-content:center;position:relative;z-index:1;",
+            pin.stale ? "opacity:0.55;" : "",
+            "box-shadow:0 2px 8px rgba(0,0,0,0.35);",
+          ].join("");
+          av.textContent = pin.name.charAt(0).toUpperCase();
+          dotWrap.appendChild(halo);
+          dotWrap.appendChild(av);
+
+          const lbl = document.createElement("div");
+          lbl.style.cssText = [
+            "background:rgba(10,16,28,0.88);border:1px solid rgba(255,255,255,0.15);",
+            "border-radius:9999px;padding:3px 8px;font:700 10px system-ui,sans-serif;color:#f8fafc;",
+            "white-space:nowrap;max-width:96px;overflow:hidden;text-overflow:ellipsis;",
+          ].join("");
+          lbl.textContent = pin.name;
+
+          wrap.appendChild(dotWrap);
+          wrap.appendChild(lbl);
+          wrap.addEventListener("click", () => onFamilyPinTap?.(pin.memberId));
+
+          marker = new ml.Marker({ element: wrap, anchor: "bottom", offset: [0, -4] })
+            .setLngLat(pos)
+            .addTo(map);
+          familyMarkersRef.current[pin.memberId] = marker;
+        } else {
+          marker.setLngLat(pos);
+        }
+      }
+    });
+
+    return () => {
+      for (const marker of Object.values(familyMarkersRef.current)) marker.remove();
+      familyMarkersRef.current = {};
+    };
+  }, [mapReady, familySnapped, onFamilyPinTap]);
+
   /* ── Animated dash flow on the active path (subtle forward shimmer) ── */
   useEffect(() => {
     const map = mapRef.current;
@@ -1093,6 +1179,8 @@ export function AirportNavigatorMap({
         fill={fill}
         onSwitchToFamilyView={onSwitchToFamilyView}
         layoutLoadFailed={layoutStatus === "error"}
+        familyPins={familyPins}
+        onFamilyPinTap={onFamilyPinTap}
       />
     );
   }
@@ -1359,6 +1447,34 @@ export function AirportNavigatorMap({
           >
             🧭 Guide me to {gateCode ? `Gate ${gateCode.toUpperCase()}` : "my gate"}
           </button>
+        </div>
+      )}
+
+      {familyPins.length > 0 && (
+        <div
+          data-testid="airport-family-chip-strip"
+          className="pointer-events-auto absolute left-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-2"
+          style={{ bottom: "max(5.5rem, calc(env(safe-area-inset-bottom) + 4.75rem))" }}
+        >
+          <span className="rounded-full bg-black/50 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-sky-200/90 backdrop-blur">
+            👪 Family here
+          </span>
+          {familyPins.map((pin) => (
+            <button
+              key={pin.memberId}
+              type="button"
+              data-testid={`airport-family-chip-${pin.memberId}`}
+              onClick={() => onFamilyPinTap?.(pin.memberId)}
+              className="rounded-full border border-white/15 bg-black/55 px-3 py-1.5 text-[11px] font-bold text-white backdrop-blur active:opacity-90"
+              style={{ opacity: pin.stale ? 0.65 : 1 }}
+            >
+              <span
+                className="mr-1.5 inline-block h-2 w-2 rounded-full"
+                style={{ background: pin.stale ? "#64748b" : pin.color }}
+              />
+              {pin.name}
+            </button>
+          ))}
         </div>
       )}
     </div>

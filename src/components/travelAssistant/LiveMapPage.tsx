@@ -17,6 +17,7 @@ import { resolveLiveCoordinates, resetGeolocationQualityState } from "@/lib/fami
 import { clearLocationDisplayCache, resolveLocationForMapDisplay } from "@/lib/family/locationDisplayCache";
 import { isFamilySharingActive } from "@/lib/family/locationSharingPrefs";
 import { burstFamilyLocationFix, refreshFamilyLocationFix } from "@/lib/family/familyLocationWatch";
+import { buildFamilyAirportPins } from "@/lib/family/familyAirportPins";
 import { readCompassHeading, requestDeviceOrientationPermission } from "@/lib/map/deviceCompass";
 import { MobileTabBarNav } from "@/components/travelAssistant/mobile/useMobileTabNavigation";
 
@@ -598,6 +599,30 @@ export function LiveMapPage() {
   /* ── Derived ── */
   const members = group?.members ?? [];
   const liveCount = members.filter(m => locations[m.id] && !isStale(locations[m.id].updatedAt)).length;
+
+  const familyAirportPins = useMemo(
+    () =>
+      activeFlight
+        ? buildFamilyAirportPins(members, locations, activeFlight.f.flightDepartureAirport ?? "", {
+            excludeMemberId: myMemberId,
+          })
+        : [],
+    [activeFlight, members, locations, myMemberId],
+  );
+
+  const handleFamilyPinTap = useCallback(
+    (memberId: string) => {
+      setMapView("family");
+      setSelected(memberId);
+      setDrawerOpen(false);
+      const loc = locations[memberId];
+      if (loc && mapRef.current) {
+        mapRef.current.flyTo({ center: [loc.lon, loc.lat], zoom: 16, duration: 900, essential: true });
+      }
+    },
+    [locations],
+  );
+
   const myLoc = myMemberId ? locations[myMemberId] : null;
   const myAccuracyM = myLoc?.accuracy;
   const selMember = selected ? members.find(m => m.id === selected) : null;
@@ -688,6 +713,8 @@ export function LiveMapPage() {
               onCredentialsAnswer={saveCredentials}
               eligibleLoungeNames={navEligibleLounges}
               onSwitchToFamilyView={() => setMapView("family")}
+              familyPins={familyAirportPins}
+              onFamilyPinTap={handleFamilyPinTap}
             />
           </div>
         )}

@@ -158,4 +158,66 @@ test.describe("SEA day-of-travel", () => {
     await waitForIndoorMap(page);
     await expect(page.getByText(/Gate A10/i).first()).toBeVisible();
   });
+
+  test("shows family chip when another member is at SEA", async ({ page }) => {
+    await signIn(page);
+    const slot = departureSlotMinutesFromNow(90);
+    await seedSeaDayOfTravelTrip(page, slot);
+
+    await page.route("**/api/family", async (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          group: {
+            id: "e2e-group",
+            name: "E2E Family",
+            ownerId: "owner",
+            inviteCode: "TEST",
+            createdAt: new Date().toISOString(),
+            members: [
+              {
+                id: "me",
+                name: "Me",
+                email: null,
+                role: "organizer",
+                color: "#007AFF",
+                sharingEnabled: true,
+                visibility: "all-members",
+                joinedAt: new Date().toISOString(),
+              },
+              {
+                id: "spouse",
+                name: "Alex",
+                email: null,
+                role: "adult",
+                color: "#f472b6",
+                sharingEnabled: true,
+                visibility: "all-members",
+                joinedAt: new Date().toISOString(),
+              },
+            ],
+          },
+          locations: {
+            spouse: {
+              lat: SEA_COORDS.latitude + 0.001,
+              lon: SEA_COORDS.longitude,
+              updatedAt: new Date().toISOString(),
+              memberId: "spouse",
+            },
+          },
+          myMemberId: "me",
+        }),
+      });
+    });
+
+    await page.goto("/travel-assistant/live-map?view=airport", { waitUntil: "domcontentloaded" });
+    await waitForIndoorMap(page);
+
+    const chip = page.getByTestId("airport-family-chip-spouse");
+    await expect(chip).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("airport-family-chip-strip")).toBeVisible();
+    await chip.click();
+    await expect(page.getByRole("button", { name: /Family/i })).toHaveClass(/bg-white/);
+  });
 });

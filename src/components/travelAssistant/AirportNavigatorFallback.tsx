@@ -5,6 +5,7 @@ import { listSupportedIndoorAirports } from "@/lib/airportNav/getLayout";
 import type { TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
 import { buildGateInstructions, getAirportNav } from "@/lib/travelAssistant/airportNavigation";
+import type { FamilyAirportPin } from "@/lib/family/familyAirportPins";
 
 interface AirportNavigatorFallbackProps {
   iata: string;
@@ -26,6 +27,8 @@ interface AirportNavigatorFallbackProps {
   onSwitchToFamilyView?: () => void;
   /** True when layout API failed (not merely unsupported). */
   layoutLoadFailed?: boolean;
+  familyPins?: FamilyAirportPin[];
+  onFamilyPinTap?: (memberId: string) => void;
 }
 
 function proximityLabel(status: string): string {
@@ -54,6 +57,8 @@ export function AirportNavigatorFallback({
   fill = false,
   onSwitchToFamilyView,
   layoutLoadFailed = false,
+  familyPins = [],
+  onFamilyPinTap,
 }: AirportNavigatorFallbackProps) {
   const code = iata.trim().toUpperCase();
   const nav = getAirportNav(code);
@@ -197,6 +202,35 @@ export function AirportNavigatorFallback({
               ))}
             </ul>
             <p className="mt-2 text-xs text-sky-100/70">Ask staff for the nearest entrance — indoor map routing is next.</p>
+          </section>
+        ) : null}
+
+        {familyPins.length > 0 ? (
+          <section
+            data-testid="airport-family-chip-strip"
+            className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-3"
+          >
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-200">Family at {code}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {familyPins.map((pin) => (
+                <button
+                  key={pin.memberId}
+                  type="button"
+                  data-testid={`airport-family-chip-${pin.memberId}`}
+                  onClick={() => onFamilyPinTap?.(pin.memberId)}
+                  className="rounded-full border border-white/15 bg-black/35 px-3 py-1.5 text-sm font-semibold text-white active:opacity-90"
+                  style={{ opacity: pin.stale ? 0.65 : 1 }}
+                >
+                  <span
+                    className="mr-1.5 inline-block h-2 w-2 rounded-full"
+                    style={{ background: pin.stale ? "#64748b" : pin.color }}
+                  />
+                  {pin.name}
+                  {pin.proximityStatus === "in-terminal" ? " · in terminal" : " · at airport"}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-emerald-100/75">GPS only here — tap a name to open the family map.</p>
           </section>
         ) : null}
 
