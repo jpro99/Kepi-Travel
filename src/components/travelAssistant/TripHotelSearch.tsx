@@ -24,6 +24,7 @@ import {
 } from "@/lib/loyalty/chainFilterPrefs";
 import { HotelFilteredOutSheet, type FilteredHotelRow } from "@/components/travelAssistant/HotelFilteredOutSheet";
 import { HotelRefineSheet } from "@/components/travelAssistant/HotelRefineSheet";
+import { HotelChainFilterBar } from "@/components/travelAssistant/ChainFilterBar";
 import { computeLivePriceBounds, resolveHotelDisplay } from "@/lib/hotels/hotelSearchFilters";
 import {
   buildHotelSearchProviderBody,
@@ -205,9 +206,7 @@ export function TripHotelSearch({
   const [liveBookableCount, setLiveBookableCount] = useState(0);
   const [googleHotelsUrl, setGoogleHotelsUrl] = useState<string | null>(null);
   const [inCityCount, setInCityCount] = useState(0);
-  const [resultsView, setResultsView] = useState<ResultsView>(() =>
-    preferMapOnMobile && isCompactViewportClient() ? "map" : "list",
-  );
+  const [resultsView, setResultsView] = useState<ResultsView>("map");
   const [mapSelectedId, setMapSelectedId] = useState<string | null>(null);
   const [detailHotelId, setDetailHotelId] = useState<string | null>(null);
   const [savedHotelIds, setSavedHotelIds] = useState<Set<string>>(new Set());
@@ -511,6 +510,20 @@ export function TripHotelSearch({
     return attachHotelCoordinates(visibleResults, cityCenter.lat, cityCenter.lng, resolvedCity ?? city);
   }, [cityCenter, hotelsWithCoords, visibleResults, resolvedCity, city]);
 
+  const chainCounts = useMemo(() => {
+    const counts: Record<HotelChainId, number> = {
+      hyatt: 0,
+      marriott: 0,
+      hilton: 0,
+      ihg: 0,
+    };
+    for (const hotel of visibleResults) {
+      const chainId = matchHotelChain(hotel.chainName, hotel.name);
+      if (chainId) counts[chainId] += 1;
+    }
+    return counts;
+  }, [visibleResults]);
+
   const detailHotel = results.find((row) => row.id === detailHotelId && !dismissedIds.has(row.id)) ?? null;
 
   const openDetail = (hotel: RankedHotelSearchResult): void => {
@@ -765,7 +778,15 @@ export function TripHotelSearch({
 
           {!loading && visibleResults.length > 0 ? (
             <>
-              {resultsView === "map" && cityCenter ? (
+              <div className="mb-4 space-y-3">
+                <HotelChainFilterBar toggles={chainToggles} onChange={handleChainToggle} />
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {HOTEL_CHAINS.map((chain) => `${chain.label} ${chainCounts[chain.id]}`).join(" · ")}
+                  {" · "}Uncheck a chain to hide its hotels (including sub-brands like Andaz or Moxy).
+                </p>
+              </div>
+
+              {cityCenter && mappedHotels.length > 0 ? (
                 <div id="hotel-search-map" className="mb-4 scroll-mt-24">
                   <HotelStayMap
                     city={resolvedCity ?? city}
@@ -775,7 +796,7 @@ export function TripHotelSearch({
                     selectedId={mapSelectedId}
                     onSelect={openDetail}
                     payMode={payMode}
-                    expanded
+                    expanded={resultsView === "map"}
                     priceMin={priceMin}
                     priceMax={priceMax}
                     priceBounds={{ min: priceBounds.min, max: priceBounds.max }}
@@ -786,7 +807,7 @@ export function TripHotelSearch({
                     onOpenPreferences={() => setRefineOpen(true)}
                   />
                   <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    Tap a price pin for hotel details · gold = best match for you
+                    Pin color = hotel chain · gold ring = top match for you · M/T = metro and train
                   </p>
                 </div>
               ) : null}

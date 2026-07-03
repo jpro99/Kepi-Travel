@@ -57,15 +57,14 @@ test("resolveHotelInventoryBadge returns user-facing labels", () => {
   assert.equal(sample.label, "Estimated sample");
 });
 
-test("buildHotelSearchProviderBody clarifies Duffel is not required for LiteAPI", () => {
+test("buildHotelSearchProviderBody clarifies live vs browse inventory", () => {
   const body = buildHotelSearchProviderBody({ source: "liteapi" });
-  assert.match(body, /LiteAPI/i);
-  assert.match(body, /Duffel/i);
-  assert.match(body, /not required/i);
+  assert.match(body, /Live in Kepi/i);
+  assert.match(body, /Browse on Google/i);
 
   const estimated = buildHotelSearchProviderBody({ source: "estimated" });
-  assert.match(estimated, /pending/i);
   assert.match(estimated, /LiteAPI/i);
+  assert.match(estimated, /Duffel/i);
 });
 
 test("buildHotelSearchProviderHeadline distinguishes estimated from live", () => {

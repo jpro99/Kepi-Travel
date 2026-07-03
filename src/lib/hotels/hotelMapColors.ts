@@ -1,10 +1,14 @@
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
+import { resolveHotelChainMapColor } from "@/lib/hotels/hotelChainDisplay";
 
 export interface HotelMapColorStyle {
   bg: string;
   text: string;
   ring: string;
-  label: "Best match" | "Good fit" | "Other";
+  /** Chain or independent bucket */
+  label: string;
+  /** Fit quality when user needs both chain + match context */
+  fitLabel: "Top match" | "Good fit" | "Other" | null;
 }
 
 export function fitScoreRange(hotels: RankedHotelSearchResult[]): { min: number; max: number } {
@@ -13,23 +17,41 @@ export function fitScoreRange(hotels: RankedHotelSearchResult[]): { min: number;
   return { min: Math.min(...scores), max: Math.max(...scores) };
 }
 
+function isStrongMatch(
+  hotel: RankedHotelSearchResult,
+  range: { min: number; max: number },
+): boolean {
+  const span = Math.max(1, range.max - range.min);
+  const ratio = (hotel.fitScore - range.min) / span;
+  return (
+    hotel.tier === "kepi_pick" ||
+    hotel.tier === "personal" ||
+    hotel.tier === "points_play" ||
+    hotel.badges.includes("Matches you") ||
+    hotel.badges.some((badge) => /your chain|hyatt|marriott|hilton|ihg/i.test(badge)) ||
+    ratio >= 0.62
+  );
+}
+
+function isGoodFit(hotel: RankedHotelSearchResult, range: { min: number; max: number }): boolean {
+  const span = Math.max(1, range.max - range.min);
+  const ratio = (hotel.fitScore - range.min) / span;
+  return ratio >= 0.35;
+}
+
 export function hotelMapPinStyle(
   hotel: RankedHotelSearchResult,
   range: { min: number; max: number },
 ): HotelMapColorStyle {
-  const span = Math.max(1, range.max - range.min);
-  const ratio = (hotel.fitScore - range.min) / span;
-  const strongMatch =
-    hotel.tier === "kepi_pick" ||
-    hotel.tier === "personal" ||
-    hotel.badges.includes("Matches you") ||
-    ratio >= 0.62;
+  const chainColor = resolveHotelChainMapColor(hotel.chainName, hotel.name);
+  const strongMatch = isStrongMatch(hotel, range);
+  const goodFit = isGoodFit(hotel, range);
 
-  if (strongMatch) {
-    return { bg: "#14532d", text: "#ffffff", ring: "#86efac", label: "Best match" };
-  }
-  if (ratio >= 0.35) {
-    return { bg: "#f59e0b", text: "#1c1917", ring: "#fde68a", label: "Good fit" };
-  }
-  return { bg: "#ea580c", text: "#ffffff", ring: "#fdba74", label: "Other" };
+  return {
+    bg: chainColor.bg,
+    text: chainColor.text,
+    ring: strongMatch ? "#f4c95d" : goodFit ? "#ffffff" : "#e2e8f0",
+    label: chainColor.label,
+    fitLabel: strongMatch ? "Top match" : goodFit ? "Good fit" : "Other",
+  };
 }

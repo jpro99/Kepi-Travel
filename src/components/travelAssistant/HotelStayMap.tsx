@@ -4,6 +4,10 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "@/lib/maplibreCspWorker";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fitScoreRange, hotelMapPinStyle } from "@/lib/hotels/hotelMapColors";
+import {
+  HOTEL_CHAIN_MAP_COLORS,
+  INDEPENDENT_HOTEL_MAP_COLOR,
+} from "@/lib/hotels/hotelChainDisplay";
 import type { MapBounds } from "@/lib/hotels/hotelCoordinates";
 import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
@@ -53,10 +57,14 @@ function createPricePin(
 
   const badge = document.createElement("span");
   const compact = typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches;
-  badge.className = `rounded-lg font-black shadow-md ${compact ? "px-2 py-1 text-[11px]" : "px-1.5 py-0.5 text-[10px]"} ${selected ? "ring-2 ring-white scale-110" : ""}`;
+  badge.className = `rounded-lg font-black shadow-md ${compact ? "px-2 py-1 text-[11px]" : "px-1.5 py-0.5 text-[10px]"} ${selected ? "scale-110" : ""}`;
   badge.style.backgroundColor = style.bg;
   badge.style.color = style.text;
-  if (selected) badge.style.boxShadow = `0 0 0 2px ${style.ring}`;
+  badge.style.boxShadow = selected
+    ? `0 0 0 2px ${style.ring}, 0 0 0 4px rgba(255,255,255,0.9)`
+    : style.fitLabel === "Top match"
+      ? `0 0 0 2px ${style.ring}`
+      : undefined;
   badge.textContent = pin.text;
 
   const dot = document.createElement("span");
@@ -89,9 +97,10 @@ function createTransitMarker(stop: TransitStop): HTMLButtonElement {
   badge.textContent = style.label;
 
   const label = document.createElement("span");
+  const shortName = stop.name.split(/[,(]/)[0]?.trim() || stop.name;
   label.className =
-    "mt-0.5 max-w-[6rem] truncate rounded bg-slate-950/90 px-1 py-0.5 text-[8px] font-semibold text-white opacity-0 group-hover:opacity-100";
-  label.textContent = stop.name;
+    "mt-0.5 max-w-[5.5rem] truncate rounded bg-slate-950/90 px-1 py-0.5 text-[8px] font-semibold leading-tight text-white";
+  label.textContent = shortName;
 
   wrap.append(badge, label);
   return wrap;
@@ -311,18 +320,36 @@ export function HotelStayMap({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 overflow-visible rounded-2xl bg-white px-4 py-3 text-xs shadow-sm dark:bg-slate-900/60">
         <div className="flex flex-wrap items-center gap-3 text-slate-600 dark:text-slate-300">
+          {Object.values(HOTEL_CHAIN_MAP_COLORS).map((chain) => (
+            <span key={chain.label} className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: chain.bg }} />
+              {chain.label}
+            </span>
+          ))}
           <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm bg-[#f4c95d]" /> Best match
+            <span
+              className="h-2.5 w-2.5 rounded-sm"
+              style={{ backgroundColor: INDEPENDENT_HOTEL_MAP_COLOR.bg }}
+            />
+            Other
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm bg-slate-400" /> Good fit
+            <span className="h-2.5 w-2.5 rounded-sm ring-2 ring-[#f4c95d] ring-offset-1" style={{ backgroundColor: "#5b21b6" }} />
+            Gold ring = top match for you
           </span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 text-slate-600 dark:text-slate-300">
           <span className="inline-flex items-center gap-1.5">
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-slate-700 text-[8px] font-black text-white">M</span>
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#0284c7] text-[8px] font-black text-white">
+              M
+            </span>
             Metro
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-slate-900 text-[8px] font-black text-white">T</span>
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#0c4a6e] text-[8px] font-black text-white">
+              T
+            </span>
             Train
           </span>
         </div>

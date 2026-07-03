@@ -9,6 +9,7 @@ import {
   resolveHotelHeroVisual,
   topAmenityIcons,
 } from "@/lib/hotels/hotelCardDisplay";
+import { resolveHotelChainPresentation } from "@/lib/hotels/hotelChainDisplay";
 import { hasKepiBookableLiveRate } from "@/lib/hotels/hotelLiveRate";
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
 import { HotelInventoryBadgePill } from "@/components/travelAssistant/HotelInventoryBadgePill";
@@ -50,6 +51,7 @@ export function HotelRankCard({
   onSelect,
   payMode = "any",
 }: HotelRankCardProps) {
+  const chain = resolveHotelChainPresentation(hotel);
   const nightlyPts = pointsPerNight(hotel);
   const showPoints = payMode === "points" || payMode === "any";
   const hero = resolveHotelHeroVisual(hotel);
@@ -83,13 +85,38 @@ export function HotelRankCard({
 
         <div className="space-y-4 p-5">
           <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-xl font-black leading-tight text-slate-900 dark:text-white">{hotel.name}</h3>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              {chain.participatesInPoints ? (
+                <span
+                  className="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white"
+                  style={{ backgroundColor: chain.mapColor.bg }}
+                >
+                  {chain.programName ?? chain.chainLabel}
+                </span>
+              ) : (
+                <span className="inline-flex items-center rounded-full bg-slate-200 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:bg-slate-700 dark:text-slate-200">
+                  Independent
+                </span>
+              )}
+              {showPoints && chain.pointsPerNight ? (
+                <span className="rounded-full bg-[#0b1f3a] px-2.5 py-1 text-[10px] font-bold text-[#f4c95d]">
+                  ~{chain.pointsPerNight.toLocaleString()} pts / night
+                </span>
+              ) : null}
               <HotelInventoryBadgePill hotel={hotel} />
+              {hotel.badges.slice(0, 2).map((badge) => (
+                <span
+                  key={badge}
+                  className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                >
+                  {badge}
+                </span>
+              ))}
             </div>
+            <h3 className="text-xl font-black leading-tight text-slate-900 dark:text-white">{hotel.name}</h3>
             <p className="mt-1 text-sm text-slate-500">
               {"★".repeat(Math.round(hotel.stars))} · {guestScore} guest score
-              {hotel.chainName ? ` · ${hotel.chainName}` : ""}
+              {chain.brandLine && chain.brandLine !== hotel.name ? ` · ${chain.brandLine}` : ""}
             </p>
           </div>
 
@@ -150,10 +177,23 @@ export function HotelRankCard({
         }`}
       >
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2">
-            <p className="truncate text-sm font-bold text-slate-900 dark:text-white">{hotel.name}</p>
+          <div className="mb-1 flex flex-wrap items-center gap-1.5">
+            {chain.participatesInPoints ? (
+              <span
+                className="rounded-full px-2 py-0.5 text-[9px] font-black uppercase text-white"
+                style={{ backgroundColor: chain.mapColor.bg }}
+              >
+                {chain.chainLabel}
+              </span>
+            ) : null}
+            {showPoints && chain.pointsPerNight ? (
+              <span className="text-[9px] font-bold text-[#f4c95d]">
+                {chain.pointsPerNight.toLocaleString()} pts
+              </span>
+            ) : null}
             <HotelInventoryBadgePill hotel={hotel} compact />
           </div>
+          <p className="truncate text-sm font-bold text-slate-900 dark:text-white">{hotel.name}</p>
           <p className="truncate text-xs text-slate-500">
             {guestScore} · {nightlyLabel}
             {showPoints && nightlyPts ? ` · ${nightlyPts.toLocaleString()} pts` : ""}
