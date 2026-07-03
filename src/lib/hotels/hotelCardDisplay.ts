@@ -59,7 +59,7 @@ export function formatHotelNightlyPriceCaption(
 ): string {
   if (hasKepiBookableLiveRate(hotel)) {
     const room = hotel.rateRoomName?.trim();
-    return room ? `/ night · ${room}` : "/ night · Kepi live rate";
+    return room ? `/ night · ${room}` : "/ night · verify at checkout";
   }
   if (hasDisplayNightlyRate(hotel)) return "/ night · verify before booking";
   return "See booking site";

@@ -12,6 +12,7 @@ import { pointsPerNight } from "@/lib/hotels/hotelPointsDisplay";
 import { hasDisplayNightlyRate, hasKepiBookableLiveRate } from "@/lib/hotels/hotelLiveRate";
 import { HotelInventoryBadgePill } from "@/components/travelAssistant/HotelInventoryBadgePill";
 import { resolveHotelInventoryBadge } from "@/lib/hotels/hotelInventoryBadge";
+import { normalizeHotelAvailabilityError } from "@/lib/hotels/hotelAvailabilityError";
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
 import { HotelPhotoGallery } from "@/components/travelAssistant/HotelPhotoGallery";
 import type { TravelProfile } from "@/app/api/travel-profile/route";
@@ -49,6 +50,7 @@ export function HotelDetailSheet({
   const [phone, setPhone] = useState("");
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [quoteSoldOut, setQuoteSoldOut] = useState(false);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [verifiedQuote, setVerifiedQuote] = useState<{
     guestTotalUsd: number;
@@ -156,6 +158,7 @@ export function HotelDetailSheet({
     if (!hotel.bookOfferId) return false;
     setQuoteLoading(true);
     setCheckoutError(null);
+    setQuoteSoldOut(false);
     setVerifiedQuote(null);
     try {
       const response = await fetch("/api/hotels/checkout/quote", {
@@ -168,6 +171,7 @@ export function HotelDetailSheet({
       });
       const payload = (await response.json()) as {
         error?: string;
+        soldOut?: boolean;
         guestTotalUsd?: number;
         netTotalUsd?: number;
         isMemberRate?: boolean;
@@ -176,7 +180,9 @@ export function HotelDetailSheet({
         deltaUsd?: number | null;
       };
       if (!response.ok || payload.guestTotalUsd === undefined) {
-        setCheckoutError(payload.error ?? "Could not verify live price.");
+        const message = normalizeHotelAvailabilityError(payload.error);
+        setCheckoutError(message);
+        setQuoteSoldOut(Boolean(payload.soldOut) || /sold out|no longer available/i.test(message));
         return false;
       }
       setVerifiedQuote({
@@ -482,7 +488,8 @@ export function HotelDetailSheet({
                 </div>
               </div>
             ) : (
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="space-y-3">
+                <div className="grid gap-2 sm:grid-cols-2">
                 {pointsMode || (payMode === "any" && nightlyPts && !kepiBookable) ? (
                   <a
                     href={pointsBook.url}
@@ -550,6 +557,31 @@ export function HotelDetailSheet({
                     {saved ? "Saved to your trip ✓" : "Save to my trip"}
                   </button>
                 )}
+                </div>
+
+                {checkoutError && !checkoutOpen ? (
+                  <div
+                    className={`rounded-xl border px-3 py-3 text-sm ${
+                      quoteSoldOut
+                        ? "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+                        : "border-red-300 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100"
+                    }`}
+                    role="alert"
+                  >
+                    <p className="font-semibold">{quoteSoldOut ? "Not available in Kepi" : "Could not start booking"}</p>
+                    <p className="mt-1">{checkoutError}</p>
+                    {quoteSoldOut ? (
+                      <a
+                        href={book.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 inline-flex text-sm font-bold underline"
+                      >
+                        Check Google Hotels →
+                      </a>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             )}
 
@@ -579,7 +611,7 @@ export function HotelDetailSheet({
               {pointsMode
                 ? "Point estimates use your loyalty wallet and typical cents-per-point values. Redeem on the hotel chain site for full elite benefits — Kepi cash checkout does not earn chain points."
                 : kepiBookable
-                  ? "Book in Kepi with Stripe — your confirmation is saved to your trip automatically. Use Redeem points for chain loyalty stays."
+                  ? "Live in Kepi at search time — tap Book to verify availability. If sold out, try another Live hotel or Google Hotels."
                   : hasLiveRate
                     ? "Book on the hotel chain or Google for live room types and loyalty credit. Saving here adds it to your Kepi itinerary."
                     : "Kepi could not fetch a live rate for these dates — open the chain site or Google Hotels for pricing."}

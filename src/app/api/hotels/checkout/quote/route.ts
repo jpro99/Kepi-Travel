@@ -4,6 +4,7 @@ import { userHasMemberHotelPricing } from "@/lib/billing/memberHotelPricing";
 import { guestTotalForPlan } from "@/lib/hotels/guestPricing";
 import { prebookLiteApiOffer } from "@/lib/providers/liteapi/bookHotel";
 import { isLiteApiConfigured } from "@/lib/providers/liteapi/searchHotels";
+import { isHotelSoldOutError, normalizeHotelAvailabilityError } from "@/lib/hotels/hotelAvailabilityError";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,7 +48,11 @@ export async function POST(req: Request) {
       priceChanged,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not verify price";
-    return NextResponse.json({ error: message }, { status: 502 });
+    const raw = error instanceof Error ? error.message : "Could not verify price";
+    const message = normalizeHotelAvailabilityError(raw);
+    return NextResponse.json(
+      { error: message, soldOut: isHotelSoldOutError(raw) },
+      { status: 502 },
+    );
   }
 }

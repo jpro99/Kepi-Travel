@@ -15,7 +15,7 @@ const BADGES: Record<HotelInventoryKind, HotelInventoryBadge> = {
     kind: "kepi_live",
     label: "Live in Kepi",
     shortLabel: "Live",
-    description: "Book and pay in Kepi with a live checkout rate.",
+    description: "Can checkout in Kepi — tap Book to verify the rate is still available before you pay.",
   },
   browse_google: {
     kind: "browse_google",
@@ -105,7 +105,7 @@ export function buildHotelSearchProviderBody(input: {
     return "LiteAPI had no bookable rates for these dates. Duffel Stays is still pending on your account — live search runs through LiteAPI and does not require Duffel approval.";
   }
   if (input.source === "liteapi" || input.source === "duffel") {
-    return "Look for the Live in Kepi badge to book inside the app. Browse on Google listings open Google Hotels for pricing. Duffel Stays approval is separate and not required for LiteAPI live search.";
+    return "Live in Kepi = can try checkout here (we verify before payment). Browse on Google / Sample = not bookable in Kepi. Sold-out rates disappear when you tap Book — pick another Live hotel.";
   }
   return "Look for the Live in Kepi badge on each hotel card.";
 }
