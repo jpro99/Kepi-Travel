@@ -2,10 +2,14 @@ import { resolveAirport } from "@/lib/airports/lookup";
 import {
   HOTEL_DESTINATION_ALIASES,
   normalizeHotelDestinationQuery,
-  suggestHotelDestinations,
+  suggestHotelDestinations as fuzzyHotelSuggestions,
 } from "@/lib/hotels/destinationAliases";
 
-export { suggestHotelDestinations };
+export interface HotelDestinationSuggestion {
+  label: string;
+  iata?: string;
+  kind: "city" | "airport";
+}
 
 /** Known city centers keyed by IATA or alias (uppercase). */
 export const HOTEL_CITY_COORDS: Record<string, { lat: number; lng: number; name: string }> = {
@@ -193,4 +197,81 @@ export async function resolveHotelDestination(input: string): Promise<ResolvedHo
 
   if (!geocoded) return null;
   return correctedFrom ? { ...geocoded, correctedFrom } : geocoded;
+}
+
+function normalizeSuggestQuery(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9, ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** City and town suggestions from the hotel catalog (not just airports). */
+export function suggestHotelCityDestinations(raw: string): HotelDestinationSuggestion[] {
+  const clean = normalizeSuggestQuery(raw);
+  if (clean.length < 2) return [];
+
+  const results: HotelDestinationSuggestion[] = [];
+  const seen = new Set<string>();
+
+  const add = (label: string, iata?: string): void => {
+    const key = label.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    results.push({ label, iata, kind: "city" });
+  };
+
+  for (const [alias, canonical] of Object.entries(HOTEL_DESTINATION_ALIASES)) {
+    if (alias.startsWith(clean) || clean.startsWith(alias)) {
+      const resolved = resolveHotelDestinationSync(canonical) ?? resolveHotelDestinationSync(alias);
+      if (resolved) add(resolved.displayName, resolved.iata);
+    }
+  }
+
+  for (const [key, hit] of Object.entries(HOTEL_CITY_COORDS)) {
+    const nameLower = hit.name.toLowerCase();
+    const stem = nameLower.split(",")[0]?.trim() ?? nameLower;
+    const keyLower = key.toLowerCase();
+    const matches =
+      stem.startsWith(clean) ||
+      clean.startsWith(stem) ||
+      (clean.length >= 3 && stem.includes(clean)) ||
+      (clean.length >= 3 && nameLower.includes(clean)) ||
+      (clean.length === 3 && keyLower.startsWith(clean));
+
+    if (matches) {
+      add(hit.name, iataForKnownKey(key));
+    }
+  }
+
+  if (/puglia|salento|lecce|monop|polign/i.test(clean)) {
+    add("Lecce, Italy", "BDS");
+    add("Monopoli, Italy", "BRI");
+    add("Polignano a Mare", "BRI");
+  }
+
+  return results.slice(0, 6);
+}
+
+/** Combined catalog + fuzzy suggestions for error messages and autocomplete fallback. */
+export function suggestHotelDestinations(raw: string): string[] {
+  const merged: string[] = [];
+  const seen = new Set<string>();
+
+  for (const item of suggestHotelCityDestinations(raw)) {
+    const key = item.label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(item.label);
+  }
+  for (const label of fuzzyHotelSuggestions(raw)) {
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(label);
+  }
+
+  return merged.slice(0, 6);
 }

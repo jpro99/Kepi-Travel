@@ -140,7 +140,7 @@ export function TripHotelSearch({
   }, []);
 
   const runSearch = async (): Promise<void> => {
-    const destination = cityIata || city.trim();
+    const destination = city.trim() || cityIata;
     if (!destination) {
       setError("Enter a city or destination.");
       return;

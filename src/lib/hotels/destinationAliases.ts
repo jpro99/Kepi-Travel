@@ -12,6 +12,7 @@ export const HOTEL_DESTINATION_ALIASES: Record<string, string> = {
   "polignano, italy": "polignano a mare",
   lecce: "lecce",
   "lecce italy": "lecce",
+  "lecce, italy": "lecce",
   ortisei: "ortisei",
   ortese: "ortisei",
   ortesei: "ortisei",
@@ -58,13 +59,13 @@ export function suggestHotelDestinations(raw: string): string[] {
   const suggestions: string[] = [];
 
   if (/monop|monopol/i.test(lower)) {
-    suggestions.push("Monopoli, Italy", "Bari (BRI)", "Brindisi (BDS)");
+    suggestions.push("Monopoli, Italy", "Lecce, Italy", "Bari (BRI)", "Brindisi (BDS)");
   }
-  if (/puglia|salento/i.test(lower)) {
-    suggestions.push("Monopoli, Italy", "Bari (BRI)", "Brindisi (BDS)");
+  if (/puglia|salento|lecce/i.test(lower)) {
+    suggestions.push("Lecce, Italy", "Monopoli, Italy", "Bari (BRI)", "Brindisi (BDS)");
   }
   if (/\b(italy|italia)\b/i.test(lower) && suggestions.length === 0) {
-    suggestions.push("Rome (FCO)", "Florence (FLR)", "Venice (VCE)", "Bari (BRI)");
+    suggestions.push("Lecce, Italy", "Rome (FCO)", "Florence (FLR)", "Venice (VCE)", "Bari (BRI)");
   }
 
   return suggestions.slice(0, 4);
