@@ -95,6 +95,12 @@ interface BookTabViewProps {
   hotelSearchDefaults?: HotelSearchDefaults;
   onLaunchHotelSearch?: (params: { city: string; cityIata?: string; checkIn: string; checkOut: string }) => void;
   onSearchHotels?: () => void;
+  inlineHotelSearchActive?: boolean;
+  inlineHotelSearchDefaults?: HotelSearchDefaults;
+  hotelSearchGeneration?: number;
+  onCloseInlineHotelSearch?: () => void;
+  onAddHotelFromSearch?: (hotel: import("@/lib/hotels/types").HotelSearchResult) => void;
+  hotelSearchMapPreview?: { city: string; lat: number; lng: number } | null;
   onSearchSegment?: (segment: TripStaySegment) => void;
   onAddCityStay?: (input: { city: string; checkIn: string; checkOut: string }) => void;
   onSetStayIntent?: (
@@ -141,6 +147,12 @@ export function BookTabView({
   hotelSearchDefaults,
   onLaunchHotelSearch,
   onSearchHotels,
+  inlineHotelSearchActive,
+  inlineHotelSearchDefaults,
+  hotelSearchGeneration,
+  onCloseInlineHotelSearch,
+  onAddHotelFromSearch,
+  hotelSearchMapPreview,
   onSearchSegment,
   onAddCityStay,
   onSetStayIntent,
@@ -232,6 +244,12 @@ export function BookTabView({
           hotelSearchDefaults={hotelSearchDefaults}
           onLaunchHotelSearch={onLaunchHotelSearch}
           onSearchHotels={onSearchHotels}
+          inlineHotelSearchActive={inlineHotelSearchActive}
+          inlineHotelSearchDefaults={inlineHotelSearchDefaults}
+          hotelSearchGeneration={hotelSearchGeneration}
+          onCloseInlineHotelSearch={onCloseInlineHotelSearch}
+          onAddHotelFromSearch={onAddHotelFromSearch}
+          mapPreviewCenter={hotelSearchMapPreview}
           onSearchSegment={onSearchSegment}
           onAddCityStay={onAddCityStay}
           onSetStayIntent={onSetStayIntent}

@@ -12,6 +12,7 @@ export interface HotelSearchModalProps {
   defaultCityIata?: string;
   defaultCheckIn?: string;
   defaultCheckOut?: string;
+  searchGeneration?: number;
   onClose: () => void;
   onAddHotel: (hotel: HotelSearchResult) => void;
 }
@@ -24,6 +25,7 @@ export function HotelSearchModal({
   defaultCityIata = "",
   defaultCheckIn = "",
   defaultCheckOut = "",
+  searchGeneration = 0,
   onClose,
   onAddHotel,
 }: HotelSearchModalProps) {
@@ -41,6 +43,9 @@ export function HotelSearchModal({
               <h2 className="text-lg font-black text-slate-900 dark:text-white md:text-xl">
                 {segmentLabel ?? (defaultCity ? defaultCity.split("(")[0]?.trim() : "Find your stay")}
               </h2>
+              {tripName ? (
+                <p className="mt-0.5 text-[11px] text-slate-500">{tripName}</p>
+              ) : null}
               {defaultCheckIn && defaultCheckOut ? (
                 <p className="mt-0.5 text-[11px] text-slate-500">{defaultCheckIn} → {defaultCheckOut}</p>
               ) : null}
@@ -57,11 +62,13 @@ export function HotelSearchModal({
         </header>
         <div className="flex-1 overflow-y-auto px-4 py-3 md:px-5 md:py-4">
           <TripHotelSearch
-            key={`${segmentLabel ?? "default"}-${defaultCity}-${defaultCityIata}-${defaultCheckIn}-${defaultCheckOut}`}
+            key={`${defaultCity}-${defaultCityIata}-${defaultCheckIn}-${defaultCheckOut}`}
             defaultCity={defaultCity}
             defaultCityIata={defaultCityIata}
             defaultCheckIn={defaultCheckIn}
             defaultCheckOut={defaultCheckOut}
+            searchGeneration={searchGeneration}
+            listOnly
             onAddHotel={onAddHotel}
           />
         </div>

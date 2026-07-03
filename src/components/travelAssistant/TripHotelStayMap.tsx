@@ -18,6 +18,12 @@ import {
   type HotelStayMapReservation,
 } from "@/lib/travelAssistant/tripHotelStayMap";
 
+export interface MapPreviewCenter {
+  city: string;
+  lat: number;
+  lng: number;
+}
+
 interface TripHotelStayMapProps {
   reservations: HotelStayMapReservation[];
   staySegments?: TripStaySegment[];
@@ -26,6 +32,8 @@ interface TripHotelStayMapProps {
   mobileProminent?: boolean;
   sectionId?: string;
   onOpenNotebook?: () => void;
+  /** When searching hotels, pan the stay map to the searched city. */
+  mapPreviewCenter?: MapPreviewCenter | null;
 }
 
 function StayCard({
@@ -120,6 +128,7 @@ export function TripHotelStayMap({
   mobileProminent = false,
   sectionId,
   onOpenNotebook,
+  mapPreviewCenter = null,
 }: TripHotelStayMapProps) {
   const points = useMemo(
     () => buildHotelStayMapPoints({ reservations, staySegments, plannedStayCities }),
@@ -310,8 +319,28 @@ export function TripHotelStayMap({
     if (!map || !mapReady) return;
     installStayLayers(map);
     void renderStayMarkers();
+    if (mapPreviewCenter) {
+      map.flyTo({
+        center: [mapPreviewCenter.lng, mapPreviewCenter.lat],
+        zoom: 13,
+        duration: 800,
+        essential: true,
+      });
+      return;
+    }
     if (shouldAutoFit(pointsFingerprint)) void fitWholeTrip();
-  }, [pointsFingerprint, installStayLayers, renderStayMarkers, fitWholeTrip, mapReady, shouldAutoFit]);
+  }, [pointsFingerprint, installStayLayers, renderStayMarkers, fitWholeTrip, mapReady, shouldAutoFit, mapPreviewCenter]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !mapPreviewCenter) return;
+    map.flyTo({
+      center: [mapPreviewCenter.lng, mapPreviewCenter.lat],
+      zoom: 13,
+      duration: 700,
+      essential: true,
+    });
+  }, [mapPreviewCenter, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;

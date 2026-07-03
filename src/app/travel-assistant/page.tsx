@@ -87,6 +87,7 @@ import { TripPlanningWizard } from "@/components/travelAssistant/TripPlanningWiz
 import { HotelSearchModal } from "@/components/travelAssistant/HotelSearchModal";
 import type { HotelSearchResult } from "@/lib/hotels/types";
 import { deriveHotelSearchContext, formatHotelSearchCityLabel } from "@/lib/hotels/tripSearchContext";
+import { resolveHotelDestinationSync } from "@/lib/hotels/resolveDestination";
 import {
   deriveTripStaySegments,
   nextMissingStaySegment,
@@ -211,8 +212,9 @@ import {
 } from "@/lib/travelAssistant/consumerTabs";
 import { MobileSearchOverlay } from "@/components/travelAssistant/mobile/MobileSearchOverlay";
 import { MobileTabBarNav } from "@/components/travelAssistant/mobile/useMobileTabNavigation";
-import { isStandaloneApp } from "@/lib/ui/isStandaloneApp";
+import { isCompactViewportClient } from "@/lib/ui/isCompactViewport";
 import { useMobilePrimaryTab } from "@/components/travelAssistant/mobile/useMobilePrimaryTab";
+import { PlannerTab } from "@/components/travelAssistant/PlannerTab";
 
 const OpsPanel = lazy(async () => {
   const loadedModule = await import("@/components/travelAssistant/OpsPanel");
@@ -1933,6 +1935,7 @@ export default function TravelAssistantPage() {
   const [exportTo, setExportTo] = useState("");
   const [timelineSectionTab, setTimelineSectionTab] = useState<TimelineSectionTab>("reservations");
   const [, setPackingCompletionPercent] = useState(0);
+  const [desktopPlannerView, setDesktopPlannerView] = useState<"plan" | "overview">("overview");
   const [consumerTab, setConsumerTab] = useState<ConsumerTab>("trip");
   const [bookSubTab, setBookSubTab] = useState<BookSubTab>("flights");
   const [planSubView, setPlanSubView] = useState<PlanSubView>("timeline");
@@ -2013,6 +2016,8 @@ export default function TravelAssistantPage() {
   const [manualReservationModalOpen, setManualReservationModalOpen] = useState(false);
   const [manualReservationPresetType, setManualReservationPresetType] = useState<"flight" | "hotel" | null>(null);
   const [hotelSearchModalOpen, setHotelSearchModalOpen] = useState(false);
+  const [inlineHotelSearchOpen, setInlineHotelSearchOpen] = useState(false);
+  const [hotelSearchGeneration, setHotelSearchGeneration] = useState(0);
   const [hotelSearchSegment, setHotelSearchSegment] = useState<TripStaySegment | null>(null);
   const [postBookingConfirmation, setPostBookingConfirmation] = useState<PostBookingConfirmationData | null>(null);
   const [manualStaySegmentsByTrip, setManualStaySegmentsByTrip] = useState<Record<string, TripStaySegmentInput[]>>({});
@@ -3476,11 +3481,8 @@ export default function TravelAssistantPage() {
     const widthMedia = window.matchMedia("(max-width: 1023px)");
     const touchMedia = window.matchMedia("(hover: none) and (pointer: coarse)");
     const update = (): void => {
-      const forceMobile = new URLSearchParams(window.location.search).get("mobile") === "1";
-      const standalone = isStandaloneApp();
-      const compact =
-        forceMobile || standalone || widthMedia.matches || (touchMedia.matches && window.innerWidth < 1280);
-      setIsCompactViewport(compact);
+      setIsCompactViewport(isCompactViewportClient());
+      const compact = isCompactViewportClient();
       setMobileSimpleView(compact);
       setMobileViewPanel((previous) => {
         if (compact) {
@@ -4306,6 +4308,15 @@ export default function TravelAssistantPage() {
     return currentEndDate || null;
   }, [activeTrip?.endDate]);
 
+  const plannerFlightCount = consumerReservationsSorted.filter((reservation) => reservation.type === "flight").length;
+  const plannerHotelCount = consumerReservationsSorted.filter((reservation) => reservation.type === "hotel").length;
+  const plannerOtherBookingCount = consumerReservationsSorted.length - plannerFlightCount - plannerHotelCount;
+  const plannerReadyStepCount =
+    (activeTrip ? 1 : 0) +
+    (consumerTripStartDate && consumerTripEndDate ? 1 : 0) +
+    (plannerFlightCount > 0 ? 1 : 0) +
+    (plannerHotelCount > 0 ? 1 : 0);
+
   useEffect(() => {
     const start = (consumerTripStartDate ?? activeTrip?.startDate)?.slice(0, 10) ?? null;
     if (!start) return;
@@ -4646,6 +4657,64 @@ export default function TravelAssistantPage() {
     }
     return hotelSearchDefaults;
   }, [hotelSearchDefaults, hotelSearchSegment, tripStaySegments]);
+
+  const hotelSearchMapPreview = useMemo(() => {
+    if (!inlineHotelSearchOpen && !hotelSearchModalOpen) return null;
+    const city = effectiveHotelSearchDefaults.city?.trim();
+    if (!city) return null;
+    const resolved = resolveHotelDestinationSync(city);
+    if (!resolved) return null;
+    return { city: resolved.displayName, lat: resolved.lat, lng: resolved.lng };
+  }, [effectiveHotelSearchDefaults.city, hotelSearchModalOpen, inlineHotelSearchOpen]);
+
+  const closeHotelSearch = useCallback((): void => {
+    setHotelSearchModalOpen(false);
+    setInlineHotelSearchOpen(false);
+    setHotelSearchSegment(null);
+  }, []);
+
+  const scrollToInlineHotelSearch = useCallback((): void => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        document.getElementById("inline-hotel-search-results")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+    });
+  }, []);
+
+  const openHotelSearchUi = useCallback(
+    (segment: TripStaySegment): void => {
+      setHotelSearchSegment(segment);
+      setHotelSearchGeneration((value) => value + 1);
+      const compact = isCompactViewportClient();
+      if (compact) {
+        setInlineHotelSearchOpen(true);
+        setHotelSearchModalOpen(false);
+        navigateToBook("hotels");
+        window.setTimeout(() => scrollToInlineHotelSearch(), 120);
+      } else {
+        setHotelSearchModalOpen(true);
+        setInlineHotelSearchOpen(false);
+      }
+    },
+    [navigateToBook, scrollToInlineHotelSearch],
+  );
+
+  useEffect(() => {
+    if (!isCompactViewport || !hotelSearchModalOpen || inlineHotelSearchOpen) return;
+    setHotelSearchModalOpen(false);
+    setInlineHotelSearchOpen(true);
+    navigateToBook("hotels");
+    window.setTimeout(() => scrollToInlineHotelSearch(), 120);
+  }, [
+    hotelSearchModalOpen,
+    inlineHotelSearchOpen,
+    isCompactViewport,
+    navigateToBook,
+    scrollToInlineHotelSearch,
+  ]);
   const tripPlanningInitialDraft = useMemo(
     () => ({
       tripName: activeTrip?.name && !/^trip \d+$/iu.test(activeTrip.name.trim()) ? activeTrip.name : "",
@@ -5555,18 +5624,18 @@ export default function TravelAssistantPage() {
     const nextPlanned =
       plannedStayCities.find((city) => city.status === "needed") ?? plannedStayCities[0];
     if (nextPlanned) {
-      setHotelSearchSegment(plannedStayCityToSegment(nextPlanned));
-      setHotelSearchModalOpen(true);
+      openHotelSearchUi(plannedStayCityToSegment(nextPlanned));
       return;
     }
-    setHotelSearchSegment(nextMissingStaySegment(tripStaySegments));
-    setHotelSearchModalOpen(true);
-  }, [plannedStayCities, tripStaySegments]);
+    const nextMissing = nextMissingStaySegment(tripStaySegments);
+    if (nextMissing) {
+      openHotelSearchUi(nextMissing);
+    }
+  }, [openHotelSearchUi, plannedStayCities, tripStaySegments]);
 
   const openHotelSearchForPlannedCity = useCallback((city: PlannedStayCity): void => {
-    setHotelSearchSegment(plannedStayCityToSegment(city));
-    setHotelSearchModalOpen(true);
-  }, []);
+    openHotelSearchUi(plannedStayCityToSegment(city));
+  }, [openHotelSearchUi]);
 
   const handleFlightSearchPlan = useCallback(
     (plan: FlightSearchPlan): void => {
@@ -5641,9 +5710,8 @@ export default function TravelAssistantPage() {
   );
 
   const openHotelSearchForSegment = useCallback((segment: TripStaySegment): void => {
-    setHotelSearchSegment(segment);
-    setHotelSearchModalOpen(true);
-  }, []);
+    openHotelSearchUi(segment);
+  }, [openHotelSearchUi]);
 
   const launchCustomHotelSearch = useCallback(
     (params: { city: string; cityIata?: string; checkIn: string; checkOut: string }): void => {
@@ -5656,7 +5724,7 @@ export default function TravelAssistantPage() {
             86_400_000,
         ),
       );
-      setHotelSearchSegment({
+      openHotelSearchUi({
         id: "custom-hotel-search",
         city: params.city,
         cityIata: params.cityIata,
@@ -5673,9 +5741,8 @@ export default function TravelAssistantPage() {
         connectionHours: null,
         needsDecision: false,
       });
-      setHotelSearchModalOpen(true);
     },
-    [],
+    [openHotelSearchUi],
   );
 
   const handleAddCityStay = useCallback(
@@ -5807,8 +5874,9 @@ export default function TravelAssistantPage() {
         detail: `Check-in ${hotel.checkIn} · ${searchCity}. Find it under Book → Hotels.`,
         syncedToTrip: true,
       });
+      closeHotelSearch();
     },
-    [activeTripId, effectiveHotelSearchDefaults.city, hotelSearchSegment?.city, pushUndoSnapshot, queueMutation, selectedFamilyMember.id, trips],
+    [activeTripId, closeHotelSearch, effectiveHotelSearchDefaults.city, hotelSearchSegment?.city, pushUndoSnapshot, queueMutation, selectedFamilyMember.id, trips],
   );
 
   const handleImportParsedReservations = useCallback(
@@ -7927,26 +7995,29 @@ export default function TravelAssistantPage() {
         );
       if (mode === "hotel" && city) {
         const formatted = formatHotelSearchCityLabel(city);
+        const checkOut = addDay(dateKey, 1);
         handleAddCityStay({
           city: formatted.label || city,
           checkIn: dateKey,
-          checkOut: addDay(dateKey, 1),
+          checkOut,
         });
-        setHotelSearchSegment({
+        openHotelSearchUi({
           id: `day-plan-${dateKey}`,
           city: formatted.label || city,
           cityIata: formatted.iata,
           checkIn: dateKey,
-          checkOut: addDay(dateKey, 1),
+          checkOut,
           label: `${formatted.label || city} · ${dateKey}`,
           source: "manual",
           status: "missing",
           needsDecision: false,
           stayIntent: "needs_hotel",
+          suggestedIntent: "needs_hotel",
+          intentReason: "Day plan hotel search",
+          stopKind: "destination",
+          connectionHours: null,
           nights: 1,
-        } as TripStaySegment);
-        setHotelSearchModalOpen(true);
-        navigateToBook("hotels");
+        });
         setToast(`Hotel search ready for ${formatted.label || city}.`);
         return;
       }
@@ -7958,7 +8029,7 @@ export default function TravelAssistantPage() {
       navigateToBook("flights");
       setToast(`${mode.charAt(0).toUpperCase()}${mode.slice(1)} planning for ${intent.summary}`);
     },
-    [addDay, handleAddCityStay, itineraryPrefs.dayNotes, effectiveStopRanges, navigateToConsumerTab, setToast],
+    [addDay, handleAddCityStay, itineraryPrefs.dayNotes, effectiveStopRanges, navigateToConsumerTab, openHotelSearchUi, setToast],
   );
 
   const handleReservationsRefresh = useCallback(async (): Promise<void> => {
@@ -8699,17 +8770,15 @@ export default function TravelAssistantPage() {
         }}
       />
       <HotelSearchModal
-        open={hotelSearchModalOpen}
+        open={hotelSearchModalOpen && !isCompactViewport}
         tripName={activeTrip?.name}
         segmentLabel={hotelSearchSegment?.label}
         defaultCity={effectiveHotelSearchDefaults.city}
         defaultCityIata={effectiveHotelSearchDefaults.cityIata}
         defaultCheckIn={effectiveHotelSearchDefaults.checkIn}
         defaultCheckOut={effectiveHotelSearchDefaults.checkOut}
-        onClose={() => {
-          setHotelSearchModalOpen(false);
-          setHotelSearchSegment(null);
-        }}
+        searchGeneration={hotelSearchGeneration}
+        onClose={closeHotelSearch}
         onAddHotel={handleAddHotelFromSearch}
       />
     </>
@@ -8977,7 +9046,21 @@ export default function TravelAssistantPage() {
                 plannedStayCities={plannedStayCities}
                 usuallySkipsConnections={usuallySkipsConnections}
                 onLaunchHotelSearch={launchCustomHotelSearch}
-                onSearchHotels={openHotelSearchForTrip}
+                inlineHotelSearchActive={inlineHotelSearchOpen}
+                inlineHotelSearchDefaults={
+                  inlineHotelSearchOpen
+                    ? {
+                        city: effectiveHotelSearchDefaults.city,
+                        cityIata: effectiveHotelSearchDefaults.cityIata,
+                        checkIn: effectiveHotelSearchDefaults.checkIn,
+                        checkOut: effectiveHotelSearchDefaults.checkOut,
+                      }
+                    : undefined
+                }
+                hotelSearchGeneration={hotelSearchGeneration}
+                onCloseInlineHotelSearch={closeHotelSearch}
+                onAddHotelFromSearch={handleAddHotelFromSearch}
+                hotelSearchMapPreview={hotelSearchMapPreview}
                 onSearchSegment={openHotelSearchForSegment}
                 onPickPlannedCity={openHotelSearchForPlannedCity}
                 onAddCityStay={handleAddCityStay}
@@ -9138,7 +9221,21 @@ export default function TravelAssistantPage() {
                 checkOut: hotelSearchDefaults.checkOut,
               }}
               onLaunchHotelSearch={launchCustomHotelSearch}
-              onSearchHotels={openHotelSearchForTrip}
+              inlineHotelSearchActive={inlineHotelSearchOpen}
+              inlineHotelSearchDefaults={
+                inlineHotelSearchOpen
+                  ? {
+                      city: effectiveHotelSearchDefaults.city,
+                      cityIata: effectiveHotelSearchDefaults.cityIata,
+                      checkIn: effectiveHotelSearchDefaults.checkIn,
+                      checkOut: effectiveHotelSearchDefaults.checkOut,
+                    }
+                  : undefined
+              }
+              hotelSearchGeneration={hotelSearchGeneration}
+              onCloseInlineHotelSearch={closeHotelSearch}
+              onAddHotelFromSearch={handleAddHotelFromSearch}
+              hotelSearchMapPreview={hotelSearchMapPreview}
               onSearchSegment={openHotelSearchForSegment}
               onAddCityStay={handleAddCityStay}
               onSetStayIntent={handleSetStayIntent}
@@ -9678,6 +9775,58 @@ export default function TravelAssistantPage() {
           onQuickAdd={handleQuickAdd}
           undoStackLength={undoStack.length}
         />
+        <nav className="hidden rounded-2xl border border-slate-700 bg-slate-900/70 p-1 shadow-sm md:flex md:w-fit" aria-label="Desktop planning tabs">
+          {([
+            ["plan", "🧭 Plan"],
+            ["overview", "Overview"],
+          ] as const).map(([tab, label]) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setDesktopPlannerView(tab)}
+              className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                desktopPlannerView === tab
+                  ? "bg-cyan-500 text-slate-950"
+                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+        {desktopPlannerView === "plan" ? (
+          <PlannerTab
+            tripName={activeTrip?.name ?? null}
+            destination={consumerTripDestination}
+            startDate={consumerTripStartDate}
+            endDate={consumerTripEndDate}
+            flightCount={plannerFlightCount}
+            hotelCount={plannerHotelCount}
+            otherBookingCount={plannerOtherBookingCount}
+            readyStepCount={plannerReadyStepCount}
+            forwardAddress={emptyStateForwardAddress}
+            canUseGmailImport={canUseGmailImport}
+            gmailImportBusy={gmailImportBusy}
+            onAddBooking={() => setManualReservationModalOpen(true)}
+            onCreateTrip={() => {
+              void handleCreateTrip();
+            }}
+            onImportGmail={() => setGmailScopeModalOpen(true)}
+            onRequestGmailUpgrade={() =>
+              openUpgradeModal("gmail-import", "Upgrade to Pro to import reservations from your connected email account.")
+            }
+            onCopyForwardAddress={() => {
+              void handleCopyForwardAddress();
+            }}
+            onViewTrip={() => {
+              setDesktopPlannerView("overview");
+              navigateToConsumerTab("trip");
+            }}
+            onViewFlights={() => navigateToBook("flights")}
+            onViewHotels={() => navigateToBook("hotels")}
+          />
+        ) : (
+          <>
         <TripOrientationCard
           travelerName={viewerDisplayName}
           destination={activeTrip?.destination ?? "your trip"}
@@ -10355,6 +10504,9 @@ export default function TravelAssistantPage() {
             activeScenarioPlaybook={activeScenarioPlaybook}
           />
         </Suspense>
+
+          </>
+        )}
       </div>
 
       {activeDrawerPanel}
@@ -10398,6 +10550,14 @@ export default function TravelAssistantPage() {
           });
         }}
       />
+      {manualReservationModalOpen ? (
+        <ManualReservationEntryModal
+          familyMembers={familyMembers.map((member) => ({ id: member.id, name: member.name }))}
+          defaultAssignedTo={[selectedFamilyMember.id]}
+          onClose={() => setManualReservationModalOpen(false)}
+          onSave={handleSaveManualReservation}
+        />
+      ) : null}
       <PostBookingConfirmation
         data={postBookingConfirmation}
         onDismiss={() => setPostBookingConfirmation(null)}

@@ -7,6 +7,8 @@ import { MobileHotelStayNotebook } from "@/components/travelAssistant/mobile/Mob
 import { TripStayPlanner } from "@/components/travelAssistant/TripStayPlanner";
 import { TripHotelCityPicker } from "@/components/travelAssistant/TripHotelCityPicker";
 import { HotelSearchLauncher, type HotelSearchDefaults } from "@/components/travelAssistant/HotelSearchLauncher";
+import { TripHotelSearch } from "@/components/travelAssistant/TripHotelSearch";
+import type { HotelSearchResult } from "@/lib/hotels/types";
 import type { PlannedStayCity } from "@/lib/travelAssistant/tripPlanBooking";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 import { segmentsNeedingHotel } from "@/lib/hotels/deriveTripStaySegments";
@@ -53,6 +55,12 @@ interface HotelsTabProps {
   hotelSearchDefaults?: HotelSearchDefaults;
   onLaunchHotelSearch?: (params: { city: string; cityIata?: string; checkIn: string; checkOut: string }) => void;
   onSearchHotels?: () => void;
+  inlineHotelSearchActive?: boolean;
+  inlineHotelSearchDefaults?: HotelSearchDefaults;
+  hotelSearchGeneration?: number;
+  onCloseInlineHotelSearch?: () => void;
+  onAddHotelFromSearch?: (hotel: HotelSearchResult) => void;
+  mapPreviewCenter?: { city: string; lat: number; lng: number } | null;
   onSearchSegment?: (segment: TripStaySegment) => void;
   onAddCityStay?: (input: { city: string; checkIn: string; checkOut: string }) => void;
   onSetStayIntent?: (
@@ -138,6 +146,12 @@ export function HotelsTab({
   hotelSearchDefaults,
   onLaunchHotelSearch,
   onSearchHotels,
+  inlineHotelSearchActive = false,
+  inlineHotelSearchDefaults,
+  hotelSearchGeneration = 0,
+  onCloseInlineHotelSearch,
+  onAddHotelFromSearch,
+  mapPreviewCenter = null,
   onSearchSegment,
   onAddCityStay,
   onSetStayIntent,
@@ -165,7 +179,7 @@ export function HotelsTab({
 
   return (
     <section className={`space-y-4 pb-6 ${type.section}`}>
-      {showBookSearch && onLaunchHotelSearch ? (
+      {showBookSearch && onLaunchHotelSearch && !inlineHotelSearchActive ? (
         <HotelSearchLauncher
           tripName={tripName}
           defaults={hotelSearchDefaults}
@@ -173,9 +187,48 @@ export function HotelsTab({
         />
       ) : null}
 
+      {inlineHotelSearchActive && onAddHotelFromSearch && inlineHotelSearchDefaults ? (
+        <section
+          id="inline-hotel-search-results"
+          className="scroll-mt-24 space-y-3 rounded-3xl border border-sky-200 bg-white p-4 shadow-sm dark:border-sky-800/50 dark:bg-slate-900"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400">
+                Hotel results
+              </p>
+              <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                {inlineHotelSearchDefaults.city?.split("(")[0]?.trim() || "Your search"}
+              </h3>
+            </div>
+            {onCloseInlineHotelSearch ? (
+              <button
+                type="button"
+                onClick={onCloseInlineHotelSearch}
+                className="rounded-lg px-2 py-1 text-sm text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+              >
+                Close
+              </button>
+            ) : null}
+          </div>
+          <TripHotelSearch
+            listOnly
+            searchGeneration={hotelSearchGeneration}
+            defaultCity={inlineHotelSearchDefaults.city ?? ""}
+            defaultCityIata={inlineHotelSearchDefaults.cityIata ?? ""}
+            defaultCheckIn={inlineHotelSearchDefaults.checkIn ?? ""}
+            defaultCheckOut={inlineHotelSearchDefaults.checkOut ?? ""}
+            onAddHotel={onAddHotelFromSearch}
+          />
+        </section>
+      ) : null}
+
       {simplifiedMobile ? (
         <TripHotelStayMap
           reservations={mapReservations ?? reservations}
+          staySegments={staySegments}
+          plannedStayCities={plannedStayCities}
+          mapPreviewCenter={mapPreviewCenter}
           onStayTap={(point) => {
             if (point.reservationId) {
               onReservationTap(point.reservationId);
@@ -206,7 +259,7 @@ export function HotelsTab({
             </button>
           ) : null}
         </div>
-        {enableBookSearch ? (
+        {enableBookSearch && !(showBookSearch && onLaunchHotelSearch) ? (
           <div className="flex gap-2">
             <button
               type="button"
@@ -554,11 +607,12 @@ export function HotelsTab({
       )}
 
       {!simplifiedMobile ? (
-      <TripHotelStayMap
-        reservations={mapReservations ?? reservations}
-        staySegments={staySegments}
-        plannedStayCities={plannedStayCities}
-        onStayTap={(point) => {
+        <TripHotelStayMap
+          reservations={mapReservations ?? reservations}
+          staySegments={staySegments}
+          plannedStayCities={plannedStayCities}
+          mapPreviewCenter={mapPreviewCenter}
+          onStayTap={(point) => {
           if (point.reservationId) {
             onReservationTap(point.reservationId);
             return;

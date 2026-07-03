@@ -11,6 +11,7 @@ import {
 } from "@/lib/hotels/hotelCardDisplay";
 import { hasKepiBookableLiveRate } from "@/lib/hotels/hotelLiveRate";
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
+import { HotelInventoryBadgePill } from "@/components/travelAssistant/HotelInventoryBadgePill";
 import type { HotelPayMode } from "@/lib/hotels/hotelPointsDisplay";
 import { pointsPerNight } from "@/lib/hotels/hotelPointsDisplay";
 
@@ -82,7 +83,10 @@ export function HotelRankCard({
 
         <div className="space-y-4 p-5">
           <div>
-            <h3 className="text-xl font-black leading-tight text-slate-900 dark:text-white">{hotel.name}</h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-xl font-black leading-tight text-slate-900 dark:text-white">{hotel.name}</h3>
+              <HotelInventoryBadgePill hotel={hotel} />
+            </div>
             <p className="mt-1 text-sm text-slate-500">
               {"★".repeat(Math.round(hotel.stars))} · {guestScore} guest score
               {hotel.chainName ? ` · ${hotel.chainName}` : ""}
@@ -109,8 +113,8 @@ export function HotelRankCard({
           <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">{matchReason}</p>
 
           {kepiBookable ? (
-            <p className="text-xs font-bold uppercase tracking-wide text-sky-700 dark:text-sky-300">
-              Book in Kepi · Stripe checkout
+            <p className="text-xs font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+              Stripe checkout · saves to your trip
             </p>
           ) : null}
 
@@ -146,7 +150,10 @@ export function HotelRankCard({
         }`}
       >
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-bold text-slate-900 dark:text-white">{hotel.name}</p>
+          <div className="flex min-w-0 items-center gap-2">
+            <p className="truncate text-sm font-bold text-slate-900 dark:text-white">{hotel.name}</p>
+            <HotelInventoryBadgePill hotel={hotel} compact />
+          </div>
           <p className="truncate text-xs text-slate-500">
             {guestScore} · {nightlyLabel}
             {showPoints && nightlyPts ? ` · ${nightlyPts.toLocaleString()} pts` : ""}
@@ -179,7 +186,10 @@ export function HotelRankCard({
       <div className="space-y-3 p-5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="font-bold text-slate-900 dark:text-white">{hotel.name}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-bold text-slate-900 dark:text-white">{hotel.name}</p>
+              <HotelInventoryBadgePill hotel={hotel} compact />
+            </div>
             <p className="text-xs text-slate-500">#{hotel.rank} of {totalInSearch}</p>
           </div>
           <p className="text-lg font-black text-[#f4c95d]">{nightlyLabel}</p>

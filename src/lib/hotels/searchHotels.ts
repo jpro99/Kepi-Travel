@@ -307,7 +307,7 @@ export async function searchHotelsLiveOrEstimated(input: {
     const source: HotelSearchSource = duffel.hotels.length > 0 ? "duffel" : "liteapi";
     const notice =
       duffel.error?.includes("Stays not enabled") || duffel.error?.includes("403")
-        ? "Live rates via LiteAPI — Duffel Stays will take over when enabled on your account."
+        ? "Live rates via LiteAPI. Duffel Stays is still pending on your account — not required for live search."
         : undefined;
     return {
       hotels: merged.slice(0, 150),

@@ -13,6 +13,7 @@ const REGION_NIGHTLY: Record<string, { min: number; max: number }> = {
   VCE: { min: 240, max: 420 },
   BRI: { min: 160, max: 280 },
   BDS: { min: 150, max: 260 },
+  LECCE: { min: 140, max: 250 },
   MONOPOLI: { min: 145, max: 255 },
   FLR: { min: 195, max: 320 },
   MXP: { min: 210, max: 350 },
@@ -50,8 +51,10 @@ function boutiqueNames(city: string): Array<{ name: string; chainName?: string }
 
 function regionalStays(city: string, iata: string): Array<{ name: string; chainName?: string }> {
   const haystack = `${city} ${iata}`.toLowerCase();
-  if (/monopoli|bari|brindisi|puglia|bds|bri/.test(haystack)) {
+  if (/monopoli|bari|brindisi|puglia|bds|bri|lecce|salento|ostuni|otranto/.test(haystack)) {
     return [
+      { name: `Palazzo ${city}` },
+      { name: `${city} Historical Center B&B` },
       { name: `Masseria ${city}` },
       { name: `${city} Old Town B&B` },
       { name: `Trullo Stay — near ${city}` },
@@ -131,14 +134,14 @@ export function buildEstimatedStays(input: {
 }
 
 export function estimatedStaysNotice(liveError?: string, mockMode?: boolean): string {
-  if (mockMode) return "Showing estimated hotel rates (mock mode).";
+  if (mockMode) return "Sample hotel listings (mock mode) — not live prices.";
   if (liveError?.includes("Stays not enabled")) {
-    return "Showing estimated hotel rates — enable Duffel Stays on your account for live pricing.";
+    return "No live LiteAPI rates for these dates. Sample listings below. Duffel Stays is still pending on your account — live search runs through LiteAPI and does not require Duffel approval.";
   }
   if (liveError?.includes("not configured") || liveError?.includes("No geocoding")) {
-    return "Showing estimated hotel rates for this destination.";
+    return "No live rates for this destination. Sample listings below for discovery — check Google Hotels for pricing.";
   }
   return liveError
-    ? `Showing estimated hotel rates — ${liveError.charAt(0).toLowerCase()}${liveError.slice(1)}`
-    : "Showing estimated hotel rates until live search is available.";
+    ? `No live rates for these dates (${liveError.charAt(0).toLowerCase()}${liveError.slice(1)}). Sample listings below.`
+    : "No live rates for these dates. Sample listings below — not bookable in Kepi.";
 }

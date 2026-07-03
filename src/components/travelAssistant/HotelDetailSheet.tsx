@@ -10,6 +10,8 @@ import { extractLiteApiHotelId, mergeHotelDetailMedia } from "@/lib/hotels/hotel
 import type { HotelPayMode } from "@/lib/hotels/hotelPointsDisplay";
 import { pointsPerNight } from "@/lib/hotels/hotelPointsDisplay";
 import { hasDisplayNightlyRate, hasKepiBookableLiveRate } from "@/lib/hotels/hotelLiveRate";
+import { HotelInventoryBadgePill } from "@/components/travelAssistant/HotelInventoryBadgePill";
+import { resolveHotelInventoryBadge } from "@/lib/hotels/hotelInventoryBadge";
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
 import { HotelPhotoGallery } from "@/components/travelAssistant/HotelPhotoGallery";
 import type { TravelProfile } from "@/app/api/travel-profile/route";
@@ -145,6 +147,7 @@ export function HotelDetailSheet({
   const hasLiveRate = hasDisplayNightlyRate(hotel);
   const kepiLiveRate = hasKepiBookableLiveRate(hotel);
   const kepiBookable = Boolean(hotel.kepiBookable && hotel.bookOfferId && kepiLiveRate) && payMode !== "points";
+  const inventoryBadge = resolveHotelInventoryBadge(hotel);
   const nightlyPts = pointsPerNight(hotel);
   const pointsMode = payMode === "points";
   const displayCheckoutTotal = verifiedQuote?.guestTotalUsd ?? hotel.totalPrice;
@@ -276,6 +279,10 @@ export function HotelDetailSheet({
                 <h3 id="hotel-detail-title" className="text-lg font-black text-slate-900 dark:text-white">
                   {hotel.name}
                 </h3>
+                <div className="mt-1">
+                  <HotelInventoryBadgePill hotel={hotel} />
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500">{inventoryBadge.description}</p>
                 {hotel.chainName ? <p className="text-xs text-slate-500">{hotel.chainName}</p> : null}
                 {eliteCheckInTip ? (
                   <p className="mt-2 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-2 text-xs text-indigo-800 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200">

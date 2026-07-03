@@ -82,8 +82,11 @@ export function HotelSearchLauncher({ tripName, defaults, onSearch }: HotelSearc
           cityIata={cityIata}
           onChange={setCityField}
           onClear={clearCityField}
-          placeholder="Venice (VCE) or Cortina"
+          placeholder="Lecce, Italy · Venice (VCE)"
         />
+        <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+          Type a city like Lecce, Italy — tap Search when ready.
+        </p>
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-3">

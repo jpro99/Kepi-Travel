@@ -15,7 +15,7 @@ export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: numb
 
 export function isSmallDestination(displayName: string): boolean {
   const lower = displayName.toLowerCase();
-  return /monopoli|polignano|positano|amalfi|ravello|manarola|monterosso|cefalù|cefalu|ortisei|sperlonga|tropea|matera|alberobello|locorotondo|ostuni|gallipoli|otranto|leuca/.test(
+  return /monopoli|polignano|positano|amalfi|ravello|manarola|monterosso|cefalù|cefalu|ortisei|sperlonga|tropea|matera|alberobello|locorotondo|ostuni|gallipoli|otranto|leuca|lecce/.test(
     lower,
   );
 }

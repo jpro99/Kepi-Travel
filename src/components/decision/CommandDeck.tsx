@@ -795,19 +795,10 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
-            cache: "no-store",
-            credentials: "same-origin",
           },
           STRATEGY_TIMEOUT_MS,
           "Taking longer than expected — tap Try Again for a faster result.",
         );
-        const elapsedMs = Date.now() - analyzeFetchStartedAt;
-        console.log("[analyze] fetch:response", {
-          ms: elapsedMs,
-          ok: res.ok,
-          status: res.status,
-          fastPath: useFastPath,
-        });
         if (!res.ok) {
           // No retry — just surface the error clearly
           throw new Error(
@@ -822,6 +813,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         // Don't bail on runId mismatch — brief from the latest fetch is always valid
         // and setLoading(false) in finally always runs regardless
         analyzeFastRetryRef.current = 0;
+        const elapsedMs = Date.now() - analyzeFetchStartedAt;
         console.log("[analyze] complete", {
           ms: elapsedMs,
           fastPath: useFastPath,
