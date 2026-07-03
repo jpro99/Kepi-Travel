@@ -98,7 +98,6 @@ export function CitySearchCombobox({
         aria-haspopup="listbox"
         aria-autocomplete="list"
         autoComplete="off"
-        autoComplete="off"
         placeholder={selected?.label ?? "Search cities…"}
         value={isEditing ? query : selected?.label ?? ""}
         onFocus={() => {
