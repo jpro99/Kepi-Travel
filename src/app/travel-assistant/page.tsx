@@ -212,7 +212,7 @@ import {
 } from "@/lib/travelAssistant/consumerTabs";
 import { MobileSearchOverlay } from "@/components/travelAssistant/mobile/MobileSearchOverlay";
 import { MobileTabBarNav } from "@/components/travelAssistant/mobile/useMobileTabNavigation";
-import { isStandaloneApp } from "@/lib/ui/isStandaloneApp";
+import { isCompactViewportClient } from "@/lib/ui/isCompactViewport";
 import { useMobilePrimaryTab } from "@/components/travelAssistant/mobile/useMobilePrimaryTab";
 import { PlannerTab } from "@/components/travelAssistant/PlannerTab";
 
@@ -3481,11 +3481,8 @@ export default function TravelAssistantPage() {
     const widthMedia = window.matchMedia("(max-width: 1023px)");
     const touchMedia = window.matchMedia("(hover: none) and (pointer: coarse)");
     const update = (): void => {
-      const forceMobile = new URLSearchParams(window.location.search).get("mobile") === "1";
-      const standalone = isStandaloneApp();
-      const compact =
-        forceMobile || standalone || widthMedia.matches || (touchMedia.matches && window.innerWidth < 1280);
-      setIsCompactViewport(compact);
+      setIsCompactViewport(isCompactViewportClient());
+      const compact = isCompactViewportClient();
       setMobileSimpleView(compact);
       setMobileViewPanel((previous) => {
         if (compact) {
@@ -4676,23 +4673,48 @@ export default function TravelAssistantPage() {
     setHotelSearchSegment(null);
   }, []);
 
+  const scrollToInlineHotelSearch = useCallback((): void => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        document.getElementById("inline-hotel-search-results")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+    });
+  }, []);
+
   const openHotelSearchUi = useCallback(
     (segment: TripStaySegment): void => {
       setHotelSearchSegment(segment);
       setHotelSearchGeneration((value) => value + 1);
-      if (isCompactViewport) {
+      const compact = isCompactViewportClient();
+      if (compact) {
         setInlineHotelSearchOpen(true);
         setHotelSearchModalOpen(false);
-        window.setTimeout(() => {
-          document.getElementById("inline-hotel-search-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 150);
+        navigateToBook("hotels");
+        window.setTimeout(() => scrollToInlineHotelSearch(), 120);
       } else {
         setHotelSearchModalOpen(true);
         setInlineHotelSearchOpen(false);
       }
     },
-    [isCompactViewport],
+    [navigateToBook, scrollToInlineHotelSearch],
   );
+
+  useEffect(() => {
+    if (!isCompactViewport || !hotelSearchModalOpen || inlineHotelSearchOpen) return;
+    setHotelSearchModalOpen(false);
+    setInlineHotelSearchOpen(true);
+    navigateToBook("hotels");
+    window.setTimeout(() => scrollToInlineHotelSearch(), 120);
+  }, [
+    hotelSearchModalOpen,
+    inlineHotelSearchOpen,
+    isCompactViewport,
+    navigateToBook,
+    scrollToInlineHotelSearch,
+  ]);
   const tripPlanningInitialDraft = useMemo(
     () => ({
       tripName: activeTrip?.name && !/^trip \d+$/iu.test(activeTrip.name.trim()) ? activeTrip.name : "",
@@ -7973,26 +7995,29 @@ export default function TravelAssistantPage() {
         );
       if (mode === "hotel" && city) {
         const formatted = formatHotelSearchCityLabel(city);
+        const checkOut = addDay(dateKey, 1);
         handleAddCityStay({
           city: formatted.label || city,
           checkIn: dateKey,
-          checkOut: addDay(dateKey, 1),
+          checkOut,
         });
-        setHotelSearchSegment({
+        openHotelSearchUi({
           id: `day-plan-${dateKey}`,
           city: formatted.label || city,
           cityIata: formatted.iata,
           checkIn: dateKey,
-          checkOut: addDay(dateKey, 1),
+          checkOut,
           label: `${formatted.label || city} · ${dateKey}`,
           source: "manual",
           status: "missing",
           needsDecision: false,
           stayIntent: "needs_hotel",
+          suggestedIntent: "needs_hotel",
+          intentReason: "Day plan hotel search",
+          stopKind: "destination",
+          connectionHours: null,
           nights: 1,
-        } as TripStaySegment);
-        setHotelSearchModalOpen(true);
-        navigateToBook("hotels");
+        });
         setToast(`Hotel search ready for ${formatted.label || city}.`);
         return;
       }
@@ -8004,7 +8029,7 @@ export default function TravelAssistantPage() {
       navigateToBook("flights");
       setToast(`${mode.charAt(0).toUpperCase()}${mode.slice(1)} planning for ${intent.summary}`);
     },
-    [addDay, handleAddCityStay, itineraryPrefs.dayNotes, effectiveStopRanges, navigateToConsumerTab, setToast],
+    [addDay, handleAddCityStay, itineraryPrefs.dayNotes, effectiveStopRanges, navigateToConsumerTab, openHotelSearchUi, setToast],
   );
 
   const handleReservationsRefresh = useCallback(async (): Promise<void> => {

@@ -179,7 +179,7 @@ export function HotelsTab({
 
   return (
     <section className={`space-y-4 pb-6 ${type.section}`}>
-      {showBookSearch && onLaunchHotelSearch ? (
+      {showBookSearch && onLaunchHotelSearch && !inlineHotelSearchActive ? (
         <HotelSearchLauncher
           tripName={tripName}
           defaults={hotelSearchDefaults}

@@ -25,6 +25,11 @@ import {
 import { HotelFilteredOutSheet, type FilteredHotelRow } from "@/components/travelAssistant/HotelFilteredOutSheet";
 import { HotelRefineSheet } from "@/components/travelAssistant/HotelRefineSheet";
 import { computeLivePriceBounds, resolveHotelDisplay } from "@/lib/hotels/hotelSearchFilters";
+import {
+  buildHotelSearchProviderBody,
+  buildHotelSearchProviderHeadline,
+  hotelInventoryBadgeClassName,
+} from "@/lib/hotels/hotelInventoryBadge";
 import type { HotelStayProfile } from "@/lib/memory/hotelStayProfile";
 import { hotelParticipatesInPoints, HOTEL_CHAINS, matchHotelChain, type HotelChainId } from "@/lib/loyalty/chainRegistry";
 import { useStableDefaultSync } from "@/lib/ui/useStableDefaultSync";
@@ -244,17 +249,26 @@ export function TripHotelSearch({
   useStableDefaultSync(cityDefaultsKey, applyCityDefaults);
   useStableDefaultSync(dateDefaultsKey, applyDateDefaults);
 
-  const runSearch = async (): Promise<void> => {
-    const destination = city.trim() || cityIata;
+  const runSearch = async (overrides?: {
+    city?: string;
+    cityIata?: string;
+    checkIn?: string;
+    checkOut?: string;
+  }): Promise<void> => {
+    const searchCity = overrides?.city ?? city;
+    const searchCityIata = overrides?.cityIata ?? cityIata;
+    const searchCheckIn = overrides?.checkIn ?? checkIn;
+    const searchCheckOut = overrides?.checkOut ?? checkOut;
+    const destination = searchCity.trim() || searchCityIata;
     if (!destination) {
       setError("Enter a city or destination.");
       return;
     }
-    if (!checkIn.trim() || !checkOut.trim()) {
+    if (!searchCheckIn.trim() || !searchCheckOut.trim()) {
       setError("Select check-in and check-out dates.");
       return;
     }
-    if (checkOut <= checkIn) {
+    if (searchCheckOut <= searchCheckIn) {
       setError("Check-out must be after check-in.");
       return;
     }
@@ -273,7 +287,7 @@ export function TripHotelSearch({
       const response = await fetch("/api/hotels/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ destination, checkIn, checkOut, guests, rooms }),
+        body: JSON.stringify({ destination, checkIn: searchCheckIn, checkOut: searchCheckOut, guests, rooms }),
       });
       const rawBody = await response.text();
       let payload: {
@@ -382,7 +396,12 @@ export function TripHotelSearch({
     if (searchGeneration <= 0 || searchGeneration === lastSearchGenerationRef.current) return;
     lastSearchGenerationRef.current = searchGeneration;
     if (!defaultCity.trim() || !defaultCheckIn || !defaultCheckOut) return;
-    void runSearch();
+    void runSearch({
+      city: defaultCity,
+      cityIata: defaultCityIata,
+      checkIn: defaultCheckIn,
+      checkOut: defaultCheckOut,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchGeneration]);
 
@@ -649,17 +668,49 @@ export function TripHotelSearch({
             </p>
           ) : null}
 
-          {searchSource === "liteapi" || providerNotice ? (
-            <div className="mb-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 dark:border-sky-900 dark:bg-sky-950/40">
-              <p className="text-sm font-semibold text-sky-900 dark:text-sky-100">
-                {liveBookableCount > 0
-                  ? `${liveBookableCount} hotel${liveBookableCount === 1 ? "" : "s"} ready to book in Kepi`
-                  : "Live hotel rates via LiteAPI"}
+          {searchSource ? (
+            <div
+              className={`mb-4 rounded-2xl border px-4 py-3 ${
+                searchSource === "estimated"
+                  ? "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40"
+                  : "border-sky-200 bg-sky-50 dark:border-sky-900 dark:bg-sky-950/40"
+              }`}
+            >
+              <p
+                className={`text-sm font-semibold ${
+                  searchSource === "estimated"
+                    ? "text-amber-950 dark:text-amber-100"
+                    : "text-sky-900 dark:text-sky-100"
+                }`}
+              >
+                {buildHotelSearchProviderHeadline({ source: searchSource, liveBookableCount })}
               </p>
-              <p className="mt-1 text-sm text-sky-800 dark:text-sky-200">
-                {providerNotice ??
-                  "Tap a hotel → Book with Kepi → pay with Stripe. Your confirmation saves to the trip automatically."}
+              <p
+                className={`mt-1 text-sm ${
+                  searchSource === "estimated"
+                    ? "text-amber-900 dark:text-amber-200"
+                    : "text-sky-800 dark:text-sky-200"
+                }`}
+              >
+                {buildHotelSearchProviderBody({
+                  source: searchSource,
+                  notice: providerNotice,
+                  inventoryNote,
+                })}
               </p>
+              {searchSource !== "estimated" ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${hotelInventoryBadgeClassName("kepi_live")}`}>
+                    Live in Kepi
+                  </span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${hotelInventoryBadgeClassName("browse_google")}`}>
+                    Browse on Google
+                  </span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${hotelInventoryBadgeClassName("estimated")}`}>
+                    Estimated sample
+                  </span>
+                </div>
+              ) : null}
             </div>
           ) : null}
 
