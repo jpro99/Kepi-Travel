@@ -293,3 +293,38 @@ test("parseForwardedEmail prefers html body when plain text is only a stub", asy
     }
   }
 });
+
+test("extractFlightLegsFromEmailBody parses Bali-style PDF text with AZ and without Flight-of-N false positives", () => {
+  const text = `
+Flight 1 of 5
+AS 865
+Ontario, CA (ONT) to Seattle, WA (SEA)
+Departure: Friday, September 12, 2025 at 6:00 AM
+
+Flight 2 of 5
+AS 6422 operated by ITA Airways
+Seattle, WA (SEA) to Rome, Italy (FCO)
+Departure: Friday, September 12, 2025 at 11:30 AM
+
+Flight 3 of 5
+AZ 1607
+Bari, Italy (BRI) to Rome, Italy (FCO)
+Departure: Friday, September 19, 2025 at 9:40 AM
+
+Flight 4 of 5
+SQ 948
+Singapore (SIN) to Denpasar Bali (DPS)
+Departure: Thursday, September 25, 2025 at 2:15 PM
+`;
+  const legs = extractFlightLegsFromEmailBody(text);
+  const numbers = legs.map((leg) => leg.flightNumber.replace(/\s+/gu, ""));
+  assert.equal(numbers.includes("OF5"), false);
+  assert.ok(numbers.includes("AZ1607"));
+  assert.ok(numbers.includes("AS6422"));
+  const az = legs.find((leg) => leg.flightNumber.replace(/\s+/gu, "") === "AZ1607");
+  assert.equal(az?.departureAirport, "BRI");
+  assert.equal(az?.arrivalAirport, "FCO");
+  const codeshare = legs.find((leg) => leg.flightNumber.replace(/\s+/gu, "") === "AS6422");
+  assert.equal(codeshare?.departureAirport, "SEA");
+  assert.equal(codeshare?.arrivalAirport, "FCO");
+});

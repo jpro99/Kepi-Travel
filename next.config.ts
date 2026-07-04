@@ -56,6 +56,7 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ["lucide-react", "recharts"],
   },
+  serverExternalPackages: ["pdf-parse"],
   ...(isCapacitorBuild
     ? {}
     : {

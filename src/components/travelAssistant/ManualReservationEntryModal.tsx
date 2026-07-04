@@ -35,6 +35,21 @@ interface ManualReservationEntryModalProps {
   onSave: (value: ManualReservationFormValue) => void;
 }
 
+interface ScanDraftPayload {
+  type?: string;
+  title?: string;
+  provider?: string;
+  localTime?: string;
+  location?: string;
+  confirmationCode?: string;
+  notes?: string;
+  checkOutDate?: string;
+  roomType?: string;
+  flightNumber?: string;
+  flightDepartureAirport?: string;
+  flightArrivalAirport?: string;
+}
+
 const RESERVATION_TYPE_OPTIONS: Array<{ value: ManualReservationType; label: string }> = [
   { value: "flight", label: "✈️ Flight" },
   { value: "hotel", label: "🏨 Hotel" },
@@ -163,7 +178,7 @@ export function ManualReservationEntryModal({
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const response = await fetch("/api/travel-updates?action=ticket-scan", {
+      const response = await fetch("/api/travel-updates/ticket-scan", {
         method: "POST",
         body: formData,
         credentials: "include",
@@ -171,24 +186,24 @@ export function ManualReservationEntryModal({
       });
       const payload = (await response.json()) as {
         error?: string;
-        draft?: {
-          type?: string;
-          title?: string;
-          provider?: string;
-          localTime?: string;
-          location?: string;
-          confirmationCode?: string;
-          notes?: string;
-          checkOutDate?: string;
-          roomType?: string;
-          flightNumber?: string;
-        };
+        draft?: ScanDraftPayload;
+        drafts?: ScanDraftPayload[];
       };
-      if (!response.ok || !payload.draft) {
+      const scannedDrafts =
+        payload.drafts && payload.drafts.length > 0
+          ? payload.drafts
+          : payload.draft
+            ? [payload.draft]
+            : [];
+      if (!response.ok || scannedDrafts.length === 0) {
         setScanMessage(`Scan failed: ${payload.error ?? "unknown error"}`);
         return;
       }
-      const d = payload.draft;
+      const d = scannedDrafts[0];
+      if (!d) {
+        setScanMessage("Scan failed: empty result.");
+        return;
+      }
       setReservationType(normalizeScanType(d.type));
       if (d.title?.trim()) setTitle(d.title.trim());
       if (d.provider?.trim()) setProvider(d.provider.trim());
@@ -199,7 +214,11 @@ export function ManualReservationEntryModal({
       if (d.checkOutDate?.trim()) setCheckOutDate(d.checkOutDate.trim());
       if (d.roomType?.trim()) setRoomType(d.roomType.trim());
       if (d.flightNumber?.trim()) setFlightNumber(d.flightNumber.trim());
-      setScanMessage("✓ Fields filled from your file — review and save.");
+      setScanMessage(
+        scannedDrafts.length > 1
+          ? `✓ Found ${scannedDrafts.length} legs — first leg filled; use Flights import to add all.`
+          : "✓ Fields filled from your file — review and save.",
+      );
     } catch {
       setScanMessage("Scan failed — please fill in the fields manually.");
     } finally {

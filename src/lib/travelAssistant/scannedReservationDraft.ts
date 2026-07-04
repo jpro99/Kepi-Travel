@@ -113,8 +113,24 @@ export function buildScannedReservationDraft(reservationNode: Record<string, unk
   const scannedType = normalizeScannedReservationType(reservationNode.type);
   const provider = typeof reservationNode.provider === "string" ? reservationNode.provider.trim() : "";
   const title = typeof reservationNode.title === "string" ? reservationNode.title.trim() : "";
-  const date = normalizeScannedDate(typeof reservationNode.date === "string" ? reservationNode.date : "");
-  const time = normalizeScannedTime(typeof reservationNode.time === "string" ? reservationNode.time : "");
+  const date = normalizeScannedDate(
+    typeof reservationNode.date === "string"
+      ? reservationNode.date
+      : typeof reservationNode.departureDate === "string"
+        ? reservationNode.departureDate
+        : typeof reservationNode.departDate === "string"
+          ? reservationNode.departDate
+          : "",
+  );
+  const time = normalizeScannedTime(
+    typeof reservationNode.time === "string"
+      ? reservationNode.time
+      : typeof reservationNode.departureTime === "string"
+        ? reservationNode.departureTime
+        : typeof reservationNode.departTime === "string"
+          ? reservationNode.departTime
+          : "",
+  );
   const timezone =
     typeof reservationNode.timezone === "string" && reservationNode.timezone.trim().length > 0
       ? reservationNode.timezone.trim()
@@ -248,20 +264,28 @@ function collectReservationNodes(root: Record<string, unknown>): Record<string, 
 
 /** Parse one or many reservations from ticket/PDF scan model output. */
 export function parseScannedReservationsJson(modelText: string): ScannedReservationDraft[] {
-  const jsonStart = modelText.indexOf("{");
-  const arrayStart = modelText.indexOf("[");
+  let normalized = modelText.trim();
+  normalized = normalized.replace(/^```(?:json)?\s*/iu, "").replace(/\s*```$/iu, "").trim();
+
+  const jsonStart = normalized.indexOf("{");
+  const arrayStart = normalized.indexOf("[");
   const start =
     jsonStart < 0 ? arrayStart : arrayStart < 0 ? jsonStart : Math.min(jsonStart, arrayStart);
-  const jsonEnd = Math.max(modelText.lastIndexOf("}"), modelText.lastIndexOf("]"));
+  const jsonEnd = Math.max(normalized.lastIndexOf("}"), normalized.lastIndexOf("]"));
   if (start < 0 || jsonEnd < start) {
     return [];
   }
 
+  const jsonSlice = normalized.slice(start, jsonEnd + 1);
+
   let parsed: unknown;
   try {
-    parsed = JSON.parse(modelText.slice(start, jsonEnd + 1));
+    parsed = JSON.parse(jsonSlice);
   } catch {
-    return [];
+    parsed = tryParseTruncatedReservationsJson(jsonSlice);
+    if (!parsed) {
+      return [];
+    }
   }
 
   const nodes: Record<string, unknown>[] = [];
@@ -279,8 +303,57 @@ export function parseScannedReservationsJson(modelText: string): ScannedReservat
     .map((node) => buildScannedReservationDraft(node))
     .filter((draft) => {
       if (draft.localTime.trim().length > 0) return true;
-      return draft.type === "hotel" && draft.checkOutDate.trim().length > 0;
+      if (draft.type === "hotel" && draft.checkOutDate.trim().length > 0) return true;
+      if (
+        draft.type === "flight" &&
+        draft.flightNumber.trim() &&
+        draft.flightDepartureAirport.trim() &&
+        draft.flightArrivalAirport.trim()
+      ) {
+        return true;
+      }
+      return false;
     });
+}
+
+function tryParseTruncatedReservationsJson(jsonSlice: string): Record<string, unknown> | null {
+  const match = jsonSlice.match(/"reservations"\s*:\s*\[/iu);
+  if (!match || match.index === undefined) {
+    return null;
+  }
+  const arrayStart = jsonSlice.indexOf("[", match.index);
+  if (arrayStart < 0) {
+    return null;
+  }
+
+  const objects: Record<string, unknown>[] = [];
+  let depth = 0;
+  let objectStart = -1;
+  for (let index = arrayStart + 1; index < jsonSlice.length; index += 1) {
+    const char = jsonSlice[index];
+    if (char === "{") {
+      if (depth === 0) objectStart = index;
+      depth += 1;
+      continue;
+    }
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0 && objectStart >= 0) {
+        const objectText = jsonSlice.slice(objectStart, index + 1);
+        try {
+          const parsed = JSON.parse(objectText) as unknown;
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            objects.push(parsed as Record<string, unknown>);
+          }
+        } catch {
+          // skip malformed tail object from truncated model output
+        }
+        objectStart = -1;
+      }
+    }
+  }
+
+  return objects.length > 0 ? { reservations: objects } : null;
 }
 
 /** Vercel serverless body limit is ~4.5MB — stay under it for mobile PDF uploads. */

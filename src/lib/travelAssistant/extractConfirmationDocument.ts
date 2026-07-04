@@ -1,4 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { mergeConfirmationDrafts } from "@/lib/travelAssistant/confirmationDraftMerge";
+import { extractPdfPlainText, preparePdfTextForParsing } from "@/lib/travelAssistant/pdfTextExtract";
 import {
   confirmationScanKind,
   parseScannedReservationsJson,
@@ -43,7 +45,10 @@ export async function extractConfirmationDocument(
   apiKey: string,
 ): Promise<ScannedReservationDraft[]> {
   const kind = confirmationScanKind(file);
-  const fileBase64 = Buffer.from(await file.arrayBuffer()).toString("base64");
+  const fileBytes = Buffer.from(await file.arrayBuffer());
+  const fileBase64 = fileBytes.toString("base64");
+  const pdfPlainText =
+    kind === "pdf" ? preparePdfTextForParsing(await extractPdfPlainText(fileBytes)) : "";
   const client = new Anthropic({ apiKey });
 
   const documentBlock =
@@ -65,9 +70,21 @@ export async function extractConfirmationDocument(
           },
         };
 
+  const userTextParts = [
+    kind === "pdf"
+      ? "Extract every flight segment and every hotel from this PDF. Return all of them in reservations[]."
+      : "Extract every reservation visible on this ticket image. Return all in reservations[].",
+  ];
+  if (pdfPlainText.length >= 80) {
+    userTextParts.push(
+      "Plain text extracted from the PDF (use this to ensure you capture every leg, including later pages):\n\n" +
+        pdfPlainText.slice(0, 120_000),
+    );
+  }
+
   const scanResponse = await client.messages.create({
     model: "claude-sonnet-4-5",
-    max_tokens: 8000,
+    max_tokens: 12_000,
     temperature: 0,
     system: SCAN_SYSTEM_PROMPT,
     messages: [
@@ -77,10 +94,7 @@ export async function extractConfirmationDocument(
           documentBlock,
           {
             type: "text",
-            text:
-              kind === "pdf"
-                ? "Extract every flight segment and every hotel from this PDF. Return all of them in reservations[]."
-                : "Extract every reservation visible on this ticket image. Return all in reservations[].",
+            text: userTextParts.join("\n\n"),
           },
         ],
       },
@@ -93,7 +107,12 @@ export async function extractConfirmationDocument(
     .join("\n")
     .trim();
 
-  const drafts = parseScannedReservationsJson(modelText);
+  const aiDrafts = parseScannedReservationsJson(modelText);
+  const drafts =
+    kind === "pdf" && pdfPlainText.length >= 80
+      ? mergeConfirmationDrafts(aiDrafts, pdfPlainText)
+      : aiDrafts;
+
   if (drafts.length === 0) {
     throw new Error("Ticket scan model returned an invalid response.");
   }

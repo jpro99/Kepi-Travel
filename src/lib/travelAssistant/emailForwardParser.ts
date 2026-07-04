@@ -106,6 +106,33 @@ const FLIGHT_NUMBER_RE = /\b(?:Flight\s*)?([A-Z]{2})\s*(\d{1,4})\b/giu;
 
 const NEXT_FLIGHT_TOKEN_RE = /\b(?:Flight\s*)?[A-Z]{2}\s*\d{1,4}\b/iu;
 
+/** False positives like "Flight 1 of 5" → OF5. */
+const FALSE_FLIGHT_PREFIX_DENYLIST = new Set(["OF"]);
+
+/** Airline IATA codes that collide with ISO country codes — allow in flight context. */
+const AIRLINE_COUNTRY_OVERRIDES = new Set([
+  "AF", "AI", "AM", "AR", "AZ", "CA", "ET", "GA", "IB", "KE", "LA", "LO", "LY", "ME", "MU", "NZ", "OK", "OS", "RO",
+  "SA", "SK", "SN", "SQ", "SU", "SV", "TG", "TK", "UX", "VN",
+]);
+
+function isDeniedFlightAirlineCode(code: string, context: string): boolean {
+  const upper = code.toUpperCase();
+  if (FALSE_FLIGHT_PREFIX_DENYLIST.has(upper)) {
+    return true;
+  }
+  if (!COUNTRY_CODE_DENYLIST.has(upper)) {
+    return false;
+  }
+  if (!AIRLINE_COUNTRY_OVERRIDES.has(upper)) {
+    return true;
+  }
+  return !(
+    FLIGHT_CONTEXT_RE.test(context) ||
+    /\([A-Z]{3}\)/u.test(context) ||
+    /\boperated\s+by\b/iu.test(context)
+  );
+}
+
 const RESERVATION_TYPE_KEYWORDS: Array<{ type: ForwardedReservationType; pattern: RegExp; confidence: number }> = [
   { type: "flight", pattern: /\b(flight|airline|boarding|terminal|gate)\b/iu, confidence: 0.78 },
   { type: "hotel", pattern: /\b(hotel|check-?in|check out|room|suite|stay)\b/iu, confidence: 0.78 },
@@ -727,7 +754,9 @@ function countUniqueFlightNumbers(text: string): number {
   const seen = new Set<string>();
   for (const match of text.matchAll(FLIGHT_NUMBER_RE)) {
     const code = match[1]?.toUpperCase() ?? "";
-    if (COUNTRY_CODE_DENYLIST.has(code)) continue;
+    const idx = match.index ?? 0;
+    const window = text.slice(idx, Math.min(text.length, idx + 120));
+    if (isDeniedFlightAirlineCode(code, window)) continue;
     seen.add(`${code}${match[2] ?? ""}`);
   }
   return seen.size;
@@ -764,6 +793,19 @@ function enrichFlightCandidate(candidate: CandidateMap): CandidateMap {
 }
 
 function extractAirportsFromWindow(window: string): { dep?: string; arr?: string } {
+  const parenAirports = [...window.matchAll(/\(([A-Z]{3})\)/gu)]
+    .map((match) => match[1] ?? "")
+    .filter(
+      (code) =>
+        code.length === 3 &&
+        !AIRPORT_WORD_DENYLIST.has(code) &&
+        !COUNTRY_CODE_DENYLIST.has(code) &&
+        code !== "ITA",
+    );
+  if (parenAirports.length >= 2) {
+    return { dep: parenAirports[0], arr: parenAirports[1] };
+  }
+
   const depLine = window.match(/(?:Departure|Depart(?:s|ure)?|From)[:\s]+([A-Z]{3})\b/iu);
   const arrLine = window.match(/(?:Arrival|Arrive(?:s)?|To)[:\s]+([A-Z]{3})\b/iu);
   if (depLine?.[1] && arrLine?.[1]) {
@@ -814,14 +856,14 @@ function extractFlightLegsFromRegex(lineAwareText: string, sharedFields: Candida
   for (const match of lineAwareText.matchAll(FLIGHT_NUMBER_RE)) {
     const code = match[1]?.toUpperCase() ?? "";
     const num = match[2] ?? "";
-    if (COUNTRY_CODE_DENYLIST.has(code)) continue;
+    const idx = match.index ?? 0;
+    const tokenLength = match[0]?.length ?? `${code}${num}`.length;
+    const window = extractFlightLegWindow(lineAwareText, idx, tokenLength);
+    if (isDeniedFlightAirlineCode(code, window)) continue;
     const flightNumber = `${code}${num}`;
     if (seen.has(flightNumber)) continue;
     seen.add(flightNumber);
 
-    const idx = match.index ?? 0;
-    const tokenLength = match[0]?.length ?? flightNumber.length;
-    const window = extractFlightLegWindow(lineAwareText, idx, tokenLength);
     const { dep, arr } = extractAirportsFromWindow(window);
     const localTimeResult = extractLegDepartureTime(window);
     const leg: CandidateMap = {
@@ -986,7 +1028,10 @@ function buildRegexCandidates(input: {
   const hasFlightContext = FLIGHT_CONTEXT_RE.test(combined);
 
   const flightNumberMatch = hasFlightContext ? combined.match(/\b([A-Z]{2})\s?(\d{2,4})\b/u) : null;
-  if (flightNumberMatch && !COUNTRY_CODE_DENYLIST.has(flightNumberMatch[1] ?? "")) {
+  if (
+    flightNumberMatch &&
+    !isDeniedFlightAirlineCode(flightNumberMatch[1] ?? "", combined)
+  ) {
     const flightNumber = `${flightNumberMatch[1]} ${flightNumberMatch[2]}`;
     candidates.type = {
       value: "flight",

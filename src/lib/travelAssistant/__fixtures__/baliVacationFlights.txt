@@ -1,0 +1,34 @@
+ALASKA AIRLINES — Trip Confirmation
+Confirmation Code: ABCDEF
+
+Flight 1 of 5
+AS 865
+Ontario, CA (ONT) to Seattle, WA (SEA)
+Departure: Friday, September 12, 2025 at 6:00 AM
+Arrival: Friday, September 12, 2025 at 8:45 AM
+
+Flight 2 of 5
+AS 6422 operated by ITA Airways
+Seattle, WA (SEA) to Rome, Italy (FCO)
+Departure: Friday, September 12, 2025 at 11:30 AM
+Arrival: Saturday, September 13, 2025 at 7:55 AM
+
+Flight 3 of 5
+AZ 1607
+Bari, Italy (BRI) to Rome, Italy (FCO)
+Departure: Friday, September 19, 2025 at 9:40 AM
+Arrival: Friday, September 19, 2025 at 10:45 AM
+
+Flight 4 of 5
+SQ 948
+Singapore (SIN) to Denpasar Bali (DPS)
+Departure: Thursday, September 25, 2025 at 2:15 PM
+Arrival: Thursday, September 25, 2025 at 5:05 PM
+
+Flight 5 of 5
+GA 875
+Jakarta (CGK) to Singapore (SIN)
+Departure: Monday, October 6, 2025 at 8:20 AM
+Arrival: Monday, October 6, 2025 at 11:10 AM
+
+Record Locator: ABCDEF
