@@ -55,6 +55,31 @@ test("createShareLink produces token and shared trip payload", async () => {
   }
 });
 
+test("createShareLink stores intendedEmail on email-locked invites", async () => {
+  const userId = `trip-share-email-${generateId()}`;
+  const trip = await createTrip(
+    {
+      name: "Europe 2026",
+      destination: "Italy",
+      startDate: "2026-06-01",
+      endDate: "2026-06-14",
+      stage: "readiness",
+      reservations: [],
+    },
+    userId,
+  );
+
+  const share = await createShareLink(
+    userId,
+    trip.id,
+    { expiresInDays: 7, readOnly: true, showPersonalNotes: false },
+    "family@example.com",
+  );
+
+  assert.equal(share.intendedEmail, "family@example.com");
+  assert.equal(share.token.length, 12);
+});
+
 test("revokeShareLink invalidates public token", async () => {
   const userId = `trip-share-revoke-${generateId()}`;
   const trip = await createTrip(

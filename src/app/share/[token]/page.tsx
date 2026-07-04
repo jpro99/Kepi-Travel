@@ -1,5 +1,8 @@
-import { notFound } from "next/navigation";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { ShareAccessGate } from "@/components/share/ShareTripPhotosNav";
 import { SharedTripView } from "@/components/share/SharedTripView";
+import { maskEmail, resolveShareViewerGate } from "@/lib/travelAssistant/tripShareAccess";
 import { getSharedTrip } from "@/lib/travelAssistant/tripShareStore";
 
 export default async function SharePage({ params }: { params: Promise<{ token: string }> }) {
@@ -30,6 +33,23 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
         </div>
       </div>
     );
+  }
+
+  const gate = await resolveShareViewerGate(token);
+  if (gate.status === "sign-in-required") {
+    redirect(`/sign-in?redirect_url=${encodeURIComponent(`/share/${token}`)}`);
+  }
+  if (gate.status === "email-mismatch") {
+    return (
+      <ShareAccessGate
+        token={token}
+        maskedEmail={maskEmail(gate.intendedEmail)}
+        mode="email-mismatch"
+      />
+    );
+  }
+  if (gate.status === "invalid") {
+    notFound();
   }
 
   return (

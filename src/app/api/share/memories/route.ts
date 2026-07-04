@@ -6,6 +6,7 @@ import {
   resolveOwnerFromShareToken,
   resolveTripMemoryAccess,
 } from "@/lib/travelAssistant/tripMemoryAccess";
+import { assertShareViewerEmailAccess } from "@/lib/travelAssistant/tripShareAccess";
 import { generateId } from "@/lib/utils/generateId";
 
 export const runtime = "nodejs";
@@ -30,6 +31,8 @@ async function authorizeShareToken(token: string) {
   const resolved = await resolveOwnerFromShareToken(token);
   if (!resolved) return null;
   const { userId } = await auth();
+  const emailOk = await assertShareViewerEmailAccess(token, userId);
+  if (!emailOk) return null;
   const access = await resolveTripMemoryAccess({
     ownerUserId: resolved.ownerUserId,
     tripId: resolved.tripId,

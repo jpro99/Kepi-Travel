@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ShareTripPhotosNav } from "@/components/share/ShareTripPhotosNav";
 import { TripMemoriesPanel } from "@/components/travelAssistant/TripMemoriesPanel";
 import type { TripShareOptions } from "@/lib/travelAssistant/tripShareStore";
 
@@ -78,6 +79,8 @@ export function SharedTripView({
           <p className="mt-1 text-xs text-slate-600">Link expires {new Date(expiresAt).toLocaleDateString()}</p>
         </header>
 
+        <ShareTripPhotosNav tripName={tripName} />
+
         <div className="flex flex-col gap-3">
           {sorted.map((reservation) => (
             <article
@@ -111,7 +114,10 @@ export function SharedTripView({
           ))}
         </div>
 
-        <div className="mt-8 rounded-2xl border border-slate-700 bg-[#161b22] p-4 text-slate-100 [&_h2]:text-white [&_p]:text-slate-300 [&_textarea]:bg-[#0d1117] [&_textarea]:text-slate-100 [&_input]:bg-[#0d1117] [&_input]:text-slate-100">
+        <div
+          id="trip-photos"
+          className="mt-8 scroll-mt-6 rounded-2xl border border-slate-700 bg-[#161b22] p-4 text-slate-100 [&_h2]:text-white [&_p]:text-slate-300 [&_textarea]:bg-[#0d1117] [&_textarea]:text-slate-100 [&_input]:bg-[#0d1117] [&_input]:text-slate-100"
+        >
           <TripMemoriesPanel
             tripId={null}
             tripName={tripName}

@@ -19,6 +19,8 @@ interface TripShareRecord {
   expiresAt: string;
   revokedAt: string | null;
   options: TripShareOptions;
+  /** When set, only this email (signed in via Clerk) may open the link. */
+  intendedEmail?: string | null;
 }
 
 interface SharedTripPayload {
@@ -64,6 +66,10 @@ function generateShareToken(): string {
 function isShareRecord(value: unknown): value is TripShareRecord {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<TripShareRecord>;
+  const intendedOk =
+    candidate.intendedEmail === undefined ||
+    candidate.intendedEmail === null ||
+    typeof candidate.intendedEmail === "string";
   return (
     typeof candidate.token === "string" &&
     typeof candidate.ownerUserId === "string" &&
@@ -74,7 +80,8 @@ function isShareRecord(value: unknown): value is TripShareRecord {
     !!candidate.options &&
     typeof candidate.options.expiresInDays === "number" &&
     typeof candidate.options.readOnly === "boolean" &&
-    typeof candidate.options.showPersonalNotes === "boolean"
+    typeof candidate.options.showPersonalNotes === "boolean" &&
+    intendedOk
   );
 }
 
@@ -96,15 +103,22 @@ async function listShareRecords(): Promise<TripShareRecord[]> {
 async function findActiveShareRecord(args: {
   ownerUserId: string;
   tripId: string;
+  intendedEmail?: string | null;
 }): Promise<TripShareRecord | null> {
+  const normalizedEmail = args.intendedEmail?.trim().toLowerCase() ?? null;
   const all = await listShareRecords();
   const record = all.find((share) => {
-    return (
-      share.ownerUserId === args.ownerUserId &&
-      share.tripId === args.tripId &&
-      share.revokedAt === null &&
-      !isExpired(share)
-    );
+    if (share.ownerUserId !== args.ownerUserId || share.tripId !== args.tripId) {
+      return false;
+    }
+    if (share.revokedAt !== null || isExpired(share)) {
+      return false;
+    }
+    const shareEmail = share.intendedEmail?.trim().toLowerCase() ?? null;
+    if (normalizedEmail) {
+      return shareEmail === normalizedEmail;
+    }
+    return shareEmail === null;
   });
   return record ?? null;
 }
@@ -158,11 +172,13 @@ export async function createShareLink(
   userId: string,
   tripId: string,
   options: TripShareOptions,
+  intendedEmail?: string | null,
 ): Promise<{
   token: string;
   expiresAt: string;
   options: TripShareOptions;
   existing: boolean;
+  intendedEmail: string | null;
 }> {
   const trip = await getTrip(tripId, userId);
   if (!trip) {
@@ -170,15 +186,18 @@ export async function createShareLink(
   }
 
   const normalizedOptions = normalizeOptions(options);
+  const normalizedEmail = intendedEmail?.trim().toLowerCase() || null;
   const existing = await findActiveShareRecord({
     ownerUserId: userId,
     tripId,
+    intendedEmail: normalizedEmail,
   });
 
   if (existing) {
     const updated: TripShareRecord = {
       ...existing,
       options: normalizedOptions,
+      intendedEmail: normalizedEmail,
       expiresAt: new Date(
         Date.now() + normalizedOptions.expiresInDays * 24 * 60 * 60 * 1000,
       ).toISOString(),
@@ -189,6 +208,7 @@ export async function createShareLink(
       expiresAt: updated.expiresAt,
       options: updated.options,
       existing: true,
+      intendedEmail: normalizedEmail,
     };
   }
 
@@ -211,6 +231,7 @@ export async function createShareLink(
     ).toISOString(),
     revokedAt: null,
     options: normalizedOptions,
+    intendedEmail: normalizedEmail,
   };
   await kvStoreSet(token, shareRecord, { userId: SHARE_NAMESPACE_USER });
   return {
@@ -218,6 +239,7 @@ export async function createShareLink(
     expiresAt: shareRecord.expiresAt,
     options: shareRecord.options,
     existing: false,
+    intendedEmail: normalizedEmail,
   };
 }
 

@@ -14,9 +14,13 @@ function SignInPageInner() {
     ""
   ).toUpperCase();
 
+  const redirectParam = searchParams.get("redirect_url")?.trim() ?? "";
+  const safeRedirect =
+    redirectParam.startsWith("/") && !redirectParam.startsWith("//") ? redirectParam : null;
+
   const forceRedirectUrl = inviteCode
     ? `/travel-assistant?redeem=${encodeURIComponent(inviteCode)}`
-    : "/travel-assistant";
+    : safeRedirect ?? "/travel-assistant";
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-4 bg-[#f0f4f8] dark:bg-slate-950">
