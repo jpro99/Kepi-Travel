@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isAutomatedTestRuntime } from "@/lib/auth/mockClerkAuth";
-import { getUserPlan, isFeatureEnabled } from "@/lib/billing/planGate";
+import { getUserPlan, isFeatureEnabled, userHasProAccess } from "@/lib/billing/planGate";
 import { logger } from "@/lib/logger";
 import { enforceRateLimit } from "@/lib/rateLimit";
 import { subscribeUser, hasPushSubscription } from "@/lib/travelAssistant/pushNotificationService";
@@ -38,6 +38,14 @@ async function resolveAuthenticatedUserId(): Promise<string | null> {
   }
 }
 
+async function userCanUsePushNotifications(userId: string): Promise<boolean> {
+  if (await userHasProAccess(userId)) {
+    return true;
+  }
+  const plan = await getUserPlan(userId);
+  return isFeatureEnabled(plan, "push-notifications");
+}
+
 export async function GET(req: Request) {
   const requestId = req.headers.get("x-request-id")?.trim() || generateId();
   const userId = await resolveAuthenticatedUserId();
@@ -53,11 +61,12 @@ export async function GET(req: Request) {
   }
 
   const plan = await getUserPlan(userId);
-  if (!isFeatureEnabled(plan, "push-notifications")) {
+  if (!(await userCanUsePushNotifications(userId))) {
     return NextResponse.json(
       {
         error: "Push notifications require Pro.",
         requiresProFeature: "push-notifications",
+        plan,
       },
       { status: 402 },
     );
@@ -86,8 +95,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const plan = await getUserPlan(userId);
-  if (!isFeatureEnabled(plan, "push-notifications")) {
+  if (!(await userCanUsePushNotifications(userId))) {
     return NextResponse.json(
       {
         error: "Push notifications require Pro.",

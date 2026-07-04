@@ -89,7 +89,7 @@ import { AISuggestionPanel } from "@/components/travelAssistant/AISuggestionPane
 import { UpgradeModal, type UpgradeModalGateContext } from "@/components/billing/UpgradeModal";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { LanguageSettingsCard } from "@/components/LanguageSettingsCard";
-import { subscribeToWebPushNotifications } from "@/lib/push/webPushClient";
+import { readWebPushSubscriptionActive, subscribeToWebPushNotifications } from "@/lib/push/webPushClient";
 import { OnboardingFlow } from "@/components/onboarding/OnboardingFlow";
 import type { TripSetupDraft } from "@/components/onboarding/TripSetupForm";
 import { TripPlanningWizard } from "@/components/travelAssistant/TripPlanningWizard";
@@ -2831,11 +2831,11 @@ export default function TravelAssistantPage() {
   }, [applyServerTripsSnapshot]);
 
   const openUpgradeModal = useCallback((feature: PlanFeature, detail?: string): void => {
-    if (billingLoading || billingStatusPlan !== "free") {
+    if (billingStatusPlan !== "free") {
       return;
     }
     setUpgradeModalGate({ feature, detail });
-  }, [billingLoading, billingStatusPlan]);
+  }, [billingStatusPlan]);
 
   const closeUpgradeModal = useCallback((): void => {
     setUpgradeModalGate(null);
@@ -6018,23 +6018,40 @@ export default function TravelAssistantPage() {
       const result = await subscribeToWebPushNotifications();
       if (result.ok) {
         setPushSubscribed(true);
-        setPushMessage("✅ Push alerts enabled! You'll be notified of gate changes and delays.");
+        const successMessage = "✅ Push alerts enabled! You'll be notified of gate changes and delays.";
+        setPushMessage(successMessage);
+        setToast("Flight alerts enabled ✓");
       } else if (result.requiresPro) {
-        if (hasProAccess || isLifetime || isTrial) {
-          setPushMessage("Could not enable alerts right now. Refresh the page and try again.");
-        } else {
-          setPushMessage(result.message);
+        setPushMessage(result.message);
+        setToast(result.message);
+        if (!(hasProAccess || isLifetime || isTrial)) {
           openUpgradeModal("push-notifications", result.message);
         }
       } else {
         setPushMessage(result.message);
+        setToast(result.message);
       }
-    } catch {
-      setPushMessage("Could not enable push notifications.");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not enable push notifications.";
+      setPushMessage(message);
+      setToast(message);
     } finally {
       setPushBusy(false);
     }
-  }, [hasProAccess, isLifetime, isTrial, pushBusy, openUpgradeModal]);
+  }, [hasProAccess, isLifetime, isTrial, openUpgradeModal, pushBusy, setToast]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void readWebPushSubscriptionActive().then((active) => {
+      if (!cancelled && active) {
+        setPushSubscribed(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleCopyForwardAddress = useCallback(async (address?: string): Promise<void> => {
     const value = (address ?? emailForwardAddress)?.trim();

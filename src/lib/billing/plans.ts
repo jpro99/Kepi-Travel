@@ -26,7 +26,7 @@ export const FREE_PLAN: BillingPlanDefinition = {
   monthlyPriceCents: 0,
   tagline: "Essential trip execution for one active trip.",
   maxTrips: 1,
-  enabledFeatures: [],
+  enabledFeatures: ["push-notifications"],
 };
 
 export const PRO_PLAN: BillingPlanDefinition = {

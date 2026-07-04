@@ -12,7 +12,7 @@ interface MobileSettingsViewProps {
   pushSubscribed: boolean;
   pushBusy: boolean;
   pushMessage: string | null;
-  onEnablePush: () => void;
+  onEnablePush: () => void | Promise<void>;
   billingLoading: boolean;
   isLifetime: boolean;
   isTrial: boolean;
@@ -92,7 +92,9 @@ export function MobileSettingsView({
         {!pushSubscribed ? (
           <button
             type="button"
-            onClick={onEnablePush}
+            onClick={() => {
+              void onEnablePush();
+            }}
             disabled={pushBusy}
             className={`mt-3 w-full min-h-[44px] ${appleBtnPrimary} disabled:opacity-60`}
           >
