@@ -433,7 +433,7 @@ export function LiveMapPage() {
         map.on("error", (e: any) => {
           const msg = String(e?.error?.message ?? "unknown error");
           console.warn("[LiveMap]", msg, e);
-          if (!isLoadedRef.current && !cancelled && maptilerKey && !usingOsmFallbackRef.current) {
+          if (!isLoadedRef.current && !cancelled && !usingOsmFallbackRef.current) {
             usingOsmFallbackRef.current = true;
             map.setStyle(buildOsmRasterFallbackStyle());
             map.once("styledata", () => {
@@ -785,7 +785,7 @@ export function LiveMapPage() {
         {/* Map canvas — family / world basemap with country labels */}
         <div
           ref={mapEl}
-          className={`absolute inset-0 z-0 h-[100dvh] w-full min-h-[240px] ${mapView === "airport" ? "opacity-0 pointer-events-none" : ""}`}
+          className={`absolute inset-0 z-0 h-[100dvh] w-full min-h-[240px] bg-[#dbeafe] ${mapView === "airport" ? "opacity-0 pointer-events-none" : ""}`}
         />
 
         {/* Airport Navigator overlay — full-bleed when at the airport view */}

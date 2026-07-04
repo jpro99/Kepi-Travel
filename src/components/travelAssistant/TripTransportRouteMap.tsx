@@ -18,7 +18,12 @@ import {
   collectRouteMapPoints,
   segmentBounds,
 } from "@/lib/travelAssistant/tripRouteMapGeo";
-import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
+import {
+  attachMapStyleErrorFallback,
+  buildOsmRasterFallbackStyle,
+  directMaptilerTransformRequest,
+  resolveLiveMapStyle,
+} from "@/lib/map/maptilerClient";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import { useMobileMapExpand, useMapResizeOnLayoutChange } from "@/lib/ui/useMobileMapExpand";
 import { useMapUserViewport } from "@/lib/ui/useMapUserViewport";
@@ -174,6 +179,8 @@ export function TripTransportRouteMap({
   const [mapStyle, setMapStyle] = useState<"streets" | "hybrid">("streets");
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const appliedStyleRef = useRef<"streets" | "hybrid" | null>(null);
+  const usingOsmFallbackRef = useRef(false);
+  const isLoadedRef = useRef(false);
   const routeRef = useRef(route);
   routeRef.current = route;
   const { expanded, expand, collapse } = useMobileMapExpand(mobileProminent);
@@ -195,10 +202,10 @@ export function TripTransportRouteMap({
       .catch(() => {});
   }, []);
 
-  const styleUrl = useMemo(() => {
-    if (!maptilerKey) return "https://demotiles.maplibre.org/style.json";
-    return maptilerStyleUrl(mapStyle === "hybrid" ? "hybrid" : "streets-v2", maptilerKey);
-  }, [mapStyle, maptilerKey]);
+  const styleSpec = useMemo(
+    () => resolveLiveMapStyle(mapStyle === "hybrid" ? "satellite" : "streets", maptilerKey),
+    [mapStyle, maptilerKey],
+  );
 
   const geoPointsRef = useRef(geoPoints);
   geoPointsRef.current = geoPoints;
@@ -366,9 +373,11 @@ export function TripTransportRouteMap({
       const maplibregl = await import("maplibre-gl");
       if (cancelled || !containerRef.current) return;
 
-      const initialStyle = maptilerKey
-        ? maptilerStyleUrl("streets-v2", maptilerKey)
-        : "https://demotiles.maplibre.org/style.json";
+      usingOsmFallbackRef.current = false;
+      isLoadedRef.current = false;
+      setMapReady(false);
+
+      const initialStyle = resolveLiveMapStyle("streets", maptilerKey);
 
       const map = new maplibregl.Map({
         container: containerRef.current,
@@ -387,15 +396,35 @@ export function TripTransportRouteMap({
       map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
       mapRef.current = map;
 
-      map.on("load", () => {
+      const finishMapLoad = (): void => {
         if (cancelled) return;
         appliedStyleRef.current = "streets";
         installRouteLayers(map);
         unbindInteractionRef.current?.();
         unbindInteractionRef.current = bindUserInteraction(map);
+        isLoadedRef.current = true;
         setMapReady(true);
+        window.requestAnimationFrame(() => {
+          try {
+            map.resize();
+          } catch {
+            /* ignore */
+          }
+        });
         void fitWholeTrip(0);
         void renderAirportMarkers();
+      };
+
+      map.on("load", finishMapLoad);
+
+      attachMapStyleErrorFallback(map, {
+        isCancelled: () => cancelled,
+        isLoaded: () => isLoadedRef.current,
+        markLoaded: () => {
+          isLoadedRef.current = true;
+        },
+        usingOsmFallback: usingOsmFallbackRef,
+        onRecovered: finishMapLoad,
       });
       map.on("remove", () => {
         unbindInteractionRef.current?.();
@@ -427,9 +456,10 @@ export function TripTransportRouteMap({
       airportMarkersRef.current = [];
       mapRef.current?.remove();
       mapRef.current = null;
+      isLoadedRef.current = false;
       setMapReady(false);
     };
-  }, [hasGeo, maptilerKey, bindUserInteraction, fitWholeTrip, installRouteLayers, renderAirportMarkers]);
+  }, [hasGeo, maptilerKey, bindUserInteraction, fitWholeTrip, installRouteLayers, renderAirportMarkers, geoPoints]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -458,15 +488,18 @@ export function TripTransportRouteMap({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapReady || !maptilerKey) return;
+    if (!map || !mapReady) return;
+    if (usingOsmFallbackRef.current) return;
+    if (!maptilerKey) return;
     if (appliedStyleRef.current === mapStyle) return;
     appliedStyleRef.current = mapStyle;
-    map.setStyle(styleUrl);
+    map.setStyle(styleSpec);
     map.once("idle", () => {
       installRouteLayers(map);
       void renderAirportMarkers();
+      if (shouldAutoFit(routeFingerprint)) void fitWholeTrip(0);
     });
-  }, [mapStyle, mapReady, maptilerKey, styleUrl, installRouteLayers, renderAirportMarkers]);
+  }, [mapStyle, mapReady, maptilerKey, styleSpec, installRouteLayers, renderAirportMarkers, fitWholeTrip, routeFingerprint, shouldAutoFit]);
 
   if (route.segments.length === 0) return null;
 
@@ -641,10 +674,10 @@ export function TripTransportRouteMap({
           <div className={`relative ${expanded ? "h-full w-full" : ""}`}>
             <div
               ref={containerRef}
-              className={`w-full overflow-hidden ${
+              className={`w-full overflow-hidden bg-[#dbeafe] ${
                 expanded
-                  ? "absolute inset-0"
-                  : `rounded-2xl ring-1 ${mobileLight ? "ring-black/10" : "ring-white/10"} ${mobileProminent ? (mobileLight ? "h-[min(52vw,22rem)] min-h-[16rem]" : "h-80") : "h-64 md:h-80 lg:h-96"}`
+                  ? "absolute inset-0 min-h-[240px]"
+                  : `rounded-2xl ring-1 ${mobileLight ? "ring-black/10" : "ring-white/10"} ${mobileProminent ? (mobileLight ? "h-[min(52vw,22rem)] min-h-[16rem]" : "h-80 min-h-[16rem]") : "h-64 min-h-[12rem] md:h-80 lg:h-96"}`
               }`}
               role="application"
               aria-label="Interactive trip route map — drag to pan, scroll to zoom"

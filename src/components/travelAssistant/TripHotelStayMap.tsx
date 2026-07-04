@@ -4,7 +4,11 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "@/lib/maplibreCspWorker";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
-import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
+import {
+  attachMapStyleErrorFallback,
+  directMaptilerTransformRequest,
+  resolveLiveMapStyle,
+} from "@/lib/map/maptilerClient";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import { useMobileMapExpand, useMapResizeOnLayoutChange } from "@/lib/ui/useMobileMapExpand";
 import { useMapUserViewport } from "@/lib/ui/useMapUserViewport";
@@ -173,10 +177,12 @@ export function TripHotelStayMap({
       .catch(() => {});
   }, []);
 
-  const styleUrl = useMemo(() => {
-    if (!maptilerKey) return "https://demotiles.maplibre.org/style.json";
-    return maptilerStyleUrl(mapStyle === "hybrid" ? "hybrid" : "streets-v2", maptilerKey);
-  }, [mapStyle, maptilerKey]);
+  const styleSpec = useMemo(
+    () => resolveLiveMapStyle(mapStyle === "hybrid" ? "satellite" : "streets", maptilerKey),
+    [mapStyle, maptilerKey],
+  );
+  const usingOsmFallbackRef = useRef(false);
+  const isLoadedRef = useRef(false);
 
   const fitWholeTrip = useCallback(async (duration = 900) => {
     const map = mapRef.current;
@@ -264,9 +270,11 @@ export function TripHotelStayMap({
       const maplibregl = await import("maplibre-gl");
       if (cancelled || !containerRef.current) return;
 
-      const initialStyle = maptilerKey
-        ? maptilerStyleUrl("streets-v2", maptilerKey)
-        : "https://demotiles.maplibre.org/style.json";
+      usingOsmFallbackRef.current = false;
+      isLoadedRef.current = false;
+      setMapReady(false);
+
+      const initialStyle = resolveLiveMapStyle("streets", maptilerKey);
 
       const map = new maplibregl.Map({
         container: containerRef.current,
@@ -285,15 +293,28 @@ export function TripHotelStayMap({
       map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
       mapRef.current = map;
 
-      map.on("load", () => {
+      const finishMapLoad = (): void => {
         if (cancelled) return;
         appliedStyleRef.current = "streets";
         installStayLayers(map);
         unbindInteractionRef.current?.();
         unbindInteractionRef.current = bindUserInteraction(map);
+        isLoadedRef.current = true;
         setMapReady(true);
         void fitWholeTrip(0);
         void renderStayMarkers();
+      };
+
+      map.on("load", finishMapLoad);
+
+      attachMapStyleErrorFallback(map, {
+        isCancelled: () => cancelled,
+        isLoaded: () => isLoadedRef.current,
+        markLoaded: () => {
+          isLoadedRef.current = true;
+        },
+        usingOsmFallback: usingOsmFallbackRef,
+        onRecovered: finishMapLoad,
       });
       map.on("remove", () => {
         unbindInteractionRef.current?.();
@@ -347,12 +368,12 @@ export function TripHotelStayMap({
     if (!map || !mapReady || !maptilerKey) return;
     if (appliedStyleRef.current === mapStyle) return;
     appliedStyleRef.current = mapStyle;
-    map.setStyle(styleUrl);
+    map.setStyle(styleSpec);
     map.once("idle", () => {
       installStayLayers(map);
       void renderStayMarkers();
     });
-  }, [mapStyle, mapReady, maptilerKey, styleUrl, installStayLayers, renderStayMarkers]);
+  }, [mapStyle, mapReady, maptilerKey, styleSpec, installStayLayers, renderStayMarkers]);
 
   if (points.length === 0) return null;
 

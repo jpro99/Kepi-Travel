@@ -65,6 +65,34 @@ export function resolveLiveMapStyle(styleId: LiveMapStyleId, maptilerKey?: strin
   return buildOsmRasterFallbackStyle();
 }
 
+/** Attach once — recover from MapTiler/style URL failures by switching to inline OSM tiles. */
+export function attachMapStyleErrorFallback(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  map: any,
+  ctx: {
+    isCancelled: () => boolean;
+    isLoaded: () => boolean;
+    markLoaded: () => void;
+    usingOsmFallback: { current: boolean };
+    onRecovered: () => void;
+  },
+): void {
+  map.on("error", (event: { error?: { message?: string } }) => {
+    const message = String(event?.error?.message ?? "Map style failed to load");
+    console.warn("[map] style/tile error", message, event);
+    if (ctx.isCancelled() || ctx.isLoaded() || ctx.usingOsmFallback.current) {
+      return;
+    }
+    ctx.usingOsmFallback.current = true;
+    map.setStyle(buildOsmRasterFallbackStyle());
+    map.once("styledata", () => {
+      if (ctx.isCancelled()) return;
+      ctx.markLoaded();
+      ctx.onRecovered();
+    });
+  });
+}
+
 export function directMaptilerTransformRequest(
   maptilerKey: string,
 ): (url: string) => { url: string } | undefined {
