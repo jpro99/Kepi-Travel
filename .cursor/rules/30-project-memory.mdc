@@ -12,9 +12,15 @@ Before telling the user to sign up, email support, or redo a setup step:
 2. **Do not repeat** actions already recorded there (e.g. Duffel Stays emails already sent)
 3. **Update** that file when the user states a durable fact, decision, or completed external step
 
-## Auto-push (Jeff, 2026-06-15)
+## Auto-push (Jeff, 2026-07-04)
 
-After **implementing** code (not discuss-only replies): run `npm run lint` and `npm run build`. If clean, **commit and push to `main` immediately** — never ask "should I push?" Production: kepitravel.com (Vercel).
+When **any programming work** is finished (fixes, features, refactors — not discuss-only or review-only replies):
+
+1. Run `npm run lint` and `npm run build`; fix failures before proceeding.
+2. **Commit and push to `main` automatically** — do not ask "should I push?" or wait for a separate push request.
+3. Briefly tell Jeff the commit hash and what shipped.
+
+Production: kepitravel.com (Vercel). Never push a broken build.
 
 ## Two kinds of memory
 
