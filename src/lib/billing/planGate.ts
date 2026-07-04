@@ -1,6 +1,7 @@
 import type { BillingPlanId, PlanFeature } from "@/lib/billing/plans";
 import { BILLING_PLANS, PRO_PLAN } from "@/lib/billing/plans";
-import { getSubscriptionRecord, isSubscriptionActive } from "@/lib/billing/subscriptionStore";
+import { resolveUserEffectivePlanStatus } from "@/lib/billing/resolveEffectivePlan";
+import { isAdminUserId } from "@/lib/admin/adminAccess";
 
 const PRO_FEATURE_SET = new Set<PlanFeature>(PRO_PLAN.enabledFeatures);
 const CONCIERGE_ONLY_FEATURES = new Set<PlanFeature>([
@@ -23,6 +24,18 @@ export function isFeatureEnabled(plan: BillingPlanId, feature: PlanFeature): boo
 }
 
 export async function getUserPlan(userId: string): Promise<BillingPlanId> {
-  const subscription = await getSubscriptionRecord(userId);
-  return isSubscriptionActive(subscription) ? subscription.plan : "free";
+  if (isAdminUserId(userId)) {
+    return "pro";
+  }
+  const status = await resolveUserEffectivePlanStatus(userId);
+  return status.basePlan;
+}
+
+/** Same Pro/trial/lifetime/admin rules as /api/billing/status — use for feature gates. */
+export async function userHasProAccess(userId: string): Promise<boolean> {
+  if (isAdminUserId(userId)) {
+    return true;
+  }
+  const status = await resolveUserEffectivePlanStatus(userId);
+  return status.basePlan !== "free";
 }

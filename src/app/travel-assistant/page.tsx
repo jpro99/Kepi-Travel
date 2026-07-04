@@ -6017,8 +6017,12 @@ export default function TravelAssistantPage() {
         setPushSubscribed(true);
         setPushMessage("✅ Push alerts enabled! You'll be notified of gate changes and delays.");
       } else if (result.requiresPro) {
-        setPushMessage(result.message);
-        openUpgradeModal("push-notifications", result.message);
+        if (hasProAccess || isLifetime || isTrial) {
+          setPushMessage("Could not enable alerts right now. Refresh the page and try again.");
+        } else {
+          setPushMessage(result.message);
+          openUpgradeModal("push-notifications", result.message);
+        }
       } else {
         setPushMessage(result.message);
       }
@@ -6027,7 +6031,7 @@ export default function TravelAssistantPage() {
     } finally {
       setPushBusy(false);
     }
-  }, [pushBusy, openUpgradeModal]);
+  }, [hasProAccess, isLifetime, isTrial, pushBusy, openUpgradeModal]);
 
   const handleCopyForwardAddress = useCallback(async (address?: string): Promise<void> => {
     const value = (address ?? emailForwardAddress)?.trim();

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isAutomatedTestRuntime } from "@/lib/auth/mockClerkAuth";
-import { getUserPlan } from "@/lib/billing/planGate";
+import { getUserPlan, isFeatureEnabled } from "@/lib/billing/planGate";
 import { logger } from "@/lib/logger";
 import { enforceRateLimit } from "@/lib/rateLimit";
 import { subscribeUser, hasPushSubscription } from "@/lib/travelAssistant/pushNotificationService";
@@ -53,7 +53,7 @@ export async function GET(req: Request) {
   }
 
   const plan = await getUserPlan(userId);
-  if (plan === "free") {
+  if (!isFeatureEnabled(plan, "push-notifications")) {
     return NextResponse.json(
       {
         error: "Push notifications require Pro.",
@@ -87,7 +87,7 @@ export async function POST(req: Request) {
   }
 
   const plan = await getUserPlan(userId);
-  if (plan === "free") {
+  if (!isFeatureEnabled(plan, "push-notifications")) {
     return NextResponse.json(
       {
         error: "Push notifications require Pro.",

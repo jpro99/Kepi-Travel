@@ -17,7 +17,10 @@ import {
   KEPI_PLAN_COOKIE_NAME,
   KEPI_PLAN_LIFETIME_VALUE,
 } from "@/lib/billing/planCookie";
-import { CLERK_METADATA_LIFETIME_KEY, CLERK_METADATA_PLAN_KEY } from "@/lib/billing/clerkMetadataKeys";
+import {
+  resolveEffectivePlanStatus,
+  getLifetimePlanFlagFromClerkMetadata,
+} from "@/lib/billing/resolveEffectivePlan";
 import { getStripePublishableKey } from "@/lib/billing/stripeClient";
 import {
   getBillingPlanMirrorKey,
@@ -26,9 +29,8 @@ import {
   getSubscriptionRecord,
   getSubscriptionStorageKey,
   getUserLifetimeMirrorKey,
-  isSubscriptionActive,
 } from "@/lib/billing/subscriptionStore";
-import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
+import { resolveAuthenticatedUserId, isAdminUserId } from "@/lib/admin/adminAccess";
 import { logger } from "@/lib/logger";
 import { listTrips } from "@/lib/travelAssistant/tripStore";
 import { generateId } from "@/lib/utils/generateId";
@@ -78,8 +80,6 @@ interface BillingStatusPayload {
   };
 }
 
-const DAY_IN_MS = 24 * 60 * 60 * 1000;
-
 function applyLifetimePlanCookie(response: NextResponse): void {
   response.cookies.set({
     name: KEPI_PLAN_COOKIE_NAME,
@@ -90,93 +90,6 @@ function applyLifetimePlanCookie(response: NextResponse): void {
     path: "/",
     maxAge: KEPI_PLAN_COOKIE_MAX_AGE_SECONDS,
   });
-}
-
-function resolveEffectivePlanStatus(
-  subscriptionRecord: Awaited<ReturnType<typeof getSubscriptionRecord>>,
-  nowMs: number,
-  hasLifetimePlanFallback: boolean,
-): {
-  plan: BillingStatusPlan;
-  basePlan: BillingPlanId;
-  lifetimePlanActive: boolean;
-  trialActive: boolean;
-  trialDaysRemaining: number | null;
-  nextBillingDate: string | null;
-} {
-  const lifetimePlanActive = subscriptionRecord.lifetimePlan || hasLifetimePlanFallback;
-  if (lifetimePlanActive) {
-    return {
-      plan: "lifetime",
-      basePlan: "pro",
-      lifetimePlanActive: true,
-      trialActive: false,
-      trialDaysRemaining: null,
-      nextBillingDate: null,
-    };
-  }
-
-  const trialExpiresAt = subscriptionRecord.trialExpiresAt;
-  const trialExpiresMs =
-    typeof trialExpiresAt === "string" && trialExpiresAt.length > 0 ? Date.parse(trialExpiresAt) : Number.NaN;
-  const trialActive = !Number.isNaN(trialExpiresMs) && trialExpiresMs > nowMs;
-  if (trialActive) {
-    return {
-      plan: "trial",
-      basePlan: "pro",
-      lifetimePlanActive: false,
-      trialActive: true,
-      trialDaysRemaining: Math.max(1, Math.ceil((trialExpiresMs - nowMs) / DAY_IN_MS)),
-      nextBillingDate: trialExpiresAt,
-    };
-  }
-
-  if (isSubscriptionActive(subscriptionRecord)) {
-    const paidPlan: BillingPlanId = subscriptionRecord.plan === "concierge" ? "concierge" : "pro";
-    return {
-      plan: paidPlan,
-      basePlan: paidPlan,
-      lifetimePlanActive: false,
-      trialActive: false,
-      trialDaysRemaining: null,
-      nextBillingDate: subscriptionRecord.validUntil,
-    };
-  }
-
-  return {
-    plan: "free",
-    basePlan: "free",
-    lifetimePlanActive: false,
-    trialActive: false,
-    trialDaysRemaining: null,
-    nextBillingDate: null,
-  };
-}
-
-async function getLifetimePlanFlagFromClerkMetadata(userId: string): Promise<boolean> {
-  if (!process.env.CLERK_SECRET_KEY?.trim()) {
-    return false;
-  }
-  try {
-    const { clerkClient } = await import("@clerk/nextjs/server");
-    const client = await clerkClient();
-    const user = await client.users.getUser(userId);
-    const privatePlan = user.privateMetadata?.[CLERK_METADATA_PLAN_KEY];
-    if (typeof privatePlan === "string" && privatePlan.trim().toLowerCase() === "lifetime") {
-      return true;
-    }
-    const privateLifetimeFlag = user.privateMetadata?.[CLERK_METADATA_LIFETIME_KEY];
-    if (typeof privateLifetimeFlag === "boolean") {
-      return privateLifetimeFlag;
-    }
-    if (typeof privateLifetimeFlag === "string") {
-      const normalized = privateLifetimeFlag.trim().toLowerCase();
-      return normalized === "true" || normalized === "1" || normalized === "lifetime";
-    }
-    return false;
-  } catch {
-    return false;
-  }
 }
 
 export async function GET(req: Request) {
@@ -215,11 +128,20 @@ export async function GET(req: Request) {
     getLifetimePlanFlagFromClerkMetadata(userId),
   ]);
   const nowMs = Date.now();
-  const planStatus = resolveEffectivePlanStatus(
-    subscriptionRecord,
-    nowMs,
-    lifetimeMirrorStatus.hasLifetimeAccess || clerkMetadataHasLifetime,
-  );
+  const planStatus = isAdminUserId(userId)
+    ? {
+        plan: "lifetime" as const,
+        basePlan: "pro" as const,
+        lifetimePlanActive: true,
+        trialActive: false,
+        trialDaysRemaining: null,
+        nextBillingDate: null,
+      }
+    : resolveEffectivePlanStatus(
+        subscriptionRecord,
+        nowMs,
+        lifetimeMirrorStatus.hasLifetimeAccess || clerkMetadataHasLifetime,
+      );
   const billingPlanMirrorKey = getBillingPlanMirrorKey(userId);
   const userLifetimeMirrorKey = getUserLifetimeMirrorKey(userId);
   const rawSubscriptionRecord = await getRawSubscriptionRecordForDebug(userId);
