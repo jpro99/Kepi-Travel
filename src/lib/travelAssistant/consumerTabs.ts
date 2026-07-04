@@ -1,11 +1,11 @@
 /** Bottom-nav and orientation card tabs in the travel assistant consumer shell. */
-export type ConsumerTab = "trip" | "itinerary" | "book" | "map" | "more";
+export type ConsumerTab = "trip" | "itinerary" | "book" | "map" | "photos" | "more";
 
 export type BookSubTab = "flights" | "hotels";
 
 export type PlanSubView = "timeline" | "calendar";
 
-export const CONSUMER_TABS: ConsumerTab[] = ["trip", "itinerary", "book", "map", "more"];
+export const CONSUMER_TABS: ConsumerTab[] = ["trip", "itinerary", "book", "map", "photos", "more"];
 
 /** Tab bar labels/icons — shared by desktop and mobile nav. */
 export const CONSUMER_TAB_BAR: ReadonlyArray<readonly [ConsumerTab, string, string]> = [
@@ -13,6 +13,7 @@ export const CONSUMER_TAB_BAR: ReadonlyArray<readonly [ConsumerTab, string, stri
   ["itinerary", "Plan", "📋"],
   ["book", "Book", "🎫"],
   ["map", "Map", "🗺"],
+  ["photos", "Photos", "📷"],
   ["more", "More", "···"],
 ];
 
@@ -25,6 +26,7 @@ export function normalizeConsumerTabParam(tab: string | null): ConsumerTab | nul
   if (!tab) return null;
   if (tab === "calendar") return "itinerary";
   if (tab === "flights" || tab === "hotels") return "book";
+  if (tab === "memories") return "photos";
   if (isConsumerTab(tab)) return tab;
   return null;
 }

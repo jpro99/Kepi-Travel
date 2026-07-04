@@ -1,11 +1,12 @@
-export type MobilePrimaryTab = "home" | "plan" | "book" | "map" | "more";
+export type MobilePrimaryTab = "home" | "plan" | "book" | "map" | "photos" | "more";
 
-/** Same mental model as desktop: Home → Plan → Book → Map → More */
+/** Same mental model as desktop: Home → Plan → Book → Map → Photos → More */
 export const MOBILE_PRIMARY_TABS: Array<{ id: MobilePrimaryTab; label: string }> = [
   { id: "home", label: "Home" },
   { id: "plan", label: "Plan" },
   { id: "book", label: "Book" },
   { id: "map", label: "Map" },
+  { id: "photos", label: "Photos" },
   { id: "more", label: "More" },
 ];
 
@@ -19,6 +20,7 @@ const LEGACY_MOBILE_TAB_ALIASES: Record<string, MobilePrimaryTab> = {
   hotels: "book",
   assist: "home",
   settings: "more",
+  memories: "photos",
 };
 
 export function isMobilePrimaryTab(value: string | null): value is MobilePrimaryTab {

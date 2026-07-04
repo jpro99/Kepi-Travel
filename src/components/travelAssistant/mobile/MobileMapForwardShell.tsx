@@ -546,24 +546,48 @@ export function MobileMapForwardShell({
     );
   }
 
+  if (activeTab === "photos") {
+    return (
+      <div className="kepi-mobile-shell space-y-5 pb-4">
+        <header>
+          <h1 className="text-[2rem] font-bold tracking-tight text-[var(--text-primary)]">Photos</h1>
+          <p className="mt-1 text-[19px] text-[var(--text-secondary)]">
+            Trip memories — upload, view, and share with family.
+          </p>
+        </header>
+        {hasActiveTrip && tripId ? (
+          <div className="overflow-hidden rounded-2xl bg-[var(--bg-card)] p-4 ring-1 ring-[var(--border-default)]">
+            <TripMemoriesPanel
+              tripId={tripId}
+              tripName={tripName}
+              destination={destination}
+              startDate={startDate}
+              endDate={endDate}
+              mode="owner"
+              hideTitle
+            />
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-[var(--border-default)] px-4 py-10 text-center">
+            <p className="text-[19px] font-semibold text-[var(--text-primary)]">No trip selected</p>
+            <p className="mt-2 text-[17px] text-[var(--text-secondary)]">
+              Create or open a trip on Home to start your photo album.
+            </p>
+            <button type="button" onClick={() => onNavigateTab("home")} className={`${juicyBtnPrimary} mt-5`}>
+              Go to Home
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="kepi-mobile-shell space-y-5 pb-4">
       <header>
         <h1 className="text-[2rem] font-bold tracking-tight text-[var(--text-primary)]">More</h1>
         <p className="mt-1 text-[19px] text-[var(--text-secondary)]">Settings & family</p>
       </header>
-      {hasActiveTrip && tripId ? (
-        <div className="overflow-hidden rounded-2xl bg-[var(--bg-card)] p-4 ring-1 ring-[var(--border-default)]">
-          <TripMemoriesPanel
-            tripId={tripId}
-            tripName={tripName}
-            destination={destination}
-            startDate={startDate}
-            endDate={endDate}
-            mode="owner"
-          />
-        </div>
-      ) : null}
       <Link
         href="/travel-assistant/live-map"
         className="flex min-h-[56px] items-center rounded-2xl bg-[var(--bg-card)] px-5 text-[19px] font-bold text-[var(--text-primary)] ring-1 ring-[var(--border-default)]"

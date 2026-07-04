@@ -13,6 +13,8 @@ test("normalizeConsumerTabParam maps legacy calendar and book tabs", () => {
   assert.equal(normalizeConsumerTabParam("hotels"), "book");
   assert.equal(normalizeConsumerTabParam("trip"), "trip");
   assert.equal(normalizeConsumerTabParam("book"), "book");
+  assert.equal(normalizeConsumerTabParam("photos"), "photos");
+  assert.equal(normalizeConsumerTabParam("memories"), "photos");
   assert.equal(normalizeConsumerTabParam("unknown"), null);
 });
 

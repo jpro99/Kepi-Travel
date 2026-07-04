@@ -31,7 +31,7 @@ export function MobileTabBar({ activeTab, onSelectTab, className = "" }: MobileT
       style={{ paddingBottom: "max(0.625rem, env(safe-area-inset-bottom))" }}
       aria-label="Main navigation"
     >
-      <div className="mx-auto grid max-w-lg grid-cols-5 gap-1">
+      <div className="mx-auto grid max-w-lg grid-cols-6 gap-0.5">
         {MOBILE_PRIMARY_TABS.map(({ id, label }) => {
           const active = activeTab === id;
           return (
@@ -42,14 +42,14 @@ export function MobileTabBar({ activeTab, onSelectTab, className = "" }: MobileT
                 event.stopPropagation();
                 handleSelect(id);
               }}
-              className={`flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 transition-colors touch-manipulation select-none ${
+              className={`flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-2xl px-0.5 py-2 transition-colors touch-manipulation select-none ${
                 active
                   ? "text-[var(--accent)]"
                   : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
               }`}
               aria-current={active ? "page" : undefined}
             >
-              <span className={`font-bold tracking-tight ${active ? "text-[18px]" : "text-[17px]"}`}>
+              <span className={`font-bold tracking-tight ${active ? "text-[16px]" : "text-[15px]"}`}>
                 {label}
               </span>
               {active ? (

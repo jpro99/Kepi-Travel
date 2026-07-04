@@ -177,6 +177,7 @@ import { PackingList } from "@/components/travelAssistant/PackingList";
 import { BagControl } from "@/components/travelAssistant/BagControl";
 import type { FlightSearchDefaults } from "@/components/travelAssistant/FlightSearchLauncher";
 import { ShareTripCard } from "@/components/travelAssistant/ShareTripCard";
+import { TripMemoriesPanel } from "@/components/travelAssistant/TripMemoriesPanel";
 import { TravelDayView } from "@/components/travelAssistant/TravelDayView";
 import { ShareModal } from "@/components/travelAssistant/ShareModal";
 import { SmartPackingList } from "@/components/travelAssistant/SmartPackingList";
@@ -9037,7 +9038,7 @@ export default function TravelAssistantPage() {
               <button
                 key={tab}
                 type="button"
-                onClick={() => tab === "map" ? router.push("/travel-assistant/live-map") : navigateToConsumerTab(tab)}
+                onClick={() => (tab === "map" ? router.push("/travel-assistant/live-map") : navigateToConsumerTab(tab))}
                 className={`relative flex min-w-[4.5rem] flex-1 flex-col items-center justify-center gap-0.5 py-2.5 transition-all ${
                   consumerTab === tab
                     ? "text-[#007AFF] dark:text-[#0A84FF]"
@@ -9329,6 +9330,42 @@ export default function TravelAssistantPage() {
               tripProblemCount={transportConflictReservationIds.size}
               onReviewPricing={() => navigateToBook("flights")}
             />
+          ) : consumerTab === "photos" ? (
+            <section className="space-y-4">
+              <header>
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Photos</h1>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  Trip memories — upload, view, and share with family.
+                </p>
+              </header>
+              {activeTrip && activeTripId ? (
+                <div className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-black/[0.06] dark:bg-slate-900 dark:ring-white/[0.08]">
+                  <TripMemoriesPanel
+                    tripId={activeTripId}
+                    tripName={activeTrip?.name ?? "Your trip"}
+                    destination={consumerTripDestination ?? activeTrip?.destination ?? null}
+                    startDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
+                    endDate={consumerTripEndDate ?? activeTrip?.endDate ?? null}
+                    mode="owner"
+                    hideTitle
+                  />
+                </div>
+              ) : (
+                <div className="rounded-3xl border border-dashed border-slate-300 px-6 py-12 text-center dark:border-slate-700">
+                  <p className="text-lg font-semibold text-slate-900 dark:text-white">No trip selected</p>
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                    Create or open a trip on Home to start your photo album.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigateToConsumerTab("trip")}
+                    className="mt-5 rounded-2xl bg-[#007AFF] px-5 py-3 text-sm font-bold text-white"
+                  >
+                    Go to Home
+                  </button>
+                </div>
+              )}
+            </section>
           ) : (
             <section className="space-y-3">
               <button

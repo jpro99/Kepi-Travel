@@ -14,6 +14,8 @@ interface TripMemoriesPanelProps {
   shareToken?: string | null;
   /** owner = upload/delete/collage; viewer = comment + pick-your-own collage */
   mode?: "owner" | "viewer";
+  /** Hide section title when embedded in the dedicated Photos tab */
+  hideTitle?: boolean;
   className?: string;
 }
 
@@ -35,6 +37,7 @@ export function TripMemoriesPanel({
   endDate,
   shareToken = null,
   mode = "owner",
+  hideTitle = false,
   className = "",
 }: TripMemoriesPanelProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -354,17 +357,9 @@ export function TripMemoriesPanel({
 
   return (
     <section className={`space-y-4 ${className}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-[var(--text-primary)]">Trip photos</h2>
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            {mode === "owner"
-              ? "Upload moments from your trip. Family and friends on your share link can view, comment, and build their own collages."
-              : "Photos from the trip — comment or pick your favorites to build a keepsake collage."}
-          </p>
-        </div>
-        {mode === "owner" ? (
-          <>
+      {hideTitle ? (
+        mode === "owner" ? (
+          <div className="flex justify-end">
             <input
               ref={inputRef}
               type="file"
@@ -383,9 +378,42 @@ export function TripMemoriesPanel({
             >
               {busy ? "Working…" : "Add photo"}
             </button>
-          </>
-        ) : null}
-      </div>
+          </div>
+        ) : null
+      ) : (
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-[var(--text-primary)]">Trip photos</h2>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">
+              {mode === "owner"
+                ? "Upload moments from your trip. Family and friends on your share link can view, comment, and build their own collages."
+                : "Photos from the trip — comment or pick your favorites to build a keepsake collage."}
+            </p>
+          </div>
+          {mode === "owner" ? (
+            <>
+              <input
+                ref={inputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(event) => {
+                  void handleUpload(event.target.files?.[0]);
+                  event.currentTarget.value = "";
+                }}
+              />
+              <button
+                type="button"
+                disabled={busy || !tripId}
+                onClick={() => inputRef.current?.click()}
+                className="shrink-0 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
+              >
+                {busy ? "Working…" : "Add photo"}
+              </button>
+            </>
+          ) : null}
+        </div>
+      )}
 
       {loading ? <p className="text-sm text-[var(--text-muted)]">Loading album…</p> : null}
       {message ? (
