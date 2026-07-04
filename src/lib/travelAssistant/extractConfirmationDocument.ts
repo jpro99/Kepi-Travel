@@ -12,6 +12,12 @@ import {
   type ScannedReservationDraft,
 } from "@/lib/travelAssistant/scannedReservationDraft";
 
+function isHeicBuffer(bytes: Buffer): boolean {
+  if (bytes.length < 12) return false;
+  const head = bytes.subarray(4, 12).toString("ascii").toLowerCase();
+  return head.startsWith("ftyp") && (head.includes("heic") || head.includes("heif") || head.includes("mif1"));
+}
+
 const SCAN_SYSTEM_PROMPT = [
   "You extract travel reservations from confirmation documents (PDF e-tickets, HTML emails, boarding passes, hotel vouchers, rail tickets).",
   "Return ONLY strict JSON — no explanation text.",
@@ -188,6 +194,11 @@ export async function extractConfirmationDocument(
 ): Promise<ScannedReservationDraft[]> {
   const fileBytes = Buffer.from(await file.arrayBuffer());
   const kind = resolveConfirmationScanKind(file, fileBytes);
+  if (kind === "image" && isHeicBuffer(fileBytes)) {
+    throw new Error(
+      "HEIC photos are not supported yet. Change camera format to JPEG, or take a screenshot of your confirmation.",
+    );
+  }
   const fileBase64 = fileBytes.toString("base64");
   const plainText = confirmationKindUsesTextExtraction(kind)
     ? await extractConfirmationPlainText(fileBytes, kind)

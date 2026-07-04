@@ -1,4 +1,5 @@
 import { extractFlightLegsFromEmailBody } from "@/lib/travelAssistant/emailForwardParser";
+import { extractHotelDraftsFromDocumentText } from "@/lib/travelAssistant/confirmationHotelExtract";
 import { preparePdfTextForParsing } from "@/lib/travelAssistant/pdfTextExtract";
 import {
   buildScannedReservationDraft,
@@ -79,6 +80,9 @@ function inferMissingYears(drafts: ScannedReservationDraft[]): ScannedReservatio
 function isUsableDraft(draft: ScannedReservationDraft): boolean {
   if (draft.localTime.trim().length > 0) return true;
   if (draft.type === "hotel" && draft.checkOutDate.trim().length > 0) return true;
+  if (draft.type === "hotel" && draft.title.trim().length > 0 && draft.confirmationCode.trim().length > 0) {
+    return true;
+  }
   if (
     draft.type === "flight" &&
     draft.flightNumber.trim() &&
@@ -95,8 +99,10 @@ export function mergeConfirmationDrafts(
   aiDrafts: ScannedReservationDraft[],
   documentText: string,
 ): ScannedReservationDraft[] {
-  const regexDrafts = regexLegsToDrafts(documentText);
-  if (regexDrafts.length === 0) {
+  const regexFlightDrafts = regexLegsToDrafts(documentText);
+  const regexHotelDrafts = extractHotelDraftsFromDocumentText(documentText);
+
+  if (regexFlightDrafts.length === 0 && regexHotelDrafts.length === 0) {
     return inferMissingYears(aiDrafts.filter(isUsableDraft));
   }
 
@@ -107,17 +113,24 @@ export function mergeConfirmationDrafts(
   for (const draft of aiFlights) {
     mergedFlights.set(flightLegKey(draft), draft);
   }
-  for (const draft of regexDrafts) {
+  for (const draft of regexFlightDrafts) {
     const key = flightLegKey(draft);
     const existing = mergedFlights.get(key);
     mergedFlights.set(key, existing ? mergeFlightDraft(existing, draft) : draft);
   }
 
   const flights =
-    aiFlights.length === 0 && regexDrafts.length > 0
-      ? regexDrafts
+    aiFlights.length === 0 && regexFlightDrafts.length > 0
+      ? regexFlightDrafts
       : [...mergedFlights.values()];
 
-  const combined = inferMissingYears([...flights, ...nonFlights]).filter(isUsableDraft);
+  const aiHotels = nonFlights.filter((draft) => draft.type === "hotel");
+  const hotels =
+    aiHotels.length === 0 && regexHotelDrafts.length > 0
+      ? regexHotelDrafts
+      : [...regexHotelDrafts, ...aiHotels];
+  const otherNonFlights = nonFlights.filter((draft) => draft.type !== "hotel");
+
+  const combined = inferMissingYears([...flights, ...hotels, ...otherNonFlights]).filter(isUsableDraft);
   return combined.length > 0 ? combined : inferMissingYears(aiDrafts.filter(isUsableDraft));
 }

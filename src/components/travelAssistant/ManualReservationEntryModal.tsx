@@ -2,6 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { ImportConfirmationDropzone } from "@/components/travelAssistant/ImportConfirmationDropzone";
+import {
+  pickScanDraftForType,
+  readTicketScanResponse,
+} from "@/lib/travelAssistant/confirmationScanClient";
 
 type ManualReservationType = "flight" | "hotel" | "train" | "car" | "dinner" | "tour" | "experience" | "other";
 
@@ -184,27 +188,26 @@ export function ManualReservationEntryModal({
         credentials: "include",
         cache: "no-store",
       });
-      const payload = (await response.json()) as {
-        error?: string;
-        draft?: ScanDraftPayload;
-        drafts?: ScanDraftPayload[];
-      };
+      const { ok, payload } = await readTicketScanResponse(response);
       const scannedDrafts =
         payload.drafts && payload.drafts.length > 0
-          ? payload.drafts
+          ? (payload.drafts as ScanDraftPayload[])
           : payload.draft
-            ? [payload.draft]
+            ? [payload.draft as ScanDraftPayload]
             : [];
-      if (!response.ok || scannedDrafts.length === 0) {
+      if (!ok || scannedDrafts.length === 0) {
         setScanMessage(`Scan failed: ${payload.error ?? "unknown error"}`);
         return;
       }
-      const d = scannedDrafts[0];
+      const preferredType = lockReservationType ? reservationType : undefined;
+      const d = pickScanDraftForType(scannedDrafts, preferredType);
       if (!d) {
         setScanMessage("Scan failed: empty result.");
         return;
       }
-      setReservationType(normalizeScanType(d.type));
+      if (!lockReservationType) {
+        setReservationType(normalizeScanType(d.type));
+      }
       if (d.title?.trim()) setTitle(d.title.trim());
       if (d.provider?.trim()) setProvider(d.provider.trim());
       if (d.localTime?.trim()) setLocalDateTime(toDatetimeLocal(d.localTime));
@@ -216,11 +219,12 @@ export function ManualReservationEntryModal({
       if (d.flightNumber?.trim()) setFlightNumber(d.flightNumber.trim());
       setScanMessage(
         scannedDrafts.length > 1
-          ? `✓ Found ${scannedDrafts.length} legs — first leg filled; use Flights import to add all.`
+          ? `✓ Found ${scannedDrafts.length} bookings — ${lockReservationType === "hotel" ? "hotel" : "first leg"} filled; review and save.`
           : "✓ Fields filled from your file — review and save.",
       );
-    } catch {
-      setScanMessage("Scan failed — please fill in the fields manually.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown error";
+      setScanMessage(`Scan failed: ${message}. You can fill in the fields manually.`);
     } finally {
       setScanning(false);
     }

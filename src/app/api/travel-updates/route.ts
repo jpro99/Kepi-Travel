@@ -292,13 +292,7 @@ export async function POST(req: Request) {
 
   const url = new URL(req.url);
   if (url.searchParams.get("action") === "ticket-scan") {
-    const anthropicApiKey = process.env.ANTHROPIC_API_KEY?.trim();
-    if (!anthropicApiKey) {
-      return NextResponse.json(
-        { error: "Ticket scan unavailable: ANTHROPIC_API_KEY is missing." },
-        { status: 503, headers: rateLimit.headers },
-      );
-    }
+    const anthropicApiKey = process.env.ANTHROPIC_API_KEY?.trim() ?? "";
     routeLogger.info("Confirmation scan request started (legacy query route).");
     return handleConfirmationScanUpload(req, {
       anthropicApiKey,
