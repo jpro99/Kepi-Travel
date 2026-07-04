@@ -1,4 +1,5 @@
 import { prepareReviewDraftForAccept } from "@/lib/travelAssistant/prepareReviewDraftForAccept";
+import { correctReservationTravelDates } from "@/lib/travelAssistant/travelDateCorrection";
 
 export interface StoredFlightReservation {
   type: string;
@@ -35,7 +36,9 @@ export function reconcileStoredFlightReservations<T extends StoredFlightReservat
   const next = reservations.map((reservation) => {
     if (reservation.type !== "flight") return reservation;
     const before = flightScheduleFingerprint(reservation);
-    const reconciled = prepareReviewDraftForAccept({ ...reservation }) as T;
+    const reconciled = correctReservationTravelDates(
+      prepareReviewDraftForAccept({ ...reservation }),
+    ) as T;
     if (flightScheduleFingerprint(reconciled) !== before) {
       changed = true;
       return reconciled;

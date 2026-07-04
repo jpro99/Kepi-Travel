@@ -10,6 +10,7 @@ import {
 } from "./confirmationDocumentValidation";
 import { extractConfirmationDocument } from "./extractConfirmationDocument";
 import { inferImportedTripMeta } from "./persistImportToTrip";
+import { correctReservationTravelDates } from "./travelDateCorrection";
 
 const fixtureDir = join(dirname(fileURLToPath(import.meta.url)), "__fixtures__");
 
@@ -42,7 +43,7 @@ test("extractConfirmationDocument imports Bali fixture without AI", async () => 
 });
 
 test("inferImportedTripMeta builds trip shell from imported flights", () => {
-  const meta = inferImportedTripMeta([
+  const reservations = [
     {
       type: "flight",
       localTime: "2025-09-12 06:00",
@@ -55,10 +56,11 @@ test("inferImportedTripMeta builds trip shell from imported flights", () => {
       flightDepartureAirport: "CGK",
       flightArrivalAirport: "SIN",
     },
-  ]);
+  ].map((reservation) => correctReservationTravelDates(reservation, new Date("2026-06-15T12:00:00Z")));
+  const meta = inferImportedTripMeta(reservations);
   assert.equal(meta.destination, "SIN");
-  assert.equal(meta.startDate, "2025-09-12");
-  assert.equal(meta.endDate, "2025-10-06");
+  assert.equal(meta.startDate, "2026-09-12");
+  assert.equal(meta.endDate, "2026-10-06");
 });
 
 test("detectMisleadingDownloadPage returns null for real itinerary", () => {

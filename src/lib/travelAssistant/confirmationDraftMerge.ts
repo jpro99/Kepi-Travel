@@ -5,6 +5,7 @@ import {
   buildScannedReservationDraft,
   type ScannedReservationDraft,
 } from "@/lib/travelAssistant/scannedReservationDraft";
+import { correctReservationTravelDates } from "@/lib/travelAssistant/travelDateCorrection";
 
 function normalizeFlightNumber(value: string): string {
   return value.trim().toUpperCase().replace(/\s+/gu, "");
@@ -59,22 +60,20 @@ function regexLegsToDrafts(documentText: string): ScannedReservationDraft[] {
 }
 
 function inferMissingYears(drafts: ScannedReservationDraft[]): ScannedReservationDraft[] {
-  const knownYears = drafts
-    .map((draft) => draft.localTime.trim().slice(0, 4))
-    .filter((year) => /^\d{4}$/u.test(year))
-    .map((year) => Number.parseInt(year, 10));
-  const fallbackYear = knownYears.length > 0 ? Math.max(...knownYears) : null;
-
   return drafts.map((draft) => {
-    if (draft.localTime.trim().length >= 10 || !fallbackYear) {
-      return draft;
-    }
     const timeOnly = draft.localTime.trim();
     if (/^\d{1,2}:\d{2}$/u.test(timeOnly) && draft.flightDate.trim().length >= 10) {
       return { ...draft, localTime: `${draft.flightDate.trim()} ${timeOnly}` };
     }
     return draft;
   });
+}
+
+function applyTravelDateCorrections(
+  drafts: ScannedReservationDraft[],
+  referenceDate = new Date(),
+): ScannedReservationDraft[] {
+  return drafts.map((draft) => correctReservationTravelDates(draft, referenceDate));
 }
 
 function isUsableDraft(draft: ScannedReservationDraft): boolean {
@@ -94,16 +93,23 @@ function isUsableDraft(draft: ScannedReservationDraft): boolean {
   return false;
 }
 
+export interface MergeConfirmationDraftsOptions {
+  /** For tests; defaults to now so past-year imports roll forward automatically. */
+  referenceDate?: Date;
+}
+
 /** Merge Claude PDF scan output with regex legs extracted from PDF plain text. */
 export function mergeConfirmationDrafts(
   aiDrafts: ScannedReservationDraft[],
   documentText: string,
+  options?: MergeConfirmationDraftsOptions,
 ): ScannedReservationDraft[] {
+  const referenceDate = options?.referenceDate ?? new Date();
   const regexFlightDrafts = regexLegsToDrafts(documentText);
   const regexHotelDrafts = extractHotelDraftsFromDocumentText(documentText);
 
   if (regexFlightDrafts.length === 0 && regexHotelDrafts.length === 0) {
-    return inferMissingYears(aiDrafts.filter(isUsableDraft));
+    return applyTravelDateCorrections(inferMissingYears(aiDrafts.filter(isUsableDraft)), referenceDate);
   }
 
   const nonFlights = aiDrafts.filter((draft) => draft.type !== "flight");
@@ -131,6 +137,11 @@ export function mergeConfirmationDrafts(
       : [...regexHotelDrafts, ...aiHotels];
   const otherNonFlights = nonFlights.filter((draft) => draft.type !== "hotel");
 
-  const combined = inferMissingYears([...flights, ...hotels, ...otherNonFlights]).filter(isUsableDraft);
-  return combined.length > 0 ? combined : inferMissingYears(aiDrafts.filter(isUsableDraft));
+  const combined = applyTravelDateCorrections(
+    inferMissingYears([...flights, ...hotels, ...otherNonFlights]),
+    referenceDate,
+  ).filter(isUsableDraft);
+  return combined.length > 0
+    ? combined
+    : applyTravelDateCorrections(inferMissingYears(aiDrafts.filter(isUsableDraft)), referenceDate);
 }

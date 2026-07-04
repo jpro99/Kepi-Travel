@@ -9,10 +9,11 @@ import { parseScannedReservationsJson } from "./scannedReservationDraft";
 
 const fixtureDir = dirname(fileURLToPath(import.meta.url));
 const baliFixtureText = readFileSync(join(fixtureDir, "__fixtures__", "baliVacationFlights.txt"), "utf8");
+const BEFORE_TRIP = { referenceDate: new Date("2025-08-01T12:00:00Z") };
 
 test("mergeConfirmationDrafts extracts all Bali vacation legs from PDF plain text", () => {
   const prepared = preparePdfTextForParsing(baliFixtureText);
-  const merged = mergeConfirmationDrafts([], prepared);
+  const merged = mergeConfirmationDrafts([], prepared, BEFORE_TRIP);
   assert.ok(merged.length >= 5, `expected at least 5 legs, got ${merged.length}`);
   const flightNumbers = merged.map((draft) => draft.flightNumber.replace(/\s+/gu, ""));
   assert.ok(flightNumbers.includes("AS865"));
@@ -38,11 +39,18 @@ test("mergeConfirmationDrafts adds missing regex legs when AI returns only the f
       ],
     }),
   );
-  const merged = mergeConfirmationDrafts(aiOnlyFirst, preparePdfTextForParsing(baliFixtureText));
+  const merged = mergeConfirmationDrafts(aiOnlyFirst, preparePdfTextForParsing(baliFixtureText), BEFORE_TRIP);
   assert.ok(merged.length >= 5);
   assert.ok(merged.every((draft) => draft.type === "flight"));
   assert.ok(merged.some((draft) => draft.flightNumber.replace(/\s+/gu, "") === "AZ1607"));
   assert.ok(merged.some((draft) => draft.flightNumber.replace(/\s+/gu, "") === "SQ948"));
+});
+
+test("mergeConfirmationDrafts rolls past-year dates forward for upcoming trips", () => {
+  const prepared = preparePdfTextForParsing(baliFixtureText);
+  const merged = mergeConfirmationDrafts([], prepared, { referenceDate: new Date("2026-06-15T12:00:00Z") });
+  assert.ok(merged.length >= 5);
+  assert.ok(merged.every((draft) => draft.localTime.startsWith("2026-")));
 });
 
 test("parseScannedReservationsJson recovers truncated multi-leg JSON", () => {

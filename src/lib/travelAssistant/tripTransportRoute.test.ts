@@ -315,3 +315,52 @@ test("buildTripTransportRoute marks unbooked planned legs as gray segments", () 
   assert.equal(route.segments[0]?.booked, false);
   assert.equal(route.segments[0]?.fromCode, "LAX");
 });
+
+test("buildTripTransportRoute includes geo for ONT, CGK, and DPS airports on Bali itinerary", () => {
+  const route = buildTripTransportRoute([
+    {
+      id: "f1",
+      type: "flight",
+      title: "ONT → SEA",
+      provider: "Alaska",
+      localTime: "2026-09-12 06:00",
+      timezone: "America/Los_Angeles",
+      confirmationCode: "AAA111",
+      flightDepartureAirport: "ONT",
+      flightArrivalAirport: "SEA",
+      flightDate: "2026-09-12",
+    },
+    {
+      id: "f2",
+      type: "flight",
+      title: "SIN → DPS",
+      provider: "Singapore",
+      localTime: "2026-09-25 14:15",
+      timezone: "Asia/Singapore",
+      confirmationCode: "BBB222",
+      flightDepartureAirport: "SIN",
+      flightArrivalAirport: "DPS",
+      flightDate: "2026-09-25",
+    },
+    {
+      id: "f3",
+      type: "flight",
+      title: "CGK → SIN",
+      provider: "Garuda",
+      localTime: "2026-10-06 08:20",
+      timezone: "Asia/Jakarta",
+      confirmationCode: "CCC333",
+      flightDepartureAirport: "CGK",
+      flightArrivalAirport: "SIN",
+      flightDate: "2026-10-06",
+    },
+  ]);
+
+  const withGeo = route.segments.filter(
+    (segment) => segment.lat != null && segment.lon != null && segment.toLat != null && segment.toLon != null,
+  );
+  assert.equal(withGeo.length, 3);
+  assert.ok(withGeo.some((segment) => segment.fromCode === "ONT"));
+  assert.ok(withGeo.some((segment) => segment.toCode === "DPS"));
+  assert.ok(withGeo.some((segment) => segment.fromCode === "CGK"));
+});

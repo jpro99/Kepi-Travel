@@ -1,4 +1,5 @@
 import { prepareReviewDraftForAccept, type ReviewDraftFlightFields } from "@/lib/travelAssistant/prepareReviewDraftForAccept";
+import { correctReservationTravelDates } from "@/lib/travelAssistant/travelDateCorrection";
 
 export interface AutoImportReservationFields extends ReviewDraftFlightFields {
   type: string;
@@ -107,5 +108,5 @@ export function enrichReservationForAutoImport<T extends AutoImportReservationFi
     }
   }
 
-  return next;
+  return correctReservationTravelDates(next);
 }

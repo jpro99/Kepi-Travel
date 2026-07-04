@@ -40,6 +40,7 @@ const AIRPORTS: AirportGeo[] = [
   { iata:"IAD", name:"Washington Dulles",   lat:38.9531,  lon:-77.4565,  radiusKm:5.0, securityRadiusKm:1.8 },
   { iata:"BWI", name:"Baltimore/Washington",lat:39.1754,  lon:-76.6683,  radiusKm:3.5, securityRadiusKm:1.2 },
   { iata:"SNA", name:"Orange County",       lat:33.6757,  lon:-117.8676, radiusKm:2.5, securityRadiusKm:0.9 },
+  { iata:"ONT", name:"Ontario",             lat:34.0560,  lon:-117.6012, radiusKm:3.0, securityRadiusKm:1.0 },
   { iata:"SJC", name:"San Jose",            lat:37.3626,  lon:-121.9290, radiusKm:2.5, securityRadiusKm:0.9 },
   { iata:"HNL", name:"Honolulu",            lat:21.3245,  lon:-157.9251, radiusKm:4.0, securityRadiusKm:1.4 },
   // Canada
@@ -74,6 +75,8 @@ const AIRPORTS: AirportGeo[] = [
   { iata:"PEK", name:"Beijing Capital",     lat:40.0799,  lon:116.6031,  radiusKm:5.5, securityRadiusKm:2.0 },
   { iata:"HKG", name:"Hong Kong",           lat:22.3080,  lon:113.9185,  radiusKm:4.5, securityRadiusKm:1.5 },
   { iata:"SIN", name:"Singapore Changi",    lat:1.3644,   lon:103.9915,  radiusKm:4.0, securityRadiusKm:1.4 },
+  { iata:"CGK", name:"Jakarta Soekarno-Hatta", lat:-6.1256, lon:106.6558, radiusKm:5.0, securityRadiusKm:1.8 },
+  { iata:"DPS", name:"Denpasar Bali",       lat:-8.7482,  lon:115.1672,  radiusKm:4.0, securityRadiusKm:1.4 },
   { iata:"BKK", name:"Bangkok Suvarnabhumi",lat:13.6900,  lon:100.7501,  radiusKm:5.0, securityRadiusKm:1.8 },
   { iata:"KUL", name:"Kuala Lumpur",        lat:2.7456,   lon:101.7099,  radiusKm:5.0, securityRadiusKm:1.8 },
   { iata:"SYD", name:"Sydney",              lat:-33.9399, lon:151.1753,  radiusKm:4.5, securityRadiusKm:1.5 },
