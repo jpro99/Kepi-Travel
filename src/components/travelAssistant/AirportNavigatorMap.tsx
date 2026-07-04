@@ -57,6 +57,8 @@ interface AirportNavigatorMapProps {
   familyPins?: FamilyAirportPin[];
   onFamilyPinTap?: (memberId: string) => void;
   activeRally?: FamilyRally | null;
+  /** Extra bottom offset when embedded above a fixed tab bar (e.g. /live-map). */
+  shellBottomInset?: string;
 }
 
 const COLOR = {
@@ -134,7 +136,15 @@ export function AirportNavigatorMap({
   familyPins = [],
   onFamilyPinTap,
   activeRally = null,
+  shellBottomInset,
 }: AirportNavigatorMapProps) {
+  const bottomPanel = shellBottomInset ?? "max(0.75rem, env(safe-area-inset-bottom))";
+  const bottomMic = shellBottomInset
+    ? `calc(${shellBottomInset} + 3.25rem)`
+    : "max(4rem, calc(env(safe-area-inset-bottom) + 3.25rem))";
+  const bottomFamily = shellBottomInset
+    ? `calc(${shellBottomInset} + 4.75rem)`
+    : "max(5.5rem, calc(env(safe-area-inset-bottom) + 4.75rem))";
   const mapEl = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
@@ -1344,7 +1354,7 @@ export function AirportNavigatorMap({
           onPointerUp={stopListening}
           onPointerLeave={stopListening}
           style={{
-            bottom: "max(4rem, calc(env(safe-area-inset-bottom) + 3.25rem))",
+            bottom: bottomMic,
             background: listening ? "#38bdf8" : "rgba(255,255,255,0.92)",
             animation: listening ? "kepiMicRing 1.2s ease-out infinite" : undefined,
           }} className="absolute right-3 z-10 flex h-12 w-12 items-center justify-center rounded-full text-lg shadow-xl"
@@ -1355,7 +1365,7 @@ export function AirportNavigatorMap({
 
       {/* Journey prompt (e.g. "Are you through security yet?") */}
       {journeyPrompt && !securityQuestionOpen && (
-        <div style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }} className="absolute inset-x-3 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95">
+        <div style={{ bottom: bottomPanel }} className="absolute inset-x-3 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95">
           <p className="text-xs font-bold text-slate-900 dark:text-slate-100">{journeyPrompt.text}</p>
           <div className="mt-2 flex gap-1.5">
             {journeyPrompt.options.map((option) => (
@@ -1374,7 +1384,7 @@ export function AirportNavigatorMap({
 
       {/* Security credential question */}
       {securityQuestionOpen && (
-        <div style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }} className="absolute inset-x-3 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95">
+        <div style={{ bottom: bottomPanel }} className="absolute inset-x-3 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95">
           <p className="text-xs font-bold text-slate-900 dark:text-slate-100">
             Quick one — do you have TSA PreCheck or CLEAR?
           </p>
@@ -1390,7 +1400,7 @@ export function AirportNavigatorMap({
 
       {/* Quiet Mode at security — no nagging while hands are full */}
       {quietMode && !journeyPrompt && !securityQuestionOpen && (
-        <div style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }} className="absolute inset-x-3 rounded-2xl bg-black/55 p-3 text-center backdrop-blur">
+        <div style={{ bottom: bottomPanel }} className="absolute inset-x-3 rounded-2xl bg-black/55 p-3 text-center backdrop-blur">
           <p className="text-[11px] font-semibold text-sky-100">
             We&apos;ll pick up on the other side.
             {gateCode ? ` Gate ${gateCode.toUpperCase()} after security.` : ""}
@@ -1400,7 +1410,7 @@ export function AirportNavigatorMap({
 
       {/* Active route card */}
       {!securityQuestionOpen && !journeyPrompt && !quietMode && activeRoute && (
-        <div style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }} className="absolute inset-x-3 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95">
+        <div style={{ bottom: bottomPanel }} className="absolute inset-x-3 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <p className="truncate text-xs font-bold text-slate-900 dark:text-slate-100">
@@ -1429,7 +1439,7 @@ export function AirportNavigatorMap({
             </div>
           </div>
           {showInstructions && (
-            <ol className="mt-2 max-h-28 space-y-1 overflow-y-auto">
+            <ol className="mt-2 max-h-28 space-y-1 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]">
               {activeRoute.instructions.map((step, stepIdx) => (
                 <li key={`${step.maneuver}-${step.atMeters}-${stepIdx}`} className="text-[11px] text-slate-600 dark:text-slate-300">
                   {stepIdx + 1}. {step.text}
@@ -1442,7 +1452,7 @@ export function AirportNavigatorMap({
 
       {/* Guide-me CTA when idle */}
       {!securityQuestionOpen && !journeyPrompt && !quietMode && !activeRoute && layout && gatePoi && (
-        <div style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }} className="absolute inset-x-3">
+        <div style={{ bottom: bottomPanel }} className="absolute inset-x-3">
           <button
             type="button"
             onClick={() => startRoute(gatePoi.id)}
@@ -1469,7 +1479,7 @@ export function AirportNavigatorMap({
         <div
           data-testid="airport-family-chip-strip"
           className="pointer-events-auto absolute left-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-2"
-          style={{ bottom: "max(5.5rem, calc(env(safe-area-inset-bottom) + 4.75rem))" }}
+          style={{ bottom: bottomFamily }}
         >
           <span className="rounded-full bg-black/50 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-sky-200/90 backdrop-blur">
             👪 Family here

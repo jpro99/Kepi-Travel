@@ -77,7 +77,6 @@ import type {
 import { ConnectivityPanel } from "@/components/travelAssistant/ConnectivityPanel";
 import { AISuggestionPanel } from "@/components/travelAssistant/AISuggestionPanel";
 import { UpgradeModal, type UpgradeModalGateContext } from "@/components/billing/UpgradeModal";
-import { InstallPrompt } from "@/components/InstallPrompt";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { LanguageSettingsCard } from "@/components/LanguageSettingsCard";
 import { subscribeToWebPushNotifications } from "@/lib/push/webPushClient";
@@ -9658,7 +9657,6 @@ export default function TravelAssistantPage() {
             });
           }}
         />
-        <InstallPrompt />
         {travelStyleQuizOpen ? (
           <TravelStyleQuiz onComplete={handleTravelStyleComplete} onSkip={handleTravelStyleSkip} />
         ) : null}
@@ -10579,7 +10577,6 @@ export default function TravelAssistantPage() {
           navigateToConsumerTab("trip");
         }}
       />
-      <InstallPrompt />
       {travelStyleQuizOpen ? (
         <TravelStyleQuiz onComplete={handleTravelStyleComplete} onSkip={handleTravelStyleSkip} />
       ) : null}

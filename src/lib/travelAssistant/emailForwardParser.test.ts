@@ -150,3 +150,73 @@ test("parseForwardedEmail returns separate drafts for each flight leg without AI
     }
   }
 });
+
+const roundTripCompactEmail = `
+Your trip confirmation ABC123
+
+Outbound
+AS654
+ONT - SEA
+September 14, 2026
+8:45 AM
+
+AS832
+SEA - HNL
+September 14, 2026
+1:05 PM
+
+HA12
+HNL - HND
+September 21, 2026
+10:15 AM
+
+Return flights
+HA11
+HND - HNL
+October 5, 2026
+5:30 PM
+
+AS833
+HNL - SEA
+October 5, 2026
+8:15 PM
+
+AS655
+SEA - ONT
+October 6, 2026
+6:40 AM
+`;
+
+test("extractFlightLegsFromEmailBody finds outbound and return flights without Flight prefix", () => {
+  const legs = extractFlightLegsFromEmailBody(roundTripCompactEmail);
+  assert.equal(legs.length, 6);
+  assert.deepEqual(
+    legs.map((leg) => leg.flightNumber).sort(),
+    ["AS654", "AS655", "AS832", "AS833", "HA11", "HA12"],
+  );
+  assert.equal(legs.find((leg) => leg.flightNumber === "HA11")?.departureAirport, "HND");
+  assert.equal(legs.find((leg) => leg.flightNumber === "AS655")?.arrivalAirport, "ONT");
+});
+
+test("parseForwardedEmail imports every leg on a round-trip itinerary without AI", async () => {
+  const previousKey = process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  try {
+    const result = await parseForwardedEmail({
+      subject: "Your trip confirmation",
+      from: "no-reply@alaskaair.com",
+      text: roundTripCompactEmail,
+      html: "",
+      attachments: [],
+    });
+    assert.equal(result.drafts.length, 6);
+    assert.equal(result.drafts.find((draft) => draft.flightNumber === "AS655")?.localTime, "2026-10-06 06:40");
+    assert.equal(result.drafts.find((draft) => draft.flightNumber === "HA11")?.localTime, "2026-10-05 17:30");
+  } finally {
+    if (previousKey === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = previousKey;
+    }
+  }
+});

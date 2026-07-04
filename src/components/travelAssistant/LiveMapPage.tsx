@@ -11,7 +11,7 @@ import {
   useNavigatorCredentials,
 } from "@/lib/travelAssistant/useActiveFlight";
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
-import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
+import { directMaptilerTransformRequest, resolveLiveMapStyleUrl, type LiveMapStyleId } from "@/lib/map/maptilerClient";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import { resolveLiveCoordinates, resetGeolocationQualityState } from "@/lib/family/geolocationQuality";
 import { clearLocationDisplayCache, resolveLocationForMapDisplay } from "@/lib/family/locationDisplayCache";
@@ -64,11 +64,24 @@ function timeAgo(iso: string): string {
 function isStale(iso: string) { return Date.now() - Date.parse(iso) > 10 * 60_000; }
 
 /* ─── Map style builders ─────────────────────────────────────── */
-type MapStyleId = "dark" | "streets" | "satellite";
-function stylePathFor(styleId: MapStyleId): string {
-  if (styleId === "satellite") return "satellite";
-  if (styleId === "streets") return "streets-v2";
-  return "dataviz-dark";
+type MapStyleId = LiveMapStyleId;
+
+/** Bottom inset so map overlays clear the fixed mobile tab bar on /live-map. */
+const MOBILE_TAB_BAR_INSET = "max(4.75rem, calc(env(safe-area-inset-bottom) + 4rem))";
+
+function defaultMapCenter(locations: LocationPoint[]): { center: [number, number]; zoom: number } {
+  if (locations.length === 1) {
+    return { center: [locations[0].lon, locations[0].lat], zoom: 16 };
+  }
+  if (locations.length > 1) {
+    const center: [number, number] = [
+      locations.reduce((sum, loc) => sum + loc.lon, 0) / locations.length,
+      locations.reduce((sum, loc) => sum + loc.lat, 0) / locations.length,
+    ];
+    return { center, zoom: 11 };
+  }
+  // World view with country borders and labels when no live pins yet
+  return { center: [0, 22], zoom: 1.65 };
 }
 
 /* ─── Component ──────────────────────────────────────────────── */
@@ -84,6 +97,7 @@ export function LiveMapPage() {
   const watchIdRef = useRef<number | null>(null);
   const myMemberIdRef = useRef<string | null>(null);
   const firstFixRef = useRef<boolean>(false);
+  const skipStyleSyncRef = useRef(true);
 
   const [group, setGroup] = useState<FamilyGroup | null>(null);
   const [locations, setLocations] = useState<Record<string, LocationPoint>>({});
@@ -355,12 +369,13 @@ export function LiveMapPage() {
     }).catch(console.error);
   }, [group, locations]);
 
-  /* ── Init map (only when maptilerKey first arrives) ── */
+  /* ── Init map — always render a basemap (MapTiler or MapLibre demo fallback) ── */
   useEffect(() => {
-    if (!maptilerKey || !mapEl.current) return;
+    if (!mapEl.current) return;
     let cancelled = false;
     isLoadedRef.current = false;
     setIsLoaded(false); setIsError(false);
+    skipStyleSyncRef.current = true;
 
     if (mapRef.current) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -376,23 +391,21 @@ export function LiveMapPage() {
         if (cancelled || !mapEl.current) return;
 
         const locs = Object.values(locations);
-        const center: [number, number] = locs.length > 0
-          ? [locs.reduce((s, l) => s + l.lon, 0) / locs.length, locs.reduce((s, l) => s + l.lat, 0) / locs.length]
-          : [-118.2437, 34.0522];
-        const zoom = locs.length === 1 ? 16 : locs.length > 1 ? 12 : 4;
-
-        const style = maptilerStyleUrl(stylePathFor(mapStyle), maptilerKey);
+        const { center, zoom } = defaultMapCenter(locs);
+        const style = resolveLiveMapStyleUrl(mapStyle, maptilerKey);
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const map = new (ml as any).Map({
           container: mapEl.current,
           style,
-          center, zoom,
+          center,
+          zoom,
+          minZoom: 1,
           maxZoom: 20,
           pixelRatio: getMapPixelRatio(),
           attributionControl: false,
           fadeDuration: 0,
-          transformRequest: directMaptilerTransformRequest(maptilerKey),
+          ...(maptilerKey ? { transformRequest: directMaptilerTransformRequest(maptilerKey) } : {}),
         });
         const unbindResize = bindMapResize(mapEl.current, map);
 
@@ -434,17 +447,21 @@ export function LiveMapPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [maptilerKey]);
 
+  /* ── Style toggle — streets / dark / satellite+labels ── */
+  useEffect(() => {
+    if (!mapRef.current || !isLoaded) return;
+    if (skipStyleSyncRef.current) {
+      skipStyleSyncRef.current = false;
+      return;
+    }
+    mapRef.current.setStyle(resolveLiveMapStyleUrl(mapStyle, maptilerKey));
+    mapRef.current.once("styledata", () => { if (mapRef.current) placeMarkers(mapRef.current); });
+  }, [mapStyle, maptilerKey, isLoaded, placeMarkers]);
+
   /* ── Re-place/move markers when locations update ── */
   useEffect(() => {
     if (mapRef.current && isLoaded) placeMarkers(mapRef.current);
   }, [placeMarkers, isLoaded]);
-
-  /* ── Satellite toggle — swap style without reinitialising map ── */
-  useEffect(() => {
-    if (!mapRef.current || !maptilerKey || !isLoaded) return;
-    mapRef.current.setStyle(maptilerStyleUrl(stylePathFor(mapStyle), maptilerKey));
-    mapRef.current.once("styledata", () => { if (mapRef.current) placeMarkers(mapRef.current); });
-  }, [mapStyle, maptilerKey, isLoaded, placeMarkers]);
 
   /* ── Fit all members ── */
   const fitAll = useCallback(() => {
@@ -471,6 +488,17 @@ export function LiveMapPage() {
   const [navLon, setNavLon] = useState<number | null>(null);
   const navWatchRef = useRef<number | null>(null);
   const autoAirportRef = useRef(urlPrefersAirport);
+
+  useEffect(() => {
+    if (mapView !== "family" || !mapRef.current || !isLoaded) return;
+    window.requestAnimationFrame(() => {
+      try {
+        mapRef.current?.resize();
+      } catch {
+        /* ignore */
+      }
+    });
+  }, [mapView, isLoaded]);
 
   // Passive low-accuracy watch for proximity + indoor snapping (separate from
   // the consent-gated family location SHARING — this never leaves the device)
@@ -717,6 +745,12 @@ export function LiveMapPage() {
         }
         .lm-drawer { animation: lmslideup 0.28s cubic-bezier(0.32,0.72,0,1); }
         .lm-card   { animation: lmfadein 0.22s ease; }
+        .lm-drawer-scroll {
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          touch-action: pan-y;
+          -webkit-overflow-scrolling: touch;
+        }
         .maplibregl-ctrl-attrib { font-size: 11px !important; opacity: 0.75; }
         .maplibregl-ctrl-group { border-radius: 14px !important; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.2) !important; }
         .maplibregl-ctrl button { width: 44px !important; height: 44px !important; }
@@ -724,8 +758,8 @@ export function LiveMapPage() {
 
       <div className={`fixed inset-0 z-[100] flex flex-col overflow-hidden ${lightChrome ? "bg-slate-100" : "bg-slate-950"}`}>
 
-        {/* Map canvas */}
-        <div ref={mapEl} className="absolute inset-0 w-full h-full" />
+        {/* Map canvas — family / world basemap with country labels */}
+        <div ref={mapEl} className={`absolute inset-0 z-0 h-full w-full ${mapView === "airport" ? "opacity-0 pointer-events-none" : ""}`} />
 
         {/* Airport Navigator overlay — full-bleed when at the airport view */}
         {mapView === "airport" && activeFlight && (
@@ -755,11 +789,12 @@ export function LiveMapPage() {
               familyPins={familyAirportPins}
               onFamilyPinTap={handleFamilyPinTap}
               activeRally={airportSync?.rally?.status === "active" ? airportSync.rally : null}
+              shellBottomInset={MOBILE_TAB_BAR_INSET}
             />
             {members.length >= 2 ? (
               <div
                 className="pointer-events-none absolute inset-x-0 z-50 px-3"
-                style={{ bottom: "max(6.5rem, calc(env(safe-area-inset-bottom) + 5.75rem))" }}
+                style={{ bottom: `calc(${MOBILE_TAB_BAR_INSET} + 5.5rem)` }}
               >
                 <FamilyRallyStrip
                   members={members.map((m) => ({ id: m.id, name: m.name, color: m.color }))}
@@ -839,7 +874,7 @@ export function LiveMapPage() {
             </button>
           </div>
           <div className={`flex overflow-hidden rounded-2xl border shadow-lg self-end ${lightChrome ? "border-slate-200" : "border-white/15"}`}>
-            {([["dark", "Dark"], ["streets", "Map"], ["satellite", "Sat"]] as [MapStyleId, string][]).map(([styleId, styleLabel]) => (
+            {([["dark", "Dark"], ["streets", "Map"], ["satellite", "Sat+"]] as [MapStyleId, string][]).map(([styleId, styleLabel]) => (
               <button
                 key={styleId}
                 type="button"
@@ -871,7 +906,7 @@ export function LiveMapPage() {
             </p>
           </div>
           <div className="flex overflow-hidden rounded-full border border-white/10 shadow-lg">
-            {([["dark", "Dark"], ["streets", "Map"], ["satellite", "Sat"]] as [MapStyleId, string][]).map(([styleId, styleLabel]) => (
+            {([["dark", "Dark"], ["streets", "Map"], ["satellite", "Sat+"]] as [MapStyleId, string][]).map(([styleId, styleLabel]) => (
               <button
                 key={styleId}
                 type="button"
@@ -918,7 +953,8 @@ export function LiveMapPage() {
           <button
             type="button"
             onClick={fitAll}
-            className="absolute left-4 bottom-[240px] z-20 flex h-12 w-12 items-center justify-center rounded-full bg-black/55 backdrop-blur-md text-white shadow-lg text-[22px] border border-white/15"
+            className="absolute left-4 z-20 flex h-12 w-12 items-center justify-center rounded-full bg-black/55 backdrop-blur-md text-white shadow-lg text-[22px] border border-white/15"
+            style={{ bottom: drawerOpen ? "calc(15.5rem + 4.75rem)" : MOBILE_TAB_BAR_INSET }}
             title="Fit all members"
           >
             ⊙
@@ -929,7 +965,7 @@ export function LiveMapPage() {
         {selMember && selLoc && (
           <div
             className="lm-card absolute left-4 right-4 z-20 rounded-2xl overflow-hidden shadow-2xl"
-            style={{ bottom: drawerOpen ? "228px" : "24px" }}
+            style={{ bottom: drawerOpen ? "calc(14.25rem + 4.75rem)" : MOBILE_TAB_BAR_INSET }}
           >
             <div className={`backdrop-blur-xl border p-5 ${lightChrome ? "bg-white/95 border-slate-200" : "bg-slate-900/95 border-white/10"}`}>
               <div className="flex items-center gap-3">
@@ -977,7 +1013,12 @@ export function LiveMapPage() {
         )}
 
         {/* Member drawer */}
-        <div className={`absolute left-0 right-0 bottom-0 z-20 transition-transform duration-300 ${drawerOpen ? "translate-y-0" : "translate-y-full"}`}>
+        <div
+          className={`absolute left-0 right-0 z-40 transition-transform duration-300 pointer-events-auto ${drawerOpen ? "translate-y-0" : "translate-y-full"}`}
+          style={{ bottom: MOBILE_TAB_BAR_INSET }}
+          onTouchStart={(event) => event.stopPropagation()}
+          onTouchMove={(event) => event.stopPropagation()}
+        >
           <button
             type="button"
             onClick={() => setDrawerOpen(v => !v)}
@@ -1039,7 +1080,7 @@ export function LiveMapPage() {
               </p>
             )}
 
-            <div className="overflow-y-auto max-h-[240px] divide-y divide-slate-200/80">
+            <div className="lm-drawer-scroll max-h-[min(42dvh,360px)] divide-y divide-slate-200/80">
               {members.length === 0 && (
                 <div className={`px-4 py-8 text-center text-[16px] ${lightChrome ? "text-slate-400" : "text-white/35"}`}>No members yet</div>
               )}
@@ -1094,8 +1135,6 @@ export function LiveMapPage() {
                 );
               })}
             </div>
-
-            <div className="h-[env(safe-area-inset-bottom,16px)]" />
           </div>
         </div>
 
@@ -1104,14 +1143,15 @@ export function LiveMapPage() {
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
-            className="absolute right-4 bottom-28 z-20 flex h-12 items-center gap-2 rounded-full bg-slate-900/90 backdrop-blur-md border border-white/10 px-5 shadow-xl text-white text-[15px] font-bold"
+            className="absolute right-4 z-20 flex h-12 items-center gap-2 rounded-full bg-slate-900/90 backdrop-blur-md border border-white/10 px-5 shadow-xl text-white text-[15px] font-bold"
+            style={{ bottom: MOBILE_TAB_BAR_INSET }}
           >
             <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
             {liveCount} live
           </button>
         )}
 
-        <MobileTabBarNav />
+        <MobileTabBarNav activeTab="map" />
       </div>
     </>
   );

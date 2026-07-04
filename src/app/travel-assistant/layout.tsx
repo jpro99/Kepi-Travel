@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { TravelAssistantChrome } from "@/components/travelAssistant/TravelAssistantChrome";
 
 export const metadata: Metadata = {
   title: "My Trips",
@@ -9,5 +10,5 @@ export default function TravelAssistantLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return children;
+  return <TravelAssistantChrome>{children}</TravelAssistantChrome>;
 }

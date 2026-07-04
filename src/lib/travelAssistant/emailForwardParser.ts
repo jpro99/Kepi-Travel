@@ -100,7 +100,11 @@ const AIRPORT_WORD_DENYLIST = new Set([
   "ETA", "ETD", "UTC", "GMT", "EST", "CST", "MST", "PST",
 ]);
 
-const FLIGHT_CONTEXT_RE = /\b(flight|airline|boarding\s*pass|aircraft|operated\s*by|itinerary|segment)\b/iu;
+const FLIGHT_CONTEXT_RE = /\b(flight|airline|boarding\s*pass|aircraft|operated\s*by|itinerary|segment|departure|arrival|connecting|connection|layover|outbound|inbound|return(?:ing)?|round[\s-]?trip)\b/iu;
+
+const FLIGHT_NUMBER_RE = /\b(?:Flight\s*)?([A-Z]{2})\s*(\d{1,4})\b/giu;
+
+const NEXT_FLIGHT_TOKEN_RE = /\b(?:Flight\s*)?[A-Z]{2}\s*\d{1,4}\b/iu;
 
 const RESERVATION_TYPE_KEYWORDS: Array<{ type: ForwardedReservationType; pattern: RegExp; confidence: number }> = [
   { type: "flight", pattern: /\b(flight|airline|boarding|terminal|gate)\b/iu, confidence: 0.78 },
@@ -632,6 +636,29 @@ function statusFromScore(score: number): ForwardedParsingStatus {
   return "needs-user-input";
 }
 
+function countUniqueFlightNumbers(text: string): number {
+  const seen = new Set<string>();
+  for (const match of text.matchAll(FLIGHT_NUMBER_RE)) {
+    const code = match[1]?.toUpperCase() ?? "";
+    if (COUNTRY_CODE_DENYLIST.has(code)) continue;
+    seen.add(`${code}${match[2] ?? ""}`);
+  }
+  return seen.size;
+}
+
+function isFlightCandidate(candidate: CandidateMap): boolean {
+  return normalizeType(candidate.type?.value ?? "") === "flight" || Boolean(candidate.flightNumber?.value?.trim());
+}
+
+function flightLegKey(candidate: CandidateMap): string {
+  const flightNumber = (candidate.flightNumber?.value ?? "").replace(/\s+/gu, "").toUpperCase();
+  const dep = (candidate.departureAirport?.value ?? "").trim().toUpperCase();
+  const arr = (candidate.arrivalAirport?.value ?? "").trim().toUpperCase();
+  const time = (candidate.localTime?.value ?? "").trim().slice(0, 16);
+  if (flightNumber) return `${flightNumber}|${dep}|${arr}|${time}`;
+  return `${dep}|${arr}|${time}`;
+}
+
 function enrichFlightCandidate(candidate: CandidateMap): CandidateMap {
   const dep = candidate.departureAirport?.value?.trim().toUpperCase().slice(0, 4);
   const arr = candidate.arrivalAirport?.value?.trim().toUpperCase().slice(0, 4);
@@ -650,8 +677,8 @@ function enrichFlightCandidate(candidate: CandidateMap): CandidateMap {
 }
 
 function extractAirportsFromWindow(window: string): { dep?: string; arr?: string } {
-  const depLine = window.match(/Departure[:\s]+([A-Z]{3})\b/iu);
-  const arrLine = window.match(/Arrival[:\s]+([A-Z]{3})\b/iu);
+  const depLine = window.match(/(?:Departure|Depart(?:s|ure)?|From)[:\s]+([A-Z]{3})\b/iu);
+  const arrLine = window.match(/(?:Arrival|Arrive(?:s)?|To)[:\s]+([A-Z]{3})\b/iu);
   if (depLine?.[1] && arrLine?.[1]) {
     const dep = depLine[1].toUpperCase();
     const arr = arrLine[1].toUpperCase();
@@ -679,23 +706,25 @@ function extractAirportsFromWindow(window: string): { dep?: string; arr?: string
 }
 
 function extractFlightLegWindow(lineAwareText: string, flightMatchIndex: number, flightTokenLength: number): string {
-  const start = Math.max(0, flightMatchIndex - 40);
+  const start = flightMatchIndex;
   const afterFlight = flightMatchIndex + flightTokenLength;
   const remainder = lineAwareText.slice(afterFlight);
-  const nextFlightOffset = remainder.search(/\bFlight\s+[A-Z]{2}\s?\d{2,4}\b/iu);
+  const nextFlightOffset = remainder.search(NEXT_FLIGHT_TOKEN_RE);
   const end =
     nextFlightOffset >= 0
       ? afterFlight + nextFlightOffset
-      : Math.min(lineAwareText.length, afterFlight + 720);
+      : Math.min(lineAwareText.length, afterFlight + 420);
   return lineAwareText.slice(start, end);
 }
 
 function extractFlightLegsFromRegex(lineAwareText: string, sharedFields: CandidateMap): CandidateMap[] {
-  if (!FLIGHT_CONTEXT_RE.test(lineAwareText)) return [];
+  const uniqueFlightCount = countUniqueFlightNumbers(lineAwareText);
+  const hasFlightContext = FLIGHT_CONTEXT_RE.test(lineAwareText) || uniqueFlightCount >= 2;
+  if (!hasFlightContext || uniqueFlightCount === 0) return [];
   const legs: CandidateMap[] = [];
   const seen = new Set<string>();
 
-  for (const match of lineAwareText.matchAll(/\b(?:Flight\s+)?([A-Z]{2})\s?(\d{2,4})\b/giu)) {
+  for (const match of lineAwareText.matchAll(FLIGHT_NUMBER_RE)) {
     const code = match[1]?.toUpperCase() ?? "";
     const num = match[2] ?? "";
     if (COUNTRY_CODE_DENYLIST.has(code)) continue;
@@ -722,6 +751,91 @@ function extractFlightLegsFromRegex(lineAwareText: string, sharedFields: Candida
     legs.push(enrichFlightCandidate(leg));
   }
   return legs;
+}
+
+function mergeFlightLegSources(
+  aiCandidates: CandidateMap[],
+  regexCandidates: CandidateMap,
+  candidates: CandidateMap,
+  lineAwareText: string,
+  flightEmail: boolean,
+): CandidateMap[] {
+  const regexLegs = extractFlightLegsFromRegex(lineAwareText, regexCandidates);
+  const aiFlights = aiCandidates.filter(isFlightCandidate);
+  const nonFlightMaps = aiCandidates
+    .filter((candidate) => !isFlightCandidate(candidate))
+    .map((candidate) => sanitizeTravelLocalTime(mergeCandidates(regexCandidates, candidate), lineAwareText));
+
+  const mergeAiIntoLeg = (leg: CandidateMap): CandidateMap => {
+    const flightNumber = leg.flightNumber?.value?.trim().toUpperCase().replace(/\s+/gu, "");
+    const matchingAi = flightNumber
+      ? aiFlights.find(
+          (aiLeg) => (aiLeg.flightNumber?.value ?? "").trim().toUpperCase().replace(/\s+/gu, "") === flightNumber,
+        )
+      : undefined;
+    const merged = matchingAi ? mergeCandidates(leg, matchingAi) : leg;
+    return sanitizeTravelLocalTime(
+      enrichFlightCandidate(applySharedFields(merged, regexCandidates)),
+      lineAwareText,
+    );
+  };
+
+  const byKey = new Map<string, CandidateMap>();
+  for (const leg of regexLegs) {
+    const prepared = mergeAiIntoLeg(leg);
+    byKey.set(flightLegKey(prepared), prepared);
+  }
+
+  for (const aiLeg of aiFlights) {
+    const flightNumber = (aiLeg.flightNumber?.value ?? "").trim().toUpperCase().replace(/\s+/gu, "");
+    const prepared = sanitizeTravelLocalTime(
+      enrichFlightCandidate(applySharedFields(aiLeg, regexCandidates)),
+      lineAwareText,
+    );
+    const existingByFlightNumber = flightNumber
+      ? [...byKey.values()].find(
+          (leg) => (leg.flightNumber?.value ?? "").trim().toUpperCase().replace(/\s+/gu, "") === flightNumber,
+        )
+      : undefined;
+    if (existingByFlightNumber) {
+      const merged = sanitizeTravelLocalTime(
+        enrichFlightCandidate(mergeCandidates(existingByFlightNumber, aiLeg)),
+        lineAwareText,
+      );
+      byKey.delete(flightLegKey(existingByFlightNumber));
+      byKey.set(flightLegKey(merged), merged);
+      continue;
+    }
+    const key = flightLegKey(prepared);
+    if (!byKey.has(key)) {
+      byKey.set(key, prepared);
+    }
+  }
+
+  let flightMaps = [...byKey.values()];
+
+  // AI often collapses a full round-trip/connecting itinerary into one object — prefer regex legs.
+  if (regexLegs.length > flightMaps.length) {
+    flightMaps = regexLegs.map((leg) => mergeAiIntoLeg(leg));
+  } else if (regexLegs.length > aiFlights.length && regexLegs.length >= 2) {
+    flightMaps = regexLegs.map((leg) => mergeAiIntoLeg(leg));
+  }
+
+  if (flightMaps.length === 0) {
+    if (aiFlights.length > 1) {
+      flightMaps = aiFlights.map((aiLeg) =>
+        sanitizeTravelLocalTime(enrichFlightCandidate(applySharedFields(aiLeg, regexCandidates)), lineAwareText),
+      );
+    } else if (aiFlights.length === 1) {
+      flightMaps = [sanitizeTravelLocalTime(mergeCandidates(regexCandidates, aiFlights[0]), lineAwareText)];
+    } else if (flightEmail) {
+      flightMaps = [sanitizeTravelLocalTime(candidates, lineAwareText)];
+    } else {
+      flightMaps = [sanitizeTravelLocalTime(candidates, lineAwareText)];
+    }
+  }
+
+  return [...flightMaps, ...nonFlightMaps];
 }
 
 function candidateMapsToDrafts(
@@ -860,7 +974,7 @@ function buildRegexCandidates(input: {
     /(?:confirmation(?:\s*(?:number|code|#|receipt))?|booking\s*(?:ref(?:erence)?|code|#|number)|record locator|pnr|itinerary\s*(?:number|#)?|reservation\s*(?:number|#)?)[^A-Za-z0-9]{0,30}([A-Za-z0-9-]{4,20})/iu,
   );
   // Denylist common English words that regex may incorrectly grab as confirmation codes
-  const CONFIRMATION_CODE_WORD_DENYLIST = new Set(["RECEIPT", "CODE", "NUMBER", "DETAILS", "PENDING", "CONFIRMED", "RESERVED", "BOOKING", "TRAVEL", "FLIGHT", "HOTEL", "TICKET", "MANAGE", "VIEW"]);
+  const CONFIRMATION_CODE_WORD_DENYLIST = new Set(["RECEIPT", "CODE", "NUMBER", "DETAILS", "PENDING", "CONFIRMED", "RESERVED", "BOOKING", "TRAVEL", "FLIGHT", "HOTEL", "TICKET", "MANAGE", "VIEW", "FORWARDED", "MESSAGE"]);
   const isValidConfirmationCode = confirmationMatch?.[1] && !CONFIRMATION_CODE_WORD_DENYLIST.has(confirmationMatch[1].toUpperCase());
   if (isValidConfirmationCode) {
     candidates.confirmationCode = {
@@ -1110,7 +1224,7 @@ function hasMultipleFlightMentions(text: string): boolean {
     .map((m) => m[1] ?? "")
     .filter((code) => !AIRPORT_WORD_DENYLIST.has(code) && !COUNTRY_CODE_DENYLIST.has(code));
   if (new Set(airportMatches).size > 2) return true;
-  if (/segment\s+\d|flight\s+\d\s+of\s+\d|\d\s+stop|\bconnecting\b|\blayover\b/iu.test(text)) return true;
+  if (/segment\s+\d|flight\s+\d\s+of\s+\d|\d\s+stop|\bconnecting\b|\blayover\b|\boutbound\b|\binbound\b|\breturn(?:ing)?\b|\bround[\s-]?trip\b/iu.test(text)) return true;
   return false;
 }
 
@@ -1161,7 +1275,10 @@ export async function parseForwardedEmail(input: ForwardedEmailParseInput): Prom
   let aiCandidates: CandidateMap[] = [];
   // Always run AI for flight emails — regex only catches one flight,
   // AI is needed to extract all legs from multi-segment confirmations
-  const likelyFlightEmail = /\bflight\b|\boarding\b|\bairport\b|\bdeparture\b|\barrival\b/iu.test(parsedText);
+  const likelyFlightEmail =
+    /\bflight\b|\boarding\b|\bairport\b|\bdeparture\b|\barrival\b|\bitinerary\b|\bsegment\b|\bconnecting\b|\boutbound\b|\breturn\b/iu.test(
+      `${subject}\n${parsedText}\n${lineAwareText}`,
+    );
   const shouldAttemptAiFallback = multiFlightDetected || likelyFlightEmail || (!imageBasedEmail && score < HIGH_CONFIDENCE_THRESHOLD);
 
   if (shouldAttemptAiFallback) {
@@ -1207,31 +1324,18 @@ export async function parseForwardedEmail(input: ForwardedEmailParseInput): Prom
   }
 
   let allCandidateMaps: CandidateMap[];
-  if (aiCandidates.length > 1) {
-    allCandidateMaps = aiCandidates.map((candidate) => {
-      const reservationType = normalizeType(candidate.type?.value ?? "");
-      if (reservationType === "flight") {
-        return sanitizeTravelLocalTime(
-          enrichFlightCandidate(applySharedFields(candidate, regexCandidates)),
-          lineAwareText,
-        );
-      }
-      return sanitizeTravelLocalTime(mergeCandidates(regexCandidates, candidate), lineAwareText);
-    });
-  } else if (aiCandidates.length === 1) {
-    const primary = sanitizeTravelLocalTime(mergeCandidates(regexCandidates, aiCandidates[0]), lineAwareText);
-    if (multiFlightDetected) {
-      const regexLegs = extractFlightLegsFromRegex(lineAwareText, regexCandidates);
-      allCandidateMaps = regexLegs.length > 1 ? regexLegs : [primary];
-    } else {
-      allCandidateMaps = [primary];
-    }
-  } else if (multiFlightDetected) {
-    const regexLegs = extractFlightLegsFromRegex(lineAwareText, regexCandidates);
-    allCandidateMaps =
-      regexLegs.length > 1
-        ? regexLegs
-        : [sanitizeTravelLocalTime(regexCandidates, lineAwareText)];
+  if (likelyFlightEmail || multiFlightDetected || aiCandidates.some(isFlightCandidate)) {
+    allCandidateMaps = mergeFlightLegSources(
+      aiCandidates,
+      regexCandidates,
+      candidates,
+      lineAwareText,
+      likelyFlightEmail || multiFlightDetected,
+    );
+  } else if (aiCandidates.length > 0) {
+    allCandidateMaps = aiCandidates.map((candidate) =>
+      sanitizeTravelLocalTime(mergeCandidates(regexCandidates, candidate), lineAwareText),
+    );
   } else {
     allCandidateMaps = [sanitizeTravelLocalTime(candidates, lineAwareText)];
   }
