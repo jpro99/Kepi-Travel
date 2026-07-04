@@ -25,6 +25,8 @@ import {
   prepareReviewDraftForAccept,
 } from "@/lib/travelAssistant/prepareReviewDraftForAccept";
 import { enrichReservationForAutoImport } from "@/lib/travelAssistant/autoImportReservation";
+import { drainForwardReviewQueue } from "@/lib/travelAssistant/drainForwardReviewQueue";
+import { isDuplicateReservation } from "@/lib/travelAssistant/reservationDuplicates";
 import {
   nextTripStage,
   shouldQuickAddGoToReview,
@@ -837,24 +839,6 @@ function defaultStageForReservationType(type: "flight" | "hotel" | "train" | "ri
   if (type === "flight" || type === "train") return "airport";
   if (type === "hotel" || type === "ride") return "arrival";
   return "readiness";
-}
-
-function normalizeDuplicateValue(value: string): string {
-  return value.trim().toLowerCase();
-}
-
-function isDuplicateReservation(reservation: Reservation, draft: ReservationDraft): boolean {
-  const reservationCode = normalizeDuplicateValue(reservation.confirmationCode);
-  const draftCode = normalizeDuplicateValue(draft.confirmationCode);
-  if (reservationCode.length > 0 && draftCode.length > 0 && reservationCode === draftCode) {
-    return true;
-  }
-  return (
-    normalizeDuplicateValue(reservation.type) === normalizeDuplicateValue(draft.type) &&
-    normalizeDuplicateValue(reservation.provider) === normalizeDuplicateValue(draft.provider) &&
-    normalizeDuplicateValue(reservation.localTime) === normalizeDuplicateValue(draft.localTime) &&
-    normalizeDuplicateValue(reservation.location) === normalizeDuplicateValue(draft.location)
-  );
 }
 
 function mapManualReservationType(type: ManualReservationFormValue["reservationType"]): ReservationType {
@@ -2685,8 +2669,30 @@ export default function TravelAssistantPage() {
   const applyManagedTripToState = useCallback((trip: ManagedTrip, options?: { resetHighlight?: boolean }): void => {
     applyingTripStateRef.current = true;
     const hydratedReservations = hydrateReservationsPricing(trip.reservations);
+    const drained = drainForwardReviewQueue(hydratedReservations, trip.reviewQueue, () => `res-${generateId()}`);
+    const tripReservations = drained.reservations;
+    const tripReviewQueue = drained.reviewQueue as ReviewItem[];
     const tripForState =
-      hydratedReservations === trip.reservations ? trip : { ...trip, reservations: hydratedReservations };
+      drained.changed || hydratedReservations !== trip.reservations
+        ? { ...trip, reservations: tripReservations, reviewQueue: tripReviewQueue }
+        : trip;
+    if (drained.changed) {
+      void fetch(TRIP_API_ROUTE, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update",
+          id: trip.id,
+          patch: {
+            reservations: tripReservations,
+            reviewQueue: tripReviewQueue,
+          },
+        }),
+      }).catch(() => {
+        // Trip will still show drained state locally; next sync retries.
+      });
+    }
     setTrips((previous) => {
       const index = previous.findIndex((entry) => entry.id === trip.id);
       if (index < 0) {
@@ -2724,9 +2730,9 @@ export default function TravelAssistantPage() {
     setMinutesToDeparture((previous) => (previous === trip.minutesToDeparture ? previous : trip.minutesToDeparture));
     setActiveScenario((previous) => (previous === trip.activeScenario ? previous : trip.activeScenario));
     setReservations((previous) => {
-      return areSnapshotsEqual(previous, hydratedReservations) ? previous : hydratedReservations;
+      return areSnapshotsEqual(previous, tripReservations) ? previous : tripReservations;
     });
-    setReviewQueue((previous) => (areSnapshotsEqual(previous, trip.reviewQueue) ? previous : trip.reviewQueue));
+    setReviewQueue((previous) => (areSnapshotsEqual(previous, tripReviewQueue) ? previous : tripReviewQueue));
     setReadinessItems((previous) => (areSnapshotsEqual(previous, trip.readinessItems) ? previous : trip.readinessItems));
     // Mark checklist as initialized from server — prevents useEffect from overwriting with auto-computed values
     if (Array.isArray(trip.readinessItems) && trip.readinessItems.length > 0) {
@@ -6128,17 +6134,27 @@ export default function TravelAssistantPage() {
       try {
         const formData = new FormData();
         formData.append("file", file);
-        const response = await fetch("/api/travel-updates?action=ticket-scan", {
-          method: "POST",
-          body: formData,
-          cache: "no-store",
-          credentials: "include",
-        });
-        const payload = (await response.json()) as {
-          error?: string;
-          draft?: ReservationDraft;
-          scanKind?: "pdf" | "image";
-        };
+        let response: Response;
+        try {
+          response = await fetch("/api/travel-updates/ticket-scan", {
+            method: "POST",
+            body: formData,
+            cache: "no-store",
+            credentials: "include",
+          });
+        } catch {
+          throw new Error("Upload failed — check your connection and try again.");
+        }
+        let payload: { error?: string; draft?: ReservationDraft; scanKind?: "pdf" | "image" };
+        try {
+          payload = (await response.json()) as typeof payload;
+        } catch {
+          throw new Error(
+            response.status === 413
+              ? "PDF is too large — try a smaller file (under 4MB)."
+              : `Ticket scan failed (${response.status}). Try again in a moment.`,
+          );
+        }
         if (!response.ok || !payload.draft) {
           throw new Error(payload.error ?? `Ticket scan failed (${response.status})`);
         }
@@ -6352,7 +6368,25 @@ export default function TravelAssistantPage() {
       } else {
         const reviewItem = reviewQueue.find((item) => item.id === id);
         if (reviewItem) {
-          setDrawerDraft(reviewItem.draft);
+          const prepared = enrichReservationForAutoImport(
+            prepareReviewDraftForAccept({
+              ...reviewItem.draft,
+              type: reviewItem.draft.type,
+              title: reviewItem.draft.title,
+              provider: reviewItem.draft.provider,
+              localTime: reviewItem.draft.localTime,
+              timezone: reviewItem.draft.timezone,
+              location: reviewItem.draft.location,
+              confirmationCode: reviewItem.draft.confirmationCode,
+              flightNumber: reviewItem.draft.flightNumber,
+              flightAirline: reviewItem.draft.flightAirline,
+              flightDate: reviewItem.draft.flightDate,
+              flightDepartureAirport: reviewItem.draft.flightDepartureAirport,
+              flightArrivalAirport: reviewItem.draft.flightArrivalAirport,
+              flightDepartureTime: reviewItem.draft.flightDepartureTime,
+            }),
+          );
+          setDrawerDraft(prepared);
         }
       }
       setFlightLookupError(null);

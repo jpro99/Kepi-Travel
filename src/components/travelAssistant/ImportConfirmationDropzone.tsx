@@ -87,7 +87,7 @@ export function ImportConfirmationDropzone({
         <p className="text-xs text-cyan-800/90 dark:text-cyan-200/90">
           {compact
             ? "E-ticket, boarding pass, hotel voucher"
-            : "Boarding pass, e-ticket PDF, hotel voucher — we’ll read it and ask you to confirm"}
+            : "Boarding pass, e-ticket PDF, hotel voucher — we’ll read it and add it to your trip"}
         </p>
         {!busy ? (
           <span className="mt-1 text-[11px] font-semibold text-cyan-700 underline dark:text-cyan-300">

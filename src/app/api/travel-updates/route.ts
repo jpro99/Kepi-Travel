@@ -10,12 +10,10 @@ import { persistTravelRuntimeState } from "@/lib/travelAssistant/updateRuntimeSt
 import type { TravelUpdateEvent } from "@/lib/travelAssistant/travelUpdateTypes";
 import { generateId } from "@/lib/utils/generateId";
 import { maybeSendFlightStatusPushAlerts } from "@/lib/travelAssistant/flightStatusPushBridge";
-import { extractConfirmationDocument } from "@/lib/travelAssistant/extractConfirmationDocument";
-import {
-  CONFIRMATION_SCAN_MAX_BYTES,
-  confirmationScanKind,
-  isConfirmationScanUpload,
-} from "@/lib/travelAssistant/scannedReservationDraft";
+import { handleConfirmationScanUpload } from "@/lib/travelAssistant/confirmationScanHandler";
+
+export const maxDuration = 60;
+export const runtime = "nodejs";
 
 const ReservationSchema = z.object({
   id: z.string().min(1),
@@ -301,54 +299,11 @@ export async function POST(req: Request) {
         { status: 503, headers: rateLimit.headers },
       );
     }
-
-    let formData: FormData;
-    try {
-      formData = await req.formData();
-    } catch {
-      return NextResponse.json({ error: "Invalid multipart form data." }, { status: 400, headers: rateLimit.headers });
-    }
-
-    const upload = formData.get("file") ?? formData.get("image");
-    if (!(upload instanceof File)) {
-      return NextResponse.json({ error: "PDF or image file is required." }, { status: 400, headers: rateLimit.headers });
-    }
-    if (!isConfirmationScanUpload(upload)) {
-      return NextResponse.json(
-        { error: "Upload a PDF or image (JPG, PNG, WebP)." },
-        { status: 422, headers: rateLimit.headers },
-      );
-    }
-    if (upload.size <= 0 || upload.size > CONFIRMATION_SCAN_MAX_BYTES) {
-      return NextResponse.json(
-        { error: "File is too large. Upload up to 8MB." },
-        { status: 413, headers: rateLimit.headers },
-      );
-    }
-
-    const scanKind = confirmationScanKind(upload);
-    routeLogger.info("Confirmation scan request started.", {
-      fileName: upload.name,
-      mimeType: upload.type,
-      sizeBytes: upload.size,
-      scanKind,
+    routeLogger.info("Confirmation scan request started (legacy query route).");
+    return handleConfirmationScanUpload(req, {
+      anthropicApiKey,
+      rateLimitHeaders: rateLimit.headers,
     });
-
-    try {
-      const draft = await extractConfirmationDocument(upload, anthropicApiKey);
-      routeLogger.info("Confirmation scan extraction complete.", {
-        extractedType: draft.type,
-        extractedProvider: draft.provider,
-        extractedLocalTime: draft.localTime,
-        extractedNumber: draft.flightNumber || null,
-        scanKind,
-      });
-      return NextResponse.json({ draft, scanKind }, { headers: rateLimit.headers });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown confirmation scan error.";
-      routeLogger.warn("Confirmation scan failed.", { error: message, scanKind });
-      return NextResponse.json({ error: `Confirmation scan failed: ${message}` }, { status: 502, headers: rateLimit.headers });
-    }
   }
 
   let payload: unknown;

@@ -58,3 +58,23 @@ test("prepareReviewDraftForAccept keeps scanned localTime when departure time ha
   assert.equal(prepared.location, "BRI -> VCE");
   assert.equal(prepared.timezone, "Europe/Rome");
 });
+
+test("prepareReviewDraftForAccept aligns stale flightDate with localTime", () => {
+  const prepared = prepareReviewDraftForAccept({
+    type: "flight",
+    title: "HND to ONT",
+    provider: "OR Airlines",
+    localTime: "2026-09-12 09:40",
+    timezone: "Etc/UTC",
+    location: "",
+    confirmationCode: "",
+    flightDepartureAirport: "HND",
+    flightArrivalAirport: "ONT",
+    flightNumber: "OR101",
+    flightDate: "2026-05-29",
+    flightDepartureTime: "2026-05-29 21:20",
+  });
+  assert.equal(prepared.localTime, "2026-09-12 09:40");
+  assert.equal(prepared.flightDate, "2026-09-12");
+  assert.equal(prepared.flightDepartureTime, "2026-09-12 09:40");
+});

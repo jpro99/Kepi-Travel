@@ -27,9 +27,7 @@ function normalizeLocalTimeValue(raw: string, flightDate?: string, flightDepartu
     return trimmed.slice(0, 16);
   }
   if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/u.test(trimmed)) {
-    if (!departureTime || !date || trimmed.slice(0, 10) === date || departureTime.slice(0, 10) !== date) {
-      return trimmed;
-    }
+    return trimmed;
   }
 
   if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/u.test(departureTime)) {
@@ -126,6 +124,19 @@ export function prepareReviewDraftForAccept<T extends ReviewDraftFlightFields>(d
   }
 
   next.localTime = normalizeLocalTimeValue(next.localTime, next.flightDate, next.flightDepartureTime);
+
+  const localDay = next.localTime.trim().slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/u.test(localDay)) {
+    const flightDay = next.flightDate?.trim().slice(0, 10) ?? "";
+    if (flightDay && flightDay !== localDay) {
+      next.flightDate = localDay;
+    }
+    const departureDay = next.flightDepartureTime?.trim().slice(0, 10) ?? "";
+    if (departureDay && departureDay !== localDay) {
+      next.flightDepartureTime = next.localTime.trim();
+    }
+  }
+
   if (next.flightDate?.trim() && next.flightDepartureTime?.trim()) {
     const flightDay = next.flightDate.trim().slice(0, 10);
     if (next.flightDepartureTime.trim().slice(0, 10) !== flightDay) {

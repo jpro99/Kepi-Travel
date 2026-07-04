@@ -26,6 +26,7 @@ import {
   isSameFlightLeg,
 } from "@/lib/travelAssistant/flightItinerarySync";
 import { enrichReservationForAutoImport } from "@/lib/travelAssistant/autoImportReservation";
+import { drainForwardReviewQueue } from "@/lib/travelAssistant/drainForwardReviewQueue";
 import { resolveReservationPricing } from "@/lib/travelAssistant/parseReservationMiles";
 import { generateId } from "@/lib/utils/generateId";
 
@@ -990,6 +991,10 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
     }
 
     nextReservations = dedupeFlightReservations(nextReservations);
+
+    const drained = drainForwardReviewQueue(nextReservations, nextQueue, () => `res-email-${generateId()}`);
+    nextReservations = drained.reservations;
+    nextQueue = drained.reviewQueue;
 
     const reservationDates = nextReservations
       .map((reservation) => reservationPrimaryDate(reservation))

@@ -223,7 +223,8 @@ export function parseScannedReservationJson(modelText: string): ScannedReservati
   return buildScannedReservationDraft(reservationNode);
 }
 
-export const CONFIRMATION_SCAN_MAX_BYTES = 8 * 1024 * 1024;
+/** Vercel serverless body limit is ~4.5MB — stay under it for mobile PDF uploads. */
+export const CONFIRMATION_SCAN_MAX_BYTES = 4 * 1024 * 1024;
 
 export function isConfirmationScanUpload(file: File): boolean {
   const name = file.name.toLowerCase();
