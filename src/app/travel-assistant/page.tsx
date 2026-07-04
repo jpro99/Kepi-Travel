@@ -23,8 +23,8 @@ import {
 import { evaluateReservationIntegrity } from "@/lib/travelAssistant/reservationIntegrity";
 import {
   prepareReviewDraftForAccept,
-  summarizeIntegrityBlockers,
 } from "@/lib/travelAssistant/prepareReviewDraftForAccept";
+import { enrichReservationForAutoImport } from "@/lib/travelAssistant/autoImportReservation";
 import {
   nextTripStage,
   shouldQuickAddGoToReview,
@@ -837,6 +837,24 @@ function defaultStageForReservationType(type: "flight" | "hotel" | "train" | "ri
   if (type === "flight" || type === "train") return "airport";
   if (type === "hotel" || type === "ride") return "arrival";
   return "readiness";
+}
+
+function normalizeDuplicateValue(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function isDuplicateReservation(reservation: Reservation, draft: ReservationDraft): boolean {
+  const reservationCode = normalizeDuplicateValue(reservation.confirmationCode);
+  const draftCode = normalizeDuplicateValue(draft.confirmationCode);
+  if (reservationCode.length > 0 && draftCode.length > 0 && reservationCode === draftCode) {
+    return true;
+  }
+  return (
+    normalizeDuplicateValue(reservation.type) === normalizeDuplicateValue(draft.type) &&
+    normalizeDuplicateValue(reservation.provider) === normalizeDuplicateValue(draft.provider) &&
+    normalizeDuplicateValue(reservation.localTime) === normalizeDuplicateValue(draft.localTime) &&
+    normalizeDuplicateValue(reservation.location) === normalizeDuplicateValue(draft.location)
+  );
 }
 
 function mapManualReservationType(type: ManualReservationFormValue["reservationType"]): ReservationType {
@@ -5886,41 +5904,11 @@ export default function TravelAssistantPage() {
       }
 
       const defaultAssignees = familyMembers.map((member) => member.id);
-      const importedSamples: EmailSample[] = importedReservations.map((item) => ({
-        id: `gmail-${item.messageId}`,
-        sender: item.sender,
-        receivedAt: item.receivedAt,
-        subject: item.subject,
-        body: item.body,
-        confidence: item.reservation.confidence,
-        issues: item.reservation.issues,
-        parsed: {
-          type: item.reservation.type,
-          title: item.reservation.title,
-          provider: item.reservation.provider,
-          localTime: item.reservation.localTime,
-          timezone: item.reservation.timezone,
-          location: item.reservation.location,
-          confirmationCode: item.reservation.confirmationCode,
-          assignedTo: defaultAssignees,
-          stage: defaultStageForReservationType(item.reservation.type),
-          critical: item.reservation.type === "flight" || item.reservation.type === "train" || item.reservation.type === "ride",
-          confidence: item.reservation.confidence,
-          notes: `Imported from email message ${item.messageId}`,
-        },
-      }));
-      setEmailSamples(importedSamples);
-      setSelectedEmailId(importedSamples[0]?.id ?? "");
+      const newReservations: Reservation[] = [];
+      let skippedDuplicates = 0;
 
-      const queueItems: ReviewItem[] = importedReservations.map((item) => ({
-        id: nextId("review"),
-        reasons:
-          item.reservation.issues.length > 0
-            ? item.reservation.issues
-            : ["Imported from email import. Confirm before publishing to live itinerary."],
-        impact: "Imported email needs review and confirmation before live activation.",
-        sourceEmailSubject: item.subject,
-        draft: {
+      for (const item of importedReservations) {
+        const enriched = enrichReservationForAutoImport({
           type: item.reservation.type,
           title: item.reservation.title,
           provider: item.reservation.provider,
@@ -5933,39 +5921,81 @@ export default function TravelAssistantPage() {
           critical: item.reservation.type === "flight" || item.reservation.type === "train" || item.reservation.type === "ride",
           confidence: item.reservation.confidence,
           notes: `Imported via email import from message ${item.messageId}.`,
-        },
-        sourceChannel: "gmail-import",
-        parseConfidenceScore:
-          item.reservation.confidence === "high" ? 85 : item.reservation.confidence === "medium" ? 55 : 30,
-        parsingStatus:
-          item.reservation.confidence === "high"
-            ? "auto-parsed"
-            : item.reservation.confidence === "medium"
-              ? "needs-review"
-              : "needs-user-input",
-        missingFields: item.reservation.issues
-          .map((issue) => {
-            const normalized = issue.toLowerCase();
-            if (normalized.includes("title")) return "title";
-            if (normalized.includes("provider")) return "provider";
-            if (normalized.includes("confirm")) return "confirmationCode";
-            if (normalized.includes("time")) return "localTime";
-            if (normalized.includes("timezone")) return "timezone";
-            if (normalized.includes("location") || normalized.includes("terminal")) return "location";
-            return null;
-          })
-          .filter((field): field is NonNullable<ReviewItem["missingFields"]>[number] => field !== null),
-        originalEmailText: item.body,
-        reviewStatus: item.reservation.confidence === "low" ? "incomplete" : "pending",
-      }));
-      setReviewQueue((prev) => [...queueItems, ...prev]);
-      queueMutation("Imported reservations from email import into review queue.", {
+        });
+        const pricedDraft = applyAcceptedReservationPricing(enriched, { originalEmailText: item.body });
+        if (reservations.some((reservation) => isDuplicateReservation(reservation, pricedDraft))) {
+          skippedDuplicates += 1;
+          continue;
+        }
+        newReservations.push({
+          ...pricedDraft,
+          id: nextId("res"),
+          source: "imported",
+          sourceEmailSubject: item.subject,
+          originalEmailText: item.body,
+          flightNumber: pricedDraft.flightNumber ?? "",
+          flightAirline: pricedDraft.flightAirline ?? pricedDraft.provider,
+          flightDate: pricedDraft.flightDate ?? pricedDraft.localTime.slice(0, 10),
+          flightDepartureAirport: pricedDraft.flightDepartureAirport ?? "",
+          flightArrivalAirport: pricedDraft.flightArrivalAirport ?? "",
+          flightDepartureTime: pricedDraft.flightDepartureTime ?? pricedDraft.localTime,
+        });
+      }
+
+      if (newReservations.length === 0) {
+        setToast(
+          skippedDuplicates > 0
+            ? "Imported reservations already match items on your trip."
+            : "Nothing new to import.",
+        );
+        return;
+      }
+
+      pushUndoSnapshot("Imported reservations from email");
+      const nextReservations = [...newReservations, ...reservations];
+      setReservations(nextReservations);
+      const targetTripId = activeTripId ?? trips[0]?.id ?? null;
+      if (targetTripId) {
+        setTrips((previous) =>
+          previous.map((trip) =>
+            trip.id === targetTripId ? { ...trip, reservations: nextReservations } : trip,
+          ),
+        );
+        void fetch(TRIP_API_ROUTE, {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "update",
+            id: targetTripId,
+            patch: { reservations: nextReservations },
+          }),
+        }).catch(() => {
+          setToast("Could not save imported reservations to your trip.");
+        });
+      }
+      void syncReservationsToGoogleCalendar(nextReservations, "gmail-import");
+      queueMutation(`Imported ${newReservations.length} reservation${newReservations.length === 1 ? "" : "s"} from email.`, {
         key: "gmail-import",
         fingerprint: `gmail:${importedReservations.map((item) => item.messageId).join(",")}`,
       });
-      setToast(`Imported ${importedReservations.length} reservation${importedReservations.length === 1 ? "" : "s"} from email.`);
+      setToast(
+        skippedDuplicates > 0
+          ? `Added ${newReservations.length} reservation${newReservations.length === 1 ? "" : "s"} — ${skippedDuplicates} duplicate${skippedDuplicates === 1 ? "" : "s"} skipped.`
+          : `Added ${newReservations.length} reservation${newReservations.length === 1 ? "" : "s"} to your trip.`,
+      );
+      setConsumerTab("book");
+      setBookSubTab("flights");
     },
-    [familyMembers, queueMutation, setToast],
+    [
+      activeTripId,
+      familyMembers,
+      pushUndoSnapshot,
+      queueMutation,
+      reservations,
+      setToast,
+      trips,
+    ],
   );
 
   const handleEnablePush = useCallback(async (): Promise<void> => {
@@ -6034,7 +6064,7 @@ export default function TravelAssistantPage() {
         const foundCount = payload.foundCount ?? importedReservations.length;
         setGmailImportMessage(
           foundCount > 0
-            ? `Found ${foundCount} matching email${foundCount === 1 ? "" : "s"} before queueing.`
+            ? `Found ${foundCount} matching email${foundCount === 1 ? "" : "s"}.`
             : "No matching emails found for this scope.",
         );
         if (importedReservations.length > 0) {
@@ -6051,46 +6081,42 @@ export default function TravelAssistantPage() {
 
   const handleImportAction = (target: "live" | "review"): void => {
     if (!selectedEmail) return;
-    pushUndoSnapshot(target === "live" ? "Import added to live trip" : "Import routed to review queue");
-    if (target === "live") {
-      const integrity = evaluateReservationIntegrity(selectedEmail.parsed);
-      if (!integrity.safeForLive) {
-        quarantineDraftToReview(selectedEmail.parsed, {
-          sourceEmailSubject: selectedEmail.subject,
-          impact: "Imported item was blocked from live itinerary due to invalid critical fields.",
-          prependReason: "Quarantined: import failed integrity checks.",
-        });
-        queueMutation("Unsafe import quarantined for manual correction.", {
-          key: "import-quarantine",
-          fingerprint: `import:${selectedEmail.id}:quarantine`,
-        });
-        return;
-      }
-      const reservation: Reservation = {
-        id: nextId("res"),
-        ...selectedEmail.parsed,
-        source: "imported",
-      };
-      setReservations((prev) => [reservation, ...prev]);
-      queueMutation("Imported reservation to live trip.", {
-        key: "import-live",
-        reservationId: reservation.id,
-        fingerprint: `import:${selectedEmail.id}:live`,
-      });
+    void target;
+    pushUndoSnapshot("Import added to live trip");
+    const enriched = enrichReservationForAutoImport(selectedEmail.parsed);
+    const pricedDraft = applyAcceptedReservationPricing(enriched);
+    if (reservations.some((reservation) => isDuplicateReservation(reservation, pricedDraft))) {
+      setToast("This import matches a reservation already on your trip.");
       return;
     }
-    const queueItem: ReviewItem = {
-      id: nextId("review"),
-      reasons: selectedEmail.issues.length > 0 ? selectedEmail.issues : ["Manual review requested before activation"],
-      impact: "Needs confirmation before becoming active itinerary item.",
+    const reservation: Reservation = {
+      id: nextId("res"),
+      ...pricedDraft,
+      source: "imported",
       sourceEmailSubject: selectedEmail.subject,
-      draft: selectedEmail.parsed,
+      originalEmailText: selectedEmail.body,
+      flightNumber: pricedDraft.flightNumber ?? "",
+      flightAirline: pricedDraft.flightAirline ?? pricedDraft.provider,
+      flightDate: pricedDraft.flightDate ?? pricedDraft.localTime.slice(0, 10),
+      flightDepartureAirport: pricedDraft.flightDepartureAirport ?? "",
+      flightArrivalAirport: pricedDraft.flightArrivalAirport ?? "",
+      flightDepartureTime: pricedDraft.flightDepartureTime ?? pricedDraft.localTime,
     };
-    setReviewQueue((prev) => [queueItem, ...prev]);
-    queueMutation("Import sent to review queue.", {
-      key: "import-review",
-      fingerprint: `import:${selectedEmail.id}:review`,
+    const nextReservations = [reservation, ...reservations];
+    setReservations(nextReservations);
+    queueMutation("Imported reservation to live trip.", {
+      key: "import-live",
+      reservationId: reservation.id,
+      fingerprint: `import:${selectedEmail.id}:live`,
     });
+    setPostBookingConfirmation({
+      kind: reservation.type === "hotel" ? "hotel" : reservation.type === "flight" ? "flight" : "import",
+      title: `${reservation.type === "hotel" ? "Hotel" : reservation.type === "flight" ? "Flight" : "Booking"} added`,
+      confirmationCode: reservation.confirmationCode?.trim() || undefined,
+      detail: `${reservation.provider || reservation.title} is on your flights timeline.`,
+      syncedToTrip: true,
+    });
+    setToast("Added to your trip.");
   };
 
   const handleTicketScanUpload = useCallback(
@@ -6117,50 +6143,60 @@ export default function TravelAssistantPage() {
           throw new Error(payload.error ?? `Ticket scan failed (${response.status})`);
         }
 
-        const scannedDraft: ReservationDraft = prepareReviewDraftForAccept({
-          ...EMPTY_DRAFT,
-          ...payload.draft,
-          type: payload.draft.type,
-          title: payload.draft.title.trim(),
-          provider: payload.draft.provider.trim(),
-          localTime: payload.draft.localTime.trim(),
-          timezone: payload.draft.timezone.trim() || "Etc/UTC",
-          location: payload.draft.location.trim(),
-          confirmationCode: payload.draft.confirmationCode.trim(),
-          assignedTo: payload.draft.assignedTo ?? [],
-          stage: payload.draft.stage,
-          critical: payload.draft.critical,
-          confidence: payload.draft.confidence,
-          notes: payload.draft.notes.trim(),
-          flightNumber: payload.draft.flightNumber ?? "",
-          flightAirline: payload.draft.flightAirline ?? payload.draft.provider ?? "",
-          flightDate: payload.draft.flightDate ?? payload.draft.localTime.slice(0, 10),
-          flightDepartureAirport: payload.draft.flightDepartureAirport ?? "",
-          flightArrivalAirport: payload.draft.flightArrivalAirport ?? "",
-          flightDepartureTime: payload.draft.flightDepartureTime ?? payload.draft.localTime,
-        });
-        const reviewItem: ReviewItem = {
-          id: nextId("review"),
-          reasons: [
-            payload.scanKind === "pdf"
-              ? "Read from confirmation PDF. Confirm details before publishing."
-              : "Scanned from ticket image. Confirm details before publishing.",
-          ],
-          impact:
-            payload.scanKind === "pdf"
-              ? "Reservation details were extracted from a PDF and need confirmation."
-              : "Ticket details were extracted from a photo and need confirmation.",
+        const scannedDraft: ReservationDraft = enrichReservationForAutoImport(
+          prepareReviewDraftForAccept({
+            ...EMPTY_DRAFT,
+            ...payload.draft,
+            type: payload.draft.type,
+            title: payload.draft.title.trim(),
+            provider: payload.draft.provider.trim(),
+            localTime: payload.draft.localTime.trim(),
+            timezone: payload.draft.timezone.trim() || "Etc/UTC",
+            location: payload.draft.location.trim(),
+            confirmationCode: payload.draft.confirmationCode.trim(),
+            assignedTo: payload.draft.assignedTo ?? [],
+            stage: payload.draft.stage,
+            critical: payload.draft.critical,
+            confidence: payload.draft.confidence,
+            notes: payload.draft.notes.trim(),
+            flightNumber: payload.draft.flightNumber ?? "",
+            flightAirline: payload.draft.flightAirline ?? payload.draft.provider ?? "",
+            flightDate: payload.draft.flightDate ?? payload.draft.localTime.slice(0, 10),
+            flightDepartureAirport: payload.draft.flightDepartureAirport ?? "",
+            flightArrivalAirport: payload.draft.flightArrivalAirport ?? "",
+            flightDepartureTime: payload.draft.flightDepartureTime ?? payload.draft.localTime,
+          }),
+        );
+        const pricedDraft = applyAcceptedReservationPricing(scannedDraft);
+        const duplicateReservation = reservations.find((reservation) => isDuplicateReservation(reservation, pricedDraft));
+        if (duplicateReservation) {
+          setToast(
+            `Possible duplicate found (${duplicateReservation.title || duplicateReservation.provider || "existing reservation"}) — skipped this scan.`,
+          );
+          return;
+        }
+        pushUndoSnapshot("Ticket scan added to trip");
+        const newReservation: Reservation = {
+          ...pricedDraft,
+          id: nextId("res"),
+          source: "imported",
           sourceEmailSubject: `Scanned ticket: ${file.name || "image upload"}`,
-          sourceChannel: "manual",
-          parseConfidenceScore: 55,
-          parsingStatus: "needs-review",
-          reviewStatus: "pending",
-          draft: scannedDraft,
+          flightNumber: pricedDraft.flightNumber ?? "",
+          flightAirline: pricedDraft.flightAirline ?? pricedDraft.provider,
+          flightDate: pricedDraft.flightDate ?? pricedDraft.localTime.slice(0, 10),
+          flightDepartureAirport: pricedDraft.flightDepartureAirport ?? "",
+          flightArrivalAirport: pricedDraft.flightArrivalAirport ?? "",
+          flightDepartureTime: pricedDraft.flightDepartureTime ?? pricedDraft.localTime,
         };
-        const nextQueue = [reviewItem, ...reviewQueue];
-        setReviewQueue(nextQueue);
+        const nextReservations = [newReservation, ...reservations];
+        setReservations(nextReservations);
         const targetTripId = activeTripId ?? trips[0]?.id ?? null;
         if (targetTripId) {
+          setTrips((previous) =>
+            previous.map((trip) =>
+              trip.id === targetTripId ? { ...trip, reservations: nextReservations } : trip,
+            ),
+          );
           void fetch(TRIP_API_ROUTE, {
             method: "PUT",
             credentials: "include",
@@ -6168,26 +6204,31 @@ export default function TravelAssistantPage() {
             body: JSON.stringify({
               action: "update",
               id: targetTripId,
-              patch: { reviewQueue: nextQueue },
+              patch: { reservations: nextReservations },
             }),
           }).catch(() => {
-            setToast("Could not save review queue.");
+            setToast("Could not save scanned reservation to your trip.");
           });
         }
-        queueMutation("Ticket scan added to review queue.", {
-          key: "ticket-scan-review",
-          fingerprint: `ticket-scan:${reviewItem.id}`,
+        queueMutation("Ticket scan added to live trip.", {
+          key: "ticket-scan-import",
+          fingerprint: `ticket-scan:${newReservation.id}`,
         });
-        setDrawerDraft(reviewItem.draft);
         setFlightLookupError(null);
         setFlightLookupBusy(false);
-        setActiveDrawer({ kind: "review", id: reviewItem.id });
         setConsumerTab("book");
         setBookSubTab("flights");
+        setPostBookingConfirmation({
+          kind: newReservation.type === "hotel" ? "hotel" : newReservation.type === "flight" ? "flight" : "import",
+          title: `${newReservation.type === "hotel" ? "Hotel" : newReservation.type === "flight" ? "Flight" : "Booking"} added`,
+          confirmationCode: newReservation.confirmationCode?.trim() || undefined,
+          detail: `${newReservation.provider || newReservation.title} is on your flights timeline.`,
+          syncedToTrip: true,
+        });
         setToast(
           payload.scanKind === "pdf"
-            ? "PDF read. Review and confirm before saving."
-            : "Ticket scanned. Review and confirm before saving.",
+            ? "PDF read and added to your trip."
+            : "Ticket scanned and added to your trip.",
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : "Ticket scan failed.";
@@ -6196,7 +6237,7 @@ export default function TravelAssistantPage() {
         setTicketScanBusy(false);
       }
     },
-    [activeTripId, queueMutation, reviewQueue, setToast, ticketScanBusy, trips],
+    [activeTripId, pushUndoSnapshot, queueMutation, reservations, setToast, ticketScanBusy, trips],
   );
 
   const handleTicketScanFileSelected = useCallback(
@@ -7132,27 +7173,12 @@ export default function TravelAssistantPage() {
     handleCheckFlightStatusRef.current = handleCheckFlightStatus;
   }, [handleCheckFlightStatus]);
 
-  const normalizeDuplicateValue = (value: string): string => value.trim().toLowerCase();
-
-  const isDuplicateReservation = (reservation: Reservation, draft: ReservationDraft): boolean => {
-    const reservationCode = normalizeDuplicateValue(reservation.confirmationCode);
-    const draftCode = normalizeDuplicateValue(draft.confirmationCode);
-    if (reservationCode.length > 0 && draftCode.length > 0 && reservationCode === draftCode) {
-      return true;
-    }
-    return (
-      normalizeDuplicateValue(reservation.type) === normalizeDuplicateValue(draft.type) &&
-      normalizeDuplicateValue(reservation.provider) === normalizeDuplicateValue(draft.provider) &&
-      normalizeDuplicateValue(reservation.localTime) === normalizeDuplicateValue(draft.localTime) &&
-      normalizeDuplicateValue(reservation.location) === normalizeDuplicateValue(draft.location)
-    );
-  };
-
   const acceptReviewWithDraft = (reviewId: string, draftOverride?: ReservationDraft): boolean => {
     const target = reviewQueue.find((item) => item.id === reviewId);
     if (!target) return false;
     const draft = applyAcceptedReservationPricing(
-      prepareReviewDraftForAccept({
+      enrichReservationForAutoImport(
+        prepareReviewDraftForAccept({
       ...(draftOverride ?? target.draft),
       type: (draftOverride ?? target.draft).type,
       title: (draftOverride ?? target.draft).title,
@@ -7174,6 +7200,7 @@ export default function TravelAssistantPage() {
       notes: (draftOverride ?? target.draft).notes,
       originalEmailText: target.originalEmailText,
     }),
+      ),
       { originalEmailText: target.originalEmailText },
     );
     const duplicateReservation = reservations.find((reservation) => isDuplicateReservation(reservation, draft));
@@ -7192,38 +7219,6 @@ export default function TravelAssistantPage() {
       if (activeDrawer?.kind === "review" && activeDrawer.id === reviewId) {
         closeDrawer();
       }
-      return false;
-    }
-    const integrity = evaluateReservationIntegrity(draft);
-    if (!integrity.safeForLive) {
-      const blockers = summarizeIntegrityBlockers(integrity.issues) || "check title, route, and departure time.";
-      const nextQueue = reviewQueue.map((item) =>
-        item.id === reviewId
-          ? {
-              ...item,
-              draft,
-              parsingStatus: "needs-user-input" as const,
-              reviewStatus: "incomplete" as const,
-              reasons: [
-                ...new Set([
-                  ...item.reasons,
-                  ...integrity.issues.map((issue) => issue.message),
-                  summarizeIntegrityBlockers(integrity.issues) || "Fill in the highlighted fields, then accept again.",
-                ]),
-              ],
-            }
-          : item,
-      );
-      setReviewQueue(nextQueue);
-      persistReviewQueueToTrip(nextQueue, { reviewId, source: "integrity-blocked" });
-      setDrawerDraft(draft);
-      openDrawer("review", reviewId);
-      setConsumerTab("book");
-      setBookSubTab("flights");
-      setToast(`Couldn't add this booking: ${blockers} We opened the form — fix the highlighted fields and tap Save + accept.`, {
-        force: true,
-        tone: "error",
-      });
       return false;
     }
     pushUndoSnapshot("Review item accepted");
