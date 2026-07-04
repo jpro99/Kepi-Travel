@@ -95,6 +95,8 @@ interface MobileMapForwardShellProps {
   onCheckStatus: (id: string) => void;
   onDelete: (id: string) => void;
   onAddBooking: () => void;
+  onAddFlight?: () => void;
+  onAddHotel?: () => void;
   onTalkPlanner?: () => void;
   emailForwardAddress: string | null;
   onCopyForwardAddress: () => void;
@@ -194,6 +196,8 @@ export function MobileMapForwardShell({
   onCheckStatus,
   onDelete,
   onAddBooking,
+  onAddFlight,
+  onAddHotel,
   onTalkPlanner,
   emailForwardAddress,
   onCopyForwardAddress,
@@ -456,6 +460,8 @@ export function MobileMapForwardShell({
           nearestAirport={nearestAirport}
           onCreateTrip={onCreateTrip}
           onAddBooking={onAddBooking}
+          onAddFlight={onAddFlight}
+          onAddHotel={onAddHotel}
           onReservationTap={onReservationTap}
           onCheckStatus={onCheckStatus}
           onDelete={onDelete}

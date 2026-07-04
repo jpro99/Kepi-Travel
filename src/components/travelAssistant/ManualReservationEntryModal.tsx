@@ -29,6 +29,8 @@ interface ManualReservationEntryModalProps {
   defaultAssignedTo: string[];
   defaultReservationType?: ManualReservationType;
   defaultLocalDateTime?: string;
+  /** When true, type is fixed (e.g. opened from Book → Flights or Hotels). */
+  lockReservationType?: boolean;
   onClose: () => void;
   onSave: (value: ManualReservationFormValue) => void;
 }
@@ -76,11 +78,22 @@ function toDatetimeLocal(localTime: string): string {
   return localDateTimeDefault();
 }
 
+function modalCopy(reservationType: ManualReservationType): { title: string; saveLabel: string } {
+  if (reservationType === "flight") {
+    return { title: "Add existing flight", saveLabel: "Save flight" };
+  }
+  if (reservationType === "hotel") {
+    return { title: "Add existing hotel", saveLabel: "Save hotel" };
+  }
+  return { title: "Add reservation", saveLabel: "Save booking" };
+}
+
 export function ManualReservationEntryModal({
   familyMembers,
   defaultAssignedTo,
   defaultReservationType = "flight",
   defaultLocalDateTime,
+  lockReservationType = false,
   onClose,
   onSave,
 }: ManualReservationEntryModalProps) {
@@ -105,6 +118,43 @@ export function ManualReservationEntryModal({
   const [formError, setFormError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scanMessage, setScanMessage] = useState<string | null>(null);
+
+  const { title: modalTitle, saveLabel } = modalCopy(reservationType);
+
+  const submitForm = (): void => {
+    const normalizedTitle = title.trim();
+    const normalizedProvider = provider.trim();
+    const normalizedLocation = location.trim();
+    const locationRequired = reservationType !== "flight" && reservationType !== "train";
+    if (!normalizedTitle || !normalizedProvider || !localDateTime.trim() || (locationRequired && !normalizedLocation)) {
+      setFormError(
+        reservationType === "hotel"
+          ? "Hotel name, provider, check-in date/time, and location are required."
+          : reservationType === "flight"
+            ? "Flight title, airline, and departure date/time are required."
+            : "Title, provider, and date/time are required.",
+      );
+      return;
+    }
+    if (assignedTo.length === 0) {
+      setFormError("Choose at least one family member.");
+      return;
+    }
+    setFormError(null);
+    onSave({
+      reservationType,
+      title: normalizedTitle,
+      provider: normalizedProvider,
+      localDateTime: localDateTime.trim(),
+      location: normalizedLocation,
+      confirmationCode: confirmationCode.trim(),
+      notes: notes.trim(),
+      assignedTo,
+      checkOutDate: checkOutDate.trim(),
+      roomType: roomType.trim(),
+      flightNumber: flightNumber.trim(),
+    });
+  };
 
   const handleScanFile = async (file: File): Promise<void> => {
     setScanning(true);
@@ -163,9 +213,9 @@ export function ManualReservationEntryModal({
         {/* ── Header (fixed, never scrolls away) ── */}
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--border-default)] px-4 py-4">
           <div className="min-w-0">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Add reservation</h2>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">{modalTitle}</h2>
             <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-              Drop a PDF or screenshot to auto-fill, or enter details manually.
+              Drop a PDF or screenshot to auto-fill, or enter details and tap Save below.
             </p>
           </div>
           <button
@@ -192,59 +242,48 @@ export function ManualReservationEntryModal({
           ) : null}
 
           <form
+            id="manual-reservation-entry-form"
             className="space-y-3"
             onSubmit={(event) => {
               event.preventDefault();
-              const normalizedTitle = title.trim();
-              const normalizedProvider = provider.trim();
-              const normalizedLocation = location.trim();
-              const locationRequired = reservationType !== "flight" && reservationType !== "train";
-              if (!normalizedTitle || !normalizedProvider || !localDateTime.trim() || (locationRequired && !normalizedLocation)) {
-                setFormError("Title, provider, and date/time are required.");
-                return;
-              }
-              if (assignedTo.length === 0) {
-                setFormError("Choose at least one family member.");
-                return;
-              }
-              onSave({
-                reservationType,
-                title: normalizedTitle,
-                provider: normalizedProvider,
-                localDateTime: localDateTime.trim(),
-                location: normalizedLocation,
-                confirmationCode: confirmationCode.trim(),
-                notes: notes.trim(),
-                assignedTo,
-                checkOutDate: checkOutDate.trim(),
-                roomType: roomType.trim(),
-                flightNumber: flightNumber.trim(),
-              });
+              submitForm();
             }}
           >
+            {!lockReservationType ? (
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Reservation type</span>
+                <select
+                  value={reservationType}
+                  onChange={(e) => setReservationType(e.target.value as ManualReservationType)}
+                  className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-3 text-base font-medium text-slate-900 placeholder-slate-400 focus:border-cyan-400 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500"
+                >
+                  {RESERVATION_TYPE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             <label className="block text-sm">
-              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Reservation type</span>
-              <select
-                value={reservationType}
-                onChange={(e) => setReservationType(e.target.value as ManualReservationType)}
-                className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-3 text-base font-medium text-slate-900 placeholder-slate-400 focus:border-cyan-400 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500"
-              >
-                {RESERVATION_TYPE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Title / reservation name</span>
+              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                {reservationType === "flight" ? "Flight description" : reservationType === "hotel" ? "Hotel name" : "Title / reservation name"}
+              </span>
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="AA 123 JFK→LAX, Hyatt Tokyo, Nobu dinner…"
+                placeholder={
+                  reservationType === "flight"
+                    ? "e.g. ONT → FCO · Alaska AS123"
+                    : reservationType === "hotel"
+                      ? "e.g. Hyatt Centric Monopoli"
+                      : "AA 123 JFK→LAX, Nobu dinner…"
+                }
                 className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-3 text-base font-medium text-slate-900 placeholder-slate-400 focus:border-cyan-400 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500"
               />
             </label>
             <label className="block text-sm">
-              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Provider / airline / restaurant</span>
+              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                {reservationType === "flight" ? "Airline" : reservationType === "hotel" ? "Hotel brand / booking site" : "Provider / airline / restaurant"}
+              </span>
               <input
                 value={provider}
                 onChange={(e) => setProvider(e.target.value)}
@@ -252,7 +291,13 @@ export function ManualReservationEntryModal({
               />
             </label>
             <label className="block text-sm">
-              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Date and time</span>
+              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                {reservationType === "flight"
+                  ? "Departure date and time"
+                  : reservationType === "hotel"
+                    ? "Check-in date and time"
+                    : "Date and time"}
+              </span>
               <input
                 type="datetime-local"
                 value={localDateTime}
@@ -261,10 +306,15 @@ export function ManualReservationEntryModal({
               />
             </label>
             <label className="block text-sm">
-              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Location / address</span>
+              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                {reservationType === "hotel" ? "City / address" : reservationType === "flight" ? "Route or airport (optional)" : "Location / address"}
+              </span>
               <input
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
+                placeholder={
+                  reservationType === "flight" ? "e.g. ONT → FCO" : reservationType === "hotel" ? "Monopoli, Italy" : ""
+                }
                 className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-3 text-base font-medium text-slate-900 placeholder-slate-400 focus:border-cyan-400 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500"
               />
             </label>
@@ -349,23 +399,31 @@ export function ManualReservationEntryModal({
                 {formError}
               </p>
             ) : null}
-
-            <div className="flex flex-wrap gap-2 pt-1 pb-2">
-              <button
-                type="submit"
-                className="rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-400"
-              >
-                Save reservation
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold dark:border-slate-700"
-              >
-                Cancel
-              </button>
-            </div>
           </form>
+        </div>
+
+        <div className="shrink-0 border-t border-[var(--border-default)] bg-white px-4 py-3 dark:bg-slate-900">
+          {formError ? (
+            <p className="mb-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200 md:hidden">
+              {formError}
+            </p>
+          ) : null}
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              form="manual-reservation-entry-form"
+              className="min-h-[52px] flex-1 rounded-xl bg-[#007AFF] px-4 text-base font-bold text-white hover:bg-[#0066DD]"
+            >
+              {saveLabel}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="min-h-[52px] rounded-xl border border-slate-300 px-4 text-sm font-semibold dark:border-slate-700"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       </div>
     </div>

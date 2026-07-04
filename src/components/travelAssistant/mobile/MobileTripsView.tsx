@@ -74,6 +74,8 @@ interface MobileTripsViewProps {
   nearestAirport?: string;
   onCreateTrip: () => void;
   onAddBooking: () => void;
+  onAddFlight?: () => void;
+  onAddHotel?: () => void;
   onReservationTap: (id: string) => void;
   onCheckStatus: (id: string) => void;
   onDelete: (id: string) => void;
@@ -155,6 +157,8 @@ export function MobileTripsView({
   nearestAirport,
   onCreateTrip,
   onAddBooking,
+  onAddFlight,
+  onAddHotel,
   onReservationTap,
   onCheckStatus,
   onDelete,
@@ -266,7 +270,7 @@ export function MobileTripsView({
           onReservationTap={onReservationTap}
           onCheckStatus={onCheckStatus}
           onDelete={onDelete}
-          onAdd={onAddBooking}
+          onAdd={onAddFlight ?? onAddBooking}
           simplifiedMobile
           enableBookSearch={enableBookSearch}
           hideRouteMap={hideRouteMap}
@@ -283,7 +287,7 @@ export function MobileTripsView({
           onReservationTap={onReservationTap}
           onCheckStatus={onCheckStatus}
           onDelete={onDelete}
-          onAdd={onAddBooking}
+          onAdd={onAddHotel ?? onAddBooking}
           simplifiedMobile
           enableBookSearch={enableBookSearch}
           hotelSearchDefaults={hotelSearchDefaults}

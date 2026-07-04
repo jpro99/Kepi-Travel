@@ -8866,6 +8866,22 @@ export default function TravelAssistantPage() {
         onClose={closeHotelSearch}
         onAddHotel={handleAddHotelFromSearch}
       />
+      {manualReservationModalOpen ? (
+        <ManualReservationEntryModal
+          key={`${manualReservationPresetType ?? "default"}-${manualReservationDefaultDateTime ?? "nodate"}`}
+          familyMembers={familyMembers.map((member) => ({ id: member.id, name: member.name }))}
+          defaultAssignedTo={[selectedFamilyMember.id]}
+          defaultReservationType={manualReservationPresetType ?? "flight"}
+          defaultLocalDateTime={manualReservationDefaultDateTime ?? undefined}
+          lockReservationType={manualReservationPresetType === "flight" || manualReservationPresetType === "hotel"}
+          onClose={() => {
+            setManualReservationModalOpen(false);
+            setManualReservationPresetType(null);
+            setManualReservationDefaultDateTime(null);
+          }}
+          onSave={handleSaveManualReservation}
+        />
+      ) : null}
     </>
   );
 
@@ -9091,6 +9107,11 @@ export default function TravelAssistantPage() {
                 onCheckStatus={(id) => void handleCheckFlightStatus(id)}
                 onDelete={(id) => void handleDeleteReservation(id)}
                 onAddBooking={() => setManualReservationModalOpen(true)}
+                onAddFlight={() => {
+                  setManualReservationPresetType("flight");
+                  setManualReservationModalOpen(true);
+                }}
+                onAddHotel={openManualHotelReservation}
                 onTalkPlanner={() => setTalkPlannerOpen(true)}
                 emailForwardAddress={emailForwardAddress}
                 onCopyForwardAddress={() => {
@@ -9295,7 +9316,10 @@ export default function TravelAssistantPage() {
               onReservationTap={(id) => openDrawer("reservation", id)}
               onCheckStatus={(id) => void handleCheckFlightStatus(id)}
               onDelete={(id) => void handleDeleteReservation(id)}
-              onAddFlight={() => setManualReservationModalOpen(true)}
+              onAddFlight={() => {
+                setManualReservationPresetType("flight");
+                setManualReservationModalOpen(true);
+              }}
               onAddHotel={openManualHotelReservation}
               onQuickGroundTransport={handleQuickGroundTransport}
               usuallySkipsConnections={usuallySkipsConnections}
@@ -9753,21 +9777,6 @@ export default function TravelAssistantPage() {
             onClose={() => setShareModalOpen(false)}
           />
         )}
-        {manualReservationModalOpen ? (
-          <ManualReservationEntryModal
-            key={`${manualReservationPresetType ?? "default"}-${manualReservationDefaultDateTime ?? "nodate"}`}
-            familyMembers={familyMembers.map((member) => ({ id: member.id, name: member.name }))}
-            defaultAssignedTo={[selectedFamilyMember.id]}
-            defaultReservationType={manualReservationPresetType ?? "flight"}
-            defaultLocalDateTime={manualReservationDefaultDateTime ?? undefined}
-            onClose={() => {
-              setManualReservationModalOpen(false);
-              setManualReservationPresetType(null);
-              setManualReservationDefaultDateTime(null);
-            }}
-            onSave={handleSaveManualReservation}
-          />
-        ) : null}
         <GmailImportScopeModal
           key={gmailScopeModalKey}
           open={gmailScopeModalOpen}
@@ -10673,14 +10682,6 @@ export default function TravelAssistantPage() {
           });
         }}
       />
-      {manualReservationModalOpen ? (
-        <ManualReservationEntryModal
-          familyMembers={familyMembers.map((member) => ({ id: member.id, name: member.name }))}
-          defaultAssignedTo={[selectedFamilyMember.id]}
-          onClose={() => setManualReservationModalOpen(false)}
-          onSave={handleSaveManualReservation}
-        />
-      ) : null}
       <PostBookingConfirmation
         data={postBookingConfirmation}
         onDismiss={() => setPostBookingConfirmation(null)}
