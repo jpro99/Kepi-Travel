@@ -807,11 +807,11 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         const existing = nextReservations[matchingReservationIndex] as SessionReservation;
         const incoming = parsedReservation as SessionReservation;
         const scheduleChanges = detectFlightScheduleChange(existing, incoming);
+        const merged = mergeFlightReservationUpdate(existing, incoming);
+        nextReservations = nextReservations.map((reservation, index) =>
+          index === matchingReservationIndex ? merged : reservation,
+        );
         if (scheduleChanges.length > 0) {
-          const merged = mergeFlightReservationUpdate(existing, incoming);
-          nextReservations = nextReservations.map((reservation, index) =>
-            index === matchingReservationIndex ? merged : reservation,
-          );
           nextUpdateFeed = [
             {
               id: `feed-flight-change-${generateId()}`,
@@ -825,12 +825,75 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
             },
             ...nextUpdateFeed,
           ];
+        }
+        acceptedDraftCount += 1;
+        routeLogger.info("Flight refreshed from re-forwarded itinerary email.", {
+          userId: targetUserId,
+          tripId: targetTrip.id,
+          reservationId: merged.id,
+          scheduleChanges,
+        });
+        continue;
+      }
+      if (hasMatchingQueuedDraft) {
+        const queueIndex = nextQueue.findIndex((item) => {
+          const reviewItem = asRecord(item);
+          const draft = asRecord(reviewItem?.draft);
+          if (!draft) return false;
+          return isDuplicateReservation(
+            {
+              type: typeof draft.type === "string" ? draft.type : "",
+              provider: typeof draft.provider === "string" ? draft.provider : "",
+              localTime: typeof draft.localTime === "string" ? draft.localTime : "",
+              location: typeof draft.location === "string" ? draft.location : "",
+              confirmationCode: typeof draft.confirmationCode === "string" ? draft.confirmationCode : "",
+              flightNumber: typeof draft.flightNumber === "string" ? draft.flightNumber : "",
+              flightDepartureAirport:
+                typeof draft.flightDepartureAirport === "string" ? draft.flightDepartureAirport : "",
+              flightArrivalAirport:
+                typeof draft.flightArrivalAirport === "string" ? draft.flightArrivalAirport : "",
+            },
+            parsedReservation,
+          );
+        });
+        if (queueIndex >= 0) {
+          const reviewRecord = asRecord(nextQueue[queueIndex]) ?? {};
+          const existingDraft = asRecord(reviewRecord.draft) ?? {};
+          nextQueue = nextQueue.map((item, index) => {
+            if (index !== queueIndex) return item;
+            return {
+              ...reviewRecord,
+              draft: {
+                ...existingDraft,
+                title: parserTitle || existingDraft.title,
+                provider: parserProvider || existingDraft.provider,
+                localTime: parserLocalTime || existingDraft.localTime,
+                timezone: parserTimezone || existingDraft.timezone,
+                location: parserLocation || existingDraft.location,
+                confirmationCode: parserConfirmationCode || existingDraft.confirmationCode,
+                notes: [existingDraft.notes, parserNotesText].filter(Boolean).join(" ").trim(),
+                flightNumber: parserFlightNumber || existingDraft.flightNumber,
+                flightAirline: resolvedAirline || existingDraft.flightAirline,
+                flightDate: parserLocalTime.slice(0, 10) || existingDraft.flightDate,
+                flightDepartureAirport:
+                  parsedReservation.flightDepartureAirport || existingDraft.flightDepartureAirport,
+                flightArrivalAirport:
+                  parsedReservation.flightArrivalAirport || existingDraft.flightArrivalAirport,
+                flightDepartureTime: parserLocalTime || existingDraft.flightDepartureTime,
+              },
+              parseConfidenceScore: Math.max(
+                typeof reviewRecord.parseConfidenceScore === "number" ? reviewRecord.parseConfidenceScore : 0,
+                parserConfidenceScore,
+              ),
+              parsingStatus: parserParsingStatus,
+              parserNotes,
+            };
+          });
           acceptedDraftCount += 1;
-          routeLogger.info("Flight schedule updated from forwarded email.", {
+          routeLogger.info("Pending review flight refreshed from re-forwarded email.", {
             userId: targetUserId,
             tripId: targetTrip.id,
-            reservationId: merged.id,
-            scheduleChanges,
+            flightNumber: parserFlightNumber || null,
           });
           continue;
         }
@@ -935,6 +998,11 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
             flightNumber: parserType === "flight" ? parserFlightNumber : "",
             flightAirline: resolvedAirline,
             flightDate: parserType === "flight" ? parserLocalTime.slice(0, 10) : "",
+            flightDepartureAirport:
+              parserType === "flight" ? parsedReservation.flightDepartureAirport : "",
+            flightArrivalAirport:
+              parserType === "flight" ? parsedReservation.flightArrivalAirport : "",
+            flightDepartureTime: parserType === "flight" && parserLocalTime ? parserLocalTime : "",
           },
           sourceChannel: "email-forward" as const,
           parseConfidenceScore: parserConfidenceScore,

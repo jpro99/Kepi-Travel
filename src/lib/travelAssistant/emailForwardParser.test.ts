@@ -212,6 +212,51 @@ test("parseForwardedEmail imports every leg on a round-trip itinerary without AI
     assert.equal(result.drafts.length, 6);
     assert.equal(result.drafts.find((draft) => draft.flightNumber === "AS655")?.localTime, "2026-10-06 06:40");
     assert.equal(result.drafts.find((draft) => draft.flightNumber === "HA11")?.localTime, "2026-10-05 17:30");
+    assert.notEqual(result.drafts[0]?.confirmationCode, "YOUR");
+  } finally {
+    if (previousKey === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = previousKey;
+    }
+  }
+});
+
+test("extractBestLocalTimeFromEmailBody reads Gmail abbreviated date with at time", () => {
+  const email = `
+Flight AS654
+Departure ONT
+Thu, Sep 14, 2026 at 8:45 AM
+Arrival SEA
+Thu, Sep 14, 2026 at 11:20 AM
+`;
+  const localTime = extractBestLocalTimeFromEmailBody(email, "flight");
+  assert.equal(localTime, "2026-09-14 08:45");
+});
+
+test("html itinerary keeps line breaks for per-leg date parsing", async () => {
+  const previousKey = process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  try {
+    const html = `
+      <p>Confirmation ABC123</p>
+      <p>Flight AS654</p>
+      <p>Departure ONT</p>
+      <p>Sep 14, 2026 at 8:45 AM</p>
+      <p>Flight AS832</p>
+      <p>Departure SEA</p>
+      <p>Sep 14, 2026 at 1:05 PM</p>
+    `;
+    const result = await parseForwardedEmail({
+      subject: "Itinerary",
+      from: "no-reply@alaskaair.com",
+      text: "",
+      html,
+      attachments: [],
+    });
+    assert.equal(result.drafts.length, 2);
+    assert.equal(result.drafts.find((draft) => draft.flightNumber === "AS654")?.localTime, "2026-09-14 08:45");
+    assert.equal(result.drafts.find((draft) => draft.flightNumber === "AS832")?.localTime, "2026-09-14 13:05");
   } finally {
     if (previousKey === undefined) {
       delete process.env.ANTHROPIC_API_KEY;

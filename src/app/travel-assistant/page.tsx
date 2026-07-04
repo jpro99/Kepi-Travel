@@ -8225,11 +8225,13 @@ export default function TravelAssistantPage() {
     [flightLiveStatusByReservationId, flightStatusCheckByReservationId],
   );
 
+  const MOBILE_TAB_BAR_INSET = "max(4.75rem, calc(env(safe-area-inset-bottom) + 4rem))";
+
   const activeDrawerPanel =
     activeDrawer && drawerPortalReady
       ? createPortal(
           <div
-            className="fixed inset-0 z-[140] flex items-end justify-end bg-black/80 p-3 md:p-6"
+            className="fixed inset-0 z-[10050] flex items-end justify-center bg-black/80 p-0 md:items-end md:justify-end md:p-6"
             onMouseDown={(event) => {
               if (event.target === event.currentTarget) {
                 closeDrawer();
@@ -8242,10 +8244,10 @@ export default function TravelAssistantPage() {
         aria-modal="true"
         aria-labelledby="travel-assistant-drawer-title"
         tabIndex={-1}
-        className="h-full w-full max-w-xl overflow-y-auto rounded-2xl border-2 border-slate-300 bg-white p-5 text-slate-900 shadow-2xl md:max-h-[92vh] [color-scheme:light]"
+        className="flex h-[100dvh] w-full max-w-xl flex-col overflow-hidden rounded-none border-2 border-slate-300 bg-white text-slate-900 shadow-2xl md:h-auto md:max-h-[92vh] md:rounded-2xl md:p-0 [color-scheme:light]"
         style={{ backgroundColor: "#ffffff", color: "#0f172a" }}
       >
-        <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-3">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-5 pb-3 pt-[max(1rem,env(safe-area-inset-top))] md:pt-5">
           <h2 id="travel-assistant-drawer-title" className="text-lg font-bold text-slate-900">
             {activeDrawer.kind === "reservation" ? "Reservation details" : "Confirm this booking"}
           </h2>
@@ -8254,11 +8256,12 @@ export default function TravelAssistantPage() {
             type="button"
             onClick={closeDrawer}
             aria-label="Close details drawer"
-            className="rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-800 hover:bg-slate-200"
+            className="min-h-[44px] rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-800 hover:bg-slate-200 touch-manipulation"
           >
             Close
           </button>
         </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain touch-pan-y px-5 pb-4">
         {activeDrawer.kind === "review" ? (
           <p className="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950">
             Check the fields below, then tap <strong>Save + accept</strong> to add this to your Flights tab.
@@ -8595,11 +8598,15 @@ export default function TravelAssistantPage() {
             />
           </label>
         </div>
-        <div className="mt-4 flex flex-wrap gap-2">
+        </div>
+        <div
+          className="flex shrink-0 flex-wrap gap-2 border-t border-slate-200 bg-white px-5 py-3 touch-manipulation"
+          style={{ paddingBottom: `calc(${MOBILE_TAB_BAR_INSET} + 0.5rem)` }}
+        >
           <button
             type="button"
             onClick={saveDrawer}
-            className="rounded-lg bg-cyan-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
+            className="min-h-[44px] rounded-lg bg-cyan-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
           >
             Save changes
           </button>
@@ -8635,7 +8642,7 @@ export default function TravelAssistantPage() {
               onClick={() => {
                 acceptReviewWithDraft(activeDrawer.id, drawerDraft);
               }}
-              className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
+              className="min-h-[44px] rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
             >
               Save + accept review
             </button>
@@ -8646,7 +8653,7 @@ export default function TravelAssistantPage() {
               onClick={() => {
                 handleSkipReviewAndAdvance(activeDrawer.id);
               }}
-              className="rounded-lg bg-slate-700 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-600"
+              className="min-h-[44px] rounded-lg bg-slate-700 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-600"
             >
               Skip review
             </button>
@@ -8661,7 +8668,7 @@ export default function TravelAssistantPage() {
                   source: "review-drawer",
                 });
               }}
-              className="rounded-lg bg-rose-500 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-400"
+              className="min-h-[44px] rounded-lg bg-rose-500 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-400"
             >
               Delete review item
             </button>

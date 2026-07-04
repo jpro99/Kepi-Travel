@@ -247,28 +247,65 @@ export function prepareEmailBodyForParsing(rawText: string): { collapsed: string
   };
 }
 
+function lineMentionsIsoDay(line: string, isoDay: string): boolean {
+  if (line.includes(isoDay) || line.includes(isoDay.replace(/-/gu, "/"))) {
+    return true;
+  }
+  const datePatterns = [
+    /\b(20\d{2}-\d{2}-\d{2})\b/u,
+    /\b(\d{1,2}\/\d{1,2}\/\d{2,4})\b/u,
+    /\b(\d{1,2}-(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{4})\b/iu,
+    /\b(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?,?\s+\d{4})\b/iu,
+    /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})\b/iu,
+    /\b((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})\b/iu,
+  ];
+  for (const pattern of datePatterns) {
+    const match = line.match(pattern);
+    const rawDate = match?.[1]?.replace(/\s+at\s+.*/iu, "") ?? "";
+    if (rawDate && parseDateCandidate(rawDate) === isoDay) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function localTimeIsTravelContext(localTime: string, lineAwareText: string): boolean {
   const day = localTime.trim().slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(day)) return true;
   const lines = lineAwareText.split("\n");
   for (let index = 0; index < lines.length; index += 1) {
-    const context = [lines[index - 1], lines[index], lines[index + 1]]
-      .filter(Boolean)
-      .join(" ");
-    if (!context.includes(day) && !context.includes(day.replace(/-/gu, "/"))) continue;
+    const contextLines = [lines[index - 1], lines[index], lines[index + 1]].filter(Boolean);
+    const mentionsDay = contextLines.some((line) => lineMentionsIsoDay(line, day));
+    if (!mentionsDay) continue;
+    const context = contextLines.join(" ");
     if (NON_TRAVEL_DATE_CONTEXT.test(context)) return false;
     if (TRAVEL_DATE_CONTEXT.test(context)) return true;
   }
-  return !lines.some((line) => line.includes(day) && NON_TRAVEL_DATE_CONTEXT.test(line));
+  return !lines.some((line) => lineMentionsIsoDay(line, day) && NON_TRAVEL_DATE_CONTEXT.test(line));
 }
 
 function sanitizeTravelLocalTime(candidates: CandidateMap, lineAwareText: string): CandidateMap {
   const localTime = candidates.localTime;
   if (!localTime?.value.trim()) return candidates;
+  if (localTime.source === "regex" && candidates.flightNumber?.value?.trim()) {
+    return candidates;
+  }
   if (localTimeIsTravelContext(localTime.value, lineAwareText)) return candidates;
   const next = { ...candidates };
   delete next.localTime;
   return next;
+}
+
+function findTimeOnNearbyLines(lines: string[], index: number): string | null {
+  const candidates = [lines[index], lines[index - 1], lines[index + 1], lines[index + 2]]
+    .filter(Boolean)
+    .join(" ");
+  const combinedMatch =
+    candidates.match(/\bat\s+(\d{1,2}:\d{2}\s*(?:AM|PM))\b/iu) ??
+    candidates.match(/\b(\d{1,2}:\d{2}\s*(?:AM|PM))\b/iu) ??
+    candidates.match(/\bat\s+(\d{1,2}:\d{2})\b/iu) ??
+    candidates.match(/\b(\d{1,2}:\d{2})\b/u);
+  return parseTimeTo24Hour(combinedMatch?.[1] ?? "");
 }
 
 function extractBestLocalTimeCandidate(
@@ -281,20 +318,24 @@ function extractBestLocalTimeCandidate(
     /\b(20\d{2}-\d{2}-\d{2})\b/u,
     /\b(\d{1,2}\/\d{1,2}\/\d{2,4})\b/u,
     /\b(\d{1,2}-(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{4})\b/iu,
-    /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4})\b/iu,
-    /\b((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4})\b/iu,
+    /\b(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?,?\s+\d{4})\b/iu,
+    /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})\b/iu,
+    /\b((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})\b/iu,
+    /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s*(?:AM|PM)?)\b/iu,
   ];
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? "";
-    const context = [lines[index - 1], line, lines[index + 1]].filter(Boolean).join(" ");
+    const context = [lines[index - 2], lines[index - 1], line, lines[index + 1], lines[index + 2]]
+      .filter(Boolean)
+      .join(" ");
     if (EMAIL_HEADER_DATE_LINE.test(line.trim())) continue;
     if (NON_TRAVEL_DATE_CONTEXT.test(context) && !TRAVEL_DATE_CONTEXT.test(context)) continue;
 
     for (const pattern of datePatterns) {
       const dateMatch = line.match(pattern) ?? context.match(pattern);
       const rawDate = dateMatch?.[1] ?? "";
-      const parsedDate = parseDateCandidate(rawDate);
+      const parsedDate = parseDateCandidate(rawDate.replace(/\s+at\s+.*/iu, ""));
       if (!parsedDate) continue;
 
       let score = 0;
@@ -305,12 +346,7 @@ function extractBestLocalTimeCandidate(
       if (reservationType === "hotel" && /\b(?:check-?in|check out|stay|night)\b/iu.test(context)) score += 4;
       if (NON_TRAVEL_DATE_CONTEXT.test(context)) score -= 8;
 
-      const timeMatch =
-        line.match(/\b(\d{1,2}:\d{2}\s*(?:AM|PM))\b/iu) ??
-        line.match(/\b(\d{1,2}:\d{2})\b/u) ??
-        (lines[index + 1] ?? "").match(/\b(\d{1,2}:\d{2}\s*(?:AM|PM))\b/iu) ??
-        (lines[index + 1] ?? "").match(/\b(\d{1,2}:\d{2})\b/u);
-      const parsedTime = parseTimeTo24Hour(timeMatch?.[1] ?? "");
+      const parsedTime = findTimeOnNearbyLines(lines, index);
       const localTime = parsedTime ? `${parsedDate} ${parsedTime}` : `${parsedDate} 12:00`;
       if (parsedTime) score += 3;
       scored.push({ localTime, score });
@@ -331,6 +367,29 @@ function extractBestLocalTimeCandidate(
   };
 }
 
+function extractLegDepartureTime(window: string): { localTime: string; confidence: number } | null {
+  const lines = window.split("\n");
+  let collecting = false;
+  const depLines: string[] = [];
+  for (const line of lines) {
+    if (/\b(?:Departure|Depart(?:s|ure)?|From)\b/iu.test(line)) {
+      collecting = true;
+      depLines.push(line);
+      continue;
+    }
+    if (collecting) {
+      if (/^\s*(?:Flight\s*)?[A-Z]{2}\s*\d{1,4}\b/iu.test(line.trim())) break;
+      if (/\b(?:Arrival|Arrive(?:s)?)\b/iu.test(line)) break;
+      depLines.push(line);
+    }
+  }
+  if (depLines.length > 0) {
+    const fromDeparture = extractBestLocalTimeCandidate(depLines.join("\n"), "flight");
+    if (fromDeparture) return fromDeparture;
+  }
+  return extractBestLocalTimeCandidate(window, "flight");
+}
+
 /** Resolve the best travel date/time from a raw or forwarded email body. */
 export function extractBestLocalTimeFromEmailBody(
   rawText: string,
@@ -344,19 +403,31 @@ function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/gu, " ").trim();
 }
 
+function htmlToLineAwareText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/giu, "\n")
+    .replace(/<script[\s\S]*?<\/script>/giu, "\n")
+    .replace(/<br\s*\/?>/giu, "\n")
+    .replace(/<\/p>/giu, "\n")
+    .replace(/<\/div>/giu, "\n")
+    .replace(/<\/tr>/giu, "\n")
+    .replace(/<\/li>/giu, "\n")
+    .replace(/<\/h[1-6]>/giu, "\n")
+    .replace(/<[^>]+>/gu, " ")
+    .replace(/&nbsp;/giu, " ")
+    .replace(/&amp;/giu, "&")
+    .replace(/&lt;/giu, "<")
+    .replace(/&gt;/giu, ">")
+    .replace(/&#39;/giu, "'")
+    .replace(/&quot;/giu, '"')
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+\n/gu, "\n")
+    .replace(/\n{3,}/gu, "\n\n")
+    .trim();
+}
+
 function stripHtml(input: string): string {
-  return normalizeWhitespace(
-    input
-      .replace(/<style[\s\S]*?<\/style>/giu, " ")
-      .replace(/<script[\s\S]*?<\/script>/giu, " ")
-      .replace(/<[^>]+>/gu, " ")
-      .replace(/&nbsp;/giu, " ")
-      .replace(/&amp;/giu, "&")
-      .replace(/&lt;/giu, "<")
-      .replace(/&gt;/giu, ">")
-      .replace(/&#39;/giu, "'")
-      .replace(/&quot;/giu, '"'),
-  );
+  return normalizeWhitespace(htmlToLineAwareText(input));
 }
 
 function hasPdfAttachment(attachments: ForwardedEmailAttachmentMeta[] | null | undefined): boolean {
@@ -736,7 +807,7 @@ function extractFlightLegsFromRegex(lineAwareText: string, sharedFields: Candida
     const tokenLength = match[0]?.length ?? flightNumber.length;
     const window = extractFlightLegWindow(lineAwareText, idx, tokenLength);
     const { dep, arr } = extractAirportsFromWindow(window);
-    const localTimeResult = extractBestLocalTimeCandidate(window, "flight");
+    const localTimeResult = extractLegDepartureTime(window);
     const leg: CandidateMap = {
       type: { value: "flight", confidence: 0.88, source: "regex" },
       flightNumber: { value: flightNumber, confidence: 0.92, source: "regex" },
@@ -970,16 +1041,31 @@ function buildRegexCandidates(input: {
   }
 
   // Handle "Confirmation #\n49932361" where newline separates # from code
+  const inlineConfirmationMatch = combined.match(
+    /\b(?:confirmation|record locator|pnr)\s+#?\s*([A-Z0-9]{4,10})\b/iu,
+  );
   const confirmationMatch = combined.match(
     /(?:confirmation(?:\s*(?:number|code|#|receipt))?|booking\s*(?:ref(?:erence)?|code|#|number)|record locator|pnr|itinerary\s*(?:number|#)?|reservation\s*(?:number|#)?)[^A-Za-z0-9]{0,30}([A-Za-z0-9-]{4,20})/iu,
   );
   // Denylist common English words that regex may incorrectly grab as confirmation codes
-  const CONFIRMATION_CODE_WORD_DENYLIST = new Set(["RECEIPT", "CODE", "NUMBER", "DETAILS", "PENDING", "CONFIRMED", "RESERVED", "BOOKING", "TRAVEL", "FLIGHT", "HOTEL", "TICKET", "MANAGE", "VIEW", "FORWARDED", "MESSAGE"]);
-  const isValidConfirmationCode = confirmationMatch?.[1] && !CONFIRMATION_CODE_WORD_DENYLIST.has(confirmationMatch[1].toUpperCase());
-  if (isValidConfirmationCode) {
+  const CONFIRMATION_CODE_WORD_DENYLIST = new Set([
+    "RECEIPT", "CODE", "NUMBER", "DETAILS", "PENDING", "CONFIRMED", "RESERVED", "BOOKING", "TRAVEL",
+    "FLIGHT", "HOTEL", "TICKET", "MANAGE", "VIEW", "FORWARDED", "MESSAGE", "YOUR", "TRIP", "TRIPS",
+    "ITINERARY", "ALASKA", "UNITED", "DELTA", "AMERICAN", "HAWAIIAN", "OUTBOUND", "INBOUND", "RETURN",
+    "CONFIRMATION",
+  ]);
+  const inlineCode = inlineConfirmationMatch?.[1]?.toUpperCase();
+  const matchedCode = confirmationMatch?.[1]?.toUpperCase();
+  const chosenCode =
+    inlineCode && !CONFIRMATION_CODE_WORD_DENYLIST.has(inlineCode)
+      ? inlineCode
+      : matchedCode && !CONFIRMATION_CODE_WORD_DENYLIST.has(matchedCode)
+        ? matchedCode
+        : "";
+  if (chosenCode) {
     candidates.confirmationCode = {
-      value: normalizeConfirmationCode(confirmationMatch![1]!),
-      confidence: 0.92,
+      value: normalizeConfirmationCode(chosenCode),
+      confidence: inlineCode === chosenCode ? 0.94 : 0.92,
       source: "regex",
     };
   } else {
@@ -1201,16 +1287,17 @@ function dedupeDrafts(drafts: ForwardedReservationDraft[]): ForwardedReservation
 function chooseBodyText(text: string, html: string): { parsedText: string; lineAwareText: string; imageBasedEmail: boolean } {
   const lineAwareRaw = text.replace(/\r\n/g, "\n");
   const normalizedText = normalizeWhitespace(text);
-  if (normalizedText.length >= MIN_READABLE_TEXT_LENGTH) {
+  if (lineAwareRaw.trim().length >= MIN_READABLE_TEXT_LENGTH) {
     return { parsedText: normalizedText, lineAwareText: lineAwareRaw, imageBasedEmail: false };
   }
-  const strippedHtml = stripHtml(html);
+  const lineAwareHtml = htmlToLineAwareText(html);
+  const strippedHtml = normalizeWhitespace(lineAwareHtml);
   if (strippedHtml.length >= MIN_READABLE_TEXT_LENGTH) {
-    return { parsedText: strippedHtml, lineAwareText: strippedHtml, imageBasedEmail: false };
+    return { parsedText: strippedHtml, lineAwareText: lineAwareHtml, imageBasedEmail: false };
   }
   return {
     parsedText: strippedHtml || normalizedText,
-    lineAwareText: lineAwareRaw || strippedHtml,
+    lineAwareText: lineAwareRaw || lineAwareHtml || strippedHtml,
     imageBasedEmail: true,
   };
 }
