@@ -18,7 +18,10 @@ import type { TravelStyleProfile } from "@/lib/traveler/types";
 import { MobileTripShellHeader } from "@/components/travelAssistant/mobile/MobileTripShellHeader";
 import { MobileTripsView } from "@/components/travelAssistant/mobile/MobileTripsView";
 import { MobileBookHeader, MobileBookSegmentToggle } from "@/components/travelAssistant/mobile/MobileBookChrome";
-import type { MobilePrimaryTab } from "@/components/travelAssistant/mobile/mobileShellTypes";
+import {
+  MOBILE_TAB_BAR_CLEARANCE,
+  type MobilePrimaryTab,
+} from "@/components/travelAssistant/mobile/mobileShellTypes";
 import { DestinationHeroPhoto, resolveHeroCity } from "@/components/travelAssistant/tripHeroVisuals";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 import type { StopDateRange } from "@/lib/decision/stopDates";
@@ -401,9 +404,13 @@ export function MobileMapForwardShell({
 
   if (activeTab === "map") {
     const atAirport = locationStatus === "at-airport" || locationStatus === "in-terminal";
+    const mapPanelHeight = `calc(100dvh - ${MOBILE_TAB_BAR_CLEARANCE} - 5.5rem)`;
     return (
-      <div className="kepi-mobile-shell -mx-1 flex min-h-[calc(100dvh-11rem)] flex-col pb-2">
-        <div className="relative min-h-[calc(100dvh-11rem)] flex-1 overflow-hidden rounded-[var(--radius-card)] bg-[#dbeafe] ring-1 ring-[var(--border-default)]">
+      <div className="kepi-mobile-shell -mx-1 flex flex-col pb-2">
+        <div
+          className="relative overflow-hidden rounded-[var(--radius-card)] bg-[#dbeafe] ring-1 ring-[var(--border-default)]"
+          style={{ height: mapPanelHeight, maxHeight: mapPanelHeight }}
+        >
           <TripHomeOverviewMap
             transportReservations={transportReservations}
             hotelReservations={hotelReservations}
@@ -411,7 +418,7 @@ export function MobileMapForwardShell({
             staySegments={staySegments}
             onReservationTap={onReservationTap}
             preferUserLocation
-            className="min-h-[calc(100dvh-11rem)]"
+            className="h-full min-h-0"
           />
           <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center gap-3 px-4 pb-4 pt-16">
             <Link
@@ -429,6 +436,16 @@ export function MobileMapForwardShell({
               </Link>
             ) : null}
           </div>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => onNavigateTab("home")} className={quickActionBtn}>
+            <p className="text-[15px] font-semibold text-[var(--text-muted)]">Leave map</p>
+            <p className="mt-1 text-[17px] font-bold text-[var(--text-primary)]">Trip home</p>
+          </button>
+          <button type="button" onClick={() => onNavigateTab("book")} className={quickActionBtn}>
+            <p className="text-[15px] font-semibold text-[var(--text-muted)]">Bookings</p>
+            <p className="mt-1 text-[17px] font-bold text-[var(--text-primary)]">Flights & hotels</p>
+          </button>
         </div>
       </div>
     );

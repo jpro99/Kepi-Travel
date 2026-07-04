@@ -17,9 +17,13 @@ export function useMobileTabNavigation(
         onNavigate(tab);
         return;
       }
-      const params = new URLSearchParams();
-      params.set("mtab", tab);
-      router.push(`/travel-assistant?${params.toString()}`);
+      const target = `/travel-assistant?mtab=${encodeURIComponent(tab)}`;
+      // Full-screen /live-map keeps a WebGL canvas alive; hard navigation reliably exits on mobile.
+      if (typeof window !== "undefined" && window.location.pathname.includes("/live-map")) {
+        window.location.assign(target);
+        return;
+      }
+      router.push(target);
     },
     [onNavigate, router],
   );

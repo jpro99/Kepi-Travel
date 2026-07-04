@@ -1,5 +1,8 @@
 export type MobilePrimaryTab = "home" | "plan" | "book" | "map" | "photos" | "more";
 
+/** Fixed bottom tab bar height — keep map canvases above this line so taps reach navigation. */
+export const MOBILE_TAB_BAR_CLEARANCE = "max(4.75rem, calc(env(safe-area-inset-bottom) + 4rem))";
+
 /** Same mental model as desktop: Home → Plan → Book → Map → Photos → More */
 export const MOBILE_PRIMARY_TABS: Array<{ id: MobilePrimaryTab; label: string }> = [
   { id: "home", label: "Home" },

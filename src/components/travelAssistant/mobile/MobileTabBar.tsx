@@ -27,7 +27,7 @@ export function MobileTabBar({ activeTab, onSelectTab, className = "" }: MobileT
 
   const bar = (
     <nav
-      className={`fixed inset-x-0 bottom-0 z-[9999] border-t border-[var(--border-default)] bg-[var(--bg-card)] px-2 pt-2 shadow-[0_-8px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl pointer-events-auto ${className}`}
+      className={`fixed inset-x-0 bottom-0 isolate z-[99999] border-t border-[var(--border-default)] bg-[var(--bg-card)] px-2 pt-2 shadow-[0_-8px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl pointer-events-auto ${className}`}
       style={{ paddingBottom: "max(0.625rem, env(safe-area-inset-bottom))" }}
       aria-label="Main navigation"
     >

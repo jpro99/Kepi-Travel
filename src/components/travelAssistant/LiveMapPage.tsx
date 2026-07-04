@@ -21,6 +21,7 @@ import { buildFamilyAirportPins } from "@/lib/family/familyAirportPins";
 import { useFamilyAirportSync } from "@/lib/family/useFamilyAirportSync";
 import { FamilyRallyStrip } from "@/components/travelAssistant/FamilyRallyStrip";
 import { readCompassHeading, requestDeviceOrientationPermission } from "@/lib/map/deviceCompass";
+import { MOBILE_TAB_BAR_CLEARANCE } from "@/components/travelAssistant/mobile/mobileShellTypes";
 import { MobileTabBarNav } from "@/components/travelAssistant/mobile/useMobileTabNavigation";
 
 /* ─── Types ─────────────────────────────────────────────────── */
@@ -67,7 +68,7 @@ function isStale(iso: string) { return Date.now() - Date.parse(iso) > 10 * 60_00
 type MapStyleId = LiveMapStyleId;
 
 /** Bottom inset so map overlays clear the fixed mobile tab bar on /live-map. */
-const MOBILE_TAB_BAR_INSET = "max(4.75rem, calc(env(safe-area-inset-bottom) + 4rem))";
+const MOBILE_TAB_BAR_INSET = MOBILE_TAB_BAR_CLEARANCE;
 
 function defaultMapCenter(locations: LocationPoint[]): { center: [number, number]; zoom: number } {
   if (locations.length === 1) {
@@ -851,7 +852,8 @@ export function LiveMapPage() {
         {/* Map canvas — family / world basemap with country labels */}
         <div
           ref={mapEl}
-          className={`absolute inset-0 z-0 h-[100dvh] w-full min-h-[240px] bg-[#dbeafe] ${mapView === "airport" ? "opacity-0 pointer-events-none" : ""}`}
+          className={`absolute left-0 right-0 top-0 z-0 w-full min-h-[240px] bg-[#dbeafe] ${mapView === "airport" ? "opacity-0 pointer-events-none" : ""}`}
+          style={{ bottom: MOBILE_TAB_BAR_INSET }}
         />
 
         {/* Airport Navigator overlay — full-bleed when at the airport view */}
@@ -941,9 +943,11 @@ export function LiveMapPage() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => router.push("/travel-assistant?mtab=map")}
+              onClick={() => {
+                window.location.assign("/travel-assistant?mtab=home");
+              }}
               className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-[22px] font-bold shadow-lg backdrop-blur-md border ${chromeBtnIdle}`}
-              aria-label="Back"
+              aria-label="Back to trip home"
             >
               ←
             </button>
