@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { LiveMapLink } from "@/components/travelAssistant/LiveMapLink";
 import { TripFlightLegPicker } from "@/components/travelAssistant/TripFlightLegPicker";
 import { InterCityTransportPrompts } from "@/components/travelAssistant/InterCityTransportPrompts";
 import { TripFirstBanner } from "@/components/travelAssistant/TripFirstBanner";
@@ -415,13 +416,12 @@ function AirportGuideCard({
 
       {showTerminalNavigator ? (
         <div className="mx-4 mb-3">
-          <Link
-            href="/travel-assistant/live-map"
+          <LiveMapLink
             className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#007AFF] py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-500/30 transition hover:bg-[#0066DD]"
           >
             Open terminal navigator
             <span aria-hidden>→</span>
-          </Link>
+          </LiveMapLink>
           <p className={`mt-2 text-center text-[10px] ${guideType.mutedText}`}>
             {hasNav
               ? `Gate routing · lounges · ${iata} terminal map`

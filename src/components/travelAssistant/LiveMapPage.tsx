@@ -21,6 +21,7 @@ import { buildFamilyAirportPins } from "@/lib/family/familyAirportPins";
 import { useFamilyAirportSync } from "@/lib/family/useFamilyAirportSync";
 import { FamilyRallyStrip } from "@/components/travelAssistant/FamilyRallyStrip";
 import { readCompassHeading, requestDeviceOrientationPermission } from "@/lib/map/deviceCompass";
+import { leaveLiveMap, isLiveMapSessionActive, markLiveMapSessionActive } from "@/lib/travelAssistant/liveMapSession";
 import { MOBILE_TAB_BAR_CLEARANCE } from "@/components/travelAssistant/mobile/mobileShellTypes";
 import { MobileTabBarNav } from "@/components/travelAssistant/mobile/useMobileTabNavigation";
 
@@ -120,6 +121,15 @@ export function LiveMapPage() {
   const [myMemberId, setMyMemberId] = useState<string | null>(null);
   const [gpsRefreshing, setGpsRefreshing] = useState(false);
   const [activeTripId, setActiveTripId] = useState<string | null>(urlTripId);
+
+  useEffect(() => {
+    if (urlTripId) {
+      markLiveMapSessionActive();
+      return;
+    }
+    if (isLiveMapSessionActive()) return;
+    leaveLiveMap("home");
+  }, [urlTripId]);
 
   useEffect(() => {
     headingUpRef.current = headingUp;
@@ -943,9 +953,7 @@ export function LiveMapPage() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => {
-                window.location.assign("/travel-assistant?mtab=home");
-              }}
+              onClick={() => leaveLiveMap("home")}
               className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-[22px] font-bold shadow-lg backdrop-blur-md border ${chromeBtnIdle}`}
               aria-label="Back to trip home"
             >

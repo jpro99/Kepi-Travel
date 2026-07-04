@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { MobileTabBar } from "@/components/travelAssistant/mobile/MobileTabBar";
 import type { MobilePrimaryTab } from "@/components/travelAssistant/mobile/mobileShellTypes";
+import { clearLiveMapSession } from "@/lib/travelAssistant/liveMapSession";
 
 export function useMobileTabNavigation(
   activeTab?: MobilePrimaryTab,
@@ -20,6 +21,7 @@ export function useMobileTabNavigation(
       const target = `/travel-assistant?mtab=${encodeURIComponent(tab)}`;
       // Full-screen /live-map keeps a WebGL canvas alive; hard navigation reliably exits on mobile.
       if (typeof window !== "undefined" && window.location.pathname.includes("/live-map")) {
+        clearLiveMapSession();
         window.location.assign(target);
         return;
       }

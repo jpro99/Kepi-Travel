@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { LiveMapLink } from "@/components/travelAssistant/LiveMapLink";
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { MobileAssistView } from "@/components/travelAssistant/mobile/MobileAssistView";
@@ -421,19 +421,17 @@ export function MobileMapForwardShell({
             className="h-full min-h-0"
           />
           <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center gap-3 px-4 pb-4 pt-16">
-            <Link
-              href="/travel-assistant/live-map"
+            <LiveMapLink
               className="pointer-events-auto min-h-[48px] rounded-full bg-white/95 px-5 py-3 text-[17px] font-bold text-slate-900 shadow-lg ring-1 ring-black/10"
             >
               Family map
-            </Link>
+            </LiveMapLink>
             {atAirport ? (
-              <Link
-                href="/travel-assistant/live-map"
+              <LiveMapLink
                 className="pointer-events-auto min-h-[48px] rounded-full bg-[#007AFF] px-5 py-3 text-[17px] font-bold text-white shadow-lg"
               >
                 Airport mode
-              </Link>
+              </LiveMapLink>
             ) : null}
           </div>
         </div>
@@ -619,12 +617,11 @@ export function MobileMapForwardShell({
         <h1 className="text-[2rem] font-bold tracking-tight text-[var(--text-primary)]">More</h1>
         <p className="mt-1 text-[19px] text-[var(--text-secondary)]">Settings & family</p>
       </header>
-      <Link
-        href="/travel-assistant/live-map"
+      <LiveMapLink
         className="flex min-h-[56px] items-center rounded-2xl bg-[var(--bg-card)] px-5 text-[19px] font-bold text-[var(--text-primary)] ring-1 ring-[var(--border-default)]"
       >
         Family map & live location
-      </Link>
+      </LiveMapLink>
 
       <div className="overflow-hidden rounded-2xl bg-[var(--bg-card)] ring-1 ring-[var(--border-default)]">
         <div className="flex items-center gap-3 border-b border-[var(--border-default)] px-5 py-4">

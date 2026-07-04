@@ -175,6 +175,7 @@ import { buildFlightLegsFromIntent, defaultEnabledLegIds } from "@/lib/decision/
 import { DesktopTripHomeView } from "@/components/travelAssistant/DesktopTripHomeView";
 import { MobileMapForwardShell } from "@/components/travelAssistant/mobile/MobileMapForwardShell";
 import { computeJourneyPhase, defaultConsumerTabForPhase, type JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
+import { markLiveMapSessionActive } from "@/lib/travelAssistant/liveMapSession";
 import { TripSearch, type TripSearchSelection } from "@/components/travelAssistant/TripSearch";
 import { TripSwitcher } from "@/components/travelAssistant/TripSwitcher";
 import { TripOrientationCard } from "@/components/travelAssistant/TripOrientationCard";
@@ -1979,7 +1980,6 @@ export default function TravelAssistantPage() {
     }
   }, [navigateToConsumerTab, navigateMobilePrimaryTab]);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-  const airportAutoNavRef = useRef(false);
   const [manualReservationDefaultDateTime, setManualReservationDefaultDateTime] = useState<string | null>(null);
   const itineraryPrefs = useItineraryPanelPrefs(activeTripId);
   const [itinerarySelectedDateKey, setItinerarySelectedDateKey] = useState<string | null>(null);
@@ -4822,30 +4822,6 @@ export default function TravelAssistantPage() {
     navigateToConsumerTab(defaultTab, defaultTab === "book" ? { bookView: "flights" } : undefined);
     consumerTabInitRef.current = true;
   }, [journeyPhase, navigateToConsumerTab]);
-
-  useEffect(() => {
-    if (!isCompactViewport) {
-      airportAutoNavRef.current = false;
-      return;
-    }
-    const atAirport =
-      guidanceLocationStatus === "at-airport" || guidanceLocationStatus === "in-terminal";
-    if (!atAirport) {
-      airportAutoNavRef.current = false;
-      return;
-    }
-    if (
-      journeyPhase.kind === "no-trip" ||
-      journeyPhase.kind === "airborne"
-    ) {
-      return;
-    }
-    if (airportAutoNavRef.current) {
-      return;
-    }
-    airportAutoNavRef.current = true;
-    router.push("/travel-assistant/live-map");
-  }, [guidanceLocationStatus, journeyPhase, isCompactViewport, router]);
 
   useEffect(() => {
     if (!tripsHydratedRef.current) return;
@@ -9138,7 +9114,14 @@ export default function TravelAssistantPage() {
               <button
                 key={tab}
                 type="button"
-                onClick={() => (tab === "map" ? router.push("/travel-assistant/live-map") : navigateToConsumerTab(tab))}
+                onClick={() => {
+                  if (tab === "map") {
+                    markLiveMapSessionActive();
+                    router.push("/travel-assistant/live-map");
+                    return;
+                  }
+                  navigateToConsumerTab(tab);
+                }}
                 className={`relative flex min-w-[4.5rem] flex-1 flex-col items-center justify-center gap-0.5 py-2.5 transition-all ${
                   consumerTab === tab
                     ? "text-[#007AFF] dark:text-[#0A84FF]"
@@ -9340,7 +9323,10 @@ export default function TravelAssistantPage() {
                 onReservationTap={(id) => openDrawer("reservation", id)}
                 onOpenBook={() => navigateToBook("flights")}
                 onOpenPlan={() => navigateToConsumerTab("itinerary")}
-                onOpenMap={() => router.push("/travel-assistant/live-map")}
+                onOpenMap={() => {
+                  markLiveMapSessionActive();
+                  router.push("/travel-assistant/live-map");
+                }}
                 liveStatus={flightStatusCheckByReservationId}
               />
             )

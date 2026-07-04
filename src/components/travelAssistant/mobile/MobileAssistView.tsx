@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { LiveMapLink } from "@/components/travelAssistant/LiveMapLink";
 import { NextUpCard } from "@/components/travelAssistant/NextUpCard";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 
@@ -73,8 +73,7 @@ export function MobileAssistView({
       journeyPhase.kind !== "post-trip" &&
       journeyPhase.kind !== "no-trip" &&
       journeyPhase.kind !== "airborne" ? (
-        <Link
-          href="/travel-assistant/live-map"
+        <LiveMapLink
           className="flex min-h-[56px] items-center justify-between gap-3 rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-50 to-blue-50 px-5 py-4 shadow-sm dark:border-sky-500/40 dark:from-sky-950/60 dark:to-blue-950/40"
         >
           <div className="min-w-0">
@@ -86,7 +85,7 @@ export function MobileAssistView({
             </p>
           </div>
           <span className="shrink-0 text-sm font-bold text-[#007AFF] dark:text-[#0A84FF]">Go →</span>
-        </Link>
+        </LiveMapLink>
       ) : null}
 
       <NextUpCard
