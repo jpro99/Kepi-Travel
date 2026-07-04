@@ -1,19 +1,23 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { mergeConfirmationDrafts } from "@/lib/travelAssistant/confirmationDraftMerge";
-import { extractPdfPlainText, preparePdfTextForParsing } from "@/lib/travelAssistant/pdfTextExtract";
 import {
-  confirmationScanKind,
+  confirmationKindUsesTextExtraction,
+  extractConfirmationPlainText,
+  resolveConfirmationScanKind,
+  type ConfirmationScanKind,
+} from "@/lib/travelAssistant/confirmationDocumentText";
+import { mergeConfirmationDrafts } from "@/lib/travelAssistant/confirmationDraftMerge";
+import {
   parseScannedReservationsJson,
   type ScannedReservationDraft,
 } from "@/lib/travelAssistant/scannedReservationDraft";
 
 const SCAN_SYSTEM_PROMPT = [
-  "You extract travel reservations from confirmation documents (PDF e-tickets, boarding passes, hotel vouchers, rail tickets).",
+  "You extract travel reservations from confirmation documents (PDF e-tickets, HTML emails, boarding passes, hotel vouchers, rail tickets).",
   "Return ONLY strict JSON — no explanation text.",
   "Shape:",
   '{ "reservations": [ { "type": "", "title": "", "provider": "", "confirmationCode": "", "localTime": "", "checkOutDate": "", "timezone": "", "location": "", "notes": "", "flightNumber": "", "departureAirport": "", "arrivalAirport": "", "roomType": "", "cashUsd": 0, "pointsMiles": 0, "pointsProgram": "" } ] }',
   "CRITICAL — MULTI-LEG ITINERARIES: Scan the ENTIRE document for EVERY flight segment and EVERY hotel.",
-  "A single PDF may contain 5+ flights (e.g. ONT→SEA→FCO→BRI and later MUC→CGK for Indonesia) — return ONE object per segment in reservations[].",
+  "A single document may contain 5+ flights (e.g. ONT→SEA→FCO→BRI and later MUC→CGK for Indonesia) — return ONE object per segment in reservations[].",
   "Never merge legs. Each flight needs its own flightNumber, departureAirport, arrivalAirport, and localTime (that leg's scheduled DEPARTURE).",
   "Many documents use ONE confirmation/PNR code for all legs — still emit separate reservations[] objects per leg.",
   "For hotels on the same document, add a separate reservations[] object with type=hotel, localTime=check-in (YYYY-MM-DD HH:mm), checkOutDate=YYYY-MM-DD.",
@@ -40,49 +44,106 @@ function imageMediaType(file: File): "image/jpeg" | "image/png" | "image/gif" | 
   return "image/jpeg";
 }
 
-export async function extractConfirmationDocument(
-  file: File,
-  apiKey: string,
-): Promise<ScannedReservationDraft[]> {
-  const kind = confirmationScanKind(file);
-  const fileBytes = Buffer.from(await file.arrayBuffer());
-  const fileBase64 = fileBytes.toString("base64");
-  const pdfPlainText =
-    kind === "pdf" ? preparePdfTextForParsing(await extractPdfPlainText(fileBytes)) : "";
-  const client = new Anthropic({ apiKey });
+function extractionPrompt(kind: ConfirmationScanKind): string {
+  if (kind === "html") {
+    return "Extract every flight segment and every hotel from this HTML travel confirmation (email or webpage). Return all of them in reservations[].";
+  }
+  if (kind === "text") {
+    return "Extract every flight segment and every hotel from this plain-text travel confirmation. Return all of them in reservations[].";
+  }
+  if (kind === "pdf") {
+    return "Extract every flight segment and every hotel from this PDF. Return all of them in reservations[].";
+  }
+  return "Extract every reservation visible on this ticket image. Return all in reservations[].";
+}
 
-  const documentBlock =
-    kind === "pdf"
-      ? {
-          type: "document" as const,
-          source: {
-            type: "base64" as const,
-            media_type: "application/pdf" as const,
-            data: fileBase64,
-          },
-        }
-      : {
-          type: "image" as const,
-          source: {
-            type: "base64" as const,
-            media_type: imageMediaType(file),
-            data: fileBase64,
-          },
-        };
+async function scanWithModel(args: {
+  client: Anthropic;
+  kind: ConfirmationScanKind;
+  file: File;
+  fileBase64: string;
+  plainText: string;
+}): Promise<string> {
+  const userTextParts = [extractionPrompt(args.kind)];
 
-  const userTextParts = [
-    kind === "pdf"
-      ? "Extract every flight segment and every hotel from this PDF. Return all of them in reservations[]."
-      : "Extract every reservation visible on this ticket image. Return all in reservations[].",
-  ];
-  if (pdfPlainText.length >= 80) {
+  if (args.plainText.length >= 80) {
     userTextParts.push(
-      "Plain text extracted from the PDF (use this to ensure you capture every leg, including later pages):\n\n" +
-        pdfPlainText.slice(0, 120_000),
+      "Plain text extracted from the document (use this to ensure you capture every leg, including later pages):\n\n" +
+        args.plainText.slice(0, 120_000),
     );
   }
 
-  const scanResponse = await client.messages.create({
+  if (args.kind === "image") {
+    const scanResponse = await args.client.messages.create({
+      model: "claude-sonnet-4-5",
+      max_tokens: 12_000,
+      temperature: 0,
+      system: SCAN_SYSTEM_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: imageMediaType(args.file),
+                data: args.fileBase64,
+              },
+            },
+            {
+              type: "text",
+              text: userTextParts.join("\n\n"),
+            },
+          ],
+        },
+      ],
+    });
+    return scanResponse.content
+      .filter((block): block is Extract<(typeof scanResponse.content)[number], { type: "text" }> => block.type === "text")
+      .map((block) => block.text)
+      .join("\n")
+      .trim();
+  }
+
+  if (args.kind === "pdf") {
+    const scanResponse = await args.client.messages.create({
+      model: "claude-sonnet-4-5",
+      max_tokens: 12_000,
+      temperature: 0,
+      system: SCAN_SYSTEM_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "document",
+              source: {
+                type: "base64",
+                media_type: "application/pdf",
+                data: args.fileBase64,
+              },
+            },
+            {
+              type: "text",
+              text: userTextParts.join("\n\n"),
+            },
+          ],
+        },
+      ],
+    });
+    return scanResponse.content
+      .filter((block): block is Extract<(typeof scanResponse.content)[number], { type: "text" }> => block.type === "text")
+      .map((block) => block.text)
+      .join("\n")
+      .trim();
+  }
+
+  if (args.plainText.length < 40) {
+    throw new Error("Document did not contain enough readable text to parse.");
+  }
+
+  const scanResponse = await args.client.messages.create({
     model: "claude-sonnet-4-5",
     max_tokens: 12_000,
     temperature: 0,
@@ -91,7 +152,6 @@ export async function extractConfirmationDocument(
       {
         role: "user",
         content: [
-          documentBlock,
           {
             type: "text",
             text: userTextParts.join("\n\n"),
@@ -100,21 +160,54 @@ export async function extractConfirmationDocument(
       },
     ],
   });
-
-  const modelText = scanResponse.content
+  return scanResponse.content
     .filter((block): block is Extract<(typeof scanResponse.content)[number], { type: "text" }> => block.type === "text")
     .map((block) => block.text)
     .join("\n")
     .trim();
+}
+
+function finalizeDrafts(aiDrafts: ScannedReservationDraft[], plainText: string, kind: ConfirmationScanKind): ScannedReservationDraft[] {
+  if (confirmationKindUsesTextExtraction(kind) && plainText.length >= 80) {
+    return mergeConfirmationDrafts(aiDrafts, plainText);
+  }
+  return aiDrafts;
+}
+
+export async function extractConfirmationDocument(
+  file: File,
+  apiKey: string,
+): Promise<ScannedReservationDraft[]> {
+  const fileBytes = Buffer.from(await file.arrayBuffer());
+  const kind = resolveConfirmationScanKind(file, fileBytes);
+  const fileBase64 = fileBytes.toString("base64");
+  const plainText = confirmationKindUsesTextExtraction(kind)
+    ? await extractConfirmationPlainText(fileBytes, kind)
+    : "";
+  const client = new Anthropic({ apiKey });
+
+  const modelText = await scanWithModel({
+    client,
+    kind,
+    file,
+    fileBase64,
+    plainText,
+  });
 
   const aiDrafts = parseScannedReservationsJson(modelText);
-  const drafts =
-    kind === "pdf" && pdfPlainText.length >= 80
-      ? mergeConfirmationDrafts(aiDrafts, pdfPlainText)
-      : aiDrafts;
+  const drafts = finalizeDrafts(aiDrafts, plainText, kind);
+
+  if (drafts.length === 0 && plainText.length >= 80) {
+    const regexOnly = finalizeDrafts([], plainText, kind);
+    if (regexOnly.length > 0) {
+      return regexOnly;
+    }
+  }
 
   if (drafts.length === 0) {
-    throw new Error("Ticket scan model returned an invalid response.");
+    throw new Error("Could not read any reservations from this file. Try a PDF, screenshot, or HTML confirmation.");
   }
   return drafts;
 }
+
+export { resolveConfirmationScanKind as confirmationScanKind };

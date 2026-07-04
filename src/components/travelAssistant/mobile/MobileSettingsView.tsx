@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ThemePicker } from "@/components/ThemeToggle";
 import { LanguageSettingsCard } from "@/components/LanguageSettingsCard";
+import { OfflineTravelKitSettingsCard } from "@/components/travelAssistant/OfflineTravelKitSettingsCard";
 import { appleBtnPrimary, appleCard, appleCaption, appleCardTitle, appleMetadata } from "@/lib/ui/appleDesign";
 
 interface MobileSettingsViewProps {
@@ -19,6 +20,10 @@ interface MobileSettingsViewProps {
   trialExpiresAt: string | null;
   hasProAccess: boolean;
   emailForwardSetupMessage?: string | null;
+  offlineKitSavedAtLabel?: string | null;
+  offlineKitReservationCount?: number;
+  offlineKitSyncing?: boolean;
+  onRefreshOfflineKit?: () => void;
   onSignOut: () => void;
 }
 
@@ -36,10 +41,23 @@ export function MobileSettingsView({
   trialExpiresAt,
   hasProAccess,
   emailForwardSetupMessage,
+  offlineKitSavedAtLabel = null,
+  offlineKitReservationCount = 0,
+  offlineKitSyncing = false,
+  onRefreshOfflineKit,
   onSignOut,
 }: MobileSettingsViewProps) {
   return (
     <section className="space-y-4 pb-4">
+      <OfflineTravelKitSettingsCard
+        savedAtLabel={offlineKitSavedAtLabel}
+        reservationCount={offlineKitReservationCount}
+        syncing={offlineKitSyncing}
+        onRefresh={() => {
+          onRefreshOfflineKit?.();
+        }}
+      />
+
       <article className={`${appleCard} p-4`}>
         <h2 className={appleCardTitle}>Forward email address</h2>
         {emailForwardAddress ? (

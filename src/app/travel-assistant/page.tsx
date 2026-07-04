@@ -46,7 +46,10 @@ import {
 import {
   parseTravelClientSessionState,
   stringifyTravelClientSessionState,
+  type SessionReservation,
 } from "@/lib/travelAssistant/clientSessionState";
+import { useBrowserConnectivity } from "@/hooks/useBrowserConnectivity";
+import { useOfflineTravelKitSync } from "@/hooks/useOfflineTravelKitSync";
 import { scheduleLocalNotification, triggerHaptic } from "@/lib/native/capacitorBridge";
 import {
   burstFamilyLocationFix,
@@ -79,6 +82,8 @@ import type {
   TravelUpdateSeverity,
 } from "@/lib/travelAssistant/travelUpdateTypes";
 import { ConnectivityPanel } from "@/components/travelAssistant/ConnectivityPanel";
+import { OfflineKitBanner } from "@/components/travelAssistant/OfflineKitBanner";
+import { OfflineTravelKitSettingsCard } from "@/components/travelAssistant/OfflineTravelKitSettingsCard";
 import { AISuggestionPanel } from "@/components/travelAssistant/AISuggestionPanel";
 import { UpgradeModal, type UpgradeModalGateContext } from "@/components/billing/UpgradeModal";
 import { LanguageToggle } from "@/components/LanguageToggle";
@@ -4333,6 +4338,22 @@ export default function TravelAssistantPage() {
     const currentEndDate = activeTrip?.endDate?.trim() ?? "";
     return currentEndDate || null;
   }, [activeTrip?.endDate]);
+
+  const browserConnectivity = useBrowserConnectivity();
+  const offlineKitSync = useOfflineTravelKitSync({
+    tripId: activeTripId,
+    tripName: activeTrip?.name ?? "Your trip",
+    destination: consumerTripDestination ?? activeTrip?.destination ?? "",
+    startDate: consumerTripStartDate ?? activeTrip?.startDate ?? "",
+    endDate: consumerTripEndDate ?? activeTrip?.endDate ?? "",
+    airportTransport: airportTransportChoice,
+    hotelArrivalTime,
+    reservations: consumerReservationsSorted as SessionReservation[],
+    readinessItems,
+    dayNotes: itineraryPrefs.dayNotes,
+    hotelNotebookNote: itineraryPrefs.hotelNotebookNote,
+    enabled: Boolean(activeTripId && consumerReservationsSorted.length > 0),
+  });
 
   const plannerFlightCount = consumerReservationsSorted.filter((reservation) => reservation.type === "flight").length;
   const plannerHotelCount = consumerReservationsSorted.filter((reservation) => reservation.type === "hotel").length;
@@ -9052,6 +9073,13 @@ export default function TravelAssistantPage() {
             </div>
           </header>
 
+          {browserConnectivity.ready && !browserConnectivity.isOnline && consumerReservationsSorted.length > 0 ? (
+            <OfflineKitBanner
+              savedAtLabel={offlineKitSync.savedAtLabel}
+              reservationCount={consumerReservationsSorted.length}
+            />
+          ) : null}
+
           {!isCompactViewport ? (
           <div className="relative flex items-stretch overflow-x-auto rounded-2xl bg-white/90 shadow-sm ring-1 ring-black/[0.06] dark:bg-slate-900/90 dark:ring-white/[0.08]">
             {CONSUMER_TAB_BAR.map(([tab, label, icon]) => (
@@ -9135,6 +9163,12 @@ export default function TravelAssistantPage() {
                 onGapActionTap={handleItineraryGapAction}
                 onSignOut={() => {
                   void clerk.signOut();
+                }}
+                offlineKitSavedAtLabel={offlineKitSync.savedAtLabel}
+                offlineKitReservationCount={consumerReservationsSorted.length}
+                offlineKitSyncing={offlineKitSync.syncing}
+                onRefreshOfflineKit={() => {
+                  void offlineKitSync.forceSync();
                 }}
                 bookSubTab={bookSubTab}
                 onBookSubTabChange={(subTab) => navigateToConsumerTab("book", { bookView: subTab })}
@@ -9526,6 +9560,14 @@ export default function TravelAssistantPage() {
                 />
               </Suspense>
               {/* Share trip */}
+              <OfflineTravelKitSettingsCard
+                savedAtLabel={offlineKitSync.savedAtLabel}
+                reservationCount={consumerReservationsSorted.length}
+                syncing={offlineKitSync.syncing}
+                onRefresh={() => {
+                  void offlineKitSync.forceSync();
+                }}
+              />
               <ShareTripCard tripId={activeTripId} tripName={activeTrip?.name ?? "My Trip"} />
               <section
                 id="readiness-checklist-section"

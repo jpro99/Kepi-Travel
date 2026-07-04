@@ -359,18 +359,26 @@ function tryParseTruncatedReservationsJson(jsonSlice: string): Record<string, un
 /** Vercel serverless body limit is ~4.5MB — stay under it for mobile PDF uploads. */
 export const CONFIRMATION_SCAN_MAX_BYTES = 4 * 1024 * 1024;
 
+const HTML_EXTENSIONS = [".html", ".htm", ".mhtml", ".eml"];
+const TEXT_EXTENSIONS = [".txt", ".csv", ".ics"];
+
 export function isConfirmationScanUpload(file: File): boolean {
   const name = file.name.toLowerCase();
-  if (file.type === "application/pdf" || name.endsWith(".pdf")) {
+  const type = file.type.toLowerCase();
+  if (type === "application/pdf" || name.endsWith(".pdf")) {
     return true;
   }
-  return file.type.startsWith("image/");
-}
-
-export function confirmationScanKind(file: File): "pdf" | "image" {
-  const name = file.name.toLowerCase();
-  if (file.type === "application/pdf" || name.endsWith(".pdf")) {
-    return "pdf";
+  if (type.startsWith("image/")) {
+    return true;
   }
-  return "image";
+  if (type.includes("html") || type === "message/rfc822" || type.startsWith("text/")) {
+    return true;
+  }
+  if (HTML_EXTENSIONS.some((ext) => name.endsWith(ext))) {
+    return true;
+  }
+  if (TEXT_EXTENSIONS.some((ext) => name.endsWith(ext))) {
+    return true;
+  }
+  return false;
 }

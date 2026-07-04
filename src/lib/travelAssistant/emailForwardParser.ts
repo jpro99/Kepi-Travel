@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { htmlToPlainConfirmationText } from "@/lib/travelAssistant/confirmationDocumentText";
 import { logger } from "@/lib/logger";
 
 const MODEL = "claude-sonnet-4-5";
@@ -102,12 +103,12 @@ const AIRPORT_WORD_DENYLIST = new Set([
 
 const FLIGHT_CONTEXT_RE = /\b(flight|airline|boarding\s*pass|aircraft|operated\s*by|itinerary|segment|departure|arrival|connecting|connection|layover|outbound|inbound|return(?:ing)?|round[\s-]?trip)\b/iu;
 
-const FLIGHT_NUMBER_RE = /\b(?:Flight\s*)?([A-Z]{2})\s*(\d{1,4})\b/giu;
+const FLIGHT_NUMBER_RE = /\b(?:Flight\s*)?([A-Z]{2})\s*(\d{1,4})\b/gu;
 
-const NEXT_FLIGHT_TOKEN_RE = /\b(?:Flight\s*)?[A-Z]{2}\s*\d{1,4}\b/iu;
+const NEXT_FLIGHT_TOKEN_RE = /\b(?:Flight\s*)?[A-Z]{2}\s*\d{1,4}\b/u;
 
 /** False positives like "Flight 1 of 5" → OF5. */
-const FALSE_FLIGHT_PREFIX_DENYLIST = new Set(["OF"]);
+const FALSE_FLIGHT_PREFIX_DENYLIST = new Set(["OF", "AT", "AM", "PM", "TO", "ON", "IN", "BY", "OR", "IF", "AN"]);
 
 /** Airline IATA codes that collide with ISO country codes — allow in flight context. */
 const AIRLINE_COUNTRY_OVERRIDES = new Set([
@@ -421,13 +422,29 @@ function extractLegDepartureTime(window: string): { localTime: string; confidenc
       continue;
     }
     if (collecting) {
-      if (/^\s*(?:Flight\s*)?[A-Z]{2}\s*\d{1,4}\b/iu.test(line.trim())) break;
+      const trimmedLine = line.trim();
+      if (/^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/iu.test(trimmedLine)) {
+        depLines.push(line);
+        continue;
+      }
+      if (/^\s*(?:Flight\s*)?[A-Z]{2}\s*\d{1,4}\b/u.test(trimmedLine)) break;
       if (/\b(?:Arrival|Arrive(?:s)?)\b/iu.test(line)) break;
       depLines.push(line);
     }
   }
   if (depLines.length > 0) {
-    const fromDeparture = extractBestLocalTimeCandidate(depLines.join("\n"), "flight");
+    const depBlock = depLines.join("\n");
+    const inlineDateTimeMatch = depBlock.match(
+      /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})\s+at\s+(\d{1,2}:\d{2}\s*(?:AM|PM))\b/iu,
+    );
+    if (inlineDateTimeMatch?.[1] && inlineDateTimeMatch[2]) {
+      const parsedDate = parseDateCandidate(inlineDateTimeMatch[1]);
+      const parsedTime = parseTimeTo24Hour(inlineDateTimeMatch[2]);
+      if (parsedDate && parsedTime) {
+        return { localTime: `${parsedDate} ${parsedTime}`, confidence: 0.82 };
+      }
+    }
+    const fromDeparture = extractBestLocalTimeCandidate(depBlock, "flight");
     if (fromDeparture) return fromDeparture;
   }
   return extractBestLocalTimeCandidate(window, "flight");
@@ -447,30 +464,7 @@ function normalizeWhitespace(value: string): string {
 }
 
 function htmlToLineAwareText(html: string): string {
-  return html
-    .replace(/<style[\s\S]*?<\/style>/giu, "\n")
-    .replace(/<script[\s\S]*?<\/script>/giu, "\n")
-    .replace(/<br\s*\/?>/giu, "\n")
-    .replace(/<\/p>/giu, "\n")
-    .replace(/<\/div>/giu, "\n")
-    .replace(/<\/tr>/giu, "\n")
-    .replace(/<\/li>/giu, "\n")
-    .replace(/<\/h[1-6]>/giu, "\n")
-    .replace(/<[^>]+>/gu, " ")
-    .replace(/&nbsp;/giu, " ")
-    .replace(/&amp;/giu, "&")
-    .replace(/&lt;/giu, "<")
-    .replace(/&gt;/giu, ">")
-    .replace(/&#39;/giu, "'")
-    .replace(/&quot;/giu, '"')
-    .replace(/\r\n/g, "\n")
-    .replace(/[ \t]+\n/gu, "\n")
-    .replace(/\n{3,}/gu, "\n\n")
-    .trim();
-}
-
-function stripHtml(input: string): string {
-  return normalizeWhitespace(htmlToLineAwareText(input));
+  return htmlToPlainConfirmationText(html);
 }
 
 function hasPdfAttachment(attachments: ForwardedEmailAttachmentMeta[] | null | undefined): boolean {

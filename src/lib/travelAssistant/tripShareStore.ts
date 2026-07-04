@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { SessionReservation } from "@/lib/travelAssistant/clientSessionState";
 import { kvStoreGet, kvStoreList, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 import { getTrip } from "@/lib/travelAssistant/tripStore";
+import { buildSharedHotelContact } from "@/lib/travelAssistant/sharedHotelInfo";
 
 const SHARE_NAMESPACE_USER = "share";
 
@@ -160,6 +161,30 @@ function sanitizeSharedTrip(
         confidence: reservation.confidence,
         source: reservation.source,
       };
+      if (reservation.type === "hotel") {
+        sanitized.checkOutDate = reservation.checkOutDate;
+        sanitized.roomType = reservation.roomType;
+        const contact = buildSharedHotelContact({
+          type: reservation.type,
+          title: reservation.title,
+          provider: reservation.provider,
+          localTime: reservation.localTime,
+          location: reservation.location,
+          confirmationCode: reservation.confirmationCode,
+          checkOutDate: reservation.checkOutDate,
+          roomType: reservation.roomType,
+          hotelPhone: reservation.hotelPhone,
+          notes: reservation.notes,
+        });
+        if (contact.phone) {
+          sanitized.hotelPhone = contact.phone;
+        } else if (reservation.hotelPhone?.trim()) {
+          sanitized.hotelPhone = reservation.hotelPhone.trim();
+        }
+        if (contact.address && !sanitized.location?.trim()) {
+          sanitized.location = contact.address;
+        }
+      }
       if (options.showPersonalNotes) {
         sanitized.notes = reservation.notes;
       }

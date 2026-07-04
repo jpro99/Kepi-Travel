@@ -1,8 +1,8 @@
-const CACHE_VERSION = "kepi-pwa-v35";
+const CACHE_VERSION = "kepi-pwa-v36";
 const APP_SHELL_CACHE = `${CACHE_VERSION}-app-shell`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
-const APP_SHELL_ROUTES = ["/", "/travel-assistant"];
+const APP_SHELL_ROUTES = ["/", "/travel-assistant", "/offline-kit"];
 const PRECACHE_MANIFEST = self.__WB_MANIFEST || [];
 const PRECACHE_URLS = PRECACHE_MANIFEST
   .map((entry) => (typeof entry === "string" ? entry : entry?.url))
@@ -68,6 +68,11 @@ self.addEventListener("message", (event) => {
   }
   if (event.data === "SKIP_WAITING") {
     self.skipWaiting();
+  }
+  if (event.data && typeof event.data === "object" && event.data.type === "CACHE_OFFLINE_KIT_ROUTE") {
+    event.waitUntil(
+      caches.open(APP_SHELL_CACHE).then((cache) => cache.add("/offline-kit").catch(() => undefined)),
+    );
   }
 });
 

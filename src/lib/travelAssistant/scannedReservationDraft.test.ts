@@ -2,22 +2,31 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildScannedReservationDraft,
-  confirmationScanKind,
   isConfirmationScanUpload,
   normalizeScannedDate,
   parseScannedReservationsJson,
 } from "./scannedReservationDraft";
+import { resolveConfirmationScanKind } from "./confirmationDocumentText";
 
-test("isConfirmationScanUpload accepts pdf and images", () => {
+test("isConfirmationScanUpload accepts pdf, images, html, and text", () => {
   assert.equal(isConfirmationScanUpload(new File(["x"], "ticket.pdf", { type: "application/pdf" })), true);
   assert.equal(isConfirmationScanUpload(new File(["x"], "photo.jpg", { type: "image/jpeg" })), true);
-  assert.equal(isConfirmationScanUpload(new File(["x"], "doc.txt", { type: "text/plain" })), false);
+  assert.equal(isConfirmationScanUpload(new File(["x"], "confirm.html", { type: "text/html" })), true);
+  assert.equal(isConfirmationScanUpload(new File(["x"], "itinerary.txt", { type: "text/plain" })), true);
+  assert.equal(isConfirmationScanUpload(new File(["x"], "app.exe", { type: "application/octet-stream" })), false);
 });
 
-test("confirmationScanKind detects pdf by extension", () => {
+test("resolveConfirmationScanKind detects pdf by extension only when bytes match", () => {
   assert.equal(
-    confirmationScanKind(new File(["x"], "confirm.PDF", { type: "application/octet-stream" })),
+    resolveConfirmationScanKind(new File(["%PDF-1.4"], "confirm.PDF", { type: "application/octet-stream" }), Buffer.from("%PDF-1.4")),
     "pdf",
+  );
+  assert.equal(
+    resolveConfirmationScanKind(
+      new File(["<!doctype html>"], "confirm.PDF", { type: "application/pdf" }),
+      Buffer.from("<!doctype html><html><body>Flight</body></html>"),
+    ),
+    "html",
   );
 });
 

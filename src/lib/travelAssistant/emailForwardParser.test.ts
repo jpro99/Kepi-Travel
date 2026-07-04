@@ -234,6 +234,20 @@ Thu, Sep 14, 2026 at 11:20 AM
   assert.equal(localTime, "2026-09-14 08:45");
 });
 
+test("extractFlightLegsFromEmailBody parses at-time departure lines", () => {
+  const body = `Confirmation ABC123
+Flight AS654
+Departure ONT
+Sep 14, 2026 at 8:45 AM
+Flight AS832
+Departure SEA
+Sep 14, 2026 at 1:05 PM`;
+  const legs = extractFlightLegsFromEmailBody(body);
+  assert.equal(legs.length, 2);
+  assert.equal(legs.find((leg) => leg.flightNumber === "AS654")?.localTime, "2026-09-14 08:45");
+  assert.equal(legs.find((leg) => leg.flightNumber === "AS832")?.localTime, "2026-09-14 13:05");
+});
+
 test("html itinerary keeps line breaks for per-leg date parsing", async () => {
   const previousKey = process.env.ANTHROPIC_API_KEY;
   delete process.env.ANTHROPIC_API_KEY;

@@ -3,7 +3,8 @@
 import { useCallback, useRef, useState } from "react";
 import { isConfirmationScanUpload } from "@/lib/travelAssistant/scannedReservationDraft";
 
-const ACCEPT = "image/jpeg,image/png,image/webp,image/gif,application/pdf,.pdf";
+const ACCEPT =
+  "image/jpeg,image/png,image/webp,image/gif,application/pdf,.pdf,text/html,text/plain,.html,.htm,.txt,.eml";
 
 interface ImportConfirmationDropzoneProps {
   busy?: boolean;
@@ -27,7 +28,7 @@ export function ImportConfirmationDropzone({
       setError(null);
       if (!file) return;
       if (!isConfirmationScanUpload(file)) {
-        setError("Use a PDF or image (JPG, PNG, WebP).");
+        setError("Use a PDF, screenshot, HTML email, or text confirmation.");
         return;
       }
       onFile(file);
@@ -82,12 +83,12 @@ export function ImportConfirmationDropzone({
       >
         <span className="text-2xl leading-none">{busy ? "⏳" : "📄"}</span>
         <p className="text-sm font-bold text-cyan-900 dark:text-cyan-100">
-          {busy ? "Reading confirmation…" : "Drop PDF or screenshot here"}
+          {busy ? "Reading confirmation…" : "Drop confirmation here"}
         </p>
         <p className="text-xs text-cyan-800/90 dark:text-cyan-200/90">
           {compact
-            ? "E-ticket, boarding pass, hotel voucher"
-            : "Boarding pass, e-ticket PDF, hotel voucher — we’ll read it and add it to your trip"}
+            ? "PDF, screenshot, HTML email, or text"
+            : "PDF, boarding pass, HTML email from your travel company, or screenshot — we’ll read every leg"}
         </p>
         {!busy ? (
           <span className="mt-1 text-[11px] font-semibold text-cyan-700 underline dark:text-cyan-300">

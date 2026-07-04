@@ -146,6 +146,10 @@ interface MobileMapForwardShellProps {
   tripProblemCount?: number;
   userId?: string | null;
   travelStyleProfile?: TravelStyleProfile | null;
+  offlineKitSavedAtLabel?: string | null;
+  offlineKitReservationCount?: number;
+  offlineKitSyncing?: boolean;
+  onRefreshOfflineKit?: () => void;
 }
 
 function daysUntilTrip(startDate: string | null): number | null {
@@ -247,6 +251,10 @@ export function MobileMapForwardShell({
   tripProblemCount = 0,
   userId = null,
   travelStyleProfile = null,
+  offlineKitSavedAtLabel = null,
+  offlineKitReservationCount = 0,
+  offlineKitSyncing = false,
+  onRefreshOfflineKit,
 }: MobileMapForwardShellProps) {
   const [planSegment, setPlanSegment] = useState<PlanSegment>("itinerary");
   const bookSegment = bookSubTab;
@@ -657,6 +665,10 @@ export function MobileMapForwardShell({
         trialExpiresAt={trialExpiresAt}
         hasProAccess={hasProAccess}
         emailForwardSetupMessage={emailForwardSetupMessage}
+        offlineKitSavedAtLabel={offlineKitSavedAtLabel}
+        offlineKitReservationCount={offlineKitReservationCount}
+        offlineKitSyncing={offlineKitSyncing}
+        onRefreshOfflineKit={onRefreshOfflineKit}
         onSignOut={onSignOut}
       />
     </div>

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
+import { resolveConfirmationScanKind } from "@/lib/travelAssistant/confirmationDocumentText";
 import { extractConfirmationDocument } from "@/lib/travelAssistant/extractConfirmationDocument";
 import {
   CONFIRMATION_SCAN_MAX_BYTES,
-  confirmationScanKind,
   isConfirmationScanUpload,
 } from "@/lib/travelAssistant/scannedReservationDraft";
 
@@ -21,10 +21,13 @@ export async function handleConfirmationScanUpload(
 
   const upload = formData.get("file") ?? formData.get("image");
   if (!(upload instanceof File)) {
-    return NextResponse.json({ error: "PDF or image file is required." }, { status: 400, headers });
+    return NextResponse.json({ error: "PDF, image, HTML, or text file is required." }, { status: 400, headers });
   }
   if (!isConfirmationScanUpload(upload)) {
-    return NextResponse.json({ error: "Upload a PDF or image (JPG, PNG, WebP)." }, { status: 422, headers });
+    return NextResponse.json(
+      { error: "Upload a PDF, image, HTML email, or text confirmation." },
+      { status: 422, headers },
+    );
   }
   if (upload.size <= 0 || upload.size > CONFIRMATION_SCAN_MAX_BYTES) {
     const maxMb = Math.floor(CONFIRMATION_SCAN_MAX_BYTES / (1024 * 1024));
@@ -34,7 +37,8 @@ export async function handleConfirmationScanUpload(
     );
   }
 
-  const scanKind = confirmationScanKind(upload);
+  const fileBytes = Buffer.from(await upload.arrayBuffer());
+  const scanKind = resolveConfirmationScanKind(upload, fileBytes);
 
   try {
     const drafts = await extractConfirmationDocument(upload, options.anthropicApiKey);

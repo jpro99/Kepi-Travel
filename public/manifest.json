@@ -23,6 +23,12 @@
       "short_name": "Packing",
       "url": "/travel-assistant?tab=packing",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Offline Travel Kit",
+      "short_name": "Offline",
+      "url": "/offline-kit",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     }
   ],
   "icons": [
