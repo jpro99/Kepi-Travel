@@ -196,6 +196,136 @@ function extractOriginalEmailFromForwardChain(text: string): string {
   return text;
 }
 
+const NON_TRAVEL_DATE_CONTEXT =
+  /\b(?:purchase(?:d)?|booked on|booking date|transaction date|order date|payment date|issued on|date of issue|receipt date|ticketed on|sales date|invoice date|email sent|sent on|forwarded message)\b/iu;
+
+const TRAVEL_DATE_CONTEXT =
+  /\b(?:depart(?:ure|s|ing)?|arriv(?:al|es|ing)?|scheduled|flight|gate|terminal|boarding|check-?in|check out|leaves| lands|segment|itinerary)\b/iu;
+
+const EMAIL_HEADER_METADATA_LINE =
+  /^(?:From|To|Cc|Bcc|Reply-To|Subject|Sent|Date|De|Para|Objet|Fecha):\s*/iu;
+
+const EMAIL_HEADER_DATE_LINE =
+  /^(?:Date|Sent):\s*(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[^\n]*(?:\([+-]?\d{4}\)|\b(?:UTC|GMT|[A-Z]{2,5})\b)/iu;
+
+/** Strip Gmail/Outlook forward wrappers so purchase/forward dates are not parsed as trip dates. */
+export function stripForwardEnvelopeHeaders(text: string): string {
+  return text
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return true;
+      if (/^---------- Forwarded message ---------$/iu.test(trimmed)) return false;
+      if (/^-----Original Message-----$/iu.test(trimmed)) return false;
+      if (EMAIL_HEADER_METADATA_LINE.test(trimmed)) return false;
+      if (EMAIL_HEADER_DATE_LINE.test(trimmed)) return false;
+      if (/^On .+ wrote:$/iu.test(trimmed)) return false;
+      return true;
+    })
+    .join("\n");
+}
+
+export function prepareEmailBodyForParsing(rawText: string): { collapsed: string; lineAware: string } {
+  let lineAware = rawText.replace(/\r\n/g, "\n");
+  lineAware = extractOriginalEmailFromForwardChain(lineAware);
+  lineAware = stripForwardEnvelopeHeaders(lineAware);
+  return {
+    lineAware,
+    collapsed: normalizeWhitespace(lineAware),
+  };
+}
+
+function localTimeIsTravelContext(localTime: string, lineAwareText: string): boolean {
+  const day = localTime.trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(day)) return true;
+  const lines = lineAwareText.split("\n");
+  for (let index = 0; index < lines.length; index += 1) {
+    const context = [lines[index - 1], lines[index], lines[index + 1]]
+      .filter(Boolean)
+      .join(" ");
+    if (!context.includes(day) && !context.includes(day.replace(/-/gu, "/"))) continue;
+    if (NON_TRAVEL_DATE_CONTEXT.test(context)) return false;
+    if (TRAVEL_DATE_CONTEXT.test(context)) return true;
+  }
+  return !lines.some((line) => line.includes(day) && NON_TRAVEL_DATE_CONTEXT.test(line));
+}
+
+function sanitizeTravelLocalTime(candidates: CandidateMap, lineAwareText: string): CandidateMap {
+  const localTime = candidates.localTime;
+  if (!localTime?.value.trim()) return candidates;
+  if (localTimeIsTravelContext(localTime.value, lineAwareText)) return candidates;
+  const next = { ...candidates };
+  delete next.localTime;
+  return next;
+}
+
+function extractBestLocalTimeCandidate(
+  lineAwareText: string,
+  reservationType: ForwardedReservationType | undefined,
+): { localTime: string; confidence: number } | null {
+  const lines = lineAwareText.split("\n");
+  const scored: Array<{ localTime: string; score: number }> = [];
+  const datePatterns = [
+    /\b(20\d{2}-\d{2}-\d{2})\b/u,
+    /\b(\d{1,2}\/\d{1,2}\/\d{2,4})\b/u,
+    /\b(\d{1,2}-(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{4})\b/iu,
+    /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4})\b/iu,
+    /\b((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4})\b/iu,
+  ];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    const context = [lines[index - 1], line, lines[index + 1]].filter(Boolean).join(" ");
+    if (EMAIL_HEADER_DATE_LINE.test(line.trim())) continue;
+    if (NON_TRAVEL_DATE_CONTEXT.test(context) && !TRAVEL_DATE_CONTEXT.test(context)) continue;
+
+    for (const pattern of datePatterns) {
+      const dateMatch = line.match(pattern) ?? context.match(pattern);
+      const rawDate = dateMatch?.[1] ?? "";
+      const parsedDate = parseDateCandidate(rawDate);
+      if (!parsedDate) continue;
+
+      let score = 0;
+      if (TRAVEL_DATE_CONTEXT.test(context)) score += 5;
+      if (/\b(?:depart|departure|leaves|scheduled)\b/iu.test(context)) score += 3;
+      if (reservationType === "hotel" && /\b(?:check-?in|check out|stay|night)\b/iu.test(context)) score += 4;
+      if (NON_TRAVEL_DATE_CONTEXT.test(context)) score -= 8;
+
+      const timeMatch =
+        line.match(/\b(\d{1,2}:\d{2}\s*(?:AM|PM))\b/iu) ??
+        line.match(/\b(\d{1,2}:\d{2})\b/u) ??
+        (lines[index + 1] ?? "").match(/\b(\d{1,2}:\d{2}\s*(?:AM|PM))\b/iu) ??
+        (lines[index + 1] ?? "").match(/\b(\d{1,2}:\d{2})\b/u);
+      const parsedTime = parseTimeTo24Hour(timeMatch?.[1] ?? "");
+      const localTime = parsedTime ? `${parsedDate} ${parsedTime}` : `${parsedDate} 12:00`;
+      if (parsedTime) score += 3;
+      scored.push({ localTime, score });
+    }
+  }
+
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    const aDefault = a.localTime.endsWith(" 12:00") ? 1 : 0;
+    const bDefault = b.localTime.endsWith(" 12:00") ? 1 : 0;
+    return aDefault - bDefault;
+  });
+  const best = scored[0];
+  if (!best || best.score < 1) return null;
+  return {
+    localTime: best.localTime,
+    confidence: Math.min(0.82, 0.42 + best.score * 0.07),
+  };
+}
+
+/** Resolve the best travel date/time from a raw or forwarded email body. */
+export function extractBestLocalTimeFromEmailBody(
+  rawText: string,
+  reservationType?: ForwardedReservationType,
+): string | null {
+  const prepared = prepareEmailBodyForParsing(rawText);
+  return extractBestLocalTimeCandidate(prepared.lineAware, reservationType)?.localTime ?? null;
+}
+
 function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/gu, " ").trim();
 }
@@ -445,6 +575,15 @@ function mergeCandidates(base: CandidateMap, incoming: CandidateMap): CandidateM
       merged[key] = next;
     }
   }
+  const reservationType = normalizeType(incoming.type?.value ?? base.type?.value ?? "");
+  const hasFlightSignals = reservationType === "flight" || Boolean(incoming.flightNumber?.value || base.flightNumber?.value);
+  if (
+    hasFlightSignals &&
+    incoming.localTime?.source === "ai" &&
+    incoming.localTime.value.trim()
+  ) {
+    merged.localTime = incoming.localTime;
+  }
   return merged;
 }
 
@@ -474,11 +613,12 @@ function statusFromScore(score: number): ForwardedParsingStatus {
 
 function buildRegexCandidates(input: {
   text: string;
+  lineAwareText: string;
   subject: string;
   from: string;
   parserNotes: string[];
 }): CandidateMap {
-  const { text, subject, from, parserNotes } = input;
+  const { text, lineAwareText, subject, from, parserNotes } = input;
   const combined = `${subject}\n${text}`.trim();
   const candidates: CandidateMap = {};
 
@@ -584,31 +724,17 @@ function buildRegexCandidates(input: {
     }
   }
 
-  const dateMatch =
-    combined.match(/\b(20\d{2}-\d{2}-\d{2})\b/u) ??
-    combined.match(/\b(\d{1,2}\/\d{1,2}\/\d{2,4})\b/u) ??
-    combined.match(
-      /\b(\d{1,2}-(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{4})\b/iu,
-    ) ??
-    combined.match(
-      /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(?:,\s*\d{4})?)\b/iu,
-    );
-  const parsedDate = parseDateCandidate(dateMatch?.[1] ?? "");
-  const timeMatch = combined.match(/\b(\d{1,2}:\d{2}\s*(?:AM|PM))\b/iu) ?? combined.match(/\b(\d{1,2}:\d{2})\b/u);
-  const parsedTime = parseTimeTo24Hour(timeMatch?.[1] ?? "");
-  if (parsedDate && parsedTime) {
+  const reservationType = normalizeType(candidates.type?.value ?? "") ?? undefined;
+  const bestLocalTime = extractBestLocalTimeCandidate(lineAwareText, reservationType);
+  if (bestLocalTime) {
     candidates.localTime = {
-      value: `${parsedDate} ${parsedTime}`,
-      confidence: 0.55, // lowered — AI departure time should override for flights
+      value: bestLocalTime.localTime,
+      confidence: bestLocalTime.confidence,
       source: "regex",
     };
-  } else if (parsedDate) {
-    candidates.localTime = {
-      value: `${parsedDate} 12:00`,
-      confidence: 0.45,
-      source: "regex",
-    };
-    parserNotes.push("Time not found in email; defaulted to 12:00 local time for review.");
+    if (bestLocalTime.localTime.endsWith(" 12:00")) {
+      parserNotes.push("Time not found in email; defaulted to 12:00 local time for review.");
+    }
   }
 
   const timezone = resolveTimezone(combined);
@@ -663,7 +789,7 @@ async function runAiFallback(rawEmailText: string, subject = ""): Promise<Candid
     '{ "reservations": [ { "type": "", "title": "", "provider": "", "confirmationCode": "", "localTime": "", "checkOutDate": "", "timezone": "", "location": "", "notes": "", "flightNumber": "", "departureAirport": "", "arrivalAirport": "" } ] }',
     "IMPORTANT: This may be a multi-leg itinerary. Scan for EVERY individual flight segment. For example HND→HNL→SEA→ONT has 3 flights — return 3 separate objects in reservations[]. Each object must have its own flightNumber, departureAirport, arrivalAirport, and localTime (departure time for that specific leg).",
     "Use type values only: flight, hotel, train, ride.",
-    "CRITICAL for localTime: For flights, use the scheduled DEPARTURE time (not email send time, not boarding time). For hotels, use the check-in date and time if stated, otherwise just the check-in date at 15:00 local time. NEVER guess or infer a year — if the year is not explicitly in the email use the current year only if the date is clearly in the future, otherwise leave localTime empty.",
+    "CRITICAL for localTime: For flights, use the scheduled DEPARTURE time (not email send time, not boarding time, not purchase/booking/transaction date). Ignore 'Date:' and 'Sent:' lines from forward headers. For hotels, use the check-in date and time if stated, otherwise just the check-in date at 15:00 local time. NEVER guess or infer a year — if the year is not explicitly in the email use the current year only if the date is clearly in the future, otherwise leave localTime empty.",
     "For hotels, set checkOutDate to the check-out date in YYYY-MM-DD format. The email may use formats like 'Friday, 29-May-2026' or 'May 29, 2026' — convert to YYYY-MM-DD e.g. 2026-05-29. Also set localTime to the check-in date and time e.g. '2026-05-24 15:00'. For flights, leave checkOutDate empty.",
     "The departure time is the scheduled time the plane leaves the gate. Format: 'YYYY-MM-DD HH:mm' in 24-hour.",
     "For flights, set flightNumber to IATA airline code + flight number. If the email says 'Alaska Airlines Flight 832' write AS832. If it says 'Hawaiian Airlines Flight 12' write HA12. Common IATA codes: AS=Alaska Airlines, HA=Hawaiian Airlines, UA=United Airlines, AA=American Airlines, DL=Delta, WN=Southwest, B6=JetBlue, KE=Korean Air, NH=ANA, JL=JAL. NEVER use just the number alone — always prefix with the 2-letter IATA code. Never use credit card numbers like VI3557.",
@@ -689,7 +815,7 @@ async function runAiFallback(rawEmailText: string, subject = ""): Promise<Candid
       max_tokens: 8000,  // 8000 handles up to ~30 flight legs safely
       temperature: 0,
       system:
-        "You extract travel reservations from forwarded emails. Return ONLY a JSON object with a reservations array. CRITICAL RULES:\n(1) For FLIGHTS: scan the entire email for every individual flight segment. A 3-leg itinerary like HND→HNL→SEA→ONT has 3 separate flights — return 3 objects. NEVER merge segments into one. Each segment has its own flight number, departure airport, arrival airport, and departure time.\n(2) type=flight ONLY when a flight number or airline is present. type=hotel for hotels even if they mention arrival/departure dates.\n(3) localTime = scheduled DEPARTURE time of that specific flight leg in YYYY-MM-DD HH:mm 24-hour format. Not email send time, not boarding time.\n(4) flightNumber = 2-letter IATA code + flight number. If email says 'Alaska Airlines Flight 832' write AS832. If 'Hawaiian Airlines Flight 12' write HA12. Key codes: AS=Alaska, HA=Hawaiian, UA=United, AA=American, DL=Delta, KE=Korean Air, NH=ANA, JL=JAL, AZ=ITA Airways, FR=Ryanair, U2=easyJet, W4=Wizz Air. NEVER return number alone. VI3557 is a credit card, NOT a flight number.\n(5) departureAirport = IATA code of origin. arrivalAirport = IATA code of destination. Both must be set for every flight. Bari=BRI, Venice=VCE.\n(6) timezone = IANA timezone of the departure city e.g. Asia/Tokyo, Pacific/Honolulu, America/Los_Angeles, Europe/Rome.\n(7) location = departure city or airport name.\n(8) If a field is not in the email, use empty string. Never guess or invent values.",
+        "You extract travel reservations from forwarded emails. Return ONLY a JSON object with a reservations array. CRITICAL RULES:\n(1) For FLIGHTS: scan the entire email for every individual flight segment. A 3-leg itinerary like HND→HNL→SEA→ONT has 3 separate flights — return 3 objects. NEVER merge segments into one. Each segment has its own flight number, departure airport, arrival airport, and departure time.\n(2) type=flight ONLY when a flight number or airline is present. type=hotel for hotels even if they mention arrival/departure dates.\n(3) localTime = scheduled DEPARTURE time of that specific flight leg in YYYY-MM-DD HH:mm 24-hour format. Never use email send time, purchase date, booking date, transaction date, or forward-header Date/Sent metadata.\n(4) flightNumber = 2-letter IATA code + flight number. If email says 'Alaska Airlines Flight 832' write AS832. If 'Hawaiian Airlines Flight 12' write HA12. Key codes: AS=Alaska, HA=Hawaiian, UA=United, AA=American, DL=Delta, KE=Korean Air, NH=ANA, JL=JAL, AZ=ITA Airways, FR=Ryanair, U2=easyJet, W4=Wizz Air. NEVER return number alone. VI3557 is a credit card, NOT a flight number.\n(5) departureAirport = IATA code of origin. arrivalAirport = IATA code of destination. Both must be set for every flight. Bari=BRI, Venice=VCE.\n(6) timezone = IANA timezone of the departure city e.g. Asia/Tokyo, Pacific/Honolulu, America/Los_Angeles, Europe/Rome.\n(7) location = departure city or airport name.\n(8) If a field is not in the email, use empty string. Never guess or invent values.",
       messages: [
         {
           role: "user",
@@ -790,16 +916,21 @@ function dedupeDrafts(drafts: ForwardedReservationDraft[]): ForwardedReservation
   return output;
 }
 
-function chooseBodyText(text: string, html: string): { parsedText: string; imageBasedEmail: boolean } {
+function chooseBodyText(text: string, html: string): { parsedText: string; lineAwareText: string; imageBasedEmail: boolean } {
+  const lineAwareRaw = text.replace(/\r\n/g, "\n");
   const normalizedText = normalizeWhitespace(text);
   if (normalizedText.length >= MIN_READABLE_TEXT_LENGTH) {
-    return { parsedText: normalizedText, imageBasedEmail: false };
+    return { parsedText: normalizedText, lineAwareText: lineAwareRaw, imageBasedEmail: false };
   }
   const strippedHtml = stripHtml(html);
   if (strippedHtml.length >= MIN_READABLE_TEXT_LENGTH) {
-    return { parsedText: strippedHtml, imageBasedEmail: false };
+    return { parsedText: strippedHtml, lineAwareText: strippedHtml, imageBasedEmail: false };
   }
-  return { parsedText: strippedHtml || normalizedText, imageBasedEmail: true };
+  return {
+    parsedText: strippedHtml || normalizedText,
+    lineAwareText: lineAwareRaw || strippedHtml,
+    imageBasedEmail: true,
+  };
 }
 
 function hasMultipleFlightMentions(text: string): boolean {
@@ -840,9 +971,9 @@ export async function parseForwardedEmail(input: ForwardedEmailParseInput): Prom
   const parserNotes: string[] = [];
   const chosenBody = chooseBodyText(text, html);
   const imageBasedEmail = chosenBody.imageBasedEmail;
-  // Strip repeated forwarding headers — keep only the deepest original email
-  // This prevents 18x forwarded emails from burying the actual reservation data
-  const parsedText = extractOriginalEmailFromForwardChain(chosenBody.parsedText);
+  const prepared = prepareEmailBodyForParsing(chosenBody.lineAwareText || chosenBody.parsedText);
+  const parsedText = prepared.collapsed;
+  const lineAwareText = prepared.lineAware;
   const multiFlightDetected = hasMultipleFlightMentions(`${subject}\n${parsedText}`);
   const pdfAttached = hasPdfAttachment(input.attachments);
 
@@ -851,12 +982,16 @@ export async function parseForwardedEmail(input: ForwardedEmailParseInput): Prom
     parserNotes.push("Check the attached PDF for your confirmation code");
   }
 
-  const regexCandidates = buildRegexCandidates({
-    text: parsedText,
-    subject,
-    from,
-    parserNotes,
-  });
+  const regexCandidates = sanitizeTravelLocalTime(
+    buildRegexCandidates({
+      text: parsedText,
+      lineAwareText,
+      subject,
+      from,
+      parserNotes,
+    }),
+    lineAwareText,
+  );
   let candidates = regexCandidates;
   let score = scoreCandidates(candidates);
   let usedAiFallback = false;
@@ -879,7 +1014,10 @@ export async function parseForwardedEmail(input: ForwardedEmailParseInput): Prom
     aiCandidates = await runAiFallback(parsedText, subject);
     if (aiCandidates.length > 0) {
       usedAiFallback = true;
-      candidates = mergeCandidates(candidates, aiCandidates[0] ?? {});
+      candidates = sanitizeTravelLocalTime(
+        mergeCandidates(candidates, aiCandidates[0] ?? {}),
+        lineAwareText,
+      );
       score = scoreCandidates(candidates);
       parserNotes.push("Applied AI fallback extraction for low-confidence fields.");
       logger.info("AI fallback extracted fields.", {
@@ -908,7 +1046,12 @@ export async function parseForwardedEmail(input: ForwardedEmailParseInput): Prom
   const draft = buildDraft(candidates, parserNotes);
   const supplementalDrafts = aiCandidates
     .slice(1)
-    .map((candidate) => buildDraft(mergeCandidates(regexCandidates, candidate), parserNotes))
+    .map((candidate) =>
+      buildDraft(
+        sanitizeTravelLocalTime(mergeCandidates(regexCandidates, candidate), lineAwareText),
+        parserNotes,
+      ),
+    )
     .filter((candidateDraft) =>
       Boolean(
         candidateDraft.title.trim() ||
