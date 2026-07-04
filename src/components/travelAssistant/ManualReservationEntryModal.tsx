@@ -231,8 +231,8 @@ export function ManualReservationEntryModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-3 backdrop-blur-sm md:items-center">
-      <div className="flex max-h-[92dvh] w-full max-w-xl flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-sm sm:p-3 md:items-center">
+      <div className="flex max-h-[92dvh] w-full max-w-xl min-h-0 flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:rounded-2xl">
         {/* ── Header (fixed, never scrolls away) ── */}
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--border-default)] px-4 py-4">
           <div className="min-w-0">
@@ -251,7 +251,7 @@ export function ManualReservationEntryModal({
         </div>
 
         {/* ── Scrollable body ── */}
-        <div className="flex-1 overflow-y-auto px-4 py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain touch-pan-y px-4 py-4">
           <ImportConfirmationDropzone
             busy={scanning}
             compact
@@ -425,7 +425,7 @@ export function ManualReservationEntryModal({
           </form>
         </div>
 
-        <div className="shrink-0 border-t border-[var(--border-default)] bg-white px-4 py-3 dark:bg-slate-900">
+        <div className="shrink-0 border-t border-[var(--border-default)] bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] dark:bg-slate-900">
           {formError ? (
             <p className="mb-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200 md:hidden">
               {formError}
