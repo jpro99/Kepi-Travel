@@ -14,6 +14,7 @@ import { PointsTravelProfileCard } from "@/components/travelAssistant/PointsTrav
 import { TravelFitCard } from "@/components/travelAssistant/TravelFitCard";
 import { TravelStyleBadge } from "@/components/travelAssistant/TravelStyleQuiz";
 import { LoyaltyWalletSection } from "@/components/loyalty/LoyaltyWalletSection";
+import { ShareTripCard } from "@/components/travelAssistant/ShareTripCard";
 import type { TravelStyleProfile } from "@/lib/traveler/types";
 import { MobileTripShellHeader } from "@/components/travelAssistant/mobile/MobileTripShellHeader";
 import { MobileTripsView } from "@/components/travelAssistant/mobile/MobileTripsView";
@@ -617,6 +618,11 @@ export function MobileMapForwardShell({
         <h1 className="text-[2rem] font-bold tracking-tight text-[var(--text-primary)]">More</h1>
         <p className="mt-1 text-[19px] text-[var(--text-secondary)]">Settings & family</p>
       </header>
+
+      {hasActiveTrip ? (
+        <ShareTripCard tripId={tripId ?? null} tripName={tripName} />
+      ) : null}
+
       <LiveMapLink
         className="flex min-h-[56px] items-center rounded-2xl bg-[var(--bg-card)] px-5 text-[19px] font-bold text-[var(--text-primary)] ring-1 ring-[var(--border-default)]"
       >
