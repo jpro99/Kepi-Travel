@@ -82,6 +82,28 @@ test("parseScannedReservationsJson extracts every leg from multi-flight PDF resp
   assert.equal(drafts[2]?.checkOutDate, "2026-09-12");
 });
 
+test("parseScannedReservationsJson reads flights[] alias from model output", () => {
+  const json = JSON.stringify({
+    flights: [
+      {
+        type: "flight",
+        flightNumber: "AZ1607",
+        departureAirport: "BRI",
+        arrivalAirport: "FCO",
+        localTime: "2026-09-12 09:40",
+      },
+      {
+        type: "flight",
+        flightNumber: "AZ1608",
+        departureAirport: "FCO",
+        arrivalAirport: "BRI",
+        localTime: "2026-09-19 18:15",
+      },
+    ],
+  });
+  assert.equal(parseScannedReservationsJson(json).length, 2);
+});
+
 test("parseScannedReservationsJson supports legacy single reservation shape", () => {
   const json = JSON.stringify({
     reservation: {

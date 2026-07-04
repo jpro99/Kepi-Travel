@@ -13,6 +13,7 @@ const SCAN_SYSTEM_PROMPT = [
   "CRITICAL — MULTI-LEG ITINERARIES: Scan the ENTIRE document for EVERY flight segment and EVERY hotel.",
   "A single PDF may contain 5+ flights (e.g. ONT→SEA→FCO→BRI and later MUC→CGK for Indonesia) — return ONE object per segment in reservations[].",
   "Never merge legs. Each flight needs its own flightNumber, departureAirport, arrivalAirport, and localTime (that leg's scheduled DEPARTURE).",
+  "Many documents use ONE confirmation/PNR code for all legs — still emit separate reservations[] objects per leg.",
   "For hotels on the same document, add a separate reservations[] object with type=hotel, localTime=check-in (YYYY-MM-DD HH:mm), checkOutDate=YYYY-MM-DD.",
   "type values: flight, hotel, train, ride, dinner.",
   "localTime for flights = scheduled gate departure in YYYY-MM-DD HH:mm 24-hour. NOT boarding time, purchase date, or email/print date.",

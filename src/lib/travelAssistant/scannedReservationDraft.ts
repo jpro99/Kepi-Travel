@@ -146,6 +146,8 @@ export function buildScannedReservationDraft(reservationNode: Record<string, unk
         : date
           ? `${date} 12:00`
           : "";
+  const flightDateFromLocal =
+    scannedType === "flight" && localTime.length >= 10 ? localTime.slice(0, 10) : date;
   const notes = typeof reservationNode.notes === "string" ? reservationNode.notes.trim() : "";
   const roomType = typeof reservationNode.roomType === "string" ? reservationNode.roomType.trim() : "";
   const checkOutDate = normalizeScannedDate(
@@ -187,7 +189,7 @@ export function buildScannedReservationDraft(reservationNode: Record<string, unk
     notes,
     flightNumber: scannedType === "flight" ? numberValue : "",
     flightAirline: scannedType === "flight" ? provider : "",
-    flightDate: scannedType === "flight" ? date : "",
+    flightDate: scannedType === "flight" ? flightDateFromLocal : "",
     flightDepartureAirport: scannedType === "flight" ? departureAirport : "",
     flightArrivalAirport: scannedType === "flight" ? arrivalAirport : "",
     checkOutDate: scannedType === "hotel" ? checkOutDate : "",
@@ -223,6 +225,27 @@ function reservationNodeFromUnknown(entry: unknown): Record<string, unknown> | n
   return entry as Record<string, unknown>;
 }
 
+function collectReservationNodes(root: Record<string, unknown>): Record<string, unknown>[] {
+  const nodes: Record<string, unknown>[] = [];
+  const arrayKeys = ["reservations", "flights", "legs", "segments", "itinerary", "bookings"];
+  for (const key of arrayKeys) {
+    const value = root[key];
+    if (!Array.isArray(value)) continue;
+    for (const entry of value) {
+      const node = reservationNodeFromUnknown(entry);
+      if (node) nodes.push(node);
+    }
+    if (nodes.length > 0) return nodes;
+  }
+  if (root.reservation && typeof root.reservation === "object" && !Array.isArray(root.reservation)) {
+    return [root.reservation as Record<string, unknown>];
+  }
+  if (typeof root.type === "string") {
+    return [root];
+  }
+  return nodes;
+}
+
 /** Parse one or many reservations from ticket/PDF scan model output. */
 export function parseScannedReservationsJson(modelText: string): ScannedReservationDraft[] {
   const jsonStart = modelText.indexOf("{");
@@ -249,17 +272,7 @@ export function parseScannedReservationsJson(modelText: string): ScannedReservat
       if (node) nodes.push(node);
     }
   } else if (parsed && typeof parsed === "object") {
-    const root = parsed as Record<string, unknown>;
-    if (Array.isArray(root.reservations)) {
-      for (const entry of root.reservations) {
-        const node = reservationNodeFromUnknown(entry);
-        if (node) nodes.push(node);
-      }
-    } else if (root.reservation && typeof root.reservation === "object" && !Array.isArray(root.reservation)) {
-      nodes.push(root.reservation as Record<string, unknown>);
-    } else {
-      nodes.push(root);
-    }
+    nodes.push(...collectReservationNodes(parsed as Record<string, unknown>));
   }
 
   return nodes
