@@ -21,7 +21,10 @@ import {
   findPlannedReplacementIndex,
   mergeIncomingOverPlanned,
 } from "@/lib/travelAssistant/plannedReservationMatch";
-import { extractReservationSourceLinks } from "@/lib/travelAssistant/reservationLinks";
+import {
+  dedupeFlightReservations,
+  isSameFlightLeg,
+} from "@/lib/travelAssistant/flightItinerarySync";
 import { resolveReservationPricing } from "@/lib/travelAssistant/parseReservationMiles";
 import { generateId } from "@/lib/utils/generateId";
 
@@ -206,44 +209,14 @@ function isDuplicateReservation(
     arrivalAirport?: string;
   },
 ): boolean {
-  const existingCode = normalizeDuplicateValue(existing.confirmationCode);
-  const candidateCode = normalizeDuplicateValue(candidate.confirmationCode);
-  const existingFlight = normalizeDuplicateValue(existing.flightNumber);
-  const candidateFlight = normalizeDuplicateValue(candidate.flightNumber);
-  const existingDep = normalizeDuplicateValue(existing.flightDepartureAirport ?? existing.departureAirport);
-  const candidateDep = normalizeDuplicateValue(candidate.flightDepartureAirport ?? candidate.departureAirport);
-  const existingArr = normalizeDuplicateValue(existing.flightArrivalAirport ?? existing.arrivalAirport);
-  const candidateArr = normalizeDuplicateValue(candidate.flightArrivalAirport ?? candidate.arrivalAirport);
-
   const existingType = normalizeDuplicateValue(existing.type);
   const candidateType = normalizeDuplicateValue(candidate.type);
+  if (existingType === "flight" && candidateType === "flight") {
+    return isSameFlightLeg(existing, candidate);
+  }
+  const existingCode = normalizeDuplicateValue(existing.confirmationCode);
+  const candidateCode = normalizeDuplicateValue(candidate.confirmationCode);
   if (existingCode.length > 0 && candidateCode.length > 0 && existingCode === candidateCode) {
-    if (existingType === "flight" || candidateType === "flight") {
-      if (existingFlight.length > 0 && candidateFlight.length > 0) {
-        return existingFlight === candidateFlight;
-      }
-      if (
-        existingDep.length > 0 &&
-        candidateDep.length > 0 &&
-        existingArr.length > 0 &&
-        candidateArr.length > 0 &&
-        existingDep === candidateDep &&
-        existingArr === candidateArr
-      ) {
-        const existingTime = normalizeDuplicateValue(existing.localTime);
-        const candidateTime = normalizeDuplicateValue(candidate.localTime);
-        if (existingTime.length > 0 && candidateTime.length > 0) {
-          return existingTime === candidateTime;
-        }
-        return false;
-      }
-      const existingTime = normalizeDuplicateValue(existing.localTime);
-      const candidateTime = normalizeDuplicateValue(candidate.localTime);
-      if (existingTime.length > 0 && candidateTime.length > 0) {
-        return existingTime === candidateTime;
-      }
-      return false;
-    }
     return true;
   }
   if (existingType !== candidateType) {
@@ -1053,6 +1026,8 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         tripId: targetTrip.id,
       };
     }
+
+    nextReservations = dedupeFlightReservations(nextReservations);
 
     const reservationDates = nextReservations
       .map((reservation) => reservationPrimaryDate(reservation))

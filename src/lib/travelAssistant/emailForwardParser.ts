@@ -332,6 +332,22 @@ function extractBestLocalTimeCandidate(
     if (EMAIL_HEADER_DATE_LINE.test(line.trim())) continue;
     if (NON_TRAVEL_DATE_CONTEXT.test(context) && !TRAVEL_DATE_CONTEXT.test(context)) continue;
 
+    const combinedDateTime = line.match(
+      /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})\s+at\s+(\d{1,2}:\d{2}\s*(?:AM|PM))\b/iu,
+    );
+    if (combinedDateTime?.[1] && combinedDateTime[2]) {
+      const parsedDate = parseDateCandidate(combinedDateTime[1]);
+      const parsedTime = parseTimeTo24Hour(combinedDateTime[2]);
+      if (parsedDate && parsedTime) {
+        let score = 6;
+        if (TRAVEL_DATE_CONTEXT.test(context)) score += 5;
+        if (/\b(?:depart|departure|leaves|scheduled)\b/iu.test(context)) score += 3;
+        if (/\b(?:arrival|arrive|arriving|lands|landed)\b/iu.test(context)) score -= 4;
+        scored.push({ localTime: `${parsedDate} ${parsedTime}`, score });
+        continue;
+      }
+    }
+
     for (const pattern of datePatterns) {
       const dateMatch = line.match(pattern) ?? context.match(pattern);
       const rawDate = dateMatch?.[1] ?? "";
@@ -1270,10 +1286,31 @@ function draftIdentityKey(draft: ForwardedReservationDraft): string {
   ].join("|");
 }
 
+function draftRichness(draft: ForwardedReservationDraft): number {
+  let score = 0;
+  if (draft.flightNumber?.trim()) score += 4;
+  if (draft.departureAirport?.trim()) score += 2;
+  if (draft.arrivalAirport?.trim()) score += 2;
+  if (draft.localTime.trim() && !draft.localTime.endsWith(" 12:00")) score += 3;
+  else if (draft.localTime.trim()) score += 1;
+  if (draft.confirmationCode.trim()) score += 1;
+  return score;
+}
+
 function dedupeDrafts(drafts: ForwardedReservationDraft[]): ForwardedReservationDraft[] {
-  const seen = new Set<string>();
+  const flightByNumber = new Map<string, ForwardedReservationDraft>();
   const output: ForwardedReservationDraft[] = [];
+  const seen = new Set<string>();
+
   for (const draft of drafts) {
+    if (draft.type === "flight" && draft.flightNumber?.trim()) {
+      const fnKey = draft.flightNumber.trim().toUpperCase();
+      const existing = flightByNumber.get(fnKey);
+      if (!existing || draftRichness(draft) > draftRichness(existing)) {
+        flightByNumber.set(fnKey, draft);
+      }
+      continue;
+    }
     const key = draftIdentityKey(draft);
     if (seen.has(key)) {
       continue;
@@ -1281,23 +1318,35 @@ function dedupeDrafts(drafts: ForwardedReservationDraft[]): ForwardedReservation
     seen.add(key);
     output.push(draft);
   }
-  return output;
+
+  const flights = [...flightByNumber.values()].sort((a, b) => a.localTime.localeCompare(b.localTime));
+  return [...flights, ...output];
 }
 
 function chooseBodyText(text: string, html: string): { parsedText: string; lineAwareText: string; imageBasedEmail: boolean } {
   const lineAwareRaw = text.replace(/\r\n/g, "\n");
-  const normalizedText = normalizeWhitespace(text);
-  if (lineAwareRaw.trim().length >= MIN_READABLE_TEXT_LENGTH) {
-    return { parsedText: normalizedText, lineAwareText: lineAwareRaw, imageBasedEmail: false };
+  const lineAwareHtml = html.trim() ? htmlToLineAwareText(html) : "";
+  const rawFlightCount = countUniqueFlightNumbers(lineAwareRaw);
+  const htmlFlightCount = countUniqueFlightNumbers(lineAwareHtml);
+  let lineAwareText = lineAwareRaw;
+  if (
+    htmlFlightCount > rawFlightCount ||
+    (htmlFlightCount > 0 && lineAwareHtml.length > lineAwareRaw.length * 1.1) ||
+    (lineAwareHtml.length >= MIN_READABLE_TEXT_LENGTH && lineAwareRaw.trim().length < MIN_READABLE_TEXT_LENGTH)
+  ) {
+    lineAwareText = lineAwareHtml;
   }
-  const lineAwareHtml = htmlToLineAwareText(html);
+  const normalizedText = normalizeWhitespace(lineAwareText);
+  if (normalizedText.length >= MIN_READABLE_TEXT_LENGTH) {
+    return { parsedText: normalizedText, lineAwareText, imageBasedEmail: false };
+  }
   const strippedHtml = normalizeWhitespace(lineAwareHtml);
   if (strippedHtml.length >= MIN_READABLE_TEXT_LENGTH) {
     return { parsedText: strippedHtml, lineAwareText: lineAwareHtml, imageBasedEmail: false };
   }
   return {
     parsedText: strippedHtml || normalizedText,
-    lineAwareText: lineAwareRaw || lineAwareHtml || strippedHtml,
+    lineAwareText: lineAwareText || lineAwareHtml || strippedHtml,
     imageBasedEmail: true,
   };
 }

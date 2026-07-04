@@ -7,6 +7,37 @@ export const MAPLIBRE_FALLBACK_STYLE_URL = "https://demotiles.maplibre.org/style
 
 export type LiveMapStyleId = "dark" | "streets" | "satellite";
 
+/** Inline OSM raster style — works when MapTiler key is missing or CSP blocks demotiles. */
+export function buildOsmRasterFallbackStyle(): {
+  version: 8;
+  sources: Record<string, unknown>;
+  layers: Array<Record<string, unknown>>;
+} {
+  return {
+    version: 8,
+    sources: {
+      osm: {
+        type: "raster",
+        tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+        tileSize: 256,
+        maxzoom: 19,
+        attribution: "© OpenStreetMap contributors",
+      },
+    },
+    layers: [
+      {
+        id: "osm-raster",
+        type: "raster",
+        source: "osm",
+        minzoom: 0,
+        maxzoom: 22,
+      },
+    ],
+  };
+}
+
+export type LiveMapStyleSpec = string | ReturnType<typeof buildOsmRasterFallbackStyle>;
+
 export function liveMapStylePath(styleId: LiveMapStyleId): string {
   if (styleId === "satellite") return "hybrid";
   if (styleId === "streets") return "streets-v2";
@@ -23,6 +54,15 @@ export function resolveLiveMapStyleUrl(styleId: LiveMapStyleId, maptilerKey?: st
     return maptilerStyleUrl(liveMapStylePath(styleId), key);
   }
   return MAPLIBRE_FALLBACK_STYLE_URL;
+}
+
+/** Prefer MapTiler when keyed; otherwise use inline OSM tiles (CSP-safe on kepitravel.com). */
+export function resolveLiveMapStyle(styleId: LiveMapStyleId, maptilerKey?: string): LiveMapStyleSpec {
+  const key = maptilerKey?.trim();
+  if (key) {
+    return maptilerStyleUrl(liveMapStylePath(styleId), key);
+  }
+  return buildOsmRasterFallbackStyle();
 }
 
 export function directMaptilerTransformRequest(

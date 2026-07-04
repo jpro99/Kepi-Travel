@@ -265,3 +265,31 @@ test("html itinerary keeps line breaks for per-leg date parsing", async () => {
     }
   }
 });
+
+test("parseForwardedEmail prefers html body when plain text is only a stub", async () => {
+  const previousKey = process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  try {
+    const html = `
+      <p>Confirmation ABC123</p>
+      <p>Flight AS654</p><p>Departure ONT</p><p>Sep 14, 2026 at 8:45 AM</p>
+      <p>Flight AS832</p><p>Departure SEA</p><p>Sep 14, 2026 at 1:05 PM</p>
+      <p>Flight HA12</p><p>Departure HNL</p><p>Sep 21, 2026 at 10:15 AM</p>
+    `;
+    const result = await parseForwardedEmail({
+      subject: "Itinerary",
+      from: "no-reply@alaskaair.com",
+      text: "Your trip confirmation ABC123",
+      html,
+      attachments: [],
+    });
+    assert.ok(result.drafts.length >= 3);
+    assert.equal(result.drafts.find((draft) => draft.flightNumber === "HA12")?.localTime, "2026-09-21 10:15");
+  } finally {
+    if (previousKey === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = previousKey;
+    }
+  }
+});

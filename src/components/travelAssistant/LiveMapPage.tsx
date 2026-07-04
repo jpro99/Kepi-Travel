@@ -11,7 +11,7 @@ import {
   useNavigatorCredentials,
 } from "@/lib/travelAssistant/useActiveFlight";
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
-import { directMaptilerTransformRequest, resolveLiveMapStyleUrl, type LiveMapStyleId } from "@/lib/map/maptilerClient";
+import { buildOsmRasterFallbackStyle, directMaptilerTransformRequest, resolveLiveMapStyle, type LiveMapStyleId } from "@/lib/map/maptilerClient";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import { resolveLiveCoordinates, resetGeolocationQualityState } from "@/lib/family/geolocationQuality";
 import { clearLocationDisplayCache, resolveLocationForMapDisplay } from "@/lib/family/locationDisplayCache";
@@ -94,6 +94,7 @@ export function LiveMapPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
   const isLoadedRef = useRef(false);
+  const usingOsmFallbackRef = useRef(false);
   const watchIdRef = useRef<number | null>(null);
   const myMemberIdRef = useRef<string | null>(null);
   const firstFixRef = useRef<boolean>(false);
@@ -392,7 +393,8 @@ export function LiveMapPage() {
 
         const locs = Object.values(locations);
         const { center, zoom } = defaultMapCenter(locs);
-        const style = resolveLiveMapStyleUrl(mapStyle, maptilerKey);
+        const style = resolveLiveMapStyle(mapStyle, maptilerKey);
+        usingOsmFallbackRef.current = typeof style !== "string";
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const map = new (ml as any).Map({
@@ -419,11 +421,31 @@ export function LiveMapPage() {
           isLoadedRef.current = true;
           setIsLoaded(true);
           placeMarkers(map);
+          window.requestAnimationFrame(() => {
+            try {
+              map.resize();
+            } catch {
+              /* ignore */
+            }
+          });
         });
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         map.on("error", (e: any) => {
           const msg = String(e?.error?.message ?? "unknown error");
           console.warn("[LiveMap]", msg, e);
+          if (!isLoadedRef.current && !cancelled && maptilerKey && !usingOsmFallbackRef.current) {
+            usingOsmFallbackRef.current = true;
+            map.setStyle(buildOsmRasterFallbackStyle());
+            map.once("styledata", () => {
+              if (!cancelled) {
+                isLoadedRef.current = true;
+                setIsLoaded(true);
+                setIsError(false);
+                placeMarkers(map);
+              }
+            });
+            return;
+          }
           if (!isLoadedRef.current && !cancelled) { setIsError(true); setErrorMsg(msg); }
         });
 
@@ -454,7 +476,9 @@ export function LiveMapPage() {
       skipStyleSyncRef.current = false;
       return;
     }
-    mapRef.current.setStyle(resolveLiveMapStyleUrl(mapStyle, maptilerKey));
+    mapRef.current.setStyle(
+      maptilerKey ? resolveLiveMapStyle(mapStyle, maptilerKey) : buildOsmRasterFallbackStyle(),
+    );
     mapRef.current.once("styledata", () => { if (mapRef.current) placeMarkers(mapRef.current); });
   }, [mapStyle, maptilerKey, isLoaded, placeMarkers]);
 
@@ -759,7 +783,10 @@ export function LiveMapPage() {
       <div className={`fixed inset-0 z-[100] flex flex-col overflow-hidden ${lightChrome ? "bg-slate-100" : "bg-slate-950"}`}>
 
         {/* Map canvas — family / world basemap with country labels */}
-        <div ref={mapEl} className={`absolute inset-0 z-0 h-full w-full ${mapView === "airport" ? "opacity-0 pointer-events-none" : ""}`} />
+        <div
+          ref={mapEl}
+          className={`absolute inset-0 z-0 h-[100dvh] w-full min-h-[240px] ${mapView === "airport" ? "opacity-0 pointer-events-none" : ""}`}
+        />
 
         {/* Airport Navigator overlay — full-bleed when at the airport view */}
         {mapView === "airport" && activeFlight && (
