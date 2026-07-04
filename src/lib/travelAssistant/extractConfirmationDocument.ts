@@ -5,6 +5,7 @@ import {
   resolveConfirmationScanKind,
   type ConfirmationScanKind,
 } from "@/lib/travelAssistant/confirmationDocumentText";
+import { validateConfirmationPlainText } from "@/lib/travelAssistant/confirmationDocumentValidation";
 import { mergeConfirmationDrafts } from "@/lib/travelAssistant/confirmationDraftMerge";
 import {
   parseScannedReservationsJson,
@@ -174,6 +175,13 @@ function finalizeDrafts(aiDrafts: ScannedReservationDraft[], plainText: string, 
   return aiDrafts;
 }
 
+function regexDraftsFromPlainText(plainText: string, kind: ConfirmationScanKind): ScannedReservationDraft[] {
+  if (!confirmationKindUsesTextExtraction(kind) || plainText.length < 80) {
+    return [];
+  }
+  return mergeConfirmationDrafts([], plainText);
+}
+
 export async function extractConfirmationDocument(
   file: File,
   apiKey: string,
@@ -184,30 +192,54 @@ export async function extractConfirmationDocument(
   const plainText = confirmationKindUsesTextExtraction(kind)
     ? await extractConfirmationPlainText(fileBytes, kind)
     : "";
-  const client = new Anthropic({ apiKey });
 
-  const modelText = await scanWithModel({
-    client,
-    kind,
-    file,
-    fileBase64,
-    plainText,
-  });
-
-  const aiDrafts = parseScannedReservationsJson(modelText);
-  const drafts = finalizeDrafts(aiDrafts, plainText, kind);
-
-  if (drafts.length === 0 && plainText.length >= 80) {
-    const regexOnly = finalizeDrafts([], plainText, kind);
-    if (regexOnly.length > 0) {
-      return regexOnly;
+  if (confirmationKindUsesTextExtraction(kind)) {
+    const validation = validateConfirmationPlainText(plainText);
+    if (!validation.ok) {
+      throw new Error(validation.message);
     }
   }
 
-  if (drafts.length === 0) {
-    throw new Error("Could not read any reservations from this file. Try a PDF, screenshot, or HTML confirmation.");
+  const regexDrafts = regexDraftsFromPlainText(plainText, kind);
+  const trimmedApiKey = apiKey.trim();
+
+  if (!trimmedApiKey) {
+    if (kind === "image") {
+      throw new Error("Photo import needs AI vision — ticket scan is temporarily unavailable.");
+    }
+    if (regexDrafts.length > 0) {
+      return regexDrafts;
+    }
+    throw new Error("Could not read any reservations from this file. Try a PDF export from your airline email.");
   }
-  return drafts;
+
+  try {
+    const client = new Anthropic({ apiKey: trimmedApiKey });
+    const modelText = await scanWithModel({
+      client,
+      kind,
+      file,
+      fileBase64,
+      plainText,
+    });
+    const aiDrafts = parseScannedReservationsJson(modelText);
+    const drafts = finalizeDrafts(aiDrafts, plainText, kind);
+    if (drafts.length === 0 && regexDrafts.length > 0) {
+      return regexDrafts;
+    }
+    if (drafts.length === 0) {
+      throw new Error("Could not read any reservations from this file. Try a PDF, screenshot, or HTML confirmation.");
+    }
+    return drafts;
+  } catch (error) {
+    if (regexDrafts.length > 0) {
+      return regexDrafts;
+    }
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error("Confirmation scan failed.");
+  }
 }
 
 export { resolveConfirmationScanKind as confirmationScanKind };

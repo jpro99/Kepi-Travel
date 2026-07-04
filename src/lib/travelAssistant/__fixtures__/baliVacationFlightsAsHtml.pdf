@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+  <body>
+    <h1>ALASKA AIRLINES  Trip Confirmation</h1>
+    <p>Confirmation Code: ABCDEF</p>
+    <p>Flight 1 of 5</p>
+    <p>AS 865</p>
+    <p>Ontario, CA (ONT) to Seattle, WA (SEA)</p>
+    <p>Departure: Friday, September 12, 2025 at 6:00 AM</p>
+    <p>Arrival: Friday, September 12, 2025 at 8:45 AM</p>
+    <p>Flight 2 of 5</p>
+    <p>AS 6422 operated by ITA Airways</p>
+    <p>Seattle, WA (SEA) to Rome, Italy (FCO)</p>
+    <p>Departure: Friday, September 12, 2025 at 11:30 AM</p>
+    <p>Arrival: Saturday, September 13, 2025 at 7:55 AM</p>
+    <p>Flight 3 of 5</p>
+    <p>AZ 1607</p>
+    <p>Bari, Italy (BRI) to Rome, Italy (FCO)</p>
+    <p>Departure: Friday, September 19, 2025 at 9:40 AM</p>
+    <p>Arrival: Friday, September 19, 2025 at 10:45 AM</p>
+    <p>Flight 4 of 5</p>
+    <p>SQ 948</p>
+    <p>Singapore (SIN) to Denpasar Bali (DPS)</p>
+    <p>Departure: Thursday, September 25, 2025 at 2:15 PM</p>
+    <p>Arrival: Thursday, September 25, 2025 at 5:05 PM</p>
+    <p>Flight 5 of 5</p>
+    <p>GA 875</p>
+    <p>Jakarta (CGK) to Singapore (SIN)</p>
+    <p>Departure: Monday, October 6, 2025 at 8:20 AM</p>
+    <p>Arrival: Monday, October 6, 2025 at 11:10 AM</p>
+    <p>Record Locator: ABCDEF</p>
+  </body>
+</html>

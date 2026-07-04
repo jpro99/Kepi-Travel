@@ -39,14 +39,16 @@ test("htmlToPlainConfirmationText strips tags from travel email html", () => {
 });
 
 test("resolveConfirmationScanKind reads Bali HTML-as-PDF fixture when present", () => {
-  const fixturePath = join(fixtureDir, "..", "..", "..", "BaliVacationFlights.real.pdf");
+  const fixturePath = join(fixtureDir, "baliVacationFlightsAsHtml.pdf");
   try {
     const bytes = readFileSync(fixturePath);
-    const file = new File([bytes], "BaliVacationFlights.real.pdf", { type: "application/pdf" });
+    const file = new File([bytes], "baliVacationFlightsAsHtml.pdf", { type: "application/pdf" });
     const kind = resolveConfirmationScanKind(file, bytes);
     assert.notEqual(kind, "pdf");
     assert.ok(kind === "html" || kind === "text");
+    const plain = htmlToPlainConfirmationText(bytes.toString("utf8"));
+    assert.match(plain, /AS\s+865/);
   } catch {
-    // Fixture optional in CI
+    // Optional fixture
   }
 });

@@ -88,7 +88,7 @@ export function ImportConfirmationDropzone({
         <p className="text-xs text-cyan-800/90 dark:text-cyan-200/90">
           {compact
             ? "PDF, screenshot, HTML email, or text"
-            : "PDF, boarding pass, HTML email from your travel company, or screenshot — we’ll read every leg"}
+            : "PDF, boarding pass, HTML email, or screenshot — not a Google Drive login page"}
         </p>
         {!busy ? (
           <span className="mt-1 text-[11px] font-semibold text-cyan-700 underline dark:text-cyan-300">

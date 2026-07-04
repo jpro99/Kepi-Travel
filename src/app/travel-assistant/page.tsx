@@ -25,6 +25,7 @@ import {
   prepareReviewDraftForAccept,
 } from "@/lib/travelAssistant/prepareReviewDraftForAccept";
 import { enrichReservationForAutoImport } from "@/lib/travelAssistant/autoImportReservation";
+import { inferImportedTripMeta } from "@/lib/travelAssistant/persistImportToTrip";
 import { drainForwardReviewQueue } from "@/lib/travelAssistant/drainForwardReviewQueue";
 import { reconcileStoredFlightReservations } from "@/lib/travelAssistant/reconcileStoredFlightReservations";
 import { canonicalFlightDepartureDay, canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
@@ -6264,25 +6265,76 @@ export default function TravelAssistantPage() {
         pushUndoSnapshot("Ticket scan added to trip");
         const nextReservations = [...newReservations, ...reservations];
         setReservations(nextReservations);
-        const targetTripId = activeTripId ?? trips[0]?.id ?? null;
-        if (targetTripId) {
+        let targetTripId = activeTripId ?? trips[0]?.id ?? null;
+        if (!targetTripId) {
+          const tripMeta = inferImportedTripMeta(newReservations);
+          try {
+            const createResponse = await fetch(TRIP_API_ROUTE, {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                setActive: true,
+                trip: {
+                  name: tripMeta.name,
+                  destination: tripMeta.destination,
+                  startDate: tripMeta.startDate,
+                  endDate: tripMeta.endDate,
+                  stage: "readiness",
+                  reservations: nextReservations,
+                },
+              }),
+            });
+            const createPayload = (await createResponse.json()) as {
+              error?: string;
+              activeTripId?: string | null;
+              trip?: { id?: string };
+              trips?: unknown[];
+            };
+            if (!createResponse.ok) {
+              throw new Error(createPayload.error ?? "Could not create a trip for your import.");
+            }
+            applyServerTripsSnapshot(createPayload);
+            targetTripId = createPayload.activeTripId ?? createPayload.trip?.id ?? null;
+            if (targetTripId) {
+              setActiveTripId(targetTripId);
+            }
+          } catch (createError) {
+            setToast(
+              createError instanceof Error
+                ? createError.message
+                : "Flights imported locally but could not save to your trip.",
+            );
+          }
+        } else {
           setTrips((previous) =>
             previous.map((trip) =>
               trip.id === targetTripId ? { ...trip, reservations: nextReservations } : trip,
             ),
           );
-          void fetch(TRIP_API_ROUTE, {
-            method: "PUT",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "update",
-              id: targetTripId,
-              patch: { reservations: nextReservations },
-            }),
-          }).catch(() => {
-            setToast("Could not save scanned reservation to your trip.");
-          });
+          try {
+            const updateResponse = await fetch(TRIP_API_ROUTE, {
+              method: "PUT",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "update",
+                id: targetTripId,
+                patch: { reservations: nextReservations },
+              }),
+            });
+            if (!updateResponse.ok) {
+              const updatePayload = (await updateResponse.json()) as { error?: string };
+              throw new Error(updatePayload.error ?? "Could not save scanned reservation to your trip.");
+            }
+            applyServerTripsSnapshot((await updateResponse.json()) as { trips?: unknown[]; activeTripId?: string | null });
+          } catch (updateError) {
+            setToast(
+              updateError instanceof Error
+                ? updateError.message
+                : "Could not save scanned reservation to your trip.",
+            );
+          }
         }
         for (const reservation of newReservations) {
           queueMutation("Ticket scan added to live trip.", {
@@ -6324,7 +6376,7 @@ export default function TravelAssistantPage() {
         setTicketScanBusy(false);
       }
     },
-    [activeTripId, pushUndoSnapshot, queueMutation, reservations, setToast, ticketScanBusy, trips],
+    [activeTripId, applyServerTripsSnapshot, pushUndoSnapshot, queueMutation, reservations, setToast, ticketScanBusy, trips],
   );
 
   const handleTicketScanFileSelected = useCallback(
