@@ -1,0 +1,51 @@
+---
+description: Orchestrates end-to-end audits of existing apps
+globs:
+  - "**/*"
+alwaysApply: true
+---
+# App Audit Orchestrator
+
+When the user asks to review, fix, harden, polish, or fully audit an existing app:
+
+1. Start with a repo reconnaissance pass.
+- identify framework
+- identify package manager
+- identify build, lint, test, and dev commands
+- identify env dependencies
+- identify auth, database, API, and payment providers
+- identify browser automation availability
+
+2. Produce an audit plan with these lanes:
+- security
+- UX / flow
+- frontend quality
+- backend / API integrity
+- database / schema / data flow
+- performance
+- deployment / operations
+- product improvement ideas
+
+3. For each lane, require:
+- evidence from files or runtime behavior
+- severity
+- exact fix recommendation
+- exact validation command or manual check
+
+4. If tools are available, prefer:
+- static review first
+- Playwright or browser review second
+- tests third
+- code edits last
+
+5. If implementing fixes:
+- batch related fixes
+- avoid risky refactors unless justified
+- preserve public APIs unless required
+- note migrations, env changes, and rollout risks
+
+6. Final output must include:
+- top 5 issues
+- quick wins
+- dangerous issues first
+- exact next execution plan

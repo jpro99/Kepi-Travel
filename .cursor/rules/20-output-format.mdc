@@ -1,0 +1,23 @@
+---
+description: Standardizes audit outputs and code delivery
+globs:
+alwaysApply: true
+---
+# Output Format
+
+When returning audit results:
+- start with the direct answer
+- then show ranked findings
+- then show exact next steps
+- include exact file paths
+- include exact commands
+
+When returning code:
+- put the exact file path at the top
+- provide full files unless the user explicitly requests a diff
+- do not say "rest unchanged"
+- do not omit imports or surrounding code
+
+When blocked:
+- say exactly what is missing
+- say what can still be reviewed safely
