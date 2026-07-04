@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { ImportConfirmationDropzone } from "@/components/travelAssistant/ImportConfirmationDropzone";
 import {
   pickScanDraftForType,
@@ -137,6 +138,19 @@ export function ManualReservationEntryModal({
   const [formError, setFormError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scanMessage, setScanMessage] = useState<string | null>(null);
+  const [portalReady, setPortalReady] = useState(false);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
 
   const { title: modalTitle, saveLabel } = modalCopy(reservationType);
 
@@ -230,13 +244,18 @@ export function ManualReservationEntryModal({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-sm sm:p-3 md:items-center">
-      <div className="flex max-h-[92dvh] w-full max-w-xl min-h-0 flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:rounded-2xl">
+  const modal = (
+    <div
+      className="fixed inset-0 z-[100000] flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-sm sm:p-3 md:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="manual-reservation-entry-title"
+    >
+      <div className="flex h-[92dvh] max-h-[92dvh] w-full max-w-xl min-h-0 flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[92dvh] sm:rounded-2xl">
         {/* ── Header (fixed, never scrolls away) ── */}
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--border-default)] px-4 py-4">
           <div className="min-w-0">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">{modalTitle}</h2>
+            <h2 id="manual-reservation-entry-title" className="text-lg font-bold text-slate-900 dark:text-slate-100">{modalTitle}</h2>
             <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
               Drop a PDF or screenshot to auto-fill, or enter details and tap Save below.
             </p>
@@ -251,7 +270,10 @@ export function ManualReservationEntryModal({
         </div>
 
         {/* ── Scrollable body ── */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain touch-pan-y px-4 py-4">
+        <div
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain touch-pan-y px-4 py-4 pb-6"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
           <ImportConfirmationDropzone
             busy={scanning}
             compact
@@ -435,7 +457,7 @@ export function ManualReservationEntryModal({
             <button
               type="submit"
               form="manual-reservation-entry-form"
-              className="min-h-[52px] flex-1 rounded-xl bg-[#007AFF] px-4 text-base font-bold text-white hover:bg-[#0066DD]"
+              className="min-h-[52px] flex-1 touch-manipulation rounded-xl bg-[#007AFF] px-4 text-base font-bold text-white hover:bg-[#0066DD]"
             >
               {saveLabel}
             </button>
@@ -451,4 +473,10 @@ export function ManualReservationEntryModal({
       </div>
     </div>
   );
+
+  if (!portalReady || typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(modal, document.body);
 }
