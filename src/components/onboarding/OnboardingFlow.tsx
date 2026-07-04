@@ -594,7 +594,7 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
     if (currentStep === 1) return t("stepWelcome");
     if (currentStep === 2) return t("stepFirstTrip");
     if (currentStep === 3) return t("stepNotifications");
-    if (currentStep === 4) return "Email forwarding";
+    if (currentStep === 4) return "Forward confirmations — how Kepi works";
     return t("stepDone");
   }, [currentStep, t]);
 
@@ -747,6 +747,13 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
 
           {currentStep === 4 ? (
             <div className="space-y-3 text-sm">
+              <p className="font-semibold text-slate-900 dark:text-slate-100">
+                This is the most important step.
+              </p>
+              <p className="text-slate-700 dark:text-slate-300">
+                Book flights and hotels on Google, airlines, or Booking.com — then forward the confirmation email to
+                your Kepi address below. That&apos;s how your timeline, alerts, and trip walkthrough come alive.
+              </p>
               {forwardAddress ? (
                 <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-3 dark:border-cyan-500/30 dark:bg-cyan-500/10">
                   <p className="text-slate-700 dark:text-slate-300">

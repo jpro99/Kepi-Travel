@@ -3,6 +3,12 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AirlineChainFilterBar } from "@/components/travelAssistant/ChainFilterBar";
 import { resolveAwardBookUrl, resolveCashBookUrl } from "@/lib/decision/bookingLinks";
+import { TripFirstBanner } from "@/components/travelAssistant/TripFirstBanner";
+import {
+  buildFlightAwardBookLabel,
+  buildFlightCashBookLabel,
+  buildForwardAfterBookHint,
+} from "@/lib/travelAssistant/tripFirstMessaging";
 import {
   enabledAirlineChainIds,
   loadAirlineChainToggles,
@@ -185,8 +191,9 @@ export function TripFlightSearch({ plan, selectedLegs }: TripFlightSearchProps) 
           rel="noopener noreferrer"
           className="rounded-lg bg-sky-600 py-2.5 text-center text-xs font-black text-white hover:bg-sky-500"
         >
-          {book.label}
+          {buildFlightCashBookLabel({ airlineName: flight.airlineName || flight.airline, priceUsd: flight.price })}
         </a>
+        <p className="text-[10px] leading-relaxed text-slate-500 dark:text-slate-400">{buildForwardAfterBookHint()}</p>
       </div>
     );
   };
@@ -230,8 +237,9 @@ export function TripFlightSearch({ plan, selectedLegs }: TripFlightSearchProps) 
           rel="noopener noreferrer"
           className="rounded-lg bg-emerald-600 py-2.5 text-center text-xs font-black text-white hover:bg-emerald-500"
         >
-          {book.label}
+          {buildFlightAwardBookLabel(award.program)}
         </a>
+        <p className="text-[10px] leading-relaxed text-emerald-900/80 dark:text-emerald-200/80">{buildForwardAfterBookHint()}</p>
       </div>
     );
   };
@@ -242,6 +250,8 @@ export function TripFlightSearch({ plan, selectedLegs }: TripFlightSearchProps) 
 
   return (
     <div className="space-y-3">
+      <TripFirstBanner variant="flight" />
+
       <div>
         <p className="text-sm font-bold text-slate-900 dark:text-white">{plan.summary}</p>
         <p className="text-[11px] text-slate-500">
@@ -282,9 +292,13 @@ export function TripFlightSearch({ plan, selectedLegs }: TripFlightSearchProps) 
 
       {payMode === "points" ? (
         <p className="text-[11px] text-emerald-800 dark:text-emerald-200">
-          Points mode shows airlines with loyalty programs. Uncheck carriers you don&apos;t want — booking opens their site with route and dates filled in.
+          Find award space here, verify on Seats.aero, book on the airline — then forward your confirmation to Kepi.
         </p>
-      ) : null}
+      ) : (
+        <p className="text-[11px] text-sky-800 dark:text-sky-200">
+          Prices are for comparison. Book on Google Flights or the airline, then forward confirmation to Kepi.
+        </p>
+      )}
 
       {error ? (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">{error}</p>

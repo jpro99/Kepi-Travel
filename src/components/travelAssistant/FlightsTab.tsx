@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { TripFlightLegPicker } from "@/components/travelAssistant/TripFlightLegPicker";
 import { InterCityTransportPrompts } from "@/components/travelAssistant/InterCityTransportPrompts";
+import { TripFirstBanner } from "@/components/travelAssistant/TripFirstBanner";
 import { FlightSearchLauncher, type FlightSearchDefaults } from "@/components/travelAssistant/FlightSearchLauncher";
 import { ImportConfirmationDropzone } from "@/components/travelAssistant/ImportConfirmationDropzone";
 import { FlightSearchModal } from "@/components/travelAssistant/FlightSearchModal";
@@ -566,6 +567,8 @@ export function FlightsTab({
     <section className={`space-y-4 pb-6 ${type.section}`}>
       {showBookSearch ? (
         <>
+      <TripFirstBanner variant="flight" />
+
       <FlightSearchLauncher
         tripName={tripName}
         defaults={flightSearchDefaults}

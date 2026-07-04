@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { suggestAirports, type AirportResult } from "@/lib/airports/lookup";
 import {
   buildFlightSearchPlan,
@@ -217,20 +216,14 @@ export function FlightSearchLauncher({ tripName, defaults, onSearch }: FlightSea
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-700 dark:text-sky-300">
-            Book travel
+            Compare & decide
           </p>
-          <h3 className="mt-1 text-lg font-black text-slate-900 dark:text-white">Search & book flights</h3>
+          <h3 className="mt-1 text-lg font-black text-slate-900 dark:text-white">Find flights — book on Google or airline</h3>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
             {tripName ? `${tripName} · ` : ""}
-            Live prices from Kepi — cash or miles — then book on the airline.
+            Compare cash and miles here. Book externally, then forward your confirmation to Kepi.
           </p>
         </div>
-        <Link
-          href="/book?tab=flights"
-          className="shrink-0 rounded-full border border-slate-300 px-3 py-1.5 text-[11px] font-bold text-slate-600 dark:border-slate-600 dark:text-slate-300"
-        >
-          Full checkout →
-        </Link>
       </div>
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">

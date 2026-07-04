@@ -78,7 +78,7 @@ const pillars = [
   {
     title: "Plan",
     description:
-      "Build a calm, living itinerary — flights, stays, and day-by-day notes in one place. Kepi organizes what you booked and what still needs attention.",
+      "Build a living itinerary — where to go, when to stay, what's missing. Compare options in Kepi, then book on Google or the airline when the price is right.",
     icon: Compass,
   },
   {
@@ -276,17 +276,18 @@ function HeroSection({ userId, authCtaHref }: { userId: string | null; authCtaHr
         <Reveal>
           <p className="inline-flex items-center gap-2 rounded-full border border-[var(--apple-border)] bg-[var(--apple-card)] px-3.5 py-1.5 text-[13px] font-medium text-[var(--apple-text-secondary)]">
             <span className="h-1.5 w-1.5 rounded-full bg-[var(--apple-accent)]" aria-hidden />
-            Intelligent travel companion
+            Trip OS · not another booking site
           </p>
           <h1
             id="hero-heading"
             className="mt-6 max-w-xl text-[2.75rem] font-semibold leading-[1.08] tracking-tight text-[var(--apple-text)] sm:text-5xl lg:text-[3.25rem]"
           >
-            Kepi keeps your journey moving.
+            Book anywhere. Kepi runs the trip.
           </h1>
           <p className={`mt-5 max-w-lg text-[17px] leading-relaxed sm:text-lg ${textSecondary}`}>
-            More than booking. Kepi plans your trip, guides you through the airport, and stays with you from departure to
-            memory — with calm, real-time intelligence when travel gets stressful.
+            Plan cities and dates in Kepi, compare flights and hotels, then book on Google, airlines, or Booking.com.
+            Forward your confirmations — Kepi walks you through the whole journey with timeline, alerts, and airport
+            guidance.
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -308,7 +309,7 @@ function HeroSection({ userId, authCtaHref }: { userId: string | null; authCtaHr
           </div>
 
           <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-[var(--apple-border)] pt-8">
-            {["Invite-only beta", "Real-time flight monitoring", "iOS & web"].map((item) => (
+            {["Forward confirmations", "Real-time flight monitoring", "iOS & web"].map((item) => (
               <span key={item} className={`inline-flex items-center gap-2 text-[13px] ${textSecondary}`}>
                 <CheckCircle2 className="h-3.5 w-3.5 text-[var(--apple-accent)]" aria-hidden />
                 {item}

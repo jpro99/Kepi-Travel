@@ -1,5 +1,9 @@
 import { hasKepiBookableLiveRate } from "@/lib/hotels/hotelLiveRate";
 import type { HotelSearchResult } from "@/lib/hotels/types";
+import {
+  buildTripFirstBody,
+  buildTripFirstHeadline,
+} from "@/lib/travelAssistant/tripFirstMessaging";
 
 /** Kepi in-app checkout when within this % of public reference price (default 10%). */
 export const HOTEL_KEPI_COMPETITIVE_THRESHOLD = 0.1;
@@ -109,7 +113,7 @@ export function resolveHotelBookingStrategy(input: HotelBookingStrategyInput): H
 
 export function buildHotelTripFirstBannerCopy(): { headline: string; body: string } {
   return {
-    headline: "Book where it’s cheapest — Kepi runs the trip after",
-    body: "Compare on Google or Booking.com for the best rate. After you book, forward your confirmation email to Kepi and it appears on your timeline with alerts, gaps, and check-in guidance.",
+    headline: buildTripFirstHeadline(),
+    body: buildTripFirstBody("hotel"),
   };
 }
