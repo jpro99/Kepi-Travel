@@ -23,6 +23,7 @@ import {
   buildOsmRasterFallbackStyle,
   directMaptilerTransformRequest,
   resolveLiveMapStyle,
+  scheduleMapLoadFallback,
 } from "@/lib/map/maptilerClient";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import { useMobileMapExpand, useMapResizeOnLayoutChange } from "@/lib/ui/useMobileMapExpand";
@@ -368,20 +369,19 @@ export function TripTransportRouteMap({
     if (!hasGeo || !containerRef.current) return;
 
     let cancelled = false;
+    let clearLoadFallback: (() => void) | null = null;
 
     void (async () => {
       const maplibregl = await import("maplibre-gl");
       if (cancelled || !containerRef.current) return;
 
-      usingOsmFallbackRef.current = false;
+      usingOsmFallbackRef.current = true;
       isLoadedRef.current = false;
       setMapReady(false);
 
-      const initialStyle = resolveLiveMapStyle("streets", maptilerKey);
-
       const map = new maplibregl.Map({
         container: containerRef.current,
-        style: initialStyle,
+        style: buildOsmRasterFallbackStyle(),
         center: [geoPoints[0]?.lon ?? 0, geoPoints[0]?.lat ?? 20],
         zoom: 3,
         maxZoom: 18,
@@ -426,7 +426,16 @@ export function TripTransportRouteMap({
         usingOsmFallback: usingOsmFallbackRef,
         onRecovered: finishMapLoad,
       });
+
+      clearLoadFallback = scheduleMapLoadFallback(map, {
+        isCancelled: () => cancelled,
+        isLoaded: () => isLoadedRef.current,
+        usingOsmFallback: usingOsmFallbackRef,
+        onReady: finishMapLoad,
+      });
+
       map.on("remove", () => {
+        clearLoadFallback?.();
         unbindInteractionRef.current?.();
         unbindInteractionRef.current = null;
         unbindResize();
@@ -450,6 +459,7 @@ export function TripTransportRouteMap({
 
     return () => {
       cancelled = true;
+      clearLoadFallback?.();
       unbindInteractionRef.current?.();
       unbindInteractionRef.current = null;
       for (const marker of airportMarkersRef.current) marker.remove();
@@ -459,7 +469,7 @@ export function TripTransportRouteMap({
       isLoadedRef.current = false;
       setMapReady(false);
     };
-  }, [hasGeo, maptilerKey, bindUserInteraction, fitWholeTrip, installRouteLayers, renderAirportMarkers, geoPoints]);
+  }, [hasGeo, bindUserInteraction, fitWholeTrip, installRouteLayers, renderAirportMarkers, geoPoints]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -489,11 +499,9 @@ export function TripTransportRouteMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
-    if (usingOsmFallbackRef.current) return;
-    if (!maptilerKey) return;
-    if (appliedStyleRef.current === mapStyle) return;
-    appliedStyleRef.current = mapStyle;
-    map.setStyle(styleSpec);
+    const key = maptilerKey.trim();
+    usingOsmFallbackRef.current = !key;
+    map.setStyle(key ? styleSpec : buildOsmRasterFallbackStyle());
     map.once("idle", () => {
       installRouteLayers(map);
       void renderAirportMarkers();

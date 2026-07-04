@@ -93,6 +93,30 @@ export function attachMapStyleErrorFallback(
   });
 }
 
+/** If MapLibre never reaches load (common when MapTiler hangs), force OSM tiles. */
+export function scheduleMapLoadFallback(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  map: any,
+  ctx: {
+    isCancelled: () => boolean;
+    isLoaded: () => boolean;
+    usingOsmFallback: { current: boolean };
+    onReady: () => void;
+  },
+  delayMs = 4500,
+): () => void {
+  const timer = window.setTimeout(() => {
+    if (ctx.isCancelled() || ctx.isLoaded()) return;
+    ctx.usingOsmFallback.current = true;
+    map.setStyle(buildOsmRasterFallbackStyle());
+    map.once("idle", () => {
+      if (ctx.isCancelled()) return;
+      ctx.onReady();
+    });
+  }, delayMs);
+  return () => window.clearTimeout(timer);
+}
+
 export function directMaptilerTransformRequest(
   maptilerKey: string,
 ): (url: string) => { url: string } | undefined {

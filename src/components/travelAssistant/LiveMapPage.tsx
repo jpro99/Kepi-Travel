@@ -11,7 +11,7 @@ import {
   useNavigatorCredentials,
 } from "@/lib/travelAssistant/useActiveFlight";
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
-import { buildOsmRasterFallbackStyle, directMaptilerTransformRequest, resolveLiveMapStyle, type LiveMapStyleId } from "@/lib/map/maptilerClient";
+import { buildOsmRasterFallbackStyle, directMaptilerTransformRequest, resolveLiveMapStyle, scheduleMapLoadFallback, attachMapStyleErrorFallback, type LiveMapStyleId } from "@/lib/map/maptilerClient";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import { resolveLiveCoordinates, resetGeolocationQualityState } from "@/lib/family/geolocationQuality";
 import { clearLocationDisplayCache, resolveLocationForMapDisplay } from "@/lib/family/locationDisplayCache";
@@ -98,11 +98,12 @@ export function LiveMapPage() {
   const watchIdRef = useRef<number | null>(null);
   const myMemberIdRef = useRef<string | null>(null);
   const firstFixRef = useRef<boolean>(false);
-  const skipStyleSyncRef = useRef(true);
 
   const [group, setGroup] = useState<FamilyGroup | null>(null);
   const [locations, setLocations] = useState<Record<string, LocationPoint>>({});
   const [maptilerKey, setMaptilerKey] = useState("");
+  const maptilerKeyRef = useRef("");
+  const mapStyleRef = useRef<MapStyleId>("streets");
   const [mapStyle, setMapStyle] = useState<MapStyleId>("streets");
   const [headingUp, setHeadingUp] = useState(true);
   const headingRef = useRef<number>(0);
@@ -122,6 +123,14 @@ export function LiveMapPage() {
   useEffect(() => {
     headingUpRef.current = headingUp;
   }, [headingUp]);
+
+  useEffect(() => {
+    mapStyleRef.current = mapStyle;
+  }, [mapStyle]);
+
+  useEffect(() => {
+    maptilerKeyRef.current = maptilerKey;
+  }, [maptilerKey]);
 
   const applyHeadingToUi = useCallback((heading: number) => {
     headingRef.current = heading;
@@ -370,13 +379,15 @@ export function LiveMapPage() {
     }).catch(console.error);
   }, [group, locations]);
 
-  /* ── Init map — always render a basemap (MapTiler or MapLibre demo fallback) ── */
+  /* ── Init map once with OSM tiles (instant paint), then optional MapTiler upgrade ── */
   useEffect(() => {
     if (!mapEl.current) return;
     let cancelled = false;
+    let clearLoadFallback: (() => void) | null = null;
     isLoadedRef.current = false;
-    setIsLoaded(false); setIsError(false);
-    skipStyleSyncRef.current = true;
+    setIsLoaded(false);
+    setIsError(false);
+    usingOsmFallbackRef.current = true;
 
     if (mapRef.current) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -386,6 +397,21 @@ export function LiveMapPage() {
       mapRef.current = null;
     }
 
+    const markMapReady = (map: import("maplibre-gl").Map): void => {
+      if (cancelled || isLoadedRef.current) return;
+      isLoadedRef.current = true;
+      setIsLoaded(true);
+      setIsError(false);
+      placeMarkers(map);
+      window.requestAnimationFrame(() => {
+        try {
+          map.resize();
+        } catch {
+          /* ignore */
+        }
+      });
+    };
+
     void (async () => {
       try {
         const ml = await import("maplibre-gl");
@@ -393,13 +419,11 @@ export function LiveMapPage() {
 
         const locs = Object.values(locations);
         const { center, zoom } = defaultMapCenter(locs);
-        const style = resolveLiveMapStyle(mapStyle, maptilerKey);
-        usingOsmFallbackRef.current = typeof style !== "string";
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const map = new (ml as any).Map({
           container: mapEl.current,
-          style,
+          style: buildOsmRasterFallbackStyle(),
           center,
           zoom,
           minZoom: 1,
@@ -407,7 +431,9 @@ export function LiveMapPage() {
           pixelRatio: getMapPixelRatio(),
           attributionControl: false,
           fadeDuration: 0,
-          ...(maptilerKey ? { transformRequest: directMaptilerTransformRequest(maptilerKey) } : {}),
+          ...(maptilerKeyRef.current.trim()
+            ? { transformRequest: directMaptilerTransformRequest(maptilerKeyRef.current) }
+            : {}),
         });
         const unbindResize = bindMapResize(mapEl.current, map);
 
@@ -417,69 +443,66 @@ export function LiveMapPage() {
         map.addControl(new (ml as any).AttributionControl({ compact: true }), "bottom-right");
 
         map.on("load", () => {
-          if (cancelled) return;
-          isLoadedRef.current = true;
-          setIsLoaded(true);
-          placeMarkers(map);
-          window.requestAnimationFrame(() => {
-            try {
-              map.resize();
-            } catch {
-              /* ignore */
-            }
-          });
+          markMapReady(map);
         });
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        map.on("error", (e: any) => {
-          const msg = String(e?.error?.message ?? "unknown error");
-          console.warn("[LiveMap]", msg, e);
-          if (!isLoadedRef.current && !cancelled && !usingOsmFallbackRef.current) {
-            usingOsmFallbackRef.current = true;
-            map.setStyle(buildOsmRasterFallbackStyle());
-            map.once("styledata", () => {
-              if (!cancelled) {
-                isLoadedRef.current = true;
-                setIsLoaded(true);
-                setIsError(false);
-                placeMarkers(map);
-              }
-            });
-            return;
-          }
-          if (!isLoadedRef.current && !cancelled) { setIsError(true); setErrorMsg(msg); }
+
+        attachMapStyleErrorFallback(map, {
+          isCancelled: () => cancelled,
+          isLoaded: () => isLoadedRef.current,
+          markLoaded: () => {
+            isLoadedRef.current = true;
+          },
+          usingOsmFallback: usingOsmFallbackRef,
+          onRecovered: () => markMapReady(map),
+        });
+
+        clearLoadFallback = scheduleMapLoadFallback(map, {
+          isCancelled: () => cancelled,
+          isLoaded: () => isLoadedRef.current,
+          usingOsmFallback: usingOsmFallbackRef,
+          onReady: () => markMapReady(map),
         });
 
         mapRef.current = map;
-        map.on("remove", () => unbindResize());
+        map.on("remove", () => {
+          clearLoadFallback?.();
+          unbindResize();
+        });
       } catch (err) {
-        if (!cancelled) { setIsError(true); setErrorMsg(err instanceof Error ? err.message : String(err)); }
+        if (!cancelled) {
+          setIsError(true);
+          setErrorMsg(err instanceof Error ? err.message : String(err));
+        }
       }
     })();
 
     return () => {
       cancelled = true;
+      clearLoadFallback?.();
       if (mapRef.current) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const old = mapRef.current._kepiMarkers as Record<string, any> | undefined;
         if (old) Object.values(old).forEach((mk: unknown) => (mk as { remove(): void }).remove());
-        mapRef.current.remove(); mapRef.current = null;
+        mapRef.current.remove();
+        mapRef.current = null;
       }
-      isLoadedRef.current = false; setIsLoaded(false);
+      isLoadedRef.current = false;
+      setIsLoaded(false);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [maptilerKey]);
+  }, []);
 
-  /* ── Style toggle — streets / dark / satellite+labels ── */
+  /* ── Style toggle + MapTiler upgrade when key arrives ── */
   useEffect(() => {
     if (!mapRef.current || !isLoaded) return;
-    if (skipStyleSyncRef.current) {
-      skipStyleSyncRef.current = false;
-      return;
-    }
+    const key = maptilerKey.trim();
+    usingOsmFallbackRef.current = !key;
     mapRef.current.setStyle(
-      maptilerKey ? resolveLiveMapStyle(mapStyle, maptilerKey) : buildOsmRasterFallbackStyle(),
+      key ? resolveLiveMapStyle(mapStyle, key) : buildOsmRasterFallbackStyle(),
     );
-    mapRef.current.once("styledata", () => { if (mapRef.current) placeMarkers(mapRef.current); });
+    mapRef.current.once("idle", () => {
+      if (mapRef.current) placeMarkers(mapRef.current);
+    });
   }, [mapStyle, maptilerKey, isLoaded, placeMarkers]);
 
   /* ── Re-place/move markers when locations update ── */
