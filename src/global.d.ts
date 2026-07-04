@@ -1,6 +1,16 @@
 declare module "*.css";
 declare module "maplibre-gl/dist/maplibre-gl.css";
 
+declare module "heic2any" {
+  interface Heic2AnyOptions {
+    blob: Blob;
+    toType?: string;
+    quality?: number;
+    multiple?: boolean;
+  }
+  export default function heic2any(options: Heic2AnyOptions): Promise<Blob | Blob[]>;
+}
+
 interface SpeechRecognition extends EventTarget {
   continuous: boolean;
   interimResults: boolean;

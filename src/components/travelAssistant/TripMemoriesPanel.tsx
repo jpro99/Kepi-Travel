@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TripMemoryAlbum, TripMemoryPhoto } from "@/lib/travelAssistant/tripMemoryStore";
-import { compressTripPhotoFile } from "@/lib/travelAssistant/tripMemoryClient";
+import { prepareTripPhotoForUpload } from "@/lib/travelAssistant/tripMemoryClient";
 import { downloadBlob, generateTripCollageBlob } from "@/lib/travelAssistant/tripMemoryCollage";
+
+const TRIP_PHOTO_ACCEPT =
+  "image/*,.heic,.heif,.HEIC,.HEIF,image/heic,image/heif,image/jpeg,image/png,image/webp";
 
 interface TripMemoriesPanelProps {
   tripId: string | null;
@@ -122,7 +125,7 @@ export function TripMemoriesPanel({
     setBusy(true);
     setMessage(null);
     try {
-      const compressed = await compressTripPhotoFile(file);
+      const compressed = await prepareTripPhotoForUpload(file);
       const formData = new FormData();
       formData.append("tripId", tripId);
       formData.append("file", compressed);
@@ -363,7 +366,7 @@ export function TripMemoriesPanel({
             <input
               ref={inputRef}
               type="file"
-              accept="image/*"
+              accept={TRIP_PHOTO_ACCEPT}
               className="hidden"
               onChange={(event) => {
                 void handleUpload(event.target.files?.[0]);
@@ -395,7 +398,7 @@ export function TripMemoriesPanel({
               <input
                 ref={inputRef}
                 type="file"
-                accept="image/*"
+                accept={TRIP_PHOTO_ACCEPT}
                 className="hidden"
                 onChange={(event) => {
                   void handleUpload(event.target.files?.[0]);
@@ -528,6 +531,15 @@ export function TripMemoriesPanel({
           />
           {selectedPhoto.caption ? (
             <p className="mt-2 text-sm text-[var(--text-secondary)]">{selectedPhoto.caption}</p>
+          ) : null}
+          {mode === "owner" && selectedPhoto.printImageUrl && selectedPhoto.kind === "photo" ? (
+            <a
+              href={selectedPhoto.printImageUrl}
+              download={`${tripName.replace(/\s+/gu, "-")}-print.jpg`}
+              className="mt-3 inline-flex rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white dark:bg-slate-100 dark:text-slate-900"
+            >
+              Download print version
+            </a>
           ) : null}
           <div className="mt-4 space-y-2">
             {commentsForPhoto(album, selectedPhoto.id).map((comment) => (

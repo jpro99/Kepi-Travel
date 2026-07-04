@@ -14,6 +14,8 @@ export interface TripMemoryPhoto {
   kind: "photo" | "collage";
   /** Source photo ids when kind=collage */
   collageSourcePhotoIds?: string[];
+  /** Higher-resolution JPEG for owner print/download */
+  printImageUrl?: string;
 }
 
 export interface TripMemoryComment {
@@ -67,6 +69,7 @@ function sanitizePhoto(raw: unknown): TripMemoryPhoto | null {
     collageSourcePhotoIds: Array.isArray(p.collageSourcePhotoIds)
       ? p.collageSourcePhotoIds.filter((id): id is string => typeof id === "string")
       : undefined,
+    printImageUrl: typeof p.printImageUrl === "string" ? p.printImageUrl : undefined,
   };
 }
 
@@ -122,6 +125,7 @@ async function saveTripMemoryAlbum(
 export async function addTripMemoryPhoto(
   ownerUserId: string,
   input: {
+    id?: string;
     tripId: string;
     imageUrl: string;
     caption?: string;
@@ -129,11 +133,12 @@ export async function addTripMemoryPhoto(
     uploadedByName: string;
     kind?: "photo" | "collage";
     collageSourcePhotoIds?: string[];
+    printImageUrl?: string;
   },
 ): Promise<TripMemoryPhoto> {
   const album = await getTripMemoryAlbum(ownerUserId, input.tripId);
   const photo: TripMemoryPhoto = {
-    id: generateId(),
+    id: input.id?.trim() || generateId(),
     tripId: input.tripId,
     imageUrl: input.imageUrl,
     caption: input.caption?.trim() ?? "",
@@ -144,6 +149,7 @@ export async function addTripMemoryPhoto(
     collageSourcePhotoIds: input.collageSourcePhotoIds?.length
       ? input.collageSourcePhotoIds
       : undefined,
+    printImageUrl: input.printImageUrl,
   };
   album.photos.unshift(photo);
   if (photo.kind === "collage") {

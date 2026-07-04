@@ -1,11 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import {
-  addTripMemoryComment,
-  addTripMemoryPhoto,
-  getTripMemoryAlbum,
-} from "@/lib/travelAssistant/tripMemoryStore";
-import { storeTripPhotoBytes } from "@/lib/travelAssistant/tripMemoryMedia";
+import { addTripMemoryComment, addTripMemoryPhoto, getTripMemoryAlbum } from "@/lib/travelAssistant/tripMemoryStore";
+import { ingestTripMemoryUpload } from "@/lib/travelAssistant/tripMemoryUpload";
 import {
   resolveOwnerFromShareToken,
   resolveTripMemoryAccess,
@@ -122,17 +118,28 @@ export async function POST(req: Request) {
 
     const photoId = generateId();
     const bytes = Buffer.from(await upload.arrayBuffer());
-    const imageUrl = await storeTripPhotoBytes({
-      ownerUserId: authResult.resolved.ownerUserId,
-      tripId: authResult.resolved.tripId,
-      photoId,
-      bytes,
-      contentType: upload.type || "image/jpeg",
-    });
+    let stored: { imageUrl: string; printImageUrl?: string };
+    try {
+      stored = await ingestTripMemoryUpload({
+        ownerUserId: authResult.resolved.ownerUserId,
+        tripId: authResult.resolved.tripId,
+        photoId,
+        bytes,
+        fileName: upload.name || "keepsake.jpg",
+        declaredType: upload.type || "image/jpeg",
+        kind: "collage",
+      });
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Could not save collage." },
+        { status: 422 },
+      );
+    }
 
     const photo = await addTripMemoryPhoto(authResult.resolved.ownerUserId, {
+      id: photoId,
       tripId: authResult.resolved.tripId,
-      imageUrl,
+      imageUrl: stored.imageUrl,
       caption: `Keepsake by ${authorName}${sourcePhotoIds.length ? ` · ${sourcePhotoIds.length} photos` : ""}`,
       uploadedByUserId: authResult.userId ?? `guest:${authorName}`,
       uploadedByName: authorName,

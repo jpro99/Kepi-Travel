@@ -6,15 +6,12 @@ import {
   getTripMemoryAlbum,
   removeTripMemoryPhoto,
 } from "@/lib/travelAssistant/tripMemoryStore";
-import { storeTripPhotoBytes } from "@/lib/travelAssistant/tripMemoryMedia";
+import { ingestTripMemoryUpload } from "@/lib/travelAssistant/tripMemoryUpload";
 import { generateId } from "@/lib/utils/generateId";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-const MAX_PHOTO_BYTES = 6 * 1024 * 1024;
-const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
 async function displayName(userId: string): Promise<string> {
   try {
@@ -94,12 +91,6 @@ export async function POST(req: Request) {
   if (!(upload instanceof File)) {
     return NextResponse.json({ error: "Photo file is required." }, { status: 400 });
   }
-  if (!ALLOWED_TYPES.has(upload.type)) {
-    return NextResponse.json({ error: "Upload a JPG, PNG, WebP, or GIF." }, { status: 422 });
-  }
-  if (upload.size <= 0 || upload.size > MAX_PHOTO_BYTES) {
-    return NextResponse.json({ error: "Photo must be under 6MB." }, { status: 413 });
-  }
 
   const caption = String(formData.get("caption") ?? "").trim();
   const kindRaw = String(formData.get("kind") ?? "photo");
@@ -119,17 +110,30 @@ export async function POST(req: Request) {
 
   const photoId = generateId();
   const bytes = Buffer.from(await upload.arrayBuffer());
-  const imageUrl = await storeTripPhotoBytes({
-    ownerUserId: userId,
-    tripId,
-    photoId,
-    bytes,
-    contentType: upload.type || "image/jpeg",
-  });
+
+  let stored: { imageUrl: string; printImageUrl?: string };
+  try {
+    stored = await ingestTripMemoryUpload({
+      ownerUserId: userId,
+      tripId,
+      photoId,
+      bytes,
+      fileName: upload.name,
+      declaredType: upload.type,
+      kind,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Could not process photo." },
+      { status: 422 },
+    );
+  }
 
   const photo = await addTripMemoryPhoto(userId, {
+    id: photoId,
     tripId,
-    imageUrl,
+    imageUrl: stored.imageUrl,
+    printImageUrl: stored.printImageUrl,
     caption,
     uploadedByUserId: userId,
     uploadedByName: await displayName(userId),

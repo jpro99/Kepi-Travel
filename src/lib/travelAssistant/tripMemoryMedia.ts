@@ -4,8 +4,10 @@ export async function storeTripPhotoBytes(args: {
   photoId: string;
   bytes: Buffer;
   contentType: string;
+  variant?: "display" | "print";
 }): Promise<string> {
-  const path = `trip-memories/${args.ownerUserId}/${args.tripId}/${args.photoId}`;
+  const variantSuffix = args.variant ? `-${args.variant}` : "";
+  const path = `trip-memories/${args.ownerUserId}/${args.tripId}/${args.photoId}${variantSuffix}`;
   const blobToken = process.env.BLOB_READ_WRITE_TOKEN?.trim();
   const blobStoreConfigured = Boolean(blobToken || process.env.BLOB_STORE_ID?.trim());
   const onVercel = process.env.VERCEL === "1";
@@ -34,4 +36,34 @@ export async function storeTripPhotoBytes(args: {
   }
 
   return `data:${args.contentType};base64,${args.bytes.toString("base64")}`;
+}
+
+export async function storeTripPhotoVariants(args: {
+  ownerUserId: string;
+  tripId: string;
+  photoId: string;
+  displayBytes: Buffer;
+  printBytes: Buffer;
+  contentType?: string;
+}): Promise<{ imageUrl: string; printImageUrl: string }> {
+  const contentType = args.contentType ?? "image/jpeg";
+  const [imageUrl, printImageUrl] = await Promise.all([
+    storeTripPhotoBytes({
+      ownerUserId: args.ownerUserId,
+      tripId: args.tripId,
+      photoId: args.photoId,
+      bytes: args.displayBytes,
+      contentType,
+      variant: "display",
+    }),
+    storeTripPhotoBytes({
+      ownerUserId: args.ownerUserId,
+      tripId: args.tripId,
+      photoId: args.photoId,
+      bytes: args.printBytes,
+      contentType,
+      variant: "print",
+    }),
+  ]);
+  return { imageUrl, printImageUrl };
 }
