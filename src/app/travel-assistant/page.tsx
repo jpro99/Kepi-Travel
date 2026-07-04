@@ -9379,7 +9379,7 @@ export default function TravelAssistantPage() {
                 />
               </Suspense>
               {/* Share trip */}
-              <ShareTripCard tripName={activeTrip?.name ?? "My Trip"} />
+              <ShareTripCard tripId={activeTripId} tripName={activeTrip?.name ?? "My Trip"} />
               <section
                 id="readiness-checklist-section"
                 ref={readinessChecklistSectionRef}
