@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TripMemoriesPanel } from "@/components/travelAssistant/TripMemoriesPanel";
 import type { TripShareOptions } from "@/lib/travelAssistant/tripShareStore";
 
 interface SharedReservation {
@@ -14,6 +15,7 @@ interface SharedReservation {
 }
 
 interface SharedTripViewProps {
+  token: string;
   tripName: string;
   destination: string;
   startDate: string;
@@ -44,6 +46,7 @@ function formatTime(localTime: string): string {
 }
 
 export function SharedTripView({
+  token,
   tripName,
   destination,
   startDate,
@@ -106,6 +109,18 @@ export function SharedTripView({
               {reservation.notes ? <p className="mt-2 text-xs text-slate-400">{reservation.notes}</p> : null}
             </article>
           ))}
+        </div>
+
+        <div className="mt-8 rounded-2xl border border-slate-700 bg-[#161b22] p-4 text-slate-100 [&_h2]:text-white [&_p]:text-slate-300 [&_textarea]:bg-[#0d1117] [&_textarea]:text-slate-100 [&_input]:bg-[#0d1117] [&_input]:text-slate-100">
+          <TripMemoriesPanel
+            tripId={null}
+            tripName={tripName}
+            destination={destination}
+            startDate={startDate}
+            endDate={endDate}
+            shareToken={token}
+            mode="viewer"
+          />
         </div>
 
         <p className="mt-8 text-center text-sm text-slate-600">

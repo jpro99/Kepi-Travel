@@ -93,3 +93,16 @@ test("reservationsForDayWalkthrough includes overnight arrivals", () => {
   const onArrivalDay = reservationsForDayWalkthrough("2026-06-15", [overnight]);
   assert.equal(onArrivalDay.length, 1);
 });
+
+test("stale flightDate does not attach flight to wrong day", () => {
+  const staleMayFlight = {
+    ...ontToSea,
+    localTime: "2026-09-01 18:00",
+    flightDate: "2026-05-29",
+    flightDepartureTime: "2026-05-29 18:00",
+  };
+  const septemberDay = reservationsForDayWalkthrough("2026-09-01", [staleMayFlight]);
+  assert.equal(septemberDay.length, 1);
+  const mayDay = reservationsForDayWalkthrough("2026-05-29", [staleMayFlight]);
+  assert.equal(mayDay.length, 0);
+});

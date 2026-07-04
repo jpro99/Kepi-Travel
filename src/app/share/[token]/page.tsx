@@ -34,6 +34,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
 
   return (
     <SharedTripView
+      token={token}
       tripName={result.trip.name}
       destination={result.trip.destination}
       startDate={result.trip.startDate}

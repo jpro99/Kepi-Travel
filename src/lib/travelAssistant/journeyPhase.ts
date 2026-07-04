@@ -3,6 +3,10 @@
  * Uses UTC-correct flight times — never browser-local date heuristics alone.
  */
 
+import {
+  canonicalFlightDepartureLocalTime,
+} from "@/lib/travelAssistant/tripWindow";
+
 export interface JourneyReservation {
   id: string;
   type: string;
@@ -92,10 +96,9 @@ export function toUtcMs(localTime: string, timezone?: string): number {
 }
 
 function flightDepartureUtcMs(flight: JourneyReservation): number {
-  const candidates = [flight.flightDepartureTime, flight.localTime, flight.flightDate ? `${flight.flightDate} 12:00` : ""];
-  for (const value of candidates) {
-    if (!value?.trim()) continue;
-    const ms = toUtcMs(value, flight.timezone);
+  const canonical = canonicalFlightDepartureLocalTime(flight);
+  if (canonical?.trim()) {
+    const ms = toUtcMs(canonical, flight.timezone);
     if (!Number.isNaN(ms)) return ms;
   }
   return Number.NaN;

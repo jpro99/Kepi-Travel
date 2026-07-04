@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
 
 interface NextUpReservation {
   id: string;
@@ -90,24 +91,11 @@ function toUtcMs(localTime: string, timezone?: string): number {
 }
 
 function parseBestMs(r: NextUpReservation): number {
-  // Use same field precedence as journeyPhase: flightDepartureTime > flightDate > localTime
-  // This ensures NextUpCard and journeyPhase agree on which flights are upcoming
-  const candidates = [
-    r.flightDepartureTime,
-    r.flightDate,
-    r.localTime,
-  ].filter(Boolean) as string[];
-
-  for (const t of candidates) {
-    // Handle date-only strings like "2026-07-15" — treat as noon local time
-    const normalized = t.trim().length === 10 ? t.trim() + " 12:00" : t.trim();
-    const utc = toUtcMs(normalized, r.timezone);
-    if (!Number.isNaN(utc)) return utc;
-    // Fallback: parse without timezone
-    const ms = parseMs(normalized);
-    if (!Number.isNaN(ms)) return ms;
-  }
-  return Number.NaN;
+  const normalized = canonicalFlightDepartureLocalTime(r);
+  if (!normalized) return Number.NaN;
+  const utc = toUtcMs(normalized, r.timezone);
+  if (!Number.isNaN(utc)) return utc;
+  return parseMs(normalized);
 }
 
 function formatRelative(localTime: string, timezone?: string): string {

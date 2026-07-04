@@ -209,18 +209,65 @@ export function buildScannedReservationDraft(reservationNode: Record<string, unk
 }
 
 export function parseScannedReservationJson(modelText: string): ScannedReservationDraft {
-  const jsonStart = modelText.indexOf("{");
-  const jsonEnd = modelText.lastIndexOf("}");
-  if (jsonStart < 0 || jsonEnd < jsonStart) {
+  const drafts = parseScannedReservationsJson(modelText);
+  if (drafts.length === 0) {
     throw new Error("Ticket scan model returned an invalid response.");
   }
-  const parsed = JSON.parse(modelText.slice(jsonStart, jsonEnd + 1)) as unknown;
-  const root = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
-  const reservationNode =
-    root.reservation && typeof root.reservation === "object" && !Array.isArray(root.reservation)
-      ? (root.reservation as Record<string, unknown>)
-      : root;
-  return buildScannedReservationDraft(reservationNode);
+  return drafts[0]!;
+}
+
+function reservationNodeFromUnknown(entry: unknown): Record<string, unknown> | null {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    return null;
+  }
+  return entry as Record<string, unknown>;
+}
+
+/** Parse one or many reservations from ticket/PDF scan model output. */
+export function parseScannedReservationsJson(modelText: string): ScannedReservationDraft[] {
+  const jsonStart = modelText.indexOf("{");
+  const arrayStart = modelText.indexOf("[");
+  const start =
+    jsonStart < 0 ? arrayStart : arrayStart < 0 ? jsonStart : Math.min(jsonStart, arrayStart);
+  const jsonEnd = Math.max(modelText.lastIndexOf("}"), modelText.lastIndexOf("]"));
+  if (start < 0 || jsonEnd < start) {
+    return [];
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(modelText.slice(start, jsonEnd + 1));
+  } catch {
+    return [];
+  }
+
+  const nodes: Record<string, unknown>[] = [];
+
+  if (Array.isArray(parsed)) {
+    for (const entry of parsed) {
+      const node = reservationNodeFromUnknown(entry);
+      if (node) nodes.push(node);
+    }
+  } else if (parsed && typeof parsed === "object") {
+    const root = parsed as Record<string, unknown>;
+    if (Array.isArray(root.reservations)) {
+      for (const entry of root.reservations) {
+        const node = reservationNodeFromUnknown(entry);
+        if (node) nodes.push(node);
+      }
+    } else if (root.reservation && typeof root.reservation === "object" && !Array.isArray(root.reservation)) {
+      nodes.push(root.reservation as Record<string, unknown>);
+    } else {
+      nodes.push(root);
+    }
+  }
+
+  return nodes
+    .map((node) => buildScannedReservationDraft(node))
+    .filter((draft) => {
+      if (draft.localTime.trim().length > 0) return true;
+      return draft.type === "hotel" && draft.checkOutDate.trim().length > 0;
+    });
 }
 
 /** Vercel serverless body limit is ~4.5MB — stay under it for mobile PDF uploads. */

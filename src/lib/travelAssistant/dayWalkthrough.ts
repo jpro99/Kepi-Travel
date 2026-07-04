@@ -1,4 +1,5 @@
 import { airportToCity } from "@/lib/travelAssistant/buildTripLegs";
+import { canonicalFlightDepartureDay } from "@/lib/travelAssistant/tripWindow";
 
 export interface DayWalkthroughReservation {
   id: string;
@@ -41,8 +42,7 @@ function dateKeyFromTime(raw: string | undefined): string | null {
 }
 
 function flightDepartureDateKey(reservation: DayWalkthroughReservation): string {
-  if (reservation.flightDate?.trim()) return reservation.flightDate.slice(0, 10);
-  return reservation.localTime.trim().slice(0, 10);
+  return canonicalFlightDepartureDay(reservation);
 }
 
 export function reservationsForDayWalkthrough(

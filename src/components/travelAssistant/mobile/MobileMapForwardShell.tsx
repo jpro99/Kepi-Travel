@@ -9,6 +9,7 @@ import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
 import { MobileItineraryReader } from "@/components/travelAssistant/mobile/MobileItineraryReader";
 import { MobilePlanNotebook } from "@/components/travelAssistant/mobile/MobilePlanNotebook";
 import { MobileSettingsView } from "@/components/travelAssistant/mobile/MobileSettingsView";
+import { TripMemoriesPanel } from "@/components/travelAssistant/TripMemoriesPanel";
 import { PointsTravelProfileCard } from "@/components/travelAssistant/PointsTravelProfileCard";
 import { TravelFitCard } from "@/components/travelAssistant/TravelFitCard";
 import { TravelStyleBadge } from "@/components/travelAssistant/TravelStyleQuiz";
@@ -551,6 +552,18 @@ export function MobileMapForwardShell({
         <h1 className="text-[2rem] font-bold tracking-tight text-[var(--text-primary)]">More</h1>
         <p className="mt-1 text-[19px] text-[var(--text-secondary)]">Settings & family</p>
       </header>
+      {hasActiveTrip && tripId ? (
+        <div className="overflow-hidden rounded-2xl bg-[var(--bg-card)] p-4 ring-1 ring-[var(--border-default)]">
+          <TripMemoriesPanel
+            tripId={tripId}
+            tripName={tripName}
+            destination={destination}
+            startDate={startDate}
+            endDate={endDate}
+            mode="owner"
+          />
+        </div>
+      ) : null}
       <Link
         href="/travel-assistant/live-map"
         className="flex min-h-[56px] items-center rounded-2xl bg-[var(--bg-card)] px-5 text-[19px] font-bold text-[var(--text-primary)] ring-1 ring-[var(--border-default)]"

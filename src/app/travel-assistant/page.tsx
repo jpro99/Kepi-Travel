@@ -26,6 +26,8 @@ import {
 } from "@/lib/travelAssistant/prepareReviewDraftForAccept";
 import { enrichReservationForAutoImport } from "@/lib/travelAssistant/autoImportReservation";
 import { drainForwardReviewQueue } from "@/lib/travelAssistant/drainForwardReviewQueue";
+import { reconcileStoredFlightReservations } from "@/lib/travelAssistant/reconcileStoredFlightReservations";
+import { canonicalFlightDepartureDay, canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
 import { isDuplicateReservation } from "@/lib/travelAssistant/reservationDuplicates";
 import {
   nextTripStage,
@@ -2669,14 +2671,15 @@ export default function TravelAssistantPage() {
   const applyManagedTripToState = useCallback((trip: ManagedTrip, options?: { resetHighlight?: boolean }): void => {
     applyingTripStateRef.current = true;
     const hydratedReservations = hydrateReservationsPricing(trip.reservations);
-    const drained = drainForwardReviewQueue(hydratedReservations, trip.reviewQueue, () => `res-${generateId()}`);
+    const reconciled = reconcileStoredFlightReservations(hydratedReservations);
+    const drained = drainForwardReviewQueue(reconciled.reservations, trip.reviewQueue, () => `res-${generateId()}`);
     const tripReservations = drained.reservations;
     const tripReviewQueue = drained.reviewQueue as ReviewItem[];
     const tripForState =
-      drained.changed || hydratedReservations !== trip.reservations
+      drained.changed || reconciled.changed || hydratedReservations !== trip.reservations
         ? { ...trip, reservations: tripReservations, reviewQueue: tripReviewQueue }
         : trip;
-    if (drained.changed) {
+    if (drained.changed || reconciled.changed) {
       void fetch(TRIP_API_ROUTE, {
         method: "PUT",
         credentials: "include",
@@ -4220,12 +4223,7 @@ export default function TravelAssistantPage() {
     const nowMs = new Date().getTime();
     return consumerReservationsSorted.find((r) => {
       if (r.type !== "flight") return false;
-      const rr = r as Reservation & { flightDepartureTime?: string };
-      const fromFlightDate = r.flightDate ? parseDateInput(r.flightDate + " 23:59") : Number.NaN;
-      const fromDepTime = rr.flightDepartureTime ? parseDateInput(rr.flightDepartureTime) : Number.NaN;
-      const fromLocal = parseDateInput(r.localTime ?? "");
-      const candidates = [fromFlightDate, fromDepTime, fromLocal].filter(v => !Number.isNaN(v));
-      const depMs = candidates.length > 0 ? Math.max(...candidates) : Number.NaN;
+      const depMs = parseDateInput(canonicalFlightDepartureLocalTime(r));
       return !Number.isNaN(depMs) && depMs > nowMs - 4 * 3_600_000;
     }) ?? null;
   }, [consumerReservationsSorted]);
@@ -4309,10 +4307,14 @@ export default function TravelAssistantPage() {
     if (firstHotel?.provider) return firstHotel.provider;
     return null;
   }, [earliestFlightReservation, consumerReservationsSorted]);
-  const derivedTripStartDate = earliestFlightReservation
-    ? (earliestFlightReservation.flightDate?.slice(0, 10) ||
-       extractDateFromReservationLocalTime(earliestFlightReservation.localTime))
-    : null;
+  const derivedTripStartDate = useMemo(() => {
+    const flightDays = consumerReservationsSorted
+      .filter((reservation) => reservation.type === "flight")
+      .map((reservation) => canonicalFlightDepartureDay(reservation))
+      .filter(Boolean)
+      .sort();
+    return flightDays[0] ?? null;
+  }, [consumerReservationsSorted]);
   const consumerTripDestination = useMemo(() => {
     if (derivedTripDestination) {
       return derivedTripDestination;
@@ -6145,7 +6147,13 @@ export default function TravelAssistantPage() {
         } catch {
           throw new Error("Upload failed — check your connection and try again.");
         }
-        let payload: { error?: string; draft?: ReservationDraft; scanKind?: "pdf" | "image" };
+        let payload: {
+          error?: string;
+          draft?: ReservationDraft;
+          drafts?: ReservationDraft[];
+          count?: number;
+          scanKind?: "pdf" | "image";
+        };
         try {
           payload = (await response.json()) as typeof payload;
         } catch {
@@ -6155,56 +6163,80 @@ export default function TravelAssistantPage() {
               : `Ticket scan failed (${response.status}). Try again in a moment.`,
           );
         }
-        if (!response.ok || !payload.draft) {
+        const scannedDrafts =
+          payload.drafts && payload.drafts.length > 0
+            ? payload.drafts
+            : payload.draft
+              ? [payload.draft]
+              : [];
+        if (!response.ok || scannedDrafts.length === 0) {
           throw new Error(payload.error ?? `Ticket scan failed (${response.status})`);
         }
 
-        const scannedDraft: ReservationDraft = enrichReservationForAutoImport(
-          prepareReviewDraftForAccept({
-            ...EMPTY_DRAFT,
-            ...payload.draft,
-            type: payload.draft.type,
-            title: payload.draft.title.trim(),
-            provider: payload.draft.provider.trim(),
-            localTime: payload.draft.localTime.trim(),
-            timezone: payload.draft.timezone.trim() || "Etc/UTC",
-            location: payload.draft.location.trim(),
-            confirmationCode: payload.draft.confirmationCode.trim(),
-            assignedTo: payload.draft.assignedTo ?? [],
-            stage: payload.draft.stage,
-            critical: payload.draft.critical,
-            confidence: payload.draft.confidence,
-            notes: payload.draft.notes.trim(),
-            flightNumber: payload.draft.flightNumber ?? "",
-            flightAirline: payload.draft.flightAirline ?? payload.draft.provider ?? "",
-            flightDate: payload.draft.flightDate ?? payload.draft.localTime.slice(0, 10),
-            flightDepartureAirport: payload.draft.flightDepartureAirport ?? "",
-            flightArrivalAirport: payload.draft.flightArrivalAirport ?? "",
-            flightDepartureTime: payload.draft.flightDepartureTime ?? payload.draft.localTime,
-          }),
+        const preparedDrafts = scannedDrafts.map((rawDraft) =>
+          enrichReservationForAutoImport(
+            prepareReviewDraftForAccept({
+              ...EMPTY_DRAFT,
+              ...rawDraft,
+              type: rawDraft.type,
+              title: rawDraft.title.trim(),
+              provider: rawDraft.provider.trim(),
+              localTime: rawDraft.localTime.trim(),
+              timezone: rawDraft.timezone.trim() || "Etc/UTC",
+              location: rawDraft.location.trim(),
+              confirmationCode: rawDraft.confirmationCode.trim(),
+              assignedTo: rawDraft.assignedTo ?? [],
+              stage: rawDraft.stage,
+              critical: rawDraft.critical,
+              confidence: rawDraft.confidence,
+              notes: rawDraft.notes.trim(),
+              flightNumber: rawDraft.flightNumber ?? "",
+              flightAirline: rawDraft.flightAirline ?? rawDraft.provider ?? "",
+              flightDate: rawDraft.flightDate ?? rawDraft.localTime.slice(0, 10),
+              flightDepartureAirport: rawDraft.flightDepartureAirport ?? "",
+              flightArrivalAirport: rawDraft.flightArrivalAirport ?? "",
+              flightDepartureTime: rawDraft.flightDepartureTime ?? rawDraft.localTime,
+              checkOutDate: rawDraft.checkOutDate ?? "",
+            }),
+          ),
         );
-        const pricedDraft = applyAcceptedReservationPricing(scannedDraft);
-        const duplicateReservation = reservations.find((reservation) => isDuplicateReservation(reservation, pricedDraft));
-        if (duplicateReservation) {
+
+        const newReservations: Reservation[] = [];
+        let skippedDuplicates = 0;
+        for (const scannedDraft of preparedDrafts) {
+          const pricedDraft = applyAcceptedReservationPricing(scannedDraft);
+          const duplicateReservation = [...reservations, ...newReservations].find((reservation) =>
+            isDuplicateReservation(reservation, pricedDraft),
+          );
+          if (duplicateReservation) {
+            skippedDuplicates += 1;
+            continue;
+          }
+          newReservations.push({
+            ...pricedDraft,
+            id: nextId("res"),
+            source: "imported",
+            sourceEmailSubject: `Scanned ticket: ${file.name || "image upload"}`,
+            flightNumber: pricedDraft.flightNumber ?? "",
+            flightAirline: pricedDraft.flightAirline ?? pricedDraft.provider,
+            flightDate: pricedDraft.flightDate ?? pricedDraft.localTime.slice(0, 10),
+            flightDepartureAirport: pricedDraft.flightDepartureAirport ?? "",
+            flightArrivalAirport: pricedDraft.flightArrivalAirport ?? "",
+            flightDepartureTime: pricedDraft.flightDepartureTime ?? pricedDraft.localTime,
+          });
+        }
+
+        if (newReservations.length === 0) {
           setToast(
-            `Possible duplicate found (${duplicateReservation.title || duplicateReservation.provider || "existing reservation"}) — skipped this scan.`,
+            skippedDuplicates > 0
+              ? "Everything on this document is already on your trip."
+              : "Could not read any bookings from this file.",
           );
           return;
         }
+
         pushUndoSnapshot("Ticket scan added to trip");
-        const newReservation: Reservation = {
-          ...pricedDraft,
-          id: nextId("res"),
-          source: "imported",
-          sourceEmailSubject: `Scanned ticket: ${file.name || "image upload"}`,
-          flightNumber: pricedDraft.flightNumber ?? "",
-          flightAirline: pricedDraft.flightAirline ?? pricedDraft.provider,
-          flightDate: pricedDraft.flightDate ?? pricedDraft.localTime.slice(0, 10),
-          flightDepartureAirport: pricedDraft.flightDepartureAirport ?? "",
-          flightArrivalAirport: pricedDraft.flightArrivalAirport ?? "",
-          flightDepartureTime: pricedDraft.flightDepartureTime ?? pricedDraft.localTime,
-        };
-        const nextReservations = [newReservation, ...reservations];
+        const nextReservations = [...newReservations, ...reservations];
         setReservations(nextReservations);
         const targetTripId = activeTripId ?? trips[0]?.id ?? null;
         if (targetTripId) {
@@ -6226,26 +6258,39 @@ export default function TravelAssistantPage() {
             setToast("Could not save scanned reservation to your trip.");
           });
         }
-        queueMutation("Ticket scan added to live trip.", {
-          key: "ticket-scan-import",
-          fingerprint: `ticket-scan:${newReservation.id}`,
-        });
+        for (const reservation of newReservations) {
+          queueMutation("Ticket scan added to live trip.", {
+            key: "ticket-scan-import",
+            fingerprint: `ticket-scan:${reservation.id}`,
+          });
+        }
         setFlightLookupError(null);
         setFlightLookupBusy(false);
         setConsumerTab("book");
-        setBookSubTab("flights");
+        setBookSubTab(newReservations.some((r) => r.type === "flight") ? "flights" : "hotels");
+        const firstAdded = newReservations[0]!;
         setPostBookingConfirmation({
-          kind: newReservation.type === "hotel" ? "hotel" : newReservation.type === "flight" ? "flight" : "import",
-          title: `${newReservation.type === "hotel" ? "Hotel" : newReservation.type === "flight" ? "Flight" : "Booking"} added`,
-          confirmationCode: newReservation.confirmationCode?.trim() || undefined,
-          detail: `${newReservation.provider || newReservation.title} is on your flights timeline.`,
+          kind: firstAdded.type === "hotel" ? "hotel" : firstAdded.type === "flight" ? "flight" : "import",
+          title:
+            newReservations.length === 1
+              ? `${firstAdded.type === "hotel" ? "Hotel" : firstAdded.type === "flight" ? "Flight" : "Booking"} added`
+              : `${newReservations.length} bookings added`,
+          confirmationCode: firstAdded.confirmationCode?.trim() || undefined,
+          detail:
+            newReservations.length === 1
+              ? `${firstAdded.provider || firstAdded.title} is on your timeline.`
+              : `${newReservations.filter((r) => r.type === "flight").length} flight(s) · ${newReservations.filter((r) => r.type === "hotel").length} hotel(s) from your scan.`,
           syncedToTrip: true,
         });
-        setToast(
-          payload.scanKind === "pdf"
-            ? "PDF read and added to your trip."
-            : "Ticket scanned and added to your trip.",
-        );
+        const flightCount = newReservations.filter((r) => r.type === "flight").length;
+        const hotelCount = newReservations.filter((r) => r.type === "hotel").length;
+        const parts = [
+          payload.scanKind === "pdf" ? "PDF read" : "Ticket scanned",
+          `${flightCount} flight${flightCount === 1 ? "" : "s"}`,
+          hotelCount > 0 ? `${hotelCount} hotel${hotelCount === 1 ? "" : "s"}` : null,
+          skippedDuplicates > 0 ? `${skippedDuplicates} duplicate${skippedDuplicates === 1 ? "" : "s"} skipped` : null,
+        ].filter(Boolean);
+        setToast(`${parts.join(" · ")} — added to your trip.`);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Ticket scan failed.";
         setToast(message);

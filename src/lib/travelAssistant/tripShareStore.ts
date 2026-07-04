@@ -221,16 +221,23 @@ export async function createShareLink(
   };
 }
 
-export async function getSharedTrip(token: string): Promise<SharedTripLookupResult> {
+export async function getShareRecord(token: string): Promise<TripShareRecord | null> {
   const normalizedToken = token.trim();
   if (!/^[A-Za-z0-9_-]{12}$/u.test(normalizedToken)) {
-    return { status: "invalid" };
+    return null;
   }
-
   const shareRecord = await kvStoreGet<TripShareRecord>(normalizedToken, {
     userId: SHARE_NAMESPACE_USER,
   });
   if (!shareRecord || !isShareRecord(shareRecord)) {
+    return null;
+  }
+  return shareRecord;
+}
+
+export async function getSharedTrip(token: string): Promise<SharedTripLookupResult> {
+  const shareRecord = await getShareRecord(token);
+  if (!shareRecord) {
     return { status: "invalid" };
   }
   if (shareRecord.revokedAt) {

@@ -12,6 +12,7 @@ import {
 import { buildFullTripDayKeys } from "@/lib/travelAssistant/tripTimelinePlanning";
 import { buildDayWalkthrough } from "@/lib/travelAssistant/dayWalkthrough";
 import { DayWalkthroughBlock } from "@/components/travelAssistant/DayWalkthroughBlock";
+import { canonicalFlightDepartureDay } from "@/lib/travelAssistant/tripWindow";
 
 import {
   MOBILE_OVERLAY_SCROLL,
@@ -57,7 +58,7 @@ interface MobileItineraryReaderProps {
 }
 
 function reservationDateKey(reservation: ReaderReservation): string {
-  if (reservation.type === "flight" && reservation.flightDate) return reservation.flightDate.slice(0, 10);
+  if (reservation.type === "flight") return canonicalFlightDepartureDay(reservation);
   return reservation.localTime.trim().slice(0, 10);
 }
 

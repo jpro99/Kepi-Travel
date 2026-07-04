@@ -1,3 +1,5 @@
+import { canonicalFlightDepartureDay, canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
+
 export interface TimelinePlanReservation {
   id: string;
   type: string;
@@ -22,10 +24,7 @@ function dateKeyFromLocal(localTime: string): string {
 }
 
 function flightDateKey(r: TimelinePlanReservation): string {
-  if (r.flightDate) return r.flightDate.slice(0, 10);
-  const dep = r.flightDepartureTime ? parseLocalMs(r.flightDepartureTime) : parseLocalMs(r.localTime);
-  if (!Number.isNaN(dep)) return new Date(dep).toISOString().slice(0, 10);
-  return dateKeyFromLocal(r.localTime);
+  return canonicalFlightDepartureDay(r);
 }
 
 function reservationEndMs(r: TimelinePlanReservation): number {
@@ -38,7 +37,7 @@ function reservationEndMs(r: TimelinePlanReservation): number {
   if (r.type === "flight") {
     const arr = r.flightArrivalTime ? parseLocalMs(r.flightArrivalTime) : Number.NaN;
     if (!Number.isNaN(arr)) return arr;
-    const dep = r.flightDepartureTime ? parseLocalMs(r.flightDepartureTime) : parseLocalMs(r.localTime);
+    const dep = parseLocalMs(canonicalFlightDepartureLocalTime(r));
     return Number.isNaN(dep) ? Number.NaN : dep + 6 * 60 * 60_000;
   }
   const local = parseLocalMs(r.localTime);

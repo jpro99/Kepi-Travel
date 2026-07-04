@@ -14,6 +14,55 @@ export function dateOnly(value: string | undefined | null): string {
   return value?.trim().slice(0, 10) ?? "";
 }
 
+/** True when localTime carries a full scheduled departure (not date-only). */
+export function hasCompleteFlightLocalTime(localTime: string | undefined | null): boolean {
+  return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/u.test(localTime?.trim() ?? "");
+}
+
+export interface CanonicalFlightScheduleFields {
+  localTime?: string;
+  flightDate?: string;
+  flightDepartureTime?: string;
+}
+
+/**
+ * Prefer localTime when it disagrees with stale flightDate / flightDepartureTime
+ * (email-forward bleed from purchase or send dates).
+ */
+export function canonicalFlightDepartureDay(reservation: CanonicalFlightScheduleFields): string {
+  const localDay = dateOnly(reservation.localTime);
+  if (hasCompleteFlightLocalTime(reservation.localTime) && localDay) {
+    const flightDay = dateOnly(reservation.flightDate);
+    const departureDay = dateOnly(reservation.flightDepartureTime);
+    if (flightDay && flightDay !== localDay) return localDay;
+    if (departureDay && departureDay !== localDay) return localDay;
+    return localDay;
+  }
+  return dateOnly(reservation.flightDate) || dateOnly(reservation.flightDepartureTime) || localDay;
+}
+
+/** Best local departure timestamp for sorting, countdowns, and journey phase. */
+export function canonicalFlightDepartureLocalTime(reservation: CanonicalFlightScheduleFields): string {
+  const local = reservation.localTime?.trim() ?? "";
+  const localDay = dateOnly(local);
+  if (hasCompleteFlightLocalTime(local)) {
+    const flightDay = dateOnly(reservation.flightDate);
+    const departureDay = dateOnly(reservation.flightDepartureTime);
+    if ((flightDay && flightDay !== localDay) || (departureDay && departureDay !== localDay)) {
+      return local;
+    }
+    return local;
+  }
+  const departure = reservation.flightDepartureTime?.trim() ?? "";
+  if (hasCompleteFlightLocalTime(departure.replace("T", " "))) {
+    return departure.replace("T", " ").slice(0, 16);
+  }
+  const day = canonicalFlightDepartureDay(reservation);
+  if (!day) return local;
+  const timeMatch = /(\d{2}:\d{2})/u.exec(departure || local);
+  return `${day} ${timeMatch?.[1] ?? "12:00"}`;
+}
+
 export function reservationPrimaryDate(reservation: {
   type?: string;
   localTime?: string;
@@ -22,11 +71,7 @@ export function reservationPrimaryDate(reservation: {
   checkOutDate?: string;
 }): string {
   if (reservation.type === "flight") {
-    return (
-      dateOnly(reservation.flightDate) ||
-      dateOnly(reservation.flightDepartureTime) ||
-      dateOnly(reservation.localTime)
-    );
+    return canonicalFlightDepartureDay(reservation);
   }
   if (reservation.type === "hotel") {
     return dateOnly(reservation.localTime);
@@ -66,10 +111,7 @@ export function computeMinutesToDeparture(args: {
   const flightDates: string[] = [];
   for (const reservation of args.reservations ?? []) {
     if (reservation.type !== "flight") continue;
-    const day =
-      dateOnly(reservation.flightDate) ||
-      dateOnly(reservation.flightDepartureTime) ||
-      dateOnly(reservation.localTime);
+    const day = canonicalFlightDepartureDay(reservation);
     if (day) flightDates.push(day);
   }
   flightDates.sort();

@@ -37,8 +37,11 @@ export async function handleConfirmationScanUpload(
   const scanKind = confirmationScanKind(upload);
 
   try {
-    const draft = await extractConfirmationDocument(upload, options.anthropicApiKey);
-    return NextResponse.json({ draft, scanKind }, { headers });
+    const drafts = await extractConfirmationDocument(upload, options.anthropicApiKey);
+    return NextResponse.json(
+      { drafts, draft: drafts[0] ?? null, count: drafts.length, scanKind },
+      { headers },
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown confirmation scan error.";
     return NextResponse.json({ error: `Confirmation scan failed: ${message}` }, { status: 502, headers });

@@ -123,7 +123,8 @@ export function ShareModal({ open, tripId, tripName, onClose }: ShareModalProps)
           <div>
             <h2 className="text-lg font-semibold">Share Trip</h2>
             <p className="text-xs text-slate-600 dark:text-slate-300">
-              {tripName ? `Sharing ${tripName}` : "Select a trip to share."}
+              {tripName ? `Sharing ${tripName}. ` : ""}
+              Family and friends on this link can view trip photos and leave comments.
             </p>
           </div>
           <button
