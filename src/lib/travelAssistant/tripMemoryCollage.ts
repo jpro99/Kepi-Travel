@@ -12,6 +12,7 @@ export interface CollageOptions {
   endDate?: string;
   photos: CollageInputPhoto[];
   columns?: number;
+  creatorName?: string;
 }
 
 function formatHeadingDate(start?: string, end?: string): string {
@@ -67,7 +68,10 @@ export async function generateTripCollageBlob(options: CollageOptions): Promise<
   if (subtitle) ctx.fillText(subtitle.slice(0, 80), pad, 98);
   ctx.font = "18px system-ui, sans-serif";
   ctx.fillStyle = "#7dd3fc";
-  ctx.fillText("Kepi Travel keepsake", pad, 132);
+  const byLine = options.creatorName?.trim()
+    ? `Keepsake by ${options.creatorName.trim()} · Kepi Travel`
+    : "Kepi Travel keepsake";
+  ctx.fillText(byLine.slice(0, 80), pad, 132);
 
   images.forEach((img, index) => {
     const col = index % columns;

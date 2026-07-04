@@ -104,6 +104,19 @@ export async function POST(req: Request) {
   const caption = String(formData.get("caption") ?? "").trim();
   const kindRaw = String(formData.get("kind") ?? "photo");
   const kind = kindRaw === "collage" ? "collage" : "photo";
+  let collageSourcePhotoIds: string[] | undefined;
+  const rawPhotoIds = String(formData.get("photoIds") ?? "");
+  if (rawPhotoIds && kind === "collage") {
+    try {
+      const parsed = JSON.parse(rawPhotoIds) as unknown;
+      if (Array.isArray(parsed)) {
+        collageSourcePhotoIds = parsed.filter((id): id is string => typeof id === "string");
+      }
+    } catch {
+      collageSourcePhotoIds = undefined;
+    }
+  }
+
   const photoId = generateId();
   const bytes = Buffer.from(await upload.arrayBuffer());
   const imageUrl = await storeTripPhotoBytes({
@@ -121,6 +134,7 @@ export async function POST(req: Request) {
     uploadedByUserId: userId,
     uploadedByName: await displayName(userId),
     kind,
+    collageSourcePhotoIds,
   });
 
   return NextResponse.json({ photo });
