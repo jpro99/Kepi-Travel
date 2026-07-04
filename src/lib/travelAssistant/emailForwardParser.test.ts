@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   extractBestLocalTimeFromEmailBody,
+  extractFlightLegsFromEmailBody,
+  parseForwardedEmail,
   prepareEmailBodyForParsing,
   stripForwardEnvelopeHeaders,
 } from "@/lib/travelAssistant/emailForwardParser";
@@ -59,4 +61,92 @@ September 5, 2026 3:05 PM
 `;
   const localTime = extractBestLocalTimeFromEmailBody(email, "flight");
   assert.equal(localTime, "2026-09-05 14:10");
+});
+
+const fourLegItineraryEmail = `
+---------- Forwarded message ---------
+From: Jeff <jeff@example.com>
+Date: Sat, 5 Jul 2026 10:23:00 -0700
+Subject: Fwd: Your Alaska Airlines itinerary
+
+Alaska Airlines itinerary
+Confirmation ABC123
+
+Flight AS654
+Departure ONT Ontario
+September 14, 2026
+8:45 AM
+Arrival SEA Seattle
+September 14, 2026
+11:20 AM
+
+Flight AS832
+Departure SEA Seattle
+September 14, 2026
+1:05 PM
+Arrival HNL Honolulu
+September 14, 2026
+4:30 PM
+
+Flight HA12
+Departure HNL Honolulu
+September 21, 2026
+10:15 AM
+Arrival HND Tokyo
+September 22, 2026
+2:40 PM
+
+Flight HA11
+Departure HND Tokyo
+October 5, 2026
+5:30 PM
+Arrival HNL Honolulu
+October 5, 2026
+6:45 AM
+`;
+
+test("extractFlightLegsFromEmailBody finds every flight leg in a multi-segment itinerary", () => {
+  const legs = extractFlightLegsFromEmailBody(fourLegItineraryEmail);
+  assert.equal(legs.length, 4);
+  assert.deepEqual(
+    legs.map((leg) => leg.flightNumber).sort(),
+    ["AS654", "AS832", "HA11", "HA12"],
+  );
+  assert.equal(legs.find((leg) => leg.flightNumber === "AS654")?.localTime, "2026-09-14 08:45");
+  assert.equal(legs.find((leg) => leg.flightNumber === "AS832")?.localTime, "2026-09-14 13:05");
+  assert.equal(legs.find((leg) => leg.flightNumber === "HA12")?.localTime, "2026-09-21 10:15");
+  assert.equal(legs.find((leg) => leg.flightNumber === "HA11")?.localTime, "2026-10-05 17:30");
+  assert.equal(legs.find((leg) => leg.flightNumber === "HA12")?.departureAirport, "HNL");
+  assert.equal(legs.find((leg) => leg.flightNumber === "HA12")?.arrivalAirport, "HND");
+});
+
+test("parseForwardedEmail returns separate drafts for each flight leg without AI", async () => {
+  const previousKey = process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  try {
+    const result = await parseForwardedEmail({
+      subject: "Fwd: Your Alaska Airlines itinerary",
+      from: "jeff@example.com",
+      text: fourLegItineraryEmail,
+      html: "",
+      attachments: [],
+    });
+    assert.equal(result.drafts.length, 4);
+    const flightNumbers = result.drafts.map((draft) => draft.flightNumber).sort();
+    assert.deepEqual(flightNumbers, ["AS654", "AS832", "HA11", "HA12"]);
+    assert.equal(
+      result.drafts.find((draft) => draft.flightNumber === "AS654")?.localTime,
+      "2026-09-14 08:45",
+    );
+    assert.equal(
+      result.drafts.find((draft) => draft.flightNumber === "HA12")?.localTime,
+      "2026-09-21 10:15",
+    );
+  } finally {
+    if (previousKey === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = previousKey;
+    }
+  }
 });
