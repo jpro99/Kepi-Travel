@@ -4819,7 +4819,7 @@ export default function TravelAssistantPage() {
       return;
     }
     airportAutoNavRef.current = true;
-    router.push("/travel-assistant/live-map?view=airport");
+    router.push("/travel-assistant/live-map");
   }, [guidanceLocationStatus, journeyPhase, isCompactViewport, router]);
 
   useEffect(() => {

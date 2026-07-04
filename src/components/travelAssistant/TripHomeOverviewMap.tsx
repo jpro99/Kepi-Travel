@@ -39,6 +39,8 @@ interface TripHomeOverviewMapProps {
   staySegments?: TripStaySegment[];
   onReservationTap?: (reservationId: string) => void;
   className?: string;
+  /** Map tab: open centered on user GPS instead of fitting the whole trip. */
+  preferUserLocation?: boolean;
 }
 
 function createAirportMarker(code: string, visitCount: number): HTMLDivElement {
@@ -96,6 +98,7 @@ export function TripHomeOverviewMap({
   staySegments = [],
   onReservationTap,
   className = "",
+  preferUserLocation = false,
 }: TripHomeOverviewMapProps) {
   const route = useMemo(
     () => buildTripTransportRoute(transportReservations, plannedFlightLegs),
@@ -134,6 +137,9 @@ export function TripHomeOverviewMap({
   const [maptilerKey, setMaptilerKey] = useState("");
   const usingOsmFallbackRef = useRef(false);
   const isLoadedRef = useRef(false);
+  const userCenteredRef = useRef(false);
+  const [userLat, setUserLat] = useState<number | null>(null);
+  const [userLon, setUserLon] = useState<number | null>(null);
 
   const hasRouteGeo = routePoints.length >= 2;
   const hasHotels = hotelPoints.length > 0;
@@ -152,6 +158,28 @@ export function TripHomeOverviewMap({
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!preferUserLocation || !navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        setUserLat(pos.coords.latitude);
+        setUserLon(pos.coords.longitude);
+      },
+      () => null,
+      { enableHighAccuracy: true, maximumAge: 30_000, timeout: 15_000 },
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [preferUserLocation]);
+
+  const centerOnUser = useCallback(async (duration = 900) => {
+    const map = mapRef.current;
+    if (!map) return;
+    const lat = userLat;
+    const lon = userLon;
+    if (lat == null || lon == null) return;
+    map.easeTo({ center: [lon, lat], zoom: 14, duration, essential: true });
+  }, [userLat, userLon]);
 
   const fitWholeTrip = useCallback(async (duration = 900) => {
     const map = mapRef.current;
@@ -339,8 +367,29 @@ export function TripHomeOverviewMap({
             /* ignore */
           }
         });
-        void fitWholeTrip(0);
         void renderMarkers();
+        if (preferUserLocation && !userCenteredRef.current) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              if (userCenteredRef.current || !mapRef.current) return;
+              userCenteredRef.current = true;
+              setUserLat(pos.coords.latitude);
+              setUserLon(pos.coords.longitude);
+              mapRef.current.easeTo({
+                center: [pos.coords.longitude, pos.coords.latitude],
+                zoom: 14,
+                duration: 900,
+                essential: true,
+              });
+            },
+            () => {
+              void fitWholeTrip(0);
+            },
+            { enableHighAccuracy: true, maximumAge: 60_000, timeout: 12_000 },
+          );
+        } else {
+          void fitWholeTrip(0);
+        }
       };
 
       map.on("load", finishMapLoad);
@@ -400,7 +449,7 @@ export function TripHomeOverviewMap({
       isLoadedRef.current = false;
       setMapReady(false);
     };
-  }, [hasMap, maptilerKey, bindUserInteraction, fitWholeTrip, focusSegment, installLayers, renderMarkers]);
+  }, [hasMap, maptilerKey, bindUserInteraction, fitWholeTrip, focusSegment, installLayers, renderMarkers, preferUserLocation]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -408,8 +457,15 @@ export function TripHomeOverviewMap({
     installLayers(map);
     void renderMarkers();
     allowManualFit();
-    void fitWholeTrip(400);
-  }, [dataFingerprint, mapReady, installLayers, renderMarkers, fitWholeTrip, allowManualFit]);
+    if (preferUserLocation && userLat != null && userLon != null && !userCenteredRef.current) {
+      userCenteredRef.current = true;
+      void centerOnUser(400);
+      return;
+    }
+    if (!preferUserLocation) {
+      void fitWholeTrip(400);
+    }
+  }, [dataFingerprint, mapReady, installLayers, renderMarkers, fitWholeTrip, allowManualFit, preferUserLocation, userLat, userLon, centerOnUser]);
 
   if (!hasMap) {
     return (

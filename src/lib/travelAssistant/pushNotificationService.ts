@@ -178,7 +178,7 @@ export async function sendFamilyRallyNotification(
   memberIds: string[],
   opts: { fromName: string; label: string; tripId: string },
 ): Promise<number> {
-  const url = `/travel-assistant/live-map?view=airport&tripId=${encodeURIComponent(opts.tripId)}`;
+  const url = `/travel-assistant/live-map?tripId=${encodeURIComponent(opts.tripId)}`;
   let sent = 0;
   for (const memberId of memberIds) {
     const ok = await sendPushNotification(memberId, {

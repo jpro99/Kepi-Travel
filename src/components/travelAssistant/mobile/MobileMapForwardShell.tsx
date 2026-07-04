@@ -387,6 +387,7 @@ export function MobileMapForwardShell({
   }
 
   if (activeTab === "map") {
+    const atAirport = locationStatus === "at-airport" || locationStatus === "in-terminal";
     return (
       <div className="kepi-mobile-shell -mx-1 flex min-h-[calc(100dvh-11rem)] flex-col pb-2">
         <div className="relative min-h-[calc(100dvh-11rem)] flex-1 overflow-hidden rounded-[var(--radius-card)] bg-[#dbeafe] ring-1 ring-[var(--border-default)]">
@@ -396,6 +397,7 @@ export function MobileMapForwardShell({
             plannedFlightLegs={plannedFlightLegs}
             staySegments={staySegments}
             onReservationTap={onReservationTap}
+            preferUserLocation
             className="min-h-[calc(100dvh-11rem)]"
           />
           <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center gap-3 px-4 pb-4 pt-16">
@@ -405,12 +407,14 @@ export function MobileMapForwardShell({
             >
               Family map
             </Link>
-            <Link
-              href="/travel-assistant/live-map?view=airport"
-              className="pointer-events-auto min-h-[48px] rounded-full bg-[#007AFF] px-5 py-3 text-[17px] font-bold text-white shadow-lg"
-            >
-              Airport mode
-            </Link>
+            {atAirport ? (
+              <Link
+                href="/travel-assistant/live-map"
+                className="pointer-events-auto min-h-[48px] rounded-full bg-[#007AFF] px-5 py-3 text-[17px] font-bold text-white shadow-lg"
+              >
+                Airport mode
+              </Link>
+            ) : null}
           </div>
         </div>
       </div>

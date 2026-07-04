@@ -74,7 +74,7 @@ export function MobileAssistView({
       journeyPhase.kind !== "no-trip" &&
       journeyPhase.kind !== "airborne" ? (
         <Link
-          href="/travel-assistant/live-map?view=airport"
+          href="/travel-assistant/live-map"
           className="flex min-h-[56px] items-center justify-between gap-3 rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-50 to-blue-50 px-5 py-4 shadow-sm dark:border-sky-500/40 dark:from-sky-950/60 dark:to-blue-950/40"
         >
           <div className="min-w-0">

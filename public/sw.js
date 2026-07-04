@@ -1,4 +1,4 @@
-const CACHE_VERSION = "kepi-pwa-v34";
+const CACHE_VERSION = "kepi-pwa-v35";
 const APP_SHELL_CACHE = `${CACHE_VERSION}-app-shell`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 const STATIC_CACHE = `${CACHE_VERSION}-static`;

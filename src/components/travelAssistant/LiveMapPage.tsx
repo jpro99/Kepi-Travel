@@ -88,7 +88,6 @@ function defaultMapCenter(locations: LocationPoint[]): { center: [number, number
 export function LiveMapPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const urlPrefersAirport = searchParams.get("view") === "airport";
   const urlTripId = searchParams.get("tripId");
   const mapEl = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -98,6 +97,7 @@ export function LiveMapPage() {
   const watchIdRef = useRef<number | null>(null);
   const myMemberIdRef = useRef<string | null>(null);
   const firstFixRef = useRef<boolean>(false);
+  const userMapCenteredRef = useRef(false);
 
   const [group, setGroup] = useState<FamilyGroup | null>(null);
   const [locations, setLocations] = useState<Record<string, LocationPoint>>({});
@@ -530,11 +530,11 @@ export function LiveMapPage() {
         the SAME question AirportMode does, via useActiveFlight) ── */
   const { activeFlight } = useActiveFlight();
   const { credentials: navCredentials, profile: navProfile, saveCredentials } = useNavigatorCredentials();
-  const [mapView, setMapView] = useState<"family" | "airport">(urlPrefersAirport ? "airport" : "family");
+  const [mapView, setMapView] = useState<"family" | "airport">("family");
   const [navLat, setNavLat] = useState<number | null>(null);
   const [navLon, setNavLon] = useState<number | null>(null);
   const navWatchRef = useRef<number | null>(null);
-  const autoAirportRef = useRef(urlPrefersAirport);
+  const autoAirportRef = useRef(false);
 
   useEffect(() => {
     if (mapView !== "family" || !mapRef.current || !isLoaded) return;
@@ -547,37 +547,80 @@ export function LiveMapPage() {
     });
   }, [mapView, isLoaded]);
 
-  // Passive low-accuracy watch for proximity + indoor snapping (separate from
-  // the consent-gated family location SHARING — this never leaves the device)
+  // Passive GPS for map centering + departure-airport geofence (device-only until shared)
   useEffect(() => {
-    if (!activeFlight || !navigator.geolocation) return;
+    if (!navigator.geolocation) return;
     navWatchRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         setNavLat(pos.coords.latitude);
         setNavLon(pos.coords.longitude);
       },
       () => null,
-      { enableHighAccuracy: false, maximumAge: 30_000, timeout: 15_000 },
+      { enableHighAccuracy: true, maximumAge: 30_000, timeout: 15_000 },
     );
     return () => {
       if (navWatchRef.current !== null) navigator.geolocation.clearWatch(navWatchRef.current);
       navWatchRef.current = null;
     };
-  }, [activeFlight]);
+  }, []);
 
   const navProximity = useMemo(
     () => getAirportProximity(navLat, navLon, activeFlight?.f.flightDepartureAirport),
     [navLat, navLon, activeFlight],
   );
 
-  // Auto-default to the airport view ONCE when you're actually at the airport
+  const atDepartureAirport =
+    navProximity.status === "at-airport" || navProximity.status === "in-terminal";
+
+  // Default map to the user's actual location (once), not world view or airport campus
   useEffect(() => {
-    if (autoAirportRef.current || !activeFlight) return;
-    if (navProximity.status === "at-airport" || navProximity.status === "in-terminal") {
-      autoAirportRef.current = true;
-      setMapView("airport");
+    if (!isLoaded || !mapRef.current || userMapCenteredRef.current || mapView !== "family") return;
+
+    const centerOn = (lat: number, lon: number): void => {
+      if (userMapCenteredRef.current || !mapRef.current) return;
+      userMapCenteredRef.current = true;
+      mapRef.current.easeTo({ center: [lon, lat], zoom: 15, duration: 1200, essential: true });
+    };
+
+    const myId = myMemberIdRef.current;
+    if (myId && locations[myId]) {
+      centerOn(locations[myId].lat, locations[myId].lon);
+      return;
     }
-  }, [navProximity.status, activeFlight]);
+    if (navLat != null && navLon != null) {
+      centerOn(navLat, navLon);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setNavLat(pos.coords.latitude);
+        setNavLon(pos.coords.longitude);
+        centerOn(pos.coords.latitude, pos.coords.longitude);
+      },
+      () => {
+        /* keep existing default center */
+      },
+      { enableHighAccuracy: true, maximumAge: 60_000, timeout: 12_000 },
+    );
+  }, [isLoaded, locations, mapView, navLat, navLon]);
+
+  // Airport navigator only after geofence at the departure airport
+  useEffect(() => {
+    if (!activeFlight) {
+      setMapView((prev) => (prev === "airport" ? "family" : prev));
+      return;
+    }
+    if (atDepartureAirport) {
+      if (!autoAirportRef.current) {
+        autoAirportRef.current = true;
+        setMapView("airport");
+      }
+      return;
+    }
+    autoAirportRef.current = false;
+    setMapView((prev) => (prev === "airport" ? "family" : prev));
+  }, [atDepartureAirport, activeFlight]);
 
   const navEligibleLounges = useMemo(
     () =>
@@ -812,7 +855,7 @@ export function LiveMapPage() {
         />
 
         {/* Airport Navigator overlay — full-bleed when at the airport view */}
-        {mapView === "airport" && activeFlight && (
+        {mapView === "airport" && activeFlight && atDepartureAirport && (
           <div className="absolute inset-0 z-40">
             <AirportNavigatorMap
               fill
@@ -864,8 +907,8 @@ export function LiveMapPage() {
           </div>
         )}
 
-        {/* Airport ⇄ Family view pill — only when a flight is in the window */}
-        {activeFlight && (
+        {/* Airport ⇄ Family view pill — only inside departure-airport geofence */}
+        {activeFlight && atDepartureAirport && (
           <div
             className="absolute left-1/2 z-50 flex -translate-x-1/2 overflow-hidden rounded-full border border-white/15 shadow-xl"
             style={{ top: "max(3.6rem, calc(env(safe-area-inset-top) + 3.1rem))" }}
