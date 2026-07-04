@@ -259,7 +259,7 @@ export function HotelsTab({
             </button>
           ) : null}
         </div>
-        {enableBookSearch && !(showBookSearch && onLaunchHotelSearch) ? (
+        {enableBookSearch ? (
           <div className="flex gap-2">
             <button
               type="button"
@@ -594,6 +594,17 @@ export function HotelsTab({
           );
         })}
       </div>
+
+      {shown.length > 0 && enableBookSearch ? (
+        <button
+          type="button"
+          onClick={onAdd}
+          className={`flex min-h-[52px] w-full items-center justify-center gap-2 ${type.secondaryBtn}`}
+        >
+          <span aria-hidden>+</span>
+          Add existing hotel
+        </button>
+      ) : null}
 
       {/* Past toggle */}
       {past.length > 0 && (
