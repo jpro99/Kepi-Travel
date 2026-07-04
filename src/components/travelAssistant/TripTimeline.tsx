@@ -13,6 +13,8 @@ import {
 } from "@/lib/travelAssistant/plannedReservationMatch";
 import { reservationMissingPrice } from "@/lib/travelAssistant/tripSpendSummary";
 import { ReservationQuickLinks } from "@/components/travelAssistant/ReservationQuickLinks";
+import { DayWalkthroughBlock } from "@/components/travelAssistant/DayWalkthroughBlock";
+import { buildDayWalkthrough } from "@/lib/travelAssistant/dayWalkthrough";
 import type { ReservationLinkInput } from "@/lib/travelAssistant/reservationLinks";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -364,19 +366,28 @@ function ReservationCard({
 
 interface DayEntry { key: string; reservations: TimelineReservation[]; }
 
-function DayRow({ day, onReservationTap, showPastConfirmed, dimPast, onEmptyDayTap, tripId }: {
+function DayRow({ day, onReservationTap, showPastConfirmed, dimPast, onEmptyDayTap, tripId, tripStartDate, tripEndDate, allReservations }: {
   day: DayEntry;
   onReservationTap: (id: string) => void;
   showPastConfirmed: boolean;
   dimPast: boolean;
   onEmptyDayTap?: (dateKey: string) => void;
   tripId?: string | null;
+  tripStartDate?: string | null;
+  tripEndDate?: string | null;
+  allReservations: TimelineReservation[];
 }) {
   const past = isPastDay(day.key) && !isToday(day.key);
   const hasEvents = day.reservations.length > 0;
   const [expanded, setExpanded] = useState(hasEvents);
   const { weekday, dateStr } = formatDayHeader(day.key);
   const today = isToday(day.key);
+  const walkthrough = buildDayWalkthrough({
+    dateKey: day.key,
+    reservations: allReservations,
+    tripStartDate,
+    tripEndDate,
+  });
 
   return (
     <div className={`relative flex gap-0 transition-opacity ${past && dimPast && !showPastConfirmed ? "opacity-50" : past && dimPast ? "opacity-75" : ""}`}>
@@ -421,6 +432,11 @@ function DayRow({ day, onReservationTap, showPastConfirmed, dimPast, onEmptyDayT
 
         {hasEvents && expanded ? (
           <div className="mt-3 space-y-3">
+            <DayWalkthroughBlock
+              walkthrough={walkthrough}
+              headlineClassName="text-sm font-bold text-[var(--text-primary)]"
+              paragraphClassName="mt-1.5 text-xs leading-relaxed text-slate-600 dark:text-slate-300"
+            />
             {day.reservations.map((r) => (
               <ReservationCard key={r.id} reservation={r} onTap={() => onReservationTap(r.id)} isPast={past} tripId={tripId} />
             ))}
@@ -428,8 +444,8 @@ function DayRow({ day, onReservationTap, showPastConfirmed, dimPast, onEmptyDayT
         ) : null}
 
         {hasEvents && !expanded ? (
-          <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
-            {day.reservations.length} reservation{day.reservations.length === 1 ? "" : "s"} — tap to expand
+          <p className="mt-1.5 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
+            {walkthrough.summary}
           </p>
         ) : null}
 
@@ -623,6 +639,9 @@ export function TripTimeline({
             dimPast={false}
             onEmptyDayTap={onEmptyDayTap}
             tripId={tripId}
+            tripStartDate={tripStartDate}
+            tripEndDate={tripEndDate}
+            allReservations={reservations}
           />
         ))}
       </div>

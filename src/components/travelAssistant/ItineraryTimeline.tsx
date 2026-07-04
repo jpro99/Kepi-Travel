@@ -14,6 +14,8 @@ import { fetchCityWeatherForecast, type DailyWeather } from "@/lib/travelAssista
 import { buildGapDateKeys, computeItineraryDayStatus } from "@/lib/travelAssistant/itineraryDayStatus";
 import { parseDayLines } from "@/lib/travelAssistant/dayPlanLines";
 import { buildFullTripDayKeys } from "@/lib/travelAssistant/tripTimelinePlanning";
+import { buildDayWalkthrough } from "@/lib/travelAssistant/dayWalkthrough";
+import { DayWalkthroughBlock } from "@/components/travelAssistant/DayWalkthroughBlock";
 import type { TripActionItem } from "@/lib/travelAssistant/tripActionItems";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
@@ -165,17 +167,37 @@ function DayInlineDetails({
   reservations,
   dayNotes,
   onEditPlan,
+  tripStartDate,
+  tripEndDate,
+  stayCity,
+  dayIndexInLeg,
+  dayIndexInTrip,
 }: {
   dateKey: string;
   reservations: TimelineReservation[];
   dayNotes: Record<string, string>;
   onEditPlan: (dateKey: string) => void;
+  tripStartDate: string | null;
+  tripEndDate: string | null;
+  stayCity?: string | null;
+  dayIndexInLeg?: number;
+  dayIndexInTrip?: number;
 }) {
   const dayReservations = reservationsForDay(dateKey, reservations);
   const noteLines = parseDayLines(dayNotes[dateKey] ?? "");
+  const walkthrough = buildDayWalkthrough({
+    dateKey,
+    reservations,
+    tripStartDate,
+    tripEndDate,
+    stayCity,
+    dayIndexInLeg,
+    dayIndexInTrip,
+  });
 
   return (
     <div className="border-t border-[#E5E5EA] bg-[#FAFAFA] px-5 py-4">
+      <DayWalkthroughBlock walkthrough={walkthrough} className="mb-4" />
       {dayReservations.length > 0 ? (
         <ul className="space-y-2">
           {dayReservations.map((reservation) => (
@@ -243,6 +265,9 @@ function TravelCard({
   onReservationTap,
   readOnly = false,
   defaultExpanded = false,
+  tripStartDate,
+  tripEndDate,
+  reservations,
 }: {
   leg: BuiltTripLeg;
   flights: TimelineReservation[];
@@ -250,10 +275,19 @@ function TravelCard({
   onReservationTap: (id: string) => void;
   readOnly?: boolean;
   defaultExpanded?: boolean;
+  tripStartDate: string | null;
+  tripEndDate: string | null;
+  reservations: TimelineReservation[];
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const uniqueFlights = dedupeFlights(flights);
   const hasWarning = uniqueFlights.some((f) => gapDateKeys.has(reservationDateKey(f)));
+  const travelWalkthrough = buildDayWalkthrough({
+    dateKey: leg.startDate,
+    reservations,
+    tripStartDate,
+    tripEndDate,
+  });
 
   if (!expanded) {
     return (
@@ -270,10 +304,7 @@ function TravelCard({
             </span>
             {leg.label}
           </p>
-          <p className="mt-0.5 text-[12px] text-[#6E6E73]">
-            {formatDateRange(leg.startDate, leg.endDate)}
-            {uniqueFlights.length > 0 ? ` · ${uniqueFlights.length} flight${uniqueFlights.length === 1 ? "" : "s"}` : ""}
-          </p>
+          <p className="mt-0.5 line-clamp-2 text-[12px] text-[#6E6E73]">{travelWalkthrough.summary}</p>
         </div>
         <span className="shrink-0 text-[12px] font-semibold text-[#6E6E73]">Show</span>
       </button>
@@ -304,6 +335,7 @@ function TravelCard({
             Hide
           </button>
         </div>
+        <DayWalkthroughBlock walkthrough={travelWalkthrough} className="mt-3" />
         {hasWarning && !readOnly ? (
           <p className="mt-3 border-l-4 border-amber-400 pl-3 text-[13px] font-medium text-amber-700">
             Check connection timing
@@ -513,6 +545,14 @@ function DestinationBlock({
               const isLegHighlighted = highlightedLegId === leg.id;
               const isDayExpanded = expandedDateKey === dateKey;
               const wx = weatherForDay(dateKey);
+              const dayWalkthrough = buildDayWalkthrough({
+                dateKey,
+                reservations,
+                tripStartDate,
+                tripEndDate,
+                stayCity: leg.label,
+                dayIndexInLeg: idx + 1,
+              });
 
               return (
                 <li key={dateKey}>
@@ -522,7 +562,7 @@ function DestinationBlock({
                       onSelectedDateKeyChange?.(dateKey);
                       setExpandedDateKey((prev) => (prev === dateKey ? null : dateKey));
                     }}
-                    className={`flex min-h-10 w-full items-center gap-3 px-5 py-2 text-left transition ${
+                    className={`flex min-h-10 w-full flex-wrap items-center gap-x-3 gap-y-1 px-5 py-2 text-left transition ${
                       isSelected || isLegHighlighted || isDayExpanded
                         ? "bg-[#F5F5F7] ring-1 ring-inset ring-[#f4c95d]/50"
                         : "hover:bg-[#FAFAFA]"
@@ -539,6 +579,9 @@ function DestinationBlock({
                         Day {idx + 1}
                       </span>
                       <span className="shrink-0 text-xs text-[#6E6E73]">{formatDayLabel(dateKey)}</span>
+                      <span className="min-w-0 flex-1 truncate text-[12px] text-[#6E6E73]">
+                        {dayWalkthrough.headline}
+                      </span>
                     </div>
                     <span className="shrink-0 text-[13px] text-[#1D1D1F]">
                       {wx ? (
@@ -571,6 +614,10 @@ function DestinationBlock({
                       reservations={reservations}
                       dayNotes={dayNotes}
                       onEditPlan={onEditDay}
+                      tripStartDate={tripStartDate}
+                      tripEndDate={tripEndDate}
+                      stayCity={leg.label}
+                      dayIndexInLeg={idx + 1}
                     />
                   ) : null}
                 </li>
@@ -734,6 +781,9 @@ export function ItineraryTimeline({
               onReservationTap={onReservationTap}
               readOnly={suppressPlanningAlerts}
               defaultExpanded={false}
+              tripStartDate={tripStartDate}
+              tripEndDate={tripEndDate}
+              reservations={reservations}
             />
           ) : null}
 

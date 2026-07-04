@@ -608,9 +608,9 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="onboarding-title"
-        className="flex h-full w-full flex-col border border-slate-700 bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 sm:h-auto sm:max-h-[90vh] sm:max-w-xl sm:rounded-2xl"
+        className="flex h-[100dvh] max-h-[100dvh] w-full min-h-0 flex-col rounded-t-2xl border border-slate-700 bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 sm:h-auto sm:max-h-[min(90dvh,720px)] sm:max-w-xl sm:rounded-2xl"
       >
-        <header className="border-b border-slate-200 p-4 dark:border-slate-800">
+        <header className="shrink-0 border-b border-slate-200 p-4 dark:border-slate-800">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-300">
@@ -645,9 +645,9 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-6">
           {currentStep === 1 ? (
-            <div className="space-y-3 text-sm">
+            <div className="space-y-4 text-sm">
               <p className="text-slate-700 dark:text-slate-300">
                 {t("welcomeDescription")}
               </p>
@@ -658,7 +658,7 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
               </ul>
               <label className="block">
                 <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                  Have an invite code?
+                  Have an invite code? <span className="font-normal normal-case tracking-normal text-slate-400">(optional)</span>
                 </span>
                 <input
                   value={inviteCode}
@@ -702,6 +702,9 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
                   <p className="mt-1 text-xs text-cyan-700 dark:text-cyan-300">{referralMessage}</p>
                 ) : null}
               </label>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                No code? Tap Continue below — you can add one later from billing.
+              </p>
             </div>
           ) : null}
 
@@ -850,37 +853,41 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
           ) : null}
         </div>
 
-        <footer className="flex items-center justify-between gap-2 border-t border-slate-200 p-4 dark:border-slate-800">
+        <footer className="shrink-0 space-y-3 border-t border-slate-200 bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] dark:border-slate-800 dark:bg-slate-950">
           <button
             type="button"
-            disabled={currentStep === 1 || isSaving || inviteBusy || referralBusy}
+            disabled={isSaving || inviteBusy || referralBusy}
             onClick={() => {
-              void handleBack();
+              void handleNext();
             }}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-900"
+            className="w-full rounded-xl bg-cyan-500 px-4 py-3.5 text-base font-bold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {t("back")}
+            {inviteBusy || referralBusy
+              ? "Applying code..."
+              : currentStep === TOTAL_STEPS
+                ? t("start")
+                : `${t("next")} →`}
           </button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              disabled={currentStep === 1 || isSaving || inviteBusy || referralBusy}
+              onClick={() => {
+                void handleBack();
+              }}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-900"
+            >
+              {t("back")}
+            </button>
             <button
               type="button"
               disabled={isSaving || inviteBusy || referralBusy}
               onClick={() => {
                 void handleSkip();
               }}
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-900"
+              className="rounded-md px-3 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
             >
               {t("skip")}
-            </button>
-            <button
-              type="button"
-              disabled={isSaving || inviteBusy || referralBusy}
-              onClick={() => {
-                void handleNext();
-              }}
-              className="rounded-md bg-cyan-500 px-3 py-1.5 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {inviteBusy || referralBusy ? "Applying code..." : currentStep === TOTAL_STEPS ? t("start") : t("next")}
             </button>
           </div>
         </footer>

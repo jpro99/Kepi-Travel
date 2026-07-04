@@ -19,8 +19,8 @@ function SignUpPageInner() {
     : "/travel-assistant";
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-4 bg-[#f0f4f8] dark:bg-slate-950">
-      <div className="w-full max-w-md">
+    <main className="min-h-[100dvh] overflow-y-auto bg-[#f0f4f8] p-4 dark:bg-slate-950">
+      <div className="mx-auto w-full max-w-md py-6">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-black text-[#0c2461] dark:text-white">Kepi Travel</h1>
           <p className="mt-1 text-sm text-slate-500">Create your account</p>

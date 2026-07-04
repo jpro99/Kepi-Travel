@@ -25,8 +25,8 @@ export default async function RedeemPage({ searchParams }: Props) {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-[#f0f4f8] px-4 dark:bg-slate-950">
-      <div className="w-full max-w-md">
+    <main className="min-h-[100dvh] overflow-y-auto bg-[#f0f4f8] px-4 py-8 dark:bg-slate-950">
+      <div className="mx-auto w-full max-w-md py-4">
         {/* Card */}
         <div className="overflow-hidden rounded-3xl bg-white shadow-2xl shadow-sky-500/10 dark:bg-slate-900">
           {/* Header gradient */}

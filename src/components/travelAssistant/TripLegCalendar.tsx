@@ -16,6 +16,8 @@ import {
 } from "@/lib/travelAssistant/buildTripLegs";
 import { fetchCityWeatherForecast, type DailyWeather } from "@/lib/travelAssistant/cityWeather";
 import { parseDayLines } from "@/lib/travelAssistant/dayPlanLines";
+import { buildDayWalkthrough } from "@/lib/travelAssistant/dayWalkthrough";
+import { DayWalkthroughBlock } from "@/components/travelAssistant/DayWalkthroughBlock";
 import type { ItineraryPlansData } from "@/lib/travelAssistant/itineraryDayPlan";
 import { ItineraryDayEditor } from "@/components/travelAssistant/ItineraryDayEditor";
 
@@ -73,40 +75,56 @@ function isToday(dateKey: string): boolean {
   return dateKey === dateKeyFromParts(today.getFullYear(), today.getMonth(), today.getDate());
 }
 
-function cellSubLabel(cell: DayLegCell | null, planPreview: string | null): string | null {
-  if (planPreview) return planPreview.length > 28 ? `${planPreview.slice(0, 27)}…` : planPreview;
+function truncateLabel(text: string, max = 28): string {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+function walkthroughForCell(
+  cell: DayLegCell,
+  reservations: CalendarReservation[],
+  tripStart: string | null,
+  tripEnd: string | null,
+) {
+  return buildDayWalkthrough({
+    dateKey: cell.dateKey,
+    reservations,
+    tripStartDate: tripStart,
+    tripEndDate: tripEnd,
+    stayCity: cell.cityName,
+    dayIndexInLeg: cell.dayIndexInLeg,
+    legDayCount: cell.legDayCount,
+  });
+}
+
+function cellSubLabel(
+  cell: DayLegCell | null,
+  planPreview: string | null,
+  reservations: CalendarReservation[],
+  tripStart: string | null,
+  tripEnd: string | null,
+): string | null {
+  if (planPreview) return truncateLabel(planPreview);
   if (!cell || cell.kind === "empty") return null;
-  if (cell.kind === "travel" || cell.flightPrimary) {
-    const fp = cell.flightPrimary;
-    if (!fp) return "✈ Travel";
-    const time = fp.depTime ? ` · ${fp.depTime}` : "";
-    return `✈ ${fp.number}${time}`;
-  }
-  if (cell.hotelBooked && cell.hotelName) return `🏨 ${cell.hotelName}`;
-  if (cell.cityName) return cell.cityName;
-  return null;
+  const walkthrough = walkthroughForCell(cell, reservations, tripStart, tripEnd);
+  return truncateLabel(walkthrough.headline);
 }
 
 function cellThirdLine(
   cell: DayLegCell | null,
   weather: DailyWeather | null,
+  reservations: CalendarReservation[],
+  tripStart: string | null,
+  tripEnd: string | null,
 ): { text: string; warning?: boolean } | null {
   if (!cell || cell.kind === "empty") return null;
-  if (cell.kind === "travel" || cell.flightPrimary) {
-    const route = cell.flightPrimary?.route ?? cell.flightSummary ?? "Travel";
-    if (cell.flightExtraCount > 0) {
-      return { text: `${route} · +${cell.flightExtraCount} more` };
-    }
-    return { text: route };
-  }
-  if (cell.hotelBooked && weather) {
-    return { text: `${weather.icon} ${weather.highTemp}` };
-  }
   if (cell.hotelNeeded) {
     return { text: "⚠ No hotel", warning: true };
   }
-  if (weather) return { text: `${weather.icon} ${weather.highTemp}` };
-  return cell.cityName ? { text: cell.cityName } : null;
+  const walkthrough = walkthroughForCell(cell, reservations, tripStart, tripEnd);
+  if (weather) {
+    return { text: `${weather.icon} ${weather.highTemp} · ${truncateLabel(walkthrough.summary, 22)}` };
+  }
+  return { text: truncateLabel(walkthrough.summary, 32) };
 }
 
 function legendChipLabel(chip: LegendLegChip): string {
@@ -127,6 +145,9 @@ function CalendarCell({
   theme,
   weather,
   planPreview,
+  reservations,
+  tripStart,
+  tripEnd,
   onSelect,
 }: {
   cell: DayLegCell | null;
@@ -139,14 +160,17 @@ function CalendarCell({
   theme: CalendarTheme;
   weather: DailyWeather | null;
   planPreview: string | null;
+  reservations: CalendarReservation[];
+  tripStart: string | null;
+  tripEnd: string | null;
   onSelect: () => void;
 }) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const filled = cell && cell.kind !== "empty";
   const pos = ribbonPosition === "none" ? "none" : ribbonPosition;
   const radiusClass = filled ? ribbonRadiusClass(pos) : "rounded-none";
-  const line2 = cellSubLabel(cell, planPreview);
-  const line3 = cellThirdLine(cell, weather);
+  const line2 = cellSubLabel(cell, planPreview, reservations, tripStart, tripEnd);
+  const line3 = cellThirdLine(cell, weather, reservations, tripStart, tripEnd);
   const isLight = theme === "light";
 
   return (
@@ -217,7 +241,7 @@ function CalendarCell({
         ) : null}
       </button>
       {popoverOpen && cell && filled ? (
-        <CellPopover cell={cell} weather={weather} />
+        <CellPopover cell={cell} weather={weather} reservations={reservations} tripStart={tripStart} tripEnd={tripEnd} />
       ) : null}
     </div>
   );
@@ -226,23 +250,28 @@ function CalendarCell({
 function CellPopover({
   cell,
   weather,
+  reservations,
+  tripStart,
+  tripEnd,
 }: {
   cell: DayLegCell;
   weather: DailyWeather | null;
+  reservations: CalendarReservation[];
+  tripStart: string | null;
+  tripEnd: string | null;
 }) {
   const dateLabel = new Date(`${cell.dateKey}T12:00:00`).toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
   });
-  const destination = cell.cityName
-    ? `${cell.cityName}${cell.legDayCount > 0 ? ` · Day ${cell.dayIndexInLeg} of ${cell.legDayCount}` : ""}`
-    : cell.flightSummary ?? "Travel day";
+  const walkthrough = walkthroughForCell(cell, reservations, tripStart, tripEnd);
 
   return (
     <div className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 w-[min(16rem,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl bg-white p-4 text-left shadow-[0_8px_24px_rgba(0,0,0,0.12)]">
       <p className="text-xs font-semibold text-[#6E6E73]">{dateLabel}</p>
-      <p className="mt-1 text-sm font-bold text-[#1D1D1F]">{destination}</p>
+      <p className="mt-1 text-sm font-bold text-[#1D1D1F]">{walkthrough.headline}</p>
+      <p className="mt-1 text-xs leading-relaxed text-[#3A3A3C]">{walkthrough.summary}</p>
       {weather ? <p className="mt-1 text-xs text-[#1D1D1F]">{weather.description ?? weather.highTemp}</p> : null}
       {cell.hotelBooked && cell.hotelName ? (
         <p className="mt-2 text-xs text-[#1D1D1F]">
@@ -251,9 +280,6 @@ function CellPopover({
         </p>
       ) : cell.hotelNeeded ? (
         <p className="mt-2 text-xs font-semibold text-amber-600">No hotel booked</p>
-      ) : null}
-      {cell.flightSummary ? (
-        <p className="mt-1 text-xs text-[#6E6E73]">✈ {cell.flightSummary}</p>
       ) : null}
     </div>
   );
@@ -264,6 +290,7 @@ function DayDetailPanel({
   note,
   tripStartDate,
   tripEndDate,
+  reservations,
   onClose,
   onPlanHotel,
   onViewTimeline,
@@ -273,13 +300,15 @@ function DayDetailPanel({
   note: string;
   tripStartDate: string | null;
   tripEndDate: string | null;
+  reservations: CalendarReservation[];
   onClose: () => void;
   onPlanHotel?: (dateKey: string, city: string) => void;
   onViewTimeline: () => void;
   onNoteChange?: (value: string) => void;
 }) {
   const [weatherLine, setWeatherLine] = useState<string | null>(null);
-  const city = cell.cityName ?? cell.flightSummary?.split("→").pop()?.trim() ?? null;
+  const city = cell.cityName ?? null;
+  const walkthrough = walkthroughForCell(cell, reservations, tripStartDate, tripEndDate);
 
   useEffect(() => {
     if (!city) return;
@@ -308,18 +337,18 @@ function DayDetailPanel({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6E6E73]">{dateLabel}</p>
-          {cell.cityName ? (
-            <p className="mt-1 text-2xl font-bold text-[#1D1D1F]">{cell.cityName}</p>
-          ) : cell.flightSummary ? (
-            <p className="mt-1 text-2xl font-bold text-[#1D1D1F]">{cell.flightSummary}</p>
-          ) : (
-            <p className="mt-1 text-2xl font-bold text-[#1D1D1F]">Travel day</p>
-          )}
+          <p className="mt-1 text-2xl font-bold text-[#1D1D1F]">{walkthrough.headline}</p>
           {cell.cityName && cell.legDayCount > 0 ? (
             <p className="mt-1 text-sm text-[#6E6E73]">
               Day {cell.dayIndexInLeg} of {cell.legDayCount} in {cell.cityName}
             </p>
           ) : null}
+          <DayWalkthroughBlock
+            walkthrough={walkthrough}
+            className="mt-3"
+            headlineClassName="sr-only"
+            paragraphClassName="text-sm leading-relaxed text-[#3A3A3C]"
+          />
           {weatherLine ? <p className="mt-2 text-sm text-[#1D1D1F]">{weatherLine}</p> : null}
           {cell.hotelName ? (
             <p className="mt-2 text-sm font-semibold text-[#1D1D1F]">
@@ -328,9 +357,6 @@ function DayDetailPanel({
             </p>
           ) : cell.hotelNeeded ? (
             <p className="mt-2 text-sm font-semibold text-amber-600">No hotel booked</p>
-          ) : null}
-          {cell.flightSummary ? (
-            <p className="mt-1 text-sm text-[#6E6E73]">✈ {cell.flightSummary}</p>
           ) : null}
         </div>
         <button type="button" onClick={onClose} className="text-[#6E6E73] hover:text-[#1D1D1F]" aria-label="Close">
@@ -627,6 +653,9 @@ export function TripLegCalendar({
                   theme={theme}
                   weather={weatherByDate.get(dateKey) ?? null}
                   planPreview={inTrip ? planPreviewForDate(dateKey) : null}
+                  reservations={reservations}
+                  tripStart={tripStart}
+                  tripEnd={tripEnd}
                   onSelect={() => handleDaySelect(dateKey)}
                 />
               );
@@ -688,6 +717,7 @@ export function TripLegCalendar({
           note={dayNotes[detailCell.dateKey] ?? ""}
           tripStartDate={tripStart}
           tripEndDate={tripEnd}
+          reservations={reservations}
           onClose={() => setDetailDateKey(null)}
           onPlanHotel={onPlanHotel}
           onViewTimeline={() => onScrollToTimelineDate?.(detailCell.dateKey)}

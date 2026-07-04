@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { TripPlanBuildStrip } from "@/components/travelAssistant/TripPlanBuildStrip";
 import { resolveStayCityForDay } from "@/lib/travelAssistant/dayPlanLines";
 import { buildFullTripDayKeys } from "@/lib/travelAssistant/tripTimelinePlanning";
+import { buildDayWalkthrough } from "@/lib/travelAssistant/dayWalkthrough";
+import { DayWalkthroughBlock } from "@/components/travelAssistant/DayWalkthroughBlock";
 import { cityPhotoUrl } from "@/lib/travelAssistant/cityPhotos";
 import type { StopDateRange } from "@/lib/decision/stopDates";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
@@ -173,6 +175,16 @@ export function TripCalendarView({
   const selectedStayCity = activeSelectedKey
     ? resolveStayCityForDay(activeSelectedKey, dayNotes, stopRanges, tripStart, tripEnd)
     : null;
+  const selectedDayWalkthrough = useMemo(() => {
+    if (!activeSelectedKey) return null;
+    return buildDayWalkthrough({
+      dateKey: activeSelectedKey,
+      reservations,
+      tripStartDate: tripStart,
+      tripEndDate: tripEnd,
+      stayCity: selectedStayCity,
+    });
+  }, [activeSelectedKey, reservations, tripStart, tripEnd, selectedStayCity]);
   const heroPhoto = selectedStayCity
     ? cityPhotoUrl(selectedStayCity)
     : tripStart
@@ -396,7 +408,15 @@ export function TripCalendarView({
                   <p className="mt-1 truncate text-[9px] font-semibold">{shortCity(stayCity)}</p>
                 ) : null}
                 {dayRes.length > 0 ? (
-                  <p className="mt-1 text-[9px] opacity-80">{dayRes.length} booked</p>
+                  <p className="mt-1 line-clamp-2 text-[9px] opacity-80">
+                    {buildDayWalkthrough({
+                      dateKey: key,
+                      reservations,
+                      tripStartDate: tripStart,
+                      tripEndDate: tripEnd,
+                      stayCity,
+                    }).summary}
+                  </p>
                 ) : null}
               </button>
             );
@@ -417,8 +437,13 @@ export function TripCalendarView({
           <p className="text-sm font-extrabold text-slate-900 dark:text-white">
             {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
           </p>
-          {selectedStayCity ? (
-            <p className="mt-0.5 text-xs font-semibold text-slate-500">Staying in {selectedStayCity}</p>
+          {selectedDayWalkthrough ? (
+            <DayWalkthroughBlock
+              walkthrough={selectedDayWalkthrough}
+              className="mt-3"
+              headlineClassName="text-base font-bold text-slate-900 dark:text-white"
+              paragraphClassName="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300"
+            />
           ) : null}
           {getDayReservations(selectedDate).length > 0 ? (
             <ul className="mt-3 space-y-2">

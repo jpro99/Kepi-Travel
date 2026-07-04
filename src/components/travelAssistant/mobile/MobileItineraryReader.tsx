@@ -10,6 +10,8 @@ import {
   resolveStayCityForDay,
 } from "@/lib/travelAssistant/dayPlanLines";
 import { buildFullTripDayKeys } from "@/lib/travelAssistant/tripTimelinePlanning";
+import { buildDayWalkthrough } from "@/lib/travelAssistant/dayWalkthrough";
+import { DayWalkthroughBlock } from "@/components/travelAssistant/DayWalkthroughBlock";
 
 import {
   MOBILE_OVERLAY_SCROLL,
@@ -107,11 +109,23 @@ function monthLabel(dateKey: string): string {
   return new Date(`${dateKey}T12:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
-function dayPreview(note: string, bookedCount: number): string {
-  const lines = parseDayLines(note);
+function dayPreview(args: {
+  dateKey: string;
+  note: string;
+  reservations: ReaderReservation[];
+  tripStartDate: string | null;
+  tripEndDate: string | null;
+  stayCity: string | null;
+}): string {
+  const lines = parseDayLines(args.note);
   if (lines[0]) return lines[0];
-  if (bookedCount > 0) return `${bookedCount} booking${bookedCount === 1 ? "" : "s"} confirmed`;
-  return "Tap to plan this day…";
+  return buildDayWalkthrough({
+    dateKey: args.dateKey,
+    reservations: args.reservations,
+    tripStartDate: args.tripStartDate,
+    tripEndDate: args.tripEndDate,
+    stayCity: args.stayCity,
+  }).summary;
 }
 
 export function MobileItineraryReader({
@@ -193,8 +207,23 @@ export function MobileItineraryReader({
     setExpandedDateKey((prev) => (prev === dateKey ? null : dateKey));
   };
 
-  const renderInlineDetails = (day: (typeof days)[number]): ReactNode => (
+  const renderInlineDetails = (day: (typeof days)[number]): ReactNode => {
+    const walkthrough = buildDayWalkthrough({
+      dateKey: day.dateKey,
+      reservations,
+      tripStartDate,
+      tripEndDate,
+      stayCity: day.stayCity,
+      dayIndexInTrip: day.index + 1,
+    });
+    return (
     <div className="border-t border-black/[0.06] px-5 pb-5 pt-4 dark:border-white/[0.08]">
+      <DayWalkthroughBlock
+        walkthrough={walkthrough}
+        className="mb-4"
+        headlineClassName="text-[20px] font-bold text-slate-900 dark:text-white"
+        paragraphClassName="mt-2 text-[18px] leading-snug text-slate-700 dark:text-slate-200"
+      />
       {day.booked.length > 0 ? (
         <ul className="space-y-2">
           {day.booked.map((reservation) => (
@@ -235,7 +264,8 @@ export function MobileItineraryReader({
         </button>
       ) : null}
     </div>
-  );
+    );
+  };
 
   const itineraryBody = (
     <>
@@ -330,11 +360,24 @@ export function MobileItineraryReader({
                         {!isExpanded ? (
                           <>
                             <p className="mt-3 text-[20px] leading-snug text-slate-800 dark:text-slate-100">
-                              {dayPreview(day.note, day.booked.length)}
+                              {dayPreview({
+                                dateKey: day.dateKey,
+                                note: day.note,
+                                reservations,
+                                tripStartDate,
+                                tripEndDate,
+                                stayCity: day.stayCity,
+                              })}
                             </p>
                             {day.booked.length > 0 ? (
                               <p className="mt-2 text-[17px] font-semibold text-emerald-700 dark:text-emerald-400">
-                                {day.booked.length} confirmed · tap to expand
+                                {buildDayWalkthrough({
+                                  dateKey: day.dateKey,
+                                  reservations,
+                                  tripStartDate,
+                                  tripEndDate,
+                                  stayCity: day.stayCity,
+                                }).headline} · tap to expand
                               </p>
                             ) : null}
                           </>
