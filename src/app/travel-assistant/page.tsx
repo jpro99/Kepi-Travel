@@ -9172,6 +9172,9 @@ export default function TravelAssistantPage() {
                 endDate={consumerTripEndDate ?? activeTrip?.endDate ?? null}
                 journeyPhase={journeyPhase}
                 reservations={consumerReservationsSorted}
+                transportReservations={transportRouteReservations}
+                plannedFlightLegs={plannedFlightLegs}
+                staySegments={tripStaySegments}
                 locationStatus={guidanceLocationStatus}
                 nearestAirport={guidanceNearestAirport}
                 missingPriceCount={tripSpendSummary.missingPriceCount}
