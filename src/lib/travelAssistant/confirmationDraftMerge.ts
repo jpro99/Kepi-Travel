@@ -1,6 +1,7 @@
 import { extractFlightLegsFromEmailBody } from "@/lib/travelAssistant/emailForwardParser";
 import { extractHotelDraftsFromDocumentText } from "@/lib/travelAssistant/confirmationHotelExtract";
 import { preparePdfTextForParsing } from "@/lib/travelAssistant/pdfTextExtract";
+import { parseCashUsdNearBooking } from "@/lib/travelAssistant/parseReservationCashUsd";
 import {
   buildScannedReservationDraft,
   type ScannedReservationDraft,
@@ -38,6 +39,7 @@ function mergeFlightDraft(
     flightDate: primary.flightDate.trim() || secondary.flightDate,
     flightDepartureAirport: primary.flightDepartureAirport.trim() || secondary.flightDepartureAirport,
     flightArrivalAirport: primary.flightArrivalAirport.trim() || secondary.flightArrivalAirport,
+    quotedPriceUsd: primary.quotedPriceUsd ?? secondary.quotedPriceUsd,
   };
 }
 
@@ -76,6 +78,22 @@ function applyTravelDateCorrections(
   return drafts.map((draft) => correctReservationTravelDates(draft, referenceDate));
 }
 
+function enrichDraftsWithDocumentPricing(
+  drafts: ScannedReservationDraft[],
+  documentText: string,
+): ScannedReservationDraft[] {
+  if (!documentText.trim()) return drafts;
+  return drafts.map((draft) => {
+    if (draft.quotedPriceUsd != null && draft.quotedPriceUsd > 0) return draft;
+    const parsed = parseCashUsdNearBooking(documentText, {
+      confirmationCode: draft.confirmationCode,
+      title: draft.title,
+    });
+    if (parsed == null || parsed <= 0) return draft;
+    return { ...draft, quotedPriceUsd: parsed };
+  });
+}
+
 function isUsableDraft(draft: ScannedReservationDraft): boolean {
   if (draft.localTime.trim().length > 0) return true;
   if (draft.type === "hotel" && draft.checkOutDate.trim().length > 0) return true;
@@ -109,7 +127,10 @@ export function mergeConfirmationDrafts(
   const regexHotelDrafts = extractHotelDraftsFromDocumentText(documentText);
 
   if (regexFlightDrafts.length === 0 && regexHotelDrafts.length === 0) {
-    return applyTravelDateCorrections(inferMissingYears(aiDrafts.filter(isUsableDraft)), referenceDate);
+    return enrichDraftsWithDocumentPricing(
+      applyTravelDateCorrections(inferMissingYears(aiDrafts.filter(isUsableDraft)), referenceDate),
+      documentText,
+    );
   }
 
   const nonFlights = aiDrafts.filter((draft) => draft.type !== "flight");
@@ -138,10 +159,16 @@ export function mergeConfirmationDrafts(
   const otherNonFlights = nonFlights.filter((draft) => draft.type !== "hotel");
 
   const combined = applyTravelDateCorrections(
-    inferMissingYears([...flights, ...hotels, ...otherNonFlights]),
+    enrichDraftsWithDocumentPricing(
+      inferMissingYears([...flights, ...hotels, ...otherNonFlights]),
+      documentText,
+    ),
     referenceDate,
   ).filter(isUsableDraft);
   return combined.length > 0
     ? combined
-    : applyTravelDateCorrections(inferMissingYears(aiDrafts.filter(isUsableDraft)), referenceDate);
+    : enrichDraftsWithDocumentPricing(
+        applyTravelDateCorrections(inferMissingYears(aiDrafts.filter(isUsableDraft)), referenceDate),
+        documentText,
+      );
 }

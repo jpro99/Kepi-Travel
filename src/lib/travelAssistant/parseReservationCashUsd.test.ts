@@ -19,6 +19,12 @@ test("parseCashUsdFromText handles Alaska-style totals", () => {
   assert.equal(parseCashUsdFromText(text), 892);
 });
 
+test("parseCashUsdFromText reads compact usd suffix without space", () => {
+  assert.equal(parseCashUsdFromText("Room total 499usd for 2 nights"), 499);
+  assert.equal(parseCashUsdFromText("You paid $842USD today"), 842);
+  assert.equal(parseCashUsdFromText("Grand total: 1284.50usd"), 1285);
+});
+
 test("parseCashUsdFromText reads single New Ticket Value", () => {
   const text = "Summary of airfare charges New Ticket Value: $1,386.43 Total charges USD $0.00";
   assert.equal(parseCashUsdFromText(text), 1386);

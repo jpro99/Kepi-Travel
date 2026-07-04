@@ -8,6 +8,7 @@ import {
   normalizeScannedDate,
   type ScannedReservationDraft,
 } from "@/lib/travelAssistant/scannedReservationDraft";
+import { parseCashUsdFromText } from "@/lib/travelAssistant/parseReservationCashUsd";
 
 const HOTEL_CONTEXT_RE =
   /\b(hotel|check-?in|check-?out|property|accommodation|room type|guest room|stay)\b/iu;
@@ -76,6 +77,7 @@ export function extractHotelDraftsFromDocumentText(documentText: string): Scanne
 
   const title = hotelName || "Hotel stay";
   const provider = hotelName.split(/\s+/u).slice(0, 2).join(" ") || "Hotel";
+  const quotedPriceUsd = parseCashUsdFromText(lineAware);
 
   return [
     buildScannedReservationDraft({
@@ -86,6 +88,7 @@ export function extractHotelDraftsFromDocumentText(documentText: string): Scanne
       location,
       confirmationCode,
       checkOutDate,
+      cashUsd: quotedPriceUsd,
     }),
   ];
 }

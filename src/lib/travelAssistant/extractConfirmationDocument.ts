@@ -36,6 +36,7 @@ const SCAN_SYSTEM_PROMPT = [
   "departureAirport / arrivalAirport = IATA codes (BRI, FCO, CGK, DPS, SIN, MUC, SEA, ONT). Bali=DPS, Jakarta=CGK.",
   "timezone = IANA timezone of the DEPARTURE city (Europe/Rome, Asia/Jakarta, America/Los_Angeles).",
   "For award tickets: cashUsd=0, fill pointsMiles + pointsProgram when visible.",
+  "When cash is paid, set cashUsd to the TOTAL in US dollars as a number (no currency symbol). Examples: $499 USD → 499, 499usd → 499, Total 1,284.50 USD → 1285.",
   "Only extract fields explicitly visible. Do not invent confirmation codes or airports.",
 ].join("\n");
 

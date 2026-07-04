@@ -55,6 +55,7 @@ interface DesktopTripHomeViewProps {
   onOpenBook: () => void;
   onOpenPlan: () => void;
   onOpenMap: () => void;
+  onAddGroundTransport?: () => void;
   liveStatus?: Record<string, {
     flightStatus: string;
     delayMinutes: number | null;
@@ -101,6 +102,7 @@ export function DesktopTripHomeView({
   onOpenBook,
   onOpenPlan,
   onOpenMap,
+  onAddGroundTransport,
   liveStatus,
 }: DesktopTripHomeViewProps) {
   const transportReservations =
@@ -186,6 +188,17 @@ export function DesktopTripHomeView({
         onGapActionTap={onGapActionTap}
         onReviewPricing={onReviewPricing}
       />
+
+      {onAddGroundTransport ? (
+        <button
+          type="button"
+          onClick={onAddGroundTransport}
+          className="flex w-full min-h-[44px] items-center justify-center gap-2 rounded-full border border-dashed border-slate-300 bg-white/70 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:border-sky-200 hover:text-sky-800 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:text-sky-200"
+        >
+          <span aria-hidden>🚕</span>
+          Add airport, hotel, or venue transfer
+        </button>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <button

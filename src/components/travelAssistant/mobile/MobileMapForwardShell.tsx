@@ -101,6 +101,7 @@ interface MobileMapForwardShellProps {
   onAddBooking: () => void;
   onAddFlight?: () => void;
   onAddHotel?: () => void;
+  onAddGroundTransport?: () => void;
   onTalkPlanner?: () => void;
   emailForwardAddress: string | null;
   onCopyForwardAddress: () => void;
@@ -206,6 +207,7 @@ export function MobileMapForwardShell({
   onAddBooking,
   onAddFlight,
   onAddHotel,
+  onAddGroundTransport,
   onTalkPlanner,
   emailForwardAddress,
   onCopyForwardAddress,
@@ -372,6 +374,17 @@ export function MobileMapForwardShell({
             onGapActionTap={onGapActionTap}
             onReviewPricing={onReviewPricing}
           />
+        ) : null}
+
+        {hasActiveTrip && onAddGroundTransport ? (
+          <button
+            type="button"
+            onClick={onAddGroundTransport}
+            className="flex w-full min-h-[44px] items-center justify-center gap-2 rounded-full border border-dashed border-[var(--border-default)] bg-[var(--bg-card)]/80 px-4 py-2.5 text-[15px] font-medium text-[var(--text-secondary)] transition active:opacity-80"
+          >
+            <span aria-hidden>🚕</span>
+            Add airport, hotel, or venue transfer
+          </button>
         ) : null}
 
         {!hasActiveTrip ? (

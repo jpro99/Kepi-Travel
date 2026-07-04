@@ -1,4 +1,4 @@
-export type ScannedReservationType = "flight" | "hotel" | "train" | "ride" | "dinner";
+import { parseCashUsdFromText, parseCashUsdFromUnknown } from "@/lib/travelAssistant/parseReservationCashUsd";
 
 export interface ScannedReservationDraft {
   type: ScannedReservationType;
@@ -109,6 +109,32 @@ function defaultStageForScannedType(type: ScannedReservationType): "airport" | "
   return "readiness";
 }
 
+function resolveQuotedPriceUsdFromNode(
+  reservationNode: Record<string, unknown>,
+  notes: string,
+): number | undefined {
+  const candidates = [
+    reservationNode.cashUsd,
+    reservationNode.quotedPriceUsd,
+    reservationNode.totalPrice,
+    reservationNode.totalUsd,
+    reservationNode.priceUsd,
+    reservationNode.price,
+    reservationNode.amount,
+    reservationNode.total,
+    reservationNode.roomTotal,
+  ];
+  for (const raw of candidates) {
+    const parsed = parseCashUsdFromUnknown(raw);
+    if (parsed != null) return parsed;
+  }
+  if (notes.trim()) {
+    const fromNotes = parseCashUsdFromText(notes);
+    if (fromNotes != null) return fromNotes;
+  }
+  return undefined;
+}
+
 export function buildScannedReservationDraft(reservationNode: Record<string, unknown>): ScannedReservationDraft {
   const scannedType = normalizeScannedReservationType(reservationNode.type);
   const provider = typeof reservationNode.provider === "string" ? reservationNode.provider.trim() : "";
@@ -169,12 +195,7 @@ export function buildScannedReservationDraft(reservationNode: Record<string, unk
   const checkOutDate = normalizeScannedDate(
     typeof reservationNode.checkOutDate === "string" ? reservationNode.checkOutDate : "",
   );
-  const quotedPriceUsdRaw =
-    typeof reservationNode.cashUsd === "number"
-      ? reservationNode.cashUsd
-      : typeof reservationNode.quotedPriceUsd === "number"
-        ? reservationNode.quotedPriceUsd
-        : undefined;
+  const quotedPriceUsdRaw = resolveQuotedPriceUsdFromNode(reservationNode, notes);
   const quotedPointsMilesRaw =
     typeof reservationNode.pointsMiles === "number"
       ? reservationNode.pointsMiles

@@ -105,6 +105,9 @@ function modalCopy(reservationType: ManualReservationType): { title: string; sav
   if (reservationType === "hotel") {
     return { title: "Add existing hotel", saveLabel: "Save hotel" };
   }
+  if (reservationType === "car") {
+    return { title: "Add ground transfer", saveLabel: "Save transfer" };
+  }
   return { title: "Add reservation", saveLabel: "Save booking" };
 }
 

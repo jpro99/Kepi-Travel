@@ -56,6 +56,58 @@ function parseDollarAmount(raw: string): number | undefined {
   return Math.round(value * 100) / 100;
 }
 
+/** Parse cash amounts from raw API/scan fields (numbers, "$499", "499usd", etc.). */
+export function parseCashUsdFromUnknown(raw: unknown): number | undefined {
+  if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+    return Math.round(raw);
+  }
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  const fromText = parseCashUsdFromText(trimmed);
+  if (fromText != null) return fromText;
+  const digitsOnly = trimmed.replace(/[^0-9.]/g, "");
+  if (!digitsOnly) return undefined;
+  const value = Number(digitsOnly);
+  if (!Number.isFinite(value) || value <= 0 || value > 500_000) return undefined;
+  return Math.round(value);
+}
+
+/** Prefer a price near a confirmation code or property name within a longer document. */
+export function parseCashUsdNearBooking(
+  text: string,
+  hints: { confirmationCode?: string; title?: string },
+): number | undefined {
+  const haystack = normalizeEmailText(text);
+  if (!haystack) return undefined;
+
+  const tryWindow = (start: number, end: number): number | undefined => {
+    const slice = haystack.slice(Math.max(0, start), Math.min(haystack.length, end));
+    return parseCashUsdFromText(slice);
+  };
+
+  const code = hints.confirmationCode?.trim();
+  if (code && code.length >= 4) {
+    const idx = haystack.toLowerCase().indexOf(code.toLowerCase());
+    if (idx >= 0) {
+      const near = tryWindow(idx - 500, idx + 900);
+      if (near != null) return near;
+    }
+  }
+
+  const title = hints.title?.trim();
+  if (title && title.length >= 4) {
+    const probe = title.slice(0, Math.min(title.length, 40));
+    const idx = haystack.toLowerCase().indexOf(probe.toLowerCase());
+    if (idx >= 0) {
+      const near = tryWindow(idx - 250, idx + 700);
+      if (near != null) return near;
+    }
+  }
+
+  return parseCashUsdFromText(haystack);
+}
+
 interface ScoredAmount {
   usd: number;
   score: number;
@@ -107,10 +159,12 @@ export function parseCashUsdFromText(text: string): number | undefined {
   const scored: ScoredAmount[] = [];
 
   const patterns: RegExp[] = [
-    /\b(?:grand\s+total|total(?:\s+(?:amount|price|cost|paid|charge|due|fare))?|amount\s+(?:paid|charged|due)|you\s+paid|purchase\s+total|ticket\s+total|trip\s+total|payment\s+total)\b[^$\d]{0,24}\$?\s*([\d,]+(?:\.\d{2})?)/giu,
+    /\b(?:grand\s+total|total(?:\s+(?:amount|price|cost|paid|charge|due|fare))?|amount\s+(?:paid|charged|due)|you\s+paid|purchase\s+total|ticket\s+total|trip\s+total|payment\s+total|room\s+total|stay\s+total|reservation\s+total)\b[^$\d]{0,24}\$?\s*([\d,]+(?:\.\d{2})?)/giu,
     /\b(?:USD|US\$)\s*([\d,]+(?:\.\d{2})?)/giu,
-    /\$\s*([\d,]+(?:\.\d{2})?)(?:\s*USD)?/giu,
-    /\b([\d,]+(?:\.\d{2})?)\s*(?:USD|US\s*dollars?)\b/giu,
+    /\$\s*([\d,]+(?:\.\d{2})?)(?:\s*(?:USD|US\$|usd))?/giu,
+    /\b([\d,]+(?:\.\d{2})?)\s*(?:USD|US\$|US\s*dollars?)\b/giu,
+    /\b([\d,]+(?:\.\d{2})?)(?:usd|us\$)(?![a-z])/giu,
+    /(?:^|[^\d])([\d,]+(?:\.\d{2})?)(?:usd|us\$)(?![a-z])/giu,
   ];
 
   for (const pattern of patterns) {

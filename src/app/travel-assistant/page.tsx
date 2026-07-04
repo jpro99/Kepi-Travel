@@ -2024,7 +2024,7 @@ export default function TravelAssistantPage() {
   const [showAdvancedShortcut] = useState(false);
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [manualReservationModalOpen, setManualReservationModalOpen] = useState(false);
-  const [manualReservationPresetType, setManualReservationPresetType] = useState<"flight" | "hotel" | null>(null);
+  const [manualReservationPresetType, setManualReservationPresetType] = useState<"flight" | "hotel" | "car" | null>(null);
   const [hotelSearchModalOpen, setHotelSearchModalOpen] = useState(false);
   const [inlineHotelSearchOpen, setInlineHotelSearchOpen] = useState(false);
   const [hotelSearchGeneration, setHotelSearchGeneration] = useState(0);
@@ -5574,7 +5574,7 @@ export default function TravelAssistantPage() {
       const mappedType = mapManualReservationType(value.reservationType);
       const notesPrefix = value.reservationType === "other" ? "Manual type: Other." : `Manual type: ${value.reservationType}.`;
       const localTime = value.localDateTime.replace("T", " ");
-      const reservation: Reservation = {
+      const reservation: Reservation = applyAcceptedReservationPricing({
         id: nextId("res"),
         type: mappedType,
         title: value.title.trim(),
@@ -5594,7 +5594,7 @@ export default function TravelAssistantPage() {
         flightNumber: mappedType === "flight" ? value.flightNumber.trim() : undefined,
         flightAirline: mappedType === "flight" ? value.provider.trim() : undefined,
         flightDate: mappedType === "flight" ? localTime.slice(0, 10) : undefined,
-      };
+      });
       pushUndoSnapshot("Manual reservation added");
       // Build the new list first, then set state AND save in one step
       const existingReservations = trips.find((t) => t.id === (activeTripId ?? trips[0]?.id))?.reservations ?? [];
@@ -5832,6 +5832,11 @@ export default function TravelAssistantPage() {
 
   const openManualHotelReservation = useCallback((): void => {
     setManualReservationPresetType("hotel");
+    setManualReservationModalOpen(true);
+  }, []);
+
+  const openManualGroundTransport = useCallback((): void => {
+    setManualReservationPresetType("car");
     setManualReservationModalOpen(true);
   }, []);
 
@@ -8920,9 +8925,17 @@ export default function TravelAssistantPage() {
           key={`${manualReservationPresetType ?? "default"}-${manualReservationDefaultDateTime ?? "nodate"}`}
           familyMembers={familyMembers.map((member) => ({ id: member.id, name: member.name }))}
           defaultAssignedTo={[selectedFamilyMember.id]}
-          defaultReservationType={manualReservationPresetType ?? "flight"}
+          defaultReservationType={
+            manualReservationPresetType === "car"
+              ? "car"
+              : manualReservationPresetType ?? "flight"
+          }
           defaultLocalDateTime={manualReservationDefaultDateTime ?? undefined}
-          lockReservationType={manualReservationPresetType === "flight" || manualReservationPresetType === "hotel"}
+          lockReservationType={
+            manualReservationPresetType === "flight" ||
+            manualReservationPresetType === "hotel" ||
+            manualReservationPresetType === "car"
+          }
           onClose={() => {
             setManualReservationModalOpen(false);
             setManualReservationPresetType(null);
@@ -9175,6 +9188,7 @@ export default function TravelAssistantPage() {
                   setManualReservationModalOpen(true);
                 }}
                 onAddHotel={openManualHotelReservation}
+                onAddGroundTransport={openManualGroundTransport}
                 onTalkPlanner={() => setTalkPlannerOpen(true)}
                 emailForwardAddress={emailForwardAddress}
                 onCopyForwardAddress={() => {
@@ -9327,6 +9341,7 @@ export default function TravelAssistantPage() {
                   markLiveMapSessionActive();
                   router.push("/travel-assistant/live-map");
                 }}
+                onAddGroundTransport={openManualGroundTransport}
                 liveStatus={flightStatusCheckByReservationId}
               />
             )
