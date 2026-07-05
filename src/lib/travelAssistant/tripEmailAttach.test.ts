@@ -1,10 +1,24 @@
 import { describe, expect, it } from "vitest";
 import {
+  countDraftDatesInTripWindow,
   detectFlightScheduleChange,
   expandTripWindowIfNeeded,
   inferTripWindowFromDrafts,
+  pickBestMatchingTripForDrafts,
 } from "@/lib/travelAssistant/tripEmailAttach";
+import type { TravelTrip } from "@/lib/travelAssistant/tripStore";
 import { reservationWithinTripWindow } from "@/lib/travelAssistant/tripWindow";
+
+function makeTrip(overrides: Partial<TravelTrip> & Pick<TravelTrip, "id" | "startDate" | "endDate">): TravelTrip {
+  return {
+    name: overrides.name ?? "Trip",
+    destination: overrides.destination ?? "Honolulu",
+    stage: "readiness",
+    reservations: overrides.reservations ?? [],
+    createdAt: overrides.createdAt ?? "2026-01-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
 
 describe("tripEmailAttach", () => {
   it("infers trip window from flight drafts", () => {
@@ -65,6 +79,41 @@ describe("tripEmailAttach", () => {
       },
     );
     expect(changes).toContain("departure time");
+  });
+
+  it("picks the trip whose date window matches forwarded drafts", () => {
+    const winterTrip = makeTrip({
+      id: "winter",
+      name: "Aspen ski trip",
+      destination: "Aspen",
+      startDate: "2026-12-20",
+      endDate: "2026-12-27",
+    });
+    const summerTrip = makeTrip({
+      id: "summer",
+      name: "Hawaii summer",
+      destination: "Honolulu",
+      startDate: "2026-09-01",
+      endDate: "2026-09-10",
+    });
+    const draftDates = ["2026-09-02", "2026-09-08"];
+
+    expect(countDraftDatesInTripWindow(draftDates, winterTrip)).toBe(0);
+    expect(countDraftDatesInTripWindow(draftDates, summerTrip)).toBe(2);
+
+    const picked = pickBestMatchingTripForDrafts([winterTrip, summerTrip], draftDates, "winter");
+    expect(picked?.id).toBe("summer");
+  });
+
+  it("does not return a trip when no draft dates overlap", () => {
+    const winterTrip = makeTrip({
+      id: "winter",
+      name: "Aspen ski trip",
+      destination: "Aspen",
+      startDate: "2026-12-20",
+      endDate: "2026-12-27",
+    });
+    expect(pickBestMatchingTripForDrafts([winterTrip], ["2026-09-02"], "winter")).toBeNull();
   });
 });
 

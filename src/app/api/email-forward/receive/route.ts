@@ -16,7 +16,7 @@ import {
   resolveTargetTripForEmailForward,
 } from "@/lib/travelAssistant/tripEmailAttach";
 import { mergeReservationPricingFields } from "@/lib/travelAssistant/reservationPricingMerge";
-import { reservationPrimaryDate, computeMinutesToDeparture } from "@/lib/travelAssistant/tripWindow";
+import { reservationPrimaryDate, computeMinutesToDeparture, isTripShellConfigured, reservationWithinTripWindow } from "@/lib/travelAssistant/tripWindow";
 import {
   findPlannedReplacementIndex,
   mergeIncomingOverPlanned,
@@ -633,6 +633,30 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       sourceLinks: emailSourceLinks.length > 0 ? emailSourceLinks : undefined,
     };
     for (const parserDraftRecord of parserDraftRecords) {
+      const draftPrimaryDate = reservationPrimaryDate({
+        type: typeof parserDraftRecord.type === "string" ? parserDraftRecord.type : undefined,
+        localTime: typeof parserDraftRecord.localTime === "string" ? parserDraftRecord.localTime : undefined,
+        flightDate: typeof parserDraftRecord.flightDate === "string" ? parserDraftRecord.flightDate : undefined,
+        flightDepartureTime:
+          typeof parserDraftRecord.flightDepartureTime === "string"
+            ? parserDraftRecord.flightDepartureTime
+            : undefined,
+        checkOutDate: typeof parserDraftRecord.checkOutDate === "string" ? parserDraftRecord.checkOutDate : undefined,
+      });
+      if (
+        draftPrimaryDate &&
+        isTripShellConfigured(targetTrip) &&
+        !reservationWithinTripWindow(draftPrimaryDate, targetTrip.startDate, targetTrip.endDate)
+      ) {
+        routeLogger.info("Skipped forwarded draft outside target trip window.", {
+          userId: targetUserId,
+          tripId: targetTrip.id,
+          draftPrimaryDate,
+          tripStart: targetTrip.startDate,
+          tripEnd: targetTrip.endDate,
+        });
+        continue;
+      }
       const rawType = parserDraftRecord.type;
       const parserType: SessionReservation["type"] =
         rawType === "flight" ||

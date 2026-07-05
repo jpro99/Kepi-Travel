@@ -93,6 +93,106 @@ export function expandTripWindowIfNeeded(
   };
 }
 
+export function countDraftDatesInTripWindow(
+  draftDates: string[],
+  trip: Pick<TravelTrip, "startDate" | "endDate">,
+): number {
+  return draftDates.filter((day) => reservationWithinTripWindow(day, trip.startDate, trip.endDate)).length;
+}
+
+export function pickBestMatchingTripForDrafts(
+  trips: TravelTrip[],
+  draftDates: string[],
+  activeTripId?: string | null,
+): TravelTrip | null {
+  if (draftDates.length === 0) {
+    return null;
+  }
+
+  const ranked = trips
+    .filter((candidate) => isTripShellConfigured(candidate))
+    .map((trip) => ({
+      trip,
+      matchCount: countDraftDatesInTripWindow(draftDates, trip),
+    }))
+    .filter((entry) => entry.matchCount > 0)
+    .sort((left, right) => {
+      if (right.matchCount !== left.matchCount) {
+        return right.matchCount - left.matchCount;
+      }
+      const leftCoversAll = left.matchCount === draftDates.length ? 1 : 0;
+      const rightCoversAll = right.matchCount === draftDates.length ? 1 : 0;
+      if (rightCoversAll !== leftCoversAll) {
+        return rightCoversAll - leftCoversAll;
+      }
+      if (activeTripId) {
+        if (left.trip.id === activeTripId) return -1;
+        if (right.trip.id === activeTripId) return 1;
+      }
+      return 0;
+    });
+
+  return ranked[0]?.trip ?? null;
+}
+
+async function activateTripIfNeeded(trip: TravelTrip, userId: string): Promise<TravelTrip> {
+  const activeTrip = await getActiveTrip(userId);
+  if (activeTrip?.id === trip.id) {
+    return trip;
+  }
+  const activated = await setActiveTrip(trip.id, userId);
+  return activated ?? trip;
+}
+
+async function reuseEmptyTripShell(
+  emptyShell: TravelTrip,
+  inferred: ReturnType<typeof inferTripWindowFromDrafts>,
+  drafts: EmailForwardDraft[],
+  userId: string,
+): Promise<TravelTrip> {
+  const updated = await updateTrip(
+    emptyShell.id,
+    {
+      name: inferred.name,
+      destination: inferred.destination,
+      startDate: inferred.startDate,
+      endDate: inferred.endDate,
+      minutesToDeparture:
+        computeMinutesToDeparture({
+          startDate: inferred.startDate,
+          reservations: drafts,
+        }) ?? emptyShell.minutesToDeparture,
+    },
+    userId,
+  );
+  const nextTrip = updated ?? emptyShell;
+  return activateTripIfNeeded(nextTrip, userId);
+}
+
+async function createTripFromEmailForward(
+  inferred: ReturnType<typeof inferTripWindowFromDrafts>,
+  drafts: EmailForwardDraft[],
+  userId: string,
+): Promise<TravelTrip> {
+  const wizard: BookingWizardProgress = {
+    ...advanceBookingWizard(EMPTY_BOOKING_WIZARD, "complete-setup"),
+    phase: "flights",
+  };
+  const created = await createTrip(
+    {
+      name: inferred.name,
+      destination: inferred.destination,
+      startDate: inferred.startDate,
+      endDate: inferred.endDate,
+      minutesToDeparture:
+        computeMinutesToDeparture({ startDate: inferred.startDate, reservations: drafts }) ?? 180,
+      bookingWizard: wizard,
+    },
+    userId,
+  );
+  return activateTripIfNeeded(created, userId);
+}
+
 export async function resolveTargetTripForEmailForward(
   userId: string,
   tripId: string | undefined,
@@ -103,78 +203,45 @@ export async function resolveTargetTripForEmailForward(
   }
 
   const inferred = inferTripWindowFromDrafts(drafts);
+  const draftDates = drafts.map((draft) => reservationPrimaryDate(draft)).filter(Boolean);
   const allTrips = await listTrips(userId);
-  let trip = await getActiveTrip(userId);
+  const activeTrip = await getActiveTrip(userId);
+  const activeTripId = activeTrip?.id ?? null;
 
-  if (!trip) {
-    const draftDates = drafts.map((draft) => reservationPrimaryDate(draft)).filter(Boolean);
-    trip =
-      allTrips.find((candidate) => {
-        if (!isTripShellConfigured(candidate)) return false;
-        return draftDates.some((day) => reservationWithinTripWindow(day, candidate.startDate, candidate.endDate));
-      }) ?? null;
+  const matchingTrip = pickBestMatchingTripForDrafts(allTrips, draftDates, activeTripId);
+  if (matchingTrip) {
+    return activateTripIfNeeded(matchingTrip, userId);
   }
 
-  if (!trip) {
-    const emptyShell = allTrips.find((candidate) => !isTripShellConfigured(candidate) && candidate.reservations.length === 0);
-    if (emptyShell) {
-      const updated = await updateTrip(
-        emptyShell.id,
-        {
-          name: inferred.name,
-          destination: inferred.destination,
-          startDate: inferred.startDate,
-          endDate: inferred.endDate,
-          minutesToDeparture:
-            computeMinutesToDeparture({
-              startDate: inferred.startDate,
-              reservations: drafts,
-            }) ?? emptyShell.minutesToDeparture,
-        },
-        userId,
-      );
-      if (updated) {
-        await setActiveTrip(updated.id, userId);
-        return updated;
-      }
-      return emptyShell;
-    }
-
-    const wizard: BookingWizardProgress = {
-      ...advanceBookingWizard(EMPTY_BOOKING_WIZARD, "complete-setup"),
-      phase: "flights",
-    };
-    return createTrip(
-      {
-        name: inferred.name,
-        destination: inferred.destination,
+  if (draftDates.length === 0 && activeTrip) {
+    if (!isTripShellConfigured(activeTrip) || activeTrip.reservations.length === 0) {
+      const patch = {
+        name: isTripShellConfigured(activeTrip) ? activeTrip.name : inferred.name,
+        destination: isPlaceholderDestination(activeTrip.destination)
+          ? inferred.destination
+          : activeTrip.destination,
         startDate: inferred.startDate,
         endDate: inferred.endDate,
         minutesToDeparture:
-          computeMinutesToDeparture({ startDate: inferred.startDate, reservations: drafts }) ?? 180,
-        bookingWizard: wizard,
-      },
-      userId,
-    );
+          computeMinutesToDeparture({
+            startDate: inferred.startDate,
+            reservations: [...activeTrip.reservations, ...drafts],
+          }) ?? activeTrip.minutesToDeparture,
+      };
+      const updated = await updateTrip(activeTrip.id, patch, userId);
+      return updated ?? activeTrip;
+    }
+    return activeTrip;
   }
 
-  if (!isTripShellConfigured(trip) || trip.reservations.length === 0) {
-    const patch = {
-      name: isTripShellConfigured(trip) ? trip.name : inferred.name,
-      destination: isPlaceholderDestination(trip.destination) ? inferred.destination : trip.destination,
-      startDate: inferred.startDate,
-      endDate: inferred.endDate,
-      minutesToDeparture:
-        computeMinutesToDeparture({
-          startDate: inferred.startDate,
-          reservations: [...trip.reservations, ...drafts],
-        }) ?? trip.minutesToDeparture,
-    };
-    const updated = await updateTrip(trip.id, patch, userId);
-    return updated ?? trip;
+  const emptyShell = allTrips.find(
+    (candidate) => !isTripShellConfigured(candidate) && candidate.reservations.length === 0,
+  );
+  if (emptyShell) {
+    return reuseEmptyTripShell(emptyShell, inferred, drafts, userId);
   }
 
-  return trip;
+  return createTripFromEmailForward(inferred, drafts, userId);
 }
 
 function normalizeFlightCompare(value: string | undefined): string {

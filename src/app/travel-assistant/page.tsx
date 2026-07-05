@@ -109,8 +109,8 @@ import { MyTripsModal } from "@/components/travelAssistant/MyTripsModal";
 import { isEmptyTripShell, type TripListRowInput } from "@/lib/travelAssistant/tripListDisplay";
 import {
   advanceBookingWizard,
+  EMPTY_BOOKING_WIZARD,
   normalizeBookingWizard,
-  resolveBookingWizardPhase,
   type BookingWizardPhase,
 } from "@/lib/travelAssistant/bookingWizard";
 import {
@@ -2039,6 +2039,7 @@ export default function TravelAssistantPage() {
   const [usuallySkipsConnections, setUsuallySkipsConnections] = useState(false);
   const [tripPlanningWizardOpen, setTripPlanningWizardOpen] = useState(false);
   const [tripPlanningWizardPhase, setTripPlanningWizardPhase] = useState<BookingWizardPhase>("setup");
+  const [tripPlanningWizardIntent, setTripPlanningWizardIntent] = useState<"create" | "edit">("create");
   const [myTripsModalOpen, setMyTripsModalOpen] = useState(false);
   const [deletingTripId, setDeletingTripId] = useState<string | null>(null);
   const [shareModalOpen, setShareModalOpen] = useState(false);
@@ -3023,10 +3024,6 @@ export default function TravelAssistantPage() {
     [activeTripId, applyManagedTripToState, setToast],
   );
 
-  const resolveTripPlanningWizardPhase = useCallback((): BookingWizardPhase => {
-    return resolveBookingWizardPhase(activeTrip);
-  }, [activeTrip]);
-
   const handleCreateTrip = useCallback(async (): Promise<void> => {
     const tripLimit = billingStatus?.usage?.tripLimit ?? 1;
     const allowCreation = hasProAccess || tripLimit === null || trips.length < tripLimit;
@@ -3034,14 +3031,14 @@ export default function TravelAssistantPage() {
       openUpgradeModal("multi-trip", "Free includes one trip. Upgrade to add and manage multiple trips.");
       return;
     }
-    setTripPlanningWizardPhase(resolveTripPlanningWizardPhase());
+    setTripPlanningWizardIntent("create");
+    setTripPlanningWizardPhase("setup");
     setTripPlanningWizardOpen(true);
-  }, [billingStatus?.usage?.tripLimit, hasProAccess, openUpgradeModal, resolveTripPlanningWizardPhase, trips.length]);
+  }, [billingStatus?.usage?.tripLimit, hasProAccess, openUpgradeModal, trips.length]);
 
   const openTripPlanningWizard = useCallback(() => {
-    setTripPlanningWizardPhase(resolveTripPlanningWizardPhase());
-    setTripPlanningWizardOpen(true);
-  }, [resolveTripPlanningWizardPhase]);
+    void handleCreateTrip();
+  }, [handleCreateTrip]);
 
   const handleSaveTripPlanningSetup = useCallback(
     async (tripDraft: TripSetupDraft): Promise<boolean> => {
@@ -3061,7 +3058,9 @@ export default function TravelAssistantPage() {
         computeMinutesToDeparture({ startDate: departureDate, reservations: [] }),
       );
       const bookingWizard = advanceBookingWizard(
-        normalizeBookingWizard(activeTrip?.bookingWizard),
+        tripPlanningWizardIntent === "edit"
+          ? normalizeBookingWizard(activeTrip?.bookingWizard)
+          : EMPTY_BOOKING_WIZARD,
         "complete-setup",
       );
 
@@ -3129,7 +3128,7 @@ export default function TravelAssistantPage() {
           bookingWizard,
         };
 
-        if (activeTripId && activeTrip) {
+        if (tripPlanningWizardIntent === "edit" && activeTripId && activeTrip) {
           const response = await fetch(TRIP_API_ROUTE, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -3241,6 +3240,7 @@ export default function TravelAssistantPage() {
       refreshGlobalBillingStatus,
       setToast,
       tripListRows,
+      tripPlanningWizardIntent,
     ],
   );
 
@@ -3312,6 +3312,7 @@ export default function TravelAssistantPage() {
       setToast("Select a trip first.");
       return;
     }
+    setTripPlanningWizardIntent("edit");
     setTripPlanningWizardPhase("setup");
     setTripPlanningWizardOpen(true);
     const bookingWizard = advanceBookingWizard(
@@ -4773,14 +4774,24 @@ export default function TravelAssistantPage() {
     scrollToInlineHotelSearch,
   ]);
   const tripPlanningInitialDraft = useMemo(
-    () => ({
-      tripName: activeTrip?.name && !/^trip \d+$/iu.test(activeTrip.name.trim()) ? activeTrip.name : "",
-      destination:
-        hotelSearchDefaults.city ||
-        (isTripDestinationPlaceholder(activeTrip?.destination) ? "" : (activeTrip?.destination ?? "")),
-      departureDate: hotelSearchDefaults.checkIn || activeTrip?.startDate?.slice(0, 10) || "",
-      returnDate: hotelSearchDefaults.checkOut || activeTrip?.endDate?.slice(0, 10) || "",
-    }),
+    () => {
+      if (tripPlanningWizardIntent === "create") {
+        return {
+          tripName: "",
+          destination: hotelSearchDefaults.city || "",
+          departureDate: hotelSearchDefaults.checkIn || "",
+          returnDate: hotelSearchDefaults.checkOut || "",
+        };
+      }
+      return {
+        tripName: activeTrip?.name && !/^trip \d+$/iu.test(activeTrip.name.trim()) ? activeTrip.name : "",
+        destination:
+          hotelSearchDefaults.city ||
+          (isTripDestinationPlaceholder(activeTrip?.destination) ? "" : (activeTrip?.destination ?? "")),
+        departureDate: hotelSearchDefaults.checkIn || activeTrip?.startDate?.slice(0, 10) || "",
+        returnDate: hotelSearchDefaults.checkOut || activeTrip?.endDate?.slice(0, 10) || "",
+      };
+    },
     [
       activeTrip?.destination,
       activeTrip?.endDate,
@@ -4789,6 +4800,7 @@ export default function TravelAssistantPage() {
       hotelSearchDefaults.checkIn,
       hotelSearchDefaults.checkOut,
       hotelSearchDefaults.city,
+      tripPlanningWizardIntent,
     ],
   );
 
@@ -8926,7 +8938,7 @@ export default function TravelAssistantPage() {
           setMyTripsModalOpen(false);
         }}
         onDeleteTrip={handleDeleteTripById}
-        onCreateTrip={openTripPlanningWizard}
+        onCreateTrip={handleCreateTrip}
         onDeleteEmptyTrips={handleDeleteEmptyTrips}
       />
       <TripPlanningWizard
