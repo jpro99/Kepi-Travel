@@ -13,9 +13,9 @@ import {
   detectFlightScheduleChange,
   expandTripWindowIfNeeded,
   mergeFlightReservationUpdate,
-  mergeReservationPricingFields,
   resolveTargetTripForEmailForward,
 } from "@/lib/travelAssistant/tripEmailAttach";
+import { mergeReservationPricingFields } from "@/lib/travelAssistant/reservationPricingMerge";
 import { reservationPrimaryDate, computeMinutesToDeparture } from "@/lib/travelAssistant/tripWindow";
 import {
   findPlannedReplacementIndex,

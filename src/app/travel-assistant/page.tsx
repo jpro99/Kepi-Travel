@@ -30,7 +30,7 @@ import { drainForwardReviewQueue } from "@/lib/travelAssistant/drainForwardRevie
 import { reconcileStoredFlightReservations } from "@/lib/travelAssistant/reconcileStoredFlightReservations";
 import { canonicalFlightDepartureDay, canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
 import { isDuplicateReservation } from "@/lib/travelAssistant/reservationDuplicates";
-import { countRescannableReservations } from "@/lib/travelAssistant/rescanTripImports";
+import { countRescannableReservations } from "@/lib/travelAssistant/rescanTripImportsShared";
 import {
   nextTripStage,
   shouldQuickAddGoToReview,
