@@ -30,6 +30,7 @@ import { drainForwardReviewQueue } from "@/lib/travelAssistant/drainForwardRevie
 import { reconcileStoredFlightReservations } from "@/lib/travelAssistant/reconcileStoredFlightReservations";
 import { canonicalFlightDepartureDay, canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
 import { isDuplicateReservation } from "@/lib/travelAssistant/reservationDuplicates";
+import { countRescannableReservations } from "@/lib/travelAssistant/rescanTripImports";
 import {
   nextTripStage,
   shouldQuickAddGoToReview,
@@ -85,6 +86,7 @@ import type {
 import { ConnectivityPanel } from "@/components/travelAssistant/ConnectivityPanel";
 import { OfflineKitBanner } from "@/components/travelAssistant/OfflineKitBanner";
 import { OfflineTravelKitSettingsCard } from "@/components/travelAssistant/OfflineTravelKitSettingsCard";
+import { RescanImportsCard } from "@/components/travelAssistant/RescanImportsCard";
 import { AISuggestionPanel } from "@/components/travelAssistant/AISuggestionPanel";
 import { UpgradeModal, type UpgradeModalGateContext } from "@/components/billing/UpgradeModal";
 import { LanguageToggle } from "@/components/LanguageToggle";
@@ -2264,6 +2266,8 @@ export default function TravelAssistantPage() {
   const [showCompletedFlights, setShowCompletedFlights] = useState(false);
   const [reservationsRefreshing, setReservationsRefreshing] = useState(false);
   const [ticketScanBusy, setTicketScanBusy] = useState(false);
+  const [rescanImportsBusy, setRescanImportsBusy] = useState(false);
+  const [rescanImportsSummary, setRescanImportsSummary] = useState<string | null>(null);
   const [calendarSyncInFlight, setCalendarSyncInFlight] = useState(false);
   const [calendarSyncTone, setCalendarSyncTone] = useState<"neutral" | "success" | "error">("neutral");
   const [calendarSyncMessage, setCalendarSyncMessage] = useState<string | null>(null);
@@ -4187,6 +4191,11 @@ export default function TravelAssistantPage() {
       return leftMs - rightMs;
     });
   }, [consumerDisplayReservations]);
+
+  const rescannableImportCount = useMemo(
+    () => countRescannableReservations(consumerReservationsSorted),
+    [consumerReservationsSorted],
+  );
 
   const tripSpendSummary = useMemo(
     () => computeTripSpend(advancedWorkspaceEnabled ? reservations : consumerReservationsSorted),
@@ -6395,6 +6404,48 @@ export default function TravelAssistantPage() {
     }
     ticketScanInputRef.current?.click();
   }, [ticketScanBusy]);
+
+  const handleRescanImports = useCallback(async (): Promise<void> => {
+    if (!activeTripId || rescanImportsBusy) {
+      return;
+    }
+    setRescanImportsBusy(true);
+    setRescanImportsSummary(null);
+    try {
+      const response = await fetch("/api/trips/rescan-imports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tripId: activeTripId }),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        updatedReservations?: number;
+        rescannedSources?: number;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Re-scan failed");
+      }
+
+      await refreshTripsFromServer();
+
+      const updated = payload.updatedReservations ?? 0;
+      const sources = payload.rescannedSources ?? 0;
+      if (updated > 0) {
+        const summary = `Updated ${updated} booking${updated === 1 ? "" : "s"} from ${sources} saved confirmation${sources === 1 ? "" : "s"}.`;
+        setRescanImportsSummary(summary);
+        setToast(`Re-scan filled missing details on ${updated} booking${updated === 1 ? "" : "s"}.`);
+      } else {
+        setRescanImportsSummary("Re-scan complete — no new missing fields were found.");
+        setToast("Re-scan complete — nothing new to fill in.");
+      }
+      queueMutation("Re-scanned saved confirmations.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Re-scan failed";
+      setToast(message);
+    } finally {
+      setRescanImportsBusy(false);
+    }
+  }, [activeTripId, queueMutation, refreshTripsFromServer, rescanImportsBusy, setToast]);
 
   const syncReservationsToGoogleCalendar = useCallback(
     async (reservationSnapshot: Reservation[], source: "manual" | "review-accept"): Promise<void> => {
@@ -9636,6 +9687,15 @@ export default function TravelAssistantPage() {
                 syncing={offlineKitSync.syncing}
                 onRefresh={() => {
                   void offlineKitSync.forceSync();
+                }}
+              />
+              <RescanImportsCard
+                rescannableCount={rescannableImportCount}
+                totalReservations={consumerReservationsSorted.length}
+                busy={rescanImportsBusy}
+                lastSummary={rescanImportsSummary}
+                onRescan={() => {
+                  void handleRescanImports();
                 }}
               />
               <ShareTripCard tripId={activeTripId} tripName={activeTrip?.name ?? "My Trip"} />
