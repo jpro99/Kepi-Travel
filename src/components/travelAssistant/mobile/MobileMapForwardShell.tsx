@@ -95,6 +95,7 @@ interface MobileMapForwardShellProps {
   onDayNoteChange: (dateKey: string, value: string) => void;
   onHotelNotebookChange?: (value: string) => void;
   onCreateTrip: () => void;
+  onStartNewTrip?: () => void;
   onReservationTap: (id: string) => void;
   onCheckStatus: (id: string) => void;
   onDelete: (id: string) => void;
@@ -201,6 +202,7 @@ export function MobileMapForwardShell({
   onDayNoteChange,
   onHotelNotebookChange,
   onCreateTrip,
+  onStartNewTrip,
   onReservationTap,
   onCheckStatus,
   onDelete,
@@ -342,6 +344,16 @@ export function MobileMapForwardShell({
             </p>
           </header>
         )}
+
+        {hasActiveTrip && onStartNewTrip ? (
+          <button
+            type="button"
+            onClick={onStartNewTrip}
+            className={`${juicyBtn} w-full bg-[#f4c95d] text-[#0b1f3a] shadow-md`}
+          >
+            + Start a new trip
+          </button>
+        ) : null}
 
         {hasActiveTrip ? (
           <>

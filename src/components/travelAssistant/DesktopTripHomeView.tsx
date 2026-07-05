@@ -56,6 +56,7 @@ interface DesktopTripHomeViewProps {
   onOpenPlan: () => void;
   onOpenMap: () => void;
   onAddGroundTransport?: () => void;
+  onStartNewTrip?: () => void;
   liveStatus?: Record<string, {
     flightStatus: string;
     delayMinutes: number | null;
@@ -103,6 +104,7 @@ export function DesktopTripHomeView({
   onOpenPlan,
   onOpenMap,
   onAddGroundTransport,
+  onStartNewTrip,
   liveStatus,
 }: DesktopTripHomeViewProps) {
   const transportReservations =
@@ -163,6 +165,16 @@ export function DesktopTripHomeView({
           </div>
         </div>
       </div>
+
+      {onStartNewTrip ? (
+        <button
+          type="button"
+          onClick={onStartNewTrip}
+          className="flex w-full min-h-[52px] items-center justify-center rounded-2xl bg-[#f4c95d] px-6 text-base font-black text-[#0b1f3a] shadow-md transition hover:bg-[#ffe29a]"
+        >
+          + Start a new trip
+        </button>
+      ) : null}
 
       <MobileAssistView
         journeyPhase={journeyPhase}
