@@ -9287,6 +9287,13 @@ export default function TravelAssistantPage() {
                 >
                   Trips{trips.length > 0 ? ` (${trips.length})` : ""}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => void handleCreateTrip()}
+                  className="shrink-0 rounded-full border border-sky-300/50 bg-sky-500/15 px-3 py-1.5 text-[13px] font-bold text-sky-700 dark:text-sky-200"
+                >
+                  + New trip
+                </button>
               </div>
               <div className="flex items-center gap-2 sm:gap-3">
                 {isCompactViewport ? <ThemeHeaderPicker /> : null}

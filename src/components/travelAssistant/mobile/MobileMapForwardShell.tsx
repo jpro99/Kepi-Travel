@@ -313,9 +313,20 @@ export function MobileMapForwardShell({
                 <DestinationHeroPhoto city={heroCity} />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/55 to-slate-900/30" />
                 <div className="relative flex h-full min-h-[180px] flex-col justify-end p-5">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-sky-300/90">Home</p>
-                  <h1 className="mt-1 text-[2rem] font-black leading-tight tracking-tight text-white">{tripName}</h1>
-                  <p className="mt-2 text-[17px] leading-snug text-sky-100/85">{subtitleParts.join(" · ")}</p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-sky-300/90">Home</p>
+                      <h1 className="mt-1 text-[2rem] font-black leading-tight tracking-tight text-white">{tripName}</h1>
+                      <p className="mt-2 text-[17px] leading-snug text-sky-100/85">{subtitleParts.join(" · ")}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={onCreateTrip}
+                      className="shrink-0 rounded-full border border-sky-300/40 bg-sky-400/15 px-3 py-2 text-xs font-bold text-sky-100 active:opacity-80"
+                    >
+                      + New trip
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -401,19 +412,14 @@ export function MobileMapForwardShell({
         ) : null}
 
         {hasActiveTrip ? (
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <button type="button" onClick={() => onNavigateTab("book")} className={quickActionBtn}>
-                <p className="text-[15px] font-semibold text-[var(--text-muted)]">Bookings</p>
-                <p className="mt-1 text-[19px] font-bold text-[var(--text-primary)]">Flights & hotels</p>
-              </button>
-              <button type="button" onClick={() => onNavigateTab("plan")} className={quickActionBtn}>
-                <p className="text-[15px] font-semibold text-[var(--text-muted)]">Itinerary</p>
-                <p className="mt-1 text-[19px] font-bold text-[var(--text-primary)]">Plan your days</p>
-              </button>
-            </div>
-            <button type="button" onClick={onCreateTrip} className={juicyBtnSecondary}>
-              + Add new trip
+          <div className="grid grid-cols-2 gap-3">
+            <button type="button" onClick={() => onNavigateTab("book")} className={quickActionBtn}>
+              <p className="text-[15px] font-semibold text-[var(--text-muted)]">Bookings</p>
+              <p className="mt-1 text-[19px] font-bold text-[var(--text-primary)]">Flights & hotels</p>
+            </button>
+            <button type="button" onClick={() => onNavigateTab("plan")} className={quickActionBtn}>
+              <p className="text-[15px] font-semibold text-[var(--text-muted)]">Itinerary</p>
+              <p className="mt-1 text-[19px] font-bold text-[var(--text-primary)]">Plan your days</p>
             </button>
           </div>
         ) : null}

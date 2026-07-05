@@ -57,7 +57,6 @@ interface DesktopTripHomeViewProps {
   onOpenMap: () => void;
   onAddGroundTransport?: () => void;
   onCreateTrip?: () => void;
-  canCreateTrip?: boolean;
   liveStatus?: Record<string, {
     flightStatus: string;
     delayMinutes: number | null;
@@ -106,7 +105,6 @@ export function DesktopTripHomeView({
   onOpenMap,
   onAddGroundTransport,
   onCreateTrip,
-  canCreateTrip = true,
   liveStatus,
 }: DesktopTripHomeViewProps) {
   const transportReservations =
@@ -136,9 +134,22 @@ export function DesktopTripHomeView({
             <DestinationHeroPhoto city={heroCity} />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/55 to-slate-900/30" />
             <div className="relative flex h-full flex-col justify-end p-6">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-sky-300/90">Home</p>
-              <h1 className="mt-1 text-3xl font-black tracking-tight text-white lg:text-4xl">{tripName}</h1>
-              <p className="mt-2 text-sm leading-relaxed text-sky-100/85">{subtitleParts.join(" · ")}</p>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-sky-300/90">Home</p>
+                  <h1 className="mt-1 text-3xl font-black tracking-tight text-white lg:text-4xl">{tripName}</h1>
+                  <p className="mt-2 text-sm leading-relaxed text-sky-100/85">{subtitleParts.join(" · ")}</p>
+                </div>
+                {onCreateTrip ? (
+                  <button
+                    type="button"
+                    onClick={onCreateTrip}
+                    className="shrink-0 rounded-full border border-sky-300/40 bg-sky-400/15 px-3 py-2 text-xs font-bold text-sky-100 hover:bg-sky-400/25"
+                  >
+                    + New trip
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
 
@@ -235,17 +246,6 @@ export function DesktopTripHomeView({
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Family map and airport mode</p>
         </button>
       </div>
-
-      {onCreateTrip ? (
-        <button
-          type="button"
-          onClick={onCreateTrip}
-          disabled={!canCreateTrip}
-          className="flex w-full min-h-[44px] items-center justify-center gap-2 rounded-2xl border border-dashed border-sky-300/80 bg-sky-50/60 px-4 py-3 text-sm font-semibold text-sky-900 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-sky-500/30 dark:bg-sky-950/20 dark:text-sky-100 dark:hover:bg-sky-950/40"
-        >
-          + Add new trip
-        </button>
-      ) : null}
     </section>
   );
 }
