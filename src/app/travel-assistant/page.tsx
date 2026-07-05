@@ -106,7 +106,18 @@ import {
   type TripStaySegmentInput,
 } from "@/lib/hotels/deriveTripStaySegments";
 import { MyTripsModal } from "@/components/travelAssistant/MyTripsModal";
-import { isEmptyTripShell, type TripListRowInput } from "@/lib/travelAssistant/tripListDisplay";
+import { ImportTripPickerModal } from "@/components/travelAssistant/ImportTripPickerModal";
+import {
+  formatTripDateRange,
+  isEmptyTripShell,
+  type TripListRowInput,
+} from "@/lib/travelAssistant/tripListDisplay";
+import {
+  draftDatesFromReservations,
+  resolveImportTargetTrip,
+  type ImportTargetTripReason,
+  type ImportTargetTripRow,
+} from "@/lib/travelAssistant/importTargetTrip";
 import {
   advanceBookingWizard,
   EMPTY_BOOKING_WIZARD,
@@ -2267,6 +2278,17 @@ export default function TravelAssistantPage() {
   const [showCompletedFlights, setShowCompletedFlights] = useState(false);
   const [reservationsRefreshing, setReservationsRefreshing] = useState(false);
   const [ticketScanBusy, setTicketScanBusy] = useState(false);
+  const [importTripPickerOpen, setImportTripPickerOpen] = useState(false);
+  const [importTripPickerBusy, setImportTripPickerBusy] = useState(false);
+  const [pendingTicketImport, setPendingTicketImport] = useState<{
+    fileName: string;
+    scanKind?: "pdf" | "image";
+    newReservations: Reservation[];
+    skippedDuplicates: number;
+    inferredMeta: ReturnType<typeof inferImportedTripMeta>;
+    reason: ImportTargetTripReason;
+    candidates: ImportTargetTripRow[];
+  } | null>(null);
   const [rescanImportsBusy, setRescanImportsBusy] = useState(false);
   const [rescanImportsSummary, setRescanImportsSummary] = useState<string | null>(null);
   const [calendarSyncInFlight, setCalendarSyncInFlight] = useState(false);
@@ -6173,6 +6195,184 @@ export default function TravelAssistantPage() {
     setToast("Added to your trip.");
   };
 
+  const finishTicketImportFeedback = useCallback(
+    (
+      newReservations: Reservation[],
+      scanKind: "pdf" | "image" | undefined,
+      skippedDuplicates: number,
+    ): void => {
+      for (const reservation of newReservations) {
+        queueMutation("Ticket scan added to live trip.", {
+          key: "ticket-scan-import",
+          fingerprint: `ticket-scan:${reservation.id}`,
+        });
+      }
+      setFlightLookupError(null);
+      setFlightLookupBusy(false);
+      setConsumerTab("book");
+      setBookSubTab(newReservations.some((reservation) => reservation.type === "flight") ? "flights" : "hotels");
+      const firstAdded = newReservations[0]!;
+      setPostBookingConfirmation({
+        kind: firstAdded.type === "hotel" ? "hotel" : firstAdded.type === "flight" ? "flight" : "import",
+        title:
+          newReservations.length === 1
+            ? `${firstAdded.type === "hotel" ? "Hotel" : firstAdded.type === "flight" ? "Flight" : "Booking"} added`
+            : `${newReservations.length} bookings added`,
+        confirmationCode: firstAdded.confirmationCode?.trim() || undefined,
+        detail:
+          newReservations.length === 1
+            ? `${firstAdded.provider || firstAdded.title} is on your timeline.`
+            : `${newReservations.filter((reservation) => reservation.type === "flight").length} flight(s) · ${newReservations.filter((reservation) => reservation.type === "hotel").length} hotel(s) from your scan.`,
+        syncedToTrip: true,
+      });
+      const flightCount = newReservations.filter((reservation) => reservation.type === "flight").length;
+      const hotelCount = newReservations.filter((reservation) => reservation.type === "hotel").length;
+      const parts = [
+        scanKind === "pdf" ? "PDF read" : "Ticket scanned",
+        `${flightCount} flight${flightCount === 1 ? "" : "s"}`,
+        hotelCount > 0 ? `${hotelCount} hotel${hotelCount === 1 ? "" : "s"}` : null,
+        skippedDuplicates > 0 ? `${skippedDuplicates} duplicate${skippedDuplicates === 1 ? "" : "s"} skipped` : null,
+      ].filter(Boolean);
+      setToast(`${parts.join(" · ")} — added to your trip.`);
+    },
+    [queueMutation, setToast],
+  );
+
+  const commitScannedReservationsToTrip = useCallback(
+    async (args: {
+      targetTripId: string | null;
+      newReservations: Reservation[];
+      createTripMeta?: ReturnType<typeof inferImportedTripMeta>;
+      scanKind?: "pdf" | "image";
+    }): Promise<{ ok: boolean; addedReservations: Reservation[]; skippedDuplicates: number }> => {
+      const { targetTripId, newReservations, createTripMeta, scanKind } = args;
+      const targetTrip = targetTripId ? trips.find((trip) => trip.id === targetTripId) ?? null : null;
+      const existingReservations =
+        targetTripId && targetTripId === activeTripId
+          ? reservations
+          : (targetTrip?.reservations ?? []);
+      const addedReservations: Reservation[] = [];
+      let skippedDuplicates = 0;
+      for (const candidate of newReservations) {
+        const duplicateReservation = [...existingReservations, ...addedReservations].find((reservation) =>
+          isDuplicateReservation(reservation, candidate),
+        );
+        if (duplicateReservation) {
+          skippedDuplicates += 1;
+          continue;
+        }
+        addedReservations.push(candidate);
+      }
+      if (addedReservations.length === 0) {
+        setToast(
+          skippedDuplicates > 0
+            ? "Everything on this document is already on that trip."
+            : "Could not add any bookings from this file.",
+        );
+        return { ok: false, addedReservations: [], skippedDuplicates };
+      }
+
+      pushUndoSnapshot("Ticket scan added to trip");
+      const nextReservations = [...addedReservations, ...existingReservations];
+
+      try {
+        if (!targetTripId && createTripMeta) {
+          const createResponse = await fetch(TRIP_API_ROUTE, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              setActive: true,
+              trip: {
+                name: createTripMeta.name,
+                destination: createTripMeta.destination,
+                startDate: createTripMeta.startDate,
+                endDate: createTripMeta.endDate,
+                stage: "readiness",
+                reservations: nextReservations,
+              },
+            }),
+          });
+          const createPayload = (await createResponse.json()) as {
+            error?: string;
+            activeTripId?: string | null;
+            trip?: { id?: string };
+            trips?: unknown[];
+            activeTrip?: unknown;
+          };
+          if (!createResponse.ok) {
+            throw new Error(createPayload.error ?? "Could not create a trip for your import.");
+          }
+          applyServerTripsSnapshot(createPayload);
+        } else if (targetTripId) {
+          if (targetTripId !== activeTripId) {
+            const switchResponse = await fetch(TRIP_API_ROUTE, {
+              method: "PUT",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "set-active",
+                id: targetTripId,
+              }),
+            });
+            if (!switchResponse.ok) {
+              throw new Error("Could not switch to the selected trip.");
+            }
+          }
+          const updateResponse = await fetch(TRIP_API_ROUTE, {
+            method: "PUT",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "update",
+              id: targetTripId,
+              patch: { reservations: nextReservations },
+            }),
+          });
+          if (!updateResponse.ok) {
+            const updatePayload = (await updateResponse.json()) as { error?: string };
+            throw new Error(updatePayload.error ?? "Could not save scanned reservation to your trip.");
+          }
+          const updatePayload = (await updateResponse.json()) as {
+            trips?: unknown[];
+            activeTripId?: string | null;
+            activeTrip?: unknown;
+          };
+          applyServerTripsSnapshot(updatePayload);
+          const nextActiveTrip = normalizeManagedTrip(updatePayload.activeTrip);
+          if (nextActiveTrip) {
+            applyManagedTripToState(nextActiveTrip, { resetHighlight: true });
+          } else {
+            setReservations(nextReservations);
+            setTrips((previous) =>
+              previous.map((trip) =>
+                trip.id === targetTripId ? { ...trip, reservations: nextReservations } : trip,
+              ),
+            );
+          }
+        } else {
+          throw new Error("No trip selected for this import.");
+        }
+      } catch (error) {
+        setToast(error instanceof Error ? error.message : "Could not save scanned reservation to your trip.");
+        return { ok: false, addedReservations: [], skippedDuplicates };
+      }
+
+      finishTicketImportFeedback(addedReservations, scanKind, skippedDuplicates);
+      return { ok: true, addedReservations, skippedDuplicates };
+    },
+    [
+      activeTripId,
+      applyManagedTripToState,
+      applyServerTripsSnapshot,
+      finishTicketImportFeedback,
+      pushUndoSnapshot,
+      reservations,
+      setToast,
+      trips,
+    ],
+  );
+
   const handleTicketScanUpload = useCallback(
     async (file: File): Promise<void> => {
       if (ticketScanBusy) {
@@ -6247,21 +6447,12 @@ export default function TravelAssistantPage() {
           ),
         );
 
-        const newReservations: Reservation[] = [];
-        let skippedDuplicates = 0;
-        for (const scannedDraft of preparedDrafts) {
+        const newReservations: Reservation[] = preparedDrafts.map((scannedDraft) => {
           const pricedDraft = applyAcceptedReservationPricing(scannedDraft);
-          const duplicateReservation = [...reservations, ...newReservations].find((reservation) =>
-            isDuplicateReservation(reservation, pricedDraft),
-          );
-          if (duplicateReservation) {
-            skippedDuplicates += 1;
-            continue;
-          }
-          newReservations.push({
+          return {
             ...pricedDraft,
             id: nextId("res"),
-            source: "imported",
+            source: "imported" as const,
             sourceEmailSubject: `Scanned ticket: ${file.name || "image upload"}`,
             flightNumber: pricedDraft.flightNumber ?? "",
             flightAirline: pricedDraft.flightAirline ?? pricedDraft.provider,
@@ -6269,125 +6460,58 @@ export default function TravelAssistantPage() {
             flightDepartureAirport: pricedDraft.flightDepartureAirport ?? "",
             flightArrivalAirport: pricedDraft.flightArrivalAirport ?? "",
             flightDepartureTime: pricedDraft.flightDepartureTime ?? pricedDraft.localTime,
-          });
-        }
+          };
+        });
 
         if (newReservations.length === 0) {
-          setToast(
-            skippedDuplicates > 0
-              ? "Everything on this document is already on your trip."
-              : "Could not read any bookings from this file.",
-          );
+          setToast("Could not read any bookings from this file.");
           return;
         }
 
-        pushUndoSnapshot("Ticket scan added to trip");
-        const nextReservations = [...newReservations, ...reservations];
-        setReservations(nextReservations);
-        let targetTripId = activeTripId ?? trips[0]?.id ?? null;
-        if (!targetTripId) {
-          const tripMeta = inferImportedTripMeta(newReservations);
-          try {
-            const createResponse = await fetch(TRIP_API_ROUTE, {
-              method: "POST",
-              credentials: "include",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                setActive: true,
-                trip: {
-                  name: tripMeta.name,
-                  destination: tripMeta.destination,
-                  startDate: tripMeta.startDate,
-                  endDate: tripMeta.endDate,
-                  stage: "readiness",
-                  reservations: nextReservations,
-                },
-              }),
-            });
-            const createPayload = (await createResponse.json()) as {
-              error?: string;
-              activeTripId?: string | null;
-              trip?: { id?: string };
-              trips?: unknown[];
-            };
-            if (!createResponse.ok) {
-              throw new Error(createPayload.error ?? "Could not create a trip for your import.");
-            }
-            applyServerTripsSnapshot(createPayload);
-            targetTripId = createPayload.activeTripId ?? createPayload.trip?.id ?? null;
-            if (targetTripId) {
-              setActiveTripId(targetTripId);
-            }
-          } catch (createError) {
-            setToast(
-              createError instanceof Error
-                ? createError.message
-                : "Flights imported locally but could not save to your trip.",
-            );
-          }
-        } else {
-          setTrips((previous) =>
-            previous.map((trip) =>
-              trip.id === targetTripId ? { ...trip, reservations: nextReservations } : trip,
-            ),
-          );
-          try {
-            const updateResponse = await fetch(TRIP_API_ROUTE, {
-              method: "PUT",
-              credentials: "include",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "update",
-                id: targetTripId,
-                patch: { reservations: nextReservations },
-              }),
-            });
-            if (!updateResponse.ok) {
-              const updatePayload = (await updateResponse.json()) as { error?: string };
-              throw new Error(updatePayload.error ?? "Could not save scanned reservation to your trip.");
-            }
-            applyServerTripsSnapshot((await updateResponse.json()) as { trips?: unknown[]; activeTripId?: string | null });
-          } catch (updateError) {
-            setToast(
-              updateError instanceof Error
-                ? updateError.message
-                : "Could not save scanned reservation to your trip.",
-            );
-          }
-        }
-        for (const reservation of newReservations) {
-          queueMutation("Ticket scan added to live trip.", {
-            key: "ticket-scan-import",
-            fingerprint: `ticket-scan:${reservation.id}`,
-          });
-        }
-        setFlightLookupError(null);
-        setFlightLookupBusy(false);
-        setConsumerTab("book");
-        setBookSubTab(newReservations.some((r) => r.type === "flight") ? "flights" : "hotels");
-        const firstAdded = newReservations[0]!;
-        setPostBookingConfirmation({
-          kind: firstAdded.type === "hotel" ? "hotel" : firstAdded.type === "flight" ? "flight" : "import",
-          title:
-            newReservations.length === 1
-              ? `${firstAdded.type === "hotel" ? "Hotel" : firstAdded.type === "flight" ? "Flight" : "Booking"} added`
-              : `${newReservations.length} bookings added`,
-          confirmationCode: firstAdded.confirmationCode?.trim() || undefined,
-          detail:
-            newReservations.length === 1
-              ? `${firstAdded.provider || firstAdded.title} is on your timeline.`
-              : `${newReservations.filter((r) => r.type === "flight").length} flight(s) · ${newReservations.filter((r) => r.type === "hotel").length} hotel(s) from your scan.`,
-          syncedToTrip: true,
+        const tripRows: ImportTargetTripRow[] = trips.map((trip) => ({
+          id: trip.id,
+          name: trip.name,
+          destination: trip.destination,
+          startDate: trip.startDate,
+          endDate: trip.endDate,
+          reservations: trip.reservations,
+        }));
+        const resolution = resolveImportTargetTrip({
+          trips: tripRows,
+          draftDates: draftDatesFromReservations(newReservations),
+          activeTripId,
+          reservations: newReservations,
         });
-        const flightCount = newReservations.filter((r) => r.type === "flight").length;
-        const hotelCount = newReservations.filter((r) => r.type === "hotel").length;
-        const parts = [
-          payload.scanKind === "pdf" ? "PDF read" : "Ticket scanned",
-          `${flightCount} flight${flightCount === 1 ? "" : "s"}`,
-          hotelCount > 0 ? `${hotelCount} hotel${hotelCount === 1 ? "" : "s"}` : null,
-          skippedDuplicates > 0 ? `${skippedDuplicates} duplicate${skippedDuplicates === 1 ? "" : "s"} skipped` : null,
-        ].filter(Boolean);
-        setToast(`${parts.join(" · ")} — added to your trip.`);
+
+        if (resolution.kind === "certain") {
+          await commitScannedReservationsToTrip({
+            targetTripId: resolution.tripId,
+            newReservations,
+            scanKind: payload.scanKind,
+          });
+          return;
+        }
+
+        if (resolution.kind === "create") {
+          await commitScannedReservationsToTrip({
+            targetTripId: null,
+            newReservations,
+            createTripMeta: resolution.inferredMeta,
+            scanKind: payload.scanKind,
+          });
+          return;
+        }
+
+        setPendingTicketImport({
+          fileName: file.name || "upload",
+          scanKind: payload.scanKind,
+          newReservations,
+          skippedDuplicates: 0,
+          inferredMeta: resolution.inferredMeta,
+          reason: resolution.reason,
+          candidates: resolution.candidates,
+        });
+        setImportTripPickerOpen(true);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Ticket scan failed.";
         setToast(message);
@@ -6395,8 +6519,58 @@ export default function TravelAssistantPage() {
         setTicketScanBusy(false);
       }
     },
-    [activeTripId, applyServerTripsSnapshot, pushUndoSnapshot, queueMutation, reservations, setToast, ticketScanBusy, trips],
+    [activeTripId, commitScannedReservationsToTrip, setToast, ticketScanBusy, trips],
   );
+
+  const handleImportTripPickerClose = useCallback((): void => {
+    if (importTripPickerBusy) return;
+    setImportTripPickerOpen(false);
+    setPendingTicketImport(null);
+  }, [importTripPickerBusy]);
+
+  const handleImportTripPickerSelect = useCallback(
+    async (tripId: string): Promise<void> => {
+      if (!pendingTicketImport) return;
+      setImportTripPickerBusy(true);
+      try {
+        const result = await commitScannedReservationsToTrip({
+          targetTripId: tripId,
+          newReservations: pendingTicketImport.newReservations,
+          scanKind: pendingTicketImport.scanKind,
+        });
+        if (result.ok) {
+          setImportTripPickerOpen(false);
+          setPendingTicketImport(null);
+        }
+      } finally {
+        setImportTripPickerBusy(false);
+      }
+    },
+    [commitScannedReservationsToTrip, pendingTicketImport],
+  );
+
+  const handleImportTripPickerCreate = useCallback(async (): Promise<void> => {
+    if (!pendingTicketImport) return;
+    if (!canCreateAdditionalTrips) {
+      openUpgradeModal("multi-trip", "Free includes one trip. Upgrade to add and manage multiple trips.");
+      return;
+    }
+    setImportTripPickerBusy(true);
+    try {
+      const result = await commitScannedReservationsToTrip({
+        targetTripId: null,
+        newReservations: pendingTicketImport.newReservations,
+        createTripMeta: pendingTicketImport.inferredMeta,
+        scanKind: pendingTicketImport.scanKind,
+      });
+      if (result.ok) {
+        setImportTripPickerOpen(false);
+        setPendingTicketImport(null);
+      }
+    } finally {
+      setImportTripPickerBusy(false);
+    }
+  }, [canCreateAdditionalTrips, commitScannedReservationsToTrip, openUpgradeModal, pendingTicketImport]);
 
   const handleTicketScanFileSelected = useCallback(
     (event: ChangeEvent<HTMLInputElement>): void => {
@@ -8941,6 +9115,27 @@ export default function TravelAssistantPage() {
         onCreateTrip={handleCreateTrip}
         onDeleteEmptyTrips={handleDeleteEmptyTrips}
       />
+      <ImportTripPickerModal
+        open={importTripPickerOpen}
+        fileLabel={pendingTicketImport?.fileName ?? "upload"}
+        bookingCount={pendingTicketImport?.newReservations.length ?? 0}
+        candidates={pendingTicketImport?.candidates ?? []}
+        inferredTripName={pendingTicketImport?.inferredMeta.name ?? "Imported trip"}
+        inferredDateRange={
+          pendingTicketImport
+            ? formatTripDateRange(
+                pendingTicketImport.inferredMeta.startDate,
+                pendingTicketImport.inferredMeta.endDate,
+              )
+            : ""
+        }
+        reason={pendingTicketImport?.reason ?? "no-match"}
+        busy={importTripPickerBusy}
+        canCreateTrip={canCreateAdditionalTrips}
+        onClose={handleImportTripPickerClose}
+        onSelectTrip={handleImportTripPickerSelect}
+        onCreateTrip={handleImportTripPickerCreate}
+      />
       <TripPlanningWizard
         open={tripPlanningWizardOpen}
         forwardAddress={emptyStateForwardAddress}
@@ -9382,6 +9577,15 @@ export default function TravelAssistantPage() {
                     >
                       Set dates manually
                     </button>
+                    {trips.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => void handleCreateTrip()}
+                        className="w-full rounded-2xl border border-sky-300/30 bg-sky-400/10 py-3 text-center text-sm font-semibold text-sky-100 active:opacity-80"
+                      >
+                        + Add new trip
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => navigateToBook("flights")}
@@ -9422,6 +9626,8 @@ export default function TravelAssistantPage() {
                   router.push("/travel-assistant/live-map");
                 }}
                 onAddGroundTransport={openManualGroundTransport}
+                onCreateTrip={() => void handleCreateTrip()}
+                canCreateTrip={canCreateAdditionalTrips}
                 liveStatus={flightStatusCheckByReservationId}
               />
             )

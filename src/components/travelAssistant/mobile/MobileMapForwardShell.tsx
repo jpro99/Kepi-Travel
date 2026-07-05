@@ -401,14 +401,19 @@ export function MobileMapForwardShell({
         ) : null}
 
         {hasActiveTrip ? (
-          <div className="grid grid-cols-2 gap-3">
-            <button type="button" onClick={() => onNavigateTab("book")} className={quickActionBtn}>
-              <p className="text-[15px] font-semibold text-[var(--text-muted)]">Bookings</p>
-              <p className="mt-1 text-[19px] font-bold text-[var(--text-primary)]">Flights & hotels</p>
-            </button>
-            <button type="button" onClick={() => onNavigateTab("plan")} className={quickActionBtn}>
-              <p className="text-[15px] font-semibold text-[var(--text-muted)]">Itinerary</p>
-              <p className="mt-1 text-[19px] font-bold text-[var(--text-primary)]">Plan your days</p>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <button type="button" onClick={() => onNavigateTab("book")} className={quickActionBtn}>
+                <p className="text-[15px] font-semibold text-[var(--text-muted)]">Bookings</p>
+                <p className="mt-1 text-[19px] font-bold text-[var(--text-primary)]">Flights & hotels</p>
+              </button>
+              <button type="button" onClick={() => onNavigateTab("plan")} className={quickActionBtn}>
+                <p className="text-[15px] font-semibold text-[var(--text-muted)]">Itinerary</p>
+                <p className="mt-1 text-[19px] font-bold text-[var(--text-primary)]">Plan your days</p>
+              </button>
+            </div>
+            <button type="button" onClick={onCreateTrip} className={juicyBtnSecondary}>
+              + Add new trip
             </button>
           </div>
         ) : null}

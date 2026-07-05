@@ -56,6 +56,8 @@ interface DesktopTripHomeViewProps {
   onOpenPlan: () => void;
   onOpenMap: () => void;
   onAddGroundTransport?: () => void;
+  onCreateTrip?: () => void;
+  canCreateTrip?: boolean;
   liveStatus?: Record<string, {
     flightStatus: string;
     delayMinutes: number | null;
@@ -103,6 +105,8 @@ export function DesktopTripHomeView({
   onOpenPlan,
   onOpenMap,
   onAddGroundTransport,
+  onCreateTrip,
+  canCreateTrip = true,
   liveStatus,
 }: DesktopTripHomeViewProps) {
   const transportReservations =
@@ -231,6 +235,17 @@ export function DesktopTripHomeView({
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Family map and airport mode</p>
         </button>
       </div>
+
+      {onCreateTrip ? (
+        <button
+          type="button"
+          onClick={onCreateTrip}
+          disabled={!canCreateTrip}
+          className="flex w-full min-h-[44px] items-center justify-center gap-2 rounded-2xl border border-dashed border-sky-300/80 bg-sky-50/60 px-4 py-3 text-sm font-semibold text-sky-900 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-sky-500/30 dark:bg-sky-950/20 dark:text-sky-100 dark:hover:bg-sky-950/40"
+        >
+          + Add new trip
+        </button>
+      ) : null}
     </section>
   );
 }
