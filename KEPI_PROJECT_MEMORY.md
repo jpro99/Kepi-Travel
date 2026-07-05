@@ -3,14 +3,14 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-06-15
+Last updated: 2026-07-05
 
 ---
 
 ## Jeff — how to work with him (mandatory)
 
 - **Discuss first, code second.** If he asks "what would you fix?" or "does this match?" or "tell me before you change anything" — give analysis and a short plan only. Wait for explicit approval before editing — unless he clearly says "fix it now" / "go ahead" / "build it."
-- **Auto-push after build (Jeff, 2026-06-15):** When you implement code and `npm run lint` + `npm run build` pass, **commit and push to `main` immediately** — do **not** ask "want me to push?" Production is kepitravel.com via Vercel on push to main.
+- **Auto-push + promote (Jeff, 2026-07-05):** When you implement code and `npm run lint` + `npm run build` pass, **commit, push to `main`, and promote production in the same session** — never ask "want me to push?" or "should I deploy?" If Vercel Production lags behind `main`, run `npx vercel --prod --yes` after push. Production is kepitravel.com. Stale Ready deploys waste Jeff's credits.
 - **Do not burn credits** on unapproved refactors or "helpful" extra changes.
 - **Match his eye, not a generic template.** Hotels (Stays) tab on mobile is the reference for clean mobile trip UI: trip name → Flights/Hotels picker → map → list. No blue route banner strip on Flights (he removed it — "Ontario to Ontario" was wrong and not clean). Hotels stay as-is with no blue hero.
 - **Flights and Stays must feel the same** — same structure, card style, and chrome. Mobile Book now has search launchers + CTAs on both tabs (2026-06-15).
