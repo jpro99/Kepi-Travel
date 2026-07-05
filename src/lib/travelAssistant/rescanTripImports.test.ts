@@ -5,7 +5,7 @@ import {
   canRescanReservation,
   countRescannableReservations,
   mergeRescanIntoExisting,
-} from "@/lib/travelAssistant/rescanTripImports";
+} from "@/lib/travelAssistant/rescanTripImportsShared";
 
 function sampleReservation(overrides: Partial<SessionReservation> = {}): SessionReservation {
   return {
