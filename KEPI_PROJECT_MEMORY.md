@@ -170,8 +170,17 @@ Project skills live in `.cursor/skills/` — these are **playbooks for Cursor ag
 | **Flight** | `.cursor/skills/kepi-flight-bot/SKILL.md` | `bot-deck/memory/flight.md` |
 | **Airport** | `.cursor/skills/kepi-airport-bot/SKILL.md` | `bot-deck/memory/airport.md` |
 | **Map** | `.cursor/skills/kepi-map-bot/SKILL.md` | `bot-deck/memory/map.md` |
-| **Points** | `.cursor/skills/kepi-points-bot/SKILL.md` | — |
-| **Card** | `.cursor/skills/kepi-card-bot/SKILL.md` | — |
+| **Points** | `.cursor/skills/kepi-points-bot/SKILL.md` | `bot-deck/memory/points.md` |
+| **Card** | `.cursor/skills/kepi-card-bot/SKILL.md` | `bot-deck/memory/points.md` (shared) |
+| **Weekly Audit** | `.cursor/skills/kepi-weekly-audit/SKILL.md` | `bot-deck/memory/conductor.md` § Weekly Audit |
+
+## Weekly Audit (product loop)
+
+- **Skill:** `.cursor/skills/kepi-weekly-audit/SKILL.md` — critique only, no code
+- **Rotation:** Week 1 ingestion → 2 trip-state → 3 Travel Fit + points/card → 4 UX/competitive (repeat)
+- **Reports:** `bot-deck/memory/audits/`
+- **Next run:** Week 2 (after 2026-07-06 Week 1)
+- Jeff approves ranked item → Conductor executes
 
 ## Travel Fit (product)
 
@@ -227,5 +236,6 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 | 2026-06-15 | **Auto-push:** after lint+build pass, commit+push main without asking — Vercel → kepitravel.com |
 | 2026-06-15 | **Home+Plan build order** phases 2–4: dedupeConsumerReservations, TripHealthStrip, pricing wired on Home/Plan |
 | 2026-06-15 | **Home tab product law:** unified nav Home\|Plan\|Book\|Map\|More; Home = command center + route flow (not flat flight list); Book owns inventory; premium gaps documented |
+| 2026-07-06 | **Weekly Audit:** skill + Week 1 ingestion report; Week 3 includes points/card/lounge; rotation in conductor.md |
 | 2026-06-15 | Screenshot triage rule + Polignano offshore pin fix (`isLikelyOffshorePin`) |
 | 2026-06-15 | Created memory file; documented Duffel emails sent, LiteAPI key set, Travelpayouts Drive skipped, domain bot skills |
