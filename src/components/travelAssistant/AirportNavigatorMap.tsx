@@ -3,8 +3,11 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@/lib/maplibreCspWorker";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AirportLayout, ComputedRoute, PoiDefinition, SnappedPosition, TravelerSecurityCredentials } from "@/lib/airportNav/types";
+import type { AirportLayout, ComputedRoute, GraphEdge, PoiDefinition, SnappedPosition, TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
+import type { JourneyWaypointEvent, NavTimingCalibrationStore } from "@/lib/airportNav/navTimingCalibration";
+import { loadNavTimingCalibrationStore, recordJourneyWaypointPair } from "@/lib/airportNav/navJourneyTelemetry";
+import { loadCachedAirportLayout } from "@/lib/travelAssistant/syncItineraryOfflineAssets";
 import { AirportNavigatorFallback } from "@/components/travelAssistant/AirportNavigatorFallback";
 import {
   initialJourneyState,
@@ -70,6 +73,16 @@ const COLOR = {
 const PATH_DIM = "#3b4f6b";
 const PATH_WARM = "#f4c95d";
 const PATH_WARM_BRIGHT = "#ffe29a";
+
+function findEdgeBetween(layout: AirportLayout, fromId: string, toId: string): GraphEdge | null {
+  return (
+    layout.edges.find(
+      (edge) =>
+        (edge.from === fromId && edge.to === toId) ||
+        (edge.bidirectional && edge.from === toId && edge.to === fromId),
+    ) ?? null
+  );
+}
 
 const POI_ICON: Record<PoiDefinition["category"], string> = {
   gate: "🛫",
@@ -165,6 +178,9 @@ export function AirportNavigatorMap({
 
   // Journey machine (single source of truth for "where in the journey")
   const journeyRef = useRef(initialJourneyState(Date.now()));
+  const lastWaypointRef = useRef<JourneyWaypointEvent | null>(null);
+  const activeRouteRef = useRef<ComputedRoute | null>(null);
+  const [navCalibration, setNavCalibration] = useState<NavTimingCalibrationStore | null>(null);
   const [journeyPhase, setJourneyPhase] = useState<JourneyPhaseId>("landside");
   const [journeyPrompt, setJourneyPrompt] = useState<JourneyPrompt | null>(null);
   const [statusLine, setStatusLine] = useState<string | null>(null);
@@ -255,11 +271,20 @@ export function AirportNavigatorMap({
       .catch(() => null);
   }, []);
 
+  useEffect(() => {
+    void loadNavTimingCalibrationStore().then(setNavCalibration).catch(() => null);
+  }, []);
+
+  useEffect(() => {
+    activeRouteRef.current = activeRoute;
+  }, [activeRoute]);
+
   /* ── Journey event processing ───────────────────────────────────────── */
   const processJourneyEvent = useCallback(
     (event: JourneyEvent) => {
       if (!layout) return;
-      const result = stepJourney(layout, journeyRef.current, event);
+      const prevState = journeyRef.current;
+      const result = stepJourney(layout, prevState, event);
       journeyRef.current = result.state;
       setJourneyPhase(result.state.phase);
       if (result.prompt) setJourneyPrompt(result.prompt);
@@ -269,17 +294,56 @@ export function AirportNavigatorMap({
         sayAndShow(result.announce);
       }
       if (result.suggestObjective) setObjective(result.suggestObjective);
+
+      const nextNodeId = result.state.lastNodeId;
+      if (
+        nextNodeId &&
+        (nextNodeId !== prevState.lastNodeId || result.state.phase !== prevState.phase)
+      ) {
+        const edge =
+          prevState.lastNodeId && nextNodeId
+            ? findEdgeBetween(layout, prevState.lastNodeId, nextNodeId)
+            : null;
+        const nextWaypoint: JourneyWaypointEvent = {
+          id: `${iata}:${nextNodeId}:${result.state.phase}:${Date.now()}`,
+          tripId: iata,
+          airportIata: iata,
+          nodeId: nextNodeId,
+          edgeId: edge?.id,
+          phase: result.state.phase,
+          at: Date.now(),
+        };
+        void recordJourneyWaypointPair({
+          previous: lastWaypointRef.current,
+          next: nextWaypoint,
+          curatedEdgeSeconds: edge?.traverseSeconds,
+          securityLaneId:
+            prevState.phase === "security" && result.state.phase !== "security"
+              ? activeRouteRef.current?.laneUsed
+              : undefined,
+        })
+          .then(setNavCalibration)
+          .catch(() => null);
+        lastWaypointRef.current = nextWaypoint;
+      }
     },
-    [layout, sayAndShow],
+    [iata, layout, sayAndShow],
   );
 
-  /* ── Load curated layout ────────────────────────────────────────────── */
+  /* ── Load curated layout (IndexedDB cache first, then API) ──────────── */
   useEffect(() => {
     let cancelled = false;
     setLayout(null);
     setLayoutStatus("loading");
-    void fetch(`/api/airport-nav/${encodeURIComponent(iata)}/layout`)
-      .then(async (res) => {
+    void (async () => {
+      const cached = await loadCachedAirportLayout(iata);
+      if (cached && !cancelled) {
+        setLayout(cached);
+        setLayoutStatus("ready");
+        return;
+      }
+      try {
+        const res = await fetch(`/api/airport-nav/${encodeURIComponent(iata)}/layout`);
         if (res.status === 404) {
           if (!cancelled) setLayoutStatus("unsupported");
           return;
@@ -290,10 +354,18 @@ export function AirportNavigatorMap({
           setLayout(data);
           setLayoutStatus("ready");
         }
-      })
-      .catch(() => {
-        if (!cancelled) setLayoutStatus("error");
-      });
+      } catch {
+        const fallback = await loadCachedAirportLayout(iata);
+        if (!cancelled) {
+          if (fallback) {
+            setLayout(fallback);
+            setLayoutStatus("ready");
+          } else {
+            setLayoutStatus("error");
+          }
+        }
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -336,6 +408,7 @@ export function AirportNavigatorMap({
         fromNodeId: originNodeId,
         toPoiId: poiId,
         credentials,
+        calibration: navCalibration ?? undefined,
         profile: sprintRef.current ? "sprint" : "default",
       });
       setActiveRoute(route);
@@ -348,7 +421,7 @@ export function AirportNavigatorMap({
         sayAndShow(`${targetPoi.name} — ${fmtMins(route.totalSeconds)}. ${first ? first.text : ""}`);
       }
     },
-    [layout, originNodeId, credentials, sayAndShow],
+    [layout, originNodeId, credentials, navCalibration, sayAndShow],
   );
 
   const endRoute = useCallback(() => {
@@ -371,12 +444,18 @@ export function AirportNavigatorMap({
     const targetPoi = layout.pois.find((poi) => poi.id === pendingPoiId);
     setPendingPoiId(null);
     if (!targetPoi) return;
-    const route = computeRoute({ layout, fromNodeId: originNodeId, toPoiId: targetPoi.id, credentials });
+    const route = computeRoute({
+      layout,
+      fromNodeId: originNodeId,
+      toPoiId: targetPoi.id,
+      credentials,
+      calibration: navCalibration ?? undefined,
+    });
     setActiveRoute(route);
     setActiveDestName(route ? targetPoi.name : null);
     lastInstructionIdxRef.current = -1;
     setCurrentStepIdx(0);
-  }, [credentials, pendingPoiId, layout, originNodeId]);
+  }, [credentials, pendingPoiId, layout, originNodeId, navCalibration]);
 
   // Re-route from new position as the traveler moves
   useEffect(() => {
@@ -387,10 +466,11 @@ export function AirportNavigatorMap({
       fromNodeId: originNodeId,
       toPoiId: activeRoute.toPoiId,
       credentials,
+      calibration: navCalibration ?? undefined,
       profile: sprintRef.current ? "sprint" : "default",
     });
     if (route) setActiveRoute(route);
-  }, [originNodeId, activeRoute, layout, credentials, sprint]);
+  }, [originNodeId, activeRoute, layout, credentials, navCalibration, sprint]);
 
   /* ── Journey: position + clock events ───────────────────────────────── */
   useEffect(() => {
@@ -450,9 +530,10 @@ export function AirportNavigatorMap({
       fromNodeId: originNodeId,
       toPoiId: gatePoi.id,
       credentials,
+      calibration: navCalibration ?? undefined,
       profile: sprint ? "sprint" : "default",
     });
-  }, [gatePoi, layout, originNodeId, credentials, sprint]);
+  }, [gatePoi, layout, originNodeId, credentials, navCalibration, sprint]);
 
   const pressure: BoardingPressure | null = useMemo(() => {
     if (!gateRoute || minutesRounded > 600) return null;
@@ -493,7 +574,13 @@ export function AirportNavigatorMap({
     if (loungePois.length === 0) return null;
     const scored = loungePois
       .map((poi) => {
-        const route = computeRoute({ layout, fromNodeId: originNodeId, toPoiId: poi.id, credentials });
+        const route = computeRoute({
+          layout,
+          fromNodeId: originNodeId,
+          toPoiId: poi.id,
+          credentials,
+          calibration: navCalibration ?? undefined,
+        });
         return route
           ? { poi, seconds: route.totalSeconds, eligible: loungeIsEligible(poi.name, eligibleLoungeNames) }
           : null;
@@ -501,7 +588,7 @@ export function AirportNavigatorMap({
       .filter((entry): entry is { poi: PoiDefinition; seconds: number; eligible: boolean } => entry !== null)
       .sort((a, b) => Number(b.eligible) - Number(a.eligible) || a.seconds - b.seconds);
     return scored[0]?.poi ?? null;
-  }, [layout, originNodeId, credentials, eligibleLoungeNames]);
+  }, [layout, originNodeId, credentials, navCalibration, eligibleLoungeNames]);
 
   const securityPoi = useCallback((): PoiDefinition | null => {
     if (!layout) return null;
@@ -651,7 +738,13 @@ export function AirportNavigatorMap({
             return;
           }
           if (gatePoi && layout && originNodeId) {
-            const route = computeRoute({ layout, fromNodeId: originNodeId, toPoiId: gatePoi.id, credentials });
+            const route = computeRoute({
+              layout,
+              fromNodeId: originNodeId,
+              toPoiId: gatePoi.id,
+              credentials,
+              calibration: navCalibration ?? undefined,
+            });
             if (route) {
               sayAndShow(`About ${fmtMins(route.totalSeconds)} to ${gateCode ? `Gate ${gateCode.toUpperCase()}` : "your gate"}.`);
               return;

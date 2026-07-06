@@ -9,6 +9,7 @@ import {
   saveOfflineTravelKit,
   type OfflineTravelKit,
 } from "@/lib/travelAssistant/offlineTravelKit";
+import { syncItineraryOfflineAssets } from "@/lib/travelAssistant/syncItineraryOfflineAssets";
 import type { TripAirportTransport } from "@/lib/travelAssistant/tripStore";
 
 interface UseOfflineTravelKitSyncArgs {
@@ -65,6 +66,10 @@ export function useOfflineTravelKitSync(args: UseOfflineTravelKitSyncArgs): Offl
         hotelNotebookNote: args.hotelNotebookNote,
       });
       await saveOfflineTravelKit(nextKit);
+      await syncItineraryOfflineAssets({
+        tripId: args.tripId,
+        reservations: args.reservations,
+      });
       setKit(nextKit);
     } finally {
       setSyncing(false);

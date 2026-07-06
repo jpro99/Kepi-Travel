@@ -121,6 +121,9 @@ These are agent playbooks, not autonomous runtime bots. Jeff instructs the condu
 
 ## Fix log
 
+### 2026-07-06 (Session 3)
+- **Offline nav + personalization (5-prompt batch):** itinerary-scoped offline cache (48h prefetch, leg-based eviction), pilot offline city GeoJSON bundles + Live Map offline fallback, airport nav walk/security timing calibration from journey telemetry, two-stage post-booking briefing card in Airport Mode, input-style personalization (genome + Plan tab suggestion — suggest never silent apply). Design laws D14–D18 + law tests in `test:laws`.
+
 ### 2026-07-06 (Session 2)
 - **ML readiness scaffolding** — parser version, correction triplets on review accept, active-learning review queue sort, held-out parse fixtures, few-shot AI fallback, suggestion outcome stub on Trip health.
 - **CI typecheck fix:** `app-sitter/regression-qa-pass2.spec.ts` was written without TypeScript types; strict `tsc` failed in the ci-review workflow while `npm run build` passed. All `app-sitter/*.spec.ts` files must use explicit types (`Page`, typed arrays). Scratch folders `files-from-claude*` excluded from root tsconfig.

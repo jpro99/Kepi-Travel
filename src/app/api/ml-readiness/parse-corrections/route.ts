@@ -123,6 +123,19 @@ export async function POST(req: Request): Promise<NextResponse> {
     await recordCalibrationFromCorrection(record, { userId });
   }
 
+  if (typeof body?.sourceChannel === "string") {
+    const { getTravelerGenome, saveTravelerGenome } = await import("@/lib/traveler/travelerGenomeStore");
+    const { mergeInputStyleIntoGenome, recordInputStyleEvent } = await import(
+      "@/lib/travelAssistant/inputStyleProfile"
+    );
+    const genome = await getTravelerGenome(userId);
+    const profile = recordInputStyleEvent(genome.inputStyle, {
+      channel: body.sourceChannel,
+      corrected: record.outcome === "edited-then-accepted",
+    });
+    await saveTravelerGenome(mergeInputStyleIntoGenome(genome, profile), userId);
+  }
+
   routeLogger.info("Parse correction recorded.", {
     reviewItemId,
     changedFields: record.changedFields,

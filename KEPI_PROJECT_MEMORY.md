@@ -3,7 +3,7 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-06
+Last updated: 2026-07-06 (offline nav + personalization batch)
 
 ---
 
@@ -19,6 +19,18 @@ Kepi does **not** train a custom neural net in-product. ML readiness means:
 6. **Suggestion outcomes** — stub logging (`impression`/`click`/etc.) for future bandits; Trip health missing-pricing CTA wired first.
 
 Later (optional): embedding retrieval, ranker, bandit — only after correction volume justifies it.
+
+---
+
+## Offline nav + personalization (Jeff approved 2026-07-06)
+
+Five Claude-prompt features shipped together:
+
+1. **Itinerary-scoped offline cache (D14)** — `itineraryOfflineCache.ts` + `syncItineraryOfflineAssets` prefetch airport layouts and pilot city GeoJSON bundles 48h before need; evict only when IATA/city key leaves remaining trip legs. Wired via `useOfflineTravelKitSync`.
+2. **Offline city map fallback (D15)** — Pilot bundles (`munich-de`, `puglia-it`, `rome-it`) in `offlineCityMapBundle.ts`; Live Map uses inline GeoJSON style when offline.
+3. **Nav timing calibration (D16)** — `navTimingCalibration.ts` aggregates walk/security samples from airport navigator journey events; min 5/10 samples before overriding curated edge times.
+4. **Two-stage post-booking briefing (D17)** — `postBookingBriefing.ts` + `PostBookingBriefingCard` in Airport Mode: eligibility before gate/check-in, actionable guidance after.
+5. **Input-style personalization (D18)** — `inputStyleProfile.ts` on traveler genome; `/api/traveler/input-style`; suggestion card on Plan tab; corrections from parse-review POST update channel stats. **Suggest only — never silent apply.**
 
 ---
 
@@ -240,6 +252,7 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 
 | Date | Note |
 |------|------|
+| 2026-07-06 | **Offline nav + personalization:** itinerary-scoped IndexedDB prefetch (airport layouts + pilot city GeoJSON), Live Map offline fallback, nav walk/security calibration, two-stage post-booking briefing in Airport Mode, input-style suggestion on Plan tab. Design laws D14–D18. |
 | 2026-07-06 | **Parsing reliability:** confidence/plausibility gate now blocks low-confidence or implausible forwarded reservations from auto-becoming trip fact (`evaluateForwardedReservationGate`); `drainForwardReviewQueue` no longer silently auto-promotes gated review items. Added dinner/tour/excursion detection to `emailForwardParser` (previously misclassified as "ride"). `/api/ocr` (Expense Report receipt scan) was a fake stub — now returns an honest "not available" instead of fabricated data; real OCR deferred. See `KEPI_DESIGN_LAW.md` D10–D13. |
 | 2026-06-15 | **G11 post-booking + Plan transport:** confirmation card replaces success toasts; hotel save-from-search card; inter-city transport prompts on Plan tab |
 | 2026-06-15 | **Plan calendar day editing:** tap day stays on calendar; inline Plan this day editor; plan lines preview on month cells; timeline via explicit button only |

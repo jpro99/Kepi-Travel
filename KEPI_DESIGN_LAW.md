@@ -301,6 +301,31 @@ Deterministic checks (real 3-letter airport codes, arrival ≠ departure, dates 
 **D13 — No feature may fabricate data on failure**  
 An API route that cannot perform its real function (e.g. no OCR engine wired up) must return an explicit error/"not available" response — never a hardcoded success payload that looks like real extracted data. Silent fake success is a worse failure mode than a visible error.
 
+**D14 — Itinerary-scoped offline prefetch**  
+Airport layouts and city map bundles prefetch within **48h** of when the traveler needs them. Evict cached assets only when their IATA/city key no longer appears on any **remaining** leg of the same trip — never wipe the whole cache on a single leg completion.
+
+**Test:** `src/lib/travelAssistant/itineraryOfflineCache.test.ts`
+
+**D15 — Offline city map bundles are CSP-safe**  
+When network raster tiles are unavailable, Live Map falls back to inline GeoJSON city bundles (pilot cities) built in code — not external style JSON with remote tile sources.
+
+**Test:** `src/lib/map/offlineCityMapBundle.test.ts`
+
+**D16 — Learned nav timing respects minimum samples**  
+Crowd-sourced edge walk times and security waits never override curated defaults until **≥5 walk samples** or **≥10 security samples**, with outlier trimming and plausibility gates.
+
+**Test:** `src/lib/airportNav/navTimingCalibration.test.ts`
+
+**D17 — Post-booking briefing is two-stage**  
+Before gate assignment or check-in window: show **eligibility only** (benefits on file). After gate or check-in opens: show **actionable** checkpoint and lounge guidance — never specific security lane copy before the gate is known.
+
+**Test:** `src/lib/airportNav/postBookingBriefing.test.ts`
+
+**D18 — Input-style personalization suggests, never silently applies**  
+Channel shortcuts require **≥3 attempts**, correction rate **≤25%**, and always surface as an explicit suggestion card — never auto-change import defaults without user acceptance.
+
+**Test:** `src/lib/travelAssistant/inputStyleProfile.test.ts`
+
 ---
 
 ## Test index
@@ -328,5 +353,10 @@ An API route that cannot perform its real function (e.g. no OCR engine wired up)
 | D10 | `src/lib/travelAssistant/drainForwardReviewQueue.test.ts` |
 | D11 | `src/lib/travelAssistant/reservationPlausibility.test.ts` |
 | D12 | `src/lib/travelAssistant/emailForwardParser.test.ts` |
+| D14 | `src/lib/travelAssistant/itineraryOfflineCache.test.ts` |
+| D15 | `src/lib/map/offlineCityMapBundle.test.ts` |
+| D16 | `src/lib/airportNav/navTimingCalibration.test.ts` |
+| D17 | `src/lib/airportNav/postBookingBriefing.test.ts` |
+| D18 | `src/lib/travelAssistant/inputStyleProfile.test.ts` |
 
 New laws must add a row here when a test exists.

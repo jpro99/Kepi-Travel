@@ -8,7 +8,7 @@ import { buildSharedHotelContact } from "@/lib/travelAssistant/sharedHotelInfo";
 import type { TripAirportTransport } from "@/lib/travelAssistant/tripStore";
 
 export const OFFLINE_KIT_DB_NAME = "kepi-offline";
-export const OFFLINE_KIT_DB_VERSION = 1;
+export const OFFLINE_KIT_DB_VERSION = 2;
 export const OFFLINE_KIT_STORE = "travel-kit";
 export const OFFLINE_KIT_RECORD_KEY = "active";
 
@@ -403,6 +403,9 @@ function openOfflineKitDb(): Promise<IDBDatabase> {
       const db = request.result;
       if (!db.objectStoreNames.contains(OFFLINE_KIT_STORE)) {
         db.createObjectStore(OFFLINE_KIT_STORE);
+      }
+      if (!db.objectStoreNames.contains("offline-cache")) {
+        db.createObjectStore("offline-cache");
       }
     };
     request.onsuccess = () => resolve(request.result);

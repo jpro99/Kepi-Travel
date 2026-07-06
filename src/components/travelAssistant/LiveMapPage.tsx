@@ -12,7 +12,12 @@ import {
 } from "@/lib/travelAssistant/useActiveFlight";
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
 import { buildOsmRasterFallbackStyle, directMaptilerTransformRequest, resolveLiveMapStyle, scheduleMapLoadFallback, attachMapStyleErrorFallback, type LiveMapStyleId } from "@/lib/map/maptilerClient";
+import { buildOfflineCityMapStyle } from "@/lib/map/offlineCityMapBundle";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
+import { resolveCityKeyFromLocation } from "@/lib/travelAssistant/itineraryOfflineCache";
+import { listOfflineCacheKeys } from "@/lib/travelAssistant/offlineCacheStore";
+import { loadCachedCityMapBundle } from "@/lib/travelAssistant/syncItineraryOfflineAssets";
+import { loadOfflineTravelKit } from "@/lib/travelAssistant/offlineTravelKit";
 import { resolveLiveCoordinates, resetGeolocationQualityState } from "@/lib/family/geolocationQuality";
 import { clearLocationDisplayCache, resolveLocationForMapDisplay } from "@/lib/family/locationDisplayCache";
 import { isFamilySharingActive } from "@/lib/family/locationSharingPrefs";
@@ -115,6 +120,10 @@ export function LiveMapPage() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isError, setIsError] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [isOnline, setIsOnline] = useState(true);
+  const [offlineCityStyle, setOfflineCityStyle] = useState<Record<string, unknown> | null>(null);
+  const [offlineCityCenter, setOfflineCityCenter] = useState<[number, number] | null>(null);
+  const [offlineCityZoom, setOfflineCityZoom] = useState<number | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [sharingLocation, setSharingLocation] = useState(false);
@@ -232,6 +241,36 @@ export function LiveMapPage() {
       })
       .catch(() => null);
   }, []);
+
+  useEffect(() => {
+    const updateOnline = () => setIsOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
+    updateOnline();
+    window.addEventListener("online", updateOnline);
+    window.addEventListener("offline", updateOnline);
+    return () => {
+      window.removeEventListener("online", updateOnline);
+      window.removeEventListener("offline", updateOnline);
+    };
+  }, []);
+
+  useEffect(() => {
+    void (async () => {
+      const kit = await loadOfflineTravelKit();
+      const destination = kit?.destination ?? "";
+      let cityKey = resolveCityKeyFromLocation(destination)?.cityKey ?? null;
+      if (!cityKey) {
+        const keys = await listOfflineCacheKeys();
+        const cached = keys.find((key) => key.startsWith("city-map:"));
+        cityKey = cached ? cached.replace("city-map:", "") : null;
+      }
+      if (!cityKey) return;
+      const bundle = await loadCachedCityMapBundle(cityKey);
+      if (!bundle) return;
+      setOfflineCityStyle(buildOfflineCityMapStyle(bundle));
+      setOfflineCityCenter(bundle.center);
+      setOfflineCityZoom(bundle.defaultZoom);
+    })().catch(() => null);
+  }, [activeTripId]);
 
   useEffect(() => {
     void fetch("/api/trips", { cache: "no-store" })
@@ -508,13 +547,29 @@ export function LiveMapPage() {
     if (!mapRef.current || !isLoaded) return;
     const key = maptilerKey.trim();
     usingOsmFallbackRef.current = !key;
+
+    if (!isOnline && offlineCityStyle) {
+      mapRef.current.setStyle(offlineCityStyle);
+      mapRef.current.once("idle", () => {
+        if (mapRef.current && offlineCityCenter && offlineCityZoom !== null) {
+          mapRef.current.flyTo({
+            center: offlineCityCenter,
+            zoom: offlineCityZoom,
+            essential: true,
+          });
+        }
+        if (mapRef.current) placeMarkers(mapRef.current);
+      });
+      return;
+    }
+
     mapRef.current.setStyle(
       key ? resolveLiveMapStyle(mapStyle, key) : buildOsmRasterFallbackStyle(),
     );
     mapRef.current.once("idle", () => {
       if (mapRef.current) placeMarkers(mapRef.current);
     });
-  }, [mapStyle, maptilerKey, isLoaded, placeMarkers]);
+  }, [mapStyle, maptilerKey, isLoaded, isOnline, offlineCityStyle, offlineCityCenter, offlineCityZoom, placeMarkers]);
 
   /* ── Re-place/move markers when locations update ── */
   useEffect(() => {

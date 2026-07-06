@@ -1,5 +1,7 @@
 "use client";
 
+import { InputStyleSuggestionCard } from "@/components/travelAssistant/InputStyleSuggestionCard";
+
 interface PlannerTabProps {
   tripName: string | null;
   destination: string | null;
@@ -132,6 +134,8 @@ export function PlannerTab({
           <p className="mt-1 break-all text-xs text-emerald-800/80 dark:text-emerald-100/70">{forwardAddress}</p>
         </button>
       </section>
+
+      <InputStyleSuggestionCard />
 
       <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="flex flex-wrap items-start justify-between gap-3">

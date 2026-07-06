@@ -20,12 +20,14 @@ import { AirportNavigatorMap } from "@/components/travelAssistant/AirportNavigat
 import type { TravelProfile } from "@/app/api/travel-profile/route";
 import { selectActiveFlight, type FlightReservation } from "@/lib/travelAssistant/useActiveFlight";
 import { evaluateLoungeEligibility } from "@/lib/airportNav/loungeRules";
+import { buildPostBookingBriefing } from "@/lib/airportNav/postBookingBriefing";
 import {
   airportCheckInGuidance,
   resolveFlightStatusTier,
 } from "@/lib/travelAssistant/syncTravelBenefits";
 import { listBenefitsForOwnedCards, hasCenturionOrPriorityPass } from "@/lib/points/cardBenefits";
 import { LoungeEntryGuide } from "@/components/travelAssistant/LoungeEntryGuide";
+import { PostBookingBriefingCard } from "@/components/travelAssistant/PostBookingBriefingCard";
 import type { LoungeEligibilityResult } from "@/lib/airportNav/types";
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -515,6 +517,29 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
   const hasPrioritySecurity = Boolean(tier?.prioritySecurity || profile?.tsa_precheck || profile?.global_entry);
   const hasPrecheck = Boolean(profile?.tsa_precheck || profile?.global_entry);
 
+  const postBookingBriefing = useMemo(() => {
+    if (!activeFlight) return null;
+    const flight = activeFlight.f;
+    return buildPostBookingBriefing({
+      flight: {
+        id: flight.id,
+        airline: flight.flightAirline ?? flight.provider,
+        flightNumber: flight.flightNumber,
+        departureAirport: flight.flightDepartureAirport,
+        arrivalAirport: flight.flightArrivalAirport,
+        departureTimeUtcMs: activeFlight.utcMs,
+        gate: flight.flightDepartureGate,
+        terminal: flight.flightDepartureTerminal,
+      },
+      credentials: {
+        tsaPreCheck: hasPrecheck,
+        clear: Boolean(profile?.clear),
+      },
+      loungeResults: cardLoungeEligibility,
+      nowMs: now,
+    });
+  }, [activeFlight, profile?.clear, cardLoungeEligibility, hasPrecheck, now]);
+
   if (!activeFlight) return null;
 
   const { f, utcMs: deptUtcMs } = activeFlight;
@@ -724,6 +749,8 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
           </div>
         </div>
       )}
+
+      {postBookingBriefing && <PostBookingBriefingCard briefing={postBookingBriefing} />}
 
       {/* Status badge + lounge info */}
       {(tier || cardLoungeEligibility.length > 0 || cardBenefitLines.length > 0) && (
