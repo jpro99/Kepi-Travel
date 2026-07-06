@@ -11,6 +11,7 @@ import { MobilePlanNotebook } from "@/components/travelAssistant/mobile/MobilePl
 import { MobileSettingsView } from "@/components/travelAssistant/mobile/MobileSettingsView";
 import { TripMemoriesPanel } from "@/components/travelAssistant/TripMemoriesPanel";
 import { PointsTravelProfileCard } from "@/components/travelAssistant/PointsTravelProfileCard";
+import { PointsMilesLearnPanel } from "@/components/travelAssistant/PointsMilesLearnPanel";
 import { TravelFitCard } from "@/components/travelAssistant/TravelFitCard";
 import { TravelStyleBadge } from "@/components/travelAssistant/TravelStyleQuiz";
 import { LoyaltyWalletSection } from "@/components/loyalty/LoyaltyWalletSection";
@@ -269,6 +270,7 @@ export function MobileMapForwardShell({
   onRefreshOfflineKit,
 }: MobileMapForwardShellProps) {
   const [planSegment, setPlanSegment] = useState<PlanSegment>("itinerary");
+  const [showPointsLearn, setShowPointsLearn] = useState(false);
   const bookSegment = bookSubTab;
   const setBookSegment = onBookSubTabChange ?? (() => {});
 
@@ -645,10 +647,26 @@ export function MobileMapForwardShell({
 
   return (
     <div className="kepi-mobile-shell space-y-5 pb-4">
+      {showPointsLearn ? (
+        <PointsMilesLearnPanel
+          onBack={() => setShowPointsLearn(false)}
+          onOpenCardWallet={() => setShowPointsLearn(false)}
+        />
+      ) : (
+        <>
       <header>
         <h1 className="text-[2rem] font-bold tracking-tight text-[var(--text-primary)]">More</h1>
         <p className="mt-1 text-[19px] text-[var(--text-secondary)]">Settings & family</p>
       </header>
+
+      <button
+        type="button"
+        onClick={() => setShowPointsLearn(true)}
+        className="w-full rounded-2xl bg-gradient-to-br from-sky-600 to-indigo-600 px-5 py-4 text-left text-white shadow-md"
+      >
+        <p className="text-[19px] font-bold">📚 New to points & miles?</p>
+        <p className="mt-1 text-[15px] text-white/90">Learn Rakuten, lounges, cards, and how Kepi helps</p>
+      </button>
 
       {hasActiveTrip ? (
         <ShareTripCard tripId={tripId ?? null} tripName={tripName} />
@@ -685,7 +703,7 @@ export function MobileMapForwardShell({
           </div>
         </div>
         <div className="px-4 py-4">
-          <PointsTravelProfileCard />
+          <PointsTravelProfileCard onOpenLearn={() => setShowPointsLearn(true)} />
         </div>
       </div>
 
@@ -722,6 +740,8 @@ export function MobileMapForwardShell({
         onRefreshOfflineKit={onRefreshOfflineKit}
         onSignOut={onSignOut}
       />
+        </>
+      )}
     </div>
   );
 }

@@ -193,6 +193,7 @@ import { ShareModal } from "@/components/travelAssistant/ShareModal";
 import { SmartPackingList } from "@/components/travelAssistant/SmartPackingList";
 import { LoyaltyWalletSection } from "@/components/loyalty/LoyaltyWalletSection";
 import { PointsTravelProfileCard } from "@/components/travelAssistant/PointsTravelProfileCard";
+import { PointsMilesLearnPanel } from "@/components/travelAssistant/PointsMilesLearnPanel";
 import { TravelFitCard } from "@/components/travelAssistant/TravelFitCard";
 import {
   TravelStyleBadge,
@@ -2281,6 +2282,7 @@ export default function TravelAssistantPage() {
   const [ticketScanBusy, setTicketScanBusy] = useState(false);
   const [rescanImportsBusy, setRescanImportsBusy] = useState(false);
   const [rescanImportsSummary, setRescanImportsSummary] = useState<string | null>(null);
+  const [showPointsLearn, setShowPointsLearn] = useState(false);
   const [calendarSyncInFlight, setCalendarSyncInFlight] = useState(false);
   const [calendarSyncTone, setCalendarSyncTone] = useState<"neutral" | "success" | "error">("neutral");
   const [calendarSyncMessage, setCalendarSyncMessage] = useState<string | null>(null);
@@ -9714,8 +9716,25 @@ export default function TravelAssistantPage() {
                 </div>
               )}
             </section>
+          ) : showPointsLearn ? (
+            <section>
+              <PointsMilesLearnPanel
+                onBack={() => setShowPointsLearn(false)}
+                onOpenCardWallet={() => setShowPointsLearn(false)}
+              />
+            </section>
           ) : (
             <section className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setShowPointsLearn(true)}
+                className="w-full rounded-3xl bg-gradient-to-br from-sky-600 to-indigo-600 px-5 py-4 text-left text-white shadow-md"
+              >
+                <p className="font-semibold text-lg">📚 New to points & miles?</p>
+                <p className="mt-1 text-sm text-white/90">
+                  Learn Rakuten stacking, lounge access, and how Kepi uses your card wallet
+                </p>
+              </button>
               <button
                 type="button"
                 onClick={() => setMyTripsModalOpen(true)}
@@ -9767,7 +9786,7 @@ export default function TravelAssistantPage() {
                   </div>
                 </div>
                 <div className="px-4 pb-4 pt-4">
-                  <PointsTravelProfileCard />
+                  <PointsTravelProfileCard onOpenLearn={() => setShowPointsLearn(true)} />
                 </div>
               </div>
 

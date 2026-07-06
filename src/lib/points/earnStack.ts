@@ -32,7 +32,9 @@ export function suggestEarnStack(input: {
       steps.push("Add your cards in Kepi so we can suggest the best one for this stay.");
     }
     if (usesRakuten) {
-      steps.push("If booking via a portal, activate Rakuten in one tap before checkout (cash back may not stack with direct elite nights).");
+      steps.push(
+        "Activate Rakuten before checkout — e.g. open Rakuten, then Instacart or your shopping portal, then pay with your best card.",
+      );
     }
   } else {
     steps.push(`Credit the flight to ${airline} — matches your recent travel pattern.`);

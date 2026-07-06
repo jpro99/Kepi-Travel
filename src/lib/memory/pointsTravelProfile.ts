@@ -29,6 +29,10 @@ export interface PointsTravelProfile {
   /** Card sign-up / invitation codes saved for later */
   invitationCodes: SavedInvitationCode[];
   notes: string;
+  /** Per-card enrollment toggles (Priority Pass, Amex digital lounge, etc.) */
+  cardEnrollments?: Record<string, import("@/lib/points/benefitPlaybooks").CardEnrollmentState>;
+  /** Sections completed in Points & Miles 101 */
+  learnProgress?: string[];
 }
 
 export function createEmptyPointsTravelProfile(userId: string): PointsTravelProfile {
@@ -42,6 +46,8 @@ export function createEmptyPointsTravelProfile(userId: string): PointsTravelProf
     cardReferralLinks: {},
     invitationCodes: [],
     notes: "",
+    cardEnrollments: {},
+    learnProgress: [],
   };
 }
 
@@ -52,7 +58,7 @@ export async function getPointsTravelProfile(userId?: string): Promise<PointsTra
       kvStoreGet<PointsTravelProfile>(POINTS_PROFILE_KEY, { userId: namespace }),
       new Promise<null>((resolve) => setTimeout(() => resolve(null), 3_000)),
     ]);
-    if (existing) return { ...existing, invitationCodes: existing.invitationCodes ?? [] };
+    if (existing) return { ...existing, invitationCodes: existing.invitationCodes ?? [], cardEnrollments: existing.cardEnrollments ?? {}, learnProgress: existing.learnProgress ?? [] };
   } catch {
     /* degrade */
   }

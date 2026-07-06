@@ -357,6 +357,8 @@ export interface JourneyPhase {
   objectivePoiId?: string;
 }
 
+import type { BenefitEntryMethod } from "@/lib/points/benefitPlaybooks";
+
 export interface LoungeEligibilityResult {
   loungeId: string;
   eligible: boolean;
@@ -366,6 +368,12 @@ export interface LoungeEligibilityResult {
   walkSeconds?: number;
   rankScore?: number;
   lastVerified: string;
+  loungeName?: string;
+  terminalHint?: string;
+  playbookId?: string;
+  entryMethod?: BenefitEntryMethod;
+  entrySteps?: string[];
+  deepLink?: { label: string; url: string };
 }
 
 export interface VoiceNavIntent {

@@ -19,12 +19,14 @@ import { AirportNavigatorMap } from "@/components/travelAssistant/AirportNavigat
 // guard never runs in the client bundle. Single source of truth for the schema.
 import type { TravelProfile } from "@/app/api/travel-profile/route";
 import { selectActiveFlight, type FlightReservation } from "@/lib/travelAssistant/useActiveFlight";
-import { evaluateLoungeEligibility, listLoungesForAirport } from "@/lib/airportNav/loungeRules";
+import { evaluateLoungeEligibility } from "@/lib/airportNav/loungeRules";
 import {
   airportCheckInGuidance,
   resolveFlightStatusTier,
 } from "@/lib/travelAssistant/syncTravelBenefits";
 import { listBenefitsForOwnedCards, hasCenturionOrPriorityPass } from "@/lib/points/cardBenefits";
+import { LoungeEntryGuide } from "@/components/travelAssistant/LoungeEntryGuide";
+import type { LoungeEligibilityResult } from "@/lib/airportNav/types";
 
 /* ─── Types ──────────────────────────────────────────────────── */
 
@@ -456,13 +458,13 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
   );
 
   // Resolve status for this flight's airline (matched, not just first entry)
-  const { program, tier, lounges, cardLounges, checkInTip, cardBenefitLines } = useMemo(() => {
+  const { program, tier, lounges, cardLoungeEligibility, checkInTip, cardBenefitLines } = useMemo(() => {
     if (!profile || !activeFlight) {
       return {
         program: null,
         tier: null,
         lounges: [] as AirlineLoungeInfo[],
-        cardLounges: [] as Array<{ name: string; via?: string }>,
+        cardLoungeEligibility: [] as LoungeEligibilityResult[],
         checkInTip: null as string | null,
         cardBenefitLines: [] as string[],
       };
@@ -478,15 +480,10 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
       clear: Boolean(profile.clear),
       paymentCards: profile.paymentCards,
     };
-    const cardLoungeResults =
+    const cardLoungeResults: LoungeEligibilityResult[] =
       apt && profile.paymentCards?.length
         ? evaluateLoungeEligibility(apt, credentials, hint).filter((entry) => entry.eligible)
         : [];
-    const airportRules = apt ? listLoungesForAirport(apt) : [];
-    const cardLoungesMapped = cardLoungeResults.map((entry) => {
-      const rule = airportRules.find((r) => r.loungeId === entry.loungeId);
-      return { name: rule?.name ?? entry.loungeId, via: entry.via };
-    });
 
     const ownedIds = profile.paymentCards?.map((c) => c.id) ?? [];
     const cardProfiles = listBenefitsForOwnedCards(ownedIds);
@@ -498,7 +495,7 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
       program: prog,
       tier: tierObj,
       lounges: loungeList,
-      cardLounges: cardLoungesMapped,
+      cardLoungeEligibility: cardLoungeResults,
       checkInTip: airportCheckInGuidance({
         profile,
         airlineName: prog?.airline ?? hint,
@@ -508,8 +505,12 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
     };
   }, [profile, activeFlight]);
 
-  const hasCardLoungeAccess = cardLounges.length > 0 || (profile ? hasCenturionOrPriorityPass(listBenefitsForOwnedCards(profile.paymentCards?.map((c) => c.id) ?? [])) : false);
-  const hasLoungeAccess = Boolean((tier?.loungeAccess && lounges.length > 0) || cardLounges.length > 0);
+  const hasCardLoungeAccess =
+    cardLoungeEligibility.length > 0 ||
+    (profile ? hasCenturionOrPriorityPass(listBenefitsForOwnedCards(profile.paymentCards?.map((c) => c.id) ?? [])) : false);
+  const hasLoungeAccess = Boolean(
+    (tier?.loungeAccess && lounges.length > 0) || cardLoungeEligibility.length > 0,
+  );
   const hasPrioritySecurity = Boolean(tier?.prioritySecurity || profile?.tsa_precheck || profile?.global_entry);
   const hasPrecheck = Boolean(profile?.tsa_precheck || profile?.global_entry);
 
@@ -724,7 +725,7 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
       )}
 
       {/* Status badge + lounge info */}
-      {(tier || cardLounges.length > 0 || cardBenefitLines.length > 0) && (
+      {(tier || cardLoungeEligibility.length > 0 || cardBenefitLines.length > 0) && (
         <div className="rounded-2xl border border-indigo-200 dark:border-indigo-500/30 bg-indigo-50 dark:bg-indigo-500/10 p-4 space-y-3">
           {tier && program && (
           <div className="flex items-center justify-between">
@@ -783,33 +784,22 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
             </div>
           )}
 
-          {/* Card-granted lounges */}
-          {cardLounges.length > 0 && (
+          {cardLoungeEligibility.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs font-bold uppercase tracking-wider text-indigo-500 dark:text-indigo-400">
                 🛋 Lounge access via your card{f.flightDepartureAirport ? ` at ${f.flightDepartureAirport}` : ""}
               </p>
-              {cardLounges.map((lounge) => (
-                <div
-                  key={lounge.name}
-                  className="rounded-xl bg-white dark:bg-slate-800 border border-indigo-100 dark:border-indigo-500/20 p-3"
-                >
-                  <p className="font-bold text-sm text-slate-900 dark:text-slate-100">{lounge.name}</p>
-                  {lounge.via ? (
-                    <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">Via {lounge.via}</p>
-                  ) : null}
-                </div>
-              ))}
+              <LoungeEntryGuide lounges={cardLoungeEligibility} />
             </div>
           )}
 
           {/* No lounge at this airport */}
-          {tier?.loungeAccess && lounges.length === 0 && cardLounges.length === 0 && f.flightDepartureAirport && (
+          {tier?.loungeAccess && lounges.length === 0 && cardLoungeEligibility.length === 0 && f.flightDepartureAirport && (
             <p className="text-xs text-indigo-500 dark:text-indigo-400">
               No {program?.airline} lounge at {f.flightDepartureAirport} — check partner lounges or Priority Pass.
             </p>
           )}
-          {hasCardLoungeAccess && cardLounges.length === 0 && f.flightDepartureAirport && !tier?.loungeAccess && (
+          {hasCardLoungeAccess && cardLoungeEligibility.length === 0 && f.flightDepartureAirport && !tier?.loungeAccess && (
             <p className="text-xs text-indigo-500 dark:text-indigo-400">
               Your card may include lounge access — confirm at {f.flightDepartureAirport} (Centurion / Priority Pass).
             </p>
@@ -841,7 +831,7 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
           onCredentialsAnswer={saveNavCredentials}
           eligibleLoungeNames={[
             ...lounges.map((loungeInfo) => loungeInfo.name),
-            ...cardLounges.map((l) => l.name),
+            ...cardLoungeEligibility.map((l) => l.loungeName ?? l.loungeId),
           ]}
         />
       )}
