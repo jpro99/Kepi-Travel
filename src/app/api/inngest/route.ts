@@ -4,6 +4,7 @@ import { logger } from "@/lib/logger";
 import { reminderLadder } from "@/inngest/functions/reminderLadder";
 import { emailScheduler } from "@/inngest/functions/emailScheduler";
 import { proactiveMonitoringSweep } from "@/inngest/functions/proactiveMonitoringSweep";
+import { flightStatusSweep } from "@/inngest/functions/flightStatusSweep";
 import { travelUpdatePass } from "@/inngest/functions/travelUpdatePass";
 import { trialExpirySweep } from "@/inngest/functions/trialExpirySweep";
 import { inngest } from "@/inngest/client";
@@ -11,7 +12,7 @@ import { generateId } from "@/lib/utils/generateId";
 
 const handlers = serve({
   client: inngest,
-  functions: [travelUpdatePass, reminderLadder, emailScheduler, proactiveMonitoringSweep, trialExpirySweep],
+  functions: [travelUpdatePass, flightStatusSweep, reminderLadder, emailScheduler, proactiveMonitoringSweep, trialExpirySweep],
 });
 
 export const GET = async (request: NextRequest, context: unknown): Promise<Response> => {

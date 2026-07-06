@@ -34,7 +34,20 @@ Five Claude-prompt features shipped together:
 
 ---
 
-## Jeff — how to work with him (mandatory)
+## Competitive gaps memo (Jeff approved defer/build 2026-07-06)
+
+### Shipped this session
+- **F9 flight status:** phase-aware polling (90s within 6h), AeroDataBox + optional FlightAware merge, 2-min server sweep via Inngest, discrepancy logging.
+- **F10 check-in handoff:** 24h window, airline deep links, honest Wallet/pass URL handoff on Home — no fake barcodes.
+- **M9 ground transport:** Uber/Lyft deep links with airport prefilled (Travel Day + card component). Native Uber partner API deferred.
+
+### Group planning (Mindtrip-style) — **Build later**
+Kepi already has family GPS, airport rally, journey phases. Missing: shared itinerary editing, merge conflicts, multi-editor permissions. **Scope:** 6–10 weeks. **Fits** family-travel audience without broadening to corporate. **Recommendation:** after day-of-travel reliability is bulletproof.
+
+### Conversational NL booking (Mindtrip/Zenvoya-style) — **Don't build now**
+Kepi has Command Deck + structured search wizards. Full NL→book is a product pivot (8–12+ weeks, high ambiguity risk). Differentiation is **executing the trip**, not replacing Kayak chat. Revisit only if form-based Book funnel metrics show users bouncing on complexity.
+
+---
 
 - **Discuss first, code second.** If he asks "what would you fix?" or "does this match?" or "tell me before you change anything" — give analysis and a short plan only. Wait for explicit approval before editing — unless he clearly says "fix it now" / "go ahead" / "build it."
 - **Auto-push + promote (Jeff, 2026-07-05):** When you implement code and `npm run lint` + `npm run build` pass, **commit, push to `main`, and promote production in the same session** — never ask "want me to push?" or "should I deploy?" If Vercel Production lags behind `main`, run `npx vercel --prod --yes` after push. Production is kepitravel.com. Stale Ready deploys waste Jeff's credits.
@@ -252,6 +265,7 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 
 | Date | Note |
 |------|------|
+| 2026-07-06 | **Competitive gaps (flight status, check-in, rides):** phase-aware AeroDataBox polling + optional FlightAware merge, 2-min Inngest sweep, honest check-in/Wallet handoff card on Home, Uber/Lyft deep links on Travel Day. Laws F9–F10, M9. Group/NL booking memo — defer. |
 | 2026-07-06 | **Offline nav + personalization:** itinerary-scoped IndexedDB prefetch (airport layouts + pilot city GeoJSON), Live Map offline fallback, nav walk/security calibration, two-stage post-booking briefing in Airport Mode, input-style suggestion on Plan tab. Design laws D14–D18. |
 | 2026-07-06 | **Parsing reliability:** confidence/plausibility gate now blocks low-confidence or implausible forwarded reservations from auto-becoming trip fact (`evaluateForwardedReservationGate`); `drainForwardReviewQueue` no longer silently auto-promotes gated review items. Added dinner/tour/excursion detection to `emailForwardParser` (previously misclassified as "ride"). `/api/ocr` (Expense Report receipt scan) was a fake stub — now returns an honest "not available" instead of fabricated data; real OCR deferred. See `KEPI_DESIGN_LAW.md` D10–D13. |
 | 2026-06-15 | **G11 post-booking + Plan transport:** confirmation card replaces success toasts; hotel save-from-search card; inter-city transport prompts on Plan tab |

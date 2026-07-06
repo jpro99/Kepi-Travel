@@ -32,6 +32,10 @@ import { EMAIL_FORWARD_PARSER_VERSION } from "@/lib/travelAssistant/mlReadiness/
 import { sortReviewQueueForActiveLearning } from "@/lib/travelAssistant/mlReadiness/reviewQueueTriage";
 import { reconcileStoredFlightReservations } from "@/lib/travelAssistant/reconcileStoredFlightReservations";
 import { canonicalFlightDepartureDay, canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
+import {
+  nearestUpcomingFlightDepartureUtcMs,
+  resolveFlightStatusPollIntervalMs,
+} from "@/lib/travelAssistant/flightStatusCadence";
 import { isDuplicateReservation } from "@/lib/travelAssistant/reservationDuplicates";
 import { countRescannableReservations } from "@/lib/travelAssistant/rescanTripImportsShared";
 import {
@@ -2950,20 +2954,23 @@ export default function TravelAssistantPage() {
     };
   }, [refreshTripsFromServer, tripsLoading]);
 
-  // Auto-poll flight status for upcoming flights within 24 hours
+  // Auto-poll flight status for upcoming flights within 24 hours (90s inside 6h, 5m otherwise)
   useEffect(() => {
     if (!activeTripId || !reservations.length) return;
     const nowMs = Date.now();
     const upcomingFlights = reservations.filter((r) => {
       if (r.type !== "flight") return false;
-      const local = (r as Record<string, unknown>).localTime as string | undefined;
+      const local = canonicalFlightDepartureLocalTime(r);
       if (!local) return false;
       const depMs = Date.parse(local.replace("T", " ").slice(0, 16));
       const hoursUntil = (depMs - nowMs) / 3_600_000;
       return hoursUntil > -1 && hoursUntil < 24;
     });
     if (!upcomingFlights.length) return;
-    // Poll every 5 minutes for flights within 24 hours
+    const pollIntervalMs = resolveFlightStatusPollIntervalMs(
+      nearestUpcomingFlightDepartureUtcMs(upcomingFlights, nowMs),
+      nowMs,
+    );
     const pollFlight = async () => {
       for (const flight of upcomingFlights) {
         try {
@@ -2974,7 +2981,7 @@ export default function TravelAssistantPage() {
       }
     };
     void pollFlight();
-    const interval = window.setInterval(() => { void pollFlight(); }, 5 * 60_000);
+    const interval = window.setInterval(() => { void pollFlight(); }, pollIntervalMs);
     return () => window.clearInterval(interval);
   // handleCheckFlightStatusRef is a stable ref — intentionally omitted from deps
   }, [activeTripId, reservations]);

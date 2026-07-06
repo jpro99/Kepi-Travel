@@ -60,10 +60,10 @@ function sanitizeState(raw: unknown): ProactiveMonitoringState | null {
 
 function resolveMonitoringIntervalMinutes(plan: "free" | "pro" | "concierge"): number {
   if (plan === "concierge") {
-    return 5;
+    return 2;
   }
   if (plan === "pro") {
-    return 15;
+    return 5;
   }
   return 60;
 }

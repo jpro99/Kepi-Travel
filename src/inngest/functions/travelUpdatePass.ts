@@ -112,7 +112,7 @@ export const travelUpdatePass = inngest.createFunction(
       try {
         const modeResolution = resolveEffectiveUpdateMode(parsed.data.mode);
         if (modeResolution.usedMockFallback) {
-          logger.info("Switching travel update pass to mock mode due to missing AviationStack key.", {
+          logger.info("Switching travel update pass to mock mode due to missing AeroDataBox key.", {
             userId: parsed.data.userId,
             requestedMode: parsed.data.mode,
           });

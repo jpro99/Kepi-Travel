@@ -73,6 +73,16 @@ When flights change, hotel stay segments recompute via shared trip modules (`der
 **F6 — Status polling scope**  
 Auto flight-status polling only for flights within 24h; must not spam or crash when provider is down.
 
+**F9 — Flight status freshness is phase-aware**  
+Within **6 hours** of departure, client and server polls must run at least every **90 seconds** when the app is open or a background sweep is active. Between 6–24 hours, **5 minutes** is acceptable. Primary source is **AeroDataBox**; optional **FlightAware AeroAPI** merges when configured — discrepancies are logged, never silently discarded.
+
+**Test:** `src/lib/travelAssistant/flightStatusCadence.test.ts`, `src/lib/travelAssistant/flightStatusMerge.test.ts`
+
+**F10 — Check-in handoff is honest**  
+Check-in prompts open at **24h before departure**. Kepi may deep-link to airline check-in or a stored Wallet/pass URL — never render a scannable barcode it does not hold. UI must state where the boarding pass actually lives.
+
+**Test:** `src/lib/travelAssistant/checkInHandoff.test.ts`
+
 **F7 — Multi-hop bookings satisfy planned legs**  
 A booked path (e.g. MUC→FCO→SEA→ONT) must satisfy a planned direct leg (MUC→ONT) in itinerary self-check — never flag as unbooked when a valid connection chain exists.
 
@@ -176,6 +186,11 @@ GPS permission errors or transient watch failures must **never** persist `kepi:f
 When a more accurate GPS reading arrives (e.g. house after Wi‑Fi placed the pin in a park), accept the correction even after a large jump. Never lock the first coarse bootstrap pin when a precise fix is available.
 
 **Test:** `src/lib/family/locationFixUpgrade.test.ts`, `src/lib/family/geolocationQuality.test.ts`
+
+**M9 — Ground transport uses honest deep links first**  
+Uber/Lyft actions must prefill pickup/dropoff from known trip locations via universal deep links. Native in-app ride booking is deferred until a partner API is approved — never fake a booked ride.
+
+**Test:** `src/lib/travelAssistant/groundTransportDeepLinks.test.ts`
 
 ---
 
@@ -342,9 +357,13 @@ Channel shortcuts require **≥3 attempts**, correction rate **≤25%**, and alw
 | M2 | `src/lib/hotels/__tests__/hotelOffshore.test.ts` |
 | M7, M8 | `src/lib/family/geolocationQuality.test.ts` |
 | M8 | `src/lib/family/locationFixUpgrade.test.ts` |
+| M9 | `src/lib/travelAssistant/groundTransportDeepLinks.test.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |
+| F9 | `src/lib/travelAssistant/flightStatusCadence.test.ts` |
+| F9 | `src/lib/travelAssistant/flightStatusMerge.test.ts` |
+| F10 | `src/lib/travelAssistant/checkInHandoff.test.ts` |
 | G8 | `src/lib/travelAssistant/dayPlanLines.test.ts` |
 | G10 | `src/lib/travelAssistant/tripActionItems.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |

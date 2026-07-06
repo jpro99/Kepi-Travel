@@ -121,6 +121,9 @@ These are agent playbooks, not autonomous runtime bots. Jeff instructs the condu
 
 ## Fix log
 
+### 2026-07-06 (Session 4)
+- **Competitive gaps batch:** phase-aware flight status polling (90s within 6h, 5m otherwise), AeroDataBox + optional FlightAware merge with discrepancy logging, 2-min Inngest server sweep, honest check-in/Wallet handoff card on Home, Uber/Lyft deep links on Travel Day. Laws F9–F10, M9. Group planning + NL booking memo — build later / don't build now.
+
 ### 2026-07-06 (Session 3)
 - **Offline nav + personalization (5-prompt batch):** itinerary-scoped offline cache (48h prefetch, leg-based eviction), pilot offline city GeoJSON bundles + Live Map offline fallback, airport nav walk/security timing calibration from journey telemetry, two-stage post-booking briefing card in Airport Mode, input-style personalization (genome + Plan tab suggestion — suggest never silent apply). Design laws D14–D18 + law tests in `test:laws`.
 
