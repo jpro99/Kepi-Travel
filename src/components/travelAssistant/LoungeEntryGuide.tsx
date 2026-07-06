@@ -40,6 +40,12 @@ export function LoungeEntryGuide({ lounges, className = "" }: LoungeEntryGuidePr
             ) : null}
           </div>
 
+          {lounge.enrollmentRequired ? (
+            <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-[11px] font-medium text-amber-900 dark:bg-amber-500/10 dark:text-amber-100">
+              Setup needed: {lounge.reason ?? "Complete enrollment in Card wallet first."}
+            </p>
+          ) : null}
+
           {lounge.entrySteps && lounge.entrySteps.length > 0 ? (
             <ol className="mt-3 space-y-1.5 border-t border-indigo-100 pt-3 dark:border-indigo-500/20">
               {lounge.entrySteps.map((step, index) => (

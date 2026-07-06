@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CARD_CATALOG, findCard } from "@/lib/points/cardEarnRules";
 import { getCardBenefitProfile, listBenefitsForOwnedCards, summarizeCardBenefits } from "@/lib/points/cardBenefits";
-import { enrollmentHintsForCard } from "@/lib/points/benefitPlaybooks";
+import { enrollmentHintsForCard, type CardEnrollmentState } from "@/lib/points/benefitPlaybooks";
 import type { PointsTravelProfile, SavedInvitationCode } from "@/lib/memory/pointsTravelProfile";
 import { generateId } from "@/lib/utils/generateId";
 
@@ -149,10 +149,18 @@ export function PointsTravelProfileCard({ onOpenLearn }: { onOpenLearn?: () => v
   );
   const learnDone = (profile.learnProgress?.length ?? 0) >= 3;
 
-  const setEnrollment = (cardId: string, key: "priorityPassEnrolled" | "centurionDigitalReady", value: boolean): void => {
+  const patchEnrollment = (cardId: string, patch: Partial<CardEnrollmentState>): void => {
     const cardEnrollments = { ...(profile.cardEnrollments ?? {}) };
-    cardEnrollments[cardId] = { ...(cardEnrollments[cardId] ?? {}), [key]: value };
+    cardEnrollments[cardId] = { ...(cardEnrollments[cardId] ?? {}), ...patch };
     void save({ cardEnrollments });
+  };
+
+  const setEnrollmentBoolean = (
+    cardId: string,
+    key: "priorityPassEnrolled" | "centurionDigitalReady",
+    value: boolean,
+  ): void => {
+    patchEnrollment(cardId, { [key]: value });
   };
 
   return (
@@ -259,18 +267,63 @@ export function PointsTravelProfileCard({ onOpenLearn }: { onOpenLearn?: () => v
                   <p className="text-xs font-semibold text-slate-800 dark:text-slate-100">
                     {cardDisplayName(profile, entry.cardId)}
                   </p>
-                  <div className="mt-1 space-y-1">
-                    {hints.map((hint) => (
-                      <label key={hint.key} className="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300">
-                        <input
-                          type="checkbox"
-                          className="mt-0.5"
-                          checked={enrollment[hint.key] ?? false}
-                          onChange={(e) => setEnrollment(entry.cardId, hint.key, e.target.checked)}
-                        />
-                        <span>{hint.label}</span>
-                      </label>
-                    ))}
+                  <div className="mt-1 space-y-2">
+                    {hints.map((hint) => {
+                      if (hint.key === "centurionGuestPassesUsedThisVisit") {
+                        return (
+                          <label key={hint.key} className="block text-xs text-slate-600 dark:text-slate-300">
+                            <span>{hint.label}</span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={4}
+                              value={enrollment.centurionGuestPassesUsedThisVisit ?? ""}
+                              onChange={(e) => {
+                                const raw = e.target.value.trim();
+                                patchEnrollment(entry.cardId, {
+                                  centurionGuestPassesUsedThisVisit:
+                                    raw === "" ? undefined : Math.max(0, Math.min(4, Number(raw) || 0)),
+                                });
+                              }}
+                              placeholder="0"
+                              className="mt-1 w-20 rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-900"
+                            />
+                          </label>
+                        );
+                      }
+                      if (hint.key === "priorityPassNumber") {
+                        return (
+                          <label key={hint.key} className="block text-xs text-slate-600 dark:text-slate-300">
+                            <span>{hint.label}</span>
+                            <input
+                              type="text"
+                              value={enrollment.priorityPassNumber ?? ""}
+                              onChange={(e) =>
+                                patchEnrollment(entry.cardId, {
+                                  priorityPassNumber: e.target.value.trim() || undefined,
+                                })
+                              }
+                              placeholder="Optional PP number"
+                              className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-900"
+                            />
+                          </label>
+                        );
+                      }
+                      if (hint.key === "priorityPassEnrolled" || hint.key === "centurionDigitalReady") {
+                        return (
+                          <label key={hint.key} className="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300">
+                            <input
+                              type="checkbox"
+                              className="mt-0.5"
+                              checked={enrollment[hint.key] ?? false}
+                              onChange={(e) => setEnrollmentBoolean(entry.cardId, hint.key, e.target.checked)}
+                            />
+                            <span>{hint.label}</span>
+                          </label>
+                        );
+                      }
+                      return null;
+                    })}
                   </div>
                 </div>
               );

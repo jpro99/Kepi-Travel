@@ -1,5 +1,11 @@
 import type { LoungeEligibilityResult, TravelerCredentials } from "./types";
-import { getBenefitPlaybook } from "@/lib/points/benefitPlaybooks";
+import {
+  applyEnrollmentToPlaybook,
+  getBenefitPlaybook,
+  mergeEnrollmentForPlaybook,
+} from "@/lib/points/benefitPlaybooks";
+
+/** Lounge access rules per airport — update via kepi-card-bot skill alongside benefitPlaybooks.ts. */
 
 interface LoungeRule {
   loungeId: string;
@@ -77,6 +83,8 @@ const LOUNGE_RULES: LoungeRule[] = [
     terminalHint: "Terminal 1 — ITA / SkyTeam elite",
     airlines: ["ITA", "Alitalia"],
     memberships: ["sky_club"],
+    playbookId: "ita-executive-lounge-fco",
+    guestPolicy: "Guest access varies by Volare tier — confirm at entrance",
     lastVerified: "2026-06-01",
   },
   {
@@ -169,21 +177,24 @@ export function evaluateLoungeEligibility(
     }
 
     const playbook = rule.playbookId ? getBenefitPlaybook(rule.playbookId) : null;
+    const enrollment = mergeEnrollmentForPlaybook(rule.playbookId, credentials.cardEnrollments);
+    const applied = applyEnrollmentToPlaybook(playbook, enrollment);
 
     return {
       loungeId: rule.loungeId,
       eligible,
       via,
-      reason,
-      guestPolicy: rule.guestPolicy ?? playbook?.guestPolicy,
-      rankScore: eligible ? 100 : 0,
+      reason: applied.enrollmentRequired ? applied.enrollmentReason : reason,
+      guestPolicy: rule.guestPolicy ?? applied.guestPolicy ?? playbook?.guestPolicy,
+      rankScore: eligible ? (applied.enrollmentRequired ? 80 : 100) : 0,
       lastVerified: rule.lastVerified,
       loungeName: rule.name,
       terminalHint: rule.terminalHint,
       playbookId: rule.playbookId,
-      entryMethod: playbook?.entryMethod,
-      entrySteps: playbook?.steps,
-      deepLink: playbook?.deepLink,
+      entryMethod: applied.entryMethod ?? playbook?.entryMethod,
+      entrySteps: applied.entrySteps ?? playbook?.steps,
+      deepLink: applied.deepLink ?? playbook?.deepLink,
+      enrollmentRequired: applied.enrollmentRequired,
     };
   });
 }

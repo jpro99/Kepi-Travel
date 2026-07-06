@@ -28,6 +28,7 @@ import {
 import { enrichReservationForAutoImport } from "@/lib/travelAssistant/autoImportReservation";
 import { drainForwardReviewQueue } from "@/lib/travelAssistant/drainForwardReviewQueue";
 import { extractPdfTextFromReceivedEmail } from "@/lib/travelAssistant/receivedEmailPdfText";
+import { appendPdfAttachmentText, ensurePdfInSourceText } from "@/lib/travelAssistant/emailSourceText";
 import { resolveReservationPricing, resolvePricingNearBooking } from "@/lib/travelAssistant/parseReservationMiles";
 import { applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import { generateId } from "@/lib/utils/generateId";
@@ -570,14 +571,13 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       }
     }
 
+    let pdfAttachmentText = "";
     if (emailId) {
       const resendClient = getResendClient();
       if (resendClient) {
-        const pdfAttachmentText = await extractPdfTextFromReceivedEmail(resendClient, emailId, { requestId });
+        pdfAttachmentText = await extractPdfTextFromReceivedEmail(resendClient, emailId, { requestId });
         if (pdfAttachmentText.trim()) {
-          parserText = parserText.trim()
-            ? `${parserText.trim()}\n\n--- PDF attachment ---\n\n${pdfAttachmentText.trim()}`
-            : pdfAttachmentText.trim();
+          parserText = appendPdfAttachmentText(parserText, pdfAttachmentText);
           routeLogger.info("Appended PDF attachment text to forwarded email parser input.", {
             emailId,
             pdfTextLength: pdfAttachmentText.length,
@@ -609,6 +609,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         : "needs-review";
     const parserOriginalEmailText =
       typeof parserResult?.originalEmailText === "string" ? parserResult.originalEmailText : "";
+    const storedSourceText = ensurePdfInSourceText(parserOriginalEmailText, pdfAttachmentText).slice(0, 12_000);
     const parserHasPdfAttachment = Boolean(parserResult?.hasPdfAttachment);
     const parserImageBasedEmail = Boolean(parserResult?.imageBasedEmail);
     const parserUsedAiFallback = Boolean(parserResult?.usedAiFallback);
@@ -645,8 +646,8 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
     const emailSourceMetadata = {
       sourceEmailId: emailId || undefined,
       sourceEmailSubject: parserSubject.trim() || undefined,
-      originalEmailText: parserOriginalEmailText.trim().slice(0, 12_000) || undefined,
-      hasPdfAttachment: parserHasPdfAttachment || undefined,
+      originalEmailText: storedSourceText || undefined,
+      hasPdfAttachment: parserHasPdfAttachment || Boolean(pdfAttachmentText.trim()) || undefined,
       manageUrl: emailManageUrl,
       sourceLinks: emailSourceLinks.length > 0 ? emailSourceLinks : undefined,
     };
@@ -721,12 +722,27 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         ? (isEmailProviderName && iataPrefix.length === 2 ? `${iataPrefix} Airlines` : rawAirline || "Unknown Airline")
         : "";
 
+      const parserDepartureAirport =
+        typeof parserDraftRecord.departureAirport === "string"
+          ? parserDraftRecord.departureAirport.trim()
+          : typeof parserDraftRecord.flightDepartureAirport === "string"
+            ? parserDraftRecord.flightDepartureAirport.trim()
+            : "";
+      const parserArrivalAirport =
+        typeof parserDraftRecord.arrivalAirport === "string"
+          ? parserDraftRecord.arrivalAirport.trim()
+          : typeof parserDraftRecord.flightArrivalAirport === "string"
+            ? parserDraftRecord.flightArrivalAirport.trim()
+            : "";
+
       const emailPricing = resolvePricingNearBooking({
         notes: parserNotesText,
-        originalEmailText: parserOriginalEmailText,
+        originalEmailText: storedSourceText || parserOriginalEmailText,
         confirmationCode: parserConfirmationCode,
         title: parserTitle,
         flightNumber: parserType === "flight" ? parserFlightNumber : undefined,
+        departureAirport: parserType === "flight" ? parserDepartureAirport || undefined : undefined,
+        arrivalAirport: parserType === "flight" ? parserArrivalAirport || undefined : undefined,
       });
 
       const parsedReservation = {

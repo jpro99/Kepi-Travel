@@ -50,6 +50,16 @@ const TravelProfileSchema = z.object({
   clear: z.boolean().optional(),
   paymentCards: z.array(PaymentCardSchema).max(20).optional(),
   benefitSummary: z.array(z.string().max(240)).max(40).optional(),
+  cardEnrollments: z
+    .record(
+      z.object({
+        priorityPassEnrolled: z.boolean().optional(),
+        centurionDigitalReady: z.boolean().optional(),
+        centurionGuestPassesUsedThisVisit: z.number().int().min(0).max(4).optional(),
+        priorityPassNumber: z.string().max(40).optional(),
+      }),
+    )
+    .optional(),
   cardsSyncedAt: z.string().optional(),
   updatedAt: z.string().optional(),
 });

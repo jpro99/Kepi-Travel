@@ -38,6 +38,8 @@ const PatchSchema = z.object({
       z.object({
         priorityPassEnrolled: z.boolean().optional(),
         centurionDigitalReady: z.boolean().optional(),
+        centurionGuestPassesUsedThisVisit: z.number().int().min(0).max(4).optional(),
+        priorityPassNumber: z.string().max(40).optional(),
       }),
     )
     .optional(),

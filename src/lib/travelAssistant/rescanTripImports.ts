@@ -10,6 +10,7 @@ import { resolvePricingNearBooking } from "@/lib/travelAssistant/parseReservatio
 import { applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import { getResendClient } from "@/lib/email/resendClient";
 import { fetchReceivedEmailSourceText } from "@/lib/travelAssistant/receivedEmailPdfText";
+import { shouldReplaceStoredSourceText } from "@/lib/travelAssistant/emailSourceText";
 import {
   isDuplicateReservation,
   type DuplicateReservationFields,
@@ -73,6 +74,8 @@ function draftToIncomingReservation(
     confirmationCode: draft.confirmationCode,
     title: draft.title,
     flightNumber: draft.flightNumber,
+    departureAirport: draft.departureAirport,
+    arrivalAirport: draft.arrivalAirport,
   });
 
   return {
@@ -170,7 +173,7 @@ async function backfillSourceTextFromResend(
     const fetched = sourceByEmailId.get(emailId);
     if (!fetched?.text) return reservation;
     const existingText = reservation.originalEmailText?.trim() ?? "";
-    if (existingText.length >= fetched.text.length) return reservation;
+    if (!shouldReplaceStoredSourceText(existingText, fetched.text)) return reservation;
     return applyAcceptedReservationPricing({
       ...reservation,
       originalEmailText: fetched.text.slice(0, 12_000),

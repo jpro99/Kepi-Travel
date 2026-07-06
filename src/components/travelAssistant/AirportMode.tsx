@@ -479,6 +479,7 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
       tsaPreCheck: Boolean(profile.tsa_precheck || profile.global_entry),
       clear: Boolean(profile.clear),
       paymentCards: profile.paymentCards,
+      cardEnrollments: profile.cardEnrollments,
     };
     const cardLoungeResults: LoungeEligibilityResult[] =
       apt && profile.paymentCards?.length

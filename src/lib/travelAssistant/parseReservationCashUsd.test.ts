@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  extractNearBookingText,
   parseCashUsdFromText,
   resolveReservationCashUsd,
 } from "@/lib/travelAssistant/parseReservationCashUsd";
@@ -46,6 +47,16 @@ test("parseCashUsdFromText reads totals from HTML confirmation bodies", () => {
 test("parseCashUsdFromText reads ITA-style EUR totals", () => {
   const text = "Booking EFLQKE Totale EUR 86,40 Tasse incluse";
   assert.equal(parseCashUsdFromText(text), 93);
+});
+
+test("extractNearBookingText finds EUR total near FCO-BRE route", () => {
+  const text = `
+    Leg A FCO - BRE AZ1234 Totale EUR 86,40 end leg A
+    Leg B MUC - FCO Totale EUR 120,00 end leg B
+  `;
+  const slice = extractNearBookingText(text, { departureAirport: "FCO", arrivalAirport: "BRE" });
+  assert.ok(slice?.includes("86,40"));
+  assert.equal(parseCashUsdFromText(slice ?? ""), 93);
 });
 
 test("resolveReservationCashUsd prefers stored quotedPriceUsd", () => {

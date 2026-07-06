@@ -162,6 +162,8 @@ export interface PricingNearBookingInput extends CashUsdResolvable, MilesResolva
   confirmationCode?: string;
   title?: string;
   flightNumber?: string;
+  departureAirport?: string;
+  arrivalAirport?: string;
 }
 
 /** Resolve cash + miles from the slice of a confirmation most relevant to one booking. */
@@ -171,6 +173,8 @@ export function resolvePricingNearBooking(input: PricingNearBookingInput): Reser
     confirmationCode: input.confirmationCode,
     title: input.title,
     flightNumber: input.flightNumber,
+    departureAirport: input.departureAirport,
+    arrivalAirport: input.arrivalAirport,
   });
   return resolveReservationPricing({
     ...input,

@@ -248,6 +248,7 @@ export interface TravelerCredentials {
     | "sky_club"
     | "amex_centurion"
   )[];
+  cardEnrollments?: Record<string, import("@/lib/points/benefitPlaybooks").CardEnrollmentState>;
   askedAt?: string;
 }
 
@@ -374,6 +375,7 @@ export interface LoungeEligibilityResult {
   entryMethod?: BenefitEntryMethod;
   entrySteps?: string[];
   deepLink?: { label: string; url: string };
+  enrollmentRequired?: boolean;
 }
 
 export interface VoiceNavIntent {

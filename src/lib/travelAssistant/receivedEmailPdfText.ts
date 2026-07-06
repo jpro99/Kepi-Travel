@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Resend } from "resend";
 import { extractConfirmationPlainText } from "@/lib/travelAssistant/confirmationDocumentText";
+import { appendPdfAttachmentText } from "@/lib/travelAssistant/emailSourceText";
 import { logger } from "@/lib/logger";
 
 type ReceivedAttachmentMeta = {
@@ -126,11 +127,7 @@ export async function fetchReceivedEmailSourceText(
     const pdfText = await extractPdfTextFromReceivedEmail(resendClient, trimmedEmailId, logContext);
     const bodyText = receivedEmail.text?.trim() ?? "";
     const html = receivedEmail.html?.trim() ?? "";
-    const combinedText = pdfText.trim()
-      ? bodyText
-        ? `${bodyText}\n\n--- PDF attachment ---\n\n${pdfText.trim()}`
-        : pdfText.trim()
-      : bodyText;
+    const combinedText = appendPdfAttachmentText(bodyText, pdfText);
 
     return {
       subject: receivedEmail.subject?.trim() ?? "",

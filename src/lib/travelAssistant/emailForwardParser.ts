@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { htmlToPlainConfirmationText } from "@/lib/travelAssistant/confirmationDocumentText";
+import { mergePdfSectionIntoBody } from "@/lib/travelAssistant/emailSourceText";
 import { logger } from "@/lib/logger";
 
 const MODEL = "claude-sonnet-4-5";
@@ -1377,15 +1378,21 @@ function chooseBodyText(text: string, html: string): { parsedText: string; lineA
   }
   const normalizedText = normalizeWhitespace(lineAwareText);
   if (normalizedText.length >= MIN_READABLE_TEXT_LENGTH) {
-    return { parsedText: normalizedText, lineAwareText, imageBasedEmail: false };
+    return {
+      parsedText: normalizeWhitespace(mergePdfSectionIntoBody(lineAwareText, lineAwareRaw)),
+      lineAwareText: mergePdfSectionIntoBody(lineAwareText, lineAwareRaw),
+      imageBasedEmail: false,
+    };
   }
   const strippedHtml = normalizeWhitespace(lineAwareHtml);
   if (strippedHtml.length >= MIN_READABLE_TEXT_LENGTH) {
-    return { parsedText: strippedHtml, lineAwareText: lineAwareHtml, imageBasedEmail: false };
+    const mergedHtml = mergePdfSectionIntoBody(lineAwareHtml, lineAwareRaw);
+    return { parsedText: normalizeWhitespace(mergedHtml), lineAwareText: mergedHtml, imageBasedEmail: false };
   }
+  const mergedFallback = mergePdfSectionIntoBody(lineAwareText || lineAwareHtml || strippedHtml, lineAwareRaw);
   return {
-    parsedText: strippedHtml || normalizedText,
-    lineAwareText: lineAwareText || lineAwareHtml || strippedHtml,
+    parsedText: normalizeWhitespace(mergedFallback) || strippedHtml || normalizedText,
+    lineAwareText: mergedFallback || lineAwareHtml || strippedHtml,
     imageBasedEmail: true,
   };
 }

@@ -130,7 +130,13 @@ export function parseCashUsdNearBooking(
 /** Slice of a long confirmation document most likely to contain this booking's pricing. */
 export function extractNearBookingText(
   text: string,
-  hints: { confirmationCode?: string; title?: string; flightNumber?: string },
+  hints: {
+    confirmationCode?: string;
+    title?: string;
+    flightNumber?: string;
+    departureAirport?: string;
+    arrivalAirport?: string;
+  },
 ): string | undefined {
   const haystack = text.trim();
   if (!haystack) return undefined;
@@ -139,6 +145,24 @@ export function extractNearBookingText(
     const slice = haystack.slice(Math.max(0, start), Math.min(haystack.length, end)).trim();
     return slice.length >= 40 ? slice : undefined;
   };
+
+  const dep = hints.departureAirport?.trim().toUpperCase();
+  const arr = hints.arrivalAirport?.trim().toUpperCase();
+  if (dep && arr && dep.length === 3 && arr.length === 3) {
+    const haystackUpper = haystack.toUpperCase();
+    const routeNeedles = [`${dep} - ${arr}`, `${dep}-${arr}`, `${dep} / ${arr}`, `${dep} TO ${arr}`, `${dep} ${arr}`];
+    for (const needle of routeNeedles) {
+      const idx = haystackUpper.indexOf(needle);
+      if (idx >= 0) {
+        const tail = haystack.slice(idx + needle.length, idx + needle.length + 160);
+        const nextLeg = tail.search(/\b(?:leg\s+[a-z0-9]+|segment\s+\d|passenger\s+\d)\b/iu);
+        const sliceEnd =
+          nextLeg > 20 ? idx + needle.length + nextLeg : idx + needle.length + Math.min(tail.length, 90);
+        const slice = sliceWindow(idx - 40, sliceEnd);
+        if (slice) return slice;
+      }
+    }
+  }
 
   const code = hints.confirmationCode?.trim();
   if (code && code.length >= 4) {

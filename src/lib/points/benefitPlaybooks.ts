@@ -1,6 +1,7 @@
 /**
  * Structured benefit playbooks — how to actually use a card benefit at the airport or hotel.
  * Names only; never store PAN or issuer app credentials.
+ * Update lounge/airport playbooks via kepi-card-bot skill (same pipeline as cardEarnRules.ts).
  */
 
 export type BenefitEntryMethod =
@@ -24,6 +25,10 @@ export interface BenefitPlaybook {
 export interface CardEnrollmentState {
   priorityPassEnrolled?: boolean;
   centurionDigitalReady?: boolean;
+  /** Optional per-visit guest tracking for Centurion (0–2 on many U.S. visits). */
+  centurionGuestPassesUsedThisVisit?: number;
+  /** Optional Priority Pass membership number — never store full card PAN. */
+  priorityPassNumber?: string;
 }
 
 export const BENEFIT_PLAYBOOKS: Record<string, BenefitPlaybook> = {
@@ -45,7 +50,7 @@ export const BENEFIT_PLAYBOOKS: Record<string, BenefitPlaybook> = {
     ],
     deepLink: {
       label: "Open Amex app",
-      url: "https://www.americanexpress.com/us/customer-service/digital/amex-mobile-app.html",
+      url: "https://apps.apple.com/us/app/amex/id362348516",
     },
     guestPolicy: "Platinum: typically 2 guests on many U.S. visits when flying eligible airlines — confirm at door.",
   },
@@ -106,6 +111,22 @@ export const BENEFIT_PLAYBOOKS: Record<string, BenefitPlaybook> = {
       "Board when your priority group is called on the gate display",
     ],
   },
+  "ita-executive-lounge-fco": {
+    id: "ita-executive-lounge-fco",
+    title: "ITA Airways Executive Lounge (FCO)",
+    entryMethod: "airline_status",
+    requirements: [
+      "Same-day ITA Airways or SkyTeam departure from FCO",
+      "Volare Executive / Premium Plus status, or business/first on qualifying fare",
+    ],
+    steps: [
+      "Confirm you are flying ITA or SkyTeam same day from Terminal 1",
+      "After security, follow signs to ITA Airways Executive Lounge",
+      "Show boarding pass and Volare card or status proof at the entrance",
+      "Guest access depends on your Volare tier — confirm at the desk",
+    ],
+    guestPolicy: "Guest rules vary by Volare tier and fare — ask at the lounge entrance.",
+  },
 };
 
 export function getBenefitPlaybook(id: string): BenefitPlaybook | null {
@@ -156,6 +177,14 @@ export function enrollmentHintsForCard(cardId: string): Array<{ key: keyof CardE
         key: "centurionDigitalReady",
         label: "Amex app set up — I can generate lounge QR codes",
       },
+      {
+        key: "centurionGuestPassesUsedThisVisit",
+        label: "Centurion guest passes used this visit (optional counter)",
+      },
+      {
+        key: "priorityPassNumber",
+        label: "Priority Pass membership number (optional — not your card number)",
+      },
     ];
   }
   return [];
@@ -178,4 +207,105 @@ export function entryMethodLabel(method: BenefitEntryMethod): string {
     default:
       return "At venue";
   }
+}
+
+const ENROLLMENT_STEPS: Record<string, string[]> = {
+  "amex-priority-pass": [
+    "Enroll Priority Pass once at americanexpress.com → your Platinum card benefits",
+    "Download the Priority Pass app and sign in with your membership number",
+    "Mark \"Priority Pass enrolled\" in Card wallet — Kepi will show lounge QR steps next time",
+  ],
+  "amex-centurion-lounge": [
+    "Install the Amex app and sign in with your Platinum account",
+    "Open Account → Membership → Lounge Access and confirm you can generate a QR pass",
+    "Mark \"Amex app set up\" in Card wallet — we will show Centurion entry steps at the airport",
+  ],
+  "delta-sky-club-amex": [
+    "Install the Amex app before your Delta departure",
+    "Confirm Delta Sky Club access appears under Lounge Access for today's flight",
+  ],
+};
+
+export interface LoungePlaybookApplication {
+  entryMethod?: BenefitEntryMethod;
+  entrySteps?: string[];
+  deepLink?: { label: string; url: string };
+  guestPolicy?: string;
+  enrollmentRequired?: boolean;
+  enrollmentReason?: string;
+}
+
+/** Adjust lounge entry steps when issuer enrollment is incomplete. */
+export function applyEnrollmentToPlaybook(
+  playbook: BenefitPlaybook | null,
+  enrollment: CardEnrollmentState | undefined,
+): LoungePlaybookApplication {
+  if (!playbook) return {};
+
+  if (playbook.id === "amex-priority-pass" && enrollment?.priorityPassEnrolled !== true) {
+    return {
+      entryMethod: "enrollment_required",
+      entrySteps: ENROLLMENT_STEPS["amex-priority-pass"],
+      deepLink: playbook.deepLink,
+      guestPolicy: playbook.guestPolicy,
+      enrollmentRequired: true,
+      enrollmentReason: "Enroll Priority Pass on your Amex account first",
+    };
+  }
+
+  if (playbook.entryMethod === "amex_app_qr" && enrollment?.centurionDigitalReady !== true) {
+    return {
+      entryMethod: "enrollment_required",
+      entrySteps: ENROLLMENT_STEPS[playbook.id] ?? ENROLLMENT_STEPS["amex-centurion-lounge"],
+      deepLink: playbook.deepLink,
+      guestPolicy: playbook.guestPolicy,
+      enrollmentRequired: true,
+      enrollmentReason: "Set up the Amex app to generate your lounge QR",
+    };
+  }
+
+  let guestPolicy = playbook.guestPolicy;
+  if (
+    playbook.id === "amex-centurion-lounge" &&
+    typeof enrollment?.centurionGuestPassesUsedThisVisit === "number" &&
+    enrollment.centurionGuestPassesUsedThisVisit >= 2
+  ) {
+    guestPolicy = "You marked 2 guest passes used this visit — additional guests may pay a fee at the desk.";
+  }
+
+  return {
+    entryMethod: playbook.entryMethod,
+    entrySteps: playbook.steps,
+    deepLink: playbook.deepLink,
+    guestPolicy,
+    enrollmentRequired: false,
+  };
+}
+
+/** Merge enrollment state from all owned cards that map to a playbook's card benefits. */
+export function mergeEnrollmentForPlaybook(
+  playbookId: string | undefined,
+  cardEnrollments: Record<string, CardEnrollmentState> | undefined,
+): CardEnrollmentState | undefined {
+  if (!playbookId || !cardEnrollments) return undefined;
+
+  const cardIds =
+    playbookId === "amex-priority-pass" || playbookId === "amex-centurion-lounge" || playbookId === "delta-sky-club-amex"
+      ? ["amex-platinum"]
+      : [];
+
+  if (cardIds.length === 0) return undefined;
+
+  const merged: CardEnrollmentState = {};
+  for (const cardId of cardIds) {
+    const entry = cardEnrollments[cardId];
+    if (!entry) continue;
+    if (entry.priorityPassEnrolled === true) merged.priorityPassEnrolled = true;
+    if (entry.centurionDigitalReady === true) merged.centurionDigitalReady = true;
+    if (typeof entry.centurionGuestPassesUsedThisVisit === "number") {
+      merged.centurionGuestPassesUsedThisVisit = entry.centurionGuestPassesUsedThisVisit;
+    }
+    if (entry.priorityPassNumber?.trim()) merged.priorityPassNumber = entry.priorityPassNumber.trim();
+  }
+  return Object.keys(merged).length > 0 ? merged : undefined;
 }
