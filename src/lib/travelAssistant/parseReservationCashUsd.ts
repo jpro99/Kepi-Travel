@@ -337,6 +337,23 @@ export interface CashUsdResolvable {
   quotedPriceUsd?: number;
   notes?: string;
   originalEmailText?: string;
+  confirmationCode?: string;
+  title?: string;
+  flightNumber?: string;
+  flightDepartureAirport?: string;
+  flightArrivalAirport?: string;
+}
+
+function pricingTextForReservation(reservation: CashUsdResolvable): string {
+  const combined = [reservation.notes, reservation.originalEmailText].filter(Boolean).join("\n");
+  const nearText = extractNearBookingText(combined, {
+    confirmationCode: reservation.confirmationCode,
+    title: reservation.title,
+    flightNumber: reservation.flightNumber,
+    departureAirport: reservation.flightDepartureAirport,
+    arrivalAirport: reservation.flightArrivalAirport,
+  });
+  return nearText ?? combined;
 }
 
 export function resolveReservationCashUsd(reservation: CashUsdResolvable): number | undefined {
@@ -348,14 +365,14 @@ export function resolveReservationCashUsd(reservation: CashUsdResolvable): numbe
     return Math.round(reservation.quotedPriceUsd);
   }
 
-  const combined = [reservation.notes, reservation.originalEmailText].filter(Boolean).join("\n");
-  const miles = parseMilesFromText(combined);
-  if (miles.milesSpent != null && isZeroCashDueContext(combined)) {
+  const pricingText = pricingTextForReservation(reservation);
+  const miles = parseMilesFromText(pricingText);
+  if (miles.milesSpent != null && isZeroCashDueContext(pricingText)) {
     return undefined;
   }
-  if (isZeroCashDueContext(combined) && isAwardOnlyReservationText(combined)) {
+  if (isZeroCashDueContext(pricingText) && isAwardOnlyReservationText(pricingText)) {
     return undefined;
   }
-  const parsed = parseCashUsdFromText(combined);
+  const parsed = parseCashUsdFromText(pricingText);
   return parsed != null ? Math.round(parsed) : undefined;
 }

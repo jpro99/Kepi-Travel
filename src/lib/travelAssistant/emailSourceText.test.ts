@@ -5,6 +5,7 @@ import {
   ensurePdfInSourceText,
   mergePdfSectionIntoBody,
   shouldReplaceStoredSourceText,
+  truncateEmailSourceText,
 } from "@/lib/travelAssistant/emailSourceText";
 
 test("mergePdfSectionIntoBody keeps PDF when HTML body is chosen", () => {
@@ -27,6 +28,14 @@ test("shouldReplaceStoredSourceText prefers fetched text when PDF marker is new"
     true,
   );
   assert.equal(shouldReplaceStoredSourceText("already has pdf\n\n--- PDF attachment ---\n\nold", "shorter"), false);
+});
+
+test("truncateEmailSourceText keeps PDF attachment when body is long", () => {
+  const body = "x".repeat(13_000);
+  const pdf = "--- PDF attachment ---\n\nTotale EUR 86,40";
+  const stored = truncateEmailSourceText(`${body}\n\n${pdf}`, 12_000);
+  assert.match(stored, /--- PDF attachment ---/);
+  assert.match(stored, /Totale EUR 86,40/);
 });
 
 test("appendPdfAttachmentText does not duplicate marker", () => {

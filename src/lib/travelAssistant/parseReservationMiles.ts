@@ -3,8 +3,8 @@
  */
 
 import {
-  resolveReservationCashUsd,
   extractNearBookingText,
+  resolveReservationCashUsd,
   type CashUsdResolvable,
 } from "@/lib/travelAssistant/parseReservationCashUsd";
 
@@ -110,6 +110,23 @@ export interface MilesResolvable {
   pointsProgram?: string;
   notes?: string;
   originalEmailText?: string;
+  confirmationCode?: string;
+  title?: string;
+  flightNumber?: string;
+  flightDepartureAirport?: string;
+  flightArrivalAirport?: string;
+}
+
+function milesTextForReservation(reservation: MilesResolvable): string {
+  const combined = [reservation.notes, reservation.originalEmailText].filter(Boolean).join("\n");
+  const nearText = extractNearBookingText(combined, {
+    confirmationCode: reservation.confirmationCode,
+    title: reservation.title,
+    flightNumber: reservation.flightNumber,
+    departureAirport: reservation.flightDepartureAirport,
+    arrivalAirport: reservation.flightArrivalAirport,
+  });
+  return nearText ?? combined;
 }
 
 export function resolveReservationMiles(reservation: MilesResolvable): ParsedMilesFromText {
@@ -133,8 +150,7 @@ export function resolveReservationMiles(reservation: MilesResolvable): ParsedMil
     result.program = reservation.pointsProgram.trim();
   }
 
-  const combined = [reservation.notes, reservation.originalEmailText].filter(Boolean).join("\n");
-  const parsed = parseMilesFromText(combined);
+  const parsed = parseMilesFromText(milesTextForReservation(reservation));
 
   if (result.milesSpent == null && parsed.milesSpent != null) result.milesSpent = parsed.milesSpent;
   if (result.milesEarned == null && parsed.milesEarned != null) result.milesEarned = parsed.milesEarned;

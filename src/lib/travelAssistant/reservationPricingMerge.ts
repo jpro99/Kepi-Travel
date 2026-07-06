@@ -1,3 +1,5 @@
+import { shouldReplaceStoredSourceText } from "@/lib/travelAssistant/emailSourceText";
+
 export interface ReservationPricingFields {
   quotedPriceUsd?: number;
   quotedPointsMiles?: number;
@@ -37,7 +39,16 @@ export function mergeReservationPricingFields<T extends ReservationPricingFields
   fill("quotedPointsMiles");
   fill("quotedMilesEarned");
   fill("pointsProgram");
-  fill("originalEmailText");
+
+  const existingSource = existing.originalEmailText?.trim() ?? "";
+  const incomingSource = incoming.originalEmailText?.trim() ?? "";
+  if (incomingSource && shouldReplaceStoredSourceText(existingSource, incomingSource)) {
+    next.originalEmailText = incomingSource;
+    changed = true;
+  } else {
+    fill("originalEmailText");
+  }
+
   fill("sourceEmailId");
   fill("sourceEmailSubject");
 

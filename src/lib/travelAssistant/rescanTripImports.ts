@@ -10,7 +10,7 @@ import { resolvePricingNearBooking } from "@/lib/travelAssistant/parseReservatio
 import { applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import { getResendClient } from "@/lib/email/resendClient";
 import { fetchReceivedEmailSourceText } from "@/lib/travelAssistant/receivedEmailPdfText";
-import { shouldReplaceStoredSourceText } from "@/lib/travelAssistant/emailSourceText";
+import { shouldReplaceStoredSourceText, truncateEmailSourceText } from "@/lib/travelAssistant/emailSourceText";
 import {
   isDuplicateReservation,
   type DuplicateReservationFields,
@@ -99,7 +99,7 @@ function draftToIncomingReservation(
     quotedMilesEarned: pricing.milesEarned,
     pointsProgram: pricing.program,
     sourceEmailSubject: subject,
-    originalEmailText: sourceText.slice(0, 12_000),
+    originalEmailText: truncateEmailSourceText(sourceText),
   };
 }
 
@@ -176,7 +176,7 @@ async function backfillSourceTextFromResend(
     if (!shouldReplaceStoredSourceText(existingText, fetched.text)) return reservation;
     return applyAcceptedReservationPricing({
       ...reservation,
-      originalEmailText: fetched.text.slice(0, 12_000),
+      originalEmailText: truncateEmailSourceText(fetched.text),
       sourceEmailSubject: reservation.sourceEmailSubject?.trim() || fetched.subject,
     });
   });
@@ -240,7 +240,7 @@ export async function rescanTripImports(
     }
   }
 
-  const updatedReservations = [...byId.values()];
+  const updatedReservations = [...byId.values()].map((reservation) => applyAcceptedReservationPricing(reservation));
   return {
     rescannedSources: groups.length,
     updatedReservations: results.filter((result) => result.filledFields.length > 0).length,

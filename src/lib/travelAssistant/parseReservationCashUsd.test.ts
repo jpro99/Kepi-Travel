@@ -59,6 +59,23 @@ test("extractNearBookingText finds EUR total near FCO-BRE route", () => {
   assert.equal(parseCashUsdFromText(slice ?? ""), 93);
 });
 
+test("resolveReservationCashUsd scopes ITA EUR to matching flight leg", () => {
+  const source = `
+    Confirmation EFLQKE AZ 1607 FCO-BRI Punti utilizzati 8.000 Totale EUR 72,30
+    Confirmation Z84T4Z AZ 1616 BRI-VCE Punti utilizzati 15.000 Totale EUR 54,10
+  `;
+  assert.equal(
+    resolveReservationCashUsd({
+      originalEmailText: source,
+      confirmationCode: "Z84T4Z",
+      flightNumber: "AZ1616",
+      flightDepartureAirport: "BRI",
+      flightArrivalAirport: "VCE",
+    }),
+    58,
+  );
+});
+
 test("resolveReservationCashUsd prefers stored quotedPriceUsd", () => {
   assert.equal(
     resolveReservationCashUsd({

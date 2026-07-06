@@ -28,7 +28,11 @@ import {
 import { enrichReservationForAutoImport } from "@/lib/travelAssistant/autoImportReservation";
 import { drainForwardReviewQueue } from "@/lib/travelAssistant/drainForwardReviewQueue";
 import { extractPdfTextFromReceivedEmail } from "@/lib/travelAssistant/receivedEmailPdfText";
-import { appendPdfAttachmentText, ensurePdfInSourceText } from "@/lib/travelAssistant/emailSourceText";
+import {
+  appendPdfAttachmentText,
+  ensurePdfInSourceText,
+  truncateEmailSourceText,
+} from "@/lib/travelAssistant/emailSourceText";
 import { resolveReservationPricing, resolvePricingNearBooking } from "@/lib/travelAssistant/parseReservationMiles";
 import { applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import { generateId } from "@/lib/utils/generateId";
@@ -609,7 +613,9 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         : "needs-review";
     const parserOriginalEmailText =
       typeof parserResult?.originalEmailText === "string" ? parserResult.originalEmailText : "";
-    const storedSourceText = ensurePdfInSourceText(parserOriginalEmailText, pdfAttachmentText).slice(0, 12_000);
+    const storedSourceText = truncateEmailSourceText(
+      ensurePdfInSourceText(parserOriginalEmailText, pdfAttachmentText),
+    );
     const parserHasPdfAttachment = Boolean(parserResult?.hasPdfAttachment);
     const parserImageBasedEmail = Boolean(parserResult?.imageBasedEmail);
     const parserUsedAiFallback = Boolean(parserResult?.usedAiFallback);
