@@ -27,6 +27,7 @@ import {
 } from "@/lib/travelAssistant/flightItinerarySync";
 import { enrichReservationForAutoImport } from "@/lib/travelAssistant/autoImportReservation";
 import { drainForwardReviewQueue } from "@/lib/travelAssistant/drainForwardReviewQueue";
+import { extractPdfTextFromReceivedEmail } from "@/lib/travelAssistant/receivedEmailPdfText";
 import { resolveReservationPricing } from "@/lib/travelAssistant/parseReservationMiles";
 import { generateId } from "@/lib/utils/generateId";
 
@@ -563,6 +564,22 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
           routeLogger.error("Resend receiving lookup threw an exception.", {
             emailId,
             error: error instanceof Error ? error.message : "unknown",
+          });
+        }
+      }
+    }
+
+    if (emailId) {
+      const resendClient = getResendClient();
+      if (resendClient) {
+        const pdfAttachmentText = await extractPdfTextFromReceivedEmail(resendClient, emailId, { requestId });
+        if (pdfAttachmentText.trim()) {
+          parserText = parserText.trim()
+            ? `${parserText.trim()}\n\n--- PDF attachment ---\n\n${pdfAttachmentText.trim()}`
+            : pdfAttachmentText.trim();
+          routeLogger.info("Appended PDF attachment text to forwarded email parser input.", {
+            emailId,
+            pdfTextLength: pdfAttachmentText.length,
           });
         }
       }

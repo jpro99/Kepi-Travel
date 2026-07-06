@@ -19,6 +19,7 @@ const ACTIVE_TRIP_ID_KEY = "active-trip-id";
 export type TripStatus = "green" | "yellow" | "red";
 export type TripScenario = "none" | "missed-flight" | "train-delay" | "ride-no-show";
 export type TripAirportTransport = "driving-myself" | "getting-dropped-off" | "uber-lyft" | "train-bus" | "other";
+export type TripStayDecisionIntent = "needs_hotel" | "skip";
 
 export interface TripFeedItem {
   id: string;
@@ -50,6 +51,8 @@ export interface TravelTrip {
   hotelArrivalTime?: string | null;
   bookingWizard?: BookingWizardProgress;
   itineraryPlans?: ItineraryPlansData;
+  /** User choices like pre-departure-2026-09-01 → skip (staying at home). */
+  stayDecisions?: Record<string, TripStayDecisionIntent>;
 }
 
 export interface CreateTripInput {
@@ -94,6 +97,20 @@ function asStringArrayValue<T>(value: unknown): T[] | undefined {
   return value as T[];
 }
 
+function sanitizeStayDecisions(
+  value: unknown,
+): Record<string, TripStayDecisionIntent> | undefined {
+  if (!isRecord(value)) return undefined;
+  const result: Record<string, TripStayDecisionIntent> = {};
+  for (const [key, intent] of Object.entries(value)) {
+    if (typeof key !== "string" || key.trim().length === 0) continue;
+    if (intent === "needs_hotel" || intent === "skip") {
+      result[key.trim()] = intent;
+    }
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
 function sanitizeTrip(raw: unknown): TravelTrip | null {
   if (!isRecord(raw)) return null;
   if (
@@ -136,6 +153,7 @@ function sanitizeTrip(raw: unknown): TravelTrip | null {
     : null;
   const bookingWizard = raw.bookingWizard ? normalizeBookingWizard(raw.bookingWizard) : undefined;
   const itineraryPlans = raw.itineraryPlans ? normalizeItineraryPlans(raw.itineraryPlans) : undefined;
+  const stayDecisions = sanitizeStayDecisions(raw.stayDecisions);
 
   return {
     id: raw.id,
@@ -156,6 +174,7 @@ function sanitizeTrip(raw: unknown): TravelTrip | null {
     hotelArrivalTime,
     bookingWizard,
     itineraryPlans,
+    stayDecisions,
   };
 }
 
@@ -249,6 +268,9 @@ export async function updateTrip(
     ...existing,
     ...patch,
     reservations: patch.reservations ? [...patch.reservations] : existing.reservations,
+    stayDecisions: patch.stayDecisions
+      ? { ...existing.stayDecisions, ...patch.stayDecisions }
+      : existing.stayDecisions,
   };
   const nextTrips = [...trips];
   nextTrips[index] = updated;

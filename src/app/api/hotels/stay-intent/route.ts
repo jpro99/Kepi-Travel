@@ -6,6 +6,7 @@ import {
   recordSegmentStayDecision,
   stayDecisionsMap,
 } from "@/lib/memory/hotelStayIntent";
+import { getTrip, updateTrip } from "@/lib/travelAssistant/tripStore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,9 +27,14 @@ export async function GET(req: Request) {
   if (!tripId) return NextResponse.json({ error: "tripId required" }, { status: 400 });
 
   const record = await getTripHotelStayIntent(userId, tripId);
+  const trip = await getTrip(tripId, userId);
+  const decisions = {
+    ...stayDecisionsMap(record),
+    ...(trip?.stayDecisions ?? {}),
+  };
   return NextResponse.json({
     record,
-    decisions: stayDecisionsMap(record),
+    decisions,
     usuallySkipsConnections: record.travelStyle.usuallySkipsConnections,
   });
 }
@@ -58,10 +64,25 @@ export async function POST(req: Request) {
     stopKind: parsed.data.stopKind,
   });
 
+  const decisions = stayDecisionsMap(record);
+  try {
+    await updateTrip(
+      parsed.data.tripId,
+      {
+        stayDecisions: {
+          [parsed.data.segmentId]: parsed.data.intent,
+        },
+      },
+      userId,
+    );
+  } catch {
+    /* trip patch is best-effort; KV record still saved */
+  }
+
   return NextResponse.json({
     ok: true,
     record,
-    decisions: stayDecisionsMap(record),
+    decisions,
     usuallySkipsConnections: record.travelStyle.usuallySkipsConnections,
   });
 }

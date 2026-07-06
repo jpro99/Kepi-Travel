@@ -496,6 +496,7 @@ interface ManagedTrip {
   hotelArrivalTime: string | null;
   bookingWizard?: ReturnType<typeof normalizeBookingWizard>;
   itineraryPlans?: import("@/lib/travelAssistant/itineraryDayPlan").ItineraryPlansData;
+  stayDecisions?: Record<string, "needs_hotel" | "skip">;
 }
 
 type ManagedTripRuntimeSnapshot = {
@@ -1702,6 +1703,16 @@ function normalizeManagedTrip(trip: unknown): ManagedTrip | null {
     itineraryPlans: candidate.itineraryPlans
       ? normalizeItineraryPlans(candidate.itineraryPlans)
       : undefined,
+    stayDecisions:
+      candidate.stayDecisions && typeof candidate.stayDecisions === "object"
+        ? Object.fromEntries(
+            Object.entries(candidate.stayDecisions).filter(
+              (entry): entry is [string, "needs_hotel" | "skip"] =>
+                typeof entry[0] === "string" &&
+                (entry[1] === "needs_hotel" || entry[1] === "skip"),
+            ),
+          )
+        : undefined,
   };
 }
 
@@ -2786,6 +2797,16 @@ export default function TravelAssistantPage() {
 
       setTrips((previous) => (areSnapshotsEqual(previous, parsedTrips) ? previous : parsedTrips));
       setActiveTripId((previous) => (previous === resolvedActiveTripId ? previous : resolvedActiveTripId));
+
+      const stayDecisionsByTrip: Record<string, Record<string, "needs_hotel" | "skip">> = {};
+      for (const trip of parsedTrips) {
+        if (trip.stayDecisions && Object.keys(trip.stayDecisions).length > 0) {
+          stayDecisionsByTrip[trip.id] = trip.stayDecisions;
+        }
+      }
+      if (Object.keys(stayDecisionsByTrip).length > 0) {
+        setTripStayDecisionsByTrip((previous) => ({ ...previous, ...stayDecisionsByTrip }));
+      }
 
       if (resolvedActiveTrip) {
         applyManagedTripToState(resolvedActiveTrip, { resetHighlight: true });
@@ -5886,6 +5907,16 @@ export default function TravelAssistantPage() {
           [segment.id]: intent,
         },
       }));
+      setTrips((prev) =>
+        prev.map((trip) =>
+          trip.id === activeTripId
+            ? {
+                ...trip,
+                stayDecisions: { ...(trip.stayDecisions ?? {}), [segment.id]: intent },
+              }
+            : trip,
+        ),
+      );
       try {
         const response = await fetch("/api/hotels/stay-intent", {
           method: "POST",
@@ -5928,6 +5959,16 @@ export default function TravelAssistantPage() {
           [segmentId]: "skip",
         },
       }));
+      setTrips((prev) =>
+        prev.map((trip) =>
+          trip.id === activeTripId
+            ? {
+                ...trip,
+                stayDecisions: { ...(trip.stayDecisions ?? {}), [segmentId]: "skip" },
+              }
+            : trip,
+        ),
+      );
       try {
         const response = await fetch("/api/hotels/stay-intent", {
           method: "POST",
