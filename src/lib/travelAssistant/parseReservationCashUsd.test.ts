@@ -43,6 +43,11 @@ test("parseCashUsdFromText reads totals from HTML confirmation bodies", () => {
   assert.equal(parseCashUsdFromText(html), 1285);
 });
 
+test("parseCashUsdFromText reads ITA-style EUR totals", () => {
+  const text = "Booking EFLQKE Totale EUR 86,40 Tasse incluse";
+  assert.equal(parseCashUsdFromText(text), 93);
+});
+
 test("resolveReservationCashUsd prefers stored quotedPriceUsd", () => {
   assert.equal(
     resolveReservationCashUsd({

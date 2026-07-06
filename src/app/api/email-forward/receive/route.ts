@@ -28,7 +28,8 @@ import {
 import { enrichReservationForAutoImport } from "@/lib/travelAssistant/autoImportReservation";
 import { drainForwardReviewQueue } from "@/lib/travelAssistant/drainForwardReviewQueue";
 import { extractPdfTextFromReceivedEmail } from "@/lib/travelAssistant/receivedEmailPdfText";
-import { resolveReservationPricing } from "@/lib/travelAssistant/parseReservationMiles";
+import { resolveReservationPricing, resolvePricingNearBooking } from "@/lib/travelAssistant/parseReservationMiles";
+import { applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import { generateId } from "@/lib/utils/generateId";
 
 const AttachmentSchema = z.object({
@@ -720,9 +721,12 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         ? (isEmailProviderName && iataPrefix.length === 2 ? `${iataPrefix} Airlines` : rawAirline || "Unknown Airline")
         : "";
 
-      const emailPricing = resolveReservationPricing({
+      const emailPricing = resolvePricingNearBooking({
         notes: parserNotesText,
         originalEmailText: parserOriginalEmailText,
+        confirmationCode: parserConfirmationCode,
+        title: parserTitle,
+        flightNumber: parserType === "flight" ? parserFlightNumber : undefined,
       });
 
       const parsedReservation = {
@@ -888,7 +892,9 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         if (hasMatchingReservation) {
           const existing = nextReservations[matchingReservationIndex] as SessionReservation;
           const incoming = parsedReservation as SessionReservation;
-          const pricingMerged = mergeReservationPricingFields(existing, incoming);
+          const pricingMerged = applyAcceptedReservationPricing(
+            mergeReservationPricingFields(existing, incoming),
+          );
           if (pricingMerged !== existing) {
             nextReservations = nextReservations.map((reservation, index) =>
               index === matchingReservationIndex ? pricingMerged : reservation,

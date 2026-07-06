@@ -95,3 +95,54 @@ export async function extractPdfTextFromReceivedEmail(
     return "";
   }
 }
+
+export interface ReceivedEmailSourceText {
+  subject: string;
+  text: string;
+  html: string;
+}
+
+/** Fetch received email body + PDF attachment text from Resend (for re-scan / backfill). */
+export async function fetchReceivedEmailSourceText(
+  resendClient: Resend,
+  emailId: string,
+  logContext?: Record<string, unknown>,
+): Promise<ReceivedEmailSourceText | null> {
+  const trimmedEmailId = emailId.trim();
+  if (!trimmedEmailId) return null;
+
+  try {
+    const receivedEmailResponse = await resendClient.emails.receiving.get(trimmedEmailId);
+    if (receivedEmailResponse.error || !receivedEmailResponse.data) {
+      logger.warn("Resend receiving lookup failed during source backfill.", {
+        ...logContext,
+        emailId: trimmedEmailId,
+        error: receivedEmailResponse.error?.message ?? "unknown",
+      });
+      return null;
+    }
+
+    const receivedEmail = receivedEmailResponse.data;
+    const pdfText = await extractPdfTextFromReceivedEmail(resendClient, trimmedEmailId, logContext);
+    const bodyText = receivedEmail.text?.trim() ?? "";
+    const html = receivedEmail.html?.trim() ?? "";
+    const combinedText = pdfText.trim()
+      ? bodyText
+        ? `${bodyText}\n\n--- PDF attachment ---\n\n${pdfText.trim()}`
+        : pdfText.trim()
+      : bodyText;
+
+    return {
+      subject: receivedEmail.subject?.trim() ?? "",
+      text: combinedText,
+      html,
+    };
+  } catch (error) {
+    logger.warn("Resend receiving lookup threw during source backfill.", {
+      ...logContext,
+      emailId: trimmedEmailId,
+      error: error instanceof Error ? error.message : "unknown",
+    });
+    return null;
+  }
+}

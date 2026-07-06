@@ -49,11 +49,30 @@ function normalizeEmailText(text: string): string {
     .trim();
 }
 
-function parseDollarAmount(raw: string): number | undefined {
-  const cleaned = raw.replace(/,/g, "").trim();
+/** Approximate EUR→USD for European airline tax/fare lines in trip spend totals. */
+const EUR_TO_USD = 1.08;
+
+function parseMoneyToken(raw: string): number | undefined {
+  let cleaned = raw.trim();
+  if (!cleaned) return undefined;
+  if (/^\d{1,3}(?:\.\d{3})+,\d{2}$/u.test(cleaned) || (cleaned.includes(",") && !cleaned.includes("."))) {
+    cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+  } else {
+    cleaned = cleaned.replace(/,/g, "");
+  }
   const value = Number(cleaned);
   if (!Number.isFinite(value) || value <= 0 || value > 500_000) return undefined;
   return Math.round(value * 100) / 100;
+}
+
+function parseDollarAmount(raw: string): number | undefined {
+  return parseMoneyToken(raw);
+}
+
+function parseEuroAmount(raw: string): number | undefined {
+  const eur = parseMoneyToken(raw);
+  if (eur == null) return undefined;
+  return Math.round(eur * EUR_TO_USD);
 }
 
 /** Parse cash amounts from raw API/scan fields (numbers, "$499", "499usd", etc.). */
@@ -108,6 +127,50 @@ export function parseCashUsdNearBooking(
   return parseCashUsdFromText(haystack);
 }
 
+/** Slice of a long confirmation document most likely to contain this booking's pricing. */
+export function extractNearBookingText(
+  text: string,
+  hints: { confirmationCode?: string; title?: string; flightNumber?: string },
+): string | undefined {
+  const haystack = text.trim();
+  if (!haystack) return undefined;
+
+  const sliceWindow = (start: number, end: number): string | undefined => {
+    const slice = haystack.slice(Math.max(0, start), Math.min(haystack.length, end)).trim();
+    return slice.length >= 40 ? slice : undefined;
+  };
+
+  const code = hints.confirmationCode?.trim();
+  if (code && code.length >= 4) {
+    const idx = haystack.toLowerCase().indexOf(code.toLowerCase());
+    if (idx >= 0) {
+      const slice = sliceWindow(idx - 200, idx + 550);
+      if (slice) return slice;
+    }
+  }
+
+  const flightNumber = hints.flightNumber?.trim().replace(/\s+/gu, "");
+  if (flightNumber && flightNumber.length >= 3) {
+    const idx = haystack.toUpperCase().indexOf(flightNumber.toUpperCase());
+    if (idx >= 0) {
+      const slice = sliceWindow(idx - 250, idx + 650);
+      if (slice) return slice;
+    }
+  }
+
+  const title = hints.title?.trim();
+  if (title && title.length >= 6) {
+    const probe = title.slice(0, Math.min(title.length, 48));
+    const idx = haystack.toLowerCase().indexOf(probe.toLowerCase());
+    if (idx >= 0) {
+      const slice = sliceWindow(idx - 200, idx + 550);
+      if (slice) return slice;
+    }
+  }
+
+  return undefined;
+}
+
 interface ScoredAmount {
   usd: number;
   score: number;
@@ -124,7 +187,27 @@ function scoreAmountMatch(fullText: string, start: number, end: number): number 
   if (PENALTY_CONTEXT.test(context) && !TICKET_VALUE_CONTEXT.test(context)) score -= 60;
   if (/\b(?:miles?|points?)\b/iu.test(context) && !TICKET_VALUE_CONTEXT.test(context)) score -= 40;
   if (/\bUSD\b/u.test(context)) score += 5;
+  if (/\b(?:EUR|€)\b/u.test(context)) score += 4;
   if (/\$\s*[\d,]+(?:\.\d{2})?\s*(?:USD)?/u.test(context)) score += 3;
+  return score;
+}
+
+interface ScoredEuroAmount {
+  usd: number;
+  score: number;
+}
+
+function scoreEuroAmountMatch(fullText: string, start: number, end: number): number {
+  const windowStart = Math.max(0, start - 90);
+  const windowEnd = Math.min(fullText.length, end + 90);
+  const context = fullText.slice(windowStart, windowEnd);
+  let score = 8;
+  if (TOTAL_CONTEXT.test(context)) score += 100;
+  if (/\b(?:totale|importo\s+totale|total\s+amount|amount\s+paid|taxes?\s+and\s+fees?)\b/iu.test(context)) {
+    score += 80;
+  }
+  if (PENALTY_CONTEXT.test(context) && !TOTAL_CONTEXT.test(context)) score -= 50;
+  if (/\b(?:miles?|points?|punti|volare)\b/iu.test(context)) score -= 20;
   return score;
 }
 
@@ -157,6 +240,25 @@ export function parseCashUsdFromText(text: string): number | undefined {
   }
 
   const scored: ScoredAmount[] = [];
+  const scoredEur: ScoredEuroAmount[] = [];
+
+  const eurPatterns: RegExp[] = [
+    /\b(?:grand\s+total|total(?:\s+(?:amount|price|cost|paid|charge|due|fare))?|amount\s+(?:paid|charged|due)|totale|importo\s+totale|you\s+paid|ticket\s+total|payment\s+total)\b[^€\d]{0,24}(?:€|EUR)\s*([\d.,]+)/giu,
+    /(?:€|EUR)\s*([\d.,]+)(?:\s*(?:EUR|€))?/giu,
+    /\b([\d.,]+)\s*(?:EUR|€)\b/giu,
+  ];
+
+  for (const pattern of eurPatterns) {
+    for (const match of haystack.matchAll(pattern)) {
+      const raw = match[1];
+      if (!raw) continue;
+      const usd = parseEuroAmount(raw);
+      if (usd == null) continue;
+      const start = match.index ?? 0;
+      const end = start + match[0].length;
+      scoredEur.push({ usd, score: scoreEuroAmountMatch(haystack, start, end) });
+    }
+  }
 
   const patterns: RegExp[] = [
     /\b(?:grand\s+total|total(?:\s+(?:amount|price|cost|paid|charge|due|fare))?|amount\s+(?:paid|charged|due)|you\s+paid|purchase\s+total|ticket\s+total|trip\s+total|payment\s+total|room\s+total|stay\s+total|reservation\s+total)\b[^$\d]{0,24}\$?\s*([\d,]+(?:\.\d{2})?)/giu,
@@ -179,20 +281,32 @@ export function parseCashUsdFromText(text: string): number | undefined {
     }
   }
 
-  if (scored.length === 0) return undefined;
+  if (scored.length === 0 && scoredEur.length === 0) return undefined;
 
   scored.sort((a, b) => b.score - a.score || b.usd - a.usd);
-  const best = scored[0];
-  if (best.score >= 40) return Math.round(best.usd);
+  scoredEur.sort((a, b) => b.score - a.score || b.usd - a.usd);
 
-  const viable = scored.filter((entry) => entry.score >= 0 && entry.usd >= 20);
-  if (viable.length > 0) {
-    const top = viable.sort((a, b) => b.usd - a.usd)[0];
+  const bestUsd = scored[0];
+  const bestEur = scoredEur[0];
+
+  if (bestUsd && bestUsd.score >= 40) return Math.round(bestUsd.usd);
+  if (bestEur && bestEur.score >= 40) return Math.round(bestEur.usd);
+
+  const viableUsd = scored.filter((entry) => entry.score >= 0 && entry.usd >= 20);
+  if (viableUsd.length > 0) {
+    const top = viableUsd.sort((a, b) => b.usd - a.usd)[0];
     if (top && top.score >= 0) return Math.round(top.usd);
   }
 
-  if (best.score < 0) return undefined;
-  return Math.round(best.usd);
+  const viableEur = scoredEur.filter((entry) => entry.score >= 0 && entry.usd >= 5);
+  if (viableEur.length > 0) {
+    const top = viableEur.sort((a, b) => b.usd - a.usd)[0];
+    if (top && top.score >= 0) return Math.round(top.usd);
+  }
+
+  if (bestUsd && bestUsd.score >= 0) return Math.round(bestUsd.usd);
+  if (bestEur && bestEur.score >= 0) return Math.round(bestEur.usd);
+  return undefined;
 }
 
 export interface CashUsdResolvable {

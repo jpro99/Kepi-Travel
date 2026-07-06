@@ -4,6 +4,7 @@
 
 import {
   resolveReservationCashUsd,
+  extractNearBookingText,
   type CashUsdResolvable,
 } from "@/lib/travelAssistant/parseReservationCashUsd";
 
@@ -19,12 +20,15 @@ function normalizeEmailText(text: string): string {
 
 function parseMilesNumber(raw: string | undefined): number | undefined {
   if (!raw) return undefined;
-  const value = Number(raw.replace(/,/g, "").trim());
+  const normalized = raw.replace(/\./g, "").replace(/,/g, "").trim();
+  const value = Number(normalized);
   if (!Number.isFinite(value) || value <= 0 || value > 50_000_000) return undefined;
   return Math.round(value);
 }
 
 const PROGRAM_HINTS: Array<{ pattern: RegExp; program: string }> = [
+  { pattern: /\bvolare\b/iu, program: "Volare" },
+  { pattern: /\b(?:ita\s+airways|ita\s+volare)\b/iu, program: "Volare" },
   { pattern: /\batmos\s+rewards\b/iu, program: "Atmos Rewards" },
   { pattern: /\balaska\s+mileage\s+plan\b/iu, program: "Alaska Mileage Plan" },
   { pattern: /\bmileage\s+plan\b/iu, program: "Alaska Mileage Plan" },
@@ -38,12 +42,14 @@ const PROGRAM_HINTS: Array<{ pattern: RegExp; program: string }> = [
 ];
 
 const SPENT_PATTERNS: RegExp[] = [
-  /\b(?:redeem(?:ed)?|used|spent|deducted|applied)\s*[:\-]?\s*([0-9,]+)\s*(?:miles?|points?)\b/giu,
-  /\b([0-9,]+)\s*(?:miles?|points?)\s*(?:redeem(?:ed)?|used|spent|deducted|applied)\b/giu,
-  /\b(?:miles?|points?)\s*(?:redeem(?:ed)?|used|spent|deducted)[:\-]?\s*([0-9,]+)\b/giu,
-  /\b(?:award\s+(?:travel|ticket|redemption))[^0-9]{0,24}([0-9,]+)\s*(?:miles?|points?)\b/giu,
-  /\b(?:redemption|redeemed)[:\s]+([0-9,]+)\s*(?:miles?|points?)\b/giu,
-  /\b([0-9,]+)\s*(?:miles?|points?)\s*(?:\+|\s)?(?:taxes?|fees?|surcharge)\b/giu,
+  /\b(?:punti\s+volare|volare\s+punti)\s*(?:utilizzat[oi]?|usati|spesi)[:\-]?\s*([0-9,\.]+)\b/giu,
+  /\b(?:redeem(?:ed)?|used|spent|deducted|applied|utilizzat[oi]?|spes[oi])\s*[:\-]?\s*([0-9,\.]+)\s*(?:volare\s*)?(?:miles?|points?|punti)\b/giu,
+  /\b([0-9,\.]+)\s*(?:volare\s*)?(?:miles?|points?|punti)\s*(?:redeem(?:ed)?|used|spent|deducted|applied|utilizzat[oi]?|spes[oi])\b/giu,
+  /\b(?:miles?|points?|punti)\s*(?:redeem(?:ed)?|used|spent|deducted|utilizzat[oi]?)[:\-]?\s*([0-9,\.]+)\b/giu,
+  /\b(?:award\s+(?:travel|ticket|redemption))[^0-9]{0,24}([0-9,\.]+)\s*(?:miles?|points?|punti)\b/giu,
+  /\b(?:redemption|redeemed|biglietto\s+award)[:\s]+([0-9,\.]+)\s*(?:miles?|points?|punti)\b/giu,
+  /\b([0-9,\.]+)\s*(?:miles?|points?|punti)\s*(?:\+|\s)?(?:taxes?|fees?|surcharge|tasse)\b/giu,
+  /\b(?:cash\s*&\s*points|cash\s+and\s+points)[^0-9]{0,40}([0-9,\.]+)\s*(?:miles?|points?|punti)\b/giu,
 ];
 
 const EARNED_PATTERNS: RegExp[] = [
@@ -150,4 +156,24 @@ export function resolveReservationPricing(
     ...(cashUsd != null ? { cashUsd } : {}),
     ...miles,
   };
+}
+
+export interface PricingNearBookingInput extends CashUsdResolvable, MilesResolvable {
+  confirmationCode?: string;
+  title?: string;
+  flightNumber?: string;
+}
+
+/** Resolve cash + miles from the slice of a confirmation most relevant to one booking. */
+export function resolvePricingNearBooking(input: PricingNearBookingInput): ReservationPricing {
+  const combined = [input.notes, input.originalEmailText].filter(Boolean).join("\n");
+  const nearText = extractNearBookingText(combined, {
+    confirmationCode: input.confirmationCode,
+    title: input.title,
+    flightNumber: input.flightNumber,
+  });
+  return resolveReservationPricing({
+    ...input,
+    originalEmailText: nearText ?? input.originalEmailText,
+  });
 }

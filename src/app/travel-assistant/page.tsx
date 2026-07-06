@@ -2703,7 +2703,7 @@ export default function TravelAssistantPage() {
       drained.changed || reconciled.changed || hydratedReservations !== trip.reservations
         ? { ...trip, reservations: tripReservations, reviewQueue: tripReviewQueue }
         : trip;
-    if (drained.changed || reconciled.changed) {
+    if (drained.changed || reconciled.changed || hydratedReservations !== trip.reservations) {
       void fetch(TRIP_API_ROUTE, {
         method: "PUT",
         credentials: "include",
