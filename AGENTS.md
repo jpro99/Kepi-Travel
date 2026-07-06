@@ -121,6 +121,10 @@ These are agent playbooks, not autonomous runtime bots. Jeff instructs the condu
 
 ## Fix log
 
+### 2026-07-06 (Session 2)
+- **ML readiness scaffolding** — parser version, correction triplets on review accept, active-learning review queue sort, held-out parse fixtures, few-shot AI fallback, suggestion outcome stub on Trip health.
+- **CI typecheck fix:** `app-sitter/regression-qa-pass2.spec.ts` was written without TypeScript types; strict `tsc` failed in the ci-review workflow while `npm run build` passed. All `app-sitter/*.spec.ts` files must use explicit types (`Page`, typed arrays). Scratch folders `files-from-claude*` excluded from root tsconfig.
+
 ### 2026-07-06
 - **Forwarded reservations no longer bypass review:** `drainForwardReviewQueue` was auto-promoting every email-forward/gmail-import review item straight to live reservations regardless of confidence ("no confirm step"), both server-side and on every client trip-state load. Added `evaluateForwardedReservationGate` (confidence + missing-field + plausibility check) in the ingestion route; low-confidence/implausible drafts now carry `reasons` and `drainForwardReviewQueue` never auto-promotes an item with `reasons` set.
 - **New `checkReservationPlausibility`:** deterministic checks (real IATA codes, arrival ≠ departure, sane date window, checkout after check-in, non-negative price) run independent of parser confidence.

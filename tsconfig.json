@@ -38,6 +38,8 @@
     "**/*.mts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "files-from-claude",
+    "files-from-claude-zip"
   ]
 }
