@@ -11,6 +11,7 @@ export interface TripSpendReservation {
   title?: string;
   plannedOnly?: boolean;
   confirmationCode?: string | null;
+  sourceEmailId?: string;
   quotedPriceUsd?: number;
   quotedPointsMiles?: number;
   quotedMilesEarned?: number;
@@ -60,17 +61,71 @@ export function reservationHasAnyPrice(reservation: TripSpendReservation): boole
   return hasCashPrice(reservation) || hasPointsPrice(reservation);
 }
 
+function hydrateSpendReservation(
+  reservation: TripSpendReservation,
+  allReservations: TripSpendReservation[],
+): TripSpendReservation {
+  return hydrateReservationPricing(enrichReservationFromTripPeers(reservation, allReservations));
+}
+
+/** Multi-leg bookings that share one confirmation or one forwarded email. */
+export function reservationPricingPeerGroup(
+  reservation: TripSpendReservation,
+  allReservations: TripSpendReservation[],
+): TripSpendReservation[] {
+  const tracked = allReservations.filter(isSpendTrackedReservation);
+  const code = reservation.confirmationCode?.trim().toUpperCase();
+  if (code) {
+    const byCode = tracked.filter(
+      (peer) => peer.confirmationCode?.trim().toUpperCase() === code,
+    );
+    if (byCode.length > 1) return byCode;
+  }
+
+  const emailId = reservation.sourceEmailId?.trim();
+  if (emailId) {
+    const byEmailId = tracked.filter((peer) => peer.sourceEmailId?.trim() === emailId);
+    if (byEmailId.length > 1) return byEmailId;
+  }
+
+  const emailKey = hydrateSpendReservation(reservation, allReservations).originalEmailText
+    ?.trim()
+    .slice(0, 256);
+  if (emailKey) {
+    const byEmailText = tracked.filter((peer) => {
+      const peerKey = hydrateSpendReservation(peer, allReservations).originalEmailText
+        ?.trim()
+        .slice(0, 256);
+      return peerKey === emailKey;
+    });
+    if (byEmailText.length > 1) return byEmailText;
+  }
+
+  return [reservation];
+}
+
+export function reservationGroupHasAnyPrice(
+  reservation: TripSpendReservation,
+  allReservations: TripSpendReservation[],
+): boolean {
+  return reservationPricingPeerGroup(reservation, allReservations).some((peer) =>
+    reservationHasAnyPrice(hydrateSpendReservation(peer, allReservations)),
+  );
+}
+
 /** Booked / on-trip items without cash or points logged. Pass allReservations to parse notes/email text. */
 export function reservationMissingPrice(
   reservation: TripSpendReservation,
   allReservations?: TripSpendReservation[],
 ): boolean {
   if (!isSpendTrackedReservation(reservation)) return false;
-  const hydrated =
-    allReservations && allReservations.length > 0
-      ? hydrateReservationPricing(enrichReservationFromTripPeers(reservation, allReservations))
-      : hydrateReservationPricing(reservation);
-  return !reservationHasAnyPrice(hydrated);
+  if (!allReservations || allReservations.length === 0) {
+    return !reservationHasAnyPrice(hydrateReservationPricing(reservation));
+  }
+  if (reservationGroupHasAnyPrice(reservation, allReservations)) {
+    return false;
+  }
+  return !reservationHasAnyPrice(hydrateSpendReservation(reservation, allReservations));
 }
 
 export function computeTripSpend(reservations: TripSpendReservation[]): TripSpendSummary {
@@ -83,7 +138,7 @@ export function computeTripSpend(reservations: TripSpendReservation[]): TripSpen
   const countedEmailTotals = new Set<string>();
 
   for (const raw of reservations) {
-    const reservation = hydrateReservationPricing(enrichReservationFromTripPeers(raw, reservations));
+    const reservation = hydrateSpendReservation(raw, reservations);
     if (!isSpendTrackedReservation(reservation)) continue;
 
     const type = reservation.type?.trim() || "other";

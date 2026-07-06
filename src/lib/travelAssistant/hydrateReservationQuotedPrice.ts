@@ -10,6 +10,35 @@ import {
 export interface PricingPeerResolvable extends CashUsdResolvable {
   id?: string;
   confirmationCode?: string | null;
+  sourceEmailId?: string;
+}
+
+function findPricingDonor<T extends PricingPeerResolvable>(
+  reservation: T,
+  peers: T[],
+): T | undefined {
+  const code = reservation.confirmationCode?.trim();
+  if (code) {
+    const byCode = peers.find((peer) => {
+      if (peer === reservation) return false;
+      if (peer.id != null && reservation.id != null && peer.id === reservation.id) return false;
+      if (peer.confirmationCode?.trim() !== code) return false;
+      return Boolean(peer.originalEmailText?.trim());
+    });
+    if (byCode) return byCode;
+  }
+
+  const emailId = reservation.sourceEmailId?.trim();
+  if (emailId) {
+    return peers.find((peer) => {
+      if (peer === reservation) return false;
+      if (peer.id != null && reservation.id != null && peer.id === reservation.id) return false;
+      if (peer.sourceEmailId?.trim() !== emailId) return false;
+      return Boolean(peer.originalEmailText?.trim());
+    });
+  }
+
+  return undefined;
 }
 
 /** When multi-leg bookings share one confirmation, copy email pricing text from a sibling leg. */
@@ -18,16 +47,7 @@ export function enrichReservationFromTripPeers<T extends PricingPeerResolvable>(
   peers: T[],
 ): T {
   if (reservation.originalEmailText?.trim()) return reservation;
-  const code = reservation.confirmationCode?.trim();
-  if (!code) return reservation;
-
-  const donor = peers.find((peer) => {
-    if (peer === reservation) return false;
-    if (peer.id != null && reservation.id != null && peer.id === reservation.id) return false;
-    if (peer.confirmationCode?.trim() !== code) return false;
-    return Boolean(peer.originalEmailText?.trim());
-  });
-
+  const donor = findPricingDonor(reservation, peers);
   if (!donor?.originalEmailText?.trim()) return reservation;
   return { ...reservation, originalEmailText: donor.originalEmailText };
 }

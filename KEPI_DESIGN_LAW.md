@@ -56,6 +56,11 @@ When a gap action is "Add hotel", Kepi must open Book → Hotels with city and d
 
 **Test:** `src/lib/travelAssistant/gapDetectionService.test.ts`, `src/lib/travelAssistant/europe2026TripPass.test.ts`
 
+**G14 — Multi-leg bookings share one price**  
+When several flight legs share a confirmation code or the same forwarded email, trip spend counts the booking total once and sibling legs must not each show "need pricing" or require per-leg cash breakdown.
+
+**Test:** `src/lib/travelAssistant/tripSpendSummary.test.ts`
+
 ---
 
 ## FLIGHTS LAWS
@@ -380,6 +385,7 @@ Channel shortcuts require **≥3 attempts**, correction rate **≤25%**, and alw
 | G13 | `src/lib/travelAssistant/gapDetectionService.test.ts` |
 | G8 | `src/lib/travelAssistant/dayPlanLines.test.ts` |
 | G10 | `src/lib/travelAssistant/tripActionItems.test.ts` |
+| G14 | `src/lib/travelAssistant/tripSpendSummary.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

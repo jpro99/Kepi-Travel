@@ -121,6 +121,9 @@ These are agent playbooks, not autonomous runtime bots. Jeff instructs the condu
 
 ## Fix log
 
+### 2026-07-06 (Session 6)
+- **Shared booking pricing (G14):** multi-leg flights on one confirmation or forwarded email share trip-level pricing — sibling legs no longer each flag "need pricing" when the booking total is already logged.
+
 ### 2026-07-06 (Session 5)
 - **Trip truth loop:** boarding pass URL extraction from forwarded emails, merged flight-lookup GET route, Trip Health gap actions open Book → Hotels with city/dates prefilled, Europe 2026 unit pass tests. Laws F11, G13.
 
