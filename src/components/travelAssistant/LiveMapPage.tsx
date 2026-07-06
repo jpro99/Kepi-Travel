@@ -556,7 +556,7 @@ export function LiveMapPage() {
         /* ignore */
       }
     });
-  }, [mapView, isLoaded]);
+  }, [mapView, isLoaded, drawerOpen]);
 
   // Passive GPS for map centering + departure-airport geofence (device-only until shared)
   useEffect(() => {
@@ -857,13 +857,16 @@ export function LiveMapPage() {
         .maplibregl-ctrl button { width: 44px !important; height: 44px !important; }
       `}</style>
 
-      <div className={`fixed inset-0 z-[100] flex flex-col overflow-hidden ${lightChrome ? "bg-slate-100" : "bg-slate-950"}`}>
-
+      <div
+        className={`fixed inset-0 z-[100] flex flex-col overflow-hidden ${lightChrome ? "bg-slate-100" : "bg-slate-950"}`}
+        style={{ paddingBottom: MOBILE_TAB_BAR_INSET }}
+      >
+        {/* Map stage — flex child fills viewport minus tab bar clearance */}
+        <div className="relative min-h-0 w-full flex-1">
         {/* Map canvas — family / world basemap with country labels */}
         <div
           ref={mapEl}
-          className={`absolute left-0 right-0 top-0 z-0 w-full min-h-[240px] bg-[#dbeafe] ${mapView === "airport" ? "opacity-0 pointer-events-none" : ""}`}
-          style={{ bottom: MOBILE_TAB_BAR_INSET }}
+          className={`absolute inset-0 z-0 h-full w-full bg-[#dbeafe] ${mapView === "airport" ? "opacity-0 pointer-events-none" : ""}`}
         />
 
         {/* Airport Navigator overlay — full-bleed when at the airport view */}
@@ -894,12 +897,12 @@ export function LiveMapPage() {
               familyPins={familyAirportPins}
               onFamilyPinTap={handleFamilyPinTap}
               activeRally={airportSync?.rally?.status === "active" ? airportSync.rally : null}
-              shellBottomInset={MOBILE_TAB_BAR_INSET}
+              shellBottomInset="0px"
             />
             {members.length >= 2 ? (
               <div
                 className="pointer-events-none absolute inset-x-0 z-50 px-3"
-                style={{ bottom: `calc(${MOBILE_TAB_BAR_INSET} + 5.5rem)` }}
+                style={{ bottom: "5.5rem" }}
               >
                 <FamilyRallyStrip
                   members={members.map((m) => ({ id: m.id, name: m.name, color: m.color }))}
@@ -1059,7 +1062,7 @@ export function LiveMapPage() {
             type="button"
             onClick={fitAll}
             className="absolute left-4 z-20 flex h-12 w-12 items-center justify-center rounded-full bg-black/55 backdrop-blur-md text-white shadow-lg text-[22px] border border-white/15"
-            style={{ bottom: drawerOpen ? "calc(15.5rem + 4.75rem)" : MOBILE_TAB_BAR_INSET }}
+            style={{ bottom: drawerOpen ? "15.5rem" : "1rem" }}
             title="Fit all members"
           >
             ⊙
@@ -1070,7 +1073,7 @@ export function LiveMapPage() {
         {selMember && selLoc && (
           <div
             className="lm-card absolute left-4 right-4 z-20 rounded-2xl overflow-hidden shadow-2xl"
-            style={{ bottom: drawerOpen ? "calc(14.25rem + 4.75rem)" : MOBILE_TAB_BAR_INSET }}
+            style={{ bottom: drawerOpen ? "14.25rem" : "1rem" }}
           >
             <div className={`backdrop-blur-xl border p-5 ${lightChrome ? "bg-white/95 border-slate-200" : "bg-slate-900/95 border-white/10"}`}>
               <div className="flex items-center gap-3">
@@ -1119,8 +1122,7 @@ export function LiveMapPage() {
 
         {/* Member drawer */}
         <div
-          className={`absolute left-0 right-0 z-40 transition-transform duration-300 pointer-events-auto ${drawerOpen ? "translate-y-0" : "translate-y-full"}`}
-          style={{ bottom: MOBILE_TAB_BAR_INSET }}
+          className={`absolute left-0 right-0 bottom-0 z-40 transition-transform duration-300 pointer-events-auto ${drawerOpen ? "translate-y-0" : "translate-y-full"}`}
           onTouchStart={(event) => event.stopPropagation()}
           onTouchMove={(event) => event.stopPropagation()}
         >
@@ -1248,13 +1250,14 @@ export function LiveMapPage() {
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
-            className="absolute right-4 z-20 flex h-12 items-center gap-2 rounded-full bg-slate-900/90 backdrop-blur-md border border-white/10 px-5 shadow-xl text-white text-[15px] font-bold"
-            style={{ bottom: MOBILE_TAB_BAR_INSET }}
+            className="absolute right-4 bottom-4 z-20 flex h-12 items-center gap-2 rounded-full bg-slate-900/90 backdrop-blur-md border border-white/10 px-5 shadow-xl text-white text-[15px] font-bold"
           >
             <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
             {liveCount} live
           </button>
         )}
+
+        </div>
 
         <MobileTabBarNav activeTab="map" />
       </div>
