@@ -19,7 +19,9 @@ interface ItineraryTabViewProps {
   tripStartDate: string | null;
   tripEndDate?: string | null;
   missingPriceCount?: number;
+  stayDecisions?: Record<string, "needs_hotel" | "skip">;
   onReviewPricing?: () => void;
+  onSkipPreDepartureNight?: (flightDay: string) => void;
   reservations: {
     id: string;
     type: string;
@@ -73,7 +75,9 @@ export function ItineraryTabView({
   tripStartDate,
   tripEndDate,
   missingPriceCount = 0,
+  stayDecisions,
   onReviewPricing,
+  onSkipPreDepartureNight,
   reservations,
   dayNotes,
   planSubView,
@@ -139,8 +143,10 @@ export function ItineraryTabView({
           location: reservation.location ?? "",
         }))}
         missingPriceCount={missingPriceCount}
+        stayDecisions={stayDecisions}
         onGapActionTap={onGapActionTap}
         onReviewPricing={onReviewPricing}
+        onSkipPreDepartureNight={onSkipPreDepartureNight}
       />
 
       {plannedFlightLegs.length > 0 && onSearchMissingFlights && onQuickGroundTransport ? (

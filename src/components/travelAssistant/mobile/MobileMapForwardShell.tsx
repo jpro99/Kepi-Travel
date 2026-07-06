@@ -118,8 +118,10 @@ interface MobileMapForwardShellProps {
   hasProAccess: boolean;
   emailForwardSetupMessage?: string | null;
   missingPriceCount?: number;
+  stayDecisions?: Record<string, "needs_hotel" | "skip">;
   onReviewPricing?: () => void;
   onGapActionTap?: (tab: string) => void;
+  onSkipPreDepartureNight?: (flightDay: string) => void;
   onSignOut: () => void;
   bookSubTab?: BookSubTab;
   onBookSubTabChange?: (subTab: BookSubTab) => void;
@@ -225,8 +227,10 @@ export function MobileMapForwardShell({
   hasProAccess,
   emailForwardSetupMessage,
   missingPriceCount = 0,
+  stayDecisions,
   onReviewPricing,
   onGapActionTap,
+  onSkipPreDepartureNight,
   onSignOut,
   bookSubTab = "flights",
   onBookSubTabChange,
@@ -383,8 +387,10 @@ export function MobileMapForwardShell({
           <TripHealthStrip
             reservations={reservations}
             missingPriceCount={missingPriceCount}
+            stayDecisions={stayDecisions}
             onGapActionTap={onGapActionTap}
             onReviewPricing={onReviewPricing}
+            onSkipPreDepartureNight={onSkipPreDepartureNight}
           />
         ) : null}
 

@@ -35,6 +35,13 @@ test("reservationHasAnyPrice treats points-only as priced", () => {
   assert.equal(reservationMissingPrice(reservation), false);
 });
 
+test("reservationMissingPrice reads cash from notes when all reservations provided", () => {
+  const reservations = [
+    { id: "h1", type: "hotel", title: "Hyatt Rome", notes: "Grand total $499 USD" },
+  ];
+  assert.equal(reservationMissingPrice(reservations[0]!, reservations), false);
+});
+
 test("computeTripSpend reads total from forwarded email text once per confirmation", () => {
   const email = "Confirmation AS 654. Total amount: $892.00 USD. Thank you.";
   const summary = computeTripSpend([

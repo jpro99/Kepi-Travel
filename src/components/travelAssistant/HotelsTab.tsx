@@ -376,7 +376,7 @@ export function HotelsTab({
           const past = isPastCheckout(checkOut);
           const isOpen = expanded === r.id;
           const emoji = cityEmoji(r.location ?? "");
-          const missingPrice = reservationMissingPrice(r);
+          const missingPrice = reservationMissingPrice(r, reservations);
           const costLine = formatReservationCostLine(r, { allReservations: shown });
           const attention = reservationAttentionKind(r);
 

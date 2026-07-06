@@ -140,6 +140,7 @@ import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
 import { hydrateReservationsPricing, applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import { buildTransportConflictReservationIds } from "@/lib/travelAssistant/reservationAttention";
 import { computeTripSpend } from "@/lib/travelAssistant/tripSpendSummary";
+import { preDepartureStayDecisionId } from "@/lib/travelAssistant/gapDetectionService";
 import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
@@ -4263,6 +4264,10 @@ export default function TravelAssistantPage() {
     () => computeTripSpend(advancedWorkspaceEnabled ? reservations : consumerReservationsSorted),
     [advancedWorkspaceEnabled, consumerReservationsSorted, reservations],
   );
+  const activeStayDecisions = useMemo(
+    () => (activeTripId ? tripStayDecisionsByTrip[activeTripId] ?? {} : {}),
+    [activeTripId, tripStayDecisionsByTrip],
+  );
 
   // Derive location status for AI guidance — must be after consumerReservationsSorted
   const guidanceLocationStatus = useMemo((): "away" | "at-airport" | "in-terminal" | "airborne" | "unknown" => {
@@ -5912,6 +5917,37 @@ export default function TravelAssistantPage() {
     [activeTripId],
   );
 
+  const handleSkipPreDepartureNight = useCallback(
+    async (flightDay: string): Promise<void> => {
+      if (!activeTripId) return;
+      const segmentId = preDepartureStayDecisionId(flightDay);
+      setTripStayDecisionsByTrip((prev) => ({
+        ...prev,
+        [activeTripId]: {
+          ...(prev[activeTripId] ?? {}),
+          [segmentId]: "skip",
+        },
+      }));
+      try {
+        const response = await fetch("/api/hotels/stay-intent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tripId: activeTripId,
+            segmentId,
+            intent: "skip",
+            stopKind: "destination",
+          }),
+        });
+        if (!response.ok) throw new Error("save failed");
+      } catch {
+        /* optimistic UI already updated */
+      }
+      setToast(`Got it — no hotel needed the night before your ${flightDay} flight.`);
+    },
+    [activeTripId, setToast],
+  );
+
   const openManualHotelReservation = useCallback((): void => {
     setManualReservationPresetType("hotel");
     setManualReservationModalOpen(true);
@@ -6825,7 +6861,7 @@ export default function TravelAssistantPage() {
           item.id === activeDrawer.id
             ? {
                 ...item,
-                ...drawerDraft,
+                ...applyAcceptedReservationPricing(drawerDraft),
               }
             : item,
         ),
@@ -9351,8 +9387,12 @@ export default function TravelAssistantPage() {
                 hasProAccess={hasProAccess}
                 emailForwardSetupMessage={emailForwardSetupMessage}
                 missingPriceCount={tripSpendSummary.missingPriceCount}
+                stayDecisions={activeStayDecisions}
                 onReviewPricing={() => navigateToBook("flights")}
                 onGapActionTap={handleItineraryGapAction}
+                onSkipPreDepartureNight={(flightDay) => {
+                  void handleSkipPreDepartureNight(flightDay);
+                }}
                 onSignOut={() => {
                   void clerk.signOut();
                 }}
@@ -9475,8 +9515,12 @@ export default function TravelAssistantPage() {
                 locationStatus={guidanceLocationStatus}
                 nearestAirport={guidanceNearestAirport}
                 missingPriceCount={tripSpendSummary.missingPriceCount}
+                stayDecisions={activeStayDecisions}
                 onReviewPricing={() => navigateToBook("flights")}
                 onGapActionTap={handleItineraryGapAction}
+                onSkipPreDepartureNight={(flightDay) => {
+                  void handleSkipPreDepartureNight(flightDay);
+                }}
                 onReservationTap={(id) => openDrawer("reservation", id)}
                 onOpenBook={() => navigateToBook("flights")}
                 onOpenPlan={() => navigateToConsumerTab("itinerary")}
@@ -9495,7 +9539,11 @@ export default function TravelAssistantPage() {
               tripStartDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
               tripEndDate={activeTrip?.endDate ?? null}
               missingPriceCount={tripSpendSummary.missingPriceCount}
+              stayDecisions={activeStayDecisions}
               onReviewPricing={() => navigateToBook("flights")}
+              onSkipPreDepartureNight={(flightDay) => {
+                void handleSkipPreDepartureNight(flightDay);
+              }}
               reservations={consumerReservationsSorted}
               dayNotes={itineraryPrefs.dayNotes}
               stopRanges={effectiveStopRanges}

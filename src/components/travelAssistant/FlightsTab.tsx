@@ -747,7 +747,7 @@ export function FlightsTab({
           const depTime = fmt12(r.flightDepartureTime ?? r.localTime ?? "");
           const arrTime = fmt12(r.flightArrivalTime ?? "");
           const date = fmtDate(r.flightDate ? r.flightDate + " 00:00" : r.localTime ?? "");
-          const missingPrice = reservationMissingPrice(r);
+          const missingPrice = reservationMissingPrice(r, reservations);
           const costLine = formatReservationCostLine(r, { allReservations: shown });
           const attention = reservationAttentionKind(r, transportConflictIds);
           const attentionBadge = reservationAttentionBadge(attention, {

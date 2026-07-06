@@ -98,7 +98,20 @@ function nightsBetween(fromKey: string, toKey: string): number {
   return Math.round((to - from) / 86_400_000);
 }
 
-export function detectTripGaps(reservations: GapReservation[], nowMs = Date.now()): TripGap[] {
+export interface TripGapDetectOptions {
+  /** Keys like `pre-departure-2026-09-01` when user is staying home the night before a flight. */
+  stayDecisions?: Record<string, "needs_hotel" | "skip">;
+}
+
+export function preDepartureStayDecisionId(flightDay: string): string {
+  return `pre-departure-${flightDay}`;
+}
+
+export function detectTripGaps(
+  reservations: GapReservation[],
+  nowMs = Date.now(),
+  options: TripGapDetectOptions = {},
+): TripGap[] {
   const gaps: TripGap[] = [];
   const todayKey = new Date(nowMs).toISOString().slice(0, 10);
 
@@ -210,12 +223,14 @@ export function detectTripGaps(reservations: GapReservation[], nowMs = Date.now(
       return checkInKey <= nightBeforeKey && checkOutKey > nightBeforeKey;
     });
     if (!hasHotelCoveringNight) {
+      const skipId = preDepartureStayDecisionId(flightDay);
+      if (options.stayDecisions?.[skipId] === "skip") continue;
       gaps.push({
         id: `no-hotel-night-before-${flightDay}`,
         severity: "warning",
         emoji: "🏨",
         title: "No hotel night before your flight",
-        detail: `No accommodation found for ${nightBeforeKey}. If you need a place to stay the night before your ${flightDay} flight, add it now.`,
+        detail: `No accommodation found for ${nightBeforeKey}. Add a hotel if you need one — or mark "Staying at home" if you're sleeping at home.`,
         actionLabel: "Add hotel",
         actionTab: "reservations",
       });

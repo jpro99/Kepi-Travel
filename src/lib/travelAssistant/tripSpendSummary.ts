@@ -60,10 +60,17 @@ export function reservationHasAnyPrice(reservation: TripSpendReservation): boole
   return hasCashPrice(reservation) || hasPointsPrice(reservation);
 }
 
-/** Booked / on-trip items without cash or points logged. */
-export function reservationMissingPrice(reservation: TripSpendReservation): boolean {
+/** Booked / on-trip items without cash or points logged. Pass allReservations to parse notes/email text. */
+export function reservationMissingPrice(
+  reservation: TripSpendReservation,
+  allReservations?: TripSpendReservation[],
+): boolean {
   if (!isSpendTrackedReservation(reservation)) return false;
-  return !reservationHasAnyPrice(reservation);
+  const hydrated =
+    allReservations && allReservations.length > 0
+      ? hydrateReservationPricing(enrichReservationFromTripPeers(reservation, allReservations))
+      : hydrateReservationPricing(reservation);
+  return !reservationHasAnyPrice(hydrated);
 }
 
 export function computeTripSpend(reservations: TripSpendReservation[]): TripSpendSummary {
@@ -107,7 +114,7 @@ export function computeTripSpend(reservations: TripSpendReservation[]): TripSpen
     if (cash > 0 || points > 0) {
       pricedCount += 1;
     }
-    if (reservationMissingPrice(reservation)) {
+    if (reservationMissingPrice(reservation, reservations)) {
       missingPriceIds.push(reservation.id);
     }
   }

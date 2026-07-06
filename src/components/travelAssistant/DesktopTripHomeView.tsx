@@ -49,8 +49,10 @@ interface DesktopTripHomeViewProps {
   locationStatus: "away" | "at-airport" | "in-terminal" | "airborne" | "unknown";
   nearestAirport: string;
   missingPriceCount?: number;
+  stayDecisions?: Record<string, "needs_hotel" | "skip">;
   onReviewPricing?: () => void;
   onGapActionTap?: (tab: string) => void;
+  onSkipPreDepartureNight?: (flightDay: string) => void;
   onReservationTap: (id: string) => void;
   onOpenBook: () => void;
   onOpenPlan: () => void;
@@ -97,8 +99,10 @@ export function DesktopTripHomeView({
   locationStatus,
   nearestAirport,
   missingPriceCount = 0,
+  stayDecisions,
   onReviewPricing,
   onGapActionTap,
+  onSkipPreDepartureNight,
   onReservationTap,
   onOpenBook,
   onOpenPlan,
@@ -197,8 +201,10 @@ export function DesktopTripHomeView({
           location: reservation.location ?? "",
         }))}
         missingPriceCount={missingPriceCount}
+        stayDecisions={stayDecisions}
         onGapActionTap={onGapActionTap}
         onReviewPricing={onReviewPricing}
+        onSkipPreDepartureNight={onSkipPreDepartureNight}
       />
 
       {onAddGroundTransport ? (
