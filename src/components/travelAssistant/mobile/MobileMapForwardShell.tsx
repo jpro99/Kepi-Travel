@@ -34,6 +34,7 @@ import type { PlannedFlightLeg, PlannedStayCity } from "@/lib/travelAssistant/tr
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 import type { TripSpendSummary } from "@/lib/travelAssistant/tripSpendSummary";
+import type { TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 import type { HotelStayMapReservation } from "@/lib/travelAssistant/tripHotelStayMap";
 
 const TripHomeOverviewMap = dynamic(
@@ -121,7 +122,7 @@ interface MobileMapForwardShellProps {
   missingPriceCount?: number;
   stayDecisions?: Record<string, "needs_hotel" | "skip">;
   onReviewPricing?: () => void;
-  onGapActionTap?: (tab: string) => void;
+  onGapActionTap?: (action: TripGapNavigationAction) => void;
   onSkipPreDepartureNight?: (flightDay: string) => void;
   onSignOut: () => void;
   bookSubTab?: BookSubTab;

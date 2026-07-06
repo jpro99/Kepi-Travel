@@ -40,6 +40,8 @@ Five Claude-prompt features shipped together:
 - **F9 flight status:** phase-aware polling (90s within 6h), AeroDataBox + optional FlightAware merge, 2-min server sweep via Inngest, discrepancy logging.
 - **F10 check-in handoff:** 24h window, airline deep links, honest Wallet/pass URL handoff on Home — no fake barcodes.
 - **M9 ground transport:** Uber/Lyft deep links with airport prefilled (Travel Day + card component). Native Uber partner API deferred.
+- **F11 boarding pass URLs:** extract ticket/Wallet links from forwarded confirmations; persist on flight reservations; check-in card opens stored pass.
+- **G13 contextual gap actions:** Trip Health "Add hotel" opens Book → Hotels with city/dates prefilled from the gap.
 
 ### Group planning (Mindtrip-style) — **Build later**
 Kepi already has family GPS, airport rally, journey phases. Missing: shared itinerary editing, merge conflicts, multi-editor permissions. **Scope:** 6–10 weeks. **Fits** family-travel audience without broadening to corporate. **Recommendation:** after day-of-travel reliability is bulletproof.
@@ -265,6 +267,7 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 
 | Date | Note |
 |------|------|
+| 2026-07-06 | **Trip truth loop:** boarding pass URLs from email imports, merged `/api/travel-updates` flight-lookup, contextual Trip Health → Book hotel search, Europe 2026 unit pass. Laws F11, G13. |
 | 2026-07-06 | **Competitive gaps (flight status, check-in, rides):** phase-aware AeroDataBox polling + optional FlightAware merge, 2-min Inngest sweep, honest check-in/Wallet handoff card on Home, Uber/Lyft deep links on Travel Day. Laws F9–F10, M9. Group/NL booking memo — defer. |
 | 2026-07-06 | **Offline nav + personalization:** itinerary-scoped IndexedDB prefetch (airport layouts + pilot city GeoJSON), Live Map offline fallback, nav walk/security calibration, two-stage post-booking briefing in Airport Mode, input-style suggestion on Plan tab. Design laws D14–D18. |
 | 2026-07-06 | **Parsing reliability:** confidence/plausibility gate now blocks low-confidence or implausible forwarded reservations from auto-becoming trip fact (`evaluateForwardedReservationGate`); `drainForwardReviewQueue` no longer silently auto-promotes gated review items. Added dinner/tour/excursion detection to `emailForwardParser` (previously misclassified as "ride"). `/api/ocr` (Expense Report receipt scan) was a fake stub — now returns an honest "not available" instead of fabricated data; real OCR deferred. See `KEPI_DESIGN_LAW.md` D10–D13. |

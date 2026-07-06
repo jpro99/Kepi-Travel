@@ -121,6 +121,9 @@ These are agent playbooks, not autonomous runtime bots. Jeff instructs the condu
 
 ## Fix log
 
+### 2026-07-06 (Session 5)
+- **Trip truth loop:** boarding pass URL extraction from forwarded emails, merged flight-lookup GET route, Trip Health gap actions open Book → Hotels with city/dates prefilled, Europe 2026 unit pass tests. Laws F11, G13.
+
 ### 2026-07-06 (Session 4)
 - **Competitive gaps batch:** phase-aware flight status polling (90s within 6h, 5m otherwise), AeroDataBox + optional FlightAware merge with discrepancy logging, 2-min Inngest server sweep, honest check-in/Wallet handoff card on Home, Uber/Lyft deep links on Travel Day. Laws F9–F10, M9. Group planning + NL booking memo — build later / don't build now.
 

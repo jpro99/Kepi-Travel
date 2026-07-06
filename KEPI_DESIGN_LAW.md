@@ -51,6 +51,11 @@ After a successful hotel checkout or manual reservation with a confirmation code
 **G12 — Trip health is one strip, not stacked toasts**  
 Gap alerts and missing-pricing counts merge into a single inline `TripHealthStrip` on Home and Plan — collapsed summary by default, expandable list. Never stack multiple fixed floating banners over content.
 
+**G13 — Trip health actions land in context**  
+When a gap action is "Add hotel", Kepi must open Book → Hotels with city and dates prefilled from the gap — not a generic empty search.
+
+**Test:** `src/lib/travelAssistant/gapDetectionService.test.ts`, `src/lib/travelAssistant/europe2026TripPass.test.ts`
+
 ---
 
 ## FLIGHTS LAWS
@@ -82,6 +87,11 @@ Within **6 hours** of departure, client and server polls must run at least every
 Check-in prompts open at **24h before departure**. Kepi may deep-link to airline check-in or a stored Wallet/pass URL — never render a scannable barcode it does not hold. UI must state where the boarding pass actually lives.
 
 **Test:** `src/lib/travelAssistant/checkInHandoff.test.ts`
+
+**F11 — Boarding pass URLs come from imports**  
+When a forwarded confirmation includes a boarding-pass or Wallet link, persist it on the flight reservation and surface it in check-in handoff — never invent pass URLs.
+
+**Test:** `src/lib/travelAssistant/reservationLinks.test.ts`, `src/lib/travelAssistant/europe2026TripPass.test.ts`
 
 **F7 — Multi-hop bookings satisfy planned legs**  
 A booked path (e.g. MUC→FCO→SEA→ONT) must satisfy a planned direct leg (MUC→ONT) in itinerary self-check — never flag as unbooked when a valid connection chain exists.
@@ -364,6 +374,10 @@ Channel shortcuts require **≥3 attempts**, correction rate **≤25%**, and alw
 | F9 | `src/lib/travelAssistant/flightStatusCadence.test.ts` |
 | F9 | `src/lib/travelAssistant/flightStatusMerge.test.ts` |
 | F10 | `src/lib/travelAssistant/checkInHandoff.test.ts` |
+| F11 | `src/lib/travelAssistant/reservationLinks.test.ts` |
+| F11, G13 | `src/lib/travelAssistant/europe2026TripPass.test.ts` |
+| F9 | `src/lib/travelAssistant/flightStatusLookup.test.ts` |
+| G13 | `src/lib/travelAssistant/gapDetectionService.test.ts` |
 | G8 | `src/lib/travelAssistant/dayPlanLines.test.ts` |
 | G10 | `src/lib/travelAssistant/tripActionItems.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |

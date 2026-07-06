@@ -12,7 +12,9 @@ import type { DayPlanRecord, ItineraryPlansData } from "@/lib/travelAssistant/it
 import { InterCityTransportPrompts } from "@/components/travelAssistant/InterCityTransportPrompts";
 import type { FlightSearchPlan, PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
 import type { InterCityTransportGap } from "@/lib/travelAssistant/interCityTransport";
+import type { PlanSubView } from "@/lib/travelAssistant/consumerTabs";
 import type { QuickGroundMode } from "@/lib/travelAssistant/quickGroundTransport";
+import type { TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 
 interface ItineraryTabViewProps {
   tripName: string;
@@ -58,7 +60,7 @@ interface ItineraryTabViewProps {
   getDayPlan: (dateKey: string, fallbackLocation: string) => DayPlanRecord;
   itineraryPlans: ItineraryPlansData;
   onPlanDay: (dateKey: string, intent: ParsedDayIntent, mode: DayPlanMode) => void;
-  onGapActionTap?: (tab: string) => void;
+  onGapActionTap?: (action: TripGapNavigationAction) => void;
   onPrint: () => void;
   onExportPdf: () => void;
   onShareLink: () => void;

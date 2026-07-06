@@ -147,7 +147,8 @@ import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
 import { hydrateReservationsPricing, applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import { buildTransportConflictReservationIds } from "@/lib/travelAssistant/reservationAttention";
 import { computeTripSpend } from "@/lib/travelAssistant/tripSpendSummary";
-import { preDepartureStayDecisionId } from "@/lib/travelAssistant/gapDetectionService";
+import { preDepartureStayDecisionId, type TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
+import { resolveBoardingPassUrl } from "@/lib/travelAssistant/reservationLinks";
 import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
@@ -330,6 +331,7 @@ interface Reservation extends ReservationDraft {
   hasPdfAttachment?: boolean;
   manageUrl?: string;
   sourceLinks?: Array<{ label: string; url: string; kind: string }>;
+  boardingPassUrl?: string;
 }
 
 interface ReviewItem {
@@ -7605,6 +7607,13 @@ export default function TravelAssistantPage() {
       hasPdfAttachment: target.hasPdfAttachment,
       manageUrl: target.manageUrl,
       sourceLinks: target.sourceLinks,
+      boardingPassUrl:
+        draft.type === "flight"
+          ? resolveBoardingPassUrl({
+              sourceLinks: target.sourceLinks,
+              originalEmailText: target.originalEmailText,
+            })
+          : undefined,
       flightNumber: draft.flightNumber ?? "",
       flightAirline: draft.flightAirline ?? draft.provider,
       flightDate: draft.flightDate ?? draft.localTime.slice(0, 10),
@@ -9208,8 +9217,29 @@ export default function TravelAssistantPage() {
   }, [navigateToBook, navigateToConsumerTab]);
 
   const handleItineraryGapAction = useCallback(
-    (tab: string): void => {
-      if (tab === "reservations") {
+    (action: TripGapNavigationAction): void => {
+      const { tab, context } = action;
+      if (context?.kind === "hotel" && context.city && context.checkIn && context.checkOut) {
+        launchCustomHotelSearch({
+          city: context.city,
+          cityIata: context.cityIata,
+          checkIn: context.checkIn,
+          checkOut: context.checkOut,
+        });
+        navigateToBook("hotels");
+        return;
+      }
+      if (context?.kind === "transport") {
+        setManualReservationPresetType("ride");
+        setManualReservationModalOpen(true);
+        navigateToBook("flights");
+        return;
+      }
+      if (context?.kind === "import") {
+        navigateToConsumerTab("trip");
+        return;
+      }
+      if (context?.kind === "review" || tab === "reservations") {
         navigateToBook("flights");
         return;
       }
@@ -9219,7 +9249,7 @@ export default function TravelAssistantPage() {
       }
       navigateToConsumerTab(orientationTabToConsumerTab(tab));
     },
-    [navigateToBook, navigateToConsumerTab],
+    [launchCustomHotelSearch, navigateToBook, navigateToConsumerTab],
   );
 
   const handleItineraryPlanHotel = useCallback(

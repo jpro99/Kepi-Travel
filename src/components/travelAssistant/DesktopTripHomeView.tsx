@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { MobileAssistView } from "@/components/travelAssistant/mobile/MobileAssistView";
 import { TripHealthStrip } from "@/components/travelAssistant/TripHealthStrip";
 import { DestinationHeroPhoto, resolveHeroCity } from "@/components/travelAssistant/tripHeroVisuals";
+import type { TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 import type { PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
@@ -51,7 +52,7 @@ interface DesktopTripHomeViewProps {
   missingPriceCount?: number;
   stayDecisions?: Record<string, "needs_hotel" | "skip">;
   onReviewPricing?: () => void;
-  onGapActionTap?: (tab: string) => void;
+  onGapActionTap?: (action: TripGapNavigationAction) => void;
   onSkipPreDepartureNight?: (flightDay: string) => void;
   onReservationTap: (id: string) => void;
   onOpenBook: () => void;

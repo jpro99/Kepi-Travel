@@ -19,6 +19,7 @@ import {
   type DayPlanRecord,
   type ItineraryPlansData,
 } from "@/lib/travelAssistant/itineraryDayPlan";
+import type { TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 
 const TRIP_API_ROUTE = "/api/trips";
 
@@ -63,7 +64,7 @@ interface TripItineraryPanelProps {
   onViewModeChange: (mode: ItineraryViewMode) => void;
   onClose: () => void;
   onReservationTap: (id: string) => void;
-  onGapActionTap?: (tab: string) => void;
+  onGapActionTap?: (action: TripGapNavigationAction) => void;
   onPrint: () => void;
   onExportPdf: () => void;
   onShareLink: () => void;

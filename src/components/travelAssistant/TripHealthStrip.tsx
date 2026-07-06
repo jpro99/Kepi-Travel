@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { detectTripGaps, type TripGap } from "@/lib/travelAssistant/gapDetectionService";
+import { detectTripGaps, type TripGap, type TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 import { postSuggestionOutcome } from "@/lib/travelAssistant/mlReadiness/clientTelemetry";
 
 interface TripHealthReservation {
@@ -23,7 +23,7 @@ interface TripHealthStripProps {
   reservations: TripHealthReservation[];
   missingPriceCount?: number;
   stayDecisions?: Record<string, "needs_hotel" | "skip">;
-  onGapActionTap?: (tab: string) => void;
+  onGapActionTap?: (action: TripGapNavigationAction) => void;
   onReviewPricing?: () => void;
   onSkipPreDepartureNight?: (flightDay: string) => void;
   className?: string;
@@ -37,6 +37,7 @@ interface HealthRow {
   severity: TripGap["severity"];
   actionLabel?: string;
   actionTab?: string;
+  actionContext?: TripGap["actionContext"];
   onAction?: () => void;
   secondaryActionLabel?: string;
   onSecondaryAction?: () => void;
@@ -73,6 +74,7 @@ function groupGaps(
           : first.severity,
       actionLabel: first.actionLabel,
       actionTab: first.actionTab,
+      actionContext: first.actionContext,
       secondaryActionLabel:
         preDepartureMatch && onSkipPreDepartureNight ? "Staying at home" : undefined,
       onSecondaryAction:
@@ -198,7 +200,12 @@ export function TripHealthStrip({
                           row.onAction();
                           return;
                         }
-                        if (row.actionTab) onGapActionTap?.(row.actionTab);
+                        if (row.actionTab) {
+                          onGapActionTap?.({
+                            tab: row.actionTab,
+                            context: row.actionContext,
+                          });
+                        }
                       }}
                       className="text-xs font-semibold text-[#0b1f3a] underline decoration-[#f4c95d] underline-offset-2 dark:text-[#f4c95d]"
                     >

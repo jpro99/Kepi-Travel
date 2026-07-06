@@ -3,7 +3,24 @@
  * Runs client-side — no server calls needed.
  */
 
+import { airportToCity } from "@/lib/travelAssistant/buildTripLegs";
+
 export type GapSeverity = "critical" | "warning" | "info";
+
+export type TripGapActionKind = "hotel" | "transport" | "import" | "flights" | "review";
+
+export interface TripGapActionContext {
+  kind: TripGapActionKind;
+  city?: string;
+  cityIata?: string;
+  checkIn?: string;
+  checkOut?: string;
+}
+
+export interface TripGapNavigationAction {
+  tab: string;
+  context?: TripGapActionContext;
+}
 
 export interface TripGap {
   id: string;
@@ -13,6 +30,7 @@ export interface TripGap {
   detail: string;
   actionLabel?: string;
   actionTab?: string;
+  actionContext?: TripGapActionContext;
 }
 
 interface GapReservation {
@@ -169,6 +187,7 @@ export function detectTripGaps(
       detail: `${placeholders.length} item${placeholders.length === 1 ? "" : "s"} still ${placeholders.length === 1 ? "has" : "have"} no real confirmation. Forward your booking emails or import from Gmail.`,
       actionLabel: "See import options",
       actionTab: "trip",
+      actionContext: { kind: "import" },
     });
   }
 
@@ -194,6 +213,7 @@ export function detectTripGaps(
           detail: `Your flight departs in ${Math.round(hoursUntil)} hours but no taxi or train is booked. Book now — allow extra time for traffic.`,
           actionLabel: "Add transport",
           actionTab: "reservations",
+          actionContext: { kind: "transport" },
         });
       }
     }
@@ -233,6 +253,13 @@ export function detectTripGaps(
         detail: `No accommodation found for ${nightBeforeKey}. Add a hotel if you need one — or mark "Staying at home" if you're sleeping at home.`,
         actionLabel: "Add hotel",
         actionTab: "reservations",
+        actionContext: {
+          kind: "hotel",
+          city: airportToCity(flight.flightDepartureAirport),
+          cityIata: flight.flightDepartureAirport?.trim().toUpperCase(),
+          checkIn: nightBeforeKey,
+          checkOut: flightDay,
+        },
       });
     }
   }
@@ -276,6 +303,20 @@ export function detectTripGaps(
           detail: `No hotel found between ${landingKey} and ${nextDeptKey}. Forward your hotel confirmation or add it manually.`,
           actionLabel: "Add hotel",
           actionTab: "reservations",
+          actionContext: {
+            kind: "hotel",
+            city: airportToCity(
+              (landing as GapReservation & { flightArrivalAirport?: string }).flightArrivalAirport ??
+                landing.location,
+            ),
+            cityIata: (
+              (landing as GapReservation & { flightArrivalAirport?: string }).flightArrivalAirport ?? ""
+            )
+              .trim()
+              .toUpperCase(),
+            checkIn: landingKey,
+            checkOut: nextDeptKey,
+          },
         });
       }
     }
@@ -294,6 +335,7 @@ export function detectTripGaps(
       detail: `${missingConf.map((r) => r.provider || r.type).join(", ")} ${missingConf.length === 1 ? "has" : "have"} no confirmation code. Tap to add them so you can check in quickly.`,
       actionLabel: "Review",
       actionTab: "reservations",
+      actionContext: { kind: "review" },
     });
   }
 

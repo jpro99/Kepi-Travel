@@ -215,6 +215,35 @@ export function buildReservationQuickLinks(reservation: ReservationLinkInput): R
   return links.slice(0, 5);
 }
 
+/** Prefer stored pass URL, then ticket links from import metadata or email body. */
+export function resolveBoardingPassUrl(input: {
+  boardingPassUrl?: string;
+  sourceLinks?: ReservationSourceLink[];
+  originalEmailText?: string;
+  html?: string;
+}): string | undefined {
+  const direct = input.boardingPassUrl?.trim();
+  if (direct) return direct;
+
+  const fromStored = input.sourceLinks?.find((link) => link.kind === "ticket")?.url?.trim();
+  if (fromStored) return fromStored;
+
+  const extracted = extractReservationSourceLinks({
+    text: input.originalEmailText,
+    html: input.html,
+  });
+  const fromEmail = extracted.find((link) => link.kind === "ticket")?.url?.trim();
+  if (fromEmail) return fromEmail;
+
+  for (const url of extractPlainUrls(input.originalEmailText ?? "")) {
+    const lower = url.toLowerCase();
+    if (lower.endsWith(".pkpass") || lower.includes("wallet") || lower.includes("passbook")) {
+      return url;
+    }
+  }
+  return undefined;
+}
+
 export function reservationHasSourceEmail(reservation: ReservationLinkInput): boolean {
   return Boolean(
     reservation.sourceEmailId?.trim() ||

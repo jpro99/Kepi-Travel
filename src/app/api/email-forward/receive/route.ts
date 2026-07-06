@@ -38,6 +38,10 @@ import {
 } from "@/lib/travelAssistant/emailSourceText";
 import { resolveReservationPricing, resolvePricingNearBooking } from "@/lib/travelAssistant/parseReservationMiles";
 import { applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
+import {
+  extractReservationSourceLinks,
+  resolveBoardingPassUrl,
+} from "@/lib/travelAssistant/reservationLinks";
 import { generateId } from "@/lib/utils/generateId";
 
 const AttachmentSchema = z.object({
@@ -793,6 +797,14 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         checkOutDate: parserType === "hotel"
           ? (typeof parserDraftRecord.checkOutDate === "string" ? parserDraftRecord.checkOutDate.trim().slice(0, 10) : "")
           : "",
+        boardingPassUrl:
+          parserType === "flight"
+            ? resolveBoardingPassUrl({
+                sourceLinks: emailSourceLinks,
+                originalEmailText: storedSourceText || parserOriginalEmailText,
+                html: parserHtml,
+              })
+            : undefined,
         ...emailSourceMetadata,
       };
 

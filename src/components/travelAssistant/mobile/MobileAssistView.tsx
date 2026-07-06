@@ -8,6 +8,7 @@ import {
   buildCheckInHandoffContent,
   parseDepartureUtcMs,
 } from "@/lib/travelAssistant/checkInHandoff";
+import { resolveBoardingPassUrl } from "@/lib/travelAssistant/reservationLinks";
 import { canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 
@@ -27,6 +28,8 @@ interface Reservation {
   flightDepartureTime?: string;
   flightArrivalTime?: string;
   boardingPassUrl?: string;
+  sourceLinks?: Array<{ label: string; url: string; kind: string }>;
+  originalEmailText?: string;
 }
 
 interface MobileAssistViewProps {
@@ -81,7 +84,11 @@ export function MobileAssistView({
       confirmationCode: nextFlight.confirmationCode,
       flightDepartureAirport: nextFlight.flightDepartureAirport,
       departureUtcMs,
-      boardingPassUrl: nextFlight.boardingPassUrl,
+      boardingPassUrl: resolveBoardingPassUrl({
+        boardingPassUrl: nextFlight.boardingPassUrl,
+        sourceLinks: nextFlight.sourceLinks,
+        originalEmailText: nextFlight.originalEmailText,
+      }),
     });
   }, [reservations]);
 
