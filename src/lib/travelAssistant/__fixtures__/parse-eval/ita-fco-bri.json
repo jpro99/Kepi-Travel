@@ -1,0 +1,13 @@
+{
+  "id": "holdout-ita-fco-bri",
+  "subject": "ITA Airways booking confirmation",
+  "body": "Booking reference XYZ789\nFlight AZ1234\nDeparture FCO Rome Fiumicino\nSeptember 5, 2026 2:10 PM\nArrival BRI Bari\nSeptember 5, 2026 3:05 PM\nTotal paid EUR 89.00",
+  "expected": {
+    "type": "flight",
+    "confirmationCode": "XYZ789",
+    "flightNumber": "AZ1234",
+    "localTime": "2026-09-05 14:10",
+    "departureAirport": "FCO",
+    "arrivalAirport": "BRI"
+  }
+}

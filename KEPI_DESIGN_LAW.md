@@ -283,6 +283,24 @@ Provider tokens (`DUFFEL_ACCESS_TOKEN`, `LITEAPI_KEY`, etc.) stay server-only. B
 **D8 — Email HTML via render**  
 Resend emails use `@react-email/render` → `html:` — never `react:` prop or `renderToStaticMarkup`.
 
+**D10 — Forwarded reservations gate on confidence before becoming trip fact**  
+A parsed forwarded reservation only auto-imports to the live trip when it clears `evaluateForwardedReservationGate` (confidence ≥ 40, no missing critical fields, passes plausibility). Anything below the bar goes to the review queue with explicit `reasons` — never silently auto-imported with just a soft note. `drainForwardReviewQueue` must never auto-promote a review item that carries `reasons` — that field means a human must confirm it first.
+
+**Test:** `src/lib/travelAssistant/forwardedReservationGate.test.ts`, `src/lib/travelAssistant/drainForwardReviewQueue.test.ts`
+
+**D11 — Plausibility checks run before accept, independent of parser confidence**  
+Deterministic checks (real 3-letter airport codes, arrival ≠ departure, dates within a sane travel window, checkout after check-in, non-negative price) run via `checkReservationPlausibility` regardless of how confident the parser was. A high-confidence but implausible parse still routes to review.
+
+**Test:** `src/lib/travelAssistant/reservationPlausibility.test.ts`
+
+**D12 — Reservation type detection covers non-transport bookings**  
+`emailForwardParser` must classify restaurant reservations, tours, excursions, and other bookable activities as `dinner`, not fall through to `ride`. Both the regex keyword table and the AI fallback prompt's allowed type list must stay in sync — a type added to one must be added to the other.
+
+**Test:** `src/lib/travelAssistant/emailForwardParser.test.ts`
+
+**D13 — No feature may fabricate data on failure**  
+An API route that cannot perform its real function (e.g. no OCR engine wired up) must return an explicit error/"not available" response — never a hardcoded success payload that looks like real extracted data. Silent fake success is a worse failure mode than a visible error.
+
 ---
 
 ## Test index
@@ -306,5 +324,9 @@ Resend emails use `@react-email/render` → `html:` — never `react:` prop or `
 | G10 | `src/lib/travelAssistant/tripActionItems.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
+| D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |
+| D10 | `src/lib/travelAssistant/drainForwardReviewQueue.test.ts` |
+| D11 | `src/lib/travelAssistant/reservationPlausibility.test.ts` |
+| D12 | `src/lib/travelAssistant/emailForwardParser.test.ts` |
 
 New laws must add a row here when a test exists.

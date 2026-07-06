@@ -121,6 +121,13 @@ These are agent playbooks, not autonomous runtime bots. Jeff instructs the condu
 
 ## Fix log
 
+### 2026-07-06
+- **Forwarded reservations no longer bypass review:** `drainForwardReviewQueue` was auto-promoting every email-forward/gmail-import review item straight to live reservations regardless of confidence ("no confirm step"), both server-side and on every client trip-state load. Added `evaluateForwardedReservationGate` (confidence + missing-field + plausibility check) in the ingestion route; low-confidence/implausible drafts now carry `reasons` and `drainForwardReviewQueue` never auto-promotes an item with `reasons` set.
+- **New `checkReservationPlausibility`:** deterministic checks (real IATA codes, arrival ≠ departure, sane date window, checkout after check-in, non-negative price) run independent of parser confidence.
+- **`emailForwardParser` gained "dinner" type detection:** restaurant reservations, tours, excursions, boat trips previously had no keyword pattern and fell through to the "ride" default. Regex table + AI fallback prompt + `normalizeType` all updated together (see D12).
+- **`/api/ocr` was a mock stub returning fake receipt data** ("Dinner with clients", $123.45) on every call regardless of the photo. Now returns an explicit 501/"not available yet" instead of fabricating data. Real OCR wiring deferred — not yet a product priority.
+- See `KEPI_DESIGN_LAW.md` D10–D13.
+
 ### 2026-06-15
 - Hotel stay profile, trip stay planner, LiteAPI fallback, `KEPI_PROJECT_MEMORY.md`
 - Duffel Stays emails already sent by owner — do not re-suggest unless asked

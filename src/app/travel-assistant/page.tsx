@@ -27,6 +27,9 @@ import {
 import { enrichReservationForAutoImport } from "@/lib/travelAssistant/autoImportReservation";
 import { inferImportedTripMeta } from "@/lib/travelAssistant/persistImportToTrip";
 import { drainForwardReviewQueue } from "@/lib/travelAssistant/drainForwardReviewQueue";
+import { postParseCorrection } from "@/lib/travelAssistant/mlReadiness/clientTelemetry";
+import { EMAIL_FORWARD_PARSER_VERSION } from "@/lib/travelAssistant/mlReadiness/parserVersion";
+import { sortReviewQueueForActiveLearning } from "@/lib/travelAssistant/mlReadiness/reviewQueueTriage";
 import { reconcileStoredFlightReservations } from "@/lib/travelAssistant/reconcileStoredFlightReservations";
 import { canonicalFlightDepartureDay, canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
 import { isDuplicateReservation } from "@/lib/travelAssistant/reservationDuplicates";
@@ -1922,6 +1925,10 @@ export default function TravelAssistantPage() {
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>(INITIAL_FAMILY);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [reviewQueue, setReviewQueue] = useState<ReviewItem[]>(INITIAL_REVIEW_QUEUE);
+  const triagedReviewQueue = useMemo(
+    () => sortReviewQueueForActiveLearning(reviewQueue),
+    [reviewQueue],
+  );
   const [readinessItems, setReadinessItems] = useState<ReadinessItem[]>(INITIAL_CHECKLIST);
   // Track readinessItems that came from server so we can pass as savedItems
   const serverReadinessItemsRef = useRef<ReadinessItem[]>([]);
@@ -7621,6 +7628,18 @@ export default function TravelAssistantPage() {
       detail: `${newReservation.provider || newReservation.title} is on your flights timeline.`,
       syncedToTrip: true,
     });
+    void postParseCorrection({
+      reviewItemId: target.id,
+      parserGuess: target.draft as Record<string, unknown>,
+      corrected: pricedDraft as Record<string, unknown>,
+      gateReasons: target.reasons,
+      sourceChannel: target.sourceChannel,
+      sourceEmailSubject: target.sourceEmailSubject,
+      parseConfidenceScore: target.parseConfidenceScore,
+      parsingStatus: target.parsingStatus,
+      originalEmailText: target.originalEmailText,
+      parserVersion: target.parserVersion ?? EMAIL_FORWARD_PARSER_VERSION,
+    });
     return true;
   };
 
@@ -8209,12 +8228,12 @@ export default function TravelAssistantPage() {
   );
 
   const handleOpenTopReview = useCallback((): void => {
-    if (reviewQueue.length === 0) {
+    if (triagedReviewQueue.length === 0) {
       setToast("Review queue is already clear.");
       return;
     }
-    openDrawer("review", reviewQueue[0].id);
-  }, [openDrawer, reviewQueue, setToast]);
+    openDrawer("review", triagedReviewQueue[0].id);
+  }, [openDrawer, setToast, triagedReviewQueue]);
 
   const handleOpenConsumerReviewQueue = useCallback(
     (event?: { preventDefault?: () => void; stopPropagation?: () => void }): void => {
@@ -8237,7 +8256,7 @@ export default function TravelAssistantPage() {
     if (!consumerReviewQueueSession.open) {
       return;
     }
-    const currentItem = reviewQueue[0];
+    const currentItem = triagedReviewQueue[0];
     if (!currentItem) {
       setConsumerReviewQueueSession({ open: false, processed: 0, total: 0 });
       return;
@@ -8482,7 +8501,7 @@ export default function TravelAssistantPage() {
     }
     return null;
   })();
-  const activeConsumerReviewItem = consumerReviewQueueSession.open ? (reviewQueue[0] ?? null) : null;
+  const activeConsumerReviewItem = consumerReviewQueueSession.open ? (triagedReviewQueue[0] ?? null) : null;
   const consumerReviewProgressLabel =
     consumerReviewQueueSession.open && consumerReviewQueueSession.total > 0
       ? `${Math.min(consumerReviewQueueSession.processed + 1, consumerReviewQueueSession.total)} of ${
@@ -10871,7 +10890,7 @@ export default function TravelAssistantPage() {
                   </div>
 
                   <ReviewQueue
-                    reviewQueue={reviewQueue}
+                    reviewQueue={triagedReviewQueue}
                     reservations={reservations.map((reservation) => ({ id: reservation.id, title: reservation.title }))}
                     mergeTargetByReview={mergeTargetByReview}
                     onMergeTargetChange={(reviewId, targetReservationId) =>

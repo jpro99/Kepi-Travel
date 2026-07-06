@@ -1,6 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { htmlToPlainConfirmationText } from "@/lib/travelAssistant/confirmationDocumentText";
 import { mergePdfSectionIntoBody } from "@/lib/travelAssistant/emailSourceText";
+import { formatFewShotBlock } from "@/lib/travelAssistant/mlReadiness/fewShotExamples";
+import { EMAIL_FORWARD_PARSER_VERSION } from "@/lib/travelAssistant/mlReadiness/parserVersion";
+import type { FewShotParseExample } from "@/lib/travelAssistant/mlReadiness/types";
 import { logger } from "@/lib/logger";
 
 const MODEL = "claude-sonnet-4-5";
@@ -139,6 +142,12 @@ const RESERVATION_TYPE_KEYWORDS: Array<{ type: ForwardedReservationType; pattern
   { type: "flight", pattern: /\b(flight|airline|boarding|terminal|gate)\b/iu, confidence: 0.78 },
   { type: "hotel", pattern: /\b(hotel|check-?in|check out|room|suite|stay)\b/iu, confidence: 0.78 },
   { type: "train", pattern: /\b(train|rail|amtrak|station|platform)\b/iu, confidence: 0.75 },
+  {
+    type: "dinner",
+    pattern:
+      /\b(dinner reservation|restaurant reservation|table for\s*\d+|party of\s*\d+|reservation for\s*\d+|excursion|guided tour|walking tour|boat (?:ride|tour|excursion)|snorkel(?:ing)?|scuba|day trip|cooking class|wine tasting|ticket confirmation)\b/iu,
+    confidence: 0.68,
+  },
   { type: "ride", pattern: /\b(car rental|uber|lyft|taxi|ride|pickup|dropoff)\b/iu, confidence: 0.72 },
 ];
 
@@ -160,7 +169,7 @@ interface FieldCandidate {
   source: ParserSource;
 }
 
-export type ForwardedReservationType = "flight" | "hotel" | "train" | "ride";
+export type ForwardedReservationType = "flight" | "hotel" | "train" | "ride" | "dinner";
 export type ForwardedReservationField =
   | "type"
   | "title"
@@ -188,6 +197,7 @@ export interface ForwardedEmailParseInput {
   text?: string | null;
   html?: string | null;
   attachments?: ForwardedEmailAttachmentMeta[] | null;
+  fewShotExamples?: FewShotParseExample[];
 }
 
 export interface ForwardedReservationDraft {
@@ -217,7 +227,10 @@ export interface ForwardedEmailParseResult {
   imageBasedEmail: boolean;
   hasPdfAttachment: boolean;
   usedAiFallback: boolean;
+  parserVersion: string;
 }
+
+export { EMAIL_FORWARD_PARSER_VERSION };
 
 function extractOriginalEmailFromForwardChain(text: string): string {
   // When an email is forwarded multiple times, Gmail adds repeated
@@ -486,6 +499,15 @@ function normalizeType(rawType: string): ForwardedReservationType | null {
   }
   if (value === "ride" || value === "car" || value === "rental") {
     return "ride";
+  }
+  if (
+    value === "dinner" ||
+    value === "restaurant" ||
+    value === "activity" ||
+    value === "excursion" ||
+    value === "tour"
+  ) {
+    return "dinner";
   }
   return null;
 }
@@ -1182,7 +1204,11 @@ function buildRegexCandidates(input: {
   return candidates;
 }
 
-async function runAiFallback(rawEmailText: string, subject = ""): Promise<CandidateMap[]> {
+async function runAiFallback(
+  rawEmailText: string,
+  subject = "",
+  fewShotExamples: FewShotParseExample[] = [],
+): Promise<CandidateMap[]> {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) {
     logger.warn("AI fallback skipped: ANTHROPIC_API_KEY is missing.", {
@@ -1194,12 +1220,13 @@ async function runAiFallback(rawEmailText: string, subject = ""): Promise<Candid
   }
 
   const emailContext = subject.trim() ? `Subject: ${subject}\n\n${rawEmailText}` : rawEmailText;
+  const fewShotBlock = formatFewShotBlock(fewShotExamples);
   const aiPrompt = [
     "Extract every travel reservation found in this email.",
     "Return strict JSON only with this shape:",
     '{ "reservations": [ { "type": "", "title": "", "provider": "", "confirmationCode": "", "localTime": "", "checkOutDate": "", "timezone": "", "location": "", "notes": "", "flightNumber": "", "departureAirport": "", "arrivalAirport": "" } ] }',
     "IMPORTANT: This may be a multi-leg itinerary. Scan for EVERY individual flight segment. For example HND→HNL→SEA→ONT has 3 flights — return 3 separate objects in reservations[]. Each object must have its own flightNumber, departureAirport, arrivalAirport, and localTime (departure time for that specific leg).",
-    "Use type values only: flight, hotel, train, ride.",
+    "Use type values only: flight, hotel, train, ride, dinner. Use \"dinner\" for restaurant reservations, tours, excursions, boat trips, classes, tastings, or any other bookable activity that is not a flight/hotel/train/car ride.",
     "CRITICAL for localTime: For flights, use the scheduled DEPARTURE time (not email send time, not boarding time, not purchase/booking/transaction date). Ignore 'Date:' and 'Sent:' lines from forward headers. For hotels, use the check-in date and time if stated, otherwise just the check-in date at 15:00 local time. NEVER guess or infer a year — if the year is not explicitly in the email use the current year only if the date is clearly in the future, otherwise leave localTime empty.",
     "For hotels, set checkOutDate to the check-out date in YYYY-MM-DD format. The email may use formats like 'Friday, 29-May-2026' or 'May 29, 2026' — convert to YYYY-MM-DD e.g. 2026-05-29. Also set localTime to the check-in date and time e.g. '2026-05-24 15:00'. For flights, leave checkOutDate empty.",
     "The departure time is the scheduled time the plane leaves the gate. Format: 'YYYY-MM-DD HH:mm' in 24-hour.",
@@ -1210,6 +1237,7 @@ async function runAiFallback(rawEmailText: string, subject = ""): Promise<Candid
     "If any field is not explicitly stated in the email, return empty string. NEVER invent or guess dates, codes, or any other field.",
     "Do not include explanation text.",
     "",
+    ...(fewShotBlock ? [fewShotBlock, ""] : []),
     emailContext,
   ].join("\n");
   logger.info("AI fallback request started.", {
@@ -1473,7 +1501,7 @@ export async function parseForwardedEmail(input: ForwardedEmailParseInput): Prom
       parsedText,
       parsedTextLength: parsedText.length,
     });
-    aiCandidates = await runAiFallback(lineAwareText, subject);
+    aiCandidates = await runAiFallback(lineAwareText, subject, input.fewShotExamples ?? []);
     if (aiCandidates.length > 0) {
       usedAiFallback = true;
       candidates = sanitizeTravelLocalTime(
@@ -1554,6 +1582,7 @@ export async function parseForwardedEmail(input: ForwardedEmailParseInput): Prom
     imageBasedEmail,
     hasPdfAttachment: pdfAttached,
     usedAiFallback,
+    parserVersion: EMAIL_FORWARD_PARSER_VERSION,
   };
 }
 

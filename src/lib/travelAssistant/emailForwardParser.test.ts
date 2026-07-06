@@ -342,3 +342,63 @@ Departure: Thursday, September 25, 2025 at 2:15 PM
   assert.equal(codeshare?.departureAirport, "SEA");
   assert.equal(codeshare?.arrivalAirport, "FCO");
 });
+
+test("parseForwardedEmail classifies a boat excursion as dinner/activity, not ride", async () => {
+  const previousKey = process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  try {
+    const excursionEmail = `
+Your reservation is confirmed!
+
+Sunset Boat Excursion — Monopoli Coastline Tour
+Confirmation: EXC-4471
+Reservation for 4 guests
+Saturday, September 19, 2026 at 5:30 PM
+Meet at Monopoli Harbor
+`;
+    const result = await parseForwardedEmail({
+      subject: "Booking confirmed: Sunset Boat Excursion",
+      from: "no-reply@getyourguide.com",
+      text: excursionEmail,
+      html: "",
+      attachments: [],
+    });
+    assert.equal(result.draft.type, "dinner");
+    assert.notEqual(result.draft.type, "ride");
+  } finally {
+    if (previousKey === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = previousKey;
+    }
+  }
+});
+
+test("parseForwardedEmail classifies a restaurant reservation as dinner, not ride", async () => {
+  const previousKey = process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  try {
+    const dinnerEmail = `
+Your table is booked.
+
+Locanda del Mare
+Table for 2
+Confirmation: LDM-2291
+Friday, September 18, 2026 at 7:30 PM
+`;
+    const result = await parseForwardedEmail({
+      subject: "Reservation confirmed at Locanda del Mare",
+      from: "no-reply@opentable.com",
+      text: dinnerEmail,
+      html: "",
+      attachments: [],
+    });
+    assert.equal(result.draft.type, "dinner");
+  } finally {
+    if (previousKey === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = previousKey;
+    }
+  }
+});

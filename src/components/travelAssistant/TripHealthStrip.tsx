@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { detectTripGaps, type TripGap } from "@/lib/travelAssistant/gapDetectionService";
+import { postSuggestionOutcome } from "@/lib/travelAssistant/mlReadiness/clientTelemetry";
 
 interface TripHealthReservation {
   id: string;
@@ -126,6 +127,16 @@ export function TripHealthStrip({
     return [...pricingRows, ...gapRows];
   }, [missingPriceCount, onReviewPricing, onSkipPreDepartureNight, reservations, stayDecisions]);
 
+  useEffect(() => {
+    if (missingPriceCount <= 0) return;
+    void postSuggestionOutcome({
+      surface: "trip-health-strip",
+      suggestionKey: "missing-pricing",
+      outcome: "impression",
+      metadata: { missingPriceCount },
+    });
+  }, [missingPriceCount]);
+
   if (rows.length === 0) return null;
 
   const topSeverity = rows.some((row) => row.severity === "critical")
@@ -176,6 +187,13 @@ export function TripHealthStrip({
                     <button
                       type="button"
                       onClick={() => {
+                        if (row.id === "missing-pricing") {
+                          void postSuggestionOutcome({
+                            surface: "trip-health-strip",
+                            suggestionKey: "missing-pricing",
+                            outcome: "click",
+                          });
+                        }
                         if (row.onAction) {
                           row.onAction();
                           return;

@@ -1,0 +1,13 @@
+{
+  "id": "holdout-alaska-single-leg",
+  "subject": "Your Alaska Airlines itinerary",
+  "body": "Confirmation ABC123\nFlight AS654\nDeparture: ONT Ontario\nSeptember 14, 2026\n8:45 AM\nArrival: SEA Seattle\nSeptember 14, 2026\n11:20 AM",
+  "expected": {
+    "type": "flight",
+    "confirmationCode": "ABC123",
+    "flightNumber": "AS654",
+    "localTime": "2026-09-14 08:45",
+    "departureAirport": "ONT",
+    "arrivalAirport": "SEA"
+  }
+}

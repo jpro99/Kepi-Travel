@@ -72,6 +72,7 @@ export interface SessionReviewItem {
   sourceLinks?: Array<{ label: string; url: string; kind: string }>;
   reviewStatus?: "pending" | "incomplete";
   parserNotes?: string[];
+  parserVersion?: string;
 }
 
 export interface SessionReadinessItem {

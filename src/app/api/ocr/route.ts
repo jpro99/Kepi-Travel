@@ -1,22 +1,20 @@
 import { NextResponse } from 'next/server';
 
-// This is a mock API endpoint. In a real application, this would use a real OCR engine.
+// Receipt OCR is not implemented yet. This previously returned a hardcoded fake
+// expense ("Dinner with clients", $123.45) regardless of the photo taken, silently
+// fabricating data. Returning a clear "not available" response instead so the UI can
+// tell the user nothing was actually read, rather than quietly lying about it.
+// TODO(product decision): wire to a real vision/OCR provider (e.g. Claude vision,
+// since ANTHROPIC_API_KEY is already configured) before re-enabling this feature.
 export async function POST(request: Request) {
     const { image } = await request.json();
 
-    // "Intelligently" determine if the image is a receipt
-    if (!image.includes('data:image/jpeg;base64')) {
+    if (typeof image !== 'string' || !image.includes('data:image/jpeg;base64')) {
         return NextResponse.json({ error: 'Invalid image format' }, { status: 400 });
     }
 
-    // "Read" the receipt
-    const expense = {
-        id: Math.random().toString(36).substring(2, 9),
-        date: new Date().toISOString().split('T')[0],
-        category: 'Meals',
-        description: 'Dinner with clients',
-        amount: 123.45,
-    };
-
-    return NextResponse.json({ expense });
+    return NextResponse.json(
+        { error: 'Receipt scanning is not available yet. Add this expense manually for now.' },
+        { status: 501 },
+    );
 }

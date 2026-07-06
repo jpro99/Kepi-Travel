@@ -3,7 +3,22 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-05
+Last updated: 2026-07-06
+
+---
+
+## ML readiness policy (Jeff approved 2026-07-06)
+
+Kepi does **not** train a custom neural net in-product. ML readiness means:
+
+1. **Parser versioning** — `EMAIL_FORWARD_PARSER_VERSION` on every parse + review item; bump when regex/AI/merge logic changes.
+2. **Correction triplets** — on review accept, persist `(source snippet, parser guess, user-corrected, version, confidence)` to Redis via `/api/ml-readiness/parse-corrections`.
+3. **Active-learning triage** — review queue sorted by implausibility + low confidence + missing fields first.
+4. **Held-out parse eval** — frozen fixtures in `src/lib/travelAssistant/__fixtures__/parse-eval/`; never tune prompts against them.
+5. **Few-shot from corrections** — email-forward AI fallback injects similar user corrections when available.
+6. **Suggestion outcomes** — stub logging (`impression`/`click`/etc.) for future bandits; Trip health missing-pricing CTA wired first.
+
+Later (optional): embedding retrieval, ranker, bandit — only after correction volume justifies it.
 
 ---
 
@@ -225,6 +240,7 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 
 | Date | Note |
 |------|------|
+| 2026-07-06 | **Parsing reliability:** confidence/plausibility gate now blocks low-confidence or implausible forwarded reservations from auto-becoming trip fact (`evaluateForwardedReservationGate`); `drainForwardReviewQueue` no longer silently auto-promotes gated review items. Added dinner/tour/excursion detection to `emailForwardParser` (previously misclassified as "ride"). `/api/ocr` (Expense Report receipt scan) was a fake stub — now returns an honest "not available" instead of fabricated data; real OCR deferred. See `KEPI_DESIGN_LAW.md` D10–D13. |
 | 2026-06-15 | **G11 post-booking + Plan transport:** confirmation card replaces success toasts; hotel save-from-search card; inter-city transport prompts on Plan tab |
 | 2026-06-15 | **Plan calendar day editing:** tap day stays on calendar; inline Plan this day editor; plan lines preview on month cells; timeline via explicit button only |
 | 2026-06-15 | **Europe 2026 QA + Travel Fit:** trip map regression tests (Polignano/Monopoli/Munich); Book earn stack on Flights+Hotels; mobile More gets Travel Fit + wallets |
@@ -236,6 +252,7 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 | 2026-06-15 | **Auto-push:** after lint+build pass, commit+push main without asking — Vercel → kepitravel.com |
 | 2026-06-15 | **Home+Plan build order** phases 2–4: dedupeConsumerReservations, TripHealthStrip, pricing wired on Home/Plan |
 | 2026-06-15 | **Home tab product law:** unified nav Home\|Plan\|Book\|Map\|More; Home = command center + route flow (not flat flight list); Book owns inventory; premium gaps documented |
+| 2026-07-06 | **ML readiness scaffolding:** parser version, correction triplets, review triage, held-out fixtures, few-shot AI fallback, suggestion outcome stub |
 | 2026-07-06 | **Weekly Audit:** skill + Week 1 ingestion report; Week 3 includes points/card/lounge; rotation in conductor.md |
 | 2026-06-15 | Screenshot triage rule + Polignano offshore pin fix (`isLikelyOffshorePin`) |
 | 2026-06-15 | Created memory file; documented Duffel emails sent, LiteAPI key set, Travelpayouts Drive skipped, domain bot skills |
