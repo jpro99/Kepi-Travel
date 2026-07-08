@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { isStandaloneApp } from "@/lib/ui/isStandaloneApp";
+import { isInstalledAppShell } from "@/lib/ui/isStandaloneApp";
 
 const STANDALONE_VIEWPORT =
   "width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, viewport-fit=cover";
@@ -13,7 +13,7 @@ const STANDALONE_VIEWPORT =
  */
 export function StandaloneViewportFix() {
   useEffect(() => {
-    if (!isStandaloneApp()) return;
+    if (!isInstalledAppShell()) return;
 
     document.documentElement.classList.add("kepi-standalone");
 

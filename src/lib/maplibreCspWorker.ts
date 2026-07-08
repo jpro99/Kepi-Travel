@@ -8,7 +8,9 @@ import maplibregl from "maplibre-gl";
  * this only in `useEffect` is too late — workers may already be tied to the blob.
  */
 if (typeof window !== "undefined") {
-  maplibregl.setWorkerUrl(
-    `${window.location.origin}/maplibre-gl-csp-worker.js`,
-  );
+  try {
+    maplibregl.setWorkerUrl(`${window.location.origin}/maplibre-gl-csp-worker.js`);
+  } catch (error) {
+    console.warn("[maplibre] CSP worker setup failed", error);
+  }
 }
