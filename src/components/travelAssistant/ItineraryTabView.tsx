@@ -70,6 +70,7 @@ interface ItineraryTabViewProps {
   plannedFlightLegs?: PlannedFlightLeg[];
   onSearchMissingFlights?: (plan: FlightSearchPlan, selectedLegs: PlannedFlightLeg[]) => void;
   onQuickGroundTransport?: (gap: InterCityTransportGap, mode: QuickGroundMode) => void;
+  onReservationTap?: (id: string) => void;
 }
 
 export function ItineraryTabView({
@@ -106,6 +107,7 @@ export function ItineraryTabView({
   plannedFlightLegs = [],
   onSearchMissingFlights,
   onQuickGroundTransport,
+  onReservationTap,
 }: ItineraryTabViewProps) {
   const hasTripDates = Boolean(tripStartDate && tripEndDate);
   const [planSavedFlash, setPlanSavedFlash] = useState(false);
@@ -238,7 +240,8 @@ export function ItineraryTabView({
             scrollToDateKey={scrollToDateKey}
             onSelectedDateKeyChange={onSelectedDateKeyChange}
             onDayNoteChange={handleDayNoteChange}
-            onReservationTap={() => undefined}
+            onReservationTap={onReservationTap ?? (() => undefined)}
+            itineraryPlans={itineraryPlans}
             onPlanDay={onPlanDay}
             onPlanHotel={onPlanHotel}
             missionItems={missionItems}

@@ -76,6 +76,46 @@ export function parseDayIntent(text: string): ParsedDayIntent | null {
     };
   }
 
+  if (/^\s*leave\.?\s*$/iu.test(raw)) {
+    return {
+      kind: "depart",
+      raw,
+      needsTransport: true,
+      needsHotelCheckout: true,
+      needsHotelCheckin: false,
+      summary: "Leave — heading to your next stay",
+    };
+  }
+
+  const notStayingMatch = raw.match(
+    /\b(?:not|aren't|are not|isn't|is not|won't|will not)\s+staying\s+(?:in|at)\s+(.+)/iu,
+  );
+  if (notStayingMatch?.[1]) {
+    const fromCity = cleanCity(notStayingMatch[1]);
+    if (fromCity.length >= 2) {
+      return {
+        kind: "depart",
+        raw,
+        fromCity,
+        needsTransport: true,
+        needsHotelCheckout: true,
+        needsHotelCheckin: true,
+        summary: `Not staying in ${fromCity}`,
+      };
+    }
+  }
+
+  if (/\bstaying\s+(?:somewhere|elsewhere|another\s+city|a\s+different\s+city)\b/iu.test(raw)) {
+    return {
+      kind: "depart",
+      raw,
+      needsTransport: true,
+      needsHotelCheckout: true,
+      needsHotelCheckin: true,
+      summary: "Staying in a different city",
+    };
+  }
+
   const leaveOnly = raw.match(/\bleave(?:ing)?\s+(.+)/iu);
   if (
     leaveOnly?.[1] &&

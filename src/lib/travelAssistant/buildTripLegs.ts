@@ -1,4 +1,7 @@
 import { resolveAirport } from "@/lib/airports/lookup";
+import { deriveHotelSearchCityFromReservation } from "@/lib/hotels/hotelReservationCity";
+import { overlayHotelAnchoredStays } from "@/lib/travelAssistant/hotelAnchoredStayLegs";
+import { resolveStayCityForDay } from "@/lib/travelAssistant/dayPlanLines";
 import { buildFullTripDayKeys } from "@/lib/travelAssistant/tripTimelinePlanning";
 import {
   displayHotelForDay,
@@ -425,10 +428,16 @@ function inferReturnCityStay(legs: BuiltTripLeg[], groups: FlightDayGroup[]): Bu
   return legs;
 }
 
+export interface BuildTripLegsOptions {
+  dayNotes?: Record<string, string>;
+  dayPlans?: Record<string, DayPlanRecord>;
+}
+
 export function buildTripLegs(
   reservations: LegReservation[],
   tripStartDate: string | null,
   tripEndDate: string | null,
+  options: BuildTripLegsOptions = {},
 ): BuiltTripLeg[] {
   const tripStart = tripStartDate?.slice(0, 10) ?? null;
   const tripEnd = tripEndDate?.slice(0, 10) ?? null;
@@ -481,7 +490,7 @@ export function buildTripLegs(
     if (compareDateKeys(g.maxArrivalDate, tripEnd) < 0) {
       addStay(g.maxArrivalDate, tripEnd, g.finalArrivalAirport, "-solo");
     }
-    return trimOverlappingStays(fillCoverageGaps(inferReturnCityStay(legs, groups), tripStart, tripEnd));
+    return finalizeTripLegs(legs, groups, reservations, tripStart, tripEnd, options);
   }
 
   const first = groups[0]!;
@@ -502,17 +511,41 @@ export function buildTripLegs(
     }
   }
 
-  return trimOverlappingStays(
-    fillCoverageGaps(
-      inferReturnCityStay(legs, groups),
+  return finalizeTripLegs(legs, groups, reservations, tripStart, tripEnd, options);
+}
+
+function finalizeTripLegs(
+  legs: BuiltTripLeg[],
+  groups: FlightDayGroup[],
+  reservations: LegReservation[],
+  tripStart: string,
+  tripEnd: string,
+  options: BuildTripLegsOptions,
+): BuiltTripLeg[] {
+  const hotels = reservations.filter((r) => r.type === "hotel");
+  let result = trimOverlappingStays(
+    fillCoverageGaps(inferReturnCityStay(legs, groups), tripStart, tripEnd),
+  );
+
+  if (hotels.length > 0 || Object.keys(options.dayPlans ?? {}).length > 0) {
+    result = overlayHotelAnchoredStays({
+      legs: result,
+      hotels,
       tripStart,
       tripEnd,
-    ),
-  );
+      dayNotes: options.dayNotes,
+      dayPlans: options.dayPlans,
+      stayColorForCity: stayColorForCity,
+    });
+    result = trimOverlappingStays(fillCoverageGaps(result, tripStart, tripEnd));
+  }
+
+  return result;
 }
 
 export interface BuildTripLegCalendarOptions {
   dayPlans?: Record<string, DayPlanRecord>;
+  dayNotes?: Record<string, string>;
   legLabelOverrides?: Record<string, string>;
 }
 
@@ -522,7 +555,10 @@ export function buildTripLegCalendarModel(
   tripEndDate: string | null,
   options: BuildTripLegCalendarOptions = {},
 ): TripLegCalendarModel {
-  const legs = buildTripLegs(reservations, tripStartDate, tripEndDate).map((leg) => {
+  const legs = buildTripLegs(reservations, tripStartDate, tripEndDate, {
+    dayNotes: options.dayNotes,
+    dayPlans: options.dayPlans,
+  }).map((leg) => {
     const override = options.legLabelOverrides?.[leg.id];
     return override ? { ...leg, label: override } : leg;
   });
@@ -542,10 +578,33 @@ export function buildTripLegCalendarModel(
     const prevLeg = i > 0 ? resolveLegForDate(legs, dayKeys[i - 1]!, prevDayFlights.length > 0) : null;
     const hotel = hotelOnDay(reservations, dateKey);
     const dayPlan = options.dayPlans?.[dateKey];
-    const reservationHotel = hotel ? hotel.provider || hotel.title || hotel.location || "Hotel" : null;
+    const reservationHotel = hotel
+      ? hotel.title?.trim() || hotel.provider?.trim() || hotel.location || "Hotel"
+      : null;
     const hotelDisplay = displayHotelForDay({ plan: dayPlan, reservationHotel });
     const flightDetail = flightPrimaryDetail(dayFlights);
-    const displayCity = dayPlan?.location?.trim() || (leg?.type === "stay" ? leg.label : null);
+    const hotelCity = hotel
+      ? deriveHotelSearchCityFromReservation({
+          id: hotel.id,
+          title: hotel.title,
+          provider: hotel.provider,
+          location: hotel.location,
+          localTime: hotel.localTime,
+          checkOutDate: hotel.checkOutDate,
+        })
+      : null;
+    const noteCity = resolveStayCityForDay(
+      dateKey,
+      options.dayNotes ?? {},
+      [],
+      tripStartDate,
+      tripEndDate,
+    );
+    const displayCity =
+      dayPlan?.location?.trim() ||
+      hotelCity ||
+      noteCity ||
+      (leg?.type === "stay" ? leg.label : null);
 
     let kind: DayCellKind = leg ? (leg.type === "travel" ? "travel" : "stay") : "empty";
     let transitionFromColor: string | null = null;

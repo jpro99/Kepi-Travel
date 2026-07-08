@@ -19,6 +19,10 @@ import {
   type DayPlanRecord,
   type ItineraryPlansData,
 } from "@/lib/travelAssistant/itineraryDayPlan";
+import {
+  reconcilePlanNoteWithHotels,
+  type ReconcilePlanNoteResult,
+} from "@/lib/travelAssistant/reconcilePlanNoteWithHotels";
 import type { TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 
 const TRIP_API_ROUTE = "/api/trips";
@@ -371,6 +375,63 @@ export function useItineraryPanelPrefs(tripId: string | null) {
     });
   };
 
+  const applyReconciledPlans = useCallback(
+    (result: ReconcilePlanNoteResult): void => {
+      setItineraryPlans((prev) => {
+        const next: ItineraryPlansData = {
+          ...prev,
+          dayPlans: result.dayPlans,
+          updatedAt: new Date().toISOString(),
+        };
+        setDayNotes(result.dayNotes);
+        if (tripId && typeof window !== "undefined") {
+          window.localStorage.setItem(`kepi:day-notes:${tripId}`, JSON.stringify(result.dayNotes));
+        }
+        queuePersistToTrip(next, result.dayNotes);
+        return next;
+      });
+    },
+    [queuePersistToTrip, tripId],
+  );
+
+  const reconcileDayNote = useCallback(
+    (args: {
+      dateKey: string;
+      value: string;
+      tripStartDate: string;
+      tripEndDate: string;
+      hotels: Array<{
+        id: string;
+        type: string;
+        title?: string;
+        provider?: string;
+        location?: string;
+        localTime?: string;
+        checkOutDate?: string;
+        confirmationCode?: string | null;
+      }>;
+      inferredStayCity?: string | null;
+    }): string | null => {
+      const result = reconcilePlanNoteWithHotels({
+        dateKey: args.dateKey,
+        note: args.value,
+        tripStartDate: args.tripStartDate,
+        tripEndDate: args.tripEndDate,
+        dayNotes: { ...dayNotes, [args.dateKey]: args.value },
+        dayPlans: itineraryPlans.dayPlans,
+        hotels: args.hotels,
+        inferredStayCity: args.inferredStayCity,
+      });
+      if (result.applied) {
+        applyReconciledPlans(result);
+        return result.summary;
+      }
+      updateDayNote(args.dateKey, args.value);
+      return null;
+    },
+    [applyReconciledPlans, dayNotes, itineraryPlans.dayPlans],
+  );
+
   const saveDayPlan = useCallback(
     (dateKey: string, plan: DayPlanRecord, fallbackLocation: string): void => {
       const merged = { ...mergeDayPlan(undefined, fallbackLocation), ...plan };
@@ -469,6 +530,8 @@ export function useItineraryPanelPrefs(tripId: string | null) {
     setPanelWidth: persistPanelWidth,
     dayNotes,
     updateDayNote,
+    reconcileDayNote,
+    applyReconciledPlans,
     replaceDayNotes,
     hotelNotebookNote,
     updateHotelNotebookNote,

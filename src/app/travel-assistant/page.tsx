@@ -74,6 +74,7 @@ import {
 } from "@/lib/family/locationSharingPrefs";
 import { reconcileTripItinerary } from "@/lib/travelAssistant/itinerarySelfCheck";
 import { normalizeItineraryPlans } from "@/lib/travelAssistant/itineraryDayPlan";
+import { buildTripLegCalendarModel } from "@/lib/travelAssistant/buildTripLegs";
 import {
   buildIncidentAutopilotPlan,
   type IncidentAutopilotAction,
@@ -9272,6 +9273,40 @@ export default function TravelAssistantPage() {
     [handlePlanDay],
   );
 
+  const handleItineraryDayNoteChange = useCallback(
+    (dateKey: string, value: string): void => {
+      const tripStart = consumerTripStartDate ?? activeTrip?.startDate ?? null;
+      const tripEnd = activeTrip?.endDate ?? null;
+      if (!tripStart || !tripEnd) {
+        itineraryPrefs.updateDayNote(dateKey, value);
+        return;
+      }
+
+      const model = buildTripLegCalendarModel(consumerReservationsSorted, tripStart, tripEnd, {
+        dayPlans: itineraryPrefs.itineraryPlans.dayPlans,
+        dayNotes: { ...itineraryPrefs.dayNotes, [dateKey]: value },
+      });
+      const inferredStayCity = model.dayCells.get(dateKey)?.cityName ?? null;
+      const summary = itineraryPrefs.reconcileDayNote({
+        dateKey,
+        value,
+        tripStartDate: tripStart,
+        tripEndDate: tripEnd,
+        hotels: consumerReservationsSorted.filter((reservation) => reservation.type === "hotel"),
+        inferredStayCity,
+      });
+      if (summary) setToast(summary);
+    },
+    [
+      activeTrip?.endDate,
+      activeTrip?.startDate,
+      consumerReservationsSorted,
+      consumerTripStartDate,
+      itineraryPrefs,
+      setToast,
+    ],
+  );
+
   if (!advancedWorkspaceEnabled) {
     return (
       <main className="relative min-h-screen overflow-x-hidden bg-[var(--bg-base)] pb-28 text-[var(--text-primary)]">
@@ -9653,7 +9688,7 @@ export default function TravelAssistantPage() {
               scrollToDateKey={itineraryScrollToDateKey}
               onSelectedDateKeyChange={handleItineraryDateSelect}
               onHighlightedLegIdChange={setItineraryHighlightedLegId}
-              onDayNoteChange={itineraryPrefs.updateDayNote}
+              onDayNoteChange={handleItineraryDayNoteChange}
               onSaveDayPlan={itineraryPrefs.saveDayPlan}
               onApplyHotelToDays={itineraryPrefs.applyHotelToDays}
               onSaveLegLabel={itineraryPrefs.saveLegLabelOverride}
@@ -9667,6 +9702,7 @@ export default function TravelAssistantPage() {
               missionItems={tripPlanningActions}
               onMissionAction={handleTripPlanningAction}
               onPlanHotel={handleItineraryPlanHotel}
+              onReservationTap={(id) => openDrawer("reservation", id)}
               plannedFlightLegs={plannedFlightLegs}
               onSearchMissingFlights={(plan) => handleFlightSearchPlan(plan)}
               onQuickGroundTransport={handleQuickGroundTransport}

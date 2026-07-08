@@ -18,7 +18,8 @@ import { buildDayWalkthrough } from "@/lib/travelAssistant/dayWalkthrough";
 import { DayWalkthroughBlock } from "@/components/travelAssistant/DayWalkthroughBlock";
 import type { TripActionItem } from "@/lib/travelAssistant/tripActionItems";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
-import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
+import type { ItineraryPlansData } from "@/lib/travelAssistant/itineraryDayPlan";
+import { reservationDisplayLabel } from "@/lib/travelAssistant/reservationDisplayLabel";
 
 const SYSTEM_FONT =
   '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif';
@@ -58,6 +59,7 @@ interface ItineraryTimelineProps {
   missionItems?: TripActionItem[];
   onMissionAction?: (item: TripActionItem) => void;
   dayNotes: Record<string, string>;
+  itineraryPlans?: ItineraryPlansData;
   suppressPlanningAlerts?: boolean;
 };
 
@@ -702,14 +704,20 @@ export function ItineraryTimeline({
   missionItems = [],
   onMissionAction,
   dayNotes,
+  itineraryPlans,
   suppressPlanningAlerts = false,
 }: ItineraryTimelineProps) {
   const [editDateKey, setEditDateKey] = useState<string | null>(null);
   const blockRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const legModel = useMemo(
-    () => buildTripLegCalendarModel(reservations, tripStartDate, tripEndDate),
-    [reservations, tripEndDate, tripStartDate],
+    () =>
+      buildTripLegCalendarModel(reservations, tripStartDate, tripEndDate, {
+        dayPlans: itineraryPlans?.dayPlans,
+        dayNotes,
+        legLabelOverrides: itineraryPlans?.legLabelOverrides,
+      }),
+    [reservations, tripEndDate, tripStartDate, itineraryPlans, dayNotes],
   );
 
   const gapDateKeys = useMemo(() => buildGapDateKeys(reservations), [reservations]);
@@ -832,12 +840,11 @@ export function ItineraryTimeline({
           }
           bookedItems={editReservations.map((reservation) => ({
             id: reservation.id,
-            label:
-              reservation.type === "flight"
-                ? `✈ ${reservation.flightDepartureAirport} → ${reservation.flightArrivalAirport}`
-                : reservation.type === "hotel"
-                  ? `🏨 ${reservation.provider || reservation.title}`
-                  : reservation.title,
+            label: reservationDisplayLabel(reservation),
+            onTap: () => {
+              onReservationTap(reservation.id);
+              setEditDateKey(null);
+            },
           }))}
         />
       ) : null}
