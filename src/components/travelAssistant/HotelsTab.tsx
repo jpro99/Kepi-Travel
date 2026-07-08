@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { TripHotelStayMap } from "@/components/travelAssistant/TripHotelStayMap";
 import { MobileHotelStayNotebook } from "@/components/travelAssistant/mobile/MobileHotelStayNotebook";
 import { TripStayPlanner } from "@/components/travelAssistant/TripStayPlanner";
+import { PostHotelBookHint } from "@/components/travelAssistant/PostHotelBookHint";
 import { TripHotelCityPicker } from "@/components/travelAssistant/TripHotelCityPicker";
 import { HotelSearchLauncher, type HotelSearchDefaults } from "@/components/travelAssistant/HotelSearchLauncher";
 import { TripHotelSearch } from "@/components/travelAssistant/TripHotelSearch";
@@ -310,6 +311,15 @@ export function HotelsTab({
           onSearchSegment={onSearchSegment}
           onAddCityStay={onAddCityStay}
           onSetStayIntent={onSetStayIntent}
+        />
+      ) : null}
+
+      {showBookSearch && shown.some((reservation) => !reservation.plannedOnly && reservation.confirmationCode) ? (
+        <PostHotelBookHint
+          hotelCity={
+            shown.find((reservation) => !reservation.plannedOnly)?.location?.split(",").slice(-2)[0]?.trim() ??
+            hotelSearchDefaults?.city
+          }
         />
       ) : null}
 

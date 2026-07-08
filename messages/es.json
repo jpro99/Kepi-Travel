@@ -288,5 +288,25 @@
     "subtitle": "Pregunta sobre tu viaje, reservas, facturación o cómo usar la app.",
     "chatHint": "El chat de soporte debería abrirse solo. Usa la burbuja cian si no aparece.",
     "backToTrip": "Volver a tu viaje"
+  },
+  "GroundTransport": {
+    "eyebrow": "Conectores terrestres",
+    "title": "¿Cómo vas a llegar?",
+    "subtitle": "Mira rutas y estimaciones en el mapa — tú eliges, nosotros lo seguimos en tu viaje.",
+    "airportTransfer": "Aeropuerto → hotel",
+    "betweenStays": "Entre estancias",
+    "seeRoutes": "Ver rutas y estimaciones"
+  },
+  "BookTab": {
+    "postHotelTitle": "Después de reservar el hotel",
+    "postHotelBody": "Reserva en Google o Booking.com donde el precio gane — luego reenvía la confirmación para que Kepi la añada a tu cronología.",
+    "postHotelBodyWithCity": "Reserva en {city} en Google o Booking.com — luego reenvía la confirmación para que Kepi haga seguimiento."
+  },
+  "TripHealth": {
+    "title": "El viaje necesita atención ({count})",
+    "show": "Mostrar",
+    "hide": "Ocultar",
+    "airportTransfer": "Traslado aeropuerto → hotel",
+    "betweenStays": "Entre estancias"
   }
 }

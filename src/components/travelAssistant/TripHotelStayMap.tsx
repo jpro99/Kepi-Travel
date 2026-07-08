@@ -15,8 +15,10 @@ import { useMapUserViewport } from "@/lib/ui/useMapUserViewport";
 import type { PlannedStayCity } from "@/lib/travelAssistant/tripPlanBooking";
 import {
   HOTEL_STAY_SOURCE,
+  HOTEL_STAY_LINE_SOURCE,
   buildHotelStayMapPoints,
   buildHotelStayPointGeoJson,
+  buildHotelStayLineGeoJson,
   hotelStayStrokeColor,
   type HotelStayMapPoint,
   type HotelStayMapReservation,
@@ -140,9 +142,12 @@ export function TripHotelStayMap({
   );
 
   const pointGeoJson = useMemo(() => buildHotelStayPointGeoJson(points), [points]);
+  const lineGeoJson = useMemo(() => buildHotelStayLineGeoJson(points), [points]);
 
   const pointGeoJsonRef = useRef(pointGeoJson);
+  const lineGeoJsonRef = useRef(lineGeoJson);
   pointGeoJsonRef.current = pointGeoJson;
+  lineGeoJsonRef.current = lineGeoJson;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import("maplibre-gl").Map | null>(null);
@@ -203,11 +208,32 @@ export function TripHotelStayMap({
 
   const installStayLayers = useCallback((map: import("maplibre-gl").Map) => {
     const stays = pointGeoJsonRef.current;
+    const stayLines = lineGeoJsonRef.current;
 
     if (!map.getSource(HOTEL_STAY_SOURCE)) {
       map.addSource(HOTEL_STAY_SOURCE, { type: "geojson", data: stays });
     } else {
       (map.getSource(HOTEL_STAY_SOURCE) as import("maplibre-gl").GeoJSONSource).setData(stays);
+    }
+
+    if (!map.getSource(HOTEL_STAY_LINE_SOURCE)) {
+      map.addSource(HOTEL_STAY_LINE_SOURCE, { type: "geojson", data: stayLines });
+    } else {
+      (map.getSource(HOTEL_STAY_LINE_SOURCE) as import("maplibre-gl").GeoJSONSource).setData(stayLines);
+    }
+
+    if (!map.getLayer("trip-hotel-stay-lines")) {
+      map.addLayer({
+        id: "trip-hotel-stay-lines",
+        type: "line",
+        source: HOTEL_STAY_LINE_SOURCE,
+        paint: {
+          "line-color": ["get", "color"],
+          "line-width": 3,
+          "line-opacity": 0.85,
+          "line-dasharray": ["case", ["get", "dashed"], ["literal", [2, 2]], ["literal", [1, 0]]],
+        },
+      });
     }
 
     if (!map.getLayer("trip-hotel-stay-glow")) {

@@ -4,10 +4,12 @@
  */
 
 import { airportToCity } from "@/lib/travelAssistant/buildTripLegs";
+import { detectGroundConnectorGaps } from "@/lib/travelAssistant/groundConnectorGaps";
+import { deriveHotelSearchCityFromReservation } from "@/lib/hotels/hotelReservationCity";
 
 export type GapSeverity = "critical" | "warning" | "info";
 
-export type TripGapActionKind = "hotel" | "transport" | "import" | "flights" | "review";
+export type TripGapActionKind = "hotel" | "transport" | "import" | "flights" | "review" | "ground_routes";
 
 export interface TripGapActionContext {
   kind: TripGapActionKind;
@@ -295,20 +297,40 @@ export function detectTripGaps(
         return checkInKey > landingKey && checkInKey < nextDeptKey;
       });
       if (!hasHotel) {
+        const hotelsInGap = hotels.filter((h) => {
+          const checkInKey = parseDayKey(h.localTime);
+          if (!checkInKey) return false;
+          return checkInKey > landingKey && checkInKey < nextDeptKey;
+        });
+        const firstHotelInGap = hotelsInGap.sort((a, b) =>
+          parseDayKey(a.localTime).localeCompare(parseDayKey(b.localTime)),
+        )[0];
+        const gapCity = firstHotelInGap
+          ? deriveHotelSearchCityFromReservation({
+              id: firstHotelInGap.id,
+              title: (firstHotelInGap as GapReservation & { title?: string }).title,
+              provider: firstHotelInGap.provider,
+              location: firstHotelInGap.location,
+              localTime: firstHotelInGap.localTime,
+              checkOutDate: firstHotelInGap.checkOutDate,
+            }) ?? firstHotelInGap.location
+          : airportToCity(
+              (landing as GapReservation & { flightArrivalAirport?: string }).flightArrivalAirport ??
+                landing.location,
+            );
         gaps.push({
           id: `accommodation-gap-${landing.id}-${nextDeparture.id}`,
           severity: nights > 3 ? "warning" : "info",
           emoji: "🌙",
           title: `${nights} nights without accommodation`,
-          detail: `No hotel found between ${landingKey} and ${nextDeptKey}. Forward your hotel confirmation or add it manually.`,
-          actionLabel: "Add hotel",
-          actionTab: "reservations",
+          detail: firstHotelInGap
+            ? `Hotels are booked elsewhere in this window — check ground transport to ${gapCity}.`
+            : `No hotel found between ${landingKey} and ${nextDeptKey}. Forward your hotel confirmation or add it manually.`,
+          actionLabel: firstHotelInGap ? "See routes" : "Add hotel",
+          actionTab: firstHotelInGap ? "trip" : "reservations",
           actionContext: {
-            kind: "hotel",
-            city: airportToCity(
-              (landing as GapReservation & { flightArrivalAirport?: string }).flightArrivalAirport ??
-                landing.location,
-            ),
+            kind: firstHotelInGap ? "ground_routes" : "hotel",
+            city: gapCity,
             cityIata: (
               (landing as GapReservation & { flightArrivalAirport?: string }).flightArrivalAirport ?? ""
             )
@@ -391,6 +413,33 @@ export function detectTripGaps(
         });
       }
     }
+  }
+
+  // ── 6. Ground connectors: airport → hotel and hotel → hotel ─────────────
+  const tripStartKey = upcoming
+    .map((r) => parseDayKey(r.localTime))
+    .filter(Boolean)
+    .sort()[0];
+  const tripEndKey = [...upcoming]
+    .map((r) => parseDayKey(r.localTime))
+    .filter(Boolean)
+    .sort()
+    .at(-1);
+  for (const connector of detectGroundConnectorGaps({
+    reservations: upcoming,
+    tripStart: tripStartKey,
+    tripEnd: tripEndKey,
+  })) {
+    gaps.push({
+      id: connector.id,
+      severity: connector.kind === "airport_transfer" ? "warning" : "info",
+      emoji: connector.kind === "airport_transfer" ? "🛬" : "🚆",
+      title: connector.kind === "airport_transfer" ? "Airport → hotel transfer" : "Between stays",
+      detail: connector.detail,
+      actionLabel: "See routes",
+      actionTab: "trip",
+      actionContext: { kind: "ground_routes" },
+    });
   }
 
   // Deduplicate by id, limit to 6

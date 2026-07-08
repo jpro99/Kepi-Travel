@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { detectTripGaps, type TripGap, type TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 import { postSuggestionOutcome } from "@/lib/travelAssistant/mlReadiness/clientTelemetry";
 
@@ -100,6 +101,7 @@ export function TripHealthStrip({
   onSkipPreDepartureNight,
   className = "",
 }: TripHealthStripProps) {
+  const t = useTranslations("TripHealth");
   const [expanded, setExpanded] = useState(false);
 
   const rows = useMemo(() => {
@@ -164,14 +166,14 @@ export function TripHealthStrip({
       >
         <div className="min-w-0">
           <p className="text-sm font-bold text-slate-900 dark:text-white">
-            Trip needs attention ({rows.length})
+            {t("title", { count: rows.length })}
           </p>
           {!expanded ? (
             <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{summary}</p>
           ) : null}
         </div>
         <span className="shrink-0 text-xs font-semibold text-slate-500 dark:text-slate-400">
-          {expanded ? "Hide" : "Show"}
+          {expanded ? t("hide") : t("show")}
         </span>
       </button>
 

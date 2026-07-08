@@ -208,6 +208,35 @@ test("deriveTripStaySegments marks booked hotels", () => {
   assert.equal(nextMissingStaySegment(segments), null);
 });
 
+test("deriveTripStaySegments skips Bari flight stay when Monopoli hotel is booked", () => {
+  const segments = deriveTripStaySegments({
+    tripStartDate: "2026-09-01",
+    tripEndDate: "2026-09-25",
+    flights: [
+      {
+        id: "f1",
+        flightArrivalAirport: "BRI",
+        flightArrivalTime: "2026-09-01T14:00:00",
+        flightDepartureAirport: "BRI",
+        flightDepartureTime: "2026-09-18T09:00:00",
+      },
+    ],
+    hotels: [
+      {
+        id: "h1",
+        title: "Hyatt Centric Monopoli",
+        location: "Monopoli, Italy",
+        localTime: "2026-09-03T15:00:00",
+        checkOutDate: "2026-09-06",
+        confirmationCode: "ABC123",
+      },
+    ],
+  });
+
+  assert.equal(segments.some((segment) => /bari/i.test(segment.city)), false);
+  assert.equal(segments.some((segment) => /monopoli/i.test(segment.city)), true);
+});
+
 test("mergeStayProfile keeps existing fields", () => {
   const base = createEmptyHotelStayProfile("user-1");
   const merged = mergeStayProfile(base, parseStayProfileText("Free breakfast and luxury hotels"));

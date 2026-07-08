@@ -21,8 +21,10 @@ import {
 } from "@/lib/travelAssistant/tripRouteMapGeo";
 import {
   HOTEL_STAY_SOURCE,
+  HOTEL_STAY_LINE_SOURCE,
   buildHotelStayMapPoints,
   buildHotelStayPointGeoJson,
+  buildHotelStayLineGeoJson,
   type HotelStayMapReservation,
 } from "@/lib/travelAssistant/tripHotelStayMap";
 import {
@@ -112,13 +114,16 @@ export function TripHomeOverviewMap({
   const routeGeoJson = useMemo(() => buildRouteSegmentGeoJson(route.segments), [route.segments]);
   const airportGeoJson = useMemo(() => buildAirportGeoJson(collectRouteMapPoints(route.segments)), [route.segments]);
   const hotelGeoJson = useMemo(() => buildHotelStayPointGeoJson(hotelPoints), [hotelPoints]);
+  const hotelLineGeoJson = useMemo(() => buildHotelStayLineGeoJson(hotelPoints), [hotelPoints]);
 
   const routeGeoJsonRef = useRef(routeGeoJson);
   const airportGeoJsonRef = useRef(airportGeoJson);
   const hotelGeoJsonRef = useRef(hotelGeoJson);
+  const hotelLineGeoJsonRef = useRef(hotelLineGeoJson);
   routeGeoJsonRef.current = routeGeoJson;
   airportGeoJsonRef.current = airportGeoJson;
   hotelGeoJsonRef.current = hotelGeoJson;
+  hotelLineGeoJsonRef.current = hotelLineGeoJson;
 
   const routeRef = useRef(route);
   routeRef.current = route;
@@ -218,6 +223,7 @@ export function TripHomeOverviewMap({
     const routeData = routeGeoJsonRef.current;
     const airportData = airportGeoJsonRef.current;
     const staysData = hotelGeoJsonRef.current;
+    const stayLinesData = hotelLineGeoJsonRef.current;
 
     if (!map.getSource(ROUTE_SOURCE)) {
       map.addSource(ROUTE_SOURCE, { type: "geojson", data: routeData });
@@ -268,6 +274,26 @@ export function TripHomeOverviewMap({
       map.addSource(HOTEL_STAY_SOURCE, { type: "geojson", data: staysData });
     } else {
       (map.getSource(HOTEL_STAY_SOURCE) as import("maplibre-gl").GeoJSONSource).setData(staysData);
+    }
+
+    if (!map.getSource(HOTEL_STAY_LINE_SOURCE)) {
+      map.addSource(HOTEL_STAY_LINE_SOURCE, { type: "geojson", data: stayLinesData });
+    } else {
+      (map.getSource(HOTEL_STAY_LINE_SOURCE) as import("maplibre-gl").GeoJSONSource).setData(stayLinesData);
+    }
+
+    if (!map.getLayer("trip-home-stay-lines")) {
+      map.addLayer({
+        id: "trip-home-stay-lines",
+        type: "line",
+        source: HOTEL_STAY_LINE_SOURCE,
+        paint: {
+          "line-color": ["get", "color"],
+          "line-width": 3,
+          "line-opacity": 0.85,
+          "line-dasharray": ["case", ["get", "dashed"], ["literal", [2, 2]], ["literal", [1, 0]]],
+        },
+      });
     }
 
     if (!map.getLayer("trip-home-hotel-glow")) {

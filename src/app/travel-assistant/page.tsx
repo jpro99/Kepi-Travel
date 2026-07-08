@@ -9648,6 +9648,8 @@ export default function TravelAssistantPage() {
                 }}
                 onAddGroundTransport={openManualGroundTransport}
                 onStartNewTrip={handleStartNewTrip}
+                onSearchFlights={(plan) => handleFlightSearchPlan(plan)}
+                onQuickGroundTransport={handleQuickGroundTransport}
                 liveStatus={flightStatusCheckByReservationId}
               />
             )

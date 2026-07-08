@@ -288,5 +288,25 @@
     "subtitle": "Ask about your trip, reservations, billing, or how to use the app.",
     "chatHint": "The support chat should open automatically. Use the cyan chat bubble if it does not.",
     "backToTrip": "Back to your trip"
+  },
+  "GroundTransport": {
+    "eyebrow": "Ground connectors",
+    "title": "How are you getting there?",
+    "subtitle": "See routes and estimates on the map — you pick, we track it on your trip.",
+    "airportTransfer": "Airport → hotel",
+    "betweenStays": "Between stays",
+    "seeRoutes": "See routes & estimates"
+  },
+  "BookTab": {
+    "postHotelTitle": "After you book the hotel",
+    "postHotelBody": "Book on Google or Booking.com where the price wins — then forward your confirmation so Kepi adds it to your timeline.",
+    "postHotelBodyWithCity": "Book in {city} on Google or Booking.com — then forward your confirmation so Kepi tracks check-in and ground legs."
+  },
+  "TripHealth": {
+    "title": "Trip needs attention ({count})",
+    "show": "Show",
+    "hide": "Hide",
+    "airportTransfer": "Airport → hotel transfer",
+    "betweenStays": "Between stays"
   }
 }

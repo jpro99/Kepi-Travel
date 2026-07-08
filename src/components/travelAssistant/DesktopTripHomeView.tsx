@@ -3,11 +3,14 @@
 import dynamic from "next/dynamic";
 import { MobileAssistView } from "@/components/travelAssistant/mobile/MobileAssistView";
 import { TripHealthStrip } from "@/components/travelAssistant/TripHealthStrip";
+import { TripHomeTransportSection } from "@/components/travelAssistant/TripHomeTransportSection";
 import { DestinationHeroPhoto, resolveHeroCity } from "@/components/travelAssistant/tripHeroVisuals";
 import type { TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
-import type { PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
+import type { FlightSearchPlan, PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
+import type { InterCityTransportGap } from "@/lib/travelAssistant/interCityTransport";
+import type { QuickGroundMode } from "@/lib/travelAssistant/quickGroundTransport";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import type { HotelStayMapReservation } from "@/lib/travelAssistant/tripHotelStayMap";
 
@@ -60,6 +63,8 @@ interface DesktopTripHomeViewProps {
   onOpenMap: () => void;
   onAddGroundTransport?: () => void;
   onStartNewTrip?: () => void;
+  onSearchFlights?: (plan: FlightSearchPlan, selectedLegs: PlannedFlightLeg[]) => void;
+  onQuickGroundTransport?: (gap: InterCityTransportGap, mode: QuickGroundMode) => void;
   liveStatus?: Record<string, {
     flightStatus: string;
     delayMinutes: number | null;
@@ -110,6 +115,8 @@ export function DesktopTripHomeView({
   onOpenMap,
   onAddGroundTransport,
   onStartNewTrip,
+  onSearchFlights,
+  onQuickGroundTransport,
   liveStatus,
 }: DesktopTripHomeViewProps) {
   const transportReservations =
@@ -207,6 +214,17 @@ export function DesktopTripHomeView({
         onReviewPricing={onReviewPricing}
         onSkipPreDepartureNight={onSkipPreDepartureNight}
       />
+
+      {onSearchFlights && onQuickGroundTransport ? (
+        <TripHomeTransportSection
+          reservations={reservations}
+          tripStart={startDate}
+          tripEnd={endDate}
+          plannedFlightLegs={plannedFlightLegs}
+          onSearchFlights={onSearchFlights}
+          onQuickGroundTransport={onQuickGroundTransport}
+        />
+      ) : null}
 
       {onAddGroundTransport ? (
         <button
