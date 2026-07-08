@@ -1,19 +1,19 @@
 "use client";
 
 import { useEffect } from "react";
-import { isStandaloneApp } from "@/lib/ui/isStandaloneApp";
+import { isInstalledAppShell } from "@/lib/ui/isStandaloneApp";
 
 const STANDALONE_VIEWPORT =
   "width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, viewport-fit=cover";
 
 /**
- * iOS/Android home-screen PWAs can render the page zoomed-out (tiny UI) without an
- * explicit viewport lock. Browser tabs get the correct scale from Next.js metadata;
- * standalone mode needs this runtime patch so the app matches the website.
+ * iOS/Android home-screen PWAs and the Capacitor native app can render zoomed-out
+ * (tiny UI) without an explicit viewport lock. Browser tabs get the correct scale
+ * from Next.js metadata; installed shells need this runtime patch.
  */
 export function StandaloneViewportFix() {
   useEffect(() => {
-    if (!isStandaloneApp()) return;
+    if (!isInstalledAppShell()) return;
 
     document.documentElement.classList.add("kepi-standalone");
 
