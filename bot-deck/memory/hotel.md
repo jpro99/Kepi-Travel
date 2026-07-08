@@ -13,14 +13,11 @@ Owns: `/api/hotels/*`, stay profile, trip segments, LiteAPI, Duffel Stays fallba
 - Stay profile API + UI live in codebase
 - Trip stay planner on Hotels tab
 - Ranking uses profile + genome + memory
-
-## Test focus
-
-- Monopoli / Monopoly alias searches
-- Real photos when LiteAPI returns data
+- **Hotel city = timeline stay truth** — never infer nights from flight arrival IATA; use reservation city + check-in/out dates
 
 ## Changelog
 
 | Date | Note |
 |------|------|
+| 2026-07-08 | Hotel-first timeline: booked city drives Plan chapters; OTA name is badge not headline |
 | 2026-06-15 | LiteAPI waterfall added |

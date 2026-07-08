@@ -215,6 +215,8 @@ import { guidanceToneFromStyle } from "@/lib/travelStyle/travelStyleQuiz";
 import { ReferralCard } from "@/components/referral/ReferralCard";
 import { WeatherCard } from "@/components/travelAssistant/WeatherCard";
 import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntelligencePanel";
+import { useTranslations } from "next-intl";
+import { openSupportChat } from "@/components/support/SupportChat";
 import { ConciergePanel } from "@/components/travelAssistant/ConciergePanel";
 import { trackEvent } from "@/lib/analytics/trackEvent";
 import { useBilling } from "@/lib/billing/BillingContext";
@@ -224,8 +226,8 @@ import { Logo } from "@/components/ui/Logo";
 import { JourneyFlowPanel } from "./components/JourneyFlowPanel";
 import { TravelAssistantTopControls } from "./components/TravelAssistantTopControls";
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
+import { ConsumerDesktopTabBar } from "@/components/travelAssistant/ConsumerDesktopTabBar";
 import {
-  CONSUMER_TAB_BAR,
   normalizeConsumerTabParam,
   orientationTabToConsumerTab,
   resolveBookSubTab,
@@ -1826,6 +1828,7 @@ function toastPanelClassName(tone: ToastTone): string {
 export default function TravelAssistantPage() {
   const clerk = useClerk();
   const { user } = useUser();
+  const tNav = useTranslations("ConsumerNav");
   const {
     status: billingStatus,
     loading: billingLoading,
@@ -9434,33 +9437,14 @@ export default function TravelAssistantPage() {
           ) : null}
 
           {!isCompactViewport ? (
-          <div className="relative flex items-stretch overflow-x-auto rounded-2xl bg-white/90 shadow-sm ring-1 ring-black/[0.06] dark:bg-slate-900/90 dark:ring-white/[0.08]">
-            {CONSUMER_TAB_BAR.map(([tab, label, icon]) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => {
-                  if (tab === "map") {
-                    markLiveMapSessionActive();
-                    router.push("/travel-assistant/live-map");
-                    return;
-                  }
-                  navigateToConsumerTab(tab);
-                }}
-                className={`relative flex min-w-[4.5rem] flex-1 flex-col items-center justify-center gap-0.5 py-2.5 transition-all ${
-                  consumerTab === tab
-                    ? "text-[#007AFF] dark:text-[#0A84FF]"
-                    : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
-                }`}
-              >
-                <span className="text-[15px] leading-none">{icon}</span>
-                <span className={`text-sm font-semibold tracking-tight lg:text-[10px] ${consumerTab === tab ? "text-[#007AFF] dark:text-[#0A84FF]" : ""}`}>{label}</span>
-                {consumerTab === tab && (
-                  <span className="absolute bottom-0 left-1/2 h-[2.5px] w-8 -translate-x-1/2 rounded-full bg-[#007AFF] dark:bg-[#0A84FF]" />
-                )}
-              </button>
-            ))}
-          </div>
+          <ConsumerDesktopTabBar
+            activeTab={consumerTab}
+            onSelectTab={navigateToConsumerTab}
+            onMapTab={() => {
+              markLiveMapSessionActive();
+              router.push("/travel-assistant/live-map");
+            }}
+          />
           ) : null}
 
           {isCompactViewport ? (
@@ -10102,12 +10086,13 @@ export default function TravelAssistantPage() {
 
               <LanguageSettingsCard />
 
-              <Link
-                href="/support"
-                className="block rounded-2xl border border-slate-200 bg-white p-4 font-semibold shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800"
+              <button
+                type="button"
+                onClick={() => openSupportChat()}
+                className="block w-full rounded-2xl border border-slate-200 bg-white p-4 text-left font-semibold shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800"
               >
-                Support
-              </Link>
+                {tNav("support")}
+              </button>
 
               {emailForwardSetupMessage ? (
                 <p className="text-xs text-emerald-700 dark:text-emerald-300">{emailForwardSetupMessage}</p>

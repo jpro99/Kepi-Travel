@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "next-intl";
 import type { MobilePrimaryTab } from "@/components/travelAssistant/mobile/mobileShellTypes";
 import { MOBILE_PRIMARY_TABS } from "@/components/travelAssistant/mobile/mobileShellTypes";
 
@@ -12,6 +13,7 @@ interface MobileTabBarProps {
 }
 
 export function MobileTabBar({ activeTab, onSelectTab, className = "" }: MobileTabBarProps) {
+  const t = useTranslations("ConsumerNav");
   const [portalReady, setPortalReady] = useState(false);
 
   useEffect(() => {
@@ -32,8 +34,9 @@ export function MobileTabBar({ activeTab, onSelectTab, className = "" }: MobileT
       aria-label="Main navigation"
     >
       <div className="mx-auto grid max-w-lg grid-cols-6 gap-0.5">
-        {MOBILE_PRIMARY_TABS.map(({ id, label }) => {
+        {MOBILE_PRIMARY_TABS.map(({ id }) => {
           const active = activeTab === id;
+          const label = t(id);
           return (
             <button
               key={id}

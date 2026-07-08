@@ -5,6 +5,7 @@ import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { logger } from "@/lib/logger";
 import { enforceRateLimit } from "@/lib/rateLimit";
 import { buildSupportContext } from "@/lib/support/supportContext";
+import { buildSupportChatApiMessages, normalizeSupportChatApiMessages } from "@/lib/support/buildSupportChatApiMessages";
 import { generateId } from "@/lib/utils/generateId";
 
 export const runtime = "nodejs";
@@ -23,11 +24,14 @@ const RequestBodySchema = z.object({
   tripContext: z.string().trim().max(8000).optional(),
 });
 
+const SUPPORT_MODEL = "claude-sonnet-4-5";
+
 const SUPPORT_SYSTEM_PROMPT = [
   "You are Kepi — a world-class private travel concierge and the expert support guide for the Kepi app.",
   "You combine the knowledge of a seasoned international travel agent with deep expertise in the Kepi app itself.",
   "When users ask about their trip — timing, airports, customs, hotels, connections, documents, ground transport — answer as a concierge with specific expert knowledge.",
   "When users ask about app features — reservations, forwarding emails, scanning tickets, notifications, the timeline, gap alerts — answer as a product expert with clear step-by-step guidance.",
+  "Kepi philosophy: execute the WHOLE trip, not just flights and hotels. Hotels define where users sleep; airports only define where they land. Ground connectors need distance, options, and maps — user picks, Kepi tracks.",
   "Always be specific. Never give generic advice. If the user has shared trip context, use it to give personalized answers.",
   "Tone: calm, confident, warm. Like a trusted expert who has your back.",
   "Never mention travel insurance or any insurance products.",
@@ -84,10 +88,19 @@ export async function POST(req: Request) {
 
   const anthropicApiKey = process.env.ANTHROPIC_API_KEY?.trim();
   const tripContext = parsed.data.tripContext?.trim() || (await buildSupportContext(userId));
-  const promptMessages = parsed.data.messages.map((message) => ({
-    role: message.role,
-    content: sanitizePromptText(message.content),
-  }));
+  const promptMessages = normalizeSupportChatApiMessages(
+    parsed.data.messages.map((message) => ({
+      role: message.role,
+      content: sanitizePromptText(message.content),
+    })),
+  );
+
+  if (promptMessages.length === 0 || promptMessages[promptMessages.length - 1]!.role !== "user") {
+    return NextResponse.json(
+      { error: "At least one user message is required." },
+      { status: 422, headers: rateLimit.headers },
+    );
+  }
 
   const encoder = new TextEncoder();
   const responseHeaders = new Headers(rateLimit.headers);
@@ -112,11 +125,10 @@ export async function POST(req: Request) {
       try {
         const client = new Anthropic({ apiKey: anthropicApiKey });
         const claudeStream = client.messages.stream({
-          model: "claude-sonnet-4-20250514",
+          model: SUPPORT_MODEL,
           max_tokens: 900,
           temperature: 0.2,
           system: `${SUPPORT_SYSTEM_PROMPT}\n\nUser trip context:\n${tripContext}`,
-          metadata: { user_id: userId.slice(0, 120) },
           messages: promptMessages,
         });
 

@@ -10,7 +10,8 @@
     "savedSpanish": "Idioma cambiado a español — recargando…",
     "saveFailed": "No se pudo guardar el idioma. Inténtalo de nuevo.",
     "activeEnglish": "Activo: inglés",
-    "activeSpanish": "Activo: español"
+    "activeSpanish": "Activo: español",
+    "partialCoverage": "La navegación y los ajustes están traducidos. Los detalles del viaje y la guía aún se están traduciendo al español."
   },
   "LandingPage": {
     "brand": "Kepi Asistente de Viaje",
@@ -269,5 +270,23 @@
     "ctaTitle": "¿Quieres tu propio asistente de viaje en vivo?",
     "ctaSubtitle": "Gestiona preparación, cambios de vuelo e interrupciones en un solo espacio adaptable.",
     "ctaButton": "Obtener Kepi"
+  },
+  "ConsumerNav": {
+    "trip": "Inicio",
+    "itinerary": "Plan",
+    "book": "Reservar",
+    "map": "Mapa",
+    "photos": "Fotos",
+    "more": "Más",
+    "timeline": "Cronología",
+    "calendar": "Calendario",
+    "planTab": "Plan",
+    "support": "Soporte"
+  },
+  "SupportPage": {
+    "title": "Soporte Kepi",
+    "subtitle": "Pregunta sobre tu viaje, reservas, facturación o cómo usar la app.",
+    "chatHint": "El chat de soporte debería abrirse solo. Usa la burbuja cian si no aparece.",
+    "backToTrip": "Volver a tu viaje"
   }
 }

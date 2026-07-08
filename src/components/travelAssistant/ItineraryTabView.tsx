@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { ItineraryTimeline } from "@/components/travelAssistant/ItineraryTimeline";
 import { TripHealthStrip } from "@/components/travelAssistant/TripHealthStrip";
 import { TripLegCalendar } from "@/components/travelAssistant/TripLegCalendar";
@@ -109,6 +110,7 @@ export function ItineraryTabView({
   onQuickGroundTransport,
   onReservationTap,
 }: ItineraryTabViewProps) {
+  const tNav = useTranslations("ConsumerNav");
   const hasTripDates = Boolean(tripStartDate && tripEndDate);
   const [planSavedFlash, setPlanSavedFlash] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -162,7 +164,7 @@ export function ItineraryTabView({
       ) : null}
 
       <header className="rounded-2xl bg-[#0F1923] px-5 py-5 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f4c95d]">Plan</p>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f4c95d]">{tNav("planTab")}</p>
         <h1 className="mt-1 text-2xl font-bold text-white">{tripName}</h1>
         {hasTripDates ? (
           <p className="mt-1 text-sm text-slate-300">
@@ -213,7 +215,7 @@ export function ItineraryTabView({
               : "text-slate-500 dark:text-slate-400"
           }`}
         >
-          Timeline
+          {tNav("timeline")}
         </button>
         <button
           type="button"
@@ -224,7 +226,7 @@ export function ItineraryTabView({
               : "text-slate-500 dark:text-slate-400"
           }`}
         >
-          Calendar
+          {tNav("calendar")}
         </button>
       </div>
 

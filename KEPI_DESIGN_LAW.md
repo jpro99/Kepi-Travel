@@ -280,7 +280,25 @@ Munich must always appear as a distinct leg in amber (`#C4943A`). It must never 
 **I21 — Legend covers every itinerary leg**  
 Every trip leg that exists in the itinerary must appear in both the calendar AND the legend. If a destination is in the trip but not in the legend, that is a bug.
 
-**Test:** `src/lib/travelAssistant/buildTripLegs.test.ts`
+**I22 — Stay cities come from hotels, not flight arrivals**  
+Timeline stay chapters, night counts, and calendar labels must derive from **booked hotel cities and dates**. Landing at BRI does not imply "staying in Bari" when hotels are in Monopoli/Polignano. Flight arrival is a transport event only.
+
+**Test:** `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`
+
+**I23 — Plan notes reconcile with reservations**  
+User plan notes ("Leave", "not staying in X", "staying elsewhere") must parse and reconcile against booked hotels — updating `dayPlans` and timeline legs. Decorative notes that ignore hotel truth are banned.
+
+**Test:** `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`
+
+**I24 — Inter-city gaps are decision cockpits**  
+Missing ground connectors must show distance, labeled mode estimates, map deep link, and explicit user choice — recommend softly, never prescribe a single mode as orders. No exact invented fares.
+
+**Test:** `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`
+
+**I25 — Hotel name beats OTA provider in UI**  
+Reservation drawers, timeline cards, and edit surfaces show the **hotel property name** as the headline. Booking.com / Expedia / etc. are source badges — never the primary title.
+
+**Test:** `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/buildTripLegs.test.ts`
 
 ---
 
@@ -388,6 +406,8 @@ Channel shortcuts require **≥3 attempts**, correction rate **≤25%**, and alw
 | G14 | `src/lib/travelAssistant/tripSpendSummary.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
+| I22, I23, I24, I25 | `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts` |
+| Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |
 | D10 | `src/lib/travelAssistant/drainForwardReviewQueue.test.ts` |
 | D11 | `src/lib/travelAssistant/reservationPlausibility.test.ts` |

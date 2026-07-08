@@ -3,7 +3,50 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-06 (offline nav + personalization batch)
+Last updated: 2026-07-08 (whole-trip execution + hotel-first timeline)
+
+**Neuro Brain (reasoning layer):** `NEURO_BRAIN.md` — why Jeff asks for changes; apply whole-trip thinking site-wide.
+
+---
+
+## Whole-trip execution philosophy (Jeff approved 2026-07-08)
+
+**Why Jeff asked for this:** Kepi must help through the *entire* journey — not only flights and hotels. Landing at an airport ≠ sleeping in that city. Plan notes ("Leave Bari", "not staying here") must *mean something* and reconcile with booked hotels. Ground connectors need distance, options, and maps — **user picks, Kepi tracks** (decision support, not blind orders).
+
+### Core principles (apply everywhere)
+
+| Principle | Meaning |
+|-----------|---------|
+| **Hotels = truth for where you sleep** | Stay chapters, timeline cities, and spend follow **booked hotel cities + dates**, not flight arrival airports. BRI landing does not imply "8 nights in Bari" when hotels are in Monopoli/Polignano. |
+| **Airport = transport problem** | First question after landing: *how do you get to your first hotel?* Not "where are you staying?" at the airport city. |
+| **Plan notes reconcile** | Typed intent ("Leave", "not staying in Bari") → parse → match hotels → update `dayPlans` + timeline. Never ignore user edits. |
+| **We'll help you plan it** | Missing transport shows distance, mode estimates (labeled), map link, and CTAs. Recommend softly ("most travelers…"); user chooses. |
+| **OTA labels ≠ hotel identity** | Show **hotel name** in UI; Booking.com is a badge/source, not the headline. Tappable → full stay detail. |
+| **No fake precision** | Guesstimated €/time ranges until live APIs; never invent exact fares. |
+
+### Shipped 2026-07-08 (`bc0994a`)
+
+- `hotelAnchoredStayLegs.ts` — stay legs from hotels + plan notes
+- `reconcilePlanNoteWithHotels.ts` — "Leave Bari" → Monopoli from bookings
+- `interCityTransportSuggestions.ts` + `TransportRouteSheet` — route decision UI
+- `reservationDisplayLabel.ts` — hotel title over OTA provider
+- Laws/tests: `hotelAnchoredTimeline.test.ts`
+
+### Apply this thinking next (priority order)
+
+1. **Home / Trip Health** — airport→first-hotel gap card with route sheet (not just Plan)
+2. **Book tab** — after hotel book, prompt "how are you getting there from airport/previous city?"
+3. **Map tab** — draw connector routes between stay pins (not only hotels as dots)
+4. **Gap detection** — classify BRI→Monopoli as `airport_transfer` vs `inter_city`
+5. **Support AI prompt** — already inherits whole-trip rules in `/api/support/chat`
+6. **Spanish i18n** — nav + Plan sub-views wired; **most trip copy still English** — expand `messages/es.json` incrementally
+7. **Award / multi-city** — same hotel-first rules for award trips and rail connectors
+
+### Do NOT
+
+- Tell users "take the train" with no map/options (liability + trust)
+- Infer stay city only from flight IATA
+- Show "Booking.com" as the hotel name in edit drawers
 
 ---
 
@@ -267,6 +310,7 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 
 | Date | Note |
 |------|------|
+| 2026-07-08 | **Whole-trip execution:** hotel-anchored timeline, plan-note reconciliation, inter-city route sheet, hotel display labels. Philosophy in project memory + design laws I22–I25. Support model fix (`claude-sonnet-4-5`). Spanish nav labels. |
 | 2026-07-06 | **Trip truth loop:** boarding pass URLs from email imports, merged `/api/travel-updates` flight-lookup, contextual Trip Health → Book hotel search, Europe 2026 unit pass. Laws F11, G13. |
 | 2026-07-06 | **Competitive gaps (flight status, check-in, rides):** phase-aware AeroDataBox polling + optional FlightAware merge, 2-min Inngest sweep, honest check-in/Wallet handoff card on Home, Uber/Lyft deep links on Travel Day. Laws F9–F10, M9. Group/NL booking memo — defer. |
 | 2026-07-06 | **Offline nav + personalization:** itinerary-scoped IndexedDB prefetch (airport layouts + pilot city GeoJSON), Live Map offline fallback, nav walk/security calibration, two-stage post-booking briefing in Airport Mode, input-style suggestion on Plan tab. Design laws D14–D18. |

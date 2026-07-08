@@ -22,6 +22,18 @@ Oversees all Kepi domain bots. Canonical project facts also live in `../KEPI_PRO
 - Jeff controls bots via **Bot Deck** (`bot-deck/` local app), not via production site
 - Do not install Travelpayouts Drive on kepitravel.com
 
+## Whole-trip execution (Jeff 2026-07-08 — apply to ALL bots)
+
+**Read `KEPI_PROJECT_MEMORY.md` § Whole-trip execution philosophy.**
+
+- **Hotel bot:** cities and nights come from reservations, not flight arrivals
+- **Flight bot:** arrival city ≠ stay city; surface airport→hotel as transport gap
+- **Map bot:** connector routes between stay pins; route sheet pattern for ground legs
+- **Conductor:** reject features that only solve flights/hotels without connector execution
+- **Support / concierge copy:** decision support ("see options on map"), not prescriptions
+
+When auditing or building, ask: *Does this help the traveler execute the full trip, or only book one segment?*
+
 ## Weekly Audit
 
 | Field | Value |
@@ -48,5 +60,6 @@ Oversees all Kepi domain bots. Canonical project facts also live in `../KEPI_PRO
 
 | Date | Note |
 |------|------|
+| 2026-07-08 | Whole-trip execution philosophy synced from KEPI_PROJECT_MEMORY; hotel-first timeline shipped |
 | 2026-07-06 | Weekly Audit skill + Week 1 ingestion report; next rotation Week 2 |
 | 2026-06-15 | Bot Deck created; conductor owns master coordination |
