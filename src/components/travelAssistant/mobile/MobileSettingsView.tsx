@@ -6,6 +6,7 @@ import { openSupportChat } from "@/components/support/SupportChat";
 import { ThemePicker } from "@/components/ThemeToggle";
 import { LanguageSettingsCard } from "@/components/LanguageSettingsCard";
 import { OfflineTravelKitSettingsCard } from "@/components/travelAssistant/OfflineTravelKitSettingsCard";
+import { PlanRedeemCard } from "@/components/billing/PlanRedeemCard";
 import { appleBtnPrimary, appleCard, appleCaption, appleCardTitle, appleMetadata } from "@/lib/ui/appleDesign";
 
 interface MobileSettingsViewProps {
@@ -137,6 +138,8 @@ export function MobileSettingsView({
                   : "You are on the free plan."}
         </p>
       </article>
+
+      <PlanRedeemCard compact />
 
       <section className={`${appleCard} p-4`}>
         <h2 className={appleCardTitle}>Appearance</h2>

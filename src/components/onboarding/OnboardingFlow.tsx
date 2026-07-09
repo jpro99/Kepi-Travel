@@ -405,6 +405,7 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
             nextInviteRedeemedAt = nowIso;
             setInviteMessage("Invite Code already redeemed for this account.");
             await persistProgress(1, tripDraft, inviteCode, nowIso, referralCode, nextReferralRedeemedAt);
+            window.dispatchEvent(new CustomEvent("kepi:billing-refresh"));
           } else {
             setInviteMessage(payload.error ?? "Invite Code is invalid.");
             return;
@@ -419,6 +420,7 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
               : `Invite Code redeemed. 30-day free trial active${payload.trialExpiresAt ? ` through ${new Date(payload.trialExpiresAt).toLocaleDateString()}` : ""}.`,
           );
           await persistProgress(1, tripDraft, inviteCode, redeemedAtIso, referralCode, nextReferralRedeemedAt);
+          window.dispatchEvent(new CustomEvent("kepi:billing-refresh"));
         }
       } finally {
         setInviteBusy(false);

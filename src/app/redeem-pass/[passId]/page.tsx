@@ -33,6 +33,7 @@ export default function RedeemPassPage() {
         if (response.ok) {
           setStatus('success');
           setPlan(data.plan);
+          window.dispatchEvent(new CustomEvent('kepi:billing-refresh'));
           // Redirect to the travel assistant after a short delay
           setTimeout(() => {
             router.push('/travel-assistant');
