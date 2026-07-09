@@ -4257,17 +4257,17 @@ export default function TravelAssistantPage() {
   );
   const wizardFlightCount = useMemo(
     () =>
-      tripPlanningCreatingNew
+      tripPlanningWizardIntent === "create"
         ? 0
         : consumerDisplayReservations.filter((reservation) => reservation.type === "flight").length,
-    [consumerDisplayReservations, tripPlanningCreatingNew],
+    [consumerDisplayReservations, tripPlanningWizardIntent],
   );
   const wizardHotelCount = useMemo(
     () =>
-      tripPlanningCreatingNew
+      tripPlanningWizardIntent === "create"
         ? 0
         : consumerDisplayReservations.filter((reservation) => reservation.type === "hotel").length,
-    [consumerDisplayReservations, tripPlanningCreatingNew],
+    [consumerDisplayReservations, tripPlanningWizardIntent],
   );
   const delayedFlight = useMemo(
     () =>
