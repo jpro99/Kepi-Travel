@@ -3,7 +3,7 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@/lib/maplibreCspWorker";
 import { useEffect, useRef, useCallback, useState } from "react";
-import { directMaptilerTransformRequest, maptilerStyleUrl } from "@/lib/map/maptilerClient";
+import { directMaptilerTransformRequest, maptilerStyleUrl, buildOsmRasterFallbackStyle, attachMapStyleErrorFallback, scheduleMapLoadFallback } from "@/lib/map/maptilerClient";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import { resolveLocationForMapDisplay } from "@/lib/family/locationDisplayCache";
 
@@ -27,7 +27,7 @@ interface FamilyMember {
 interface FamilyMapProps {
   members: FamilyMember[];
   locations: Record<string, LocationPoint>;
-  maptilerKey: string;
+  maptilerKey?: string;
   height?: number;
   onMemberClick?: (memberId: string) => void;
 }
@@ -43,14 +43,17 @@ function timeAgo(iso: string): string {
   return `${Math.floor(diff / 60)}h ago`;
 }
 
-export function FamilyMap({ members, locations, maptilerKey, height = 300, onMemberClick }: FamilyMapProps) {
+export function FamilyMap({ members, locations, maptilerKey = "", height = 300, onMemberClick }: FamilyMapProps) {
   const mapEl = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
+  const usingOsmFallbackRef = useRef(true);
+  const isLoadedRef = useRef(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [satellite, setSatellite] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [mapError, setMapError] = useState(false);
 
 
   // Place/move markers — update existing ones in place (no flicker)
@@ -166,11 +169,12 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
     }).catch(console.error);
   }, [members, locations, onMemberClick]);
 
-  // Init map — only when maptilerKey first arrives
+  // Init map — OSM fallback works without a MapTiler key (e.g. iPhone Safari cold start).
   useEffect(() => {
     const el = mapEl.current;
-    if (!el || !maptilerKey) return;
+    if (!el) return;
     let cancelled = false;
+    let clearLoadFallback: (() => void) | null = null;
 
     if (mapRef.current) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -179,55 +183,89 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
       mapRef.current.remove();
       mapRef.current = null;
       setIsLoaded(false);
+      isLoadedRef.current = false;
     }
 
     void (async () => {
-      const ml = await import("maplibre-gl");
-      if (cancelled || !mapEl.current) return;
+      try {
+        const ml = await import("maplibre-gl");
+        if (cancelled || !mapEl.current) return;
 
-      const knownLocs = members.map(m => locations[m.id]).filter(Boolean) as LocationPoint[];
-      const center: [number, number] = knownLocs.length > 0
-        ? [knownLocs.reduce((s, l) => s + l.lon, 0) / knownLocs.length, knownLocs.reduce((s, l) => s + l.lat, 0) / knownLocs.length]
-        : [-118.2437, 34.0522];
-      const zoom = knownLocs.length === 1 ? 16 : knownLocs.length > 1 ? 12 : 4;
+        const knownLocs = members.map(m => locations[m.id]).filter(Boolean) as LocationPoint[];
+        const center: [number, number] = knownLocs.length > 0
+          ? [knownLocs.reduce((s, l) => s + l.lon, 0) / knownLocs.length, knownLocs.reduce((s, l) => s + l.lat, 0) / knownLocs.length]
+          : [0, 22];
+        const zoom = knownLocs.length === 1 ? 16 : knownLocs.length > 1 ? 12 : 1.65;
+        const key = maptilerKey.trim();
+        usingOsmFallbackRef.current = !key;
 
-      const style = maptilerStyleUrl("streets-v2", maptilerKey);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const map = new (ml as any).Map({
-        container: mapEl.current,
-        style,
-        center, zoom,
-        maxZoom: 20,
-        pixelRatio: getMapPixelRatio(),
-        attributionControl: false,
-        fadeDuration: 0,
-        transformRequest: directMaptilerTransformRequest(maptilerKey),
-      });
-      const unbindResize = bindMapResize(mapEl.current, map);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      map.addControl(new (ml as any).NavigationControl({ showCompass: false }), "top-right");
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      map.addControl(new (ml as any).AttributionControl({ compact: true }), "bottom-right");
+        const markReady = (map: import("maplibre-gl").Map): void => {
+          if (cancelled || isLoadedRef.current) return;
+          isLoadedRef.current = true;
+          setIsLoaded(true);
+          setMapError(false);
+          placeMarkers(map);
+        };
 
-      map.on("load", () => {
-        if (cancelled) return;
-        setIsLoaded(true);
-        placeMarkers(map);
-      });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      map.on("error", (e: any) => { console.warn("[FamilyMap]", e?.error?.message ?? e?.message); });
-      map.on("remove", () => unbindResize());
-      mapRef.current = map;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const map = new (ml as any).Map({
+          container: mapEl.current,
+          style: key ? maptilerStyleUrl("streets-v2", key) : buildOsmRasterFallbackStyle(),
+          center, zoom,
+          minZoom: 1,
+          maxZoom: 20,
+          pixelRatio: getMapPixelRatio(),
+          attributionControl: false,
+          fadeDuration: 0,
+          ...(key ? { transformRequest: directMaptilerTransformRequest(key) } : {}),
+        });
+        const unbindResize = bindMapResize(mapEl.current, map);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        map.addControl(new (ml as any).NavigationControl({ showCompass: false }), "top-right");
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        map.addControl(new (ml as any).AttributionControl({ compact: true }), "bottom-right");
+
+        map.on("load", () => markReady(map));
+        attachMapStyleErrorFallback(map, {
+          isCancelled: () => cancelled,
+          isLoaded: () => isLoadedRef.current,
+          markLoaded: () => {
+            isLoadedRef.current = true;
+          },
+          usingOsmFallback: usingOsmFallbackRef,
+          onRecovered: () => markReady(map),
+        });
+        clearLoadFallback = scheduleMapLoadFallback(map, {
+          isCancelled: () => cancelled,
+          isLoaded: () => isLoadedRef.current,
+          usingOsmFallback: usingOsmFallbackRef,
+          onReady: () => markReady(map),
+        });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        map.on("error", (e: any) => { console.warn("[FamilyMap]", e?.error?.message ?? e?.message); });
+        map.on("remove", () => {
+          clearLoadFallback?.();
+          unbindResize();
+        });
+        mapRef.current = map;
+      } catch (error) {
+        if (!cancelled) {
+          console.error("[FamilyMap] init failed", error);
+          setMapError(true);
+        }
+      }
     })();
 
     return () => {
       cancelled = true;
+      clearLoadFallback?.();
       if (mapRef.current) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const old = mapRef.current._kepiMarkers as Record<string, any> | undefined;
         if (old) Object.values(old).forEach((m: unknown) => (m as { remove(): void }).remove());
         mapRef.current.remove(); mapRef.current = null;
       }
+      isLoadedRef.current = false;
       setIsLoaded(false);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -241,7 +279,12 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
   // Toggle satellite — swap style without reinitialising
   useEffect(() => {
     if (!mapRef.current || !isLoaded) return;
-    mapRef.current.setStyle(maptilerStyleUrl(satellite ? "hybrid" : "streets-v2", maptilerKey));
+    const key = maptilerKey.trim();
+    if (!key) {
+      mapRef.current.setStyle(buildOsmRasterFallbackStyle());
+    } else {
+      mapRef.current.setStyle(maptilerStyleUrl(satellite ? "hybrid" : "streets-v2", key));
+    }
     mapRef.current.once("styledata", () => { if (mapRef.current) placeMarkers(mapRef.current); });
   }, [satellite, maptilerKey, isLoaded, placeMarkers]);
 
@@ -274,6 +317,16 @@ export function FamilyMap({ members, locations, maptilerKey, height = 300, onMem
         style={{ height: fullscreen ? "100dvh" : height }}
       >
         <div ref={mapEl} style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} />
+        {mapError ? (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#dbeafe] px-4 text-center">
+            <p className="text-sm font-semibold text-slate-600">Map unavailable on this device. Open the full family map from the button below.</p>
+          </div>
+        ) : null}
+        {!isLoaded && !mapError ? (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#dbeafe]/80">
+            <p className="text-sm font-semibold text-slate-600">Loading map…</p>
+          </div>
+        ) : null}
 
         {/* Controls */}
         <div className="absolute top-3 left-3 z-20 flex flex-col gap-1.5">

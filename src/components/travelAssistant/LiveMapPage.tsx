@@ -26,6 +26,7 @@ import { buildFamilyAirportPins } from "@/lib/family/familyAirportPins";
 import { useFamilyAirportSync } from "@/lib/family/useFamilyAirportSync";
 import { FamilyRallyStrip } from "@/components/travelAssistant/FamilyRallyStrip";
 import { readCompassHeading, requestDeviceOrientationPermission } from "@/lib/map/deviceCompass";
+import { isAppleMobile } from "@/lib/ui/isStandaloneApp";
 import { leaveLiveMap, isLiveMapSessionActive, markLiveMapSessionActive } from "@/lib/travelAssistant/liveMapSession";
 import { MOBILE_TAB_BAR_CLEARANCE } from "@/components/travelAssistant/mobile/mobileShellTypes";
 import { MobileTabBarNav } from "@/components/travelAssistant/mobile/useMobileTabNavigation";
@@ -75,6 +76,22 @@ type MapStyleId = LiveMapStyleId;
 
 /** Bottom inset so map overlays clear the fixed mobile tab bar on /live-map. */
 const MOBILE_TAB_BAR_INSET = MOBILE_TAB_BAR_CLEARANCE;
+
+const IOS_GEO_OPTIONS: PositionOptions = {
+  enableHighAccuracy: true,
+  maximumAge: 30_000,
+  timeout: 25_000,
+};
+
+const DEFAULT_GEO_OPTIONS: PositionOptions = {
+  enableHighAccuracy: true,
+  maximumAge: 30_000,
+  timeout: 15_000,
+};
+
+function liveMapGeoOptions(): PositionOptions {
+  return typeof navigator !== "undefined" && isAppleMobile() ? IOS_GEO_OPTIONS : DEFAULT_GEO_OPTIONS;
+}
 
 function defaultMapCenter(locations: LocationPoint[]): { center: [number, number]; zoom: number } {
   if (locations.length === 1) {
@@ -136,8 +153,15 @@ export function LiveMapPage() {
       markLiveMapSessionActive();
       return;
     }
-    if (isLiveMapSessionActive()) return;
-    leaveLiveMap("home");
+    // Defer one frame so markLiveMapSessionActive() from the navigation click wins any race.
+    const frame = window.requestAnimationFrame(() => {
+      if (isLiveMapSessionActive()) {
+        markLiveMapSessionActive();
+        return;
+      }
+      leaveLiveMap("home");
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [urlTripId]);
 
   useEffect(() => {
@@ -622,7 +646,7 @@ export function LiveMapPage() {
         setNavLon(pos.coords.longitude);
       },
       () => null,
-      { enableHighAccuracy: true, maximumAge: 30_000, timeout: 15_000 },
+      { enableHighAccuracy: true, maximumAge: 30_000, timeout: liveMapGeoOptions().timeout ?? 15_000 },
     );
     return () => {
       if (navWatchRef.current !== null) navigator.geolocation.clearWatch(navWatchRef.current);
@@ -667,7 +691,7 @@ export function LiveMapPage() {
       () => {
         /* keep existing default center */
       },
-      { enableHighAccuracy: true, maximumAge: 60_000, timeout: 12_000 },
+      { enableHighAccuracy: true, maximumAge: 60_000, timeout: liveMapGeoOptions().timeout ?? 12_000 },
     );
   }, [isLoaded, locations, mapView, navLat, navLon]);
 

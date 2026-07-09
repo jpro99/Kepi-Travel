@@ -1,6 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import dynamic from "next/dynamic";
+import { LiveMapLink } from "@/components/travelAssistant/LiveMapLink";
+
+const FamilyMap = dynamic(
+  () => import("@/components/travelAssistant/FamilyMap").then((m) => m.FamilyMap),
+  {
+    ssr: false,
+    loading: () => <div className="h-[280px] w-full animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800" />,
+  },
+);
 
 interface LocationPoint {
   lat: number; lon: number; accuracy?: number;
@@ -85,6 +95,16 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
   // ── Location sharing — GPS is managed at page.tsx level, never unmounts ─────
   const [sharingLocation, setSharingLocation] = useState(true);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [maptilerKey, setMaptilerKey] = useState("");
+
+  useEffect(() => {
+    void fetch("/api/config", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((data: { maptilerKey?: string }) => {
+        if (data.maptilerKey) setMaptilerKey(data.maptilerKey);
+      })
+      .catch(() => null);
+  }, []);
 
   useEffect(() => {
     ensureDefaultFamilySharingOn();
@@ -396,6 +416,28 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
           </div>
         )}
       </div>
+
+      {activeGroup && totalMembers > 0 ? (
+        <div className="space-y-3">
+          <FamilyMap
+            members={(activeGroup.members ?? []).map((m) => ({
+              id: m.id,
+              name: m.name,
+              color: m.color,
+              sharingEnabled: m.sharingEnabled,
+              imageUrl: m.imageUrl ?? null,
+            }))}
+            locations={locations}
+            maptilerKey={maptilerKey}
+            height={280}
+          />
+          <LiveMapLink
+            className="flex w-full min-h-[48px] items-center justify-center rounded-2xl bg-[#007AFF] px-4 py-3 text-[17px] font-bold text-white shadow-md"
+          >
+            Open full-screen family map
+          </LiveMapLink>
+        </div>
+      ) : null}
 
       {/* ── Group panel ── */}
       {groups.length > 0 && (

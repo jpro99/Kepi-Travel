@@ -11,6 +11,7 @@ import {
   scheduleMapLoadFallback,
 } from "@/lib/map/maptilerClient";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
+import { isAppleMobile } from "@/lib/ui/isStandaloneApp";
 import { useMapUserViewport } from "@/lib/ui/useMapUserViewport";
 import {
   AIRPORT_SOURCE,
@@ -172,7 +173,7 @@ export function TripHomeOverviewMap({
         setUserLon(pos.coords.longitude);
       },
       () => null,
-      { enableHighAccuracy: true, maximumAge: 30_000, timeout: 15_000 },
+      { enableHighAccuracy: true, maximumAge: 30_000, timeout: isAppleMobile() ? 25_000 : 15_000 },
     );
     return () => navigator.geolocation.clearWatch(watchId);
   }, [preferUserLocation]);
@@ -411,7 +412,7 @@ export function TripHomeOverviewMap({
             () => {
               void fitWholeTrip(0);
             },
-            { enableHighAccuracy: true, maximumAge: 60_000, timeout: 12_000 },
+            { enableHighAccuracy: true, maximumAge: 60_000, timeout: isAppleMobile() ? 25_000 : 12_000 },
           );
         } else {
           void fitWholeTrip(0);
