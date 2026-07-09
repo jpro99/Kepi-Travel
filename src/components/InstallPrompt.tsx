@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Logo } from "@/components/ui/Logo";
 import { isAndroidBrowser, isStandaloneApp } from "@/lib/ui/isStandaloneApp";
+import { MOBILE_TAB_BAR_CLEARANCE } from "@/components/travelAssistant/mobile/mobileShellTypes";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -11,8 +12,8 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 const DISMISS_STORAGE_KEY = "kepi-install-dismissed";
-/** Keep prompt above the portaled mobile tab bar (z-[9999], ~4.75rem tall). */
-const MOBILE_TAB_BAR_INSET = "max(4.75rem, calc(env(safe-area-inset-bottom) + 4rem))";
+/** Keep prompt above the portaled mobile tab bar. */
+const MOBILE_TAB_BAR_INSET = MOBILE_TAB_BAR_CLEARANCE;
 
 export function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);

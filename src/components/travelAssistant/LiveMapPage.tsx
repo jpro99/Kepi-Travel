@@ -934,6 +934,10 @@ export function LiveMapPage() {
         .maplibregl-ctrl-attrib { font-size: 11px !important; opacity: 0.75; }
         .maplibregl-ctrl-group { border-radius: 14px !important; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.2) !important; }
         .maplibregl-ctrl button { width: 44px !important; height: 44px !important; }
+        .maplibregl-ctrl-bottom-left,
+        .maplibregl-ctrl-bottom-right {
+          bottom: calc(68px + 0.5rem + max(0.625rem, env(safe-area-inset-bottom)) + 0.25rem) !important;
+        }
       `}</style>
 
       <div

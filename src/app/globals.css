@@ -181,6 +181,21 @@
     line-height: 1.45;
   }
 
+  /* Padding for portaled bottom tab bar + home indicator (iPhone) */
+  .kepi-mobile-tab-pad {
+    padding-bottom: calc(68px + 0.5rem + max(0.625rem, env(safe-area-inset-bottom)) + 1rem);
+  }
+
+  .kepi-fixed-above-tab-bar {
+    bottom: calc(68px + 0.5rem + max(0.625rem, env(safe-area-inset-bottom)) + 0.75rem);
+  }
+
+  @media (min-width: 768px) {
+    .kepi-fixed-above-tab-bar {
+      bottom: 5rem;
+    }
+  }
+
   .kepi-mobile-shell .apple-card {
     border-radius: 20px;
   }

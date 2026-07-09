@@ -250,6 +250,10 @@ import {
 } from "@/lib/travelAssistant/consumerTabs";
 import { MobileSearchOverlay } from "@/components/travelAssistant/mobile/MobileSearchOverlay";
 import { MobileTabBarNav } from "@/components/travelAssistant/mobile/useMobileTabNavigation";
+import {
+  MOBILE_TAB_BAR_CLEARANCE,
+  MOBILE_CONTENT_BOTTOM_PAD,
+} from "@/components/travelAssistant/mobile/mobileShellTypes";
 import { isCompactViewportClient } from "@/lib/ui/isCompactViewport";
 import { useMobilePrimaryTab } from "@/components/travelAssistant/mobile/useMobilePrimaryTab";
 import { PlannerTab } from "@/components/travelAssistant/PlannerTab";
@@ -1828,13 +1832,15 @@ function classifyToastTone(message: string): ToastTone {
 }
 
 function toastPanelClassName(tone: ToastTone): string {
+  const position =
+    "fixed left-3 right-3 z-[160] mx-auto max-w-md kepi-fixed-above-tab-bar md:left-auto md:right-4";
   if (tone === "error") {
-    return "fixed bottom-20 left-3 right-3 z-[160] mx-auto max-w-md rounded-xl border-2 border-rose-600 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-950 shadow-2xl ring-4 ring-rose-500/20 md:left-auto md:right-4";
+    return `${position} rounded-xl border-2 border-rose-600 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-950 shadow-2xl ring-4 ring-rose-500/20`;
   }
   if (tone === "success") {
-    return "fixed bottom-20 left-3 right-3 z-[160] mx-auto max-w-md rounded-xl border-2 border-emerald-600 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-950 shadow-2xl md:left-auto md:right-4";
+    return `${position} rounded-xl border-2 border-emerald-600 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-950 shadow-2xl`;
   }
-  return "fixed bottom-20 left-3 right-3 z-[160] mx-auto max-w-md rounded-xl border-2 border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-2xl md:left-auto md:right-4";
+  return `${position} rounded-xl border-2 border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-2xl`;
 }
 
 export default function TravelAssistantPage() {
@@ -8797,7 +8803,7 @@ export default function TravelAssistantPage() {
     [flightLiveStatusByReservationId, flightStatusCheckByReservationId],
   );
 
-  const MOBILE_TAB_BAR_INSET = "max(4.75rem, calc(env(safe-area-inset-bottom) + 4rem))";
+  const MOBILE_TAB_BAR_INSET = MOBILE_TAB_BAR_CLEARANCE;
 
   const activeDrawerPanel =
     activeDrawer && drawerPortalReady
@@ -9513,7 +9519,10 @@ export default function TravelAssistantPage() {
 
   if (!advancedWorkspaceEnabled) {
     return (
-      <main className="relative min-h-screen overflow-x-hidden bg-[var(--bg-base)] pb-28 text-[var(--text-primary)]">
+      <main
+        className="relative min-h-screen overflow-x-hidden bg-[var(--bg-base)] text-[var(--text-primary)]"
+        style={isCompactViewport ? { paddingBottom: MOBILE_CONTENT_BOTTOM_PAD } : undefined}
+      >
         <div className="relative z-10 flex min-h-screen pointer-events-none">
           <div className="min-w-0 flex-1 pointer-events-auto">
         <div className="mx-auto max-w-3xl space-y-4 px-3 py-3 sm:max-w-4xl sm:px-4 lg:max-w-6xl lg:px-5 xl:max-w-7xl">

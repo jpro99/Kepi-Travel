@@ -20,10 +20,7 @@ import type { TravelStyleProfile } from "@/lib/traveler/types";
 import { MobileTripShellHeader } from "@/components/travelAssistant/mobile/MobileTripShellHeader";
 import { MobileTripsView } from "@/components/travelAssistant/mobile/MobileTripsView";
 import { MobileBookHeader, MobileBookSegmentToggle } from "@/components/travelAssistant/mobile/MobileBookChrome";
-import {
-  MOBILE_TAB_BAR_CLEARANCE,
-  type MobilePrimaryTab,
-} from "@/components/travelAssistant/mobile/mobileShellTypes";
+import type { MobilePrimaryTab } from "@/components/travelAssistant/mobile/mobileShellTypes";
 import { DestinationHeroPhoto, resolveHeroCity } from "@/components/travelAssistant/tripHeroVisuals";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 import type { StopDateRange } from "@/lib/decision/stopDates";
@@ -314,7 +311,7 @@ export function MobileMapForwardShell({
       : [];
 
     return (
-      <div className="kepi-mobile-shell space-y-5 pb-4">
+      <div className="kepi-mobile-shell space-y-5">
         {hasActiveTrip ? (
           <>
             <div className="overflow-hidden rounded-[var(--radius-card)] bg-[#020818] shadow-[var(--shadow-card)] ring-1 ring-[var(--border-default)]">
@@ -450,13 +447,9 @@ export function MobileMapForwardShell({
 
   if (activeTab === "map") {
     const atAirport = locationStatus === "at-airport" || locationStatus === "in-terminal";
-    const mapPanelHeight = `calc(100dvh - ${MOBILE_TAB_BAR_CLEARANCE} - 5.5rem)`;
     return (
-      <div className="kepi-mobile-shell -mx-1 flex flex-col pb-2">
-        <div
-          className="relative overflow-hidden rounded-[var(--radius-card)] bg-[#dbeafe] ring-1 ring-[var(--border-default)]"
-          style={{ height: mapPanelHeight, maxHeight: mapPanelHeight }}
-        >
+      <div className="kepi-mobile-shell -mx-1 flex flex-col gap-3">
+        <div className="relative min-h-[min(52dvh,28rem)] overflow-hidden rounded-[var(--radius-card)] bg-[#dbeafe] ring-1 ring-[var(--border-default)]">
           <TripHomeOverviewMap
             transportReservations={transportReservations}
             hotelReservations={hotelReservations}
@@ -464,7 +457,7 @@ export function MobileMapForwardShell({
             staySegments={staySegments}
             onReservationTap={onReservationTap}
             preferUserLocation
-            className="h-full min-h-0"
+            className="h-full min-h-[min(52dvh,28rem)]"
           />
           <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center gap-3 px-4 pb-4 pt-16">
             <LiveMapLink
@@ -497,7 +490,7 @@ export function MobileMapForwardShell({
 
   if (activeTab === "book") {
     return (
-      <div className="kepi-mobile-shell space-y-5 pb-4">
+      <div className="kepi-mobile-shell space-y-5">
         {hasActiveTrip ? (
           <>
             <MobileBookHeader
@@ -572,7 +565,7 @@ export function MobileMapForwardShell({
 
   if (activeTab === "plan") {
     return (
-      <div className="kepi-mobile-shell space-y-5 pb-4">
+      <div className="kepi-mobile-shell space-y-5">
         {tripHeader}
         <div className="flex gap-2 rounded-2xl bg-[var(--bg-muted)] p-1.5">
           {(["itinerary", "notebook"] as const).map((id) => (
@@ -623,7 +616,7 @@ export function MobileMapForwardShell({
 
   if (activeTab === "photos") {
     return (
-      <div className="kepi-mobile-shell space-y-5 pb-4">
+      <div className="kepi-mobile-shell space-y-5">
         <header>
           <h1 className="text-[2rem] font-bold tracking-tight text-[var(--text-primary)]">Photos</h1>
           <p className="mt-1 text-[19px] text-[var(--text-secondary)]">

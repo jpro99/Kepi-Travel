@@ -16,7 +16,7 @@ export function GuardianAlert({ message, onDismiss, onReportProblem }: GuardianA
     triggerHaptic();
   }, []);
   return (
-    <div className="fixed bottom-24 right-4 md:bottom-4 z-50 max-w-sm rounded-2xl border border-blue-500/30 bg-slate-950/80 p-4 text-white shadow-lg backdrop-blur-lg animate-in fade-in-50 slide-in-from-bottom-10">
+    <div className="fixed right-4 z-50 max-w-sm kepi-fixed-above-tab-bar rounded-2xl border border-blue-500/30 bg-slate-950/80 p-4 text-white shadow-lg backdrop-blur-lg animate-in fade-in-50 slide-in-from-bottom-10 md:right-4">
       <div className="flex items-start">
         <div className="flex-shrink-0 pt-0.5">
           <AlertTriangle className="h-6 w-6 text-blue-400" />
