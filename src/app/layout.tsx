@@ -105,6 +105,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  minimumScale: 1,
+  maximumScale: 1,
   viewportFit: "cover",
   themeColor: "#f9f9f9",
 };
@@ -134,6 +136,11 @@ export default async function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var _ktheme=localStorage.getItem('kepi-theme');if(_ktheme==='dark')document.documentElement.classList.add('dark');else document.documentElement.classList.remove('dark');}catch(e){}})();`,
+          }}
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var _cap=window.Capacitor;var _native=_cap&&typeof _cap.isNativePlatform==='function'&&_cap.isNativePlatform();var _standalone=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone;if(!_native&&!_standalone&&!/Capacitor/i.test(navigator.userAgent))return;document.documentElement.classList.add('kepi-standalone');var _vp='width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, viewport-fit=cover';var _meta=document.querySelector('meta[name="viewport"]');if(_meta)_meta.setAttribute('content',_vp);}catch(e){}})();`,
           }}
         />
         <link rel="manifest" href="/manifest.json" />

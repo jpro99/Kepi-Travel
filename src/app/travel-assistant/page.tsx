@@ -3645,8 +3645,8 @@ export default function TravelAssistantPage() {
     const widthMedia = window.matchMedia("(max-width: 1023px)");
     const touchMedia = window.matchMedia("(hover: none) and (pointer: coarse)");
     const update = (): void => {
-      setIsCompactViewport(isCompactViewportClient());
       const compact = isCompactViewportClient();
+      setIsCompactViewport(compact);
       setMobileSimpleView(compact);
       setMobileViewPanel((previous) => {
         if (compact) {
