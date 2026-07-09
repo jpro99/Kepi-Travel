@@ -97,6 +97,7 @@ import { OfflineTravelKitSettingsCard } from "@/components/travelAssistant/Offli
 import { RescanImportsCard } from "@/components/travelAssistant/RescanImportsCard";
 import { AISuggestionPanel } from "@/components/travelAssistant/AISuggestionPanel";
 import { UpgradeModal, type UpgradeModalGateContext } from "@/components/billing/UpgradeModal";
+import { PlanRedeemCard } from "@/components/billing/PlanRedeemCard";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { LanguageSettingsCard } from "@/components/LanguageSettingsCard";
 import { readWebPushSubscriptionActive, subscribeToWebPushNotifications } from "@/lib/push/webPushClient";
@@ -10077,6 +10078,8 @@ export default function TravelAssistantPage() {
                           : "You are on the free plan."}
                 </p>
               </article>
+
+              <PlanRedeemCard />
 
               <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <h2 className="mb-3 font-semibold">Appearance</h2>

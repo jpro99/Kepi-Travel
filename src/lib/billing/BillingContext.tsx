@@ -147,14 +147,17 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       return;
     }
-    if (hasLifetimePlanCookieInBrowser()) {
-      setStatus((previous) => previous ?? lifetimeCookieStatusFallback());
+
+    const lifetimeCookiePresent = hasLifetimePlanCookieInBrowser();
+    if (lifetimeCookiePresent) {
+      // Always upgrade — do not keep a stale free status when the lifetime cookie is set.
+      setStatus(lifetimeCookieStatusFallback());
       setError(null);
-      setLoading(false);
-      return;
+    } else {
+      setLoading(true);
+      setError(null);
     }
-    setLoading(true);
-    setError(null);
+
     try {
       const response = await fetch("/api/billing/status", {
         method: "GET",
@@ -179,8 +182,13 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
       };
       setStatus(mergedStatus);
     } catch (refreshError) {
-      setStatus(null);
-      setError(refreshError instanceof Error ? refreshError.message : "Could not load billing status.");
+      if (lifetimeCookiePresent) {
+        setStatus(lifetimeCookieStatusFallback());
+        setError(null);
+      } else {
+        setStatus(null);
+        setError(refreshError instanceof Error ? refreshError.message : "Could not load billing status.");
+      }
     } finally {
       setLoading(false);
     }
