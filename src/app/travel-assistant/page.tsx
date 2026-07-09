@@ -8805,6 +8805,15 @@ export default function TravelAssistantPage() {
 
   const MOBILE_TAB_BAR_INSET = MOBILE_TAB_BAR_CLEARANCE;
 
+  const suppressMobileTabBar =
+    tripPlanningWizardOpen ||
+    trips.length === 0 ||
+    mobileSearchOpen ||
+    travelStyleQuizOpen ||
+    myTripsModalOpen ||
+    manualReservationModalOpen ||
+    Boolean(activeDrawer);
+
   const activeDrawerPanel =
     activeDrawer && drawerPortalReady
       ? createPortal(
@@ -9336,7 +9345,7 @@ export default function TravelAssistantPage() {
         hotelCount={wizardHotelCount}
         onClose={() => {
           setTripPlanningWizardOpen(false);
-          setTripPlanningCreatingNew(false);
+          setTripPlanningWizardIntent("create");
         }}
         onSaveTripSetup={handleSaveTripPlanningSetup}
         onBeginSave={() => setTripPlanningWizardPhase("flights")}
@@ -10377,7 +10386,11 @@ export default function TravelAssistantPage() {
                 navigateMobilePrimaryTab("book");
               }}
             />
-            <MobileTabBarNav activeTab={mobilePrimaryTab} onSelectTab={navigateMobilePrimaryTab} />
+            <MobileTabBarNav
+              activeTab={mobilePrimaryTab}
+              onSelectTab={navigateMobilePrimaryTab}
+              hidden={suppressMobileTabBar}
+            />
           </>
         ) : null}
         <div aria-live="polite" aria-atomic="true" className="sr-only">

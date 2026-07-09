@@ -311,7 +311,7 @@ export function MobileMapForwardShell({
       : [];
 
     return (
-      <div className="kepi-mobile-shell space-y-5">
+      <div className="kepi-mobile-shell kepi-mobile-tab-pad space-y-5">
         {hasActiveTrip ? (
           <>
             <div className="overflow-hidden rounded-[var(--radius-card)] bg-[#020818] shadow-[var(--shadow-card)] ring-1 ring-[var(--border-default)]">
@@ -448,7 +448,7 @@ export function MobileMapForwardShell({
   if (activeTab === "map") {
     const atAirport = locationStatus === "at-airport" || locationStatus === "in-terminal";
     return (
-      <div className="kepi-mobile-shell -mx-1 flex flex-col gap-3">
+      <div className="kepi-mobile-shell kepi-mobile-tab-pad -mx-1 flex flex-col gap-3">
         <div className="relative min-h-[min(52dvh,28rem)] overflow-hidden rounded-[var(--radius-card)] bg-[#dbeafe] ring-1 ring-[var(--border-default)]">
           <TripHomeOverviewMap
             transportReservations={transportReservations}
@@ -490,7 +490,7 @@ export function MobileMapForwardShell({
 
   if (activeTab === "book") {
     return (
-      <div className="kepi-mobile-shell space-y-5">
+      <div className="kepi-mobile-shell kepi-mobile-tab-pad space-y-5">
         {hasActiveTrip ? (
           <>
             <MobileBookHeader
@@ -565,7 +565,7 @@ export function MobileMapForwardShell({
 
   if (activeTab === "plan") {
     return (
-      <div className="kepi-mobile-shell space-y-5">
+      <div className="kepi-mobile-shell kepi-mobile-tab-pad space-y-5">
         {tripHeader}
         <div className="flex gap-2 rounded-2xl bg-[var(--bg-muted)] p-1.5">
           {(["itinerary", "notebook"] as const).map((id) => (
@@ -616,7 +616,7 @@ export function MobileMapForwardShell({
 
   if (activeTab === "photos") {
     return (
-      <div className="kepi-mobile-shell space-y-5">
+      <div className="kepi-mobile-shell kepi-mobile-tab-pad space-y-5">
         <header>
           <h1 className="text-[2rem] font-bold tracking-tight text-[var(--text-primary)]">Photos</h1>
           <p className="mt-1 text-[19px] text-[var(--text-secondary)]">
@@ -651,7 +651,7 @@ export function MobileMapForwardShell({
   }
 
   return (
-    <div className="kepi-mobile-shell space-y-5 pb-4">
+    <div className="kepi-mobile-shell kepi-mobile-tab-pad space-y-5">
       {showPointsLearn ? (
         <PointsMilesLearnPanel
           onBack={() => setShowPointsLearn(false)}

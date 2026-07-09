@@ -10,9 +10,11 @@ interface MobileTabBarProps {
   activeTab?: MobilePrimaryTab;
   onSelectTab: (tab: MobilePrimaryTab) => void;
   className?: string;
+  /** Hide while full-screen overlays (onboarding, wizard, search) are open. */
+  hidden?: boolean;
 }
 
-export function MobileTabBar({ activeTab, onSelectTab, className = "" }: MobileTabBarProps) {
+export function MobileTabBar({ activeTab, onSelectTab, className = "", hidden = false }: MobileTabBarProps) {
   const t = useTranslations("ConsumerNav");
   const [portalReady, setPortalReady] = useState(false);
 
@@ -73,7 +75,7 @@ export function MobileTabBar({ activeTab, onSelectTab, className = "" }: MobileT
     </nav>
   );
 
-  if (!portalReady) {
+  if (!portalReady || hidden) {
     return null;
   }
 

@@ -37,9 +37,10 @@ interface MobileTabBarNavProps {
   activeTab?: MobilePrimaryTab;
   /** When provided, updates tab state immediately (required on /travel-assistant). */
   onSelectTab?: (tab: MobilePrimaryTab) => void;
+  hidden?: boolean;
 }
 
-export function MobileTabBarNav({ activeTab, onSelectTab }: MobileTabBarNavProps) {
+export function MobileTabBarNav({ activeTab, onSelectTab, hidden }: MobileTabBarNavProps) {
   const { navigateMobileTab } = useMobileTabNavigation(activeTab, onSelectTab);
-  return <MobileTabBar activeTab={activeTab} onSelectTab={navigateMobileTab} />;
+  return <MobileTabBar activeTab={activeTab} onSelectTab={navigateMobileTab} hidden={hidden} />;
 }
