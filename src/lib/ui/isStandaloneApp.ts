@@ -26,21 +26,6 @@ export function isAndroidBrowser(): boolean {
   return /Android/i.test(navigator.userAgent);
 }
 
-type CapacitorWindow = Window & {
-  Capacitor?: {
-    isNativePlatform?: () => boolean;
-  };
-};
-
-/** True in PWA standalone OR the Capacitor App Store / Play Store shell. */
-export function isInstalledAppShell(): boolean {
-  if (typeof window === "undefined") return false;
-  if (isStandaloneApp()) return true;
-  const capacitor = (window as CapacitorWindow).Capacitor;
-  if (capacitor?.isNativePlatform?.()) return true;
-  return /Capacitor/i.test(navigator.userAgent);
-}
-
 /** iPhone, iPad, or iPod — Safari and home-screen web apps need extra map/GPS handling. */
 export function isAppleMobile(): boolean {
   if (typeof navigator === "undefined") return false;
