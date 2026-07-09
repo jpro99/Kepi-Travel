@@ -1,14 +1,23 @@
 import type { LoungeEligibilityResult, TravelerCredentials } from "./types";
+import {
+  applyEnrollmentToPlaybook,
+  getBenefitPlaybook,
+  mergeEnrollmentForPlaybook,
+} from "@/lib/points/benefitPlaybooks";
+
+/** Lounge access rules per airport — update via kepi-card-bot skill alongside benefitPlaybooks.ts. */
 
 interface LoungeRule {
   loungeId: string;
   name: string;
   airportIata: string;
   nodeId: string;
+  terminalHint?: string;
   airlines?: string[];
   cards?: string[];
   memberships?: string[];
   guestPolicy?: string;
+  playbookId?: string;
   lastVerified: string;
 }
 
@@ -18,9 +27,11 @@ const LOUNGE_RULES: LoungeRule[] = [
     name: "Centurion Lounge",
     airportIata: "SEA",
     nodeId: "lounge-centurion",
+    terminalHint: "Central Terminal mezzanine",
     cards: ["Amex Platinum", "Amex Centurion"],
-    guestPolicy: "Platinum: 2 guests on same-day Delta ticket",
-    lastVerified: "2026-03-01",
+    guestPolicy: "Platinum: 2 guests on many visits when flying eligible ticket",
+    playbookId: "amex-centurion-lounge",
+    lastVerified: "2026-06-01",
   },
   {
     loungeId: "sea-admirals",
@@ -30,7 +41,7 @@ const LOUNGE_RULES: LoungeRule[] = [
     airlines: ["American"],
     cards: ["Citi AAdvantage Executive"],
     memberships: ["admirals_club"],
-    lastVerified: "2026-03-01",
+    lastVerified: "2026-06-01",
   },
   {
     loungeId: "sea-united-club",
@@ -39,7 +50,8 @@ const LOUNGE_RULES: LoungeRule[] = [
     nodeId: "lounge-united",
     airlines: ["United"],
     memberships: ["united_club", "priority_pass"],
-    lastVerified: "2026-03-01",
+    playbookId: "amex-priority-pass",
+    lastVerified: "2026-06-01",
   },
   {
     loungeId: "sea-delta-sky",
@@ -49,7 +61,53 @@ const LOUNGE_RULES: LoungeRule[] = [
     airlines: ["Delta"],
     cards: ["Amex Platinum"],
     memberships: ["sky_club"],
-    lastVerified: "2026-03-01",
+    playbookId: "delta-sky-club-amex",
+    lastVerified: "2026-06-01",
+  },
+  {
+    loungeId: "fco-plaza-premium",
+    name: "Plaza Premium Lounge",
+    airportIata: "FCO",
+    nodeId: "lounge-pp-fco",
+    terminalHint: "Terminal 3 — check Priority Pass app for exact location",
+    cards: ["Amex Platinum"],
+    memberships: ["priority_pass"],
+    playbookId: "amex-priority-pass",
+    lastVerified: "2026-06-01",
+  },
+  {
+    loungeId: "fco-ita-executive",
+    name: "ITA Airways Executive Lounge",
+    airportIata: "FCO",
+    nodeId: "lounge-ita-fco",
+    terminalHint: "Terminal 1 — ITA / SkyTeam elite",
+    airlines: ["ITA", "Alitalia"],
+    memberships: ["sky_club"],
+    playbookId: "ita-executive-lounge-fco",
+    guestPolicy: "Guest access varies by Volare tier — confirm at entrance",
+    lastVerified: "2026-06-01",
+  },
+  {
+    loungeId: "muc-atlantic-lounge",
+    name: "Atlantic Lounge",
+    airportIata: "MUC",
+    nodeId: "lounge-pp-muc",
+    terminalHint: "Terminal 2 — Priority Pass partner",
+    cards: ["Amex Platinum"],
+    memberships: ["priority_pass"],
+    playbookId: "amex-priority-pass",
+    lastVerified: "2026-06-01",
+  },
+  {
+    loungeId: "ont-no-centurion",
+    name: "Airline lounges (no Centurion at ONT)",
+    airportIata: "ONT",
+    nodeId: "lounge-info-ont",
+    terminalHint: "Small airport — use Priority Pass partners if listed in app",
+    cards: ["Amex Platinum"],
+    memberships: ["priority_pass"],
+    playbookId: "amex-priority-pass",
+    lastVerified: "2026-06-01",
   },
 ];
 
@@ -82,9 +140,17 @@ export function evaluateLoungeEligibility(
     let via: string | undefined;
     let reason: string | undefined;
 
-    if (airline && rule.airlines?.some((entry) => entry.toLowerCase() === airline.toLowerCase())) {
+    const normalizedAirline = airline?.trim().toLowerCase() ?? "";
+    if (
+      normalizedAirline &&
+      rule.airlines?.some(
+        (entry) =>
+          normalizedAirline.includes(entry.toLowerCase()) ||
+          entry.toLowerCase().includes(normalizedAirline),
+      )
+    ) {
       eligible = true;
-      via = `${airline} ticket`;
+      via = `${airline} ticket or status`;
     }
 
     const cardVia = cardMatches(rule.cards, credentials);
@@ -110,14 +176,25 @@ export function evaluateLoungeEligibility(
         : `Requires ${rule.airlines?.join("/") ?? "eligible status"}`;
     }
 
+    const playbook = rule.playbookId ? getBenefitPlaybook(rule.playbookId) : null;
+    const enrollment = mergeEnrollmentForPlaybook(rule.playbookId, credentials.cardEnrollments);
+    const applied = applyEnrollmentToPlaybook(playbook, enrollment);
+
     return {
       loungeId: rule.loungeId,
       eligible,
       via,
-      reason,
-      guestPolicy: rule.guestPolicy,
-      rankScore: eligible ? 100 : 0,
+      reason: applied.enrollmentRequired ? applied.enrollmentReason : reason,
+      guestPolicy: rule.guestPolicy ?? applied.guestPolicy ?? playbook?.guestPolicy,
+      rankScore: eligible ? (applied.enrollmentRequired ? 80 : 100) : 0,
       lastVerified: rule.lastVerified,
+      loungeName: rule.name,
+      terminalHint: rule.terminalHint,
+      playbookId: rule.playbookId,
+      entryMethod: applied.entryMethod ?? playbook?.entryMethod,
+      entrySteps: applied.entrySteps ?? playbook?.steps,
+      deepLink: applied.deepLink ?? playbook?.deepLink,
+      enrollmentRequired: applied.enrollmentRequired,
     };
   });
 }

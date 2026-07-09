@@ -15,6 +15,16 @@ const RequestSchema = z.object({
       .array(z.object({ id: z.string(), product: z.string(), network: z.string() }))
       .optional(),
     loungeMemberships: z.array(z.string()).optional(),
+    cardEnrollments: z
+      .record(
+        z.object({
+          priorityPassEnrolled: z.boolean().optional(),
+          centurionDigitalReady: z.boolean().optional(),
+          centurionGuestPassesUsedThisVisit: z.number().int().min(0).max(4).optional(),
+          priorityPassNumber: z.string().max(40).optional(),
+        }),
+      )
+      .optional(),
   }),
 });
 
@@ -39,6 +49,7 @@ export async function POST(request: Request): Promise<Response> {
       globalEntry: parsed.data.credentials.globalEntry ?? "unknown",
       paymentCards: parsed.data.credentials.paymentCards,
       loungeMemberships: parsed.data.credentials.loungeMemberships as never,
+      cardEnrollments: parsed.data.credentials.cardEnrollments,
     },
     parsed.data.airline,
   ).sort((left, right) => (right.rankScore ?? 0) - (left.rankScore ?? 0));

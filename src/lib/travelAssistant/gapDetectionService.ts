@@ -3,7 +3,26 @@
  * Runs client-side — no server calls needed.
  */
 
+import { airportToCity } from "@/lib/travelAssistant/buildTripLegs";
+import { detectGroundConnectorGaps } from "@/lib/travelAssistant/groundConnectorGaps";
+import { deriveHotelSearchCityFromReservation } from "@/lib/hotels/hotelReservationCity";
+
 export type GapSeverity = "critical" | "warning" | "info";
+
+export type TripGapActionKind = "hotel" | "transport" | "import" | "flights" | "review" | "ground_routes";
+
+export interface TripGapActionContext {
+  kind: TripGapActionKind;
+  city?: string;
+  cityIata?: string;
+  checkIn?: string;
+  checkOut?: string;
+}
+
+export interface TripGapNavigationAction {
+  tab: string;
+  context?: TripGapActionContext;
+}
 
 export interface TripGap {
   id: string;
@@ -13,6 +32,7 @@ export interface TripGap {
   detail: string;
   actionLabel?: string;
   actionTab?: string;
+  actionContext?: TripGapActionContext;
 }
 
 interface GapReservation {
@@ -98,7 +118,20 @@ function nightsBetween(fromKey: string, toKey: string): number {
   return Math.round((to - from) / 86_400_000);
 }
 
-export function detectTripGaps(reservations: GapReservation[], nowMs = Date.now()): TripGap[] {
+export interface TripGapDetectOptions {
+  /** Keys like `pre-departure-2026-09-01` when user is staying home the night before a flight. */
+  stayDecisions?: Record<string, "needs_hotel" | "skip">;
+}
+
+export function preDepartureStayDecisionId(flightDay: string): string {
+  return `pre-departure-${flightDay}`;
+}
+
+export function detectTripGaps(
+  reservations: GapReservation[],
+  nowMs = Date.now(),
+  options: TripGapDetectOptions = {},
+): TripGap[] {
   const gaps: TripGap[] = [];
   const todayKey = new Date(nowMs).toISOString().slice(0, 10);
 
@@ -156,6 +189,7 @@ export function detectTripGaps(reservations: GapReservation[], nowMs = Date.now(
       detail: `${placeholders.length} item${placeholders.length === 1 ? "" : "s"} still ${placeholders.length === 1 ? "has" : "have"} no real confirmation. Forward your booking emails or import from Gmail.`,
       actionLabel: "See import options",
       actionTab: "trip",
+      actionContext: { kind: "import" },
     });
   }
 
@@ -181,6 +215,7 @@ export function detectTripGaps(reservations: GapReservation[], nowMs = Date.now(
           detail: `Your flight departs in ${Math.round(hoursUntil)} hours but no taxi or train is booked. Book now — allow extra time for traffic.`,
           actionLabel: "Add transport",
           actionTab: "reservations",
+          actionContext: { kind: "transport" },
         });
       }
     }
@@ -210,14 +245,23 @@ export function detectTripGaps(reservations: GapReservation[], nowMs = Date.now(
       return checkInKey <= nightBeforeKey && checkOutKey > nightBeforeKey;
     });
     if (!hasHotelCoveringNight) {
+      const skipId = preDepartureStayDecisionId(flightDay);
+      if (options.stayDecisions?.[skipId] === "skip") continue;
       gaps.push({
         id: `no-hotel-night-before-${flightDay}`,
         severity: "warning",
         emoji: "🏨",
         title: "No hotel night before your flight",
-        detail: `No accommodation found for ${nightBeforeKey}. If you need a place to stay the night before your ${flightDay} flight, add it now.`,
+        detail: `No accommodation found for ${nightBeforeKey}. Add a hotel if you need one — or mark "Staying at home" if you're sleeping at home.`,
         actionLabel: "Add hotel",
         actionTab: "reservations",
+        actionContext: {
+          kind: "hotel",
+          city: airportToCity(flight.flightDepartureAirport),
+          cityIata: flight.flightDepartureAirport?.trim().toUpperCase(),
+          checkIn: nightBeforeKey,
+          checkOut: flightDay,
+        },
       });
     }
   }
@@ -253,14 +297,48 @@ export function detectTripGaps(reservations: GapReservation[], nowMs = Date.now(
         return checkInKey > landingKey && checkInKey < nextDeptKey;
       });
       if (!hasHotel) {
+        const hotelsInGap = hotels.filter((h) => {
+          const checkInKey = parseDayKey(h.localTime);
+          if (!checkInKey) return false;
+          return checkInKey > landingKey && checkInKey < nextDeptKey;
+        });
+        const firstHotelInGap = hotelsInGap.sort((a, b) =>
+          parseDayKey(a.localTime).localeCompare(parseDayKey(b.localTime)),
+        )[0];
+        const gapCity = firstHotelInGap
+          ? deriveHotelSearchCityFromReservation({
+              id: firstHotelInGap.id,
+              title: (firstHotelInGap as GapReservation & { title?: string }).title,
+              provider: firstHotelInGap.provider,
+              location: firstHotelInGap.location,
+              localTime: firstHotelInGap.localTime,
+              checkOutDate: firstHotelInGap.checkOutDate,
+            }) ?? firstHotelInGap.location
+          : airportToCity(
+              (landing as GapReservation & { flightArrivalAirport?: string }).flightArrivalAirport ??
+                landing.location,
+            );
         gaps.push({
           id: `accommodation-gap-${landing.id}-${nextDeparture.id}`,
           severity: nights > 3 ? "warning" : "info",
           emoji: "🌙",
           title: `${nights} nights without accommodation`,
-          detail: `No hotel found between ${landingKey} and ${nextDeptKey}. Forward your hotel confirmation or add it manually.`,
-          actionLabel: "Add hotel",
-          actionTab: "reservations",
+          detail: firstHotelInGap
+            ? `Hotels are booked elsewhere in this window — check ground transport to ${gapCity}.`
+            : `No hotel found between ${landingKey} and ${nextDeptKey}. Forward your hotel confirmation or add it manually.`,
+          actionLabel: firstHotelInGap ? "See routes" : "Add hotel",
+          actionTab: firstHotelInGap ? "trip" : "reservations",
+          actionContext: {
+            kind: firstHotelInGap ? "ground_routes" : "hotel",
+            city: gapCity,
+            cityIata: (
+              (landing as GapReservation & { flightArrivalAirport?: string }).flightArrivalAirport ?? ""
+            )
+              .trim()
+              .toUpperCase(),
+            checkIn: landingKey,
+            checkOut: nextDeptKey,
+          },
         });
       }
     }
@@ -279,6 +357,7 @@ export function detectTripGaps(reservations: GapReservation[], nowMs = Date.now(
       detail: `${missingConf.map((r) => r.provider || r.type).join(", ")} ${missingConf.length === 1 ? "has" : "have"} no confirmation code. Tap to add them so you can check in quickly.`,
       actionLabel: "Review",
       actionTab: "reservations",
+      actionContext: { kind: "review" },
     });
   }
 
@@ -334,6 +413,33 @@ export function detectTripGaps(reservations: GapReservation[], nowMs = Date.now(
         });
       }
     }
+  }
+
+  // ── 6. Ground connectors: airport → hotel and hotel → hotel ─────────────
+  const tripStartKey = upcoming
+    .map((r) => parseDayKey(r.localTime))
+    .filter(Boolean)
+    .sort()[0];
+  const tripEndKey = [...upcoming]
+    .map((r) => parseDayKey(r.localTime))
+    .filter(Boolean)
+    .sort()
+    .at(-1);
+  for (const connector of detectGroundConnectorGaps({
+    reservations: upcoming,
+    tripStart: tripStartKey,
+    tripEnd: tripEndKey,
+  })) {
+    gaps.push({
+      id: connector.id,
+      severity: connector.kind === "airport_transfer" ? "warning" : "info",
+      emoji: connector.kind === "airport_transfer" ? "🛬" : "🚆",
+      title: connector.kind === "airport_transfer" ? "Airport → hotel transfer" : "Between stays",
+      detail: connector.detail,
+      actionLabel: "See routes",
+      actionTab: "trip",
+      actionContext: { kind: "ground_routes" },
+    });
   }
 
   // Deduplicate by id, limit to 6

@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { GroundTransportDeepLinkCard } from "@/components/travelAssistant/GroundTransportDeepLinkCard";
+import { buildRideToAirportDeepLinks } from "@/lib/travelAssistant/groundTransportDeepLinks";
 
 type TransportMode = "driving-myself" | "getting-dropped-off" | "uber-lyft" | "train-bus" | "other";
 
@@ -117,6 +119,11 @@ export function TravelDayView({
     parseUtcMs(a.localTime, a.timezone) - parseUtcMs(b.localTime, b.timezone)
   );
   const firstFlight = sortedFlights[0];
+  const airportRideLinks = useMemo(() => {
+    const iata = firstFlight?.flightDepartureAirport?.trim().toUpperCase() ?? "";
+    if (!iata || transport !== "uber-lyft") return null;
+    return buildRideToAirportDeepLinks(iata);
+  }, [firstFlight?.flightDepartureAirport, transport]);
   if (!firstFlight && !askTransport) {
     return (
       <div className="fixed inset-0 z-[8000] bg-slate-950 flex items-center justify-center">
@@ -460,6 +467,12 @@ export function TravelDayView({
             </div>
           </div>
         </div>
+
+        {airportRideLinks ? (
+          <div className="px-5 pb-3">
+            <GroundTransportDeepLinkCard links={airportRideLinks} />
+          </div>
+        ) : null}
 
         {/* Timeline */}
         <div className="px-5 pb-4">

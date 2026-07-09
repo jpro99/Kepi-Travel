@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { detectTripGaps, type TripGap } from "@/lib/travelAssistant/gapDetectionService";
+import { detectTripGaps, type TripGap, type TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 
 interface ItinerarySlideBannersProps {
   reservations: Parameters<typeof detectTripGaps>[0];
-  onActionTap?: (tab: string) => void;
+  onActionTap?: (action: TripGapNavigationAction) => void;
   autoDismissMs?: number;
 }
 
@@ -71,7 +71,12 @@ export function ItinerarySlideBanners({
           {gap.actionTab && gap.actionLabel ? (
             <button
               type="button"
-              onClick={() => onActionTap?.(gap.actionTab!)}
+              onClick={() =>
+                onActionTap?.({
+                  tab: gap.actionTab!,
+                  context: gap.actionContext,
+                })
+              }
               className="mt-2 text-xs font-semibold text-[#f4c95d] underline-offset-2 hover:underline"
             >
               {gap.actionLabel}

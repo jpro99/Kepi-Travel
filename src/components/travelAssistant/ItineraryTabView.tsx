@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { ItineraryTimeline } from "@/components/travelAssistant/ItineraryTimeline";
 import { TripHealthStrip } from "@/components/travelAssistant/TripHealthStrip";
 import { TripLegCalendar } from "@/components/travelAssistant/TripLegCalendar";
@@ -12,14 +13,18 @@ import type { DayPlanRecord, ItineraryPlansData } from "@/lib/travelAssistant/it
 import { InterCityTransportPrompts } from "@/components/travelAssistant/InterCityTransportPrompts";
 import type { FlightSearchPlan, PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
 import type { InterCityTransportGap } from "@/lib/travelAssistant/interCityTransport";
+import type { PlanSubView } from "@/lib/travelAssistant/consumerTabs";
 import type { QuickGroundMode } from "@/lib/travelAssistant/quickGroundTransport";
+import type { TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 
 interface ItineraryTabViewProps {
   tripName: string;
   tripStartDate: string | null;
   tripEndDate?: string | null;
   missingPriceCount?: number;
+  stayDecisions?: Record<string, "needs_hotel" | "skip">;
   onReviewPricing?: () => void;
+  onSkipPreDepartureNight?: (flightDay: string) => void;
   reservations: {
     id: string;
     type: string;
@@ -56,7 +61,7 @@ interface ItineraryTabViewProps {
   getDayPlan: (dateKey: string, fallbackLocation: string) => DayPlanRecord;
   itineraryPlans: ItineraryPlansData;
   onPlanDay: (dateKey: string, intent: ParsedDayIntent, mode: DayPlanMode) => void;
-  onGapActionTap?: (tab: string) => void;
+  onGapActionTap?: (action: TripGapNavigationAction) => void;
   onPrint: () => void;
   onExportPdf: () => void;
   onShareLink: () => void;
@@ -66,6 +71,7 @@ interface ItineraryTabViewProps {
   plannedFlightLegs?: PlannedFlightLeg[];
   onSearchMissingFlights?: (plan: FlightSearchPlan, selectedLegs: PlannedFlightLeg[]) => void;
   onQuickGroundTransport?: (gap: InterCityTransportGap, mode: QuickGroundMode) => void;
+  onReservationTap?: (id: string) => void;
 }
 
 export function ItineraryTabView({
@@ -73,7 +79,9 @@ export function ItineraryTabView({
   tripStartDate,
   tripEndDate,
   missingPriceCount = 0,
+  stayDecisions,
   onReviewPricing,
+  onSkipPreDepartureNight,
   reservations,
   dayNotes,
   planSubView,
@@ -100,7 +108,9 @@ export function ItineraryTabView({
   plannedFlightLegs = [],
   onSearchMissingFlights,
   onQuickGroundTransport,
+  onReservationTap,
 }: ItineraryTabViewProps) {
+  const tNav = useTranslations("ConsumerNav");
   const hasTripDates = Boolean(tripStartDate && tripEndDate);
   const [planSavedFlash, setPlanSavedFlash] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -139,8 +149,10 @@ export function ItineraryTabView({
           location: reservation.location ?? "",
         }))}
         missingPriceCount={missingPriceCount}
+        stayDecisions={stayDecisions}
         onGapActionTap={onGapActionTap}
         onReviewPricing={onReviewPricing}
+        onSkipPreDepartureNight={onSkipPreDepartureNight}
       />
 
       {plannedFlightLegs.length > 0 && onSearchMissingFlights && onQuickGroundTransport ? (
@@ -152,7 +164,7 @@ export function ItineraryTabView({
       ) : null}
 
       <header className="rounded-2xl bg-[#0F1923] px-5 py-5 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f4c95d]">Plan</p>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f4c95d]">{tNav("planTab")}</p>
         <h1 className="mt-1 text-2xl font-bold text-white">{tripName}</h1>
         {hasTripDates ? (
           <p className="mt-1 text-sm text-slate-300">
@@ -203,7 +215,7 @@ export function ItineraryTabView({
               : "text-slate-500 dark:text-slate-400"
           }`}
         >
-          Timeline
+          {tNav("timeline")}
         </button>
         <button
           type="button"
@@ -214,7 +226,7 @@ export function ItineraryTabView({
               : "text-slate-500 dark:text-slate-400"
           }`}
         >
-          Calendar
+          {tNav("calendar")}
         </button>
       </div>
 
@@ -230,7 +242,8 @@ export function ItineraryTabView({
             scrollToDateKey={scrollToDateKey}
             onSelectedDateKeyChange={onSelectedDateKeyChange}
             onDayNoteChange={handleDayNoteChange}
-            onReservationTap={() => undefined}
+            onReservationTap={onReservationTap ?? (() => undefined)}
+            itineraryPlans={itineraryPlans}
             onPlanDay={onPlanDay}
             onPlanHotel={onPlanHotel}
             missionItems={missionItems}

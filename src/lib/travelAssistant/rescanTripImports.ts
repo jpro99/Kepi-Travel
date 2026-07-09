@@ -6,7 +6,11 @@ import {
 } from "@/lib/travelAssistant/emailForwardParser";
 import { isPlaceholderConfirmation } from "@/lib/travelAssistant/placeholderReservations";
 import { prepareReviewDraftForAccept } from "@/lib/travelAssistant/prepareReviewDraftForAccept";
-import { resolveReservationPricing } from "@/lib/travelAssistant/parseReservationMiles";
+import { resolvePricingNearBooking } from "@/lib/travelAssistant/parseReservationMiles";
+import { applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
+import { getResendClient } from "@/lib/email/resendClient";
+import { fetchReceivedEmailSourceText } from "@/lib/travelAssistant/receivedEmailPdfText";
+import { shouldReplaceStoredSourceText, truncateEmailSourceText } from "@/lib/travelAssistant/emailSourceText";
 import {
   isDuplicateReservation,
   type DuplicateReservationFields,
@@ -64,9 +68,14 @@ function draftToIncomingReservation(
     notes: draft.notes,
     checkOutDate: draft.checkOutDate,
   });
-  const pricing = resolveReservationPricing({
+  const pricing = resolvePricingNearBooking({
     notes: draft.notes,
     originalEmailText: sourceText,
+    confirmationCode: draft.confirmationCode,
+    title: draft.title,
+    flightNumber: draft.flightNumber,
+    departureAirport: draft.departureAirport,
+    arrivalAirport: draft.arrivalAirport,
   });
 
   return {
@@ -90,7 +99,7 @@ function draftToIncomingReservation(
     quotedMilesEarned: pricing.milesEarned,
     pointsProgram: pricing.program,
     sourceEmailSubject: subject,
-    originalEmailText: sourceText.slice(0, 12_000),
+    originalEmailText: truncateEmailSourceText(sourceText),
   };
 }
 
@@ -119,12 +128,69 @@ function findMatchingReservation(
   return null;
 }
 
+function reservationNeedsPricingBackfill(reservation: SessionReservation): boolean {
+  const hasCash =
+    typeof reservation.quotedPriceUsd === "number" &&
+    Number.isFinite(reservation.quotedPriceUsd) &&
+    reservation.quotedPriceUsd > 0;
+  const hasPoints =
+    typeof reservation.quotedPointsMiles === "number" &&
+    Number.isFinite(reservation.quotedPointsMiles) &&
+    reservation.quotedPointsMiles > 0;
+  return !hasCash && !hasPoints;
+}
+
+async function backfillSourceTextFromResend(
+  reservations: SessionReservation[],
+): Promise<SessionReservation[]> {
+  const resendClient = getResendClient();
+  if (!resendClient) return reservations;
+
+  const byEmailId = new Map<string, SessionReservation[]>();
+  for (const reservation of reservations) {
+    const emailId = reservation.sourceEmailId?.trim();
+    if (!emailId || !reservationNeedsPricingBackfill(reservation)) continue;
+    const list = byEmailId.get(emailId) ?? [];
+    list.push(reservation);
+    byEmailId.set(emailId, list);
+  }
+  if (byEmailId.size === 0) return reservations;
+
+  const sourceByEmailId = new Map<string, { text: string; subject?: string }>();
+  for (const emailId of byEmailId.keys()) {
+    const fetched = await fetchReceivedEmailSourceText(resendClient, emailId);
+    if (!fetched?.text.trim()) continue;
+    sourceByEmailId.set(emailId, {
+      text: fetched.text.trim(),
+      subject: fetched.subject.trim() || undefined,
+    });
+  }
+  if (sourceByEmailId.size === 0) return reservations;
+
+  return reservations.map((reservation) => {
+    const emailId = reservation.sourceEmailId?.trim();
+    if (!emailId || !reservationNeedsPricingBackfill(reservation)) return reservation;
+    const fetched = sourceByEmailId.get(emailId);
+    if (!fetched?.text) return reservation;
+    const existingText = reservation.originalEmailText?.trim() ?? "";
+    if (!shouldReplaceStoredSourceText(existingText, fetched.text)) return reservation;
+    return applyAcceptedReservationPricing({
+      ...reservation,
+      originalEmailText: truncateEmailSourceText(fetched.text),
+      sourceEmailSubject: reservation.sourceEmailSubject?.trim() || fetched.subject,
+    });
+  });
+}
+
 export async function rescanTripImports(
   reservations: SessionReservation[],
 ): Promise<RescanTripImportsResult> {
-  const groups = groupRescannableBySource(reservations);
-  const skippedNoSource = reservations.length - groups.reduce((sum, group) => sum + group.reservationIds.length, 0);
-  const byId = new Map(reservations.map((reservation) => [reservation.id, { ...reservation }]));
+  const enrichedReservations = await backfillSourceTextFromResend(reservations);
+  const groups = groupRescannableBySource(enrichedReservations);
+  const skippedNoSource =
+    enrichedReservations.length -
+    groups.reduce((sum, group) => sum + group.reservationIds.length, 0);
+  const byId = new Map(enrichedReservations.map((reservation) => [reservation.id, { ...reservation }]));
   const results: RescanReservationResult[] = [];
   const matchedIds = new Set<string>();
   let unmatchedDrafts = 0;
@@ -146,18 +212,35 @@ export async function rescanTripImports(
 
       const incoming = draftToIncomingReservation(draft, group.sourceText, group.subject);
       const merged = mergeRescanIntoExisting(match, incoming);
-      byId.set(match.id, merged.reservation);
+      const priced = applyAcceptedReservationPricing(merged.reservation);
+      const filledFields = [...merged.filledFields];
+      for (const key of ["quotedPriceUsd", "quotedPointsMiles", "quotedMilesEarned", "pointsProgram", "originalEmailText"] as const) {
+        const before = match[key];
+        const after = priced[key];
+        const wasEmpty =
+          before == null ||
+          (typeof before === "number" && (!Number.isFinite(before) || before <= 0)) ||
+          (typeof before === "string" && before.trim().length === 0);
+        const nowFilled =
+          after != null &&
+          !((typeof after === "number" && (!Number.isFinite(after) || after <= 0)) ||
+            (typeof after === "string" && after.trim().length === 0));
+        if (wasEmpty && nowFilled && !filledFields.includes(key)) {
+          filledFields.push(key);
+        }
+      }
+      byId.set(match.id, priced);
       matchedIds.add(match.id);
       results.push({
         reservationId: match.id,
-        title: merged.reservation.title,
-        filledFields: merged.filledFields,
+        title: priced.title,
+        filledFields,
         matched: true,
       });
     }
   }
 
-  const updatedReservations = [...byId.values()];
+  const updatedReservations = [...byId.values()].map((reservation) => applyAcceptedReservationPricing(reservation));
   return {
     rescannedSources: groups.length,
     updatedReservations: results.filter((result) => result.filledFields.length > 0).length,

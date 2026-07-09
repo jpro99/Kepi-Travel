@@ -441,9 +441,10 @@ export function TripLegCalendar({
     () =>
       buildTripLegCalendarModel(reservations, tripStart, tripEnd, {
         dayPlans: itineraryPlans?.dayPlans,
+        dayNotes,
         legLabelOverrides: itineraryPlans?.legLabelOverrides,
       }),
-    [reservations, tripEnd, tripStart, itineraryPlans?.dayPlans, itineraryPlans?.legLabelOverrides],
+    [reservations, tripEnd, tripStart, itineraryPlans?.dayPlans, itineraryPlans?.legLabelOverrides, dayNotes],
   );
 
   const legendChips = useMemo(() => buildLegendLegs(model.legs), [model.legs]);

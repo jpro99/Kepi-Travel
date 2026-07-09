@@ -13,6 +13,8 @@ import type { FlightSearchPlan, PlannedFlightLeg } from "@/lib/travelAssistant/t
 import type { InterCityTransportGap } from "@/lib/travelAssistant/interCityTransport";
 import type { QuickGroundMode } from "@/lib/travelAssistant/quickGroundTransport";
 import { buildGateInstructions, getAirportNav, buildArrivalGuide } from "@/lib/travelAssistant/airportNavigation";
+import { isFlightStatusStale } from "@/lib/travelAssistant/flightStatusCadence";
+import { canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
 import {
   formatReservationCostLine,
   reservationMissingPrice,
@@ -316,12 +318,12 @@ function AirportGuideCard({
     [gate, terminal, iata]
   );
 
-  // Auto-check on mount — but only if not checked in the last 5 minutes
-  // Delayed 3s so navigating quickly between tabs doesn't spam the API
+  // Auto-check on mount — phase-aware stale threshold (90s within 6h, 5m otherwise)
   useEffect(() => {
     const lastChecked = live?.checkedAt ? Date.parse(live.checkedAt) : 0;
-    const staleMs = Date.now() - lastChecked;
-    const isStale = staleMs > 5 * 60_000; // older than 5 minutes
+    const departureLocal = canonicalFlightDepartureLocalTime(flight);
+    const depMs = Date.parse(departureLocal.replace("T", " ").slice(0, 16));
+    const isStale = isFlightStatusStale(live?.checkedAt, depMs);
     if (live?.busy || !isStale) return;
     const timer = setTimeout(() => {
       onCheckStatus(flight.id);
@@ -747,7 +749,7 @@ export function FlightsTab({
           const depTime = fmt12(r.flightDepartureTime ?? r.localTime ?? "");
           const arrTime = fmt12(r.flightArrivalTime ?? "");
           const date = fmtDate(r.flightDate ? r.flightDate + " 00:00" : r.localTime ?? "");
-          const missingPrice = reservationMissingPrice(r);
+          const missingPrice = reservationMissingPrice(r, reservations);
           const costLine = formatReservationCostLine(r, { allReservations: shown });
           const attention = reservationAttentionKind(r, transportConflictIds);
           const attentionBadge = reservationAttentionBadge(attention, {

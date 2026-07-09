@@ -1,7 +1,15 @@
 "use client";
 
+import { useMemo } from "react";
 import { LiveMapLink } from "@/components/travelAssistant/LiveMapLink";
+import { CheckInHandoffCard } from "@/components/travelAssistant/CheckInHandoffCard";
 import { NextUpCard } from "@/components/travelAssistant/NextUpCard";
+import {
+  buildCheckInHandoffContent,
+  parseDepartureUtcMs,
+} from "@/lib/travelAssistant/checkInHandoff";
+import { resolveBoardingPassUrl } from "@/lib/travelAssistant/reservationLinks";
+import { canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 
 interface Reservation {
@@ -19,6 +27,9 @@ interface Reservation {
   flightArrivalAirport?: string;
   flightDepartureTime?: string;
   flightArrivalTime?: string;
+  boardingPassUrl?: string;
+  sourceLinks?: Array<{ label: string; url: string; kind: string }>;
+  originalEmailText?: string;
 }
 
 interface MobileAssistViewProps {
@@ -46,6 +57,41 @@ export function MobileAssistView({
   onReservationTap,
   liveStatus,
 }: MobileAssistViewProps) {
+  const checkInHandoff = useMemo(() => {
+    const nextFlight = [...reservations]
+      .filter((reservation) => reservation.type === "flight")
+      .sort((left, right) => {
+        const leftMs = parseDepartureUtcMs(
+          canonicalFlightDepartureLocalTime(left),
+          left.timezone,
+        ) ?? Number.POSITIVE_INFINITY;
+        const rightMs = parseDepartureUtcMs(
+          canonicalFlightDepartureLocalTime(right),
+          right.timezone,
+        ) ?? Number.POSITIVE_INFINITY;
+        return leftMs - rightMs;
+      })[0];
+    if (!nextFlight) return null;
+    const departureUtcMs = parseDepartureUtcMs(
+      canonicalFlightDepartureLocalTime(nextFlight),
+      nextFlight.timezone,
+    );
+    return buildCheckInHandoffContent({
+      id: nextFlight.id,
+      flightNumber: nextFlight.flightNumber,
+      flightAirline: nextFlight.flightAirline,
+      provider: nextFlight.provider,
+      confirmationCode: nextFlight.confirmationCode,
+      flightDepartureAirport: nextFlight.flightDepartureAirport,
+      departureUtcMs,
+      boardingPassUrl: resolveBoardingPassUrl({
+        boardingPassUrl: nextFlight.boardingPassUrl,
+        sourceLinks: nextFlight.sourceLinks,
+        originalEmailText: nextFlight.originalEmailText,
+      }),
+    });
+  }, [reservations]);
+
   return (
     <section className="space-y-4">
       {journeyPhase.kind === "airborne" ? (
@@ -87,6 +133,8 @@ export function MobileAssistView({
           <span className="shrink-0 text-sm font-bold text-[#007AFF] dark:text-[#0A84FF]">Go →</span>
         </LiveMapLink>
       ) : null}
+
+      {checkInHandoff ? <CheckInHandoffCard content={checkInHandoff} /> : null}
 
       <NextUpCard
           reservations={reservations}

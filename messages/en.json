@@ -10,7 +10,8 @@
     "savedSpanish": "Language set to Spanish — reloading…",
     "saveFailed": "Could not save language. Try again.",
     "activeEnglish": "Active: English",
-    "activeSpanish": "Active: Spanish"
+    "activeSpanish": "Active: Spanish",
+    "partialCoverage": "Navigation and settings are translated. Trip details and guidance are still rolling out in Spanish."
   },
   "LandingPage": {
     "brand": "Kepi Travel Assistant",
@@ -269,5 +270,43 @@
     "ctaTitle": "Want your own live travel assistant?",
     "ctaSubtitle": "Track readiness, flight changes, and disruptions in one adaptive trip workspace.",
     "ctaButton": "Get Kepi"
+  },
+  "ConsumerNav": {
+    "trip": "Home",
+    "itinerary": "Plan",
+    "book": "Book",
+    "map": "Map",
+    "photos": "Photos",
+    "more": "More",
+    "timeline": "Timeline",
+    "calendar": "Calendar",
+    "planTab": "Plan",
+    "support": "Support"
+  },
+  "SupportPage": {
+    "title": "Kepi Support",
+    "subtitle": "Ask about your trip, reservations, billing, or how to use the app.",
+    "chatHint": "The support chat should open automatically. Use the cyan chat bubble if it does not.",
+    "backToTrip": "Back to your trip"
+  },
+  "GroundTransport": {
+    "eyebrow": "Ground connectors",
+    "title": "How are you getting there?",
+    "subtitle": "See routes and estimates on the map — you pick, we track it on your trip.",
+    "airportTransfer": "Airport → hotel",
+    "betweenStays": "Between stays",
+    "seeRoutes": "See routes & estimates"
+  },
+  "BookTab": {
+    "postHotelTitle": "After you book the hotel",
+    "postHotelBody": "Book on Google or Booking.com where the price wins — then forward your confirmation so Kepi adds it to your timeline.",
+    "postHotelBodyWithCity": "Book in {city} on Google or Booking.com — then forward your confirmation so Kepi tracks check-in and ground legs."
+  },
+  "TripHealth": {
+    "title": "Trip needs attention ({count})",
+    "show": "Show",
+    "hide": "Hide",
+    "airportTransfer": "Airport → hotel transfer",
+    "betweenStays": "Between stays"
   }
 }

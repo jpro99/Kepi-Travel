@@ -11,6 +11,7 @@ const isPublicRoute = createRouteMatcher([
   "/share(.*)",
   "/offline-kit(.*)",
   "/join-family(.*)",
+  "/support(.*)",
   "/privacy(.*)",
   "/terms(.*)",
   "/billing(.*)",

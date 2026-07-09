@@ -159,6 +159,7 @@ export function buildSyncedTravelProfile(input: {
   existing: TravelProfile | null;
   ownedCards: OwnedCardEntry[];
   loyaltyBalances: LoyaltyBalance[];
+  cardEnrollments?: import("@/lib/memory/pointsTravelProfile").PointsTravelProfile["cardEnrollments"];
 }): TravelProfile {
   const existing = input.existing ?? { airlineStatuses: [] };
   const cardProfiles = listBenefitsForOwnedCards(input.ownedCards.map((c) => c.cardId));
@@ -180,6 +181,7 @@ export function buildSyncedTravelProfile(input: {
     ),
     paymentCards: paymentCardsFromOwned(input.ownedCards),
     benefitSummary: summarizeCardBenefits(cardProfiles),
+    cardEnrollments: input.cardEnrollments ?? existing.cardEnrollments ?? {},
     cardsSyncedAt: new Date().toISOString(),
   };
 

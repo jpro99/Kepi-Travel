@@ -3,6 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Logo } from "@/components/ui/Logo";
+import { buildSupportChatApiMessages } from "@/lib/support/buildSupportChatApiMessages";
 
 const SUPPORT_OPEN_EVENT = "kepi:support-chat-open";
 
@@ -94,15 +95,13 @@ export function SupportChat() {
     setInputValue("");
     setMessages((previous) => [...previous, outgoingMessage, assistantPlaceholder]);
 
-    const historyForApi = [...messages, outgoingMessage].map((message) => ({
-      role: message.role,
-      content: message.content,
-    }));
+    const historyForApi = buildSupportChatApiMessages(messages, outgoingMessage);
 
     try {
       const response = await fetch("/api/support/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ messages: historyForApi }),
       });
       if (!response.ok || !response.body) {

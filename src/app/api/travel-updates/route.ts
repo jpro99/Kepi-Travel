@@ -11,6 +11,11 @@ import type { TravelUpdateEvent } from "@/lib/travelAssistant/travelUpdateTypes"
 import { generateId } from "@/lib/utils/generateId";
 import { maybeSendFlightStatusPushAlerts } from "@/lib/travelAssistant/flightStatusPushBridge";
 import { handleConfirmationScanUpload } from "@/lib/travelAssistant/confirmationScanHandler";
+import {
+  fetchMergedFlightStatusSnapshot,
+  mergedSnapshotToFlightLookupResponse,
+} from "@/lib/travelAssistant/flightStatusLookup";
+import { resolveAeroDataBoxApiKey } from "@/lib/travelAssistant/flightStatusSources/aeroDataBoxSource";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
@@ -38,36 +43,6 @@ const FlightLookupQuerySchema = z.object({
   flightDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
 });
 
-const AeroDataBoxTimeSchema = z.object({
-  local: z.string().trim().optional().nullable(),
-  utc: z.string().trim().optional().nullable(),
-});
-
-const AeroDataBoxAirportSchema = z.object({
-  iata: z.string().trim().optional().nullable(),
-  name: z.string().trim().optional().nullable(),
-});
-
-const AeroDataBoxEndpointSchema = z.object({
-  airport: AeroDataBoxAirportSchema.optional().nullable(),
-  scheduledTime: AeroDataBoxTimeSchema.optional().nullable(),
-  estimatedTime: AeroDataBoxTimeSchema.optional().nullable(),
-  actualTime: AeroDataBoxTimeSchema.optional().nullable(),
-  terminal: z.string().trim().optional().nullable(),
-  gate: z.string().trim().optional().nullable(),
-  delay: z.number().finite().optional().nullable(),
-});
-
-const AeroDataBoxFlightSchema = z.object({
-  number: z.string().trim().optional().nullable(),
-  status: z.string().trim().optional().nullable(),
-  airline: z.object({ name: z.string().trim().optional().nullable() }).optional().nullable(),
-  departure: AeroDataBoxEndpointSchema.optional().nullable(),
-  arrival: AeroDataBoxEndpointSchema.optional().nullable(),
-});
-
-const AERODATABOX_BASE_URL = "https://prod.api.market/api/v1/aedbx/aerodatabox";
-
 async function resolveAuthenticatedUserId(): Promise<string | null> {
   const isTestEnv = isAutomatedTestRuntime();
   try {
@@ -88,41 +63,6 @@ function pickDisruptionUpdate(updates: readonly TravelUpdateEvent[]): TravelUpda
     updates.find((update) => update.kind === "delay" && (update.delayMinutes ?? 0) >= 20) ??
     null
   );
-}
-
-function chooseBestFlight(
-  flights: z.infer<typeof AeroDataBoxFlightSchema>[],
-): z.infer<typeof AeroDataBoxFlightSchema> | null {
-  if (flights.length === 0) return null;
-  // Prefer flights with live status over unknown/scheduled
-  const priority = ["EnRoute", "Boarding", "GateClosed", "Departed", "Approaching", "Arrived", "Delayed", "Landed"];
-  for (const status of priority) {
-    const match = flights.find((f) => f.status === status);
-    if (match) return match;
-  }
-  return flights[0] ?? null;
-}
-
-function resolveAeroDataBoxTime(endpoint: z.infer<typeof AeroDataBoxEndpointSchema> | null | undefined): string {
-  if (!endpoint) return "";
-  return (
-    endpoint.actualTime?.utc ??
-    endpoint.estimatedTime?.utc ??
-    endpoint.scheduledTime?.utc ??
-    ""
-  );
-}
-
-function resolveAeroDataBoxStatus(status: string | null | undefined): { flightStatus: string; onTime: boolean | null } {
-  const s = (status ?? "").toLowerCase();
-  if (s === "cancelled" || s === "cancelleduncertain") return { flightStatus: "cancelled", onTime: false };
-  if (s === "diverted") return { flightStatus: "diverted", onTime: false };
-  if (s === "delayed") return { flightStatus: "delayed", onTime: false };
-  if (s === "enroute" || s === "approaching" || s === "departed") return { flightStatus: "active", onTime: null };
-  if (s === "arrived" || s === "landed") return { flightStatus: "landed", onTime: null };
-  if (s === "boarding" || s === "gateclosed" || s === "checkin") return { flightStatus: "boarding", onTime: null };
-  if (s === "scheduled") return { flightStatus: "scheduled", onTime: null };
-  return { flightStatus: status ?? "unknown", onTime: null };
 }
 
 export async function GET(req: Request) {
@@ -167,7 +107,7 @@ export async function GET(req: Request) {
     );
   }
 
-  const apiKey = process.env.AERODATABOX_API_KEY?.trim();
+  const apiKey = resolveAeroDataBoxApiKey();
   if (!apiKey) {
     return NextResponse.json(
       { error: "Flight lookup unavailable: AERODATABOX_API_KEY is missing." },
@@ -176,75 +116,26 @@ export async function GET(req: Request) {
   }
 
   const flightNum = parsed.data.flightNumber.replace(/\s+/gu, "").toUpperCase();
-  const lookupUrl = `${AERODATABOX_BASE_URL}/flights/number/${encodeURIComponent(flightNum)}/${encodeURIComponent(parsed.data.flightDate)}`;
-  routeLogger.info("AeroDataBox flight lookup request.", {
+  routeLogger.info("Merged flight lookup request.", {
     requestQuery: parsed.data,
-    lookupUrl,
     flightNum,
     flightDate: parsed.data.flightDate,
   });
 
   try {
-    const response = await fetch(lookupUrl, {
-      method: "GET",
-      headers: { "x-api-market-key": apiKey, "Accept": "application/json" },
-      cache: "no-store",
+    const merged = await fetchMergedFlightStatusSnapshot({
+      flightNumber: flightNum,
+      flightDate: parsed.data.flightDate,
     });
-
-    if (response.status === 204) {
+    if (!merged) {
       return NextResponse.json(
         { error: "No flight data found for that number and date." },
         { status: 404, headers: rateLimit.headers },
       );
     }
-    if (!response.ok) {
-      const errText = await response.text().catch(() => "");
-      throw new Error(`AeroDataBox returned ${response.status}: ${errText.slice(0, 200)}`);
-    }
 
-    const rawJson = await response.json();
-    const flightArray = Array.isArray(rawJson) ? rawJson : [rawJson];
-    const parsedFlights = z.array(AeroDataBoxFlightSchema).safeParse(flightArray);
-    if (!parsedFlights.success) {
-      throw new Error("AeroDataBox payload validation failed.");
-    }
-
-    const best = chooseBestFlight(parsedFlights.data);
-    if (!best) {
-      return NextResponse.json(
-        { error: "No matching flight found for that number and date." },
-        { status: 404, headers: rateLimit.headers },
-      );
-    }
-
-    const dep = best.departure;
-    const arr = best.arrival;
-    const delayMinutes =
-      typeof dep?.delay === "number" && Number.isFinite(dep.delay)
-        ? Math.max(0, Math.round(dep.delay))
-        : typeof arr?.delay === "number" && Number.isFinite(arr.delay)
-          ? Math.max(0, Math.round(arr.delay))
-          : null;
-    const { flightStatus, onTime } = resolveAeroDataBoxStatus(best.status);
-    const computedOnTime = delayMinutes !== null ? delayMinutes <= 0 : onTime;
-
-    const responseBody = {
-      flightNumber: best.number ?? flightNum,
-      airline: best.airline?.name ?? parsed.data.airline,
-      flightDate: parsed.data.flightDate,
-      departureAirport: dep?.airport?.iata ?? dep?.airport?.name ?? "",
-      arrivalAirport: arr?.airport?.iata ?? arr?.airport?.name ?? "",
-      departureTime: resolveAeroDataBoxTime(dep),
-      arrivalTime: resolveAeroDataBoxTime(arr),
-      departureTerminal: dep?.terminal ?? "",
-      departureGate: dep?.gate ?? "",
-      arrivalTerminal: arr?.terminal ?? "",
-      arrivalGate: arr?.gate ?? "",
-      delayMinutes,
-      onTime: computedOnTime,
-      flightStatus,
-    };
-    routeLogger.info("AeroDataBox flight lookup response.", { responseBody });
+    const responseBody = mergedSnapshotToFlightLookupResponse(merged, parsed.data.airline);
+    routeLogger.info("Merged flight lookup response.", { responseBody });
     const pushResult = await maybeSendFlightStatusPushAlerts(userId, {
       flightNumber: responseBody.flightNumber,
       flightDate: responseBody.flightDate,

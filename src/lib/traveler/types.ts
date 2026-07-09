@@ -117,4 +117,6 @@ export interface TravelerGenome {
   updatedAt: string;
   /** Lightweight travel-style quiz — tunes UX tone and detail level */
   travelStyle?: TravelStyleProfile;
+  /** How the traveler prefers to add information (channel + correction patterns) */
+  inputStyle?: import("@/lib/travelAssistant/inputStyleProfile").InputStyleProfile;
 }

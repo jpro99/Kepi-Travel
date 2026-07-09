@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildReservationQuickLinks,
   extractReservationSourceLinks,
+  resolveBoardingPassUrl,
 } from "./reservationLinks";
 
 test("extractReservationSourceLinks finds manage and boarding links in html", () => {
@@ -34,4 +35,20 @@ test("buildReservationQuickLinks adds directions for dinner", () => {
     location: "Carbone New York NY",
   });
   assert.ok(links.some((link) => link.kind === "directions" && link.url.includes("google.com/maps")));
+});
+
+test("resolveBoardingPassUrl prefers ticket links from sourceLinks", () => {
+  const url = resolveBoardingPassUrl({
+    sourceLinks: [{ label: "Boarding pass", url: "https://example.com/boarding.pkpass", kind: "ticket" }],
+  });
+  assert.equal(url, "https://example.com/boarding.pkpass");
+});
+
+test("resolveBoardingPassUrl extracts ticket link from forwarded html", () => {
+  const html = `<a href="https://www.alaskaair.com/boarding/ABC123">View mobile boarding pass</a>`;
+  const url = resolveBoardingPassUrl({
+    sourceLinks: extractReservationSourceLinks({ html, type: "flight" }),
+    html,
+  });
+  assert.match(url ?? "", /boarding\/ABC123/);
 });

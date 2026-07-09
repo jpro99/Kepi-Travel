@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { GmailImportScopeModal, type GmailImportScope } from "@/components/travelAssistant/GmailImportScopeModal";
+import { postSuggestionOutcome } from "@/lib/travelAssistant/mlReadiness/clientTelemetry";
+import { sortReviewQueueForActiveLearning } from "@/lib/travelAssistant/mlReadiness/reviewQueueTriage";
 
 type TripStage = "readiness" | "pre-departure" | "airport" | "arrival" | "recovery";
 type ReservationType = "flight" | "hotel" | "train" | "ride" | "dinner";
@@ -48,6 +50,7 @@ interface ReviewItem {
   imageBasedEmail?: boolean;
   reviewStatus?: "pending" | "incomplete";
   parserNotes?: string[];
+  parserVersion?: string;
 }
 
 interface ReservationOption {
@@ -156,12 +159,17 @@ export function ReviewQueue({
   const [expandedOriginalById, setExpandedOriginalById] = useState<Record<string, boolean>>({});
   const [assistDraftById, setAssistDraftById] = useState<Record<string, Partial<ReservationDraft>>>({});
 
+  const sortedReviewQueue = useMemo(
+    () => sortReviewQueueForActiveLearning(reviewQueue),
+    [reviewQueue],
+  );
+
   const reviewStats = useMemo(() => {
-    const high = reviewQueue.filter((item) => getParsingStatus(item) === "auto-parsed").length;
-    const medium = reviewQueue.filter((item) => getParsingStatus(item) === "needs-review").length;
-    const low = reviewQueue.filter((item) => getParsingStatus(item) === "needs-user-input").length;
+    const high = sortedReviewQueue.filter((item) => getParsingStatus(item) === "auto-parsed").length;
+    const medium = sortedReviewQueue.filter((item) => getParsingStatus(item) === "needs-review").length;
+    const low = sortedReviewQueue.filter((item) => getParsingStatus(item) === "needs-user-input").length;
     return { high, medium, low };
-  }, [reviewQueue]);
+  }, [sortedReviewQueue]);
 
   const handleGmailImport = async (scope: GmailImportScope): Promise<void> => {
     if (importInFlight) return;
@@ -257,7 +265,7 @@ export function ReviewQueue({
         {importInfo ? <p className="mt-2 text-xs text-emerald-200">{importInfo}</p> : null}
       </div>
       <div className="mt-3 space-y-3">
-        {reviewQueue.map((item) => {
+        {sortedReviewQueue.map((item) => {
           const score = getConfidenceScore(item);
           const status = getParsingStatus(item);
           const missingFields = getMissingFields(item);
@@ -473,7 +481,7 @@ export function ReviewQueue({
             </div>
           );
         })}
-        {reviewQueue.length === 0 ? (
+        {sortedReviewQueue.length === 0 ? (
           <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">
             {t("queueClear")}
           </p>

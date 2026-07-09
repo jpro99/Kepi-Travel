@@ -4,6 +4,8 @@ import { prepareReviewDraftForAccept } from "@/lib/travelAssistant/prepareReview
 
 export interface DrainableReviewItem {
   id: string;
+  /** Explicit reasons a human should look at this before it becomes trip fact. */
+  reasons?: string[];
   draft: DuplicateReservationFields & {
     type: string;
     title: string;
@@ -53,6 +55,11 @@ export interface DrainableReservation extends DuplicateReservationFields {
 }
 
 function isAutoImportReviewItem(item: DrainableReviewItem): boolean {
+  // Anything the parser or plausibility gate flagged with an explicit reason must stay
+  // in the queue for a human to confirm — never silently promote it to trip fact.
+  if (Array.isArray(item.reasons) && item.reasons.length > 0) {
+    return false;
+  }
   if (item.sourceChannel === "email-forward" || item.sourceChannel === "gmail-import") {
     return true;
   }
@@ -60,7 +67,12 @@ function isAutoImportReviewItem(item: DrainableReviewItem): boolean {
   return subject.length > 0;
 }
 
-/** Move forwarded/import review items into live reservations (no confirm step). */
+/**
+ * Move forwarded/import review items into live reservations — but only when they carry
+ * no explicit review reason (see `isAutoImportReviewItem`). Items with `reasons` (from
+ * `evaluateForwardedReservationGate`) require an explicit human confirm step and are
+ * left untouched in the queue.
+ */
 export function drainForwardReviewQueue<TReservation extends DrainableReservation>(
   reservations: TReservation[],
   reviewQueue: DrainableReviewItem[],

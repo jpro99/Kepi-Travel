@@ -40,6 +40,8 @@ export interface SessionReservation {
   plannedOnly?: boolean;
   /** Where to purchase (airline, Google Flights, Seats.aero). */
   bookUrl?: string;
+  /** Airline or Duffel wallet/boarding pass URL when available — Kepi opens, never renders barcode. */
+  boardingPassUrl?: string;
   quotedPriceUsd?: number;
   quotedPointsMiles?: number;
   quotedMilesEarned?: number;
@@ -72,6 +74,7 @@ export interface SessionReviewItem {
   sourceLinks?: Array<{ label: string; url: string; kind: string }>;
   reviewStatus?: "pending" | "incomplete";
   parserNotes?: string[];
+  parserVersion?: string;
 }
 
 export interface SessionReadinessItem {

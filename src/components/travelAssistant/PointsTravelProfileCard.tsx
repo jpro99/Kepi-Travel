@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CARD_CATALOG, findCard } from "@/lib/points/cardEarnRules";
 import { getCardBenefitProfile, listBenefitsForOwnedCards, summarizeCardBenefits } from "@/lib/points/cardBenefits";
+import { enrollmentHintsForCard, type CardEnrollmentState } from "@/lib/points/benefitPlaybooks";
 import type { PointsTravelProfile, SavedInvitationCode } from "@/lib/memory/pointsTravelProfile";
 import { generateId } from "@/lib/utils/generateId";
 
@@ -12,7 +13,7 @@ function cardDisplayName(profile: PointsTravelProfile, cardId: string): string {
   return findCard(cardId)?.name ?? cardId;
 }
 
-export function PointsTravelProfileCard() {
+export function PointsTravelProfileCard({ onOpenLearn }: { onOpenLearn?: () => void } = {}) {
   const [profile, setProfile] = useState<PointsTravelProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -146,9 +147,37 @@ export function PointsTravelProfileCard() {
   const activeBenefits = summarizeCardBenefits(
     listBenefitsForOwnedCards(profile.ownedCards.map((c) => c.cardId)),
   );
+  const learnDone = (profile.learnProgress?.length ?? 0) >= 3;
+
+  const patchEnrollment = (cardId: string, patch: Partial<CardEnrollmentState>): void => {
+    const cardEnrollments = { ...(profile.cardEnrollments ?? {}) };
+    cardEnrollments[cardId] = { ...(cardEnrollments[cardId] ?? {}), ...patch };
+    void save({ cardEnrollments });
+  };
+
+  const setEnrollmentBoolean = (
+    cardId: string,
+    key: "priorityPassEnrolled" | "centurionDigitalReady",
+    value: boolean,
+  ): void => {
+    patchEnrollment(cardId, { [key]: value });
+  };
 
   return (
     <div className="space-y-4">
+      {onOpenLearn && !learnDone ? (
+        <button
+          type="button"
+          onClick={onOpenLearn}
+          className="w-full rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-left dark:border-sky-500/30 dark:bg-sky-500/10"
+        >
+          <p className="text-sm font-bold text-sky-900 dark:text-sky-100">New to points & miles? Start here →</p>
+          <p className="mt-1 text-xs text-sky-800 dark:text-sky-200">
+            Rakuten stacking, lounge QR codes, and how Kepi uses your card wallet.
+          </p>
+        </button>
+      ) : null}
+
       <p className="text-xs text-slate-500">
         Pick your card from the list — we never store full card numbers. The first 6 digits (BIN) can identify
         issuer and product, but Kepi uses your explicit card choice plus optional last-four for labeling only.
@@ -219,6 +248,87 @@ export function PointsTravelProfileCard() {
               </li>
             ))}
           </ul>
+        </div>
+      ) : null}
+
+      {catalogActive.length > 0 ? (
+        <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Benefit enrollments</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Mark what you&apos;ve already set up so Airport Mode shows the right lounge steps.
+          </p>
+          <div className="mt-3 space-y-3">
+            {catalogActive.map((entry) => {
+              const hints = enrollmentHintsForCard(entry.cardId);
+              if (hints.length === 0) return null;
+              const enrollment = profile.cardEnrollments?.[entry.cardId] ?? {};
+              return (
+                <div key={entry.cardId}>
+                  <p className="text-xs font-semibold text-slate-800 dark:text-slate-100">
+                    {cardDisplayName(profile, entry.cardId)}
+                  </p>
+                  <div className="mt-1 space-y-2">
+                    {hints.map((hint) => {
+                      if (hint.key === "centurionGuestPassesUsedThisVisit") {
+                        return (
+                          <label key={hint.key} className="block text-xs text-slate-600 dark:text-slate-300">
+                            <span>{hint.label}</span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={4}
+                              value={enrollment.centurionGuestPassesUsedThisVisit ?? ""}
+                              onChange={(e) => {
+                                const raw = e.target.value.trim();
+                                patchEnrollment(entry.cardId, {
+                                  centurionGuestPassesUsedThisVisit:
+                                    raw === "" ? undefined : Math.max(0, Math.min(4, Number(raw) || 0)),
+                                });
+                              }}
+                              placeholder="0"
+                              className="mt-1 w-20 rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-900"
+                            />
+                          </label>
+                        );
+                      }
+                      if (hint.key === "priorityPassNumber") {
+                        return (
+                          <label key={hint.key} className="block text-xs text-slate-600 dark:text-slate-300">
+                            <span>{hint.label}</span>
+                            <input
+                              type="text"
+                              value={enrollment.priorityPassNumber ?? ""}
+                              onChange={(e) =>
+                                patchEnrollment(entry.cardId, {
+                                  priorityPassNumber: e.target.value.trim() || undefined,
+                                })
+                              }
+                              placeholder="Optional PP number"
+                              className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-900"
+                            />
+                          </label>
+                        );
+                      }
+                      if (hint.key === "priorityPassEnrolled" || hint.key === "centurionDigitalReady") {
+                        return (
+                          <label key={hint.key} className="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300">
+                            <input
+                              type="checkbox"
+                              className="mt-0.5"
+                              checked={enrollment[hint.key] ?? false}
+                              onChange={(e) => setEnrollmentBoolean(entry.cardId, hint.key, e.target.checked)}
+                            />
+                            <span>{hint.label}</span>
+                          </label>
+                        );
+                      }
+                      return null;
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       ) : null}
 
@@ -353,6 +463,9 @@ export function PointsTravelProfileCard() {
           />
           I use Rakuten cashback
         </label>
+        <p className="w-full text-xs text-slate-500">
+          Tip: activate Rakuten before Instacart, Amazon, or portal checkout — then pay with your best travel card.
+        </p>
         <label className="flex items-center gap-2">
           <input
             type="checkbox"

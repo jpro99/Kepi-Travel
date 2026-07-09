@@ -3,10 +3,14 @@
 import dynamic from "next/dynamic";
 import { MobileAssistView } from "@/components/travelAssistant/mobile/MobileAssistView";
 import { TripHealthStrip } from "@/components/travelAssistant/TripHealthStrip";
+import { TripHomeTransportSection } from "@/components/travelAssistant/TripHomeTransportSection";
 import { DestinationHeroPhoto, resolveHeroCity } from "@/components/travelAssistant/tripHeroVisuals";
+import type { TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
-import type { PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
+import type { FlightSearchPlan, PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
+import type { InterCityTransportGap } from "@/lib/travelAssistant/interCityTransport";
+import type { QuickGroundMode } from "@/lib/travelAssistant/quickGroundTransport";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import type { HotelStayMapReservation } from "@/lib/travelAssistant/tripHotelStayMap";
 
@@ -49,14 +53,18 @@ interface DesktopTripHomeViewProps {
   locationStatus: "away" | "at-airport" | "in-terminal" | "airborne" | "unknown";
   nearestAirport: string;
   missingPriceCount?: number;
+  stayDecisions?: Record<string, "needs_hotel" | "skip">;
   onReviewPricing?: () => void;
-  onGapActionTap?: (tab: string) => void;
+  onGapActionTap?: (action: TripGapNavigationAction) => void;
+  onSkipPreDepartureNight?: (flightDay: string) => void;
   onReservationTap: (id: string) => void;
   onOpenBook: () => void;
   onOpenPlan: () => void;
   onOpenMap: () => void;
   onAddGroundTransport?: () => void;
-  onCreateTrip?: () => void;
+  onStartNewTrip?: () => void;
+  onSearchFlights?: (plan: FlightSearchPlan, selectedLegs: PlannedFlightLeg[]) => void;
+  onQuickGroundTransport?: (gap: InterCityTransportGap, mode: QuickGroundMode) => void;
   liveStatus?: Record<string, {
     flightStatus: string;
     delayMinutes: number | null;
@@ -97,14 +105,18 @@ export function DesktopTripHomeView({
   locationStatus,
   nearestAirport,
   missingPriceCount = 0,
+  stayDecisions,
   onReviewPricing,
   onGapActionTap,
+  onSkipPreDepartureNight,
   onReservationTap,
   onOpenBook,
   onOpenPlan,
   onOpenMap,
   onAddGroundTransport,
-  onCreateTrip,
+  onStartNewTrip,
+  onSearchFlights,
+  onQuickGroundTransport,
   liveStatus,
 }: DesktopTripHomeViewProps) {
   const transportReservations =
@@ -179,6 +191,16 @@ export function DesktopTripHomeView({
         </div>
       </div>
 
+      {onStartNewTrip ? (
+        <button
+          type="button"
+          onClick={onStartNewTrip}
+          className="flex w-full min-h-[52px] items-center justify-center rounded-2xl bg-[#f4c95d] px-6 text-base font-black text-[#0b1f3a] shadow-md transition hover:bg-[#ffe29a]"
+        >
+          + Start a new trip
+        </button>
+      ) : null}
+
       <MobileAssistView
         journeyPhase={journeyPhase}
         reservations={reservations.map((reservation) => ({
@@ -200,9 +222,22 @@ export function DesktopTripHomeView({
           location: reservation.location ?? "",
         }))}
         missingPriceCount={missingPriceCount}
+        stayDecisions={stayDecisions}
         onGapActionTap={onGapActionTap}
         onReviewPricing={onReviewPricing}
+        onSkipPreDepartureNight={onSkipPreDepartureNight}
       />
+
+      {onSearchFlights && onQuickGroundTransport ? (
+        <TripHomeTransportSection
+          reservations={reservations}
+          tripStart={startDate}
+          tripEnd={endDate}
+          plannedFlightLegs={plannedFlightLegs}
+          onSearchFlights={onSearchFlights}
+          onQuickGroundTransport={onQuickGroundTransport}
+        />
+      ) : null}
 
       {onAddGroundTransport ? (
         <button

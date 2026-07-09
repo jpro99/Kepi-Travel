@@ -31,7 +31,7 @@ export interface CardBenefitProfile {
   guidance: string[];
 }
 
-/** Travel benefits by catalog card id — names only, never PAN. */
+/** Travel benefits by catalog card id — names only, never PAN. Update via kepi-card-bot skill. */
 export const CARD_BENEFIT_PROFILES: Record<string, CardBenefitProfile> = {
   "amex-platinum": {
     cardId: "amex-platinum",

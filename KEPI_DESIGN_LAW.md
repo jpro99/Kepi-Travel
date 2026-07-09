@@ -51,6 +51,16 @@ After a successful hotel checkout or manual reservation with a confirmation code
 **G12 — Trip health is one strip, not stacked toasts**  
 Gap alerts and missing-pricing counts merge into a single inline `TripHealthStrip` on Home and Plan — collapsed summary by default, expandable list. Never stack multiple fixed floating banners over content.
 
+**G13 — Trip health actions land in context**  
+When a gap action is "Add hotel", Kepi must open Book → Hotels with city and dates prefilled from the gap — not a generic empty search.
+
+**Test:** `src/lib/travelAssistant/gapDetectionService.test.ts`, `src/lib/travelAssistant/europe2026TripPass.test.ts`
+
+**G14 — Multi-leg bookings share one price**  
+When several flight legs share a confirmation code or the same forwarded email, trip spend counts the booking total once and sibling legs must not each show "need pricing" or require per-leg cash breakdown.
+
+**Test:** `src/lib/travelAssistant/tripSpendSummary.test.ts`
+
 ---
 
 ## FLIGHTS LAWS
@@ -72,6 +82,21 @@ When flights change, hotel stay segments recompute via shared trip modules (`der
 
 **F6 — Status polling scope**  
 Auto flight-status polling only for flights within 24h; must not spam or crash when provider is down.
+
+**F9 — Flight status freshness is phase-aware**  
+Within **6 hours** of departure, client and server polls must run at least every **90 seconds** when the app is open or a background sweep is active. Between 6–24 hours, **5 minutes** is acceptable. Primary source is **AeroDataBox**; optional **FlightAware AeroAPI** merges when configured — discrepancies are logged, never silently discarded.
+
+**Test:** `src/lib/travelAssistant/flightStatusCadence.test.ts`, `src/lib/travelAssistant/flightStatusMerge.test.ts`
+
+**F10 — Check-in handoff is honest**  
+Check-in prompts open at **24h before departure**. Kepi may deep-link to airline check-in or a stored Wallet/pass URL — never render a scannable barcode it does not hold. UI must state where the boarding pass actually lives.
+
+**Test:** `src/lib/travelAssistant/checkInHandoff.test.ts`
+
+**F11 — Boarding pass URLs come from imports**  
+When a forwarded confirmation includes a boarding-pass or Wallet link, persist it on the flight reservation and surface it in check-in handoff — never invent pass URLs.
+
+**Test:** `src/lib/travelAssistant/reservationLinks.test.ts`, `src/lib/travelAssistant/europe2026TripPass.test.ts`
 
 **F7 — Multi-hop bookings satisfy planned legs**  
 A booked path (e.g. MUC→FCO→SEA→ONT) must satisfy a planned direct leg (MUC→ONT) in itinerary self-check — never flag as unbooked when a valid connection chain exists.
@@ -177,6 +202,11 @@ When a more accurate GPS reading arrives (e.g. house after Wi‑Fi placed the pi
 
 **Test:** `src/lib/family/locationFixUpgrade.test.ts`, `src/lib/family/geolocationQuality.test.ts`
 
+**M9 — Ground transport uses honest deep links first**  
+Uber/Lyft actions must prefill pickup/dropoff from known trip locations via universal deep links. Native in-app ride booking is deferred until a partner API is approved — never fake a booked ride.
+
+**Test:** `src/lib/travelAssistant/groundTransportDeepLinks.test.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -250,7 +280,25 @@ Munich must always appear as a distinct leg in amber (`#C4943A`). It must never 
 **I21 — Legend covers every itinerary leg**  
 Every trip leg that exists in the itinerary must appear in both the calendar AND the legend. If a destination is in the trip but not in the legend, that is a bug.
 
-**Test:** `src/lib/travelAssistant/buildTripLegs.test.ts`
+**I22 — Stay cities come from hotels, not flight arrivals**  
+Timeline stay chapters, night counts, and calendar labels must derive from **booked hotel cities and dates**. Landing at BRI does not imply "staying in Bari" when hotels are in Monopoli/Polignano. Flight arrival is a transport event only.
+
+**Test:** `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`
+
+**I23 — Plan notes reconcile with reservations**  
+User plan notes ("Leave", "not staying in X", "staying elsewhere") must parse and reconcile against booked hotels — updating `dayPlans` and timeline legs. Decorative notes that ignore hotel truth are banned.
+
+**Test:** `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`
+
+**I24 — Inter-city gaps are decision cockpits**  
+Missing ground connectors must show distance, labeled mode estimates, map deep link, and explicit user choice — recommend softly, never prescribe a single mode as orders. No exact invented fares.
+
+**Test:** `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`
+
+**I25 — Hotel name beats OTA provider in UI**  
+Reservation drawers, timeline cards, and edit surfaces show the **hotel property name** as the headline. Booking.com / Expedia / etc. are source badges — never the primary title.
+
+**Test:** `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/buildTripLegs.test.ts`
 
 ---
 
@@ -283,6 +331,49 @@ Provider tokens (`DUFFEL_ACCESS_TOKEN`, `LITEAPI_KEY`, etc.) stay server-only. B
 **D8 — Email HTML via render**  
 Resend emails use `@react-email/render` → `html:` — never `react:` prop or `renderToStaticMarkup`.
 
+**D10 — Forwarded reservations gate on confidence before becoming trip fact**  
+A parsed forwarded reservation only auto-imports to the live trip when it clears `evaluateForwardedReservationGate` (confidence ≥ 40, no missing critical fields, passes plausibility). Anything below the bar goes to the review queue with explicit `reasons` — never silently auto-imported with just a soft note. `drainForwardReviewQueue` must never auto-promote a review item that carries `reasons` — that field means a human must confirm it first.
+
+**Test:** `src/lib/travelAssistant/forwardedReservationGate.test.ts`, `src/lib/travelAssistant/drainForwardReviewQueue.test.ts`
+
+**D11 — Plausibility checks run before accept, independent of parser confidence**  
+Deterministic checks (real 3-letter airport codes, arrival ≠ departure, dates within a sane travel window, checkout after check-in, non-negative price) run via `checkReservationPlausibility` regardless of how confident the parser was. A high-confidence but implausible parse still routes to review.
+
+**Test:** `src/lib/travelAssistant/reservationPlausibility.test.ts`
+
+**D12 — Reservation type detection covers non-transport bookings**  
+`emailForwardParser` must classify restaurant reservations, tours, excursions, and other bookable activities as `dinner`, not fall through to `ride`. Both the regex keyword table and the AI fallback prompt's allowed type list must stay in sync — a type added to one must be added to the other.
+
+**Test:** `src/lib/travelAssistant/emailForwardParser.test.ts`
+
+**D13 — No feature may fabricate data on failure**  
+An API route that cannot perform its real function (e.g. no OCR engine wired up) must return an explicit error/"not available" response — never a hardcoded success payload that looks like real extracted data. Silent fake success is a worse failure mode than a visible error.
+
+**D14 — Itinerary-scoped offline prefetch**  
+Airport layouts and city map bundles prefetch within **48h** of when the traveler needs them. Evict cached assets only when their IATA/city key no longer appears on any **remaining** leg of the same trip — never wipe the whole cache on a single leg completion.
+
+**Test:** `src/lib/travelAssistant/itineraryOfflineCache.test.ts`
+
+**D15 — Offline city map bundles are CSP-safe**  
+When network raster tiles are unavailable, Live Map falls back to inline GeoJSON city bundles (pilot cities) built in code — not external style JSON with remote tile sources.
+
+**Test:** `src/lib/map/offlineCityMapBundle.test.ts`
+
+**D16 — Learned nav timing respects minimum samples**  
+Crowd-sourced edge walk times and security waits never override curated defaults until **≥5 walk samples** or **≥10 security samples**, with outlier trimming and plausibility gates.
+
+**Test:** `src/lib/airportNav/navTimingCalibration.test.ts`
+
+**D17 — Post-booking briefing is two-stage**  
+Before gate assignment or check-in window: show **eligibility only** (benefits on file). After gate or check-in opens: show **actionable** checkpoint and lounge guidance — never specific security lane copy before the gate is known.
+
+**Test:** `src/lib/airportNav/postBookingBriefing.test.ts`
+
+**D18 — Input-style personalization suggests, never silently applies**  
+Channel shortcuts require **≥3 attempts**, correction rate **≤25%**, and always surface as an explicit suggestion card — never auto-change import defaults without user acceptance.
+
+**Test:** `src/lib/travelAssistant/inputStyleProfile.test.ts`
+
 ---
 
 ## Test index
@@ -299,12 +390,33 @@ Resend emails use `@react-email/render` → `html:` — never `react:` prop or `
 | M2 | `src/lib/hotels/__tests__/hotelOffshore.test.ts` |
 | M7, M8 | `src/lib/family/geolocationQuality.test.ts` |
 | M8 | `src/lib/family/locationFixUpgrade.test.ts` |
+| M9 | `src/lib/travelAssistant/groundTransportDeepLinks.test.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |
+| F9 | `src/lib/travelAssistant/flightStatusCadence.test.ts` |
+| F9 | `src/lib/travelAssistant/flightStatusMerge.test.ts` |
+| F10 | `src/lib/travelAssistant/checkInHandoff.test.ts` |
+| F11 | `src/lib/travelAssistant/reservationLinks.test.ts` |
+| F11, G13 | `src/lib/travelAssistant/europe2026TripPass.test.ts` |
+| F9 | `src/lib/travelAssistant/flightStatusLookup.test.ts` |
+| G13 | `src/lib/travelAssistant/gapDetectionService.test.ts` |
 | G8 | `src/lib/travelAssistant/dayPlanLines.test.ts` |
 | G10 | `src/lib/travelAssistant/tripActionItems.test.ts` |
+| G14 | `src/lib/travelAssistant/tripSpendSummary.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
+| I22, I23, I24, I25 | `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts` |
+| I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
+| Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
+| D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |
+| D10 | `src/lib/travelAssistant/drainForwardReviewQueue.test.ts` |
+| D11 | `src/lib/travelAssistant/reservationPlausibility.test.ts` |
+| D12 | `src/lib/travelAssistant/emailForwardParser.test.ts` |
+| D14 | `src/lib/travelAssistant/itineraryOfflineCache.test.ts` |
+| D15 | `src/lib/map/offlineCityMapBundle.test.ts` |
+| D16 | `src/lib/airportNav/navTimingCalibration.test.ts` |
+| D17 | `src/lib/airportNav/postBookingBriefing.test.ts` |
+| D18 | `src/lib/travelAssistant/inputStyleProfile.test.ts` |
 
 New laws must add a row here when a test exists.

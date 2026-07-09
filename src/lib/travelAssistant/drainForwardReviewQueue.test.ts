@@ -58,6 +58,28 @@ test("drainForwardReviewQueue keeps manual review items", () => {
   assert.equal(result.reservations.length, 0);
 });
 
+test("drainForwardReviewQueue never auto-promotes items with explicit gate reasons", () => {
+  const gatedItem = {
+    id: "review-gated",
+    sourceChannel: "email-forward" as const,
+    sourceEmailSubject: "Fwd: itinerary",
+    reasons: ["Low parsing confidence (22/100).", "Missing departure airport, arrival airport, or departure time."],
+    draft: {
+      type: "flight",
+      title: "Unclear itinerary",
+      provider: "",
+      localTime: "",
+      timezone: "Etc/UTC",
+      location: "",
+      confirmationCode: "",
+    },
+  };
+  const result = drainForwardReviewQueue([], [gatedItem], () => "res-gated");
+  assert.equal(result.changed, false);
+  assert.equal(result.reviewQueue.length, 1);
+  assert.equal(result.reservations.length, 0);
+});
+
 test("drainForwardReviewQueue skips duplicates already on timeline", () => {
   const existing = {
     id: "res-existing",

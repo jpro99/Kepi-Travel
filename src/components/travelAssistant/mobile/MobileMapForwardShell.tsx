@@ -11,6 +11,7 @@ import { MobilePlanNotebook } from "@/components/travelAssistant/mobile/MobilePl
 import { MobileSettingsView } from "@/components/travelAssistant/mobile/MobileSettingsView";
 import { TripMemoriesPanel } from "@/components/travelAssistant/TripMemoriesPanel";
 import { PointsTravelProfileCard } from "@/components/travelAssistant/PointsTravelProfileCard";
+import { PointsMilesLearnPanel } from "@/components/travelAssistant/PointsMilesLearnPanel";
 import { TravelFitCard } from "@/components/travelAssistant/TravelFitCard";
 import { TravelStyleBadge } from "@/components/travelAssistant/TravelStyleQuiz";
 import { LoyaltyWalletSection } from "@/components/loyalty/LoyaltyWalletSection";
@@ -33,6 +34,7 @@ import type { PlannedFlightLeg, PlannedStayCity } from "@/lib/travelAssistant/tr
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 import type { TripSpendSummary } from "@/lib/travelAssistant/tripSpendSummary";
+import type { TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 import type { HotelStayMapReservation } from "@/lib/travelAssistant/tripHotelStayMap";
 
 const TripHomeOverviewMap = dynamic(
@@ -95,6 +97,7 @@ interface MobileMapForwardShellProps {
   onDayNoteChange: (dateKey: string, value: string) => void;
   onHotelNotebookChange?: (value: string) => void;
   onCreateTrip: () => void;
+  onStartNewTrip?: () => void;
   onReservationTap: (id: string) => void;
   onCheckStatus: (id: string) => void;
   onDelete: (id: string) => void;
@@ -117,8 +120,10 @@ interface MobileMapForwardShellProps {
   hasProAccess: boolean;
   emailForwardSetupMessage?: string | null;
   missingPriceCount?: number;
+  stayDecisions?: Record<string, "needs_hotel" | "skip">;
   onReviewPricing?: () => void;
-  onGapActionTap?: (tab: string) => void;
+  onGapActionTap?: (action: TripGapNavigationAction) => void;
+  onSkipPreDepartureNight?: (flightDay: string) => void;
   onSignOut: () => void;
   bookSubTab?: BookSubTab;
   onBookSubTabChange?: (subTab: BookSubTab) => void;
@@ -201,6 +206,7 @@ export function MobileMapForwardShell({
   onDayNoteChange,
   onHotelNotebookChange,
   onCreateTrip,
+  onStartNewTrip,
   onReservationTap,
   onCheckStatus,
   onDelete,
@@ -223,8 +229,10 @@ export function MobileMapForwardShell({
   hasProAccess,
   emailForwardSetupMessage,
   missingPriceCount = 0,
+  stayDecisions,
   onReviewPricing,
   onGapActionTap,
+  onSkipPreDepartureNight,
   onSignOut,
   bookSubTab = "flights",
   onBookSubTabChange,
@@ -263,6 +271,7 @@ export function MobileMapForwardShell({
   onRefreshOfflineKit,
 }: MobileMapForwardShellProps) {
   const [planSegment, setPlanSegment] = useState<PlanSegment>("itinerary");
+  const [showPointsLearn, setShowPointsLearn] = useState(false);
   const bookSegment = bookSubTab;
   const setBookSegment = onBookSubTabChange ?? (() => {});
 
@@ -354,6 +363,16 @@ export function MobileMapForwardShell({
           </header>
         )}
 
+        {hasActiveTrip && onStartNewTrip ? (
+          <button
+            type="button"
+            onClick={onStartNewTrip}
+            className={`${juicyBtn} w-full bg-[#f4c95d] text-[#0b1f3a] shadow-md`}
+          >
+            + Start a new trip
+          </button>
+        ) : null}
+
         {hasActiveTrip ? (
           <>
             <MobileAssistView
@@ -382,8 +401,10 @@ export function MobileMapForwardShell({
           <TripHealthStrip
             reservations={reservations}
             missingPriceCount={missingPriceCount}
+            stayDecisions={stayDecisions}
             onGapActionTap={onGapActionTap}
             onReviewPricing={onReviewPricing}
+            onSkipPreDepartureNight={onSkipPreDepartureNight}
           />
         ) : null}
 
@@ -638,10 +659,26 @@ export function MobileMapForwardShell({
 
   return (
     <div className="kepi-mobile-shell space-y-5 pb-4">
+      {showPointsLearn ? (
+        <PointsMilesLearnPanel
+          onBack={() => setShowPointsLearn(false)}
+          onOpenCardWallet={() => setShowPointsLearn(false)}
+        />
+      ) : (
+        <>
       <header>
         <h1 className="text-[2rem] font-bold tracking-tight text-[var(--text-primary)]">More</h1>
         <p className="mt-1 text-[19px] text-[var(--text-secondary)]">Settings & family</p>
       </header>
+
+      <button
+        type="button"
+        onClick={() => setShowPointsLearn(true)}
+        className="w-full rounded-2xl bg-gradient-to-br from-sky-600 to-indigo-600 px-5 py-4 text-left text-white shadow-md"
+      >
+        <p className="text-[19px] font-bold">📚 New to points & miles?</p>
+        <p className="mt-1 text-[15px] text-white/90">Learn Rakuten, lounges, cards, and how Kepi helps</p>
+      </button>
 
       {hasActiveTrip ? (
         <ShareTripCard tripId={tripId ?? null} tripName={tripName} />
@@ -678,7 +715,7 @@ export function MobileMapForwardShell({
           </div>
         </div>
         <div className="px-4 py-4">
-          <PointsTravelProfileCard />
+          <PointsTravelProfileCard onOpenLearn={() => setShowPointsLearn(true)} />
         </div>
       </div>
 
@@ -715,6 +752,8 @@ export function MobileMapForwardShell({
         onRefreshOfflineKit={onRefreshOfflineKit}
         onSignOut={onSignOut}
       />
+        </>
+      )}
     </div>
   );
 }

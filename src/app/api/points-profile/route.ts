@@ -33,6 +33,17 @@ const PatchSchema = z.object({
     )
     .optional(),
   notes: z.string().optional(),
+  cardEnrollments: z
+    .record(
+      z.object({
+        priorityPassEnrolled: z.boolean().optional(),
+        centurionDigitalReady: z.boolean().optional(),
+        centurionGuestPassesUsedThisVisit: z.number().int().min(0).max(4).optional(),
+        priorityPassNumber: z.string().max(40).optional(),
+      }),
+    )
+    .optional(),
+  learnProgress: z.array(z.string()).optional(),
 });
 
 export async function GET() {

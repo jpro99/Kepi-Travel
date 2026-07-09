@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { detectTripGaps, type TripGap } from "@/lib/travelAssistant/gapDetectionService";
+import { detectTripGaps, type TripGap, type TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 
 interface GapAlertsProps {
   /** When collapsed, show a single button instead of all alerts — less stressful while planning. */
@@ -23,7 +23,7 @@ interface GapAlertsProps {
     confirmationCode?: string;
     notes?: string;
   }[];
-  onActionTap?: (tab: string) => void;
+  onActionTap?: (action: TripGapNavigationAction) => void;
 }
 
 const SEVERITY_STYLES: Record<TripGap["severity"], { border: string; bg: string; title: string; dot: string }> = {
@@ -114,7 +114,12 @@ export function GapAlerts({ reservations, onActionTap, revealMode = "inline" }: 
                   {gap.actionLabel && gap.actionTab ? (
                     <button
                       type="button"
-                      onClick={() => onActionTap?.(gap.actionTab!)}
+                      onClick={() =>
+                        onActionTap?.({
+                          tab: gap.actionTab!,
+                          context: gap.actionContext,
+                        })
+                      }
                       className="mt-2 rounded-lg bg-slate-900/10 px-2.5 py-1 text-xs font-semibold text-slate-800 hover:bg-slate-900/20 dark:bg-white/10 dark:text-slate-100 dark:hover:bg-white/20"
                     >
                       {gap.actionLabel} →

@@ -3,6 +3,11 @@ import { resolveHotelDestination } from "@/lib/hotels/resolveDestination";
 import { enrichHotelReservationForMatching } from "@/lib/hotels/hotelReservationCity";
 import { resolveHotelForStaySegment } from "@/lib/hotels/hotelStayMatch";
 import {
+  buildHotelStaySpans,
+  type HotelStayLegInput,
+} from "@/lib/travelAssistant/hotelAnchoredStayLegs";
+import { normalizeDayPlanCity } from "@/lib/travelAssistant/normalizeDayPlanCity";
+import {
   classifyStayStop,
   resolveStayIntent,
   type StayIntent,
@@ -56,6 +61,7 @@ export interface DeriveTripStaySegmentsInput {
     localTime?: string;
     checkOutDate?: string;
     hotelSearchCity?: string;
+    confirmationCode?: string | null;
   }>;
   manualSegments?: TripStaySegmentInput[];
   /** Per-segment user decisions keyed by segment id. */
@@ -125,6 +131,30 @@ function buildSegmentLabel(
   return `${cityLabel} · ${checkIn} → ${checkOut} (${nights} night${nights === 1 ? "" : "s"})`;
 }
 
+function cityKey(value: string): string {
+  return normalizeDayPlanCity(value).toLowerCase();
+}
+
+function citiesDiffer(a: string, b: string): boolean {
+  const left = cityKey(a);
+  const right = cityKey(b);
+  if (!left || !right) return false;
+  return left !== right;
+}
+
+/** Skip flight-arrival stay when booked hotels already anchor sleep in another city. */
+function flightArrivalSupersededByHotels(
+  arrivalAirport: string,
+  arrivalDay: string,
+  hotelSpans: ReturnType<typeof buildHotelStaySpans>,
+): boolean {
+  const arrivalLabel = formatHotelSearchCityLabel(arrivalAirport).label || arrivalAirport;
+  return hotelSpans.some((span) => {
+    if (span.startDate < arrivalDay || span.startDate > addDays(arrivalDay, 21)) return false;
+    return citiesDiffer(arrivalLabel, span.city);
+  });
+}
+
 /** Break a trip into city stops for guided hotel planning. */
 export function deriveTripStaySegments(input: DeriveTripStaySegmentsInput): TripStaySegment[] {
   const manual = input.manualSegments ?? [];
@@ -133,7 +163,31 @@ export function deriveTripStaySegments(input: DeriveTripStaySegmentsInput): Trip
   const today = new Date().toISOString().slice(0, 10);
   const decisions = input.stayDecisions ?? {};
 
+  const hotelSpanInputs: HotelStayLegInput[] = input.hotels.map((hotel) => ({
+    id: hotel.id,
+    type: "hotel",
+    title: hotel.title,
+    provider: hotel.provider,
+    location: hotel.location,
+    localTime: hotel.localTime,
+    checkOutDate: hotel.checkOutDate,
+    confirmationCode: hotel.confirmationCode,
+  }));
+  const spanTripStart = tripStart ?? today;
+  const spanTripEnd = tripEnd ?? addDays(today, 365);
+  const hotelSpans = buildHotelStaySpans(hotelSpanInputs, spanTripStart, spanTripEnd);
+
   const rawSegments: TripStaySegmentInput[] = [...manual];
+
+  for (const span of hotelSpans) {
+    rawSegments.push({
+      id: `hotel-${span.hotelId}`,
+      city: span.city,
+      checkIn: span.startDate,
+      checkOut: span.endDate,
+      source: "manual",
+    });
+  }
 
   const sortedFlights = [...input.flights].sort((a, b) => {
     const aDay = flightDay(a, "arrival") ?? flightDay(a, "departure") ?? "";
@@ -146,6 +200,7 @@ export function deriveTripStaySegments(input: DeriveTripStaySegmentsInput): Trip
     const arrivalDay = flightDay(flight, "arrival");
     const arrivalAirport = flight.flightArrivalAirport?.trim();
     if (!arrivalDay || !arrivalAirport) continue;
+    if (flightArrivalSupersededByHotels(arrivalAirport, arrivalDay, hotelSpans)) continue;
 
     const formatted = formatHotelSearchCityLabel(arrivalAirport);
     const nextFlight = sortedFlights[index + 1];

@@ -42,6 +42,8 @@ On phone, open: `http://192.168.x.x:3847?token=pick-a-long-secret` (saved in bro
 | Flight | `memory/flight.md` |
 | Airport | `memory/airport.md` |
 | Map | `memory/map.md` |
+| Points & card | `memory/points.md` |
+| Weekly audit reports | `memory/audits/` |
 | Project-wide | `../KEPI_PROJECT_MEMORY.md` |
 
 Cursor skills in `.cursor/skills/kepi-*` should align with these files.
@@ -51,6 +53,12 @@ Cursor skills in `.cursor/skills/kepi-*` should align with these files.
 1. Assign task in Bot Deck → copy **Cursor prompt**
 2. Paste in Cursor chat → agent follows skill + reads memory
 3. Mark task **Done** in Bot Deck when finished
+
+### Weekly Audit (every ~1 week)
+
+1. In Cursor: *"Run Kepi Weekly Audit"* (uses `kepi-weekly-audit` skill)
+2. Read report in `memory/audits/` — pick **build #1**, **#2**, etc.
+3. Tell Conductor: *"build #2 from last audit"* → routes to domain bot + ships
 
 Bots do **not** auto-run LLM calls — you control when Cursor spends credits.
 

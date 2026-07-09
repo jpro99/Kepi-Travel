@@ -35,6 +35,13 @@ test("reservationHasAnyPrice treats points-only as priced", () => {
   assert.equal(reservationMissingPrice(reservation), false);
 });
 
+test("reservationMissingPrice reads cash from notes when all reservations provided", () => {
+  const reservations = [
+    { id: "h1", type: "hotel", title: "Hyatt Rome", notes: "Grand total $499 USD" },
+  ];
+  assert.equal(reservationMissingPrice(reservations[0]!, reservations), false);
+});
+
 test("computeTripSpend reads total from forwarded email text once per confirmation", () => {
   const email = "Confirmation AS 654. Total amount: $892.00 USD. Thank you.";
   const summary = computeTripSpend([
@@ -64,5 +71,48 @@ test("computeTripSpend inherits email pricing from sibling leg with same confirm
     },
   ]);
   assert.equal(summary.cashTotalUsd, 2773);
+  assert.equal(summary.missingPriceCount, 0);
+});
+
+test("multi-leg flights share one confirmation price without per-leg breakdown", () => {
+  const reservations = [
+    {
+      id: "f1",
+      type: "flight",
+      title: "ONT-SEA",
+      confirmationCode: "ABC123",
+      quotedPriceUsd: 8850,
+    },
+    { id: "f2", type: "flight", title: "SEA-FCO", confirmationCode: "ABC123" },
+    { id: "f3", type: "flight", title: "FCO-ONT", confirmationCode: "ABC123" },
+    { id: "h1", type: "hotel", title: "Monopoli", confirmationCode: "HOTEL1" },
+  ];
+  const summary = computeTripSpend(reservations);
+  assert.equal(summary.cashTotalUsd, 8850);
+  assert.equal(summary.missingPriceCount, 1);
+  assert.deepEqual(summary.missingPriceIds, ["h1"]);
+  assert.equal(reservationMissingPrice(reservations[1]!, reservations), false);
+  assert.equal(reservationMissingPrice(reservations[2]!, reservations), false);
+});
+
+test("forwarded email legs share pricing via sourceEmailId without duplicate missing flags", () => {
+  const email = "Confirmation ABC123. Total amount: $892.00 USD.";
+  const reservations = [
+    {
+      id: "f1",
+      type: "flight",
+      title: "ONT-SEA",
+      sourceEmailId: "email-1",
+      originalEmailText: email,
+    },
+    {
+      id: "f2",
+      type: "flight",
+      title: "SEA-FCO",
+      sourceEmailId: "email-1",
+    },
+  ];
+  const summary = computeTripSpend(reservations);
+  assert.equal(summary.cashTotalUsd, 892);
   assert.equal(summary.missingPriceCount, 0);
 });

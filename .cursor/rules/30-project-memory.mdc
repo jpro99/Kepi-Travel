@@ -9,24 +9,30 @@ alwaysApply: true
 Before telling the user to sign up, email support, or redo a setup step:
 
 1. **Read** `KEPI_PROJECT_MEMORY.md` at the repo root
-2. **Do not repeat** actions already recorded there (e.g. Duffel Stays emails already sent)
+2. **Read** `NEURO_BRAIN.md` for product reasoning — why Jeff asks for changes; apply whole-trip thinking site-wide
+3. **Do not repeat** actions already recorded there (e.g. Duffel Stays emails already sent)
 3. **Update** that file when the user states a durable fact, decision, or completed external step
 
-## Auto-push (Jeff, 2026-07-04)
+## Auto-push + production promote (Jeff, 2026-07-05 — mandatory)
 
 When **any programming work** is finished (fixes, features, refactors — not discuss-only or review-only replies):
 
 1. Run `npm run lint` and `npm run build`; fix failures before proceeding.
-2. **Commit and push to `main` automatically** — do not ask "should I push?" or wait for a separate push request.
-3. Briefly tell Jeff the commit hash and what shipped.
+2. **Commit and push to `main` automatically** — never ask "should I push?" or wait for a separate request.
+3. **Promote to production immediately** after push — do not leave Ready-but-not-Production deploys sitting on Vercel:
+   - Prefer: GitHub Deploy workflow (`--prod`) via push to `main` (CI must pass).
+   - If Production is stuck behind `main`: run `npx vercel --prod --yes` from repo root (Vercel CLI is linked).
+   - Verify deploy finished; report commit hash + that production was promoted.
+4. Briefly tell Jeff what shipped — no permission prompts for push or deploy.
 
-Production: kepitravel.com (Vercel). Never push a broken build.
+Production: kepitravel.com (Vercel). Never push a broken build. Jeff pays per failed/stale Vercel deploy — ship the same session you build.
 
 ## Two kinds of memory
 
 | Kind | Where | For |
 |------|-------|-----|
 | **Project memory** | `KEPI_PROJECT_MEMORY.md` | Agents + Jeff — provider status, decisions, what's done |
+| **Neuro Brain** | `NEURO_BRAIN.md` | Product reasoning — why changes happen; apply principles everywhere |
 | **App user memory** | Redis via `/api/hotels/profile`, `hotelMemory`, traveler genome | End users of kepitravel.com — stay style, loyalty, learned picks |
 
 Do not confuse them. End-user hotel profile does not store "Jeff emailed Duffel."

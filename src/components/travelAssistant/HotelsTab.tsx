@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { TripHotelStayMap } from "@/components/travelAssistant/TripHotelStayMap";
 import { MobileHotelStayNotebook } from "@/components/travelAssistant/mobile/MobileHotelStayNotebook";
 import { TripStayPlanner } from "@/components/travelAssistant/TripStayPlanner";
+import { PostHotelBookHint } from "@/components/travelAssistant/PostHotelBookHint";
 import { TripHotelCityPicker } from "@/components/travelAssistant/TripHotelCityPicker";
 import { HotelSearchLauncher, type HotelSearchDefaults } from "@/components/travelAssistant/HotelSearchLauncher";
 import { TripHotelSearch } from "@/components/travelAssistant/TripHotelSearch";
@@ -313,6 +314,15 @@ export function HotelsTab({
         />
       ) : null}
 
+      {showBookSearch && shown.some((reservation) => !reservation.plannedOnly && reservation.confirmationCode) ? (
+        <PostHotelBookHint
+          hotelCity={
+            shown.find((reservation) => !reservation.plannedOnly)?.location?.split(",").slice(-2)[0]?.trim() ??
+            hotelSearchDefaults?.city
+          }
+        />
+      ) : null}
+
       {/* Empty state */}
       {shown.length === 0 && (
         <div className="rounded-3xl border border-dashed border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-10 text-center">
@@ -376,7 +386,7 @@ export function HotelsTab({
           const past = isPastCheckout(checkOut);
           const isOpen = expanded === r.id;
           const emoji = cityEmoji(r.location ?? "");
-          const missingPrice = reservationMissingPrice(r);
+          const missingPrice = reservationMissingPrice(r, reservations);
           const costLine = formatReservationCostLine(r, { allReservations: shown });
           const attention = reservationAttentionKind(r);
 

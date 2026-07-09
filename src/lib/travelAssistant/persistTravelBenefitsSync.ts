@@ -22,6 +22,7 @@ export async function syncTravelProfileBenefits(
     existing: existing ?? { airlineStatuses: [] },
     ownedCards: points.ownedCards ?? [],
     loyaltyBalances: normalizeLoyaltyBalances(genome.loyaltyBalances ?? []),
+    cardEnrollments: points.cardEnrollments,
   });
   await kvStoreSet(TRAVEL_PROFILE_KEY, merged, { userId });
   return merged;

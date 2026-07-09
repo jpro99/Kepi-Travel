@@ -59,6 +59,7 @@ const TripPayloadSchema = z.object({
   ),
   bookingWizard: z.any().optional(),
   itineraryPlans: z.any().optional(),
+  stayDecisions: z.record(z.enum(["needs_hotel", "skip"])).optional(),
 });
 
 const TripPatchSchema = z.object({
@@ -84,6 +85,7 @@ const TripPatchSchema = z.object({
   ),
   bookingWizard: z.any().optional(),
   itineraryPlans: z.any().optional(),
+  stayDecisions: z.record(z.enum(["needs_hotel", "skip"])).optional(),
 });
 
 const PostBodySchema = z.object({

@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { detectTripGaps, type TripGap } from "@/lib/travelAssistant/gapDetectionService";
+import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
+import { detectTripGaps, type TripGap, type TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
+import { postSuggestionOutcome } from "@/lib/travelAssistant/mlReadiness/clientTelemetry";
 
 interface TripHealthReservation {
   id: string;
@@ -21,8 +23,10 @@ interface TripHealthReservation {
 interface TripHealthStripProps {
   reservations: TripHealthReservation[];
   missingPriceCount?: number;
-  onGapActionTap?: (tab: string) => void;
+  stayDecisions?: Record<string, "needs_hotel" | "skip">;
+  onGapActionTap?: (action: TripGapNavigationAction) => void;
   onReviewPricing?: () => void;
+  onSkipPreDepartureNight?: (flightDay: string) => void;
   className?: string;
 }
 
@@ -34,10 +38,16 @@ interface HealthRow {
   severity: TripGap["severity"];
   actionLabel?: string;
   actionTab?: string;
+  actionContext?: TripGap["actionContext"];
   onAction?: () => void;
+  secondaryActionLabel?: string;
+  onSecondaryAction?: () => void;
 }
 
-function groupGaps(gaps: TripGap[]): HealthRow[] {
+function groupGaps(
+  gaps: TripGap[],
+  onSkipPreDepartureNight?: (flightDay: string) => void,
+): HealthRow[] {
   const byTitle = new Map<string, TripGap[]>();
   for (const gap of gaps) {
     const list = byTitle.get(gap.title) ?? [];
@@ -48,6 +58,7 @@ function groupGaps(gaps: TripGap[]): HealthRow[] {
   return [...byTitle.entries()].map(([title, items]) => {
     const first = items[0]!;
     const count = items.length;
+    const preDepartureMatch = /^no-hotel-night-before-(\d{4}-\d{2}-\d{2})$/u.exec(first.id);
     return {
       id: `gap-group-${first.id}`,
       emoji: first.emoji,
@@ -64,6 +75,13 @@ function groupGaps(gaps: TripGap[]): HealthRow[] {
           : first.severity,
       actionLabel: first.actionLabel,
       actionTab: first.actionTab,
+      actionContext: first.actionContext,
+      secondaryActionLabel:
+        preDepartureMatch && onSkipPreDepartureNight ? "Staying at home" : undefined,
+      onSecondaryAction:
+        preDepartureMatch && onSkipPreDepartureNight
+          ? () => onSkipPreDepartureNight(preDepartureMatch[1]!)
+          : undefined,
     };
   });
 }
@@ -77,10 +95,13 @@ const SEVERITY_RING: Record<TripGap["severity"], string> = {
 export function TripHealthStrip({
   reservations,
   missingPriceCount = 0,
+  stayDecisions,
   onGapActionTap,
   onReviewPricing,
+  onSkipPreDepartureNight,
   className = "",
 }: TripHealthStripProps) {
+  const t = useTranslations("TripHealth");
   const [expanded, setExpanded] = useState(false);
 
   const rows = useMemo(() => {
@@ -89,8 +110,10 @@ export function TripHealthStrip({
         ...reservation,
         location: reservation.location ?? "",
       })),
+      Date.now(),
+      { stayDecisions },
     );
-    const gapRows = groupGaps(gaps);
+    const gapRows = groupGaps(gaps, onSkipPreDepartureNight);
     const pricingRows: HealthRow[] =
       missingPriceCount > 0
         ? [
@@ -106,7 +129,17 @@ export function TripHealthStrip({
           ]
         : [];
     return [...pricingRows, ...gapRows];
-  }, [missingPriceCount, onReviewPricing, reservations]);
+  }, [missingPriceCount, onReviewPricing, onSkipPreDepartureNight, reservations, stayDecisions]);
+
+  useEffect(() => {
+    if (missingPriceCount <= 0) return;
+    void postSuggestionOutcome({
+      surface: "trip-health-strip",
+      suggestionKey: "missing-pricing",
+      outcome: "impression",
+      metadata: { missingPriceCount },
+    });
+  }, [missingPriceCount]);
 
   if (rows.length === 0) return null;
 
@@ -133,14 +166,14 @@ export function TripHealthStrip({
       >
         <div className="min-w-0">
           <p className="text-sm font-bold text-slate-900 dark:text-white">
-            Trip needs attention ({rows.length})
+            {t("title", { count: rows.length })}
           </p>
           {!expanded ? (
             <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{summary}</p>
           ) : null}
         </div>
         <span className="shrink-0 text-xs font-semibold text-slate-500 dark:text-slate-400">
-          {expanded ? "Hide" : "Show"}
+          {expanded ? t("hide") : t("show")}
         </span>
       </button>
 
@@ -152,20 +185,45 @@ export function TripHealthStrip({
                 {row.emoji} {row.title}
               </p>
               <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">{row.detail}</p>
-              {row.actionLabel ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (row.onAction) {
-                      row.onAction();
-                      return;
-                    }
-                    if (row.actionTab) onGapActionTap?.(row.actionTab);
-                  }}
-                  className="mt-2 text-xs font-semibold text-[#0b1f3a] underline decoration-[#f4c95d] underline-offset-2 dark:text-[#f4c95d]"
-                >
-                  {row.actionLabel}
-                </button>
+              {row.actionLabel || row.secondaryActionLabel ? (
+                <div className="mt-2 flex flex-wrap gap-3">
+                  {row.actionLabel ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (row.id === "missing-pricing") {
+                          void postSuggestionOutcome({
+                            surface: "trip-health-strip",
+                            suggestionKey: "missing-pricing",
+                            outcome: "click",
+                          });
+                        }
+                        if (row.onAction) {
+                          row.onAction();
+                          return;
+                        }
+                        if (row.actionTab) {
+                          onGapActionTap?.({
+                            tab: row.actionTab,
+                            context: row.actionContext,
+                          });
+                        }
+                      }}
+                      className="text-xs font-semibold text-[#0b1f3a] underline decoration-[#f4c95d] underline-offset-2 dark:text-[#f4c95d]"
+                    >
+                      {row.actionLabel}
+                    </button>
+                  ) : null}
+                  {row.secondaryActionLabel ? (
+                    <button
+                      type="button"
+                      onClick={() => row.onSecondaryAction?.()}
+                      className="text-xs font-semibold text-slate-600 underline underline-offset-2 dark:text-slate-300"
+                    >
+                      {row.secondaryActionLabel}
+                    </button>
+                  ) : null}
+                </div>
               ) : null}
             </li>
           ))}

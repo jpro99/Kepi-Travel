@@ -26,8 +26,22 @@ import {
   isSameFlightLeg,
 } from "@/lib/travelAssistant/flightItinerarySync";
 import { enrichReservationForAutoImport } from "@/lib/travelAssistant/autoImportReservation";
+import { evaluateForwardedReservationGate } from "@/lib/travelAssistant/forwardedReservationGate";
 import { drainForwardReviewQueue } from "@/lib/travelAssistant/drainForwardReviewQueue";
-import { resolveReservationPricing } from "@/lib/travelAssistant/parseReservationMiles";
+import { getFewShotExamplesForEmail } from "@/lib/travelAssistant/mlReadiness/fewShotExamples";
+import { EMAIL_FORWARD_PARSER_VERSION } from "@/lib/travelAssistant/mlReadiness/parserVersion";
+import { extractPdfTextFromReceivedEmail } from "@/lib/travelAssistant/receivedEmailPdfText";
+import {
+  appendPdfAttachmentText,
+  ensurePdfInSourceText,
+  truncateEmailSourceText,
+} from "@/lib/travelAssistant/emailSourceText";
+import { resolveReservationPricing, resolvePricingNearBooking } from "@/lib/travelAssistant/parseReservationMiles";
+import { applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
+import {
+  extractReservationSourceLinks,
+  resolveBoardingPassUrl,
+} from "@/lib/travelAssistant/reservationLinks";
 import { generateId } from "@/lib/utils/generateId";
 
 const AttachmentSchema = z.object({
@@ -568,12 +582,33 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       }
     }
 
+    let pdfAttachmentText = "";
+    if (emailId) {
+      const resendClient = getResendClient();
+      if (resendClient) {
+        pdfAttachmentText = await extractPdfTextFromReceivedEmail(resendClient, emailId, { requestId });
+        if (pdfAttachmentText.trim()) {
+          parserText = appendPdfAttachmentText(parserText, pdfAttachmentText);
+          routeLogger.info("Appended PDF attachment text to forwarded email parser input.", {
+            emailId,
+            pdfTextLength: pdfAttachmentText.length,
+          });
+        }
+      }
+    }
+
+    const fewShotExamples = await getFewShotExamplesForEmail(parserText, {
+      userId: targetUserId,
+      limit: 3,
+    });
+
     const parserResult = await parseForwardedEmail({
       subject: parserSubject,
       from: parserFrom,
       text: parserText,
       html: parserHtml,
       attachments: parserAttachments,
+      fewShotExamples,
     });
     const parserDraftRecords = (
       parserResult.drafts.length > 0 ? parserResult.drafts : [parserResult.draft]
@@ -591,6 +626,9 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         : "needs-review";
     const parserOriginalEmailText =
       typeof parserResult?.originalEmailText === "string" ? parserResult.originalEmailText : "";
+    const storedSourceText = truncateEmailSourceText(
+      ensurePdfInSourceText(parserOriginalEmailText, pdfAttachmentText),
+    );
     const parserHasPdfAttachment = Boolean(parserResult?.hasPdfAttachment);
     const parserImageBasedEmail = Boolean(parserResult?.imageBasedEmail);
     const parserUsedAiFallback = Boolean(parserResult?.usedAiFallback);
@@ -627,8 +665,8 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
     const emailSourceMetadata = {
       sourceEmailId: emailId || undefined,
       sourceEmailSubject: parserSubject.trim() || undefined,
-      originalEmailText: parserOriginalEmailText.trim().slice(0, 12_000) || undefined,
-      hasPdfAttachment: parserHasPdfAttachment || undefined,
+      originalEmailText: storedSourceText || undefined,
+      hasPdfAttachment: parserHasPdfAttachment || Boolean(pdfAttachmentText.trim()) || undefined,
       manageUrl: emailManageUrl,
       sourceLinks: emailSourceLinks.length > 0 ? emailSourceLinks : undefined,
     };
@@ -727,9 +765,27 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         ? (isEmailProviderName && iataPrefix.length === 2 ? `${iataPrefix} Airlines` : rawAirline || "Unknown Airline")
         : "";
 
-      const emailPricing = resolveReservationPricing({
+      const parserDepartureAirport =
+        typeof parserDraftRecord.departureAirport === "string"
+          ? parserDraftRecord.departureAirport.trim()
+          : typeof parserDraftRecord.flightDepartureAirport === "string"
+            ? parserDraftRecord.flightDepartureAirport.trim()
+            : "";
+      const parserArrivalAirport =
+        typeof parserDraftRecord.arrivalAirport === "string"
+          ? parserDraftRecord.arrivalAirport.trim()
+          : typeof parserDraftRecord.flightArrivalAirport === "string"
+            ? parserDraftRecord.flightArrivalAirport.trim()
+            : "";
+
+      const emailPricing = resolvePricingNearBooking({
         notes: parserNotesText,
-        originalEmailText: parserOriginalEmailText,
+        originalEmailText: storedSourceText || parserOriginalEmailText,
+        confirmationCode: parserConfirmationCode,
+        title: parserTitle,
+        flightNumber: parserType === "flight" ? parserFlightNumber : undefined,
+        departureAirport: parserType === "flight" ? parserDepartureAirport || undefined : undefined,
+        arrivalAirport: parserType === "flight" ? parserArrivalAirport || undefined : undefined,
       });
 
       const parsedReservation = {
@@ -765,6 +821,14 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         checkOutDate: parserType === "hotel"
           ? (typeof parserDraftRecord.checkOutDate === "string" ? parserDraftRecord.checkOutDate.trim().slice(0, 10) : "")
           : "",
+        boardingPassUrl:
+          parserType === "flight"
+            ? resolveBoardingPassUrl({
+                sourceLinks: emailSourceLinks,
+                originalEmailText: storedSourceText || parserOriginalEmailText,
+                html: parserHtml,
+              })
+            : undefined,
         ...emailSourceMetadata,
       };
 
@@ -895,7 +959,9 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         if (hasMatchingReservation) {
           const existing = nextReservations[matchingReservationIndex] as SessionReservation;
           const incoming = parsedReservation as SessionReservation;
-          const pricingMerged = mergeReservationPricingFields(existing, incoming);
+          const pricingMerged = applyAcceptedReservationPricing(
+            mergeReservationPricingFields(existing, incoming),
+          );
           if (pricingMerged !== existing) {
             nextReservations = nextReservations.map((reservation, index) =>
               index === matchingReservationIndex ? pricingMerged : reservation,
@@ -969,10 +1035,69 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         flightDepartureTime: parserType === "flight" && parserLocalTime ? parserLocalTime : "",
         checkOutDate: parserType === "hotel" ? parsedReservation.checkOutDate : "",
       });
-      const inferredNote =
-        parserMissingFields.length > 0 || parserConfidenceScore < 40 || parserParsingStatus === "needs-user-input"
-          ? "Auto-imported with inferred fields — edit anytime in your timeline."
-          : "";
+
+      const gateResult = evaluateForwardedReservationGate({
+        type: parserType,
+        localTime: enrichedFields.localTime,
+        location: enrichedFields.location,
+        checkOutDate: parsedReservation.checkOutDate,
+        flightDepartureAirport: enrichedFields.flightDepartureAirport ?? parsedReservation.flightDepartureAirport,
+        flightArrivalAirport: enrichedFields.flightArrivalAirport ?? parsedReservation.flightArrivalAirport,
+        quotedPriceUsd: parsedReservation.quotedPriceUsd,
+        confidenceScore: parserConfidenceScore,
+        parsingStatus: parserParsingStatus,
+        missingFields: parserMissingFields,
+      });
+
+      if (gateResult.needsReview) {
+        nextQueue = [
+          {
+            id: `review-email-${generateId()}`,
+            reasons: gateResult.reasons,
+            impact: "This reservation needs a quick check before it's added to your trip.",
+            draft: {
+              type: enrichedFields.type,
+              title: enrichedFields.title,
+              provider: enrichedFields.provider,
+              localTime: enrichedFields.localTime,
+              timezone: enrichedFields.timezone,
+              location: enrichedFields.location,
+              confirmationCode: parserConfirmationCode,
+              assignedTo: parserAssignedTo.length > 0 ? parserAssignedTo : defaultAssignees,
+              stage: targetTrip.stage,
+              critical: parserType === "flight" || parserType === "train" || parserType === "ride",
+              confidence: confidenceToDraftValue(parserConfidenceScore),
+              notes: parserNotesText,
+              flightNumber: enrichedFields.flightNumber ?? parsedReservation.flightNumber,
+              flightAirline: enrichedFields.flightAirline ?? parsedReservation.flightAirline,
+              flightDate: enrichedFields.flightDate ?? parsedReservation.flightDate,
+              flightDepartureAirport: enrichedFields.flightDepartureAirport ?? parsedReservation.flightDepartureAirport,
+              flightArrivalAirport: enrichedFields.flightArrivalAirport ?? parsedReservation.flightArrivalAirport,
+              flightDepartureTime: enrichedFields.flightDepartureTime ?? parsedReservation.flightDepartureTime,
+              checkOutDate: parsedReservation.checkOutDate,
+            },
+            sourceChannel: "email-forward" as const,
+            parseConfidenceScore: parserConfidenceScore,
+            parsingStatus: parserParsingStatus,
+            missingFields: parserMissingFields,
+            reviewStatus: "pending" as const,
+            parserNotes,
+            parserVersion: parserResult.parserVersion ?? EMAIL_FORWARD_PARSER_VERSION,
+            ...emailSourceMetadata,
+          },
+          ...nextQueue,
+        ];
+        routeLogger.info("Forwarded reservation routed to review queue (did not meet auto-import bar).", {
+          userId: targetUserId,
+          tripId: targetTrip.id,
+          type: parserType,
+          confidenceScore: parserConfidenceScore,
+          reasons: gateResult.reasons,
+        });
+        acceptedDraftCount += 1;
+        continue;
+      }
+
       const autoImportedReservation: SessionReservation = {
         ...(parsedReservation as SessionReservation),
         type: enrichedFields.type,
@@ -981,7 +1106,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         localTime: enrichedFields.localTime,
         timezone: enrichedFields.timezone,
         location: enrichedFields.location,
-        notes: [enrichedFields.notes, inferredNote].filter(Boolean).join(" ").trim(),
+        notes: enrichedFields.notes,
         flightNumber: enrichedFields.flightNumber ?? parsedReservation.flightNumber,
         flightAirline: enrichedFields.flightAirline ?? parsedReservation.flightAirline,
         flightDate: enrichedFields.flightDate ?? parsedReservation.flightDate,

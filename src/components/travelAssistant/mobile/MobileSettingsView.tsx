@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
+import { openSupportChat } from "@/components/support/SupportChat";
 import { ThemePicker } from "@/components/ThemeToggle";
 import { LanguageSettingsCard } from "@/components/LanguageSettingsCard";
 import { OfflineTravelKitSettingsCard } from "@/components/travelAssistant/OfflineTravelKitSettingsCard";
@@ -47,6 +49,8 @@ export function MobileSettingsView({
   onRefreshOfflineKit,
   onSignOut,
 }: MobileSettingsViewProps) {
+  const tNav = useTranslations("ConsumerNav");
+  const tSupport = useTranslations("SupportPage");
   return (
     <section className="space-y-4 pb-4">
       <OfflineTravelKitSettingsCard
@@ -144,12 +148,14 @@ export function MobileSettingsView({
 
       <LanguageSettingsCard />
 
-      <Link
-        href="/support"
-        className={`block p-4 font-semibold text-[var(--text-primary)] ${appleCard}`}
+      <button
+        type="button"
+        onClick={() => openSupportChat()}
+        className={`block w-full p-4 text-left font-semibold text-[var(--text-primary)] ${appleCard}`}
       >
-        Support
-      </Link>
+        {tNav("support")}
+        <p className={`${appleCaption} mt-0.5 font-normal`}>{tSupport("subtitle")}</p>
+      </button>
 
       {emailForwardSetupMessage ? (
         <p className="text-[13px] text-[var(--text-secondary)]">{emailForwardSetupMessage}</p>

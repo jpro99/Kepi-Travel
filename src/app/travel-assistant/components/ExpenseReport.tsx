@@ -19,6 +19,7 @@ interface ExpenseReportProps {
 export function ExpenseReport({ tripId }: ExpenseReportProps) {
     const [expenses, setExpenses] = useState<TripExpense[]>([]);
     const [showCamera, setShowCamera] = useState(false);
+    const [ocrError, setOcrError] = useState<string | null>(null);
     const router = useRouter();
 
     useEffect(() => {
@@ -62,6 +63,10 @@ export function ExpenseReport({ tripId }: ExpenseReportProps) {
         if (response.ok) {
             const { expense } = await response.json();
             setExpenses(prevExpenses => [...prevExpenses, expense]);
+            setOcrError(null);
+        } else {
+            const body = await response.json().catch(() => null);
+            setOcrError(body?.error ?? 'Could not read that receipt. Add it manually for now.');
         }
     };
 
@@ -80,6 +85,9 @@ export function ExpenseReport({ tripId }: ExpenseReportProps) {
                     <button onClick={exportToCsv} className="rounded-full bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-300 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700">Export to CSV</button>
                 </div>
             </div>
+            {ocrError ? (
+                <p className="mt-3 text-sm text-amber-700 dark:text-amber-400">{ocrError}</p>
+            ) : null}
             <table className="mt-4 w-full text-left">
                 <thead>
                     <tr>

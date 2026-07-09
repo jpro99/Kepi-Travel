@@ -27,8 +27,15 @@ import {
 import { enrichReservationForAutoImport } from "@/lib/travelAssistant/autoImportReservation";
 import { inferImportedTripMeta } from "@/lib/travelAssistant/persistImportToTrip";
 import { drainForwardReviewQueue } from "@/lib/travelAssistant/drainForwardReviewQueue";
+import { postParseCorrection } from "@/lib/travelAssistant/mlReadiness/clientTelemetry";
+import { EMAIL_FORWARD_PARSER_VERSION } from "@/lib/travelAssistant/mlReadiness/parserVersion";
+import { sortReviewQueueForActiveLearning } from "@/lib/travelAssistant/mlReadiness/reviewQueueTriage";
 import { reconcileStoredFlightReservations } from "@/lib/travelAssistant/reconcileStoredFlightReservations";
 import { canonicalFlightDepartureDay, canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
+import {
+  nearestUpcomingFlightDepartureUtcMs,
+  resolveFlightStatusPollIntervalMs,
+} from "@/lib/travelAssistant/flightStatusCadence";
 import { isDuplicateReservation } from "@/lib/travelAssistant/reservationDuplicates";
 import { countRescannableReservations } from "@/lib/travelAssistant/rescanTripImportsShared";
 import {
@@ -67,6 +74,7 @@ import {
 } from "@/lib/family/locationSharingPrefs";
 import { reconcileTripItinerary } from "@/lib/travelAssistant/itinerarySelfCheck";
 import { normalizeItineraryPlans } from "@/lib/travelAssistant/itineraryDayPlan";
+import { buildTripLegCalendarModel } from "@/lib/travelAssistant/buildTripLegs";
 import {
   buildIncidentAutopilotPlan,
   type IncidentAutopilotAction,
@@ -151,6 +159,8 @@ import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
 import { hydrateReservationsPricing, applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import { buildTransportConflictReservationIds } from "@/lib/travelAssistant/reservationAttention";
 import { computeTripSpend } from "@/lib/travelAssistant/tripSpendSummary";
+import { preDepartureStayDecisionId, type TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
+import { resolveBoardingPassUrl } from "@/lib/travelAssistant/reservationLinks";
 import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
@@ -203,6 +213,7 @@ import { ShareModal } from "@/components/travelAssistant/ShareModal";
 import { SmartPackingList } from "@/components/travelAssistant/SmartPackingList";
 import { LoyaltyWalletSection } from "@/components/loyalty/LoyaltyWalletSection";
 import { PointsTravelProfileCard } from "@/components/travelAssistant/PointsTravelProfileCard";
+import { PointsMilesLearnPanel } from "@/components/travelAssistant/PointsMilesLearnPanel";
 import { TravelFitCard } from "@/components/travelAssistant/TravelFitCard";
 import {
   TravelStyleBadge,
@@ -215,6 +226,8 @@ import { guidanceToneFromStyle } from "@/lib/travelStyle/travelStyleQuiz";
 import { ReferralCard } from "@/components/referral/ReferralCard";
 import { WeatherCard } from "@/components/travelAssistant/WeatherCard";
 import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntelligencePanel";
+import { useTranslations } from "next-intl";
+import { openSupportChat } from "@/components/support/SupportChat";
 import { ConciergePanel } from "@/components/travelAssistant/ConciergePanel";
 import { trackEvent } from "@/lib/analytics/trackEvent";
 import { useBilling } from "@/lib/billing/BillingContext";
@@ -224,8 +237,8 @@ import { Logo } from "@/components/ui/Logo";
 import { JourneyFlowPanel } from "./components/JourneyFlowPanel";
 import { TravelAssistantTopControls } from "./components/TravelAssistantTopControls";
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
+import { ConsumerDesktopTabBar } from "@/components/travelAssistant/ConsumerDesktopTabBar";
 import {
-  CONSUMER_TAB_BAR,
   normalizeConsumerTabParam,
   orientationTabToConsumerTab,
   resolveBookSubTab,
@@ -332,6 +345,7 @@ interface Reservation extends ReservationDraft {
   hasPdfAttachment?: boolean;
   manageUrl?: string;
   sourceLinks?: Array<{ label: string; url: string; kind: string }>;
+  boardingPassUrl?: string;
 }
 
 interface ReviewItem {
@@ -506,6 +520,7 @@ interface ManagedTrip {
   hotelArrivalTime: string | null;
   bookingWizard?: ReturnType<typeof normalizeBookingWizard>;
   itineraryPlans?: import("@/lib/travelAssistant/itineraryDayPlan").ItineraryPlansData;
+  stayDecisions?: Record<string, "needs_hotel" | "skip">;
 }
 
 type ManagedTripRuntimeSnapshot = {
@@ -1712,6 +1727,16 @@ function normalizeManagedTrip(trip: unknown): ManagedTrip | null {
     itineraryPlans: candidate.itineraryPlans
       ? normalizeItineraryPlans(candidate.itineraryPlans)
       : undefined,
+    stayDecisions:
+      candidate.stayDecisions && typeof candidate.stayDecisions === "object"
+        ? Object.fromEntries(
+            Object.entries(candidate.stayDecisions).filter(
+              (entry): entry is [string, "needs_hotel" | "skip"] =>
+                typeof entry[0] === "string" &&
+                (entry[1] === "needs_hotel" || entry[1] === "skip"),
+            ),
+          )
+        : undefined,
   };
 }
 
@@ -1814,6 +1839,7 @@ function toastPanelClassName(tone: ToastTone): string {
 export default function TravelAssistantPage() {
   const clerk = useClerk();
   const { user } = useUser();
+  const tNav = useTranslations("ConsumerNav");
   const {
     status: billingStatus,
     loading: billingLoading,
@@ -1920,6 +1946,10 @@ export default function TravelAssistantPage() {
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>(INITIAL_FAMILY);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [reviewQueue, setReviewQueue] = useState<ReviewItem[]>(INITIAL_REVIEW_QUEUE);
+  const triagedReviewQueue = useMemo(
+    () => sortReviewQueueForActiveLearning(reviewQueue),
+    [reviewQueue],
+  );
   const [readinessItems, setReadinessItems] = useState<ReadinessItem[]>(INITIAL_CHECKLIST);
   // Track readinessItems that came from server so we can pass as savedItems
   const serverReadinessItemsRef = useRef<ReadinessItem[]>([]);
@@ -2291,6 +2321,7 @@ export default function TravelAssistantPage() {
   } | null>(null);
   const [rescanImportsBusy, setRescanImportsBusy] = useState(false);
   const [rescanImportsSummary, setRescanImportsSummary] = useState<string | null>(null);
+  const [showPointsLearn, setShowPointsLearn] = useState(false);
   const [calendarSyncInFlight, setCalendarSyncInFlight] = useState(false);
   const [calendarSyncTone, setCalendarSyncTone] = useState<"neutral" | "success" | "error">("neutral");
   const [calendarSyncMessage, setCalendarSyncMessage] = useState<string | null>(null);
@@ -2713,7 +2744,7 @@ export default function TravelAssistantPage() {
       drained.changed || reconciled.changed || hydratedReservations !== trip.reservations
         ? { ...trip, reservations: tripReservations, reviewQueue: tripReviewQueue }
         : trip;
-    if (drained.changed || reconciled.changed) {
+    if (drained.changed || reconciled.changed || hydratedReservations !== trip.reservations) {
       void fetch(TRIP_API_ROUTE, {
         method: "PUT",
         credentials: "include",
@@ -2807,6 +2838,16 @@ export default function TravelAssistantPage() {
 
       setTrips((previous) => (areSnapshotsEqual(previous, parsedTrips) ? previous : parsedTrips));
       setActiveTripId((previous) => (previous === resolvedActiveTripId ? previous : resolvedActiveTripId));
+
+      const stayDecisionsByTrip: Record<string, Record<string, "needs_hotel" | "skip">> = {};
+      for (const trip of parsedTrips) {
+        if (trip.stayDecisions && Object.keys(trip.stayDecisions).length > 0) {
+          stayDecisionsByTrip[trip.id] = trip.stayDecisions;
+        }
+      }
+      if (Object.keys(stayDecisionsByTrip).length > 0) {
+        setTripStayDecisionsByTrip((previous) => ({ ...previous, ...stayDecisionsByTrip }));
+      }
 
       if (resolvedActiveTrip) {
         applyManagedTripToState(resolvedActiveTrip, { resetHighlight: true });
@@ -2941,20 +2982,23 @@ export default function TravelAssistantPage() {
     };
   }, [refreshTripsFromServer, tripsLoading]);
 
-  // Auto-poll flight status for upcoming flights within 24 hours
+  // Auto-poll flight status for upcoming flights within 24 hours (90s inside 6h, 5m otherwise)
   useEffect(() => {
     if (!activeTripId || !reservations.length) return;
     const nowMs = Date.now();
     const upcomingFlights = reservations.filter((r) => {
       if (r.type !== "flight") return false;
-      const local = (r as Record<string, unknown>).localTime as string | undefined;
+      const local = canonicalFlightDepartureLocalTime(r);
       if (!local) return false;
       const depMs = Date.parse(local.replace("T", " ").slice(0, 16));
       const hoursUntil = (depMs - nowMs) / 3_600_000;
       return hoursUntil > -1 && hoursUntil < 24;
     });
     if (!upcomingFlights.length) return;
-    // Poll every 5 minutes for flights within 24 hours
+    const pollIntervalMs = resolveFlightStatusPollIntervalMs(
+      nearestUpcomingFlightDepartureUtcMs(upcomingFlights, nowMs),
+      nowMs,
+    );
     const pollFlight = async () => {
       for (const flight of upcomingFlights) {
         try {
@@ -2965,7 +3009,7 @@ export default function TravelAssistantPage() {
       }
     };
     void pollFlight();
-    const interval = window.setInterval(() => { void pollFlight(); }, 5 * 60_000);
+    const interval = window.setInterval(() => { void pollFlight(); }, pollIntervalMs);
     return () => window.clearInterval(interval);
   // handleCheckFlightStatusRef is a stable ref — intentionally omitted from deps
   }, [activeTripId, reservations]);
@@ -3046,17 +3090,33 @@ export default function TravelAssistantPage() {
     [activeTripId, applyManagedTripToState, setToast],
   );
 
-  const handleCreateTrip = useCallback(async (): Promise<void> => {
+  const resolveTripPlanningWizardPhase = useCallback((): BookingWizardPhase => {
+    return resolveBookingWizardPhase(activeTrip);
+  }, [activeTrip]);
+
+  const assertCanCreateAdditionalTrip = useCallback((): boolean => {
     const tripLimit = billingStatus?.usage?.tripLimit ?? 1;
     const allowCreation = hasProAccess || tripLimit === null || trips.length < tripLimit;
     if (!allowCreation) {
       openUpgradeModal("multi-trip", "Free includes one trip. Upgrade to add and manage multiple trips.");
-      return;
+      return false;
     }
+    return true;
+  }, [billingStatus?.usage?.tripLimit, hasProAccess, openUpgradeModal, trips.length]);
+
+  const handleCreateTrip = useCallback(async (): Promise<void> => {
+    if (!assertCanCreateAdditionalTrip()) return;
     setTripPlanningWizardIntent("create");
     setTripPlanningWizardPhase("setup");
     setTripPlanningWizardOpen(true);
-  }, [billingStatus?.usage?.tripLimit, hasProAccess, openUpgradeModal, trips.length]);
+  }, [assertCanCreateAdditionalTrip]);
+
+  const handleStartNewTrip = useCallback((): void => {
+    if (!assertCanCreateAdditionalTrip()) return;
+    setTripPlanningWizardIntent("create");
+    setTripPlanningWizardPhase("setup");
+    setTripPlanningWizardOpen(true);
+  }, [assertCanCreateAdditionalTrip]);
 
   const openTripPlanningWizard = useCallback(() => {
     void handleCreateTrip();
@@ -3110,12 +3170,15 @@ export default function TravelAssistantPage() {
         }
       };
 
-      const finishTripPlanningSave = (payload: {
-        activeTrip?: unknown;
-        trip?: unknown;
-        trips?: unknown[];
-        activeTripId?: string | null;
-      }): void => {
+      const finishTripPlanningSave = (
+        payload: {
+          activeTrip?: unknown;
+          trip?: unknown;
+          trips?: unknown[];
+          activeTripId?: string | null;
+        },
+        options?: { successToast?: string },
+      ): void => {
         applyServerTripsSnapshot(payload);
         const savedTrip = normalizeManagedTrip(payload.activeTrip ?? payload.trip);
         const savedTripId = savedTrip?.id ?? activeTripId;
@@ -3137,7 +3200,7 @@ export default function TravelAssistantPage() {
           );
         }
         setTripPlanningWizardPhase("flights");
-        setToast(`Trip "${tripName}" is set — add flights when you're ready.`);
+        setToast(options?.successToast ?? `Trip "${tripName}" is set — add flights when you're ready.`);
       };
 
       try {
@@ -3149,6 +3212,47 @@ export default function TravelAssistantPage() {
           minutesToDeparture: minutes,
           bookingWizard,
         };
+
+        if (tripPlanningWizardIntent === "create") {
+          const response = await fetch(TRIP_API_ROUTE, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              setActive: true,
+              trip: {
+                ...tripPatch,
+                stage: "readiness",
+                reservations: [],
+                tripStatus: "yellow",
+                activeScenario: "none",
+                reviewQueue: [],
+                readinessItems: INITIAL_CHECKLIST,
+                updateFeed: [],
+              },
+            }),
+          });
+          if (!response.ok) {
+            setTripPlanningWizardPhase("setup");
+            setToast(await readTripApiError(response, "Could not create your trip."));
+            return false;
+          }
+          const payload = (await response.json()) as {
+            trip?: unknown;
+            activeTrip?: unknown;
+            trips?: unknown[];
+            activeTripId?: string | null;
+          };
+          if (!normalizeManagedTrip(payload.trip ?? payload.activeTrip)) {
+            setTripPlanningWizardPhase("setup");
+            setToast("Trip saved but response was invalid.");
+            return false;
+          }
+          finishTripPlanningSave(payload, {
+            successToast: `New trip "${tripName}" is ready — your other trips stay separate.`,
+          });
+          void refreshGlobalBillingStatus();
+          return true;
+        }
 
         if (tripPlanningWizardIntent === "edit" && activeTripId && activeTrip) {
           const response = await fetch(TRIP_API_ROUTE, {
@@ -4145,12 +4249,18 @@ export default function TravelAssistantPage() {
     [updateFeed],
   );
   const wizardFlightCount = useMemo(
-    () => consumerDisplayReservations.filter((reservation) => reservation.type === "flight").length,
-    [consumerDisplayReservations],
+    () =>
+      tripPlanningCreatingNew
+        ? 0
+        : consumerDisplayReservations.filter((reservation) => reservation.type === "flight").length,
+    [consumerDisplayReservations, tripPlanningCreatingNew],
   );
   const wizardHotelCount = useMemo(
-    () => consumerDisplayReservations.filter((reservation) => reservation.type === "hotel").length,
-    [consumerDisplayReservations],
+    () =>
+      tripPlanningCreatingNew
+        ? 0
+        : consumerDisplayReservations.filter((reservation) => reservation.type === "hotel").length,
+    [consumerDisplayReservations, tripPlanningCreatingNew],
   );
   const delayedFlight = useMemo(
     () =>
@@ -4223,6 +4333,10 @@ export default function TravelAssistantPage() {
   const tripSpendSummary = useMemo(
     () => computeTripSpend(advancedWorkspaceEnabled ? reservations : consumerReservationsSorted),
     [advancedWorkspaceEnabled, consumerReservationsSorted, reservations],
+  );
+  const activeStayDecisions = useMemo(
+    () => (activeTripId ? tripStayDecisionsByTrip[activeTripId] ?? {} : {}),
+    [activeTripId, tripStayDecisionsByTrip],
   );
 
   // Derive location status for AI guidance — must be after consumerReservationsSorted
@@ -5842,6 +5956,16 @@ export default function TravelAssistantPage() {
           [segment.id]: intent,
         },
       }));
+      setTrips((prev) =>
+        prev.map((trip) =>
+          trip.id === activeTripId
+            ? {
+                ...trip,
+                stayDecisions: { ...(trip.stayDecisions ?? {}), [segment.id]: intent },
+              }
+            : trip,
+        ),
+      );
       try {
         const response = await fetch("/api/hotels/stay-intent", {
           method: "POST",
@@ -5871,6 +5995,47 @@ export default function TravelAssistantPage() {
       }
     },
     [activeTripId],
+  );
+
+  const handleSkipPreDepartureNight = useCallback(
+    async (flightDay: string): Promise<void> => {
+      if (!activeTripId) return;
+      const segmentId = preDepartureStayDecisionId(flightDay);
+      setTripStayDecisionsByTrip((prev) => ({
+        ...prev,
+        [activeTripId]: {
+          ...(prev[activeTripId] ?? {}),
+          [segmentId]: "skip",
+        },
+      }));
+      setTrips((prev) =>
+        prev.map((trip) =>
+          trip.id === activeTripId
+            ? {
+                ...trip,
+                stayDecisions: { ...(trip.stayDecisions ?? {}), [segmentId]: "skip" },
+              }
+            : trip,
+        ),
+      );
+      try {
+        const response = await fetch("/api/hotels/stay-intent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tripId: activeTripId,
+            segmentId,
+            intent: "skip",
+            stopKind: "destination",
+          }),
+        });
+        if (!response.ok) throw new Error("save failed");
+      } catch {
+        /* optimistic UI already updated */
+      }
+      setToast(`Got it — no hotel needed the night before your ${flightDay} flight.`);
+    },
+    [activeTripId, setToast],
   );
 
   const openManualHotelReservation = useCallback((): void => {
@@ -6938,7 +7103,7 @@ export default function TravelAssistantPage() {
           item.id === activeDrawer.id
             ? {
                 ...item,
-                ...drawerDraft,
+                ...applyAcceptedReservationPricing(drawerDraft),
               }
             : item,
         ),
@@ -7625,6 +7790,13 @@ export default function TravelAssistantPage() {
       hasPdfAttachment: target.hasPdfAttachment,
       manageUrl: target.manageUrl,
       sourceLinks: target.sourceLinks,
+      boardingPassUrl:
+        draft.type === "flight"
+          ? resolveBoardingPassUrl({
+              sourceLinks: target.sourceLinks,
+              originalEmailText: target.originalEmailText,
+            })
+          : undefined,
       flightNumber: draft.flightNumber ?? "",
       flightAirline: draft.flightAirline ?? draft.provider,
       flightDate: draft.flightDate ?? draft.localTime.slice(0, 10),
@@ -7654,6 +7826,18 @@ export default function TravelAssistantPage() {
       confirmationCode: newReservation.confirmationCode?.trim() || undefined,
       detail: `${newReservation.provider || newReservation.title} is on your flights timeline.`,
       syncedToTrip: true,
+    });
+    void postParseCorrection({
+      reviewItemId: target.id,
+      parserGuess: target.draft as Record<string, unknown>,
+      corrected: pricedDraft as Record<string, unknown>,
+      gateReasons: target.reasons,
+      sourceChannel: target.sourceChannel,
+      sourceEmailSubject: target.sourceEmailSubject,
+      parseConfidenceScore: target.parseConfidenceScore,
+      parsingStatus: target.parsingStatus,
+      originalEmailText: target.originalEmailText,
+      parserVersion: target.parserVersion ?? EMAIL_FORWARD_PARSER_VERSION,
     });
     return true;
   };
@@ -8243,12 +8427,12 @@ export default function TravelAssistantPage() {
   );
 
   const handleOpenTopReview = useCallback((): void => {
-    if (reviewQueue.length === 0) {
+    if (triagedReviewQueue.length === 0) {
       setToast("Review queue is already clear.");
       return;
     }
-    openDrawer("review", reviewQueue[0].id);
-  }, [openDrawer, reviewQueue, setToast]);
+    openDrawer("review", triagedReviewQueue[0].id);
+  }, [openDrawer, setToast, triagedReviewQueue]);
 
   const handleOpenConsumerReviewQueue = useCallback(
     (event?: { preventDefault?: () => void; stopPropagation?: () => void }): void => {
@@ -8271,7 +8455,7 @@ export default function TravelAssistantPage() {
     if (!consumerReviewQueueSession.open) {
       return;
     }
-    const currentItem = reviewQueue[0];
+    const currentItem = triagedReviewQueue[0];
     if (!currentItem) {
       setConsumerReviewQueueSession({ open: false, processed: 0, total: 0 });
       return;
@@ -8516,7 +8700,7 @@ export default function TravelAssistantPage() {
     }
     return null;
   })();
-  const activeConsumerReviewItem = consumerReviewQueueSession.open ? (reviewQueue[0] ?? null) : null;
+  const activeConsumerReviewItem = consumerReviewQueueSession.open ? (triagedReviewQueue[0] ?? null) : null;
   const consumerReviewProgressLabel =
     consumerReviewQueueSession.open && consumerReviewQueueSession.total > 0
       ? `${Math.min(consumerReviewQueueSession.processed + 1, consumerReviewQueueSession.total)} of ${
@@ -9112,7 +9296,7 @@ export default function TravelAssistantPage() {
           setMyTripsModalOpen(false);
         }}
         onDeleteTrip={handleDeleteTripById}
-        onCreateTrip={handleCreateTrip}
+        onCreateTrip={handleStartNewTrip}
         onDeleteEmptyTrips={handleDeleteEmptyTrips}
       />
       <ImportTripPickerModal
@@ -9145,6 +9329,7 @@ export default function TravelAssistantPage() {
         hotelCount={wizardHotelCount}
         onClose={() => {
           setTripPlanningWizardOpen(false);
+          setTripPlanningCreatingNew(false);
         }}
         onSaveTripSetup={handleSaveTripPlanningSetup}
         onBeginSave={() => setTripPlanningWizardPhase("flights")}
@@ -9236,8 +9421,29 @@ export default function TravelAssistantPage() {
   }, [navigateToBook, navigateToConsumerTab]);
 
   const handleItineraryGapAction = useCallback(
-    (tab: string): void => {
-      if (tab === "reservations") {
+    (action: TripGapNavigationAction): void => {
+      const { tab, context } = action;
+      if (context?.kind === "hotel" && context.city && context.checkIn && context.checkOut) {
+        launchCustomHotelSearch({
+          city: context.city,
+          cityIata: context.cityIata,
+          checkIn: context.checkIn,
+          checkOut: context.checkOut,
+        });
+        navigateToBook("hotels");
+        return;
+      }
+      if (context?.kind === "transport") {
+        setManualReservationPresetType("ride");
+        setManualReservationModalOpen(true);
+        navigateToBook("flights");
+        return;
+      }
+      if (context?.kind === "import") {
+        navigateToConsumerTab("trip");
+        return;
+      }
+      if (context?.kind === "review" || tab === "reservations") {
         navigateToBook("flights");
         return;
       }
@@ -9247,7 +9453,7 @@ export default function TravelAssistantPage() {
       }
       navigateToConsumerTab(orientationTabToConsumerTab(tab));
     },
-    [navigateToBook, navigateToConsumerTab],
+    [launchCustomHotelSearch, navigateToBook, navigateToConsumerTab],
   );
 
   const handleItineraryPlanHotel = useCallback(
@@ -9268,6 +9474,40 @@ export default function TravelAssistantPage() {
       );
     },
     [handlePlanDay],
+  );
+
+  const handleItineraryDayNoteChange = useCallback(
+    (dateKey: string, value: string): void => {
+      const tripStart = consumerTripStartDate ?? activeTrip?.startDate ?? null;
+      const tripEnd = activeTrip?.endDate ?? null;
+      if (!tripStart || !tripEnd) {
+        itineraryPrefs.updateDayNote(dateKey, value);
+        return;
+      }
+
+      const model = buildTripLegCalendarModel(consumerReservationsSorted, tripStart, tripEnd, {
+        dayPlans: itineraryPrefs.itineraryPlans.dayPlans,
+        dayNotes: { ...itineraryPrefs.dayNotes, [dateKey]: value },
+      });
+      const inferredStayCity = model.dayCells.get(dateKey)?.cityName ?? null;
+      const summary = itineraryPrefs.reconcileDayNote({
+        dateKey,
+        value,
+        tripStartDate: tripStart,
+        tripEndDate: tripEnd,
+        hotels: consumerReservationsSorted.filter((reservation) => reservation.type === "hotel"),
+        inferredStayCity,
+      });
+      if (summary) setToast(summary);
+    },
+    [
+      activeTrip?.endDate,
+      activeTrip?.startDate,
+      consumerReservationsSorted,
+      consumerTripStartDate,
+      itineraryPrefs,
+      setToast,
+    ],
   );
 
   if (!advancedWorkspaceEnabled) {
@@ -9404,33 +9644,14 @@ export default function TravelAssistantPage() {
           ) : null}
 
           {!isCompactViewport ? (
-          <div className="relative flex items-stretch overflow-x-auto rounded-2xl bg-white/90 shadow-sm ring-1 ring-black/[0.06] dark:bg-slate-900/90 dark:ring-white/[0.08]">
-            {CONSUMER_TAB_BAR.map(([tab, label, icon]) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => {
-                  if (tab === "map") {
-                    markLiveMapSessionActive();
-                    router.push("/travel-assistant/live-map");
-                    return;
-                  }
-                  navigateToConsumerTab(tab);
-                }}
-                className={`relative flex min-w-[4.5rem] flex-1 flex-col items-center justify-center gap-0.5 py-2.5 transition-all ${
-                  consumerTab === tab
-                    ? "text-[#007AFF] dark:text-[#0A84FF]"
-                    : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
-                }`}
-              >
-                <span className="text-[15px] leading-none">{icon}</span>
-                <span className={`text-sm font-semibold tracking-tight lg:text-[10px] ${consumerTab === tab ? "text-[#007AFF] dark:text-[#0A84FF]" : ""}`}>{label}</span>
-                {consumerTab === tab && (
-                  <span className="absolute bottom-0 left-1/2 h-[2.5px] w-8 -translate-x-1/2 rounded-full bg-[#007AFF] dark:bg-[#0A84FF]" />
-                )}
-              </button>
-            ))}
-          </div>
+          <ConsumerDesktopTabBar
+            activeTab={consumerTab}
+            onSelectTab={navigateToConsumerTab}
+            onMapTab={() => {
+              markLiveMapSessionActive();
+              router.push("/travel-assistant/live-map");
+            }}
+          />
           ) : null}
 
           {isCompactViewport ? (
@@ -9461,6 +9682,7 @@ export default function TravelAssistantPage() {
                 onCreateTrip={() => {
                   void handleCreateTrip();
                 }}
+                onStartNewTrip={handleStartNewTrip}
                 onReservationTap={(id) => openDrawer("reservation", id)}
                 onCheckStatus={(id) => void handleCheckFlightStatus(id)}
                 onDelete={(id) => void handleDeleteReservation(id)}
@@ -9490,8 +9712,12 @@ export default function TravelAssistantPage() {
                 hasProAccess={hasProAccess}
                 emailForwardSetupMessage={emailForwardSetupMessage}
                 missingPriceCount={tripSpendSummary.missingPriceCount}
+                stayDecisions={activeStayDecisions}
                 onReviewPricing={() => navigateToBook("flights")}
                 onGapActionTap={handleItineraryGapAction}
+                onSkipPreDepartureNight={(flightDay) => {
+                  void handleSkipPreDepartureNight(flightDay);
+                }}
                 onSignOut={() => {
                   void clerk.signOut();
                 }}
@@ -9579,7 +9805,7 @@ export default function TravelAssistantPage() {
                     <p className="text-center text-xs text-sky-200/40">or</p>
                     <button
                       type="button"
-                      onClick={openTripPlanningWizard}
+                      onClick={() => void handleCreateTrip()}
                       className="w-full rounded-2xl border border-white/10 bg-white/8 py-3 text-center text-sm font-semibold text-white active:opacity-80"
                     >
                       Set dates manually
@@ -9623,8 +9849,12 @@ export default function TravelAssistantPage() {
                 locationStatus={guidanceLocationStatus}
                 nearestAirport={guidanceNearestAirport}
                 missingPriceCount={tripSpendSummary.missingPriceCount}
+                stayDecisions={activeStayDecisions}
                 onReviewPricing={() => navigateToBook("flights")}
                 onGapActionTap={handleItineraryGapAction}
+                onSkipPreDepartureNight={(flightDay) => {
+                  void handleSkipPreDepartureNight(flightDay);
+                }}
                 onReservationTap={(id) => openDrawer("reservation", id)}
                 onOpenBook={() => navigateToBook("flights")}
                 onOpenPlan={() => navigateToConsumerTab("itinerary")}
@@ -9633,7 +9863,9 @@ export default function TravelAssistantPage() {
                   router.push("/travel-assistant/live-map");
                 }}
                 onAddGroundTransport={openManualGroundTransport}
-                onCreateTrip={() => void handleCreateTrip()}
+                onStartNewTrip={handleStartNewTrip}
+                onSearchFlights={(plan) => handleFlightSearchPlan(plan)}
+                onQuickGroundTransport={handleQuickGroundTransport}
                 canCreateTrip={canCreateAdditionalTrips}
                 liveStatus={flightStatusCheckByReservationId}
               />
@@ -9644,7 +9876,11 @@ export default function TravelAssistantPage() {
               tripStartDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
               tripEndDate={activeTrip?.endDate ?? null}
               missingPriceCount={tripSpendSummary.missingPriceCount}
+              stayDecisions={activeStayDecisions}
               onReviewPricing={() => navigateToBook("flights")}
+              onSkipPreDepartureNight={(flightDay) => {
+                void handleSkipPreDepartureNight(flightDay);
+              }}
               reservations={consumerReservationsSorted}
               dayNotes={itineraryPrefs.dayNotes}
               stopRanges={effectiveStopRanges}
@@ -9655,7 +9891,7 @@ export default function TravelAssistantPage() {
               scrollToDateKey={itineraryScrollToDateKey}
               onSelectedDateKeyChange={handleItineraryDateSelect}
               onHighlightedLegIdChange={setItineraryHighlightedLegId}
-              onDayNoteChange={itineraryPrefs.updateDayNote}
+              onDayNoteChange={handleItineraryDayNoteChange}
               onSaveDayPlan={itineraryPrefs.saveDayPlan}
               onApplyHotelToDays={itineraryPrefs.applyHotelToDays}
               onSaveLegLabel={itineraryPrefs.saveLegLabelOverride}
@@ -9669,6 +9905,7 @@ export default function TravelAssistantPage() {
               missionItems={tripPlanningActions}
               onMissionAction={handleTripPlanningAction}
               onPlanHotel={handleItineraryPlanHotel}
+              onReservationTap={(id) => openDrawer("reservation", id)}
               plannedFlightLegs={plannedFlightLegs}
               onSearchMissingFlights={(plan) => handleFlightSearchPlan(plan)}
               onQuickGroundTransport={handleQuickGroundTransport}
@@ -9774,8 +10011,25 @@ export default function TravelAssistantPage() {
                 </div>
               )}
             </section>
+          ) : showPointsLearn ? (
+            <section>
+              <PointsMilesLearnPanel
+                onBack={() => setShowPointsLearn(false)}
+                onOpenCardWallet={() => setShowPointsLearn(false)}
+              />
+            </section>
           ) : (
             <section className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setShowPointsLearn(true)}
+                className="w-full rounded-3xl bg-gradient-to-br from-sky-600 to-indigo-600 px-5 py-4 text-left text-white shadow-md"
+              >
+                <p className="font-semibold text-lg">📚 New to points & miles?</p>
+                <p className="mt-1 text-sm text-white/90">
+                  Learn Rakuten stacking, lounge access, and how Kepi uses your card wallet
+                </p>
+              </button>
               <button
                 type="button"
                 onClick={() => setMyTripsModalOpen(true)}
@@ -9827,7 +10081,7 @@ export default function TravelAssistantPage() {
                   </div>
                 </div>
                 <div className="px-4 pb-4 pt-4">
-                  <PointsTravelProfileCard />
+                  <PointsTravelProfileCard onOpenLearn={() => setShowPointsLearn(true)} />
                 </div>
               </div>
 
@@ -10051,12 +10305,13 @@ export default function TravelAssistantPage() {
 
               <LanguageSettingsCard />
 
-              <Link
-                href="/support"
-                className="block rounded-2xl border border-slate-200 bg-white p-4 font-semibold shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800"
+              <button
+                type="button"
+                onClick={() => openSupportChat()}
+                className="block w-full rounded-2xl border border-slate-200 bg-white p-4 text-left font-semibold shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800"
               >
-                Support
-              </Link>
+                {tNav("support")}
+              </button>
 
               {emailForwardSetupMessage ? (
                 <p className="text-xs text-emerald-700 dark:text-emerald-300">{emailForwardSetupMessage}</p>
@@ -10216,7 +10471,7 @@ export default function TravelAssistantPage() {
               }))}
               activeTripId={activeTripId}
               onSwitchTrip={handleSwitchTrip}
-              onCreateTrip={handleCreateTrip}
+              onCreateTrip={handleStartNewTrip}
               onManageTrips={() => setMyTripsModalOpen(true)}
               disabled={tripsLoading}
               canCreateTrip={canCreateAdditionalTrips}
@@ -10338,7 +10593,7 @@ export default function TravelAssistantPage() {
             gmailImportBusy={gmailImportBusy}
             onAddBooking={() => setManualReservationModalOpen(true)}
             onCreateTrip={() => {
-              void handleCreateTrip();
+              void handleStartNewTrip();
             }}
             onImportGmail={() => setGmailScopeModalOpen(true)}
             onRequestGmailUpgrade={() =>
@@ -10912,7 +11167,7 @@ export default function TravelAssistantPage() {
                   </div>
 
                   <ReviewQueue
-                    reviewQueue={reviewQueue}
+                    reviewQueue={triagedReviewQueue}
                     reservations={reservations.map((reservation) => ({ id: reservation.id, title: reservation.title }))}
                     mergeTargetByReview={mergeTargetByReview}
                     onMergeTargetChange={(reviewId, targetReservationId) =>
