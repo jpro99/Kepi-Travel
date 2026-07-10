@@ -269,5 +269,11 @@
     "ctaTitle": "¿Quieres tu propio asistente de viaje en vivo?",
     "ctaSubtitle": "Gestiona preparación, cambios de vuelo e interrupciones en un solo espacio adaptable.",
     "ctaButton": "Obtener Kepi"
+  },
+  "SupportPage": {
+    "title": "Soporte Kepi",
+    "subtitle": "Pregunta sobre tu viaje, reservas, facturación o cómo usar la app.",
+    "chatHint": "El chat de soporte debería abrirse solo. Usa la burbuja cian si no aparece.",
+    "backToTrip": "Volver a tu viaje"
   }
 }

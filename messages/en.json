@@ -269,5 +269,11 @@
     "ctaTitle": "Want your own live travel assistant?",
     "ctaSubtitle": "Track readiness, flight changes, and disruptions in one adaptive trip workspace.",
     "ctaButton": "Get Kepi"
+  },
+  "SupportPage": {
+    "title": "Kepi Support",
+    "subtitle": "Ask about your trip, reservations, billing, or how to use the app.",
+    "chatHint": "The support chat should open automatically. Use the cyan chat bubble if it does not.",
+    "backToTrip": "Back to your trip"
   }
 }

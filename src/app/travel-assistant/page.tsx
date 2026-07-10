@@ -80,6 +80,7 @@ import { UpgradeModal, type UpgradeModalGateContext } from "@/components/billing
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { LanguageSettingsCard } from "@/components/LanguageSettingsCard";
+import { openSupportChat } from "@/components/support/SupportChat";
 import { subscribeToWebPushNotifications } from "@/lib/push/webPushClient";
 import { OnboardingFlow } from "@/components/onboarding/OnboardingFlow";
 import type { TripSetupDraft } from "@/components/onboarding/TripSetupForm";
@@ -9481,12 +9482,13 @@ export default function TravelAssistantPage() {
 
               <LanguageSettingsCard />
 
-              <Link
-                href="/support"
-                className="block rounded-2xl border border-slate-200 bg-white p-4 font-semibold shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800"
+              <button
+                type="button"
+                onClick={() => openSupportChat()}
+                className="block w-full rounded-2xl border border-slate-200 bg-white p-4 text-left font-semibold shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800"
               >
                 Support
-              </Link>
+              </button>
 
               {emailForwardSetupMessage ? (
                 <p className="text-xs text-emerald-700 dark:text-emerald-300">{emailForwardSetupMessage}</p>
