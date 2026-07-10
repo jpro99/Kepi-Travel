@@ -1,4 +1,4 @@
-const CACHE_VERSION = "kepi-pwa-v36";
+const CACHE_VERSION = "kepi-pwa-v37";
 const APP_SHELL_CACHE = `${CACHE_VERSION}-app-shell`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
@@ -120,8 +120,10 @@ self.addEventListener("fetch", (event) => {
       (async () => {
         try {
           const response = await fetch(request);
-          const shellCache = await caches.open(APP_SHELL_CACHE);
-          shellCache.put(request, response.clone());
+          if (response.ok) {
+            const shellCache = await caches.open(APP_SHELL_CACHE);
+            shellCache.put(request, response.clone());
+          }
           return response;
         } catch {
           const shellCache = await caches.open(APP_SHELL_CACHE);
