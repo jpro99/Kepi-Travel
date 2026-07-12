@@ -31,6 +31,7 @@
     "@anthropic-ai/sdk": "^0.96.0",
     "@capacitor/core": "^8.3.4",
     "@capacitor/haptics": "^8.0.2",
+    "@capacitor/ios": "^8.4.1",
     "@capacitor/local-notifications": "^8.2.0",
     "@capacitor/push-notifications": "^8.1.1",
     "@clerk/nextjs": "^7.4.3",
