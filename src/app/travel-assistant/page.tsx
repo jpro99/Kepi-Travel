@@ -132,6 +132,7 @@ import {
   advanceBookingWizard,
   EMPTY_BOOKING_WIZARD,
   normalizeBookingWizard,
+  resolveBookingWizardPhase,
   type BookingWizardPhase,
 } from "@/lib/travelAssistant/bookingWizard";
 import {
@@ -9887,7 +9888,6 @@ export default function TravelAssistantPage() {
                 onStartNewTrip={handleStartNewTrip}
                 onSearchFlights={(plan) => handleFlightSearchPlan(plan)}
                 onQuickGroundTransport={handleQuickGroundTransport}
-                canCreateTrip={canCreateAdditionalTrips}
                 liveStatus={flightStatusCheckByReservationId}
               />
             )

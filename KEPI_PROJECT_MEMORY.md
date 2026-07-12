@@ -3,7 +3,7 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-08 (whole-trip execution + hotel-first timeline)
+Last updated: 2026-07-12 (lifetime invite auto-redeem + travel-assistant crash fix)
 
 **Neuro Brain (reasoning layer):** `NEURO_BRAIN.md` — why Jeff asks for changes; apply whole-trip thinking site-wide.
 
@@ -306,10 +306,28 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 
 ---
 
+## Lifetime invite flow (2026-07-12)
+
+**User expectation:** Admin sends lifetime invite email → recipient clicks link → **Lifetime/Pro is on automatically** — no manual redeem in More tab, no onboarding step 1 "Next" required.
+
+**Canonical path:**
+1. Email CTA → `/redeem?code=XXX`
+2. Unsigned → `/sign-up?code=XXX` → Clerk → `/travel-assistant?redeem=XXX`
+3. `useAutoRedeemInviteFromUrl` POSTs `/api/invite/redeem`, refreshes billing, strips URL params
+4. Onboarding also redeems on load / skip / complete (belt-and-suspenders)
+
+**Gotchas:**
+- Invite codes with `intendedEmail` require sign-up with that exact email (403 otherwise).
+- `redeemInviteCodeClient` in `@/lib/invite/redeemInviteCodeClient` — use everywhere (More tab, onboarding, URL hook).
+- **Never** leave JSX referencing a prop name that was renamed in destructuring (`onCreateTrip` vs `onStartNewTrip` in `DesktopTripHomeView` caused production `ReferenceError` after onboarding).
+
+---
+
 ## Changelog
 
 | Date | Note |
 |------|------|
+| 2026-07-12 | **Lifetime auto-redeem** from email links (`useAutoRedeemInviteFromUrl`, onboarding skip fix). **Crash fix:** `DesktopTripHomeView` used undefined `onCreateTrip` — prop is `onStartNewTrip`. |
 | 2026-07-08 | **Whole-trip execution:** hotel-anchored timeline, plan-note reconciliation, inter-city route sheet, hotel display labels. Philosophy in project memory + design laws I22–I25. Support model fix (`claude-sonnet-4-5`). Spanish nav labels. |
 | 2026-07-06 | **Trip truth loop:** boarding pass URLs from email imports, merged `/api/travel-updates` flight-lookup, contextual Trip Health → Book hotel search, Europe 2026 unit pass. Laws F11, G13. |
 | 2026-07-06 | **Competitive gaps (flight status, check-in, rides):** phase-aware AeroDataBox polling + optional FlightAware merge, 2-min Inngest sweep, honest check-in/Wallet handoff card on Home, Uber/Lyft deep links on Travel Day. Laws F9–F10, M9. Group/NL booking memo — defer. |

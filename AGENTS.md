@@ -121,6 +121,11 @@ These are agent playbooks, not autonomous runtime bots. Jeff instructs the condu
 
 ## Fix log
 
+### 2026-07-12 (Session — lifetime invite + travel-assistant crash)
+- **Lifetime invite auto-install:** Email link `?redeem=` / `?code=` now redeems on travel-assistant load via `useAutoRedeemInviteFromUrl`; onboarding skip/complete also redeems; `/redeem` redirects signed-in users straight to travel-assistant. Shared helper: `redeemInviteCodeClient`.
+- **Production crash `onCreateTrip is not defined`:** `DesktopTripHomeView` hero button referenced `onCreateTrip` but the prop is `onStartNewTrip` — users saw lifetime work briefly then crash when home view rendered after onboarding. **Do not rename props in JSX without updating all references; run `tsc` grep for `TS2304` in travel-assistant before ship.**
+- **Missing import:** `resolveBookingWizardPhase` used in `page.tsx` without import — fixed (dead callback today, but would crash if called).
+
 ### 2026-07-06 (Session 6)
 - **Shared booking pricing (G14):** multi-leg flights on one confirmation or forwarded email share trip-level pricing — sibling legs no longer each flag "need pricing" when the booking total is already logged.
 

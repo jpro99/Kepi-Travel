@@ -152,10 +152,10 @@ export function DesktopTripHomeView({
                   <h1 className="mt-1 text-3xl font-black tracking-tight text-white lg:text-4xl">{tripName}</h1>
                   <p className="mt-2 text-sm leading-relaxed text-sky-100/85">{subtitleParts.join(" · ")}</p>
                 </div>
-                {onCreateTrip ? (
+                {onStartNewTrip ? (
                   <button
                     type="button"
-                    onClick={onCreateTrip}
+                    onClick={onStartNewTrip}
                     className="shrink-0 rounded-full border border-sky-300/40 bg-sky-400/15 px-3 py-2 text-xs font-bold text-sky-100 hover:bg-sky-400/25"
                   >
                     + New trip
