@@ -69,6 +69,7 @@ async function signIn(page: import("@playwright/test").Page): Promise<void> {
 async function seedSeaDayOfTravelTrip(
   page: import("@playwright/test").Page,
   slot: DepartureSlot,
+  options?: { gateCode?: string | null },
 ): Promise<void> {
   const trip = {
     name: "E2E Airport Day Test",
@@ -103,7 +104,7 @@ async function seedSeaDayOfTravelTrip(
         flightDepartureTime: slot.departureIso,
         flightArrivalTime: slot.arrivalIso,
         flightStatus: "scheduled",
-        flightDepartureGate: "A10",
+        flightDepartureGate: options?.gateCode === undefined ? "A10" : options.gateCode,
         flightDepartureTerminal: "S",
       },
     ],
@@ -185,7 +186,7 @@ test.describe("SEA day-of-travel", () => {
 
     await signIn(page);
     const slot = departureSlotMinutesFromNow(72 * 60);
-    await seedSeaDayOfTravelTrip(page, slot);
+    await seedSeaDayOfTravelTrip(page, slot, { gateCode: null });
 
     await page.goto("/travel-assistant/live-map?view=airport", { waitUntil: "domcontentloaded" });
 
@@ -194,8 +195,12 @@ test.describe("SEA day-of-travel", () => {
     await expect(mapHost).toBeVisible({ timeout: 30_000 });
     await expect(schematic).toBeVisible({ timeout: 30_000 });
     await expect(schematic).toHaveAttribute("data-zone-count", "8");
-    await expect(page.getByText("Offline-ready terminal schematic")).toBeVisible();
+    await expect(page.getByText("Landside", { exact: true })).toBeVisible();
+    await expect(page.getByText(/Gate assignment pending/i)).toBeVisible();
     await expect(page.getByRole("button", { name: /Navigate to Alaska check-in/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Navigate to Alaska Lounge/i })).toHaveCount(0);
+    await page.getByRole("button", { name: "Lounges" }).click();
+    await expect(page.getByRole("button", { name: /Navigate to Alaska Lounge/i }).first()).toBeVisible();
     await expect(mapHost.locator("canvas")).toHaveCount(0);
     await expect(page.getByTestId("family-map-drawer")).toHaveCount(0);
 

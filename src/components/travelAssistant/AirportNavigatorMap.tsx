@@ -6,7 +6,7 @@ import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AirportLayout, ComputedRoute, GraphEdge, PoiDefinition, SnappedPosition, TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
-import { buildAirportSchematicModel } from "@/lib/airportNav/schematic";
+import { buildAirportSchematicModel, placeAirportSchematicLabels } from "@/lib/airportNav/schematic";
 import type { JourneyWaypointEvent, NavTimingCalibrationStore } from "@/lib/airportNav/navTimingCalibration";
 import { loadNavTimingCalibrationStore, recordJourneyWaypointPair } from "@/lib/airportNav/navJourneyTelemetry";
 import { loadCachedAirportLayout } from "@/lib/travelAssistant/syncItineraryOfflineAssets";
@@ -202,10 +202,30 @@ function AirportSchematicLayer({
   onPoiClick,
 }: AirportSchematicLayerProps) {
   const model = useMemo(() => buildAirportSchematicModel(layout), [layout]);
-  const visiblePois = model.pois.filter(({ definition }) => {
-    if (definition.category !== "checkin" || !definition.airline) return true;
-    return Boolean(airlineName?.toLowerCase().includes(definition.airline.toLowerCase()));
-  });
+  const [detailMode, setDetailMode] = useState<"essentials" | "lounges" | "all">("essentials");
+  const hasAirlineCheckin = model.pois.some(({ definition }) =>
+    definition.category === "checkin"
+    && Boolean(definition.airline)
+    && Boolean(airlineName?.toLowerCase().includes(definition.airline!.toLowerCase())),
+  );
+  const visiblePois = useMemo(() => model.pois.filter(({ definition }) => {
+    if (definition.category === "checkin") {
+      if (definition.airline) {
+        if (!airlineName?.toLowerCase().includes(definition.airline.toLowerCase())) return false;
+      } else if (hasAirlineCheckin) {
+        return false;
+      }
+    }
+    if (definition.id === gatePoiId) return true;
+    if (detailMode === "essentials") {
+      return ["gate", "checkin", "security", "train"].includes(definition.category);
+    }
+    if (detailMode === "lounges") {
+      return ["gate", "security", "train", "lounge"].includes(definition.category);
+    }
+    return true;
+  }), [airlineName, detailMode, gatePoiId, hasAirlineCheckin, model.pois]);
+  const placedPois = useMemo(() => placeAirportSchematicLabels(visiblePois), [visiblePois]);
   const routePoints = activeRoute?.coordinates
     .map((coordinate) => model.project(coordinate))
     .map((point) => `${point.x},${point.y}`)
@@ -246,7 +266,7 @@ function AirportSchematicLayer({
               x={zone.label.x}
               y={zone.label.y}
               fill="#dbeafe"
-              fontSize="1.65"
+              fontSize="2.05"
               fontWeight="700"
               textAnchor="middle"
               dominantBaseline="middle"
@@ -310,35 +330,103 @@ function AirportSchematicLayer({
             />
           );
         })}
+
+        {placedPois.map(({ definition, point, labelPoint }) => {
+          const isGate = definition.id === gatePoiId;
+          const label = isGate && gateCode ? `Gate ${gateCode.toUpperCase()}` : definition.name;
+          const countdown = isGate && minutesToDeparture > 0 && minutesToDeparture < 600
+            ? ` · ${Math.max(1, Math.round(minutesToDeparture))}m`
+            : "";
+          const displayLabel = `${POI_ICON[definition.category]} ${label}${countdown}`;
+          const labelWidth = Math.min(29, Math.max(13, displayLabel.length * 0.92 + 4));
+          return (
+            <g key={definition.id}>
+              <line
+                x1={point.x}
+                y1={point.y}
+                x2={labelPoint.x}
+                y2={labelPoint.y}
+                stroke={isGate ? "#f4c95d" : "#94a3b8"}
+                strokeWidth={isGate ? "0.65" : "0.42"}
+                strokeDasharray={isGate ? undefined : "1 0.8"}
+                opacity="0.85"
+              />
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r={isGate ? "1.15" : "0.72"}
+                fill={isGate ? "#f4c95d" : "#f8fafc"}
+                stroke="#0b1f3a"
+                strokeWidth="0.35"
+              />
+              <g
+                role="button"
+                tabIndex={0}
+                aria-label={`Navigate to ${label}`}
+                data-testid={`airport-nav-schematic-poi-${definition.id}`}
+                className="cursor-pointer outline-none"
+                transform={`translate(${labelPoint.x} ${labelPoint.y})`}
+                onClick={() => onPoiClick(definition.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onPoiClick(definition.id);
+                  }
+                }}
+              >
+                <title>{`Navigate to ${label}`}</title>
+                <rect
+                  x={-labelWidth / 2}
+                  y="-2.8"
+                  width={labelWidth}
+                  height="5.6"
+                  rx="2.8"
+                  fill={isGate ? "#f4c95d" : "#f8fafc"}
+                  stroke={isGate ? "#fff3bd" : "#cbd5e1"}
+                  strokeWidth={isGate ? "0.55" : "0.3"}
+                  filter="url(#kepi-terminal-shadow)"
+                />
+                <text
+                  x="0"
+                  y="0.15"
+                  fill="#0b1f3a"
+                  fontSize="1.72"
+                  fontWeight={isGate ? "800" : "700"}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                >
+                  {displayLabel}
+                </text>
+              </g>
+            </g>
+          );
+        })}
       </svg>
 
-      {visiblePois.map(({ definition, point }) => {
-        const isGate = definition.id === gatePoiId;
-        const label = isGate && gateCode ? `Gate ${gateCode.toUpperCase()}` : definition.name;
-        const countdown = isGate && minutesToDeparture > 0 && minutesToDeparture < 600
-          ? ` · ${Math.max(1, Math.round(minutesToDeparture))}m`
-          : "";
-        return (
+      <div className="absolute bottom-12 left-1/2 z-[3] flex -translate-x-1/2 overflow-hidden rounded-full border border-white/15 bg-black/55 p-1 shadow-xl backdrop-blur">
+        {([
+          ["essentials", "Essentials"],
+          ["lounges", "Lounges"],
+          ["all", "All"],
+        ] as const).map(([mode, label]) => (
           <button
-            key={definition.id}
+            key={mode}
             type="button"
-            data-testid={`airport-nav-schematic-poi-${definition.id}`}
-            aria-label={`Navigate to ${label}`}
-            onClick={() => onPoiClick(definition.id)}
-            className={`absolute z-[2] -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full px-2 py-1 text-[10px] font-bold shadow-lg ${
-              isGate
-                ? "border-2 border-[#f4c95d] bg-white text-[#0b1f3a]"
-                : "border border-white/45 bg-white/90 text-slate-800"
+            aria-pressed={detailMode === mode}
+            onClick={() => setDetailMode(mode)}
+            className={`rounded-full px-3 py-1.5 text-[11px] font-bold transition ${
+              detailMode === mode ? "bg-white text-[#0b1f3a]" : "text-white/75"
             }`}
-            style={{ left: `${point.x}%`, top: `${point.y}%` }}
           >
-            {POI_ICON[definition.category]} {label}{countdown}
+            {label}
           </button>
-        );
-      })}
+        ))}
+      </div>
 
-      <div className="pointer-events-none absolute bottom-3 left-3 rounded-full border border-white/15 bg-black/45 px-3 py-1 text-[10px] font-semibold text-sky-100 backdrop-blur">
-        Offline-ready terminal schematic
+      <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-3 rounded-full border border-white/15 bg-black/45 px-3 py-1 text-[10px] font-semibold text-sky-100 backdrop-blur">
+        <span><span className="mr-1 inline-block h-2 w-2 rounded-sm bg-[#496680]" />Landside</span>
+        <span><span className="mr-1 inline-block h-2 w-2 rounded-sm bg-[#36577e]" />Airside</span>
+        <span><span className="mr-1 text-sky-200">┄</span>Train</span>
       </div>
     </div>
   );
@@ -1619,7 +1707,9 @@ export function AirportNavigatorMap({
         >
           <p className="text-[11px] font-bold uppercase tracking-wide text-sky-200">Explore before you go</p>
           <p className="text-[11px] leading-snug text-sky-100/90">
-            Tap lounges, check-in, and your gate on the map — live turn-by-turn starts when you arrive at {iata}.
+            {gateCode
+              ? `Tap Essentials, Lounges, or any label to explore ${iata}. Live directions start when you arrive.`
+              : `Gate assignment pending. Explore check-in, security, trains, and lounges now — your gate will highlight when assigned.`}
           </p>
         </div>
       ) : null}

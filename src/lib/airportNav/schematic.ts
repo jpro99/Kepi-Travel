@@ -5,6 +5,15 @@ export interface SchematicPoint {
   y: number;
 }
 
+export interface SchematicPoi {
+  definition: PoiDefinition;
+  point: SchematicPoint;
+}
+
+export interface PlacedSchematicPoi extends SchematicPoi {
+  labelPoint: SchematicPoint;
+}
+
 export interface AirportSchematicModel {
   zones: Array<{
     id: string;
@@ -19,15 +28,15 @@ export interface AirportSchematicModel {
     from: SchematicPoint;
     to: SchematicPoint;
   }>;
-  pois: Array<{
-    definition: PoiDefinition;
-    point: SchematicPoint;
-  }>;
+  pois: SchematicPoi[];
   project: (coordinate: [number, number]) => SchematicPoint;
 }
 
 const VIEWBOX_PADDING = 6;
 const VIEWBOX_SPAN = 100 - VIEWBOX_PADDING * 2;
+const LABEL_EDGE_PADDING = 13;
+const LABEL_X_GAP = 10;
+const LABEL_Y_GAP = 6;
 
 function averagePoint(points: SchematicPoint[]): SchematicPoint {
   if (points.length === 0) return { x: 50, y: 50 };
@@ -91,4 +100,37 @@ export function buildAirportSchematicModel(layout: AirportLayout): AirportSchema
     }),
     project,
   };
+}
+
+/**
+ * Keeps labels in the same SVG coordinate space as their POIs, offsets them
+ * only enough to expose the anchor, and staggers nearby labels to reduce
+ * collisions. The maximum displacement stays intentionally short so labels
+ * continue to explain where each place actually sits in the terminal.
+ */
+export function placeAirportSchematicLabels(pois: SchematicPoi[]): PlacedSchematicPoi[] {
+  const occupied: SchematicPoint[] = [];
+
+  return pois.map((poi) => {
+    const direction = poi.point.x >= 50 ? -1 : 1;
+    let x = poi.point.x + direction * LABEL_X_GAP;
+    let y = poi.point.y;
+    x = Math.min(100 - LABEL_EDGE_PADDING, Math.max(LABEL_EDGE_PADDING, x));
+    y = Math.min(94, Math.max(6, y));
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const collision = occupied.find(
+        (point) => Math.abs(point.x - x) < 18 && Math.abs(point.y - y) < LABEL_Y_GAP,
+      );
+      if (!collision) break;
+      const shiftedDown = collision.y + LABEL_Y_GAP;
+      y = shiftedDown <= 94 ? shiftedDown : Math.max(6, collision.y - LABEL_Y_GAP);
+    }
+    y = Math.min(poi.point.y + 12, Math.max(poi.point.y - 12, y));
+    y = Math.min(94, Math.max(6, y));
+
+    const labelPoint = { x, y };
+    occupied.push(labelPoint);
+    return { ...poi, labelPoint };
+  });
 }

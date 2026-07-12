@@ -209,6 +209,7 @@ Uber/Lyft actions must prefill pickup/dropoff from known trip locations via univ
 
 **M10 — Airport preview never depends on WebGL or network tiles**
 Curated airport planning maps must render terminal zones, walkways, POIs, and routes from local layout data without MapTiler or WebGL. A failed or lost MapLibre context may reduce 3D polish in live mode, but must never leave a blank airport screen.
+POI names and leader lines must share the terminal SVG coordinate system; labels may stagger to avoid collisions but must remain close to their actual anchor. Default to essential wayfinding and reveal lounges/all services on demand.
 
 **Test:** `src/lib/airportNav/schematic.test.ts`, `app-sitter/airport-day-of-travel.spec.ts`
 
