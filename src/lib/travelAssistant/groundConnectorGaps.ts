@@ -1,6 +1,12 @@
 import { formatHotelSearchCityLabel } from "@/lib/hotels/tripSearchContext";
 import { airportToCity } from "@/lib/travelAssistant/buildTripLegs";
 import { buildHotelStaySpans, type HotelStayLegInput } from "@/lib/travelAssistant/hotelAnchoredStayLegs";
+import { citiesLikelySame } from "@/lib/hotels/hotelReservationCity";
+import {
+  airportServesStayCity,
+  isLocalGroundHop,
+} from "@/lib/travelAssistant/metroAirportCoverage";
+import { legCoveredByGroundTransport } from "@/lib/travelAssistant/quickGroundTransport";
 import { normalizeDayPlanCity } from "@/lib/travelAssistant/normalizeDayPlanCity";
 
 import type { PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
@@ -53,13 +59,35 @@ function hasGroundTransportBetween(
   reservations: ConnectorReservation[],
   fromDay: string,
   toDay: string,
+  fromLabel: string,
+  toLabel: string,
+  fromIata = "",
+  toIata = "",
 ): boolean {
   const windowEnd = toDay > fromDay ? toDay : addDays(fromDay, 1);
+  const stubLeg = {
+    fromLabel,
+    toLabel,
+    fromIata,
+    toIata,
+    departureDate: fromDay,
+    role: "connector" as const,
+  };
+  const transports = reservations.filter((reservation) => ["ride", "train"].includes(reservation.type));
+  if (legCoveredByGroundTransport(stubLeg, transports).covered) {
+    return true;
+  }
+
   return reservations.some((reservation) => {
     if (!["ride", "train"].includes(reservation.type)) return false;
     const day = isoDate(reservation.localTime);
     if (!day) return false;
-    return day >= fromDay && day <= windowEnd;
+    if (day < fromDay || day > windowEnd) return false;
+    const routeText = reservation.location?.trim() || reservation.title?.trim() || "";
+    if (!routeText) return true;
+    const parts = routeText.split(/→|->| to /iu).map((part) => part.trim()).filter(Boolean);
+    if (parts.length < 2) return true;
+    return citiesLikelySame(parts[0] ?? "", fromLabel) && citiesLikelySame(parts[1] ?? "", toLabel);
   });
 }
 
@@ -98,7 +126,19 @@ export function detectGroundConnectorGaps(input: {
     );
     if (!firstHotel) continue;
     if (!citiesDiffer(arrivalLabel, firstHotel.city)) continue;
-    if (hasGroundTransportBetween(input.reservations, arrivalDay, firstHotel.startDate)) continue;
+    if (airportServesStayCity(arrivalIata, firstHotel.city)) continue;
+    if (
+      hasGroundTransportBetween(
+        input.reservations,
+        arrivalDay,
+        firstHotel.startDate,
+        arrivalLabel,
+        firstHotel.city,
+        arrivalIata,
+      )
+    ) {
+      continue;
+    }
 
     gaps.push({
       id: `airport-transfer-${flight.id}-${firstHotel.hotelId}`,
@@ -116,9 +156,20 @@ export function detectGroundConnectorGaps(input: {
     const current = hotelSpans[index]!;
     const next = hotelSpans[index + 1]!;
     if (!citiesDiffer(current.city, next.city)) continue;
+    if (isLocalGroundHop(current.city, next.city)) continue;
 
     const travelDate = current.endDate;
-    if (hasGroundTransportBetween(input.reservations, travelDate, next.startDate)) continue;
+    if (
+      hasGroundTransportBetween(
+        input.reservations,
+        travelDate,
+        next.startDate,
+        current.city,
+        next.city,
+      )
+    ) {
+      continue;
+    }
 
     gaps.push({
       id: `inter-city-${current.hotelId}-${next.hotelId}`,

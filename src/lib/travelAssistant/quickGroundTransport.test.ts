@@ -57,4 +57,23 @@ describe("quickGroundTransport", () => {
     assert.equal(updated?.status, "booked");
     assert.match(updated?.bookedSummary ?? "", /Uber/i);
   });
+
+  it("buildPlannedFlightLegs treats BRI landing as covering Polignano connector", () => {
+    const stopRanges = [
+      { stop: { name: "Polignano a Mare" }, checkIn: "2026-09-03", checkOut: "2026-09-09", nights: 6 },
+    ];
+    const flights = [
+      {
+        id: "f1",
+        flightArrivalAirport: "BRI",
+        flightDepartureAirport: "JFK",
+        flightDate: "2026-09-01",
+        localTime: "2026-09-01 14:00",
+      },
+    ];
+    const legs = buildPlannedFlightLegs(null, flights, stopRanges, {}, "2026-09-01", "2026-09-25");
+    const connectors = legs.filter((leg) => leg.role === "connector");
+    assert.equal(connectors.every((leg) => leg.status === "booked"), true);
+    assert.equal(listMissingTransportGaps(legs).length, 0);
+  });
 });

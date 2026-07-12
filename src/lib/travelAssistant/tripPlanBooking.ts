@@ -24,6 +24,11 @@ import {
   legCoveredByGroundTransport,
   type TripGroundTransportInput,
 } from "@/lib/travelAssistant/quickGroundTransport";
+import {
+  airportServesStayCity,
+  inboundFlightCoversMetroTransfer,
+  isLocalGroundHop,
+} from "@/lib/travelAssistant/metroAirportCoverage";
 
 export interface PlannedStayCity {
   id: string;
@@ -175,12 +180,38 @@ export function buildPlannedFlightLegs(
     const groundCoverage = flightCoverage.covered
       ? { covered: false as const }
       : legCoveredByGroundTransport(leg, groundTransport);
-    const covered = flightCoverage.covered || groundCoverage.covered;
+    const metroTransferCovered =
+      !flightCoverage.covered &&
+      !groundCoverage.covered &&
+      leg.role === "connector" &&
+      flights.some((flight) => {
+        const arrival = flight.flightArrivalAirport?.trim().toUpperCase() ?? "";
+        if (!arrival) return false;
+        return inboundFlightCoversMetroTransfer({
+          fromLabel: leg.fromLabel,
+          toLabel: leg.toLabel,
+          fromIata: leg.fromIata,
+          arrivalIata: arrival,
+        });
+      });
+    const localHopCovered =
+      !flightCoverage.covered &&
+      !groundCoverage.covered &&
+      !metroTransferCovered &&
+      leg.role === "connector" &&
+      isLocalGroundHop(leg.fromLabel, leg.toLabel, leg.fromIata, leg.toIata);
+    const covered =
+      flightCoverage.covered || groundCoverage.covered || metroTransferCovered || localHopCovered;
     const match = flightCoverage.covered ? flights.find((flight) => legMatchesFlight(leg, flight)) : undefined;
     const fn = match?.flightNumber?.trim();
     const summary =
       flightCoverage.summary ??
       groundCoverage.summary ??
+      (metroTransferCovered
+        ? "Land at regional airport — Uber/taxi typical"
+        : localHopCovered
+          ? "Short hop — Uber/taxi typical"
+          : undefined) ??
       (match ? [fn, `${match.flightDepartureAirport}→${match.flightArrivalAirport}`].filter(Boolean).join(" · ") : undefined);
     return {
       ...leg,

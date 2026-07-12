@@ -108,7 +108,12 @@ import { TripPlanningWizard } from "@/components/travelAssistant/TripPlanningWiz
 import { HotelSearchModal } from "@/components/travelAssistant/HotelSearchModal";
 import type { HotelSearchResult } from "@/lib/hotels/types";
 import { deriveHotelSearchContext, formatHotelSearchCityLabel } from "@/lib/hotels/tripSearchContext";
+import {
+  deriveHotelSearchCityFromReservation,
+  reservationLooksBooked,
+} from "@/lib/hotels/hotelReservationCity";
 import { resolveHotelDestinationSync } from "@/lib/hotels/resolveDestination";
+import { airportToCity } from "@/lib/travelAssistant/buildTripLegs";
 import {
   deriveTripStaySegments,
   nextMissingStaySegment,
@@ -4473,26 +4478,28 @@ export default function TravelAssistantPage() {
   }, [hotelArrivalDraft, setToast]);
   const earliestFlightReservation =
     consumerReservationsSorted.find((reservation) => reservation.type === "flight") ?? null;
-  // Destination = arrival airport city of first flight, or hotel city, or stored destination
+  // Where you are staying / heading — hotels first, then first inbound flight (not return leg).
   const derivedTripDestination = useMemo(() => {
-    // For multi-leg trips use the LAST flight's arrival, not the first leg's arrival
-    const allFlights = consumerReservationsSorted.filter((r) => r.type === "flight");
-    if (allFlights.length > 1) {
-      const lastFlight = allFlights[allFlights.length - 1];
-      if ((lastFlight as Reservation & { flightArrivalAirport?: string }).flightArrivalAirport) {
-        return (lastFlight as Reservation & { flightArrivalAirport?: string }).flightArrivalAirport!;
-      }
+    const bookedHotels = consumerReservationsSorted.filter((reservation) => reservation.type === "hotel");
+    for (const hotel of bookedHotels) {
+      if (!reservationLooksBooked(hotel)) continue;
+      const stayCity = deriveHotelSearchCityFromReservation(hotel);
+      if (stayCity?.trim()) return stayCity.trim();
     }
-    if (earliestFlightReservation?.flightArrivalAirport) {
-      return earliestFlightReservation.flightArrivalAirport;
+
+    const allFlights = consumerReservationsSorted.filter((reservation) => reservation.type === "flight");
+    const firstFlight = allFlights[0];
+    if (firstFlight?.flightArrivalAirport?.trim()) {
+      const iata = firstFlight.flightArrivalAirport.trim().toUpperCase();
+      return formatHotelSearchCityLabel(iata).label || airportToCity(iata);
     }
     if (earliestFlightReservation?.location) {
       return extractDestinationFromReservationLocation(earliestFlightReservation.location);
     }
-    const firstHotel = consumerReservationsSorted.find((r) => r.type === "hotel");
+    const firstHotel = bookedHotels[0];
     if (firstHotel?.provider) return firstHotel.provider;
     return null;
-  }, [earliestFlightReservation, consumerReservationsSorted]);
+  }, [consumerReservationsSorted, earliestFlightReservation]);
   const derivedTripStartDate = useMemo(() => {
     const flightDays = consumerReservationsSorted
       .filter((reservation) => reservation.type === "flight")
