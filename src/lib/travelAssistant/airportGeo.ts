@@ -61,7 +61,8 @@ const AIRPORTS: AirportGeo[] = [
   { iata:"NAP", name:"Naples",              lat:40.8860,  lon:14.2908,   radiusKm:4.0, securityRadiusKm:1.4 },
   { iata:"BRI", name:"Bari",                lat:41.1386,  lon:16.7606,   radiusKm:3.5, securityRadiusKm:1.2 },
   { iata:"FLR", name:"Florence",            lat:43.8100,  lon:11.2051,   radiusKm:3.5, securityRadiusKm:1.2 },
-  { iata:"ZUR", name:"Zurich",              lat:47.4647,  lon:8.5492,    radiusKm:3.5, securityRadiusKm:1.2 },
+  { iata:"ZRH", name:"Zurich",              lat:47.4647,  lon:8.5492,    radiusKm:3.5, securityRadiusKm:1.2 },
+  { iata:"ZUR", name:"Zurich",              lat:47.4647,  lon:8.5492,    radiusKm:3.5, securityRadiusKm:1.2 }, // alias — correct IATA is ZRH
   { iata:"VIE", name:"Vienna",              lat:48.1103,  lon:16.5697,   radiusKm:4.0, securityRadiusKm:1.4 },
   { iata:"CPH", name:"Copenhagen",          lat:55.6180,  lon:12.6561,   radiusKm:3.5, securityRadiusKm:1.2 },
   { iata:"ARN", name:"Stockholm Arlanda",   lat:59.6519,  lon:17.9186,   radiusKm:4.0, securityRadiusKm:1.4 },
@@ -129,22 +130,32 @@ export function getAirportProximity(
     return { status: "unknown", airport: null, distanceKm: null };
   }
 
-  // First try the specific departure airport
-  const targets = departureIata
-    ? [AIRPORT_MAP.get(departureIata.toUpperCase()), ...AIRPORTS].filter(Boolean) as AirportGeo[]
-    : AIRPORTS;
+  // When a departure airport is known, only geofence THAT field (never a nearby wrong airport).
+  if (departureIata?.trim()) {
+    const apt = AIRPORT_MAP.get(departureIata.trim().toUpperCase());
+    if (!apt) {
+      return { status: "away", airport: null, distanceKm: null };
+    }
+    const d = distanceKm(userLat, userLon, apt.lat, apt.lon);
+    if (d > apt.radiusKm) {
+      return { status: "away", airport: apt, distanceKm: d };
+    }
+    return {
+      status: d <= apt.securityRadiusKm ? "in-terminal" : "at-airport",
+      airport: apt,
+      distanceKm: d,
+    };
+  }
 
   let closest: AirportGeo | null = null;
   let closestDist = Infinity;
 
-  for (const apt of targets) {
+  for (const apt of AIRPORTS) {
     const d = distanceKm(userLat, userLon, apt.lat, apt.lon);
     if (d < closestDist) {
       closestDist = d;
       closest = apt;
     }
-    // Early exit if we found the departure airport and we're clearly there
-    if (apt.iata === departureIata?.toUpperCase() && d < apt.radiusKm) break;
   }
 
   if (!closest || closestDist > closest.radiusKm) {

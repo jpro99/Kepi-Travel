@@ -4399,7 +4399,15 @@ export default function TravelAssistantPage() {
     if (airborne) return "airborne";
 
     // GPS-based airport proximity
-    const nextFlight = consumerReservationsSorted.find(r => r.type === "flight" && (Date.parse((r as unknown as Record<string,string>).localTime ?? "") - nowMs) / 60_000 > -120);
+    // Prefer the next departure within 12h so early airport arrival still geofences correctly
+    const nextFlight = consumerReservationsSorted.find((r) => {
+      if (r.type !== "flight") return false;
+      const local = (r as unknown as Record<string, string>).localTime ?? "";
+      const depMs = Date.parse(local.replace("T", " ").slice(0, 16).replace(" ", "T"));
+      if (Number.isNaN(depMs)) return false;
+      const minutes = (depMs - nowMs) / 60_000;
+      return minutes > -120 && minutes < 12 * 60;
+    });
     const deptIata = (nextFlight as unknown as Record<string,string> | undefined)?.flightDepartureAirport;
     const proximity = getAirportProximity(guidanceUserLat, guidanceUserLon, deptIata);
     return proximity.status === "unknown" ? "unknown" : proximity.status;
@@ -4409,6 +4417,23 @@ export default function TravelAssistantPage() {
     const proximity = getAirportProximity(guidanceUserLat, guidanceUserLon, undefined);
     return proximity.airport?.iata ?? "";
   }, [guidanceUserLat, guidanceUserLon]);
+
+  // When GPS says you're at the departure airport, open live map airport mode once per session.
+  useEffect(() => {
+    if (guidanceLocationStatus !== "at-airport" && guidanceLocationStatus !== "in-terminal") {
+      return;
+    }
+    if (typeof window === "undefined") return;
+    const key = "kepi:auto-opened-airport-map";
+    try {
+      if (sessionStorage.getItem(key) === "1") return;
+      sessionStorage.setItem(key, "1");
+    } catch {
+      // sessionStorage may be blocked — still attempt open once via ref below
+    }
+    markLiveMapSessionActive();
+    router.push("/travel-assistant/live-map?view=airport");
+  }, [guidanceLocationStatus, router]);
 
   const nextUpcomingFlight = useMemo(() => {
     const nowMs = new Date().getTime();

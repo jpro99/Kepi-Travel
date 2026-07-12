@@ -113,6 +113,8 @@ export function LiveMapPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlTripId = searchParams.get("tripId");
+  const urlView = searchParams.get("view");
+  const preferAirportView = urlView === "airport";
   const mapEl = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
@@ -695,13 +697,13 @@ export function LiveMapPage() {
     );
   }, [isLoaded, locations, mapView, navLat, navLon]);
 
-  // Airport navigator only after geofence at the departure airport
+  // Airport navigator: deep-link (?view=airport) or auto-switch when geofenced at departure airport
   useEffect(() => {
     if (!activeFlight) {
       setMapView((prev) => (prev === "airport" ? "family" : prev));
       return;
     }
-    if (atDepartureAirport) {
+    if (preferAirportView || atDepartureAirport) {
       if (!autoAirportRef.current) {
         autoAirportRef.current = true;
         setMapView("airport");
@@ -710,7 +712,7 @@ export function LiveMapPage() {
     }
     autoAirportRef.current = false;
     setMapView((prev) => (prev === "airport" ? "family" : prev));
-  }, [atDepartureAirport, activeFlight]);
+  }, [atDepartureAirport, activeFlight, preferAirportView]);
 
   const navEligibleLounges = useMemo(
     () =>
@@ -953,7 +955,7 @@ export function LiveMapPage() {
         />
 
         {/* Airport Navigator overlay — full-bleed when at the airport view */}
-        {mapView === "airport" && activeFlight && atDepartureAirport && (
+        {mapView === "airport" && activeFlight && (atDepartureAirport || preferAirportView) && (
           <div className="absolute inset-0 z-40">
             <AirportNavigatorMap
               fill

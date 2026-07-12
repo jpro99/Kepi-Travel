@@ -79,14 +79,17 @@ export function toUtcMs(localTime: string, timezone?: string): number {
   }
 }
 
-const WINDOW_AHEAD_MIN = 180;
+const WINDOW_AHEAD_MIN = 12 * 60; // 12h — early airport arrival still gets navigator
 const WINDOW_BEHIND_MIN = 60;
 
 /** Same selection AirportMode has always used: next flight in the airport window. */
 export function selectActiveFlight(
   reservations: FlightReservation[],
   nowMs: number,
+  options?: { aheadMinutes?: number; behindMinutes?: number },
 ): ActiveFlight | null {
+  const ahead = options?.aheadMinutes ?? WINDOW_AHEAD_MIN;
+  const behind = options?.behindMinutes ?? WINDOW_BEHIND_MIN;
   return (
     reservations
       .filter((r) => r.type === "flight")
@@ -94,8 +97,8 @@ export function selectActiveFlight(
       .filter(
         ({ utcMs }) =>
           !isNaN(utcMs) &&
-          (utcMs - nowMs) / 60_000 < WINDOW_AHEAD_MIN &&
-          (nowMs - utcMs) / 60_000 < WINDOW_BEHIND_MIN,
+          (utcMs - nowMs) / 60_000 < ahead &&
+          (nowMs - utcMs) / 60_000 < behind,
       )
       .sort((a, b) => a.utcMs - b.utcMs)[0] ?? null
   );

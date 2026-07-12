@@ -566,6 +566,16 @@ export function AirportNavigatorMap({
     showSubtitle(pressure.breakdown);
   }, [pressure, gatePoi, setSprintMode, startRoute, showSubtitle]);
 
+  // Auto-start gate walk once when layout + gate are ready (after PreCheck answer if needed).
+  const autoGateStartedRef = useRef(false);
+  useEffect(() => {
+    if (autoGateStartedRef.current) return;
+    if (!layout || !gatePoi || activeRoute || quietMode) return;
+    if (!credentials.known) return;
+    autoGateStartedRef.current = true;
+    startRoute(gatePoi.id, true);
+  }, [layout, gatePoi, activeRoute, quietMode, credentials.known, startRoute]);
+
 
   /* ── Voice co-pilot ─────────────────────────────────────────────────── */
   const bestLoungePoi = useCallback((): PoiDefinition | null => {
