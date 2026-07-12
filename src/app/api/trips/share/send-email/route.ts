@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { trackServerEvent } from "@/lib/analytics/trackServerEvent";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
+import { userHasProAccess } from "@/lib/billing/planGate";
 import { TripShareEmail } from "@/lib/email/templates/tripShareEmail";
 import { getResendClient, getResendFromEmail } from "@/lib/email/resendClient";
 import { logger } from "@/lib/logger";
@@ -74,6 +75,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Trip not found." }, { status: 404, headers: rateLimit.headers });
   }
 
+  const wantsEditTogether = parsed.data.options.readOnly !== true;
+  if (wantsEditTogether) {
+    const ownerHasPro = await userHasProAccess(userId);
+    if (!ownerHasPro) {
+      return NextResponse.json(
+        {
+          error:
+            "Edit-together trip invites need Pro or Lifetime. Upgrade, or send a view-only link instead.",
+          code: "PRO_REQUIRED_OWNER",
+          requiresProFeature: "multi-trip",
+        },
+        { status: 402, headers: rateLimit.headers },
+      );
+    }
+  }
+
   try {
     const result = await createShareLink(
       userId,
@@ -94,6 +111,7 @@ export async function POST(req: Request) {
 
     const url = new URL(req.url);
     const shareUrl = `${url.origin}/share/${result.token}`;
+    const canEditTogether = result.options.readOnly !== true;
 
     const resend = getResendClient();
     if (!resend) {
@@ -118,6 +136,7 @@ export async function POST(req: Request) {
           shareUrl,
           senderName: parsed.data.senderName,
           expiresAt: result.expiresAt,
+          canEditTogether,
         }),
       );
     } catch (error) {
@@ -133,7 +152,9 @@ export async function POST(req: Request) {
     const { error: sendError } = await resend.emails.send({
       from: getResendFromEmail(),
       to: parsed.data.email,
-      subject: `You're invited to view ${trip.name} on Kepi Travel`,
+      subject: canEditTogether
+        ? `Plan together: ${trip.name} on Kepi Travel`
+        : `You're invited to view ${trip.name} on Kepi Travel`,
       html,
     });
 

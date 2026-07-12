@@ -8,6 +8,7 @@ export type KepiAnalyticsEvent =
   | { type: "disruption_detected"; userId: string; tripId: string; disruptionType: string }
   | { type: "autopilot_applied"; tripId: string | null; recommendationTitle: string }
   | { type: "share_link_created"; userId: string; tripId: string; readOnly: boolean; expiresInDays: number }
+  | { type: "trip_collaborator_joined"; userId: string; tripId: string; ownerUserId: string }
   | { type: "upgrade_clicked"; currentPlan: PlanType; featureGated?: string; targetPlan?: PlanType }
   | { type: "upgrade_completed"; userId: string; newPlan: "pro" | "concierge" }
   | { type: "gmail_import_triggered"; userId: string; maxResults: number; tripId?: string; lookbackDays?: number; tripStartDate?: string | null; tripEndDate?: string | null }

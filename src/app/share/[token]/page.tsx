@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { redirect, notFound } from "next/navigation";
 import { ShareAccessGate } from "@/components/share/ShareTripPhotosNav";
 import { SharedTripView } from "@/components/share/SharedTripView";
 import { maskEmail, resolveShareViewerGate } from "@/lib/travelAssistant/tripShareAccess";

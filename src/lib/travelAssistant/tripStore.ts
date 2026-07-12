@@ -372,6 +372,25 @@ export async function deleteReservationFromTrip(
   };
 }
 
+export async function forceSetActiveTripId(tripId: string, userId: string): Promise<void> {
+  const normalized = tripId.trim();
+  if (!normalized) return;
+  try {
+    await kvStoreSet(ACTIVE_TRIP_ID_KEY, normalized, { userId });
+  } catch {
+    // Non-critical: caller still has in-memory selection.
+  }
+}
+
+export async function getStoredActiveTripId(userId: string): Promise<string | null> {
+  try {
+    const value = await kvStoreGet<string>(ACTIVE_TRIP_ID_KEY, { userId });
+    return typeof value === "string" && value.trim() ? value.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function setActiveTrip(id: string, userId?: string): Promise<TravelTrip | null> {
   const trip = await getTrip(id, userId);
   if (!trip) {

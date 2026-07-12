@@ -9,14 +9,59 @@ import { enforceRateLimit } from "@/lib/rateLimit";
 import {
   createTrip,
   deleteTrip,
+  forceSetActiveTripId,
   getActiveTrip,
+  getStoredActiveTripId,
   getTrip,
   listTrips,
   setActiveTrip,
   updateTrip,
 } from "@/lib/travelAssistant/tripStore";
+import {
+  listCollaborativeTripsForUser,
+  leaveTripCollaboration,
+  resolveTripWriteAccess,
+  type CollaborativeTrip,
+} from "@/lib/travelAssistant/tripCollaboratorStore";
 import { MAX_MINUTES_TO_DEPARTURE } from "@/lib/travelAssistant/tripWindow";
 import { generateId } from "@/lib/utils/generateId";
+
+async function listTripsIncludingCollaborations(userId: string) {
+  const [owned, collaborative] = await Promise.all([
+    listTrips(userId),
+    listCollaborativeTripsForUser(userId),
+  ]);
+  const ownedIds = new Set(owned.map((trip) => trip.id));
+  return [...owned, ...collaborative.filter((trip) => !ownedIds.has(trip.id))];
+}
+
+function isCollaborativeTrip(trip: { id: string }): trip is CollaborativeTrip {
+  return "collaboration" in trip && Boolean((trip as CollaborativeTrip).collaboration);
+}
+
+async function resolveActiveTrip(userId: string) {
+  const trips = await listTripsIncludingCollaborations(userId);
+  if (trips.length === 0) {
+    return { trips, activeTrip: null as Awaited<ReturnType<typeof getTrip>>, activeTripId: null as string | null };
+  }
+
+  const storedId = await getStoredActiveTripId(userId);
+  const preferred =
+    (storedId ? trips.find((trip) => trip.id === storedId) : null) ??
+    trips[0] ??
+    null;
+  if (!preferred) {
+    return { trips, activeTrip: null, activeTripId: null };
+  }
+
+  if (isCollaborativeTrip(preferred) && preferred.collaboration) {
+    const full = await getTrip(preferred.id, preferred.collaboration.ownerUserId);
+    return { trips, activeTrip: full ?? preferred, activeTripId: preferred.id };
+  }
+
+  const owned = await getTrip(preferred.id, userId);
+  return { trips, activeTrip: owned ?? preferred, activeTripId: preferred.id };
+}
 
 const TripStageSchema = z.enum(["readiness", "pre-departure", "airport", "arrival", "recovery"]);
 const TripStatusSchema = z.enum(["green", "yellow", "red"]);
@@ -186,20 +231,38 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const tripId = url.searchParams.get("id")?.trim() ?? "";
     if (tripId) {
-      const trip = await getTrip(tripId, auth.userId);
-      return NextResponse.json(
-        {
-          trip,
-        },
-        { headers: auth.headers },
-      );
+      const owned = await getTrip(tripId, auth.userId);
+      if (owned) {
+        return NextResponse.json({ trip: owned }, { headers: auth.headers });
+      }
+      const access = await resolveTripWriteAccess(auth.userId, tripId);
+      if (access) {
+        const shared = await getTrip(tripId, access.ownerUserId);
+        return NextResponse.json(
+          {
+            trip: shared
+              ? {
+                  ...shared,
+                  collaboration: {
+                    ownerUserId: access.ownerUserId,
+                    role: access.collaboration?.role ?? "editor",
+                    shareToken: access.collaboration?.shareToken ?? "",
+                    canEdit: access.canEdit,
+                  },
+                }
+              : null,
+          },
+          { headers: auth.headers },
+        );
+      }
+      return NextResponse.json({ trip: null }, { headers: auth.headers });
     }
 
-    const [trips, activeTrip] = await Promise.all([listTrips(auth.userId), getActiveTrip(auth.userId)]);
+    const { trips, activeTrip, activeTripId } = await resolveActiveTrip(auth.userId);
     return NextResponse.json(
       {
         trips,
-        activeTripId: activeTrip?.id ?? null,
+        activeTripId,
         activeTrip,
       },
       { headers: auth.headers },
@@ -311,11 +374,20 @@ export async function PUT(req: Request) {
         userId: auth.userId,
         tripId: parsed.data.id,
       });
-      const activeTrip = await setActiveTrip(parsed.data.id, auth.userId);
+      let activeTrip = await setActiveTrip(parsed.data.id, auth.userId);
+      if (!activeTrip) {
+        const access = await resolveTripWriteAccess(auth.userId, parsed.data.id);
+        if (access) {
+          activeTrip = await getTrip(parsed.data.id, access.ownerUserId);
+          if (activeTrip) {
+            await forceSetActiveTripId(parsed.data.id, auth.userId);
+          }
+        }
+      }
       if (!activeTrip) {
         return NextResponse.json({ error: "Trip not found" }, { status: 404, headers: auth.headers });
       }
-      const trips = await listTrips(auth.userId);
+      const trips = await listTripsIncludingCollaborations(auth.userId);
       return NextResponse.json(
         {
           activeTrip,
@@ -326,17 +398,31 @@ export async function PUT(req: Request) {
       );
     }
 
-    const existingTrip = await getTrip(parsed.data.id, auth.userId);
+    let existingTrip = await getTrip(parsed.data.id, auth.userId);
+    let writeOwnerUserId = auth.userId;
+    if (!existingTrip) {
+      const access = await resolveTripWriteAccess(auth.userId, parsed.data.id);
+      if (!access?.canEdit) {
+        return NextResponse.json({ error: "Trip not found" }, { status: 404, headers: auth.headers });
+      }
+      writeOwnerUserId = access.ownerUserId;
+      existingTrip = await getTrip(parsed.data.id, access.ownerUserId);
+      if (!existingTrip) {
+        return NextResponse.json({ error: "Trip not found" }, { status: 404, headers: auth.headers });
+      }
+    }
+
     const patchReservationCount = Array.isArray(parsed.data.patch.reservations) ? parsed.data.patch.reservations.length : null;
     auth.routeLogger.info("[/api/trips] PUT update received.", {
       userId: auth.userId,
       tripId: parsed.data.id,
+      writeOwnerUserId,
       existingTripFound: Boolean(existingTrip),
       existingReservationCount: existingTrip?.reservations.length ?? null,
       patchReservationCount,
       patchKeys: Object.keys(parsed.data.patch),
     });
-    const updated = await updateTrip(parsed.data.id, parsed.data.patch, auth.userId);
+    const updated = await updateTrip(parsed.data.id, parsed.data.patch, writeOwnerUserId);
     if (!updated) {
       auth.routeLogger.warn("[/api/trips] PUT update failed: trip not found.", {
         userId: auth.userId,
@@ -404,13 +490,13 @@ export async function PUT(req: Request) {
       }
     }
 
-    const [trips, activeTrip] = await Promise.all([listTrips(auth.userId), getActiveTrip(auth.userId)]);
+    const snapshot = await resolveActiveTrip(auth.userId);
     return NextResponse.json(
       {
         trip: updated,
-        trips,
-        activeTripId: activeTrip?.id ?? null,
-        activeTrip,
+        trips: snapshot.trips,
+        activeTripId: snapshot.activeTripId,
+        activeTrip: snapshot.activeTrip,
       },
       { headers: auth.headers },
     );
@@ -453,12 +539,35 @@ export async function DELETE(req: Request) {
     });
     if ("action" in parsed.data && parsed.data.action === "delete-reservation") {
       const { tripId, reservationId } = parsed.data;
-      const tripsBeforeDelete = await listTrips(auth.userId);
-      const targetTrip = tripId
-        ? tripsBeforeDelete.find((trip) => trip.id === tripId) ?? null
-        : tripsBeforeDelete.find((trip) =>
-            trip.reservations.some((reservation) => reservation.id === reservationId),
-          ) ?? null;
+      const ownedTrips = await listTrips(auth.userId);
+      let targetTrip =
+        (tripId
+          ? ownedTrips.find((trip) => trip.id === tripId) ?? null
+          : ownedTrips.find((trip) =>
+              trip.reservations.some((reservation) => reservation.id === reservationId),
+            ) ?? null);
+      let writeOwnerUserId = auth.userId;
+
+      if (!targetTrip && tripId) {
+        const access = await resolveTripWriteAccess(auth.userId, tripId);
+        if (access?.canEdit) {
+          writeOwnerUserId = access.ownerUserId;
+          targetTrip = await getTrip(tripId, access.ownerUserId);
+        }
+      } else if (!targetTrip) {
+        const collabTrips = await listCollaborativeTripsForUser(auth.userId);
+        const match = collabTrips.find((trip) =>
+          trip.reservations.some((reservation) => reservation.id === reservationId),
+        );
+        if (match?.collaboration) {
+          const access = await resolveTripWriteAccess(auth.userId, match.id);
+          if (access?.canEdit) {
+            writeOwnerUserId = access.ownerUserId;
+            targetTrip = match;
+          }
+        }
+      }
+
       if (!targetTrip) {
         return NextResponse.json(
           { error: "Reservation not found in trip." },
@@ -474,14 +583,15 @@ export async function DELETE(req: Request) {
           { status: 404, headers: auth.headers },
         );
       }
-      const updatedTrip = await updateTrip(targetTrip.id, { reservations: nextReservations }, auth.userId);
+      const updatedTrip = await updateTrip(targetTrip.id, { reservations: nextReservations }, writeOwnerUserId);
       if (!updatedTrip) {
         return NextResponse.json({ error: "Trip not found" }, { status: 404, headers: auth.headers });
       }
-      const [trips, activeTrip] = await Promise.all([listTrips(auth.userId), getActiveTrip(auth.userId)]);
+      const snapshot = await resolveActiveTrip(auth.userId);
       auth.routeLogger.info("[/api/trips] DELETE reservation response sent.", {
         userId: auth.userId,
         tripId: updatedTrip.id,
+        writeOwnerUserId,
         beforeCount: targetTrip.reservations.length,
         afterCount: updatedTrip.reservations.length,
       });
@@ -490,9 +600,9 @@ export async function DELETE(req: Request) {
           ok: true,
           action: "delete-reservation",
           trip: updatedTrip,
-          trips,
-          activeTripId: activeTrip?.id ?? null,
-          activeTrip,
+          trips: snapshot.trips,
+          activeTripId: snapshot.activeTripId,
+          activeTrip: snapshot.activeTrip,
           removedReservationId: parsed.data.reservationId,
         },
         { headers: auth.headers },
@@ -502,9 +612,27 @@ export async function DELETE(req: Request) {
     const tripId = parsed.data.id;
     const removed = await deleteTrip(tripId, auth.userId);
     if (!removed) {
-      return NextResponse.json({ error: "Trip not found" }, { status: 404, headers: auth.headers });
+      // Collaborators leave the shared trip instead of deleting the owner's copy.
+      const left = await leaveTripCollaboration({
+        collaboratorUserId: auth.userId,
+        tripId,
+      });
+      if (!left) {
+        return NextResponse.json({ error: "Trip not found" }, { status: 404, headers: auth.headers });
+      }
+      const snapshot = await resolveActiveTrip(auth.userId);
+      return NextResponse.json(
+        {
+          ok: true,
+          action: "leave-collaboration",
+          trips: snapshot.trips,
+          activeTripId: snapshot.activeTripId,
+          activeTrip: snapshot.activeTrip,
+        },
+        { headers: auth.headers },
+      );
     }
-    const [trips, activeTrip] = await Promise.all([listTrips(auth.userId), getActiveTrip(auth.userId)]);
+    const snapshot = await resolveActiveTrip(auth.userId);
     auth.routeLogger.info("[/api/trips] DELETE trip response sent.", {
       userId: auth.userId,
       tripId,
@@ -513,9 +641,9 @@ export async function DELETE(req: Request) {
       {
         ok: true,
         action: "delete-trip",
-        trips,
-        activeTripId: activeTrip?.id ?? null,
-        activeTrip,
+        trips: snapshot.trips,
+        activeTripId: snapshot.activeTripId,
+        activeTrip: snapshot.activeTrip,
       },
       { headers: auth.headers },
     );

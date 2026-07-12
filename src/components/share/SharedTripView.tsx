@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ShareTripPhotosNav } from "@/components/share/ShareTripPhotosNav";
 import { SharedTripReservations } from "@/components/share/SharedTripReservations";
+import { JoinCollaborateButton } from "@/components/share/JoinCollaborateButton";
 import { TripMemoriesPanel } from "@/components/travelAssistant/TripMemoriesPanel";
 import type { TripShareOptions } from "@/lib/travelAssistant/tripShareStore";
 
@@ -54,10 +55,12 @@ export function SharedTripView({
           {destination ? <p className="mt-1 text-base text-slate-400">📍 {destination}</p> : null}
           <p className="mt-2 text-xs text-slate-500">
             {startDate} → {endDate}
-            {options.readOnly ? " · Read-only" : ""}
+            {options.readOnly ? " · View only" : " · Edit together"}
           </p>
           <p className="mt-1 text-xs text-slate-600">Link expires {new Date(expiresAt).toLocaleDateString()}</p>
         </header>
+
+        {!options.readOnly ? <JoinCollaborateButton token={token} tripName={tripName} /> : null}
 
         <ShareTripPhotosNav tripName={tripName} />
 
@@ -79,10 +82,11 @@ export function SharedTripView({
         </div>
 
         <p className="mt-8 text-center text-sm text-slate-600">
-          Shared read-only via{" "}
+          Shared via{" "}
           <Link href="https://kepitravel.com" className="text-sky-400 hover:underline">
             kepitravel.com
           </Link>
+          {options.readOnly ? " · view only" : " · paid partners can edit together"}
         </p>
       </div>
     </div>

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import { downloadTripJson } from "@/lib/travelAssistant/tripExport";
+import type { TravelTrip } from "@/lib/travelAssistant/tripStore";
 
 interface ShareModalProps {
   open: boolean;
@@ -24,14 +26,15 @@ interface SharePayload {
 }
 
 export function ShareModal({ open, tripId, tripName, onClose }: ShareModalProps) {
-  const [expiresInDays, setExpiresInDays] = useState(7);
-  const [readOnly, setReadOnly] = useState(true);
-  const [showPersonalNotes, setShowPersonalNotes] = useState(false);
+  const [expiresInDays, setExpiresInDays] = useState(30);
+  const [readOnly, setReadOnly] = useState(false);
+  const [showPersonalNotes, setShowPersonalNotes] = useState(true);
   const [recipientEmail, setRecipientEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [sharePayload, setSharePayload] = useState<SharePayload | null>(null);
+  const [downloadBusy, setDownloadBusy] = useState(false);
 
   const shareOptions = {
     expiresInDays,
@@ -53,7 +56,10 @@ export function ShareModal({ open, tripId, tripName, onClose }: ShareModalProps)
           options: shareOptions,
         }),
       });
-      const payload = (await response.json()) as Partial<SharePayload> & { error?: string };
+      const payload = (await response.json()) as Partial<SharePayload> & {
+        error?: string;
+        code?: string;
+      };
       if (!response.ok || !payload.token || !payload.url || !payload.expiresAt || !payload.options) {
         throw new Error(payload.error ?? `Share API returned ${response.status}`);
       }
@@ -67,8 +73,12 @@ export function ShareModal({ open, tripId, tripName, onClose }: ShareModalProps)
       });
       setSuccessMessage(
         payload.existing
-          ? "Open link loaded (anyone with the URL can view)."
-          : "Open link created (anyone with the URL can view).",
+          ? readOnly
+            ? "Open view link loaded."
+            : "Open edit link loaded (anyone with the URL who has Pro can join)."
+          : readOnly
+            ? "Open view link created."
+            : "Open edit link created (anyone with the URL who has Pro can join).",
       );
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Could not create share link.");
@@ -103,6 +113,7 @@ export function ShareModal({ open, tripId, tripName, onClose }: ShareModalProps)
         ok?: boolean;
         emailSent?: boolean;
         intendedEmail?: string;
+        code?: string;
       };
       if (!response.ok || !payload.token || !payload.url || !payload.expiresAt) {
         throw new Error(payload.error ?? `Invite failed (${response.status})`);
@@ -117,7 +128,9 @@ export function ShareModal({ open, tripId, tripName, onClose }: ShareModalProps)
       });
       setSuccessMessage(
         payload.emailSent
-          ? `Invite sent to ${email}. They must sign in with that email to open the trip and photos.`
+          ? readOnly
+            ? `View-only invite sent to ${email}.`
+            : `Edit invite sent to ${email}. They sign in with that email, tap Open in My Trips, and you can plan together.`
           : "Invite link created.",
       );
     } catch (error) {
@@ -153,6 +166,28 @@ export function ShareModal({ open, tripId, tripName, onClose }: ShareModalProps)
     }
   };
 
+  const handleDownloadTrip = async (): Promise<void> => {
+    if (!tripId || downloadBusy) return;
+    setDownloadBusy(true);
+    setErrorMessage(null);
+    try {
+      const response = await fetch(`/api/trips?id=${encodeURIComponent(tripId)}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+      const payload = (await response.json()) as { trip?: TravelTrip; error?: string };
+      if (!response.ok || !payload.trip) {
+        throw new Error(payload.error ?? "Could not load trip for download.");
+      }
+      downloadTripJson(payload.trip);
+      setSuccessMessage("Trip downloaded as JSON — keep a backup or send the file to your partner.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Could not download trip.");
+    } finally {
+      setDownloadBusy(false);
+    }
+  };
+
   useEffect(() => {
     if (!open) {
       setSharePayload(null);
@@ -178,7 +213,8 @@ export function ShareModal({ open, tripId, tripName, onClose }: ShareModalProps)
             <h2 className="text-lg font-semibold">Share Trip</h2>
             <p className="text-xs text-slate-600 dark:text-slate-300">
               {tripName ? `Sharing ${tripName}. ` : ""}
-              Email invites are locked to that person&apos;s sign-in. They can view the itinerary and scroll to trip photos at the bottom.
+              Invite your partner or friend by email. With <strong>Edit together</strong> on, they open the trip in
+              their own Kepi account and you both can change flights, hotels, and notes.
             </p>
           </div>
           <button
@@ -191,6 +227,17 @@ export function ShareModal({ open, tripId, tripName, onClose }: ShareModalProps)
         </header>
 
         <div className="mt-4 space-y-3">
+          <button
+            type="button"
+            disabled={!tripId || downloadBusy}
+            onClick={() => {
+              void handleDownloadTrip();
+            }}
+            className="min-h-[48px] w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:hover:bg-slate-800"
+          >
+            {downloadBusy ? "Preparing download…" : "Download whole trip (JSON)"}
+          </button>
+
           <label className="block text-sm">
             <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Send secure invite by email
@@ -199,13 +246,14 @@ export function ShareModal({ open, tripId, tripName, onClose }: ShareModalProps)
               type="email"
               value={recipientEmail}
               onChange={(event) => setRecipientEmail(event.target.value)}
-              placeholder="family@example.com"
+              placeholder="partner@example.com"
               autoComplete="email"
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900"
             />
           </label>
           <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-            Only this email can open the link — even if they forward it. They&apos;ll sign in with Clerk using the same address.
+            Only this email can open the link. They sign in with that address. Both of you need Pro or Lifetime to
+            edit together.
           </p>
           <button
             type="button"
@@ -215,7 +263,11 @@ export function ShareModal({ open, tripId, tripName, onClose }: ShareModalProps)
             }}
             className="min-h-[48px] w-full rounded-xl bg-[#007AFF] px-3 py-2 text-sm font-bold text-white hover:bg-[#0066DD] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {busy ? "Sending…" : "Send email invite"}
+            {busy
+              ? "Sending…"
+              : readOnly
+                ? "Send view-only invite"
+                : "Send edit invite to partner"}
           </button>
 
           <div className="border-t border-slate-200 pt-3 dark:border-slate-800">
@@ -239,7 +291,10 @@ export function ShareModal({ open, tripId, tripName, onClose }: ShareModalProps)
               </select>
             </label>
             <label className="mt-2 flex items-center justify-between rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900">
-              <span>Read-only share link</span>
+              <span>
+                <span className="font-semibold">View only</span>
+                <span className="mt-0.5 block text-[11px] text-slate-500">Off = partner can edit with you</span>
+              </span>
               <input
                 type="checkbox"
                 checked={readOnly}
@@ -302,6 +357,7 @@ export function ShareModal({ open, tripId, tripName, onClose }: ShareModalProps)
               ) : (
                 <> · Open link</>
               )}
+              {sharePayload.options.readOnly ? " · View only" : " · Edit together"}
             </p>
             <div className="mt-2 flex gap-2">
               <input
