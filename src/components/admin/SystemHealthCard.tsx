@@ -18,7 +18,7 @@ function statusBadgeClass(status: AdminServiceStatus): string {
 
 export function SystemHealthCard({ data, loading, error, onRefresh }: SystemHealthCardProps) {
   useEffect(() => {
-    const interval = window.setInterval(() => onRefresh(), 30_000);
+    const interval = window.setInterval(() => onRefresh(), 120_000);
     return () => window.clearInterval(interval);
   }, [onRefresh]);
 
@@ -28,7 +28,7 @@ export function SystemHealthCard({ data, loading, error, onRefresh }: SystemHeal
         <div>
           <h2 className="text-lg font-semibold">System health</h2>
           <p className="text-xs text-slate-600 dark:text-slate-400">
-            Auto-refreshes every 30 seconds.
+            Auto-refreshes every 2 minutes.
           </p>
         </div>
         <button

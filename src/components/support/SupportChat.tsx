@@ -2,6 +2,7 @@
 
 import { useAuth } from "@clerk/nextjs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Logo } from "@/components/ui/Logo";
 import { buildSupportChatApiMessages } from "@/lib/support/buildSupportChatApiMessages";
 
@@ -28,21 +29,25 @@ export function openSupportChat(): void {
 
 export function SupportChat() {
   const { isSignedIn } = useAuth();
+  const t = useTranslations("SupportChat");
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "assistant-welcome",
-      role: "assistant",
-      content:
-        "Hi! I’m Kepi Support. I can help with trips, reservations, billing, notifications, and app workflows.",
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const panelScrollRef = useRef<HTMLDivElement | null>(null);
   const isOpenRef = useRef(isOpen);
+
+  useEffect(() => {
+    setMessages([
+      {
+        id: "assistant-welcome",
+        role: "assistant",
+        content: t("welcome"),
+      },
+    ]);
+  }, [t]);
 
   useEffect(() => {
     isOpenRef.current = isOpen;
@@ -67,10 +72,10 @@ export function SupportChat() {
 
   const bubbleLabel = useMemo(() => {
     if (unreadCount <= 0) {
-      return "Support chat";
+      return t("bubbleLabel");
     }
-    return `Support chat (${unreadCount} unread)`;
-  }, [unreadCount]);
+    return t("bubbleLabelUnread", { count: unreadCount });
+  }, [unreadCount, t]);
 
   const sendMessage = useCallback(async (): Promise<void> => {
     const trimmed = inputValue.trim();
@@ -135,7 +140,7 @@ export function SupportChat() {
                 content:
                   completed.length > 0
                     ? completed
-                    : "I can help with Kepi support topics. Could you provide a little more detail?",
+                    : t("emptyFallback"),
               }
             : message,
         ),
@@ -151,8 +156,7 @@ export function SupportChat() {
           entry.id === assistantPlaceholderId
             ? {
                 ...entry,
-                content:
-                  "I couldn’t complete that response right now. Please try again, or contact human support.",
+                content: t("errorFallback"),
               }
             : entry,
         ),
@@ -160,7 +164,7 @@ export function SupportChat() {
     } finally {
       setIsSending(false);
     }
-  }, [inputValue, isSending, messages]);
+  }, [inputValue, isSending, messages, t]);
 
   if (!isSignedIn) {
     return null;
@@ -175,14 +179,14 @@ export function SupportChat() {
               <div>
                 <Logo size="sm" className="[&>span:last-child]:text-slate-100" />
                 <p className="sr-only">Kepi Support</p>
-                <p className="text-[11px] text-slate-400">Fast help for trips, billing, and app workflows</p>
+                <p className="text-[11px] text-slate-400">{t("subtitle")}</p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
                 className="rounded-md border border-slate-600 px-2 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-800"
               >
-                Close
+                {t("close")}
               </button>
             </header>
 
@@ -196,7 +200,7 @@ export function SupportChat() {
                       : "ml-auto bg-cyan-500 text-slate-950"
                   }`}
                 >
-                  {message.content || (message.role === "assistant" ? "Thinking..." : "")}
+                  {message.content || (message.role === "assistant" ? t("thinking") : "")}
                 </article>
               ))}
             </div>
@@ -213,7 +217,7 @@ export function SupportChat() {
                       void sendMessage();
                     }
                   }}
-                  placeholder="Ask Kepi support..."
+                  placeholder={t("inputPlaceholder")}
                   className="flex-1 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300 focus-visible:ring-2"
                 />
                 <button
@@ -224,7 +228,7 @@ export function SupportChat() {
                   }}
                   className="rounded-lg bg-cyan-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isSending ? "Sending..." : "Send"}
+                  {isSending ? t("sending") : t("send")}
                 </button>
               </div>
             </footer>

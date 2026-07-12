@@ -10,8 +10,7 @@
     "savedSpanish": "Language set to Spanish — reloading…",
     "saveFailed": "Could not save language. Try again.",
     "activeEnglish": "Active: English",
-    "activeSpanish": "Active: Spanish",
-    "partialCoverage": "Navigation and settings are translated. Trip details and guidance are still rolling out in Spanish."
+    "activeSpanish": "Active: Spanish"
   },
   "LandingPage": {
     "brand": "Kepi Travel Assistant",

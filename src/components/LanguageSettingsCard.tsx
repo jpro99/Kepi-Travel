@@ -79,10 +79,9 @@ export function LanguageSettingsCard() {
           {message}
         </p>
       ) : null}
-      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
         {locale === "es" ? t("activeSpanish") : t("activeEnglish")}
       </p>
-      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("partialCoverage")}</p>
     </section>
   );
 }

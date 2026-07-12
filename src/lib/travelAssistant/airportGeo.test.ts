@@ -1,5 +1,5 @@
-import test from "node:test";
 import assert from "node:assert/strict";
+import test from "node:test";
 import {
   distanceKm,
   getAirportByIata,
@@ -33,11 +33,9 @@ test("getAirportProximity marks SEA campus as at-airport or in-terminal", () => 
 });
 
 test("getAirportProximity prefers departure airport when provided", () => {
-  // Standing at SEA while departure is also SEA
   const atSea = getAirportProximity(SEA.lat, SEA.lon, "SEA");
   assert.equal(atSea.airport?.iata, "SEA");
 
-  // Standing far from FCO should be away even if FCO is departure
   const awayFromFco = getAirportProximity(SEA.lat, SEA.lon, "FCO");
   assert.equal(awayFromFco.status, "away");
 });

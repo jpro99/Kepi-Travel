@@ -82,7 +82,7 @@ export function toUtcMs(localTime: string, timezone?: string): number {
 const WINDOW_AHEAD_MIN = 12 * 60; // 12h — early airport arrival still gets navigator
 const WINDOW_BEHIND_MIN = 60;
 
-/** Same selection AirportMode has always used: next flight in the airport window. */
+/** Live airport mode: departure within −60min … +180min (day-of navigation). */
 export function selectActiveFlight(
   reservations: FlightReservation[],
   nowMs: number,
@@ -104,6 +104,24 @@ export function selectActiveFlight(
   );
 }
 
+/**
+ * Preview mode: earliest upcoming departure on the trip — any lead time.
+ * Lets travelers explore the terminal map days or weeks before travel day.
+ */
+export function selectPreviewAirportFlight(
+  reservations: FlightReservation[],
+  nowMs: number,
+): ActiveFlight | null {
+  const graceMs = WINDOW_BEHIND_MIN * 60_000;
+  return (
+    reservations
+      .filter((r) => r.type === "flight" && r.flightDepartureAirport)
+      .map((f) => ({ f, utcMs: toUtcMs(f.localTime, f.timezone) }))
+      .filter(({ utcMs }) => !isNaN(utcMs) && utcMs > nowMs - graceMs)
+      .sort((a, b) => a.utcMs - b.utcMs)[0] ?? null
+  );
+}
+
 /** Mirrors page.tsx's onboarding-placeholder rule (provider/notes markers). */
 function isPlaceholderReservation(r: FlightReservation): boolean {
   const provider = (r.provider ?? "").trim().toLowerCase();
@@ -119,7 +137,11 @@ interface TripsResponse {
  * Self-fetching active flight for surfaces without reservation props
  * (e.g. the Map page). Fetches once, re-selects every 30s.
  */
-export function useActiveFlight(): { activeFlight: ActiveFlight | null; loading: boolean } {
+export function useActiveFlight(): {
+  activeFlight: ActiveFlight | null;
+  previewFlight: ActiveFlight | null;
+  loading: boolean;
+} {
   const [reservations, setReservations] = useState<FlightReservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -150,7 +172,8 @@ export function useActiveFlight(): { activeFlight: ActiveFlight | null; loading:
   }, []);
 
   const activeFlight = useMemo(() => selectActiveFlight(reservations, nowMs), [reservations, nowMs]);
-  return { activeFlight, loading };
+  const previewFlight = useMemo(() => selectPreviewAirportFlight(reservations, nowMs), [reservations, nowMs]);
+  return { activeFlight, previewFlight, loading };
 }
 
 export interface NavigatorCredentials {
@@ -232,6 +255,7 @@ export function deriveEligibleLounges(
   if (profile?.paymentCards?.length) {
     const credentials = {
       tsaPreCheck: Boolean(profile.tsa_precheck || profile.global_entry),
+      globalEntry: Boolean(profile.global_entry),
       clear: Boolean(profile.clear),
       paymentCards: profile.paymentCards,
     };

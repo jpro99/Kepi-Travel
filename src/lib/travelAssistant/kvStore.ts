@@ -126,7 +126,7 @@ export async function kvStoreGet<T>(
 export async function kvStoreSet<T>(
   key: string,
   value: T,
-  options?: { userId?: string },
+  options?: { userId?: string; ttlSeconds?: number },
 ): Promise<void> {
   const upstashRedis = getUpstashRedis();
   const userNamespace = await resolveUserNamespace(options?.userId);
@@ -137,7 +137,12 @@ export async function kvStoreSet<T>(
     return;
   }
   try {
-    await upstashRedis.set(namespacedKey, value);
+    const ttlSeconds = options?.ttlSeconds;
+    if (typeof ttlSeconds === "number" && ttlSeconds > 0) {
+      await upstashRedis.set(namespacedKey, value, { ex: Math.floor(ttlSeconds) });
+    } else {
+      await upstashRedis.set(namespacedKey, value);
+    }
   } catch (error) {
     logger.warn("KV set failed. Persisting in-memory fallback value.", {
       scope: "travelAssistant/kvStore",

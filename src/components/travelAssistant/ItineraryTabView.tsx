@@ -111,6 +111,7 @@ export function ItineraryTabView({
   onReservationTap,
 }: ItineraryTabViewProps) {
   const tNav = useTranslations("ConsumerNav");
+  const tPlan = useTranslations("PlanTab");
   const hasTripDates = Boolean(tripStartDate && tripEndDate);
   const [planSavedFlash, setPlanSavedFlash] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -171,7 +172,7 @@ export function ItineraryTabView({
             {tripStartDate} → {tripEndDate}
           </p>
         ) : (
-          <p className="mt-1 text-sm text-slate-400">Set dates on Trip to unlock your timeline</p>
+          <p className="mt-1 text-sm text-slate-400">{tPlan("setDatesHint")}</p>
         )}
         <div className="mt-4 flex flex-wrap gap-2">
           <button
@@ -179,28 +180,28 @@ export function ItineraryTabView({
             onClick={onPrint}
             className="rounded-xl border border-white/20 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/10"
           >
-            Print
+            {tPlan("print")}
           </button>
           <button
             type="button"
             onClick={onExportPdf}
             className="rounded-xl border border-white/20 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/10"
           >
-            PDF
+            {tPlan("pdf")}
           </button>
           <button
             type="button"
             onClick={onShareLink}
             className="rounded-xl bg-[#f4c95d] px-3 py-1.5 text-[11px] font-extrabold text-[#1D1D1F]"
           >
-            Share
+            {tPlan("share")}
           </button>
           <span
             className={`self-center text-[10px] font-semibold ${
               planSavedFlash ? "text-emerald-400" : "text-slate-500"
             }`}
           >
-            {planSavedFlash ? "Saved ✓" : "Auto-saves as you type"}
+            {planSavedFlash ? tPlan("savedFlash") : tPlan("autoSaveHint")}
           </span>
         </div>
       </header>

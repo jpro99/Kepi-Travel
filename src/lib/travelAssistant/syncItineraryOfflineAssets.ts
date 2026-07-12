@@ -4,11 +4,10 @@ import type { SessionReservation } from "@/lib/travelAssistant/clientSessionStat
 import {
   cacheKeyForAirport,
   cacheKeyForCity,
-  extractScheduledAirportNeeds,
   extractScheduledCityNeeds,
   listRemainingAirportIatas,
   listRemainingCityKeys,
-  shouldPrefetchAsset,
+  shouldPrefetchCityMap,
 } from "@/lib/travelAssistant/itineraryOfflineCache";
 import {
   evictOfflineCacheExcept,
@@ -69,25 +68,24 @@ export async function syncItineraryOfflineAssets(input: {
     allowedKeys.add(cacheKeyForCity(cityKey));
   }
 
-  for (const need of extractScheduledAirportNeeds(input.reservations)) {
-    if (!shouldPrefetchAsset(need.needByUtcMs, nowMs)) continue;
-    const layout = getAirportLayout(need.iata);
+  for (const iata of listRemainingAirportIatas(input.reservations, nowMs)) {
+    const layout = getAirportLayout(iata);
     if (!layout) {
-      skippedAirports.push(need.iata);
+      skippedAirports.push(iata);
       continue;
     }
     await saveOfflineCacheRecord({
-      key: cacheKeyForAirport(need.iata),
+      key: cacheKeyForAirport(iata),
       kind: "airport-layout",
       tripId: input.tripId,
       savedAt: new Date(nowMs).toISOString(),
       payload: layout,
     });
-    prefetchedAirports.push(need.iata);
+    prefetchedAirports.push(iata);
   }
 
   for (const need of extractScheduledCityNeeds(input.reservations)) {
-    if (!shouldPrefetchAsset(need.needByUtcMs, nowMs)) continue;
+    if (!shouldPrefetchCityMap(need.needByUtcMs, nowMs)) continue;
     const bundle = await getOfflineCityMapBundle(need.cityKey);
     if (!bundle) continue;
     await saveOfflineCacheRecord({

@@ -45,6 +45,8 @@ interface AirportNavigatorMapProps {
   flightDelayed?: boolean;
   /** "in-terminal" auto-expands the map to full screen once (auto-pop). */
   proximityStatus?: string;
+  /** Explore terminal layout before travel day — no live GPS routing. */
+  previewMode?: boolean;
   /** Fill the parent (Map page embed) — no card chrome, no expand button. */
   fill?: boolean;
   minutesToDeparture: number;
@@ -144,6 +146,7 @@ export function AirportNavigatorMap({
   flightStatusLabel = null,
   flightDelayed = false,
   proximityStatus = "away",
+  previewMode = false,
   fill = false,
   onSwitchToFamilyView,
   familyPins = [],
@@ -215,11 +218,15 @@ export function AirportNavigatorMap({
   const autoPoppedRef = useRef(false);
   const [heroOpen, setHeroOpen] = useState(true);
   useEffect(() => {
+    if (previewMode && fill) {
+      setExpanded(true);
+      return;
+    }
     if (proximityStatus === "in-terminal" && !autoPoppedRef.current) {
       autoPoppedRef.current = true;
       setExpanded(true);
     }
-  }, [proximityStatus]);
+  }, [proximityStatus, previewMode, fill]);
   // MapLibre must re-measure its container when the card resizes
   useEffect(() => {
     const map = mapRef.current;
@@ -1343,6 +1350,19 @@ export function AirportNavigatorMap({
       </button>
       )}
 
+      {/* Preview banner — plan lounges, check-in, and gate before travel day */}
+      {previewMode ? (
+        <div
+          className="pointer-events-none absolute left-3 right-3 z-20 rounded-2xl border border-sky-400/30 bg-sky-950/80 px-3 py-2 backdrop-blur-md"
+          style={{ top: fill ? "max(4.5rem, calc(env(safe-area-inset-top) + 4rem))" : "3.25rem" }}
+        >
+          <p className="text-[11px] font-bold uppercase tracking-wide text-sky-200">Explore before you go</p>
+          <p className="text-[11px] leading-snug text-sky-100/90">
+            Tap lounges, check-in, and your gate on the map — live turn-by-turn starts when you arrive at {iata}.
+          </p>
+        </div>
+      ) : null}
+
       {/* Flight hero card — everything glanceable: gate, flight, boarding, status */}
       <div
         className="pointer-events-none absolute left-3 right-14 z-10 flex items-start justify-between gap-2"
@@ -1385,8 +1405,9 @@ export function AirportNavigatorMap({
                     ) : null}
                   </span>
                   <span className="block truncate text-[9px] text-sky-200/70">
-                    {statusLine ?? phaseStatusLine(journeyPhase, gateCode)}
-                    {snapped ? ` · position ${Math.round(snapped.confidence * 100)}%` : " · locating…"}
+                    {previewMode
+                      ? "Planning mode — browse the terminal layout"
+                      : `${statusLine ?? phaseStatusLine(journeyPhase, gateCode)}${snapped ? ` · position ${Math.round(snapped.confidence * 100)}%` : " · locating…"}`}
                   </span>
                 </span>
               </span>
@@ -1400,7 +1421,7 @@ export function AirportNavigatorMap({
           </button>
         </div>
         <div className="flex flex-col items-end gap-1">
-          {pressure && (
+          {pressure && !previewMode && (
             <button
               type="button"
               onClick={onPressureChipTap}
@@ -1416,7 +1437,7 @@ export function AirportNavigatorMap({
               {sprint ? "⚡ " : ""}{pressure.verdict === "at_risk" ? "⚠ " : ""}{pressure.line}
             </button>
           )}
-          {leaveByLabel && (
+          {leaveByLabel && !previewMode && (
             <span className={`rounded-lg px-2 py-1 text-[10px] font-bold backdrop-blur ${leaveByLabel === "Leave now" ? "bg-amber-500/90 text-slate-900" : "bg-black/45 text-amber-200"}`}>
               ⏱ {leaveByLabel}
             </span>
@@ -1448,8 +1469,8 @@ export function AirportNavigatorMap({
         </div>
       )}
 
-      {/* Mic — press and hold, thumb zone */}
-      {layout && (
+      {/* Mic — press and hold, thumb zone (live mode only) */}
+      {layout && !previewMode && (
         <button
           type="button"
           aria-label="Hold to talk to Kepi"
@@ -1467,7 +1488,7 @@ export function AirportNavigatorMap({
       )}
 
       {/* Journey prompt (e.g. "Are you through security yet?") */}
-      {journeyPrompt && !securityQuestionOpen && (
+      {journeyPrompt && !securityQuestionOpen && !previewMode && (
         <div style={{ bottom: bottomPanel }} className="absolute inset-x-3 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95">
           <p className="text-xs font-bold text-slate-900 dark:text-slate-100">{journeyPrompt.text}</p>
           <div className="mt-2 flex gap-1.5">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { BookTravelFitStrip } from "@/components/travelAssistant/BookTravelFitStrip";
 import { FlightsTab } from "@/components/travelAssistant/FlightsTab";
 import { HotelsTab } from "@/components/travelAssistant/HotelsTab";
@@ -195,6 +196,8 @@ export function MobileTripsView({
   importConfirmationBusy,
   travelFitReservations = [],
 }: MobileTripsViewProps) {
+  const t = useTranslations("MobileTrips");
+  const tBook = useTranslations("BookTab");
   const [internalSegment, setInternalSegment] = useState<MobileTripsSegment>("flights");
   const segment = segmentProp ?? internalSegment;
   const setSegment = onSegmentChange ?? setInternalSegment;
@@ -207,16 +210,14 @@ export function MobileTripsView({
     return (
       <section className="space-y-4">
         <div className="rounded-[var(--radius-card)] bg-[var(--bg-card)] p-6 text-center shadow-[var(--shadow-card)]">
-          <p className="text-[26px] font-bold text-[var(--text-primary)]">Your trips live here</p>
-          <p className="mt-3 text-[19px] leading-snug text-[var(--text-secondary)]">
-            Create a trip to see flights, hotels, and tickets in one clean place.
-          </p>
+          <p className="text-[26px] font-bold text-[var(--text-primary)]">{t("emptyTitle")}</p>
+          <p className="mt-3 text-[19px] leading-snug text-[var(--text-secondary)]">{t("emptyBody")}</p>
           <button
             type="button"
             onClick={onCreateTrip}
             className="mt-6 min-h-[56px] w-full rounded-[var(--radius-button)] bg-[var(--accent)] px-6 text-[19px] font-bold text-white"
           >
-            Create your trip
+            {t("emptyCta")}
           </button>
         </div>
       </section>
@@ -238,7 +239,7 @@ export function MobileTripsView({
                   : "text-[17px] text-[var(--text-muted)]"
               }`}
             >
-              {id}
+              {id === "flights" ? tBook("subTabFlights") : tBook("subTabHotels")}
             </button>
           ))}
         </div>
@@ -310,7 +311,7 @@ export function MobileTripsView({
 
       {tickets.length > 0 ? (
         <div className="space-y-3 pt-2">
-          <p className="text-[13px] font-bold uppercase tracking-widest text-[var(--text-muted)]">Other bookings</p>
+          <p className="text-[13px] font-bold uppercase tracking-widest text-[var(--text-muted)]">{t("otherBookings")}</p>
           {tickets.map((reservation) => (
             <TicketCard key={reservation.id} reservation={reservation} onTap={onReservationTap} />
           ))}

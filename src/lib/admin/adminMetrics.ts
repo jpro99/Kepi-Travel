@@ -1,4 +1,5 @@
 import { getSafeRedisClient, hasRedisEnvConfig } from "@/lib/redis";
+import type { Redis } from "@upstash/redis";
 import { logger } from "@/lib/logger";
 import type {
   AdminBackgroundJobRun,
@@ -48,9 +49,32 @@ interface AnalyticsEventRecord {
 }
 
 const KV_CONFIGURED = hasRedisEnvConfig();
+const ADMIN_STATS_CACHE_TTL_MS = 120_000;
+const ADMIN_HEALTH_CACHE_TTL_MS = 60_000;
+const ADMIN_ANALYTICS_SCAN_LIMIT = 200;
+const ADMIN_KV_SCAN_LIMIT = 500;
+
+let cachedStatsSnapshot: AdminStatsResponse | null = null;
+let cachedStatsAtMs = 0;
+let cachedHealthSnapshot: AdminHealthResponse | null = null;
+let cachedHealthAtMs = 0;
 
 function getUsageRedis() {
   return getSafeRedisClient("admin/adminMetrics");
+}
+
+async function mgetChunked<T>(redis: Redis, keys: readonly string[]): Promise<Map<string, T | null>> {
+  const results = new Map<string, T | null>();
+  const chunkSize = 100;
+  for (let index = 0; index < keys.length; index += chunkSize) {
+    const chunk = keys.slice(index, index + chunkSize);
+    if (chunk.length === 0) continue;
+    const values = await redis.mget<(T | null)[]>(...chunk);
+    chunk.forEach((key, valueIndex) => {
+      results.set(key, values[valueIndex] ?? null);
+    });
+  }
+  return results;
 }
 
 function extractUserIdFromKepiKey(key: string): string | null {
@@ -61,7 +85,7 @@ function extractUserIdFromKepiKey(key: string): string | null {
   return parts[1] || null;
 }
 
-async function scanKvKeys(match: string, limit = 5000): Promise<string[]> {
+async function scanKvKeys(match: string, limit = ADMIN_KV_SCAN_LIMIT): Promise<string[]> {
   if (!KV_CONFIGURED) {
     return [];
   }
@@ -141,18 +165,15 @@ async function measureKvHealth(): Promise<AdminHealthResponse["services"]["kv"]>
     };
   }
 
-  const pingKey = `kepi:admin:health-ping:${Date.now()}`;
   const startedAtMs = Date.now();
   try {
-    await usageRedis.set(pingKey, "ok");
-    await usageRedis.get(pingKey);
-    await usageRedis.del(pingKey);
+    await usageRedis.ping();
     const latencyMs = Math.max(1, Date.now() - startedAtMs);
     const status: AdminServiceStatus = latencyMs < 250 ? "green" : latencyMs < 1000 ? "yellow" : "red";
     return {
       status,
       latencyMs,
-      detail: `Upstash Redis round-trip latency ${latencyMs}ms.`,
+      detail: `Upstash Redis ping latency ${latencyMs}ms.`,
     };
   } catch (error) {
     return {
@@ -341,6 +362,12 @@ async function collectRecentAlerts(limit = 20): Promise<AdminRecentAlertEntry[]>
 }
 
 async function collectApiUsageStats(): Promise<AdminStatsResponse["apiUsage"]> {
+  if (process.env.KEPI_RECORD_API_USAGE !== "true") {
+    return {
+      endpointRateLimitHits: [],
+      topActiveUsers: [],
+    };
+  }
   const usageRedis = getUsageRedis();
   if (!usageRedis) {
     return {
@@ -354,9 +381,10 @@ async function collectApiUsageStats(): Promise<AdminStatsResponse["apiUsage"]> {
       usageRedis.keys("kepi:api-usage:user:*"),
     ]);
 
+    const endpointValues = await mgetChunked<string | number>(usageRedis, endpointKeys);
     const endpointStats: AdminEndpointHitStat[] = [];
     for (const key of endpointKeys) {
-      const rawValue = await usageRedis.get<string | number>(key);
+      const rawValue = endpointValues.get(key);
       const hits = typeof rawValue === "number" ? rawValue : Number.parseInt(String(rawValue ?? "0"), 10);
       const encodedEndpoint = key.replace("kepi:api-usage:rate-limit-hit:", "");
       endpointStats.push({
@@ -365,9 +393,10 @@ async function collectApiUsageStats(): Promise<AdminStatsResponse["apiUsage"]> {
       });
     }
 
+    const userValues = await mgetChunked<string | number>(usageRedis, userKeys);
     const topUsers: AdminTopUserStat[] = [];
     for (const key of userKeys) {
-      const rawValue = await usageRedis.get<string | number>(key);
+      const rawValue = userValues.get(key);
       const calls = typeof rawValue === "number" ? rawValue : Number.parseInt(String(rawValue ?? "0"), 10);
       const encodedUser = key.replace("kepi:api-usage:user:", "");
       topUsers.push({
@@ -420,7 +449,7 @@ async function collectInsightsStats(
   const [tripKeys, subscriptionKeys, analyticsEventKeys] = await Promise.all([
     scanKvKeys("kepi:*:trips"),
     scanKvKeys("kepi:*:subscription"),
-    scanKvKeys("kepi:__analytics:events/*", 20_000),
+    scanKvKeys("kepi:__analytics:events/*", ADMIN_ANALYTICS_SCAN_LIMIT),
   ]);
 
   const totalUsers = new Set<string>();
@@ -446,13 +475,14 @@ async function collectInsightsStats(
   let totalReservations = 0;
   let proSubscribers = 0;
 
+  const tripValues = await mgetChunked<unknown>(usageRedis, tripKeys);
   for (const key of tripKeys) {
     const userId = extractUserIdFromKepiKey(key);
     if (userId && !userId.startsWith("__")) {
       totalUsers.add(userId);
     }
     try {
-      const value = await usageRedis.get<unknown>(key);
+      const value = tripValues.get(key);
       if (!Array.isArray(value)) {
         continue;
       }
@@ -474,13 +504,14 @@ async function collectInsightsStats(
     }
   }
 
+  const subscriptionValues = await mgetChunked<SubscriptionRecord>(usageRedis, subscriptionKeys);
   for (const key of subscriptionKeys) {
     const userId = extractUserIdFromKepiKey(key);
     if (userId && !userId.startsWith("__")) {
       totalUsers.add(userId);
     }
     try {
-      const record = (await usageRedis.get<SubscriptionRecord>(key)) ?? null;
+      const record = subscriptionValues.get(key) ?? null;
       if (!record || record.plan === "free") continue;
       const validUntilMs = record.validUntil ? Date.parse(record.validUntil) : Number.NaN;
       if (!record.validUntil || Number.isNaN(validUntilMs) || validUntilMs > Date.now()) {
@@ -495,9 +526,10 @@ async function collectInsightsStats(
     }
   }
 
+  const analyticsValues = await mgetChunked<AnalyticsEventRecord>(usageRedis, analyticsEventKeys);
   for (const key of analyticsEventKeys) {
     try {
-      const record = (await usageRedis.get<AnalyticsEventRecord>(key)) ?? null;
+      const record = analyticsValues.get(key) ?? null;
       if (!record || typeof record.createdAt !== "string") {
         continue;
       }
@@ -547,13 +579,18 @@ function measureEnvConfiguredHealth(envKey: string, label: string): AdminSystemS
 }
 
 export async function buildAdminHealthSnapshot(): Promise<AdminHealthResponse> {
+  const nowMs = Date.now();
+  if (cachedHealthSnapshot && nowMs - cachedHealthAtMs < ADMIN_HEALTH_CACHE_TTL_MS) {
+    return cachedHealthSnapshot;
+  }
+
   const [kvHealth, backgroundRuns, aviationStackHealth, sentryHealth] = await Promise.all([
     measureKvHealth(),
     collectBackgroundRuns(1),
     measureAviationStackHealth(),
     measureSentryHealth(),
   ]);
-  return {
+  const snapshot: AdminHealthResponse = {
     generatedAt: new Date().toISOString(),
     services: {
       kv: kvHealth,
@@ -564,9 +601,17 @@ export async function buildAdminHealthSnapshot(): Promise<AdminHealthResponse> {
       seatsAero: measureEnvConfiguredHealth("SEATS_AERO_API_KEY", "Seats.aero"),
     },
   };
+  cachedHealthSnapshot = snapshot;
+  cachedHealthAtMs = nowMs;
+  return snapshot;
 }
 
 export async function buildAdminStatsSnapshot(): Promise<AdminStatsResponse> {
+  const nowMs = Date.now();
+  if (cachedStatsSnapshot && nowMs - cachedStatsAtMs < ADMIN_STATS_CACHE_TTL_MS) {
+    return cachedStatsSnapshot;
+  }
+
   const [activeUsers, recentAlerts, backgroundRuns, apiUsage] = await Promise.all([
     collectActiveUserStats(),
     collectRecentAlerts(20),
@@ -574,7 +619,7 @@ export async function buildAdminStatsSnapshot(): Promise<AdminStatsResponse> {
     collectApiUsageStats(),
   ]);
   const insights = await collectInsightsStats(activeUsers);
-  return {
+  const snapshot: AdminStatsResponse = {
     generatedAt: new Date().toISOString(),
     activeUsers,
     recentAlerts,
@@ -585,4 +630,7 @@ export async function buildAdminStatsSnapshot(): Promise<AdminStatsResponse> {
     apiUsage,
     insights,
   };
+  cachedStatsSnapshot = snapshot;
+  cachedStatsAtMs = nowMs;
+  return snapshot;
 }

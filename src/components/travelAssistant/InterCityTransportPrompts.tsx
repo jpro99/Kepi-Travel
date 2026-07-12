@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   buildFlightSearchPlan,
   type FlightSearchPlan,
@@ -26,17 +27,17 @@ interface InterCityTransportPromptsProps {
 
 const QUICK_GROUND_MODES: QuickGroundMode[] = ["uber", "taxi", "metro", "train"];
 
-function roleBadge(role: InterCityTransportGap["role"]): string {
-  if (role === "outbound") return "Start of trip";
-  if (role === "return") return "Head home";
-  return "Between cities";
+function roleBadge(role: InterCityTransportGap["role"], t: (key: string) => string): string {
+  if (role === "outbound") return t("roleOutbound");
+  if (role === "return") return t("roleReturn");
+  return t("roleBetween");
 }
 
-function quickGroundLabel(mode: QuickGroundMode): string {
-  if (mode === "uber") return "Uber";
-  if (mode === "taxi") return "Taxi";
-  if (mode === "metro") return "Metro";
-  return "Train";
+function quickGroundLabel(mode: QuickGroundMode, t: (key: string) => string): string {
+  if (mode === "uber") return t("quickUber");
+  if (mode === "taxi") return t("quickTaxi");
+  if (mode === "metro") return t("quickMetro");
+  return t("quickTrain");
 }
 
 export function InterCityTransportPrompts({
@@ -44,6 +45,7 @@ export function InterCityTransportPrompts({
   onSearchFlights,
   onQuickGroundTransport,
 }: InterCityTransportPromptsProps) {
+  const t = useTranslations("GroundTransport");
   const gaps = listMissingTransportGaps(legs);
   const [routeGap, setRouteGap] = useState<InterCityTransportGap | null>(null);
   const routeSuggestion = routeGap
@@ -74,19 +76,17 @@ export function InterCityTransportPrompts({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">
-              Missing transport
+              {t("missingTransport")}
             </p>
-            <h3 className="mt-1 text-lg font-black text-slate-900 dark:text-white">How are you getting there?</h3>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-              See routes and estimates on the map — you pick, we track it on your trip.
-            </p>
+            <h3 className="mt-1 text-lg font-black text-slate-900 dark:text-white">{t("transportTitle")}</h3>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{t("transportSubtitle")}</p>
           </div>
           <button
             type="button"
             onClick={searchAll}
             className="shrink-0 rounded-full border border-sky-300 bg-white px-4 py-2 text-sm font-bold text-sky-800 shadow-sm active:opacity-80 dark:border-sky-600 dark:bg-slate-900 dark:text-sky-200"
           >
-            Search all flights
+            {t("searchAllFlights")}
           </button>
         </div>
 
@@ -105,7 +105,7 @@ export function InterCityTransportPrompts({
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800 dark:bg-amber-500/20 dark:text-amber-200">
-                    {roleBadge(gap.role)}
+                    {roleBadge(gap.role, t)}
                   </span>
                   {gap.dateDisplay ? (
                     <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">{gap.dateDisplay}</span>
@@ -116,7 +116,7 @@ export function InterCityTransportPrompts({
                 </p>
                 {suggestion ? (
                   <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-                    ~{suggestion.distanceMi} mi · {suggestion.hint}
+                    {t("distanceMi", { miles: suggestion.distanceMi, hint: suggestion.hint })}
                   </p>
                 ) : null}
                 <p className="mt-2 text-xs font-semibold text-sky-700 dark:text-sky-300">
@@ -130,7 +130,7 @@ export function InterCityTransportPrompts({
                     onClick={() => setRouteGap(gap)}
                     className="rounded-full bg-[#0F1923] px-4 py-2 text-xs font-bold text-white active:opacity-80 dark:bg-[#f4c95d] dark:text-[#0F1923]"
                   >
-                    See routes &amp; estimates
+                    {t("seeRoutes")}
                   </button>
                   {QUICK_GROUND_MODES.map((mode) => (
                     <button
@@ -140,7 +140,7 @@ export function InterCityTransportPrompts({
                       onClick={() => onQuickGroundTransport(gap, mode)}
                       className="rounded-full border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-bold text-slate-800 shadow-sm active:opacity-80 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                     >
-                      {quickGroundModeEmoji(mode)} {quickGroundLabel(mode)}
+                      {quickGroundModeEmoji(mode)} {quickGroundLabel(mode, t)}
                     </button>
                   ))}
                   {!suggestion?.hideFlights ? (
@@ -149,7 +149,7 @@ export function InterCityTransportPrompts({
                       onClick={() => searchOne(gap)}
                       className="rounded-full bg-[#007AFF] px-4 py-2 text-xs font-bold text-white active:opacity-80"
                     >
-                      Search flights
+                      {t("searchFlights")}
                     </button>
                   ) : null}
                 </div>

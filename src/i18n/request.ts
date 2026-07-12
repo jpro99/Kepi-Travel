@@ -29,17 +29,29 @@ async function resolveRequestLocale(): Promise<"en" | "es"> {
   return headerLocale ?? DEFAULT_LOCALE;
 }
 
+import { deepMergeMessages } from "@/lib/i18n/mergeMessages";
+
 export default getRequestConfig(async () => {
   const locale = await resolveRequestLocale();
   let messages: Record<string, unknown> = {};
   try {
     messages = (await import(`../../messages/${locale}.json`)).default as Record<string, unknown>;
   } catch {
-    // Locale file not found — fall back to English
     try {
       messages = (await import("../../messages/en.json")).default as Record<string, unknown>;
     } catch {
       messages = {};
+    }
+  }
+  try {
+    const consumer = (await import(`../../messages/consumer/${locale}.json`)).default as Record<string, unknown>;
+    messages = deepMergeMessages(messages, consumer);
+  } catch {
+    try {
+      const consumerEn = (await import("../../messages/consumer/en.json")).default as Record<string, unknown>;
+      messages = deepMergeMessages(messages, consumerEn);
+    } catch {
+      // consumer bundle optional
     }
   }
   return { locale, messages };

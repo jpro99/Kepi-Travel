@@ -30,12 +30,22 @@ const flight: SessionReservation = {
   flightArrivalTime: "2026-09-14 11:20",
 };
 
-test("shouldPrefetchAsset opens 48h before airport need time", () => {
+test("shouldPrefetchCityMap opens 48h before city need time", () => {
   const needs = extractScheduledAirportNeeds([flight]);
   const dep = needs.find((entry) => entry.iata === "ONT");
   assert.ok(dep);
   assert.equal(shouldPrefetchAsset(dep.needByUtcMs, dep.needByUtcMs - 47 * 60 * 60 * 1000), true);
   assert.equal(shouldPrefetchAsset(dep.needByUtcMs, dep.needByUtcMs - 72 * 60 * 60 * 1000), false);
+});
+
+test("listRemainingAirportIatas keeps airports for immediate indoor layout prefetch", () => {
+  const needs = extractScheduledAirportNeeds([flight]);
+  const dep = needs.find((entry) => entry.iata === "ONT");
+  assert.ok(dep);
+  const monthsBefore = dep.needByUtcMs - 90 * 24 * 60 * 60 * 1000;
+  const remaining = listRemainingAirportIatas([flight], monthsBefore);
+  assert.ok(remaining.has("ONT"));
+  assert.ok(remaining.has("SEA"));
 });
 
 test("listRemainingAirportIatas keeps hub for round-trip until final leg passes", () => {

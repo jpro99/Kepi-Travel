@@ -1854,6 +1854,8 @@ export default function TravelAssistantPage() {
   const clerk = useClerk();
   const { user } = useUser();
   const tNav = useTranslations("ConsumerNav");
+  const tApp = useTranslations("TravelAssistant");
+  const tMore = useTranslations("MoreSettings");
   const {
     status: billingStatus,
     loading: billingLoading,
@@ -3007,16 +3009,27 @@ export default function TravelAssistantPage() {
   }, [refreshTripsFromServer, setToast]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      if (tripsLoading) {
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const pollTrips = () => {
+      if (tripsLoading || document.visibilityState === "hidden") {
         return;
       }
       void refreshTripsFromServer().catch(() => {
         // Background polling should fail silently and retry on next interval.
       });
-    }, 30_000);
+    };
+    timer = window.setInterval(pollTrips, 120_000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        pollTrips();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
-      window.clearInterval(timer);
+      if (timer) {
+        window.clearInterval(timer);
+      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [refreshTripsFromServer, tripsLoading]);
 
@@ -3078,7 +3091,7 @@ export default function TravelAssistantPage() {
           setTrips(parsedTrips);
         }
       });
-    }, 2_000);
+    }, 8_000);
     return () => {
       window.clearTimeout(timeout);
     };
@@ -4554,7 +4567,7 @@ export default function TravelAssistantPage() {
   const browserConnectivity = useBrowserConnectivity();
   const offlineKitSync = useOfflineTravelKitSync({
     tripId: activeTripId,
-    tripName: activeTrip?.name ?? "Your trip",
+    tripName: activeTrip?.name ?? tApp("defaultTripName"),
     destination: consumerTripDestination ?? activeTrip?.destination ?? "",
     startDate: consumerTripStartDate ?? activeTrip?.startDate ?? "",
     endDate: consumerTripEndDate ?? activeTrip?.endDate ?? "",
@@ -4791,7 +4804,7 @@ export default function TravelAssistantPage() {
     }
     if (tripPlanningActions.length > 0) {
       return {
-        title: `${activeTrip?.name ?? "Your trip"} · action needed`,
+        title: `${activeTrip?.name ?? tApp("defaultTripName")} · action needed`,
         detail: `${tripPlanningActions.length} booking${tripPlanningActions.length === 1 ? "" : "s"} still to do.`,
         tone: "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-50",
       };
@@ -9668,7 +9681,7 @@ export default function TravelAssistantPage() {
                       className="block rounded-xl px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
                       onClick={() => setConsumerAvatarMenuOpen(false)}
                     >
-                      Billing
+                      {tApp("headerBilling")}
                     </Link>
                     {isAdminUser ? (
                       <Link
@@ -9676,15 +9689,15 @@ export default function TravelAssistantPage() {
                         className="block rounded-xl px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
                         onClick={() => setConsumerAvatarMenuOpen(false)}
                       >
-                        Admin
+                        {tApp("headerAdmin")}
                       </Link>
                     ) : null}
                     <div className="mt-2 rounded-xl bg-slate-100 p-2 dark:bg-slate-950">
-                      <p className="mb-2 px-1 text-xs font-semibold text-slate-500 dark:text-slate-400">Language</p>
+                      <p className="mb-2 px-1 text-xs font-semibold text-slate-500 dark:text-slate-400">{tApp("headerLanguage")}</p>
                       <LanguageToggle />
                     </div>
                     <div className="mt-2 flex items-center justify-between rounded-xl bg-slate-100 p-2 text-sm dark:bg-slate-950">
-                      <span>Theme</span>
+                      <span>{tApp("headerTheme")}</span>
                       <ThemeToggle />
                     </div>
                     {showAdvancedShortcut ? (
@@ -9704,7 +9717,7 @@ export default function TravelAssistantPage() {
                       }}
                       className="mt-2 w-full rounded-xl px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/10"
                     >
-                      Sign out
+                      {tApp("headerSignOut")}
                     </button>
                   </div>
                 ) : null}
@@ -9742,7 +9755,7 @@ export default function TravelAssistantPage() {
                 activeTab={mobilePrimaryTab}
                 onNavigateTab={navigateMobilePrimaryTab}
                 journeyPhase={mobileJourneyPhase}
-                tripName={activeTrip?.name ?? "Your trip"}
+                tripName={activeTrip?.name ?? tApp("defaultTripName")}
                 destination={consumerTripDestination ?? activeTrip?.destination ?? null}
                 startDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
                 endDate={consumerTripEndDate ?? activeTrip?.endDate ?? null}
@@ -9865,11 +9878,9 @@ export default function TravelAssistantPage() {
               <section className="space-y-4">
                 <div className="rounded-3xl overflow-hidden bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 shadow-xl">
                   <div className="px-5 pt-6 pb-4">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-sky-300/70">Welcome to Kepi</p>
-                    <p className="text-2xl font-black text-white mt-1">Where to next? ✈️</p>
-                    <p className="text-sky-100/70 text-sm mt-2 leading-relaxed">
-                      Just talk to us — tell us your dates, cities, and how many nights in each place. We&apos;ll build your calendar and itinerary.
-                    </p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-sky-300/70">{tApp("homeEmptyEyebrow")}</p>
+                    <p className="text-2xl font-black text-white mt-1">{tApp("homeEmptyTitle")}</p>
+                    <p className="text-sky-100/70 text-sm mt-2 leading-relaxed">{tApp("homeEmptyBody")}</p>
                   </div>
                   <div className="mx-4 mb-4 space-y-3">
                     <button
@@ -9877,15 +9888,15 @@ export default function TravelAssistantPage() {
                       onClick={() => setTalkPlannerOpen(true)}
                       className="w-full rounded-2xl bg-[#f4c95d] py-4 text-center font-black text-[#0b1f3a] text-base active:opacity-80"
                     >
-                      🎙 Tell us about your trip
+                      {tApp("homeEmptyTalkCta")}
                     </button>
-                    <p className="text-center text-xs text-sky-200/40">or</p>
+                    <p className="text-center text-xs text-sky-200/40">{tApp("homeEmptyOr")}</p>
                     <button
                       type="button"
                       onClick={() => void handleCreateTrip()}
                       className="w-full rounded-2xl border border-white/10 bg-white/8 py-3 text-center text-sm font-semibold text-white active:opacity-80"
                     >
-                      Set dates manually
+                      {tApp("homeEmptyManualDates")}
                     </button>
                     {trips.length > 0 ? (
                       <button
@@ -9901,12 +9912,12 @@ export default function TravelAssistantPage() {
                       onClick={() => navigateToBook("flights")}
                       className="w-full rounded-2xl border border-white/10 bg-white/8 py-3 text-center text-sm font-semibold text-white active:opacity-80"
                     >
-                      + Add a flight manually
+                      {tApp("homeEmptyAddFlight")}
                     </button>
                     <div className="rounded-2xl bg-white/8 border border-white/10 px-4 py-3">
                       <p className="text-white/60 text-xs leading-relaxed">
-                        💡 <span className="text-white/80 font-medium">Easiest way:</span> forward any booking confirmation email to{" "}
-                        <span className="text-sky-300 font-mono">jpro99-2@trips.kepitravel.com</span> and it appears here automatically.
+                        💡 <span className="text-white/80 font-medium">{tApp("homeEmptyForwardLabel")}</span>{" "}
+                        {tApp("homeEmptyForwardBody", { address: emptyStateForwardAddress })}
                       </p>
                     </div>
                   </div>
@@ -9914,7 +9925,7 @@ export default function TravelAssistantPage() {
               </section>
             ) : (
               <DesktopTripHomeView
-                tripName={activeTrip?.name ?? "Your trip"}
+                tripName={activeTrip?.name ?? tApp("defaultTripName")}
                 destination={consumerTripDestination ?? activeTrip?.destination ?? null}
                 startDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
                 endDate={consumerTripEndDate ?? activeTrip?.endDate ?? null}
@@ -9948,7 +9959,7 @@ export default function TravelAssistantPage() {
             )
           ) : consumerTab === "itinerary" ? (
             <ItineraryTabView
-              tripName={activeTrip?.name ?? "Your trip"}
+              tripName={activeTrip?.name ?? tApp("defaultTripName")}
               tripStartDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
               tripEndDate={activeTrip?.endDate ?? null}
               missingPriceCount={tripSpendSummary.missingPriceCount}
@@ -10054,16 +10065,14 @@ export default function TravelAssistantPage() {
           ) : consumerTab === "photos" ? (
             <section className="space-y-4">
               <header>
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Photos</h1>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                  Trip memories — upload, view, and share with family.
-                </p>
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{tApp("photosTitle")}</h1>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{tApp("photosSubtitle")}</p>
               </header>
               {activeTrip && activeTripId ? (
                 <div className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-black/[0.06] dark:bg-slate-900 dark:ring-white/[0.08]">
                   <TripMemoriesPanel
                     tripId={activeTripId}
-                    tripName={activeTrip?.name ?? "Your trip"}
+                    tripName={activeTrip?.name ?? tApp("defaultTripName")}
                     destination={consumerTripDestination ?? activeTrip?.destination ?? null}
                     startDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
                     endDate={consumerTripEndDate ?? activeTrip?.endDate ?? null}
@@ -10073,16 +10082,14 @@ export default function TravelAssistantPage() {
                 </div>
               ) : (
                 <div className="rounded-3xl border border-dashed border-slate-300 px-6 py-12 text-center dark:border-slate-700">
-                  <p className="text-lg font-semibold text-slate-900 dark:text-white">No trip selected</p>
-                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                    Create or open a trip on Home to start your photo album.
-                  </p>
+                  <p className="text-lg font-semibold text-slate-900 dark:text-white">{tApp("photosEmptyTitle")}</p>
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{tApp("photosEmptyBody")}</p>
                   <button
                     type="button"
                     onClick={() => navigateToConsumerTab("trip")}
                     className="mt-5 rounded-2xl bg-[#007AFF] px-5 py-3 text-sm font-bold text-white"
                   >
-                    Go to Home
+                    {tApp("photosGoHome")}
                   </button>
                 </div>
               )}
@@ -10115,9 +10122,9 @@ export default function TravelAssistantPage() {
                   <div className="flex items-center gap-3">
                     <span className="text-xl">🗂️</span>
                     <div>
-                      <p className="font-semibold text-slate-900 dark:text-white">My trips</p>
+                      <p className="font-semibold text-slate-900 dark:text-white">{tApp("moreMyTripsTitle")}</p>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        {trips.length} saved · switch, rename, or delete
+                        {tApp("moreMyTripsSubtitle", { count: trips.length })}
                       </p>
                     </div>
                   </div>
@@ -10129,10 +10136,8 @@ export default function TravelAssistantPage() {
                 <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 dark:border-slate-800">
                   <span className="text-xl">🎯</span>
                   <div>
-                    <p className="font-semibold text-slate-900 dark:text-white">Travel Fit</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Kepi learns how you travel — airlines, hotels, and earn paths
-                    </p>
+                    <p className="font-semibold text-slate-900 dark:text-white">{tApp("moreTravelFitTitle")}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{tApp("moreTravelFitSubtitle")}</p>
                   </div>
                 </div>
                 <div className="px-4 pb-4 pt-4">
@@ -10150,10 +10155,8 @@ export default function TravelAssistantPage() {
                 <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 dark:border-slate-800">
                   <span className="text-xl">💳</span>
                   <div>
-                    <p className="font-semibold text-slate-900 dark:text-white">Card wallet</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Which cards you hold — names only, no numbers stored on our servers
-                    </p>
+                    <p className="font-semibold text-slate-900 dark:text-white">{tApp("moreCardWalletTitle")}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{tApp("moreCardWalletSubtitle")}</p>
                   </div>
                 </div>
                 <div className="px-4 pb-4 pt-4">
@@ -10166,10 +10169,8 @@ export default function TravelAssistantPage() {
                 <div className="flex items-center gap-3 px-5 py-4">
                   <span className="text-xl">💳</span>
                   <div>
-                    <p className="font-semibold text-slate-900 dark:text-white">Loyalty Wallet</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Member numbers · miles · points · status
-                    </p>
+                    <p className="font-semibold text-slate-900 dark:text-white">{tApp("moreLoyaltyTitle")}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{tApp("moreLoyaltySubtitle")}</p>
                   </div>
                 </div>
                 <div className="border-t border-slate-100 dark:border-slate-800 px-4 pb-4 pt-4">
@@ -10187,8 +10188,8 @@ export default function TravelAssistantPage() {
                   <div className="flex items-center gap-3">
                     <span className="text-xl">🎒</span>
                     <div>
-                      <p className="font-semibold text-slate-900 dark:text-white">Packing &amp; Bags</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Checklist · weight tracking · critical items</p>
+                      <p className="font-semibold text-slate-900 dark:text-white">{tApp("morePackingTitle")}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{tApp("morePackingSubtitle")}</p>
                     </div>
                   </div>
                   <span className="text-slate-400 text-sm">›</span>
@@ -10260,9 +10261,9 @@ export default function TravelAssistantPage() {
                 className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <h2 className="font-semibold">Readiness checklist</h2>
+                  <h2 className="font-semibold">{tApp("moreReadinessTitle")}</h2>
                   <span className="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900 dark:bg-amber-500/20 dark:text-amber-100">
-                    {unresolvedReadinessCount} pending
+                    {tApp("moreReadinessPending", { count: unresolvedReadinessCount })}
                   </span>
                 </div>
                 <div className="mt-3 space-y-2">
@@ -10413,8 +10414,8 @@ export default function TravelAssistantPage() {
                 }}
                 className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
               >
-                🔄 Clear cache &amp; refresh
-                <p className="mt-0.5 text-xs font-normal text-slate-500 dark:text-slate-400">Fixes map issues, outdated screens, or loading problems</p>
+                🔄 {tMore("cacheTitle")}
+                <p className="mt-0.5 text-xs font-normal text-slate-500 dark:text-slate-400">{tMore("cacheBody")}</p>
               </button>
 
               <button
@@ -10424,7 +10425,7 @@ export default function TravelAssistantPage() {
                 }}
                 className="w-full rounded-2xl border border-red-200 bg-white p-4 text-left font-semibold text-red-600 shadow-sm dark:border-red-500/30 dark:bg-slate-900 dark:text-red-300"
               >
-                Sign out
+                {tApp("moreSignOut")}
               </button>
             </section>
           ))}
@@ -11142,7 +11143,7 @@ export default function TravelAssistantPage() {
                 <article className="space-y-4">
                   <TripTimeline
                     reservations={visibleReservations}
-                    tripName={activeTrip?.name ?? "Your trip"}
+                    tripName={activeTrip?.name ?? tApp("defaultTripName")}
                     tripStartDate={activeTrip?.startDate ?? null}
                     tripEndDate={activeTrip?.endDate ?? null}
                     tripDaysAway={tripDaysAway}

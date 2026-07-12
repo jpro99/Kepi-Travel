@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "next-intl";
 import { TripHotelStayMap } from "@/components/travelAssistant/TripHotelStayMap";
 import { MobileHotelStayNotebook } from "@/components/travelAssistant/mobile/MobileHotelStayNotebook";
 import { TripStayPlanner } from "@/components/travelAssistant/TripStayPlanner";
@@ -164,6 +165,8 @@ export function HotelsTab({
   onHotelNotebookChange,
   travelFitReservations = [],
 }: HotelsTabProps) {
+  const t = useTranslations("HotelsTab");
+  const tCommon = useTranslations("Common");
   const type = hotelCardTypography(simplifiedMobile);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showPast, setShowPast] = useState(false);
@@ -196,10 +199,10 @@ export function HotelsTab({
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400">
-                Hotel results
+                {t("inlineResultsEyebrow")}
               </p>
               <h3 className="text-lg font-black text-slate-900 dark:text-white">
-                {inlineHotelSearchDefaults.city?.split("(")[0]?.trim() || "Your search"}
+                {inlineHotelSearchDefaults.city?.split("(")[0]?.trim() || t("inlineResultsFallbackCity")}
               </h3>
             </div>
             {onCloseInlineHotelSearch ? (
@@ -208,7 +211,7 @@ export function HotelsTab({
                 onClick={onCloseInlineHotelSearch}
                 className="rounded-lg px-2 py-1 text-sm text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
               >
-                Close
+                {tCommon("close")}
               </button>
             ) : null}
           </div>
@@ -245,9 +248,10 @@ export function HotelsTab({
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className={type.heading}>Your hotels</h2>
+            <h2 className={type.heading}>{t("heading")}</h2>
             <p className={type.subheading}>
-              {upcoming.length} booked{past.length > 0 ? ` · ${past.length} past` : ""}
+              {t("bookedCount", { count: upcoming.length })}
+              {past.length > 0 ? ` ${t("pastCount", { count: past.length })}` : ""}
             </p>
           </div>
           {!enableBookSearch ? (
@@ -256,7 +260,7 @@ export function HotelsTab({
               onClick={onAdd}
               className={`shrink-0 ${type.addBtn}`}
             >
-              Add existing
+              {t("addExisting")}
             </button>
           ) : null}
         </div>
@@ -281,14 +285,14 @@ export function HotelsTab({
               disabled={!onLaunchHotelSearch && !onSearchHotels}
               className="min-h-[48px] flex-1 rounded-[var(--radius-button)] bg-[#007AFF] px-4 text-[17px] font-bold text-white disabled:opacity-50"
             >
-              Search hotels
+              {t("searchHotels")}
             </button>
             <button
               type="button"
               onClick={onAdd}
               className={`min-h-[48px] shrink-0 ${type.addBtn}`}
             >
-              Add existing
+              {t("addExisting")}
             </button>
           </div>
         ) : null}
@@ -327,11 +331,9 @@ export function HotelsTab({
       {shown.length === 0 && (
         <div className="rounded-3xl border border-dashed border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-10 text-center">
           <p className="text-4xl mb-3">🏨</p>
-          <p className="font-semibold text-slate-900 dark:text-white">No hotels yet</p>
+          <p className="font-semibold text-slate-900 dark:text-white">{t("emptyTitle")}</p>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">
-            {enableBookSearch
-              ? "Search for a hotel below, or add one you already booked."
-              : "Use the search box above to find and book a hotel, or add one you already booked."}
+            {enableBookSearch ? t("emptyBodyBook") : t("emptyBodyDefault")}
           </p>
           {onLaunchHotelSearch ? (
             <button
@@ -346,7 +348,7 @@ export function HotelsTab({
               }
               className="mb-3 w-full rounded-full bg-[#007AFF] px-6 py-2.5 text-sm font-bold text-white"
             >
-              Search hotels
+              {t("searchHotels")}
             </button>
           ) : onSearchHotels ? (
             <button
@@ -354,7 +356,7 @@ export function HotelsTab({
               onClick={onSearchHotels}
               className="mb-3 w-full rounded-full bg-[#007AFF] px-6 py-2.5 text-sm font-semibold text-white"
             >
-              Search hotels
+              {t("searchHotels")}
             </button>
           ) : null}
           <button
@@ -362,7 +364,7 @@ export function HotelsTab({
             onClick={onAdd}
             className="rounded-full border border-slate-300 px-6 py-2.5 text-sm font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-200"
           >
-            Add existing booking
+            {t("addExistingBooking")}
           </button>
         </div>
       )}
@@ -374,7 +376,7 @@ export function HotelsTab({
           onClick={() => setNotebookOpen(true)}
           className={`flex min-h-[48px] w-full items-center justify-center px-4 text-[17px] font-semibold text-[var(--text-primary)] ${type.secondaryBtn}`}
         >
-          Open stay notebook
+          {t("openNotebook")}
         </button>
       ) : null}
 

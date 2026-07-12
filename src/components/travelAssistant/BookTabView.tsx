@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type { BookSubTab } from "@/lib/travelAssistant/consumerTabs";
 import { bookSubTabButtonClass, BOOK_SUBTAB_TOGGLE_CLASS } from "@/components/travelAssistant/bookTabStyles";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
@@ -163,15 +164,17 @@ export function BookTabView({
   tripProblemCount = 0,
   onReviewPricing,
 }: BookTabViewProps) {
+  const t = useTranslations("BookTab");
+  const tTrip = useTranslations("TravelAssistant");
   return (
     <section className="space-y-3">
       <header className="rounded-2xl bg-[#0F1923] px-5 py-4 shadow-sm">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f4c95d]">Book</p>
-            <h1 className="mt-1 text-xl font-bold text-white">{tripName ?? "Your trip"}</h1>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f4c95d]">{t("headerEyebrow")}</p>
+            <h1 className="mt-1 text-xl font-bold text-white">{tripName ?? tTrip("defaultTripName")}</h1>
             <p className="mt-1 text-sm text-slate-300">
-              {flightCount} flight{flightCount === 1 ? "" : "s"} · {hotelCount} hotel{hotelCount === 1 ? "" : "s"}
+              {t("bookingCounts", { flights: flightCount, hotels: hotelCount })}
             </p>
           </div>
           {tripSpendSummary ? (
@@ -190,14 +193,14 @@ export function BookTabView({
           onClick={() => onBookSubTabChange("flights")}
           className={bookSubTabButtonClass(bookSubTab === "flights")}
         >
-          Flights
+          {t("subTabFlights")}
         </button>
         <button
           type="button"
           onClick={() => onBookSubTabChange("hotels")}
           className={bookSubTabButtonClass(bookSubTab === "hotels")}
         >
-          Hotels
+          {t("subTabHotels")}
         </button>
       </div>
 

@@ -349,8 +349,11 @@ Deterministic checks (real 3-letter airport codes, arrival ≠ departure, dates 
 **D13 — No feature may fabricate data on failure**  
 An API route that cannot perform its real function (e.g. no OCR engine wired up) must return an explicit error/"not available" response — never a hardcoded success payload that looks like real extracted data. Silent fake success is a worse failure mode than a visible error.
 
-**D14 — Itinerary-scoped offline prefetch**  
-Airport layouts and city map bundles prefetch within **48h** of when the traveler needs them. Evict cached assets only when their IATA/city key no longer appears on any **remaining** leg of the same trip — never wipe the whole cache on a single leg completion.
+**D14 — Itinerary-scoped offline prefetch**
+Airport indoor layouts prefetch **as soon as the IATA appears on a remaining trip leg** (flight booked or added). City map bundles still prefetch within **48h** of when the traveler needs them. Evict cached assets only when their IATA/city key no longer appears on any **remaining** leg of the same trip — never wipe the whole cache on a single leg completion.
+
+**D14b — Airport preview before travel day**
+Travelers may open the indoor terminal map **any time after a departure airport is on the trip** — not only inside the airport geofence. Preview mode shows lounges, check-in, gates, and routes to study the layout; live turn-by-turn, voice co-pilot, and family rally activate automatically at the departure geofence on travel day.
 
 **Test:** `src/lib/travelAssistant/itineraryOfflineCache.test.ts`
 

@@ -1,7 +1,8 @@
 /**
  * Shared itinerary-scoped offline cache rules (airport layouts + city map bundles).
- * Prefetch opens 48h before the traveler needs an asset; eviction only when the
- * IATA/city key does not appear in any remaining leg of the same trip.
+ * Airport indoor layouts prefetch as soon as the IATA appears on a remaining trip leg.
+ * City map bundles still open within 48h of when the traveler needs them.
+ * Eviction only when the IATA/city key does not appear in any remaining leg of the same trip.
  */
 
 import type { SessionReservation } from "@/lib/travelAssistant/clientSessionState";
@@ -154,6 +155,11 @@ export function shouldPrefetchAsset(needByUtcMs: number, nowMs: number): boolean
   const leadMs = OFFLINE_PREFETCH_LEAD_HOURS * 60 * 60 * 1000;
   const graceMs = OFFLINE_PREFETCH_GRACE_AFTER_HOURS * 60 * 60 * 1000;
   return nowMs >= needByUtcMs - leadMs && nowMs <= needByUtcMs + graceMs;
+}
+
+/** City maps use the 48h lead window; airport layouts prefetch via remaining-leg set instead. */
+export function shouldPrefetchCityMap(needByUtcMs: number, nowMs: number): boolean {
+  return shouldPrefetchAsset(needByUtcMs, nowMs);
 }
 
 export function listRemainingAirportIatas(

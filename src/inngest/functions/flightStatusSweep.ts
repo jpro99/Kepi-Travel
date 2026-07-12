@@ -52,7 +52,7 @@ export const flightStatusSweep = inngest.createFunction(
     id: "flight-status-sweep",
     name: "Flight status proactive sweep",
     retries: 1,
-    triggers: [{ cron: "*/2 * * * *" }],
+    triggers: [{ cron: "*/10 * * * *" }],
   },
   async ({ step }) => {
     const userIds = await step.run("discover-trip-owners", listUserIdsWithTrips);

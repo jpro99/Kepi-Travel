@@ -69,7 +69,7 @@ Later (optional): embedding retrieval, ranker, bandit — only after correction 
 
 Five Claude-prompt features shipped together:
 
-1. **Itinerary-scoped offline cache (D14)** — `itineraryOfflineCache.ts` + `syncItineraryOfflineAssets` prefetch airport layouts and pilot city GeoJSON bundles 48h before need; evict only when IATA/city key leaves remaining trip legs. Wired via `useOfflineTravelKitSync`.
+1. **Itinerary-scoped offline cache (D14)** — `itineraryOfflineCache.ts` + `syncItineraryOfflineAssets` prefetch airport layouts as soon as an IATA is on a trip leg; city GeoJSON bundles still prefetch 48h before need; evict only when IATA/city key leaves remaining trip legs. Wired via `useOfflineTravelKitSync`.
 2. **Offline city map fallback (D15)** — Pilot bundles (`munich-de`, `puglia-it`, `rome-it`) in `offlineCityMapBundle.ts`; Live Map uses inline GeoJSON style when offline.
 3. **Nav timing calibration (D16)** — `navTimingCalibration.ts` aggregates walk/security samples from airport navigator journey events; min 5/10 samples before overriding curated edge times.
 4. **Two-stage post-booking briefing (D17)** — `postBookingBriefing.ts` + `PostBookingBriefingCard` in Airport Mode: eligibility before gate/check-in, actionable guidance after.

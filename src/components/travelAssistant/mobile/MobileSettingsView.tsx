@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { openSupportChat } from "@/components/support/SupportChat";
 import { ThemePicker } from "@/components/ThemeToggle";
 import { LanguageSettingsCard } from "@/components/LanguageSettingsCard";
@@ -50,8 +50,11 @@ export function MobileSettingsView({
   onRefreshOfflineKit,
   onSignOut,
 }: MobileSettingsViewProps) {
+  const locale = useLocale();
   const tNav = useTranslations("ConsumerNav");
   const tSupport = useTranslations("SupportPage");
+  const t = useTranslations("MoreSettings");
+  const dateTag = locale === "es" ? "es-ES" : "en-US";
   return (
     <section className="space-y-4 pb-4">
       <OfflineTravelKitSettingsCard
@@ -64,7 +67,7 @@ export function MobileSettingsView({
       />
 
       <article className={`${appleCard} p-4`}>
-        <h2 className={appleCardTitle}>Forward email address</h2>
+        <h2 className={appleCardTitle}>{t("forwardEmailTitle")}</h2>
         {emailForwardAddress ? (
           <>
             <p className={`${appleMetadata} mt-1`}>{emailForwardAddress}</p>
@@ -73,27 +76,23 @@ export function MobileSettingsView({
               onClick={onCopyForwardAddress}
               className={`mt-3 w-full min-h-[44px] ${appleBtnPrimary}`}
             >
-              Copy forward address
+              {t("forwardEmailCopy")}
             </button>
-            <p className={`${appleCaption} mt-2`}>
-              Forward any flight, hotel, or booking confirmation from any email app to this address.
-            </p>
+            <p className={`${appleCaption} mt-2`}>{t("forwardEmailHint")}</p>
           </>
         ) : (
-          <p className={`${appleMetadata} mt-1`}>Assigning your forwarding address...</p>
+          <p className={`${appleMetadata} mt-1`}>{t("forwardEmailAssigning")}</p>
         )}
       </article>
 
       <article className={`${appleCard} p-4`}>
         <div className="flex items-center justify-between gap-2">
-          <h2 className={appleCardTitle}>Flight alerts</h2>
+          <h2 className={appleCardTitle}>{t("flightAlertsTitle")}</h2>
           {pushSubscribed ? (
-            <span className="text-[13px] font-medium text-[var(--success)]">Active</span>
+            <span className="text-[13px] font-medium text-[var(--success)]">{t("flightAlertsActive")}</span>
           ) : null}
         </div>
-        <p className={`${appleMetadata} mt-1`}>
-          Get push alerts for gate changes, delays, and departure reminders — even when the app isn&apos;t open.
-        </p>
+        <p className={`${appleMetadata} mt-1`}>{t("flightAlertsBody")}</p>
         {!pushSubscribed ? (
           <button
             type="button"
@@ -103,10 +102,10 @@ export function MobileSettingsView({
             disabled={pushBusy}
             className={`mt-3 w-full min-h-[44px] ${appleBtnPrimary} disabled:opacity-60`}
           >
-            {pushBusy ? "Enabling..." : "Enable flight alerts"}
+            {pushBusy ? t("flightAlertsEnabling") : t("flightAlertsEnable")}
           </button>
         ) : (
-          <p className="mt-3 text-[15px] font-medium text-[var(--success)]">Alerts are on</p>
+          <p className="mt-3 text-[15px] font-medium text-[var(--success)]">{t("flightAlertsOn")}</p>
         )}
         {pushMessage ? (
           <p
@@ -121,31 +120,39 @@ export function MobileSettingsView({
 
       <article className={`${appleCard} p-4`}>
         <div className="flex items-center justify-between gap-2">
-          <h2 className={appleCardTitle}>Plan status</h2>
+          <h2 className={appleCardTitle}>{t("planStatusTitle")}</h2>
           <span className="text-[13px] font-medium text-[var(--text-secondary)]">
-            {isLifetime ? "Pro" : isTrial ? `Trial — ${trialDaysRemaining}d` : hasProAccess ? "Pro" : "Free"}
+            {isLifetime
+              ? t("planPro")
+              : isTrial
+                ? t("planTrial", { days: trialDaysRemaining })
+                : hasProAccess
+                  ? t("planPro")
+                  : t("planFree")}
           </span>
         </div>
         <p className={`${appleMetadata} mt-2`}>
           {billingLoading
-            ? "Loading your plan..."
+            ? t("planLoading")
             : isLifetime
-              ? "You have lifetime Pro access."
+              ? t("planLifetime")
               : isTrial
-                ? `Trial ends ${trialExpiresAt ? new Date(trialExpiresAt).toLocaleDateString() : "soon"}.`
+                ? trialExpiresAt
+                  ? t("planTrialEnds", {
+                      date: new Date(trialExpiresAt).toLocaleDateString(dateTag),
+                    })
+                  : t("planTrialSoon")
                 : hasProAccess
-                  ? "Your Pro plan is active."
-                  : "You are on the free plan."}
+                  ? t("planProActive")
+                  : t("planFreeBody")}
         </p>
       </article>
 
       <PlanRedeemCard compact />
 
       <section className={`${appleCard} p-4`}>
-        <h2 className={appleCardTitle}>Appearance</h2>
-        <p className={`${appleMetadata} mb-3 mt-1`}>
-          Light is easier to read on your phone. Dark is available when you want it.
-        </p>
+        <h2 className={appleCardTitle}>{t("appearanceTitle")}</h2>
+        <p className={`${appleMetadata} mb-3 mt-1`}>{t("appearanceBody")}</p>
         <ThemePicker />
       </section>
 
@@ -180,10 +187,8 @@ export function MobileSettingsView({
         }}
         className={`w-full p-4 text-left ${appleCard}`}
       >
-        <span className={appleCardTitle}>Clear cache &amp; refresh</span>
-        <p className={`${appleCaption} mt-0.5`}>
-          Fixes map issues, outdated screens, or loading problems
-        </p>
+        <span className={appleCardTitle}>{t("cacheTitle")}</span>
+        <p className={`${appleCaption} mt-0.5`}>{t("cacheBody")}</p>
       </button>
 
       <button
@@ -191,7 +196,7 @@ export function MobileSettingsView({
         onClick={onSignOut}
         className={`w-full p-4 text-left font-semibold text-[var(--destructive)] ${appleCard}`}
       >
-        Sign out
+        {t("signOut")}
       </button>
     </section>
   );

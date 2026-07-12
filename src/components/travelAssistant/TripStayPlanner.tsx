@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 import { nextMissingStaySegment, segmentsAwaitingDecision, segmentsNeedingHotel } from "@/lib/hotels/deriveTripStaySegments";
 
@@ -17,23 +18,26 @@ export interface TripStayPlannerProps {
   ) => void | Promise<void>;
 }
 
-function statusLabel(segment: TripStaySegment): { text: string; className: string } {
+function statusLabel(
+  segment: TripStaySegment,
+  t: (key: string) => string,
+): { text: string; className: string } {
   if (segment.status === "booked") {
-    return { text: "Booked", className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200" };
+    return { text: t("statusBooked"), className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200" };
   }
   if (segment.status === "partial") {
-    return { text: "Partial", className: "bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-100" };
+    return { text: t("statusPartial"), className: "bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-100" };
   }
   if (segment.stayIntent === "skip" || segment.status === "skipped") {
-    return { text: "Connection", className: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" };
+    return { text: t("statusConnection"), className: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" };
   }
   if (segment.needsDecision) {
-    return { text: "Need answer", className: "bg-sky-100 text-sky-900 dark:bg-sky-950/50 dark:text-sky-100" };
+    return { text: t("statusNeedAnswer"), className: "bg-sky-100 text-sky-900 dark:bg-sky-950/50 dark:text-sky-100" };
   }
   if (segment.stayIntent === "needs_hotel") {
-    return { text: "Hotel needed", className: "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200" };
+    return { text: t("statusHotelNeeded"), className: "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200" };
   }
-  return { text: "Review", className: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200" };
+  return { text: t("statusReview"), className: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200" };
 }
 
 function cityName(segment: TripStaySegment): string {
@@ -56,6 +60,7 @@ export function TripStayPlanner({
   onAddCityStay,
   onSetStayIntent,
 }: TripStayPlannerProps) {
+  const t = useTranslations("StayPlanner");
   const [showAddCity, setShowAddCity] = useState(false);
   const [newCity, setNewCity] = useState("");
   const [newCheckIn, setNewCheckIn] = useState("");
@@ -86,7 +91,7 @@ export function TripStayPlanner({
   if (segments.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-sm text-slate-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300">
-        Add flights or set trip dates to see where you might need hotels — or add a city stay below.
+        {t("empty")}
       </div>
     );
   }
@@ -95,13 +100,13 @@ export function TripStayPlanner({
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Where you&apos;re staying</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{t("eyebrow")}</p>
           <p className="text-sm font-semibold text-slate-900 dark:text-white">
             {tripName?.trim() ? `${tripName.trim()} · ` : ""}
-            {mainSegments.length} stop{mainSegments.length === 1 ? "" : "s"} to plan
+            {t("stopCount", { stops: mainSegments.length })}
           </p>
           {usuallySkipsConnections ? (
-            <p className="mt-0.5 text-[11px] text-slate-500">Connection cities fold away automatically.</p>
+            <p className="mt-0.5 text-[11px] text-slate-500">{t("foldHint")}</p>
           ) : null}
         </div>
         {onAddCityStay ? (
@@ -110,7 +115,7 @@ export function TripStayPlanner({
             onClick={() => setShowAddCity((value) => !value)}
             className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-200"
           >
-            + City
+            {t("addCity")}
           </button>
         ) : null}
       </div>
@@ -118,7 +123,7 @@ export function TripStayPlanner({
       {awaitingDecision.length > 0 ? (
         <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 dark:border-sky-800 dark:bg-sky-950/30">
           <p className="text-sm font-bold text-sky-900 dark:text-sky-100">
-            {awaitingDecision.length} quick yes/no — hotel or just connecting?
+            {t("awaitingPrompt", { count: awaitingDecision.length })}
           </p>
         </div>
       ) : null}
@@ -129,7 +134,7 @@ export function TripStayPlanner({
           onClick={() => onSearchSegment(nextMissing)}
           className="w-full rounded-2xl bg-[#0b1f3a] px-4 py-3 text-left text-white shadow-md"
         >
-          <p className="text-[10px] font-black uppercase tracking-widest text-[#f4c95d]">Next hotel to book</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-[#f4c95d]">{t("nextHotelEyebrow")}</p>
           <p className="mt-1 text-sm font-bold">{cityName(nextMissing)}</p>
           <p className="text-xs text-slate-300">
             {nextMissing.checkIn} → {nextMissing.checkOut}
@@ -138,7 +143,7 @@ export function TripStayPlanner({
         </button>
       ) : committedMissing.length === 0 && awaitingDecision.length === 0 ? (
         <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100">
-          Stays covered — connections are tucked away below.
+          {t("staysCovered")}
         </p>
       ) : null}
 
@@ -163,7 +168,7 @@ export function TripStayPlanner({
           >
             <div>
               <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                ✈️ {foldedConnections.length} connection{foldedConnections.length === 1 ? "" : "s"} — no hotel needed
+                ✈️ {t("connectionsFolded", { count: foldedConnections.length })}
               </p>
               <p className="text-[11px] text-slate-500">
                 {foldedConnections.map(cityName).join(" · ")}
@@ -178,8 +183,8 @@ export function TripStayPlanner({
                   <span>{cityName(segment)}</span>
                   <span>
                     {segment.connectionHours != null
-                      ? `~${Math.round(segment.connectionHours)}h layover`
-                      : "Same-day connection"}
+                      ? t("layoverHours", { hours: Math.round(segment.connectionHours) })
+                      : t("sameDayConnection")}
                   </span>
                   {onSetStayIntent ? (
                     <button
@@ -188,7 +193,7 @@ export function TripStayPlanner({
                       onClick={() => void handleIntent(segment, "needs_hotel")}
                       className="font-semibold text-sky-700 underline dark:text-sky-300"
                     >
-                      Need hotel?
+                      {t("needHotel")}
                     </button>
                   ) : null}
                 </div>
@@ -200,7 +205,7 @@ export function TripStayPlanner({
 
       {showAddCity && onAddCityStay ? (
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/50">
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Add a city stay</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{t("addCityStayTitle")}</p>
           <input
             type="text"
             value={newCity}
@@ -254,7 +259,8 @@ function SegmentCard({
   onSearch: () => void;
   onIntent?: (intent: "needs_hotel" | "skip") => void;
 }) {
-  const status = statusLabel(segment);
+  const t = useTranslations("StayPlanner");
+  const status = statusLabel(segment, (key) => t(key as Parameters<typeof t>[0]));
   const name = cityName(segment);
   const compact = segment.status === "booked" || segment.stayIntent === "skip";
 
@@ -291,7 +297,7 @@ function SegmentCard({
             onClick={() => onIntent("needs_hotel")}
             className="rounded-xl bg-sky-600 py-2 text-sm font-bold text-white disabled:opacity-50"
           >
-            Yes — hotel
+            {t("yesHotel")}
           </button>
           <button
             type="button"
@@ -299,14 +305,14 @@ function SegmentCard({
             onClick={() => onIntent("skip")}
             className="rounded-xl border border-slate-300 py-2 text-sm font-bold text-slate-700 dark:border-slate-600 dark:text-slate-200 disabled:opacity-50"
           >
-            No — connecting
+            {t("noConnecting")}
           </button>
         </div>
       ) : null}
 
       {segment.stayIntent === "needs_hotel" && segment.status !== "booked" ? (
         <button type="button" onClick={onSearch} className="mt-3 w-full rounded-xl bg-sky-600 py-2.5 text-sm font-bold text-white">
-          Search hotels
+          {t("searchHotels")}
         </button>
       ) : null}
     </div>

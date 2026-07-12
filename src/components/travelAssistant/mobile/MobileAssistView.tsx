@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { LiveMapLink } from "@/components/travelAssistant/LiveMapLink";
 import { CheckInHandoffCard } from "@/components/travelAssistant/CheckInHandoffCard";
 import { NextUpCard } from "@/components/travelAssistant/NextUpCard";
@@ -57,6 +58,7 @@ export function MobileAssistView({
   onReservationTap,
   liveStatus,
 }: MobileAssistViewProps) {
+  const t = useTranslations("HomeAssist");
   const checkInHandoff = useMemo(() => {
     const nextFlight = [...reservations]
       .filter((reservation) => reservation.type === "flight")
@@ -96,21 +98,23 @@ export function MobileAssistView({
     <section className="space-y-4">
       {journeyPhase.kind === "airborne" ? (
         <div className="rounded-3xl overflow-hidden bg-[var(--bg-card)] p-5 shadow-lg ring-1 ring-[var(--border-default)]">
-          <p className="text-xs font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400">In flight</p>
+          <p className="text-xs font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400">{t("inFlight")}</p>
           <p className="mt-2 text-2xl font-black text-[var(--text-primary)] leading-tight">
             {(journeyPhase.onFlight as Reservation & { flightDepartureAirport?: string }).flightDepartureAirport ?? ""} →{" "}
             {journeyPhase.landingAt}
           </p>
           <p className="mt-2 text-sm text-[var(--text-muted)]">
-            Landing in {journeyPhase.landingIn}
+            {t("landingIn", { time: journeyPhase.landingIn })}
           </p>
         </div>
       ) : journeyPhase.kind === "just-landed" ? (
         <div className="rounded-3xl overflow-hidden bg-[var(--bg-card)] p-5 shadow-lg ring-1 ring-[var(--border-default)]">
-          <p className="text-xs font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Welcome</p>
-          <p className="mt-2 text-2xl font-black text-[var(--text-primary)]">You&apos;ve landed</p>
+          <p className="text-xs font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">{t("landedLabel")}</p>
+          <p className="mt-2 text-2xl font-black text-[var(--text-primary)]">{t("landedTitle")}</p>
           <p className="mt-2 text-sm text-[var(--text-muted)]">
-            {journeyPhase.landedMinutesAgo < 2 ? "Just now" : `${journeyPhase.landedMinutesAgo} min ago`}
+            {journeyPhase.landedMinutesAgo < 2
+              ? t("justNow")
+              : t("minutesAgo", { count: journeyPhase.landedMinutesAgo })}
           </p>
         </div>
       ) : null}
@@ -124,13 +128,11 @@ export function MobileAssistView({
         >
           <div className="min-w-0">
             <p className="text-base font-bold text-sky-950 dark:text-sky-100">
-              {locationStatus === "in-terminal" ? "Inside the terminal" : "You're at the airport"}
+              {locationStatus === "in-terminal" ? t("inTerminal") : t("atAirport")}
             </p>
-            <p className="mt-0.5 text-sm text-sky-900/80 dark:text-sky-100/80">
-              Open gate routing and terminal map
-            </p>
+            <p className="mt-0.5 text-sm text-sky-900/80 dark:text-sky-100/80">{t("airportSubtitle")}</p>
           </div>
-          <span className="shrink-0 text-sm font-bold text-[#007AFF] dark:text-[#0A84FF]">Go →</span>
+          <span className="shrink-0 text-sm font-bold text-[#007AFF] dark:text-[#0A84FF]">{t("go")}</span>
         </LiveMapLink>
       ) : null}
 

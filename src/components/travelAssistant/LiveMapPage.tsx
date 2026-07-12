@@ -10,6 +10,7 @@ import {
   useActiveFlight,
   useNavigatorCredentials,
 } from "@/lib/travelAssistant/useActiveFlight";
+import { hasAirportLayout } from "@/lib/airportNav/getLayout";
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
 import { buildOsmRasterFallbackStyle, directMaptilerTransformRequest, resolveLiveMapStyle, scheduleMapLoadFallback, attachMapStyleErrorFallback, type LiveMapStyleId } from "@/lib/map/maptilerClient";
 import { buildOfflineCityMapStyle } from "@/lib/map/offlineCityMapBundle";
@@ -620,7 +621,8 @@ export function LiveMapPage() {
 
   /* ── Airport Navigator integration (shared selection — Map button asks
         the SAME question AirportMode does, via useActiveFlight) ── */
-  const { activeFlight } = useActiveFlight();
+  const { activeFlight, previewFlight } = useActiveFlight();
+  const navFlight = activeFlight ?? previewFlight;
   const { credentials: navCredentials, profile: navProfile, saveCredentials } = useNavigatorCredentials();
   const [mapView, setMapView] = useState<"family" | "airport">("family");
   const [navLat, setNavLat] = useState<number | null>(null);
@@ -657,12 +659,22 @@ export function LiveMapPage() {
   }, []);
 
   const navProximity = useMemo(
-    () => getAirportProximity(navLat, navLon, activeFlight?.f.flightDepartureAirport),
-    [navLat, navLon, activeFlight],
+    () => getAirportProximity(navLat, navLon, navFlight?.f.flightDepartureAirport),
+    [navLat, navLon, navFlight],
   );
 
   const atDepartureAirport =
     navProximity.status === "at-airport" || navProximity.status === "in-terminal";
+
+  const airportLiveMode = Boolean(activeFlight && atDepartureAirport);
+  const airportPreviewMode = Boolean(navFlight && !airportLiveMode);
+  const navIata = navFlight?.f.flightDepartureAirport ?? "";
+  const navHasIndoorLayout = hasAirportLayout(navIata);
+
+  useEffect(() => {
+    if (!preferAirportView || !previewFlight || !navHasIndoorLayout) return;
+    setMapView("airport");
+  }, [preferAirportView, previewFlight, navHasIndoorLayout]);
 
   // Default map to the user's actual location (once), not world view or airport campus
   useEffect(() => {
@@ -700,7 +712,9 @@ export function LiveMapPage() {
   // Airport navigator: deep-link (?view=airport) or auto-switch when geofenced at departure airport
   useEffect(() => {
     if (!activeFlight) {
-      setMapView((prev) => (prev === "airport" ? "family" : prev));
+      if (!preferAirportView) {
+        setMapView((prev) => (prev === "airport" ? "family" : prev));
+      }
       return;
     }
     if (preferAirportView || atDepartureAirport) {
@@ -711,22 +725,24 @@ export function LiveMapPage() {
       return;
     }
     autoAirportRef.current = false;
-    setMapView((prev) => (prev === "airport" ? "family" : prev));
+    if (!preferAirportView) {
+      setMapView((prev) => (prev === "airport" ? "family" : prev));
+    }
   }, [atDepartureAirport, activeFlight, preferAirportView]);
 
   const navEligibleLounges = useMemo(
     () =>
-      activeFlight
+      navFlight
         ? deriveEligibleLounges(
             navProfile,
-            activeFlight.f.flightAirline ?? activeFlight.f.provider ?? "",
-            activeFlight.f.flightDepartureAirport ?? "",
+            navFlight.f.flightAirline ?? navFlight.f.provider ?? "",
+            navFlight.f.flightDepartureAirport ?? "",
           )
         : [],
-    [navProfile, activeFlight],
+    [navProfile, navFlight],
   );
 
-  const navMinutesToDeparture = activeFlight ? (activeFlight.utcMs - Date.now()) / 60_000 : 0;
+  const navMinutesToDeparture = navFlight ? (navFlight.utcMs - Date.now()) / 60_000 : 0;
 
   const {
     sync: airportSync,
@@ -954,24 +970,25 @@ export function LiveMapPage() {
           className={`absolute inset-0 z-0 h-full w-full bg-[#dbeafe] ${mapView === "airport" ? "opacity-0 pointer-events-none" : ""}`}
         />
 
-        {/* Airport Navigator overlay — full-bleed when at the airport view */}
-        {mapView === "airport" && activeFlight && (atDepartureAirport || preferAirportView) && (
+        {/* Airport Navigator overlay — preview anytime; live navigation at geofence */}
+        {mapView === "airport" && navFlight && navHasIndoorLayout && (
           <div className="absolute inset-0 z-40">
             <AirportNavigatorMap
               fill
-              iata={activeFlight.f.flightDepartureAirport ?? ""}
-              gateCode={activeFlight.f.flightDepartureGate ?? null}
-              airlineName={activeFlight.f.flightAirline ?? activeFlight.f.provider ?? null}
-              flightNumber={activeFlight.f.flightNumber ?? null}
-              arrivalAirport={activeFlight.f.flightArrivalAirport ?? null}
-              departureTerminal={activeFlight.f.flightDepartureTerminal ?? null}
+              previewMode={airportPreviewMode}
+              iata={navFlight.f.flightDepartureAirport ?? ""}
+              gateCode={navFlight.f.flightDepartureGate ?? null}
+              airlineName={navFlight.f.flightAirline ?? navFlight.f.provider ?? null}
+              flightNumber={navFlight.f.flightNumber ?? null}
+              arrivalAirport={navFlight.f.flightArrivalAirport ?? null}
+              departureTerminal={navFlight.f.flightDepartureTerminal ?? null}
               flightStatusLabel={
-                (activeFlight.f.flightDelayMinutes ?? 0) > 0
-                  ? `Delayed +${activeFlight.f.flightDelayMinutes}m`
-                  : activeFlight.f.flightStatus ?? (activeFlight.f.flightOnTime === false ? "Delayed" : "On time")
+                (navFlight.f.flightDelayMinutes ?? 0) > 0
+                  ? `Delayed +${navFlight.f.flightDelayMinutes}m`
+                  : navFlight.f.flightStatus ?? (navFlight.f.flightOnTime === false ? "Delayed" : "On time")
               }
-              flightDelayed={(activeFlight.f.flightDelayMinutes ?? 0) > 0 || activeFlight.f.flightOnTime === false}
-              proximityStatus={navProximity.status}
+              flightDelayed={(navFlight.f.flightDelayMinutes ?? 0) > 0 || navFlight.f.flightOnTime === false}
+              proximityStatus={airportLiveMode ? navProximity.status : "preview"}
               minutesToDeparture={navMinutesToDeparture}
               userLat={navLat}
               userLon={navLon}
@@ -979,12 +996,12 @@ export function LiveMapPage() {
               onCredentialsAnswer={saveCredentials}
               eligibleLoungeNames={navEligibleLounges}
               onSwitchToFamilyView={() => setMapView("family")}
-              familyPins={familyAirportPins}
+              familyPins={airportLiveMode ? familyAirportPins : []}
               onFamilyPinTap={handleFamilyPinTap}
-              activeRally={airportSync?.rally?.status === "active" ? airportSync.rally : null}
+              activeRally={airportLiveMode && airportSync?.rally?.status === "active" ? airportSync.rally : null}
               shellBottomInset="0px"
             />
-            {members.length >= 2 ? (
+            {airportLiveMode && members.length >= 2 ? (
               <div
                 className="pointer-events-none absolute inset-x-0 z-50 px-3"
                 style={{ bottom: "5.5rem" }}
@@ -995,8 +1012,8 @@ export function LiveMapPage() {
                   sync={airportSync}
                   groupBoarding={groupBoarding}
                   activeRally={airportSync?.rally?.status === "active" ? airportSync.rally : null}
-                  gateCode={activeFlight.f.flightDepartureGate ?? null}
-                  iata={activeFlight.f.flightDepartureAirport ?? "—"}
+                  gateCode={navFlight.f.flightDepartureGate ?? null}
+                  iata={navFlight.f.flightDepartureAirport ?? "—"}
                   busy={familySyncBusy}
                   onSetPhase={(phase) => void setFamilyJourneyPhase(phase)}
                   onSetRallyAtGate={handleRallyAtGate}
@@ -1007,13 +1024,16 @@ export function LiveMapPage() {
           </div>
         )}
 
-        {/* Airport ⇄ Family view pill — only inside departure-airport geofence */}
-        {activeFlight && atDepartureAirport && (
+        {/* Airport ⇄ Family view pill — when trip has a mappable departure airport */}
+        {navFlight && navHasIndoorLayout && (
           <div
             className="absolute left-1/2 z-50 flex -translate-x-1/2 overflow-hidden rounded-full border border-white/15 shadow-xl"
             style={{ top: "max(3.6rem, calc(env(safe-area-inset-top) + 3.1rem))" }}
           >
-            {([["airport", "✈ Airport"], ["family", "👪 Family"]] as ["airport" | "family", string][]).map(([viewId, viewLabel]) => (
+            {([
+              ["airport", airportPreviewMode ? "✈ Plan airport" : "✈ Airport"],
+              ["family", "👪 Family"],
+            ] as ["airport" | "family", string][]).map(([viewId, viewLabel]) => (
               <button
                 key={viewId}
                 type="button"

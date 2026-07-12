@@ -1,23 +1,42 @@
-import test from "node:test";
 import assert from "node:assert/strict";
-import { selectActiveFlight, toUtcMs } from "@/lib/travelAssistant/useActiveFlight";
+import test from "node:test";
+import {
+  selectActiveFlight,
+  selectPreviewAirportFlight,
+  toUtcMs,
+  type FlightReservation,
+} from "@/lib/travelAssistant/useActiveFlight";
 
 function localInHours(hoursFromNow: number): string {
   const ms = Date.now() + hoursFromNow * 3_600_000;
   const d = new Date(ms);
   const pad = (n: number) => String(n).padStart(2, "0");
-  // Use UTC-ish local string; toUtcMs without timezone treats as UTC approx
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
 }
 
+const baseFlight: FlightReservation = {
+  id: "f1",
+  type: "flight",
+  title: "AS 271",
+  provider: "Alaska",
+  localTime: "2026-12-01 08:45",
+  timezone: "America/Los_Angeles",
+  location: "SEA",
+  confirmationCode: "ABC",
+  flightNumber: "AS271",
+  flightDepartureAirport: "SEA",
+  flightArrivalAirport: "HNL",
+};
+
 test("selectActiveFlight includes flights up to 12 hours ahead (early airport arrival)", () => {
   const now = Date.now();
-  const flight = {
+  const flight: FlightReservation = {
     id: "f1",
     type: "flight",
     title: "SEA → FCO",
     provider: "Delta",
     localTime: localInHours(8),
+    location: "SEA",
     flightDepartureAirport: "SEA",
   };
   const active = selectActiveFlight([flight], now);
@@ -27,12 +46,13 @@ test("selectActiveFlight includes flights up to 12 hours ahead (early airport ar
 
 test("selectActiveFlight ignores flights more than 12 hours ahead", () => {
   const now = Date.now();
-  const flight = {
+  const flight: FlightReservation = {
     id: "f1",
     type: "flight",
     title: "SEA → FCO",
     provider: "Delta",
     localTime: localInHours(20),
+    location: "SEA",
     flightDepartureAirport: "SEA",
   };
   assert.equal(selectActiveFlight([flight], now), null);
@@ -41,4 +61,29 @@ test("selectActiveFlight ignores flights more than 12 hours ahead", () => {
 test("toUtcMs parses local time strings", () => {
   const ms = toUtcMs("2026-09-01 14:30");
   assert.ok(Number.isFinite(ms));
+});
+
+test("selectPreviewAirportFlight includes departures months away", () => {
+  const depMs = Date.parse("2026-12-01T16:45:00Z");
+  const monthsBefore = depMs - 120 * 24 * 60 * 60 * 1000;
+  const preview = selectPreviewAirportFlight([baseFlight], monthsBefore);
+  assert.ok(preview);
+  assert.equal(preview.f.flightDepartureAirport, "SEA");
+});
+
+test("selectActiveFlight ignores departures outside the live airport window", () => {
+  const depMs = Date.parse("2026-12-01T16:45:00Z");
+  const monthsBefore = depMs - 120 * 24 * 60 * 60 * 1000;
+  const live = selectActiveFlight([baseFlight], monthsBefore);
+  assert.equal(live, null);
+});
+
+test("selectActiveFlight and preview agree inside the live window", () => {
+  const depMs = Date.parse("2026-12-01T16:45:00Z");
+  const twoHoursBefore = depMs - 2 * 60 * 60 * 1000;
+  const live = selectActiveFlight([baseFlight], twoHoursBefore);
+  const preview = selectPreviewAirportFlight([baseFlight], twoHoursBefore);
+  assert.ok(live);
+  assert.ok(preview);
+  assert.equal(live!.f.id, preview!.f.id);
 });

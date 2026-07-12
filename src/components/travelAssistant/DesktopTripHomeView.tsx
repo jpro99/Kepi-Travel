@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useLocale, useTranslations } from "next-intl";
 import { MobileAssistView } from "@/components/travelAssistant/mobile/MobileAssistView";
 import { TripHealthStrip } from "@/components/travelAssistant/TripHealthStrip";
 import { TripHomeTransportSection } from "@/components/travelAssistant/TripHomeTransportSection";
@@ -81,10 +82,15 @@ function daysUntilTrip(startDate: string | null | undefined): number | null {
   return Math.max(0, Math.ceil((start - Date.now()) / 86_400_000));
 }
 
-function formatDateRange(startDate: string | null | undefined, endDate: string | null | undefined): string | null {
+function formatDateRange(
+  startDate: string | null | undefined,
+  endDate: string | null | undefined,
+  locale: string,
+): string | null {
   if (!startDate || !endDate) return null;
+  const tag = locale === "es" ? "es-ES" : "en-US";
   const fmt = (value: string) =>
-    new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString("en-US", {
+    new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString(tag, {
       month: "short",
       day: "numeric",
       year: "numeric",
@@ -119,6 +125,9 @@ export function DesktopTripHomeView({
   onQuickGroundTransport,
   liveStatus,
 }: DesktopTripHomeViewProps) {
+  const locale = useLocale();
+  const t = useTranslations("TripHome");
+  const tNav = useTranslations("ConsumerNav");
   const transportReservations =
     transportReservationsProp ??
     reservations.filter((reservation) => ["flight", "train", "ride"].includes(reservation.type));
@@ -126,15 +135,15 @@ export function DesktopTripHomeView({
   const flightCount = reservations.filter((reservation) => reservation.type === "flight").length;
   const hotelCount = hotelReservations.length;
   const countdown = daysUntilTrip(startDate);
-  const dateRange = formatDateRange(startDate, endDate);
+  const dateRange = formatDateRange(startDate, endDate, locale);
   const heroCity = resolveHeroCity(destination, reservations);
 
   const subtitleParts = [
     destination ?? heroCity,
     dateRange,
-    countdown != null && countdown > 0 ? `${countdown} day${countdown === 1 ? "" : "s"} away` : null,
+    countdown != null && countdown > 0 ? t("countdownDays", { count: countdown }) : null,
     flightCount > 0 || hotelCount > 0
-      ? `${flightCount} flight${flightCount === 1 ? "" : "s"} · ${hotelCount} hotel${hotelCount === 1 ? "" : "s"}`
+      ? t("bookingCounts", { flights: flightCount, hotels: hotelCount })
       : null,
   ].filter(Boolean);
 
@@ -148,7 +157,7 @@ export function DesktopTripHomeView({
             <div className="relative flex h-full flex-col justify-end p-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-sky-300/90">Home</p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-sky-300/90">{t("heroLabel")}</p>
                   <h1 className="mt-1 text-3xl font-black tracking-tight text-white lg:text-4xl">{tripName}</h1>
                   <p className="mt-2 text-sm leading-relaxed text-sky-100/85">{subtitleParts.join(" · ")}</p>
                 </div>
@@ -175,16 +184,14 @@ export function DesktopTripHomeView({
               className="h-full min-h-[240px] lg:min-h-[360px]"
             />
             <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#020818]/90 via-[#020818]/40 to-transparent px-5 pb-4 pt-10">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-sky-300/80">Your trip map</p>
-              <p className="mt-0.5 text-sm text-sky-100/90">
-                Pinch or scroll to zoom · tap a flight line or hotel pin
-              </p>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-sky-300/80">{t("mapEyebrow")}</p>
+              <p className="mt-0.5 text-sm text-sky-100/90">{t("mapHint")}</p>
               <button
                 type="button"
                 onClick={onOpenMap}
                 className="pointer-events-auto mt-2 text-sm font-semibold text-sky-300 underline hover:text-sky-200"
               >
-                Open live family map →
+                {t("openLiveMap")}
               </button>
             </div>
           </div>
@@ -197,7 +204,7 @@ export function DesktopTripHomeView({
           onClick={onStartNewTrip}
           className="flex w-full min-h-[52px] items-center justify-center rounded-2xl bg-[#f4c95d] px-6 text-base font-black text-[#0b1f3a] shadow-md transition hover:bg-[#ffe29a]"
         >
-          + Start a new trip
+          {t("startNewTrip")}
         </button>
       ) : null}
 
@@ -246,7 +253,7 @@ export function DesktopTripHomeView({
           className="flex w-full min-h-[44px] items-center justify-center gap-2 rounded-full border border-dashed border-slate-300 bg-white/70 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:border-sky-200 hover:text-sky-800 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:text-sky-200"
         >
           <span aria-hidden>🚕</span>
-          Add airport, hotel, or venue transfer
+          {t("addGroundTransfer")}
         </button>
       ) : null}
 
@@ -256,29 +263,29 @@ export function DesktopTripHomeView({
           onClick={onOpenBook}
           className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-left shadow-sm transition hover:border-sky-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900"
         >
-          <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Book</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">{tNav("book")}</p>
           <p className="mt-1 text-lg font-bold text-slate-950 dark:text-white">
-            {flightCount} flight{flightCount === 1 ? "" : "s"} · {hotelCount} hotel{hotelCount === 1 ? "" : "s"}
+            {t("bookingCounts", { flights: flightCount, hotels: hotelCount })}
           </p>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Search, tickets, and confirmations</p>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{t("bookCardSubtitle")}</p>
         </button>
         <button
           type="button"
           onClick={onOpenPlan}
           className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-left shadow-sm transition hover:border-emerald-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900"
         >
-          <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Plan</p>
-          <p className="mt-1 text-lg font-bold text-slate-950 dark:text-white">Day-by-day</p>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Timeline, calendar, and notes</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">{tNav("itinerary")}</p>
+          <p className="mt-1 text-lg font-bold text-slate-950 dark:text-white">{t("planCardTitle")}</p>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{t("planCardSubtitle")}</p>
         </button>
         <button
           type="button"
           onClick={onOpenMap}
           className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-left shadow-sm transition hover:border-sky-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900"
         >
-          <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Map</p>
-          <p className="mt-1 text-lg font-bold text-slate-950 dark:text-white">Live view</p>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Family map and airport mode</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">{tNav("map")}</p>
+          <p className="mt-1 text-lg font-bold text-slate-950 dark:text-white">{t("mapCardTitle")}</p>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{t("mapCardSubtitle")}</p>
         </button>
       </div>
     </section>

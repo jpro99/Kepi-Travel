@@ -181,12 +181,19 @@ function encodeUsagePart(value: string): string {
   return encodeURIComponent(value);
 }
 
+function shouldRecordApiUsage(): boolean {
+  return process.env.KEPI_RECORD_API_USAGE === "true";
+}
+
 async function recordApiUsage(options: {
   route: string;
   identifier: string;
   rateLimitHit: boolean;
   requestId: string;
 }): Promise<void> {
+  if (!shouldRecordApiUsage()) {
+    return;
+  }
   const upstashRedis = getUpstashRedis();
   if (!upstashRedis) {
     return;

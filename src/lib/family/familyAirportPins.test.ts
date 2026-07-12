@@ -1,5 +1,5 @@
-import test from "node:test";
 import assert from "node:assert/strict";
+import test from "node:test";
 import { buildFamilyAirportPins } from "./familyAirportPins";
 
 const SEA_LAT = 47.4502;
@@ -27,4 +27,8 @@ test("buildFamilyAirportPins includes members at the departure airport and exclu
   assert.equal(pins.length, 1);
   assert.equal(pins[0]?.memberId, "wife");
   assert.match(pins[0]?.proximityStatus ?? "", /at-airport|in-terminal/);
+});
+
+test("buildFamilyAirportPins returns empty when airport code is missing", () => {
+  assert.deepEqual(buildFamilyAirportPins([], {}, "  "), []);
 });

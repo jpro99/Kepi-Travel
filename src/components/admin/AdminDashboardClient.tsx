@@ -147,7 +147,7 @@ export function AdminDashboardClient() {
   useEffect(() => {
     const interval = window.setInterval(() => {
       void loadStats();
-    }, 30_000);
+    }, 120_000);
     return () => window.clearInterval(interval);
   }, [loadStats]);
 

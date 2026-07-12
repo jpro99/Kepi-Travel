@@ -2,7 +2,10 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { LiveMapLink } from "@/components/travelAssistant/LiveMapLink";
+import { hasAirportLayout } from "@/lib/airportNav/getLayout";
+import { selectPreviewAirportFlight } from "@/lib/travelAssistant/useActiveFlight";
 import { TripFlightLegPicker } from "@/components/travelAssistant/TripFlightLegPicker";
 import { InterCityTransportPrompts } from "@/components/travelAssistant/InterCityTransportPrompts";
 import { TripFirstBanner } from "@/components/travelAssistant/TripFirstBanner";
@@ -161,6 +164,7 @@ function minsUntilDep(r: Reservation): number {
 
 /* ─── Live status badge ──────────────────────────────────────── */
 function StatusBadge({ r, live }: { r: Reservation; live?: LiveStatusResult }) {
+  const t = useTranslations("FlightsTab");
   const status = live?.flightStatus || r.flightStatus || "";
   const delay = live?.delayMinutes ?? r.flightDelayMinutes ?? 0;
   const onTime = live?.onTime ?? r.flightOnTime;
@@ -168,22 +172,22 @@ function StatusBadge({ r, live }: { r: Reservation; live?: LiveStatusResult }) {
 
   if (live?.busy) return (
     <span className="rounded-full bg-slate-100 dark:bg-slate-700 px-2.5 py-0.5 text-xs lg:text-[10px] font-bold text-slate-500 animate-pulse">
-      Checking…
+      {t("statusChecking")}
     </span>
   );
   if (s === "cancelled") return (
     <span className="rounded-full bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 px-2.5 py-0.5 text-xs lg:text-[10px] font-bold">
-      CANCELLED
+      {t("statusCancelled")}
     </span>
   );
   if (delay > 0 || s === "delayed") return (
     <span className="rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 px-2.5 py-0.5 text-xs lg:text-[10px] font-bold">
-      +{delay || "?"}m DELAY
+      {t("statusDelayed", { delay: delay || "?" })}
     </span>
   );
   if (onTime === true || s === "scheduled" || s === "active" || s === "en-route") return (
     <span className="rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 px-2.5 py-0.5 text-xs lg:text-[10px] font-bold">
-      ON TIME
+      {t("statusOnTime")}
     </span>
   );
   return null;
@@ -496,6 +500,7 @@ export function FlightsTab({
   enableBookSearch = false,
   hideRouteMap = false,
 }: FlightsTabProps) {
+  const t = useTranslations("FlightsTab");
   const showBookSearch = !simplifiedMobile || enableBookSearch;
   const type = flightCardTypography(simplifiedMobile);
   const listType = hotelCardTypography(simplifiedMobile);
@@ -541,6 +546,13 @@ export function FlightsTab({
   // The app knows where you are in your journey and shows the right card automatically
   const nowMs = Date.now();
 
+  const previewAirportFlight = useMemo(
+    () => selectPreviewAirportFlight(reservations, nowMs),
+    [reservations, nowMs],
+  );
+  const previewDepartureIata = previewAirportFlight?.f.flightDepartureAirport ?? "";
+  const canExploreTerminal = hasAirportLayout(previewDepartureIata);
+
   // Are we currently airborne on a flight? (departed, not yet arrived)
   const airborneOnFlight = useMemo(() => [...upcoming, ...past].find(r => {
     const depMs = parseFlightTimeMs(r.flightDepartureTime ?? r.localTime ?? "", r.timezone);
@@ -580,15 +592,11 @@ export function FlightsTab({
           onClick={() => onOpenForwardReview(pendingForwardReview.id)}
           className="w-full rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-left shadow-sm transition hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-500/15 dark:hover:bg-amber-500/20"
         >
-          <p className="text-sm font-bold text-amber-900 dark:text-amber-100">
-            Forwarded flight waiting for you
-          </p>
+          <p className="text-sm font-bold text-amber-900 dark:text-amber-100">{t("forwardBannerTitle")}</p>
           <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-200">
             {pendingForwardReview.reason}
           </p>
-          <p className="mt-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
-            Tap to confirm and add to your flights →
-          </p>
+          <p className="mt-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300">{t("forwardBannerCta")}</p>
         </button>
       ) : null}
 
@@ -655,9 +663,10 @@ export function FlightsTab({
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className={listType.heading}>Your flights</h2>
+            <h2 className={listType.heading}>{t("heading")}</h2>
             <p className={listType.subheading}>
-              {upcoming.length} booked{past.length > 0 ? ` · ${past.length} past` : ""}
+              {t("bookedCount", { count: upcoming.length })}
+              {past.length > 0 ? ` ${t("pastCount", { count: past.length })}` : ""}
             </p>
           </div>
           {!enableBookSearch ? (
@@ -666,7 +675,7 @@ export function FlightsTab({
               onClick={onAdd}
               className={`shrink-0 ${simplifiedMobile ? listType.addBtn : type.addBtn}`}
             >
-              Add existing
+              {t("addExisting")}
             </button>
           ) : null}
         </div>
@@ -682,18 +691,31 @@ export function FlightsTab({
               }
               className="min-h-[48px] flex-1 rounded-[var(--radius-button)] bg-[#007AFF] px-4 text-[17px] font-bold text-white"
             >
-              Search flights
+              {t("searchFlights")}
             </button>
             <button
               type="button"
               onClick={onAdd}
               className={`min-h-[48px] shrink-0 ${listType.addBtn}`}
             >
-              Add existing
+              {t("addExisting")}
             </button>
           </div>
         ) : null}
       </div>
+
+      {canExploreTerminal ? (
+        <Link
+          href="/travel-assistant/live-map?view=airport"
+          className="block w-full rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-50 to-blue-50 px-4 py-3 text-left shadow-sm transition active:opacity-90 dark:border-sky-500/30 dark:from-sky-950/50 dark:to-blue-950/40"
+        >
+          <p className="text-sm font-bold text-sky-950 dark:text-sky-100">
+            {t("exploreTerminalTitle", { iata: previewDepartureIata })}
+          </p>
+          <p className="mt-0.5 text-xs leading-snug text-sky-900/80 dark:text-sky-100/80">{t("exploreTerminalBody")}</p>
+          <p className="mt-1.5 text-xs font-semibold text-[#007AFF] dark:text-[#0A84FF]">{t("exploreTerminalCta")}</p>
+        </Link>
+      ) : null}
 
       {/* Empty */}
       {shown.length === 0 && !showGuide && (
@@ -705,10 +727,8 @@ export function FlightsTab({
           }
         >
           <p className="text-4xl mb-3">🛫</p>
-          <p className="font-semibold text-slate-900 dark:text-white">No flights yet</p>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">
-            Use the search box above to find and book a flight, or add one you already booked.
-          </p>
+          <p className="font-semibold text-slate-900 dark:text-white">{t("emptyTitle")}</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">{t("emptyBody")}</p>
           <button
             type="button"
             onClick={() =>
@@ -723,14 +743,14 @@ export function FlightsTab({
             }
             className="mb-3 w-full rounded-full bg-[#007AFF] px-6 py-2.5 text-sm font-bold text-white"
           >
-            Search flights
+            {t("searchFlights")}
           </button>
           <button
             type="button"
             onClick={onAdd}
             className="rounded-full border border-slate-300 px-6 py-2.5 text-sm font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-200"
           >
-            Add existing booking
+            {t("addExistingBooking")}
           </button>
         </div>
       )}

@@ -96,7 +96,7 @@ const AIRPORT_MAP = new Map(AIRPORTS.map(a => [a.iata, a]));
 export function getAirportByIata(iata: string | undefined | null): AirportGeo | undefined {
   const code = iata?.trim().toUpperCase();
   if (!code) return undefined;
-  return AIRPORT_MAP.get(code);
+  return AIRPORT_MAP.get(code) ?? (code === "ZUR" ? AIRPORT_MAP.get("ZRH") : undefined);
 }
 
 /** Haversine distance in km between two lat/lon points */
@@ -130,20 +130,20 @@ export function getAirportProximity(
     return { status: "unknown", airport: null, distanceKm: null };
   }
 
-  // When a departure airport is known, only geofence THAT field (never a nearby wrong airport).
-  if (departureIata?.trim()) {
-    const apt = AIRPORT_MAP.get(departureIata.trim().toUpperCase());
-    if (!apt) {
+  const departureCode = departureIata?.trim().toUpperCase();
+  if (departureCode) {
+    const departureAirport = getAirportByIata(departureCode);
+    if (!departureAirport) {
       return { status: "away", airport: null, distanceKm: null };
     }
-    const d = distanceKm(userLat, userLon, apt.lat, apt.lon);
-    if (d > apt.radiusKm) {
-      return { status: "away", airport: apt, distanceKm: d };
+    const distance = distanceKm(userLat, userLon, departureAirport.lat, departureAirport.lon);
+    if (distance > departureAirport.radiusKm) {
+      return { status: "away", airport: departureAirport, distanceKm: distance };
     }
     return {
-      status: d <= apt.securityRadiusKm ? "in-terminal" : "at-airport",
-      airport: apt,
-      distanceKm: d,
+      status: distance <= departureAirport.securityRadiusKm ? "in-terminal" : "at-airport",
+      airport: departureAirport,
+      distanceKm: distance,
     };
   }
 

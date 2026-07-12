@@ -49,7 +49,6 @@ function labelForLegEndpoint(iata: string, fallback: string): string {
   const code = normalizeIata(iata);
   if (code.length === 3) {
     const airport = getAirportByIata(code);
-    if (airport?.city?.trim()) return airport.city.trim();
     if (airport?.name?.trim()) return airport.name.trim();
   }
   return fallback.trim() || iata;
