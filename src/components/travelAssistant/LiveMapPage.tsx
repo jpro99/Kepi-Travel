@@ -1254,8 +1254,11 @@ export function LiveMapPage() {
           </div>
         )}
 
-        {/* Member drawer */}
+        {/* Family controls belong only to the family basemap, never Airport Mode. */}
+        {mapView === "family" ? (
+        <>
         <div
+          data-testid="family-map-drawer"
           className={`absolute left-0 right-0 bottom-0 z-40 transition-transform duration-300 pointer-events-auto ${drawerOpen ? "translate-y-0" : "translate-y-full"}`}
           onTouchStart={(event) => event.stopPropagation()}
           onTouchMove={(event) => event.stopPropagation()}
@@ -1390,6 +1393,8 @@ export function LiveMapPage() {
             {liveCount} live
           </button>
         )}
+        </>
+        ) : null}
 
         </div>
 

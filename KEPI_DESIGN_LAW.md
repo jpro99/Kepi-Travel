@@ -207,6 +207,11 @@ Uber/Lyft actions must prefill pickup/dropoff from known trip locations via univ
 
 **Test:** `src/lib/travelAssistant/groundTransportDeepLinks.test.ts`
 
+**M10 — Airport preview never depends on WebGL or network tiles**
+Curated airport planning maps must render terminal zones, walkways, POIs, and routes from local layout data without MapTiler or WebGL. A failed or lost MapLibre context may reduce 3D polish in live mode, but must never leave a blank airport screen.
+
+**Test:** `src/lib/airportNav/schematic.test.ts`, `app-sitter/airport-day-of-travel.spec.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -394,6 +399,7 @@ Channel shortcuts require **≥3 attempts**, correction rate **≤25%**, and alw
 | M7, M8 | `src/lib/family/geolocationQuality.test.ts` |
 | M8 | `src/lib/family/locationFixUpgrade.test.ts` |
 | M9 | `src/lib/travelAssistant/groundTransportDeepLinks.test.ts` |
+| M10 | `src/lib/airportNav/schematic.test.ts`, `app-sitter/airport-day-of-travel.spec.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |

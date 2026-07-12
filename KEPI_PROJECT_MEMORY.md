@@ -304,6 +304,8 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 
 **Failure logged 2026-06-15:** Polignano map showed hotel pins in the Adriatic; agent fixed slider instead. Root cause: LiteAPI coords ~0.5–1.5 km east of town passed `areCoordsTrusted` but were offshore. Fixed with `isLikelyOffshorePin` in `hotelGeo.ts`.
 
+**Failure logged 2026-07-12:** SEA Plan Airport repeatedly showed only a navy canvas while the family MapLibre map aborted MapTiler requests during handoff. Airport planning now uses a local SVG schematic (no MapTiler/WebGL), and family drawer chrome is removed from Airport Mode; live 3D MapLibre retains the schematic as its context-loss fallback.
+
 ---
 
 ## Lifetime invite flow (2026-07-12)

@@ -6,6 +6,7 @@ import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AirportLayout, ComputedRoute, GraphEdge, PoiDefinition, SnappedPosition, TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
+import { buildAirportSchematicModel } from "@/lib/airportNav/schematic";
 import type { JourneyWaypointEvent, NavTimingCalibrationStore } from "@/lib/airportNav/navTimingCalibration";
 import { loadNavTimingCalibrationStore, recordJourneyWaypointPair } from "@/lib/airportNav/navJourneyTelemetry";
 import { loadCachedAirportLayout } from "@/lib/travelAssistant/syncItineraryOfflineAssets";
@@ -177,6 +178,172 @@ const POI_ICON: Record<PoiDefinition["category"], string> = {
   baggage: "🎒",
 };
 
+interface AirportSchematicLayerProps {
+  layout: AirportLayout;
+  activeRoute: ComputedRoute | null;
+  snapped: SnappedPosition | null;
+  familyPins: FamilyAirportPin[];
+  airlineName: string | null;
+  gatePoiId: string | null;
+  gateCode: string | null;
+  minutesToDeparture: number;
+  onPoiClick: (poiId: string) => void;
+}
+
+function AirportSchematicLayer({
+  layout,
+  activeRoute,
+  snapped,
+  familyPins,
+  airlineName,
+  gatePoiId,
+  gateCode,
+  minutesToDeparture,
+  onPoiClick,
+}: AirportSchematicLayerProps) {
+  const model = useMemo(() => buildAirportSchematicModel(layout), [layout]);
+  const visiblePois = model.pois.filter(({ definition }) => {
+    if (definition.category !== "checkin" || !definition.airline) return true;
+    return Boolean(airlineName?.toLowerCase().includes(definition.airline.toLowerCase()));
+  });
+  const routePoints = activeRoute?.coordinates
+    .map((coordinate) => model.project(coordinate))
+    .map((point) => `${point.x},${point.y}`)
+    .join(" ");
+
+  return (
+    <div
+      data-testid="airport-nav-schematic"
+      data-zone-count={model.zones.length}
+      className="absolute inset-0 z-[1] overflow-hidden bg-[#0b1f3a]"
+    >
+      <svg
+        aria-label={`${layout.iata} terminal schematic`}
+        className="absolute inset-0 h-full w-full"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="xMidYMid meet"
+      >
+        <defs>
+          <filter id="kepi-terminal-shadow" x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="0" dy="1.2" stdDeviation="1.2" floodColor="#020617" floodOpacity="0.65" />
+          </filter>
+          <linearGradient id="kepi-terminal-route" x1="0" x2="1">
+            <stop offset="0" stopColor={PATH_WARM} />
+            <stop offset="1" stopColor={PATH_WARM_BRIGHT} />
+          </linearGradient>
+        </defs>
+
+        {model.zones.map((zone) => (
+          <g key={zone.id}>
+            <polygon
+              points={zone.points.map((point) => `${point.x},${point.y}`).join(" ")}
+              fill={zone.airside ? "#36577e" : "#496680"}
+              stroke={zone.airside ? "#7ea5cc" : "#8ca5bb"}
+              strokeWidth="0.45"
+              filter="url(#kepi-terminal-shadow)"
+            />
+            <text
+              x={zone.label.x}
+              y={zone.label.y}
+              fill="#dbeafe"
+              fontSize="1.65"
+              fontWeight="700"
+              textAnchor="middle"
+              dominantBaseline="middle"
+            >
+              {zone.name}
+            </text>
+          </g>
+        ))}
+
+        {model.walkways.map((walkway) => (
+          <line
+            key={walkway.id}
+            x1={walkway.from.x}
+            y1={walkway.from.y}
+            x2={walkway.to.x}
+            y2={walkway.to.y}
+            stroke={walkway.train ? "#9cc5ef" : "#7b9fc7"}
+            strokeWidth={walkway.train ? "1.1" : "0.7"}
+            strokeDasharray={walkway.train ? "1.5 1" : undefined}
+            strokeLinecap="round"
+            opacity="0.9"
+          />
+        ))}
+
+        {routePoints ? (
+          <polyline
+            data-testid="airport-nav-schematic-route"
+            points={routePoints}
+            fill="none"
+            stroke="url(#kepi-terminal-route)"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        ) : null}
+
+        {snapped ? (
+          <circle
+            data-testid="airport-nav-schematic-user"
+            cx={model.project(snapped.pos).x}
+            cy={model.project(snapped.pos).y}
+            r="1.4"
+            fill="#38bdf8"
+            stroke="#ffffff"
+            strokeWidth="0.55"
+          />
+        ) : null}
+
+        {familyPins.map((pin) => {
+          const point = model.project([pin.lon, pin.lat]);
+          return (
+            <circle
+              key={pin.memberId}
+              cx={point.x}
+              cy={point.y}
+              r="1.25"
+              fill={pin.color}
+              stroke="#ffffff"
+              strokeWidth="0.45"
+              opacity={pin.stale ? "0.55" : "1"}
+            />
+          );
+        })}
+      </svg>
+
+      {visiblePois.map(({ definition, point }) => {
+        const isGate = definition.id === gatePoiId;
+        const label = isGate && gateCode ? `Gate ${gateCode.toUpperCase()}` : definition.name;
+        const countdown = isGate && minutesToDeparture > 0 && minutesToDeparture < 600
+          ? ` · ${Math.max(1, Math.round(minutesToDeparture))}m`
+          : "";
+        return (
+          <button
+            key={definition.id}
+            type="button"
+            data-testid={`airport-nav-schematic-poi-${definition.id}`}
+            aria-label={`Navigate to ${label}`}
+            onClick={() => onPoiClick(definition.id)}
+            className={`absolute z-[2] -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full px-2 py-1 text-[10px] font-bold shadow-lg ${
+              isGate
+                ? "border-2 border-[#f4c95d] bg-white text-[#0b1f3a]"
+                : "border border-white/45 bg-white/90 text-slate-800"
+            }`}
+            style={{ left: `${point.x}%`, top: `${point.y}%` }}
+          >
+            {POI_ICON[definition.category]} {label}{countdown}
+          </button>
+        );
+      })}
+
+      <div className="pointer-events-none absolute bottom-3 left-3 rounded-full border border-white/15 bg-black/45 px-3 py-1 text-[10px] font-semibold text-sky-100 backdrop-blur">
+        Offline-ready terminal schematic
+      </div>
+    </div>
+  );
+}
+
 function isAirsidePoi(poi: PoiDefinition): boolean {
   return poi.category !== "checkin";
 }
@@ -240,7 +407,7 @@ export function AirportNavigatorMap({
     ? `calc(${shellBottomInset} + 3.25rem)`
     : "max(4rem, calc(env(safe-area-inset-bottom) + 3.25rem))";
   const bottomFamily = shellBottomInset
-    ? `calc(${shellBottomInset} + 4.75rem)`
+    ? `calc(${shellBottomInset} + 12rem)`
     : "max(5.5rem, calc(env(safe-area-inset-bottom) + 4.75rem))";
   const mapEl = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -938,11 +1105,19 @@ export function AirportNavigatorMap({
 
   /* ── Map init (dark schematic canvas, no remote style) ──────────────── */
   useEffect(() => {
-    if (!mapEl.current || mapRef.current || !layout) return;
+    // Planning mode is intentionally SVG-only: it must work without WebGL,
+    // MapTiler, or a second map competing with the family map's old context.
+    if (previewMode || !mapEl.current || mapRef.current || !layout) return;
     let disposed = false;
     let layersInstalled = false;
     let unbindResize: (() => void) | null = null;
-    let loadFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    let loadRetryTimer: number | null = null;
+    let mapCanvas: HTMLCanvasElement | null = null;
+
+    const handleContextLost = (event: Event) => {
+      event.preventDefault();
+      if (!disposed) setMapReady(false);
+    };
 
     const finalizeMap = (map: import("maplibre-gl").Map) => {
       if (disposed || layersInstalled) return;
@@ -950,6 +1125,10 @@ export function AirportNavigatorMap({
         installAirportLayoutLayers(map, layout);
         if (!map.getSource("kepi-zones")) return;
         layersInstalled = true;
+        if (loadRetryTimer !== null) {
+          window.clearInterval(loadRetryTimer);
+          loadRetryTimer = null;
+        }
         setMapReady(true);
         window.requestAnimationFrame(() => {
           try {
@@ -986,16 +1165,20 @@ export function AirportNavigatorMap({
           });
           mapRef.current = map;
           unbindResize = bindMapResize(mapEl.current, map);
+          mapCanvas = map.getCanvas();
+          mapCanvas.addEventListener("webglcontextlost", handleContextLost);
 
           map.on("load", () => finalizeMap(map));
+          map.on("styledata", () => finalizeMap(map));
           if (map.isStyleLoaded()) finalizeMap(map);
 
-          loadFallbackTimer = window.setTimeout(() => {
+          loadRetryTimer = window.setInterval(() => {
             if (!disposed && !layersInstalled) finalizeMap(map);
-          }, 450);
+          }, 100);
 
           map.on("remove", () => {
-            if (loadFallbackTimer !== null) window.clearTimeout(loadFallbackTimer);
+            if (loadRetryTimer !== null) window.clearInterval(loadRetryTimer);
+            mapCanvas?.removeEventListener("webglcontextlost", handleContextLost);
             unbindResize?.();
           });
         } catch (error) {
@@ -1009,7 +1192,8 @@ export function AirportNavigatorMap({
       });
     return () => {
       disposed = true;
-      if (loadFallbackTimer !== null) window.clearTimeout(loadFallbackTimer);
+      if (loadRetryTimer !== null) window.clearInterval(loadRetryTimer);
+      mapCanvas?.removeEventListener("webglcontextlost", handleContextLost);
       unbindResize?.();
       if (mapRef.current) {
         mapRef.current.remove();
@@ -1019,7 +1203,7 @@ export function AirportNavigatorMap({
       userMarkerRef.current = null;
       setMapReady(false);
     };
-  }, [layout]);
+  }, [layout, previewMode]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1389,7 +1573,23 @@ export function AirportNavigatorMap({
       <style>{`@keyframes kepiPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
 @keyframes kepiMicRing{0%{box-shadow:0 0 0 0 rgba(56,189,248,0.55)}100%{box-shadow:0 0 0 14px rgba(56,189,248,0)}}
 @keyframes kepiBeacon{0%{transform:scale(0.6);opacity:0.9}100%{transform:scale(1.9);opacity:0}}`}</style>
-      <div ref={mapEl} className="absolute inset-0" />
+      <div
+        ref={mapEl}
+        className={`absolute inset-0 transition-opacity ${previewMode || !mapReady ? "pointer-events-none opacity-0" : "opacity-100"}`}
+      />
+      {layout && (previewMode || !mapReady) ? (
+        <AirportSchematicLayer
+          layout={layout}
+          activeRoute={activeRoute}
+          snapped={snapped}
+          familyPins={familyPins}
+          airlineName={airlineName}
+          gatePoiId={gatePoi?.id ?? null}
+          gateCode={gateCode}
+          minutesToDeparture={minutesRounded}
+          onPoiClick={startRoute}
+        />
+      ) : null}
       {/* Vignette + top legibility gradient — concierge depth, not flat canvas */}
       <div
         className="pointer-events-none absolute inset-0"
@@ -1663,7 +1863,7 @@ export function AirportNavigatorMap({
       {familyPins.length > 0 && (
         <div
           data-testid="airport-family-chip-strip"
-          className="pointer-events-auto absolute left-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-2"
+          className="pointer-events-auto absolute left-3 z-[60] flex max-w-[calc(100%-1.5rem)] flex-wrap gap-2"
           style={{ bottom: bottomFamily }}
         >
           <span className="rounded-full bg-black/50 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-sky-200/90 backdrop-blur">
