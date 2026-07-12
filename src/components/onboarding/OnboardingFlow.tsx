@@ -286,27 +286,18 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
           nextInviteRedeemedAt = redemption.redeemedAt;
           nextInviteMessage = redemption.message;
           if (nextInviteRedeemedAt) {
-            await fetch("/api/travel-updates/onboarding", {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                currentStep: resolvedStep,
-                tripDraft: {
-                  ...EMPTY_TRIP_SETUP_DRAFT,
-                  ...(resolved.tripDraft ?? {}),
-                },
-                inviteCode: resolvedInviteCode,
-                inviteRedeemedAt: nextInviteRedeemedAt,
-                referralCode:
-                  (typeof resolved.referralCode === "string" ? resolved.referralCode.trim().toUpperCase() : "") ||
-                  referralCodeFromUrl,
-                referralRedeemedAt:
-                  typeof resolved.referralRedeemedAt === "string" && resolved.referralRedeemedAt.length > 0
-                    ? resolved.referralRedeemedAt
-                    : null,
-                notificationsSeen: notificationsSeen,
-              }),
-            });
+            try {
+              await fetch("/api/travel-updates/onboarding", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  inviteCode: resolvedInviteCode,
+                  inviteRedeemedAt: nextInviteRedeemedAt,
+                }),
+              });
+            } catch {
+              // Invite is already persisted in billing; onboarding metadata is optional.
+            }
           }
         } finally {
           setInviteBusy(false);

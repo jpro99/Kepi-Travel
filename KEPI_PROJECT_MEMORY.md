@@ -320,6 +320,7 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 - Invite codes with `intendedEmail` require sign-up with that exact email (403 otherwise).
 - `redeemInviteCodeClient` in `@/lib/invite/redeemInviteCodeClient` — use everywhere (More tab, onboarding, URL hook).
 - **Never** leave JSX referencing a prop name that was renamed in destructuring (`onCreateTrip` vs `onStartNewTrip` in `DesktopTripHomeView` caused production `ReferenceError` after onboarding).
+- **Never** `kvStoreDel(onboarding-complete)` on progress PUT — returning users with trips must auto-skip onboarding (`listTrips` check on GET). Only show `OnboardingFlow` when `!tripsLoading && trips.length === 0`.
 
 ---
 
@@ -327,7 +328,7 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 
 | Date | Note |
 |------|------|
-| 2026-07-12 | **Lifetime auto-redeem** from email links (`useAutoRedeemInviteFromUrl`, onboarding skip fix). **Crash fix:** `DesktopTripHomeView` used undefined `onCreateTrip` — prop is `onStartNewTrip`. |
+| 2026-07-12 | **Lifetime auto-redeem** from email links. **Crash fix:** `onCreateTrip` → `onStartNewTrip`. **Returning users:** stop wiping `onboarding-complete` on progress PUT; auto-complete when trips exist; don't show onboarding until trips finish loading. |
 | 2026-07-08 | **Whole-trip execution:** hotel-anchored timeline, plan-note reconciliation, inter-city route sheet, hotel display labels. Philosophy in project memory + design laws I22–I25. Support model fix (`claude-sonnet-4-5`). Spanish nav labels. |
 | 2026-07-06 | **Trip truth loop:** boarding pass URLs from email imports, merged `/api/travel-updates` flight-lookup, contextual Trip Health → Book hotel search, Europe 2026 unit pass. Laws F11, G13. |
 | 2026-07-06 | **Competitive gaps (flight status, check-in, rides):** phase-aware AeroDataBox polling + optional FlightAware merge, 2-min Inngest sweep, honest check-in/Wallet handoff card on Home, Uber/Lyft deep links on Travel Day. Laws F9–F10, M9. Group/NL booking memo — defer. |

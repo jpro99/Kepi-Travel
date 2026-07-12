@@ -2886,26 +2886,49 @@ export default function TravelAssistantPage() {
   );
 
   const refreshTripsFromServer = useCallback(async (): Promise<number> => {
-    const response = await fetch(TRIP_API_ROUTE, {
-      method: "GET",
-      cache: "no-store",
-    });
-    if (!response.ok) {
-      throw new Error(`Trip API returned ${response.status}`);
-    }
-    const payload = (await response.json()) as {
-      trips?: unknown[];
-      activeTripId?: string | null;
-      activeTrip?: unknown;
-      degraded?: boolean;
-    };
+    const maxAttempts = 3;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const response = await fetch(TRIP_API_ROUTE, {
+        method: "GET",
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        if (attempt < maxAttempts - 1) {
+          await new Promise((resolve) => window.setTimeout(resolve, 400 * (attempt + 1)));
+          continue;
+        }
+        throw new Error(`Trip API returned ${response.status}`);
+      }
+      const payload = (await response.json()) as {
+        trips?: unknown[];
+        activeTripId?: string | null;
+        activeTrip?: unknown;
+        degraded?: boolean;
+      };
 
-    if (payload.degraded === true && tripsHydratedRef.current && tripsRef.current.length > 0) {
-      setTripsLoading(false);
-      return tripsRef.current.length;
+      const parsedTrips = Array.isArray(payload.trips)
+        ? payload.trips.map((trip) => normalizeManagedTrip(trip)).filter((trip): trip is ManagedTrip => trip !== null)
+        : [];
+
+      if (
+        payload.degraded === true &&
+        parsedTrips.length === 0 &&
+        tripsHydratedRef.current &&
+        tripsRef.current.length > 0
+      ) {
+        setTripsLoading(false);
+        return tripsRef.current.length;
+      }
+
+      if (payload.degraded === true && parsedTrips.length === 0 && attempt < maxAttempts - 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 500 * (attempt + 1)));
+        continue;
+      }
+
+      return applyServerTripsSnapshot(payload);
     }
 
-    return applyServerTripsSnapshot(payload);
+    return applyServerTripsSnapshot({ trips: [], activeTripId: null, activeTrip: null });
   }, [applyServerTripsSnapshot]);
 
   const openUpgradeModal = useCallback((feature: PlanFeature, detail?: string): void => {
@@ -10474,9 +10497,9 @@ export default function TravelAssistantPage() {
           <TravelStyleQuiz onComplete={handleTravelStyleComplete} onSkip={handleTravelStyleSkip} />
         ) : null}
         {tripManagementModals}
-        {trips.length === 0 && (
+        {!tripsLoading && trips.length === 0 ? (
           <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
-        )}
+        ) : null}
       </main>
     );
   }
@@ -11386,9 +11409,9 @@ export default function TravelAssistantPage() {
         <TravelStyleQuiz onComplete={handleTravelStyleComplete} onSkip={handleTravelStyleSkip} />
       ) : null}
       {tripManagementModals}
-      {trips.length === 0 && (
+      {!tripsLoading && trips.length === 0 ? (
         <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
-      )}
+      ) : null}
     </main>
   );
 }

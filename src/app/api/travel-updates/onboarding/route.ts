@@ -4,6 +4,7 @@ import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { logger } from "@/lib/logger";
 import { enforceRateLimit } from "@/lib/rateLimit";
 import { kvStoreDel, kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
+import { listTrips } from "@/lib/travelAssistant/tripStore";
 import { generateId } from "@/lib/utils/generateId";
 import { getSubscriptionRecord, isSubscriptionActive } from "@/lib/billing/subscriptionStore";
 
@@ -92,6 +93,23 @@ export async function GET(req: Request) {
       if (isSubscriptionActive(sub) || sub.lifetimePlan || (sub.trialExpiresAt && Date.parse(sub.trialExpiresAt) > Date.now())) {
         await kvStoreSet<boolean>(ONBOARDING_COMPLETE_KEY, true, { userId });
         isComplete = true;
+      }
+    } catch {
+      // Non-fatal — proceed with normal onboarding flow
+    }
+  }
+
+  // Returning users with saved trips must never be forced through onboarding again.
+  if (!isComplete) {
+    try {
+      const existingTrips = await listTrips(userId);
+      if (existingTrips.length > 0) {
+        await kvStoreSet<boolean>(ONBOARDING_COMPLETE_KEY, true, { userId });
+        await kvStoreDel(ONBOARDING_PROGRESS_KEY, { userId });
+        isComplete = true;
+        routeLogger.info("Onboarding auto-completed for returning user with trips.", {
+          tripCount: existingTrips.length,
+        });
       }
     } catch {
       // Non-fatal — proceed with normal onboarding flow
@@ -187,6 +205,32 @@ export async function PUT(req: Request) {
     return NextResponse.json({ ok: true, complete: true }, { headers: rateLimit.headers });
   }
 
+  const hasProgressFields =
+    parsedBody.data.currentStep !== undefined ||
+    parsedBody.data.tripDraft !== undefined ||
+    parsedBody.data.inviteCode !== undefined ||
+    parsedBody.data.inviteRedeemedAt !== undefined ||
+    parsedBody.data.referralCode !== undefined ||
+    parsedBody.data.referralRedeemedAt !== undefined;
+
+  if (parsedBody.data.notificationsSeen === true && !hasProgressFields) {
+    await kvStoreSet(ONBOARDING_NOTIFICATIONS_SEEN_KEY, new Date().toISOString(), { userId });
+    routeLogger.info("Onboarding notifications preference saved.");
+    return NextResponse.json({ ok: true, notificationsSeen: true }, { headers: rateLimit.headers });
+  }
+
+  const alreadyComplete = Boolean(await kvStoreGet<boolean>(ONBOARDING_COMPLETE_KEY, { userId }));
+  if (alreadyComplete) {
+    if (parsedBody.data.notificationsSeen === true) {
+      await kvStoreSet(ONBOARDING_NOTIFICATIONS_SEEN_KEY, new Date().toISOString(), { userId });
+    }
+    routeLogger.info("Ignoring onboarding progress update for already-complete user.");
+    return NextResponse.json(
+      { ok: true, complete: true, notificationsSeen: Boolean(await kvStoreGet(ONBOARDING_NOTIFICATIONS_SEEN_KEY, { userId })) },
+      { headers: rateLimit.headers },
+    );
+  }
+
   if (parsedBody.data.notificationsSeen === true) {
     await kvStoreSet(ONBOARDING_NOTIFICATIONS_SEEN_KEY, new Date().toISOString(), { userId });
   }
@@ -215,7 +259,6 @@ export async function PUT(req: Request) {
     updatedAt: new Date().toISOString(),
   };
 
-  await kvStoreDel(ONBOARDING_COMPLETE_KEY, { userId });
   await kvStoreSet(ONBOARDING_PROGRESS_KEY, progressPayload, { userId });
   const notificationsSeen = Boolean(
     await kvStoreGet<string | boolean | null>(ONBOARDING_NOTIFICATIONS_SEEN_KEY, { userId }),
