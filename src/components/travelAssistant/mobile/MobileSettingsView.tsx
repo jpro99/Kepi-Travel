@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { openSupportChat } from "@/components/support/SupportChat";
+import { openBugReport, openSupportChat } from "@/components/support/SupportChat";
 import { ThemePicker } from "@/components/ThemeToggle";
 import { LanguageSettingsCard } from "@/components/LanguageSettingsCard";
 import { OfflineTravelKitSettingsCard } from "@/components/travelAssistant/OfflineTravelKitSettingsCard";
@@ -165,6 +165,17 @@ export function MobileSettingsView({
       >
         {tNav("support")}
         <p className={`${appleCaption} mt-0.5 font-normal`}>{tSupport("subtitle")}</p>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => openBugReport()}
+        className={`block w-full p-4 text-left font-semibold text-[var(--text-primary)] ${appleCard}`}
+      >
+        🐛 Report a bug or crash
+        <p className={`${appleCaption} mt-0.5 font-normal`}>
+          AI reviews your report and texts Jeff if it&apos;s a real code issue.
+        </p>
       </button>
 
       {emailForwardSetupMessage ? (

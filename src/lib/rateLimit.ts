@@ -8,7 +8,8 @@ type RateLimitPolicyName =
   | "travel-updates-gmail-import"
   | "push-subscribe"
   | "ai-suggestions"
-  | "support-chat";
+  | "support-chat"
+  | "bug-report";
 
 type RateLimitPolicy = {
   limit: number;
@@ -51,6 +52,11 @@ const RATE_LIMIT_POLICIES: Record<RateLimitPolicyName, RateLimitPolicy> = {
     limit: 20,
     windowSeconds: 60 * 60,
     prefix: "kepi:rl:support-chat",
+  },
+  "bug-report": {
+    limit: 5,
+    windowSeconds: 60 * 60,
+    prefix: "kepi:rl:bug-report",
   },
 };
 

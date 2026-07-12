@@ -5,8 +5,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Logo } from "@/components/ui/Logo";
 import { buildSupportChatApiMessages } from "@/lib/support/buildSupportChatApiMessages";
+import { BugReportModal } from "@/components/support/BugReportModal";
 
 const SUPPORT_OPEN_EVENT = "kepi:support-chat-open";
+const BUG_REPORT_OPEN_EVENT = "kepi:bug-report-open";
 
 type ChatRole = "user" | "assistant";
 
@@ -21,16 +23,20 @@ function nextMessageId(prefix: string): string {
 }
 
 export function openSupportChat(): void {
-  if (typeof window === "undefined") {
-    return;
-  }
+  if (typeof window === "undefined") return;
   window.dispatchEvent(new Event(SUPPORT_OPEN_EVENT));
+}
+
+export function openBugReport(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(BUG_REPORT_OPEN_EVENT));
 }
 
 export function SupportChat() {
   const { isSignedIn } = useAuth();
   const t = useTranslations("SupportChat");
   const [isOpen, setIsOpen] = useState(false);
+  const [bugReportOpen, setBugReportOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -62,6 +68,12 @@ export function SupportChat() {
     return () => {
       window.removeEventListener(SUPPORT_OPEN_EVENT, onOpenRequested);
     };
+  }, []);
+
+  useEffect(() => {
+    const onBugReport = (): void => setBugReportOpen(true);
+    window.addEventListener(BUG_REPORT_OPEN_EVENT, onBugReport);
+    return () => window.removeEventListener(BUG_REPORT_OPEN_EVENT, onBugReport);
   }, []);
 
   useEffect(() => {
@@ -172,6 +184,8 @@ export function SupportChat() {
 
   return (
     <>
+      <BugReportModal open={bugReportOpen} onClose={() => setBugReportOpen(false)} />
+
       {isOpen ? (
         <section className="fixed inset-0 z-[120] flex bg-slate-950/75 sm:inset-auto sm:bottom-24 sm:right-6 sm:h-[480px] sm:w-[320px] sm:rounded-2xl sm:border sm:border-slate-700 sm:bg-slate-950/95">
           <div className="flex h-full w-full flex-col">
@@ -231,6 +245,14 @@ export function SupportChat() {
                   {isSending ? t("sending") : t("send")}
                 </button>
               </div>
+              {/* Bug report quick-access */}
+              <button
+                type="button"
+                onClick={() => { setIsOpen(false); setBugReportOpen(true); }}
+                className="mt-2 w-full rounded-lg border border-slate-600 px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+              >
+                🐛 Report a bug or crash
+              </button>
             </footer>
           </div>
         </section>
