@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { scoreTravelStyleAnswers, travelStyleUX, applyGuidanceMix, effectiveDominantMode, guidanceToneFromStyle } from "./travelStyleQuiz";
+import { scoreTravelStyleAnswers, profileFromTravelStyleMode, travelStyleUX, applyGuidanceMix, effectiveDominantMode, guidanceToneFromStyle } from "./travelStyleQuiz";
 
 describe("scoreTravelStyleAnswers", () => {
   it("picks the mode with the most answers", () => {
@@ -13,6 +13,13 @@ describe("scoreTravelStyleAnswers", () => {
     assert.equal(profile.dominant, "route_scout");
     assert.equal(profile.completed, true);
     assert.ok(profile.scores.route_scout > profile.scores.quick_board);
+  });
+
+  it("single answer sets dominant mode at 100%", () => {
+    const profile = profileFromTravelStyleMode("travel_companion");
+    assert.equal(profile.dominant, "travel_companion");
+    assert.equal(profile.scores.travel_companion, 1);
+    assert.equal(profile.scores.quick_board, 0);
   });
 });
 

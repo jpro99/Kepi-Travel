@@ -8,7 +8,19 @@ export interface TravelStyleQuestion {
   options: Array<{ mode: TravelStyleMode; label: string }>;
 }
 
-/** Ten quick travel-behavior questions (one tap each). */
+/** Single onboarding question — one tap sets guidance style. */
+export const TRAVEL_STYLE_QUICK_QUESTION: TravelStyleQuestion = {
+  id: "guidance",
+  prompt: "When you're traveling, Kepi should mostly feel like…",
+  options: [
+    { mode: "quick_board", label: "⚡ Fast — short nudges, gate and go" },
+    { mode: "route_scout", label: "🧭 Smart — options, timing, and why" },
+    { mode: "travel_companion", label: "🤝 Calm — steady encouragement" },
+    { mode: "flight_plan", label: "📋 Structured — checklists and clear steps" },
+  ],
+};
+
+/** Legacy multi-question bank (settings / retune flows may reference). */
 export const TRAVEL_STYLE_QUESTIONS: TravelStyleQuestion[] = [
   {
     id: "airport",
@@ -175,6 +187,11 @@ export function scoreTravelStyleAnswers(answers: TravelStyleMode[]): TravelStyle
     dominant,
     completedAt: new Date().toISOString(),
   };
+}
+
+/** One-tap profile from the quick onboarding question. */
+export function profileFromTravelStyleMode(mode: TravelStyleMode): TravelStyleProfile {
+  return scoreTravelStyleAnswers([mode]);
 }
 
 export function dominantFromScores(scores: TravelStyleScores): TravelStyleMode {
