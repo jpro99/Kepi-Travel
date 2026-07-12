@@ -1,4 +1,5 @@
 import { formatHotelSearchCityLabel } from "@/lib/hotels/tripSearchContext";
+import { resolveHotelDestinationSync } from "@/lib/hotels/resolveDestination";
 import { airportToCity } from "@/lib/travelAssistant/buildTripLegs";
 import { buildHotelStaySpans, type HotelStayLegInput } from "@/lib/travelAssistant/hotelAnchoredStayLegs";
 import { citiesLikelySame } from "@/lib/hotels/hotelReservationCity";
@@ -6,6 +7,11 @@ import {
   airportServesStayCity,
   isLocalGroundHop,
 } from "@/lib/travelAssistant/metroAirportCoverage";
+import {
+  hasBookedAirportPath,
+  type ItineraryPathSegment,
+} from "@/lib/travelAssistant/itineraryPathCoverage";
+import { suggestInterCityRoute } from "@/lib/travelAssistant/interCityTransportSuggestions";
 import { legCoveredByGroundTransport } from "@/lib/travelAssistant/quickGroundTransport";
 import { normalizeDayPlanCity } from "@/lib/travelAssistant/normalizeDayPlanCity";
 
@@ -36,6 +42,10 @@ interface ConnectorReservation {
   checkOutDate?: string;
 }
 
+/** Ground connectors are regional transfers — never cross-country legs. */
+const MAX_AIRPORT_GROUND_KM = 400;
+const MAX_INTERCITY_GROUND_KM = 500;
+
 function cityKey(value: string): string {
   return normalizeDayPlanCity(value).toLowerCase();
 }
@@ -53,6 +63,103 @@ function addDays(iso: string, days: number): string {
 
 function flightArrivalDay(reservation: ConnectorReservation): string | null {
   return isoDate(reservation.flightDate) ?? isoDate(reservation.localTime);
+}
+
+function iataForStayCity(city: string): string | null {
+  const served = resolveHotelDestinationSync(city)?.iata?.trim().toUpperCase();
+  return served && served.length === 3 ? served : null;
+}
+
+function groundDistanceKm(
+  fromLabel: string,
+  toLabel: string,
+  fromIata = "",
+  toIata = "",
+): number | null {
+  const fromCode = fromIata.trim().toUpperCase();
+  const toCode = toIata.trim().toUpperCase();
+  const route =
+    fromCode.length === 3 && fromCode === toCode && !citiesLikelySame(fromLabel, toLabel)
+      ? suggestInterCityRoute(fromLabel, toLabel, "", "")
+      : suggestInterCityRoute(fromLabel, toLabel, fromIata, toIata);
+  return route?.distanceKm ?? null;
+}
+
+function isReasonableGroundDistance(
+  fromLabel: string,
+  toLabel: string,
+  fromIata: string,
+  toIata: string,
+  maxKm: number,
+): boolean {
+  const km = groundDistanceKm(fromLabel, toLabel, fromIata, toIata);
+  return km !== null && km > 0 && km <= maxKm;
+}
+
+function buildBookedFlightHops(flights: ConnectorReservation[]): ItineraryPathSegment[] {
+  return flights
+    .map((flight) => {
+      const dep = flight.flightDepartureAirport?.trim().toUpperCase() ?? "";
+      const arr = flight.flightArrivalAirport?.trim().toUpperCase() ?? "";
+      if (!dep || !arr || dep === arr) return null;
+      const day = flightArrivalDay(flight);
+      return {
+        fromCode: dep,
+        toCode: arr,
+        booked: true,
+        departMs: day ? Date.parse(`${day}T12:00:00`) : null,
+      } satisfies ItineraryPathSegment;
+    })
+    .filter((hop): hop is ItineraryPathSegment => hop !== null);
+}
+
+function bookedFlightsConnectStayCities(
+  hops: ItineraryPathSegment[],
+  fromCity: string,
+  toCity: string,
+): boolean {
+  const fromIata = iataForStayCity(fromCity);
+  const toIata = iataForStayCity(toCity);
+  if (!fromIata || !toIata) return false;
+  if (fromIata === toIata) return true;
+  return hasBookedAirportPath(hops, fromIata, toIata);
+}
+
+function bookedFlightsReachHotel(
+  hops: ItineraryPathSegment[],
+  arrivalIata: string,
+  hotelCity: string,
+): boolean {
+  const hotelIata = iataForStayCity(hotelCity);
+  if (!hotelIata) return false;
+  if (arrivalIata === hotelIata) return true;
+  if (airportServesStayCity(arrivalIata, hotelCity)) return true;
+  return hasBookedAirportPath(hops, arrivalIata, hotelIata);
+}
+
+function hopDepartsInWindow(hop: ItineraryPathSegment, fromDay: string, toDay: string): boolean {
+  if (hop.departMs == null || !Number.isFinite(hop.departMs)) return true;
+  const startMs = Date.parse(`${fromDay}T00:00:00Z`);
+  const endMs = Date.parse(`${toDay}T23:59:59Z`) + 2 * 86_400_000;
+  return hop.departMs >= startMs - 86_400_000 && hop.departMs <= endMs;
+}
+
+function flightsCoverHotelTransition(
+  flights: ConnectorReservation[],
+  fromCity: string,
+  toCity: string,
+  travelDate: string,
+  nextStartDate: string,
+): boolean {
+  const hops = buildBookedFlightHops(flights);
+  if (!bookedFlightsConnectStayCities(hops, fromCity, toCity)) return false;
+
+  const fromIata = iataForStayCity(fromCity);
+  if (!fromIata) return true;
+
+  return hops.some(
+    (hop) => hop.fromCode === fromIata && hopDepartsInWindow(hop, travelDate, nextStartDate),
+  );
 }
 
 function hasGroundTransportBetween(
@@ -98,6 +205,12 @@ function citiesDiffer(a: string, b: string): boolean {
   return left !== right;
 }
 
+function isValidFlightHop(flight: ConnectorReservation): boolean {
+  const dep = flight.flightDepartureAirport?.trim().toUpperCase() ?? "";
+  const arr = flight.flightArrivalAirport?.trim().toUpperCase() ?? "";
+  return dep.length === 3 && arr.length === 3 && dep !== arr;
+}
+
 /** Airport → first hotel and hotel → hotel ground legs still missing from the trip. */
 export function detectGroundConnectorGaps(input: {
   reservations: ConnectorReservation[];
@@ -114,42 +227,49 @@ export function detectGroundConnectorGaps(input: {
 
   const hotels = input.reservations.filter((reservation) => reservation.type === "hotel") as HotelStayLegInput[];
   const hotelSpans = buildHotelStaySpans(hotels, tripStart, tripEnd);
+  const flightHops = buildBookedFlightHops(flights);
 
-  for (const flight of flights) {
-    const arrivalDay = flightArrivalDay(flight);
-    const arrivalIata = flight.flightArrivalAirport?.trim().toUpperCase() ?? "";
-    if (!arrivalDay || !arrivalIata) continue;
-
-    const arrivalLabel = formatHotelSearchCityLabel(arrivalIata).label || airportToCity(arrivalIata);
-    const firstHotel = hotelSpans.find(
-      (span) => span.startDate >= arrivalDay && span.startDate <= addDays(arrivalDay, 21),
-    );
-    if (!firstHotel) continue;
-    if (!citiesDiffer(arrivalLabel, firstHotel.city)) continue;
-    if (airportServesStayCity(arrivalIata, firstHotel.city)) continue;
-    if (
-      hasGroundTransportBetween(
-        input.reservations,
-        arrivalDay,
-        firstHotel.startDate,
-        arrivalLabel,
-        firstHotel.city,
-        arrivalIata,
-      )
-    ) {
-      continue;
-    }
-
-    gaps.push({
-      id: `airport-transfer-${flight.id}-${firstHotel.hotelId}`,
-      kind: "airport_transfer",
-      fromLabel: arrivalLabel,
-      toLabel: firstHotel.city,
-      fromIata: arrivalIata,
-      toIata: "",
-      travelDate: arrivalDay,
-      detail: `You land at ${arrivalIata} (${arrivalLabel}) but your first hotel is in ${firstHotel.city}. How are you getting there?`,
+  const firstHotel = hotelSpans[0];
+  if (firstHotel) {
+    const inboundFlights = flights.filter((flight) => {
+      if (!isValidFlightHop(flight)) return false;
+      const arrivalDay = flightArrivalDay(flight);
+      return Boolean(arrivalDay && arrivalDay <= firstHotel.startDate);
     });
+    const arrivalFlight = inboundFlights[inboundFlights.length - 1];
+
+    if (arrivalFlight) {
+      const arrivalDay = flightArrivalDay(arrivalFlight)!;
+      const arrivalIata = arrivalFlight.flightArrivalAirport!.trim().toUpperCase();
+      const arrivalLabel = formatHotelSearchCityLabel(arrivalIata).label || airportToCity(arrivalIata);
+
+      const shouldSkip =
+        !citiesDiffer(arrivalLabel, firstHotel.city) ||
+        airportServesStayCity(arrivalIata, firstHotel.city) ||
+        bookedFlightsReachHotel(flightHops, arrivalIata, firstHotel.city) ||
+        !isReasonableGroundDistance(arrivalLabel, firstHotel.city, arrivalIata, "", MAX_AIRPORT_GROUND_KM) ||
+        hasGroundTransportBetween(
+          input.reservations,
+          arrivalDay,
+          firstHotel.startDate,
+          arrivalLabel,
+          firstHotel.city,
+          arrivalIata,
+        );
+
+      if (!shouldSkip) {
+        gaps.push({
+          id: `airport-transfer-${arrivalFlight.id}-${firstHotel.hotelId}`,
+          kind: "airport_transfer",
+          fromLabel: arrivalLabel,
+          toLabel: firstHotel.city,
+          fromIata: arrivalIata,
+          toIata: "",
+          travelDate: arrivalDay,
+          detail: `You land at ${arrivalIata} (${arrivalLabel}) but your first hotel is in ${firstHotel.city}. How are you getting there?`,
+        });
+      }
+    }
   }
 
   for (let index = 0; index < hotelSpans.length - 1; index++) {
@@ -159,17 +279,18 @@ export function detectGroundConnectorGaps(input: {
     if (isLocalGroundHop(current.city, next.city)) continue;
 
     const travelDate = current.endDate;
-    if (
+    const shouldSkip =
+      flightsCoverHotelTransition(flights, current.city, next.city, travelDate, next.startDate) ||
+      !isReasonableGroundDistance(current.city, next.city, "", "", MAX_INTERCITY_GROUND_KM) ||
       hasGroundTransportBetween(
         input.reservations,
         travelDate,
         next.startDate,
         current.city,
         next.city,
-      )
-    ) {
-      continue;
-    }
+      );
+
+    if (shouldSkip) continue;
 
     gaps.push({
       id: `inter-city-${current.hotelId}-${next.hotelId}`,

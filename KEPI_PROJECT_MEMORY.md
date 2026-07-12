@@ -321,6 +321,8 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 - `redeemInviteCodeClient` in `@/lib/invite/redeemInviteCodeClient` — use everywhere (More tab, onboarding, URL hook).
 - **Never** leave JSX referencing a prop name that was renamed in destructuring (`onCreateTrip` vs `onStartNewTrip` in `DesktopTripHomeView` caused production `ReferenceError` after onboarding).
 - **Never** `kvStoreDel(onboarding-complete)` on progress PUT — returning users with trips must auto-skip onboarding (`listTrips` check on GET). Only show `OnboardingFlow` when `!tripsLoading && trips.length === 0`.
+- **Regional airport metro:** BRI serves Monopoli/Polignano — do not prompt "how are you getting there?" for airport→hotel when `airportServesStayCity` matches. Trip destination display uses **hotel city first**, then **first inbound flight** (not return leg — was showing Rome/FCO incorrectly).
+- **Ground connectors must respect booked flights:** Never prompt SEA→Polignano (absurd distance) or FCO→Polignano when FCO→BRI is booked. Only evaluate **last inbound flight before first hotel**. Skip inter-city hotel hops when booked flights connect stay cities. Max ground distance ~400km airport, ~500km inter-city.
 
 ---
 
