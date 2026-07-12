@@ -185,6 +185,7 @@ export function AirportNavigatorMap({
   const activeRouteRef = useRef<ComputedRoute | null>(null);
   const [navCalibration, setNavCalibration] = useState<NavTimingCalibrationStore | null>(null);
   const [journeyPhase, setJourneyPhase] = useState<JourneyPhaseId>("landside");
+  const quietMode = journeyPhase === "security";
   const [journeyPrompt, setJourneyPrompt] = useState<JourneyPrompt | null>(null);
   const [statusLine, setStatusLine] = useState<string | null>(null);
   const [objective, setObjective] = useState<"checkin" | "security" | "gate" | "lounge" | null>(null);
@@ -1318,7 +1319,6 @@ export function AirportNavigatorMap({
     );
   }
 
-  const quietMode = journeyPhase === "security";
   const nextInstruction = activeRoute?.instructions[Math.min(currentStepIdx, Math.max(0, (activeRoute?.instructions.length ?? 1) - 1))] ?? null;
   const securityQuestionOpen = pendingPoiId !== null && !credentials.known;
 
