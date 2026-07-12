@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { JourneyPhaseId } from "@/lib/airportNav/journeyMachine";
 import type { GroupBoardingPressure } from "@/lib/airportNav/groupBoardingMath";
 import type { FamilyAirportSyncDocument, FamilyRallyTarget } from "@/lib/family/familyAirportSync";
@@ -19,12 +19,33 @@ export function useFamilyAirportSync({
   const [sync, setSync] = useState<FamilyAirportSyncDocument | null>(null);
   const [groupBoarding, setGroupBoarding] = useState<GroupBoardingPressure | null>(null);
   const [busy, setBusy] = useState(false);
+  const tripIdRef = useRef(tripId);
+  const groupIdRef = useRef(groupId);
+  const minutesToDepartureRef = useRef(minutesToDeparture);
+
+  useEffect(() => {
+    tripIdRef.current = tripId;
+    groupIdRef.current = groupId;
+  }, [tripId, groupId]);
+
+  useEffect(() => {
+    minutesToDepartureRef.current = minutesToDeparture;
+  }, [
+    minutesToDeparture == null
+      ? null
+      : Number.isFinite(minutesToDeparture)
+        ? Math.round(minutesToDeparture)
+        : null,
+  ]);
 
   const refresh = useCallback(async () => {
-    if (!tripId || !groupId) return;
-    const params = new URLSearchParams({ tripId, groupId });
-    if (minutesToDeparture != null && Number.isFinite(minutesToDeparture)) {
-      params.set("minutesToDeparture", String(Math.round(minutesToDeparture)));
+    const activeTripId = tripIdRef.current;
+    const activeGroupId = groupIdRef.current;
+    if (!activeTripId || !activeGroupId) return;
+    const params = new URLSearchParams({ tripId: activeTripId, groupId: activeGroupId });
+    const mins = minutesToDepartureRef.current;
+    if (mins != null && Number.isFinite(mins)) {
+      params.set("minutesToDeparture", String(Math.round(mins)));
     }
     const res = await fetch(`/api/family/airport-sync?${params.toString()}`, { cache: "no-store" });
     if (!res.ok) return;
@@ -34,13 +55,14 @@ export function useFamilyAirportSync({
     };
     setSync(data.sync ?? null);
     setGroupBoarding(data.groupBoarding ?? null);
-  }, [tripId, groupId, minutesToDeparture]);
+  }, []);
 
   useEffect(() => {
+    if (!tripId || !groupId) return;
     void refresh();
     const id = window.setInterval(() => void refresh(), 10_000);
     return () => window.clearInterval(id);
-  }, [refresh]);
+  }, [tripId, groupId, refresh]);
 
   const postAction = useCallback(
     async (body: Record<string, unknown>) => {

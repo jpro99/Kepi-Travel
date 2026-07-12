@@ -858,29 +858,39 @@ export function AirportNavigatorMap({
   useEffect(() => {
     if (!mapEl.current || mapRef.current || !layout) return;
     let disposed = false;
-    void import("maplibre-gl").then((ml) => {
-      if (disposed || !mapEl.current || mapRef.current) return;
-      const map = new ml.Map({
-        container: mapEl.current,
-        style: {
-          version: 8,
-          sources: {},
-          layers: [{ id: "bg", type: "background", paint: { "background-color": COLOR.canvas } }],
-        },
-        center: layout.center,
-        zoom: 15.2,
-        pitch: 58,
-        bearing: -15,
-        attributionControl: false,
-        dragRotate: true,
+    void import("maplibre-gl")
+      .then((ml) => {
+        if (disposed || !mapEl.current || mapRef.current) return;
+        try {
+          const map = new ml.Map({
+            container: mapEl.current,
+            style: {
+              version: 8,
+              sources: {},
+              layers: [{ id: "bg", type: "background", paint: { "background-color": COLOR.canvas } }],
+            },
+            center: layout.center,
+            zoom: 15.2,
+            pitch: 58,
+            bearing: -15,
+            attributionControl: false,
+            dragRotate: true,
+          });
+          mapRef.current = map;
+          map.on("load", () => {
+            if (disposed) return;
+            addLayoutLayers(map, layout);
+            setMapReady(true);
+          });
+        } catch (error) {
+          console.error("[AirportNavigatorMap] Map init failed", error);
+          if (!disposed) setLayoutStatus("error");
+        }
+      })
+      .catch((error) => {
+        console.error("[AirportNavigatorMap] MapLibre load failed", error);
+        if (!disposed) setLayoutStatus("error");
       });
-      mapRef.current = map;
-      map.on("load", () => {
-        if (disposed) return;
-        addLayoutLayers(map, layout);
-        setMapReady(true);
-      });
-    });
     return () => {
       disposed = true;
       if (mapRef.current) {

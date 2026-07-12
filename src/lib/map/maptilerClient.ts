@@ -80,7 +80,7 @@ export function attachMapStyleErrorFallback(
   map.on("error", (event: { error?: { message?: string } }) => {
     const message = String(event?.error?.message ?? "Map style failed to load");
     console.warn("[map] style/tile error", message, event);
-    if (ctx.isCancelled() || ctx.isLoaded() || ctx.usingOsmFallback.current) {
+    if (ctx.isCancelled() || ctx.usingOsmFallback.current) {
       return;
     }
     ctx.usingOsmFallback.current = true;

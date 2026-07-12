@@ -49,6 +49,7 @@ export function FamilyMap({ members, locations, maptilerKey = "", height = 300, 
   const mapRef = useRef<any>(null);
   const usingOsmFallbackRef = useRef(true);
   const isLoadedRef = useRef(false);
+  const lastAppliedStyleRef = useRef<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [satellite, setSatellite] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -198,6 +199,7 @@ export function FamilyMap({ members, locations, maptilerKey = "", height = 300, 
         const zoom = knownLocs.length === 1 ? 16 : knownLocs.length > 1 ? 12 : 1.65;
         const key = maptilerKey.trim();
         usingOsmFallbackRef.current = !key;
+        lastAppliedStyleRef.current = key ? `streets-v2:${key}` : "__osm__";
 
         const markReady = (map: import("maplibre-gl").Map): void => {
           if (cancelled || isLoadedRef.current) return;
@@ -267,6 +269,7 @@ export function FamilyMap({ members, locations, maptilerKey = "", height = 300, 
       }
       isLoadedRef.current = false;
       setIsLoaded(false);
+      lastAppliedStyleRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [maptilerKey]);
@@ -280,13 +283,19 @@ export function FamilyMap({ members, locations, maptilerKey = "", height = 300, 
   useEffect(() => {
     if (!mapRef.current || !isLoaded) return;
     const key = maptilerKey.trim();
+    const styleFingerprint = key
+      ? `${satellite ? "hybrid" : "streets-v2"}:${key}`
+      : "__osm__";
+    if (lastAppliedStyleRef.current === styleFingerprint) return;
+    lastAppliedStyleRef.current = styleFingerprint;
+
     if (!key) {
       mapRef.current.setStyle(buildOsmRasterFallbackStyle());
     } else {
       mapRef.current.setStyle(maptilerStyleUrl(satellite ? "hybrid" : "streets-v2", key));
     }
     mapRef.current.once("styledata", () => { if (mapRef.current) placeMarkers(mapRef.current); });
-  }, [satellite, maptilerKey, isLoaded, placeMarkers]);
+  }, [satellite, maptilerKey, isLoaded]);
 
   // Resize after fullscreen transition
   useEffect(() => {

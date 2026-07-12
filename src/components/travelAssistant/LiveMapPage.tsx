@@ -116,6 +116,8 @@ export function LiveMapPage() {
   const urlTripId = searchParams.get("tripId");
   const urlView = searchParams.get("view");
   const preferAirportView = urlView === "airport";
+  const { activeFlight, previewFlight } = useActiveFlight();
+  const [mapView, setMapView] = useState<"family" | "airport">(() => (preferAirportView ? "airport" : "family"));
   const mapEl = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
@@ -130,6 +132,7 @@ export function LiveMapPage() {
   const [locations, setLocations] = useState<Record<string, LocationPoint>>({});
   const [maptilerKey, setMaptilerKey] = useState("");
   const maptilerKeyRef = useRef("");
+  const lastAppliedStyleRef = useRef<string | null>(null);
   const mapStyleRef = useRef<MapStyleId>("streets");
   const [mapStyle, setMapStyle] = useState<MapStyleId>("streets");
   const [headingUp, setHeadingUp] = useState(true);
@@ -150,6 +153,12 @@ export function LiveMapPage() {
   const [myMemberId, setMyMemberId] = useState<string | null>(null);
   const [gpsRefreshing, setGpsRefreshing] = useState(false);
   const [activeTripId, setActiveTripId] = useState<string | null>(urlTripId);
+
+  useEffect(() => {
+    if (preferAirportView) {
+      markLiveMapSessionActive();
+    }
+  }, [preferAirportView]);
 
   useEffect(() => {
     if (urlTripId) {
@@ -456,23 +465,39 @@ export function LiveMapPage() {
     }).catch(console.error);
   }, [group, locations]);
 
-  /* ── Init map once with OSM tiles (instant paint), then optional MapTiler upgrade ── */
+  /* ── Init family basemap (skip while airport navigator owns WebGL) ── */
   useEffect(() => {
     if (!mapEl.current) return;
     let cancelled = false;
     let clearLoadFallback: (() => void) | null = null;
+
+    const teardownFamilyMap = (): void => {
+      clearLoadFallback?.();
+      clearLoadFallback = null;
+      if (mapRef.current) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const old = mapRef.current._kepiMarkers as Record<string, any> | undefined;
+        if (old) Object.values(old).forEach((mk: unknown) => (mk as { remove(): void }).remove());
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+      isLoadedRef.current = false;
+      setIsLoaded(false);
+      lastAppliedStyleRef.current = null;
+    };
+
+    if (mapView === "airport") {
+      teardownFamilyMap();
+      return () => {
+        cancelled = true;
+      };
+    }
+
     isLoadedRef.current = false;
     setIsLoaded(false);
     setIsError(false);
     usingOsmFallbackRef.current = true;
-
-    if (mapRef.current) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const old = mapRef.current._kepiMarkers as Record<string, any> | undefined;
-      if (old) Object.values(old).forEach((mk: unknown) => (mk as { remove(): void }).remove());
-      mapRef.current.remove();
-      mapRef.current = null;
-    }
+    teardownFamilyMap();
 
     const markMapReady = (map: import("maplibre-gl").Map): void => {
       if (cancelled || isLoadedRef.current) return;
@@ -496,11 +521,19 @@ export function LiveMapPage() {
 
         const locs = Object.values(locations);
         const { center, zoom } = defaultMapCenter(locs);
+        const key = maptilerKeyRef.current.trim();
+        usingOsmFallbackRef.current = !key;
+        const initialStyle = key
+          ? resolveLiveMapStyle(mapStyleRef.current, key)
+          : buildOsmRasterFallbackStyle();
+        lastAppliedStyleRef.current = key
+          ? `${mapStyleRef.current}:${key}`
+          : "__osm__";
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const map = new (ml as any).Map({
           container: mapEl.current,
-          style: buildOsmRasterFallbackStyle(),
+          style: initialStyle,
           center,
           zoom,
           minZoom: 1,
@@ -555,25 +588,23 @@ export function LiveMapPage() {
 
     return () => {
       cancelled = true;
-      clearLoadFallback?.();
-      if (mapRef.current) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const old = mapRef.current._kepiMarkers as Record<string, any> | undefined;
-        if (old) Object.values(old).forEach((mk: unknown) => (mk as { remove(): void }).remove());
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
-      isLoadedRef.current = false;
-      setIsLoaded(false);
+      teardownFamilyMap();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [mapView]);
 
   /* ── Style toggle + MapTiler upgrade when key arrives ── */
   useEffect(() => {
     if (!mapRef.current || !isLoaded) return;
     const key = maptilerKey.trim();
     usingOsmFallbackRef.current = !key;
+
+    const styleFingerprint = !isOnline && offlineCityStyle
+      ? `offline:${activeTripId ?? "none"}`
+      : key
+        ? `${mapStyle}:${key}`
+        : "__osm__";
+    if (lastAppliedStyleRef.current === styleFingerprint) return;
+    lastAppliedStyleRef.current = styleFingerprint;
 
     if (!isOnline && offlineCityStyle) {
       mapRef.current.setStyle(offlineCityStyle);
@@ -596,7 +627,7 @@ export function LiveMapPage() {
     mapRef.current.once("idle", () => {
       if (mapRef.current) placeMarkers(mapRef.current);
     });
-  }, [mapStyle, maptilerKey, isLoaded, isOnline, offlineCityStyle, offlineCityCenter, offlineCityZoom, placeMarkers]);
+  }, [mapStyle, maptilerKey, isLoaded, isOnline, offlineCityStyle, offlineCityCenter, offlineCityZoom, activeTripId]);
 
   /* ── Re-place/move markers when locations update ── */
   useEffect(() => {
@@ -621,10 +652,8 @@ export function LiveMapPage() {
 
   /* ── Airport Navigator integration (shared selection — Map button asks
         the SAME question AirportMode does, via useActiveFlight) ── */
-  const { activeFlight, previewFlight } = useActiveFlight();
   const navFlight = activeFlight ?? previewFlight;
   const { credentials: navCredentials, profile: navProfile, saveCredentials } = useNavigatorCredentials();
-  const [mapView, setMapView] = useState<"family" | "airport">("family");
   const [navLat, setNavLat] = useState<number | null>(null);
   const [navLon, setNavLon] = useState<number | null>(null);
   const navWatchRef = useRef<number | null>(null);

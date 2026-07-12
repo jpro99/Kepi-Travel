@@ -18,13 +18,14 @@ function LiveMapLoading() {
 
 interface LiveMapErrorBoundaryState {
   hasError: boolean;
+  detail: string | null;
 }
 
 class LiveMapErrorBoundary extends Component<{ children: ReactNode }, LiveMapErrorBoundaryState> {
-  state: LiveMapErrorBoundaryState = { hasError: false };
+  state: LiveMapErrorBoundaryState = { hasError: false, detail: null };
 
-  static getDerivedStateFromError(): LiveMapErrorBoundaryState {
-    return { hasError: true };
+  static getDerivedStateFromError(error: Error): LiveMapErrorBoundaryState {
+    return { hasError: true, detail: error.message };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
@@ -43,6 +44,9 @@ class LiveMapErrorBoundary extends Component<{ children: ReactNode }, LiveMapErr
         <p className="max-w-sm text-[16px] leading-relaxed text-slate-600">
           This can happen on older iPhones or when WebGL is disabled. Try closing other tabs, then reopen Kepi.
         </p>
+        {this.state.detail ? (
+          <p className="max-w-sm text-xs leading-relaxed text-slate-500">{this.state.detail}</p>
+        ) : null}
         <button
           type="button"
           onClick={() => leaveLiveMap("home")}

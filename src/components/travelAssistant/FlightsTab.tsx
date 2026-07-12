@@ -705,7 +705,7 @@ export function FlightsTab({
       </div>
 
       {canExploreTerminal ? (
-        <Link
+        <LiveMapLink
           href="/travel-assistant/live-map?view=airport"
           className="block w-full rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-50 to-blue-50 px-4 py-3 text-left shadow-sm transition active:opacity-90 dark:border-sky-500/30 dark:from-sky-950/50 dark:to-blue-950/40"
         >
@@ -714,7 +714,7 @@ export function FlightsTab({
           </p>
           <p className="mt-0.5 text-xs leading-snug text-sky-900/80 dark:text-sky-100/80">{t("exploreTerminalBody")}</p>
           <p className="mt-1.5 text-xs font-semibold text-[#007AFF] dark:text-[#0A84FF]">{t("exploreTerminalCta")}</p>
-        </Link>
+        </LiveMapLink>
       ) : null}
 
       {/* Empty */}
