@@ -57,6 +57,7 @@ import {
   stringifyTravelClientSessionState,
   type SessionReservation,
 } from "@/lib/travelAssistant/clientSessionState";
+import { useAutoRedeemInviteFromUrl } from "@/hooks/useAutoRedeemInviteFromUrl";
 import { useBrowserConnectivity } from "@/hooks/useBrowserConnectivity";
 import { useOfflineTravelKitSync } from "@/hooks/useOfflineTravelKitSync";
 import { scheduleLocalNotification, triggerHaptic } from "@/lib/native/capacitorBridge";
@@ -1857,6 +1858,7 @@ export default function TravelAssistantPage() {
     isLifetime,
     isTrial,
   } = useBilling();
+  useAutoRedeemInviteFromUrl();
   const updateMode: TravelUpdateMode =
     (process.env.NEXT_PUBLIC_TRAVEL_UPDATES_MODE ?? "auto").toLowerCase() === "off"
       ? "off"

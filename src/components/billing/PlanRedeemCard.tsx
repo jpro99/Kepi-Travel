@@ -3,14 +3,11 @@
 import { useCallback, useRef, useState } from "react";
 import Link from "next/link";
 import { useBilling } from "@/lib/billing/BillingContext";
+import { redeemInviteCodeClient } from "@/lib/invite/redeemInviteCodeClient";
 import { appleBtnPrimary, appleCaption, appleCard, appleCardTitle, appleMetadata } from "@/lib/ui/appleDesign";
 
 function normalizeInviteCode(value: string): string {
   return value.trim().toUpperCase();
-}
-
-function dispatchBillingRefresh(): void {
-  window.dispatchEvent(new CustomEvent("kepi:billing-refresh"));
 }
 
 interface PlanRedeemCardProps {
@@ -41,42 +38,29 @@ export function PlanRedeemCard({ className = "", compact = false }: PlanRedeemCa
     setMessage(null);
     setError(null);
     try {
-      const response = await fetch("/api/invite/redeem", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
-      });
-      const payload = (await response.json()) as {
-        ok?: boolean;
-        restored?: boolean;
-        error?: string;
-        reason?: string;
-        plan?: "lifetime" | "trial";
-        trialExpiresAt?: string | null;
-      };
+      const result = await redeemInviteCodeClient(code);
 
-      if (response.ok && payload.ok) {
+      if (result.ok) {
         if (inputRef.current) inputRef.current.value = "";
         setMessage(
-          payload.restored
-            ? payload.plan === "lifetime"
+          result.restored
+            ? result.plan === "lifetime"
               ? "Lifetime Pro access restored on your account."
               : "Trial access restored on your account."
-            : payload.plan === "lifetime"
+            : result.plan === "lifetime"
               ? "Lifetime Pro activated. Enjoy unlimited access."
-              : `30-day trial active${payload.trialExpiresAt ? ` through ${new Date(payload.trialExpiresAt).toLocaleDateString()}` : ""}.`,
+              : `30-day trial active${result.trialExpiresAt ? ` through ${new Date(result.trialExpiresAt).toLocaleDateString()}` : ""}.`,
         );
-        dispatchBillingRefresh();
         await refresh();
         return;
       }
 
       const mappedError =
-        payload.reason === "code-revoked"
+        result.reason === "code-revoked"
           ? "This invite code has been revoked."
-          : payload.reason === "already-redeemed" || payload.reason === "code-used"
+          : result.reason === "already-redeemed" || result.reason === "code-used"
             ? "This code was already used. If it was yours, contact support to restore access."
-            : payload.error ?? "Invite code is invalid.";
+            : result.error ?? "Invite code is invalid.";
       setError(mappedError);
     } catch (redeemError) {
       setError(redeemError instanceof Error ? redeemError.message : "Could not redeem invite code.");

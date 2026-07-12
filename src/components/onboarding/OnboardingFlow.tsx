@@ -11,6 +11,7 @@ import {
   validateTripSetupDraft,
 } from "@/components/onboarding/TripSetupForm";
 import { Logo } from "@/components/ui/Logo";
+import { redeemInviteCodeClient } from "@/lib/invite/redeemInviteCodeClient";
 
 const TOTAL_STEPS = 5;
 
@@ -126,6 +127,35 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
     return /^[A-Z0-9-]{1,50}$/u.test(raw) ? raw : "";
   }, [searchParams]);
 
+  const redeemPendingInvite = useCallback(
+    async (
+      code: string,
+      redeemedAt: string | null,
+    ): Promise<{ redeemedAt: string | null; message: string | null }> => {
+      const normalizedCode = code.trim().toUpperCase();
+      if (!normalizedCode || redeemedAt) {
+        return { redeemedAt, message: null };
+      }
+      const result = await redeemInviteCodeClient(normalizedCode);
+      if (result.ok) {
+        const redeemedAtIso = new Date().toISOString();
+        return {
+          redeemedAt: redeemedAtIso,
+          message: result.restored
+            ? "Invite Code already redeemed for this account."
+            : result.plan === "lifetime"
+              ? "Invite Code redeemed. Lifetime Pro access activated."
+              : `Invite Code redeemed. 30-day free trial active${result.trialExpiresAt ? ` through ${new Date(result.trialExpiresAt).toLocaleDateString()}` : ""}.`,
+        };
+      }
+      return {
+        redeemedAt,
+        message: result.error ?? "Invite Code is invalid.",
+      };
+    },
+    [],
+  );
+
   const localizeTripErrors = useCallback(
     (errors: TripSetupValidationErrors): TripSetupValidationErrors => {
       const localized: TripSetupValidationErrors = {};
@@ -214,20 +244,9 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
         ...payload,
       };
       if (resolved.complete) {
-        // Onboarding already done — but if there's a fresh invite/referral code
-        // in the URL, redeem it silently without showing the onboarding UI.
+        // Onboarding already done — redeem any fresh invite code from the URL.
         if (inviteCodeFromUrl && !resolved.inviteRedeemedAt) {
-          void fetch("/api/invite/redeem", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code: inviteCodeFromUrl }),
-          }).then(async (r) => {
-            const data = (await r.json()) as { ok?: boolean; plan?: string; error?: string; reason?: string };
-            if (data.ok) {
-              // Force billing context to refresh so Pro unlocks immediately
-              window.dispatchEvent(new CustomEvent("kepi:billing-refresh"));
-            }
-          }).catch(() => null);
+          void redeemInviteCodeClient(inviteCodeFromUrl).catch(() => null);
         }
         setIsVisible(false);
         return;
@@ -254,7 +273,47 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
           ? resolved.inviteRedeemedAt
           : null,
       );
-      setInviteMessage(resolvedInviteCode && !resolved.inviteRedeemedAt ? "Invite Code entered and ready to redeem." : null);
+      let nextInviteRedeemedAt =
+        typeof resolved.inviteRedeemedAt === "string" && resolved.inviteRedeemedAt.length > 0
+          ? resolved.inviteRedeemedAt
+          : null;
+      let nextInviteMessage =
+        resolvedInviteCode && !nextInviteRedeemedAt ? "Invite Code entered and ready to redeem." : null;
+      if (resolvedInviteCode && !nextInviteRedeemedAt) {
+        setInviteBusy(true);
+        try {
+          const redemption = await redeemPendingInvite(resolvedInviteCode, nextInviteRedeemedAt);
+          nextInviteRedeemedAt = redemption.redeemedAt;
+          nextInviteMessage = redemption.message;
+          if (nextInviteRedeemedAt) {
+            await fetch("/api/travel-updates/onboarding", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                currentStep: resolvedStep,
+                tripDraft: {
+                  ...EMPTY_TRIP_SETUP_DRAFT,
+                  ...(resolved.tripDraft ?? {}),
+                },
+                inviteCode: resolvedInviteCode,
+                inviteRedeemedAt: nextInviteRedeemedAt,
+                referralCode:
+                  (typeof resolved.referralCode === "string" ? resolved.referralCode.trim().toUpperCase() : "") ||
+                  referralCodeFromUrl,
+                referralRedeemedAt:
+                  typeof resolved.referralRedeemedAt === "string" && resolved.referralRedeemedAt.length > 0
+                    ? resolved.referralRedeemedAt
+                    : null,
+                notificationsSeen: notificationsSeen,
+              }),
+            });
+          }
+        } finally {
+          setInviteBusy(false);
+        }
+      }
+      setInviteRedeemedAt(nextInviteRedeemedAt);
+      setInviteMessage(nextInviteMessage);
       const resolvedReferralCode =
         (typeof resolved.referralCode === "string" ? resolved.referralCode.trim().toUpperCase() : "") || referralCodeFromUrl;
       setReferralCode(resolvedReferralCode);
@@ -283,7 +342,7 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [inviteCodeFromUrl, referralCodeFromUrl, t]);
+  }, [inviteCodeFromUrl, redeemPendingInvite, referralCodeFromUrl, t]);
 
   const initialLoadDoneRef = useRef(false);
   useEffect(() => {
@@ -331,6 +390,23 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
   const completeOnboarding = useCallback(async (): Promise<void> => {
     setIsSaving(true);
     try {
+      let nextInviteRedeemedAt = inviteRedeemedAt;
+      if (inviteCode.trim() && !nextInviteRedeemedAt) {
+        setInviteBusy(true);
+        try {
+          const redemption = await redeemPendingInvite(inviteCode, nextInviteRedeemedAt);
+          nextInviteRedeemedAt = redemption.redeemedAt;
+          if (redemption.message) {
+            setInviteMessage(redemption.message);
+          }
+          if (nextInviteRedeemedAt) {
+            setInviteRedeemedAt(nextInviteRedeemedAt);
+            await persistProgress(currentStep, tripDraft, inviteCode, nextInviteRedeemedAt, referralCode, referralRedeemedAt);
+          }
+        } finally {
+          setInviteBusy(false);
+        }
+      }
       await fetch("/api/travel-updates/onboarding", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -342,7 +418,16 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
       setIsSaving(false);
       setIsVisible(false);
     }
-  }, []);
+  }, [
+    currentStep,
+    inviteCode,
+    inviteRedeemedAt,
+    persistProgress,
+    redeemPendingInvite,
+    referralCode,
+    referralRedeemedAt,
+    tripDraft,
+  ]);
 
   const goToStep = useCallback(
     async (nextStep: number): Promise<void> => {
@@ -386,41 +471,16 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
       setInviteBusy(true);
       setInviteMessage(null);
       try {
-        const response = await fetch("/api/invite/redeem", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code: inviteCode.trim().toUpperCase() }),
-        });
-        const payload = (await response.json()) as {
-          ok?: boolean;
-          reason?: string;
-          error?: string;
-          plan?: "lifetime" | "trial";
-          trialExpiresAt?: string | null;
-        };
-        if (!response.ok) {
-          if (payload.reason === "already-redeemed") {
-            const nowIso = new Date().toISOString();
-            setInviteRedeemedAt(nowIso);
-            nextInviteRedeemedAt = nowIso;
-            setInviteMessage("Invite Code already redeemed for this account.");
-            await persistProgress(1, tripDraft, inviteCode, nowIso, referralCode, nextReferralRedeemedAt);
-            window.dispatchEvent(new CustomEvent("kepi:billing-refresh"));
-          } else {
-            setInviteMessage(payload.error ?? "Invite Code is invalid.");
-            return;
-          }
-        } else {
-          const redeemedAtIso = new Date().toISOString();
-          setInviteRedeemedAt(redeemedAtIso);
-          nextInviteRedeemedAt = redeemedAtIso;
-          setInviteMessage(
-            payload.plan === "lifetime"
-              ? "Invite Code redeemed. Lifetime Pro access activated."
-              : `Invite Code redeemed. 30-day free trial active${payload.trialExpiresAt ? ` through ${new Date(payload.trialExpiresAt).toLocaleDateString()}` : ""}.`,
-          );
-          await persistProgress(1, tripDraft, inviteCode, redeemedAtIso, referralCode, nextReferralRedeemedAt);
-          window.dispatchEvent(new CustomEvent("kepi:billing-refresh"));
+        const redemption = await redeemPendingInvite(inviteCode, inviteRedeemedAt);
+        if (!redemption.redeemedAt && redemption.message) {
+          setInviteMessage(redemption.message);
+          return;
+        }
+        if (redemption.redeemedAt) {
+          setInviteRedeemedAt(redemption.redeemedAt);
+          nextInviteRedeemedAt = redemption.redeemedAt;
+          setInviteMessage(redemption.message);
+          await persistProgress(1, tripDraft, inviteCode, redemption.redeemedAt, referralCode, nextReferralRedeemedAt);
         }
       } finally {
         setInviteBusy(false);
@@ -491,6 +551,7 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
     inviteCode,
     inviteRedeemedAt,
     persistProgress,
+    redeemPendingInvite,
     referralCode,
     referralRedeemedAt,
     t,
