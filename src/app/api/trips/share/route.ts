@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { trackServerEvent } from "@/lib/analytics/trackServerEvent";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
+import { userHasProAccess } from "@/lib/billing/planGate";
 import { logger } from "@/lib/logger";
 import { enforceRateLimit } from "@/lib/rateLimit";
 import { createShareLink, revokeShareLink } from "@/lib/travelAssistant/tripShareStore";
@@ -94,6 +95,22 @@ export async function POST(req: Request) {
       { error: "Validation failed", details: parsed.error.flatten() },
       { status: 422, headers: auth.headers },
     );
+  }
+
+  const wantsEditTogether = parsed.data.options.readOnly !== true;
+  if (wantsEditTogether) {
+    const ownerHasPro = await userHasProAccess(auth.userId);
+    if (!ownerHasPro) {
+      return NextResponse.json(
+        {
+          error:
+            "Edit-together trip sharing needs Pro or Lifetime. Upgrade, or create a view-only link instead.",
+          code: "PRO_REQUIRED_OWNER",
+          requiresProFeature: "multi-trip",
+        },
+        { status: 402, headers: auth.headers },
+      );
+    }
   }
 
   try {

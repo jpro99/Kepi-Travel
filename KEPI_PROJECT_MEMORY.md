@@ -86,8 +86,8 @@ Five Claude-prompt features shipped together:
 - **F11 boarding pass URLs:** extract ticket/Wallet links from forwarded confirmations; persist on flight reservations; check-in card opens stored pass.
 - **G13 contextual gap actions:** Trip Health "Add hotel" opens Book → Hotels with city/dates prefilled from the gap.
 
-### Group planning (Mindtrip-style) — **Build later**
-Kepi already has family GPS, airport rally, journey phases. Missing: shared itinerary editing, merge conflicts, multi-editor permissions. **Scope:** 6–10 weeks. **Fits** family-travel audience without broadening to corporate. **Recommendation:** after day-of-travel reliability is bulletproof.
+### Group planning (Mindtrip-style) — **Shipped (v1, 2026-07-12)**
+Paid partners (Pro/Lifetime on **both** sides) can invite by email with **Edit together**, join into My Trips, and co-edit the same trip. View-only share still works for free. JSON trip download is in Share modal. Conflict UX / multi-editor presence still later.
 
 ### Conversational NL booking (Mindtrip/Zenvoya-style) — **Don't build now**
 Kepi has Command Deck + structured search wizards. Full NL→book is a product pivot (8–12+ weeks, high ambiguity risk). Differentiation is **executing the trip**, not replacing Kayak chat. Revisit only if form-based Book funnel metrics show users bouncing on complexity.

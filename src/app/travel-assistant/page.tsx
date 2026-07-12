@@ -533,6 +533,13 @@ interface ManagedTrip {
   bookingWizard?: ReturnType<typeof normalizeBookingWizard>;
   itineraryPlans?: import("@/lib/travelAssistant/itineraryDayPlan").ItineraryPlansData;
   stayDecisions?: Record<string, "needs_hotel" | "skip">;
+  /** Present when this trip is owned by a partner and shared for editing. */
+  collaboration?: {
+    ownerUserId: string;
+    role: string;
+    shareToken: string;
+    canEdit?: boolean;
+  };
 }
 
 type ManagedTripRuntimeSnapshot = {
@@ -1748,6 +1755,22 @@ function normalizeManagedTrip(trip: unknown): ManagedTrip | null {
                 (entry[1] === "needs_hotel" || entry[1] === "skip"),
             ),
           )
+        : undefined,
+    collaboration:
+      candidate.collaboration &&
+      typeof candidate.collaboration === "object" &&
+      typeof candidate.collaboration.ownerUserId === "string" &&
+      typeof candidate.collaboration.role === "string" &&
+      typeof candidate.collaboration.shareToken === "string"
+        ? {
+            ownerUserId: candidate.collaboration.ownerUserId,
+            role: candidate.collaboration.role,
+            shareToken: candidate.collaboration.shareToken,
+            canEdit:
+              typeof candidate.collaboration.canEdit === "boolean"
+                ? candidate.collaboration.canEdit
+                : undefined,
+          }
         : undefined,
   };
 }
@@ -3140,6 +3163,20 @@ export default function TravelAssistantPage() {
     },
     [activeTripId, applyManagedTripToState, setToast],
   );
+
+  // After collaborate join (?tripId=), select that shared trip once trips load
+  useEffect(() => {
+    const tripIdFromUrl = searchParams.get("tripId")?.trim() ?? "";
+    if (!tripIdFromUrl || tripsLoading) return;
+    const exists = trips.some((trip) => trip.id === tripIdFromUrl);
+    if (!exists) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("tripId");
+    window.history.replaceState({}, "", url.toString());
+    if (tripIdFromUrl !== activeTripId) {
+      void handleSwitchTrip(tripIdFromUrl);
+    }
+  }, [searchParams, tripsLoading, trips, activeTripId, handleSwitchTrip]);
 
   const resolveTripPlanningWizardPhase = useCallback((): BookingWizardPhase => {
     return resolveBookingWizardPhase(activeTrip);
@@ -9820,6 +9857,8 @@ export default function TravelAssistantPage() {
                 bookSubTab={bookSubTab}
                 onBookSubTabChange={(subTab) => navigateToConsumerTab("book", { bookView: subTab })}
                 tripId={activeTripId}
+                isSharedWithMe={Boolean(activeTrip?.collaboration)}
+                onOpenShare={() => setShareModalOpen(true)}
                 transportReservations={transportRouteReservations}
                 plannedFlightLegs={plannedFlightLegs}
                 flightSearchDefaults={flightSearchDefaults}
@@ -10254,7 +10293,12 @@ export default function TravelAssistantPage() {
                   void handleRescanImports();
                 }}
               />
-              <ShareTripCard tripId={activeTripId} tripName={activeTrip?.name ?? "My Trip"} />
+              <ShareTripCard
+                tripId={activeTripId}
+                tripName={activeTrip?.name ?? "My Trip"}
+                isSharedWithMe={Boolean(activeTrip?.collaboration)}
+                onOpenShare={() => setShareModalOpen(true)}
+              />
               <section
                 id="readiness-checklist-section"
                 ref={readinessChecklistSectionRef}

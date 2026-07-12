@@ -8,6 +8,8 @@ export interface TripShareEmailProps {
   shareUrl: string;
   senderName?: string;
   expiresAt: string;
+  /** When true, invitee can open the trip in My Trips and edit with the owner (both need Pro). */
+  canEditTogether?: boolean;
 }
 
 const shell: CSSProperties = {
@@ -77,6 +79,7 @@ export function TripShareEmail({
   shareUrl,
   senderName,
   expiresAt,
+  canEditTogether = false,
 }: TripShareEmailProps): ReactElement {
   const host = getAppHostname();
   const expiryLabel = new Date(expiresAt).toLocaleDateString("en-US", {
@@ -90,7 +93,9 @@ export function TripShareEmail({
       <body style={shell}>
         <div style={card}>
           <div style={header}>
-            <h1 style={h1}>You&apos;re invited to view a trip</h1>
+            <h1 style={h1}>
+              {canEditTogether ? "Plan this trip together" : "You're invited to view a trip"}
+            </h1>
             <p style={subtitle}>
               {senderName ? `${senderName} shared` : "Someone shared"} <strong>{tripName}</strong>
               {destination ? ` · ${destination}` : ""} with you on Kepi Travel.
@@ -98,19 +103,24 @@ export function TripShareEmail({
           </div>
           <div style={body}>
             <p style={{ margin: "0 0 16px", fontSize: 15, color: "#334155", lineHeight: 1.6 }}>
-              Open the itinerary, browse trip photos at the bottom, leave comments, and build your own keepsake collage.
+              {canEditTogether
+                ? "Open the trip in your Kepi account to edit flights, hotels, and notes together. Both of you need Pro or Lifetime."
+                : "Open the itinerary, browse trip photos at the bottom, leave comments, and build your own keepsake collage."}
             </p>
             <a href={shareUrl} style={ctaButton}>
-              View trip →
+              {canEditTogether ? "Open & edit together →" : "View trip →"}
             </a>
             <div style={noteBox}>
               <p style={{ margin: 0, fontSize: 13, color: "#0369a1", lineHeight: 1.6 }}>
-                <strong>Private link for {recipientEmail} only.</strong> Sign in with this exact email to open the trip.
-                The link will not work for anyone else, even if it is forwarded.
+                <strong>Private link for {recipientEmail} only.</strong> Sign in with this exact email to open the
+                trip. The link will not work for anyone else, even if it is forwarded.
               </p>
             </div>
             <p style={{ margin: "20px 0 0", fontSize: 12, color: "#64748b", lineHeight: 1.5 }}>
-              Link expires {expiryLabel}. Trip photos are at the bottom of the page — scroll down or tap &quot;Jump to photos&quot; when you arrive.
+              Link expires {expiryLabel}.
+              {canEditTogether
+                ? " After you join, the trip appears in My Trips for both of you."
+                : ' Trip photos are at the bottom of the page — scroll down or tap "Jump to photos" when you arrive.'}
             </p>
             <p style={{ margin: "16px 0 0", fontSize: 11, color: "#94a3b8" }}>
               {host} · Kepi Travel

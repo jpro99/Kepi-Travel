@@ -125,6 +125,8 @@ interface MobileMapForwardShellProps {
   bookSubTab?: BookSubTab;
   onBookSubTabChange?: (subTab: BookSubTab) => void;
   tripId?: string | null;
+  isSharedWithMe?: boolean;
+  onOpenShare?: () => void;
   transportReservations?: TransportRouteReservation[];
   plannedFlightLegs?: PlannedFlightLeg[];
   flightSearchDefaults?: FlightSearchDefaults;
@@ -234,6 +236,8 @@ export function MobileMapForwardShell({
   bookSubTab = "flights",
   onBookSubTabChange,
   tripId,
+  isSharedWithMe = false,
+  onOpenShare,
   transportReservations: transportReservationsProp,
   plannedFlightLegs = [],
   flightSearchDefaults,
@@ -674,7 +678,12 @@ export function MobileMapForwardShell({
       </button>
 
       {hasActiveTrip ? (
-        <ShareTripCard tripId={tripId ?? null} tripName={tripName} />
+        <ShareTripCard
+          tripId={tripId ?? null}
+          tripName={tripName}
+          isSharedWithMe={isSharedWithMe}
+          onOpenShare={onOpenShare}
+        />
       ) : null}
 
       <LiveMapLink
