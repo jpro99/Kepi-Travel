@@ -2,6 +2,7 @@
 
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@/lib/maplibreCspWorker";
+import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AirportLayout, ComputedRoute, GraphEdge, PoiDefinition, SnappedPosition, TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
@@ -75,6 +76,86 @@ const COLOR = {
 const PATH_DIM = "#3b4f6b";
 const PATH_WARM = "#f4c95d";
 const PATH_WARM_BRIGHT = "#ffe29a";
+
+/** Schematic terminal zones, walkways, and route layers — idempotent for load-race retries. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function installAirportLayoutLayers(map: any, lay: AirportLayout): void {
+  if (!map.isStyleLoaded() || map.getSource("kepi-zones")) return;
+
+  const zoneFeatures = lay.zones.map((zone) => ({
+    type: "Feature" as const,
+    properties: { height: zone.heightM, airside: zone.airside ? 1 : 0, name: zone.name },
+    geometry: { type: "Polygon" as const, coordinates: [zone.ring] },
+  }));
+  map.addSource("kepi-zones", { type: "geojson", data: { type: "FeatureCollection", features: zoneFeatures } });
+  map.addLayer({
+    id: "kepi-zones-3d",
+    type: "fill-extrusion",
+    source: "kepi-zones",
+    paint: {
+      "fill-extrusion-color": ["case", ["==", ["get", "airside"], 1], COLOR.airside, COLOR.landside],
+      "fill-extrusion-height": ["get", "height"],
+      "fill-extrusion-opacity": 0.85,
+    },
+  });
+
+  const nodePos = new Map(lay.nodes.map((node) => [node.id, node.pos]));
+  const walkFeatures = lay.edges
+    .filter((edge) => edge.kind !== "security_transition")
+    .map((edge) => ({
+      type: "Feature" as const,
+      properties: { train: edge.kind === "train" ? 1 : 0 },
+      geometry: {
+        type: "LineString" as const,
+        coordinates: [nodePos.get(edge.from) ?? [0, 0], nodePos.get(edge.to) ?? [0, 0]],
+      },
+    }));
+  map.addSource("kepi-walkways", { type: "geojson", data: { type: "FeatureCollection", features: walkFeatures } });
+  map.addLayer({
+    id: "kepi-walkways-line",
+    type: "line",
+    source: "kepi-walkways",
+    paint: {
+      "line-color": ["case", ["==", ["get", "train"], 1], "#5a7ba6", "#33507a"],
+      "line-width": 2,
+      "line-opacity": 0.55,
+      "line-dasharray": [1, 2],
+    },
+  });
+
+  map.addSource("kepi-route", {
+    type: "geojson",
+    lineMetrics: true,
+    data: { type: "FeatureCollection", features: [] },
+  });
+  map.addLayer({
+    id: "kepi-route-glow",
+    type: "line",
+    source: "kepi-route",
+    layout: { "line-cap": "round", "line-join": "round" },
+    paint: {
+      "line-color": PATH_WARM,
+      "line-width": 16,
+      "line-blur": 8,
+      "line-opacity": 0.3,
+    },
+  });
+  map.addLayer({
+    id: "kepi-route-line",
+    type: "line",
+    source: "kepi-route",
+    layout: { "line-cap": "round", "line-join": "round" },
+    paint: {
+      "line-width": 6,
+      "line-opacity": 0.95,
+      "line-gradient": [
+        "interpolate", ["linear"], ["line-progress"],
+        0, PATH_WARM,
+        1, PATH_WARM_BRIGHT,
+      ],
+    },
+  });
+}
 
 function findEdgeBetween(layout: AirportLayout, fromId: string, toId: string): GraphEdge | null {
   return (
@@ -859,6 +940,30 @@ export function AirportNavigatorMap({
   useEffect(() => {
     if (!mapEl.current || mapRef.current || !layout) return;
     let disposed = false;
+    let layersInstalled = false;
+    let unbindResize: (() => void) | null = null;
+    let loadFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const finalizeMap = (map: import("maplibre-gl").Map) => {
+      if (disposed || layersInstalled) return;
+      try {
+        installAirportLayoutLayers(map, layout);
+        if (!map.getSource("kepi-zones")) return;
+        layersInstalled = true;
+        setMapReady(true);
+        window.requestAnimationFrame(() => {
+          try {
+            map.resize();
+          } catch {
+            /* ignore */
+          }
+        });
+      } catch (error) {
+        console.error("[AirportNavigatorMap] Layer install failed", error);
+        if (!disposed) setLayoutStatus("error");
+      }
+    };
+
     void import("maplibre-gl")
       .then((ml) => {
         if (disposed || !mapEl.current || mapRef.current) return;
@@ -874,14 +979,24 @@ export function AirportNavigatorMap({
             zoom: 15.2,
             pitch: 58,
             bearing: -15,
+            pixelRatio: getMapPixelRatio(),
             attributionControl: false,
             dragRotate: true,
+            fadeDuration: 0,
           });
           mapRef.current = map;
-          map.on("load", () => {
-            if (disposed) return;
-            addLayoutLayers(map, layout);
-            setMapReady(true);
+          unbindResize = bindMapResize(mapEl.current, map);
+
+          map.on("load", () => finalizeMap(map));
+          if (map.isStyleLoaded()) finalizeMap(map);
+
+          loadFallbackTimer = window.setTimeout(() => {
+            if (!disposed && !layersInstalled) finalizeMap(map);
+          }, 450);
+
+          map.on("remove", () => {
+            if (loadFallbackTimer !== null) window.clearTimeout(loadFallbackTimer);
+            unbindResize?.();
           });
         } catch (error) {
           console.error("[AirportNavigatorMap] Map init failed", error);
@@ -894,6 +1009,8 @@ export function AirportNavigatorMap({
       });
     return () => {
       disposed = true;
+      if (loadFallbackTimer !== null) window.clearTimeout(loadFallbackTimer);
+      unbindResize?.();
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
@@ -904,83 +1021,17 @@ export function AirportNavigatorMap({
     };
   }, [layout]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function addLayoutLayers(map: any, lay: AirportLayout) {
-    const zoneFeatures = lay.zones.map((zone) => ({
-      type: "Feature" as const,
-      properties: { height: zone.heightM, airside: zone.airside ? 1 : 0, name: zone.name },
-      geometry: { type: "Polygon" as const, coordinates: [zone.ring] },
-    }));
-    map.addSource("kepi-zones", { type: "geojson", data: { type: "FeatureCollection", features: zoneFeatures } });
-    map.addLayer({
-      id: "kepi-zones-3d",
-      type: "fill-extrusion",
-      source: "kepi-zones",
-      paint: {
-        "fill-extrusion-color": ["case", ["==", ["get", "airside"], 1], COLOR.airside, COLOR.landside],
-        "fill-extrusion-height": ["get", "height"],
-        "fill-extrusion-opacity": 0.85,
-      },
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    window.requestAnimationFrame(() => {
+      try {
+        map.resize();
+      } catch {
+        /* ignore */
+      }
     });
-
-    const nodePos = new Map(lay.nodes.map((node) => [node.id, node.pos]));
-    const walkFeatures = lay.edges
-      .filter((edge) => edge.kind !== "security_transition")
-      .map((edge) => ({
-        type: "Feature" as const,
-        properties: { train: edge.kind === "train" ? 1 : 0 },
-        geometry: {
-          type: "LineString" as const,
-          coordinates: [nodePos.get(edge.from) ?? [0, 0], nodePos.get(edge.to) ?? [0, 0]],
-        },
-      }));
-    map.addSource("kepi-walkways", { type: "geojson", data: { type: "FeatureCollection", features: walkFeatures } });
-    map.addLayer({
-      id: "kepi-walkways-line",
-      type: "line",
-      source: "kepi-walkways",
-      paint: {
-        "line-color": ["case", ["==", ["get", "train"], 1], "#5a7ba6", "#33507a"],
-        "line-width": 2,
-        "line-opacity": 0.55,
-        "line-dasharray": [1, 2],
-      },
-    });
-
-    map.addSource("kepi-route", {
-      type: "geojson",
-      lineMetrics: true,
-      data: { type: "FeatureCollection", features: [] },
-    });
-    // Soft glow casing beneath the warm path — premium depth, not neon
-    map.addLayer({
-      id: "kepi-route-glow",
-      type: "line",
-      source: "kepi-route",
-      layout: { "line-cap": "round", "line-join": "round" },
-      paint: {
-        "line-color": PATH_WARM,
-        "line-width": 16,
-        "line-blur": 8,
-        "line-opacity": 0.3,
-      },
-    });
-    map.addLayer({
-      id: "kepi-route-line",
-      type: "line",
-      source: "kepi-route",
-      layout: { "line-cap": "round", "line-join": "round" },
-      paint: {
-        "line-width": 6,
-        "line-opacity": 0.95,
-        "line-gradient": [
-          "interpolate", ["linear"], ["line-progress"],
-          0, PATH_WARM,
-          1, PATH_WARM_BRIGHT,
-        ],
-      },
-    });
-  }
+  }, [fill, expanded, mapReady]);
 
   /* ── Route geometry + warmth gradient ───────────────────────────────── */
   useEffect(() => {
