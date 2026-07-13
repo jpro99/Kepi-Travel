@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo } from "react";
-import { listSupportedIndoorAirports } from "@/lib/airportNav/getLayout";
 import type { TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
 import { buildGateInstructions, getAirportNav } from "@/lib/travelAssistant/airportNavigation";
@@ -64,7 +63,6 @@ export function AirportNavigatorFallback({
 }: AirportNavigatorFallbackProps) {
   const code = iata.trim().toUpperCase();
   const nav = getAirportNav(code);
-  const indoorAirports = listSupportedIndoorAirports();
   const officialWayfinding = getAirportWayfindingResource(code);
 
   const proximity = useMemo(
@@ -113,13 +111,7 @@ export function AirportNavigatorFallback({
             ) : (
               <>
                 Turn-by-turn terminal routing isn&apos;t live at <span className="font-bold">{code}</span> yet.
-                {indoorAirports.length > 0 ? (
-                  <>
-                    {" "}
-                    Full gate routing works today at{" "}
-                    <span className="font-semibold">{indoorAirports.join(", ")}</span>.
-                  </>
-                ) : null}
+                {" "}Kepi will switch this screen to the stored indoor map when its airport package is published.
               </>
             )}
           </p>

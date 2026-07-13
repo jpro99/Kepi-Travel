@@ -3,7 +3,7 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-13 (official airport wayfinding registry + honest indoor position)
+Last updated: 2026-07-13 (database-backed Kepi airport map packages)
 
 **Neuro Brain (reasoning layer):** `NEURO_BRAIN.md` — why Jeff asks for changes; apply whole-trip thinking site-wide.
 
@@ -307,6 +307,8 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 **Failure logged 2026-07-12:** SEA Plan Airport repeatedly showed only a navy canvas while the family MapLibre map aborted MapTiler requests during handoff. Airport planning now uses a local SVG schematic (no MapTiler/WebGL), and family drawer chrome is removed from Airport Mode; live 3D MapLibre retains the schematic as its context-loss fallback. Mobile must expose `Plan SEA airport` for future SEA flights outside the geofence; destination selection uses 48px controls, one selected map label, and a readable route sheet.
 
 **Failure logged 2026-07-13:** The airport destination box disappeared after selection, indoor GPS looked more precise than it was, and SEA’s curated Checkpoint 3 incorrectly claimed CLEAR. Airport controls must remain visible, GPS uses an accuracy halo/approximate label, SEA live wayfinding hands off to the official Atrius map, and third-party airport maps are never claimed as downloadable/offline.
+
+**Decision 2026-07-13:** Build Kepi-owned airport maps as reusable database packages, starting with SEA. Packages contain original vector geometry, a walking graph, POIs, licensing/source metadata, revision/status, and a verified date. Published database layouts feed live navigation and offline trip caches; bundled layouts are safe first-use seeds. Never copy official airport map artwork or claim phone GPS is survey-accurate indoors.
 
 ---
 

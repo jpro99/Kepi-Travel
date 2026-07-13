@@ -30,16 +30,41 @@ export async function loadCachedAirportLayout(iata: string): Promise<AirportLayo
   return record.payload as AirportLayout;
 }
 
+export async function saveAirportLayoutToOfflineCache(input: {
+  tripId: string;
+  layout: AirportLayout;
+  savedAt?: string;
+}): Promise<void> {
+  await saveOfflineCacheRecord({
+    key: cacheKeyForAirport(input.layout.iata),
+    kind: "airport-layout",
+    tripId: input.tripId,
+    savedAt: input.savedAt ?? new Date().toISOString(),
+    payload: input.layout,
+  });
+}
+
+async function fetchPublishedAirportLayout(iata: string): Promise<AirportLayout | null> {
+  if (typeof window === "undefined") return null;
+  try {
+    const response = await fetch(`/api/airport-nav/${encodeURIComponent(iata)}/layout`);
+    if (!response.ok) return null;
+    return (await response.json()) as AirportLayout;
+  } catch {
+    return null;
+  }
+}
+
 export async function resolveAirportLayoutForNav(
   iata: string,
   options?: { allowLiveFetch?: boolean },
 ): Promise<{ layout: AirportLayout | null; source: "cache" | "live" | "none" }> {
   const cached = await loadCachedAirportLayout(iata);
-  if (cached) return { layout: cached, source: "cache" };
   if (options?.allowLiveFetch !== false && typeof fetch !== "undefined") {
-    const live = getAirportLayout(iata);
+    const live = await fetchPublishedAirportLayout(iata);
     if (live) return { layout: live, source: "live" };
   }
+  if (cached) return { layout: cached, source: "cache" };
   return { layout: getAirportLayout(iata), source: getAirportLayout(iata) ? "live" : "none" };
 }
 
@@ -69,17 +94,15 @@ export async function syncItineraryOfflineAssets(input: {
   }
 
   for (const iata of listRemainingAirportIatas(input.reservations, nowMs)) {
-    const layout = getAirportLayout(iata);
+    const layout = await fetchPublishedAirportLayout(iata) ?? getAirportLayout(iata);
     if (!layout) {
       skippedAirports.push(iata);
       continue;
     }
-    await saveOfflineCacheRecord({
-      key: cacheKeyForAirport(iata),
-      kind: "airport-layout",
+    await saveAirportLayoutToOfflineCache({
       tripId: input.tripId,
       savedAt: new Date(nowMs).toISOString(),
-      payload: layout,
+      layout,
     });
     prefetchedAirports.push(iata);
   }

@@ -1,57 +1,76 @@
-import { promises as fs } from 'fs';
-import path from 'path';
-import { NextResponse } from 'next/server';
-import { z } from 'zod';
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { requireAdminApiAccess } from "@/lib/admin/requireAdminApiAccess";
+import { parseAirportLayout } from "@/lib/airportNav/airportLayoutPackage";
+import {
+  getStoredAirportLayoutPackage,
+  saveAirportLayoutPackage,
+} from "@/lib/airportNav/airportLayoutStore";
 
-// Basic check for admin privileges
-function isAdmin(request: Request): boolean {
-    // In a real app, this would involve checking a session cookie for a user's role.
-    // For now, we'll keep it simple and allow it in a non-production environment.
-    return process.env.NODE_ENV !== 'production';
-}
-
-const BodySchema = z.object({
-    iata: z.string().trim().length(3),
-    geojson: z.string(),
+const SourceSchema = z.object({
+  ownership: z.literal("kepi_original"),
+  attribution: z.string().trim().min(1),
+  sourceUrls: z.array(z.string().url()).default([]),
+  licenseNote: z.string().trim().min(1),
+  lastVerifiedAt: z.string().trim().min(1),
 });
 
+const BodySchema = z.object({
+  iata: z.string().trim().regex(/^[A-Za-z]{3}$/),
+  layout: z.unknown(),
+  status: z.enum(["draft", "published"]).default("draft"),
+  source: SourceSchema,
+});
+
+export async function GET(request: Request) {
+  const gate = await requireAdminApiAccess("/api/admin/airport-layout");
+  if (!gate.ok) return gate.response;
+
+  const url = new URL(request.url);
+  const iata = url.searchParams.get("iata")?.trim().toUpperCase() ?? "";
+  if (!/^[A-Z]{3}$/.test(iata)) {
+    return NextResponse.json({ error: "A valid iata query parameter is required" }, { status: 400 });
+  }
+
+  const [published, draft] = await Promise.all([
+    getStoredAirportLayoutPackage(iata, "published"),
+    getStoredAirportLayoutPackage(iata, "draft"),
+  ]);
+  return NextResponse.json({ iata, published, draft });
+}
+
 export async function POST(request: Request) {
-    if (!isAdmin(request)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  const gate = await requireAdminApiAccess("/api/admin/airport-layout");
+  if (!gate.ok) return gate.response;
+
+  try {
+    const parsedBody = BodySchema.parse(await request.json());
+    const iata = parsedBody.iata.toUpperCase();
+    const layout = parseAirportLayout(parsedBody.layout);
+    if (layout.iata !== iata) {
+      return NextResponse.json(
+        { error: `Body IATA ${iata} does not match layout IATA ${layout.iata}` },
+        { status: 400 },
+      );
     }
 
-    try {
-        const body = await request.json();
-        const validation = BodySchema.safeParse(body);
-
-        if (!validation.success) {
-            return NextResponse.json({ error: 'Invalid input', details: validation.error.flatten() }, { status: 400 });
-        }
-
-        const { iata, geojson } = validation.data;
-
-        // Validate that the geojson string is valid JSON
-        try {
-            JSON.parse(geojson);
-        } catch (e) {
-            return NextResponse.json({ error: 'Invalid GeoJSON content: Not valid JSON.' }, { status: 400 });
-        }
-
-        const upperIata = iata.toUpperCase();
-        const filename = `${upperIata.toLowerCase()}.json`;
-        
-        // IMPORTANT: Ensure the directory exists. Adjust the path according to your project structure.
-        const dataDir = path.join(process.cwd(), 'src', 'data', 'airport-layouts');
-        await fs.mkdir(dataDir, { recursive: true });
-
-        const filePath = path.join(dataDir, filename);
-        await fs.writeFile(filePath, geojson, 'utf8');
-
-        return NextResponse.json({ message: 'Airport layout saved successfully.', iata: upperIata });
-
-    } catch (error) {
-        console.error("Error in airport-layout API:", error);
-        const errorMessage = error instanceof Error ? error.message : 'An unknown server error occurred';
-        return NextResponse.json({ error: errorMessage }, { status: 500 });
+    const saved = await saveAirportLayoutPackage(layout, parsedBody.source, {
+      status: parsedBody.status,
+    });
+    return NextResponse.json({
+      message: `${iata} airport layout ${parsedBody.status}.`,
+      package: saved,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: "Invalid airport layout package", details: error.flatten() },
+        { status: 400 },
+      );
     }
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unable to save airport layout package" },
+      { status: 400 },
+    );
+  }
 }

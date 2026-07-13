@@ -7,16 +7,18 @@ interface OfficialAirportMapLinkProps {
   iata: string;
   compact?: boolean;
   className?: string;
+  hasOfflineKepiLayout?: boolean;
 }
 
 export function OfficialAirportMapLink({
   iata,
   compact = false,
   className = "",
+  hasOfflineKepiLayout,
 }: OfficialAirportMapLinkProps) {
   const resource = getAirportWayfindingResource(iata);
   if (!resource) return null;
-  const hasOfflineKepiLayout = hasAirportLayout(iata);
+  const offlineKepiLayout = hasOfflineKepiLayout ?? hasAirportLayout(iata);
 
   return (
     <section
@@ -43,7 +45,7 @@ export function OfficialAirportMapLink({
       </a>
       <p className={`mt-1.5 leading-snug text-sky-100/65 ${compact ? "text-[9px]" : "text-[11px]"}`}>
         {resource.provider} · Official map requires internet
-        {hasOfflineKepiLayout ? " · Kepi schematic remains available offline" : ""}
+        {offlineKepiLayout ? " · Kepi schematic remains available offline" : ""}
       </p>
     </section>
   );

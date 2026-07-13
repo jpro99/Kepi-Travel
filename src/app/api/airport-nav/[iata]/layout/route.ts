@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { getAirportLayout } from "@/lib/airportNav/getLayout";
+import { resolvePublishedAirportLayout } from "@/lib/airportNav/airportLayoutStore";
 
 type Params = { params: Promise<{ iata: string }> };
 
 /**
  * GET /api/airport-nav/[iata]/layout
- * Returns the curated AirportLayout (zones + walkway graph + POIs) for the
- * given IATA code, or 404 when no curated layout exists yet.
- * Long cache — layouts change only on curation pushes (layoutVersion bumps).
+ * Returns the published, versioned Kepi-owned AirportLayout for the IATA.
+ * Database packages win; bundled layouts seed the database on first use.
  */
 export async function GET(_request: Request, { params }: Params) {
   const { iata: raw } = await params;
@@ -17,7 +16,8 @@ export async function GET(_request: Request, { params }: Params) {
     return NextResponse.json({ error: "Invalid IATA code" }, { status: 400 });
   }
 
-  const layout = getAirportLayout(iata);
+  const resolved = await resolvePublishedAirportLayout(iata);
+  const layout = resolved.layout;
   if (!layout) {
     return NextResponse.json(
       { error: "No curated layout for this airport yet", iata },
@@ -27,7 +27,10 @@ export async function GET(_request: Request, { params }: Params) {
 
   return NextResponse.json(layout, {
     headers: {
-      "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
+      "Cache-Control": "public, max-age=60, s-maxage=300, stale-while-revalidate=86400",
+      "ETag": `"${iata}:${resolved.package?.revision ?? 0}:${layout.layoutVersion}"`,
+      "X-Kepi-Airport-Layout-Source": resolved.source,
+      "X-Kepi-Airport-Layout-Revision": String(resolved.package?.revision ?? 0),
     },
   });
 }

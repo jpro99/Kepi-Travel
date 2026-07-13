@@ -5,13 +5,11 @@ import "@/lib/maplibreCspWorker";
 import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AirportNavigatorMap } from "@/components/travelAssistant/AirportNavigatorMap";
-import { AirportNavigatorFallback } from "@/components/travelAssistant/AirportNavigatorFallback";
 import {
   deriveEligibleLounges,
   useActiveFlight,
   useNavigatorCredentials,
 } from "@/lib/travelAssistant/useActiveFlight";
-import { hasAirportLayout } from "@/lib/airportNav/getLayout";
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
 import { buildOsmRasterFallbackStyle, directMaptilerTransformRequest, resolveLiveMapStyle, scheduleMapLoadFallback, attachMapStyleErrorFallback, type LiveMapStyleId } from "@/lib/map/maptilerClient";
 import { buildOfflineCityMapStyle } from "@/lib/map/offlineCityMapBundle";
@@ -700,8 +698,6 @@ export function LiveMapPage() {
 
   const airportLiveMode = Boolean(activeFlight && atDepartureAirport);
   const airportPreviewMode = Boolean(navFlight && !airportLiveMode);
-  const navIata = navFlight?.f.flightDepartureAirport ?? "";
-  const navHasIndoorLayout = hasAirportLayout(navIata);
 
   useEffect(() => {
     if (!preferAirportView || !previewFlight) return;
@@ -1003,7 +999,7 @@ export function LiveMapPage() {
         />
 
         {/* Airport Navigator overlay — preview anytime; live navigation at geofence */}
-        {mapView === "airport" && navFlight && navHasIndoorLayout && (
+        {mapView === "airport" && navFlight && (
           <div className="absolute inset-0 z-40">
             <AirportNavigatorMap
               fill
@@ -1056,31 +1052,6 @@ export function LiveMapPage() {
             ) : null}
           </div>
         )}
-
-        {mapView === "airport" && navFlight && !navHasIndoorLayout ? (
-          <div className="absolute inset-0 z-40">
-            <AirportNavigatorFallback
-              fill
-              iata={navIata}
-              gateCode={navFlight.f.flightDepartureGate ?? null}
-              airlineName={navFlight.f.flightAirline ?? navFlight.f.provider ?? null}
-              flightNumber={navFlight.f.flightNumber ?? null}
-              arrivalAirport={navFlight.f.flightArrivalAirport ?? null}
-              departureTerminal={navFlight.f.flightDepartureTerminal ?? null}
-              flightStatusLabel={navFlight.f.flightStatus ?? null}
-              flightDelayed={(navFlight.f.flightDelayMinutes ?? 0) > 0 || navFlight.f.flightOnTime === false}
-              minutesToDeparture={navMinutesToDeparture}
-              proximityStatus={airportLiveMode ? navProximity.status : "preview"}
-              userLat={navLat}
-              userLon={navLon}
-              credentials={navCredentials}
-              eligibleLoungeNames={navEligibleLounges}
-              onSwitchToFamilyView={() => setMapView("family")}
-              familyPins={airportLiveMode ? familyAirportPins : []}
-              onFamilyPinTap={handleFamilyPinTap}
-            />
-          </div>
-        ) : null}
 
         {/* Airport ⇄ Family view pill — when trip has a mappable departure airport */}
         {navFlight && (

@@ -1,6 +1,7 @@
 /**
- * Registry of curated airport layouts. Phase 0: SEA only.
- * Add airports here as curation completes (ATL, DEN, ORD, LAX next — spec §H).
+ * Bundled safety seeds for Kepi-owned airport layouts.
+ * Published database packages are resolved by airportLayoutStore; keep only
+ * critical offline/bootstrap layouts here.
  */
 
 import type { AirportLayout } from "./types";
@@ -19,7 +20,7 @@ export function hasAirportLayout(iata: string | null | undefined): boolean {
   return getAirportLayout(iata) !== null;
 }
 
-/** Airports with curated indoor walkway graphs (turn-by-turn terminal map). */
+/** Airports bundled with the app; database-backed coverage may be larger. */
 export function listSupportedIndoorAirports(): string[] {
   return Object.keys(LAYOUTS);
 }

@@ -169,6 +169,8 @@ test.describe("SEA day-of-travel", () => {
     await signIn(page);
     const layoutResponse = await page.request.get("/api/airport-nav/SEA/layout");
     expect(layoutResponse.ok()).toBeTruthy();
+    expect(layoutResponse.headers()["x-kepi-airport-layout-source"]).toMatch(/database|bundled/);
+    expect(Number(layoutResponse.headers()["x-kepi-airport-layout-revision"])).toBeGreaterThan(0);
     const slot = departureSlotMinutesFromNow(90);
     await seedSeaDayOfTravelTrip(page, slot);
 

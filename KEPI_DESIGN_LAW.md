@@ -223,6 +223,11 @@ There is no universal downloadable live indoor airport map. Kepi must use a veri
 
 **Test:** `src/lib/airportNav/officialWayfinding.test.ts`, `src/lib/airportNav/pathfinder.test.ts`, `app-sitter/airport-day-of-travel.spec.ts`
 
+**M13 — Kepi airport maps are versioned, original route packages**
+Each Kepi-owned airport map is stored as a versioned database package containing original vector zones, a validated walking graph, POIs, source/licensing metadata, and a last-verified date. Public navigation reads the published database package first, seeds from a bundled safe fallback when necessary, and refreshes the traveler’s offline cache from the published API. Every edge, POI, and gate resolver must reference a real graph node; official map artwork is reference material, never copied into Kepi.
+
+**Test:** `src/lib/airportNav/airportLayoutPackage.test.ts`, `app-sitter/airport-day-of-travel.spec.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -413,6 +418,7 @@ Channel shortcuts require **≥3 attempts**, correction rate **≤25%**, and alw
 | M10 | `src/lib/airportNav/schematic.test.ts`, `app-sitter/airport-day-of-travel.spec.ts` |
 | M11 | `app-sitter/airport-day-of-travel.spec.ts` |
 | M12 | `src/lib/airportNav/officialWayfinding.test.ts`, `src/lib/airportNav/pathfinder.test.ts`, `app-sitter/airport-day-of-travel.spec.ts` |
+| M13 | `src/lib/airportNav/airportLayoutPackage.test.ts`, `app-sitter/airport-day-of-travel.spec.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |

@@ -9,7 +9,10 @@ import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pat
 import { buildAirportSchematicModel } from "@/lib/airportNav/schematic";
 import type { JourneyWaypointEvent, NavTimingCalibrationStore } from "@/lib/airportNav/navTimingCalibration";
 import { loadNavTimingCalibrationStore, recordJourneyWaypointPair } from "@/lib/airportNav/navJourneyTelemetry";
-import { loadCachedAirportLayout } from "@/lib/travelAssistant/syncItineraryOfflineAssets";
+import {
+  loadCachedAirportLayout,
+  saveAirportLayoutToOfflineCache,
+} from "@/lib/travelAssistant/syncItineraryOfflineAssets";
 import { AirportNavigatorFallback } from "@/components/travelAssistant/AirportNavigatorFallback";
 import {
   initialJourneyState,
@@ -317,7 +320,12 @@ function AirportDestinationRail({
           );
         })}
       </div>
-      <OfficialAirportMapLink iata={layout.iata} compact className="mt-2 shrink-0" />
+      <OfficialAirportMapLink
+        iata={layout.iata}
+        compact
+        hasOfflineKepiLayout
+        className="mt-2 shrink-0"
+      />
     </section>
   );
 }
@@ -826,12 +834,11 @@ export function AirportNavigatorMap({
       if (cached && !cancelled) {
         setLayout(cached);
         setLayoutStatus("ready");
-        return;
       }
       try {
         const res = await fetch(`/api/airport-nav/${encodeURIComponent(iata)}/layout`);
         if (res.status === 404) {
-          if (!cancelled) setLayoutStatus("unsupported");
+          if (!cancelled && !cached) setLayoutStatus("unsupported");
           return;
         }
         if (!res.ok) throw new Error(String(res.status));
@@ -839,6 +846,10 @@ export function AirportNavigatorMap({
         if (!cancelled) {
           setLayout(data);
           setLayoutStatus("ready");
+          void saveAirportLayoutToOfflineCache({
+            tripId: "airport-nav",
+            layout: data,
+          });
         }
       } catch {
         const fallback = await loadCachedAirportLayout(iata);
