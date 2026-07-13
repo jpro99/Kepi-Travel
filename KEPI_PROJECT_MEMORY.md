@@ -3,7 +3,7 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-13 (database-backed Kepi airport map packages)
+Last updated: 2026-07-13 (demand-driven airport curation queue)
 
 **Neuro Brain (reasoning layer):** `NEURO_BRAIN.md` — why Jeff asks for changes; apply whole-trip thinking site-wide.
 
@@ -309,6 +309,8 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 **Failure logged 2026-07-13:** The airport destination box disappeared after selection, indoor GPS looked more precise than it was, and SEA’s curated Checkpoint 3 incorrectly claimed CLEAR. Airport controls must remain visible, GPS uses an accuracy halo/approximate label, SEA live wayfinding hands off to the official Atrius map, and third-party airport maps are never claimed as downloadable/offline.
 
 **Decision 2026-07-13:** Build Kepi-owned airport maps as reusable database packages, starting with SEA. Packages contain original vector geometry, a walking graph, POIs, licensing/source metadata, revision/status, and a verified date. Published database layouts feed live navigation and offline trip caches; bundled layouts are safe first-use seeds. Never copy official airport map artwork or claim phone GPS is survey-accurate indoors.
+
+**Decision 2026-07-13:** Unsupported airport package requests automatically enter a shared, IATA-only curation queue with deduplicated demand and official-source metadata. No traveler identity is stored. Geometry may be prepared as a draft, but only validated, explicitly published packages replace the official-map fallback.
 
 ---
 

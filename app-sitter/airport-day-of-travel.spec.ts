@@ -241,6 +241,11 @@ test.describe("SEA day-of-travel", () => {
   test("unsupported curated airports open their verified official map", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await signIn(page);
+    const missingLayout = await page.request.get("/api/airport-nav/HNL/layout");
+    expect(missingLayout.status()).toBe(404);
+    const missingBody = await missingLayout.json() as { curationStatus?: string; demandCount?: number };
+    expect(missingBody.curationStatus).toBe("requested");
+    expect(missingBody.demandCount).toBeGreaterThan(0);
     const slot = departureSlotMinutesFromNow(72 * 60);
     await seedSeaDayOfTravelTrip(page, slot, {
       gateCode: null,

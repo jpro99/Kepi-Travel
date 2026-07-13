@@ -1,4 +1,5 @@
 import { logger } from "@/lib/logger";
+import { setAirportCurationStatus } from "@/lib/airportNav/airportCurationQueue";
 import { getAirportLayout } from "@/lib/airportNav/getLayout";
 import {
   createNextAirportLayoutPackage,
@@ -71,7 +72,10 @@ export async function saveAirportLayoutPackage(
     existingDraft: draft,
     now: options?.now,
   });
-  await kvStoreSet(packageKey(code, status), nextPackage, { userId: AIRPORT_LAYOUT_NAMESPACE });
+  await Promise.all([
+    kvStoreSet(packageKey(code, status), nextPackage, { userId: AIRPORT_LAYOUT_NAMESPACE }),
+    setAirportCurationStatus(code, status),
+  ]);
   return nextPackage;
 }
 

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordAirportCurationDemand } from "@/lib/airportNav/airportCurationQueue";
 import { resolvePublishedAirportLayout } from "@/lib/airportNav/airportLayoutStore";
 
 type Params = { params: Promise<{ iata: string }> };
@@ -19,8 +20,14 @@ export async function GET(_request: Request, { params }: Params) {
   const resolved = await resolvePublishedAirportLayout(iata);
   const layout = resolved.layout;
   if (!layout) {
+    const curation = await recordAirportCurationDemand(iata);
     return NextResponse.json(
-      { error: "No curated layout for this airport yet", iata },
+      {
+        error: "No curated layout for this airport yet",
+        iata,
+        curationStatus: curation.status,
+        demandCount: curation.demandCount,
+      },
       { status: 404 },
     );
   }

@@ -1,6 +1,18 @@
 "use client";
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+
+interface AirportCurationRequest {
+    iata: string;
+    airportName: string;
+    status: 'requested' | 'draft' | 'published' | 'dismissed';
+    demandCount: number;
+    firstRequestedAt: string;
+    lastRequestedAt: string;
+    officialMapUrl: string | null;
+    officialMapProvider: string | null;
+    officialMapVerified: boolean;
+}
 
 export default function AirportEditorPage() {
     const [iataCode, setIataCode] = useState('');
@@ -10,6 +22,40 @@ export default function AirportEditorPage() {
     const [status, setStatus] = useState<'draft' | 'published'>('draft');
     const [message, setMessage] = useState('');
     const [isUploading, setIsUploading] = useState(false);
+    const [queue, setQueue] = useState<AirportCurationRequest[]>([]);
+    const [queueLoading, setQueueLoading] = useState(true);
+
+    const loadQueue = useCallback(async () => {
+        setQueueLoading(true);
+        try {
+            const response = await fetch('/api/admin/airport-layout/queue');
+            const body = await response.json() as { requests?: AirportCurationRequest[] };
+            if (response.ok) setQueue(body.requests ?? []);
+        } finally {
+            setQueueLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        void loadQueue();
+    }, [loadQueue]);
+
+    const selectRequest = (request: AirportCurationRequest) => {
+        setIataCode(request.iata);
+        setAttribution(`Kepi original ${request.iata} airport schematic`);
+        setSourceUrl(request.officialMapVerified ? request.officialMapUrl ?? '' : '');
+        setStatus('draft');
+        setMessage(`${request.iata} selected. Build and verify its AirportLayout JSON, then save it as a draft.`);
+    };
+
+    const dismissRequest = async (request: AirportCurationRequest) => {
+        await fetch('/api/admin/airport-layout/queue', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ iata: request.iata, status: 'dismissed' }),
+        });
+        await loadQueue();
+    };
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files) {
@@ -70,6 +116,7 @@ export default function AirportEditorPage() {
                     setSourceUrl('');
                     setStatus('draft');
                     (document.getElementById('file-input') as HTMLInputElement).value = '';
+                    await loadQueue();
                 } else {
                     throw new Error(result.error || 'Failed to upload file.');
                 }
@@ -91,8 +138,73 @@ export default function AirportEditorPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-            <div className="max-w-md w-full bg-white p-8 rounded-lg shadow-md">
+        <div className="min-h-screen bg-gray-100 px-4 py-10">
+            <div className="mx-auto grid w-full max-w-6xl gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.8fr)]">
+              <section className="rounded-2xl bg-white p-6 shadow-md">
+                <div className="flex items-center justify-between gap-3">
+                    <div>
+                        <h2 className="text-xl font-bold text-gray-900">Airport demand queue</h2>
+                        <p className="mt-1 text-sm text-gray-500">
+                            Missing airports appear automatically. Demand is deduplicated within five minutes.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => void loadQueue()}
+                        className="rounded-xl border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700"
+                    >
+                        Refresh
+                    </button>
+                </div>
+                <div className="mt-5 space-y-3">
+                    {queueLoading ? <p className="text-sm text-gray-500">Loading requests…</p> : null}
+                    {!queueLoading && queue.length === 0 ? (
+                        <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500">No airport requests yet.</p>
+                    ) : null}
+                    {queue.map((request) => (
+                        <article key={request.iata} className="rounded-2xl border border-gray-200 p-4">
+                            <div className="flex items-start justify-between gap-3">
+                                <div>
+                                    <p className="text-lg font-black text-gray-900">
+                                        {request.iata} · {request.airportName}
+                                    </p>
+                                    <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                        {request.status} · demand {request.demandCount}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => selectRequest(request)}
+                                    disabled={request.status === 'published'}
+                                    className="rounded-xl bg-[#0b1f3a] px-3 py-2 text-sm font-bold text-white disabled:opacity-40"
+                                >
+                                    Prepare
+                                </button>
+                            </div>
+                            {request.officialMapUrl ? (
+                                <a
+                                    href={request.officialMapUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="mt-3 block text-sm font-semibold text-blue-700 underline"
+                                >
+                                    Review {request.officialMapVerified ? 'verified official source' : 'map search'}
+                                </a>
+                            ) : null}
+                            {request.status !== 'published' && request.status !== 'dismissed' ? (
+                                <button
+                                    type="button"
+                                    onClick={() => void dismissRequest(request)}
+                                    className="mt-3 text-xs font-semibold text-gray-500 underline"
+                                >
+                                    Dismiss request
+                                </button>
+                            ) : null}
+                        </article>
+                    ))}
+                </div>
+              </section>
+              <section className="w-full rounded-2xl bg-white p-8 shadow-md">
                 <h1 className="text-2xl font-bold text-center mb-2">Kepi Airport Package Editor</h1>
                 <p className="mb-6 text-center text-sm text-gray-500">
                     Upload original vector geometry, routing nodes, edges, and POIs. Save as draft before publishing.
@@ -181,6 +293,7 @@ export default function AirportEditorPage() {
                         {message}
                     </p>
                 )}
+              </section>
             </div>
         </div>
     );

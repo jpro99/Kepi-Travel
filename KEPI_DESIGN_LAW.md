@@ -229,6 +229,11 @@ Package lifecycle tests must use pure in-memory inputs and must never write draf
 
 **Test:** `src/lib/airportNav/airportLayoutPackage.test.ts`, `app-sitter/airport-day-of-travel.spec.ts`
 
+**M14 — Missing airports enter a demand-driven curation queue**
+When a traveler requests an airport without a published Kepi package, record a shared IATA-level curation request with deduplicated demand and verified official-source metadata. Never store traveler identity in this queue, and never auto-publish generated or imported geometry. A validated draft must be explicitly published before it can replace the official-map fallback.
+
+**Test:** `src/lib/airportNav/airportCurationQueue.test.ts`, `app-sitter/airport-day-of-travel.spec.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -420,6 +425,7 @@ Channel shortcuts require **≥3 attempts**, correction rate **≤25%**, and alw
 | M11 | `app-sitter/airport-day-of-travel.spec.ts` |
 | M12 | `src/lib/airportNav/officialWayfinding.test.ts`, `src/lib/airportNav/pathfinder.test.ts`, `app-sitter/airport-day-of-travel.spec.ts` |
 | M13 | `src/lib/airportNav/airportLayoutPackage.test.ts`, `app-sitter/airport-day-of-travel.spec.ts` |
+| M14 | `src/lib/airportNav/airportCurationQueue.test.ts`, `app-sitter/airport-day-of-travel.spec.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |
