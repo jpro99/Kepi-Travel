@@ -213,6 +213,11 @@ POI names and leader lines must share the terminal SVG coordinate system; labels
 
 **Test:** `src/lib/airportNav/schematic.test.ts`, `app-sitter/airport-day-of-travel.spec.ts`
 
+**M11 — Mobile airport planning stays visible and touch-first**
+A future flight at a curated airport must expose **Plan {IATA} airport** on the mobile Map tab even when the traveler is outside the geofence. Airport schematics use 48px+ destination controls, show only the selected POI label with a clear leader line, and put route steps in a readable bottom sheet; selecting a preview route must explicitly say live guidance begins on arrival.
+
+**Test:** `app-sitter/airport-day-of-travel.spec.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -401,6 +406,7 @@ Channel shortcuts require **≥3 attempts**, correction rate **≤25%**, and alw
 | M8 | `src/lib/family/locationFixUpgrade.test.ts` |
 | M9 | `src/lib/travelAssistant/groundTransportDeepLinks.test.ts` |
 | M10 | `src/lib/airportNav/schematic.test.ts`, `app-sitter/airport-day-of-travel.spec.ts` |
+| M11 | `app-sitter/airport-day-of-travel.spec.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |

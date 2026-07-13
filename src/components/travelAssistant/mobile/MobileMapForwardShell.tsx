@@ -33,6 +33,7 @@ import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 import type { TripSpendSummary } from "@/lib/travelAssistant/tripSpendSummary";
 import type { TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 import type { HotelStayMapReservation } from "@/lib/travelAssistant/tripHotelStayMap";
+import { hasAirportLayout } from "@/lib/airportNav/getLayout";
 
 const TripHomeOverviewMap = dynamic(
   () => import("@/components/travelAssistant/TripHomeOverviewMap").then((m) => m.TripHomeOverviewMap),
@@ -179,6 +180,21 @@ function formatDateRange(startDate: string | null, endDate: string | null): stri
   return `${fmt(startDate)} – ${fmt(endDate)}`;
 }
 
+function findPlannableAirport(reservations: Reservation[]): string | null {
+  const gracePeriodStart = Date.now() - 86_400_000;
+  for (const reservation of reservations) {
+    if (reservation.type !== "flight") continue;
+    const iata = reservation.flightDepartureAirport?.trim().toUpperCase();
+    if (!iata || !hasAirportLayout(iata)) continue;
+    const departureValue = reservation.flightDate
+      ?? reservation.flightDepartureTime
+      ?? reservation.localTime;
+    const departureAt = Date.parse(departureValue);
+    if (Number.isNaN(departureAt) || departureAt >= gracePeriodStart) return iata;
+  }
+  return null;
+}
+
 const juicyBtn =
   "min-h-[56px] w-full rounded-[var(--radius-button)] text-[19px] font-bold transition active:scale-[0.98] touch-manipulation";
 const juicyBtnPrimary = `${juicyBtn} bg-[var(--accent)] text-white shadow-md`;
@@ -290,6 +306,7 @@ export function MobileMapForwardShell({
   const hotelCount = hotelReservations.length;
   const heroCity = resolveHeroCity(destination, reservations);
   const dateRange = formatDateRange(startDate, endDate);
+  const plannableAirport = useMemo(() => findPlannableAirport(reservations), [reservations]);
 
   const countdown = daysUntilTrip(startDate);
 
@@ -451,6 +468,7 @@ export function MobileMapForwardShell({
 
   if (activeTab === "map") {
     const atAirport = locationStatus === "at-airport" || locationStatus === "in-terminal";
+    const showAirportButton = atAirport || plannableAirport !== null;
     return (
       <div className="kepi-mobile-shell kepi-mobile-tab-pad -mx-1 flex flex-col gap-3">
         <div className="relative min-h-[min(52dvh,28rem)] overflow-hidden rounded-[var(--radius-card)] bg-[#dbeafe] ring-1 ring-[var(--border-default)]">
@@ -469,11 +487,12 @@ export function MobileMapForwardShell({
             >
               Family map
             </LiveMapLink>
-            {atAirport ? (
+            {showAirportButton ? (
               <LiveMapLink
+                href="/travel-assistant/live-map?view=airport"
                 className="pointer-events-auto min-h-[48px] rounded-full bg-[#007AFF] px-5 py-3 text-[17px] font-bold text-white shadow-lg"
               >
-                Airport mode
+                {atAirport ? "Airport mode" : `Plan ${plannableAirport} airport`}
               </LiveMapLink>
             ) : null}
           </div>

@@ -180,6 +180,7 @@ test.describe("SEA day-of-travel", () => {
 
   test("planning mode renders SEA without MapTiler or WebGL", async ({ page }) => {
     const mapTilerRequests: string[] = [];
+    await page.setViewportSize({ width: 390, height: 844 });
     page.on("request", (request) => {
       if (request.url().includes("api.maptiler.com")) mapTilerRequests.push(request.url());
     });
@@ -201,11 +202,33 @@ test.describe("SEA day-of-travel", () => {
     await expect(page.getByRole("button", { name: /Navigate to Alaska Lounge/i })).toHaveCount(0);
     await page.getByRole("button", { name: "Lounges" }).click();
     await expect(page.getByRole("button", { name: /Navigate to Alaska Lounge/i }).first()).toBeVisible();
+    await page.getByRole("button", { name: "Essential" }).click();
+    const checkinButton = page.getByRole("button", { name: /Navigate to Alaska check-in/i });
+    const checkinBox = await checkinButton.boundingBox();
+    expect(checkinBox?.height).toBeGreaterThanOrEqual(48);
+    await checkinButton.click();
+    await expect(page.getByTestId("airport-nav-selected-label")).toBeVisible();
+    await expect(page.getByRole("region", { name: "Route instructions" })).toContainText("Route preview");
+    await expect(page.getByText(/Live step-by-step guidance starts when you arrive at SEA/i)).toBeVisible();
     await expect(mapHost.locator("canvas")).toHaveCount(0);
     await expect(page.getByTestId("family-map-drawer")).toHaveCount(0);
 
     await page.waitForTimeout(1_500);
     expect(mapTilerRequests).toEqual([]);
+  });
+
+  test("mobile Map tab exposes future SEA planning outside the airport geofence", async ({ page, context }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await context.setGeolocation({ latitude: 40.7128, longitude: -74.006 });
+    await signIn(page);
+    const slot = departureSlotMinutesFromNow(72 * 60);
+    await seedSeaDayOfTravelTrip(page, slot, { gateCode: null });
+
+    await page.goto("/travel-assistant?mtab=map", { waitUntil: "domcontentloaded" });
+
+    const planAirport = page.getByRole("link", { name: "Plan SEA airport" });
+    await expect(planAirport).toBeVisible({ timeout: 30_000 });
+    await expect(planAirport).toHaveAttribute("href", "/travel-assistant/live-map?view=airport");
   });
 
   test("indoor map survives refresh at SEA", async ({ page }) => {

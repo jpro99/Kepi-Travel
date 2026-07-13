@@ -6,7 +6,7 @@ import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AirportLayout, ComputedRoute, GraphEdge, PoiDefinition, SnappedPosition, TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
-import { buildAirportSchematicModel, placeAirportSchematicLabels } from "@/lib/airportNav/schematic";
+import { buildAirportSchematicModel } from "@/lib/airportNav/schematic";
 import type { JourneyWaypointEvent, NavTimingCalibrationStore } from "@/lib/airportNav/navTimingCalibration";
 import { loadNavTimingCalibrationStore, recordJourneyWaypointPair } from "@/lib/airportNav/navJourneyTelemetry";
 import { loadCachedAirportLayout } from "@/lib/travelAssistant/syncItineraryOfflineAssets";
@@ -181,6 +181,7 @@ const POI_ICON: Record<PoiDefinition["category"], string> = {
 interface AirportSchematicLayerProps {
   layout: AirportLayout;
   activeRoute: ComputedRoute | null;
+  selectedPoiId: string | null;
   snapped: SnappedPosition | null;
   familyPins: FamilyAirportPin[];
   airlineName: string | null;
@@ -193,6 +194,7 @@ interface AirportSchematicLayerProps {
 function AirportSchematicLayer({
   layout,
   activeRoute,
+  selectedPoiId,
   snapped,
   familyPins,
   airlineName,
@@ -225,7 +227,7 @@ function AirportSchematicLayer({
     }
     return true;
   }), [airlineName, detailMode, gatePoiId, hasAirlineCheckin, model.pois]);
-  const placedPois = useMemo(() => placeAirportSchematicLabels(visiblePois), [visiblePois]);
+  const selectedPoi = visiblePois.find(({ definition }) => definition.id === selectedPoiId) ?? null;
   const routePoints = activeRoute?.coordinates
     .map((coordinate) => model.project(coordinate))
     .map((point) => `${point.x},${point.y}`)
@@ -331,67 +333,64 @@ function AirportSchematicLayer({
           );
         })}
 
-        {placedPois.map(({ definition, point, labelPoint }) => {
+        {visiblePois.map(({ definition, point }) => {
+          const isGate = definition.id === gatePoiId;
+          const isSelected = definition.id === selectedPoiId;
+          return (
+            <circle
+              key={definition.id}
+              cx={point.x}
+              cy={point.y}
+              r={isSelected ? "1.55" : isGate ? "1.15" : "0.8"}
+              fill={isGate || isSelected ? "#f4c95d" : "#f8fafc"}
+              stroke={isSelected ? "#ffffff" : "#0b1f3a"}
+              strokeWidth={isSelected ? "0.7" : "0.35"}
+            />
+          );
+        })}
+
+        {selectedPoi ? (() => {
+          const { definition, point } = selectedPoi;
           const isGate = definition.id === gatePoiId;
           const label = isGate && gateCode ? `Gate ${gateCode.toUpperCase()}` : definition.name;
           const countdown = isGate && minutesToDeparture > 0 && minutesToDeparture < 600
             ? ` · ${Math.max(1, Math.round(minutesToDeparture))}m`
             : "";
           const displayLabel = `${POI_ICON[definition.category]} ${label}${countdown}`;
-          const labelWidth = Math.min(29, Math.max(13, displayLabel.length * 0.92 + 4));
+          const labelWidth = Math.min(34, Math.max(18, displayLabel.length * 0.98 + 5));
+          const labelX = point.x >= 50
+            ? Math.max(18, point.x - 18)
+            : Math.min(82, point.x + 18);
+          const labelY = Math.min(78, Math.max(18, point.y));
+          const elbowX = point.x >= 50 ? labelX + labelWidth / 2 + 2 : labelX - labelWidth / 2 - 2;
           return (
-            <g key={definition.id}>
-              <line
-                x1={point.x}
-                y1={point.y}
-                x2={labelPoint.x}
-                y2={labelPoint.y}
-                stroke={isGate ? "#f4c95d" : "#94a3b8"}
-                strokeWidth={isGate ? "0.65" : "0.42"}
-                strokeDasharray={isGate ? undefined : "1 0.8"}
-                opacity="0.85"
+            <g data-testid="airport-nav-selected-label">
+              <polyline
+                points={`${point.x},${point.y} ${elbowX},${point.y} ${elbowX},${labelY} ${labelX},${labelY}`}
+                fill="none"
+                stroke="#f4c95d"
+                strokeWidth="0.85"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               />
-              <circle
-                cx={point.x}
-                cy={point.y}
-                r={isGate ? "1.15" : "0.72"}
-                fill={isGate ? "#f4c95d" : "#f8fafc"}
-                stroke="#0b1f3a"
-                strokeWidth="0.35"
-              />
-              <g
-                role="button"
-                tabIndex={0}
-                aria-label={`Navigate to ${label}`}
-                data-testid={`airport-nav-schematic-poi-${definition.id}`}
-                className="cursor-pointer outline-none"
-                transform={`translate(${labelPoint.x} ${labelPoint.y})`}
-                onClick={() => onPoiClick(definition.id)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    onPoiClick(definition.id);
-                  }
-                }}
-              >
-                <title>{`Navigate to ${label}`}</title>
+              <g transform={`translate(${labelX} ${labelY})`}>
                 <rect
                   x={-labelWidth / 2}
-                  y="-2.8"
+                  y="-3.5"
                   width={labelWidth}
-                  height="5.6"
-                  rx="2.8"
-                  fill={isGate ? "#f4c95d" : "#f8fafc"}
-                  stroke={isGate ? "#fff3bd" : "#cbd5e1"}
-                  strokeWidth={isGate ? "0.55" : "0.3"}
+                  height="7"
+                  rx="3.5"
+                  fill="#f4c95d"
+                  stroke="#fff3bd"
+                  strokeWidth="0.55"
                   filter="url(#kepi-terminal-shadow)"
                 />
                 <text
                   x="0"
-                  y="0.15"
+                  y="0.2"
                   fill="#0b1f3a"
-                  fontSize="1.72"
-                  fontWeight={isGate ? "800" : "700"}
+                  fontSize="2"
+                  fontWeight="800"
                   textAnchor="middle"
                   dominantBaseline="middle"
                 >
@@ -400,34 +399,65 @@ function AirportSchematicLayer({
               </g>
             </g>
           );
-        })}
+        })() : null}
       </svg>
 
-      <div className="absolute bottom-12 left-1/2 z-[3] flex -translate-x-1/2 overflow-hidden rounded-full border border-white/15 bg-black/55 p-1 shadow-xl backdrop-blur">
-        {([
-          ["essentials", "Essentials"],
-          ["lounges", "Lounges"],
-          ["all", "All"],
-        ] as const).map(([mode, label]) => (
-          <button
-            key={mode}
-            type="button"
-            aria-pressed={detailMode === mode}
-            onClick={() => setDetailMode(mode)}
-            className={`rounded-full px-3 py-1.5 text-[11px] font-bold transition ${
-              detailMode === mode ? "bg-white text-[#0b1f3a]" : "text-white/75"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-3 rounded-full border border-white/15 bg-black/45 px-3 py-1 text-[10px] font-semibold text-sky-100 backdrop-blur">
-        <span><span className="mr-1 inline-block h-2 w-2 rounded-sm bg-[#496680]" />Landside</span>
-        <span><span className="mr-1 inline-block h-2 w-2 rounded-sm bg-[#36577e]" />Airside</span>
-        <span><span className="mr-1 text-sky-200">┄</span>Train</span>
-      </div>
+      {!selectedPoiId ? (
+        <section
+          aria-label="Airport destinations"
+          className="absolute inset-x-2 bottom-2 z-[3] max-h-[38dvh] overflow-hidden rounded-[22px] bg-white/95 p-3 shadow-2xl backdrop-blur-md md:inset-x-auto md:bottom-4 md:right-4 md:w-80"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[17px] font-black text-[#0b1f3a]">Where do you want to go?</p>
+              <p className="text-[12px] text-slate-500">Tap a destination to preview the route.</p>
+            </div>
+            <div className="flex shrink-0 overflow-hidden rounded-full bg-slate-100 p-0.5">
+              {([
+                ["essentials", "Essential"],
+                ["lounges", "Lounges"],
+                ["all", "All"],
+              ] as const).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={detailMode === mode}
+                  onClick={() => setDetailMode(mode)}
+                  className={`min-h-[36px] rounded-full px-2.5 text-[11px] font-bold transition ${
+                    detailMode === mode ? "bg-[#0b1f3a] text-white shadow-sm" : "text-slate-600"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mt-2 grid max-h-[21dvh] grid-cols-2 gap-2 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]">
+            {visiblePois.map(({ definition }) => {
+              const isGate = definition.id === gatePoiId;
+              const label = isGate && gateCode ? `Gate ${gateCode.toUpperCase()}` : definition.name;
+              return (
+                <button
+                  key={definition.id}
+                  type="button"
+                  aria-label={`Navigate to ${label}`}
+                  data-testid={`airport-nav-destination-${definition.id}`}
+                  onClick={() => onPoiClick(definition.id)}
+                  className="min-h-[48px] rounded-2xl bg-slate-100 px-3 py-2 text-left text-[14px] font-bold leading-tight text-[#0b1f3a] ring-1 ring-slate-200 active:scale-[0.98]"
+                >
+                  <span className="mr-1.5" aria-hidden>{POI_ICON[definition.category]}</span>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="pointer-events-none mt-2 flex items-center gap-3 text-[10px] font-semibold text-slate-500">
+            <span><span className="mr-1 inline-block h-2 w-2 rounded-sm bg-[#496680]" />Landside</span>
+            <span><span className="mr-1 inline-block h-2 w-2 rounded-sm bg-[#36577e]" />Airside</span>
+            <span><span className="mr-1 text-sky-700">┄</span>Train</span>
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
@@ -521,7 +551,7 @@ export function AirportNavigatorMap({
   const activeRouteRef = useRef<ComputedRoute | null>(null);
   const [navCalibration, setNavCalibration] = useState<NavTimingCalibrationStore | null>(null);
   const [journeyPhase, setJourneyPhase] = useState<JourneyPhaseId>("landside");
-  const quietMode = journeyPhase === "security";
+  const quietMode = !previewMode && journeyPhase === "security";
   const [journeyPrompt, setJourneyPrompt] = useState<JourneyPrompt | null>(null);
   const [statusLine, setStatusLine] = useState<string | null>(null);
   const [objective, setObjective] = useState<"checkin" | "security" | "gate" | "lounge" | null>(null);
@@ -722,12 +752,12 @@ export function AirportNavigatorMap({
   }, [layout, userLat, userLon]);
 
   const originNodeId = useMemo(() => {
-    if (snapped) return snapped.nearestNodeId;
+    if (snapped && !previewMode) return snapped.nearestNodeId;
     if (!layout) return null;
     return layout.nodes.find((node) => node.kind === "junction" && !node.airside)?.id
       ?? layout.nodes[0]?.id
       ?? null;
-  }, [snapped, layout]);
+  }, [snapped, layout, previewMode]);
 
   const gatePoi: PoiDefinition | null = useMemo(() => {
     if (!layout || !gateCode) return null;
@@ -818,14 +848,14 @@ export function AirportNavigatorMap({
 
   /* ── Journey: position + clock events ───────────────────────────────── */
   useEffect(() => {
-    if (!snapped) return;
+    if (!snapped || previewMode) return;
     processJourneyEvent({
       type: "position",
       nodeId: snapped.nearestNodeId,
       confidence: snapped.confidence,
       at: Date.now(),
     });
-  }, [snapped?.nearestNodeId, snapped?.confidence, processJourneyEvent]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [snapped?.nearestNodeId, snapped?.confidence, previewMode, processJourneyEvent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!layout) return;
@@ -1669,7 +1699,8 @@ export function AirportNavigatorMap({
         <AirportSchematicLayer
           layout={layout}
           activeRoute={activeRoute}
-          snapped={snapped}
+          selectedPoiId={pendingPoiId ?? activeRoute?.toPoiId ?? null}
+          snapped={previewMode ? null : snapped}
           familyPins={familyPins}
           airlineName={airlineName}
           gatePoiId={gatePoi?.id ?? null}
@@ -1885,44 +1916,56 @@ export function AirportNavigatorMap({
 
       {/* Active route card */}
       {!securityQuestionOpen && !journeyPrompt && !quietMode && activeRoute && (
-        <div style={{ bottom: bottomPanel }} className="absolute inset-x-3 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95">
-          <div className="flex items-center justify-between gap-2">
+        <section
+          aria-label="Route instructions"
+          style={{ bottom: bottomPanel }}
+          className="absolute inset-x-2 z-30 max-h-[42dvh] overflow-hidden rounded-[24px] bg-white/95 p-4 shadow-2xl backdrop-blur-md dark:bg-slate-900/95 sm:inset-x-3"
+        >
+          <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-slate-300 dark:bg-slate-600" />
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="truncate text-xs font-bold text-slate-900 dark:text-slate-100">
-                → {activeDestName} · {fmtMins(activeRoute.totalSeconds)}
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                {previewMode ? "Route preview" : "Walking directions"}
+              </p>
+              <p className="mt-1 text-[20px] font-black leading-tight text-slate-900 dark:text-slate-100">
+                {activeDestName} · {fmtMins(activeRoute.totalSeconds)}
                 {activeRoute.laneUsed ? ` · ${activeRoute.laneUsed === "precheck" ? "PreCheck" : activeRoute.laneUsed === "clear" ? "CLEAR" : "standard"} lane` : ""}
               </p>
               {nextInstruction && (
-                <p className="mt-0.5 truncate text-[11px] text-slate-600 dark:text-slate-300">{nextInstruction.text}</p>
+                <p className="mt-2 text-[17px] leading-snug text-slate-600 dark:text-slate-300">{nextInstruction.text}</p>
               )}
+              {previewMode ? (
+                <p className="mt-1 text-[12px] text-slate-500">Live step-by-step guidance starts when you arrive at {iata}.</p>
+              ) : null}
             </div>
-            <div className="flex shrink-0 gap-1.5">
+            <div className="flex shrink-0 gap-2">
               <button
                 type="button"
                 onClick={() => setShowInstructions((open) => !open)}
-                className="rounded-lg bg-slate-100 px-2 py-1.5 text-[10px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                className="min-h-[48px] rounded-2xl bg-slate-100 px-3 text-[13px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200"
               >
                 {showInstructions ? "Hide" : "Steps"}
               </button>
               <button
                 type="button"
                 onClick={endRoute}
-                className="rounded-lg bg-slate-100 px-2 py-1.5 text-[10px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                className="min-h-[48px] rounded-2xl bg-slate-100 px-3 text-[13px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200"
               >
-                End
+                Close
               </button>
             </div>
           </div>
           {showInstructions && (
-            <ol className="mt-2 max-h-28 space-y-1 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]">
+            <ol className="mt-3 max-h-[18dvh] space-y-2 overflow-y-auto overscroll-contain border-t border-slate-200 pt-3 touch-pan-y [-webkit-overflow-scrolling:touch] dark:border-slate-700">
               {activeRoute.instructions.map((step, stepIdx) => (
-                <li key={`${step.maneuver}-${step.atMeters}-${stepIdx}`} className="text-[11px] text-slate-600 dark:text-slate-300">
-                  {stepIdx + 1}. {step.text}
+                <li key={`${step.maneuver}-${step.atMeters}-${stepIdx}`} className="flex gap-2 text-[16px] leading-snug text-slate-600 dark:text-slate-300">
+                  <span className="font-bold text-slate-900 dark:text-slate-100">{stepIdx + 1}.</span>
+                  <span>{step.text}</span>
                 </li>
               ))}
             </ol>
           )}
-        </div>
+        </section>
       )}
 
       {/* Guide-me CTA when idle */}
