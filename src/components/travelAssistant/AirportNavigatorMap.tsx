@@ -6,6 +6,7 @@ import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AirportLayout, ComputedRoute, GraphEdge, PoiDefinition, SnappedPosition, TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
+import { computeDirectionArrow, confirmedSnappedPosition } from "@/lib/airportNav/directionArrow";
 import { buildAirportSchematicModel } from "@/lib/airportNav/schematic";
 import type { JourneyWaypointEvent, NavTimingCalibrationStore } from "@/lib/airportNav/navTimingCalibration";
 import { loadNavTimingCalibrationStore, recordJourneyWaypointPair } from "@/lib/airportNav/navJourneyTelemetry";
@@ -614,6 +615,78 @@ function loungeIsEligible(poiName: string, eligibleNames: string[]): boolean {
   });
 }
 
+/**
+ * Phone compass heading (deg, 0 = north, clockwise). Null until we get a real
+ * reading — we never fake facing. iOS needs an explicit permission tap.
+ */
+function useDeviceHeading(active: boolean): {
+  heading: number | null;
+  needsPermission: boolean;
+  requestPermission: () => void;
+} {
+  const [heading, setHeading] = useState<number | null>(null);
+  const [needsPermission, setNeedsPermission] = useState(false);
+  const [granted, setGranted] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const orientationEvent = window.DeviceOrientationEvent as any;
+    if (!orientationEvent) return;
+    if (typeof orientationEvent.requestPermission === "function" && !granted) {
+      setNeedsPermission(true);
+    }
+  }, [granted]);
+
+  useEffect(() => {
+    if (!active || typeof window === "undefined") return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const orientationEvent = window.DeviceOrientationEvent as any;
+    if (!orientationEvent) return;
+    if (typeof orientationEvent.requestPermission === "function" && !granted) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handler = (event: any) => {
+      const iosHeading = typeof event.webkitCompassHeading === "number" ? event.webkitCompassHeading : null;
+      if (iosHeading != null && Number.isFinite(iosHeading)) {
+        setHeading(iosHeading);
+        return;
+      }
+      if (typeof event.alpha === "number" && Number.isFinite(event.alpha)) {
+        // alpha is counter-clockwise from north; convert to clockwise compass.
+        setHeading((360 - event.alpha) % 360);
+      }
+    };
+    window.addEventListener("deviceorientationabsolute", handler, true);
+    window.addEventListener("deviceorientation", handler, true);
+    return () => {
+      window.removeEventListener("deviceorientationabsolute", handler, true);
+      window.removeEventListener("deviceorientation", handler, true);
+    };
+  }, [active, granted]);
+
+  const requestPermission = useCallback(() => {
+    if (typeof window === "undefined") return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const orientationEvent = window.DeviceOrientationEvent as any;
+    if (orientationEvent && typeof orientationEvent.requestPermission === "function") {
+      orientationEvent
+        .requestPermission()
+        .then((state: string) => {
+          if (state === "granted") {
+            setGranted(true);
+            setNeedsPermission(false);
+          }
+        })
+        .catch(() => undefined);
+    } else {
+      setGranted(true);
+      setNeedsPermission(false);
+    }
+  }, []);
+
+  return { heading, needsPermission, requestPermission };
+}
+
 export function AirportNavigatorMap({
   iata,
   gateCode,
@@ -663,7 +736,14 @@ export function AirportNavigatorMap({
   const [activeRoute, setActiveRoute] = useState<ComputedRoute | null>(null);
   const [activeDestName, setActiveDestName] = useState<string | null>(null);
   const [pendingPoiId, setPendingPoiId] = useState<string | null>(null);
+  // The tapped destination stays highlighted even if a route can't be computed
+  // yet — fixes the "label disappears the instant you tap it" flicker.
+  const [selectedPoiId, setSelectedPoiId] = useState<string | null>(null);
   const [showInstructions, setShowInstructions] = useState(false);
+  // Tap-to-confirm "I'm here": when set, overrides GPS snapping (positionFusion
+  // grants user_confirmed the top confidence grade — this is the UI gesture).
+  const [confirmMode, setConfirmMode] = useState(false);
+  const [confirmedNodeId, setConfirmedNodeId] = useState<string | null>(null);
 
   // Journey machine (single source of truth for "where in the journey")
   const journeyRef = useRef(initialJourneyState(Date.now()));
@@ -870,9 +950,15 @@ export function AirportNavigatorMap({
 
   /* ── Snapped traveler position ──────────────────────────────────────── */
   const snapped: SnappedPosition | null = useMemo(() => {
-    if (!layout || userLat === null || userLon === null) return null;
+    if (!layout || previewMode) return null;
+    // A user-confirmed "I'm here" tap wins over noisy indoor GPS.
+    if (confirmedNodeId) {
+      const node = layout.nodes.find((entry) => entry.id === confirmedNodeId);
+      if (node) return confirmedSnappedPosition(node);
+    }
+    if (userLat === null || userLon === null) return null;
     return snapToGraph(layout, userLon, userLat, userAccuracyM);
-  }, [layout, userLat, userLon, userAccuracyM]);
+  }, [layout, previewMode, confirmedNodeId, userLat, userLon, userAccuracyM]);
 
   const originNodeId = useMemo(() => {
     if (snapped && !previewMode) return snapped.nearestNodeId;
@@ -895,6 +981,8 @@ export function AirportNavigatorMap({
       if (!layout || !originNodeId) return;
       const targetPoi = layout.pois.find((poi) => poi.id === poiId);
       if (!targetPoi) return;
+      // Highlight the tapped destination immediately, regardless of routing outcome.
+      setSelectedPoiId(poiId);
       if (isAirsidePoi(targetPoi) && !credentials.known && !journeyRef.current.throughSecurity) {
         setPendingPoiId(poiId);
         if (viaVoice) sayAndShow("Quick one — do you have TSA PreCheck, CLEAR, or both?");
@@ -924,9 +1012,32 @@ export function AirportNavigatorMap({
   const endRoute = useCallback(() => {
     setActiveRoute(null);
     setActiveDestName(null);
+    setSelectedPoiId(null);
     lastInstructionIdxRef.current = -1;
     setCurrentStepIdx(0);
   }, []);
+
+  // Tap on a POI: in confirm mode, lock the traveler's position to that POI's
+  // node; otherwise start routing there. Reads confirm mode from a ref so the
+  // MapLibre marker bindings never capture a stale closure.
+  const confirmModeRef = useRef(false);
+  useEffect(() => {
+    confirmModeRef.current = confirmMode;
+  }, [confirmMode]);
+  const handlePoiTap = useCallback(
+    (poiId: string) => {
+      if (confirmModeRef.current && layout) {
+        const poi = layout.pois.find((entry) => entry.id === poiId);
+        if (poi) {
+          setConfirmedNodeId(poi.nodeId);
+          setConfirmMode(false);
+        }
+        return;
+      }
+      startRoute(poiId);
+    },
+    [layout, startRoute],
+  );
 
   const answerCredentials = useCallback(
     (tsaPreCheck: boolean, clear: boolean) => {
@@ -1560,7 +1671,7 @@ export function AirportNavigatorMap({
               .join(" · ")
           : "";
         bubble.textContent = `${POI_ICON[poi.category]} ${gateLabel}${countdown}${accessMark}${laneSummary ? ` · ${laneSummary}` : ""}`;
-        bubble.addEventListener("click", () => startRoute(poi.id));
+        bubble.addEventListener("click", () => handlePoiTap(poi.id));
 
         const marker = new ml.Marker({ element: bubble, anchor: "bottom", offset: [0, -6] })
           .setLngLat(pos as [number, number])
@@ -1775,6 +1886,25 @@ export function AirportNavigatorMap({
     };
   }, [mapReady, activeRoute]);
 
+  // Compass-heading direction arrow — only live (not preview) with a route + position.
+  // Declared before any early return so hook order stays stable.
+  const { heading: deviceHeading, needsPermission: headingNeedsPermission, requestPermission: requestHeading } =
+    useDeviceHeading(!previewMode && Boolean(activeRoute));
+  const directionArrow = useMemo(() => {
+    if (previewMode || !activeRoute || !snapped) return null;
+    const userPos: [number, number] =
+      userLon !== null && userLat !== null ? [userLon, userLat] : snapped.pos;
+    const stepIdx = Math.min(currentStepIdx, Math.max(0, activeRoute.instructions.length - 1));
+    const landmark = activeRoute.instructions[stepIdx]?.landmark ?? activeDestName;
+    return computeDirectionArrow({
+      userPos,
+      route: activeRoute,
+      currentNodeId: snapped.nearestNodeId,
+      headingDeg: deviceHeading,
+      targetLandmark: landmark,
+    });
+  }, [previewMode, activeRoute, snapped, userLon, userLat, deviceHeading, currentStepIdx, activeDestName]);
+
   /* ── Render ─────────────────────────────────────────────────────────── */
   if (layoutStatus === "unsupported" || layoutStatus === "error") {
     return (
@@ -1830,7 +1960,7 @@ export function AirportNavigatorMap({
         <AirportSchematicLayer
           layout={layout}
           activeRoute={activeRoute}
-          selectedPoiId={pendingPoiId ?? activeRoute?.toPoiId ?? null}
+          selectedPoiId={selectedPoiId ?? pendingPoiId ?? activeRoute?.toPoiId ?? null}
           snapped={previewMode ? null : snapped}
           userAccuracyM={userAccuracyM}
           familyPins={familyPins}
@@ -1838,7 +1968,7 @@ export function AirportNavigatorMap({
           gatePoiId={gatePoi?.id ?? null}
           gateCode={gateCode}
           minutesToDeparture={minutesRounded}
-          onPoiClick={startRoute}
+          onPoiClick={handlePoiTap}
         />
       ) : null}
       {/* Vignette + top legibility gradient — concierge depth, not flat canvas */}
@@ -1883,10 +2013,10 @@ export function AirportNavigatorMap({
           airlineName={airlineName}
           gatePoiId={gatePoi?.id ?? null}
           gateCode={gateCode}
-          selectedPoiId={pendingPoiId ?? activeRoute?.toPoiId ?? null}
+          selectedPoiId={selectedPoiId ?? pendingPoiId ?? activeRoute?.toPoiId ?? null}
           credentials={credentials}
           hasApproximatePosition={!previewMode && Boolean(snapped)}
-          onPoiClick={startRoute}
+          onPoiClick={handlePoiTap}
         />
       ) : null}
 
@@ -2056,6 +2186,62 @@ export function AirportNavigatorMap({
             We&apos;ll pick up on the other side.
             {gateCode ? ` Gate ${gateCode.toUpperCase()} after security.` : ""}
           </p>
+        </div>
+      )}
+
+      {/* Compass direction arrow — points the way you're actually facing */}
+      {!securityQuestionOpen && !journeyPrompt && !quietMode && directionArrow && (
+        <div
+          data-testid="airport-nav-direction-arrow"
+          data-heading-known={directionArrow.headingKnown ? "true" : "false"}
+          className="pointer-events-none absolute inset-x-0 z-30 flex flex-col items-center"
+          style={{ bottom: `calc(${bottomPanel} + 9.5rem)` }}
+        >
+          <div className="pointer-events-auto flex flex-col items-center rounded-3xl bg-black/60 px-4 py-3 backdrop-blur-md">
+            <svg width="56" height="56" viewBox="0 0 56 56" aria-label={directionArrow.cue}>
+              <circle cx="28" cy="28" r="26" fill="rgba(56,189,248,0.12)" stroke="rgba(125,211,252,0.5)" strokeWidth="1.5" />
+              <g
+                transform={`rotate(${directionArrow.rotationDeg} 28 28)`}
+                style={{ transition: "transform 220ms ease-out" }}
+              >
+                <path d="M28 9 L39 40 L28 33 L17 40 Z" fill="#f4c95d" stroke="#fff3bd" strokeWidth="1" strokeLinejoin="round" />
+              </g>
+            </svg>
+            <p className="mt-1 text-[13px] font-black leading-none text-white">{directionArrow.cue}</p>
+            <p className="mt-0.5 text-[10px] font-semibold text-sky-200/90">
+              {directionArrow.distanceM} m
+              {directionArrow.headingKnown ? "" : " · compass off"}
+            </p>
+            {!directionArrow.headingKnown && headingNeedsPermission ? (
+              <button
+                type="button"
+                onClick={requestHeading}
+                className="mt-1.5 rounded-full bg-sky-600 px-3 py-1 text-[10px] font-bold text-white"
+              >
+                Enable compass
+              </button>
+            ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* Tap-to-confirm "I'm here" — lock position when GPS is unsure indoors */}
+      {!securityQuestionOpen && !journeyPrompt && !quietMode && !previewMode && layout && (
+        <div
+          className="pointer-events-auto absolute right-3 z-30"
+          style={{ bottom: `calc(${bottomPanel} + ${activeRoute ? "9.5rem" : "3rem"})` }}
+        >
+          <button
+            type="button"
+            data-testid="airport-nav-confirm-location"
+            aria-pressed={confirmMode}
+            onClick={() => setConfirmMode((on) => !on)}
+            className={`rounded-full px-3 py-2 text-[11px] font-bold shadow-lg backdrop-blur ${
+              confirmMode ? "bg-[#f4c95d] text-[#0b1f3a]" : "bg-black/55 text-white"
+            }`}
+          >
+            {confirmMode ? "Tap where you are" : confirmedNodeId ? "📍 Update my spot" : "📍 I'm here"}
+          </button>
         </div>
       )}
 

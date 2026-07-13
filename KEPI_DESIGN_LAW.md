@@ -239,6 +239,11 @@ Kepi may import an airport's real building/concourse shapes, gates, lounges, and
 
 **Test:** `src/lib/airportNav/osmImport.test.ts`
 
+**M16 — Direction arrow is compass-honest; position can be user-confirmed**
+The airport wayfinding arrow points the way the traveler is *actually facing* by rotating to `bearingToNextNode − deviceCompassHeading`. When the compass is unavailable or permission is denied, the arrow falls back to a north-up bearing and says so ("compass off" / "Head toward …") — it never pretends to know facing. Turn cues are relative to travel direction (Straight ahead / Bear / Turn / Sharp / Turn around). Travelers may tap "I'm here" and then tap a gate/checkpoint/POI to lock position to that node; this user-confirmed fix outranks noisy indoor GPS (positionFusion already grants `user_confirmed` the top confidence grade). Landmark instructions reuse the existing `RouteInstruction.landmark` field — do not add a parallel landmark model.
+
+**Test:** `src/lib/airportNav/directionArrow.test.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -447,6 +452,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | M13 | `src/lib/airportNav/airportLayoutPackage.test.ts`, `app-sitter/airport-day-of-travel.spec.ts` |
 | M14 | `src/lib/airportNav/airportCurationQueue.test.ts`, `app-sitter/airport-day-of-travel.spec.ts` |
 | M15 | `src/lib/airportNav/osmImport.test.ts` |
+| M16 | `src/lib/airportNav/directionArrow.test.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |
