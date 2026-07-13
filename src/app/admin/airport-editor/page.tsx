@@ -105,6 +105,9 @@ export default function AirportEditorPage() {
     const [isWorking, setIsWorking] = useState(false);
     const [queue, setQueue] = useState<AirportCurationRequest[]>([]);
     const [queueLoading, setQueueLoading] = useState(true);
+    const [importing, setImporting] = useState(false);
+    const [importWarnings, setImportWarnings] = useState<string[]>([]);
+    const [importStats, setImportStats] = useState<Record<string, number> | null>(null);
     const [previewLayout, setPreviewLayout] = useState<AirportLayout | null>(null);
     const [previewConfirmed, setPreviewConfirmed] = useState(false);
     const [packageInfo, setPackageInfo] = useState<PackageInfoResponse | null>(null);
@@ -142,6 +145,40 @@ export default function AirportEditorPage() {
         setLayoutText(nextText);
         setPreviewLayout(null);
         setPreviewConfirmed(false);
+    };
+
+    const handleImportFromOsm = async () => {
+        if (iataCode.length !== 3) {
+            setMessage('Enter a 3-letter IATA code before importing from OpenStreetMap.');
+            return;
+        }
+        setImporting(true);
+        setMessage('');
+        setImportWarnings([]);
+        setImportStats(null);
+        try {
+            const response = await fetch('/api/admin/airport-layout/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ iata: iataCode.toUpperCase() }),
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Import failed.');
+            updateLayoutText(JSON.stringify(result.layout, null, 2));
+            setImportWarnings(result.warnings ?? []);
+            setImportStats(result.stats ?? null);
+            if (result.source?.attribution) setAttribution(String(result.source.attribution));
+            setSourceUrl('https://www.openstreetmap.org/');
+            setStatus('draft');
+            setMessage(
+                result.message
+                || `${iataCode.toUpperCase()} imported from OpenStreetMap. Fix the warnings, add security + real walkways, validate, confirm the preview, then publish.`,
+            );
+        } catch (error) {
+            setMessage(`Error: ${error instanceof Error ? error.message : 'Import failed.'}`);
+        } finally {
+            setImporting(false);
+        }
     };
 
     const selectRequest = (request: AirportCurationRequest) => {
@@ -390,6 +427,36 @@ export default function AirportEditorPage() {
                             placeholder="JFK"
                             required
                         />
+                    </div>
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                            <div>
+                                <p className="text-sm font-bold text-emerald-900">Import real shape from OpenStreetMap</p>
+                                <p className="mt-0.5 text-xs text-emerald-700">
+                                    Free, legal (ODbL, attributed). Produces a draft you must finish curating.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => void handleImportFromOsm()}
+                                disabled={importing || iataCode.length !== 3}
+                                className="shrink-0 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-40"
+                            >
+                                {importing ? 'Importing…' : 'Import'}
+                            </button>
+                        </div>
+                        {importStats ? (
+                            <p className="mt-3 text-xs font-semibold text-emerald-800">
+                                {importStats.zones} zones · {importStats.gates} gates · {importStats.lounges} lounges · {importStats.restrooms} restrooms
+                            </p>
+                        ) : null}
+                        {importWarnings.length > 0 ? (
+                            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-amber-800">
+                                {importWarnings.map((warning) => (
+                                    <li key={warning}>{warning}</li>
+                                ))}
+                            </ul>
+                        ) : null}
                     </div>
                     <div>
                         <label htmlFor="file-input" className="block text-sm font-medium text-gray-700">

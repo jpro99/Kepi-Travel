@@ -3,7 +3,23 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-13 (demand-driven airport curation queue)
+Last updated: 2026-07-13 (OSM real-shape airport import — Phase 0 verified, Phase 1 shipped)
+
+## Decision 2026-07-13 — OpenStreetMap real airport maps (Phase 0 verified → Phase 1 shipped)
+
+**Why Jeff asked:** replace square-box airport schematics with the airport's *real* shape for free; keep Kepi's routing brain as the actual differentiator. Must be lightweight, flawless on mobile.
+
+**Phase 0 — VERIFIED (Overpass, 2026-07-13).** Real, measured indoor richness:
+
+| Airport | Features | Gates | Leveled | Indoor rooms | Shops | Food | Toilets | Security |
+|---|---|---|---|---|---|---|---|---|
+| SEA | 1290 | 103 | 1120 | 197 | 53 | 74 | 53 | **0** |
+| LAX | 815 | 148 | 540 | 11 | 72 | 78 | 41 | **0** |
+| PSP | 68 | 16 | 8 | 0 | 6 | 5 | 1 | **0** |
+
+Conclusion: rich at hubs, workable at small airports. **Load-bearing gap confirmed as the plan predicted: security checkpoints are untagged everywhere (0/0/0); lounges named inconsistently.** So imports are draft-only; curation hand-adds security + confirms lounges before publish.
+
+**Phase 1 — SHIPPED.** `src/lib/airportNav/osmImport.ts` (pure, tested) converts Overpass output → existing `AirportLayout` (real zones + gate/lounge/restroom nodes + POIs + flagged straight-line walkway skeleton). Admin route `POST /api/admin/airport-layout/import` returns a draft; admin editor has an "Import from OpenStreetMap" button that feeds the existing validate → preview → confirm → publish flow. ODbL: `Map data © OpenStreetMap contributors` + derivative-database license note stored per package. Never fabricates security. Law **M15**. Spot-check any new airport on openstreetmap.org before first import (5 min).
 
 **Neuro Brain (reasoning layer):** `NEURO_BRAIN.md` — why Jeff asks for changes; apply whole-trip thinking site-wide.
 
@@ -210,6 +226,22 @@ Component map: `TripHealthStrip`, `dedupeConsumerReservations`, `DesktopTripHome
 - **Do not recommend:** Installing Drive, Money Script, or sitewide widgets on kepitravel.com
 - **Optional later:** Server-built affiliate deep links only (no site script) — low priority
 
+### Atrius (indoor airport map/positioning vendor) — deprioritized
+
+- **Status (2026-07-06):** Investigated embedding Atrius Wayfinder/Navigator (the vendor behind
+  flysea.org's official SEA map) instead of building photorealistic per-airport maps in-house.
+  No public pricing; enterprise-sales-only; case studies are all major hubs and airline-scale
+  deals (Heathrow, JFK, Dublin, Austin-Bergstrom) — likely not accessible/affordable at Kepi's
+  current scale.
+- **Owner action:** Jeff sent one no-commitment outreach email to Atrius asking about small-company
+  access and whether individual airports already license Atrius (so Kepi could be added as an
+  approved partner app instead of a fresh Atrius contract). **Do not keep re-raising this or
+  suggesting a bigger BD push** unless Jeff reports Atrius responded or Kepi's scale changes.
+- **Do not build:** No embed integration work until real terms come back — see
+  `CURSOR_PROMPT_map_vendor_embed.md` Part 2, which stays gated on this.
+- **Primary path remains:** Kepi's own curated `AirportPackage` schematic + credential-aware
+  routing + linking to the airport's free public map page. This does not depend on Atrius.
+
 ---
 
 ## Hotel product — built features
@@ -339,6 +371,7 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 
 | Date | Note |
 |------|------|
+| 2026-07-06 | **Atrius embed deprioritized:** enterprise-only pricing, likely inaccessible at current scale; sent one no-cost outreach email, no BD push planned until real terms/scale change. Kepi's own schematic + routing pipeline remains primary. |
 | 2026-07-12 | **Lifetime auto-redeem** from email links. **Crash fix:** `onCreateTrip` → `onStartNewTrip`. **Returning users:** stop wiping `onboarding-complete` on progress PUT; auto-complete when trips exist; don't show onboarding until trips finish loading. |
 | 2026-07-08 | **Whole-trip execution:** hotel-anchored timeline, plan-note reconciliation, inter-city route sheet, hotel display labels. Philosophy in project memory + design laws I22–I25. Support model fix (`claude-sonnet-4-5`). Spanish nav labels. |
 | 2026-07-06 | **Trip truth loop:** boarding pass URLs from email imports, merged `/api/travel-updates` flight-lookup, contextual Trip Health → Book hotel search, Europe 2026 unit pass. Laws F11, G13. |

@@ -234,6 +234,11 @@ When a traveler requests an airport without a published Kepi package, record a s
 
 **Test:** `src/lib/airportNav/airportCurationQueue.test.ts`, `app-sitter/airport-day-of-travel.spec.ts`
 
+**M15 — OpenStreetMap import is a draft source, never a published shortcut**
+Kepi may import an airport's real building/concourse shapes, gates, lounges, and restrooms from OpenStreetMap to replace square-box schematics. Verified 2026-07-13: OSM indoor data is rich at hubs (SEA 1290 features/103 gates, LAX 815/148) and workable at small airports (PSP), but **security checkpoints are untagged everywhere (0/0/0)** and lounges are named inconsistently. Therefore an OSM import must: (1) produce a **draft only** and route through the same admin validate → rendered-preview → human confirmation gate as hand-curated packages (M13); (2) **never fabricate security** — synthesized walkways are a clearly-flagged straight-line skeleton a curator must replace, and security nodes/lanes are added by hand before publish; (3) store `Map data © OpenStreetMap contributors` attribution and an ODbL license note, treating the extracted routing graph as a derivative database (share-alike on the extracted data); (4) fall back to hand-curation, not a broken import, when OSM lacks usable geometry. Kepi's credential-aware routing stays authoritative regardless of visual source.
+
+**Test:** `src/lib/airportNav/osmImport.test.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -441,6 +446,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | M12 | `src/lib/airportNav/officialWayfinding.test.ts`, `src/lib/airportNav/pathfinder.test.ts`, `app-sitter/airport-day-of-travel.spec.ts` |
 | M13 | `src/lib/airportNav/airportLayoutPackage.test.ts`, `app-sitter/airport-day-of-travel.spec.ts` |
 | M14 | `src/lib/airportNav/airportCurationQueue.test.ts`, `app-sitter/airport-day-of-travel.spec.ts` |
+| M15 | `src/lib/airportNav/osmImport.test.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |
