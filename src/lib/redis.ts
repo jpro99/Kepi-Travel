@@ -15,6 +15,16 @@ export function hasRedisEnvConfig(): boolean {
   return hasAnyEnvValue(REDIS_URL_ENV_KEYS) && hasAnyEnvValue(REDIS_TOKEN_ENV_KEYS);
 }
 
+/**
+ * Test-only: drop the memoized client so the next call re-reads env. Lets
+ * hermetic tests force the in-memory fallback even when CI/Vercel inject real
+ * Redis credentials (M13: package-lifecycle tests must never touch shared Redis).
+ */
+export function resetRedisClientCacheForTests(): void {
+  cachedRedisClient = undefined;
+  cachedRawRedisClient = undefined;
+}
+
 export function getSafeRedisClient(scope = "redis"): Redis | null {
   if (cachedRedisClient !== undefined) {
     return cachedRedisClient;

@@ -5,7 +5,8 @@
  */
 
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { before } from "node:test";
+import { resetRedisClientCacheForTests } from "@/lib/redis";
 import {
   getStoredAirportLayoutPackage,
   listAirportLayoutPackageIatas,
@@ -16,6 +17,26 @@ import {
 } from "@/lib/airportNav/airportLayoutStore";
 import { SEA_LAYOUT } from "@/lib/airportNav/layouts/sea";
 import type { AirportLayout } from "@/lib/airportNav/types";
+
+// Hermetic guarantee: these tests lock in the "empty Redis / missing env"
+// survival path. CI and Vercel builds DO inject Redis + blob credentials, so we
+// strip them here and reset the memoized client to force the in-memory fallback.
+// Without this the tests read/WRITE shared Redis, drift across runs, and fail
+// the Vercel build (M13: package-lifecycle tests must never touch shared Redis).
+function forceInMemoryStore(): void {
+  for (const key of [
+    "UPSTASH_REDIS_REST_URL",
+    "KV_REST_API_URL",
+    "UPSTASH_REDIS_REST_TOKEN",
+    "KV_REST_API_TOKEN",
+    "BLOB_READ_WRITE_TOKEN",
+  ]) {
+    delete process.env[key];
+  }
+  resetRedisClientCacheForTests();
+}
+forceInMemoryStore();
+before(forceInMemoryStore);
 
 const SOURCE = {
   ownership: "kepi_original" as const,
