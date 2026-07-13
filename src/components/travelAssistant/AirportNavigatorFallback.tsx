@@ -6,6 +6,8 @@ import type { TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
 import { buildGateInstructions, getAirportNav } from "@/lib/travelAssistant/airportNavigation";
 import type { FamilyAirportPin } from "@/lib/family/familyAirportPins";
+import { OfficialAirportMapLink } from "@/components/travelAssistant/OfficialAirportMapLink";
+import { getAirportWayfindingResource } from "@/lib/airportNav/officialWayfinding";
 
 interface AirportNavigatorFallbackProps {
   iata: string;
@@ -63,6 +65,7 @@ export function AirportNavigatorFallback({
   const code = iata.trim().toUpperCase();
   const nav = getAirportNav(code);
   const indoorAirports = listSupportedIndoorAirports();
+  const officialWayfinding = getAirportWayfindingResource(code);
 
   const proximity = useMemo(
     () => getAirportProximity(userLat, userLon, code),
@@ -99,7 +102,7 @@ export function AirportNavigatorFallback({
       <div className="space-y-4 p-4 sm:p-5">
         <div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3">
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-200">
-            {layoutLoadFailed ? "Indoor map unavailable" : "Indoor map coming soon"}
+            {layoutLoadFailed ? "Kepi indoor map unavailable" : "Kepi indoor map coming soon"}
           </p>
           <p className="mt-1 text-sm leading-relaxed text-amber-50/95">
             {layoutLoadFailed ? (
@@ -121,6 +124,8 @@ export function AirportNavigatorFallback({
             )}
           </p>
         </div>
+
+        <OfficialAirportMapLink iata={code} />
 
         <div className="rounded-2xl bg-black/35 px-4 py-3 backdrop-blur">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -253,7 +258,9 @@ export function AirportNavigatorFallback({
         ) : null}
 
         <p className="text-center text-[10px] leading-relaxed text-slate-500">
-          GPS geofencing is active. Indoor turn-by-turn for {code} is on the roadmap — use the steps above for now.
+          {officialWayfinding?.official
+            ? `Kepi keeps the trip context; ${officialWayfinding.provider} provides the verified live airport map.`
+            : `Kepi GPS geofencing is active. Exact indoor positioning for ${code} is not verified — use airport signs and staff as the final word.`}
         </p>
       </div>
     </div>

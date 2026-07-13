@@ -218,6 +218,11 @@ A future flight at a curated airport must expose **Plan {IATA} airport** on the 
 
 **Test:** `app-sitter/airport-day-of-travel.spec.ts`
 
+**M12 — Airport wayfinding uses the best honest source**
+There is no universal downloadable live indoor airport map. Kepi must use a verified airport-owned live map when available, a clearly labeled universal venue-map fallback otherwise, and cache offline only the curated layouts Kepi owns. Destination controls remain visible after selection; native position is labeled approximate with GPS accuracy, while the selected route remains visually dominant. Security programs and checkpoint locations must be verified against current airport sources and defer to live airport signage.
+
+**Test:** `src/lib/airportNav/officialWayfinding.test.ts`, `src/lib/airportNav/pathfinder.test.ts`, `app-sitter/airport-day-of-travel.spec.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -407,6 +412,7 @@ Channel shortcuts require **≥3 attempts**, correction rate **≤25%**, and alw
 | M9 | `src/lib/travelAssistant/groundTransportDeepLinks.test.ts` |
 | M10 | `src/lib/airportNav/schematic.test.ts`, `app-sitter/airport-day-of-travel.spec.ts` |
 | M11 | `app-sitter/airport-day-of-travel.spec.ts` |
+| M12 | `src/lib/airportNav/officialWayfinding.test.ts`, `src/lib/airportNav/pathfinder.test.ts`, `app-sitter/airport-day-of-travel.spec.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |

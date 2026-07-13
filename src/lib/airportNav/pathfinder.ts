@@ -64,7 +64,12 @@ function edgeUsable(edge: GraphEdge, lanes: SecurityLaneType[]): boolean {
  * accurate to tens of meters, so node-level snapping (not edge projection) is
  * the honest granularity for v1. Confidence decays with off-graph distance.
  */
-export function snapToGraph(layout: AirportLayout, lng: number, lat: number): SnappedPosition | null {
+export function snapToGraph(
+  layout: AirportLayout,
+  lng: number,
+  lat: number,
+  accuracyM?: number | null,
+): SnappedPosition | null {
   let best: GraphNode | null = null;
   let bestDist = Infinity;
   for (const node of layout.nodes) {
@@ -75,8 +80,19 @@ export function snapToGraph(layout: AirportLayout, lng: number, lat: number): Sn
     }
   }
   if (!best || bestDist > 600) return null; // not plausibly in the terminal area
-  // 0m off-graph → 0.95; 300m+ → 0.2 floor. Never claim 1.0 from GPS.
-  const confidence = Math.max(0.2, Math.min(0.95, 0.95 - (bestDist / 300) * 0.75));
+  // Distance-to-graph alone is not positioning confidence. Indoor GPS can
+  // coincidentally land near a node while still carrying 100m+ uncertainty.
+  const graphConfidence = Math.max(0.2, Math.min(0.95, 0.95 - (bestDist / 300) * 0.75));
+  const gpsConfidence = accuracyM == null || !Number.isFinite(accuracyM)
+    ? 0.55
+    : accuracyM <= 15
+    ? 0.9
+    : accuracyM <= 35
+    ? 0.72
+    : accuracyM <= 75
+    ? 0.5
+    : 0.3;
+  const confidence = Math.min(graphConfidence, gpsConfidence);
   return { pos: best.pos, nearestNodeId: best.id, offGraphMeters: Math.round(bestDist), confidence };
 }
 

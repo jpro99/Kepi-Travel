@@ -33,7 +33,6 @@ import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 import type { TripSpendSummary } from "@/lib/travelAssistant/tripSpendSummary";
 import type { TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 import type { HotelStayMapReservation } from "@/lib/travelAssistant/tripHotelStayMap";
-import { hasAirportLayout } from "@/lib/airportNav/getLayout";
 
 const TripHomeOverviewMap = dynamic(
   () => import("@/components/travelAssistant/TripHomeOverviewMap").then((m) => m.TripHomeOverviewMap),
@@ -185,7 +184,7 @@ function findPlannableAirport(reservations: Reservation[]): string | null {
   for (const reservation of reservations) {
     if (reservation.type !== "flight") continue;
     const iata = reservation.flightDepartureAirport?.trim().toUpperCase();
-    if (!iata || !hasAirportLayout(iata)) continue;
+    if (!iata) continue;
     const departureValue = reservation.flightDate
       ?? reservation.flightDepartureTime
       ?? reservation.localTime;

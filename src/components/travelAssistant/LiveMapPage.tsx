@@ -5,6 +5,7 @@ import "@/lib/maplibreCspWorker";
 import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AirportNavigatorMap } from "@/components/travelAssistant/AirportNavigatorMap";
+import { AirportNavigatorFallback } from "@/components/travelAssistant/AirportNavigatorFallback";
 import {
   deriveEligibleLounges,
   useActiveFlight,
@@ -656,6 +657,7 @@ export function LiveMapPage() {
   const { credentials: navCredentials, profile: navProfile, saveCredentials } = useNavigatorCredentials();
   const [navLat, setNavLat] = useState<number | null>(null);
   const [navLon, setNavLon] = useState<number | null>(null);
+  const [navAccuracyM, setNavAccuracyM] = useState<number | null>(null);
   const navWatchRef = useRef<number | null>(null);
   const autoAirportRef = useRef(false);
 
@@ -677,9 +679,10 @@ export function LiveMapPage() {
       (pos) => {
         setNavLat(pos.coords.latitude);
         setNavLon(pos.coords.longitude);
+        setNavAccuracyM(Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : null);
       },
       () => null,
-      { enableHighAccuracy: true, maximumAge: 30_000, timeout: liveMapGeoOptions().timeout ?? 15_000 },
+      { enableHighAccuracy: true, maximumAge: 10_000, timeout: liveMapGeoOptions().timeout ?? 15_000 },
     );
     return () => {
       if (navWatchRef.current !== null) navigator.geolocation.clearWatch(navWatchRef.current);
@@ -701,9 +704,9 @@ export function LiveMapPage() {
   const navHasIndoorLayout = hasAirportLayout(navIata);
 
   useEffect(() => {
-    if (!preferAirportView || !previewFlight || !navHasIndoorLayout) return;
+    if (!preferAirportView || !previewFlight) return;
     setMapView("airport");
-  }, [preferAirportView, previewFlight, navHasIndoorLayout]);
+  }, [preferAirportView, previewFlight]);
 
   // Default map to the user's actual location (once), not world view or airport campus
   useEffect(() => {
@@ -1021,6 +1024,7 @@ export function LiveMapPage() {
               minutesToDeparture={navMinutesToDeparture}
               userLat={navLat}
               userLon={navLon}
+              userAccuracyM={navAccuracyM}
               credentials={navCredentials}
               onCredentialsAnswer={saveCredentials}
               eligibleLoungeNames={navEligibleLounges}
@@ -1053,8 +1057,33 @@ export function LiveMapPage() {
           </div>
         )}
 
+        {mapView === "airport" && navFlight && !navHasIndoorLayout ? (
+          <div className="absolute inset-0 z-40">
+            <AirportNavigatorFallback
+              fill
+              iata={navIata}
+              gateCode={navFlight.f.flightDepartureGate ?? null}
+              airlineName={navFlight.f.flightAirline ?? navFlight.f.provider ?? null}
+              flightNumber={navFlight.f.flightNumber ?? null}
+              arrivalAirport={navFlight.f.flightArrivalAirport ?? null}
+              departureTerminal={navFlight.f.flightDepartureTerminal ?? null}
+              flightStatusLabel={navFlight.f.flightStatus ?? null}
+              flightDelayed={(navFlight.f.flightDelayMinutes ?? 0) > 0 || navFlight.f.flightOnTime === false}
+              minutesToDeparture={navMinutesToDeparture}
+              proximityStatus={airportLiveMode ? navProximity.status : "preview"}
+              userLat={navLat}
+              userLon={navLon}
+              credentials={navCredentials}
+              eligibleLoungeNames={navEligibleLounges}
+              onSwitchToFamilyView={() => setMapView("family")}
+              familyPins={airportLiveMode ? familyAirportPins : []}
+              onFamilyPinTap={handleFamilyPinTap}
+            />
+          </div>
+        ) : null}
+
         {/* Airport ⇄ Family view pill — when trip has a mappable departure airport */}
-        {navFlight && navHasIndoorLayout && (
+        {navFlight && (
           <div
             className="absolute left-1/2 z-50 flex -translate-x-1/2 overflow-hidden rounded-full border border-white/15 shadow-xl"
             style={{ top: "max(3.6rem, calc(env(safe-area-inset-top) + 3.1rem))" }}

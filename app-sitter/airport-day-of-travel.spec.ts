@@ -69,8 +69,10 @@ async function signIn(page: import("@playwright/test").Page): Promise<void> {
 async function seedSeaDayOfTravelTrip(
   page: import("@playwright/test").Page,
   slot: DepartureSlot,
-  options?: { gateCode?: string | null },
+  options?: { gateCode?: string | null; departureAirport?: string; arrivalAirport?: string },
 ): Promise<void> {
+  const departureAirport = options?.departureAirport ?? "SEA";
+  const arrivalAirport = options?.arrivalAirport ?? "HNL";
   const trip = {
     name: "E2E Airport Day Test",
     destination: "Honolulu",
@@ -85,11 +87,11 @@ async function seedSeaDayOfTravelTrip(
         id: "e2e-flight-1",
         source: "manual",
         type: "flight",
-        title: "AS 1234 to Honolulu",
+        title: `AS 1234 ${departureAirport} to ${arrivalAirport}`,
         provider: "Alaska Airlines",
         localTime: slot.localTime,
         timezone: SEA_TIMEZONE,
-        location: "SEA",
+        location: departureAirport,
         confirmationCode: "E2ETEST",
         assignedTo: [],
         stage: "airport",
@@ -99,8 +101,8 @@ async function seedSeaDayOfTravelTrip(
         flightNumber: "AS1234",
         flightAirline: "Alaska Airlines",
         flightDate: slot.date,
-        flightDepartureAirport: "SEA",
-        flightArrivalAirport: "HNL",
+        flightDepartureAirport: departureAirport,
+        flightArrivalAirport: arrivalAirport,
         flightDepartureTime: slot.departureIso,
         flightArrivalTime: slot.arrivalIso,
         flightStatus: "scheduled",
@@ -175,6 +177,7 @@ test.describe("SEA day-of-travel", () => {
     await expect(page.getByTestId("airport-nav-fallback")).toHaveCount(0);
     await waitForIndoorMap(page);
     await expect(page.getByText(/Gate A10/i).first()).toBeVisible();
+    await expect(page.getByTestId("airport-nav-live-user")).toBeVisible();
     await expect(page.getByRole("button", { name: /Airport/i })).toHaveClass(/bg-white/);
   });
 
@@ -196,20 +199,22 @@ test.describe("SEA day-of-travel", () => {
     await expect(mapHost).toBeVisible({ timeout: 30_000 });
     await expect(schematic).toBeVisible({ timeout: 30_000 });
     await expect(schematic).toHaveAttribute("data-zone-count", "8");
-    await expect(page.getByText("Landside", { exact: true })).toBeVisible();
+    await expect(page.getByText("Preview starts at terminal entrance", { exact: true })).toBeVisible();
     await expect(page.getByText(/Gate assignment pending/i)).toBeVisible();
     await expect(page.getByRole("button", { name: /Navigate to Alaska check-in/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /Navigate to Alaska Lounge/i })).toHaveCount(0);
-    await page.getByRole("button", { name: "Lounges" }).click();
+    await page.getByRole("button", { name: "Lounge" }).click();
     await expect(page.getByRole("button", { name: /Navigate to Alaska Lounge/i }).first()).toBeVisible();
-    await page.getByRole("button", { name: "Essential" }).click();
+    await page.getByRole("button", { name: "Main" }).click();
     const checkinButton = page.getByRole("button", { name: /Navigate to Alaska check-in/i });
     const checkinBox = await checkinButton.boundingBox();
     expect(checkinBox?.height).toBeGreaterThanOrEqual(48);
     await checkinButton.click();
     await expect(page.getByTestId("airport-nav-selected-label")).toBeVisible();
+    await expect(checkinButton).toBeVisible();
     await expect(page.getByRole("region", { name: "Route instructions" })).toContainText("Route preview");
     await expect(page.getByText(/Live step-by-step guidance starts when you arrive at SEA/i)).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open SEA live indoor directions" })).toBeVisible();
     await expect(mapHost.locator("canvas")).toHaveCount(0);
     await expect(page.getByTestId("family-map-drawer")).toHaveCount(0);
 
@@ -229,6 +234,25 @@ test.describe("SEA day-of-travel", () => {
     const planAirport = page.getByRole("link", { name: "Plan SEA airport" });
     await expect(planAirport).toBeVisible({ timeout: 30_000 });
     await expect(planAirport).toHaveAttribute("href", "/travel-assistant/live-map?view=airport");
+  });
+
+  test("unsupported curated airports open their verified official map", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await signIn(page);
+    const slot = departureSlotMinutesFromNow(72 * 60);
+    await seedSeaDayOfTravelTrip(page, slot, {
+      gateCode: null,
+      departureAirport: "HNL",
+      arrivalAirport: "SEA",
+    });
+
+    await page.goto("/travel-assistant/live-map?view=airport", { waitUntil: "domcontentloaded" });
+
+    await expect(page.getByTestId("airport-nav-fallback")).toBeVisible({ timeout: 30_000 });
+    const officialMap = page.getByRole("link", { name: "Open official HNL terminal maps" });
+    await expect(officialMap).toBeVisible();
+    await expect(officialMap).toHaveAttribute("href", "https://airports.hawaii.gov/hnl/airport-map/");
+    await expect(page.getByText(/Indoor step-by-step guidance is not verified at this airport/i)).toBeVisible();
   });
 
   test("indoor map survives refresh at SEA", async ({ page }) => {

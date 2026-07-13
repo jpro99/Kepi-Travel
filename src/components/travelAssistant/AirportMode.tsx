@@ -417,6 +417,7 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
   const [now, setNow] = useState(() => Date.now());
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLon, setUserLon] = useState<number | null>(null);
+  const [userAccuracyM, setUserAccuracyM] = useState<number | null>(null);
   const watchRef = useRef<number | null>(null);
   const [profile, setProfile] = useState<TravelProfile | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
@@ -443,9 +444,13 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
   useEffect(() => {
     if (!navigator.geolocation) return;
     watchRef.current = navigator.geolocation.watchPosition(
-      pos => { setUserLat(pos.coords.latitude); setUserLon(pos.coords.longitude); },
+      pos => {
+        setUserLat(pos.coords.latitude);
+        setUserLon(pos.coords.longitude);
+        setUserAccuracyM(Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : null);
+      },
       () => null,
-      { enableHighAccuracy: false, maximumAge: 30_000, timeout: 15_000 }
+      { enableHighAccuracy: true, maximumAge: 10_000, timeout: 15_000 }
     );
     return () => { if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current); };
   }, []);
@@ -855,6 +860,7 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
           minutesToDeparture={msUntilDept / 60_000}
           userLat={userLat}
           userLon={userLon}
+          userAccuracyM={userAccuracyM}
           credentials={navCredentials}
           onCredentialsAnswer={saveNavCredentials}
           eligibleLoungeNames={[
