@@ -1,6 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { AirportLayout } from '@/lib/airportNav/types';
+import {
+    buildAirportSchematicModel,
+    placeAirportSchematicLabels,
+} from '@/lib/airportNav/schematic';
 
 interface AirportCurationRequest {
     iata: string;
@@ -12,18 +17,97 @@ interface AirportCurationRequest {
     officialMapUrl: string | null;
     officialMapProvider: string | null;
     officialMapVerified: boolean;
+    detectedBy?: string[];
+    notes?: string;
+    linkedPackageRevision?: number;
+}
+
+interface PackageHistoryEntry {
+    revision: number;
+    status: 'draft' | 'published';
+    precisionGrade?: 'schematic' | 'surveyed';
+    updatedAt: string;
+    publishedAt: string | null;
+    previewConfirmedBy?: string;
+    layoutBlobUrl?: string;
+}
+
+interface PackageInfoResponse {
+    iata: string;
+    published: { revision: number; updatedAt: string } | null;
+    draft: { revision: number; updatedAt: string } | null;
+    history: PackageHistoryEntry[];
+}
+
+/** Non-WebGL rendered preview of the draft layout (same projection as the resilient schematic renderer). */
+function LayoutPreview({ layout }: { layout: AirportLayout }) {
+    const model = useMemo(() => buildAirportSchematicModel(layout), [layout]);
+    const labeledPois = useMemo(
+        () => placeAirportSchematicLabels(model.pois),
+        [model],
+    );
+    return (
+        <svg
+            viewBox="0 0 100 100"
+            role="img"
+            aria-label={`Rendered preview of the ${layout.iata} draft layout`}
+            className="h-auto w-full rounded-xl border border-gray-200 bg-[#f7f5f0]"
+        >
+            {model.zones.map((zone) => (
+                <polygon
+                    key={zone.id}
+                    points={zone.points.map((point) => `${point.x},${point.y}`).join(' ')}
+                    fill={zone.airside ? '#dbe7f5' : '#e8e3d8'}
+                    stroke="#8a94a6"
+                    strokeWidth={0.4}
+                />
+            ))}
+            {model.walkways.map((walkway) => (
+                <line
+                    key={walkway.id}
+                    x1={walkway.from.x}
+                    y1={walkway.from.y}
+                    x2={walkway.to.x}
+                    y2={walkway.to.y}
+                    stroke={walkway.train ? '#7c3aed' : '#0b1f3a'}
+                    strokeWidth={walkway.train ? 0.9 : 0.6}
+                    strokeDasharray={walkway.train ? '2 1.2' : undefined}
+                    strokeLinecap="round"
+                    opacity={0.75}
+                />
+            ))}
+            {labeledPois.map(({ definition, point, labelPoint }) => (
+                <g key={definition.id}>
+                    <circle cx={point.x} cy={point.y} r={1.1} fill="#b91c1c" />
+                    <text
+                        x={labelPoint.x}
+                        y={labelPoint.y}
+                        fontSize={2.4}
+                        fill="#1f2937"
+                        textAnchor="middle"
+                    >
+                        {definition.name}
+                    </text>
+                </g>
+            ))}
+        </svg>
+    );
 }
 
 export default function AirportEditorPage() {
     const [iataCode, setIataCode] = useState('');
-    const [file, setFile] = useState<File | null>(null);
+    const [layoutText, setLayoutText] = useState('');
     const [attribution, setAttribution] = useState('');
     const [sourceUrl, setSourceUrl] = useState('');
     const [status, setStatus] = useState<'draft' | 'published'>('draft');
+    const [precisionGrade, setPrecisionGrade] = useState<'schematic' | 'surveyed'>('schematic');
     const [message, setMessage] = useState('');
-    const [isUploading, setIsUploading] = useState(false);
+    const [isWorking, setIsWorking] = useState(false);
     const [queue, setQueue] = useState<AirportCurationRequest[]>([]);
     const [queueLoading, setQueueLoading] = useState(true);
+    const [previewLayout, setPreviewLayout] = useState<AirportLayout | null>(null);
+    const [previewConfirmed, setPreviewConfirmed] = useState(false);
+    const [packageInfo, setPackageInfo] = useState<PackageInfoResponse | null>(null);
 
     const loadQueue = useCallback(async () => {
         setQueueLoading(true);
@@ -40,12 +124,33 @@ export default function AirportEditorPage() {
         void loadQueue();
     }, [loadQueue]);
 
+    const loadPackageInfo = useCallback(async (iata: string) => {
+        if (!/^[A-Z]{3}$/.test(iata)) {
+            setPackageInfo(null);
+            return;
+        }
+        const response = await fetch(`/api/admin/airport-layout?iata=${encodeURIComponent(iata)}`);
+        if (response.ok) {
+            setPackageInfo(await response.json() as PackageInfoResponse);
+        } else {
+            setPackageInfo(null);
+        }
+    }, []);
+
+    /** Any edit to the layout invalidates the previous visual confirmation. */
+    const updateLayoutText = (nextText: string) => {
+        setLayoutText(nextText);
+        setPreviewLayout(null);
+        setPreviewConfirmed(false);
+    };
+
     const selectRequest = (request: AirportCurationRequest) => {
         setIataCode(request.iata);
         setAttribution(`Kepi original ${request.iata} airport schematic`);
         setSourceUrl(request.officialMapVerified ? request.officialMapUrl ?? '' : '');
         setStatus('draft');
         setMessage(`${request.iata} selected. Build and verify its AirportLayout JSON, then save it as a draft.`);
+        void loadPackageInfo(request.iata);
     };
 
     const dismissRequest = async (request: AirportCurationRequest) => {
@@ -58,83 +163,107 @@ export default function AirportEditorPage() {
     };
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        if (event.target.files) {
-            setFile(event.target.files[0]);
+        const file = event.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.readAsText(file);
+        reader.onload = () => updateLayoutText(typeof reader.result === 'string' ? reader.result : '');
+        reader.onerror = () => setMessage('Error reading file.');
+    };
+
+    const buildSourceBody = () => ({
+        ownership: 'kepi_original' as const,
+        attribution: attribution.trim() || `Kepi original ${iataCode.toUpperCase()} airport schematic`,
+        sourceUrls: sourceUrl.trim() ? [sourceUrl.trim()] : [],
+        licenseNote: 'Kepi-owned vector geometry; official map artwork is not redistributed.',
+        lastVerifiedAt: new Date().toISOString().slice(0, 10),
+    });
+
+    const parseLayoutText = (): unknown | null => {
+        try {
+            return JSON.parse(layoutText) as unknown;
+        } catch {
+            setMessage('Error: layout is not valid JSON.');
+            return null;
+        }
+    };
+
+    const handleValidateAndPreview = async () => {
+        if (iataCode.length !== 3 || !layoutText.trim()) {
+            setMessage('Provide an IATA code and Kepi AirportLayout JSON first.');
+            return;
+        }
+        const layout = parseLayoutText();
+        if (layout === null) return;
+        setIsWorking(true);
+        setMessage('');
+        try {
+            const response = await fetch('/api/admin/airport-layout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    iata: iataCode.toUpperCase(),
+                    layout,
+                    status,
+                    source: buildSourceBody(),
+                    dryRun: true,
+                }),
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Validation failed.');
+            setPreviewLayout(layout as AirportLayout);
+            setPreviewConfirmed(false);
+            setMessage(
+                `${iataCode.toUpperCase()} passed structural validation (${result.stats.zones} zones, ${result.stats.nodes} nodes, ${result.stats.edges} edges, ${result.stats.pois} POIs). Now inspect the rendered preview below.`,
+            );
+        } catch (error) {
+            setPreviewLayout(null);
+            setPreviewConfirmed(false);
+            setMessage(`Error: ${error instanceof Error ? error.message : 'unknown validation error'}`);
+        } finally {
+            setIsWorking(false);
         }
     };
 
     const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
-        if (!file || !iataCode) {
-            setMessage('Please provide an IATA code and a Kepi AirportLayout JSON file.');
+        if (iataCode.length !== 3 || !layoutText.trim()) {
+            setMessage('Provide an IATA code and Kepi AirportLayout JSON first.');
             return;
         }
-
-        if (iataCode.length !== 3) {
-            setMessage('IATA code must be exactly 3 characters.');
+        if (status === 'published' && (!previewLayout || !previewConfirmed)) {
+            setMessage('Error: publishing requires validating, rendering, and visually confirming the preview first.');
             return;
         }
+        const layout = parseLayoutText();
+        if (layout === null) return;
 
-        setIsUploading(true);
+        setIsWorking(true);
         setMessage('');
-
-        const reader = new FileReader();
-        reader.readAsText(file);
-        reader.onload = async () => {
-            try {
-                const fileContent = reader.result as string;
-                const layout = JSON.parse(fileContent) as unknown;
-
-                const response = await fetch('/api/admin/airport-layout', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        iata: iataCode.toUpperCase(),
-                        layout,
-                        status,
-                        source: {
-                            ownership: 'kepi_original',
-                            attribution: attribution.trim() || `Kepi original ${iataCode.toUpperCase()} airport schematic`,
-                            sourceUrls: sourceUrl.trim() ? [sourceUrl.trim()] : [],
-                            licenseNote: 'Kepi-owned vector geometry; official map artwork is not redistributed.',
-                            lastVerifiedAt: new Date().toISOString().slice(0, 10),
-                        },
-                    }),
-                });
-
-                const result = await response.json();
-
-                if (response.ok) {
-                    setMessage(
-                        `Successfully saved ${result.package.iata} revision ${result.package.revision} as ${result.package.status}.`,
-                    );
-                    setIataCode('');
-                    setFile(null);
-                    setAttribution('');
-                    setSourceUrl('');
-                    setStatus('draft');
-                    (document.getElementById('file-input') as HTMLInputElement).value = '';
-                    await loadQueue();
-                } else {
-                    throw new Error(result.error || 'Failed to upload file.');
-                }
-            } catch (error) {
-                if (error instanceof Error) {
-                    setMessage(`Error: ${error.message}`);
-                } else {
-                    setMessage('An unknown error occurred.');
-                }
-            }
-            finally {
-                setIsUploading(false);
-            }
-        };
-        reader.onerror = () => {
-            setMessage('Error reading file.');
-            setIsUploading(false);
-        };
+        try {
+            const response = await fetch('/api/admin/airport-layout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    iata: iataCode.toUpperCase(),
+                    layout,
+                    status,
+                    source: buildSourceBody(),
+                    precisionGrade,
+                    previewConfirmed,
+                }),
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Failed to save package.');
+            setMessage(
+                `Successfully saved ${result.package.iata} revision ${result.package.revision} as ${result.package.status}.`,
+            );
+            await Promise.all([loadQueue(), loadPackageInfo(result.package.iata)]);
+        } catch (error) {
+            setMessage(`Error: ${error instanceof Error ? error.message : 'An unknown error occurred.'}`);
+        } finally {
+            setIsWorking(false);
+        }
     };
 
     return (
@@ -170,7 +299,15 @@ export default function AirportEditorPage() {
                                     </p>
                                     <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
                                         {request.status} · demand {request.demandCount}
+                                        {request.linkedPackageRevision
+                                            ? ` · rev ${request.linkedPackageRevision}`
+                                            : ''}
                                     </p>
+                                    {request.detectedBy && request.detectedBy.length > 0 ? (
+                                        <p className="mt-1 text-xs text-gray-400">
+                                            Seen via {request.detectedBy.join(', ')}
+                                        </p>
+                                    ) : null}
                                 </div>
                                 <button
                                     type="button"
@@ -203,11 +340,36 @@ export default function AirportEditorPage() {
                         </article>
                     ))}
                 </div>
+                {packageInfo ? (
+                    <div className="mt-6 rounded-2xl border border-gray-200 p-4">
+                        <h3 className="text-sm font-bold uppercase tracking-wide text-gray-700">
+                            {packageInfo.iata} version history
+                        </h3>
+                        <p className="mt-1 text-xs text-gray-500">
+                            Published rev {packageInfo.published?.revision ?? '—'} · Draft rev {packageInfo.draft?.revision ?? '—'}
+                        </p>
+                        {packageInfo.history.length === 0 ? (
+                            <p className="mt-3 text-xs text-gray-400">No stored revisions yet.</p>
+                        ) : (
+                            <ul className="mt-3 space-y-1">
+                                {packageInfo.history.map((entry) => (
+                                    <li key={entry.revision} className="text-xs text-gray-600">
+                                        rev {entry.revision} · {entry.status}
+                                        {entry.precisionGrade ? ` · ${entry.precisionGrade}` : ''}
+                                        {' · '}{new Date(entry.updatedAt).toLocaleString()}
+                                        {entry.previewConfirmedBy ? ` · preview ✓ ${entry.previewConfirmedBy}` : ''}
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                ) : null}
               </section>
               <section className="w-full rounded-2xl bg-white p-8 shadow-md">
                 <h1 className="text-2xl font-bold text-center mb-2">Kepi Airport Package Editor</h1>
                 <p className="mb-6 text-center text-sm text-gray-500">
-                    Upload original vector geometry, routing nodes, edges, and POIs. Save as draft before publishing.
+                    Upload or paste original vector geometry, routing nodes, edges, and POIs.
+                    Validate, inspect the rendered preview, then save. Publishing requires the visual check.
                 </p>
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
@@ -218,7 +380,11 @@ export default function AirportEditorPage() {
                             id="iata"
                             type="text"
                             value={iataCode}
-                            onChange={(e) => setIataCode(e.target.value.toUpperCase())}
+                            onChange={(e) => {
+                                setIataCode(e.target.value.toUpperCase());
+                                setPackageInfo(null);
+                            }}
+                            onBlur={() => void loadPackageInfo(iataCode)}
                             maxLength={3}
                             className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                             placeholder="JFK"
@@ -235,7 +401,20 @@ export default function AirportEditorPage() {
                             onChange={handleFileChange}
                             accept=".json,application/json"
                             className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100"
-                            required
+                        />
+                    </div>
+                    <div>
+                        <label htmlFor="layout-json" className="block text-sm font-medium text-gray-700">
+                            …or paste AirportLayout JSON
+                        </label>
+                        <textarea
+                            id="layout-json"
+                            value={layoutText}
+                            onChange={(event) => updateLayoutText(event.target.value)}
+                            rows={6}
+                            spellCheck={false}
+                            className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 font-mono text-xs shadow-sm"
+                            placeholder='{"iata":"JFK","name":"John F. Kennedy International Airport", …}'
                         />
                     </div>
                     <div>
@@ -264,29 +443,71 @@ export default function AirportEditorPage() {
                             placeholder="https://airport.example/maps"
                         />
                     </div>
-                    <div>
-                        <label htmlFor="status" className="block text-sm font-medium text-gray-700">
-                            Save status
-                        </label>
-                        <select
-                            id="status"
-                            value={status}
-                            onChange={(event) => setStatus(event.target.value as 'draft' | 'published')}
-                            className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm"
-                        >
-                            <option value="draft">Draft — not visible to travelers</option>
-                            <option value="published">Published — available immediately</option>
-                        </select>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                            <label htmlFor="precision" className="block text-sm font-medium text-gray-700">
+                                Precision grade
+                            </label>
+                            <select
+                                id="precision"
+                                value={precisionGrade}
+                                onChange={(event) => setPrecisionGrade(event.target.value as 'schematic' | 'surveyed')}
+                                className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm"
+                            >
+                                <option value="schematic">Schematic — approximate geometry</option>
+                                <option value="surveyed">Surveyed — verified positions</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="status" className="block text-sm font-medium text-gray-700">
+                                Save status
+                            </label>
+                            <select
+                                id="status"
+                                value={status}
+                                onChange={(event) => setStatus(event.target.value as 'draft' | 'published')}
+                                className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm"
+                            >
+                                <option value="draft">Draft — not visible to travelers</option>
+                                <option value="published">Published — available immediately</option>
+                            </select>
+                        </div>
                     </div>
-                    <div>
-                        <button
-                            type="submit"
-                            disabled={isUploading}
-                            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-300"
-                        >
-                            {isUploading ? 'Validating and saving…' : `Save ${status}`}
-                        </button>
-                    </div>
+                    <button
+                        type="button"
+                        onClick={() => void handleValidateAndPreview()}
+                        disabled={isWorking}
+                        className="w-full rounded-md border border-indigo-600 py-2 px-4 text-sm font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-40"
+                    >
+                        {isWorking ? 'Working…' : 'Validate & render preview'}
+                    </button>
+                    {previewLayout ? (
+                        <div className="space-y-3 rounded-2xl border border-gray-200 p-4">
+                            <p className="text-sm font-semibold text-gray-800">
+                                Rendered preview — check gates, corridors, and security placement against the official reference.
+                            </p>
+                            <LayoutPreview layout={previewLayout} />
+                            <label className="flex items-start gap-2 text-sm text-gray-700">
+                                <input
+                                    type="checkbox"
+                                    checked={previewConfirmed}
+                                    onChange={(event) => setPreviewConfirmed(event.target.checked)}
+                                    className="mt-0.5"
+                                />
+                                <span>
+                                    I inspected the rendered preview and the geometry is physically plausible
+                                    (gates in the right concourses, security on the right side, no offshore geometry).
+                                </span>
+                            </label>
+                        </div>
+                    ) : null}
+                    <button
+                        type="submit"
+                        disabled={isWorking || (status === 'published' && (!previewLayout || !previewConfirmed))}
+                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-300"
+                    >
+                        {isWorking ? 'Validating and saving…' : `Save ${status}`}
+                    </button>
                 </form>
                 {message && (
                     <p className={`mt-4 text-sm text-center ${message.startsWith('Error') ? 'text-red-500' : 'text-green-500'}`}>

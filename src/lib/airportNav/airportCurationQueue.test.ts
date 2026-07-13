@@ -35,6 +35,31 @@ test("repeated layout fetches within five minutes do not inflate demand", () => 
   assert.equal(laterDemand.demandCount, 2);
 });
 
+test("demand sources dedupe and legacy fields carry forward", () => {
+  const first = buildNextAirportCurationRequest({
+    iata: "JFK",
+    detectedBy: "layout-api",
+    now: new Date("2026-07-13T20:00:00.000Z"),
+  });
+  const second = buildNextAirportCurationRequest({
+    iata: "JFK",
+    existing: { ...first, notes: "verify AirTrain link", linkedPackageRevision: 4 },
+    detectedBy: "layout-api",
+    now: new Date("2026-07-13T21:00:00.000Z"),
+  });
+  const third = buildNextAirportCurationRequest({
+    iata: "JFK",
+    existing: second,
+    detectedBy: "offline-sync",
+    now: new Date("2026-07-13T22:00:00.000Z"),
+  });
+
+  assert.deepEqual(second.detectedBy, ["layout-api"]);
+  assert.deepEqual(third.detectedBy, ["layout-api", "offline-sync"]);
+  assert.equal(third.notes, "verify AirTrain link");
+  assert.equal(third.linkedPackageRevision, 4);
+});
+
 test("a published package remains published if an old client requests it", () => {
   const request = buildNextAirportCurationRequest({
     iata: "SEA",

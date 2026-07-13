@@ -18,12 +18,21 @@ export interface AirportCurationRequest {
   officialMapUrl: string | null;
   officialMapProvider: string | null;
   officialMapVerified: boolean;
+  /** Where demand was detected (e.g. "layout-api"). Deduplicated. Optional on legacy records. */
+  detectedBy?: string[];
+  /** Admin/verification notes. */
+  notes?: string;
+  /** Package revision this request was last linked to (draft or published save). */
+  linkedPackageRevision?: number;
 }
+
+const MAX_DETECTED_BY_SOURCES = 12;
 
 export function buildNextAirportCurationRequest(input: {
   iata: string;
   existing?: AirportCurationRequest | null;
   now?: Date;
+  detectedBy?: string;
 }): AirportCurationRequest {
   const iata = input.iata.trim().toUpperCase();
   if (!/^[A-Z]{3}$/.test(iata)) throw new Error("Invalid airport IATA code");
@@ -37,6 +46,11 @@ export function buildNextAirportCurationRequest(input: {
     !existing
     || !Number.isFinite(lastRequestMs)
     || now.getTime() - lastRequestMs >= 5 * 60_000;
+  const detectedBySource = input.detectedBy?.trim();
+  const detectedBy = [...new Set([
+    ...(existing?.detectedBy ?? []),
+    ...(detectedBySource ? [detectedBySource] : []),
+  ])].slice(0, MAX_DETECTED_BY_SOURCES);
 
   return {
     iata,
@@ -51,6 +65,9 @@ export function buildNextAirportCurationRequest(input: {
     officialMapUrl: officialMap?.url ?? null,
     officialMapProvider: officialMap?.provider ?? null,
     officialMapVerified: Boolean(officialMap?.official && officialMap.verifiedAt),
+    detectedBy,
+    notes: existing?.notes,
+    linkedPackageRevision: existing?.linkedPackageRevision,
   };
 }
 
@@ -76,10 +93,17 @@ async function writeCurationRequest(request: AirportCurationRequest): Promise<vo
   ]);
 }
 
-export async function recordAirportCurationDemand(iata: string): Promise<AirportCurationRequest> {
+export async function recordAirportCurationDemand(
+  iata: string,
+  options?: { detectedBy?: string },
+): Promise<AirportCurationRequest> {
   const code = iata.trim().toUpperCase();
   const existing = await readCurationRequest(code);
-  const next = buildNextAirportCurationRequest({ iata: code, existing });
+  const next = buildNextAirportCurationRequest({
+    iata: code,
+    existing,
+    detectedBy: options?.detectedBy ?? "layout-api",
+  });
   await writeCurationRequest(next);
   return next;
 }
@@ -87,11 +111,19 @@ export async function recordAirportCurationDemand(iata: string): Promise<Airport
 export async function setAirportCurationStatus(
   iata: string,
   status: AirportCurationStatus,
+  options?: { linkedPackageRevision?: number; notes?: string },
 ): Promise<AirportCurationRequest> {
   const code = iata.trim().toUpperCase();
   const existing = await readCurationRequest(code);
   const base = existing ?? buildNextAirportCurationRequest({ iata: code });
-  const next = { ...base, status };
+  const next: AirportCurationRequest = {
+    ...base,
+    status,
+    ...(options?.linkedPackageRevision !== undefined
+      ? { linkedPackageRevision: options.linkedPackageRevision }
+      : {}),
+    ...(options?.notes !== undefined ? { notes: options.notes } : {}),
+  };
   await writeCurationRequest(next);
   return next;
 }

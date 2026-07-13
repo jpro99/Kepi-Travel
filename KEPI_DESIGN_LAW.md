@@ -404,6 +404,21 @@ Channel shortcuts require **≥3 attempts**, correction rate **≤25%**, and alw
 
 **Test:** `src/lib/travelAssistant/inputStyleProfile.test.ts`
 
+**D19 — SEA survives empty storage and missing env**  
+Airport layout resolution must return the compiled SEA seed even with empty Redis, missing Redis env keys, or a missing `BLOB_READ_WRITE_TOKEN`. When Blob is unavailable, package saves fall back to inline Redis storage — Blob offload failure must never fail a save or blank a published airport.
+
+**Test:** `src/lib/airportNav/airportLayoutStore.test.ts`
+
+**D20 — Visual preview confirmation gates publish**  
+An airport package may only be published when a human has confirmed the rendered visual preview (`previewConfirmedBy`). Structural/schema validation alone is insufficient — schema-valid geometry can still be physically wrong (see the 2026-06-15 offshore-pin failure). Compiled seed layouts self-confirm as `kepi-seed-bundle` because they are human-reviewed in code.
+
+**Test:** `src/lib/airportNav/airportLayoutPackage.test.ts`, `src/lib/airportNav/airportLayoutStore.test.ts`
+
+**D21 — Curation requests dedupe by IATA**  
+There is exactly one shared curation request per airport IATA. Repeat demand within 5 minutes never inflates the demand count, detection sources (`detectedBy`) deduplicate, and admin notes / linked package revisions carry forward across demand updates.
+
+**Test:** `src/lib/airportNav/airportCurationQueue.test.ts`
+
 ---
 
 ## Test index
@@ -453,5 +468,8 @@ Channel shortcuts require **≥3 attempts**, correction rate **≤25%**, and alw
 | D16 | `src/lib/airportNav/navTimingCalibration.test.ts` |
 | D17 | `src/lib/airportNav/postBookingBriefing.test.ts` |
 | D18 | `src/lib/travelAssistant/inputStyleProfile.test.ts` |
+| D19, D20 | `src/lib/airportNav/airportLayoutStore.test.ts` |
+| D20 | `src/lib/airportNav/airportLayoutPackage.test.ts` |
+| D21, M14 | `src/lib/airportNav/airportCurationQueue.test.ts` |
 
 New laws must add a row here when a test exists.

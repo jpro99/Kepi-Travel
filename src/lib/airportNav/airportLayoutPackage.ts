@@ -69,6 +69,16 @@ export interface AirportLayoutPackageSource {
   lastVerifiedAt: string;
 }
 
+export type AirportLayoutPrecisionGrade = "schematic" | "surveyed";
+
+/** Human sign-off that the rendered draft looked physically correct on the map. */
+export interface AirportLayoutPreviewConfirmation {
+  /** ISO timestamp; defaults to package creation time when omitted. */
+  at?: string;
+  /** Who confirmed the rendered preview (admin user id, or "kepi-seed-bundle"). */
+  by: string;
+}
+
 export interface AirportLayoutPackage {
   schemaVersion: typeof AIRPORT_LAYOUT_PACKAGE_SCHEMA_VERSION;
   iata: string;
@@ -76,9 +86,15 @@ export interface AirportLayoutPackage {
   status: "draft" | "published";
   layout: AirportLayout;
   source: AirportLayoutPackageSource;
+  precisionGrade: AirportLayoutPrecisionGrade;
   createdAt: string;
   updatedAt: string;
   publishedAt: string | null;
+  /** Set when a human confirmed the rendered visual preview (required to publish). */
+  previewConfirmedAt?: string;
+  previewConfirmedBy?: string;
+  /** When set, the layout payload also lives in Vercel Blob at this URL. */
+  layoutBlobUrl?: string;
 }
 
 const AirportLayoutPackageSchema = z.object({
@@ -94,9 +110,14 @@ const AirportLayoutPackageSchema = z.object({
     licenseNote: z.string().trim().min(1),
     lastVerifiedAt: z.string().trim().min(1),
   }),
+  // Defaults keep packages stored before this field existed parseable.
+  precisionGrade: z.enum(["schematic", "surveyed"]).default("schematic"),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   publishedAt: z.string().datetime().nullable(),
+  previewConfirmedAt: z.string().datetime().optional(),
+  previewConfirmedBy: z.string().trim().min(1).optional(),
+  layoutBlobUrl: z.string().url().optional(),
 });
 
 function duplicateIds(items: Array<{ id: string }>): string[] {
@@ -172,10 +193,19 @@ export function createAirportLayoutPackage(input: {
   status?: "draft" | "published";
   now?: Date;
   createdAt?: string;
+  precisionGrade?: AirportLayoutPrecisionGrade;
+  previewConfirmation?: AirportLayoutPreviewConfirmation;
 }): AirportLayoutPackage {
   const layout = parseAirportLayout(input.layout);
   const nowIso = (input.now ?? new Date()).toISOString();
   const status = input.status ?? "published";
+  const confirmedBy = input.previewConfirmation?.by?.trim();
+  // Enforced at creation time only, so legacy stored packages still parse on read.
+  if (status === "published" && !confirmedBy) {
+    throw new Error(
+      "Publishing requires visual preview confirmation: a human must confirm the rendered draft (previewConfirmation.by).",
+    );
+  }
   return parseAirportLayoutPackage({
     schemaVersion: AIRPORT_LAYOUT_PACKAGE_SCHEMA_VERSION,
     iata: layout.iata,
@@ -183,9 +213,12 @@ export function createAirportLayoutPackage(input: {
     status,
     layout,
     source: input.source,
+    precisionGrade: input.precisionGrade ?? "schematic",
     createdAt: input.createdAt ?? nowIso,
     updatedAt: nowIso,
     publishedAt: status === "published" ? nowIso : null,
+    previewConfirmedAt: confirmedBy ? input.previewConfirmation?.at ?? nowIso : undefined,
+    previewConfirmedBy: confirmedBy || undefined,
   });
 }
 
@@ -196,6 +229,8 @@ export function createNextAirportLayoutPackage(input: {
   existingPublished?: AirportLayoutPackage | null;
   existingDraft?: AirportLayoutPackage | null;
   now?: Date;
+  precisionGrade?: AirportLayoutPrecisionGrade;
+  previewConfirmation?: AirportLayoutPreviewConfirmation;
 }): AirportLayoutPackage {
   const currentForStatus = input.status === "published"
     ? input.existingPublished
@@ -214,5 +249,7 @@ export function createNextAirportLayoutPackage(input: {
       currentForStatus?.createdAt
       ?? input.existingPublished?.createdAt
       ?? input.existingDraft?.createdAt,
+    precisionGrade: input.precisionGrade ?? currentForStatus?.precisionGrade,
+    previewConfirmation: input.previewConfirmation,
   });
 }

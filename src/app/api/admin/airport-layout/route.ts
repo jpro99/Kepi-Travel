@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminApiAccess } from "@/lib/admin/requireAdminApiAccess";
-import { parseAirportLayout } from "@/lib/airportNav/airportLayoutPackage";
+import {
+  parseAirportLayout,
+  validateAirportLayoutGraph,
+} from "@/lib/airportNav/airportLayoutPackage";
 import {
   getStoredAirportLayoutPackage,
+  listAirportLayoutRevisionRecords,
   saveAirportLayoutPackage,
 } from "@/lib/airportNav/airportLayoutStore";
 
@@ -20,6 +24,11 @@ const BodySchema = z.object({
   layout: z.unknown(),
   status: z.enum(["draft", "published"]).default("draft"),
   source: SourceSchema,
+  precisionGrade: z.enum(["schematic", "surveyed"]).default("schematic"),
+  /** Admin attests the rendered visual preview looked physically correct. Required to publish. */
+  previewConfirmed: z.boolean().default(false),
+  /** Validate the layout only; never write anything. */
+  dryRun: z.boolean().default(false),
 });
 
 export async function GET(request: Request) {
@@ -32,11 +41,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "A valid iata query parameter is required" }, { status: 400 });
   }
 
-  const [published, draft] = await Promise.all([
+  const [published, draft, historyRecords] = await Promise.all([
     getStoredAirportLayoutPackage(iata, "published"),
     getStoredAirportLayoutPackage(iata, "draft"),
+    listAirportLayoutRevisionRecords(iata),
   ]);
-  return NextResponse.json({ iata, published, draft });
+  // History is metadata-only for the admin UI; strip inline layouts to keep the response light.
+  const history = historyRecords.map(({ layout: _layout, ...metadata }) => metadata);
+  return NextResponse.json({ iata, published, draft, history });
 }
 
 export async function POST(request: Request) {
@@ -54,8 +66,37 @@ export async function POST(request: Request) {
       );
     }
 
+    if (parsedBody.dryRun) {
+      // parseAirportLayout already threw on structural issues; report a clean bill.
+      return NextResponse.json({
+        message: `${iata} layout passed structural validation.`,
+        valid: true,
+        issues: validateAirportLayoutGraph(layout),
+        stats: {
+          zones: layout.zones.length,
+          nodes: layout.nodes.length,
+          edges: layout.edges.length,
+          pois: layout.pois.length,
+        },
+      });
+    }
+
+    if (parsedBody.status === "published" && !parsedBody.previewConfirmed) {
+      return NextResponse.json(
+        {
+          error:
+            "Publishing requires visual preview confirmation. Render the draft on the map preview and confirm it looks physically correct first.",
+        },
+        { status: 400 },
+      );
+    }
+
     const saved = await saveAirportLayoutPackage(layout, parsedBody.source, {
       status: parsedBody.status,
+      precisionGrade: parsedBody.precisionGrade,
+      previewConfirmation: parsedBody.previewConfirmed
+        ? { by: gate.userId }
+        : undefined,
     });
     return NextResponse.json({
       message: `${iata} airport layout ${parsedBody.status}.`,
