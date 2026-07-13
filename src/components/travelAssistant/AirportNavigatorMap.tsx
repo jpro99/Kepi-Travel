@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AirportLayout, ComputedRoute, GraphEdge, PoiDefinition, SnappedPosition, TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
 import { computeDirectionArrow, confirmedSnappedPosition } from "@/lib/airportNav/directionArrow";
+import { computeLayoutBounds } from "@/lib/airportNav/layoutBounds";
 import { buildAirportSchematicModel } from "@/lib/airportNav/schematic";
 import type { JourneyWaypointEvent, NavTimingCalibrationStore } from "@/lib/airportNav/navTimingCalibration";
 import { loadNavTimingCalibrationStore, recordJourneyWaypointPair } from "@/lib/airportNav/navJourneyTelemetry";
@@ -1482,9 +1483,21 @@ export function AirportNavigatorMap({
           loadRetryTimer = null;
         }
         setMapReady(true);
+        // Frame the actual terminal footprint. Real OSM-derived layouts are
+        // irregular and off-centre, so a fixed center+zoom crops them (M17).
+        const bounds = computeLayoutBounds(layout);
         window.requestAnimationFrame(() => {
           try {
             map.resize();
+            if (bounds) {
+              map.fitBounds(bounds, {
+                padding: { top: 90, bottom: 150, left: 40, right: 40 },
+                pitch: 58,
+                bearing: -15,
+                maxZoom: 16.2,
+                duration: 0,
+              });
+            }
           } catch {
             /* ignore */
           }
@@ -1622,6 +1635,7 @@ export function AirportNavigatorMap({
       poiMarkersRef.current = {};
 
       const nodePos = new Map(layout.nodes.map((node) => [node.id, node.pos]));
+      const selectedId = selectedPoiId ?? activeRoute?.toPoiId ?? null;
       for (const poi of layout.pois) {
         if (poi.category === "checkin" && poi.airline && airlineName && !airlineName.toLowerCase().includes(poi.airline.toLowerCase())) {
           continue;
@@ -1630,6 +1644,7 @@ export function AirportNavigatorMap({
         const pos = nodePos.get(poi.nodeId);
         if (!pos) continue;
 
+        const isSelected = selectedId !== null && poi.id === selectedId;
         const isGateBubble = gatePoi !== null && poi.id === gatePoi.id;
         const urgent = isGateBubble && minutesRounded <= 45;
         const critical = isGateBubble && minutesRounded <= 20;
@@ -1658,6 +1673,7 @@ export function AirportNavigatorMap({
             ? "background:rgba(236,253,245,0.95);color:#065f46;border:1.5px solid #34d399;"
             : "background:rgba(255,255,255,0.82);color:#1e293b;border:1px solid rgba(255,255,255,0.5);",
           isObjective && !isGateBubble ? "outline:2px solid #f4c95d;outline-offset:1px;" : "",
+          isSelected ? "outline:3px solid #38bdf8;outline-offset:2px;transform:scale(1.1);z-index:5;" : "",
           "box-shadow:0 4px 14px rgba(0,0,0,0.35);",
           critical || urgent ? "animation:kepiPulse 1.6s ease-in-out infinite;" : "",
         ].join("");
@@ -1685,7 +1701,7 @@ export function AirportNavigatorMap({
       }
       poiMarkersRef.current = {};
     };
-  }, [mapReady, layout, gatePoi, gateCode, minutesRounded, airlineName, objective, eligibleLoungeNames, startRoute]);
+  }, [mapReady, layout, gatePoi, gateCode, minutesRounded, airlineName, objective, eligibleLoungeNames, startRoute, selectedPoiId, activeRoute]);
 
   /* ── Snapped user puck with confidence halo ─────────────────────────── */
   useEffect(() => {

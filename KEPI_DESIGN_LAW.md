@@ -244,6 +244,11 @@ The airport wayfinding arrow points the way the traveler is *actually facing* by
 
 **Test:** `src/lib/airportNav/directionArrow.test.ts`
 
+**M17 — The live map frames the real footprint, not a fixed box**
+The live MapLibre view already renders every zone ring as a 3D `fill-extrusion`, so a real OSM-derived layout draws its true terminal/concourse shape the instant it is published — no separate "real map" renderer is needed. Because real footprints are irregular and off-centre, the camera must `fitBounds` to the layout's actual zone geometry (`computeLayoutBounds`) rather than a hardcoded `center` + `zoom`; a fixed camera crops large or asymmetric terminals. A tapped POI stays visibly selected on the live map (sky-blue ring + scale, raised z-index) so the destination pill never vanishes on tap, matching the schematic callout intent (G-label persistence). Padding leaves room for the bottom rail and top chrome.
+
+**Test:** `src/lib/airportNav/layoutBounds.test.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -453,6 +458,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | M14 | `src/lib/airportNav/airportCurationQueue.test.ts`, `app-sitter/airport-day-of-travel.spec.ts` |
 | M15 | `src/lib/airportNav/osmImport.test.ts` |
 | M16 | `src/lib/airportNav/directionArrow.test.ts` |
+| M17 | `src/lib/airportNav/layoutBounds.test.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |
