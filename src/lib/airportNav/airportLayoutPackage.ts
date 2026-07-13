@@ -188,3 +188,31 @@ export function createAirportLayoutPackage(input: {
     publishedAt: status === "published" ? nowIso : null,
   });
 }
+
+export function createNextAirportLayoutPackage(input: {
+  layout: AirportLayout;
+  source: AirportLayoutPackageSource;
+  status: "draft" | "published";
+  existingPublished?: AirportLayoutPackage | null;
+  existingDraft?: AirportLayoutPackage | null;
+  now?: Date;
+}): AirportLayoutPackage {
+  const currentForStatus = input.status === "published"
+    ? input.existingPublished
+    : input.existingDraft;
+  const latestRevision = Math.max(
+    input.existingPublished?.revision ?? 0,
+    input.existingDraft?.revision ?? 0,
+  );
+  return createAirportLayoutPackage({
+    layout: input.layout,
+    source: input.source,
+    revision: latestRevision + 1,
+    status: input.status,
+    now: input.now,
+    createdAt:
+      currentForStatus?.createdAt
+      ?? input.existingPublished?.createdAt
+      ?? input.existingDraft?.createdAt,
+  });
+}

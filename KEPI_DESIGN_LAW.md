@@ -225,6 +225,7 @@ There is no universal downloadable live indoor airport map. Kepi must use a veri
 
 **M13 — Kepi airport maps are versioned, original route packages**
 Each Kepi-owned airport map is stored as a versioned database package containing original vector zones, a validated walking graph, POIs, source/licensing metadata, and a last-verified date. Public navigation reads the published database package first, seeds from a bundled safe fallback when necessary, and refreshes the traveler’s offline cache from the published API. Every edge, POI, and gate resolver must reference a real graph node; official map artwork is reference material, never copied into Kepi.
+Package lifecycle tests must use pure in-memory inputs and must never write draft or synthetic layouts into shared Redis.
 
 **Test:** `src/lib/airportNav/airportLayoutPackage.test.ts`, `app-sitter/airport-day-of-travel.spec.ts`
 

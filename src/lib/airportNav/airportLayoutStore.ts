@@ -1,7 +1,7 @@
 import { logger } from "@/lib/logger";
 import { getAirportLayout } from "@/lib/airportNav/getLayout";
 import {
-  createAirportLayoutPackage,
+  createNextAirportLayoutPackage,
   parseAirportLayoutPackage,
   type AirportLayoutPackage,
   type AirportLayoutPackageSource,
@@ -63,15 +63,13 @@ export async function saveAirportLayoutPackage(
     getStoredAirportLayoutPackage(code, "published"),
     getStoredAirportLayoutPackage(code, "draft"),
   ]);
-  const existing = status === "published" ? published : draft;
-  const latestRevision = Math.max(published?.revision ?? 0, draft?.revision ?? 0);
-  const nextPackage = createAirportLayoutPackage({
+  const nextPackage = createNextAirportLayoutPackage({
     layout: { ...layout, iata: code },
     source,
-    revision: latestRevision + 1,
     status,
+    existingPublished: published,
+    existingDraft: draft,
     now: options?.now,
-    createdAt: existing?.createdAt ?? published?.createdAt ?? draft?.createdAt,
   });
   await kvStoreSet(packageKey(code, status), nextPackage, { userId: AIRPORT_LAYOUT_NAMESPACE });
   return nextPackage;

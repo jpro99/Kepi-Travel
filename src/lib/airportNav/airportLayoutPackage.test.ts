@@ -2,15 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createAirportLayoutPackage,
+  createNextAirportLayoutPackage,
   parseAirportLayout,
   validateAirportLayoutGraph,
 } from "@/lib/airportNav/airportLayoutPackage";
 import { SEA_LAYOUT } from "@/lib/airportNav/layouts/sea";
-import {
-  getStoredAirportLayoutPackage,
-  resolvePublishedAirportLayout,
-  saveAirportLayoutPackage,
-} from "@/lib/airportNav/airportLayoutStore";
 
 const SOURCE = {
   ownership: "kepi_original" as const,
@@ -55,33 +51,34 @@ test("airport graph validation rejects open terminal polygons", () => {
   assert.throws(() => parseAirportLayout(broken), /ring must be closed/);
 });
 
-test("bundled SEA seeds the shared store and subsequent reads use the database", async () => {
-  const first = await resolvePublishedAirportLayout("SEA");
-  const second = await resolvePublishedAirportLayout("SEA");
-
-  assert.ok(first.layout);
-  assert.ok(first.package);
-  assert.equal(first.package?.status, "published");
-  assert.equal(second.source, "database");
-  assert.equal(second.package?.revision, first.package?.revision);
-});
-
-test("draft airport revisions remain hidden until explicitly published", async () => {
-  const publishedBefore = await resolvePublishedAirportLayout("SEA");
-  const draftLayout = { ...SEA_LAYOUT, layoutVersion: "draft-test-version" };
-  const draft = await saveAirportLayoutPackage(draftLayout, SOURCE, {
+test("draft and published package revisions advance without touching shared storage", () => {
+  const published = createAirportLayoutPackage({
+    layout: SEA_LAYOUT,
+    source: SOURCE,
+    revision: 2,
+    status: "published",
+    now: new Date("2026-07-13T18:00:00.000Z"),
+  });
+  const draft = createNextAirportLayoutPackage({
+    layout: { ...SEA_LAYOUT, layoutVersion: "draft-test-version" },
+    source: SOURCE,
     status: "draft",
+    existingPublished: published,
     now: new Date("2026-07-13T19:00:00.000Z"),
   });
-  const publicWhileDraft = await resolvePublishedAirportLayout("SEA");
-
-  assert.equal((await getStoredAirportLayoutPackage("SEA", "draft"))?.layout.layoutVersion, "draft-test-version");
-  assert.equal(publicWhileDraft.layout?.layoutVersion, publishedBefore.layout?.layoutVersion);
-
-  const published = await saveAirportLayoutPackage(draftLayout, SOURCE, {
+  const promoted = createNextAirportLayoutPackage({
+    layout: draft.layout,
+    source: SOURCE,
     status: "published",
+    existingPublished: published,
+    existingDraft: draft,
     now: new Date("2026-07-13T19:05:00.000Z"),
   });
-  assert.ok(published.revision > draft.revision);
-  assert.equal((await resolvePublishedAirportLayout("SEA")).layout?.layoutVersion, "draft-test-version");
+
+  assert.equal(draft.revision, 3);
+  assert.equal(draft.status, "draft");
+  assert.equal(published.layout.layoutVersion, SEA_LAYOUT.layoutVersion);
+  assert.equal(promoted.revision, 4);
+  assert.equal(promoted.status, "published");
+  assert.equal(promoted.layout.layoutVersion, "draft-test-version");
 });
