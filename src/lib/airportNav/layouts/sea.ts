@@ -39,29 +39,47 @@ function n(
   return { id, pos: [lng, lat], kind, airside: !LANDSIDE_NODE_IDS.has(id), landmark };
 }
 
-// ── Real anchor coordinates (OSM-derived, 2026-07-13) ──────────────────────
-// Main terminal is an X: A gates SE, B gates SW, C gates NW, D gates NE, with
-// ticketing along the east (departures drive) and security in the core.
+// ── GROUND-TRUTH anchor coordinates (KEPI_DESIGN_LAW M26) ──────────────────
+// These are REAL coordinates read from OpenStreetMap's surveyed, satellite-
+// aligned data (Overpass), NOT eyeballed and NOT reverse-engineered from our
+// own derived terminal ring. SEA's departures doors are OSM `entrance` nodes
+// carrying real `ref` door numbers; low numbers are SOUTH, high are NORTH:
+//   Door 4  = 47.442272, -122.300184   Door 12 = 47.443169, -122.301487
+//   Door 14 = 47.443522, -122.301777   Door 22 = 47.444474, -122.300868
+//   Door 24 = 47.444651, -122.300607
+// The flysea.org/Atrius reference (owner-supplied screenshots) is used ONLY to
+// know WHICH airline/checkpoint sits at which door — Alaska at the north end,
+// international carriers at the south — never as a coordinate source. Do NOT
+// gate these coordinates on SEA_OSM_FOOTPRINTS.mainTerminal: that ring is a
+// simplified, decorative backdrop and a verified door can fall just outside it
+// (Door 4 does) — the real coordinate wins (M26 supersedes M23's polygon gate).
 const NODES: GraphNode[] = [
-  // ── Departures drop-off (upper roadway, east entrance of the main terminal) ──
-  // Just inside the east entrance doors (verified in-polygon), not out on the drive.
-  n("curb-departures", -122.30110, 47.44255, "junction", "Departures drop-off — upper roadway"),
+  // ── Departures drop-off (central main entrance) ──
+  // Anchored to OSM entrance ref=14 (central departures doors). Verified via OSM
+  // Overpass entrance-ref query, 2026-07-14.
+  n("curb-departures", -122.301777, 47.443522, "junction", "Departures drop-off — Door 14 (central)"),
 
-  // ── Landside ticketing hall (main terminal core) ──
-  // Every coordinate verified INSIDE SEA_OSM_FOOTPRINTS.mainTerminal via
-  // @turf/turf booleanPointInPolygon (M23). The hall runs on a diagonal — its
-  // interior edge moves WEST as it runs north — so counters step west going
-  // north; the earlier eyeballed east coords fell into the parking structure.
-  n("checkin-south", -122.30055, 47.44250, "checkin", "Ticketing — south end (Alaska)"),
-  n("checkin-center", -122.30140, 47.44300, "checkin", "Ticketing — center (Delta, United)"),
-  n("checkin-north", -122.30165, 47.44420, "checkin", "Ticketing — north end (international)"),
-  n("landside-hall", -122.30185, 47.44335, "junction", "Main hall, behind ticketing"),
+  // ── Landside ticketing hall — each anchored to a real OSM door node ──
+  // Verified via OSM Overpass entrance `ref` coordinates, 2026-07-14. Airline
+  // section (which door) comes from the public flysea map ordering; the lat/lng
+  // is the real door coordinate, not an estimate.
+  n("checkin-south", -122.300184, 47.442272, "checkin", "Ticketing — south end / Door 4 (international)"),
+  n("checkin-center", -122.301487, 47.443169, "checkin", "Ticketing — center / Door 12 (Delta, United)"),
+  n("checkin-north", -122.300607, 47.444651, "checkin", "Ticketing — north end / Door 24 (Alaska)"),
+  // Interior walkway between the real central doors and the airside core (where
+  // the A/B/C/D gate arms converge). Kepi-curated corridor point, positioned
+  // between real Door 12/14 and airside-central so the route runs straight in
+  // (no landside→airside zigzag), 2026-07-14.
+  n("landside-hall", -122.302000, 47.443400, "junction", "Main hall, behind central ticketing"),
 
   // ── Security checkpoints (entries landside, exits airside) ──
-  n("sec3-entry", -122.30150, 47.44305, "security_entry", "Checkpoint 3 — center of the hall"),
-  n("sec3-exit", -122.30195, 47.44315, "security_exit", "Past Checkpoint 3"),
-  n("sec5-entry", -122.30170, 47.44430, "security_entry", "Checkpoint 5 — north end"),
-  n("sec5-exit", -122.30205, 47.44440, "security_exit", "Past Checkpoint 5"),
+  // OSM has NO security-checkpoint tagging (KEPI_DESIGN_LAW M15), so these are
+  // Kepi-curated: placed just airside (interior) of the real central/north doors
+  // toward the concourse core, per the flysea checkpoint locations. 2026-07-14.
+  n("sec3-entry", -122.302100, 47.443350, "security_entry", "Checkpoint 3 — central (behind Door 12)"),
+  n("sec3-exit", -122.302350, 47.443450, "security_exit", "Past Checkpoint 3"),
+  n("sec5-entry", -122.302050, 47.444450, "security_entry", "Checkpoint 5 — north (behind Door 22–24)"),
+  n("sec5-exit", -122.302300, 47.444520, "security_exit", "Past Checkpoint 5"),
 
   // ── Airside central spine ──
   n("airside-central", -122.30210, 47.44340, "junction", "Central airside concourse"),
@@ -180,12 +198,15 @@ const POIS: PoiDefinition[] = [
   // real counter door and IATA code (for a logo/brand chip). minZoomToShow keeps
   // them out of the zoomed-out view; they reveal as you zoom into the ticketing
   // hall, Atrius-style. Physical layout facts are hand-curated Kepi data.
-  { id: "poi-checkin-as", nodeId: "checkin-south", category: "checkin", name: "Alaska check-in", airline: "Alaska", airlineIataCode: "AS", doorLabel: "Door 1", minZoomToShow: 15 },
-  { id: "poi-checkin-dl", nodeId: "checkin-center", category: "checkin", name: "Delta check-in", airline: "Delta", airlineIataCode: "DL", doorLabel: "Door 3", minZoomToShow: 15 },
-  { id: "poi-checkin-ua", nodeId: "checkin-center", category: "checkin", name: "United check-in", airline: "United", airlineIataCode: "UA", doorLabel: "Door 3", minZoomToShow: 15 },
-  { id: "poi-checkin-ac", nodeId: "checkin-north", category: "checkin", name: "Air Canada check-in", airline: "Air Canada", airlineIataCode: "AC", doorLabel: "Door 5", minZoomToShow: 15.2 },
-  { id: "poi-checkin-ek", nodeId: "checkin-north", category: "checkin", name: "Emirates check-in", airline: "Emirates", airlineIataCode: "EK", doorLabel: "Door 5", minZoomToShow: 15.2 },
-  { id: "poi-checkin-gen", nodeId: "checkin-center", category: "checkin", name: "Check-in & bag drop", doorLabel: "Doors 2–4" },
+  // Section (which door) follows the public flysea north→south ordering: Alaska
+  // at the NORTH end, Delta/United central, international carriers at the SOUTH.
+  // The previous file had Alaska flipped to the south end — corrected 2026-07-14.
+  { id: "poi-checkin-as", nodeId: "checkin-north", category: "checkin", name: "Alaska check-in", airline: "Alaska", airlineIataCode: "AS", doorLabel: "Door 24", minZoomToShow: 15 },
+  { id: "poi-checkin-dl", nodeId: "checkin-center", category: "checkin", name: "Delta check-in", airline: "Delta", airlineIataCode: "DL", doorLabel: "Door 12", minZoomToShow: 15 },
+  { id: "poi-checkin-ua", nodeId: "checkin-center", category: "checkin", name: "United check-in", airline: "United", airlineIataCode: "UA", doorLabel: "Door 12", minZoomToShow: 15 },
+  { id: "poi-checkin-ac", nodeId: "checkin-south", category: "checkin", name: "Air Canada check-in", airline: "Air Canada", airlineIataCode: "AC", doorLabel: "Door 4", minZoomToShow: 15.2 },
+  { id: "poi-checkin-ek", nodeId: "checkin-south", category: "checkin", name: "Emirates check-in", airline: "Emirates", airlineIataCode: "EK", doorLabel: "Door 4", minZoomToShow: 15.2 },
+  { id: "poi-checkin-gen", nodeId: "checkin-center", category: "checkin", name: "Check-in & bag drop", doorLabel: "Doors 12–14" },
   {
     id: "poi-sec3",
     nodeId: "sec3-entry",
@@ -221,7 +242,7 @@ const POIS: PoiDefinition[] = [
 export const SEA_LAYOUT: AirportLayout = {
   iata: "SEA",
   name: "Seattle–Tacoma International",
-  layoutVersion: "0.4.1-verified-anchors",
+  layoutVersion: "0.5.0-ground-truth-doors",
   updatedAt: "2026-07-14",
   center: [-122.30209, 47.44328],
   zones: ZONES,
