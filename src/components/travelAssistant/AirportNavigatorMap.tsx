@@ -87,37 +87,11 @@ const PATH_WARM_BRIGHT = "#60a5fa";
  * scale (M17). Idempotent so the load-race retry loop can call it repeatedly.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function installAirportLayoutLayers(map: any, lay: AirportLayout): void {
-  if (!map.isStyleLoaded() || map.getSource("kepi-zones")) return;
+function installAirportLayoutLayers(map: any): void {
+  if (!map.isStyleLoaded() || map.getSource("kepi-route")) return;
 
-  const zoneFeatures = lay.zones.map((zone) => ({
-    type: "Feature" as const,
-    properties: { airside: zone.airside ? 1 : 0, name: zone.name },
-    geometry: { type: "Polygon" as const, coordinates: [zone.ring] },
-  }));
-  map.addSource("kepi-zones", { type: "geojson", data: { type: "FeatureCollection", features: zoneFeatures } });
-  // Faint tint + crisp outline so travelers can see which building is theirs,
-  // without hiding the real OSM map underneath.
-  map.addLayer({
-    id: "kepi-zones-fill",
-    type: "fill",
-    source: "kepi-zones",
-    paint: {
-      "fill-color": ["case", ["==", ["get", "airside"], 1], "#38bdf8", "#2563eb"],
-      "fill-opacity": 0.1,
-    },
-  });
-  map.addLayer({
-    id: "kepi-zones-outline",
-    type: "line",
-    source: "kepi-zones",
-    paint: {
-      "line-color": "#2563eb",
-      "line-width": 1.6,
-      "line-opacity": 0.55,
-    },
-  });
-
+  // No terminal "boxes": the real OSM basemap already draws every building to
+  // scale (M17). We only overlay the walking route + POI markers on top.
   map.addSource("kepi-route", {
     type: "geojson",
     lineMetrics: true,
@@ -1507,8 +1481,8 @@ export function AirportNavigatorMap({
     const finalizeMap = (map: import("maplibre-gl").Map) => {
       if (disposed || layersInstalled) return;
       try {
-        installAirportLayoutLayers(map, layout);
-        if (!map.getSource("kepi-zones")) return;
+        installAirportLayoutLayers(map);
+        if (!map.getSource("kepi-route")) return;
         layersInstalled = true;
         if (loadRetryTimer !== null) {
           window.clearInterval(loadRetryTimer);
@@ -1699,28 +1673,6 @@ export function AirportNavigatorMap({
           (objective === "lounge" && poi.category === "lounge");
         const eligibleLounge = poi.category === "lounge" && loungeIsEligible(poi.name, eligibleLoungeNames);
 
-        const bubble = document.createElement("button");
-        bubble.type = "button";
-        bubble.setAttribute("aria-label", `Navigate to ${poi.name}`);
-        bubble.style.cssText = [
-          "display:flex;align-items:center;gap:5px;",
-          "padding:5px 10px;border-radius:9999px;cursor:pointer;",
-          "font:600 11px system-ui,-apple-system,sans-serif;white-space:nowrap;",
-          "backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);",
-          critical
-            ? "background:rgba(220,38,38,0.92);color:#fff;border:1px solid #fca5a5;"
-            : urgent
-            ? "background:rgba(245,158,11,0.92);color:#1f2937;border:1px solid #fde68a;"
-            : isGateBubble
-            ? "background:rgba(255,255,255,0.95);color:#0b1f3a;border:2px solid #f4c95d;"
-            : eligibleLounge
-            ? "background:rgba(236,253,245,0.95);color:#065f46;border:1.5px solid #34d399;"
-            : "background:rgba(255,255,255,0.82);color:#1e293b;border:1px solid rgba(255,255,255,0.5);",
-          isObjective && !isGateBubble ? "outline:2px solid #f4c95d;outline-offset:1px;" : "",
-          isSelected ? "outline:3px solid #38bdf8;outline-offset:2px;transform:scale(1.1);z-index:5;" : "",
-          "box-shadow:0 4px 14px rgba(0,0,0,0.35);",
-          critical || urgent ? "animation:kepiPulse 1.6s ease-in-out infinite;" : "",
-        ].join("");
         const gateLabel = isGateBubble && gateCode ? `Gate ${gateCode.toUpperCase()}` : poi.name;
         const countdown = isGateBubble && minutesRounded > 0 && minutesRounded < 600 ? ` · ${minutesRounded}m` : "";
         const accessMark = eligibleLounge ? " ✓" : "";
@@ -1730,10 +1682,54 @@ export function AirportNavigatorMap({
               .map((lane) => lane === "precheck" ? "PreCheck" : lane === "clear" ? "CLEAR" : lane)
               .join(" · ")
           : "";
-        bubble.textContent = `${POI_ICON[poi.category]} ${gateLabel}${countdown}${accessMark}${laneSummary ? ` · ${laneSummary}` : ""}`;
+
+        // Precise map label: a colored dot ON the exact coordinate + the name in
+        // haloed text (no box). Dot color encodes category / urgency.
+        const dotColor = critical
+          ? "#dc2626"
+          : urgent
+          ? "#f59e0b"
+          : isGateBubble
+          ? "#d97706"
+          : eligibleLounge
+          ? "#059669"
+          : POI_COLOR[poi.category];
+        const emphatic = isSelected || isGateBubble || isObjective;
+        const dotSize = isSelected ? 15 : emphatic ? 13 : 10;
+
+        const bubble = document.createElement("button");
+        bubble.type = "button";
+        bubble.setAttribute("aria-label", `Navigate to ${poi.name}`);
+        bubble.style.cssText = [
+          "display:flex;align-items:center;gap:5px;",
+          "background:transparent;border:none;padding:3px;cursor:pointer;",
+          "font:700 11px system-ui,-apple-system,sans-serif;white-space:nowrap;",
+          isSelected ? "z-index:6;" : "",
+        ].join("");
+
+        const dot = document.createElement("span");
+        dot.style.cssText = [
+          `width:${dotSize}px;height:${dotSize}px;flex:none;border-radius:9999px;`,
+          `background:${dotColor};border:2px solid #ffffff;`,
+          "box-shadow:0 1px 4px rgba(15,23,42,0.55);",
+          isSelected ? "outline:3px solid rgba(56,189,248,0.95);outline-offset:1px;" : "",
+          critical || urgent ? "animation:kepiPulse 1.6s ease-in-out infinite;" : "",
+        ].join("");
+
+        const label = document.createElement("span");
+        label.textContent = `${gateLabel}${countdown}${accessMark}${laneSummary ? ` · ${laneSummary}` : ""}`;
+        label.style.cssText = [
+          emphatic ? "color:#0f172a;font-weight:800;" : "color:#1f2937;font-weight:700;",
+          "text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff,0 1px 2px #fff,0 -1px 2px #fff,1px 0 2px #fff,-1px 0 2px #fff;",
+        ].join("");
+
+        bubble.appendChild(dot);
+        bubble.appendChild(label);
         bubble.addEventListener("click", () => handlePoiTap(poi.id));
 
-        const marker = new ml.Marker({ element: bubble, anchor: "bottom", offset: [0, -6] })
+        // Anchor "left" pins the dot exactly on the coordinate; the name reads to
+        // its right like a real map label.
+        const marker = new ml.Marker({ element: bubble, anchor: "left" })
           .setLngLat(pos as [number, number])
           .addTo(map);
         poiMarkersRef.current[poi.id] = marker;
