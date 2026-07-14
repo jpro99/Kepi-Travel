@@ -134,6 +134,48 @@ function installAirportLayoutLayers(map: any): void {
       ],
     },
   });
+
+  // Train legs (underground people-mover to the N/S satellites) drawn distinctly
+  // ON TOP of the walking line as a dashed violet ribbon, so a long straight
+  // segment across the airfield reads as "ride the train," not "walk across the
+  // taxiways" (owner: the straight line looked like it walked you across). The
+  // base route line stays continuous underneath; this just recolors the train
+  // hops. Kept a separate source so the walking gradient is untouched.
+  map.addSource("kepi-route-train", {
+    type: "geojson",
+    data: { type: "FeatureCollection", features: [] },
+  });
+  map.addLayer({
+    id: "kepi-route-train-line",
+    type: "line",
+    source: "kepi-route-train",
+    layout: { "line-cap": "butt", "line-join": "round" },
+    paint: {
+      "line-color": "#7c3aed",
+      "line-width": 7,
+      "line-opacity": 0.95,
+      "line-dasharray": [1.4, 1.1],
+    },
+  });
+}
+
+/**
+ * The train (people-mover) hops along a route, as separate line segments, so
+ * they can be drawn distinctly from the walking line. Each hop is the [from,to]
+ * coordinate pair of a `train` edge on the path.
+ */
+function trainSegmentsFromNodeIds(layout: AirportLayout, nodeIds: string[]): [number, number][][] {
+  if (nodeIds.length < 2) return [];
+  const pos = new Map(layout.nodes.map((node) => [node.id, node.pos]));
+  const segments: [number, number][][] = [];
+  for (let i = 0; i < nodeIds.length - 1; i += 1) {
+    const edge = findEdgeBetween(layout, nodeIds[i], nodeIds[i + 1]);
+    if (edge?.kind !== "train") continue;
+    const a = pos.get(nodeIds[i]);
+    const b = pos.get(nodeIds[i + 1]);
+    if (a && b) segments.push([a, b]);
+  }
+  return segments;
 }
 
 function findEdgeBetween(layout: AirportLayout, fromId: string, toId: string): GraphEdge | null {
@@ -1029,7 +1071,7 @@ export function AirportNavigatorMap({
   // The connected "here's your whole path" line: drop-off → check-in → security
   // → lounge → your gate, chained leg-by-leg along the real walkway graph. Stops
   // at the first unknown stop (e.g. gate not yet assigned).
-  const journeyRoute = useMemo<[number, number][] | null>(() => {
+  const journeyRoute = useMemo<{ coords: [number, number][]; nodeIds: string[] } | null>(() => {
     if (!layout) return null;
     // In preview (pre-trip) draw only the get-through-the-door path
     // (drop-off → check-in → security); the full airside line to lounge/gate is
@@ -1039,6 +1081,7 @@ export function AirportNavigatorMap({
     const startId = stops[0]?.nodeId;
     if (!startId) return null;
     const coords: [number, number][] = [];
+    const nodeIds: string[] = [];
     let fromNodeId = startId;
     for (let i = 1; i < stops.length; i += 1) {
       const stop = stops[i];
@@ -1054,8 +1097,10 @@ export function AirportNavigatorMap({
       if (!leg || leg.coordinates.length === 0) continue;
       const legCoords = coords.length > 0 ? leg.coordinates.slice(1) : leg.coordinates;
       coords.push(...legCoords);
+      const legNodes = nodeIds.length > 0 ? leg.nodeIds.slice(1) : leg.nodeIds;
+      nodeIds.push(...legNodes);
     }
-    return coords.length > 1 ? coords : null;
+    return coords.length > 1 ? { coords, nodeIds } : null;
   }, [layout, journey, previewMode, credentials, navCalibration]);
 
   /* ── Routing ────────────────────────────────────────────────────────── */
@@ -1719,12 +1764,15 @@ export function AirportNavigatorMap({
     if (!map || !mapReady) return;
     const source = map.getSource("kepi-route");
     if (!source) return;
+    const trainSource = map.getSource("kepi-route-train");
     // A tapped destination wins; otherwise draw the whole trip journey line so
     // the traveler always sees their path (drop-off → check-in → security →
     // lounge → gate) without having to guess.
-    const line = activeRoute?.coordinates ?? journeyRoute;
+    const line = activeRoute?.coordinates ?? journeyRoute?.coords ?? null;
+    const routeNodeIds = activeRoute?.nodeIds ?? journeyRoute?.nodeIds ?? [];
     if (!line || line.length < 2) {
       source.setData({ type: "FeatureCollection", features: [] });
+      trainSource?.setData({ type: "FeatureCollection", features: [] });
       return;
     }
     source.setData({
@@ -1732,6 +1780,16 @@ export function AirportNavigatorMap({
       properties: {},
       geometry: { type: "LineString", coordinates: line },
     });
+    // Overlay the train hops distinctly (dashed violet) so a straight cross-field
+    // segment reads as the people-mover ride, not a walk.
+    if (trainSource && layout) {
+      const trainSegs = trainSegmentsFromNodeIds(layout, routeNodeIds);
+      trainSource.setData(
+        trainSegs.length > 0
+          ? { type: "Feature", properties: {}, geometry: { type: "MultiLineString", coordinates: trainSegs } }
+          : { type: "FeatureCollection", features: [] },
+      );
+    }
 
     let progress = 0;
     if (activeRoute && snapped) {
@@ -1759,7 +1817,7 @@ export function AirportNavigatorMap({
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRoute, journeyRoute, mapReady, snapped?.nearestNodeId]);
+  }, [activeRoute, journeyRoute, mapReady, snapped?.nearestNodeId, layout]);
 
   /* ── POI bubble markers ─────────────────────────────────────────────── */
   useEffect(() => {
@@ -1848,9 +1906,16 @@ export function AirportNavigatorMap({
           critical || urgent ? "animation:kepiPulse 1.6s ease-in-out infinite;" : "",
         ].join("");
 
-        // De-clutter: reference POIs show a dot only, except reference gates keep
-        // a faint concourse letter so the piers stay identifiable.
-        const showLabel = !isReference || poi.category === "gate";
+        // De-clutter: reference POIs show a dot only, EXCEPT reference gates keep
+        // a faint concourse letter, and check-in counters + amenities always keep
+        // their name/logo — they're zoom-gated (M22) so they only appear once
+        // you're zoomed into the hall, and at that point the whole point is to
+        // read which airline / what amenity each counter is (owner: "put all of
+        // them on there"). Without this, every non-your-airline counter collapsed
+        // to a nameless grey dot and looked like nothing was there.
+        const labelledReference = poi.category === "gate" || poi.category === "checkin" || poi.category === "amenity";
+        const showLabel = !isReference || labelledReference;
+        const showBrand = !isReference || poi.category === "checkin";
         bubble.appendChild(dot);
         if (showLabel) {
           // Airline branding on a real counter (M22): Duffel's brand-compliant
@@ -1865,7 +1930,7 @@ export function AirportNavigatorMap({
             chip.style.cssText = "flex:none;padding:1px 4px;border-radius:4px;background:#1d4ed8;color:#fff;font:800 9px system-ui,-apple-system,sans-serif;letter-spacing:0.3px;box-shadow:0 1px 3px rgba(15,23,42,0.35);";
             return chip;
           };
-          if (!isReference && logoSrc) {
+          if (showBrand && logoSrc) {
             const img = document.createElement("img");
             img.src = logoSrc;
             img.alt = poi.airline ? `${poi.airline} logo` : "airline logo";
@@ -1875,7 +1940,7 @@ export function AirportNavigatorMap({
               else img.remove();
             });
             bubble.appendChild(img);
-          } else if (!isReference && iataChip) {
+          } else if (showBrand && iataChip) {
             bubble.appendChild(makeIataChip());
           }
           const doorSuffix = poi.doorLabel ? ` · ${poi.doorLabel}` : "";

@@ -19,9 +19,9 @@ export const POI_ZOOM_TIER: Record<PoiCategory, number> = {
   train: 13.5,
   lounge: 14,
   baggage: 14,
-  checkin: 15,
+  checkin: 14.4,
   restroom: 15.5,
-  amenity: 15.5,
+  amenity: 15,
 };
 
 export function poiMinZoom(poi: PoiDefinition): number {
