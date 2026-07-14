@@ -12,10 +12,10 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AirportLayout, ComputedRoute, GraphEdge, PoiDefinition, SnappedPosition, TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
-import { buildTripJourney, journeyPoiIds, type JourneyStop } from "@/lib/airportNav/tripJourney";
+import { buildTripJourney, journeyPoiIds, preSecurityJourney, type JourneyStop } from "@/lib/airportNav/tripJourney";
 import { poiMinZoom, airlineLogoAsset } from "@/lib/airportNav/poiDetail";
 import { computeDirectionArrow, confirmedSnappedPosition } from "@/lib/airportNav/directionArrow";
-import { computeLayoutBounds } from "@/lib/airportNav/layoutBounds";
+import { computeLayoutBounds, computeLandsideBounds } from "@/lib/airportNav/layoutBounds";
 import { buildAirportSchematicModel } from "@/lib/airportNav/schematic";
 import type { JourneyWaypointEvent, NavTimingCalibrationStore } from "@/lib/airportNav/navTimingCalibration";
 import { loadNavTimingCalibrationStore, recordJourneyWaypointPair } from "@/lib/airportNav/navJourneyTelemetry";
@@ -1028,13 +1028,18 @@ export function AirportNavigatorMap({
   // → lounge → your gate, chained leg-by-leg along the real walkway graph. Stops
   // at the first unknown stop (e.g. gate not yet assigned).
   const journeyRoute = useMemo<[number, number][] | null>(() => {
-    if (!layout || journey.length < 2) return null;
-    const startId = journey[0]?.nodeId;
+    if (!layout) return null;
+    // In preview (pre-trip) draw only the get-through-the-door path
+    // (drop-off → check-in → security); the full airside line to lounge/gate is
+    // drawn at the airport / once the gate is assigned (M24).
+    const stops = previewMode ? preSecurityJourney(journey) : journey;
+    if (stops.length < 2) return null;
+    const startId = stops[0]?.nodeId;
     if (!startId) return null;
     const coords: [number, number][] = [];
     let fromNodeId = startId;
-    for (let i = 1; i < journey.length; i += 1) {
-      const stop = journey[i];
+    for (let i = 1; i < stops.length; i += 1) {
+      const stop = stops[i];
       if (!stop.known || !stop.poiId || !stop.nodeId) break;
       const leg = computeRoute({
         layout,
@@ -1049,7 +1054,7 @@ export function AirportNavigatorMap({
       coords.push(...legCoords);
     }
     return coords.length > 1 ? coords : null;
-  }, [layout, journey, credentials, navCalibration]);
+  }, [layout, journey, previewMode, credentials, navCalibration]);
 
   /* ── Routing ────────────────────────────────────────────────────────── */
   const startRoute = useCallback(
@@ -1568,8 +1573,10 @@ export function AirportNavigatorMap({
         }
         setMapReady(true);
         // Frame the actual terminal footprint. Real OSM-derived layouts are
-        // irregular and off-centre, so a fixed center+zoom crops them (M17).
-        const bounds = computeLayoutBounds(layout);
+        // irregular and off-centre, so a fixed center+zoom crops them (M17). In
+        // preview, frame just the main (landside) terminal where check-in +
+        // security are, not the whole airfield incl. satellites (M24).
+        const bounds = previewMode ? computeLandsideBounds(layout) : computeLayoutBounds(layout);
         window.requestAnimationFrame(() => {
           try {
             map.resize();

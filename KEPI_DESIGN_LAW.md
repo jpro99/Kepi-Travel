@@ -279,6 +279,11 @@ A node's real `[lng, lat]` IS its marker position on the live map — `AirportNa
 
 **Test:** `src/lib/airportNav/layouts/seaNodeContainment.test.ts`
 
+**M24 — Planning-mode preview shows the get-through-the-door path and frames the main terminal**
+Before the traveler is at the airport (planning/`previewMode`, gate usually pending), the journey line draws **only drop-off → check-in → security** (`preSecurityJourney`), not the full airside line to a lounge/gate — snaking a long line across the terminal to a lounge before arrival reads as a confusing spike toward the parking side, not a helpful path. The full journey line (through lounge → gate) is drawn at the airport / once the gate is assigned. The preview camera frames the **landside main terminal** (`computeLandsideBounds` — airside=false zones) where check-in and security are, not the whole airfield incl. satellites (which shrinks the terminal and pushes it off toward parking). Both helpers are pure/airport-agnostic so this holds for any layout. Do not draw the airside spur in preview; do not frame the whole airfield in preview.
+
+**Test:** `src/lib/airportNav/tripJourney.test.ts`, `src/lib/airportNav/layoutBounds.test.ts`
+
 ---
 
 ## ITINERARY LAWS

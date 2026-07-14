@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { computeLayoutBounds, layoutSpanMeters } from "./layoutBounds";
+import { computeLayoutBounds, computeLandsideBounds, layoutSpanMeters } from "./layoutBounds";
 import type { AirportLayout } from "./types";
 
 function layout(overrides: Partial<AirportLayout> = {}): AirportLayout {
@@ -76,6 +76,55 @@ test("computeLayoutBounds falls back to node positions when zones lack geometry"
 
 test("computeLayoutBounds returns null with no geometry at all", () => {
   assert.equal(computeLayoutBounds(layout({ zones: [], nodes: [] })), null);
+});
+
+test("computeLandsideBounds frames only the landside terminal, not airside satellites", () => {
+  const l = layout(); // z1 is airside
+  // Landside main terminal.
+  l.zones.push({
+    id: "z-main",
+    name: "Main Terminal",
+    ring: [
+      [-122.305, 47.442],
+      [-122.301, 47.442],
+      [-122.301, 47.446],
+      [-122.305, 47.446],
+      [-122.305, 47.442],
+    ],
+    airside: false,
+    heightM: 14,
+  });
+  // A far-north airside satellite that would blow up the full-layout bounds.
+  l.zones.push({
+    id: "z-sat",
+    name: "North Satellite",
+    ring: [
+      [-122.304, 47.49],
+      [-122.302, 47.49],
+      [-122.302, 47.492],
+      [-122.304, 47.492],
+      [-122.304, 47.49],
+    ],
+    airside: true,
+    heightM: 11,
+  });
+
+  const landside = computeLandsideBounds(l)!;
+  assert.equal(landside[0][0], -122.305);
+  assert.equal(landside[1][0], -122.301);
+  assert.equal(landside[0][1], 47.442);
+  assert.equal(landside[1][1], 47.446, "landside bounds must exclude the far-north satellite");
+
+  // And it is tighter than the full-airport bounds.
+  const full = computeLayoutBounds(l)!;
+  assert.ok(full[1][1] > landside[1][1], "full bounds reach the satellite; landside bounds do not");
+});
+
+test("computeLandsideBounds falls back to full bounds when no landside zone exists", () => {
+  const l = layout(); // only an airside zone
+  const landside = computeLandsideBounds(l)!;
+  const full = computeLayoutBounds(l)!;
+  assert.deepEqual(landside, full);
 });
 
 test("layoutSpanMeters reports a plausible terminal-scale span", () => {

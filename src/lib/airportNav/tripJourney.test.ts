@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { buildTripJourney, journeyPoiIds } from "./tripJourney";
+import { buildTripJourney, journeyPoiIds, preSecurityJourney } from "./tripJourney";
 import { SEA_LAYOUT } from "./layouts/sea";
 
 test("journey without a gate ends with a pending gate placeholder", () => {
@@ -61,4 +61,28 @@ test("journeyPoiIds returns every backing POI on the journey", () => {
   assert.ok(ids.has("poi-gate-C"));
   // The pending-gate placeholder (no poiId) contributes nothing.
   assert.ok(!ids.has(""));
+});
+
+test("preSecurityJourney keeps only drop-off → check-in → security for preview", () => {
+  const full = buildTripJourney(SEA_LAYOUT, {
+    airlineName: "Alaska",
+    gateCode: "C11",
+    eligibleLoungeNames: ["Alaska Lounge"],
+  });
+  // Full journey reaches the lounge + gate.
+  assert.ok(full.some((s) => s.role === "lounge"));
+  assert.ok(full.some((s) => s.role === "gate"));
+
+  const preview = preSecurityJourney(full);
+  assert.deepEqual(preview.map((s) => s.role), ["dropoff", "checkin", "security"]);
+  // No airside stop leaks into the preview slice (that caused the long spike).
+  assert.ok(!preview.some((s) => s.role === "lounge" || s.role === "gate"));
+});
+
+test("preSecurityJourney returns the whole slice when there is no security stop", () => {
+  const stops = preSecurityJourney([
+    { role: "dropoff", nodeId: "a", label: "Drop-off", known: true },
+    { role: "checkin", nodeId: "b", label: "Check-in", known: true },
+  ]);
+  assert.equal(stops.length, 2);
 });

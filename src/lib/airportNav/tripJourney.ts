@@ -204,3 +204,19 @@ export function buildTripJourney(
 export function journeyPoiIds(stops: JourneyStop[]): Set<string> {
   return new Set(stops.map((stop) => stop.poiId).filter((id): id is string => Boolean(id)));
 }
+
+/**
+ * The pre-trip / preview slice of the journey: stops up to and including
+ * security. Before the traveler is at the airport (and before a gate is
+ * assigned) drawing the full airside line all the way to a lounge/gate snakes a
+ * long, confusing spike across the terminal; the useful preview is the
+ * get-through-the-front-door path (drop-off → check-in → security). See M24.
+ */
+export function preSecurityJourney(stops: JourneyStop[]): JourneyStop[] {
+  const out: JourneyStop[] = [];
+  for (const stop of stops) {
+    out.push(stop);
+    if (stop.role === "security") break;
+  }
+  return out;
+}

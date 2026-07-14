@@ -38,6 +38,37 @@ export function computeLayoutBounds(layout: AirportLayout): LngLatBounds | null 
   ];
 }
 
+/**
+ * Bounds of the landside terminal building(s) only (airside === false zones).
+ * Used to frame the preview camera on the main terminal — where check-in and
+ * security are — instead of the whole airfield (which shrinks the terminal and
+ * pushes it off toward the parking/satellites). Falls back to the full layout
+ * bounds when a layout has no explicit landside zone. See M24.
+ */
+export function computeLandsideBounds(layout: AirportLayout): LngLatBounds | null {
+  let west = Infinity;
+  let south = Infinity;
+  let east = -Infinity;
+  let north = -Infinity;
+
+  for (const zone of layout.zones) {
+    if (zone.airside) continue;
+    for (const [lng, lat] of zone.ring) {
+      if (!Number.isFinite(lng) || !Number.isFinite(lat)) continue;
+      if (lng < west) west = lng;
+      if (lng > east) east = lng;
+      if (lat < south) south = lat;
+      if (lat > north) north = lat;
+    }
+  }
+
+  if (west === Infinity) return computeLayoutBounds(layout);
+  return [
+    [west, south],
+    [east, north],
+  ];
+}
+
 /** Approximate span of the layout in meters (max of width/height). */
 export function layoutSpanMeters(bounds: LngLatBounds): number {
   const [[west, south], [east, north]] = bounds;
