@@ -1458,9 +1458,11 @@ export function AirportNavigatorMap({
 
   /* ── Map init (dark schematic canvas, no remote style) ──────────────── */
   useEffect(() => {
-    // Planning mode is intentionally SVG-only: it must work without WebGL,
-    // MapTiler, or a second map competing with the family map's old context.
-    if (previewMode || !mapEl.current || mapRef.current || !layout) return;
+    // The live 3D map renders in BOTH planning and at-airport so the two views
+    // feel identical. It uses a basemap-free style (no MapTiler), and if WebGL
+    // is unavailable the schematic below is the automatic fallback (mapReady
+    // never flips true), so no device is left with a blank screen.
+    if (!mapEl.current || mapRef.current || !layout) return;
     let disposed = false;
     let layersInstalled = false;
     let unbindResize: (() => void) | null = null;
@@ -1568,7 +1570,7 @@ export function AirportNavigatorMap({
       userMarkerRef.current = null;
       setMapReady(false);
     };
-  }, [layout, previewMode]);
+  }, [layout]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1970,9 +1972,9 @@ export function AirportNavigatorMap({
 @keyframes kepiBeacon{0%{transform:scale(0.6);opacity:0.9}100%{transform:scale(1.9);opacity:0}}`}</style>
       <div
         ref={mapEl}
-        className={`absolute inset-0 transition-opacity ${previewMode || !mapReady ? "pointer-events-none opacity-0" : "opacity-100"}`}
+        className={`absolute inset-0 transition-opacity ${!mapReady ? "pointer-events-none opacity-0" : "opacity-100"}`}
       />
-      {layout && (previewMode || !mapReady) ? (
+      {layout && !mapReady ? (
         <AirportSchematicLayer
           layout={layout}
           activeRoute={activeRoute}

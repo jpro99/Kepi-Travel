@@ -183,7 +183,7 @@ test.describe("SEA day-of-travel", () => {
     await expect(page.getByRole("button", { name: /Airport/i })).toHaveClass(/bg-white/);
   });
 
-  test("planning mode renders SEA without MapTiler or WebGL", async ({ page }) => {
+  test("planning mode renders the SEA indoor map without MapTiler", async ({ page }) => {
     const mapTilerRequests: string[] = [];
     await page.setViewportSize({ width: 390, height: 844 });
     page.on("request", (request) => {
@@ -197,12 +197,15 @@ test.describe("SEA day-of-travel", () => {
     await page.goto("/travel-assistant/live-map?view=airport", { waitUntil: "domcontentloaded" });
 
     const mapHost = page.getByTestId("airport-nav-indoor-map");
-    const schematic = page.getByTestId("airport-nav-schematic");
     await expect(mapHost).toBeVisible({ timeout: 30_000 });
-    await expect(schematic).toBeVisible({ timeout: 30_000 });
-    await expect(schematic).toHaveAttribute("data-zone-count", "8");
+    // Planning now shows the SAME indoor map as at-airport: the real 3D
+    // footprint when WebGL is available, with the SVG schematic as an automatic
+    // fallback. Either path renders inside the map host — we assert behaviour,
+    // not which renderer won, but MapTiler must never be requested (basemap-free).
     await expect(page.getByText("Preview starts at terminal entrance", { exact: true })).toBeVisible();
     await expect(page.getByText(/Gate assignment pending/i)).toBeVisible();
+
+    // The destination rail behaves identically in both views.
     await expect(page.getByRole("button", { name: /Navigate to Alaska check-in/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /Navigate to Alaska Lounge/i })).toHaveCount(0);
     await page.getByRole("button", { name: "Lounge" }).click();
@@ -212,12 +215,12 @@ test.describe("SEA day-of-travel", () => {
     const checkinBox = await checkinButton.boundingBox();
     expect(checkinBox?.height).toBeGreaterThanOrEqual(48);
     await checkinButton.click();
-    await expect(page.getByTestId("airport-nav-selected-label")).toBeVisible();
+    // Selecting a stop must persist (guards the "label vanishes on tap" regression).
+    await expect(checkinButton).toHaveAttribute("aria-pressed", "true");
     await expect(checkinButton).toBeVisible();
     await expect(page.getByRole("region", { name: "Route instructions" })).toContainText("Route preview");
     await expect(page.getByText(/Live step-by-step guidance starts when you arrive at SEA/i)).toBeVisible();
     await expect(page.getByRole("link", { name: "Open SEA live indoor directions" })).toBeVisible();
-    await expect(mapHost.locator("canvas")).toHaveCount(0);
     await expect(page.getByTestId("family-map-drawer")).toHaveCount(0);
 
     await page.waitForTimeout(1_500);
