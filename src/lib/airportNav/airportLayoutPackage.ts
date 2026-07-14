@@ -54,6 +54,12 @@ const AirportLayoutSchema = z.object({
     airline: z.string().trim().min(1).optional(),
     lanes: z.array(z.enum(["standard", "precheck", "clear", "clear_precheck", "priority"])).optional(),
     notes: z.string().trim().min(1).optional(),
+    // Zoom-tiered POI detail + airline branding + door labels (M22). All optional
+    // so existing curated packages remain valid unchanged.
+    minZoomToShow: z.number().finite().min(0).max(24).optional(),
+    airlineIataCode: z.string().trim().regex(/^[A-Za-z0-9]{2,3}$/).optional(),
+    logoUrl: z.string().trim().min(1).optional(),
+    doorLabel: z.string().trim().min(1).optional(),
   })).min(1),
   gateNodeResolver: z.array(z.object({
     prefix: z.string().trim().min(1),

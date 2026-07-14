@@ -83,6 +83,18 @@ export interface PoiDefinition {
   /** For security POIs: which lanes exist at this checkpoint. */
   lanes?: SecurityLaneType[];
   notes?: string;
+  /**
+   * Zoom level at/above which this POI's marker appears on the live map. When
+   * absent, a sensible per-category default applies (major anchors mid-zoom;
+   * counter-/door-level detail only once zoomed in close). See M22.
+   */
+  minZoomToShow?: number;
+  /** 2–3 char IATA carrier code used to resolve an airline logo / brand chip. */
+  airlineIataCode?: string;
+  /** Explicit, license-cleared logo asset path (overrides code resolution). */
+  logoUrl?: string;
+  /** Door number / named sub-label shown next to the name, e.g. "Door 7". */
+  doorLabel?: string;
 }
 
 export interface AirportLayout {

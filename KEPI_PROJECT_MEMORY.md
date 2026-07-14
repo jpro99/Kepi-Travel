@@ -266,6 +266,24 @@ Component map: `TripHealthStrip`, `dedupeConsumerReservations`, `DesktopTripHome
 - **Primary path remains:** Kepi's own curated `AirportPackage` schematic + credential-aware
   routing + linking to the airport's free public map page. This does not depend on Atrius.
 
+### Airport map POI detail — shipped + two deferred items (2026-07-14)
+
+- **Shipped (M22):** zoom-tiered POI visibility (counter-level detail reveals only when zoomed
+  in), `doorLabel` on counters/checkpoints, and airline branding on check-in counters via a
+  Kepi-generated **IATA code chip** with a real-logo swap-in path. SEA curated with per-airline
+  counters (AS/DL/UA/AC/EK), doors, and named checkpoints. Fields: `minZoomToShow`,
+  `airlineIataCode`, `logoUrl`, `doorLabel` on `PoiDefinition` (+ Zod). Curated per airport
+  through the existing admin JSON editor — no bulk auto-generator.
+- **Revisit later — real airline logo assets:** we ship the code chip today because logo image
+  licensing must be confirmed before committing binaries. When ready, source from airlines' own
+  brand/press kits or a license-clear icon set (NOT a map vendor's tiles), confirm terms, commit
+  under `public/airline-logos/{code}.svg`, and register the code in `AVAILABLE_AIRLINE_LOGOS`
+  (`poiDetail.ts`) — the UI swaps chip→logo automatically. Never hotlink.
+- **Revisit later — live security/checkpoint wait times:** explicitly NOT built (same posture as
+  VPS). This is a harder, honesty-sensitive feature that needs real Kepi traveler traffic through
+  an airport to estimate credibly. **Do not fabricate a number.** Do not build until there is
+  honest data to back it.
+
 ---
 
 ## Hotel product — built features

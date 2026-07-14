@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AirportLayout, ComputedRoute, GraphEdge, PoiDefinition, SnappedPosition, TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
 import { buildTripJourney, journeyPoiIds, type JourneyStop } from "@/lib/airportNav/tripJourney";
+import { poiMinZoom, airlineLogoAsset } from "@/lib/airportNav/poiDetail";
 import { computeDirectionArrow, confirmedSnappedPosition } from "@/lib/airportNav/directionArrow";
 import { computeLayoutBounds } from "@/lib/airportNav/layoutBounds";
 import { buildAirportSchematicModel } from "@/lib/airportNav/schematic";
@@ -188,6 +189,7 @@ function airportPoiIsVisible(
   airlineName: string | null,
   gatePoiId: string | null,
   hasAirlineCheckin: boolean,
+  zoom?: number,
 ): boolean {
   if (definition.category === "checkin") {
     if (definition.airline) {
@@ -197,6 +199,10 @@ function airportPoiIsVisible(
     }
   }
   if (definition.id === gatePoiId) return true;
+  // Zoom-tiered detail (M22): below a POI's tier it stays hidden until you zoom
+  // in. Only applied when a live zoom value is supplied (the map); the static
+  // rail/schematic lists pass no zoom and are unaffected.
+  if (typeof zoom === "number" && zoom < poiMinZoom(definition)) return false;
   if (mode === "essentials") return ["gate", "checkin", "security", "train"].includes(definition.category);
   if (mode === "lounges") return ["gate", "security", "train", "lounge"].includes(definition.category);
   return true;
@@ -545,7 +551,9 @@ function AirportSchematicLayer({
           const countdown = isGate && minutesToDeparture > 0 && minutesToDeparture < 600
             ? ` · ${Math.max(1, Math.round(minutesToDeparture))}m`
             : "";
-          const displayLabel = `${POI_ICON[definition.category]} ${label}${countdown}`;
+          const doorSuffix = definition.doorLabel ? ` · ${definition.doorLabel}` : "";
+          const logo = airlineLogoAsset(definition);
+          const displayLabel = `${POI_ICON[definition.category]} ${label}${countdown}${doorSuffix}`;
           const color = isGate ? "#d97706" : POI_COLOR[definition.category];
           const labelWidth = Math.min(38, Math.max(18, displayLabel.length * 1.02 + 6));
           const labelX = point.x >= 50
@@ -575,8 +583,18 @@ function AirportSchematicLayer({
                   strokeWidth="0.6"
                   filter="url(#kepi-terminal-shadow)"
                 />
+                {logo ? (
+                  <image
+                    href={logo}
+                    x={-labelWidth / 2 + 1.4}
+                    y={-2.6}
+                    width={5.2}
+                    height={5.2}
+                    preserveAspectRatio="xMidYMid meet"
+                  />
+                ) : null}
                 <text
-                  x="0"
+                  x={logo ? 3 : 0}
                   y="0.2"
                   fill="#1f2937"
                   fontSize="2"
@@ -740,6 +758,7 @@ export function AirportNavigatorMap({
   const mapRef = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const poiMarkersRef = useRef<Record<string, any>>({});
+  const zoomTierHandlerRef = useRef<(() => void) | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const userMarkerRef = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1746,10 +1765,14 @@ export function AirportNavigatorMap({
       const nodePos = new Map(layout.nodes.map((node) => [node.id, node.pos]));
       const selectedId = selectedPoiId ?? activeRoute?.toPoiId ?? null;
       for (const poi of layout.pois) {
-        if (poi.category === "checkin" && poi.airline && airlineName && !airlineName.toLowerCase().includes(poi.airline.toLowerCase())) {
-          continue;
-        }
-        if (poi.category === "checkin" && poi.airline && !airlineName) continue;
+        // Other airlines' check-in counters are NOT hidden — they are kept as
+        // zoom-gated reference detail (M22) so zooming into the check-in hall
+        // reveals every counter (Atrius-style), while the traveler's own counter
+        // stays emphasised via the journey set below.
+        const isAirlineCheckin = poi.category === "checkin" && Boolean(poi.airline);
+        const matchesAirline = isAirlineCheckin && airlineName
+          ? airlineName.toLowerCase().includes(poi.airline!.toLowerCase())
+          : false;
         const pos = nodePos.get(poi.nodeId);
         if (!pos) continue;
 
@@ -1781,7 +1804,7 @@ export function AirportNavigatorMap({
         // a small grey reference dot so nobody has to hunt (owner: "don't need
         // all the gates — highlight the ones the person is going to use").
         const isJourney = journeyPoiIdSet.has(poi.id);
-        const emphatic = isSelected || isGateBubble || isObjective || isJourney;
+        const emphatic = isSelected || isGateBubble || isObjective || isJourney || matchesAirline;
         const isReference = !emphatic;
 
         const dotColor = critical
@@ -1821,8 +1844,26 @@ export function AirportNavigatorMap({
         const showLabel = !isReference || poi.category === "gate";
         bubble.appendChild(dot);
         if (showLabel) {
+          // Airline branding on a real counter (M22): a license-cleared logo
+          // asset when one exists, otherwise a Kepi-generated IATA code chip —
+          // never a broken image, never blocking on a missing logo.
+          const logoSrc = airlineLogoAsset(poi);
+          const iataChip = poi.airlineIataCode?.toUpperCase();
+          if (!isReference && logoSrc) {
+            const img = document.createElement("img");
+            img.src = logoSrc;
+            img.alt = poi.airline ? `${poi.airline} logo` : "airline logo";
+            img.style.cssText = "height:14px;width:auto;flex:none;border-radius:3px;background:#fff;padding:1px;box-shadow:0 1px 3px rgba(15,23,42,0.35);";
+            bubble.appendChild(img);
+          } else if (!isReference && iataChip) {
+            const chip = document.createElement("span");
+            chip.textContent = iataChip;
+            chip.style.cssText = "flex:none;padding:1px 4px;border-radius:4px;background:#1d4ed8;color:#fff;font:800 9px system-ui,-apple-system,sans-serif;letter-spacing:0.3px;box-shadow:0 1px 3px rgba(15,23,42,0.35);";
+            bubble.appendChild(chip);
+          }
+          const doorSuffix = poi.doorLabel ? ` · ${poi.doorLabel}` : "";
           const label = document.createElement("span");
-          label.textContent = `${gateLabel}${countdown}${accessMark}${laneSummary ? ` · ${laneSummary}` : ""}`;
+          label.textContent = `${gateLabel}${countdown}${accessMark}${laneSummary ? ` · ${laneSummary}` : ""}${doorSuffix}`;
           label.style.cssText = [
             isReference
               ? "color:#64748b;font-weight:600;font-size:10px;"
@@ -1833,6 +1874,12 @@ export function AirportNavigatorMap({
         }
         bubble.addEventListener("click", () => handlePoiTap(poi.id));
 
+        // Zoom-tiered detail (M22): the tier at/above which this marker shows.
+        // Journey stops, the assigned gate, the selected POI and the traveler's
+        // own airline counter are always visible regardless of zoom.
+        bubble.dataset.minzoom = String(poiMinZoom(poi));
+        bubble.dataset.always = (isGateBubble || isSelected || isJourney || matchesAirline) ? "1" : "0";
+
         // Anchor "left" pins the dot exactly on the coordinate; the name reads to
         // its right like a real map label.
         const marker = new ml.Marker({ element: bubble, anchor: "left" })
@@ -1840,8 +1887,27 @@ export function AirportNavigatorMap({
           .addTo(map);
         poiMarkersRef.current[poi.id] = marker;
       }
+
+      // Apply zoom tiers now and whenever the user zooms — reveal counter-level
+      // detail up close, hide it when zoomed out (real airport-map behavior).
+      const applyZoomTiers = () => {
+        const z = map.getZoom();
+        for (const key of Object.keys(poiMarkersRef.current)) {
+          const el = poiMarkersRef.current[key].getElement() as HTMLElement;
+          const always = el.dataset.always === "1";
+          const mz = Number(el.dataset.minzoom ?? "0");
+          el.style.visibility = always || z >= mz ? "visible" : "hidden";
+        }
+      };
+      zoomTierHandlerRef.current = applyZoomTiers;
+      map.on("zoom", applyZoomTiers);
+      applyZoomTiers();
     });
     return () => {
+      if (zoomTierHandlerRef.current) {
+        try { mapRef.current?.off("zoom", zoomTierHandlerRef.current); } catch { /* map gone */ }
+        zoomTierHandlerRef.current = null;
+      }
       for (const key of Object.keys(poiMarkersRef.current)) {
         poiMarkersRef.current[key].remove();
       }

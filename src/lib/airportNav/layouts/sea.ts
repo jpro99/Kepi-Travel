@@ -173,16 +173,23 @@ const ZONES: TerminalZonePolygon[] = [
 ];
 
 const POIS: PoiDefinition[] = [
-  { id: "poi-checkin-as", nodeId: "checkin-south", category: "checkin", name: "Alaska check-in", airline: "Alaska" },
-  { id: "poi-checkin-dl", nodeId: "checkin-center", category: "checkin", name: "Delta check-in", airline: "Delta" },
-  { id: "poi-checkin-ua", nodeId: "checkin-center", category: "checkin", name: "United check-in", airline: "United" },
-  { id: "poi-checkin-gen", nodeId: "checkin-center", category: "checkin", name: "Check-in & bag drop" },
+  // Airline check-in counters — counter-level detail (M22): each carries its
+  // real counter door and IATA code (for a logo/brand chip). minZoomToShow keeps
+  // them out of the zoomed-out view; they reveal as you zoom into the ticketing
+  // hall, Atrius-style. Physical layout facts are hand-curated Kepi data.
+  { id: "poi-checkin-as", nodeId: "checkin-south", category: "checkin", name: "Alaska check-in", airline: "Alaska", airlineIataCode: "AS", doorLabel: "Door 1", minZoomToShow: 15 },
+  { id: "poi-checkin-dl", nodeId: "checkin-center", category: "checkin", name: "Delta check-in", airline: "Delta", airlineIataCode: "DL", doorLabel: "Door 3", minZoomToShow: 15 },
+  { id: "poi-checkin-ua", nodeId: "checkin-center", category: "checkin", name: "United check-in", airline: "United", airlineIataCode: "UA", doorLabel: "Door 3", minZoomToShow: 15 },
+  { id: "poi-checkin-ac", nodeId: "checkin-north", category: "checkin", name: "Air Canada check-in", airline: "Air Canada", airlineIataCode: "AC", doorLabel: "Door 5", minZoomToShow: 15.2 },
+  { id: "poi-checkin-ek", nodeId: "checkin-north", category: "checkin", name: "Emirates check-in", airline: "Emirates", airlineIataCode: "EK", doorLabel: "Door 5", minZoomToShow: 15.2 },
+  { id: "poi-checkin-gen", nodeId: "checkin-center", category: "checkin", name: "Check-in & bag drop", doorLabel: "Doors 2–4" },
   {
     id: "poi-sec3",
     nodeId: "sec3-entry",
     category: "security",
     name: "Security — Checkpoint 3",
     lanes: ["standard", "precheck"],
+    doorLabel: "TSA PreCheck",
     notes: "PreCheck is normally available; checkpoint services can change with TSA operations.",
   },
   {
@@ -191,6 +198,7 @@ const POIS: PoiDefinition[] = [
     category: "security",
     name: "Security — Checkpoint 5",
     lanes: ["standard", "precheck"],
+    doorLabel: "TSA PreCheck",
   },
   { id: "poi-gate-A", nodeId: "gate-A", category: "gate", name: "A Gates" },
   { id: "poi-gate-B", nodeId: "gate-B", category: "gate", name: "B Gates" },
@@ -210,7 +218,7 @@ const POIS: PoiDefinition[] = [
 export const SEA_LAYOUT: AirportLayout = {
   iata: "SEA",
   name: "Seattle–Tacoma International",
-  layoutVersion: "0.3.0-trip-journey",
+  layoutVersion: "0.4.0-counter-detail",
   updatedAt: "2026-07-14",
   center: [-122.30209, 47.44328],
   zones: ZONES,
