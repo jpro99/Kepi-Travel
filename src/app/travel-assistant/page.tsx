@@ -2663,6 +2663,44 @@ export default function TravelAssistantPage() {
     setToastRaw(normalized);
   }, []);
 
+  // Auto-apply new deploys. This is a PWA (next-pwa service worker) whose SW
+  // skipWaiting()+clients.claim() so a freshly-built worker activates and takes
+  // control immediately — but without this, the *already-open page* keeps
+  // running the old JS bundle until a manual cache clear, which is why shipped
+  // changes looked like "nothing changed yet". When the controller changes to a
+  // new worker we reload once (guarded against loops and the first-install
+  // controllerchange), and we proactively poll for a new worker on load and when
+  // the tab is refocused so a fresh deploy is picked up promptly.
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+    const sw = navigator.serviceWorker;
+    const hadControllerAtMount = Boolean(sw.controller);
+    let reloading = false;
+    const onControllerChange = (): void => {
+      if (reloading) return;
+      // First-ever SW install (no prior controller): the page is already running
+      // the fresh bundle, so a reload would be a pointless flash. Only reload when
+      // an existing controlled page gets a NEW worker (i.e. a real deploy).
+      if (!hadControllerAtMount) return;
+      reloading = true;
+      setToast("Updated to the latest version…", { force: true, tone: "subtle" });
+      window.setTimeout(() => window.location.reload(), 600);
+    };
+    sw.addEventListener("controllerchange", onControllerChange);
+    const checkForUpdate = (): void => {
+      void sw.getRegistration().then((reg) => reg?.update()).catch(() => undefined);
+    };
+    checkForUpdate();
+    const onVisibility = (): void => {
+      if (document.visibilityState === "visible") checkForUpdate();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      sw.removeEventListener("controllerchange", onControllerChange);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [setToast]);
+
   useEffect(() => {
     let cancelled = false;
     const loadAdvancedModePreference = async (): Promise<void> => {
