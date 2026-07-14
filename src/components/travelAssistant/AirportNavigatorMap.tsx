@@ -76,14 +76,14 @@ interface AirportNavigatorMapProps {
 }
 
 const COLOR = {
-  canvas: "#0b1f3a",
-  landside: "#27405f",
-  airside: "#1d3557",
+  canvas: "#eef1f5",
+  landside: "#dbe2ea",
+  airside: "#e7eef5",
 };
 
-const PATH_DIM = "#3b4f6b";
-const PATH_WARM = "#f4c95d";
-const PATH_WARM_BRIGHT = "#ffe29a";
+const PATH_DIM = "#c3ccd7";
+const PATH_WARM = "#2563eb";
+const PATH_WARM_BRIGHT = "#60a5fa";
 
 /** Schematic terminal zones, walkways, and route layers — idempotent for load-race retries. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -124,9 +124,9 @@ function installAirportLayoutLayers(map: any, lay: AirportLayout): void {
     type: "line",
     source: "kepi-walkways",
     paint: {
-      "line-color": ["case", ["==", ["get", "train"], 1], "#5a7ba6", "#33507a"],
+      "line-color": ["case", ["==", ["get", "train"], 1], "#94a3b8", "#b7c1cd"],
       "line-width": 2,
-      "line-opacity": 0.55,
+      "line-opacity": 0.8,
       "line-dasharray": [1, 2],
     },
   });
@@ -184,6 +184,31 @@ const POI_ICON: Record<PoiDefinition["category"], string> = {
   train: "🚈",
   baggage: "🎒",
 };
+
+/** Category accent colors for the light "floor-plan" schematic (flysea-style). */
+const POI_COLOR: Record<PoiDefinition["category"], string> = {
+  gate: "#d97706",
+  checkin: "#2563eb",
+  security: "#e11d48",
+  lounge: "#059669",
+  restroom: "#64748b",
+  train: "#7c3aed",
+  baggage: "#b45309",
+};
+
+/** Light floor-plan palette — shared by the SVG schematic and the 3D map. */
+const LIGHT_MAP = {
+  canvas: "#eef1f5",
+  landsideFill: "#e2e7ee",
+  airsideFill: "#eef3f8",
+  buildingStroke: "#b7c1cd",
+  zoneLabel: "#334155",
+  corridor: "#c3ccd7",
+  train: "#94a3b8",
+  route: "#2563eb",
+  routeGlow: "#93c5fd",
+  user: "#2563eb",
+} as const;
 
 type AirportDetailMode = "essentials" | "lounges" | "all";
 
@@ -381,47 +406,55 @@ function AirportSchematicLayer({
     <div
       data-testid="airport-nav-schematic"
       data-zone-count={model.zones.length}
-      className="absolute inset-0 z-[1] overflow-hidden bg-[#0b1f3a]"
+      className="absolute inset-0 z-[1] overflow-hidden"
+      style={{ backgroundColor: LIGHT_MAP.canvas }}
     >
       <svg
-        aria-label={`${layout.iata} terminal schematic`}
+        aria-label={`${layout.iata} terminal floor plan`}
         className="absolute inset-0 h-full w-full"
         viewBox="0 0 100 100"
         preserveAspectRatio="xMidYMid meet"
       >
         <defs>
           <filter id="kepi-terminal-shadow" x="-30%" y="-30%" width="160%" height="160%">
-            <feDropShadow dx="0" dy="1.2" stdDeviation="1.2" floodColor="#020617" floodOpacity="0.65" />
+            <feDropShadow dx="0" dy="0.5" stdDeviation="0.6" floodColor="#334155" floodOpacity="0.28" />
           </filter>
-          <linearGradient id="kepi-terminal-route" x1="0" x2="1">
-            <stop offset="0" stopColor={PATH_WARM} />
-            <stop offset="1" stopColor={PATH_WARM_BRIGHT} />
-          </linearGradient>
         </defs>
 
+        {/* Terminal + concourse footprints — light floor-plan fills */}
         {model.zones.map((zone) => (
           <g key={zone.id}>
             <polygon
               points={zone.points.map((point) => `${point.x},${point.y}`).join(" ")}
-              fill={zone.airside ? "#36577e" : "#496680"}
-              stroke={zone.airside ? "#7ea5cc" : "#8ca5bb"}
-              strokeWidth="0.45"
+              fill={zone.airside ? LIGHT_MAP.airsideFill : LIGHT_MAP.landsideFill}
+              stroke={LIGHT_MAP.buildingStroke}
+              strokeWidth="0.5"
+              strokeLinejoin="round"
               filter="url(#kepi-terminal-shadow)"
             />
-            <text
-              x={zone.label.x}
-              y={zone.label.y}
-              fill="#dbeafe"
-              fontSize="2.05"
-              fontWeight="700"
-              textAnchor="middle"
-              dominantBaseline="middle"
-            >
-              {zone.name}
-            </text>
           </g>
         ))}
 
+        {/* Concourse names — dark text with a soft white halo for legibility */}
+        {model.zones.map((zone) => (
+          <text
+            key={`${zone.id}-label`}
+            x={zone.label.x}
+            y={zone.label.y}
+            fill={LIGHT_MAP.zoneLabel}
+            fontSize="2.1"
+            fontWeight="700"
+            textAnchor="middle"
+            dominantBaseline="middle"
+            stroke="#ffffff"
+            strokeWidth="0.7"
+            style={{ paintOrder: "stroke" }}
+          >
+            {zone.name}
+          </text>
+        ))}
+
+        {/* Corridors / walkways */}
         {model.walkways.map((walkway) => (
           <line
             key={walkway.id}
@@ -429,8 +462,8 @@ function AirportSchematicLayer({
             y1={walkway.from.y}
             x2={walkway.to.x}
             y2={walkway.to.y}
-            stroke={walkway.train ? "#9cc5ef" : "#7b9fc7"}
-            strokeWidth={walkway.train ? "1.1" : "0.7"}
+            stroke={walkway.train ? LIGHT_MAP.train : LIGHT_MAP.corridor}
+            strokeWidth={walkway.train ? "1" : "0.65"}
             strokeDasharray={walkway.train ? "1.5 1" : undefined}
             strokeLinecap="round"
             opacity="0.9"
@@ -442,18 +475,18 @@ function AirportSchematicLayer({
             <polyline
               points={routePoints}
               fill="none"
-              stroke="#f4c95d"
-              strokeWidth="6"
+              stroke={LIGHT_MAP.routeGlow}
+              strokeWidth="5"
               strokeLinecap="round"
               strokeLinejoin="round"
-              opacity="0.2"
+              opacity="0.5"
             />
             <polyline
               data-testid="airport-nav-schematic-route"
               points={routePoints}
               fill="none"
-              stroke="url(#kepi-terminal-route)"
-              strokeWidth="3.2"
+              stroke={LIGHT_MAP.route}
+              strokeWidth="2.6"
               strokeLinecap="round"
               strokeLinejoin="round"
             />
@@ -469,28 +502,18 @@ function AirportSchematicLayer({
               cx={model.project(snapped.pos).x}
               cy={model.project(snapped.pos).y}
               r={Math.min(8, Math.max(4.5, (userAccuracyM ?? 35) / 12))}
-              fill="rgba(56,189,248,0.16)"
-              stroke="rgba(125,211,252,0.65)"
-              strokeWidth="0.5"
+              fill="rgba(37,99,235,0.14)"
+              stroke="rgba(37,99,235,0.5)"
+              strokeWidth="0.4"
             />
             <circle
               cx={model.project(snapped.pos).x}
               cy={model.project(snapped.pos).y}
-              r="2.5"
-              fill="#38bdf8"
+              r="2.3"
+              fill={LIGHT_MAP.user}
               stroke="#ffffff"
-              strokeWidth="0.8"
+              strokeWidth="0.9"
             />
-            <text
-              x={model.project(snapped.pos).x}
-              y={model.project(snapped.pos).y + 5}
-              fill="#ffffff"
-              fontSize="2"
-              fontWeight="800"
-              textAnchor="middle"
-            >
-              YOU
-            </text>
           </g>
         ) : null}
 
@@ -510,19 +533,38 @@ function AirportSchematicLayer({
           );
         })}
 
+        {/* Category icon markers — tappable, colored by kind (flysea-style) */}
         {visiblePois.map(({ definition, point }) => {
           const isGate = definition.id === gatePoiId;
           const isSelected = definition.id === selectedPoiId;
+          const color = isGate ? "#d97706" : POI_COLOR[definition.category];
+          const r = isSelected ? 2.9 : isGate ? 2.5 : 2.1;
           return (
-            <circle
+            <g
               key={definition.id}
-              cx={point.x}
-              cy={point.y}
-              r={isSelected ? "1.55" : isGate ? "1.15" : "0.8"}
-              fill={isGate || isSelected ? "#f4c95d" : "#f8fafc"}
-              stroke={isSelected ? "#ffffff" : "#0b1f3a"}
-              strokeWidth={isSelected ? "0.7" : "0.35"}
-            />
+              transform={`translate(${point.x} ${point.y})`}
+              onClick={() => onPoiClick(definition.id)}
+              style={{ cursor: "pointer" }}
+            >
+              <title>{definition.name}</title>
+              <circle r={3.4} fill="transparent" />
+              <circle
+                r={r}
+                fill={isSelected ? color : "#ffffff"}
+                stroke={color}
+                strokeWidth={isSelected ? 0.7 : 0.55}
+                filter="url(#kepi-terminal-shadow)"
+              />
+              <text
+                x="0"
+                y="0.15"
+                fontSize={isSelected ? 2.7 : 2.2}
+                textAnchor="middle"
+                dominantBaseline="middle"
+              >
+                {POI_ICON[definition.category]}
+              </text>
+            </g>
           );
         })}
 
@@ -534,38 +576,39 @@ function AirportSchematicLayer({
             ? ` · ${Math.max(1, Math.round(minutesToDeparture))}m`
             : "";
           const displayLabel = `${POI_ICON[definition.category]} ${label}${countdown}`;
-          const labelWidth = Math.min(34, Math.max(18, displayLabel.length * 0.98 + 5));
+          const color = isGate ? "#d97706" : POI_COLOR[definition.category];
+          const labelWidth = Math.min(38, Math.max(18, displayLabel.length * 1.02 + 6));
           const labelX = point.x >= 50
             ? Math.max(18, point.x - 18)
             : Math.min(82, point.x + 18);
-          const labelY = Math.min(78, Math.max(18, point.y));
+          const labelY = Math.min(80, Math.max(14, point.y - 6));
           const elbowX = point.x >= 50 ? labelX + labelWidth / 2 + 2 : labelX - labelWidth / 2 - 2;
           return (
             <g data-testid="airport-nav-selected-label">
               <polyline
                 points={`${point.x},${point.y} ${elbowX},${point.y} ${elbowX},${labelY} ${labelX},${labelY}`}
                 fill="none"
-                stroke="#f4c95d"
-                strokeWidth="0.85"
+                stroke={color}
+                strokeWidth="0.75"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
               <g transform={`translate(${labelX} ${labelY})`}>
                 <rect
                   x={-labelWidth / 2}
-                  y="-3.5"
+                  y="-3.6"
                   width={labelWidth}
-                  height="7"
-                  rx="3.5"
-                  fill="#f4c95d"
-                  stroke="#fff3bd"
-                  strokeWidth="0.55"
+                  height="7.2"
+                  rx="3.6"
+                  fill="#ffffff"
+                  stroke={color}
+                  strokeWidth="0.6"
                   filter="url(#kepi-terminal-shadow)"
                 />
                 <text
                   x="0"
                   y="0.2"
-                  fill="#0b1f3a"
+                  fill="#1f2937"
                   fontSize="2"
                   fontWeight="800"
                   textAnchor="middle"
@@ -1960,10 +2003,10 @@ export function AirportNavigatorMap({
       data-map-ready={mapReady ? "true" : "false"}
       className={
         fill
-          ? "relative h-full w-full overflow-hidden bg-[#0b1f3a]"
+          ? "relative h-full w-full overflow-hidden bg-[#eef1f5]"
           : expanded
-          ? "fixed inset-0 z-[100] overflow-hidden bg-[#0b1f3a]"
-          : "relative overflow-hidden rounded-3xl border border-slate-700 bg-[#0b1f3a]"
+          ? "fixed inset-0 z-[100] overflow-hidden bg-[#eef1f5]"
+          : "relative overflow-hidden rounded-3xl border border-slate-300 bg-[#eef1f5]"
       }
       style={fill || expanded ? undefined : { height: 420 }}
     >
@@ -1994,7 +2037,7 @@ export function AirportNavigatorMap({
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(120% 90% at 50% 30%, transparent 55%, rgba(2,8,20,0.55) 100%), linear-gradient(to bottom, rgba(2,8,20,0.55), transparent 22%)",
+            "radial-gradient(120% 90% at 50% 35%, transparent 62%, rgba(15,23,42,0.10) 100%)",
         }}
       />
       {/* Expand / close — the map is always one tap away, and one tap out */}

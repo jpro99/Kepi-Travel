@@ -254,6 +254,11 @@ The SEA pilot (`src/lib/airportNav/layouts/sea.ts`) renders the airport's **real
 
 **Test:** `src/lib/airportNav/layouts/seaLayout.test.ts`
 
+**M19 — The airport map is a light floor plan, not dark blocks**
+The indoor airport map uses a light "floor-plan" aesthetic modeled on official airport maps (e.g. flysea): a cream/light canvas (`LIGHT_MAP`/`COLOR` in `AirportNavigatorMap.tsx`), light-gray building fills with clean outlines, concourse names in dark text with a white halo, category-colored **icon markers** (check-in blue, gate amber, security rose, lounge emerald, restroom slate, train violet) that are tappable, a blue route line, and a blue user puck. Never render the terminal as dark navy blocks. The same palette is shared by the SVG schematic (planning + no-WebGL fallback) and the 3D MapLibre map (at-airport) so the two views read as one product. It stays Kepi-owned/OSM-derived — we do not embed or copy any airport's proprietary map artwork.
+
+**Test:** `src/lib/airportNav/schematic.test.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -465,6 +470,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | M16 | `src/lib/airportNav/directionArrow.test.ts` |
 | M17 | `src/lib/airportNav/layoutBounds.test.ts` |
 | M18 | `src/lib/airportNav/layouts/seaLayout.test.ts` |
+| M19 | `src/lib/airportNav/schematic.test.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |
