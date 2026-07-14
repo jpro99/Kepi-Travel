@@ -264,6 +264,11 @@ Inside a terminal, indoor GPS drops out and position falls back to dead reckonin
 
 **Test:** `src/lib/airportNav/deadReckoning.test.ts`
 
+**M21 — The airport map highlights THIS trip's journey, not every POI**
+The airport map is trip-focused, not a directory. `buildTripJourney` (`tripJourney.ts`) turns the layout + the traveler's flight context into the short ordered path that matters — **drop-off → check-in (their airline) → security (nearest checkpoint) → lounge (only if eligible) → their gate** — and the map draws that as one connected route line (`journeyRoute`, chained leg-by-leg along the real walkway graph) plus emphasised markers. Every other gate/lounge/POI is **kept as a faint grey reference dot** (owner: "I don't know why we need all the gates… you can have others as reference points"), never removed. The gate is a firm, strongly-highlighted stop **only once assigned**; before that it is a `known:false` "assigned soon" placeholder and the concourses stay reference-only. This logic is airport-agnostic (works off any `AirportLayout`, hand-curated or OSM-imported) so it replicates to every airport. Tapping a specific POI still routes turn-by-turn to it (overrides the journey line); the journey line is the default so nobody has to guess. Node anchors must stay on the real building (SEA gate centroids are the live OSM per-concourse centroids — M18); never scatter emphasis across irrelevant POIs.
+
+**Test:** `src/lib/airportNav/tripJourney.test.ts`
+
 ---
 
 ## ITINERARY LAWS

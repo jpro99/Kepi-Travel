@@ -25,7 +25,7 @@ import { SEA_OSM_FOOTPRINTS } from "./seaFootprints";
 // Landside node ids — everything else in this layout is past security.
 // (security_entry sits landside; security_exit sits airside.)
 const LANDSIDE_NODE_IDS = new Set([
-  "checkin-south", "checkin-center", "checkin-north", "landside-hall",
+  "curb-departures", "checkin-south", "checkin-center", "checkin-north", "landside-hall",
   "sec3-entry", "sec5-entry",
 ]);
 
@@ -43,11 +43,16 @@ function n(
 // Main terminal is an X: A gates SE, B gates SW, C gates NW, D gates NE, with
 // ticketing along the east (departures drive) and security in the core.
 const NODES: GraphNode[] = [
-  // ── Landside ticketing hall (east side of the main terminal) ──
-  n("checkin-south", -122.30020, 47.44245, "checkin", "Ticketing — south end (Alaska)"),
-  n("checkin-center", -122.30040, 47.44330, "checkin", "Ticketing — center (Delta, United)"),
-  n("checkin-north", -122.30060, 47.44430, "checkin", "Ticketing — north end (international)"),
-  n("landside-hall", -122.30110, 47.44330, "junction", "Main hall, behind ticketing"),
+  // ── Departures drop-off (upper roadway, east face of the main terminal) ──
+  n("curb-departures", -122.29955, 47.44300, "junction", "Departures drop-off — upper roadway"),
+
+  // ── Landside ticketing hall (main terminal core) ──
+  // Anchored onto the real terminal building (OSM main-terminal center is
+  // -122.3008), not out on the departures drive.
+  n("checkin-south", -122.30055, 47.44250, "checkin", "Ticketing — south end (Alaska)"),
+  n("checkin-center", -122.30075, 47.44335, "checkin", "Ticketing — center (Delta, United)"),
+  n("checkin-north", -122.30095, 47.44435, "checkin", "Ticketing — north end (international)"),
+  n("landside-hall", -122.30120, 47.44335, "junction", "Main hall, behind ticketing"),
 
   // ── Security checkpoints (entries landside, exits airside) ──
   n("sec3-entry", -122.30150, 47.44305, "security_entry", "Checkpoint 3 — center of the hall"),
@@ -111,6 +116,10 @@ const walkSecs = (m: number) => Math.round(m / WALK_MPS);
 // Traverse times are calibrated from real SEA walk/train timings and stay
 // authoritative for routing; the drawn polyline follows the real node coords.
 const EDGES: GraphEdge[] = [
+  // Departures curb → ticketing
+  e("e-curb-cc", "curb-departures", "checkin-center", "walkway", 45, walkSecs(45)),
+  e("e-curb-hall", "curb-departures", "landside-hall", "walkway", 60, walkSecs(60)),
+
   // Landside hall connections
   e("e-cs-hall", "checkin-south", "landside-hall", "walkway", 110, walkSecs(110)),
   e("e-cc-hall", "checkin-center", "landside-hall", "walkway", 20, walkSecs(20)),
@@ -201,8 +210,8 @@ const POIS: PoiDefinition[] = [
 export const SEA_LAYOUT: AirportLayout = {
   iata: "SEA",
   name: "Seattle–Tacoma International",
-  layoutVersion: "0.2.0-osm-footprint",
-  updatedAt: "2026-07-13",
+  layoutVersion: "0.3.0-trip-journey",
+  updatedAt: "2026-07-14",
   center: [-122.30209, 47.44328],
   zones: ZONES,
   nodes: NODES,

@@ -56,3 +56,27 @@ test("gate anchors sit inside their real terminal footprints", () => {
 test("SEA center sits within the main terminal footprint", () => {
   assert.ok(inside(SEA_LAYOUT.center, bbox(zone("z-main").ring)));
 });
+
+test("gate anchors match the real OSM gate-cluster centroids", () => {
+  // These are the live OpenStreetMap per-concourse gate centroids (verified
+  // 2026-07-14). Lock them so a future edit can't drift pins off the piers.
+  const expected: Record<string, [number, number]> = {
+    "gate-A": [-122.299174, 47.440265],
+    "gate-B": [-122.303761, 47.441586],
+    "gate-C": [-122.303808, 47.445539],
+    "gate-D": [-122.299969, 47.445766],
+    "gate-N": [-122.302579, 47.448618],
+    "gate-S": [-122.302136, 47.438814],
+  };
+  for (const [id, [lng, lat]] of Object.entries(expected)) {
+    const pos = node(id).pos;
+    assert.ok(Math.abs(pos[0] - lng) < 0.001, `${id} lng drifted: ${pos[0]}`);
+    assert.ok(Math.abs(pos[1] - lat) < 0.001, `${id} lat drifted: ${pos[1]}`);
+  }
+});
+
+test("departures drop-off is landside and feeds check-in", () => {
+  const curb = node("curb-departures");
+  assert.equal(curb.airside, false);
+  assert.ok(inside(curb.pos, bbox(zone("z-main").ring)));
+});

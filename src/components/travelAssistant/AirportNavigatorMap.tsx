@@ -12,6 +12,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AirportLayout, ComputedRoute, GraphEdge, PoiDefinition, SnappedPosition, TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
+import { buildTripJourney, journeyPoiIds, type JourneyStop } from "@/lib/airportNav/tripJourney";
 import { computeDirectionArrow, confirmedSnappedPosition } from "@/lib/airportNav/directionArrow";
 import { computeLayoutBounds } from "@/lib/airportNav/layoutBounds";
 import { buildAirportSchematicModel } from "@/lib/airportNav/schematic";
@@ -992,6 +993,45 @@ export function AirportNavigatorMap({
     return layout.pois.find((poi) => poi.category === "gate" && poi.nodeId === gateNodeId) ?? null;
   }, [layout, gateCode]);
 
+  /* ── Trip-focused journey (drop-off → check-in → security → lounge → gate) ─ */
+  const journey: JourneyStop[] = useMemo(() => {
+    if (!layout) return [];
+    return buildTripJourney(layout, {
+      airlineName,
+      gateCode,
+      eligibleLoungeNames,
+    });
+  }, [layout, airlineName, gateCode, eligibleLoungeNames]);
+
+  const journeyPoiIdSet = useMemo(() => journeyPoiIds(journey), [journey]);
+
+  // The connected "here's your whole path" line: drop-off → check-in → security
+  // → lounge → your gate, chained leg-by-leg along the real walkway graph. Stops
+  // at the first unknown stop (e.g. gate not yet assigned).
+  const journeyRoute = useMemo<[number, number][] | null>(() => {
+    if (!layout || journey.length < 2) return null;
+    const startId = journey[0]?.nodeId;
+    if (!startId) return null;
+    const coords: [number, number][] = [];
+    let fromNodeId = startId;
+    for (let i = 1; i < journey.length; i += 1) {
+      const stop = journey[i];
+      if (!stop.known || !stop.poiId || !stop.nodeId) break;
+      const leg = computeRoute({
+        layout,
+        fromNodeId,
+        toPoiId: stop.poiId,
+        credentials,
+        calibration: navCalibration ?? undefined,
+      });
+      fromNodeId = stop.nodeId;
+      if (!leg || leg.coordinates.length === 0) continue;
+      const legCoords = coords.length > 0 ? leg.coordinates.slice(1) : leg.coordinates;
+      coords.push(...legCoords);
+    }
+    return coords.length > 1 ? coords : null;
+  }, [layout, journey, credentials, navCalibration]);
+
   /* ── Routing ────────────────────────────────────────────────────────── */
   const startRoute = useCallback(
     (poiId: string, viaVoice = false) => {
@@ -1651,18 +1691,22 @@ export function AirportNavigatorMap({
     if (!map || !mapReady) return;
     const source = map.getSource("kepi-route");
     if (!source) return;
-    if (!activeRoute) {
+    // A tapped destination wins; otherwise draw the whole trip journey line so
+    // the traveler always sees their path (drop-off → check-in → security →
+    // lounge → gate) without having to guess.
+    const line = activeRoute?.coordinates ?? journeyRoute;
+    if (!line || line.length < 2) {
       source.setData({ type: "FeatureCollection", features: [] });
       return;
     }
     source.setData({
       type: "Feature",
       properties: {},
-      geometry: { type: "LineString", coordinates: activeRoute.coordinates },
+      geometry: { type: "LineString", coordinates: line },
     });
 
     let progress = 0;
-    if (snapped) {
+    if (activeRoute && snapped) {
       const idx = activeRoute.nodeIds.indexOf(snapped.nearestNodeId);
       if (idx > 0) progress = idx / Math.max(1, activeRoute.nodeIds.length - 1);
     }
@@ -1676,7 +1720,9 @@ export function AirportNavigatorMap({
       1, PATH_WARM_BRIGHT,
     ]);
 
-    if (activeRoute.coordinates.length > 1) {
+    // Only reframe the camera on an explicit destination tap — never yank it for
+    // the passive journey overlay (the initial fitBounds already framed it).
+    if (activeRoute && activeRoute.coordinates.length > 1) {
       const lngs = activeRoute.coordinates.map((coord) => coord[0]);
       const lats = activeRoute.coordinates.map((coord) => coord[1]);
       map.fitBounds(
@@ -1685,7 +1731,7 @@ export function AirportNavigatorMap({
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRoute, mapReady, snapped?.nearestNodeId]);
+  }, [activeRoute, journeyRoute, mapReady, snapped?.nearestNodeId]);
 
   /* ── POI bubble markers ─────────────────────────────────────────────── */
   useEffect(() => {
@@ -1730,6 +1776,14 @@ export function AirportNavigatorMap({
 
         // Precise map label: a colored dot ON the exact coordinate + the name in
         // haloed text (no box). Dot color encodes category / urgency.
+        // Trip-focused emphasis: the stops on THIS traveler's journey (their
+        // check-in, security, lounge, gate) stand out; everything else fades to
+        // a small grey reference dot so nobody has to hunt (owner: "don't need
+        // all the gates — highlight the ones the person is going to use").
+        const isJourney = journeyPoiIdSet.has(poi.id);
+        const emphatic = isSelected || isGateBubble || isObjective || isJourney;
+        const isReference = !emphatic;
+
         const dotColor = critical
           ? "#dc2626"
           : urgent
@@ -1738,9 +1792,10 @@ export function AirportNavigatorMap({
           ? "#d97706"
           : eligibleLounge
           ? "#059669"
+          : isReference
+          ? "#9aa7b8"
           : POI_COLOR[poi.category];
-        const emphatic = isSelected || isGateBubble || isObjective;
-        const dotSize = isSelected ? 15 : emphatic ? 13 : 10;
+        const dotSize = isSelected ? 15 : isReference ? 7 : 13;
 
         const bubble = document.createElement("button");
         bubble.type = "button";
@@ -1749,27 +1804,33 @@ export function AirportNavigatorMap({
           "display:flex;align-items:center;gap:5px;",
           "background:transparent;border:none;padding:3px;cursor:pointer;",
           "font:700 11px system-ui,-apple-system,sans-serif;white-space:nowrap;",
-          isSelected ? "z-index:6;" : "",
+          isSelected ? "z-index:6;" : isReference ? "z-index:1;opacity:0.72;" : "z-index:3;",
         ].join("");
 
         const dot = document.createElement("span");
         dot.style.cssText = [
           `width:${dotSize}px;height:${dotSize}px;flex:none;border-radius:9999px;`,
           `background:${dotColor};border:2px solid #ffffff;`,
-          "box-shadow:0 1px 4px rgba(15,23,42,0.55);",
+          isReference ? "box-shadow:0 1px 2px rgba(15,23,42,0.25);" : "box-shadow:0 1px 4px rgba(15,23,42,0.55);",
           isSelected ? "outline:3px solid rgba(56,189,248,0.95);outline-offset:1px;" : "",
           critical || urgent ? "animation:kepiPulse 1.6s ease-in-out infinite;" : "",
         ].join("");
 
-        const label = document.createElement("span");
-        label.textContent = `${gateLabel}${countdown}${accessMark}${laneSummary ? ` · ${laneSummary}` : ""}`;
-        label.style.cssText = [
-          emphatic ? "color:#0f172a;font-weight:800;" : "color:#1f2937;font-weight:700;",
-          "text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff,0 1px 2px #fff,0 -1px 2px #fff,1px 0 2px #fff,-1px 0 2px #fff;",
-        ].join("");
-
+        // De-clutter: reference POIs show a dot only, except reference gates keep
+        // a faint concourse letter so the piers stay identifiable.
+        const showLabel = !isReference || poi.category === "gate";
         bubble.appendChild(dot);
-        bubble.appendChild(label);
+        if (showLabel) {
+          const label = document.createElement("span");
+          label.textContent = `${gateLabel}${countdown}${accessMark}${laneSummary ? ` · ${laneSummary}` : ""}`;
+          label.style.cssText = [
+            isReference
+              ? "color:#64748b;font-weight:600;font-size:10px;"
+              : emphatic ? "color:#0f172a;font-weight:800;" : "color:#1f2937;font-weight:700;",
+            "text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff,0 1px 2px #fff,0 -1px 2px #fff,1px 0 2px #fff,-1px 0 2px #fff;",
+          ].join("");
+          bubble.appendChild(label);
+        }
         bubble.addEventListener("click", () => handlePoiTap(poi.id));
 
         // Anchor "left" pins the dot exactly on the coordinate; the name reads to
@@ -1786,7 +1847,7 @@ export function AirportNavigatorMap({
       }
       poiMarkersRef.current = {};
     };
-  }, [mapReady, layout, gatePoi, gateCode, minutesRounded, airlineName, objective, eligibleLoungeNames, startRoute, selectedPoiId, activeRoute]);
+  }, [mapReady, layout, gatePoi, gateCode, minutesRounded, airlineName, objective, eligibleLoungeNames, startRoute, selectedPoiId, activeRoute, journeyPoiIdSet]);
 
   /* ── Snapped user puck with confidence halo ─────────────────────────── */
   useEffect(() => {

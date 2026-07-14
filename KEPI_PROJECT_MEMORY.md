@@ -230,6 +230,26 @@ Component map: `TripHealthStrip`, `dedupeConsumerReservations`, `DesktopTripHome
 - **Do not recommend:** Installing Drive, Money Script, or sitewide widgets on kepitravel.com
 - **Optional later:** Server-built affiliate deep links only (no site script) — low priority
 
+### Visual Positioning (VPS / camera-based indoor nav) — real option, not now
+
+- **Status (2026-07-06):** Researched indoor-positioning alternatives to beacons: magnetic
+  fingerprinting (IndoorAtlas-style), WiFi RTT, UWB, and camera-based Visual Positioning System
+  (VPS). VPS is the one worth remembering — industry guidance now recommends it as the default
+  for new indoor-nav builds over BLE beacons, and Google has shipped it at real airports/malls.
+  It works like Google's outdoor Live View: camera compares the live scene against a pre-scanned
+  image database of the venue, arrow overlays on the camera feed.
+- **Real cost, not free:** requires a one-time photogrammetry scan of the airport's public areas
+  (a genuine content project, same category of effort as the map-curation work) and continuous
+  AR camera use drains phone battery at roughly 10-20% per hour — a real tradeoff for a traveler
+  who needs battery all day.
+- **Do not build now.** This is a bigger, resourced project for later, not a near-term task.
+  **Do not keep re-raising it** unless Kepi has the resources/scale to justify a dedicated
+  per-airport scanning project.
+- **What we're building instead, now:** map-aided dead reckoning — constrain the existing
+  step-counting position estimate to the walkway graph Kepi already curates, using data and code
+  already in place. See `CURSOR_PROMPT_map_aided_dead_reckoning.md`. No new infrastructure, no new
+  vendor, no new hardware.
+
 ### Atrius (indoor airport map/positioning vendor) — deprioritized
 
 - **Status (2026-07-06):** Investigated embedding Atrius Wayfinder/Navigator (the vendor behind

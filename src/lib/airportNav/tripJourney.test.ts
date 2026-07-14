@@ -1,0 +1,64 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+
+import { buildTripJourney, journeyPoiIds } from "./tripJourney";
+import { SEA_LAYOUT } from "./layouts/sea";
+
+test("journey without a gate ends with a pending gate placeholder", () => {
+  const stops = buildTripJourney(SEA_LAYOUT, { airlineName: "Alaska" });
+  const roles = stops.map((s) => s.role);
+  assert.deepEqual(roles, ["dropoff", "checkin", "security", "gate"]);
+
+  const gate = stops.at(-1)!;
+  assert.equal(gate.known, false);
+  assert.equal(gate.nodeId, "");
+
+  // Check-in resolves to the traveler's airline counter, and the journey starts
+  // at the departures curb.
+  assert.equal(stops[0].nodeId, "curb-departures");
+  assert.equal(stops.find((s) => s.role === "checkin")?.poiId, "poi-checkin-as");
+});
+
+test("eligible traveler gets a lounge stop; ineligible does not", () => {
+  const withLounge = buildTripJourney(SEA_LAYOUT, {
+    airlineName: "Alaska",
+    eligibleLoungeNames: ["Alaska Lounge"],
+  });
+  assert.ok(withLounge.some((s) => s.role === "lounge"), "eligible traveler should get a lounge");
+
+  const noLounge = buildTripJourney(SEA_LAYOUT, { airlineName: "Alaska" });
+  assert.ok(!noLounge.some((s) => s.role === "lounge"), "ineligible traveler should not");
+});
+
+test("known gate locks the gate stop and picks the nearest checkpoint + lounge", () => {
+  const stops = buildTripJourney(SEA_LAYOUT, {
+    airlineName: "Alaska",
+    gateCode: "C11",
+    eligibleLoungeNames: ["Alaska Lounge"],
+  });
+
+  const gate = stops.find((s) => s.role === "gate")!;
+  assert.equal(gate.known, true);
+  assert.equal(gate.nodeId, "gate-C");
+  assert.equal(gate.label, "Gate C11");
+
+  // C gates are north — Checkpoint 5 (north) is closer than Checkpoint 3.
+  assert.equal(stops.find((s) => s.role === "security")?.poiId, "poi-sec5");
+  // The Concourse-C Alaska Lounge is nearer C11 than the North Satellite one.
+  assert.equal(stops.find((s) => s.role === "lounge")?.poiId, "poi-lounge-akc");
+});
+
+test("journeyPoiIds returns every backing POI on the journey", () => {
+  const stops = buildTripJourney(SEA_LAYOUT, {
+    airlineName: "Alaska",
+    gateCode: "C11",
+    eligibleLoungeNames: ["Alaska Lounge"],
+  });
+  const ids = journeyPoiIds(stops);
+  assert.ok(ids.has("poi-checkin-as"));
+  assert.ok(ids.has("poi-sec5"));
+  assert.ok(ids.has("poi-lounge-akc"));
+  assert.ok(ids.has("poi-gate-C"));
+  // The pending-gate placeholder (no poiId) contributes nothing.
+  assert.ok(!ids.has(""));
+});
