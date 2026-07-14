@@ -274,6 +274,11 @@ The airport map shows detail in tiers like a real commercial airport map, never 
 
 **Test:** `src/lib/airportNav/poiDetail.test.ts`
 
+**M23 — Every curated in-building node coordinate is verified inside its real polygon before merge**
+A node's real `[lng, lat]` IS its marker position on the live map — `AirportNavigatorMap` renders POI markers with `.setLngLat(pos)` and no separate projection, so a wrong coordinate puts the counter in the wrong real-world place (SEA's Delta/United/Air Canada/Emirates check-in once rendered in the parking structure east of the terminal because the coords were eyeballed, never checked). **No hand-placed check-in/security/in-building node coordinate ships unverified.** Every `checkin`, `security_entry`, and `security_exit` node must be proven inside the real OSM building footprint it belongs to (SEA → `z-main` = `SEA_OSM_FOOTPRINTS.mainTerminal`) using `@turf/turf`'s `booleanPointInPolygon` — never a hand-rolled ray-cast, which can return a false "inside" near the notches of a non-convex/simplified real-world ring. Interior counter positions are picked near the airline's actual ticketing location (cross-checked on openstreetmap.org), not an arbitrary centroid, and the hall's diagonal (its interior edge shifts as it runs) must be respected. Never re-fix this by moving the basemap/parking or by eyeballing a screenshot again.
+
+**Test:** `src/lib/airportNav/layouts/seaNodeContainment.test.ts`
+
 ---
 
 ## ITINERARY LAWS
