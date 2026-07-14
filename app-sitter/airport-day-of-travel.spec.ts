@@ -183,7 +183,7 @@ test.describe("SEA day-of-travel", () => {
     await expect(page.getByRole("button", { name: /Airport/i })).toHaveClass(/bg-white/);
   });
 
-  test("planning mode renders SEA without MapTiler or WebGL", async ({ page }) => {
+  test("planning mode renders SEA on the real OpenStreetMap basemap (no MapTiler)", async ({ page }) => {
     const mapTilerRequests: string[] = [];
     await page.setViewportSize({ width: 390, height: 844 });
     page.on("request", (request) => {
@@ -199,11 +199,12 @@ test.describe("SEA day-of-travel", () => {
     const mapHost = page.getByTestId("airport-nav-indoor-map");
     const schematic = page.getByTestId("airport-nav-schematic");
     await expect(mapHost).toBeVisible({ timeout: 30_000 });
-    // Planning is intentionally SVG-only (no second WebGL map competing with the
-    // family basemap) so it never flashes-then-blanks. The real OSM footprint is
-    // now three zones: main terminal + North + South satellites.
+    // Planning now shows the real OSM tile basemap (M17) with the light SVG floor
+    // plan underneath as an always-on fallback (never blanks). Zones = main
+    // terminal + North + South satellites. Basemap is OSM raster, never MapTiler.
     await expect(schematic).toBeVisible({ timeout: 30_000 });
     await expect(schematic).toHaveAttribute("data-zone-count", "3");
+    await expect(mapHost.locator("canvas").first()).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText("Preview starts at terminal entrance", { exact: true })).toBeVisible();
     await expect(page.getByText(/Gate assignment pending/i)).toBeVisible();
     await expect(page.getByRole("button", { name: /Navigate to Alaska check-in/i })).toBeVisible();
@@ -220,7 +221,6 @@ test.describe("SEA day-of-travel", () => {
     await expect(page.getByRole("region", { name: "Route instructions" })).toContainText("Route preview");
     await expect(page.getByText(/Live step-by-step guidance starts when you arrive at SEA/i)).toBeVisible();
     await expect(page.getByRole("link", { name: "Open SEA live indoor directions" })).toBeVisible();
-    await expect(mapHost.locator("canvas")).toHaveCount(0);
     await expect(page.getByTestId("family-map-drawer")).toHaveCount(0);
 
     await page.waitForTimeout(1_500);

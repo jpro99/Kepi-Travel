@@ -3,6 +3,7 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@/lib/maplibreCspWorker";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
+import { buildOsmRasterFallbackStyle } from "@/lib/map/maptilerClient";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AirportLayout, ComputedRoute, GraphEdge, PoiDefinition, SnappedPosition, TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
@@ -75,59 +76,45 @@ interface AirportNavigatorMapProps {
   shellBottomInset?: string;
 }
 
-const COLOR = {
-  canvas: "#eef1f5",
-  landside: "#dbe2ea",
-  airside: "#e7eef5",
-};
-
 const PATH_DIM = "#c3ccd7";
 const PATH_WARM = "#2563eb";
 const PATH_WARM_BRIGHT = "#60a5fa";
 
-/** Schematic terminal zones, walkways, and route layers — idempotent for load-race retries. */
+/**
+ * Overlays on top of the real OpenStreetMap basemap: a subtle highlight of the
+ * traveler's terminal footprint plus the walking route. We deliberately do NOT
+ * redraw buildings/roads/parking — the OSM basemap already renders those to
+ * scale (M17). Idempotent so the load-race retry loop can call it repeatedly.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function installAirportLayoutLayers(map: any, lay: AirportLayout): void {
   if (!map.isStyleLoaded() || map.getSource("kepi-zones")) return;
 
   const zoneFeatures = lay.zones.map((zone) => ({
     type: "Feature" as const,
-    properties: { height: zone.heightM, airside: zone.airside ? 1 : 0, name: zone.name },
+    properties: { airside: zone.airside ? 1 : 0, name: zone.name },
     geometry: { type: "Polygon" as const, coordinates: [zone.ring] },
   }));
   map.addSource("kepi-zones", { type: "geojson", data: { type: "FeatureCollection", features: zoneFeatures } });
+  // Faint tint + crisp outline so travelers can see which building is theirs,
+  // without hiding the real OSM map underneath.
   map.addLayer({
-    id: "kepi-zones-3d",
-    type: "fill-extrusion",
+    id: "kepi-zones-fill",
+    type: "fill",
     source: "kepi-zones",
     paint: {
-      "fill-extrusion-color": ["case", ["==", ["get", "airside"], 1], COLOR.airside, COLOR.landside],
-      "fill-extrusion-height": ["get", "height"],
-      "fill-extrusion-opacity": 0.85,
+      "fill-color": ["case", ["==", ["get", "airside"], 1], "#38bdf8", "#2563eb"],
+      "fill-opacity": 0.1,
     },
   });
-
-  const nodePos = new Map(lay.nodes.map((node) => [node.id, node.pos]));
-  const walkFeatures = lay.edges
-    .filter((edge) => edge.kind !== "security_transition")
-    .map((edge) => ({
-      type: "Feature" as const,
-      properties: { train: edge.kind === "train" ? 1 : 0 },
-      geometry: {
-        type: "LineString" as const,
-        coordinates: [nodePos.get(edge.from) ?? [0, 0], nodePos.get(edge.to) ?? [0, 0]],
-      },
-    }));
-  map.addSource("kepi-walkways", { type: "geojson", data: { type: "FeatureCollection", features: walkFeatures } });
   map.addLayer({
-    id: "kepi-walkways-line",
+    id: "kepi-zones-outline",
     type: "line",
-    source: "kepi-walkways",
+    source: "kepi-zones",
     paint: {
-      "line-color": ["case", ["==", ["get", "train"], 1], "#94a3b8", "#b7c1cd"],
-      "line-width": 2,
-      "line-opacity": 0.8,
-      "line-dasharray": [1, 2],
+      "line-color": "#2563eb",
+      "line-width": 1.6,
+      "line-opacity": 0.55,
     },
   });
 
@@ -1505,7 +1492,7 @@ export function AirportNavigatorMap({
     // MapTiler, or a SECOND live map competing with the family map's WebGL
     // context + shared worker. Running the 3D map in planning made Plan-airport
     // flash then blank (regression 2026-07-13) — keep preview on the schematic.
-    if (previewMode || !mapEl.current || mapRef.current || !layout) return;
+    if (!mapEl.current || mapRef.current || !layout) return;
     let disposed = false;
     let layersInstalled = false;
     let unbindResize: (() => void) | null = null;
@@ -1536,10 +1523,10 @@ export function AirportNavigatorMap({
             map.resize();
             if (bounds) {
               map.fitBounds(bounds, {
-                padding: { top: 90, bottom: 150, left: 40, right: 40 },
-                pitch: 58,
-                bearing: -15,
-                maxZoom: 16.2,
+                padding: { top: 96, bottom: 160, left: 48, right: 48 },
+                pitch: 0,
+                bearing: 0,
+                maxZoom: 17,
                 duration: 0,
               });
             }
@@ -1555,28 +1542,40 @@ export function AirportNavigatorMap({
 
     void import("maplibre-gl")
       .then((ml) => {
+        // Defer one frame so the parent /live-map family basemap finishes its
+        // teardown before we claim a WebGL context (avoids the old family→airport
+        // context-limit blank). The SVG floor plan stays underneath regardless.
         if (disposed || !mapEl.current || mapRef.current) return;
         try {
           const map = new ml.Map({
             container: mapEl.current,
-            style: {
-              version: 8,
-              sources: {},
-              layers: [{ id: "bg", type: "background", paint: { "background-color": COLOR.canvas } }],
-            },
+            // Real OpenStreetMap tiles — this is the "map from that site" (M17).
+            // CSP already allows tile.openstreetmap.org; no API key required.
+            style: buildOsmRasterFallbackStyle(),
             center: layout.center,
-            zoom: 15.2,
-            pitch: 58,
-            bearing: -15,
+            zoom: 15.4,
+            minZoom: 12,
+            maxZoom: 19,
+            pitch: 0,
+            bearing: 0,
             pixelRatio: getMapPixelRatio(),
             attributionControl: false,
-            dragRotate: true,
+            dragRotate: false,
             fadeDuration: 0,
           });
           mapRef.current = map;
           unbindResize = bindMapResize(mapEl.current, map);
           mapCanvas = map.getCanvas();
           mapCanvas.addEventListener("webglcontextlost", handleContextLost);
+
+          // Pinch-zoom works natively; add explicit +/- for one-handed use and
+          // the required OpenStreetMap attribution.
+          try {
+            map.addControl(new ml.NavigationControl({ showCompass: false, showZoom: true }), "top-left");
+            map.addControl(new ml.AttributionControl({ compact: true }), "bottom-right");
+          } catch {
+            /* controls are best-effort */
+          }
 
           map.on("load", () => finalizeMap(map));
           map.on("styledata", () => finalizeMap(map));
@@ -1613,7 +1612,7 @@ export function AirportNavigatorMap({
       userMarkerRef.current = null;
       setMapReady(false);
     };
-  }, [layout, previewMode]);
+  }, [layout]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1663,7 +1662,7 @@ export function AirportNavigatorMap({
       const lats = activeRoute.coordinates.map((coord) => coord[1]);
       map.fitBounds(
         [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
-        { padding: 70, pitch: 58, duration: 800 },
+        { padding: 80, pitch: 0, duration: 800 },
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2013,11 +2012,9 @@ export function AirportNavigatorMap({
       <style>{`@keyframes kepiPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
 @keyframes kepiMicRing{0%{box-shadow:0 0 0 0 rgba(56,189,248,0.55)}100%{box-shadow:0 0 0 14px rgba(56,189,248,0)}}
 @keyframes kepiBeacon{0%{transform:scale(0.6);opacity:0.9}100%{transform:scale(1.9);opacity:0}}`}</style>
-      <div
-        ref={mapEl}
-        className={`absolute inset-0 transition-opacity ${previewMode || !mapReady ? "pointer-events-none opacity-0" : "opacity-100"}`}
-      />
-      {layout && (previewMode || !mapReady) ? (
+      {/* Always-on light floor-plan base. The real OSM map fades in on top when
+          ready; if tiles/WebGL ever fail, this stays visible so we never blank. */}
+      {layout ? (
         <AirportSchematicLayer
           layout={layout}
           activeRoute={activeRoute}
@@ -2032,6 +2029,12 @@ export function AirportNavigatorMap({
           onPoiClick={handlePoiTap}
         />
       ) : null}
+      <div
+        ref={mapEl}
+        className={`absolute inset-0 z-[2] transition-opacity ${mapReady ? "opacity-100" : "pointer-events-none opacity-0"}`}
+      />
+      <style>{`.maplibregl-ctrl-top-left{margin-top:calc(env(safe-area-inset-top) + 5.5rem)}
+.maplibregl-ctrl-top-left .maplibregl-ctrl{box-shadow:0 2px 8px rgba(15,23,42,0.25)}`}</style>
       {/* Vignette + top legibility gradient — concierge depth, not flat canvas */}
       <div
         className="pointer-events-none absolute inset-0"
