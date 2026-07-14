@@ -1844,22 +1844,30 @@ export function AirportNavigatorMap({
         const showLabel = !isReference || poi.category === "gate";
         bubble.appendChild(dot);
         if (showLabel) {
-          // Airline branding on a real counter (M22): a license-cleared logo
-          // asset when one exists, otherwise a Kepi-generated IATA code chip —
-          // never a broken image, never blocking on a missing logo.
+          // Airline branding on a real counter (M22): Duffel's brand-compliant
+          // logo (customer-licensed, resolved by IATA code), with a graceful
+          // onerror swap to a Kepi-generated IATA code chip so a logo Duffel
+          // lacks never shows a broken image or blocks the render.
           const logoSrc = airlineLogoAsset(poi);
           const iataChip = poi.airlineIataCode?.toUpperCase();
+          const makeIataChip = () => {
+            const chip = document.createElement("span");
+            chip.textContent = iataChip ?? "";
+            chip.style.cssText = "flex:none;padding:1px 4px;border-radius:4px;background:#1d4ed8;color:#fff;font:800 9px system-ui,-apple-system,sans-serif;letter-spacing:0.3px;box-shadow:0 1px 3px rgba(15,23,42,0.35);";
+            return chip;
+          };
           if (!isReference && logoSrc) {
             const img = document.createElement("img");
             img.src = logoSrc;
             img.alt = poi.airline ? `${poi.airline} logo` : "airline logo";
-            img.style.cssText = "height:14px;width:auto;flex:none;border-radius:3px;background:#fff;padding:1px;box-shadow:0 1px 3px rgba(15,23,42,0.35);";
+            img.style.cssText = "height:15px;width:auto;max-width:46px;flex:none;border-radius:3px;background:#fff;padding:1px;box-shadow:0 1px 3px rgba(15,23,42,0.35);";
+            img.addEventListener("error", () => {
+              if (iataChip) img.replaceWith(makeIataChip());
+              else img.remove();
+            });
             bubble.appendChild(img);
           } else if (!isReference && iataChip) {
-            const chip = document.createElement("span");
-            chip.textContent = iataChip;
-            chip.style.cssText = "flex:none;padding:1px 4px;border-radius:4px;background:#1d4ed8;color:#fff;font:800 9px system-ui,-apple-system,sans-serif;letter-spacing:0.3px;box-shadow:0 1px 3px rgba(15,23,42,0.35);";
-            bubble.appendChild(chip);
+            bubble.appendChild(makeIataChip());
           }
           const doorSuffix = poi.doorLabel ? ` · ${poi.doorLabel}` : "";
           const label = document.createElement("span");

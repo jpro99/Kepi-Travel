@@ -230,6 +230,22 @@ Component map: `TripHealthStrip`, `dedupeConsumerReservations`, `DesktopTripHome
 - **Do not recommend:** Installing Drive, Money Script, or sitewide widgets on kepitravel.com
 - **Optional later:** Server-built affiliate deep links only (no site script) — low priority
 
+### TSA/security checkpoint wait times — real option, deferred until paying clients
+
+- **Status (2026-07-14):** Researched live options for showing estimated security wait times
+  somewhere in Kepi (not on the map itself — that's Atrius's proprietary live number, not ours to
+  take). Found a real, working, paid option: **TSAWaitTimes.com** (TayTech LLC, not TSA-affiliated)
+  — $49.95/mo self-serve (discounts at 3/6/12mo), 7-day free trial, server-side only, one estimate
+  per airport (not per checkpoint), blends TSA/FAA + historical + user reports.
+- **Checked for a free alternative — none held up.** FlightQueue has a free tier, but live security
+  wait times are Premium-only ($4.17–6.99/mo), and third-party API access is Enterprise-only
+  ($499/mo). TSA's own old public web service (`apps.tsa.dhs.gov/MyTSAWebService`) is marked
+  "archived" by DHS (docs last updated 2023) and returned nothing when tested live — looks dead.
+- **Decision: not now.** Owner's call — this is a real, buildable feature, but not worth $50/mo
+  until Kepi has paying clients. **Revisit once there's paid-client revenue to justify the cost,
+  not before.** Cursor prompt already written and ready to hand off when the time comes:
+  `CURSOR_PROMPT_tsa_wait_times_integration.md`.
+
 ### Visual Positioning (VPS / camera-based indoor nav) — real option, not now
 
 - **Status (2026-07-06):** Researched indoor-positioning alternatives to beacons: magnetic
@@ -274,11 +290,14 @@ Component map: `TripHealthStrip`, `dedupeConsumerReservations`, `DesktopTripHome
   counters (AS/DL/UA/AC/EK), doors, and named checkpoints. Fields: `minZoomToShow`,
   `airlineIataCode`, `logoUrl`, `doorLabel` on `PoiDefinition` (+ Zod). Curated per airport
   through the existing admin JSON editor — no bulk auto-generator.
-- **Revisit later — real airline logo assets:** we ship the code chip today because logo image
-  licensing must be confirmed before committing binaries. When ready, source from airlines' own
-  brand/press kits or a license-clear icon set (NOT a map vendor's tiles), confirm terms, commit
-  under `public/airline-logos/{code}.svg`, and register the code in `AVAILABLE_AIRLINE_LOGOS`
-  (`poiDetail.ts`) — the UI swaps chip→logo automatically. Never hotlink.
+- **Real airline logos — SOLVED via Duffel (2026-07-14):** Kepi already has Duffel
+  (`DUFFEL_ACCESS_TOKEN`, flights + stays). Duffel serves 600+ brand-compliant airline logos from
+  its public CDN keyed by IATA code (`https://assets.duffel.com/img/airlines/for-light-background/full-color-logo/{IATA}.svg`,
+  lockup variant under `full-color-lockup/`) — provided for building travel apps, no token needed
+  for the image, `img-src https:` already permits it. `airlineLogoAsset` (`poiDetail.ts`) now
+  resolves `logoUrl` → local override → Duffel CDN; the marker `<img>` has `onerror` → IATA code
+  chip so a missing logo never breaks. **Do not re-defer this or re-suggest sourcing logo files —
+  Duffel covers it.** Local `AVAILABLE_AIRLINE_LOGOS` override path remains for special cases.
 - **Revisit later — live security/checkpoint wait times:** explicitly NOT built (same posture as
   VPS). This is a harder, honesty-sensitive feature that needs real Kepi traveler traffic through
   an airport to estimate credibly. **Do not fabricate a number.** Do not build until there is

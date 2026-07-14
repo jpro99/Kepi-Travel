@@ -6,6 +6,7 @@ import {
   poiMinZoom,
   poiPassesZoom,
   airlineLogoAsset,
+  duffelAirlineLogoUrl,
   AVAILABLE_AIRLINE_LOGOS,
 } from "./poiDetail";
 import { parseAirportLayout } from "./airportLayoutPackage";
@@ -48,27 +49,42 @@ test("poiPassesZoom hides counter detail when zoomed out and reveals it up close
   assert.equal(poiPassesZoom(gate, 14), true);
 });
 
-/* ── License-safe airline branding (M22) ──────────────────────────────── */
+/* ── License-safe airline branding via Duffel (M22) ───────────────────── */
 
-test("no logo asset registered → falls back to null (caller renders text/chip)", () => {
-  assert.equal(AVAILABLE_AIRLINE_LOGOS.size, 0, "no un-license-checked logos are committed by default");
-  assert.equal(airlineLogoAsset(poi({ airlineIataCode: "AS" })), null);
-  assert.equal(airlineLogoAsset(poi({ airline: "Alaska" })), null);
+test("an IATA code resolves to Duffel's brand-compliant CDN logo (customer-licensed)", () => {
+  const src = airlineLogoAsset(poi({ airlineIataCode: "as" }));
+  assert.equal(src, "https://assets.duffel.com/img/airlines/for-light-background/full-color-logo/AS.svg");
+  assert.ok(src?.startsWith("https://assets.duffel.com/"), "logo comes from Duffel's CDN, never a map vendor tile");
 });
 
-test("an explicit license-cleared logoUrl is used verbatim", () => {
+test("duffelAirlineLogoUrl exposes symbol (logomark) and lockup (symbol + name) variants", () => {
+  assert.equal(
+    duffelAirlineLogoUrl("BA", "symbol"),
+    "https://assets.duffel.com/img/airlines/for-light-background/full-color-logo/BA.svg",
+  );
+  assert.equal(
+    duffelAirlineLogoUrl("ba", "lockup"),
+    "https://assets.duffel.com/img/airlines/for-light-background/full-color-lockup/BA.svg",
+  );
+});
+
+test("a POI with no airline code and no logoUrl → null (caller renders plain text)", () => {
+  assert.equal(airlineLogoAsset(poi({ airline: "Alaska" })), null);
+  assert.equal(airlineLogoAsset(poi({ category: "gate", name: "A Gates" })), null);
+});
+
+test("an explicit license-cleared logoUrl overrides Duffel resolution", () => {
   assert.equal(
     airlineLogoAsset(poi({ airlineIataCode: "AS", logoUrl: "/airline-logos/as.svg" })),
     "/airline-logos/as.svg",
   );
 });
 
-test("a registered IATA code resolves to its local asset path (no hotlinking)", () => {
+test("a locally-committed asset (registered code) takes precedence over Duffel", () => {
   AVAILABLE_AIRLINE_LOGOS.add("AS");
   try {
     const src = airlineLogoAsset(poi({ airlineIataCode: "as" }));
     assert.equal(src, "/airline-logos/as.svg");
-    assert.ok(src && src.startsWith("/airline-logos/"), "logo is served locally, never a vendor tile URL");
   } finally {
     AVAILABLE_AIRLINE_LOGOS.delete("AS");
   }

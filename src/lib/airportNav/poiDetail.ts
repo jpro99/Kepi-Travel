@@ -33,17 +33,35 @@ export function poiPassesZoom(poi: PoiDefinition, zoom: number): boolean {
 }
 
 /**
- * License-safe airline branding. We never hotlink or copy a map vendor's logo
- * tiles. When a license-cleared asset has been committed under
- * `/airline-logos/{code}.svg` (its IATA code registered in
- * `AVAILABLE_AIRLINE_LOGOS`) we use it; otherwise callers fall back to a
- * Kepi-generated code chip / plain text — never a broken image.
+ * License-safe airline branding. We never hotlink or copy a *map vendor's*
+ * (e.g. Atrius) rendered logo tiles. The blessed logo source is **Duffel** —
+ * Kepi is a Duffel customer, and Duffel serves 600+ brand-compliant airline
+ * logos from its public CDN keyed purely by IATA code, provided precisely for
+ * building travel apps (https://duffel.com/docs/api/airlines/schema). The image
+ * URLs need no token; the app only needs `assets.duffel.com` allowed in CSP
+ * `img-src`. If a logo 404s (airline Duffel lacks), the UI's `onerror` swaps to
+ * a Kepi-generated code chip / plain text — never a broken image.
+ */
+export const DUFFEL_AIRLINE_LOGO_BASE = "https://assets.duffel.com/img/airlines/for-light-background";
+
+/** Duffel brand-compliant logo URL. `symbol` = logomark only; `lockup` = symbol + name. */
+export function duffelAirlineLogoUrl(iataCode: string, variant: "symbol" | "lockup" = "symbol"): string {
+  const code = iataCode.trim().toUpperCase();
+  const folder = variant === "lockup" ? "full-color-lockup" : "full-color-logo";
+  return `${DUFFEL_AIRLINE_LOGO_BASE}/${folder}/${code}.svg`;
+}
+
+/**
+ * Local logo overrides: IATA codes with a license-cleared asset committed under
+ * `public/airline-logos/{code}.svg`. Takes precedence over the Duffel CDN when
+ * we want a specific asset; usually empty (Duffel covers the field).
  */
 export const AVAILABLE_AIRLINE_LOGOS = new Set<string>();
 
-export function airlineLogoAsset(poi: PoiDefinition): string | null {
+export function airlineLogoAsset(poi: PoiDefinition, variant: "symbol" | "lockup" = "symbol"): string | null {
   if (poi.logoUrl) return poi.logoUrl;
   const code = poi.airlineIataCode?.toUpperCase();
-  if (code && AVAILABLE_AIRLINE_LOGOS.has(code)) return `/airline-logos/${code.toLowerCase()}.svg`;
-  return null;
+  if (!code) return null;
+  if (AVAILABLE_AIRLINE_LOGOS.has(code)) return `/airline-logos/${code.toLowerCase()}.svg`;
+  return duffelAirlineLogoUrl(code, variant);
 }
