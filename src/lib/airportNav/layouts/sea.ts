@@ -73,9 +73,13 @@ const NODES: GraphNode[] = [
   n("landside-hall", -122.302000, 47.443400, "junction", "Main hall, behind central ticketing"),
 
   // ── Security checkpoints (entries landside, exits airside) ──
-  // OSM has NO security-checkpoint tagging (KEPI_DESIGN_LAW M15), so these are
-  // Kepi-curated: placed just airside (interior) of the real central/north doors
-  // toward the concourse core, per the flysea checkpoint locations. 2026-07-14.
+  // HONESTY BOUNDARY (M26): unlike the doors above, these coordinates are NOT
+  // ground truth. OSM has NO security-checkpoint tagging (KEPI_DESIGN_LAW M15)
+  // and there is no open dataset for checkpoint positions. So these are Kepi's
+  // best ESTIMATE: the checkpoint *names* (Checkpoint 3 / 5) come from the public
+  // flysea reference, but the lat/lng is inferred — placed sensibly just airside
+  // (interior) of the real, verified doors toward the concourse core. Do not
+  // present these as verified; if a real coordinate source appears, replace them.
   n("sec3-entry", -122.302100, 47.443350, "security_entry", "Checkpoint 3 — central (behind Door 12)"),
   n("sec3-exit", -122.302350, 47.443450, "security_exit", "Past Checkpoint 3"),
   n("sec5-entry", -122.302050, 47.444450, "security_entry", "Checkpoint 5 — north (behind Door 22–24)"),
@@ -214,7 +218,7 @@ const POIS: PoiDefinition[] = [
     name: "Security — Checkpoint 3",
     lanes: ["standard", "precheck"],
     doorLabel: "TSA PreCheck",
-    notes: "PreCheck is normally available; checkpoint services can change with TSA operations.",
+    notes: "Approximate location — checkpoint pin is our best estimate near the central ticketing hall. PreCheck is normally available; checkpoint services can change with TSA operations.",
   },
   {
     id: "poi-sec5",
@@ -223,6 +227,7 @@ const POIS: PoiDefinition[] = [
     name: "Security — Checkpoint 5",
     lanes: ["standard", "precheck"],
     doorLabel: "TSA PreCheck",
+    notes: "Approximate location — checkpoint pin is our best estimate near the north end of the terminal.",
   },
   { id: "poi-gate-A", nodeId: "gate-A", category: "gate", name: "A Gates" },
   { id: "poi-gate-B", nodeId: "gate-B", category: "gate", name: "B Gates" },
@@ -242,7 +247,7 @@ const POIS: PoiDefinition[] = [
 export const SEA_LAYOUT: AirportLayout = {
   iata: "SEA",
   name: "Seattle–Tacoma International",
-  layoutVersion: "0.5.0-ground-truth-doors",
+  layoutVersion: "0.5.1-honest-checkpoint-labels",
   updatedAt: "2026-07-14",
   center: [-122.30209, 47.44328],
   zones: ZONES,
