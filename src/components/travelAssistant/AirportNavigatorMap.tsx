@@ -3,7 +3,12 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@/lib/maplibreCspWorker";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
-import { buildOsmRasterFallbackStyle } from "@/lib/map/maptilerClient";
+import {
+  attachMapStyleErrorFallback,
+  buildOsmRasterFallbackStyle,
+  directMaptilerTransformRequest,
+  maptilerStyleUrl,
+} from "@/lib/map/maptilerClient";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AirportLayout, ComputedRoute, GraphEdge, PoiDefinition, SnappedPosition, TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
@@ -56,6 +61,9 @@ interface AirportNavigatorMapProps {
   proximityStatus?: string;
   /** Explore terminal layout before travel day — no live GPS routing. */
   previewMode?: boolean;
+  /** MapTiler key (from /api/config). When present we render a crisp vector
+   * OSM basemap with resizable labels; otherwise we fall back to OSM raster. */
+  maptilerKey?: string;
   /** Fill the parent (Map page embed) — no card chrome, no expand button. */
   fill?: boolean;
   minutesToDeparture: number;
@@ -711,6 +719,7 @@ export function AirportNavigatorMap({
   flightDelayed = false,
   proximityStatus = "away",
   previewMode = false,
+  maptilerKey = "",
   fill = false,
   onSwitchToFamilyView,
   familyPins = [],
@@ -734,6 +743,9 @@ export function AirportNavigatorMap({
   const userMarkerRef = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const familyMarkersRef = useRef<Record<string, any>>({});
+
+  const mapInitGraceElapsedRef = useRef(false);
+  const [mapInitGraceTick, setMapInitGraceTick] = useState(0);
 
   const [layout, setLayout] = useState<AirportLayout | null>(null);
   const [layoutStatus, setLayoutStatus] = useState<"loading" | "ready" | "unsupported" | "error">("loading");
@@ -1460,13 +1472,20 @@ export function AirportNavigatorMap({
     return `Leave by ${fmtClock(leaveByMs)}`;
   }, [journeyPhase, gateRoute, minutesRounded]);
 
-  /* ── Map init (dark schematic canvas, no remote style) ──────────────── */
+  /* ── Map init (real OSM basemap: vector when keyed, raster fallback) ──── */
   useEffect(() => {
-    // Planning mode is intentionally SVG-only: it must work without WebGL,
-    // MapTiler, or a SECOND live map competing with the family map's WebGL
-    // context + shared worker. Running the 3D map in planning made Plan-airport
-    // flash then blank (regression 2026-07-13) — keep preview on the schematic.
     if (!mapEl.current || mapRef.current || !layout) return;
+    const key = maptilerKey.trim();
+    // The key arrives async from /api/config. Wait a short grace before
+    // committing to the raster fallback so a keyed session gets the crisp
+    // vector basemap (resizable labels) instead of the baked-in raster labels.
+    if (!key && !mapInitGraceElapsedRef.current) {
+      const graceTimer = window.setTimeout(() => {
+        mapInitGraceElapsedRef.current = true;
+        setMapInitGraceTick((tick) => tick + 1);
+      }, 1200);
+      return () => window.clearTimeout(graceTimer);
+    }
     let disposed = false;
     let layersInstalled = false;
     let unbindResize: (() => void) | null = null;
@@ -1521,11 +1540,20 @@ export function AirportNavigatorMap({
         // context-limit blank). The SVG floor plan stays underneath regardless.
         if (disposed || !mapEl.current || mapRef.current) return;
         try {
+          // Real OpenStreetMap basemap — "the map from that site" (M17). When a
+          // MapTiler key is present we use the VECTOR OpenStreetMap style, whose
+          // road/place labels are real MapLibre text (crisp at any zoom, and we
+          // control size) instead of the raster fallback's baked-in pixel labels.
+          // Without a key we keep the free raster tiles. Either way the SVG floor
+          // plan underneath guarantees the screen never blanks.
+          const usingOsmFallback = { current: !key };
+          const basemapStyle: string | import("maplibre-gl").StyleSpecification = key
+            ? maptilerStyleUrl("openstreetmap", key)
+            : (buildOsmRasterFallbackStyle() as unknown as import("maplibre-gl").StyleSpecification);
           const map = new ml.Map({
             container: mapEl.current,
-            // Real OpenStreetMap tiles — this is the "map from that site" (M17).
-            // CSP already allows tile.openstreetmap.org; no API key required.
-            style: buildOsmRasterFallbackStyle(),
+            style: basemapStyle,
+            ...(key ? { transformRequest: directMaptilerTransformRequest(key) } : {}),
             center: layout.center,
             zoom: 15.4,
             minZoom: 12,
@@ -1541,6 +1569,22 @@ export function AirportNavigatorMap({
           unbindResize = bindMapResize(mapEl.current, map);
           mapCanvas = map.getCanvas();
           mapCanvas.addEventListener("webglcontextlost", handleContextLost);
+
+          // If the vector style fails (bad/missing key, CSP, timeout), drop to
+          // the raster OSM tiles and reinstall our route layer — never blank.
+          if (key) {
+            attachMapStyleErrorFallback(map, {
+              isCancelled: () => disposed,
+              isLoaded: () => layersInstalled,
+              markLoaded: () => {},
+              usingOsmFallback,
+              onRecovered: () => {
+                if (disposed) return;
+                layersInstalled = false;
+                finalizeMap(map);
+              },
+            });
+          }
 
           // Pinch-zoom works natively; add explicit +/- for one-handed use and
           // the required OpenStreetMap attribution.
@@ -1586,7 +1630,8 @@ export function AirportNavigatorMap({
       userMarkerRef.current = null;
       setMapReady(false);
     };
-  }, [layout]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layout, maptilerKey, mapInitGraceTick]);
 
   useEffect(() => {
     const map = mapRef.current;

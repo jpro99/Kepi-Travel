@@ -1,4 +1,5 @@
 import type { IndoorPositionFix, WalkwayGraph } from "./types";
+import { projectDeadReckoningOnGraph } from "./pathfinder3d";
 
 export function fuseFix(
   previous: IndoorPositionFix | null,
@@ -26,9 +27,26 @@ export function fuseFix(
   if (incoming.source === "dead_reckoning") {
     const decaySeconds = elapsedMs / 1000;
     const decay = Math.max(0.25, 1 - decaySeconds / 120);
+
+    // Map-aided dead reckoning: constrain the free-space DR estimate to the
+    // walkway graph so it never drifts through walls. Geometry only — the
+    // confidence decay below is unchanged; ambiguity lowers it further, never
+    // raises it.
+    let pos = incoming.pos;
+    let snappedNodeId = incoming.snappedNodeId;
+    let ambiguityFactor = 1;
+    if (graph && graph.nodes.length > 0) {
+      const projected = projectDeadReckoningOnGraph(graph, previous, incoming);
+      pos = projected.pos;
+      snappedNodeId = projected.snappedNodeId ?? snappedNodeId;
+      if (projected.ambiguous) ambiguityFactor = 0.6;
+    }
+
     return {
       ...incoming,
-      confidence: Math.min(previous.confidence * decay, 0.55),
+      pos,
+      snappedNodeId,
+      confidence: Math.min(previous.confidence * decay * ambiguityFactor, 0.55),
     };
   }
 

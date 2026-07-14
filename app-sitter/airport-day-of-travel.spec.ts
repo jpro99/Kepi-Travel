@@ -183,12 +183,8 @@ test.describe("SEA day-of-travel", () => {
     await expect(page.getByRole("button", { name: /Airport/i })).toHaveClass(/bg-white/);
   });
 
-  test("planning mode renders SEA on the real OpenStreetMap basemap (no MapTiler)", async ({ page }) => {
-    const mapTilerRequests: string[] = [];
+  test("planning mode renders SEA on the real OpenStreetMap basemap", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    page.on("request", (request) => {
-      if (request.url().includes("api.maptiler.com")) mapTilerRequests.push(request.url());
-    });
 
     await signIn(page);
     const slot = departureSlotMinutesFromNow(72 * 60);
@@ -199,9 +195,10 @@ test.describe("SEA day-of-travel", () => {
     const mapHost = page.getByTestId("airport-nav-indoor-map");
     const schematic = page.getByTestId("airport-nav-schematic");
     await expect(mapHost).toBeVisible({ timeout: 30_000 });
-    // Planning now shows the real OSM tile basemap (M17) with the light SVG floor
-    // plan underneath as an always-on fallback (never blanks). Zones = main
-    // terminal + North + South satellites. Basemap is OSM raster, never MapTiler.
+    // Planning now shows the real OSM basemap (M17) — the vector OpenStreetMap
+    // style when a MapTiler key is configured, otherwise the free OSM raster
+    // tiles — with the light SVG floor plan underneath as an always-on fallback
+    // (never blanks). Zones = main terminal + North + South satellites.
     await expect(schematic).toBeVisible({ timeout: 30_000 });
     await expect(schematic).toHaveAttribute("data-zone-count", "3");
     await expect(mapHost.locator("canvas").first()).toBeVisible({ timeout: 30_000 });
@@ -222,9 +219,6 @@ test.describe("SEA day-of-travel", () => {
     await expect(page.getByText(/Live step-by-step guidance starts when you arrive at SEA/i)).toBeVisible();
     await expect(page.getByRole("link", { name: "Open SEA live indoor directions" })).toBeVisible();
     await expect(page.getByTestId("family-map-drawer")).toHaveCount(0);
-
-    await page.waitForTimeout(1_500);
-    expect(mapTilerRequests).toEqual([]);
   });
 
   test("mobile Map tab exposes future SEA planning outside the airport geofence", async ({ page, context }) => {

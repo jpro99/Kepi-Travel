@@ -9,6 +9,7 @@ import type {
   SecurityLaneType,
   TravelerCredentials,
   TurnInstruction,
+  WalkwayGraph,
 } from "./types";
 import { generateId } from "@/lib/utils/generateId";
 
@@ -336,6 +337,183 @@ export function findNodeByRegion(
   region: NavGraphNode["region"],
 ): NavGraphNode | undefined {
   return model.graph.nodes.find((node) => node.region === region);
+}
+
+function bearingDegrees(a: Point3D, b: Point3D): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const toDeg = (rad: number) => (rad * 180) / Math.PI;
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const y = Math.sin(dLng) * Math.cos(lat2);
+  const x =
+    Math.cos(lat1) * Math.sin(lat2) -
+    Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+}
+
+function angularDiffDegrees(a: number, b: number): number {
+  const diff = Math.abs(a - b) % 360;
+  return diff > 180 ? 360 - diff : diff;
+}
+
+function interpolatePoint(a: Point3D, b: Point3D, fraction: number): Point3D {
+  return {
+    lng: a.lng + (b.lng - a.lng) * fraction,
+    lat: a.lat + (b.lat - a.lat) * fraction,
+    level: a.level,
+  };
+}
+
+export interface DeadReckoningProjection {
+  /** Position constrained to the walkway graph (never through a wall). */
+  pos: Point3D;
+  /** Graph node the traveler is at/nearest after walking the displacement. */
+  snappedNodeId: string | undefined;
+  /**
+   * True when the graph cannot resolve where the displacement went — an
+   * off-corridor heading or an equally-plausible branch. Callers must lower
+   * confidence; we never fabricate a turn the graph does not offer.
+   */
+  ambiguous: boolean;
+  /** Meters actually advanced along the graph (<= raw displacement). */
+  advancedMeters: number;
+}
+
+const DR_MIN_MOVE_M = 0.75;
+const DR_MAX_TURN_DEG = 70;
+const DR_BRANCH_AMBIGUITY_DEG = 30;
+
+/**
+ * Map-aided dead reckoning.
+ *
+ * A raw dead-reckoning fix is a free-space estimate (step count + heading) and
+ * drifts — projected naively it walks straight through walls and snaps to the
+ * geometrically-nearest node even when that node is unreachable. This constrains
+ * the previous→incoming displacement to the airport walkway graph: starting from
+ * the last known node, it walks the displacement distance along connected edges,
+ * following the edge whose bearing best matches the traveler's heading and
+ * transitioning at junctions. It refuses to invent a turn the graph does not
+ * offer (marks `ambiguous`) and refuses to pick between two equally-plausible
+ * branches (marks `ambiguous`). It only constrains geometry — it never raises
+ * confidence; the caller keeps the dead-reckoning decay and adds an ambiguity
+ * penalty.
+ */
+export function projectDeadReckoningOnGraph(
+  graph: WalkwayGraph,
+  previous: IndoorPositionFix,
+  incoming: IndoorPositionFix,
+): DeadReckoningProjection {
+  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
+
+  let anchor: NavGraphNode | null = null;
+  if (previous.snappedNodeId) {
+    anchor = nodeById.get(previous.snappedNodeId) ?? null;
+  }
+  if (!anchor) anchor = nearestNode(graph, previous);
+  if (!anchor) {
+    return {
+      pos: incoming.pos,
+      snappedNodeId: incoming.snappedNodeId,
+      ambiguous: false,
+      advancedMeters: 0,
+    };
+  }
+
+  const displacementM = haversineMeters(previous.pos, incoming.pos);
+  if (displacementM < DR_MIN_MOVE_M) {
+    return {
+      pos: { ...anchor.pos },
+      snappedNodeId: anchor.id,
+      ambiguous: false,
+      advancedMeters: 0,
+    };
+  }
+
+  const travelBearing = bearingDegrees(previous.pos, incoming.pos);
+
+  const adjacency = new Map<string, NavGraphNode[]>();
+  const pushAdjacency = (fromId: string, toId: string) => {
+    const to = nodeById.get(toId);
+    if (!to) return;
+    const list = adjacency.get(fromId) ?? [];
+    list.push(to);
+    adjacency.set(fromId, list);
+  };
+  for (const edge of graph.edges) {
+    pushAdjacency(edge.from, edge.to);
+    if (edge.bidirectional) pushAdjacency(edge.to, edge.from);
+  }
+
+  let remaining = displacementM;
+  let current = anchor;
+  let cameFromId: string | null = null;
+  let ambiguous = false;
+  let resultPos: Point3D = { ...anchor.pos };
+  let resultNodeId = anchor.id;
+  let advanced = 0;
+  let guard = 0;
+
+  while (remaining > DR_MIN_MOVE_M && guard < 128) {
+    guard += 1;
+    const allNeighbors = adjacency.get(current.id) ?? [];
+    let neighbors = allNeighbors.filter((node) => node.id !== cameFromId);
+    if (neighbors.length === 0) neighbors = allNeighbors;
+    if (neighbors.length === 0) {
+      // Isolated node: the graph offers nowhere to go but the sensors say we
+      // moved. Do not teleport — stay put and flag ambiguity.
+      if (remaining > 3) ambiguous = true;
+      break;
+    }
+
+    const scored = neighbors
+      .map((node) => ({
+        node,
+        diff: angularDiffDegrees(bearingDegrees(current.pos, node.pos), travelBearing),
+      }))
+      .sort((a, b) => a.diff - b.diff);
+
+    const best = scored[0];
+    if (best.diff > DR_MAX_TURN_DEG) {
+      // Heading points somewhere the corridors here do not go.
+      ambiguous = true;
+      break;
+    }
+    if (
+      scored.length >= 2 &&
+      scored[1].diff <= DR_MAX_TURN_DEG &&
+      scored[1].diff - best.diff < DR_BRANCH_AMBIGUITY_DEG
+    ) {
+      // Two corridors are equally plausible — refuse to guess.
+      ambiguous = true;
+      break;
+    }
+
+    const segmentM = haversineMeters(current.pos, best.node.pos);
+    if (segmentM <= 0.01) {
+      cameFromId = current.id;
+      current = best.node;
+      resultPos = { ...current.pos };
+      resultNodeId = current.id;
+      continue;
+    }
+    if (remaining < segmentM) {
+      const fraction = remaining / segmentM;
+      resultPos = interpolatePoint(current.pos, best.node.pos, fraction);
+      resultNodeId = fraction >= 0.5 ? best.node.id : current.id;
+      advanced += remaining;
+      remaining = 0;
+      break;
+    }
+    remaining -= segmentM;
+    advanced += segmentM;
+    cameFromId = current.id;
+    current = best.node;
+    resultPos = { ...current.pos };
+    resultNodeId = current.id;
+  }
+
+  return { pos: resultPos, snappedNodeId: resultNodeId, ambiguous, advancedMeters: advanced };
 }
 
 export { haversineMeters, nearestNode, resolveSecurityLane };

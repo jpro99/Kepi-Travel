@@ -1004,6 +1004,7 @@ export function LiveMapPage() {
             <AirportNavigatorMap
               fill
               previewMode={airportPreviewMode}
+              maptilerKey={maptilerKey}
               iata={navFlight.f.flightDepartureAirport ?? ""}
               gateCode={navFlight.f.flightDepartureGate ?? null}
               airlineName={navFlight.f.flightAirline ?? navFlight.f.provider ?? null}
