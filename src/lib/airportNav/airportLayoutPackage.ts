@@ -49,7 +49,7 @@ const AirportLayoutSchema = z.object({
   pois: z.array(z.object({
     id: z.string().trim().min(1),
     nodeId: z.string().trim().min(1),
-    category: z.enum(["gate", "checkin", "security", "lounge", "restroom", "train", "baggage"]),
+    category: z.enum(["gate", "checkin", "security", "lounge", "restroom", "train", "baggage", "amenity"]),
     name: z.string().trim().min(1),
     airline: z.string().trim().min(1).optional(),
     lanes: z.array(z.enum(["standard", "precheck", "clear", "clear_precheck", "priority"])).optional(),
@@ -60,6 +60,9 @@ const AirportLayoutSchema = z.object({
     airlineIataCode: z.string().trim().regex(/^[A-Za-z0-9]{2,3}$/).optional(),
     logoUrl: z.string().trim().min(1).optional(),
     doorLabel: z.string().trim().min(1).optional(),
+    // Per-POI coordinate confidence tier (M26/M27) — must persist so surveyed
+    // anchors stay distinct from calibrated estimates after republish.
+    precision: z.enum(["surveyed", "schematic", "extrapolated"]).optional(),
   })).min(1),
   gateNodeResolver: z.array(z.object({
     prefix: z.string().trim().min(1),

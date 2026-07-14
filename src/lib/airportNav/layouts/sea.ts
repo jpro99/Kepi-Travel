@@ -21,6 +21,7 @@
 
 import type { AirportLayout, GraphEdge, GraphNode, PoiDefinition, TerminalZonePolygon } from "../types";
 import { SEA_OSM_FOOTPRINTS } from "./seaFootprints";
+import { buildSeaTicketingHall } from "./seaTicketingHall";
 
 // Landside node ids — everything else in this layout is past security.
 // (security_entry sits landside; security_exit sits airside.)
@@ -197,20 +198,15 @@ const ZONES: TerminalZonePolygon[] = [
   { id: "z-sat-s", name: "South Satellite", airside: true, heightM: 11, ring: SEA_OSM_FOOTPRINTS.southSatellite },
 ];
 
+// Curve-calibrated door/airline POIs + OSM-verified amenities (M26/M27). Airline
+// counters + amenities are generated from real OSM anchors in ./seaTicketingHall.
+const TICKETING = buildSeaTicketingHall();
+
 const POIS: PoiDefinition[] = [
-  // Airline check-in counters — counter-level detail (M22): each carries its
-  // real counter door and IATA code (for a logo/brand chip). minZoomToShow keeps
-  // them out of the zoomed-out view; they reveal as you zoom into the ticketing
-  // hall, Atrius-style. Physical layout facts are hand-curated Kepi data.
-  // Section (which door) follows the public flysea north→south ordering: Alaska
-  // at the NORTH end, Delta/United central, international carriers at the SOUTH.
-  // The previous file had Alaska flipped to the south end — corrected 2026-07-14.
-  { id: "poi-checkin-as", nodeId: "checkin-north", category: "checkin", name: "Alaska check-in", airline: "Alaska", airlineIataCode: "AS", doorLabel: "Door 24", minZoomToShow: 15 },
-  { id: "poi-checkin-dl", nodeId: "checkin-center", category: "checkin", name: "Delta check-in", airline: "Delta", airlineIataCode: "DL", doorLabel: "Door 12", minZoomToShow: 15 },
-  { id: "poi-checkin-ua", nodeId: "checkin-center", category: "checkin", name: "United check-in", airline: "United", airlineIataCode: "UA", doorLabel: "Door 12", minZoomToShow: 15 },
-  { id: "poi-checkin-ac", nodeId: "checkin-south", category: "checkin", name: "Air Canada check-in", airline: "Air Canada", airlineIataCode: "AC", doorLabel: "Door 4", minZoomToShow: 15.2 },
-  { id: "poi-checkin-ek", nodeId: "checkin-south", category: "checkin", name: "Emirates check-in", airline: "Emirates", airlineIataCode: "EK", doorLabel: "Door 4", minZoomToShow: 15.2 },
-  { id: "poi-checkin-gen", nodeId: "checkin-center", category: "checkin", name: "Check-in & bag drop", doorLabel: "Doors 12–14" },
+  // Generic bag-drop stop on the surveyed central Door 12 anchor — the journey
+  // fallback when the traveler's specific airline isn't matched. Airline-specific
+  // counters (Alaska…Avianca) are generated in TICKETING, each precision-tagged.
+  { id: "poi-checkin-gen", nodeId: "checkin-center", category: "checkin", name: "Check-in & bag drop", doorLabel: "Door 12", precision: "surveyed" },
   {
     id: "poi-sec3",
     nodeId: "sec3-entry",
@@ -247,13 +243,13 @@ const POIS: PoiDefinition[] = [
 export const SEA_LAYOUT: AirportLayout = {
   iata: "SEA",
   name: "Seattle–Tacoma International",
-  layoutVersion: "0.5.1-honest-checkpoint-labels",
+  layoutVersion: "0.6.0-full-ticketing-hall",
   updatedAt: "2026-07-14",
   center: [-122.30209, 47.44328],
   zones: ZONES,
-  nodes: NODES,
-  edges: EDGES,
-  pois: POIS,
+  nodes: [...NODES, ...TICKETING.nodes],
+  edges: [...EDGES, ...TICKETING.edges],
+  pois: [...POIS, ...TICKETING.pois],
   gateNodeResolver: [
     { prefix: "A", nodeId: "gate-A" },
     { prefix: "B", nodeId: "gate-B" },

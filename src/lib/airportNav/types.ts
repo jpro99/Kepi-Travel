@@ -71,7 +71,8 @@ export type PoiCategory =
   | "lounge"
   | "restroom"
   | "train"
-  | "baggage";
+  | "baggage"
+  | "amenity";
 
 export interface PoiDefinition {
   id: string;
@@ -95,6 +96,15 @@ export interface PoiDefinition {
   logoUrl?: string;
   /** Door number / named sub-label shown next to the name, e.g. "Door 7". */
   doorLabel?: string;
+  /**
+   * Coordinate confidence tier (KEPI_DESIGN_LAW M26/M27). Keeps surveyed anchors
+   * honestly distinct from calibrated estimates in the same package:
+   *   - "surveyed"     : real coordinate read from OSM/survey data.
+   *   - "schematic"    : curve-interpolated between two surveyed anchors.
+   *   - "extrapolated" : outside the anchor span — lower confidence.
+   * Absent = treat as schematic (the package-level default grade).
+   */
+  precision?: "surveyed" | "schematic" | "extrapolated";
 }
 
 export interface AirportLayout {

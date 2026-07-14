@@ -154,6 +154,7 @@ const POI_ICON: Record<PoiDefinition["category"], string> = {
   restroom: "🚻",
   train: "🚈",
   baggage: "🎒",
+  amenity: "🍽",
 };
 
 /** Category accent colors for the light "floor-plan" schematic (flysea-style). */
@@ -165,6 +166,7 @@ const POI_COLOR: Record<PoiDefinition["category"], string> = {
   restroom: "#64748b",
   train: "#7c3aed",
   baggage: "#b45309",
+  amenity: "#0891b2",
 };
 
 /** Light floor-plan palette — shared by the SVG schematic and the 3D map. */
