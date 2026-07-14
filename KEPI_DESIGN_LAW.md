@@ -284,6 +284,10 @@ Before the traveler is at the airport (planning/`previewMode`, gate usually pend
 
 **Test:** `src/lib/airportNav/tripJourney.test.ts`, `src/lib/airportNav/layoutBounds.test.ts`
 
+**M25 — Published layout packages are cached in Redis and win over source; a seed fix only ships when the bundle version bumps AND republishes; zone rings must be simple**
+The live airport map does **not** read the bundled layout source (`sea.ts`) at runtime — `GET /api/airport-nav/[iata]/layout` calls `resolvePublishedAirportLayout`, and a **published `AirportLayoutPackage` in Redis/Blob always wins**; the bundled seed only fills in when no package exists. So editing coordinates in a bundled layout does **nothing** to production on its own — the stored package keeps serving the old geometry (this is exactly why the SEA check-in/security fix "changed nothing": Redis served seed revision 6 / `0.1.0-beta-schematic` while the corrected source was `0.4.x`). The rule: **bump the bundle's `layoutVersion` whenever you change geometry.** `resolvePublishedAirportLayout` auto-republishes a **seed-originated** stored package (identified by matching `bundledSource(iata).attribution`) when the bundle's `layoutVersion` differs, so the fix reaches live traffic without a manual admin republish — while **admin- and OSM-curated** publishes (different attribution) are never clobbered. Never "fix" a bundled layout by nudging coordinates without also bumping `layoutVersion`; never assume a source edit alone updated production; never delete/overwrite a curated (non-seed) published package from code. Separately, a node's `booleanPointInPolygon` result is only trustworthy if the ring is **simple**: every bundled zone ring (and the raw OSM footprints they derive from) must have **zero `@turf/kinks` self-intersections** and be closed — a self-intersecting ring makes containment lie near the crossing. Validate ring simplicity as a permanent test for every airport, not a one-off diagnostic.
+**Test:** `src/lib/airportNav/airportLayoutStore.test.ts`, `src/lib/airportNav/layouts/zoneRingValidity.test.ts`, `src/lib/airportNav/layouts/seaNodeContainment.test.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -497,6 +501,10 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | M18 | `src/lib/airportNav/layouts/seaLayout.test.ts` |
 | M19 | `src/lib/airportNav/schematic.test.ts` |
 | M20 | `src/lib/airportNav/deadReckoning.test.ts` |
+| M21, M24 | `src/lib/airportNav/tripJourney.test.ts` |
+| M22 | `src/lib/airportNav/poiDetail.test.ts` |
+| M23 | `src/lib/airportNav/layouts/seaNodeContainment.test.ts` |
+| M25 | `src/lib/airportNav/airportLayoutStore.test.ts`, `src/lib/airportNav/layouts/zoneRingValidity.test.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |

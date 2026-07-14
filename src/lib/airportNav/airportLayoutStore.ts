@@ -52,7 +52,7 @@ function revisionIndexKey(iata: string): string {
   return `${AIRPORT_LAYOUT_KEY_PREFIX}${normalizeIata(iata)}:revisions`;
 }
 
-function bundledSource(iata: string): AirportLayoutPackageSource {
+export function bundledSource(iata: string): AirportLayoutPackageSource {
   return {
     ownership: "kepi_original",
     attribution: `Kepi original ${iata} terminal schematic (approximate, not survey-grade)`,
@@ -213,6 +213,16 @@ export async function saveAirportLayoutPackage(
   return finalPackage;
 }
 
+/**
+ * True when a stored package originated from our own compiled seed bundle (not
+ * an admin manual publish or an OSM import). Seed packages carry the fixed
+ * attribution `bundledSource()` produces; admin/OSM-curated publishes supply a
+ * different attribution, so they are never auto-replaced by the code bundle.
+ */
+function isSeedOriginatedPackage(pkg: AirportLayoutPackage, iata: string): boolean {
+  return pkg.source.attribution === bundledSource(iata).attribution;
+}
+
 export async function resolvePublishedAirportLayout(inputIata: string): Promise<{
   layout: AirportLayout | null;
   package: AirportLayoutPackage | null;
@@ -220,11 +230,30 @@ export async function resolvePublishedAirportLayout(inputIata: string): Promise<
 }> {
   const iata = normalizeIata(inputIata);
   const stored = await getStoredAirportLayoutPackage(iata, "published");
+  const bundled = getAirportLayout(iata);
+
   if (stored) {
+    // A published package our own seed path created must never pin outdated
+    // geometry after we ship a corrected bundle. "Database wins" is right for
+    // admin/OSM-curated packages, but a code-owned seed whose bundle now carries
+    // a newer layoutVersion has to re-publish itself so live traffic gets the
+    // fix without a manual admin republish (KEPI_DESIGN_LAW M25). This is exactly
+    // why the SEA check-in/security fix never reached the live map: the source
+    // edit changed the bundle, but Redis kept serving the old seeded revision.
+    if (
+      bundled &&
+      isSeedOriginatedPackage(stored, iata) &&
+      stored.layout.layoutVersion !== bundled.layoutVersion
+    ) {
+      const reseeded = await saveAirportLayoutPackage(bundled, bundledSource(iata), {
+        status: "published",
+        previewConfirmation: { by: SEED_PREVIEW_CONFIRMER },
+      });
+      return { layout: reseeded.layout, package: reseeded, source: "bundled" };
+    }
     return { layout: stored.layout, package: stored, source: "database" };
   }
 
-  const bundled = getAirportLayout(iata);
   if (!bundled) return { layout: null, package: null, source: "none" };
 
   const draft = await getStoredAirportLayoutPackage(iata, "draft");

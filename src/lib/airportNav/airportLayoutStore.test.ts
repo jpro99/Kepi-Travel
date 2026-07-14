@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import test, { before } from "node:test";
 import { resetRedisClientCacheForTests } from "@/lib/redis";
 import {
+  bundledSource,
   getStoredAirportLayoutPackage,
   listAirportLayoutPackageIatas,
   listAirportLayoutRevisionRecords,
@@ -103,4 +104,57 @@ test("unknown airports resolve to none without inventing geometry", async () => 
   const resolved = await resolvePublishedAirportLayout("ZZX");
   assert.equal(resolved.layout, null);
   assert.equal(resolved.source, "none");
+});
+
+// M25 — a seed-originated published package must re-publish itself when the
+// shipped bundle carries a newer layoutVersion. This is the exact bug behind the
+// SEA check-in/security fix: the source geometry was corrected, but Redis kept
+// serving an old seeded revision so the live map never changed.
+test("stale seed-originated published package auto-refreshes to the newer bundle", async () => {
+  // Simulate a previously-seeded SEA published at an old layoutVersion.
+  const stale: AirportLayout = {
+    ...structuredClone(SEA_LAYOUT),
+    layoutVersion: "0.0.1-stale-seed",
+  };
+  const staleSaved = await saveAirportLayoutPackage(stale, bundledSource("SEA"), {
+    status: "published",
+    previewConfirmation: { by: SEED_PREVIEW_CONFIRMER },
+  });
+  assert.equal(staleSaved.layout.layoutVersion, "0.0.1-stale-seed");
+
+  // Resolving now serves the CURRENT bundle, not the stale stored revision.
+  const resolved = await resolvePublishedAirportLayout("SEA");
+  assert.equal(resolved.source, "bundled");
+  assert.equal(resolved.layout?.layoutVersion, SEA_LAYOUT.layoutVersion);
+  assert.notEqual(resolved.layout?.layoutVersion, "0.0.1-stale-seed");
+  // A fresh revision was written so subsequent reads are already up to date.
+  assert.ok((resolved.package?.revision ?? 0) > staleSaved.revision);
+
+  const stored = await getStoredAirportLayoutPackage("SEA", "published");
+  assert.equal(stored?.layout.layoutVersion, SEA_LAYOUT.layoutVersion);
+});
+
+// The reseed must NEVER clobber an admin- or OSM-curated publish. Those carry a
+// different attribution than the compiled seed, so "database wins" still holds.
+test("admin/OSM-curated published package is not overwritten by the bundle", async () => {
+  const curated: AirportLayout = {
+    ...structuredClone(SEA_LAYOUT),
+    layoutVersion: "9.9.9-curated-survey",
+  };
+  const curatedSource = {
+    ownership: "kepi_original" as const,
+    attribution: "Map data © OpenStreetMap contributors (curated import)",
+    sourceUrls: ["https://www.openstreetmap.org/"],
+    licenseNote: "Kepi-owned geometry derived from OSM under ODbL.",
+    lastVerifiedAt: "2026-07-14",
+  };
+  const curatedSaved = await saveAirportLayoutPackage(curated, curatedSource, {
+    status: "published",
+    previewConfirmation: { by: "admin-human" },
+  });
+
+  const resolved = await resolvePublishedAirportLayout("SEA");
+  assert.equal(resolved.source, "database");
+  assert.equal(resolved.layout?.layoutVersion, "9.9.9-curated-survey");
+  assert.equal(resolved.package?.revision, curatedSaved.revision);
 });
