@@ -249,6 +249,11 @@ The live MapLibre view already renders every zone ring as a 3D `fill-extrusion`,
 
 **Test:** `src/lib/airportNav/layoutBounds.test.ts`
 
+**M18 — SEA ships the real OSM footprint with a hand-curated routing graph**
+The SEA pilot (`src/lib/airportNav/layouts/sea.ts`) renders the airport's **real shape**: one main terminal (concourses A–D radiate inside it) plus the North and South satellites, from OpenStreetMap (`./seaFootprints.ts`, `Map data © OpenStreetMap contributors`, ODbL — regenerate, never hand-edit). Node anchors use real OSM gate-cluster centroids so pins sit on the real building. Per M15, the **routing graph stays Kepi-curated** — security checkpoints/lanes, walkways, train links and their calibrated traverse times are hand-authored (OSM has no security tagging). Never replace the curated graph with the raw OSM star-skeleton, and never fabricate security to make the map look complete. Gate anchors must fall inside their matching footprint (no pins in water/parking).
+
+**Test:** `src/lib/airportNav/layouts/seaLayout.test.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -459,6 +464,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | M15 | `src/lib/airportNav/osmImport.test.ts` |
 | M16 | `src/lib/airportNav/directionArrow.test.ts` |
 | M17 | `src/lib/airportNav/layoutBounds.test.ts` |
+| M18 | `src/lib/airportNav/layouts/seaLayout.test.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |

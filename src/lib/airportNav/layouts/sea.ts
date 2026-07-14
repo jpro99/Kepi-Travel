@@ -1,11 +1,17 @@
 /**
- * SEA (Seattle–Tacoma) curated layout — Phase 0 pilot airport.
+ * SEA (Seattle–Tacoma) curated layout — pilot airport.
  *
- * IMPORTANT HONESTY NOTE: this is a SCHEMATIC v1 layout. Building footprints
- * and node coordinates are approximate (±50–100m). The navigator never trusts
- * raw GPS against this geometry — positions are snapped to the walkway graph
- * and rendered with a confidence halo. Refine coordinates with an on-site
- * curation pass (see spec §H Phase 0 risks) before removing the beta label.
+ * GEOMETRY (2026-07-13): terminal + satellite *footprints* and node anchors are
+ * now the airport's REAL shape, extracted from OpenStreetMap (see
+ * ./seaFootprints.ts, `Map data © OpenStreetMap contributors`, ODbL). SEA is
+ * one main terminal (concourses A–D radiate inside it) plus the North and South
+ * satellites reached by underground train — not eight separate boxes.
+ *
+ * ROUTING (Kepi-curated, NOT from OSM): OSM has no security-checkpoint tagging
+ * (KEPI_DESIGN_LAW M15), so security nodes/lanes, walkways, train links and
+ * their calibrated traverse times remain hand-authored. Node coordinates are
+ * real to ~tens of meters; the navigator still snaps GPS to the graph and shows
+ * a confidence halo rather than trusting raw indoor GPS.
  *
  * Graph timings are seeded from src/lib/travelAssistant/airportNavigation.ts:
  *   - security → C gates: ~3 min walk straight ahead
@@ -14,10 +20,7 @@
  */
 
 import type { AirportLayout, GraphEdge, GraphNode, PoiDefinition, TerminalZonePolygon } from "../types";
-
-// ── Anchor coordinates (approximate, schematic) ────────────────────────────
-// Main terminal runs roughly N–S just west of International Blvd.
-const MAIN_LNG = -122.3005;
+import { SEA_OSM_FOOTPRINTS } from "./seaFootprints";
 
 // Landside node ids — everything else in this layout is past security.
 // (security_entry sits landside; security_exit sits airside.)
@@ -36,48 +39,49 @@ function n(
   return { id, pos: [lng, lat], kind, airside: !LANDSIDE_NODE_IDS.has(id), landmark };
 }
 
-const LAT_BASE = 47.4428; // south end of ticketing hall (approx)
-
+// ── Real anchor coordinates (OSM-derived, 2026-07-13) ──────────────────────
+// Main terminal is an X: A gates SE, B gates SW, C gates NW, D gates NE, with
+// ticketing along the east (departures drive) and security in the core.
 const NODES: GraphNode[] = [
-  // ── Landside ticketing hall (north/center/south zones) ──
-  n("checkin-south", MAIN_LNG + 0.0006, LAT_BASE + 0.0004, "checkin", "Ticketing — south end (Alaska)"),
-  n("checkin-center", MAIN_LNG + 0.0006, LAT_BASE + 0.0016, "checkin", "Ticketing — center (Delta, United)"),
-  n("checkin-north", MAIN_LNG + 0.0006, LAT_BASE + 0.0028, "checkin", "Ticketing — north end (international)"),
-  n("landside-hall", MAIN_LNG + 0.0004, LAT_BASE + 0.0016, "junction", "Main hall, behind ticketing"),
+  // ── Landside ticketing hall (east side of the main terminal) ──
+  n("checkin-south", -122.30020, 47.44245, "checkin", "Ticketing — south end (Alaska)"),
+  n("checkin-center", -122.30040, 47.44330, "checkin", "Ticketing — center (Delta, United)"),
+  n("checkin-north", -122.30060, 47.44430, "checkin", "Ticketing — north end (international)"),
+  n("landside-hall", -122.30110, 47.44330, "junction", "Main hall, behind ticketing"),
 
   // ── Security checkpoints (entries landside, exits airside) ──
-  n("sec3-entry", MAIN_LNG + 0.0002, LAT_BASE + 0.0012, "security_entry", "Checkpoint 3 — center of the hall"),
-  n("sec3-exit", MAIN_LNG - 0.0002, LAT_BASE + 0.0012, "security_exit", "Past Checkpoint 3"),
-  n("sec5-entry", MAIN_LNG + 0.0002, LAT_BASE + 0.0024, "security_entry", "Checkpoint 5 — north end"),
-  n("sec5-exit", MAIN_LNG - 0.0002, LAT_BASE + 0.0024, "security_exit", "Past Checkpoint 5"),
+  n("sec3-entry", -122.30150, 47.44305, "security_entry", "Checkpoint 3 — center of the hall"),
+  n("sec3-exit", -122.30195, 47.44315, "security_exit", "Past Checkpoint 3"),
+  n("sec5-entry", -122.30170, 47.44430, "security_entry", "Checkpoint 5 — north end"),
+  n("sec5-exit", -122.30205, 47.44440, "security_exit", "Past Checkpoint 5"),
 
   // ── Airside central spine ──
-  n("airside-central", MAIN_LNG - 0.0006, LAT_BASE + 0.0016, "junction", "Central airside concourse"),
-  n("airside-south", MAIN_LNG - 0.0006, LAT_BASE + 0.0004, "junction", "South airside — toward A/B gates"),
-  n("airside-north", MAIN_LNG - 0.0006, LAT_BASE + 0.0028, "junction", "North airside — toward C/D gates"),
+  n("airside-central", -122.30210, 47.44340, "junction", "Central airside concourse"),
+  n("airside-south", -122.30190, 47.44120, "junction", "South airside — toward A/B gates"),
+  n("airside-north", -122.30200, 47.44540, "junction", "North airside — toward C/D gates"),
 
-  // ── Concourse anchors (gate clusters) ──
-  n("gate-A", MAIN_LNG - 0.0002, LAT_BASE - 0.0010, "gate", "Concourse A gates"),
-  n("gate-B", MAIN_LNG - 0.0014, LAT_BASE - 0.0002, "gate", "Concourse B gates"),
-  n("gate-C", MAIN_LNG - 0.0014, LAT_BASE + 0.0030, "gate", "Concourse C gates"),
-  n("gate-D", MAIN_LNG - 0.0002, LAT_BASE + 0.0040, "gate", "Concourse D gates"),
+  // ── Concourse anchors (real gate-cluster centroids) ──
+  n("gate-A", -122.29917, 47.44026, "gate", "Concourse A gates"),
+  n("gate-B", -122.30376, 47.44159, "gate", "Concourse B gates"),
+  n("gate-C", -122.30381, 47.44554, "gate", "Concourse C gates"),
+  n("gate-D", -122.29997, 47.44577, "gate", "Concourse D gates"),
 
   // ── Train platforms + satellites ──
-  n("train-C", MAIN_LNG - 0.0016, LAT_BASE + 0.0034, "train_platform", "N Gates train — red sign near Gate C18"),
-  n("train-N", MAIN_LNG - 0.0034, LAT_BASE + 0.0050, "train_platform", "North Satellite train platform"),
-  n("gate-N", MAIN_LNG - 0.0038, LAT_BASE + 0.0056, "gate", "North Satellite (N gates)"),
-  n("train-S-main", MAIN_LNG - 0.0010, LAT_BASE + 0.0010, "train_platform", "S Gates train — lower level, central terminal"),
-  n("train-S", MAIN_LNG - 0.0040, LAT_BASE - 0.0006, "train_platform", "South Satellite train platform"),
-  n("gate-S", MAIN_LNG - 0.0044, LAT_BASE - 0.0010, "gate", "South Satellite (S gates)"),
+  n("train-C", -122.30330, 47.44620, "train_platform", "N Gates train — red sign near Gate C18"),
+  n("train-N", -122.30268, 47.44820, "train_platform", "North Satellite train platform"),
+  n("gate-N", -122.30258, 47.44862, "gate", "North Satellite (N gates)"),
+  n("train-S-main", -122.30200, 47.44230, "train_platform", "S Gates train — lower level, central terminal"),
+  n("train-S", -122.30205, 47.43950, "train_platform", "South Satellite train platform"),
+  n("gate-S", -122.30214, 47.43881, "gate", "South Satellite (S gates)"),
 
-  // ── Lounges ──
-  n("lounge-alaska-c", MAIN_LNG - 0.0012, LAT_BASE + 0.0026, "lounge", "Alaska Lounge — Concourse C, upper level"),
-  n("lounge-alaska-n", MAIN_LNG - 0.0037, LAT_BASE + 0.0054, "lounge", "Alaska Lounge — North Satellite"),
-  n("lounge-centurion", MAIN_LNG - 0.0007, LAT_BASE + 0.0020, "lounge", "Amex Centurion Lounge — Central Terminal mezzanine"),
-  n("lounge-club-a", MAIN_LNG - 0.0001, LAT_BASE - 0.0008, "lounge", "The Club at SEA — Concourse A"),
+  // ── Lounges (real OSM positions) ──
+  n("lounge-alaska-c", -122.30228, 47.44460, "lounge", "Alaska Lounge — Concourse C, upper level"),
+  n("lounge-alaska-n", -122.30358, 47.44917, "lounge", "Alaska Lounge — North Satellite"),
+  n("lounge-centurion", -122.30312, 47.44241, "lounge", "Amex Centurion Lounge — Central Terminal mezzanine"),
+  n("lounge-club-a", -122.29950, 47.44060, "lounge", "The Club at SEA — Concourse A"),
 
   // ── Services ──
-  n("restroom-central", MAIN_LNG - 0.0007, LAT_BASE + 0.0014, "restroom", "Restrooms — central airside"),
+  n("restroom-central", -122.30210, 47.44345, "restroom", "Restrooms — central airside"),
 ];
 
 function e(
@@ -104,6 +108,8 @@ function e(
 const WALK_MPS = 1.25; // ~3 mph with carry-on
 const walkSecs = (m: number) => Math.round(m / WALK_MPS);
 
+// Traverse times are calibrated from real SEA walk/train timings and stay
+// authoritative for routing; the drawn polyline follows the real node coords.
 const EDGES: GraphEdge[] = [
   // Landside hall connections
   e("e-cs-hall", "checkin-south", "landside-hall", "walkway", 110, walkSecs(110)),
@@ -150,43 +156,11 @@ const EDGES: GraphEdge[] = [
   e("e-central-restroom", "airside-central", "restroom-central", "walkway", 30, walkSecs(30)),
 ];
 
-// ── Schematic footprint polygons (extruded in the renderer) ────────────────
-function rect(
-  id: string,
-  name: string,
-  cLng: number,
-  cLat: number,
-  wDeg: number,
-  hDeg: number,
-  airside: boolean,
-  heightM: number,
-): TerminalZonePolygon {
-  const hw = wDeg / 2;
-  const hh = hDeg / 2;
-  return {
-    id,
-    name,
-    airside,
-    heightM,
-    ring: [
-      [cLng - hw, cLat - hh],
-      [cLng + hw, cLat - hh],
-      [cLng + hw, cLat + hh],
-      [cLng - hw, cLat + hh],
-      [cLng - hw, cLat - hh],
-    ],
-  };
-}
-
+// ── Real terminal footprints (OpenStreetMap, extruded in the renderer) ─────
 const ZONES: TerminalZonePolygon[] = [
-  rect("z-main", "Main Terminal", MAIN_LNG + 0.0002, LAT_BASE + 0.0016, 0.0014, 0.0036, false, 14),
-  rect("z-airside", "Central Concourse", MAIN_LNG - 0.0007, LAT_BASE + 0.0016, 0.0008, 0.0034, true, 12),
-  rect("z-conc-a", "Concourse A", MAIN_LNG - 0.0001, LAT_BASE - 0.0009, 0.0010, 0.0010, true, 10),
-  rect("z-conc-b", "Concourse B", MAIN_LNG - 0.0014, LAT_BASE - 0.0002, 0.0010, 0.0010, true, 10),
-  rect("z-conc-c", "Concourse C", MAIN_LNG - 0.0014, LAT_BASE + 0.0030, 0.0012, 0.0012, true, 10),
-  rect("z-conc-d", "Concourse D", MAIN_LNG - 0.0002, LAT_BASE + 0.0040, 0.0010, 0.0010, true, 10),
-  rect("z-sat-n", "North Satellite", MAIN_LNG - 0.0038, LAT_BASE + 0.0055, 0.0014, 0.0012, true, 10),
-  rect("z-sat-s", "South Satellite", MAIN_LNG - 0.0043, LAT_BASE - 0.0009, 0.0014, 0.0012, true, 10),
+  { id: "z-main", name: "Main Terminal", airside: false, heightM: 14, ring: SEA_OSM_FOOTPRINTS.mainTerminal },
+  { id: "z-sat-n", name: "North Satellite", airside: true, heightM: 11, ring: SEA_OSM_FOOTPRINTS.northSatellite },
+  { id: "z-sat-s", name: "South Satellite", airside: true, heightM: 11, ring: SEA_OSM_FOOTPRINTS.southSatellite },
 ];
 
 const POIS: PoiDefinition[] = [
@@ -227,9 +201,9 @@ const POIS: PoiDefinition[] = [
 export const SEA_LAYOUT: AirportLayout = {
   iata: "SEA",
   name: "Seattle–Tacoma International",
-  layoutVersion: "0.1.0-beta-schematic",
+  layoutVersion: "0.2.0-osm-footprint",
   updatedAt: "2026-07-13",
-  center: [MAIN_LNG - 0.0006, LAT_BASE + 0.0016],
+  center: [-122.30209, 47.44328],
   zones: ZONES,
   nodes: NODES,
   edges: EDGES,
