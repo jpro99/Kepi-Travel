@@ -229,21 +229,24 @@ const POIS: PoiDefinition[] = [
   { id: "poi-gate-B", nodeId: "gate-B", category: "gate", name: "B Gates" },
   { id: "poi-gate-C", nodeId: "gate-C", category: "gate", name: "C Gates" },
   { id: "poi-gate-D", nodeId: "gate-D", category: "gate", name: "D Gates" },
-  { id: "poi-gate-N", nodeId: "gate-N", category: "gate", name: "N Gates (North Satellite)" },
-  { id: "poi-gate-S", nodeId: "gate-S", category: "gate", name: "S Gates (South Satellite)" },
+  { id: "poi-gate-N", nodeId: "gate-N", category: "gate", name: "N Gates (North Satellite) · train" },
+  { id: "poi-gate-S", nodeId: "gate-S", category: "gate", name: "S Gates (South Satellite) · train" },
   { id: "poi-lounge-akc", nodeId: "lounge-alaska-c", category: "lounge", name: "Alaska Lounge (C)", airline: "Alaska" },
   { id: "poi-lounge-akn", nodeId: "lounge-alaska-n", category: "lounge", name: "Alaska Lounge (N)", airline: "Alaska" },
   { id: "poi-lounge-centurion", nodeId: "lounge-centurion", category: "lounge", name: "Centurion Lounge" },
   { id: "poi-lounge-club-a", nodeId: "lounge-club-a", category: "lounge", name: "The Club at SEA (A)" },
   { id: "poi-restroom", nodeId: "restroom-central", category: "restroom", name: "Restrooms" },
-  { id: "poi-train-n", nodeId: "train-C", category: "train", name: "N Gates Train" },
-  { id: "poi-train-s", nodeId: "train-S-main", category: "train", name: "S Gates Train" },
+  // The N/S satellite trains are NOT separate destinations. Tapping "N Gates" /
+  // "S Gates" routes the full walk → train → walk in one line (the ride shows as
+  // the dashed violet leg), so standalone "N Gates Train" / "S Gates Train" stops
+  // were removed to end the confusing duplicate (owner, 2026-07-14). The train
+  // nodes/edges (train-C, train-N, train-S-main, train-S) remain for routing.
 ];
 
 export const SEA_LAYOUT: AirportLayout = {
   iata: "SEA",
   name: "Seattle–Tacoma International",
-  layoutVersion: "0.6.0-full-ticketing-hall",
+  layoutVersion: "0.7.0-fold-train-stops",
   updatedAt: "2026-07-14",
   center: [-122.30209, 47.44328],
   zones: ZONES,
