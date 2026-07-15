@@ -338,7 +338,12 @@ Anything OSM already tags with a real coordinate and a useful name (shops, food,
 **M35 — Staleness, import diffs, and traveler-facing precision honesty (every airport)**
 Layouts go stale when airlines move counters and OSM updates. Every package carries `source.lastVerifiedAt`; past `LAYOUT_STALENESS_DAYS` (180) the admin curation queue surfaces **Needs re-verification** (`layoutStaleness.ts`). Re-importing OSM against a published/bundled baseline returns a POI-level **diff** (`layoutDiff.ts` — added/removed/moved ≥25 m) and never auto-publishes. Traveler map labels must hedge schematic/extrapolated pins (`poiLocationHonestyTag` → "approx. location" / "estimated location"; security still uses M32's "approx. area") so a curve-interpolated check-in never looks as confident as a surveyed OSM door. Reference-image georeferencing is wired in admin (`ReferenceImageGeorefPanel` + `referenceImageDraft.ts`) — affine drafts stay schematic/extrapolated until click-to-place confirm.
 
-**Test:** `src/lib/airportNav/layoutStaleness.test.ts`, `src/lib/airportNav/layoutDiff.test.ts`, `src/lib/airportNav/poiPrecisionHonesty.test.ts`, `src/lib/airportNav/referenceImageDraft.test.ts`
+**Test:** `src/lib/airportNav/layoutStaleness.test.ts`, `src/lib/airportNav/layoutDiff.test.ts`, `src/lib/airportNav/poiPrecisionHonesty.test.ts`, `src/lib/airportNav/referenceImageDraft.test.ts`, `src/lib/airportNav/allAirportsPrecisionHonesty.test.ts`
+
+**M36 — Door-ref anchors must be monotonically ordered along the facade before they drive a curve**
+`doorCurve.ts` interpolates by door number, assuming that ordinal tracks physical order along the ticketing facade. A mis-tagged OSM entrance (real coordinate, wrong `ref` — SEA's old Door 24) silently poisons every interpolated counter near it. `findMonotonicityOutliers(anchors)` projects anchors onto the best-fit line through the set and flags any door that reverses relative to its neighbors; `osmImport` surfaces each outlier as a draft warning ("exclude before using as a curve anchor"). Airport-agnostic — no hardcoded axis. Curated SEA anchors (4/12/14/20/22) must pass; a synthetic mid-facade high-number ref must fail.
+
+**Test:** `src/lib/airportNav/doorMonotonicity.test.ts`
 
 ---
 
@@ -566,7 +571,8 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | M32 | `src/lib/airportNav/securityDisclosure.test.ts` |
 | M33 | `src/lib/airportNav/osmGroundTruth.test.ts` |
 | M34 | `src/lib/airportNav/osmImport.test.ts`, `src/lib/airportNav/controlPointAnchors.test.ts`, `src/lib/airportNav/controlPointTransform.test.ts`, `src/lib/airportNav/clickToPlace.test.ts` |
-| M35 | `src/lib/airportNav/layoutStaleness.test.ts`, `src/lib/airportNav/layoutDiff.test.ts`, `src/lib/airportNav/poiPrecisionHonesty.test.ts`, `src/lib/airportNav/referenceImageDraft.test.ts` |
+| M35 | `src/lib/airportNav/layoutStaleness.test.ts`, `src/lib/airportNav/layoutDiff.test.ts`, `src/lib/airportNav/poiPrecisionHonesty.test.ts`, `src/lib/airportNav/referenceImageDraft.test.ts`, `src/lib/airportNav/allAirportsPrecisionHonesty.test.ts` |
+| M36 | `src/lib/airportNav/doorMonotonicity.test.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |

@@ -28,3 +28,12 @@ export function hasAirportLayout(iata: string | null | undefined): boolean {
 export function listSupportedIndoorAirports(): string[] {
   return Object.keys(LAYOUTS);
 }
+
+/**
+ * Every bundled layout in registry order. Cross-airport law tests must loop this
+ * (not hand-copied SEA/LAX/ONT arrays) so a new getLayout entry automatically
+ * inherits M29 / M30 / M31 / M32 / M35 coverage.
+ */
+export function listAllBundledLayouts(): AirportLayout[] {
+  return Object.values(LAYOUTS);
+}

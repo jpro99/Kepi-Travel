@@ -1,8 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SEA_LAYOUT } from "./layouts/sea";
-import { LAX_LAYOUT } from "./layouts/lax";
-import { ONT_LAYOUT } from "./layouts/ont";
+import { listAllBundledLayouts } from "./getLayout";
 import { validateAirportLayoutGraph } from "./airportLayoutPackage";
 import type { AirportLayout } from "./types";
 
@@ -11,16 +9,10 @@ import type { AirportLayout } from "./types";
  * EVERY airport in the registry, enforced in shared code (validateAirportLayoutGraph),
  * never special-cased per IATA.
  *
- *  M31 — landside↔airside may only be crossed through a `security_transition`
- *        edge, so "security past the gates" / a sterile-area bypass is impossible
- *        in the data, not merely wrong on the map.
- *  M32 — a `security` POI may never claim `precision: "surveyed"` — checkpoints
- *        have zero public ground truth anywhere and stay permanently approximate.
+ * Layouts come from listAllBundledLayouts() — no duplicated SEA/LAX/ONT arrays.
  */
 
-const ALL_LAYOUTS: AirportLayout[] = [SEA_LAYOUT, LAX_LAYOUT, ONT_LAYOUT];
-
-for (const layout of ALL_LAYOUTS) {
+for (const layout of listAllBundledLayouts()) {
   test(`${layout.iata} obeys landside/airside topology + security-approximate invariants`, () => {
     const issues = validateAirportLayoutGraph(layout);
     const topology = issues.filter((i) => i.includes("(M31)"));

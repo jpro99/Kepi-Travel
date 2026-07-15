@@ -121,6 +121,10 @@ These are agent playbooks, not autonomous runtime bots. Jeff instructs the condu
 
 ## Fix log
 
+### 2026-07-15 (Session — generator hardening phase 1: registry + M36)
+- **`listAllBundledLayouts()`** in `getLayout.ts` — M29/M30/M31/M32/M35 cross-airport tests loop one registry (no duplicated SEA/LAX/ONT arrays).
+- **M36** `findMonotonicityOutliers` — door-ref facade order; osmImport warns; SEA anchors pass; synthetic mid-facade Door 24 fails.
+
 ### 2026-07-15 (Session — M35 verification follow-up after 79db246)
 - **SEA airlines:** Icelandair → Door 7 (Port PDF cluster); Southwest Door 17 ESTIMATE; AA/F9/SY Door 21; Alaska surveyed OSM Door 22.
 - **SEA_DOOR_ANCHORS** rematched to OSM entrance nodes 4/12/14/20/22 (2026-07-15).

@@ -30,6 +30,7 @@ import {
   poolControlPointAnchors,
   summarizeControlPointPool,
 } from "@/lib/airportNav/controlPointAnchors";
+import { findMonotonicityOutliers, type DoorAnchor } from "@/lib/airportNav/doorCurve";
 
 export const OSM_ATTRIBUTION = "Map data © OpenStreetMap contributors";
 export const OSM_LICENSE_NOTE =
@@ -160,6 +161,21 @@ function pointFromElement(el: OsmElement): [number, number] | null {
   const ring = ringFromElement(el);
   if (ring) return centroid(ring);
   return null;
+}
+
+/** Numeric entrance `ref` nodes suitable as doorCurve anchors (M36 input). */
+export function doorAnchorsFromOsmElements(elements: OsmElement[]): DoorAnchor[] {
+  const out: DoorAnchor[] = [];
+  for (const el of elements) {
+    const tags = el.tags ?? {};
+    if (!tags.entrance) continue;
+    const ref = tags.ref?.trim();
+    if (!ref || !/^\d+$/.test(ref)) continue;
+    const pos = pointFromElement(el);
+    if (!pos) continue;
+    out.push({ door: Number(ref), lng: pos[0], lat: pos[1] });
+  }
+  return out;
 }
 
 function slug(value: string): string {
@@ -401,6 +417,15 @@ export function convertOsmToLayoutDraft(
       `Control-point pool is thin for 2D georeferencing (${controlAnchors.length} anchors across ` +
         `${Object.values(poolSummary).filter((n) => n > 0).length} kinds) — door-row curve interpolation ` +
         `is still fine; pool more gates/elevators before trusting depth into the terminal.`,
+    );
+  }
+
+  // M36 — entrance refs that break facade monotonicity poison doorCurve anchors.
+  const doorAnchors = doorAnchorsFromOsmElements(elements);
+  const doorOutliers = findMonotonicityOutliers(doorAnchors);
+  for (const outlier of doorOutliers) {
+    warnings.push(
+      `Door ref ${outlier.door} breaks monotonic order with its neighbors — likely mis-tagged, exclude before using as a curve anchor (M36).`,
     );
   }
 

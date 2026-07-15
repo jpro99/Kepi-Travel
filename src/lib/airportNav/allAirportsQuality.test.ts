@@ -1,27 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { SEA_LAYOUT } from "./layouts/sea";
-import { LAX_LAYOUT } from "./layouts/lax";
-import { ONT_LAYOUT } from "./layouts/ont";
-import type { AirportLayout } from "./types";
+import { listAllBundledLayouts } from "./getLayout";
 import { auditLayoutRouting } from "./layoutQuality";
 
 /**
  * KEPI_DESIGN_LAW M29 — every bundled airport layout must pass the generic
  * routing-quality audit (reachability + no-backtrack + coordinate sanity).
  *
- * This test iterates ALL bundled layouts, so adding a new airport automatically
- * inherits the SEA lessons: a new layout that reintroduces the star-hub zigzag,
- * an orphaned destination, or a stray coordinate fails the build here — before
- * it can be published.
- *
- * When registering a new airport, add it to ALL_LAYOUTS below (mirrors
- * getLayout.ts LAYOUTS). Keep this list in sync with the bundled registry.
+ * Layouts come from listAllBundledLayouts() — registering in getLayout.ts is
+ * enough; do not maintain a second ALL_LAYOUTS array here.
  */
-const ALL_LAYOUTS: AirportLayout[] = [SEA_LAYOUT, LAX_LAYOUT, ONT_LAYOUT];
-
-for (const layout of ALL_LAYOUTS) {
+for (const layout of listAllBundledLayouts()) {
   test(`${layout.iata} layout passes generic routing-quality audit`, () => {
     const report = auditLayoutRouting(layout);
     assert.equal(
