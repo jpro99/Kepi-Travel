@@ -5,6 +5,9 @@ import { Haptics, ImpactStyle } from "@capacitor/haptics";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { PushNotifications } from "@capacitor/push-notifications";
 
+// Re-export canonical detection helpers so callers can import from one place.
+export { isNative, isIOS, isAndroid, isAppMode, setStatusBarStyle } from "@/lib/native/platform";
+
 type NativePlatform = "ios" | "android";
 
 interface NativePushTokenResult {
@@ -17,10 +20,6 @@ interface LocalNotificationArgs {
   body: string;
   id?: number;
   scheduleAt?: Date;
-}
-
-export function isNative(): boolean {
-  return Capacitor.isNativePlatform();
 }
 
 function resolveNativePlatform(): NativePlatform | null {

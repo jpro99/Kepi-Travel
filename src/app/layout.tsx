@@ -132,13 +132,54 @@ export default async function RootLayout({
         {process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ? (
           <meta name="vapid-public-key" content={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY} />
         ) : null}
-        <meta name="theme-color" content="#0ea5e9" />
+
+        {/* ── Standard web ── */}
+        <meta name="theme-color" content="#0b1f3a" />
+
+        {/* ── Apple PWA / Capacitor iOS ── */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        {/*
+          "black-translucent" lets the content extend edge-to-edge under the
+          notch/Dynamic Island; we then use env(safe-area-inset-*) in CSS to
+          pad content back into the safe zone.
+        */}
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Kepi" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+        {/*
+          Expand the viewport to fill behind the notch / Dynamic Island.
+          viewport-fit=cover is the key flag — it allows env(safe-area-inset-*)
+          to work and lets us paint behind the status bar.
+        */}
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1"
+        />
+
+        {/*
+          Expose safe-area insets as CSS custom properties so any component can
+          consume them without knowing the exact env() syntax.
+          --sat / --sar / --sab / --sal  (top/right/bottom/left)
+        */}
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+}
+/* Capacitor WKWebView: prevent scroll bounce and rubber-banding */
+html, body { overscroll-behavior: none; }
+/* Full viewport height that accounts for the browser chrome on iOS Safari */
+.h-dvh { height: 100dvh; }
+`,
+          }}
+        />
       </head>
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
         <ClerkProvider>
           <NextIntlClientProvider locale={locale} messages={messages}>
             <BillingProvider>
