@@ -311,7 +311,7 @@ What the audit deliberately does **NOT** do: validate coordinate *accuracy*. Onl
 **Test:** `src/lib/airportNav/layoutQuality.test.ts`, `src/lib/airportNav/allAirportsQuality.test.ts`
 
 **M30 — Never draw a walking route we can't stand behind; schematic layouts show pins + a time estimate, not a confident line**
-The routing audit (M29) proves a destination is *reachable*, but our graphs are still straight-line skeletons between estimated curb/security/gate anchors (the OSM importer does not yet pull real footways/entrances). Painting that skeleton produces a confident blue line that cuts through terminals, roads, and parking — a lie the traveler can see. So `AirportLayout.routeGrade` gates the drawn route: `"surveyed"` (graph follows verified OSM corridors) draws the full turn-by-turn line; **absent/`"schematic"` (the honest default) draws NO route line** — the real OSM basemap + accurate pins (gate/security/check-in/lounge) + an *approximate* time estimate carry the guidance, with an "Approximate layout — pins from OpenStreetMap" banner. Only flip an airport to `"surveyed"` once its graph is rebuilt from real footways (Phase 2 OSM walkable-graph pipeline). Applies everywhere the map renders (traveler Live Map + admin verify).
+The routing audit (M29) proves a destination is *reachable*, but a straight-line skeleton between curb/security/gate anchors paints a confident blue line that cuts through terminals, roads, and parking — a lie the traveler can see. So `AirportLayout.routeGrade` gates the drawn route: `"surveyed"` draws the full turn-by-turn line; **absent/`"schematic"` (the honest default) draws NO route line** — the real OSM basemap + accurate pins + an *approximate* time estimate carry the guidance, with an "Approximate layout — pins from OpenStreetMap" banner. Flip an airport to `"surveyed"` only via the Phase 2 footway overlay (M37) after journey-reachability clears. Applies everywhere the map renders (traveler Live Map + admin verify).
 
 **Test:** `src/lib/airportNav/routeGradeHonesty.test.ts`
 
@@ -344,6 +344,11 @@ Layouts go stale when airlines move counters and OSM updates. Every package carr
 `doorCurve.ts` interpolates by door number, assuming that ordinal tracks physical order along the ticketing facade. A mis-tagged OSM entrance (real coordinate, wrong `ref` — SEA's old Door 24) silently poisons every interpolated counter near it. `findMonotonicityOutliers(anchors)` projects anchors onto the best-fit line through the set and flags any door that reverses relative to its neighbors; `osmImport` surfaces each outlier as a draft warning ("exclude before using as a curve anchor"). Airport-agnostic — no hardcoded axis. Curated SEA anchors (4/12/14/20/22) must pass; a synthetic mid-facade high-number ref must fail.
 
 **Test:** `src/lib/airportNav/doorMonotonicity.test.ts`
+
+**M37 — Phase 2 surveyed routes = OSM footways + same-side snaps + honest curated bridges**
+To earn `routeGrade:"surveyed"`, overlay real OSM pedestrian ways (`highway=footway|corridor|path|steps`) via `buildFootwayGraph` + `applyFootwayOverlay`: (1) snap curated nodes only to **same-side** footways (security entry→landside, exit→airside) so M31 cannot be bypassed; (2) drop landside↔airside footway edges; (3) keep curated `security_transition` + `train`; (4) retain curated walkway **bridges** only where OSM is not a continuous sterile-area graph — and surface that count as a warning (do not claim pure-OSM corridors); (5) flip to surveyed only when journey POIs are reachable, critical nodes snapped, and footway edge count clears the gate. SEA ships this path with `seaPedestrianWays.json` (Overpass 2026-07-15); LAX/ONT stay schematic until their overlays clear the same gate.
+
+**Test:** `src/lib/airportNav/footwayGraph.test.ts`, `src/lib/airportNav/routeGradeHonesty.test.ts`
 
 ---
 
@@ -573,6 +578,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | M34 | `src/lib/airportNav/osmImport.test.ts`, `src/lib/airportNav/controlPointAnchors.test.ts`, `src/lib/airportNav/controlPointTransform.test.ts`, `src/lib/airportNav/clickToPlace.test.ts`, `src/lib/airportNav/layouts/seaOsmAmenities.test.ts` |
 | M35 | `src/lib/airportNav/layoutStaleness.test.ts`, `src/lib/airportNav/layoutDiff.test.ts`, `src/lib/airportNav/poiPrecisionHonesty.test.ts`, `src/lib/airportNav/referenceImageDraft.test.ts`, `src/lib/airportNav/allAirportsPrecisionHonesty.test.ts` |
 | M36 | `src/lib/airportNav/doorMonotonicity.test.ts` |
+| M37 | `src/lib/airportNav/footwayGraph.test.ts`, `src/lib/airportNav/routeGradeHonesty.test.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |

@@ -7,11 +7,12 @@
  * one main terminal (concourses A–D radiate inside it) plus the North and South
  * satellites reached by underground train — not eight separate boxes.
  *
- * ROUTING (Kepi-curated, NOT from OSM): OSM has no security-checkpoint tagging
- * (KEPI_DESIGN_LAW M15), so security nodes/lanes, walkways, train links and
- * their calibrated traverse times remain hand-authored. Node coordinates are
- * real to ~tens of meters; the navigator still snaps GPS to the graph and shows
- * a confidence halo rather than trusting raw indoor GPS.
+ * ROUTING (Phase 2 / M37): OSM pedestrian ways (`highway=footway|corridor|path|
+ * steps`) are overlaid via `applyFootwayOverlay` + `seaPedestrianWays.json`
+ * (Overpass 2026-07-15). Curated pier/hall walkway bridges remain where OSM is
+ * not a continuous sterile-area graph; security_transition + train edges stay
+ * curated (M15/M31). `routeGrade:"surveyed"` only when the overlay clears the
+ * journey-reachability gate.
  *
  * Graph timings are seeded from src/lib/travelAssistant/airportNavigation.ts:
  *   - security → C gates: ~3 min walk straight ahead
@@ -22,6 +23,9 @@
 import type { AirportLayout, GraphEdge, GraphNode, PoiDefinition, TerminalZonePolygon } from "../types";
 import { SEA_OSM_FOOTPRINTS } from "./seaFootprints";
 import { buildSeaTicketingHall } from "./seaTicketingHall";
+import { applyFootwayOverlay } from "../applyFootwayOverlay";
+import type { OsmWayLike } from "../footwayGraph";
+import seaPedestrianWays from "./seaPedestrianWays.json";
 
 // Landside node ids — everything else in this layout is past security.
 // (security_entry sits landside; security_exit sits airside.)
@@ -262,7 +266,7 @@ const POIS: PoiDefinition[] = [
   // nodes/edges (train-C, train-N, train-S-main, train-S) remain for routing.
 ];
 
-export const SEA_LAYOUT: AirportLayout = {
+const SEA_LAYOUT_BASE: AirportLayout = {
   iata: "SEA",
   name: "Seattle–Tacoma International",
   layoutVersion: "0.9.1-osm-amenities",
@@ -280,4 +284,17 @@ export const SEA_LAYOUT: AirportLayout = {
     { prefix: "N", nodeId: "gate-N" },
     { prefix: "S", nodeId: "gate-S" },
   ],
+  routeGrade: "schematic",
 };
+
+const SEA_FOOTWAY = applyFootwayOverlay(
+  SEA_LAYOUT_BASE,
+  seaPedestrianWays as OsmWayLike[],
+  { now: "2026-07-15" },
+);
+
+/** Live SEA layout — OSM footway overlay applied (Phase 2). */
+export const SEA_LAYOUT: AirportLayout = SEA_FOOTWAY.layout;
+
+/** Overlay warnings for admin / tests (bridges retained, thin coverage, etc.). */
+export const SEA_FOOTWAY_WARNINGS: string[] = SEA_FOOTWAY.warnings;

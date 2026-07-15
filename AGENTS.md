@@ -121,6 +121,10 @@ These are agent playbooks, not autonomous runtime bots. Jeff instructs the condu
 
 ## Fix log
 
+### 2026-07-15 (Session — Phase 2 SEA footways → routeGrade surveyed)
+- **M37** `footwayGraph.ts` + `applyFootwayOverlay.ts` + `seaPedestrianWays.json` (Overpass 2026-07-15). SEA live layout snaps same-side to OSM footways, keeps security_transition/train, retains curated pier/hall bridges with an honest warning (OSM alone is not a continuous sterile graph). `routeGrade:"surveyed"` only after journey gate. LAX/ONT stay schematic.
+- Honesty: do not claim pure-OSM corridors; bridges are documented in overlay warnings + M37.
+
 ### 2026-07-15 (Session — SEA OSM amenity merge into live layout)
 - **134 named OSM amenities** (shop/food/bank/ATM/charging) merged into curated SEA traveler map via `seaOsmAmenities.ts` (Overpass 2026-07-15, exact coords, `precision:"surveyed"`, notes cite `OSM way/node/...`). Elevators/escalators still import-only (clutter). Contextual-pin reachability warnings expected until Phase 2 footways.
 

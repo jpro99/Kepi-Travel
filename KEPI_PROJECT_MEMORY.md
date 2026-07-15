@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-15 (M35 staleness/diff/precision honesty + SEA door rematch)
+Last updated: 2026-07-15 (Phase 2 SEA footways → routeGrade surveyed / M37)
+
+## Decision 2026-07-15 — Phase 2 SEA footways (surveyed walking routes)
+
+SEA earns `routeGrade:"surveyed"` via OSM pedestrian-way overlay (`seaPedestrianWays.json`, Overpass 2026-07-15) + same-side snaps + curated pier/hall bridges (honest warning — OSM is not a continuous sterile-area graph). Security/train stay curated (M15/M31). LAX/ONT remain schematic until their overlays clear the same M37 gate. Pure footway-only surveyed (no bridges) is **not** earned yet.
 
 ## Decision 2026-07-15 — Verification pass closed (commit follow-up after 79db246)
 
