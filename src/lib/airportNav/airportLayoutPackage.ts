@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { AirportLayout } from "@/lib/airportNav/types";
+import { assertLayoutRoutingQuality } from "@/lib/airportNav/layoutQuality";
 
 export const AIRPORT_LAYOUT_PACKAGE_SCHEMA_VERSION = 1 as const;
 
@@ -214,6 +215,14 @@ export function createAirportLayoutPackage(input: {
     throw new Error(
       "Publishing requires visual preview confirmation: a human must confirm the rendered draft (previewConfirmation.by).",
     );
+  }
+  // KEPI_DESIGN_LAW M29 — generic routing-quality gate. No airport (bundled seed
+  // OR OSM-imported draft) may PUBLISH with the failure modes SEA taught us:
+  // unreachable journey destinations, backtracking/zigzag routes, or stray
+  // coordinates. Drafts stay rough on purpose; only publishes are gated. Reads
+  // (parseAirportLayoutPackage) are NOT gated, so legacy packages still load.
+  if (status === "published") {
+    assertLayoutRoutingQuality(layout);
   }
   return parseAirportLayoutPackage({
     schemaVersion: AIRPORT_LAYOUT_PACKAGE_SCHEMA_VERSION,

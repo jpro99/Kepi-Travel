@@ -121,6 +121,12 @@ These are agent playbooks, not autonomous runtime bots. Jeff instructs the condu
 
 ## Fix log
 
+### 2026-07-14 (Session — airport scalability: mistakes baked into code as a gate)
+- **Root question (Jeff):** "As we build each airport, will we hit the same problems? Put the mistakes into the code so we don't repeat them." **Answer:** the renderer/UX fixes already carried over (shared `AirportNavigatorMap`), but every data/graph fix was SEA-only, and `osmImport.ts` synthesizes a **star-graph-to-a-hub** skeleton — so every new airport *would* reintroduce the zigzag / route-across-tarmac / orphaned-destination / lounge-outside bugs.
+- **Fix (KEPI_DESIGN_LAW M29):** new `src/lib/airportNav/layoutQuality.ts` → `auditLayoutRouting()` encodes the SEA lessons as **generic, orientation-independent invariants**: reachability of journey destinations, no-backtrack (≤50% of direct distance; SEA sits at 0–12%), and gross coordinate sanity (≤15 km from center). Wired into the **publish gate** (`createAirportLayoutPackage`, `status: "published"` only — reads/drafts not gated) and a **build gate** (`allAirportsQuality.test.ts` iterates every bundled layout).
+- **The audit found a real latent bug on first run:** 6 SEA amenity pins (McDonald's, Salty's, …) were nodes with **no edges** → unreachable. Classified as contextual pins → warning (not a ship-blocker), since connecting them needs per-airport corridor data (verify-first). Do NOT guess edges for them.
+- **Scaling rule:** accuracy is still per-airport OSM ground-truth (a `*NodeContainment` test); the audit only catches the structural failure modes. New-airport playbook is in M29 — register each airport in BOTH `getLayout.ts` and `allAirportsQuality.test.ts`.
+
 ### 2026-07-12 (Session — lifetime invite + travel-assistant crash)
 - **Lifetime invite auto-install:** Email link `?redeem=` / `?code=` now redeems on travel-assistant load via `useAutoRedeemInviteFromUrl`; onboarding skip/complete also redeems; `/redeem` redirects signed-in users straight to travel-assistant. Shared helper: `redeemInviteCodeClient`.
 - **Production crash `onCreateTrip is not defined`:** `DesktopTripHomeView` hero button referenced `onCreateTrip` but the prop is `onStartNewTrip` — users saw lifetime work briefly then crash when home view rendered after onboarding. **Do not rename props in JSX without updating all references; run `tsc` grep for `TS2304` in travel-assistant before ship.**

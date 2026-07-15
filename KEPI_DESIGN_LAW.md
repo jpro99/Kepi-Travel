@@ -300,6 +300,16 @@ When a facade has a handful of real, survey-grade anchor coordinates (SEA's tick
 A drawn walking route must never leave the building. The failure mode: a sparse graph connected the airside hub straight to a single hand-guessed gate centroid (and a lounge coordinate ~220 m into the apron), so the line cut across taxiways and "walked the user outside." Fix and rule: each concourse **enters at its real neck gate** (OSM `aeroway=gate` "Gate 1") and runs to a **real mid-pier gate cluster**, with an extra mid-spine bend on long piers, so the polyline bends *along* the pier and stays inside. Every airside node coordinate — necks, gate clusters, lounges — is a real OSM `aeroway=gate` / named indoor-room coordinate (Overpass), never eyeballed. Satellite (N/S) gates are reached only via the `train` edge (M-train), shown as the dashed leg (see AirportNavigatorMap train overlay). New airport concourses must be built the same way: pull `aeroway=gate` refs, anchor neck + mid-pier + far nodes, then wire the spine. **Machine-checked:** re-anchored coordinates are guarded against drift.
 **Test:** `src/lib/airportNav/layouts/seaNodeContainment.test.ts`
 
+**M29 — Every airport layout passes the generic routing-quality gate before publish; the SEA mistakes are enforced as code, not remembered per-airport**
+The SEA bugs (routes across the tarmac, M/W zigzags, lounges 200 m outside, destinations wired to a hub no route reaches) all came from one root cause: the OSM importer (`osmImport.ts`) synthesizes a **star-graph-to-a-central-hub** skeleton, and each airport was fixed by hand afterward, guarded only by SEA-specific tests. That does not scale — every new airport would reintroduce the same class of defect. So the lessons are now **generic invariants** in `auditLayoutRouting` (`layoutQuality.ts`), enforced in two places:
+- **Publish gate:** `createAirportLayoutPackage` runs `assertLayoutRoutingQuality` for any `status: "published"` (so no bundled seed OR OSM-imported/admin-curated draft can go live with these defects). Drafts stay rough on purpose; **reads are never gated** (legacy packages still load).
+- **Build gate:** `allAirportsQuality.test.ts` runs the audit over *every* bundled layout (add each new airport to its `ALL_LAYOUTS` list, mirroring `getLayout.ts`).
+
+The audit checks, orientation-independent, for any airport: (1) **reachability** — every journey-critical destination (gate/lounge/checkin/security/train) must be routable from the landside origin; contextual pins (amenity/restroom) that are unreachable are a *warning*, not a blocker; (2) **no-backtrack** — a route to a gate/lounge/train may spend at most `MAX_BACKTRACK_RATIO` (50%) of its direct distance moving away from the destination (catches the far-hub zigzag; SEA routes sit at 0–12%); (3) **coordinate sanity** — no node more than `MAX_NODE_DISTANCE_FROM_CENTER_M` (15 km) from the airport center (catches wrong-city/ocean/typo coords).
+
+What the audit deliberately does **NOT** do: validate coordinate *accuracy*. Only real per-airport OSM ground-truth can (verify-first, rule 50) — accuracy stays enforced per airport by a `*NodeContainment`-style test. **New-airport playbook (emulate SEA, do not re-derive):** (a) OSM Overpass → building outline + `aeroway=gate` + named indoor rooms; (b) anchor concourse neck + mid-pier + far nodes on real gate coords (M28); (c) wire each concourse to its *nearer* checkpoint, checkpoints joined so either reaches either (monotonic — no artificial hub); (d) place doors via `doorCurve.ts` with `precision` tags (M27); (e) add a `*NodeContainment` test with OSM ground truth; (f) register in `getLayout.ts` **and** `allAirportsQuality.test.ts`; (g) publish only after the gate passes + human preview confirmation.
+**Test:** `src/lib/airportNav/layoutQuality.test.ts`, `src/lib/airportNav/allAirportsQuality.test.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -519,6 +529,8 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | M25 | `src/lib/airportNav/airportLayoutStore.test.ts`, `src/lib/airportNav/layouts/zoneRingValidity.test.ts` |
 | M26 | `src/lib/airportNav/layouts/seaNodeContainment.test.ts` |
 | M27 | `src/lib/airportNav/doorCurve.test.ts`, `src/lib/airportNav/layouts/seaTicketingHall.test.ts` |
+| M28 | `src/lib/airportNav/layouts/seaNodeContainment.test.ts`, `src/lib/airportNav/layouts/seaRouteMonotonic.test.ts` |
+| M29 | `src/lib/airportNav/layoutQuality.test.ts`, `src/lib/airportNav/allAirportsQuality.test.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |
