@@ -120,6 +120,15 @@ export interface AirportLayout {
   pois: PoiDefinition[];
   /** Map a gate code like "C11" to its graph node id, with prefix fallback. */
   gateNodeResolver: { prefix: string; nodeId: string }[];
+  /**
+   * Whether the walkway graph follows *verified corridors* ("surveyed") or is a
+   * straight-line skeleton between estimated anchors ("schematic"). Absent =
+   * "schematic" (the honest default). When schematic we must NOT draw a precise
+   * walking line that cuts across buildings/parking — the UI shows pins + a
+   * distance/time estimate instead (KEPI_DESIGN_LAW M30). Only flip to
+   * "surveyed" once the graph is built from real OSM footways/corridors.
+   */
+  routeGrade?: "surveyed" | "schematic";
 }
 
 export interface TravelerSecurityCredentials {

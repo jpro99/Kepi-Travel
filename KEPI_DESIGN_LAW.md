@@ -310,6 +310,11 @@ The audit checks, orientation-independent, for any airport: (1) **reachability**
 What the audit deliberately does **NOT** do: validate coordinate *accuracy*. Only real per-airport OSM ground-truth can (verify-first, rule 50) — accuracy stays enforced per airport by a `*NodeContainment`-style test. **New-airport playbook (emulate SEA, do not re-derive):** (a) OSM Overpass → building outline + `aeroway=gate` + named indoor rooms; (b) anchor concourse neck + mid-pier + far nodes on real gate coords (M28); (c) wire each concourse to its *nearer* checkpoint, checkpoints joined so either reaches either (monotonic — no artificial hub); (d) place doors via `doorCurve.ts` with `precision` tags (M27); (e) add a `*NodeContainment` test with OSM ground truth; (f) register in `getLayout.ts` **and** `allAirportsQuality.test.ts`; (g) publish only after the gate passes + human preview confirmation.
 **Test:** `src/lib/airportNav/layoutQuality.test.ts`, `src/lib/airportNav/allAirportsQuality.test.ts`
 
+**M30 — Never draw a walking route we can't stand behind; schematic layouts show pins + a time estimate, not a confident line**
+The routing audit (M29) proves a destination is *reachable*, but our graphs are still straight-line skeletons between estimated curb/security/gate anchors (the OSM importer does not yet pull real footways/entrances). Painting that skeleton produces a confident blue line that cuts through terminals, roads, and parking — a lie the traveler can see. So `AirportLayout.routeGrade` gates the drawn route: `"surveyed"` (graph follows verified OSM corridors) draws the full turn-by-turn line; **absent/`"schematic"` (the honest default) draws NO route line** — the real OSM basemap + accurate pins (gate/security/check-in/lounge) + an *approximate* time estimate carry the guidance, with an "Approximate layout — pins from OpenStreetMap" banner. Only flip an airport to `"surveyed"` once its graph is rebuilt from real footways (Phase 2 OSM walkable-graph pipeline). Applies everywhere the map renders (traveler Live Map + admin verify).
+
+**Test:** `src/lib/airportNav/routeGradeHonesty.test.ts`
+
 ---
 
 ## ITINERARY LAWS

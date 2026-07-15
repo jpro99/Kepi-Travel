@@ -835,6 +835,11 @@ export function AirportNavigatorMap({
   const [navCalibration, setNavCalibration] = useState<NavTimingCalibrationStore | null>(null);
   const [journeyPhase, setJourneyPhase] = useState<JourneyPhaseId>("landside");
   const quietMode = !previewMode && journeyPhase === "security";
+  // Honesty gate (KEPI_DESIGN_LAW M30): only draw a precise walking line when the
+  // graph follows verified corridors. Schematic layouts (straight-line skeletons
+  // that would cut across buildings/parking) show pins + a time estimate instead,
+  // never a confident route we cannot stand behind.
+  const preciseRouteEnabled = layout?.routeGrade === "surveyed";
   const [journeyPrompt, setJourneyPrompt] = useState<JourneyPrompt | null>(null);
   const [statusLine, setStatusLine] = useState<string | null>(null);
   const [objective, setObjective] = useState<"checkin" | "security" | "gate" | "lounge" | null>(null);
@@ -1772,7 +1777,9 @@ export function AirportNavigatorMap({
     // lounge → gate) without having to guess.
     const line = activeRoute?.coordinates ?? journeyRoute?.coords ?? null;
     const routeNodeIds = activeRoute?.nodeIds ?? journeyRoute?.nodeIds ?? [];
-    if (!line || line.length < 2) {
+    // Schematic layouts: never paint the straight-line skeleton (it visibly cuts
+    // through terminals/roads). Pins + the time estimate carry the guidance.
+    if (!preciseRouteEnabled || !line || line.length < 2) {
       source.setData({ type: "FeatureCollection", features: [] });
       trainSource?.setData({ type: "FeatureCollection", features: [] });
       return;
@@ -2308,7 +2315,7 @@ export function AirportNavigatorMap({
       {layout ? (
         <AirportSchematicLayer
           layout={layout}
-          activeRoute={activeRoute}
+          activeRoute={preciseRouteEnabled ? activeRoute : null}
           selectedPoiId={selectedPoiId ?? pendingPoiId ?? activeRoute?.toPoiId ?? null}
           snapped={previewMode ? null : snapped}
           userAccuracyM={userAccuracyM}
@@ -2358,6 +2365,20 @@ export function AirportNavigatorMap({
             {gateCode
               ? `Tap Essentials, Lounges, or any label to explore ${iata}. Live directions start when you arrive.`
               : `Gate assignment pending. Explore check-in, security, trains, and lounges now — your gate will highlight when assigned.`}
+          </p>
+          {!preciseRouteEnabled ? (
+            <p className="mt-1 text-[11px] leading-snug text-amber-200/90">
+              Approximate layout — pins from OpenStreetMap. We show the walking route once corridors are verified.
+            </p>
+          ) : null}
+        </div>
+      ) : !preciseRouteEnabled && layout ? (
+        <div
+          className="pointer-events-none absolute left-3 right-3 z-20 rounded-2xl border border-amber-400/30 bg-amber-950/70 px-3 py-1.5 backdrop-blur-md"
+          style={{ top: fill ? "max(4.5rem, calc(env(safe-area-inset-top) + 4rem))" : "3.25rem" }}
+        >
+          <p className="text-[11px] leading-snug text-amber-100/90">
+            📍 Approximate layout — pins placed from OpenStreetMap. Walking route appears once {iata}&apos;s corridors are verified.
           </p>
         </div>
       ) : null}
@@ -2613,27 +2634,33 @@ export function AirportNavigatorMap({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                {previewMode ? "Route preview" : "Walking directions"}
+                {!preciseRouteEnabled ? "Estimated walk" : previewMode ? "Route preview" : "Walking directions"}
               </p>
               <p className="mt-0.5 text-[18px] font-black leading-tight text-slate-900 dark:text-slate-100">
                 {activeDestName} · {fmtMins(activeRoute.totalSeconds)}
-                {activeRoute.laneUsed ? ` · ${activeRoute.laneUsed === "precheck" ? "PreCheck" : activeRoute.laneUsed === "clear" ? "CLEAR" : "standard"} lane` : ""}
+                {preciseRouteEnabled && activeRoute.laneUsed ? ` · ${activeRoute.laneUsed === "precheck" ? "PreCheck" : activeRoute.laneUsed === "clear" ? "CLEAR" : "standard"} lane` : ""}
               </p>
-              {nextInstruction && (
+              {preciseRouteEnabled && nextInstruction && (
                 <p className="mt-1 text-[15px] leading-snug text-slate-600 dark:text-slate-300">{nextInstruction.text}</p>
               )}
-              {previewMode ? (
+              {!preciseRouteEnabled ? (
+                <p className="mt-1 text-[12px] leading-snug text-slate-500">
+                  Approximate time. Pins are placed from OpenStreetMap; step-by-step walking directions turn on once this airport&apos;s corridors are verified.
+                </p>
+              ) : previewMode ? (
                 <p className="mt-1 text-[12px] text-slate-500">Live step-by-step guidance starts when you arrive at {iata}.</p>
               ) : null}
             </div>
             <div className="flex shrink-0 gap-2">
-              <button
-                type="button"
-                onClick={() => setShowInstructions((open) => !open)}
-                className="min-h-[48px] rounded-2xl bg-slate-100 px-3 text-[13px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200"
-              >
-                {showInstructions ? "Hide" : "Steps"}
-              </button>
+              {preciseRouteEnabled && (
+                <button
+                  type="button"
+                  onClick={() => setShowInstructions((open) => !open)}
+                  className="min-h-[48px] rounded-2xl bg-slate-100 px-3 text-[13px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                >
+                  {showInstructions ? "Hide" : "Steps"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={endRoute}
@@ -2643,7 +2670,7 @@ export function AirportNavigatorMap({
               </button>
             </div>
           </div>
-          {showInstructions && (
+          {preciseRouteEnabled && showInstructions && (
             <ol className="mt-3 max-h-[18dvh] space-y-2 overflow-y-auto overscroll-contain border-t border-slate-200 pt-3 touch-pan-y [-webkit-overflow-scrolling:touch] dark:border-slate-700">
               {activeRoute.instructions.map((step, stepIdx) => (
                 <li key={`${step.maneuver}-${step.atMeters}-${stepIdx}`} className="flex gap-2 text-[16px] leading-snug text-slate-600 dark:text-slate-300">
