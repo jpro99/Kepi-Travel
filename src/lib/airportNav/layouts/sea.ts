@@ -265,8 +265,8 @@ const POIS: PoiDefinition[] = [
 export const SEA_LAYOUT: AirportLayout = {
   iata: "SEA",
   name: "Seattle–Tacoma International",
-  layoutVersion: "0.9.0-monotonic-checkpoint-routing",
-  updatedAt: "2026-07-14",
+  layoutVersion: "0.9.1-osm-amenities",
+  updatedAt: "2026-07-15",
   center: [-122.30209, 47.44328],
   zones: ZONES,
   nodes: [...NODES, ...TICKETING.nodes],

@@ -121,6 +121,9 @@ These are agent playbooks, not autonomous runtime bots. Jeff instructs the condu
 
 ## Fix log
 
+### 2026-07-15 (Session — SEA OSM amenity merge into live layout)
+- **134 named OSM amenities** (shop/food/bank/ATM/charging) merged into curated SEA traveler map via `seaOsmAmenities.ts` (Overpass 2026-07-15, exact coords, `precision:"surveyed"`, notes cite `OSM way/node/...`). Elevators/escalators still import-only (clutter). Contextual-pin reachability warnings expected until Phase 2 footways.
+
 ### 2026-07-15 (Session — generator hardening phase 1: registry + M36)
 - **`listAllBundledLayouts()`** in `getLayout.ts` — M29/M30/M31/M32/M35 cross-airport tests loop one registry (no duplicated SEA/LAX/ONT arrays).
 - **M36** `findMonotonicityOutliers` — door-ref facade order; osmImport warns; SEA anchors pass; synthetic mid-facade Door 24 fails.

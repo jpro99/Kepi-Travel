@@ -11,11 +11,15 @@
  * Southwest is not listed on that PDF — Door 17 WN is an ESTIMATE pending
  * live signage confirmation. Treat door numbers within a cluster as approximate.
  *
- * Amenities use REAL OSM indoor coordinates (Overpass, verified 2026-07-14).
+ * Amenities: named shop/food/bank/ATM/charging from live OSM (`seaOsmAmenities.ts`,
+ * Overpass 2026-07-15) at exact coordinates, precision surveyed. Elevators/
+ * escalators omitted from the traveler map (destination clutter); still promoted
+ * on OSM import drafts.
  */
 
 import type { GraphEdge, GraphNode, PoiDefinition } from "../types";
 import { interpolateDoorPosition, type DoorAnchor } from "../doorCurve";
+import { SEA_OSM_AMENITIES } from "./seaOsmAmenities";
 
 /**
  * REAL OSM entrance `ref` nodes — south→north door numbers that also increase
@@ -79,21 +83,7 @@ const DOOR_AIRLINES: DoorAirlines[] = [
   { door: 22, existingNodeId: "checkin-north", airlines: [{ name: "Alaska", iata: "AS" }] },
 ];
 
-// Named amenities — REAL OSM indoor coordinates (Overpass, verified 2026-07-14).
-interface AmenitySpec {
-  id: string;
-  name: string;
-  lng: number;
-  lat: number;
-}
-const AMENITIES: AmenitySpec[] = [
-  { id: "amenity-play", name: "Children's Play Area", lng: -122.302215, lat: 47.442876 },
-  { id: "amenity-lucky-louie", name: "Lucky Louie Fish Shack", lng: -122.303169, lat: 47.443281 },
-  { id: "amenity-floret", name: "Floret", lng: -122.302228, lat: 47.442631 },
-  { id: "amenity-mcdonalds", name: "McDonald's", lng: -122.302830, lat: 47.442660 },
-  { id: "amenity-qdoba", name: "Qdoba", lng: -122.302379, lat: 47.443014 },
-  { id: "amenity-saltys", name: "Salty's at the SEA", lng: -122.303263, lat: 47.443954 },
-];
+// Named amenities come from SEA_OSM_AMENITIES (exact OSM coords, 2026-07-15).
 
 function haversineM(a: [number, number], b: [number, number]): number {
   const R = 6371000;
@@ -155,15 +145,16 @@ export function buildSeaTicketingHall(): SeaTicketingHall {
     }
   }
 
-  for (const a of AMENITIES) {
+  for (const a of SEA_OSM_AMENITIES) {
     nodes.push({ id: a.id, pos: [a.lng, a.lat], kind: "landmark", airside: true, landmark: a.name });
     pois.push({
       id: `poi-${a.id}`,
       nodeId: a.id,
-      category: "amenity",
+      category: a.kind === "baggage" ? "baggage" : "amenity",
       name: a.name,
       minZoomToShow: 15.5,
       precision: "surveyed",
+      notes: `OSM ${a.osm}`,
     });
   }
 
