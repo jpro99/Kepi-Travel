@@ -1,11 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { AirportLayout } from '@/lib/airportNav/types';
+import type { AirportLayout, TravelerSecurityCredentials } from '@/lib/airportNav/types';
 import {
     buildAirportSchematicModel,
     placeAirportSchematicLabels,
 } from '@/lib/airportNav/schematic';
+import { AirportNavigatorMap } from '@/components/travelAssistant/AirportNavigatorMap';
+
+/** Admin verification runs as a fully-credentialed traveler so the security
+ *  question never interrupts the preview. */
+const PREVIEW_CREDENTIALS: TravelerSecurityCredentials = { tsaPreCheck: false, clear: false, known: true };
 
 interface AirportCurationRequest {
     iata: string;
@@ -127,6 +132,9 @@ export default function AirportEditorPage() {
     const [bundledLayout, setBundledLayout] = useState<AirportLayout | null>(null);
     const [bundledAudit, setBundledAudit] = useState<{ errors: string[]; warnings: string[] } | null>(null);
     const [bundledBusy, setBundledBusy] = useState(false);
+    const [maptilerKey, setMaptilerKey] = useState('');
+    const [previewGate, setPreviewGate] = useState('');
+    const [previewLive, setPreviewLive] = useState(true);
 
     const loadQueue = useCallback(async () => {
         setQueueLoading(true);
@@ -158,6 +166,13 @@ export default function AirportEditorPage() {
         void loadBundled();
     }, [loadBundled]);
 
+    useEffect(() => {
+        void fetch('/api/config', { cache: 'no-store' })
+            .then((r) => r.json())
+            .then((d: { maptilerKey?: string }) => { if (d.maptilerKey) setMaptilerKey(d.maptilerKey); })
+            .catch(() => null);
+    }, []);
+
     const openBundled = useCallback(async (iata: string) => {
         setBundledBusy(true);
         setActiveBundledIata(iata);
@@ -169,6 +184,8 @@ export default function AirportEditorPage() {
             if (response.ok && body.layout) {
                 setBundledLayout(body.layout);
                 setBundledAudit(body.audit ?? { errors: [], warnings: [] });
+                setPreviewGate(body.layout.gateNodeResolver?.[0]?.prefix ?? '');
+                setPreviewLive(true);
             }
         } finally {
             setBundledBusy(false);
@@ -448,8 +465,74 @@ export default function AirportEditorPage() {
                                         Load into editor
                                     </button>
                                 </div>
+                                <div className="flex flex-wrap items-center gap-3 rounded-xl bg-gray-50 p-3">
+                                    <div className="flex overflow-hidden rounded-lg border border-gray-300">
+                                        <button
+                                            type="button"
+                                            onClick={() => setPreviewLive(false)}
+                                            className={`px-3 py-1.5 text-xs font-bold ${!previewLive ? 'bg-[#0b1f3a] text-white' : 'bg-white text-gray-700'}`}
+                                        >
+                                            Traveler plan (to security)
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setPreviewLive(true)}
+                                            className={`px-3 py-1.5 text-xs font-bold ${previewLive ? 'bg-[#0b1f3a] text-white' : 'bg-white text-gray-700'}`}
+                                        >
+                                            At airport (full route to gate)
+                                        </button>
+                                    </div>
+                                    {previewLive && (bundledLayout.gateNodeResolver?.length ?? 0) > 0 ? (
+                                        <label className="flex items-center gap-2 text-xs font-semibold text-gray-600">
+                                            Gate
+                                            <select
+                                                value={previewGate}
+                                                onChange={(event) => setPreviewGate(event.target.value)}
+                                                className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs"
+                                            >
+                                                {bundledLayout.gateNodeResolver.map((entry) => {
+                                                    const gatePoi = bundledLayout.pois.find(
+                                                        (poi) => poi.category === 'gate' && poi.nodeId === entry.nodeId,
+                                                    );
+                                                    return (
+                                                        <option key={`${entry.prefix}-${entry.nodeId}`} value={entry.prefix}>
+                                                            {gatePoi?.name ?? `Gate ${entry.prefix}`}
+                                                        </option>
+                                                    );
+                                                })}
+                                            </select>
+                                        </label>
+                                    ) : null}
+                                    {!maptilerKey ? (
+                                        <span className="text-xs text-amber-700">Loading basemap key…</span>
+                                    ) : null}
+                                </div>
+                                <div className="relative h-[70vh] min-h-[420px] w-full overflow-hidden rounded-xl border border-gray-200">
+                                    <AirportNavigatorMap
+                                        key={`${bundledLayout.iata}-${previewLive ? 'live' : 'plan'}`}
+                                        fill
+                                        previewMode={!previewLive}
+                                        maptilerKey={maptilerKey}
+                                        iata={bundledLayout.iata}
+                                        gateCode={previewLive ? previewGate || null : null}
+                                        airlineName={null}
+                                        proximityStatus="preview"
+                                        minutesToDeparture={90}
+                                        userLat={null}
+                                        userLon={null}
+                                        credentials={PREVIEW_CREDENTIALS}
+                                        onCredentialsAnswer={() => undefined}
+                                    />
+                                </div>
                                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-                                    <LayoutPreview layout={bundledLayout} />
+                                    <details className="rounded-xl border border-gray-200 p-3">
+                                        <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-gray-500">
+                                            Wire diagram (nodes &amp; edges)
+                                        </summary>
+                                        <div className="mt-3">
+                                            <LayoutPreview layout={bundledLayout} />
+                                        </div>
+                                    </details>
                                     <div className="space-y-3">
                                         {bundledAudit && bundledAudit.errors.length === 0 && bundledAudit.warnings.length === 0 ? (
                                             <p className="rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
