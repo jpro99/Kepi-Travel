@@ -3,7 +3,29 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-14 (Verify-first rule added — no guessing; airside OSM re-anchor)
+Last updated: 2026-07-15 (Airport map master prompt locked into memory + skill + Cursor rule)
+
+## Decision 2026-07-15 — Airport map MASTER PROMPT (Jeff — mandatory on every map build)
+
+**Standing order:** Before building or changing any airport map (layout, OSM import, gates,
+security, lounges, admin editor, route honesty), agents **must read** the full file:
+
+`CURSOR_PROMPT_MASTER_airport_maps_all_airports.md`
+
+Then use the kepi-airport-bot skill (`.cursor/skills/kepi-airport-bot/SKILL.md`) and
+`KEPI_DESIGN_LAW.md` M15/M22/M26–M33.
+
+**Enforced by:**
+- `.cursor/rules/60-airport-map-master-prompt.mdc` (globs on airportNav / AirportNavigatorMap /
+  airport-editor / airport-layout)
+- `.cursor/skills/kepi-airport-bot/SKILL.md` — "REQUIRED FIRST READ" section
+
+**One rule underneath:** never claim precision Kepi hasn't earned. Ground-truth where OSM tags
+exist; security is permanently approximate; rules never change per airport — only how much of
+each airport's data currently passes them. Do not special-case SEA. Do not auto-publish re-imports
+over verified airports. M29 ≠ M33 — both must pass before "verified."
+
+---
 
 ## Decision 2026-07-14 — VERIFY FIRST, NEVER GUESS (Jeff — mandatory, standing order)
 

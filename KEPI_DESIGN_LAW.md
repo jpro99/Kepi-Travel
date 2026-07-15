@@ -325,6 +325,11 @@ Security-screening areas have zero ground-truth tagging in any public indoor-map
 
 **Test:** `src/lib/airportNav/groundTruthConformance.test.ts`, `src/lib/airportNav/securityDisclosure.test.ts`
 
+**M33 — Ground-truth conformance is a separate gate from routing logic; both must pass before "verified" (every airport)**
+M29 proves the graph is *routable*; M33 proves each curated coordinate matches the real OSM ground truth. Passing one is never proof of the other. Implemented once in shared code (`osmGroundTruth.ts::checkOsmGroundTruth(layout, osmElements)`), airport-agnostic, run at import/re-import against the OSM in hand (pure, fixture-testable): (1) a gate POI claiming `precision:"surveyed"` must sit within `GATE_EXACT_MATCH_M` of the real `aeroway=gate` node with that `ref` — no clean ref ⇒ it stays schematic; (2) a landside curb/drop-off node must be within `CURB_ROAD_MAX_M` of a real `highway=*` way; (3) a POI must not sit on a different-category OSM feature (a gate on a restaurant/toilet node); (4) an indoor POI (gate/check-in/lounge) must fall inside a terminal/concourse footprint, but only after that ring passes `@turf/kinks` (never gate on a self-intersecting ring — skip with a warning and rely on the other checks). Where an airport's data can't satisfy a check it surfaces as an error/warning; the rule is never loosened to make an airport look finished. Findings flow into the import `warnings` (drafts stay rough; nothing auto-publishes).
+
+**Test:** `src/lib/airportNav/osmGroundTruth.test.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -549,6 +554,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | M30 | `src/lib/airportNav/routeGradeHonesty.test.ts` |
 | M31, M32 | `src/lib/airportNav/groundTruthConformance.test.ts` |
 | M32 | `src/lib/airportNav/securityDisclosure.test.ts` |
+| M33 | `src/lib/airportNav/osmGroundTruth.test.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |

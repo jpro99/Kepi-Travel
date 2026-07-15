@@ -121,6 +121,18 @@ These are agent playbooks, not autonomous runtime bots. Jeff instructs the condu
 
 ## Fix log
 
+### 2026-07-15 (Session — master prompt locked into agent memory)
+- **Standing order:** every airport-map build starts by reading
+  `CURSOR_PROMPT_MASTER_airport_maps_all_airports.md`. Wired into
+  `.cursor/skills/kepi-airport-bot/SKILL.md` (REQUIRED FIRST READ),
+  `.cursor/rules/60-airport-map-master-prompt.mdc`, and
+  `KEPI_PROJECT_MEMORY.md` Decision 2026-07-15. Master prompt file is now tracked
+  in the repo (was untracked scratch).
+- **M33 also shipped this session (ground-truth conformance validator):** shared
+  `osmGroundTruth.ts::checkOsmGroundTruth` — gate-ref exact match, curb→road
+  proximity, cross-category collision, footprint containment (kinks-gated). Wired
+  into `osmImport.ts` (warnings on draft). Test `osmGroundTruth.test.ts`.
+
 ### 2026-07-15 (Session — ground-truth conformance foundation, M31/M32)
 - **Master-prompt execution, step 1 (audit) + first invariants.** Confirmed the airport engine is already IATA-keyed/airport-agnostic (`getLayout.ts::LAYOUTS` is the live 2D registry the map uses; `layouts/index.ts::LAYOUT_REGISTRY` is a separate legacy 3D model, SEA-only — not rebuilt). Then shipped the two safest, foundational conformance invariants as **shared cross-airport code** in `validateAirportLayoutGraph` (runs at parse + publish for every IATA):
   - **M31 — landside↔airside only via `security_transition`.** Any edge whose endpoints differ in `airside` must be `kind:"security_transition"`, else the layout fails to parse/publish. Makes "security past the gates" structurally impossible, not just visually wrong.

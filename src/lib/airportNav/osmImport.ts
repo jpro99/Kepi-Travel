@@ -24,6 +24,7 @@ import type {
   PoiDefinition,
   TerminalZonePolygon,
 } from "@/lib/airportNav/types";
+import { checkOsmGroundTruth } from "@/lib/airportNav/osmGroundTruth";
 
 export const OSM_ATTRIBUTION = "Map data © OpenStreetMap contributors";
 export const OSM_LICENSE_NOTE =
@@ -178,6 +179,9 @@ export function buildAirportImportQuery(iata: string): string {
   nwr${scope}["amenity"="toilets"];
   nwr${scope}["amenity"="lounge"];
   nwr${scope}["name"~"Lounge|Sky Club|Admirals Club|United Club|Centurion",i];
+  nwr${scope}["amenity"~"restaurant|cafe|fast_food|bar|food_court",i];
+  nwr${scope}["shop"];
+  way${scope}["highway"];
 );
 out geom;`;
 }
@@ -349,6 +353,13 @@ export function convertOsmToLayoutDraft(
     pois,
     gateNodeResolver,
   };
+
+  // KEPI_DESIGN_LAW M33 — run the ground-truth conformance gate against the OSM we
+  // just fetched. Drafts stay rough (nothing auto-publishes), so these surface as
+  // curation to-dos, with hard conformance failures marked as must-fix.
+  const groundTruth = checkOsmGroundTruth(layout, elements);
+  for (const e of groundTruth.errors) warnings.push(`GROUND-TRUTH (fix before publish): ${e}`);
+  for (const w of groundTruth.warnings) warnings.push(`GROUND-TRUTH: ${w}`);
 
   return {
     layout,

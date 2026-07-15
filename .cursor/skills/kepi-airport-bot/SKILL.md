@@ -13,12 +13,28 @@ description: >-
 
 # Kepi Airport Bot
 
+## REQUIRED FIRST READ — every airport map build
+
+**Before any airport map / layout / OSM / gate / security / admin-editor work,
+read this file in full:**
+
+`CURSOR_PROMPT_MASTER_airport_maps_all_airports.md` (repo root)
+
+That master prompt is the standing spec for airport #1 and airport #100. It is
+also enforced by `.cursor/rules/60-airport-map-master-prompt.mdc` and summarized
+in `KEPI_PROJECT_MEMORY.md` (Decision 2026-07-15 — Airport map master prompt).
+Do not skip it. Do not rebuild from memory of a prior chat.
+
+Then read: `KEPI_DESIGN_LAW.md` (M15/M22/M26–M33), `CLAUDE.md`, `AGENTS.md`.
+
 ## Key files
 
+- `CURSOR_PROMPT_MASTER_airport_maps_all_airports.md` — **master map spec (read first)**
 - `src/lib/airportNav/` — pathfinder, intent router, navigator engine, `types.ts`,
   `layouts/*.ts` (per-airport curated layout + OSM footprints, e.g. `sea.ts` /
-  `seaFootprints.ts`), `osmImport.ts`, `airportLayoutPackage.ts`,
-  `airportLayoutStore.ts`, `airportCurationQueue.ts`, `poiDetail.ts`
+  `seaFootprints.ts`), `osmImport.ts`, `osmGroundTruth.ts`, `airportLayoutPackage.ts`,
+  `airportLayoutStore.ts`, `airportCurationQueue.ts`, `poiDetail.ts`,
+  `securityDisclosure.ts`
 - `src/lib/travelAssistant/airportNavigation.ts`
 - `src/components/travelAssistant/AirportNavigatorMap.tsx`, NextUpCard, OnTrackButton
 - `src/app/admin/airport-editor/page.tsx` and `src/app/api/admin/airport-layout/*`
@@ -31,41 +47,45 @@ description: >-
 - HNL connection thresholds: through-ticket 2–3.5h = warning, not critical
 - Global Entry: always present GE kiosk + Mobile Passport options
 
-## Map data integrity — non-negotiable (KEPI_DESIGN_LAW M15/M22/M29/M30 + ground-truth gate)
+## Map data integrity — non-negotiable (master prompt + KEPI_DESIGN_LAW M15/M22/M26–M33)
+
+Full spec: `CURSOR_PROMPT_MASTER_airport_maps_all_airports.md`. Summary (do not treat this as a
+substitute for reading the master file):
 
 These rules exist because every past map bug (curbs at building centers, security floating in a
 parking lot, a "Gate 9" pin sitting somewhere else entirely) shipped while passing every check that
 existed at the time. They apply the same way to every airport, always — never special-case the
 *rules* per airport; only the underlying data differs.
 
+- **One rule:** never claim precision Kepi hasn't earned. Ground-truth where OSM tags exist;
+  where it can never exist (security) — say so and never guess.
 - **Never fabricate a coordinate.** Every node/POI must trace to real ground-truth data (an OSM tag)
   or explicit human verification. If neither exists yet, the airport stays schematic/approximate —
   never guessed.
 - **Gate refs must exactly match OSM's real tagged coordinate** for that gate number — not a nearby
   approximation. If an airport's OSM data doesn't tag gate refs cleanly, that airport cannot claim
   `precisionGrade: "surveyed"` for gates.
+- **Promote real tagged OSM amenities** (shops, food, toilets, elevators, ATMs, etc.) at their exact
+  coordinates — never invent missing ones.
 - **Cross-category collision check.** Every POI must match the nearest real, independently-tagged
   OSM feature's category/name. A gate can never be placed on a restaurant's real coordinate, or vice
   versa — check this generally, don't special-case individual examples.
 - **`routeGrade` defaults to `"schematic"`.** A drawn, turn-by-turn walking route only renders when
   an airport is explicitly `"surveyed"` (real, verified corridor data) — never flip this without real
   data behind it. Until then: accurate pins + an honestly-labeled approximate time estimate, no line.
-- **Security checkpoints have zero OSM tagging anywhere** (confirmed across every airport checked).
-  Never claim survey-grade precision for them. Apply what *can* be checked — landside/airside
-  topology, proximity to a real entrance, tight entry/exit pairing — and leave them schematic
-  otherwise.
-- **Landside/airside topology is structurally enforced**, not just visually checked: no node with
-  `airside: false` may connect directly to a node with `airside: true` except via a
-  `security_transition` edge. Security physically cannot be placed "past the gates" in the data.
+- **Security checkpoints have zero OSM tagging anywhere** (confirmed; Apple IMDF excludes screening
+  by policy). Never claim survey-grade precision. Render as approximate zone + mandatory disclaimer
+  (`securityDisclosure.ts`). Closed research question.
+- **Landside/airside topology is structurally enforced** (M31): no landside↔airside edge except
+  `security_transition`.
+- **Staleness / re-import:** never auto-publish a re-import over a human-verified airport — draft +
+  diff + review.
 - **Airline logos**: Duffel's licensed CDN only, keyed by IATA code (`poiDetail.ts`) — never scrape
   a map vendor's (Atrius or otherwise) rendered logos or map tiles.
-- **M29 (routing-graph logic) and the ground-truth conformance gate (real-world accuracy) are
-  separate checks.** Passing one is never proof of the other. Both must pass before anything ships
-  as verified.
-- **Scaling rule**: the goal is one consistent engine (schema, validators, curation tool) that works
-  identically for every airport — not one-off logic per airport. What differs per airport is only
-  the data and how much of it is verified. Never lower the bar on a rule just to make an airport
-  look finished.
+- **M29 (routing-graph logic) and M33 (ground-truth conformance) are separate checks.** Passing one
+  is never proof of the other. Both must pass before anything ships as verified.
+- **Scaling rule**: one consistent engine for every airport. Never lower the bar on a rule just to
+  make an airport look finished.
 
 ## Scope
 

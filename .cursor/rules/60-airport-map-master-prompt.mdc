@@ -1,0 +1,25 @@
+---
+description: Airport maps — always read the master prompt before building/editing any airport map
+globs: "**/airportNav/**,**/AirportNavigatorMap*,**/AirportMap*,**/airport-editor/**,**/airport-layout/**,**/CURSOR_PROMPT_MASTER_airport*"
+alwaysApply: false
+---
+
+# Airport map master prompt (required before any map work)
+
+**Before writing or changing any airport map / layout / OSM import / security /
+gate / curb / lounge / admin airport-editor code, you MUST:**
+
+1. **Read** `CURSOR_PROMPT_MASTER_airport_maps_all_airports.md` at the repo root
+   (full file — this is the standing spec for every airport, not just SEA).
+2. **Read** `.cursor/skills/kepi-airport-bot/SKILL.md`, then `KEPI_DESIGN_LAW.md`
+   (M15/M22/M26–M33), `CLAUDE.md`, and `AGENTS.md`.
+3. Obey the one rule: **never claim precision Kepi hasn't earned.** Ground-truth
+   where OSM tags exist; security is permanently approximate (M32); rules are
+   airport-agnostic — never loosen a rule to make one airport look finished.
+
+Standing delivery: minimal surgical changes, one design law + test per behavior,
+`npm run test:laws && npm run build` before push, push to `main`.
+
+Do not invent coordinates. Do not special-case SEA. Do not auto-publish a
+re-import over a human-verified airport. M29 (routing) ≠ M33 (ground truth) —
+both must pass before "verified."
