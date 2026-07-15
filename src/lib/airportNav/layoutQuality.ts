@@ -34,8 +34,8 @@ function metersBetween(a: [number, number], b: [number, number]): number {
 }
 
 /** Project each segment onto the direct start→end vector; sum the backward run. */
-function backtrackRatio(coords: [number, number][]): number {
-  if (coords.length < 2) return 0;
+function backtrackStats(coords: [number, number][]): { ratio: number; backwardM: number } {
+  if (coords.length < 2) return { ratio: 0, backwardM: 0 };
   const start = coords[0];
   const end = coords[coords.length - 1];
   const midLat = (start[1] + end[1]) / 2;
@@ -46,7 +46,7 @@ function backtrackRatio(coords: [number, number][]): number {
   ];
   const e = toLocal(end);
   const directLen = Math.hypot(e[0], e[1]);
-  if (directLen < 1) return 0; // start ≈ end; nothing to measure
+  if (directLen < 1) return { ratio: 0, backwardM: 0 }; // start ≈ end; nothing to measure
   const ux = e[0] / directLen;
   const uy = e[1] / directLen;
   let backward = 0;
@@ -56,7 +56,7 @@ function backtrackRatio(coords: [number, number][]): number {
     const proj = (b[0] - a[0]) * ux + (b[1] - a[1]) * uy; // signed progress toward dest
     if (proj < 0) backward += -proj;
   }
-  return backward / directLen;
+  return { ratio: backward / directLen, backwardM: backward };
 }
 
 /**
@@ -78,6 +78,43 @@ export function resolveLandsideOriginNodeId(layout: AirportLayout): string | nul
 }
 
 /**
+ * The landside node a traveler most plausibly STARTS from for a given
+ * destination — the nearest curb/check-in. At a multi-terminal airport (LAX)
+ * you are dropped at your own terminal, so backtracking must be judged from that
+ * terminal's curb, not a single global origin walked around the whole horseshoe.
+ * For a single-terminal airport (SEA) this resolves to the one curb, unchanged.
+ */
+const CURB_LANDMARK = /curb|drop|depart|ticketing|entrance/;
+
+function nearestLandsideOriginNodeId(layout: AirportLayout, destNodeId: string): string | null {
+  const dest = layout.nodes.find((n) => n.id === destNodeId);
+  if (!dest) return null;
+  // Only "curb-like" start points (a drop-off / terminal entry), never an
+  // individual check-in counter mid-hall — otherwise the nearest counter to a
+  // gate distorts the backtrack measurement.
+  const curbLike = layout.nodes.filter(
+    (n) =>
+      !n.airside &&
+      (n.kind === "junction" || n.kind === "landmark") &&
+      n.landmark != null &&
+      CURB_LANDMARK.test(n.landmark.toLowerCase()),
+  );
+  const pool = curbLike.length > 0
+    ? curbLike
+    : layout.nodes.filter((n) => !n.airside && (n.kind === "junction" || n.kind === "landmark"));
+  let bestId: string | null = null;
+  let bestD = Infinity;
+  for (const node of pool) {
+    const d = metersBetween(node.pos, dest.pos);
+    if (d < bestD) {
+      bestD = d;
+      bestId = node.id;
+    }
+  }
+  return bestId;
+}
+
+/**
  * Journey-critical destinations: the traveler is actively routed to these
  * (drop-off → check-in → security → lounge → gate). Unreachable = hard error.
  */
@@ -93,6 +130,13 @@ const BACKTRACK_CATEGORIES = new Set(["gate", "lounge", "train"]);
 
 /** Max fraction of the direct distance a route may spend moving away from the dest. */
 export const MAX_BACKTRACK_RATIO = 0.5;
+/**
+ * Absolute floor: a route is only flagged when it also runs backward at least
+ * this far. A lounge a few metres past security legitimately reads as a high
+ * *ratio* because of the mandatory checkpoint detour, but it is not a zigzag
+ * bug. The SEA M-shape that motivated this rule was hundreds of metres backward.
+ */
+export const MIN_BACKTRACK_METERS = 120;
 /** A node this far from the layout center is almost certainly a wrong/guessed coord. */
 export const MAX_NODE_DISTANCE_FROM_CENTER_M = 15_000;
 
@@ -149,12 +193,18 @@ export function auditLayoutRouting(layout: AirportLayout): LayoutQualityReport {
     auditedDestinations += 1;
     if (BACKTRACK_CATEGORIES.has(poi.category) && !seenNodes.has(routeKey)) {
       seenNodes.add(routeKey);
-      const ratio = backtrackRatio(route.coordinates);
-      if (ratio > MAX_BACKTRACK_RATIO) {
+      // Judge backtracking from the destination's OWN terminal curb (nearest
+      // landside node), so a multi-terminal airport isn't penalised for the long
+      // way around the horseshoe from a single global origin.
+      const localOrigin = nearestLandsideOriginNodeId(layout, poi.nodeId) ?? origin;
+      const localRoute = computeRoute({ layout, fromNodeId: localOrigin, toPoiId: poi.id, credentials: creds });
+      const stats = localRoute ? backtrackStats(localRoute.coordinates) : { ratio: 0, backwardM: 0 };
+      if (stats.ratio > MAX_BACKTRACK_RATIO && stats.backwardM > MIN_BACKTRACK_METERS) {
         errors.push(
-          `Route to "${poi.name}" (${poi.id}) backtracks ${(ratio * 100).toFixed(0)}% of the direct ` +
-            `distance (max ${(MAX_BACKTRACK_RATIO * 100).toFixed(0)}%) — the graph likely routes through a ` +
-            `far hub instead of the nearer corridor. Path: ${route.nodeIds.join(" → ")}`,
+          `Route to "${poi.name}" (${poi.id}) from its nearest curb (${localOrigin}) backtracks ` +
+            `${(stats.ratio * 100).toFixed(0)}% of the direct distance (${Math.round(stats.backwardM)} m backward, ` +
+            `max ${(MAX_BACKTRACK_RATIO * 100).toFixed(0)}%) — the graph likely routes through a far hub instead of ` +
+            `the nearer corridor. Path: ${localRoute!.nodeIds.join(" → ")}`,
         );
       }
     }

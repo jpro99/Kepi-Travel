@@ -6,9 +6,11 @@
 
 import type { AirportLayout } from "./types";
 import { SEA_LAYOUT } from "./layouts/sea";
+import { LAX_LAYOUT } from "./layouts/lax";
 
 const LAYOUTS: Record<string, AirportLayout> = {
   SEA: SEA_LAYOUT,
+  LAX: LAX_LAYOUT,
 };
 
 export function getAirportLayout(iata: string | null | undefined): AirportLayout | null {
