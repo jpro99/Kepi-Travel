@@ -804,6 +804,8 @@ export function AirportNavigatorMap({
   const poiMarkersRef = useRef<Record<string, any>>({});
   const zoomTierHandlerRef = useRef<(() => void) | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const originMarkerRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const userMarkerRef = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const familyMarkersRef = useRef<Record<string, any>>({});
@@ -1996,6 +1998,45 @@ export function AirportNavigatorMap({
       poiMarkersRef.current = {};
     };
   }, [mapReady, layout, gatePoi, gateCode, minutesRounded, airlineName, objective, eligibleLoungeNames, startRoute, selectedPoiId, activeRoute, journeyPoiIdSet]);
+
+  /* ── Start marker: where the drawn line begins ──────────────────────── */
+  // The route/journey line starts at the origin node — in planning mode that's
+  // the departures drop-off (Door 14), which is not obvious ("I don't know where
+  // it's coming in from"). Label it explicitly. We skip it once there's a live
+  // GPS fix, because then the blue "you" puck already marks the start.
+  useEffect(() => {
+    const map = mapRef.current;
+    const removeMarker = () => {
+      if (originMarkerRef.current) {
+        try { originMarkerRef.current.remove(); } catch { /* map gone */ }
+        originMarkerRef.current = null;
+      }
+    };
+    if (!map || !mapReady || !layout) return removeMarker;
+    const hasLine = Boolean(activeRoute?.coordinates?.length || journeyRoute?.coords?.length);
+    const origin = originNodeId ? layout.nodes.find((nd) => nd.id === originNodeId) : null;
+    if (snapped || !origin || !hasLine) {
+      removeMarker();
+      return removeMarker;
+    }
+    void import("maplibre-gl").then((ml) => {
+      removeMarker();
+      const wrap = document.createElement("div");
+      wrap.setAttribute("aria-label", "Route start");
+      wrap.style.cssText = "display:flex;align-items:center;gap:5px;font:800 11px system-ui,-apple-system,sans-serif;white-space:nowrap;z-index:5;";
+      const dot = document.createElement("span");
+      dot.style.cssText = "width:15px;height:15px;flex:none;border-radius:9999px;background:#16a34a;border:3px solid #fff;box-shadow:0 1px 5px rgba(15,23,42,0.5);";
+      const label = document.createElement("span");
+      label.textContent = `Start · ${origin.landmark ?? "Departures drop-off"}`;
+      label.style.cssText = "color:#166534;text-shadow:0 0 3px #fff,0 0 3px #fff,0 1px 2px #fff,1px 0 2px #fff,-1px 0 2px #fff;";
+      wrap.appendChild(dot);
+      wrap.appendChild(label);
+      originMarkerRef.current = new ml.Marker({ element: wrap, anchor: "left" })
+        .setLngLat(origin.pos as [number, number])
+        .addTo(map);
+    });
+    return removeMarker;
+  }, [mapReady, layout, originNodeId, snapped, activeRoute, journeyRoute]);
 
   /* ── Snapped user puck with confidence halo ─────────────────────────── */
   useEffect(() => {

@@ -67,10 +67,9 @@ const NODES: GraphNode[] = [
   n("checkin-south", -122.300184, 47.442272, "checkin", "Ticketing — south end / Door 4 (international)"),
   n("checkin-center", -122.301487, 47.443169, "checkin", "Ticketing — center / Door 12 (Delta, United)"),
   n("checkin-north", -122.300607, 47.444651, "checkin", "Ticketing — north end / Door 24 (Alaska)"),
-  // Interior walkway between the real central doors and the airside core (where
-  // the A/B/C/D gate arms converge). Kepi-curated corridor point, positioned
-  // between real Door 12/14 and airside-central so the route runs straight in
-  // (no landside→airside zigzag), 2026-07-14.
+  // Interior walkway between the real central doors and the security checkpoints.
+  // Kepi-curated corridor point positioned just behind central ticketing so the
+  // landside route runs straight in (no landside→airside zigzag), 2026-07-14.
   n("landside-hall", -122.302000, 47.443400, "junction", "Main hall, behind central ticketing"),
 
   // ── Security checkpoints (entries landside, exits airside) ──
@@ -86,14 +85,16 @@ const NODES: GraphNode[] = [
   n("sec5-entry", -122.302050, 47.444450, "security_entry", "Checkpoint 5 — north (behind Door 22–24)"),
   n("sec5-exit", -122.302300, 47.444520, "security_exit", "Past Checkpoint 5"),
 
-  // ── Airside core + concourse spines ──
-  // Post-security hubs, then each concourse ENTERS at its real neck gate and
-  // runs to the real mid-pier gate cluster, so the drawn route bends ALONG the
-  // pier and stays inside the building instead of cutting a straight chord across
-  // the apron (owner: "it has me walking outside"). Every lat/lng below is a real
-  // OSM aeroway=gate node, verified via Overpass 2026-07-14.
-  n("airside-central", -122.30210, 47.44340, "junction", "Central airside concourse"),
-  n("airside-north", -122.30200, 47.44540, "junction", "North airside — toward C/D gates"),
+  // ── Airside concourse hall (post-security) ──
+  // No artificial central "hub" node: that caused routes to climb to a north hub
+  // and then drop back down to a concourse neck (the M-shaped zigzag). Instead
+  // each concourse ENTERS at its real neck gate and hangs off the NEARER
+  // checkpoint — Checkpoint 3 (central) feeds the SOUTH piers (A, B, S-satellite
+  // train, Centurion); Checkpoint 5 (north) feeds the NORTH piers (C, D, Alaska
+  // Lounge, N-satellite train). Wiring each destination to its nearer checkpoint
+  // keeps every common route geographically monotonic — no north→south→north
+  // backtracking (M28). Every lat/lng is a real OSM aeroway=gate node, Overpass
+  // 2026-07-14.
 
   // Concourse necks — where each pier meets the main terminal (real Gate 1)
   n("a-neck", -122.3021047, 47.4425616, "junction", "Concourse A entrance (Gate A1)"),
@@ -163,6 +164,9 @@ const EDGES: GraphEdge[] = [
   e("e-cs-hall", "checkin-south", "landside-hall", "walkway", 110, walkSecs(110)),
   e("e-cc-hall", "checkin-center", "landside-hall", "walkway", 20, walkSecs(20)),
   e("e-cn-hall", "checkin-north", "landside-hall", "walkway", 120, walkSecs(120)),
+  // Direct north-end link so an Alaska (Door 24) traveler walks check-in → the
+  // north Checkpoint 5 without dipping back through the central hall.
+  e("e-cn-sec5", "checkin-north", "sec5-entry", "walkway", 110, walkSecs(110)),
   e("e-hall-sec3", "landside-hall", "sec3-entry", "walkway", 50, walkSecs(50)),
   e("e-hall-sec5", "landside-hall", "sec5-entry", "walkway", 100, walkSecs(100)),
 
@@ -174,24 +178,29 @@ const EDGES: GraphEdge[] = [
   e("e-sec5-std", "sec5-entry", "sec5-exit", "security_transition", 40, 18 * 60, { bidirectional: false, laneType: "standard" }),
   e("e-sec5-pre", "sec5-entry", "sec5-exit", "security_transition", 40, 8 * 60, { bidirectional: false, laneType: "precheck" }),
 
-  // Airside spine
-  e("e-s3x-central", "sec3-exit", "airside-central", "walkway", 60, walkSecs(60)),
-  e("e-s5x-north", "sec5-exit", "airside-north", "walkway", 60, walkSecs(60)),
-  e("e-central-north", "airside-central", "airside-north", "walkway", 225, walkSecs(225)),
+  // Join the two checkpoint exits along the terminal's concourse edge so either
+  // checkpoint can reach either end without inventing a central hub.
+  e("e-s3x-s5x", "sec3-exit", "sec5-exit", "walkway", 115, walkSecs(115)),
 
-  // South piers (A, B) branch off the central hub at their real necks, then
-  // follow the pier to the gate cluster (A adds a mid-pier bend for its length).
-  e("e-central-aneck", "airside-central", "a-neck", "walkway", 95, walkSecs(95)),
+  // SOUTH piers + S-satellite train + Centurion off Checkpoint 3 (central).
+  // Concourse A adds a mid-pier bend (Gate A5) so its long pier curves inside.
+  e("e-s3x-aneck", "sec3-exit", "a-neck", "walkway", 100, walkSecs(100)),
   e("e-aneck-amid", "a-neck", "a-mid", "walkway", 195, walkSecs(195)),
   e("e-amid-gateA", "a-mid", "gate-A", "walkway", 105, walkSecs(105)),
-  e("e-central-bneck", "airside-central", "b-neck", "walkway", 100, walkSecs(100)),
+  e("e-s3x-bneck", "sec3-exit", "b-neck", "walkway", 90, walkSecs(90)),
   e("e-bneck-gateB", "b-neck", "gate-B", "walkway", 135, walkSecs(135)),
+  e("e-s3x-trainSm", "sec3-exit", "train-S-main", "walkway", 130, walkSecs(130)),
+  e("e-s3x-centurion", "sec3-exit", "lounge-centurion", "walkway", 130, walkSecs(130) + 60),
+  e("e-s3x-restroom", "sec3-exit", "restroom-central", "walkway", 25, walkSecs(25)),
 
-  // North piers (C, D) branch off the north hub at their real necks.
-  e("e-north-cneck", "airside-north", "c-neck", "walkway", 145, walkSecs(145)),
+  // NORTH piers + N-satellite train + Alaska Lounge off Checkpoint 5 (north).
+  // The Alaska Lounge (C) is at the real OSM coord right past Checkpoint 5, NOT
+  // out at the Gate C cluster — hanging it here removes the out-and-back zigzag.
+  e("e-s5x-cneck", "sec5-exit", "c-neck", "walkway", 80, walkSecs(80)),
   e("e-cneck-gateC", "c-neck", "gate-C", "walkway", 150, walkSecs(150)),
-  e("e-north-dneck", "airside-north", "d-neck", "walkway", 80, walkSecs(80)),
+  e("e-s5x-dneck", "sec5-exit", "d-neck", "walkway", 40, walkSecs(40)),
   e("e-dneck-gateD", "d-neck", "gate-D", "walkway", 150, walkSecs(150)),
+  e("e-s5x-loungeAKC", "sec5-exit", "lounge-alaska-c", "walkway", 20, walkSecs(20) + 30),
 
   // North Satellite train (per airportNavigation.ts: walk 2 + train 4 + walk 2)
   e("e-gateC-trainC", "gate-C", "train-C", "walkway", 80, 120),
@@ -199,16 +208,12 @@ const EDGES: GraphEdge[] = [
   e("e-trainN-gateN", "train-N", "gate-N", "walkway", 90, 120),
 
   // South Satellite train
-  e("e-central-trainSm", "airside-central", "train-S-main", "walkway", 90, walkSecs(90)),
   e("e-trainSm-trainS", "train-S-main", "train-S", "train", 700, 300),
   e("e-trainS-gateS", "train-S", "gate-S", "walkway", 70, walkSecs(70)),
 
-  // Lounges + services
-  e("e-gateC-loungeAK", "gate-C", "lounge-alaska-c", "walkway", 60, walkSecs(60) + 45),
+  // Lounges hung off their nearest real anchor
   e("e-gateN-loungeAKN", "gate-N", "lounge-alaska-n", "walkway", 40, walkSecs(40) + 45),
-  e("e-central-centurion", "airside-central", "lounge-centurion", "walkway", 130, walkSecs(130) + 60),
   e("e-gateA-clubA", "gate-A", "lounge-club-a", "walkway", 220, walkSecs(220) + 45),
-  e("e-central-restroom", "airside-central", "restroom-central", "walkway", 30, walkSecs(30)),
 ];
 
 // ── Real terminal footprints (OpenStreetMap, extruded in the renderer) ─────
@@ -266,7 +271,7 @@ const POIS: PoiDefinition[] = [
 export const SEA_LAYOUT: AirportLayout = {
   iata: "SEA",
   name: "Seattle–Tacoma International",
-  layoutVersion: "0.8.0-osm-concourse-spines",
+  layoutVersion: "0.9.0-monotonic-checkpoint-routing",
   updatedAt: "2026-07-14",
   center: [-122.30209, 47.44328],
   zones: ZONES,
