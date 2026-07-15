@@ -14,6 +14,7 @@ import type { AirportLayout, ComputedRoute, GraphEdge, PoiDefinition, SnappedPos
 import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
 import { buildTripJourney, journeyPoiIds, preSecurityJourney, type JourneyStop } from "@/lib/airportNav/tripJourney";
 import { poiMinZoom, airlineLogoAsset } from "@/lib/airportNav/poiDetail";
+import { SECURITY_APPROX_DISCLAIMER, SECURITY_APPROX_TAG } from "@/lib/airportNav/securityDisclosure";
 import { computeDirectionArrow, confirmedSnappedPosition } from "@/lib/airportNav/directionArrow";
 import { computeLayoutBounds, computeLandsideBounds } from "@/lib/airportNav/layoutBounds";
 import { buildAirportSchematicModel } from "@/lib/airportNav/schematic";
@@ -1882,6 +1883,11 @@ export function AirportNavigatorMap({
         const isJourney = journeyPoiIdSet.has(poi.id);
         const emphatic = isSelected || isGateBubble || isObjective || isJourney || matchesAirline;
         const isReference = !emphatic;
+        // KEPI_DESIGN_LAW M32 — a security checkpoint has no public ground-truth
+        // coordinate anywhere, so it must NOT render as a sharp dot implying an
+        // exact spot. Draw a soft, fuzzy "approximate area" instead (same rule for
+        // every airport), and always keep its label so the "approx." tag shows.
+        const isSecurity = poi.category === "security";
 
         const dotColor = critical
           ? "#dc2626"
@@ -1907,13 +1913,26 @@ export function AirportNavigatorMap({
         ].join("");
 
         const dot = document.createElement("span");
-        dot.style.cssText = [
-          `width:${dotSize}px;height:${dotSize}px;flex:none;border-radius:9999px;`,
-          `background:${dotColor};border:2px solid #ffffff;`,
-          isReference ? "box-shadow:0 1px 2px rgba(15,23,42,0.25);" : "box-shadow:0 1px 4px rgba(15,23,42,0.55);",
-          isSelected ? "outline:3px solid rgba(56,189,248,0.95);outline-offset:1px;" : "",
-          critical || urgent ? "animation:kepiPulse 1.6s ease-in-out infinite;" : "",
-        ].join("");
+        if (isSecurity) {
+          // Soft radial zone: point sits at the fuzzy area's left edge (anchor
+          // "left"), dashed ring + gradient fade communicate "approximate", never
+          // an exact pin. No pulse — this is a place to head toward, not a countdown.
+          const zoneSize = isSelected ? 42 : isReference ? 28 : 36;
+          dot.style.cssText = [
+            `width:${zoneSize}px;height:${zoneSize}px;flex:none;border-radius:9999px;`,
+            "background:radial-gradient(circle,rgba(225,29,72,0.42) 0%,rgba(225,29,72,0.20) 52%,rgba(225,29,72,0) 78%);",
+            "border:1.5px dashed rgba(225,29,72,0.7);",
+            isSelected ? "outline:2px solid rgba(56,189,248,0.9);outline-offset:2px;" : "",
+          ].join("");
+        } else {
+          dot.style.cssText = [
+            `width:${dotSize}px;height:${dotSize}px;flex:none;border-radius:9999px;`,
+            `background:${dotColor};border:2px solid #ffffff;`,
+            isReference ? "box-shadow:0 1px 2px rgba(15,23,42,0.25);" : "box-shadow:0 1px 4px rgba(15,23,42,0.55);",
+            isSelected ? "outline:3px solid rgba(56,189,248,0.95);outline-offset:1px;" : "",
+            critical || urgent ? "animation:kepiPulse 1.6s ease-in-out infinite;" : "",
+          ].join("");
+        }
 
         // De-clutter: reference POIs show a dot only, EXCEPT reference gates keep
         // a faint concourse letter, and check-in counters + amenities always keep
@@ -1923,7 +1942,9 @@ export function AirportNavigatorMap({
         // them on there"). Without this, every non-your-airline counter collapsed
         // to a nameless grey dot and looked like nothing was there.
         const labelledReference = poi.category === "gate" || poi.category === "checkin" || poi.category === "amenity";
-        const showLabel = !isReference || labelledReference;
+        // Security always keeps its label so the "· approx. area" tag (M32) is
+        // visible even when it's only a reference pin.
+        const showLabel = !isReference || labelledReference || isSecurity;
         const showBrand = !isReference || poi.category === "checkin";
         bubble.appendChild(dot);
         if (showLabel) {
@@ -1953,8 +1974,9 @@ export function AirportNavigatorMap({
             bubble.appendChild(makeIataChip());
           }
           const doorSuffix = poi.doorLabel ? ` · ${poi.doorLabel}` : "";
+          const approxSuffix = isSecurity ? ` · ${SECURITY_APPROX_TAG}` : "";
           const label = document.createElement("span");
-          label.textContent = `${gateLabel}${countdown}${accessMark}${laneSummary ? ` · ${laneSummary}` : ""}${doorSuffix}`;
+          label.textContent = `${gateLabel}${countdown}${accessMark}${laneSummary ? ` · ${laneSummary}` : ""}${doorSuffix}${approxSuffix}`;
           label.style.cssText = [
             isReference
               ? "color:#64748b;font-weight:600;font-size:10px;"
@@ -2650,6 +2672,13 @@ export function AirportNavigatorMap({
               ) : previewMode ? (
                 <p className="mt-1 text-[12px] text-slate-500">Live step-by-step guidance starts when you arrive at {iata}.</p>
               ) : null}
+              {/* KEPI_DESIGN_LAW M32 — mandatory, un-buried security disclaimer wherever
+                  a checkpoint is the destination. Same copy for every airport. */}
+              {layout?.pois.find((p) => p.id === activeRoute.toPoiId)?.category === "security" && (
+                <p className="mt-1 rounded-lg bg-amber-50 px-2 py-1 text-[11px] leading-snug text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                  {SECURITY_APPROX_DISCLAIMER}
+                </p>
+              )}
             </div>
             <div className="flex shrink-0 gap-2">
               {preciseRouteEnabled && (

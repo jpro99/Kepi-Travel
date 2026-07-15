@@ -321,9 +321,9 @@ It is not enough to *look* correct — a traveler must never be routable from a 
 **Test:** `src/lib/airportNav/groundTruthConformance.test.ts`
 
 **M32 — Security checkpoints are permanently approximate: never `precision: "surveyed"`, always disclaimed (every airport, forever)**
-Security-screening areas have zero ground-truth tagging in any public indoor-mapping source — OSM tags none at any airport checked, and Apple's IMDF standard *deliberately excludes* the screening area as security policy, not a data gap. This is a settled, permanent decision, not an open research task: never claim an exact checkpoint coordinate for any airport, ever, and never chase "one more data source." A `security` POI may never carry `precision: "surveyed"` (enforced in `validateAirportLayoutGraph`); it is rendered as an approximate zone (not a sharp pin) with a mandatory, un-buried disclaimer ("Approximate security screening area — exact checkpoint location and lane setup can change without notice. Follow posted airport signage."). Security nodes still get the checks that don't need exact ground truth (M31 landside/airside topology, entrance proximity, tight entry/exit pairing). The only path to better-than-approximate is a human physically confirming via the click-to-place tool — and even then it stays labeled approximate.
+Security-screening areas have zero ground-truth tagging in any public indoor-mapping source — OSM tags none at any airport checked, and Apple's IMDF standard *deliberately excludes* the screening area as security policy, not a data gap. This is a settled, permanent decision, not an open research task: never claim an exact checkpoint coordinate for any airport, ever, and never chase "one more data source." A `security` POI may never carry `precision: "surveyed"` (enforced in `validateAirportLayoutGraph`); it is rendered as an approximate zone (not a sharp pin) with a mandatory, un-buried disclaimer ("Approximate security screening area — exact checkpoint location and lane setup can change without notice. Follow posted airport signage."). Security nodes still get the checks that don't need exact ground truth (M31 landside/airside topology, entrance proximity, tight entry/exit pairing). The only path to better-than-approximate is a human physically confirming via the click-to-place tool — and even then it stays labeled approximate. **Render (shipped):** in `AirportNavigatorMap` a security POI draws as a soft dashed radial "approximate area" (never a sharp dot), its label always carries a `· approx. area` tag, and routing to it shows the verbatim disclaimer from `securityDisclosure.ts` (`SECURITY_APPROX_DISCLAIMER`) — one shared source of truth so the copy can never be softened or dropped in one place.
 
-**Test:** `src/lib/airportNav/groundTruthConformance.test.ts`
+**Test:** `src/lib/airportNav/groundTruthConformance.test.ts`, `src/lib/airportNav/securityDisclosure.test.ts`
 
 ---
 
@@ -548,6 +548,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | M29 | `src/lib/airportNav/layoutQuality.test.ts`, `src/lib/airportNav/allAirportsQuality.test.ts` |
 | M30 | `src/lib/airportNav/routeGradeHonesty.test.ts` |
 | M31, M32 | `src/lib/airportNav/groundTruthConformance.test.ts` |
+| M32 | `src/lib/airportNav/securityDisclosure.test.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |
