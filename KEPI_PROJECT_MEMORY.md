@@ -26,6 +26,42 @@ M28 (airside routes follow the real OSM pier). Guard: `seaNodeContainment.test.t
 ---
 
 
+## Decision 2026-07-15 — Airport map scope: narrow to 1-2 verified pilots, not hundreds
+
+**Why Jeff asked:** after repeated rounds of SEA map bugs (parking-lot placement, self-
+intersecting terminal ring, flipped Alaska north/south, unverifiable security-checkpoint
+coordinates), Jeff asked directly whether Kepi should drop indoor maps entirely, since "hundreds
+of airports" can't all be reliably correct if even one pilot airport keeps breaking.
+
+**Decision: narrow scope, don't drop it.** Precise indoor mapping (exact counter/checkpoint/gate
+position) is genuinely hard, physical-world data — it's why companies like Atrius are entire
+survey-based businesses. Free public data (OSM) is only solid where OSM actually surveys it (doors,
+building shapes). Everything else needs real human verification, not just AI/curve estimation
+presented as final.
+
+**Going forward:**
+- **Full precision effort goes to SEA only, until it is genuinely, humanly verified end to end** —
+  every check-in counter, security checkpoint, gate, lounge, restroom checked by a person against
+  real reference material (the door coordinates already OSM-verified, cross-checked against the
+  airport's own public wayfinding map/photos), not just "passes the M29 structural audit" (that
+  audit checks graph logic — reachability, no backtracking, sane coordinate ranges — it does **not**
+  confirm real-world accuracy; don't conflate the two again).
+- **Curve-calibrated interpolation** (fitting a curve through the 5 known real door anchors to
+  estimate the rest) is allowed as a **fast draft generator only** — every interpolated/estimated
+  position must go through a human review pass (the click-to-place admin tool) before being marked
+  verified/published. Nothing ships as final on estimation alone.
+- **Do not build toward "hundreds of airports" right now.** Every airport other than the verified
+  pilot(s) shows the existing honest fallback (schematic view + prominent official-airport-map
+  link-out), never unverified precise-looking pins that create false confidence.
+- **Only after SEA is fully verified and stable**, consider a second pilot (likely LAX) using the
+  same proven, human-verified process — expand one airport at a time, never in bulk, until the
+  process itself has held up more than once.
+- This supersedes any earlier framing that treated multi-airport rollout as close/automatic. See
+  `CURSOR_PROMPT_curve_calibrated_full_door_import.md` and `CURSOR_PROMPT_admin_click_to_place_poi.md`
+  for the mechanics — both now scoped under this narrower, human-verified-first rule.
+
+---
+
 ## Decision 2026-07-13 — OpenStreetMap real airport maps (Phase 0 verified → Phase 1 shipped)
 
 **Why Jeff asked:** replace square-box airport schematics with the airport's *real* shape for free; keep Kepi's routing brain as the actual differentiator. Must be lightweight, flawless on mobile.

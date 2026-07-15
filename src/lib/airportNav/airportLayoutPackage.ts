@@ -153,6 +153,7 @@ export function validateAirportLayoutGraph(layout: AirportLayout): string[] {
     for (const id of duplicateIds(items)) issues.push(`Duplicate ${label} id: ${id}`);
   }
 
+  const nodeById = new Map(layout.nodes.map((node) => [node.id, node]));
   for (const edge of layout.edges) {
     if (!nodeIds.has(edge.from)) issues.push(`Edge ${edge.id} has unknown from node: ${edge.from}`);
     if (!nodeIds.has(edge.to)) issues.push(`Edge ${edge.id} has unknown to node: ${edge.to}`);
@@ -160,9 +161,31 @@ export function validateAirportLayoutGraph(layout: AirportLayout): string[] {
     if (edge.kind === "security_transition" && !edge.laneType) {
       issues.push(`Security edge ${edge.id} is missing laneType`);
     }
+    // KEPI_DESIGN_LAW M31 — landside↔airside crossings are ONLY legal through a
+    // security_transition edge. This makes "security past the gates" (or any
+    // sterile-area bypass) structurally impossible in the data, for every
+    // airport, not just visually wrong. Applies the same regardless of IATA.
+    const fromNode = nodeById.get(edge.from);
+    const toNode = nodeById.get(edge.to);
+    if (fromNode && toNode && fromNode.airside !== toNode.airside && edge.kind !== "security_transition") {
+      issues.push(
+        `Edge ${edge.id} crosses landside↔airside (${edge.from}→${edge.to}) without a security_transition — ` +
+          `security cannot be bypassed (M31).`,
+      );
+    }
   }
   for (const poi of layout.pois) {
     if (!nodeIds.has(poi.nodeId)) issues.push(`POI ${poi.id} has unknown node: ${poi.nodeId}`);
+    // KEPI_DESIGN_LAW M32 — a security checkpoint has ZERO ground-truth tagging in
+    // any public indoor-mapping source (OSM has none; Apple's IMDF deliberately
+    // excludes the screening area). So a "security" POI may never claim
+    // survey-grade precision — it is permanently approximate, for every airport.
+    if (poi.category === "security" && poi.precision === "surveyed") {
+      issues.push(
+        `POI ${poi.id} is category "security" with precision "surveyed" — security checkpoints have no ` +
+          `public ground truth and must stay approximate (M32).`,
+      );
+    }
   }
   for (const resolver of layout.gateNodeResolver) {
     if (!nodeIds.has(resolver.nodeId)) {
