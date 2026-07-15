@@ -219,7 +219,7 @@ A future flight at a curated airport must expose **Plan {IATA} airport** on the 
 **Test:** `app-sitter/airport-day-of-travel.spec.ts`
 
 **M12 — Airport wayfinding uses the best honest source**
-There is no universal downloadable live indoor airport map. Kepi must use a verified airport-owned live map when available, a clearly labeled universal venue-map fallback otherwise, and cache offline only the curated layouts Kepi owns. Destination controls remain visible after selection; native position is labeled approximate with GPS accuracy, while the selected route remains visually dominant. Security programs and checkpoint locations must be verified against current airport sources and defer to live airport signage.
+There is no universal downloadable live indoor airport map. Kepi must use a verified airport-owned live map when available (`supportsStepByStep: true` in `VERIFIED_AIRPORT_WAYFINDING`, e.g. SEA Atrius), a clearly labeled **orientation-only** official map when the airport has a map but not step-by-step, and a clearly labeled **weak Google venue-search fallback** otherwise — never dress the weak fallback up as confident indoor directions. When Kepi already has a layout for the airport, **Kepi's map is the primary tool**; the external link is secondary ("Extra reference · not step-by-step"), not a gold CTA that implies turn-by-turn. Honesty tiers live in `wayfindingHonestyTier` (`strong` | `official_static` | `weak`) and drive `OfficialAirportMapLink` + `AirportNavigatorFallback` presentation. Destination controls remain visible after selection; native position is labeled approximate with GPS accuracy. Security programs and checkpoint locations must defer to live airport signage (M32).
 
 **Test:** `src/lib/airportNav/officialWayfinding.test.ts`, `src/lib/airportNav/pathfinder.test.ts`, `app-sitter/airport-day-of-travel.spec.ts`
 
@@ -329,6 +329,11 @@ Security-screening areas have zero ground-truth tagging in any public indoor-map
 M29 proves the graph is *routable*; M33 proves each curated coordinate matches the real OSM ground truth. Passing one is never proof of the other. Implemented once in shared code (`osmGroundTruth.ts::checkOsmGroundTruth(layout, osmElements)`), airport-agnostic, run at import/re-import against the OSM in hand (pure, fixture-testable): (1) a gate POI claiming `precision:"surveyed"` must sit within `GATE_EXACT_MATCH_M` of the real `aeroway=gate` node with that `ref` — no clean ref ⇒ it stays schematic; (2) a landside curb/drop-off node must be within `CURB_ROAD_MAX_M` of a real `highway=*` way; (3) a POI must not sit on a different-category OSM feature (a gate on a restaurant/toilet node); (4) an indoor POI (gate/check-in/lounge) must fall inside a terminal/concourse footprint, but only after that ring passes `@turf/kinks` (never gate on a self-intersecting ring — skip with a warning and rely on the other checks). Where an airport's data can't satisfy a check it surfaces as an error/warning; the rule is never loosened to make an airport look finished. Findings flow into the import `warnings` (drafts stay rough; nothing auto-publishes).
 
 **Test:** `src/lib/airportNav/osmGroundTruth.test.ts`
+
+**M34 — Promote every real, named, coordinate-tagged OSM feature; pool control points across categories; click-to-place is the human gate**
+Anything OSM already tags with a real coordinate and a useful name (shops, food, toilets, lounges, banks/ATMs, elevators, escalators, charging stations, baggage claim, …) is fair game for a traveler POI — import it at the exact OSM coordinate as `precision:"surveyed"`, never invent missing ones, never re-derive from a screenshot. `osmImport.ts` conversion (not just the Overpass query) must promote these; unnamed shops/food stay out. For georeferencing drafts from a public reference image, **pool control-point anchors across categories** (`poolControlPointAnchors` — doors, gates, lounges, elevators, escalators, named amenities), not just a door row; a door-only pool is insufficient for 2D depth (`controlPointPoolSupports2dTransform`). 2D affine projection (`controlPointTransform.ts`) produces `schematic`/`extrapolated` drafts only — never final without human confirmation via admin **click-to-place** (`applyClickToPlace` + `AirportNavigatorMap` `placeMode`), which feeds the existing draft → preview-confirm → publish path. Security click-to-place stays approximate (M32). Full airline check-in coverage (every carrier on the public ticketing directory, not a handful of majors) is required where curated — guarded by `seaTicketingHall.test.ts` for SEA; other airports use click-to-place + control-point drafts.
+
+**Test:** `src/lib/airportNav/osmImport.test.ts`, `src/lib/airportNav/controlPointAnchors.test.ts`, `src/lib/airportNav/controlPointTransform.test.ts`, `src/lib/airportNav/clickToPlace.test.ts`, `src/lib/airportNav/layouts/seaTicketingHall.test.ts`
 
 ---
 
@@ -555,6 +560,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | M31, M32 | `src/lib/airportNav/groundTruthConformance.test.ts` |
 | M32 | `src/lib/airportNav/securityDisclosure.test.ts` |
 | M33 | `src/lib/airportNav/osmGroundTruth.test.ts` |
+| M34 | `src/lib/airportNav/osmImport.test.ts`, `src/lib/airportNav/controlPointAnchors.test.ts`, `src/lib/airportNav/controlPointTransform.test.ts`, `src/lib/airportNav/clickToPlace.test.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |

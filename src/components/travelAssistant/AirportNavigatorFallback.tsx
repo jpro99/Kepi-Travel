@@ -6,7 +6,10 @@ import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
 import { buildGateInstructions, getAirportNav } from "@/lib/travelAssistant/airportNavigation";
 import type { FamilyAirportPin } from "@/lib/family/familyAirportPins";
 import { OfficialAirportMapLink } from "@/components/travelAssistant/OfficialAirportMapLink";
-import { getAirportWayfindingResource } from "@/lib/airportNav/officialWayfinding";
+import {
+  getAirportWayfindingResource,
+  wayfindingHonestyTier,
+} from "@/lib/airportNav/officialWayfinding";
 
 interface AirportNavigatorFallbackProps {
   iata: string;
@@ -64,6 +67,8 @@ export function AirportNavigatorFallback({
   const code = iata.trim().toUpperCase();
   const nav = getAirportNav(code);
   const officialWayfinding = getAirportWayfindingResource(code);
+  const wayfindingTier = wayfindingHonestyTier(officialWayfinding);
+  const strongOfficial = wayfindingTier === "strong";
 
   const proximity = useMemo(
     () => getAirportProximity(userLat, userLon, code),
@@ -98,26 +103,38 @@ export function AirportNavigatorFallback({
       style={fill ? undefined : { maxHeight: 520 }}
     >
       <div className="space-y-4 p-4 sm:p-5">
-        <div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-200">
-            {layoutLoadFailed ? "Kepi indoor map unavailable" : "Kepi indoor map coming soon"}
+        <div className="rounded-2xl border border-sky-400/25 bg-sky-500/10 px-4 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-200">
+            {layoutLoadFailed
+              ? "Kepi terminal map temporarily unavailable"
+              : strongOfficial
+                ? "Kepi checklist · official live map below"
+                : "Your guide for this airport"}
           </p>
-          <p className="mt-1 text-sm leading-relaxed text-amber-50/95">
+          <p className="mt-1 text-sm leading-relaxed text-sky-50/95">
             {layoutLoadFailed ? (
               <>
-                We couldn&apos;t load the terminal map for <span className="font-bold">{code}</span> right now.
+                We couldn&apos;t load Kepi&apos;s terminal map for <span className="font-bold">{code}</span> right now.
                 Use the checklist below — we&apos;ll retry when you reopen the map.
+              </>
+            ) : strongOfficial ? (
+              <>
+                Kepi keeps your trip context for <span className="font-bold">{code}</span>. Open the verified
+                live indoor map below for turn-by-turn inside the terminal.
               </>
             ) : (
               <>
-                Turn-by-turn terminal routing isn&apos;t live at <span className="font-bold">{code}</span> yet.
-                {" "}Kepi will switch this screen to the stored indoor map when its airport package is published.
+                Follow this checklist for <span className="font-bold">{code}</span> — check-in, security, gate.
+                Kepi&apos;s stored terminal map will appear here once this airport is published; until then
+                trust posted signs and staff over any web venue search.
               </>
             )}
           </p>
         </div>
 
-        <OfficialAirportMapLink iata={code} />
+        {/* Strong verified indoor maps go first; weak Google fallbacks go AFTER the checklist
+            so they never look like the primary tool. */}
+        {strongOfficial ? <OfficialAirportMapLink iata={code} /> : null}
 
         <div className="rounded-2xl bg-black/35 px-4 py-3 backdrop-blur">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -188,6 +205,8 @@ export function AirportNavigatorFallback({
           ) : null}
         </section>
 
+        {!strongOfficial ? <OfficialAirportMapLink iata={code} /> : null}
+
         {eligibleLoungeNames.length > 0 ? (
           <section className="rounded-2xl border border-sky-400/20 bg-sky-500/10 px-4 py-3">
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-200">Lounges you may use</p>
@@ -250,9 +269,9 @@ export function AirportNavigatorFallback({
         ) : null}
 
         <p className="text-center text-[10px] leading-relaxed text-slate-500">
-          {officialWayfinding?.official
-            ? `Kepi keeps the trip context; ${officialWayfinding.provider} provides the verified live airport map.`
-            : `Kepi GPS geofencing is active. Exact indoor positioning for ${code} is not verified — use airport signs and staff as the final word.`}
+          {strongOfficial
+            ? `Kepi keeps the trip context; ${officialWayfinding?.provider} provides the verified live airport map.`
+            : `Kepi GPS geofencing is active. No verified indoor step-by-step map is registered for ${code} — follow airport signs and staff.`}
         </p>
       </div>
     </div>

@@ -22,6 +22,18 @@ test("every generated check-in POI resolves to a real node and carries a precisi
   const nodeIds = new Set(SEA_LAYOUT.nodes.map((n) => n.id));
   const airlinePois = SEA_LAYOUT.pois.filter((p) => p.category === "checkin" && p.airlineIataCode);
   assert.ok(airlinePois.length >= 20, `expected the full airline set, got ${airlinePois.length}`);
+  // Full public ticketing-hall coverage — not a handful of majors only (master prompt §6).
+  const expectedIatas = [
+    "AY", "TK", "OZ", "PR", "BA", "EI", "LH", "NH", "HU",
+    "UA", "EK", "AC", "JX", "B6", "DL", "AF", "AM", "WS", "SK",
+    "FI", "WN", "F9", "SY", "AA", "AS",
+  ];
+  for (const code of expectedIatas) {
+    assert.ok(
+      airlinePois.some((p) => p.airlineIataCode === code),
+      `missing airline check-in POI for ${code}`,
+    );
+  }
   for (const poi of airlinePois) {
     assert.ok(nodeIds.has(poi.nodeId), `${poi.id} -> missing node ${poi.nodeId}`);
     assert.ok(

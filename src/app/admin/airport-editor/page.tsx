@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { AirportLayout, TravelerSecurityCredentials } from '@/lib/airportNav/types';
+import type { AirportLayout, PoiCategory, TravelerSecurityCredentials } from '@/lib/airportNav/types';
 import {
     buildAirportSchematicModel,
     placeAirportSchematicLabels,
 } from '@/lib/airportNav/schematic';
+import { applyClickToPlace } from '@/lib/airportNav/clickToPlace';
 import { AirportNavigatorMap } from '@/components/travelAssistant/AirportNavigatorMap';
 
 /** Admin verification runs as a fully-credentialed traveler so the security
@@ -135,6 +136,13 @@ export default function AirportEditorPage() {
     const [maptilerKey, setMaptilerKey] = useState('');
     const [previewGate, setPreviewGate] = useState('');
     const [previewLive, setPreviewLive] = useState(true);
+    const [placeMode, setPlaceMode] = useState(false);
+    const [placeCategory, setPlaceCategory] = useState<PoiCategory>('checkin');
+    const [placeName, setPlaceName] = useState('');
+    const [placeAirline, setPlaceAirline] = useState('');
+    const [placeAirlineIata, setPlaceAirlineIata] = useState('');
+    const [placeDoor, setPlaceDoor] = useState('');
+    const [lastPlace, setLastPlace] = useState<{ lng: number; lat: number } | null>(null);
 
     const loadQueue = useCallback(async () => {
         setQueueLoading(true);
@@ -216,6 +224,37 @@ export default function AirportEditorPage() {
         void loadPackageInfo(layout.iata);
         if (typeof window !== 'undefined') window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     }, [loadPackageInfo]);
+
+    const handlePlaceCapture = useCallback((lngLat: { lng: number; lat: number }) => {
+        if (!bundledLayout) return;
+        setLastPlace(lngLat);
+        const name = placeName.trim() || `${placeCategory} (placed)`;
+        try {
+            const next = applyClickToPlace(bundledLayout, {
+                lng: lngLat.lng,
+                lat: lngLat.lat,
+                category: placeCategory,
+                name,
+                airline: placeAirline.trim() || undefined,
+                airlineIataCode: placeAirlineIata.trim() || undefined,
+                doorLabel: placeDoor.trim() || undefined,
+            });
+            setBundledLayout(next);
+            setLayoutText(JSON.stringify(next, null, 2));
+            setPreviewLayout(next);
+            setPreviewConfirmed(false);
+            setStatus('draft');
+            setPrecisionGrade('schematic');
+            setMessage(
+                `Placed "${name}" at ${lngLat.lng.toFixed(6)}, ${lngLat.lat.toFixed(6)}. ` +
+                `Saved into the draft editor — confirm preview before publish.` +
+                (placeCategory === 'security' ? ' Security stays approximate (never surveyed).' : ''),
+            );
+            setPlaceName('');
+        } catch (error) {
+            setMessage(`Place failed: ${error instanceof Error ? error.message : 'unknown error'}`);
+        }
+    }, [bundledLayout, placeCategory, placeName, placeAirline, placeAirlineIata, placeDoor]);
 
     /** Any edit to the layout invalidates the previous visual confirmation. */
     const updateLayoutText = (nextText: string) => {
@@ -482,6 +521,13 @@ export default function AirportEditorPage() {
                                             At airport (full route to gate)
                                         </button>
                                     </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPlaceMode((on) => !on)}
+                                        className={`rounded-lg px-3 py-1.5 text-xs font-bold ${placeMode ? 'bg-amber-500 text-[#0b1f3a]' : 'border border-gray-300 bg-white text-gray-700'}`}
+                                    >
+                                        {placeMode ? 'Click-to-place ON — tap map' : 'Click-to-place'}
+                                    </button>
                                     {previewLive && (bundledLayout.gateNodeResolver?.length ?? 0) > 0 ? (
                                         <label className="flex items-center gap-2 text-xs font-semibold text-gray-600">
                                             Gate
@@ -507,9 +553,68 @@ export default function AirportEditorPage() {
                                         <span className="text-xs text-amber-700">Loading basemap key…</span>
                                     ) : null}
                                 </div>
+                                {placeMode ? (
+                                    <div className="grid gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 sm:grid-cols-2 lg:grid-cols-5">
+                                        <label className="text-xs font-semibold text-gray-700">
+                                            Category
+                                            <select
+                                                value={placeCategory}
+                                                onChange={(e) => setPlaceCategory(e.target.value as PoiCategory)}
+                                                className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                                            >
+                                                {(['checkin', 'gate', 'security', 'lounge', 'restroom', 'amenity', 'train', 'baggage'] as PoiCategory[]).map((c) => (
+                                                    <option key={c} value={c}>{c}</option>
+                                                ))}
+                                            </select>
+                                        </label>
+                                        <label className="text-xs font-semibold text-gray-700">
+                                            Name
+                                            <input
+                                                value={placeName}
+                                                onChange={(e) => setPlaceName(e.target.value)}
+                                                placeholder="United check-in"
+                                                className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                                            />
+                                        </label>
+                                        <label className="text-xs font-semibold text-gray-700">
+                                            Airline
+                                            <input
+                                                value={placeAirline}
+                                                onChange={(e) => setPlaceAirline(e.target.value)}
+                                                placeholder="United"
+                                                className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                                            />
+                                        </label>
+                                        <label className="text-xs font-semibold text-gray-700">
+                                            IATA (logo)
+                                            <input
+                                                value={placeAirlineIata}
+                                                onChange={(e) => setPlaceAirlineIata(e.target.value)}
+                                                placeholder="UA"
+                                                maxLength={3}
+                                                className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm uppercase"
+                                            />
+                                        </label>
+                                        <label className="text-xs font-semibold text-gray-700">
+                                            Door label
+                                            <input
+                                                value={placeDoor}
+                                                onChange={(e) => setPlaceDoor(e.target.value)}
+                                                placeholder="Door 7"
+                                                className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                                            />
+                                        </label>
+                                        <p className="sm:col-span-2 lg:col-span-5 text-xs text-amber-900">
+                                            Tap the map to drop a pin at the real coordinate. Goes into the draft editor
+                                            (preview-confirm → publish) — never a second publish path.
+                                            {lastPlace ? ` Last: ${lastPlace.lng.toFixed(5)}, ${lastPlace.lat.toFixed(5)}.` : ''}
+                                            {placeCategory === 'security' ? ' Security stays approximate forever (M32).' : ''}
+                                        </p>
+                                    </div>
+                                ) : null}
                                 <div className="relative h-[70vh] min-h-[420px] w-full overflow-hidden rounded-xl border border-gray-200">
                                     <AirportNavigatorMap
-                                        key={`${bundledLayout.iata}-${previewLive ? 'live' : 'plan'}`}
+                                        key={`${bundledLayout.iata}-${previewLive ? 'live' : 'plan'}-${bundledLayout.pois.length}`}
                                         fill
                                         previewMode={!previewLive}
                                         maptilerKey={maptilerKey}
@@ -522,6 +627,9 @@ export default function AirportEditorPage() {
                                         userLon={null}
                                         credentials={PREVIEW_CREDENTIALS}
                                         onCredentialsAnswer={() => undefined}
+                                        layoutOverride={bundledLayout}
+                                        placeMode={placeMode}
+                                        onPlaceCapture={handlePlaceCapture}
                                     />
                                 </div>
                                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">

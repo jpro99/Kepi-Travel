@@ -85,6 +85,14 @@ interface AirportNavigatorMapProps {
   activeRally?: FamilyRally | null;
   /** Extra bottom offset when embedded above a fixed tab bar (e.g. /live-map). */
   shellBottomInset?: string;
+  /**
+   * Admin click-to-place: when true, map clicks fire onPlaceCapture with real
+   * lng/lat (no computation). Traveler UI never sets this.
+   */
+  placeMode?: boolean;
+  onPlaceCapture?: (lngLat: { lng: number; lat: number }) => void;
+  /** When set (admin verify/edit), skip the layout API and render this package. */
+  layoutOverride?: AirportLayout | null;
 }
 
 const PATH_DIM = "#c3ccd7";
@@ -790,6 +798,9 @@ export function AirportNavigatorMap({
   onFamilyPinTap,
   activeRally = null,
   shellBottomInset,
+  placeMode = false,
+  onPlaceCapture,
+  layoutOverride = null,
 }: AirportNavigatorMapProps) {
   const bottomPanel = shellBottomInset ?? "max(0.75rem, env(safe-area-inset-bottom))";
   const bottomMic = shellBottomInset
@@ -996,6 +1007,12 @@ export function AirportNavigatorMap({
   /* ── Load curated layout (IndexedDB cache first, then API) ──────────── */
   useEffect(() => {
     let cancelled = false;
+    // Admin verify / click-to-place: render the in-memory package, skip network.
+    if (layoutOverride) {
+      setLayout(layoutOverride);
+      setLayoutStatus("ready");
+      return;
+    }
     setLayout(null);
     setLayoutStatus("loading");
     void (async () => {
@@ -1035,7 +1052,7 @@ export function AirportNavigatorMap({
     return () => {
       cancelled = true;
     };
-  }, [iata]);
+  }, [iata, layoutOverride]);
 
   /* ── Snapped traveler position ──────────────────────────────────────── */
   const snapped: SnappedPosition | null = useMemo(() => {
@@ -1828,6 +1845,26 @@ export function AirportNavigatorMap({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRoute, journeyRoute, mapReady, snapped?.nearestNodeId, layout]);
+
+  /* ── Admin click-to-place (capture real lng/lat on basemap click) ───── */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !placeMode || !onPlaceCapture) return;
+    const canvas = map.getCanvas?.() as HTMLCanvasElement | undefined;
+    const prevCursor = canvas?.style.cursor ?? "";
+    if (canvas) canvas.style.cursor = "crosshair";
+    const onClick = (e: { lngLat?: { lng: number; lat: number } }) => {
+      const lng = e.lngLat?.lng;
+      const lat = e.lngLat?.lat;
+      if (typeof lng !== "number" || typeof lat !== "number") return;
+      onPlaceCapture({ lng, lat });
+    };
+    map.on("click", onClick);
+    return () => {
+      try { map.off("click", onClick); } catch { /* map gone */ }
+      if (canvas) canvas.style.cursor = prevCursor;
+    };
+  }, [mapReady, placeMode, onPlaceCapture]);
 
   /* ── POI bubble markers ─────────────────────────────────────────────── */
   useEffect(() => {

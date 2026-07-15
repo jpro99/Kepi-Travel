@@ -134,15 +134,48 @@ in `src/app/admin/airport-editor/page.tsx`:
 - This is the correction/verification mechanism for security zones and anything curve-interpolated
   (section 6) — a human glances and confirms or nudges, rather than placing from a blank map.
 
-## 6. Curve-calibrated interpolation — draft generator only, never final on its own
+## 6. Control-point georeferencing — the "instant draft" engine, 2D not just 1D
 
-Where real anchor points exist (a handful of OSM-tagged doors/gates along a curved hall), fitting a
-curve through them to estimate the rest is a legitimate way to generate a fast first draft — but:
+Generalizes the original curve-through-doors idea into a real, standard GIS technique:
+georeferencing an image via control points. Where a public reference image (e.g. an airport's own
+wayfinding map) shows named features, and enough of those same features already have a real,
+independently-verified Kepi coordinate (doors, gates), compute a 2D transform (affine at minimum;
+projective/rubber-sheet if the reference image has perspective distortion) from the matched pairs,
+then use it to estimate a real coordinate for every *other* labeled feature in that same reference
+image — ticket counters, elevators, kiosks, anything. **This never reads or copies a competitor's
+coordinate — it computes Kepi's own estimate from Kepi's own verified anchors; the reference image
+only tells you which named thing corresponds to which pixel.**
 
-- Every interpolated position is `precisionGrade: "schematic"` until a human confirms it via the
-  click-to-place tool (section 5). Nothing ships as final on interpolation alone.
-- Flag extrapolation beyond the known anchor range as lower confidence than interpolation between
-  two anchors.
+- **Anchor coverage matters — pool every real, tagged category, not just doors.** A set of anchors
+  clustered along one line (e.g. just the ticketing-hall doors) is only reliable for interpolating
+  *along that same line* — it under-determines position for anything set back from it (deeper gates,
+  side corridors, upper levels). Before trusting 2D estimates broadly, pool **every** real,
+  independently-tagged coordinate the airport's OSM data has — doors, gates, lounges, and also
+  elevators (`highway=elevator`) and escalators (conveying-tagged features), which are commonly
+  mapped and, importantly, sit at different depths through the terminal rather than along one curb
+  line. More categories pooled together means better-distributed real anchors, which is what makes
+  the transform trustworthy away from the door row, not just along it. Confirm which of these
+  categories actually exist per airport before assuming coverage — same "verify, don't assume" rule
+  as everywhere else.
+- **This estimates position, not shape.** The transform gives a trustworthy point — where a counter
+  or feature is — not its real footprint/orientation/size, unless that shape is separately and
+  reliably tagged in OSM (uncommon). Render these as points (a labeled icon/pin, airline logo where
+  applicable via the existing Duffel lookup), not as a claimed accurate desk outline — don't oversell
+  a point estimate as more than it is.
+- **Coverage must be complete, not just the airlines already hardcoded.** Currently only a handful
+  of airlines (Alaska, Delta, United, Air Canada, Emirates) have curated check-in POIs — every other
+  airline visible on the airport's own public wayfinding reference (American, Frontier, Sun Country,
+  etc.) is missing entirely, which is the actual cause of "airline X isn't showing / is showing in
+  the wrong place." Use this same control-point method to place every airline shown on that public
+  reference, not just the ones already coded — completeness is part of the fix, not an afterthought.
+- Every position produced this way is `precisionGrade: "schematic"` — this is instant-draft
+  generation, not verification. It must go through the click-to-place tool (section 5) for a human
+  quick-confirm/nudge before being treated as final, same as the original curve interpolation.
+- Flag any estimate produced by extrapolating outside the convex hull of the known anchors as lower
+  confidence than one produced by interpolating between/among anchors.
+- This is generic, reusable code (a control-point transform function + a "map labeled reference
+  points to draft coordinates" step), not a SEA-specific script — build it once, apply per airport
+  wherever a public reference image + enough real anchors exist.
 
 ## 7. Routing — honest by default, everywhere
 

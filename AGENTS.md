@@ -121,6 +121,13 @@ These are agent playbooks, not autonomous runtime bots. Jeff instructs the condu
 
 ## Fix log
 
+### 2026-07-15 (Session — master prompt remaining: amenities, honesty tiers, click-to-place, control points)
+- **M12 honesty:** `wayfindingHonestyTier` (`strong` | `official_static` | `weak`). `OfficialAirportMapLink` no longer presents Google venue-search as a confident gold CTA; when Kepi has a layout, Kepi is primary and the external link is secondary. Fallback checklist leads when weak.
+- **M34 amenity promotion:** `osmImport` converts named shops/food/banks/ATMs/elevators/escalators/charging/baggage to surveyed POIs; Overpass pulls entrances + those tags.
+- **Control-point pooling:** `controlPointAnchors.ts` + `controlPointTransform.ts` (affine + hull grade). Door-only pool is insufficient for 2D.
+- **Click-to-place:** `applyClickToPlace` + admin `placeMode` on `AirportNavigatorMap` (`layoutOverride` + map click). Security stays schematic.
+- **SEA airline coverage:** ticketing-hall test now asserts the full carrier IATA set (25), not just a count ≥20.
+
 ### 2026-07-15 (Session — master prompt locked into agent memory)
 - **Standing order:** every airport-map build starts by reading
   `CURSOR_PROMPT_MASTER_airport_maps_all_airports.md`. Wired into

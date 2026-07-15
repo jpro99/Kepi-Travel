@@ -25,6 +25,11 @@ import type {
   TerminalZonePolygon,
 } from "@/lib/airportNav/types";
 import { checkOsmGroundTruth } from "@/lib/airportNav/osmGroundTruth";
+import {
+  controlPointPoolSupports2dTransform,
+  poolControlPointAnchors,
+  summarizeControlPointPool,
+} from "@/lib/airportNav/controlPointAnchors";
 
 export const OSM_ATTRIBUTION = "Map data © OpenStreetMap contributors";
 export const OSM_LICENSE_NOTE =
@@ -59,6 +64,7 @@ export interface OsmImportStats {
   gates: number;
   lounges: number;
   restrooms: number;
+  amenities: number;
   nodes: number;
   edges: number;
   pois: number;
@@ -176,11 +182,14 @@ export function buildAirportImportQuery(iata: string): string {
   way${scope}["aeroway"="terminal"];
   way${scope}["aeroway"="concourse"];
   nwr${scope}["aeroway"="gate"];
+  nwr${scope}["entrance"];
   nwr${scope}["amenity"="toilets"];
   nwr${scope}["amenity"="lounge"];
   nwr${scope}["name"~"Lounge|Sky Club|Admirals Club|United Club|Centurion",i];
-  nwr${scope}["amenity"~"restaurant|cafe|fast_food|bar|food_court",i];
+  nwr${scope}["amenity"~"restaurant|cafe|fast_food|bar|food_court|bank|atm|charging_station|bureau_de_change|drinking_water|baggage_claim",i];
   nwr${scope}["shop"];
+  nwr${scope}["highway"="elevator"];
+  nwr${scope}["highway"="steps"]["conveying"];
   way${scope}["highway"];
 );
 out geom;`;
@@ -241,6 +250,7 @@ export function convertOsmToLayoutDraft(
   let gateCount = 0;
   let loungeCount = 0;
   let restroomCount = 0;
+  let amenityCount = 0;
 
   const hubId = "hub-central";
   nodes.push({
@@ -254,6 +264,9 @@ export function convertOsmToLayoutDraft(
 
   const gatePrefixNode = new Map<string, string>();
 
+  const FOOD_AMENITY = /^(restaurant|cafe|fast_food|bar|food_court|pub|ice_cream)$/;
+  const TRAVELER_AMENITY = /^(bank|atm|charging_station|bureau_de_change|drinking_water|baggage_claim)$/;
+
   for (const el of elements) {
     const tags = el.tags ?? {};
     const pos = pointFromElement(el);
@@ -262,7 +275,17 @@ export function convertOsmToLayoutDraft(
     const isGate = tags.aeroway === "gate";
     const isToilet = tags.amenity === "toilets";
     const isLounge = tags.amenity === "lounge" || (tags.name ? LOUNGE_NAME.test(tags.name) : false);
-    if (!isGate && !isToilet && !isLounge) continue;
+    const isElevator = tags.highway === "elevator" || tags.elevator === "yes";
+    const isEscalator =
+      tags.highway === "steps" &&
+      (tags.conveying === "yes" || tags.conveying === "forward" || tags.conveying === "backward");
+    const isShop = Boolean(tags.shop) && Boolean(tags.name?.trim());
+    const isFood = Boolean(tags.amenity && FOOD_AMENITY.test(tags.amenity) && tags.name?.trim());
+    const isTravelerAmenity = Boolean(tags.amenity && TRAVELER_AMENITY.test(tags.amenity));
+    // Skip unnamed food/shop — promote only real named tagged features (master prompt §3).
+    if (!isGate && !isToilet && !isLounge && !isElevator && !isEscalator && !isShop && !isFood && !isTravelerAmenity) {
+      continue;
+    }
 
     const baseId = `node-${el.type}-${el.id}`;
     let nodeId = baseId;
@@ -282,7 +305,13 @@ export function convertOsmToLayoutDraft(
       let poiId = `poi-gate-${slug(ref || String(el.id))}`;
       while (usedPoiIds.has(poiId)) poiId = `${poiId}-b`;
       usedPoiIds.add(poiId);
-      pois.push({ id: poiId, nodeId, category: "gate", name: ref ? `Gate ${ref}` : "Gate" });
+      pois.push({
+        id: poiId,
+        nodeId,
+        category: "gate",
+        name: ref ? `Gate ${ref}` : "Gate",
+        precision: "surveyed",
+      });
       gateCount++;
       const prefix = ref.match(/^[A-Za-z]+/)?.[0]?.toUpperCase();
       if (prefix && !gatePrefixNode.has(prefix)) gatePrefixNode.set(prefix, nodeId);
@@ -292,16 +321,32 @@ export function convertOsmToLayoutDraft(
       let poiId = `poi-lounge-${slug(name)}`;
       while (usedPoiIds.has(poiId)) poiId = `${poiId}-b`;
       usedPoiIds.add(poiId);
-      pois.push({ id: poiId, nodeId, category: "lounge", name });
+      pois.push({ id: poiId, nodeId, category: "lounge", name, precision: "surveyed" });
       loungeCount++;
-    } else {
-      // toilet
+    } else if (isToilet) {
       nodes.push({ id: nodeId, pos, kind: "restroom", airside: true, landmark: "Restrooms" });
       let poiId = `poi-restroom-${el.id}`;
       while (usedPoiIds.has(poiId)) poiId = `${poiId}-b`;
       usedPoiIds.add(poiId);
-      pois.push({ id: poiId, nodeId, category: "restroom", name: "Restrooms" });
+      pois.push({ id: poiId, nodeId, category: "restroom", name: "Restrooms", precision: "surveyed" });
       restroomCount++;
+    } else {
+      // Named shop / food / bank / ATM / elevator / escalator / charging — exact OSM coord.
+      const name =
+        tags.name?.trim() ||
+        (isElevator ? "Elevator" : isEscalator ? "Escalator" : tags.amenity?.replace(/_/g, " ") || "Amenity");
+      nodes.push({ id: nodeId, pos, kind: "landmark", airside: true, landmark: name });
+      let poiId = `poi-amenity-${slug(name)}-${el.id}`;
+      while (usedPoiIds.has(poiId)) poiId = `${poiId}-b`;
+      usedPoiIds.add(poiId);
+      pois.push({
+        id: poiId,
+        nodeId,
+        category: tags.amenity === "baggage_claim" ? "baggage" : "amenity",
+        name: name.replace(/\b\w/g, (c) => c.toUpperCase()),
+        precision: "surveyed",
+      });
+      amenityCount++;
     }
   }
 
@@ -341,6 +386,24 @@ export function convertOsmToLayoutDraft(
   if (loungeCount === 0) warnings.push("No lounges detected — add eligibility-relevant lounges if the airport has them.");
   if (gateNodeResolver.length === 0) warnings.push("No gate letter prefixes detected — set gateNodeResolver so gate codes resolve.");
 
+  // Control-point pool: tell the curator whether 2D georeferencing is viable yet.
+  const controlAnchors = poolControlPointAnchors(elements);
+  const poolSummary = summarizeControlPointPool(controlAnchors);
+  if (controlPointPoolSupports2dTransform(controlAnchors)) {
+    warnings.push(
+      `Control-point pool ready for 2D draft georeferencing (${controlAnchors.length} anchors: ` +
+        `doors ${poolSummary.door}, gates ${poolSummary.gate}, lounges ${poolSummary.lounge}, ` +
+        `elevators ${poolSummary.elevator}, escalators ${poolSummary.escalator}, amenities ${poolSummary.amenity}). ` +
+        `Estimates stay schematic until human click-to-place confirmation.`,
+    );
+  } else {
+    warnings.push(
+      `Control-point pool is thin for 2D georeferencing (${controlAnchors.length} anchors across ` +
+        `${Object.values(poolSummary).filter((n) => n > 0).length} kinds) — door-row curve interpolation ` +
+        `is still fine; pool more gates/elevators before trusting depth into the terminal.`,
+    );
+  }
+
   const layout: AirportLayout = {
     iata,
     name: opts.name.trim() || `${iata} Airport`,
@@ -369,6 +432,7 @@ export function convertOsmToLayoutDraft(
       gates: gateCount,
       lounges: loungeCount,
       restrooms: restroomCount,
+      amenities: amenityCount,
       nodes: nodes.length,
       edges: edges.length,
       pois: pois.length,

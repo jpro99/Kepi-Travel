@@ -46,12 +46,14 @@ test("OSM import produces a schema-valid AirportLayout draft", () => {
   assert.ok(parsed.pois.length >= 1);
 });
 
-test("gates, lounge (by name), and restroom are imported; non-routable POIs dropped", () => {
+test("gates, lounge (by name), restroom, and named shops are imported as surveyed POIs", () => {
   const { stats, layout } = convertOsmToLayoutDraft(FIXTURE, { iata: "SEA", name: "SEA" });
   assert.equal(stats.gates, 2);
   assert.equal(stats.lounges, 1); // Delta Sky Club matched by name, not amenity=lounge
   assert.equal(stats.restrooms, 1);
-  assert.ok(!layout.pois.some((p) => /starbucks/i.test(p.name)));
+  assert.ok(stats.amenities >= 1, "named Starbucks shop must be promoted");
+  assert.ok(layout.pois.some((p) => /starbucks/i.test(p.name) && p.precision === "surveyed"));
+  assert.ok(layout.pois.filter((p) => p.category === "gate").every((p) => p.precision === "surveyed"));
   assert.ok(layout.gateNodeResolver.some((r) => r.prefix === "B"));
   assert.ok(layout.gateNodeResolver.some((r) => r.prefix === "C"));
 });

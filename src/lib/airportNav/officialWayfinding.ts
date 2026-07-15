@@ -153,3 +153,26 @@ export function getAirportWayfindingResource(
 export function listVerifiedAirportWayfindingResources(): AirportWayfindingResource[] {
   return Object.values(VERIFIED_AIRPORT_WAYFINDING);
 }
+
+/**
+ * Honesty tier for how confidently we present an external map link (M12 / M34).
+ * - strong: airport-owned, verified step-by-step (e.g. SEA Atrius) — may be a primary CTA
+ * - official_static: airport-owned but not step-by-step — secondary reference
+ * - weak: Google venue-search fallback — never look as confident as a real indoor map
+ */
+export type WayfindingHonestyTier = "strong" | "official_static" | "weak";
+
+export function wayfindingHonestyTier(
+  resource: AirportWayfindingResource | null | undefined,
+): WayfindingHonestyTier {
+  if (!resource) return "weak";
+  if (resource.official && resource.supportsStepByStep) return "strong";
+  if (resource.official) return "official_static";
+  return "weak";
+}
+
+/** True when this IATA is in the verified registry (not the Google fallback). */
+export function hasVerifiedAirportWayfinding(iata: string | null | undefined): boolean {
+  const code = iata?.trim().toUpperCase();
+  return Boolean(code && VERIFIED_AIRPORT_WAYFINDING[code]);
+}
