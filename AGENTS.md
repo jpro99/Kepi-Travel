@@ -121,6 +121,11 @@ These are agent playbooks, not autonomous runtime bots. Jeff instructs the condu
 
 ## Fix log
 
+### 2026-07-15 (Session — ONT added as airport #3 via the M29 playbook)
+- **Ontario International (ONT)** — small two-terminal airport. New files: `src/lib/airportNav/layouts/ont.ts`, `ontFootprints.ts` (real OSM), `ontNodeContainment.test.ts`. Registered in `getLayout.ts`, `allAirportsQuality.test.ts`, `test:laws`.
+- **SURVEYED (real OSM Overpass 2026-07-15):** T2 gate cluster (201–213), T4 gate cluster (401–414), Aspire lounge, T4 + International Arrivals footprints. **ESTIMATE:** curbs/checkpoints (T4 curb = real building centroid; T2 has NO OSM building polygon so curb estimated ~60 m north of gates; checkpoints interpolated — M15). Gates numeric → resolver `2*`→T2, `4*`→T4.
+- **Overpass note:** the public endpoint timed out twice under load; retry after a few seconds (or use the kumi mirror). Not a coverage problem.
+
 ### 2026-07-14 (Session — LAX added as airport #2 via the M29 playbook)
 - **First airport built with the new-airport playbook.** LAX is a horseshoe of independent terminals (T1, T2, T3, TBIT, T4, T6, T7, T8) + West Gates (Midfield Satellite, tunnel from TBIT). New files: `src/lib/airportNav/layouts/lax.ts`, `laxFootprints.ts` (real OSM rings, auto-generated + RDP-simplified), `laxNodeContainment.test.ts` (ground-truth guard). Registered in `getLayout.ts`, `allAirportsQuality.test.ts`, and `package.json` `test:laws`.
 - **Honesty tiers:** gate-cluster centroids, lounges, footprints = SURVEYED (real OSM Overpass 2026-07-14, ODbL). Curbs = real OSM building centroids; checkpoints = interpolated ESTIMATES (OSM has no LAX checkpoint/curb tagging — M15). **Terminal 5 omitted** (no OSM polygon/gates yet) rather than fabricated. LAX gates are numeric (no letter prefixes); `gateNodeResolver` uses numeric prefixes with longest-prefix-wins so `130`→TBIT beats `13`→T1.

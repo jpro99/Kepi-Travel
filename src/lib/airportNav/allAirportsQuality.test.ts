@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { SEA_LAYOUT } from "./layouts/sea";
 import { LAX_LAYOUT } from "./layouts/lax";
+import { ONT_LAYOUT } from "./layouts/ont";
 import type { AirportLayout } from "./types";
 import { auditLayoutRouting } from "./layoutQuality";
 
@@ -18,7 +19,7 @@ import { auditLayoutRouting } from "./layoutQuality";
  * When registering a new airport, add it to ALL_LAYOUTS below (mirrors
  * getLayout.ts LAYOUTS). Keep this list in sync with the bundled registry.
  */
-const ALL_LAYOUTS: AirportLayout[] = [SEA_LAYOUT, LAX_LAYOUT];
+const ALL_LAYOUTS: AirportLayout[] = [SEA_LAYOUT, LAX_LAYOUT, ONT_LAYOUT];
 
 for (const layout of ALL_LAYOUTS) {
   test(`${layout.iata} layout passes generic routing-quality audit`, () => {
