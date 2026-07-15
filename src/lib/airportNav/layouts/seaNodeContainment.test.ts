@@ -63,6 +63,38 @@ test("every landside node matches its real OSM door coordinate (ground truth, no
   assert.equal(offenders.length, 0, `nodes drifted from their verified OSM door:\n  ${offenders.join("\n  ")}`);
 });
 
+// Real OSM aeroway=gate / named-room coordinates [lng, lat], Overpass 2026-07-14.
+// The airside concourse spine + The Club at SEA were re-anchored to these after a
+// route was seen walking OUTSIDE the terminal (the old Club coord was ~220m into
+// the apron). Necks are each concourse's real Gate 1; gate clusters are a real
+// mid-pier gate; the Club is its OSM room node.
+const AIRSIDE_GROUND_TRUTH: Record<string, [number, number]> = {
+  "a-neck": [-122.3021047, 47.4425616],
+  "b-neck": [-122.3030223, 47.4427865],
+  "c-neck": [-122.3033009, 47.4444182],
+  "d-neck": [-122.3019740, 47.4446959],
+  "a-mid": [-122.3002592, 47.4413052],
+  "gate-A": [-122.2991407, 47.4407319],
+  "gate-B": [-122.3035823, 47.4416397],
+  "gate-C": [-122.3036344, 47.4457574],
+  "gate-D": [-122.3002166, 47.4453905],
+  "lounge-club-a": [-122.2975053, 47.4390585],
+};
+
+test("airside concourse nodes match real OSM gate coordinates (route stays inside the pier)", () => {
+  const byId = new Map(SEA_LAYOUT.nodes.map((n) => [n.id, n]));
+  const offenders: string[] = [];
+  for (const [nodeId, truth] of Object.entries(AIRSIDE_GROUND_TRUTH)) {
+    const node = byId.get(nodeId);
+    assert.ok(node, `missing node ${nodeId}`);
+    const dist = haversineMeters(node!.pos, truth);
+    if (dist > 15) {
+      offenders.push(`${nodeId} is ${dist.toFixed(0)}m from its OSM coord ${JSON.stringify(truth)}`);
+    }
+  }
+  assert.equal(offenders.length, 0, `airside nodes drifted from OSM ground truth:\n  ${offenders.join("\n  ")}`);
+});
+
 test("check-in sections run in the real north→south order (Alaska north)", () => {
   const byId = new Map(SEA_LAYOUT.nodes.map((n) => [n.id, n]));
   const north = byId.get("checkin-north")!;

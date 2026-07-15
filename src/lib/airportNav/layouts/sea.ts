@@ -86,16 +86,29 @@ const NODES: GraphNode[] = [
   n("sec5-entry", -122.302050, 47.444450, "security_entry", "Checkpoint 5 — north (behind Door 22–24)"),
   n("sec5-exit", -122.302300, 47.444520, "security_exit", "Past Checkpoint 5"),
 
-  // ── Airside central spine ──
+  // ── Airside core + concourse spines ──
+  // Post-security hubs, then each concourse ENTERS at its real neck gate and
+  // runs to the real mid-pier gate cluster, so the drawn route bends ALONG the
+  // pier and stays inside the building instead of cutting a straight chord across
+  // the apron (owner: "it has me walking outside"). Every lat/lng below is a real
+  // OSM aeroway=gate node, verified via Overpass 2026-07-14.
   n("airside-central", -122.30210, 47.44340, "junction", "Central airside concourse"),
-  n("airside-south", -122.30190, 47.44120, "junction", "South airside — toward A/B gates"),
   n("airside-north", -122.30200, 47.44540, "junction", "North airside — toward C/D gates"),
 
-  // ── Concourse anchors (real gate-cluster centroids) ──
-  n("gate-A", -122.29917, 47.44026, "gate", "Concourse A gates"),
-  n("gate-B", -122.30376, 47.44159, "gate", "Concourse B gates"),
-  n("gate-C", -122.30381, 47.44554, "gate", "Concourse C gates"),
-  n("gate-D", -122.29997, 47.44577, "gate", "Concourse D gates"),
+  // Concourse necks — where each pier meets the main terminal (real Gate 1)
+  n("a-neck", -122.3021047, 47.4425616, "junction", "Concourse A entrance (Gate A1)"),
+  n("b-neck", -122.3030223, 47.4427865, "junction", "Concourse B entrance (Gate B1)"),
+  n("c-neck", -122.3033009, 47.4444182, "junction", "Concourse C entrance (Gate C2)"),
+  n("d-neck", -122.3019740, 47.4446959, "junction", "Concourse D entrance (Gate D1)"),
+  // Concourse A is the longest pier — one mid-spine bend (Gate A5) keeps its
+  // route curving with the building down to the far gates + The Club.
+  n("a-mid", -122.3002592, 47.4413052, "junction", "Concourse A mid-pier (Gate A5)"),
+
+  // ── Concourse gate clusters (real mid-pier gate centroids, OSM) ──
+  n("gate-A", -122.2991407, 47.4407319, "gate", "Concourse A gates"),
+  n("gate-B", -122.3035823, 47.4416397, "gate", "Concourse B gates"),
+  n("gate-C", -122.3036344, 47.4457574, "gate", "Concourse C gates"),
+  n("gate-D", -122.3002166, 47.4453905, "gate", "Concourse D gates"),
 
   // ── Train platforms + satellites ──
   n("train-C", -122.30330, 47.44620, "train_platform", "N Gates train — red sign near Gate C18"),
@@ -109,7 +122,7 @@ const NODES: GraphNode[] = [
   n("lounge-alaska-c", -122.30228, 47.44460, "lounge", "Alaska Lounge — Concourse C, upper level"),
   n("lounge-alaska-n", -122.30358, 47.44917, "lounge", "Alaska Lounge — North Satellite"),
   n("lounge-centurion", -122.30312, 47.44241, "lounge", "Amex Centurion Lounge — Central Terminal mezzanine"),
-  n("lounge-club-a", -122.29950, 47.44060, "lounge", "The Club at SEA — Concourse A"),
+  n("lounge-club-a", -122.2975053, 47.4390585, "lounge", "The Club at SEA — Concourse A"),
 
   // ── Services ──
   n("restroom-central", -122.30210, 47.44345, "restroom", "Restrooms — central airside"),
@@ -164,14 +177,21 @@ const EDGES: GraphEdge[] = [
   // Airside spine
   e("e-s3x-central", "sec3-exit", "airside-central", "walkway", 60, walkSecs(60)),
   e("e-s5x-north", "sec5-exit", "airside-north", "walkway", 60, walkSecs(60)),
-  e("e-central-south", "airside-central", "airside-south", "walkway", 150, walkSecs(150)),
-  e("e-central-north", "airside-central", "airside-north", "walkway", 150, walkSecs(150)),
+  e("e-central-north", "airside-central", "airside-north", "walkway", 225, walkSecs(225)),
 
-  // Concourses
-  e("e-south-gateA", "airside-south", "gate-A", "walkway", 180, walkSecs(180)),
-  e("e-south-gateB", "airside-south", "gate-B", "walkway", 160, walkSecs(160)),
-  e("e-north-gateC", "airside-north", "gate-C", "walkway", 160, walkSecs(160)),
-  e("e-north-gateD", "airside-north", "gate-D", "walkway", 170, walkSecs(170)),
+  // South piers (A, B) branch off the central hub at their real necks, then
+  // follow the pier to the gate cluster (A adds a mid-pier bend for its length).
+  e("e-central-aneck", "airside-central", "a-neck", "walkway", 95, walkSecs(95)),
+  e("e-aneck-amid", "a-neck", "a-mid", "walkway", 195, walkSecs(195)),
+  e("e-amid-gateA", "a-mid", "gate-A", "walkway", 105, walkSecs(105)),
+  e("e-central-bneck", "airside-central", "b-neck", "walkway", 100, walkSecs(100)),
+  e("e-bneck-gateB", "b-neck", "gate-B", "walkway", 135, walkSecs(135)),
+
+  // North piers (C, D) branch off the north hub at their real necks.
+  e("e-north-cneck", "airside-north", "c-neck", "walkway", 145, walkSecs(145)),
+  e("e-cneck-gateC", "c-neck", "gate-C", "walkway", 150, walkSecs(150)),
+  e("e-north-dneck", "airside-north", "d-neck", "walkway", 80, walkSecs(80)),
+  e("e-dneck-gateD", "d-neck", "gate-D", "walkway", 150, walkSecs(150)),
 
   // North Satellite train (per airportNavigation.ts: walk 2 + train 4 + walk 2)
   e("e-gateC-trainC", "gate-C", "train-C", "walkway", 80, 120),
@@ -186,8 +206,8 @@ const EDGES: GraphEdge[] = [
   // Lounges + services
   e("e-gateC-loungeAK", "gate-C", "lounge-alaska-c", "walkway", 60, walkSecs(60) + 45),
   e("e-gateN-loungeAKN", "gate-N", "lounge-alaska-n", "walkway", 40, walkSecs(40) + 45),
-  e("e-central-centurion", "airside-central", "lounge-centurion", "walkway", 70, walkSecs(70) + 60),
-  e("e-gateA-clubA", "gate-A", "lounge-club-a", "walkway", 50, walkSecs(50) + 45),
+  e("e-central-centurion", "airside-central", "lounge-centurion", "walkway", 130, walkSecs(130) + 60),
+  e("e-gateA-clubA", "gate-A", "lounge-club-a", "walkway", 220, walkSecs(220) + 45),
   e("e-central-restroom", "airside-central", "restroom-central", "walkway", 30, walkSecs(30)),
 ];
 
@@ -246,7 +266,7 @@ const POIS: PoiDefinition[] = [
 export const SEA_LAYOUT: AirportLayout = {
   iata: "SEA",
   name: "Seattle–Tacoma International",
-  layoutVersion: "0.7.0-fold-train-stops",
+  layoutVersion: "0.8.0-osm-concourse-spines",
   updatedAt: "2026-07-14",
   center: [-122.30209, 47.44328],
   zones: ZONES,
