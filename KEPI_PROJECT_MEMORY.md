@@ -3,7 +3,28 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-13 (OSM real-shape airport import — Phase 0 verified, Phase 1 shipped)
+Last updated: 2026-07-14 (Verify-first rule added — no guessing; airside OSM re-anchor)
+
+## Decision 2026-07-14 — VERIFY FIRST, NEVER GUESS (Jeff — mandatory, standing order)
+
+**Why Jeff asked:** repeated guessing (map coordinates especially) shipped wrong
+values, broke, and had to be re-fixed — "every time you guess it costs me time…
+then you realize you'd been guessing." That loop is now banned.
+
+**Standing order:** Before placing a coordinate, choosing an ID, assuming an API
+shape/field, citing a version, or claiming a provider/config state, **get the
+real answer from an authoritative source first** — Overpass/OSM for geography
+(`curl` the API and read the real lat/lng), the Read tool for code facts, docs or
+a live call for API behavior, the actual file for config. State the source (reply
++ code comment). If it truly can't be verified, **label it an ESTIMATE with the
+reason** — never a silent guess. Lock load-bearing values with a test.
+
+**Enforced by:** `.cursor/rules/50-verify-first-no-guessing.mdc` (always-apply).
+Related: `KEPI_DESIGN_LAW.md` M26 (surveyed vs estimate), M27 (precision tiers),
+M28 (airside routes follow the real OSM pier). Guard: `seaNodeContainment.test.ts`.
+
+---
+
 
 ## Decision 2026-07-13 — OpenStreetMap real airport maps (Phase 0 verified → Phase 1 shipped)
 

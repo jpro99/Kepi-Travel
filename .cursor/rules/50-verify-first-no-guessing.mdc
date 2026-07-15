@@ -1,0 +1,53 @@
+---
+description: Verify-first — never guess factual/geometric/coordinate/API values; fetch ground truth before deciding or coding
+globs:
+alwaysApply: true
+---
+
+# Verify first — no guessing (required, Jeff 2026-07-14)
+
+Guessing has repeatedly cost Jeff time and money: a value gets invented, ships,
+breaks, and we "then realize it was a guess" and redo it. That loop is banned.
+
+## The rule
+
+**Never present an unverified factual value as if it were correct.** Before you
+place a coordinate, choose an ID, assume an API field/shape, cite a version, or
+claim a provider/config state, you must first **get the real answer from an
+authoritative source.**
+
+This applies to (non-exhaustive):
+
+- **Geographic / map data** — lat/lng of any node, door, gate, POI, terminal,
+  lounge, hotel pin, city. **Query OpenStreetMap (Overpass) or the official
+  source and read the real coordinate.** Never eyeball from a screenshot, never
+  reverse-engineer from our own derived polygon, never "place it sensibly."
+- **Code facts** — function signatures, prop names, exports, types, file paths.
+  Open the file and read it. Do not assume from the name.
+- **API / provider behavior** — request/response shape, field names, auth,
+  status. Check the code, the docs, or make a live/test call.
+- **Config / env / versions** — read the actual file or `package.json`; do not
+  recall from memory.
+
+## How to comply
+
+1. **Fetch ground truth first.** Overpass for geo (`curl` the API), Read tool for
+   code, WebSearch/WebFetch for current docs, a real query for data/DB state.
+2. **State the source** in your answer and in a code comment (e.g. `// OSM
+   aeroway=gate ref=A5, Overpass 2026-07-14`).
+3. **If it genuinely cannot be verified**, say so explicitly and label the value
+   an **ESTIMATE** with the reason — in the reply AND in code (see
+   `KEPI_DESIGN_LAW.md` M26 surveyed vs estimate; M27 surveyed/schematic/
+   extrapolated). A labeled estimate is honest; a silent guess is not.
+4. **Lock it** with a test against the verified source when the value is
+   load-bearing, so it can't silently drift back (e.g.
+   `seaNodeContainment.test.ts`).
+
+## Anti-patterns (do not do)
+
+- Shipping a coordinate/ID/field you did not look up.
+- Saying "this should be roughly here / probably named X."
+- Letting confidence from one verified thing bleed into an adjacent guess.
+- Only discovering mid-fix that a prior value was invented.
+
+When you are unsure and cannot verify, **ask or flag it — do not guess.**
