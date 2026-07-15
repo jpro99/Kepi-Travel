@@ -108,7 +108,10 @@ export const viewport: Viewport = {
   minimumScale: 1,
   maximumScale: 1,
   viewportFit: "cover",
-  themeColor: "#f9f9f9",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f9f9f9" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b1f3a" },
+  ],
 };
 
 export default async function RootLayout({
@@ -148,9 +151,23 @@ export default async function RootLayout({
           <meta name="vapid-public-key" content={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY} />
         ) : null}
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        {/*
+          black-translucent: content paints edge-to-edge behind the status bar
+          and Dynamic Island. The StandaloneViewportFix + CSS env() vars below
+          handle pushing interactive content below the safe area.
+        */}
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Kepi" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        {/*
+          Expose safe-area insets as CSS custom properties for use in Tailwind
+          and inline styles.  --sat / --sar / --sab / --sal (top/right/bottom/left)
+        */}
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `:root{--sat:env(safe-area-inset-top,0px);--sar:env(safe-area-inset-right,0px);--sab:env(safe-area-inset-bottom,0px);--sal:env(safe-area-inset-left,0px)}html,body{overscroll-behavior:none}`,
+          }}
+        />
       </head>
       <body className="min-h-full flex flex-col">
         <StandaloneViewportFix />
