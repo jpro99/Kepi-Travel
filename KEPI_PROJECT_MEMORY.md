@@ -3,7 +3,17 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-15 (Airport map master prompt locked into memory + skill + Cursor rule)
+Last updated: 2026-07-15 (M35 staleness/diff/precision honesty + SEA door rematch)
+
+## Decision 2026-07-15 — Verification pass closed (commit follow-up after 79db246)
+
+After auditing `79db246`, Jeff said "go ahead with all":
+1. **Icelandair → Door 7** (Port of Seattle Web-Ticketing_4.16.25.pdf United/Emirates cluster). Southwest Door 17 remains ESTIMATE (not on that PDF). AA/F9/SY at Door 21 (schematic between OSM 20–22); Alaska at surveyed OSM Door 22.
+2. **Traveler pins show precision honesty** (`poiLocationHonestyTag` — schematic/extrapolated check-ins no longer look identical to surveyed).
+3. **SEA_DOOR_ANCHORS rematched** to live OSM entrance nodes 4/12/14/20/22 (2026-07-15); skipped mis-ordered OSM refs 6/16/18/24.
+4. **M35:** `LAYOUT_STALENESS_DAYS=180`, curation queue "Needs re-verification", import returns `vsPublished` diff, admin **Reference image → draft** wires `controlPointTransform`.
+
+---
 
 ## Decision 2026-07-15 — Airport map MASTER PROMPT (Jeff — mandatory on every map build)
 
@@ -13,7 +23,7 @@ security, lounges, admin editor, route honesty), agents **must read** the full f
 `CURSOR_PROMPT_MASTER_airport_maps_all_airports.md`
 
 Then use the kepi-airport-bot skill (`.cursor/skills/kepi-airport-bot/SKILL.md`) and
-`KEPI_DESIGN_LAW.md` M15/M22/M26–M33.
+`KEPI_DESIGN_LAW.md` M15/M22/M26–M35.
 
 **Enforced by:**
 - `.cursor/rules/60-airport-map-master-prompt.mdc` (globs on airportNav / AirportNavigatorMap /

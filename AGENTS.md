@@ -121,6 +121,11 @@ These are agent playbooks, not autonomous runtime bots. Jeff instructs the condu
 
 ## Fix log
 
+### 2026-07-15 (Session — M35 verification follow-up after 79db246)
+- **SEA airlines:** Icelandair → Door 7 (Port PDF cluster); Southwest Door 17 ESTIMATE; AA/F9/SY Door 21; Alaska surveyed OSM Door 22.
+- **SEA_DOOR_ANCHORS** rematched to OSM entrance nodes 4/12/14/20/22 (2026-07-15).
+- **M35:** traveler precision honesty tags; `LAYOUT_STALENESS_DAYS=180` + queue badge; import `vsPublished` diff; admin Reference image → draft panel.
+
 ### 2026-07-15 (Session — master prompt remaining: amenities, honesty tiers, click-to-place, control points)
 - **M12 honesty:** `wayfindingHonestyTier` (`strong` | `official_static` | `weak`). `OfficialAirportMapLink` no longer presents Google venue-search as a confident gold CTA; when Kepi has a layout, Kepi is primary and the external link is secondary. Fallback checklist leads when weak.
 - **M34 amenity promotion:** `osmImport` converts named shops/food/banks/ATMs/elevators/escalators/charging/baggage to surveyed POIs; Overpass pulls entrances + those tags.

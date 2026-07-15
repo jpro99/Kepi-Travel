@@ -45,28 +45,22 @@ function n(
 // aligned data (Overpass), NOT eyeballed and NOT reverse-engineered from our
 // own derived terminal ring. SEA's departures doors are OSM `entrance` nodes
 // carrying real `ref` door numbers; low numbers are SOUTH, high are NORTH:
-//   Door 4  = 47.442272, -122.300184   Door 12 = 47.443169, -122.301487
-//   Door 14 = 47.443522, -122.301777   Door 22 = 47.444474, -122.300868
-//   Door 24 = 47.444651, -122.300607
-// The flysea.org/Atrius reference (owner-supplied screenshots) is used ONLY to
-// know WHICH airline/checkpoint sits at which door — Alaska at the north end,
-// international carriers at the south — never as a coordinate source. Do NOT
-// gate these coordinates on SEA_OSM_FOOTPRINTS.mainTerminal: that ring is a
-// simplified, decorative backdrop and a verified door can fall just outside it
-// (Door 4 does) — the real coordinate wins (M26 supersedes M23's polygon gate).
+//   Door 4  = 47.4422245, -122.300257   (OSM node/12103438752, rematch 2026-07-15)
+//   Door 12 = 47.4429006, -122.3012498  (OSM node/11108219153)
+//   Door 14 = 47.4432645, -122.301817   (OSM node/3732079295)
+//   Door 22 = 47.4444743, -122.3008676  (OSM node/11108219161 — Alaska north)
+// OSM entrance refs that break south→north numeric order (6/16/18/24) are skipped.
+// Airline zones: Port of Seattle Web-Ticketing_4.16.25.pdf — never as a coordinate
+// source. Do NOT gate these on SEA_OSM_FOOTPRINTS.mainTerminal (M26).
 const NODES: GraphNode[] = [
   // ── Departures drop-off (central main entrance) ──
-  // Anchored to OSM entrance ref=14 (central departures doors). Verified via OSM
-  // Overpass entrance-ref query, 2026-07-14.
-  n("curb-departures", -122.301777, 47.443522, "junction", "Departures drop-off — Door 14 (central)"),
+  // Anchored to OSM entrance ref=14. Rematched OSM API 2026-07-15.
+  n("curb-departures", -122.301817, 47.4432645, "junction", "Departures drop-off — Door 14 (central)"),
 
   // ── Landside ticketing hall — each anchored to a real OSM door node ──
-  // Verified via OSM Overpass entrance `ref` coordinates, 2026-07-14. Airline
-  // section (which door) comes from the public flysea map ordering; the lat/lng
-  // is the real door coordinate, not an estimate.
-  n("checkin-south", -122.300184, 47.442272, "checkin", "Ticketing — south end / Door 4 (international)"),
-  n("checkin-center", -122.301487, 47.443169, "checkin", "Ticketing — center / Door 12 (Delta, United)"),
-  n("checkin-north", -122.300607, 47.444651, "checkin", "Ticketing — north end / Door 24 (Alaska)"),
+  n("checkin-south", -122.300257, 47.4422245, "checkin", "Ticketing — south end / Door 4 (international)"),
+  n("checkin-center", -122.3012498, 47.4429006, "checkin", "Ticketing — Door 12 (center)"),
+  n("checkin-north", -122.3008676, 47.4444743, "checkin", "Ticketing — north end / Door 22 (Alaska)"),
   // Interior walkway between the real central doors and the security checkpoints.
   // Kepi-curated corridor point positioned just behind central ticketing so the
   // landside route runs straight in (no landside→airside zigzag), 2026-07-14.
@@ -82,7 +76,7 @@ const NODES: GraphNode[] = [
   // present these as verified; if a real coordinate source appears, replace them.
   n("sec3-entry", -122.302100, 47.443350, "security_entry", "Checkpoint 3 — central (behind Door 12)"),
   n("sec3-exit", -122.302350, 47.443450, "security_exit", "Past Checkpoint 3"),
-  n("sec5-entry", -122.302050, 47.444450, "security_entry", "Checkpoint 5 — north (behind Door 22–24)"),
+  n("sec5-entry", -122.302050, 47.444450, "security_entry", "Checkpoint 5 — north (behind Door 22)"),
   n("sec5-exit", -122.302300, 47.444520, "security_exit", "Past Checkpoint 5"),
 
   // ── Airside concourse hall (post-security) ──
@@ -164,7 +158,7 @@ const EDGES: GraphEdge[] = [
   e("e-cs-hall", "checkin-south", "landside-hall", "walkway", 110, walkSecs(110)),
   e("e-cc-hall", "checkin-center", "landside-hall", "walkway", 20, walkSecs(20)),
   e("e-cn-hall", "checkin-north", "landside-hall", "walkway", 120, walkSecs(120)),
-  // Direct north-end link so an Alaska (Door 24) traveler walks check-in → the
+  // Direct north-end link so an Alaska (Door 22) traveler walks check-in → the
   // north Checkpoint 5 without dipping back through the central hall.
   e("e-cn-sec5", "checkin-north", "sec5-entry", "walkway", 110, walkSecs(110)),
   e("e-hall-sec3", "landside-hall", "sec3-entry", "walkway", 50, walkSecs(50)),

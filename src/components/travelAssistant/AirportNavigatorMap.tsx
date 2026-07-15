@@ -14,7 +14,8 @@ import type { AirportLayout, ComputedRoute, GraphEdge, PoiDefinition, SnappedPos
 import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
 import { buildTripJourney, journeyPoiIds, preSecurityJourney, type JourneyStop } from "@/lib/airportNav/tripJourney";
 import { poiMinZoom, airlineLogoAsset } from "@/lib/airportNav/poiDetail";
-import { SECURITY_APPROX_DISCLAIMER, SECURITY_APPROX_TAG } from "@/lib/airportNav/securityDisclosure";
+import { SECURITY_APPROX_DISCLAIMER } from "@/lib/airportNav/securityDisclosure";
+import { poiLocationHonestyTag } from "@/lib/airportNav/poiPrecisionHonesty";
 import { computeDirectionArrow, confirmedSnappedPosition } from "@/lib/airportNav/directionArrow";
 import { computeLayoutBounds, computeLandsideBounds } from "@/lib/airportNav/layoutBounds";
 import { buildAirportSchematicModel } from "@/lib/airportNav/schematic";
@@ -605,8 +606,10 @@ function AirportSchematicLayer({
             ? ` · ${Math.max(1, Math.round(minutesToDeparture))}m`
             : "";
           const doorSuffix = definition.doorLabel ? ` · ${definition.doorLabel}` : "";
+          const honesty = poiLocationHonestyTag(definition);
+          const honestySuffix = honesty ? ` · ${honesty}` : "";
           const logo = airlineLogoAsset(definition);
-          const displayLabel = `${POI_ICON[definition.category]} ${label}${countdown}${doorSuffix}`;
+          const displayLabel = `${POI_ICON[definition.category]} ${label}${countdown}${doorSuffix}${honestySuffix}`;
           const color = isGate ? "#d97706" : POI_COLOR[definition.category];
           const labelWidth = Math.min(38, Math.max(18, displayLabel.length * 1.02 + 6));
           const labelX = point.x >= 50
@@ -2011,7 +2014,8 @@ export function AirportNavigatorMap({
             bubble.appendChild(makeIataChip());
           }
           const doorSuffix = poi.doorLabel ? ` · ${poi.doorLabel}` : "";
-          const approxSuffix = isSecurity ? ` · ${SECURITY_APPROX_TAG}` : "";
+          const honesty = poiLocationHonestyTag(poi);
+          const approxSuffix = honesty ? ` · ${honesty}` : "";
           const label = document.createElement("span");
           label.textContent = `${gateLabel}${countdown}${accessMark}${laneSummary ? ` · ${laneSummary}` : ""}${doorSuffix}${approxSuffix}`;
           label.style.cssText = [

@@ -43,11 +43,12 @@ test("every generated check-in POI resolves to a real node and carries a precisi
   }
 });
 
-test("Alaska stays surveyed at the north anchor; door 3 is honestly extrapolated", () => {
+test("Alaska stays surveyed at the north OSM Door 22; Icelandair joins Door 7 cluster", () => {
   const alaska = SEA_LAYOUT.pois.find((p) => p.airlineIataCode === "AS");
   assert.ok(alaska);
   assert.equal(alaska!.nodeId, "checkin-north");
   assert.equal(alaska!.precision, "surveyed");
+  assert.equal(alaska!.doorLabel, "Door 22");
 
   // Door 3 is below the anchor span (min anchor = 4) → must be extrapolated.
   const finnair = SEA_LAYOUT.pois.find((p) => p.airlineIataCode === "AY");
@@ -58,6 +59,12 @@ test("Alaska stays surveyed at the north anchor; door 3 is honestly extrapolated
   const delta = SEA_LAYOUT.pois.find((p) => p.airlineIataCode === "DL");
   assert.ok(delta);
   assert.equal(delta!.precision, "schematic");
+
+  // Port of Seattle Web-Ticketing_4.16.25 — Icelandair with United cluster (Door 7).
+  const icelandair = SEA_LAYOUT.pois.find((p) => p.airlineIataCode === "FI");
+  assert.ok(icelandair);
+  assert.equal(icelandair!.doorLabel, "Door 7");
+  assert.equal(icelandair!.precision, "schematic");
 });
 
 test("generated door node positions match the curve fit from the real anchors", () => {

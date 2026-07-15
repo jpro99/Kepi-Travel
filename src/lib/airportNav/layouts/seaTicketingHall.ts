@@ -1,32 +1,38 @@
 /**
  * SEA ticketing-hall — generated door/airline POIs (KEPI_DESIGN_LAW M26/M27).
  *
- * Door POSITIONS are curve-calibrated (`doorCurve.ts`) from 5 REAL OSM anchor
- * doors (Overpass `entrance` ref, verified 2026-07-14) — a legitimate estimate
- * anchored to survey points, each POI tagged `precision` so surveyed anchors,
- * interpolated doors, and extrapolated doors stay honestly distinct.
+ * Door POSITIONS are curve-calibrated (`doorCurve.ts`) from REAL OSM entrance
+ * `ref` nodes (Overpass/OSM API map extract, re-matched 2026-07-15). Odd door
+ * numbers have no OSM entrance tag at SEA — they stay schematic/extrapolated.
  *
- * Airline → door ASSIGNMENTS are OWNER-PROVIDED from SEA's public ticketing-level
- * map (which airline sits at which door number — a physical directory fact, same
- * as reading posted signage; we do NOT copy any vendor's proprietary map data).
- * These pairings were NOT independently re-verified door-by-door in code — the
- * click-to-place admin tool is the fast human correction path. Treat door numbers
- * within a cluster as approximate.
+ * Airline → door ASSIGNMENTS cross-checked 2026-07-15 against Port of Seattle
+ * Web-Ticketing_4.16.25.pdf (zone clusters, not exact door numbers). Icelandair
+ * sits with the United/Emirates/Air Canada cluster (Door 7), not Door 17.
+ * Southwest is not listed on that PDF — Door 17 WN is an ESTIMATE pending
+ * live signage confirmation. Treat door numbers within a cluster as approximate.
  *
- * Amenities (Children's Play Area, Lucky Louie Fish Shack, …) use REAL OSM indoor
- * coordinates (Overpass, verified 2026-07-14), not guesses.
+ * Amenities use REAL OSM indoor coordinates (Overpass, verified 2026-07-14).
  */
 
 import type { GraphEdge, GraphNode, PoiDefinition } from "../types";
 import { interpolateDoorPosition, type DoorAnchor } from "../doorCurve";
 
-// 5 REAL OSM door coordinates — the control points for the curve fit.
+/**
+ * REAL OSM entrance `ref` nodes — south→north door numbers that also increase
+ * geographically (mis-tagged OSM refs 6/16/18/24 skipped — they break monotonic
+ * order). Source: OSM API map extract 2026-07-15.
+ *   Door 4  node/12103438752
+ *   Door 12 node/11108219153
+ *   Door 14 node/3732079295
+ *   Door 20 node/11108219159
+ *   Door 22 node/11108219161
+ */
 export const SEA_DOOR_ANCHORS: DoorAnchor[] = [
-  { door: 4, lng: -122.300184, lat: 47.442272 },
-  { door: 12, lng: -122.301487, lat: 47.443169 },
-  { door: 14, lng: -122.301777, lat: 47.443522 },
-  { door: 22, lng: -122.300868, lat: 47.444474 },
-  { door: 24, lng: -122.300607, lat: 47.444651 },
+  { door: 4, lng: -122.300257, lat: 47.4422245 },
+  { door: 12, lng: -122.3012498, lat: 47.4429006 },
+  { door: 14, lng: -122.301817, lat: 47.4432645 },
+  { door: 20, lng: -122.3014823, lat: 47.444138 },
+  { door: 22, lng: -122.3008676, lat: 47.4444743 },
 ];
 
 // The interior hall node door edges connect to (mirrors sea.ts `landside-hall`).
@@ -40,9 +46,8 @@ interface DoorAirlines {
   airlines: { name: string; iata: string }[];
 }
 
-// Owner-provided, ordered south→north along the hall. Do NOT re-flip Alaska to
-// the south (north end is correct — M26). Verify/refine per-door via the admin
-// click-to-place tool, not by guessing here.
+// Zone clusters from Port of Seattle Web-Ticketing_4.16.25.pdf (2026-07-15).
+// Ordered south→north. Exact door numbers within a zone are approximate.
 const DOOR_AIRLINES: DoorAirlines[] = [
   { door: 3, airlines: [
     { name: "Finnair", iata: "AY" }, { name: "Turkish Airlines", iata: "TK" },
@@ -55,19 +60,23 @@ const DOOR_AIRLINES: DoorAirlines[] = [
   { door: 7, airlines: [
     { name: "United", iata: "UA" }, { name: "Emirates", iata: "EK" }, { name: "Air Canada", iata: "AC" },
     { name: "STARLUX", iata: "JX" }, { name: "JetBlue", iata: "B6" },
+    { name: "Icelandair", iata: "FI" },
   ] },
   { door: 13, airlines: [
     { name: "Delta", iata: "DL" }, { name: "Air France", iata: "AF" }, { name: "Aeromexico", iata: "AM" },
     { name: "WestJet", iata: "WS" }, { name: "SAS", iata: "SK" },
   ] },
+  // ESTIMATE — Southwest Airlines is not on Port Web-Ticketing_4.16.25.pdf (Apr 2025).
+  // Leave schematic until live ticketing signage confirms a door.
   { door: 17, airlines: [
-    { name: "Icelandair", iata: "FI" }, { name: "Southwest", iata: "WN" },
+    { name: "Southwest", iata: "WN" },
   ] },
-  { door: 23, airlines: [
+  { door: 21, airlines: [
     { name: "Frontier", iata: "F9" }, { name: "Sun Country", iata: "SY" }, { name: "American", iata: "AA" },
   ] },
-  // Alaska — north end, on the surveyed Door 24 anchor node (already in sea.ts).
-  { door: 24, existingNodeId: "checkin-north", airlines: [{ name: "Alaska", iata: "AS" }] },
+  // Alaska — north end on surveyed OSM Door 22 (node/11108219161). OSM has no
+  // trustworthy north Door 24 entrance (ref=24 is mid-facade / mis-ordered).
+  { door: 22, existingNodeId: "checkin-north", airlines: [{ name: "Alaska", iata: "AS" }] },
 ];
 
 // Named amenities — REAL OSM indoor coordinates (Overpass, verified 2026-07-14).

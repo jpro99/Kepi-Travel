@@ -8,6 +8,8 @@ import {
 } from '@/lib/airportNav/schematic';
 import { applyClickToPlace } from '@/lib/airportNav/clickToPlace';
 import { AirportNavigatorMap } from '@/components/travelAssistant/AirportNavigatorMap';
+import { ReferenceImageGeorefPanel } from '@/components/admin/ReferenceImageGeorefPanel';
+import type { AirportLayoutDiff } from '@/lib/airportNav/layoutDiff';
 
 /** Admin verification runs as a fully-credentialed traveler so the security
  *  question never interrupts the preview. */
@@ -26,6 +28,10 @@ interface AirportCurationRequest {
     detectedBy?: string[];
     notes?: string;
     linkedPackageRevision?: number;
+    lastVerifiedAt?: string | null;
+    staleness?: 'fresh' | 'aging' | 'stale' | 'unknown';
+    needsReverification?: boolean;
+    stalenessLabel?: string;
 }
 
 interface PackageHistoryEntry {
@@ -124,6 +130,7 @@ export default function AirportEditorPage() {
     const [importing, setImporting] = useState(false);
     const [importWarnings, setImportWarnings] = useState<string[]>([]);
     const [importStats, setImportStats] = useState<Record<string, number> | null>(null);
+    const [importDiff, setImportDiff] = useState<AirportLayoutDiff | null>(null);
     const [previewLayout, setPreviewLayout] = useState<AirportLayout | null>(null);
     const [previewConfirmed, setPreviewConfirmed] = useState(false);
     const [packageInfo, setPackageInfo] = useState<PackageInfoResponse | null>(null);
@@ -272,6 +279,7 @@ export default function AirportEditorPage() {
         setMessage('');
         setImportWarnings([]);
         setImportStats(null);
+        setImportDiff(null);
         try {
             const response = await fetch('/api/admin/airport-layout/import', {
                 method: 'POST',
@@ -283,6 +291,7 @@ export default function AirportEditorPage() {
             updateLayoutText(JSON.stringify(result.layout, null, 2));
             setImportWarnings(result.warnings ?? []);
             setImportStats(result.stats ?? null);
+            setImportDiff(result.vsPublished ?? null);
             if (result.source?.attribution) setAttribution(String(result.source.attribution));
             setSourceUrl('https://www.openstreetmap.org/');
             setStatus('draft');
@@ -612,6 +621,14 @@ export default function AirportEditorPage() {
                                         </p>
                                     </div>
                                 ) : null}
+                                <ReferenceImageGeorefPanel
+                                    layout={bundledLayout}
+                                    onApplyDraft={(next, note) => {
+                                        setBundledLayout(next);
+                                        loadBundledIntoEditor(next);
+                                        setMessage(note);
+                                    }}
+                                />
                                 <div className="relative h-[70vh] min-h-[420px] w-full overflow-hidden rounded-xl border border-gray-200">
                                     <AirportNavigatorMap
                                         key={`${bundledLayout.iata}-${previewLive ? 'live' : 'plan'}-${bundledLayout.pois.length}`}
@@ -715,6 +732,17 @@ export default function AirportEditorPage() {
                                             ? ` · rev ${request.linkedPackageRevision}`
                                             : ''}
                                     </p>
+                                    {request.needsReverification ? (
+                                        <p className="mt-1 text-xs font-bold text-amber-700">
+                                            Needs re-verification
+                                            {request.lastVerifiedAt ? ` · last verified ${request.lastVerifiedAt}` : ''}
+                                        </p>
+                                    ) : request.stalenessLabel ? (
+                                        <p className="mt-1 text-xs text-gray-400">
+                                            {request.stalenessLabel}
+                                            {request.lastVerifiedAt ? ` · ${request.lastVerifiedAt}` : ''}
+                                        </p>
+                                    ) : null}
                                     {request.detectedBy && request.detectedBy.length > 0 ? (
                                         <p className="mt-1 text-xs text-gray-400">
                                             Seen via {request.detectedBy.join(', ')}
@@ -831,6 +859,20 @@ export default function AirportEditorPage() {
                                     <li key={warning}>{warning}</li>
                                 ))}
                             </ul>
+                        ) : null}
+                        {importDiff ? (
+                            <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-950">
+                                <p className="font-bold">{importDiff.summary}</p>
+                                {importDiff.added.length > 0 ? (
+                                    <p className="mt-1">Added: {importDiff.added.slice(0, 8).map((a) => a.name).join(', ')}{importDiff.added.length > 8 ? '…' : ''}</p>
+                                ) : null}
+                                {importDiff.removed.length > 0 ? (
+                                    <p className="mt-1">Removed: {importDiff.removed.slice(0, 8).map((a) => a.name).join(', ')}{importDiff.removed.length > 8 ? '…' : ''}</p>
+                                ) : null}
+                                {importDiff.moved.length > 0 ? (
+                                    <p className="mt-1">Moved: {importDiff.moved.slice(0, 8).map((a) => `${a.name} (${a.distanceM}m)`).join(', ')}{importDiff.moved.length > 8 ? '…' : ''}</p>
+                                ) : null}
+                            </div>
                         ) : null}
                     </div>
                     <div>

@@ -18,7 +18,7 @@ test("security disclaimer keeps its mandatory, un-softened phrasing", () => {
   assert.equal(SECURITY_APPROX_TAG, "approx. area");
 });
 
-test("AirportNavigatorMap renders the shared disclaimer, not a hardcoded one", () => {
+test("AirportNavigatorMap renders the shared disclaimer and honesty tags", () => {
   const src = readFileSync(
     fileURLToPath(new URL("../../components/travelAssistant/AirportNavigatorMap.tsx", import.meta.url)),
     "utf8",
@@ -28,7 +28,7 @@ test("AirportNavigatorMap renders the shared disclaimer, not a hardcoded one", (
     "AirportNavigatorMap must render {SECURITY_APPROX_DISCLAIMER} so the mandated copy can't drift.",
   );
   assert.ok(
-    src.includes("SECURITY_APPROX_TAG"),
-    "Security markers must tag the label with SECURITY_APPROX_TAG (approx. area).",
+    src.includes("poiLocationHonestyTag"),
+    "Markers must use poiLocationHonestyTag so schematic/extrapolated check-ins are not silent.",
   );
 });

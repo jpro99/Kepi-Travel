@@ -20,12 +20,12 @@ import { SEA_LAYOUT } from "./sea";
  * ever re-surveyed, update these from OSM and the node coords together.
  */
 
-// Real OSM entrance `ref` door coordinates [lng, lat], verified 2026-07-14.
+// Real OSM entrance `ref` door coordinates [lng, lat], rematched OSM API 2026-07-15.
 const DOOR_GROUND_TRUTH: Record<string, [number, number]> = {
-  "Door 4": [-122.300184, 47.442272],
-  "Door 12": [-122.301487, 47.443169],
-  "Door 14": [-122.301777, 47.443522],
-  "Door 24": [-122.300607, 47.444651],
+  "Door 4": [-122.300257, 47.4422245],
+  "Door 12": [-122.3012498, 47.4429006],
+  "Door 14": [-122.301817, 47.4432645],
+  "Door 22": [-122.3008676, 47.4444743],
 };
 
 // Which landside node is anchored to which real door.
@@ -33,7 +33,7 @@ const NODE_DOOR: Record<string, string> = {
   "curb-departures": "Door 14",
   "checkin-south": "Door 4",
   "checkin-center": "Door 12",
-  "checkin-north": "Door 24",
+  "checkin-north": "Door 22",
 };
 
 function haversineMeters(a: [number, number], b: [number, number]): number {

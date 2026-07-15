@@ -60,7 +60,7 @@ export function bundledSource(iata: string): AirportLayoutPackageSource {
       ? ["https://www.portseattle.org/sea/maps"]
       : [],
     licenseNote: "Kepi-owned vector geometry informed by public operational references; official map artwork is not redistributed.",
-    lastVerifiedAt: "2026-07-13",
+    lastVerifiedAt: "2026-07-15",
   };
 }
 
