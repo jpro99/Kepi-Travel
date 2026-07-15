@@ -39,6 +39,16 @@ interface PackageInfoResponse {
     history: PackageHistoryEntry[];
 }
 
+interface BundledAirportSummary {
+    iata: string;
+    name: string;
+    layoutVersion: string;
+    updatedAt: string;
+    counts: { zones: number; nodes: number; edges: number; pois: number; gates: number; lounges: number };
+    errors: number;
+    warnings: number;
+}
+
 /** Non-WebGL rendered preview of the draft layout (same projection as the resilient schematic renderer). */
 function LayoutPreview({ layout }: { layout: AirportLayout }) {
     const model = useMemo(() => buildAirportSchematicModel(layout), [layout]);
@@ -111,6 +121,12 @@ export default function AirportEditorPage() {
     const [previewLayout, setPreviewLayout] = useState<AirportLayout | null>(null);
     const [previewConfirmed, setPreviewConfirmed] = useState(false);
     const [packageInfo, setPackageInfo] = useState<PackageInfoResponse | null>(null);
+    const [bundled, setBundled] = useState<BundledAirportSummary[]>([]);
+    const [bundledLoading, setBundledLoading] = useState(true);
+    const [activeBundledIata, setActiveBundledIata] = useState<string | null>(null);
+    const [bundledLayout, setBundledLayout] = useState<AirportLayout | null>(null);
+    const [bundledAudit, setBundledAudit] = useState<{ errors: string[]; warnings: string[] } | null>(null);
+    const [bundledBusy, setBundledBusy] = useState(false);
 
     const loadQueue = useCallback(async () => {
         setQueueLoading(true);
@@ -127,6 +143,38 @@ export default function AirportEditorPage() {
         void loadQueue();
     }, [loadQueue]);
 
+    const loadBundled = useCallback(async () => {
+        setBundledLoading(true);
+        try {
+            const response = await fetch('/api/admin/airport-layout/bundled');
+            const body = await response.json() as { airports?: BundledAirportSummary[] };
+            if (response.ok) setBundled(body.airports ?? []);
+        } finally {
+            setBundledLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        void loadBundled();
+    }, [loadBundled]);
+
+    const openBundled = useCallback(async (iata: string) => {
+        setBundledBusy(true);
+        setActiveBundledIata(iata);
+        setBundledLayout(null);
+        setBundledAudit(null);
+        try {
+            const response = await fetch(`/api/admin/airport-layout/bundled?iata=${encodeURIComponent(iata)}`);
+            const body = await response.json() as { layout?: AirportLayout; audit?: { errors: string[]; warnings: string[] } };
+            if (response.ok && body.layout) {
+                setBundledLayout(body.layout);
+                setBundledAudit(body.audit ?? { errors: [], warnings: [] });
+            }
+        } finally {
+            setBundledBusy(false);
+        }
+    }, []);
+
     const loadPackageInfo = useCallback(async (iata: string) => {
         if (!/^[A-Z]{3}$/.test(iata)) {
             setPackageInfo(null);
@@ -139,6 +187,18 @@ export default function AirportEditorPage() {
             setPackageInfo(null);
         }
     }, []);
+
+    const loadBundledIntoEditor = useCallback((layout: AirportLayout) => {
+        setIataCode(layout.iata);
+        setLayoutText(JSON.stringify(layout, null, 2));
+        setPreviewLayout(layout);
+        setPreviewConfirmed(false);
+        setStatus('published');
+        setPrecisionGrade('surveyed');
+        setMessage(`Loaded bundled ${layout.iata} into the editor. Edit + re-validate before saving.`);
+        void loadPackageInfo(layout.iata);
+        if (typeof window !== 'undefined') window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    }, [loadPackageInfo]);
 
     /** Any edit to the layout invalidates the previous visual confirmation. */
     const updateLayoutText = (nextText: string) => {
@@ -305,7 +365,131 @@ export default function AirportEditorPage() {
 
     return (
         <div className="min-h-screen bg-gray-100 px-4 py-10">
-            <div className="mx-auto grid w-full max-w-6xl gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.8fr)]">
+          <div className="mx-auto w-full max-w-6xl space-y-6">
+            <section className="rounded-2xl bg-white p-6 shadow-md">
+                <div className="flex items-center justify-between gap-3">
+                    <div>
+                        <h2 className="text-xl font-bold text-gray-900">Bundled airports — open &amp; verify</h2>
+                        <p className="mt-1 text-sm text-gray-500">
+                            Every airport shipped in code. Click one to render its map and see its routing-audit health at any time.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => void loadBundled()}
+                        className="rounded-xl border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700"
+                    >
+                        Refresh
+                    </button>
+                </div>
+                {bundledLoading ? (
+                    <p className="mt-5 text-sm text-gray-500">Loading airports…</p>
+                ) : bundled.length === 0 ? (
+                    <p className="mt-5 rounded-xl bg-gray-50 p-4 text-sm text-gray-500">No bundled airports found.</p>
+                ) : (
+                    <div className="mt-5 flex flex-wrap gap-3">
+                        {bundled.map((airport) => {
+                            const isActive = activeBundledIata === airport.iata;
+                            return (
+                                <button
+                                    key={airport.iata}
+                                    type="button"
+                                    onClick={() => void openBundled(airport.iata)}
+                                    className={`min-w-[200px] flex-1 rounded-2xl border p-4 text-left transition ${
+                                        isActive ? 'border-[#0b1f3a] bg-[#0b1f3a]/5 ring-2 ring-[#0b1f3a]/20' : 'border-gray-200 hover:border-gray-400'
+                                    }`}
+                                >
+                                    <div className="flex items-center justify-between gap-2">
+                                        <p className="text-lg font-black text-gray-900">{airport.iata}</p>
+                                        {airport.errors > 0 ? (
+                                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">
+                                                {airport.errors} err
+                                            </span>
+                                        ) : (
+                                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">
+                                                ✓ clean
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="mt-0.5 text-sm text-gray-600">{airport.name}</p>
+                                    <p className="mt-2 text-xs text-gray-500">
+                                        {airport.counts.gates} gates · {airport.counts.lounges} lounges · {airport.counts.pois} POIs
+                                    </p>
+                                    <p className="mt-1 text-[11px] text-gray-400">
+                                        {airport.layoutVersion}
+                                        {airport.warnings > 0 ? ` · ${airport.warnings} warn` : ''}
+                                    </p>
+                                </button>
+                            );
+                        })}
+                    </div>
+                )}
+                {activeBundledIata ? (
+                    <div className="mt-6 rounded-2xl border border-gray-200 p-4">
+                        {bundledBusy ? (
+                            <p className="text-sm text-gray-500">Rendering {activeBundledIata}…</p>
+                        ) : bundledLayout ? (
+                            <div className="space-y-4">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                        <p className="text-sm font-bold text-gray-900">
+                                            {bundledLayout.iata} · {bundledLayout.name}
+                                        </p>
+                                        <p className="text-xs text-gray-500">
+                                            {bundledLayout.zones.length} zones · {bundledLayout.nodes.length} nodes ·{' '}
+                                            {bundledLayout.edges.length} edges · {bundledLayout.pois.length} POIs
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => loadBundledIntoEditor(bundledLayout)}
+                                        className="rounded-xl bg-[#0b1f3a] px-3 py-2 text-sm font-bold text-white"
+                                    >
+                                        Load into editor
+                                    </button>
+                                </div>
+                                <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+                                    <LayoutPreview layout={bundledLayout} />
+                                    <div className="space-y-3">
+                                        {bundledAudit && bundledAudit.errors.length === 0 && bundledAudit.warnings.length === 0 ? (
+                                            <p className="rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+                                                ✓ Passes the M29 routing-quality audit — reachable destinations, no backtracking, coordinates sane.
+                                            </p>
+                                        ) : null}
+                                        {bundledAudit && bundledAudit.errors.length > 0 ? (
+                                            <div className="rounded-xl bg-red-50 p-3">
+                                                <p className="text-sm font-bold text-red-800">
+                                                    {bundledAudit.errors.length} routing error(s)
+                                                </p>
+                                                <ul className="mt-1 list-disc space-y-1 pl-5 text-xs text-red-700">
+                                                    {bundledAudit.errors.map((error) => (
+                                                        <li key={error}>{error}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        ) : null}
+                                        {bundledAudit && bundledAudit.warnings.length > 0 ? (
+                                            <div className="rounded-xl bg-amber-50 p-3">
+                                                <p className="text-sm font-bold text-amber-800">
+                                                    {bundledAudit.warnings.length} warning(s)
+                                                </p>
+                                                <ul className="mt-1 list-disc space-y-1 pl-5 text-xs text-amber-700">
+                                                    {bundledAudit.warnings.map((warning) => (
+                                                        <li key={warning}>{warning}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-sm text-red-500">Could not load {activeBundledIata}.</p>
+                        )}
+                    </div>
+                ) : null}
+            </section>
+            <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.8fr)]">
               <section className="rounded-2xl bg-white p-6 shadow-md">
                 <div className="flex items-center justify-between gap-3">
                     <div>
@@ -583,6 +767,7 @@ export default function AirportEditorPage() {
                 )}
               </section>
             </div>
+          </div>
         </div>
     );
 }
