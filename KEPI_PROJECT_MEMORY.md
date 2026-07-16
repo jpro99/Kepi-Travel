@@ -3,7 +3,26 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-15 (Phase 2 SEA footways → routeGrade surveyed / M37)
+Last updated: 2026-07-16 (iOS CapApp-SPM manifest fix)
+
+## Decision 2026-07-16 — iOS CapApp-SPM / Xcode build (Jeff MacBook Air)
+
+**Error:** Xcode *"Missing or empty JSON output from manifest compilation for capapp-spm"*.
+
+**Cause:** `ios/App/CapApp-SPM/Package.swift` was committed with **Windows backslashes** in plugin paths (`..\..\..\node_modules\...`). Swift PM on macOS requires forward slashes.
+
+**Fix shipped:** Regenerated `Package.swift` with `../../../node_modules/...` paths + `@capacitor/status-bar`; aligned `@capacitor/core`/`@capacitor/cli` to **8.4.1** (match `@capacitor/ios`).
+
+**Jeff on Mac after `git pull`:**
+```bash
+cd ~/Documents/Kepi-Travel
+npm install
+npm run ios:sync
+npm run ios:open
+```
+Then Xcode: **File → Packages → Reset Package Caches** → **Resolve Package Versions** → **Product → Clean Build Folder** → ▶ Run.
+
+**CocoaPods not required** — this project uses SPM only (`App.xcodeproj`, not `.xcworkspace`). Ignore `pod` / Ruby errors.
 
 ## Decision 2026-07-15 — Phase 2 SEA footways (surveyed walking routes)
 
