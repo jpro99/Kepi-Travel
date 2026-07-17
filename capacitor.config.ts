@@ -33,6 +33,15 @@ const config: CapacitorConfig = {
     limitsNavigationsToAppBoundDomains: true,
   },
 
+  experimental: {
+    ios: {
+      spm: {
+        /** Xcode 16+/26 SPM manifest needs Swift tools 6+ */
+        swiftToolsVersion: "6.0",
+      },
+    },
+  },
+
   plugins: {
     SplashScreen: {
       /**
