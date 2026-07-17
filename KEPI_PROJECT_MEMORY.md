@@ -24,6 +24,8 @@ Then Xcode: **File → Packages → Reset Package Caches** → **Resolve Package
 
 **CocoaPods not required** — this project uses SPM only (`App.xcodeproj`, not `.xcworkspace`). Ignore `pod` / Ruby errors.
 
+**Pods-App.debug.xcconfig / `[CP] Embed Pods Frameworks` error:** Local `ios/` is an old CocoaPods template. Fix: `git checkout origin/main -- ios/` → `npm run ios:sync` → open `App.xcodeproj` (not `.xcworkspace`).
+
 ## Decision 2026-07-15 — Phase 2 SEA footways (surveyed walking routes)
 
 SEA earns `routeGrade:"surveyed"` via OSM pedestrian-way overlay (`seaPedestrianWays.json`, Overpass 2026-07-15) + same-side snaps + curated pier/hall bridges (honest warning — OSM is not a continuous sterile-area graph). Security/train stay curated (M15/M31). LAX/ONT remain schematic until their overlays clear the same M37 gate. Pure footway-only surveyed (no bridges) is **not** earned yet.
