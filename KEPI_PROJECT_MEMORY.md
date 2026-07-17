@@ -3,7 +3,28 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-16 (iOS CapApp-SPM manifest fix)
+Last updated: 2026-07-17 (iOS CapApp-SPM tools 5.9 + ios:fix)
+
+## Decision 2026-07-17 — CapApp-SPM empty JSON on fresh Xcode 26 (Jeff)
+
+**Error (still after reinstall):** Xcode *"Missing or empty JSON output from manifest compilation for capapp-spm"* → *"Missing package product 'CapApp-SPM'"*.
+
+**Causes (stacked):**
+1. Earlier commit set `experimental.ios.spm.swiftToolsVersion` to **6.0** — Capacitor docs warn this can break CapApp-SPM manifest compilation.
+2. Stale SPM/DerivedData after deleting/reinstalling Xcode.
+3. Historical Windows `\\` paths in Package.swift (fixed 2026-07-16).
+
+**Fix shipped:** Revert CapApp-SPM to **swift-tools-version 5.9**; enable Capacitor `packageOptions.symlink` for all four plugins; add `npm run ios:fix` (`scripts/ios-fix-capapp-spm.sh`).
+
+**Jeff on Mac (quit Xcode first):**
+```bash
+cd ~/Documents/Kepi-Travel
+git pull origin main
+npm run ios:fix
+```
+Then Xcode: **File → Packages → Reset Package Caches** → **Resolve Package Versions** → **Product → Clean Build Folder** → ▶ Run.
+
+**CocoaPods not required** — SPM only (`App.xcodeproj`, not `.xcworkspace`). Never `pod install`.
 
 ## Decision 2026-07-16 — iOS CapApp-SPM / Xcode build (Jeff MacBook Air)
 
@@ -11,20 +32,7 @@ Last updated: 2026-07-16 (iOS CapApp-SPM manifest fix)
 
 **Cause:** `ios/App/CapApp-SPM/Package.swift` was committed with **Windows backslashes** in plugin paths (`..\..\..\node_modules\...`). Swift PM on macOS requires forward slashes.
 
-**Fix shipped:** Regenerated `Package.swift` with `../../../node_modules/...` paths + `@capacitor/status-bar`; aligned `@capacitor/core`/`@capacitor/cli` to **8.4.1** (match `@capacitor/ios`).
-
-**Jeff on Mac after `git pull`:**
-```bash
-cd ~/Documents/Kepi-Travel
-npm install
-npm run ios:sync
-npm run ios:open
-```
-Then Xcode: **File → Packages → Reset Package Caches** → **Resolve Package Versions** → **Product → Clean Build Folder** → ▶ Run.
-
-**CocoaPods not required** — this project uses SPM only (`App.xcodeproj`, not `.xcworkspace`). Ignore `pod` / Ruby errors.
-
-**Pods-App.debug.xcconfig / `[CP] Embed Pods Frameworks` error:** Local `ios/` is an old CocoaPods template. Fix: `git checkout origin/main -- ios/` → `npm run ios:sync` → open `App.xcodeproj` (not `.xcworkspace`).
+**Fix shipped:** Regenerated `Package.swift` with forward-slash paths + `@capacitor/status-bar`; aligned `@capacitor/core`/`@capacitor/cli` to **8.4.1**. Superseded in part by 2026-07-17 (tools 5.9 + symlinks + `ios:fix`).
 
 ## Decision 2026-07-15 — Phase 2 SEA footways (surveyed walking routes)
 

@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 5.9
 import PackageDescription
 
 // DO NOT MODIFY THIS FILE - managed by Capacitor CLI commands
@@ -12,10 +12,10 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.4.1"),
-        .package(name: "CapacitorHaptics", path: "../../../node_modules/@capacitor/haptics"),
-        .package(name: "CapacitorLocalNotifications", path: "../../../node_modules/@capacitor/local-notifications"),
-        .package(name: "CapacitorPushNotifications", path: "../../../node_modules/@capacitor/push-notifications"),
-        .package(name: "CapacitorStatusBar", path: "../../../node_modules/@capacitor/status-bar")
+        .package(name: "CapacitorHaptics", path: "symlinks/CapacitorHaptics"),
+        .package(name: "CapacitorLocalNotifications", path: "symlinks/CapacitorLocalNotifications"),
+        .package(name: "CapacitorPushNotifications", path: "symlinks/CapacitorPushNotifications"),
+        .package(name: "CapacitorStatusBar", path: "symlinks/CapacitorStatusBar")
     ],
     targets: [
         .target(
