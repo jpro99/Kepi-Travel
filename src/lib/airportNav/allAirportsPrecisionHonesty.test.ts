@@ -35,5 +35,5 @@ for (const layout of listAllBundledLayouts()) {
 
 test("listAllBundledLayouts covers every currently registered indoor airport", () => {
   const iatas = listAllBundledLayouts().map((l) => l.iata).sort();
-  assert.deepEqual(iatas, ["LAX", "ONT", "SEA"]);
+  assert.deepEqual(iatas, ["BRI", "FCO", "LAX", "MUC", "ONT", "SEA", "VCE"]);
 });

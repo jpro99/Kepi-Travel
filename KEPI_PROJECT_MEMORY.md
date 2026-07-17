@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-17 (Map helpers — one-tap Door/amenity confirms, M38)
+Last updated: 2026-07-17 (Europe trip airports BRI/FCO/VCE/MUC bundled)
+
+## Decision 2026-07-17 — Europe trip indoor airports (Jeff)
+
+Trip path ONT→SEA→**BRI**→**FCO**→**VCE** (Marco Polo)→**MUC**. All four now have bundled schematic Kepi layouts (OSM gate clusters + terminal curbs surveyed; security estimate; no surveyed walking line yet). Venice = VCE not TSF. FCO OSM currently only cleanly clusters A+E — B/C/D omitted until tagged. Next upgrades: amenities + footway overlays per airport; trip-driven auto-queue still not built.
 
 ## Decision 2026-07-17 — Map helpers (admin-opt-in, Apple-simple taps)
 

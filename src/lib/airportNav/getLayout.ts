@@ -8,11 +8,19 @@ import type { AirportLayout } from "./types";
 import { SEA_LAYOUT } from "./layouts/sea";
 import { LAX_LAYOUT } from "./layouts/lax";
 import { ONT_LAYOUT } from "./layouts/ont";
+import { BRI_LAYOUT } from "./layouts/bri";
+import { FCO_LAYOUT } from "./layouts/fco";
+import { VCE_LAYOUT } from "./layouts/vce";
+import { MUC_LAYOUT } from "./layouts/muc";
 
 const LAYOUTS: Record<string, AirportLayout> = {
   SEA: SEA_LAYOUT,
   LAX: LAX_LAYOUT,
   ONT: ONT_LAYOUT,
+  BRI: BRI_LAYOUT,
+  FCO: FCO_LAYOUT,
+  VCE: VCE_LAYOUT,
+  MUC: MUC_LAYOUT,
 };
 
 export function getAirportLayout(iata: string | null | undefined): AirportLayout | null {

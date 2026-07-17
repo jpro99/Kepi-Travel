@@ -121,6 +121,9 @@ These are agent playbooks, not autonomous runtime bots. Jeff instructs the condu
 
 ## Fix log
 
+### 2026-07-17 (Session — Europe trip airports: BRI, FCO, VCE, MUC)
+- Bundled indoor layouts for **BRI, FCO, VCE, MUC** (Jeff Europe trip) via shared `buildMultiTerminalSkeleton` + Overpass 2026-07-17 gate/terminal centroids. Schematic `routeGrade` (honest). FCO OSM gap: A+E only (no B/C/D fabricated). MUC satellite airside-only via train from T2. Containment tests pin surveyed coords.
+
 ### 2026-07-17 (Session — Map helpers: one-tap Door / amenity confirms)
 - **M38** Admin Users tab → **Make helper**. Enabled users see Apple-simple chips on the airport map (Door 22, Starbucks) — one tap, no typing. Reports inbox in `/admin/airport-editor`. Never auto-publishes layout changes.
 
