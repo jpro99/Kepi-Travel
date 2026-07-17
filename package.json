@@ -28,6 +28,7 @@
     "app-sitter": "playwright test",
     "build:ios": "CAPACITOR_BUILD=true next build",
     "ios:sync": "npx cap sync ios",
+    "ios:reset": "bash scripts/ios-reset-spm.sh",
     "ios:open": "npx cap open ios",
     "ios:run": "npx cap run ios"
   },
