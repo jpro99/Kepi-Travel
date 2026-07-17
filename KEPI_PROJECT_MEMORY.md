@@ -27,7 +27,7 @@ npm run ios:fix
 cat ios-capapp-spm-diagnose.txt
 ```
 
-**2026-07-17 follow-up (verified):** Nuclear remote-only CapApp-SPM still fails with `Invalid manifest` / empty JSON. **Also `/tmp/spmtest` fails the same way** — SPM is broken system-wide on Jeff’s Mac (Xcode 26.5 toolchain / incomplete first-launch), not Kepi Package.swift and not Documents/iCloud. Fix path: `xcode-select` → license → `xcodebuild -runFirstLaunch` → open Xcode until components finish → clear SwiftPM caches → retest `/tmp/spmtest`. Only after dump-package works, rerun `npm run ios:fix`.
+**2026-07-17 follow-up (verified):** Nuclear remote-only CapApp-SPM still fails with `Invalid manifest` / empty JSON. **Also `/tmp/spmtest` fails the same way** — SPM is broken system-wide on Jeff’s Mac, not Kepi Package.swift. Machine: **Xcode 26.6 (17F113)**, macOS **26.5.2 (25F84)**, Swift **6.3.3**. Verbose dump shows `swift-frontend` + `clang` link succeed; failure is empty JSON after running the compiled manifest (classic polluted `SDKROOT` / env — try `env -i … xcrun --sdk macosx swift package dump-package`). Only after `/tmp/spmtest` dump-package works, rerun `npm run ios:fix`.
 
 **CocoaPods not required** — SPM only (`App.xcodeproj`, not `.xcworkspace`). Never `pod install`.
 
