@@ -3,7 +3,7 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-17 (iOS CapApp-SPM tools 5.9 + ios:fix)
+Last updated: 2026-07-17 (iOS CapApp-SPM nuclear remote-only)
 
 ## Decision 2026-07-17 — CapApp-SPM empty JSON on fresh Xcode 26 (Jeff)
 
@@ -13,16 +13,19 @@ Last updated: 2026-07-17 (iOS CapApp-SPM tools 5.9 + ios:fix)
 1. Earlier commit set `experimental.ios.spm.swiftToolsVersion` to **6.0** — Capacitor docs warn this can break CapApp-SPM manifest compilation.
 2. Stale SPM/DerivedData after deleting/reinstalling Xcode.
 3. Historical Windows `\\` paths in Package.swift (fixed 2026-07-16).
+4. Local `node_modules` / symlink path deps under `Documents/` often break SPM manifest compile (iCloud).
 
-**Fix shipped:** Revert CapApp-SPM to **swift-tools-version 5.9**; enable Capacitor `packageOptions.symlink` for all four plugins; add `npm run ios:fix` (`scripts/ios-fix-capapp-spm.sh`).
+**Fix shipped (nuclear):** CapApp-SPM is **remote-only** — depends solely on `capacitor-swift-pm` 8.4.1 from GitHub. No local plugin path packages. `npm run ios:fix` overwrites Package.swift after sync, clears caches, runs `swift package dump-package`, writes `ios-capapp-spm-diagnose.txt`. Native haptics/push/status-bar deferred until SPM is stable; WKWebView still loads kepitravel.com.
 
-**Jeff on Mac (quit Xcode first):**
+**Jeff on Mac (quit Xcode first) — paste ALL of this, then paste Terminal output if it still fails:**
 ```bash
 cd ~/Documents/Kepi-Travel
-git pull origin main
+git fetch origin
+git checkout origin/cursor/fix-capapp-spm-485c -- scripts/ios-fix-capapp-spm.sh package.json ios/App/CapApp-SPM/Package.swift capacitor.config.ts
+chmod +x scripts/ios-fix-capapp-spm.sh
 npm run ios:fix
+cat ios-capapp-spm-diagnose.txt
 ```
-Then Xcode: **File → Packages → Reset Package Caches** → **Resolve Package Versions** → **Product → Clean Build Folder** → ▶ Run.
 
 **CocoaPods not required** — SPM only (`App.xcodeproj`, not `.xcworkspace`). Never `pod install`.
 
