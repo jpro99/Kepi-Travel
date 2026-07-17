@@ -9,7 +9,8 @@ type RateLimitPolicyName =
   | "push-subscribe"
   | "ai-suggestions"
   | "support-chat"
-  | "bug-report";
+  | "bug-report"
+  | "map-helper-report";
 
 type RateLimitPolicy = {
   limit: number;
@@ -57,6 +58,11 @@ const RATE_LIMIT_POLICIES: Record<RateLimitPolicyName, RateLimitPolicy> = {
     limit: 5,
     windowSeconds: 60 * 60,
     prefix: "kepi:rl:bug-report",
+  },
+  "map-helper-report": {
+    limit: 40,
+    windowSeconds: 60 * 60,
+    prefix: "kepi:rl:map-helper-report",
   },
 };
 
@@ -130,6 +136,22 @@ function getUpstashLimiterByPolicy(): Partial<Record<RateLimitPolicyName, Rateli
         `${RATE_LIMIT_POLICIES["support-chat"].windowSeconds} s`,
       ),
       prefix: RATE_LIMIT_POLICIES["support-chat"].prefix,
+    }),
+    "bug-report": new Ratelimit({
+      redis: upstashRedis,
+      limiter: Ratelimit.slidingWindow(
+        RATE_LIMIT_POLICIES["bug-report"].limit,
+        `${RATE_LIMIT_POLICIES["bug-report"].windowSeconds} s`,
+      ),
+      prefix: RATE_LIMIT_POLICIES["bug-report"].prefix,
+    }),
+    "map-helper-report": new Ratelimit({
+      redis: upstashRedis,
+      limiter: Ratelimit.slidingWindow(
+        RATE_LIMIT_POLICIES["map-helper-report"].limit,
+        `${RATE_LIMIT_POLICIES["map-helper-report"].windowSeconds} s`,
+      ),
+      prefix: RATE_LIMIT_POLICIES["map-helper-report"].prefix,
     }),
   };
   return cachedLimiterByPolicy;

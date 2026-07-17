@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-16 (iOS CapApp-SPM manifest fix)
+Last updated: 2026-07-17 (Map helpers — one-tap Door/amenity confirms, M38)
+
+## Decision 2026-07-17 — Map helpers (admin-opt-in, Apple-simple taps)
+
+Jeff enables specific free/lifetime invite users as map helpers in Admin → Users. While they walk an airport map they get large one-tap chips for nearby doors and amenities (no typing). Confirms go to `/admin/airport-editor` inbox; Jeff reviews — never auto-publish pin moves. Security is never a one-tap target.
 
 ## Decision 2026-07-16 — iOS CapApp-SPM / Xcode build (Jeff MacBook Air)
 

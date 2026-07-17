@@ -121,6 +121,9 @@ These are agent playbooks, not autonomous runtime bots. Jeff instructs the condu
 
 ## Fix log
 
+### 2026-07-17 (Session — Map helpers: one-tap Door / amenity confirms)
+- **M38** Admin Users tab → **Make helper**. Enabled users see Apple-simple chips on the airport map (Door 22, Starbucks) — one tap, no typing. Reports inbox in `/admin/airport-editor`. Never auto-publishes layout changes.
+
 ### 2026-07-15 (Session — Phase 2 SEA footways → routeGrade surveyed)
 - **M37** `footwayGraph.ts` + `applyFootwayOverlay.ts` + `seaPedestrianWays.json` (Overpass 2026-07-15). SEA live layout snaps same-side to OSM footways, keeps security_transition/train, retains curated pier/hall bridges with an honest warning (OSM alone is not a continuous sterile graph). `routeGrade:"surveyed"` only after journey gate. LAX/ONT stay schematic.
 - Honesty: do not claim pure-OSM corridors; bridges are documented in overlay warnings + M37.

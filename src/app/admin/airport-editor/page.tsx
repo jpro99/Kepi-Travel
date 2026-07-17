@@ -9,6 +9,7 @@ import {
 import { applyClickToPlace } from '@/lib/airportNav/clickToPlace';
 import { AirportNavigatorMap } from '@/components/travelAssistant/AirportNavigatorMap';
 import { ReferenceImageGeorefPanel } from '@/components/admin/ReferenceImageGeorefPanel';
+import { MapHelperReportsPanel } from '@/components/admin/MapHelperReportsPanel';
 import type { AirportLayoutDiff } from '@/lib/airportNav/layoutDiff';
 
 /** Admin verification runs as a fully-credentialed traveler so the security
@@ -697,6 +698,8 @@ export default function AirportEditorPage() {
                     </div>
                 ) : null}
             </section>
+            <MapHelperReportsPanel iata={activeBundledIata ?? undefined} />
+
             <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.8fr)]">
               <section className="rounded-2xl bg-white p-6 shadow-md">
                 <div className="flex items-center justify-between gap-3">

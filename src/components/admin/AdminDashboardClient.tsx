@@ -25,6 +25,7 @@ interface AdminUserRow {
   monthlyRevenueUsd: 0 | 9 | 29;
   status: "active" | "revoked";
   inviteCodeStatus: "active" | "revoked" | "used" | null;
+  mapHelperEnabled: boolean;
 }
 
 interface AdminInviteCodeRow {
@@ -414,7 +415,10 @@ export function AdminDashboardClient() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold">Users</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Organic, invite, and referral lifecycle overview.</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Organic, invite, and referral lifecycle. Turn on <strong>Map helper</strong> for people
+                you invite — they get one-tap Door / Starbucks confirms while walking the airport.
+              </p>
             </div>
             <button
               type="button"
@@ -438,6 +442,7 @@ export function AdminDashboardClient() {
                   <th className="px-2 py-2">Trial expiry</th>
                   <th className="px-2 py-2">Monthly revenue</th>
                   <th className="px-2 py-2">Status</th>
+                  <th className="px-2 py-2">Map helper</th>
                   <th className="px-2 py-2">Action</th>
                 </tr>
               </thead>
@@ -454,6 +459,53 @@ export function AdminDashboardClient() {
                     </td>
                     <td className="px-2 py-2">${user.monthlyRevenueUsd}</td>
                     <td className="px-2 py-2">{user.status}</td>
+                    <td className="px-2 py-2">
+                      <button
+                        type="button"
+                        disabled={adminBusy || !user.userId}
+                        onClick={() => {
+                          void (async () => {
+                            setAdminBusy(true);
+                            setAdminMessage(null);
+                            try {
+                              const res = await fetch("/api/admin/map-helper/users", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  userId: user.userId,
+                                  enabled: !user.mapHelperEnabled,
+                                }),
+                              });
+                              const payload = (await res.json()) as { error?: string };
+                              if (!res.ok) throw new Error(payload.error ?? `HTTP ${res.status}`);
+                              setUsers((prev) =>
+                                prev.map((row) =>
+                                  row.userId === user.userId
+                                    ? { ...row, mapHelperEnabled: !user.mapHelperEnabled }
+                                    : row,
+                                ),
+                              );
+                              setAdminMessage(
+                                user.mapHelperEnabled
+                                  ? `Map helper off for ${user.email}`
+                                  : `Map helper on for ${user.email} — they’ll see one-tap Door / amenity chips on the airport map.`,
+                              );
+                            } catch (err) {
+                              setAdminMessage(err instanceof Error ? err.message : "Map helper toggle failed");
+                            } finally {
+                              setAdminBusy(false);
+                            }
+                          })();
+                        }}
+                        className={`rounded-md px-2 py-1 text-[11px] font-semibold disabled:opacity-40 ${
+                          user.mapHelperEnabled
+                            ? "bg-emerald-600 text-white"
+                            : "border border-slate-300 dark:border-slate-700"
+                        }`}
+                      >
+                        {user.mapHelperEnabled ? "Helper on" : "Make helper"}
+                      </button>
+                    </td>
                     <td className="px-2 py-2">
                       <button
                         type="button"

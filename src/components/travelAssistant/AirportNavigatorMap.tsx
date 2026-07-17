@@ -39,6 +39,7 @@ import { computeBoardingPressure, type BoardingPressure } from "@/lib/airportNav
 import type { FamilyAirportPin } from "@/lib/family/familyAirportPins";
 import type { FamilyRally } from "@/lib/family/familyAirportSync";
 import { OfficialAirportMapLink } from "@/components/travelAssistant/OfficialAirportMapLink";
+import { MapHelperConfirmBar } from "@/components/travelAssistant/MapHelperConfirmBar";
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Kepi Airport Navigator — Phase 1 surface (spec §B/§C/§D4/§D5).
@@ -94,6 +95,11 @@ interface AirportNavigatorMapProps {
   onPlaceCapture?: (lngLat: { lng: number; lat: number }) => void;
   /** When set (admin verify/edit), skip the layout API and render this package. */
   layoutOverride?: AirportLayout | null;
+  /**
+   * When true, show one-tap Door / amenity helper chips. When omitted, the map
+   * asks `/api/map-helper/status` (admin-enabled helpers only).
+   */
+  mapHelperEnabled?: boolean;
 }
 
 const PATH_DIM = "#c3ccd7";
@@ -804,6 +810,7 @@ export function AirportNavigatorMap({
   placeMode = false,
   onPlaceCapture,
   layoutOverride = null,
+  mapHelperEnabled: mapHelperEnabledProp,
 }: AirportNavigatorMapProps) {
   const bottomPanel = shellBottomInset ?? "max(0.75rem, env(safe-area-inset-bottom))";
   const bottomMic = shellBottomInset
@@ -842,6 +849,30 @@ export function AirportNavigatorMap({
   // grants user_confirmed the top confidence grade — this is the UI gesture).
   const [confirmMode, setConfirmMode] = useState(false);
   const [confirmedNodeId, setConfirmedNodeId] = useState<string | null>(null);
+  const [mapHelperEnabled, setMapHelperEnabled] = useState(Boolean(mapHelperEnabledProp));
+
+  useEffect(() => {
+    if (typeof mapHelperEnabledProp === "boolean") {
+      setMapHelperEnabled(mapHelperEnabledProp);
+      return;
+    }
+    if (previewMode || placeMode) {
+      setMapHelperEnabled(false);
+      return;
+    }
+    let cancelled = false;
+    void fetch("/api/map-helper/status", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((payload: { canSubmit?: boolean }) => {
+        if (!cancelled) setMapHelperEnabled(Boolean(payload.canSubmit));
+      })
+      .catch(() => {
+        if (!cancelled) setMapHelperEnabled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mapHelperEnabledProp, previewMode, placeMode]);
 
   // Journey machine (single source of truth for "where in the journey")
   const journeyRef = useRef(initialJourneyState(Date.now()));
@@ -2682,6 +2713,20 @@ export function AirportNavigatorMap({
             {confirmMode ? "Tap where you are" : confirmedNodeId ? "📍 Update my spot" : "📍 I'm here"}
           </button>
         </div>
+      )}
+
+      {/* Map helpers (admin-enabled): one-tap Door / Starbucks confirms — no typing */}
+      {mapHelperEnabled && !securityQuestionOpen && !journeyPrompt && !quietMode && !previewMode && !placeMode && layout && (
+        <MapHelperConfirmBar
+          iata={iata}
+          layout={layout}
+          pos={
+            snapped?.pos
+            ?? (userLon != null && userLat != null ? [userLon, userLat] : null)
+          }
+          accuracyM={userAccuracyM}
+          bottomOffset={`calc(${bottomPanel} + ${activeRoute ? "11.5rem" : "5.25rem"})`}
+        />
       )}
 
       {/* Active route card */}

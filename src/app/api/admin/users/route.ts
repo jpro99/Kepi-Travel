@@ -4,6 +4,7 @@ import { getSubscriptionRecord, isSubscriptionActive } from "@/lib/billing/subsc
 import { getInviteCodeRecord, getInviteCodeRedeemedByUser } from "@/lib/invite/inviteCodeStore";
 import { logger } from "@/lib/logger";
 import { getRedeemedReferralCode } from "@/lib/referral/referralStore";
+import { getMapHelperFlagsForUsers } from "@/lib/airportNav/mapHelperStore";
 import { generateId } from "@/lib/utils/generateId";
 
 export const runtime = "nodejs";
@@ -21,6 +22,7 @@ interface AdminUserSummary {
   monthlyRevenueUsd: 0 | 9 | 29;
   status: "active" | "revoked";
   inviteCodeStatus: "active" | "revoked" | "used" | null;
+  mapHelperEnabled: boolean;
 }
 
 function toIsoString(value: unknown): string | null {
@@ -102,6 +104,11 @@ export async function GET(req: Request) {
   }
 
   const nowMs = Date.now();
+  const userIds = clerkUsers
+    .map((user) => (typeof user.id === "string" ? user.id : ""))
+    .filter(Boolean);
+  const helperFlags = await getMapHelperFlagsForUsers(userIds);
+
   const summaries = await Promise.all(
     clerkUsers.map(async (user): Promise<AdminUserSummary> => {
       const targetUserId = typeof user.id === "string" ? user.id : "";
@@ -143,6 +150,7 @@ export async function GET(req: Request) {
         monthlyRevenueUsd,
         status: inviteRecord?.status === "revoked" ? "revoked" : "active",
         inviteCodeStatus: inviteRecord?.status ?? null,
+        mapHelperEnabled: Boolean(helperFlags[targetUserId]),
       };
     }),
   );

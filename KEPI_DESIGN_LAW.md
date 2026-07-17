@@ -350,6 +350,11 @@ To earn `routeGrade:"surveyed"`, overlay real OSM pedestrian ways (`highway=foot
 
 **Test:** `src/lib/airportNav/footwayGraph.test.ts`, `src/lib/airportNav/routeGradeHonesty.test.ts`
 
+**M38 — Map helpers are admin-opt-in; one-tap confirms never auto-publish**
+Jeff can enable specific users (lifetime/free invites) as **map helpers**. Those users see Apple-simple one-tap chips while walking (`Door 22`, `Starbucks`) — no typing required. Confirms store the helper’s position + chosen label in an admin inbox. **Never** auto-move layout pins or flip precision from a helper tap; admin reviews, then uses click-to-place / curated edit. Security POIs are never offered as one-tap survey targets (M32). Helpers are off by default for everyone.
+
+**Test:** `src/lib/airportNav/mapHelperNearby.test.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -579,6 +584,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | M35 | `src/lib/airportNav/layoutStaleness.test.ts`, `src/lib/airportNav/layoutDiff.test.ts`, `src/lib/airportNav/poiPrecisionHonesty.test.ts`, `src/lib/airportNav/referenceImageDraft.test.ts`, `src/lib/airportNav/allAirportsPrecisionHonesty.test.ts` |
 | M36 | `src/lib/airportNav/doorMonotonicity.test.ts` |
 | M37 | `src/lib/airportNav/footwayGraph.test.ts`, `src/lib/airportNav/routeGradeHonesty.test.ts` |
+| M38 | `src/lib/airportNav/mapHelperNearby.test.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |
