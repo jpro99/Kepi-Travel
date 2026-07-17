@@ -36,8 +36,23 @@ const config: CapacitorConfig = {
   experimental: {
     ios: {
       spm: {
-        /** Xcode 16+/26 SPM manifest needs Swift tools 6+ */
-        swiftToolsVersion: "6.0",
+        /**
+         * Capacitor 8 default. Do NOT set 6.0 — Capacitor docs warn it can
+         * break CapApp-SPM manifest compilation ("Missing or empty JSON
+         * output from manifest compilation for capapp-spm") on Xcode 26.
+         */
+        swiftToolsVersion: "5.9",
+        /**
+         * Symlink plugins into CapApp-SPM/symlinks so Package.swift never
+         * embeds brittle ../../../node_modules paths (Windows \\ or iCloud
+         * Documents sync breakage).
+         */
+        packageOptions: {
+          "@capacitor/haptics": { symlink: true },
+          "@capacitor/local-notifications": { symlink: true },
+          "@capacitor/push-notifications": { symlink: true },
+          "@capacitor/status-bar": { symlink: true },
+        },
       },
     },
   },

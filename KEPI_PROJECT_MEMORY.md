@@ -3,7 +3,40 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-16 (iOS CapApp-SPM manifest fix)
+Last updated: 2026-07-17 (Jeff Mac iOS running via CocoaPods)
+
+## Decision 2026-07-17 — CapApp-SPM empty JSON on fresh Xcode 26 (Jeff)
+
+**Error (still after reinstall):** Xcode *"Missing or empty JSON output from manifest compilation for capapp-spm"* → *"Missing package product 'CapApp-SPM'"*.
+
+**Causes (stacked):**
+1. Earlier commit set `experimental.ios.spm.swiftToolsVersion` to **6.0** — Capacitor docs warn this can break CapApp-SPM manifest compilation.
+2. Stale SPM/DerivedData after deleting/reinstalling Xcode.
+3. Historical Windows `\\` paths in Package.swift (fixed 2026-07-16).
+4. Local `node_modules` / symlink path deps under `Documents/` often break SPM manifest compile (iCloud).
+
+**Fix shipped (nuclear):** CapApp-SPM is **remote-only** — depends solely on `capacitor-swift-pm` 8.4.1 from GitHub. No local plugin path packages. `npm run ios:fix` overwrites Package.swift after sync, clears caches, runs `swift package dump-package`, writes `ios-capapp-spm-diagnose.txt`. Native haptics/push/status-bar deferred until SPM is stable; WKWebView still loads kepitravel.com.
+
+**Jeff on Mac (quit Xcode first) — paste ALL of this, then paste Terminal output if it still fails:**
+```bash
+cd ~/Documents/Kepi-Travel
+git fetch origin
+git checkout origin/cursor/fix-capapp-spm-485c -- scripts/ios-fix-capapp-spm.sh package.json ios/App/CapApp-SPM/Package.swift capacitor.config.ts
+chmod +x scripts/ios-fix-capapp-spm.sh
+npm run ios:fix
+cat ios-capapp-spm-diagnose.txt
+```
+
+**2026-07-17 follow-up (verified):** Nuclear remote-only CapApp-SPM still fails with `Invalid manifest` / empty JSON. **Also `/tmp/spmtest` fails the same way.** Machine: **Xcode 26.6 (17F113)**, macOS **26.5.2 (25F84)**, Swift **6.3.3**. Root cause pinned via `log show`: **AMFI** (`Unrecoverable CT signature issue` / no CMS blob) + **XProtect** (`failed on rPathCmd … libPackageDescription.dylib`) + **Gatekeeper** kill SPM manifest binaries (exit 137). Ad-hoc codesign still rejected. **Unblock for Kepi (WORKED for Jeff 2026-07-17):** CocoaPods path — app ran in simulator, “everything seemed to work.”
+
+**Working Mac recipe (Jeff MacBook Air, Xcode 26.6 / macOS 26.5.2):**
+1. SPM / CapApp-SPM / Homebrew Portable Ruby all **SIGKILL’d** by AMFI+XProtect — do **not** use SPM on this machine until Gatekeeper/Xcode signing is healthy.
+2. System Ruby is **2.6.10** — install CocoaPods **1.11.3** with pinned gems (`ffi 1.15.5`, `zeitwerk 2.6.18`, `i18n 1.8.11`, `activesupport 6.1.7.10`, `--conservative`), binary at `/usr/local/bin/pod`.
+3. `npx cap add ios --packagemanager CocoaPods` → `npx cap sync ios` → `pod install` → open **`ios/App/App.xcworkspace`** (not `.xcodeproj`).
+4. Xcode: select **App target** → **Signing & Capabilities** → Team → ▶ Run simulator.
+5. Native shell loads **https://kepitravel.com** (production web).
+
+**Do not re-suggest:** Homebrew cocoapods, SPM CapApp-SPM fix loops, or Lockdown Mode (already Off) unless Jeff asks.
 
 ## Decision 2026-07-16 — iOS CapApp-SPM / Xcode build (Jeff MacBook Air)
 
@@ -11,20 +44,7 @@ Last updated: 2026-07-16 (iOS CapApp-SPM manifest fix)
 
 **Cause:** `ios/App/CapApp-SPM/Package.swift` was committed with **Windows backslashes** in plugin paths (`..\..\..\node_modules\...`). Swift PM on macOS requires forward slashes.
 
-**Fix shipped:** Regenerated `Package.swift` with `../../../node_modules/...` paths + `@capacitor/status-bar`; aligned `@capacitor/core`/`@capacitor/cli` to **8.4.1** (match `@capacitor/ios`).
-
-**Jeff on Mac after `git pull`:**
-```bash
-cd ~/Documents/Kepi-Travel
-npm install
-npm run ios:sync
-npm run ios:open
-```
-Then Xcode: **File → Packages → Reset Package Caches** → **Resolve Package Versions** → **Product → Clean Build Folder** → ▶ Run.
-
-**CocoaPods not required** — this project uses SPM only (`App.xcodeproj`, not `.xcworkspace`). Ignore `pod` / Ruby errors.
-
-**Pods-App.debug.xcconfig / `[CP] Embed Pods Frameworks` error:** Local `ios/` is an old CocoaPods template. Fix: `git checkout origin/main -- ios/` → `npm run ios:sync` → open `App.xcodeproj` (not `.xcworkspace`).
+**Fix shipped:** Regenerated `Package.swift` with forward-slash paths + `@capacitor/status-bar`; aligned `@capacitor/core`/`@capacitor/cli` to **8.4.1**. Superseded in part by 2026-07-17 (tools 5.9 + symlinks + `ios:fix`).
 
 ## Decision 2026-07-15 — Phase 2 SEA footways (surveyed walking routes)
 
