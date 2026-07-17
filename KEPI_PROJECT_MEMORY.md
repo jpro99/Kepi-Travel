@@ -3,7 +3,7 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-17 (iOS CapApp-SPM nuclear remote-only)
+Last updated: 2026-07-17 (Jeff Mac iOS running via CocoaPods)
 
 ## Decision 2026-07-17 — CapApp-SPM empty JSON on fresh Xcode 26 (Jeff)
 
@@ -27,9 +27,16 @@ npm run ios:fix
 cat ios-capapp-spm-diagnose.txt
 ```
 
-**2026-07-17 follow-up (verified):** Nuclear remote-only CapApp-SPM still fails with `Invalid manifest` / empty JSON. **Also `/tmp/spmtest` fails the same way.** Machine: **Xcode 26.6 (17F113)**, macOS **26.5.2 (25F84)**, Swift **6.3.3**. Root cause pinned via `log show`: **AMFI** (`Unrecoverable CT signature issue` / no CMS blob) + **XProtect** (`failed on rPathCmd … libPackageDescription.dylib`) + **Gatekeeper** kill SPM manifest binaries (exit 137). Ad-hoc codesign still rejected. **Unblock for Kepi:** recreate iOS with CocoaPods (`npx cap add ios --packagemanager CocoaPods`, open `.xcworkspace`). Later: check Lockdown Mode + `spctl -a -vv /Applications/Xcode.app` if we want SPM back.
+**2026-07-17 follow-up (verified):** Nuclear remote-only CapApp-SPM still fails with `Invalid manifest` / empty JSON. **Also `/tmp/spmtest` fails the same way.** Machine: **Xcode 26.6 (17F113)**, macOS **26.5.2 (25F84)**, Swift **6.3.3**. Root cause pinned via `log show`: **AMFI** (`Unrecoverable CT signature issue` / no CMS blob) + **XProtect** (`failed on rPathCmd … libPackageDescription.dylib`) + **Gatekeeper** kill SPM manifest binaries (exit 137). Ad-hoc codesign still rejected. **Unblock for Kepi (WORKED for Jeff 2026-07-17):** CocoaPods path — app ran in simulator, “everything seemed to work.”
 
-**CocoaPods not required** — SPM only (`App.xcodeproj`, not `.xcworkspace`). Never `pod install`.
+**Working Mac recipe (Jeff MacBook Air, Xcode 26.6 / macOS 26.5.2):**
+1. SPM / CapApp-SPM / Homebrew Portable Ruby all **SIGKILL’d** by AMFI+XProtect — do **not** use SPM on this machine until Gatekeeper/Xcode signing is healthy.
+2. System Ruby is **2.6.10** — install CocoaPods **1.11.3** with pinned gems (`ffi 1.15.5`, `zeitwerk 2.6.18`, `i18n 1.8.11`, `activesupport 6.1.7.10`, `--conservative`), binary at `/usr/local/bin/pod`.
+3. `npx cap add ios --packagemanager CocoaPods` → `npx cap sync ios` → `pod install` → open **`ios/App/App.xcworkspace`** (not `.xcodeproj`).
+4. Xcode: select **App target** → **Signing & Capabilities** → Team → ▶ Run simulator.
+5. Native shell loads **https://kepitravel.com** (production web).
+
+**Do not re-suggest:** Homebrew cocoapods, SPM CapApp-SPM fix loops, or Lockdown Mode (already Off) unless Jeff asks.
 
 ## Decision 2026-07-16 — iOS CapApp-SPM / Xcode build (Jeff MacBook Air)
 
