@@ -27,7 +27,7 @@ npm run ios:fix
 cat ios-capapp-spm-diagnose.txt
 ```
 
-**2026-07-17 follow-up (verified):** Nuclear remote-only CapApp-SPM still fails with `Invalid manifest` / empty JSON. **Also `/tmp/spmtest` fails the same way** — SPM is broken system-wide on Jeff’s Mac, not Kepi Package.swift. Machine: **Xcode 26.6 (17F113)**, macOS **26.5.2 (25F84)**, Swift **6.3.3**. Verbose dump shows `swift-frontend` + `clang` link succeed; failure is empty JSON after running the compiled manifest (classic polluted `SDKROOT` / env — try `env -i … xcrun --sdk macosx swift package dump-package`). Only after `/tmp/spmtest` dump-package works, rerun `npm run ios:fix`.
+**2026-07-17 follow-up (verified):** Nuclear remote-only CapApp-SPM still fails with `Invalid manifest` / empty JSON. **Also `/tmp/spmtest` fails the same way.** Machine: **Xcode 26.6 (17F113)**, macOS **26.5.2 (25F84)**, Swift **6.3.3**. Root cause pinned: compiled manifest binary is **SIGKILL’d at runtime** (`zsh: killed`, exit **137**) so SPM sees empty JSON. Env is clean (`SDKROOT` unset). Next: DevToolsSecurity + Privacy→Developer Tools for Terminal; `codesign -s -` the test binary; Console/`log show` for killer. **Unblock for Kepi:** recreate iOS with CocoaPods (`npx cap add ios --packagemanager CocoaPods`) so CapApp-SPM is not required.
 
 **CocoaPods not required** — SPM only (`App.xcodeproj`, not `.xcworkspace`). Never `pod install`.
 
