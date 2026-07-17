@@ -11,7 +11,9 @@ import { SystemHealthCard } from "@/components/admin/SystemHealthCard";
 import { openSupportChat } from "@/components/support/SupportChat";
 import type { AdminHealthResponse, AdminStatsResponse } from "@/lib/admin/adminTypes";
 
-type AdminTab = "operations" | "insights" | "users" | "invite-codes";
+import { AdminAirportsVerifyPanel } from "@/components/admin/AdminAirportsVerifyPanel";
+
+type AdminTab = "operations" | "insights" | "users" | "invite-codes" | "airports";
 
 interface AdminUserRow {
   userId: string;
@@ -356,6 +358,17 @@ export function AdminDashboardClient() {
           >
             Invite Codes
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("airports")}
+            className={`rounded-md px-3 py-1.5 font-semibold transition ${
+              activeTab === "airports"
+                ? "bg-cyan-500 text-slate-950"
+                : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+            }`}
+          >
+            Airports
+          </button>
         </div>
         <button
           type="button"
@@ -410,6 +423,8 @@ export function AdminDashboardClient() {
           <HotelBookingEconomicsCard />
           <InsightsCard insights={stats?.insights ?? null} loading={loadingStats} />
         </div>
+      ) : activeTab === "airports" ? (
+        <AdminAirportsVerifyPanel />
       ) : activeTab === "users" ? (
         <section className="space-y-3 rounded-2xl border border-slate-200 bg-white/90 p-4 dark:border-slate-700 dark:bg-slate-900/70">
           <div className="flex items-center justify-between gap-3">

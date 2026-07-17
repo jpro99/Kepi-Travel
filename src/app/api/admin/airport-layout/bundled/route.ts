@@ -35,6 +35,7 @@ export async function GET(request: Request) {
         name: layout.name,
         layoutVersion: layout.layoutVersion,
         updatedAt: layout.updatedAt,
+        routeGrade: layout.routeGrade ?? "schematic",
         counts: {
           zones: layout.zones.length,
           nodes: layout.nodes.length,

@@ -33,12 +33,20 @@ export default async function AdminPage() {
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
             Toggle between Operations and Insights to monitor reliability, adoption, and conversion health.
           </p>
-          <a
-            href="/admin/bots"
-            className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#0b1f3a] px-4 py-2.5 text-sm font-bold text-[#f4c95d]"
-          >
-            🎯 Open Bot Deck
-          </a>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <a
+              href="/admin/bots"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#0b1f3a] px-4 py-2.5 text-sm font-bold text-[#f4c95d]"
+            >
+              🎯 Open Bot Deck
+            </a>
+            <a
+              href="/admin/airport-editor"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-800 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
+            >
+              Airport editor
+            </a>
+          </div>
         </header>
         <AdminDashboardClient />
       </div>
