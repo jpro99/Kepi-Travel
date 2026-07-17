@@ -27,6 +27,8 @@ npm run ios:fix
 cat ios-capapp-spm-diagnose.txt
 ```
 
+**2026-07-17 follow-up (verified):** Nuclear remote-only CapApp-SPM still fails on Jeff’s Mac with `Invalid manifest` / empty JSON from `swiftc` compiling Package.swift. So this is **not** plugin paths anymore — SwiftPM can’t compile manifests for that CapApp-SPM tree (likely **Documents/iCloud** and/or incomplete Xcode 26 first-launch). Next: `swift package dump-package` in `/tmp/spmtest`; if /tmp works, move repo to `~/Developer/Kepi-Travel`.
+
 **CocoaPods not required** — SPM only (`App.xcodeproj`, not `.xcworkspace`). Never `pod install`.
 
 ## Decision 2026-07-16 — iOS CapApp-SPM / Xcode build (Jeff MacBook Air)
