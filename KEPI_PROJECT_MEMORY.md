@@ -27,7 +27,7 @@ npm run ios:fix
 cat ios-capapp-spm-diagnose.txt
 ```
 
-**2026-07-17 follow-up (verified):** Nuclear remote-only CapApp-SPM still fails with `Invalid manifest` / empty JSON. **Also `/tmp/spmtest` fails the same way.** Machine: **Xcode 26.6 (17F113)**, macOS **26.5.2 (25F84)**, Swift **6.3.3**. Root cause pinned: compiled manifest binary is **SIGKILL’d at runtime** (`zsh: killed`, exit **137**) so SPM sees empty JSON. Env is clean (`SDKROOT` unset). Next: DevToolsSecurity + Privacy→Developer Tools for Terminal; `codesign -s -` the test binary; Console/`log show` for killer. **Unblock for Kepi:** recreate iOS with CocoaPods (`npx cap add ios --packagemanager CocoaPods`) so CapApp-SPM is not required.
+**2026-07-17 follow-up (verified):** Nuclear remote-only CapApp-SPM still fails with `Invalid manifest` / empty JSON. **Also `/tmp/spmtest` fails the same way.** Machine: **Xcode 26.6 (17F113)**, macOS **26.5.2 (25F84)**, Swift **6.3.3**. Root cause pinned via `log show`: **AMFI** (`Unrecoverable CT signature issue` / no CMS blob) + **XProtect** (`failed on rPathCmd … libPackageDescription.dylib`) + **Gatekeeper** kill SPM manifest binaries (exit 137). Ad-hoc codesign still rejected. **Unblock for Kepi:** recreate iOS with CocoaPods (`npx cap add ios --packagemanager CocoaPods`, open `.xcworkspace`). Later: check Lockdown Mode + `spctl -a -vv /Applications/Xcode.app` if we want SPM back.
 
 **CocoaPods not required** — SPM only (`App.xcodeproj`, not `.xcworkspace`). Never `pod install`.
 
