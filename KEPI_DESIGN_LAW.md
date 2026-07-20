@@ -458,6 +458,11 @@ Forwarded **.docx** day plans (e.g. “Puglia Itinerary: SEPT 2–12”) are ext
 
 **Test:** `src/lib/travelAssistant/parseDayPlanItinerary.test.ts`, `src/lib/travelAssistant/narrativeItineraryExport.test.ts`
 
+**I28 — Plan Timeline is the day-plan letter (not photo cards)**
+Timeline shows the same narrative day-plan layout as Day plan PDF: trip title, stay block, Day N · date · city, editable/draggable bullet lines. No random city thumbnails (source.unsplash / picsum). Internal parser jargon (e.g. “Applied AI fallback…”) never appears in traveler notes.
+
+**Test:** `src/lib/travelAssistant/narrativeItineraryExport.test.ts`, `src/lib/travelAssistant/sanitizeTravelerNotes.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -613,6 +618,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I22, I23, I24, I25 | `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/reservationDisplayLabel.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts` |
 | I26 | `src/lib/travelAssistant/premiumItineraryExport.test.ts` |
 | I27 | `src/lib/travelAssistant/parseDayPlanItinerary.test.ts`, `src/lib/travelAssistant/narrativeItineraryExport.test.ts` |
+| I28 | `src/lib/travelAssistant/narrativeItineraryExport.test.ts`, `src/lib/travelAssistant/sanitizeTravelerNotes.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

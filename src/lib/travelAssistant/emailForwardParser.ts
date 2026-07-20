@@ -5,6 +5,7 @@ import { extractHotelPropertyName } from "@/lib/travelAssistant/hotelPropertyNam
 import { formatFewShotBlock } from "@/lib/travelAssistant/mlReadiness/fewShotExamples";
 import { EMAIL_FORWARD_PARSER_VERSION } from "@/lib/travelAssistant/mlReadiness/parserVersion";
 import type { FewShotParseExample } from "@/lib/travelAssistant/mlReadiness/types";
+import { sanitizeTravelerNotes } from "@/lib/travelAssistant/sanitizeTravelerNotes";
 import { logger } from "@/lib/logger";
 
 export { extractHotelPropertyName };
@@ -1322,7 +1323,7 @@ function buildDraft(candidates: CandidateMap, parserNotes: string[]): ForwardedR
     timezone: sanitizeTimezoneValue(candidates.timezone?.value ?? "Etc/UTC"),
     location: normalizeWhitespace(candidates.location?.value ?? ""),
     confirmationCode: normalizeConfirmationCode(candidates.confirmationCode?.value ?? ""),
-    notes: notesSections.join(" "),
+    notes: sanitizeTravelerNotes(notesSections.join("\n")).replace(/\n/gu, " ").trim(),
     flightNumber:
       typeValue === "flight"
         ? (candidates.flightNumber?.value ?? "").replace(/[^A-Za-z0-9]/gu, "").toUpperCase()
@@ -1527,7 +1528,7 @@ export async function parseForwardedEmail(input: ForwardedEmailParseInput): Prom
         lineAwareText,
       );
       score = scoreCandidates(candidates);
-      parserNotes.push("Applied AI fallback extraction for low-confidence fields.");
+      // Do not surface internal AI-fallback jargon to travelers.
       logger.info("AI fallback extracted fields.", {
         scope: EMAIL_FORWARD_PARSER_SCOPE,
         aiCandidatesCount: aiCandidates.length,

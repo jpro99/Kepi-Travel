@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ItineraryTimeline } from "@/components/travelAssistant/ItineraryTimeline";
+import { NarrativeDayPlanView } from "@/components/travelAssistant/NarrativeDayPlanView";
 import { TripHealthStrip } from "@/components/travelAssistant/TripHealthStrip";
 import { TripLegCalendar } from "@/components/travelAssistant/TripLegCalendar";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
@@ -16,6 +16,7 @@ import type { InterCityTransportGap } from "@/lib/travelAssistant/interCityTrans
 import type { PlanSubView } from "@/lib/travelAssistant/consumerTabs";
 import type { QuickGroundMode } from "@/lib/travelAssistant/quickGroundTransport";
 import type { TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
+import { sanitizeTravelerNotes } from "@/lib/travelAssistant/sanitizeTravelerNotes";
 
 interface ItineraryTabViewProps {
   tripName: string;
@@ -94,19 +95,20 @@ export function ItineraryTabView({
   onSelectedDateKeyChange,
   onHighlightedLegIdChange,
   onDayNoteChange,
-  onSaveDayPlan,
-  onApplyHotelToDays,
-  onSaveLegLabel,
-  getDayPlan,
+  // Day-plan sheet hooks retained for calendar / future Plan actions (I28 timeline uses notes only).
+  onSaveDayPlan: _onSaveDayPlan,
+  onApplyHotelToDays: _onApplyHotelToDays,
+  onSaveLegLabel: _onSaveLegLabel,
+  getDayPlan: _getDayPlan,
   itineraryPlans,
-  onPlanDay,
+  onPlanDay: _onPlanDay,
   onGapActionTap,
   onPrint,
   onExportPdf,
   onExportDayPlanPdf,
   onShareLink,
-  missionItems = [],
-  onMissionAction,
+  missionItems: _missionItems = [],
+  onMissionAction: _onMissionAction,
   onPlanHotel,
   plannedFlightLegs = [],
   onSearchMissingFlights,
@@ -131,7 +133,7 @@ export function ItineraryTabView({
   }, [planSavedFlash]);
 
   const handleDayNoteChange = (dateKey: string, value: string): void => {
-    onDayNoteChange(dateKey, value);
+    onDayNoteChange(dateKey, sanitizeTravelerNotes(value));
     setPlanSavedFlash(true);
   };
 
@@ -245,23 +247,16 @@ export function ItineraryTabView({
 
       {planSubView === "timeline" ? (
         <div ref={timelineRef}>
-          <ItineraryTimeline
+          <NarrativeDayPlanView
+            tripName={tripName}
             tripStartDate={tripStartDate}
             tripEndDate={tripEndDate}
             reservations={reservations}
             dayNotes={dayNotes}
-            selectedDateKey={selectedDateKey}
-            highlightedLegId={highlightedLegId}
-            scrollToDateKey={scrollToDateKey}
-            onSelectedDateKeyChange={onSelectedDateKeyChange}
-            onDayNoteChange={handleDayNoteChange}
-            onReservationTap={onReservationTap ?? (() => undefined)}
             itineraryPlans={itineraryPlans}
-            onPlanDay={onPlanDay}
-            onPlanHotel={onPlanHotel}
-            missionItems={missionItems}
-            onMissionAction={onMissionAction}
-            suppressPlanningAlerts
+            onDayNoteChange={handleDayNoteChange}
+            onReservationTap={onReservationTap}
+            selectedDateKey={selectedDateKey ?? scrollToDateKey}
           />
         </div>
       ) : (

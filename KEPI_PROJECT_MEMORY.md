@@ -5,6 +5,10 @@
 
 Last updated: 2026-07-17 (Europe trip airports BRI/FCO/VCE/MUC bundled)
 
+## Decision 2026-07-20 — Plan Timeline = day-plan letter (I28)
+
+Plan **Timeline** uses the narrative Day-plan PDF layout (editable/draggable bullets), not photo-card timeline. No random Unsplash/picsum city thumbs. Strip “Applied AI fallback…” from traveler notes.
+
 ## Decision 2026-07-20 — Word day-plan itineraries (I27)
 
 Forwarded `.docx` itineraries (Puglia-style day bullets) extract via mammoth, parse onto Plan days, push opens Plan. **Day plan PDF** = friend-share letter layout. Logistics table PDF stays separate. Old `.doc` not supported — save as `.docx`.

@@ -59,14 +59,15 @@ export function cityPhotoUrl(city: string | null | undefined, width = 800): stri
   return `https://images.unsplash.com/${DEFAULT_PHOTO_ID}?w=${width}&q=80&auto=format&fit=crop`;
 }
 
-/** Primary dynamic source for destination block headers. */
+/**
+ * Destination header photos — curated Unsplash IDs only.
+ * Never use source.unsplash.com or picsum random seeds (inappropriate / nonsense images).
+ */
 export function cityPhotoSourceUrl(city: string): string {
-  const q = encodeURIComponent(city.trim());
-  return `https://source.unsplash.com/800x200/?${q},travel`;
+  return cityPhotoUrl(city, 800);
 }
 
-/** Fallback when source.unsplash.com fails to load. */
+/** Same curated set — no random fallback. */
 export function cityPhotoPicsumUrl(city: string): string {
-  const seed = city.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "-");
-  return `https://picsum.photos/seed/${encodeURIComponent(seed || "city")}/800/200`;
+  return cityPhotoUrl(city, 800);
 }
