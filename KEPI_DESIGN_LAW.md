@@ -448,6 +448,11 @@ Reservation drawers, timeline cards, and edit surfaces show the **hotel property
 
 **Test:** `src/lib/travelAssistant/reservationDisplayLabel.test.ts`, `src/lib/travelAssistant/emailForwardParser.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts`, `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/buildTripLegs.test.ts`
 
+**I26 — Print/PDF itinerary is chronological and scannable**
+Static itinerary Print/PDF/CSV uses a **Day** column (trip day number + date), not Owner. No timezone column. Rows sort by local departure/check-in time (Ontario before Seattle on the same day). Flights/hotels/trains/rides are **color-coded**. Print CSS stays dense (landscape, tight padding, `print-color-adjust: exact`) so the PDF matches the on-screen Adaptive Travel Assistant look. Dates far outside the trip window (e.g. 2018 voucher bleed) are omitted from the export.
+
+**Test:** `src/lib/travelAssistant/premiumItineraryExport.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -601,6 +606,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
 | I22, I23, I24, I25 | `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/reservationDisplayLabel.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts` |
+| I26 | `src/lib/travelAssistant/premiumItineraryExport.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

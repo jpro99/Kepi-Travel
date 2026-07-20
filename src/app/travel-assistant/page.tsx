@@ -173,6 +173,11 @@ import {
   coerceHotelTitle,
   reservationPropertyName,
 } from "@/lib/travelAssistant/reservationDisplayLabel";
+import {
+  buildPremiumExportRows,
+  buildPremiumItineraryCsv,
+  buildPremiumItineraryHtml,
+} from "@/lib/travelAssistant/premiumItineraryExport";
 import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
@@ -439,18 +444,6 @@ interface PendingDeleteConfirmation {
   id: string;
   name?: string;
   source: "reservation-card" | "review-card" | "review-drawer" | "trip-header";
-}
-
-interface ExportRow {
-  owner: string;
-  itemType: string;
-  title: string;
-  provider: string;
-  localTime: string;
-  timezone: string;
-  location: string;
-  confirmation: string;
-  notes: string;
 }
 
 interface ReminderMilestone {
@@ -1452,41 +1445,6 @@ function buildUpdateReplayKey(update: TravelUpdateEvent): string {
   ].join("|");
 }
 
-function csvEscape(value: string): string {
-  const clean = value.replaceAll('"', '""');
-  return `"${clean}"`;
-}
-
-function buildCsv(rows: ExportRow[]): string {
-  const header = [
-    "Owner",
-    "Item Type",
-    "Title",
-    "Provider",
-    "Local Time",
-    "Timezone",
-    "Location",
-    "Confirmation",
-    "Notes",
-  ];
-  const body = rows.map((row) =>
-    [
-      row.owner,
-      row.itemType,
-      row.title,
-      row.provider,
-      row.localTime,
-      row.timezone,
-      row.location,
-      row.confirmation,
-      row.notes,
-    ]
-      .map(csvEscape)
-      .join(","),
-  );
-  return [header.join(","), ...body].join("\n");
-}
-
 function toCalendarSyncReservationPayload(reservation: Reservation): {
   id: string;
   type: ReservationType;
@@ -1522,96 +1480,11 @@ function downloadBlob(filename: string, blob: Blob): void {
   URL.revokeObjectURL(url);
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
 function formatThresholdLabel(minutes: number): string {
   if (minutes % 60 === 0) {
     return `T-${minutes / 60}h`;
   }
   return `T-${minutes}m`;
-}
-
-function buildPremiumItineraryHtml({
-  rows,
-  generatedAt,
-  stageLabel,
-  statusLabel,
-  confidenceScore,
-  scopeLabel,
-}: {
-  rows: ExportRow[];
-  generatedAt: string;
-  stageLabel: string;
-  statusLabel: string;
-  confidenceScore: number | null;
-  scopeLabel: string;
-}): string {
-  const tableRows = rows
-    .map((row) => {
-      return `<tr>
-        <td>${escapeHtml(row.owner)}</td>
-        <td>${escapeHtml(row.itemType)}</td>
-        <td>${escapeHtml(row.title)}</td>
-        <td>${escapeHtml(row.provider)}</td>
-        <td>${escapeHtml(row.localTime)}</td>
-        <td>${escapeHtml(row.timezone)}</td>
-        <td>${escapeHtml(row.location)}</td>
-        <td>${escapeHtml(row.confirmation)}</td>
-        <td>${escapeHtml(row.notes)}</td>
-      </tr>`;
-    })
-    .join("");
-
-  const confidenceMarkup =
-    confidenceScore === null
-      ? ""
-      : `<span class="chip">Confidence score: ${Math.round(confidenceScore)}</span>`;
-
-  return [
-    "<html><head><meta charset='utf-8'><title>Travel Itinerary</title>",
-    "<style>",
-    "body { font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; color: #0f172a; margin: 0; background: #f8fafc; }",
-    ".wrap { padding: 28px; }",
-    ".hero { border: 1px solid #cbd5e1; border-radius: 18px; background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #111827 100%); color: #e2e8f0; padding: 20px; }",
-    ".hero h1 { margin: 0 0 8px; font-size: 24px; }",
-    ".hero p { margin: 0; font-size: 13px; color: #cbd5e1; }",
-    ".chips { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }",
-    ".chip { display: inline-block; font-size: 12px; background: rgba(148, 163, 184, 0.2); border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 999px; padding: 4px 10px; }",
-    ".section { margin-top: 16px; border: 1px solid #dbeafe; border-radius: 14px; background: #ffffff; padding: 16px; }",
-    ".section h2 { margin: 0 0 8px; font-size: 15px; color: #0f172a; }",
-    ".meta { margin: 0; font-size: 12px; color: #475569; }",
-    "table { width: 100%; border-collapse: collapse; margin-top: 12px; }",
-    "th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; font-size: 12px; vertical-align: top; }",
-    "th { background: #eff6ff; color: #1e293b; font-weight: 600; }",
-    "tfoot td { font-size: 11px; color: #475569; background: #f8fafc; }",
-    "</style></head><body>",
-    "<div class='wrap'>",
-    "<div class='hero'>",
-    "<h1>Adaptive Travel Assistant - Premium Static Itinerary</h1>",
-    "<p>Logistics-first execution snapshot for travel day reliability.</p>",
-    "<div class='chips'>",
-    `<span class='chip'>Generated: ${escapeHtml(generatedAt)}</span>`,
-    `<span class='chip'>Stage: ${escapeHtml(stageLabel)}</span>`,
-    `<span class='chip'>Status: ${escapeHtml(statusLabel)}</span>`,
-    `<span class='chip'>Scope: ${escapeHtml(scopeLabel)}</span>`,
-    confidenceMarkup,
-    "</div></div>",
-    "<div class='section'>",
-    "<h2>Static copy safety note</h2>",
-    "<p class='meta'>This document is a point-in-time export. Re-check the live app before critical transitions (check-in, gate changes, transfers, and shared meeting points).</p>",
-    "<table>",
-    "<thead><tr><th>Owner</th><th>Type</th><th>Title</th><th>Provider</th><th>Local Time</th><th>Timezone</th><th>Location</th><th>Confirmation</th><th>Notes</th></tr></thead>",
-    `<tbody>${tableRows}</tbody>`,
-    "<tfoot><tr><td colspan='9'>Timezone labels and assignment owners are included to reduce missed-event risk in static handoffs.</td></tr></tfoot>",
-    "</table></div></div></body></html>",
-  ].join("");
 }
 
 function canViewerSeeMember(viewer: FamilyMember, target: FamilyMember): boolean {
@@ -8275,38 +8148,33 @@ export default function TravelAssistantPage() {
   const exportRows = useMemo(() => {
     const fromMs = parseDateInput(exportFrom);
     const toMs = parseDateInput(exportTo);
-    return reservations
-      .filter((reservation) => {
-        if (exportScope === "selected-person" && !reservation.assignedTo.includes(selectedFamilyMember.id)) {
-          return false;
-        }
-        const whenMs = parseDateInput(reservation.localTime);
-        if (!Number.isNaN(fromMs) && !Number.isNaN(whenMs) && whenMs < fromMs) return false;
-        if (!Number.isNaN(toMs) && !Number.isNaN(whenMs) && whenMs > toMs) return false;
-        return true;
-      })
-      .flatMap((reservation) => {
-        const owners = reservation.assignedTo
-          .map((ownerId) => familyMembers.find((member) => member.id === ownerId)?.name ?? ownerId)
-          .join(", ");
-        return [
-          {
-            owner: owners,
-            itemType: RESERVATION_TYPE_LABEL[reservation.type],
-            title: reservation.title,
-            provider: reservation.provider,
-            localTime: reservation.localTime,
-            timezone: reservation.timezone,
-            location: reservation.location,
-            confirmation: reservation.confirmationCode,
-            notes: reservation.notes,
-          },
-        ];
-      });
-  }, [exportFrom, exportScope, exportTo, familyMembers, reservations, selectedFamilyMember.id]);
+    const filtered = reservations.filter((reservation) => {
+      if (exportScope === "selected-person" && !reservation.assignedTo.includes(selectedFamilyMember.id)) {
+        return false;
+      }
+      const whenMs = parseDateInput(reservation.localTime);
+      if (!Number.isNaN(fromMs) && !Number.isNaN(whenMs) && whenMs < fromMs) return false;
+      if (!Number.isNaN(toMs) && !Number.isNaN(whenMs) && whenMs > toMs) return false;
+      return true;
+    });
+    return buildPremiumExportRows(filtered, {
+      tripStartDate: consumerTripStartDate ?? activeTrip?.startDate,
+      tripEndDate: consumerTripEndDate ?? activeTrip?.endDate,
+    });
+  }, [
+    activeTrip?.endDate,
+    activeTrip?.startDate,
+    consumerTripEndDate,
+    consumerTripStartDate,
+    exportFrom,
+    exportScope,
+    exportTo,
+    reservations,
+    selectedFamilyMember.id,
+  ]);
 
   const handleExportExcel = (): void => {
-    const csv = buildCsv(exportRows);
+    const csv = buildPremiumItineraryCsv(exportRows);
     downloadBlob(
       `itinerary-${new Date().toISOString().slice(0, 10)}.csv`,
       new Blob([csv], { type: "text/csv;charset=utf-8" }),
@@ -8353,18 +8221,17 @@ export default function TravelAssistantPage() {
 
   const consumerItineraryExportRows = useMemo(
     () =>
-      consumerReservationsSorted.map((reservation) => ({
-        owner: selectedFamilyMember.name,
-        itemType: RESERVATION_TYPE_LABEL[reservation.type] ?? reservation.type,
-        title: reservation.title,
-        provider: reservation.provider,
-        localTime: reservation.localTime,
-        timezone: reservation.timezone ?? "",
-        location: reservation.location,
-        confirmation: reservation.confirmationCode,
-        notes: reservation.notes,
-      })),
-    [consumerReservationsSorted, selectedFamilyMember.name],
+      buildPremiumExportRows(consumerReservationsSorted, {
+        tripStartDate: consumerTripStartDate ?? activeTrip?.startDate,
+        tripEndDate: consumerTripEndDate ?? activeTrip?.endDate,
+      }),
+    [
+      activeTrip?.endDate,
+      activeTrip?.startDate,
+      consumerReservationsSorted,
+      consumerTripEndDate,
+      consumerTripStartDate,
+    ],
   );
 
   const handleConsumerItineraryPrint = (): void => {
@@ -11379,7 +11246,7 @@ export default function TravelAssistantPage() {
           <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
             <h2 className="text-lg font-semibold">Static itinerary exports</h2>
             <p className="text-xs text-slate-400">
-              Download PDF/Word/Excel-compatible itinerary snapshots with timezone and owner labels.
+              Download PDF/Word/Excel-compatible itinerary snapshots with day numbers and type colors.
             </p>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               <label className="block text-sm">

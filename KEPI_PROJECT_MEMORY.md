@@ -5,6 +5,10 @@
 
 Last updated: 2026-07-17 (Europe trip airports BRI/FCO/VCE/MUC bundled)
 
+## Decision 2026-07-20 — Print/PDF itinerary (I26)
+
+Print/PDF/CSV: **Day** (not Owner), no Timezone, chronological local-time sort, type color rows, dense landscape print matching Adaptive Travel Assistant chrome. Out-of-window junk dates (e.g. 2018) dropped when trip dates exist.
+
 ## Decision 2026-07-20 — OTA hotel forwards show property name (I25)
 
 Booking.com / Expedia / Airbnb forwards must headline the **property** (e.g. Casa de Elena), not the OTA. Parser reads “You’re confirmed at …”; UI uses `reservationPropertyName`; day chips + walkthrough say check-in / staying / check-out (including same-day moves). Existing bad titles salvaged from notes when possible — otherwise re-forward or edit the reservation title.
