@@ -9,6 +9,8 @@ Last updated: 2026-07-17 (Europe trip airports BRI/FCO/VCE/MUC bundled)
 
 Forwarded `.docx` itineraries (Puglia-style day bullets) extract via mammoth, parse onto Plan days, push opens Plan. **Day plan PDF** = friend-share letter layout. Logistics table PDF stays separate. Old `.doc` not supported — save as `.docx`.
 
+**Incident 2026-07-20:** First day-plan forward could create/activate an empty shell trip so Plan looked wiped. Fix: day-plan forwards never create trips; never rewrite `reservations` on day-plan-only updates; GET `/api/trips` recovers active trip to the richest booking trip if active is empty.
+
 ## Decision 2026-07-20 — Print/PDF itinerary (I26)
 
 Print/PDF/CSV: **Day** (not Owner), no Timezone, chronological local-time sort, type color rows, dense landscape print matching Adaptive Travel Assistant chrome. Out-of-window junk dates (e.g. 2018) dropped when trip dates exist.

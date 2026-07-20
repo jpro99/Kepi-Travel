@@ -6,6 +6,7 @@ import {
   expandTripWindowIfNeeded,
   inferTripWindowFromDrafts,
   pickBestMatchingTripForDrafts,
+  pickRichestTripByReservations,
 } from "@/lib/travelAssistant/tripEmailAttach";
 import type { TravelTrip } from "@/lib/travelAssistant/tripStore";
 import { reservationWithinTripWindow } from "@/lib/travelAssistant/tripWindow";
@@ -119,4 +120,20 @@ test("pickBestMatchingTripForDrafts does not return a trip when no draft dates o
 test("reservationWithinTripWindow allows reservations within padded window", () => {
   assert.equal(reservationWithinTripWindow("2026-09-02", "2026-09-05", "2026-09-12"), true);
   assert.equal(reservationWithinTripWindow("2026-08-20", "2026-09-05", "2026-09-12"), false);
+});
+
+test("pickRichestTripByReservations prefers the trip that still has bookings", () => {
+  const emptyShell = makeTrip({
+    id: "empty",
+    startDate: "2026-09-02",
+    endDate: "2026-09-12",
+    reservations: [],
+  });
+  const europe = makeTrip({
+    id: "europe",
+    startDate: "2026-09-01",
+    endDate: "2026-09-20",
+    reservations: [{ id: "f1" }, { id: "h1" }] as TravelTrip["reservations"],
+  });
+  assert.equal(pickRichestTripByReservations([emptyShell, europe])?.id, "europe");
 });

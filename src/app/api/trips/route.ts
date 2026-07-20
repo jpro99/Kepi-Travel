@@ -24,6 +24,7 @@ import {
   type CollaborativeTrip,
 } from "@/lib/travelAssistant/tripCollaboratorStore";
 import { MAX_MINUTES_TO_DEPARTURE } from "@/lib/travelAssistant/tripWindow";
+import { recoverActiveTripIfEmptyShell } from "@/lib/travelAssistant/tripEmailAttach";
 import { generateId } from "@/lib/utils/generateId";
 
 async function listTripsIncludingCollaborations(userId: string) {
@@ -40,6 +41,17 @@ function isCollaborativeTrip(trip: { id: string }): trip is CollaborativeTrip {
 }
 
 async function resolveActiveTrip(userId: string) {
+  // Recover if a Word day-plan forward left the user on an empty shell trip.
+  const recovery = await recoverActiveTripIfEmptyShell(userId);
+  if (recovery.recovered) {
+    logger.info("Recovered active trip from empty shell to trip with reservations.", {
+      userId,
+      previousActiveId: recovery.previousActiveId,
+      recoveredTripId: recovery.trip?.id ?? null,
+      reservationCount: recovery.trip?.reservations?.length ?? 0,
+    });
+  }
+
   const trips = await listTripsIncludingCollaborations(userId);
   if (trips.length === 0) {
     return { trips, activeTrip: null as Awaited<ReturnType<typeof getTrip>>, activeTripId: null as string | null };

@@ -144,6 +144,83 @@ async function activateTripIfNeeded(trip: TravelTrip, userId: string): Promise<T
   return activated ?? trip;
 }
 
+/** Prefer the trip that still has bookings — never leave Jeff on an empty shell. */
+export function pickRichestTripByReservations<T extends { id: string; reservations: unknown[] }>(
+  trips: T[],
+): T | null {
+  if (trips.length === 0) return null;
+  return [...trips].sort((left, right) => {
+    const leftCount = Array.isArray(left.reservations) ? left.reservations.length : 0;
+    const rightCount = Array.isArray(right.reservations) ? right.reservations.length : 0;
+    if (rightCount !== leftCount) return rightCount - leftCount;
+    return 0;
+  })[0] ?? null;
+}
+
+/**
+ * If the active trip is an empty shell but another trip still has reservations,
+ * switch active back to the richest trip (recovery after Word day-plan forwards).
+ */
+export async function recoverActiveTripIfEmptyShell(userId: string): Promise<{
+  trip: TravelTrip | null;
+  recovered: boolean;
+  previousActiveId: string | null;
+}> {
+  const trips = await listTrips(userId);
+  const active = await getActiveTrip(userId);
+  const activeCount = active?.reservations?.length ?? 0;
+  if (active && activeCount > 0) {
+    return { trip: active, recovered: false, previousActiveId: active.id };
+  }
+  const richest = pickRichestTripByReservations(trips);
+  const richestCount = richest?.reservations?.length ?? 0;
+  if (!richest || richestCount === 0) {
+    return { trip: active, recovered: false, previousActiveId: active?.id ?? null };
+  }
+  if (active?.id === richest.id) {
+    return { trip: active, recovered: false, previousActiveId: active.id };
+  }
+  const activated = await setActiveTrip(richest.id, userId);
+  return {
+    trip: activated ?? richest,
+    recovered: true,
+    previousActiveId: active?.id ?? null,
+  };
+}
+
+/**
+ * Day-plan Word forwards must never create a new empty trip.
+ * Prefer active trip with bookings, then date overlap, then richest trip.
+ */
+export async function resolveTargetTripForDayPlanForward(
+  userId: string,
+  dayKeys: string[],
+): Promise<TravelTrip | null> {
+  const recovered = await recoverActiveTripIfEmptyShell(userId);
+  const allTrips = await listTrips(userId);
+  const activeTrip = recovered.trip ?? (await getActiveTrip(userId));
+
+  if (activeTrip && (activeTrip.reservations?.length ?? 0) > 0) {
+    return activeTrip;
+  }
+
+  const matchingTrip = pickBestMatchingTripForDrafts(
+    allTrips,
+    dayKeys.filter(Boolean),
+    activeTrip?.id ?? null,
+  );
+  if (matchingTrip && (matchingTrip.reservations?.length ?? 0) > 0) {
+    return activateTripIfNeeded(matchingTrip, userId);
+  }
+
+  const richest = pickRichestTripByReservations(allTrips);
+  if (richest && (richest.reservations?.length ?? 0) > 0) {
+    return activateTripIfNeeded(richest, userId);
+  }
+
+  return activeTrip;
+}
+
 async function reuseEmptyTripShell(
   emptyShell: TravelTrip,
   inferred: ReturnType<typeof inferTripWindowFromDrafts>,

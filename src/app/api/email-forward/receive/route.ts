@@ -13,6 +13,8 @@ import {
   detectFlightScheduleChange,
   expandTripWindowIfNeeded,
   mergeFlightReservationUpdate,
+  recoverActiveTripIfEmptyShell,
+  resolveTargetTripForDayPlanForward,
   resolveTargetTripForEmailForward,
 } from "@/lib/travelAssistant/tripEmailAttach";
 import { mergeReservationPricingFields } from "@/lib/travelAssistant/reservationPricingMerge";
@@ -659,11 +661,38 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
     const parserImageBasedEmail = Boolean(parserResult?.imageBasedEmail);
     const parserUsedAiFallback = Boolean(parserResult?.usedAiFallback);
 
-    const targetTrip = await resolveTargetTripForEmailForward(
-      targetUserId,
-      targetTripIdHint,
-      parserDraftRecords as Array<Record<string, unknown>>,
-    );
+    // Detect narrative day plans BEFORE trip resolution so we never create/activate an empty shell.
+    const earlyDayPlanSource = [docxAttachmentText, parserText].filter((t) => t.trim()).join("\n\n");
+    const earlyDayPlan = parseDayPlanItinerary(earlyDayPlanSource, {
+      subject: parserSubject,
+    });
+    const isDayPlanForward = Boolean(earlyDayPlan && earlyDayPlan.days.length >= 2);
+
+    let targetTrip = isDayPlanForward
+      ? await resolveTargetTripForDayPlanForward(
+          targetUserId,
+          earlyDayPlan!.days.map((day) => day.dateKey),
+        )
+      : await resolveTargetTripForEmailForward(
+          targetUserId,
+          targetTripIdHint,
+          parserDraftRecords as Array<Record<string, unknown>>,
+        );
+
+    // Safety net: if we still landed on an empty shell, recover to the trip with bookings.
+    if (targetTrip && (targetTrip.reservations?.length ?? 0) === 0) {
+      const recovered = await recoverActiveTripIfEmptyShell(targetUserId);
+      if (recovered.trip && (recovered.trip.reservations?.length ?? 0) > 0) {
+        routeLogger.warn("Email forward retargeted from empty shell to trip with reservations.", {
+          previousTripId: targetTrip.id,
+          recoveredTripId: recovered.trip.id,
+          reservationCount: recovered.trip.reservations.length,
+          isDayPlanForward,
+        });
+        targetTrip = recovered.trip;
+      }
+    }
+
     if (!targetTrip) {
       console.error("[email-forward-webhook] Unable to resolve or create target trip.", {
         requestId,
@@ -696,7 +725,9 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       manageUrl: emailManageUrl,
       sourceLinks: emailSourceLinks.length > 0 ? emailSourceLinks : undefined,
     };
-    for (const parserDraftRecord of parserDraftRecords) {
+    // Day-plan Word docs are not booking confirmations — skip reservation import entirely.
+    const draftsToImport = isDayPlanForward ? [] : parserDraftRecords;
+    for (const parserDraftRecord of draftsToImport) {
       const draftPrimaryDate = reservationPrimaryDate({
         type: typeof parserDraftRecord.type === "string" ? parserDraftRecord.type : undefined,
         localTime: typeof parserDraftRecord.localTime === "string" ? parserDraftRecord.localTime : undefined,
@@ -1156,18 +1187,26 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
     }
 
     // Narrative Word/email day plans → Plan tab day notes (not reservation cards).
-    const dayPlanSource = [docxAttachmentText, parserText].filter((t) => t.trim()).join("\n\n");
-    const parsedDayPlan = parseDayPlanItinerary(dayPlanSource, {
-      subject: parserSubject,
-      tripStartDate: targetTrip.startDate,
-      tripEndDate: targetTrip.endDate,
-    });
+    const parsedDayPlan =
+      earlyDayPlan ??
+      parseDayPlanItinerary(earlyDayPlanSource, {
+        subject: parserSubject,
+        tripStartDate: targetTrip.startDate,
+        tripEndDate: targetTrip.endDate,
+      });
+    // Re-parse with trip year once we know the target trip dates.
+    const parsedDayPlanForTrip =
+      parseDayPlanItinerary(earlyDayPlanSource, {
+        subject: parserSubject,
+        tripStartDate: targetTrip.startDate,
+        tripEndDate: targetTrip.endDate,
+      }) ?? parsedDayPlan;
     let dayPlanDaysApplied = 0;
     let nextItineraryPlans = targetTrip.itineraryPlans
       ? normalizeItineraryPlans(targetTrip.itineraryPlans)
       : undefined;
-    if (parsedDayPlan) {
-      const applied = applyDayPlanToItineraryPlans(nextItineraryPlans, parsedDayPlan);
+    if (parsedDayPlanForTrip) {
+      const applied = applyDayPlanToItineraryPlans(nextItineraryPlans, parsedDayPlanForTrip);
       nextItineraryPlans = applied.plans;
       dayPlanDaysApplied = applied.daysApplied;
       if (dayPlanDaysApplied > 0) {
@@ -1177,7 +1216,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
             reservationId: "",
             kind: "day-plan-itinerary",
             severity: "info",
-            summary: parsedDayPlan.title || "Day plan itinerary",
+            summary: parsedDayPlanForTrip.title || "Day plan itinerary",
             detail: `Applied ${dayPlanDaysApplied} day${dayPlanDaysApplied === 1 ? "" : "s"} to your Plan tab from a forwarded itinerary.`,
             provider: "email-forward",
             appliedAt: new Date().toISOString(),
@@ -1188,10 +1227,11 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       routeLogger.info("Parsed forwarded day-plan itinerary.", {
         userId: targetUserId,
         tripId: targetTrip.id,
-        title: parsedDayPlan.title,
-        daysFound: parsedDayPlan.days.length,
+        title: parsedDayPlanForTrip.title,
+        daysFound: parsedDayPlanForTrip.days.length,
         daysApplied: dayPlanDaysApplied,
-        confidence: parsedDayPlan.confidence,
+        confidence: parsedDayPlanForTrip.confidence,
+        reservationCountOnTrip: targetTrip.reservations?.length ?? 0,
       });
     }
 
@@ -1212,30 +1252,35 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       };
     }
 
-    nextReservations = dedupeFlightReservations(nextReservations);
+    const dayPlanOnly = dayPlanDaysApplied > 0 && acceptedDraftCount === 0;
 
-    const drained = drainForwardReviewQueue(nextReservations, nextQueue, () => `res-email-${generateId()}`);
-    nextReservations = drained.reservations;
-    nextQueue = drained.reviewQueue;
-
-    const reservationDates = nextReservations
-      .map((reservation) => reservationPrimaryDate(reservation))
-      .filter((value) => value.length > 0);
     let tripWindowPatch: { startDate: string; endDate: string } | null = null;
-    for (const reservationDate of reservationDates) {
-      const expanded = expandTripWindowIfNeeded(targetTrip, reservationDate);
-      if (expanded) {
-        tripWindowPatch = tripWindowPatch
-          ? {
-              startDate: expanded.startDate < tripWindowPatch.startDate ? expanded.startDate : tripWindowPatch.startDate,
-              endDate: expanded.endDate > tripWindowPatch.endDate ? expanded.endDate : tripWindowPatch.endDate,
-            }
-          : expanded;
+    if (!dayPlanOnly) {
+      nextReservations = dedupeFlightReservations(nextReservations);
+      const drained = drainForwardReviewQueue(nextReservations, nextQueue, () => `res-email-${generateId()}`);
+      nextReservations = drained.reservations;
+      nextQueue = drained.reviewQueue;
+
+      const reservationDates = nextReservations
+        .map((reservation) => reservationPrimaryDate(reservation))
+        .filter((value) => value.length > 0);
+      for (const reservationDate of reservationDates) {
+        const expanded = expandTripWindowIfNeeded(targetTrip, reservationDate);
+        if (expanded) {
+          tripWindowPatch = tripWindowPatch
+            ? {
+                startDate:
+                  expanded.startDate < tripWindowPatch.startDate ? expanded.startDate : tripWindowPatch.startDate,
+                endDate: expanded.endDate > tripWindowPatch.endDate ? expanded.endDate : tripWindowPatch.endDate,
+              }
+            : expanded;
+        }
       }
     }
-    // Expand trip window from day-plan dates when needed.
-    if (parsedDayPlan) {
-      for (const day of parsedDayPlan.days) {
+
+    // Expand trip window from day-plan dates when needed (never shrink / never rewrite reservations).
+    if (parsedDayPlanForTrip) {
+      for (const day of parsedDayPlanForTrip.days) {
         const expanded = expandTripWindowIfNeeded(targetTrip, day.dateKey);
         if (expanded) {
           tripWindowPatch = tripWindowPatch
@@ -1249,20 +1294,27 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       }
     }
 
+    // CRITICAL: day-plan-only patches must NOT include reservations — omit so updateTrip keeps existing bookings.
     const updated = await updateTrip(
       targetTrip.id,
-      {
-        reservations: nextReservations,
-        reviewQueue: nextQueue,
-        updateFeed: nextUpdateFeed,
-        ...(nextItineraryPlans ? { itineraryPlans: nextItineraryPlans } : {}),
-        ...(tripWindowPatch ?? {}),
-        minutesToDeparture:
-          computeMinutesToDeparture({
-            startDate: tripWindowPatch?.startDate ?? targetTrip.startDate,
+      dayPlanOnly
+        ? {
+            updateFeed: nextUpdateFeed,
+            ...(nextItineraryPlans ? { itineraryPlans: nextItineraryPlans } : {}),
+            ...(tripWindowPatch ?? {}),
+          }
+        : {
             reservations: nextReservations,
-          }) ?? targetTrip.minutesToDeparture,
-      },
+            reviewQueue: nextQueue,
+            updateFeed: nextUpdateFeed,
+            ...(nextItineraryPlans ? { itineraryPlans: nextItineraryPlans } : {}),
+            ...(tripWindowPatch ?? {}),
+            minutesToDeparture:
+              computeMinutesToDeparture({
+                startDate: tripWindowPatch?.startDate ?? targetTrip.startDate,
+                reservations: nextReservations,
+              }) ?? targetTrip.minutesToDeparture,
+          },
       targetUserId,
     );
     if (!updated) {
@@ -1278,7 +1330,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
     const notificationSent = await sendPushNotification(targetUserId, {
       title: notifyPlanTab ? "Day plan itinerary received" : "Forwarded reservation received",
       body: notifyPlanTab
-        ? `${parsedDayPlan?.title ?? "Itinerary"} — ${dayPlanDaysApplied} days on your Plan tab.`
+        ? `${parsedDayPlanForTrip?.title ?? "Itinerary"} — ${dayPlanDaysApplied} days on your Plan tab.`
         : buildPushBody(),
       url: `/travel-assistant?tripId=${encodeURIComponent(targetTrip.id)}&tab=${notifyPlanTab ? "itinerary" : "flights"}`,
     });
