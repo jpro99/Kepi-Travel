@@ -178,6 +178,7 @@ import {
   buildPremiumItineraryCsv,
   buildPremiumItineraryHtml,
 } from "@/lib/travelAssistant/premiumItineraryExport";
+import { buildNarrativeItineraryHtml } from "@/lib/travelAssistant/narrativeItineraryExport";
 import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
@@ -8258,6 +8259,29 @@ export default function TravelAssistantPage() {
     handleConsumerItineraryPrint();
   };
 
+  const handleConsumerDayPlanPdf = (): void => {
+    const printable = buildNarrativeItineraryHtml({
+      tripName: activeTrip?.name ?? "Trip itinerary",
+      tripStartDate: consumerTripStartDate ?? activeTrip?.startDate,
+      tripEndDate: consumerTripEndDate ?? activeTrip?.endDate,
+      destination: consumerTripDestination ?? activeTrip?.destination,
+      itineraryPlans: itineraryPrefs.itineraryPlans,
+      dayNotes: itineraryPrefs.dayNotes,
+      hotels: consumerReservationsSorted.filter((r) => r.type === "hotel"),
+      generatedAt: new Date().toLocaleString(),
+    });
+    const printWindow = window.open("", "_blank", "width=900,height=1100");
+    if (!printWindow) {
+      setToast("Please allow popups to print your day plan.");
+      return;
+    }
+    printWindow.document.write(printable);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    setToast("Day plan PDF opened — share-friendly letter layout.");
+  };
+
   const handleShareItineraryLink = (): void => {
     const url = new URL(window.location.href);
     url.searchParams.set("tab", "itinerary");
@@ -9943,6 +9967,7 @@ export default function TravelAssistantPage() {
               onGapActionTap={handleItineraryGapAction}
               onPrint={handleConsumerItineraryPrint}
               onExportPdf={handleConsumerItineraryPdf}
+              onExportDayPlanPdf={handleConsumerDayPlanPdf}
               onShareLink={handleShareItineraryLink}
               missionItems={tripPlanningActions}
               onMissionAction={handleTripPlanningAction}

@@ -64,6 +64,8 @@ interface ItineraryTabViewProps {
   onGapActionTap?: (action: TripGapNavigationAction) => void;
   onPrint: () => void;
   onExportPdf: () => void;
+  /** Friend-share narrative day-plan PDF (Puglia-style letter). */
+  onExportDayPlanPdf?: () => void;
   onShareLink: () => void;
   missionItems?: TripActionItem[];
   onMissionAction?: (item: TripActionItem) => void;
@@ -101,6 +103,7 @@ export function ItineraryTabView({
   onGapActionTap,
   onPrint,
   onExportPdf,
+  onExportDayPlanPdf,
   onShareLink,
   missionItems = [],
   onMissionAction,
@@ -189,6 +192,15 @@ export function ItineraryTabView({
           >
             {tPlan("pdf")}
           </button>
+          {onExportDayPlanPdf ? (
+            <button
+              type="button"
+              onClick={onExportDayPlanPdf}
+              className="rounded-xl border border-[#f4c95d]/50 px-3 py-1.5 text-[11px] font-semibold text-[#f4c95d] hover:bg-white/10"
+            >
+              Day plan PDF
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={onShareLink}

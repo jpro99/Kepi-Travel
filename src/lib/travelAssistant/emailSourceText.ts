@@ -1,6 +1,7 @@
-/** Shared helpers for forwarded email + PDF attachment source text. */
+/** Shared helpers for forwarded email + PDF/DOCX attachment source text. */
 
 export const PDF_ATTACHMENT_MARKER = "--- PDF attachment ---";
+export const DOCX_ATTACHMENT_MARKER = "--- Word attachment ---";
 
 export function extractPdfAttachmentSection(text: string): string {
   const marker = PDF_ATTACHMENT_MARKER;
@@ -19,6 +20,18 @@ export function appendPdfAttachmentText(bodyText: string, pdfText: string): stri
   if (!body) return `${PDF_ATTACHMENT_MARKER}\n\n${trimmedPdf}`;
 
   return `${body}\n\n${PDF_ATTACHMENT_MARKER}\n\n${trimmedPdf}`;
+}
+
+/** Append extracted Word (.docx) plain text for day-plan itinerary parsing. */
+export function appendDocxAttachmentText(bodyText: string, docxText: string): string {
+  const trimmed = docxText.trim();
+  if (!trimmed) return bodyText.trim();
+
+  const body = bodyText.trim();
+  if (body.includes(DOCX_ATTACHMENT_MARKER)) return body;
+  if (!body) return `${DOCX_ATTACHMENT_MARKER}\n\n${trimmed}`;
+
+  return `${body}\n\n${DOCX_ATTACHMENT_MARKER}\n\n${trimmed}`;
 }
 
 /** Ensure stored source text includes PDF content when we extracted it separately. */

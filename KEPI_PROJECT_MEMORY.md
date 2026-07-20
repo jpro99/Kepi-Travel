@@ -5,6 +5,10 @@
 
 Last updated: 2026-07-17 (Europe trip airports BRI/FCO/VCE/MUC bundled)
 
+## Decision 2026-07-20 — Word day-plan itineraries (I27)
+
+Forwarded `.docx` itineraries (Puglia-style day bullets) extract via mammoth, parse onto Plan days, push opens Plan. **Day plan PDF** = friend-share letter layout. Logistics table PDF stays separate. Old `.doc` not supported — save as `.docx`.
+
 ## Decision 2026-07-20 — Print/PDF itinerary (I26)
 
 Print/PDF/CSV: **Day** (not Owner), no Timezone, chronological local-time sort, type color rows, dense landscape print matching Adaptive Travel Assistant chrome. Out-of-window junk dates (e.g. 2018) dropped when trip dates exist.

@@ -30,12 +30,18 @@ import { evaluateForwardedReservationGate } from "@/lib/travelAssistant/forwarde
 import { drainForwardReviewQueue } from "@/lib/travelAssistant/drainForwardReviewQueue";
 import { getFewShotExamplesForEmail } from "@/lib/travelAssistant/mlReadiness/fewShotExamples";
 import { EMAIL_FORWARD_PARSER_VERSION } from "@/lib/travelAssistant/mlReadiness/parserVersion";
-import { extractPdfTextFromReceivedEmail } from "@/lib/travelAssistant/receivedEmailPdfText";
+import { extractAttachmentTextFromReceivedEmail } from "@/lib/travelAssistant/receivedEmailAttachmentText";
 import {
+  appendDocxAttachmentText,
   appendPdfAttachmentText,
   ensurePdfInSourceText,
   truncateEmailSourceText,
 } from "@/lib/travelAssistant/emailSourceText";
+import {
+  applyDayPlanToItineraryPlans,
+  parseDayPlanItinerary,
+} from "@/lib/travelAssistant/parseDayPlanItinerary";
+import { normalizeItineraryPlans } from "@/lib/travelAssistant/itineraryDayPlan";
 import { resolveReservationPricing, resolvePricingNearBooking } from "@/lib/travelAssistant/parseReservationMiles";
 import { applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import {
@@ -583,15 +589,35 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
     }
 
     let pdfAttachmentText = "";
+    let docxAttachmentText = "";
+    let legacyDocFilenames: string[] = [];
     if (emailId) {
       const resendClient = getResendClient();
       if (resendClient) {
-        pdfAttachmentText = await extractPdfTextFromReceivedEmail(resendClient, emailId, { requestId });
+        const attachmentText = await extractAttachmentTextFromReceivedEmail(resendClient, emailId, {
+          requestId,
+        });
+        pdfAttachmentText = attachmentText.pdfText;
+        docxAttachmentText = attachmentText.docxText;
+        legacyDocFilenames = attachmentText.legacyDocFilenames;
         if (pdfAttachmentText.trim()) {
           parserText = appendPdfAttachmentText(parserText, pdfAttachmentText);
           routeLogger.info("Appended PDF attachment text to forwarded email parser input.", {
             emailId,
             pdfTextLength: pdfAttachmentText.length,
+          });
+        }
+        if (docxAttachmentText.trim()) {
+          parserText = appendDocxAttachmentText(parserText, docxAttachmentText);
+          routeLogger.info("Appended Word attachment text to forwarded email parser input.", {
+            emailId,
+            docxTextLength: docxAttachmentText.length,
+          });
+        }
+        if (legacyDocFilenames.length > 0) {
+          routeLogger.warn("Legacy .doc attachment skipped — re-save as .docx and forward again.", {
+            emailId,
+            filenames: legacyDocFilenames,
           });
         }
       }
@@ -1129,11 +1155,58 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       acceptedDraftCount += 1;
     }
 
-    if (acceptedDraftCount === 0) {
+    // Narrative Word/email day plans → Plan tab day notes (not reservation cards).
+    const dayPlanSource = [docxAttachmentText, parserText].filter((t) => t.trim()).join("\n\n");
+    const parsedDayPlan = parseDayPlanItinerary(dayPlanSource, {
+      subject: parserSubject,
+      tripStartDate: targetTrip.startDate,
+      tripEndDate: targetTrip.endDate,
+    });
+    let dayPlanDaysApplied = 0;
+    let nextItineraryPlans = targetTrip.itineraryPlans
+      ? normalizeItineraryPlans(targetTrip.itineraryPlans)
+      : undefined;
+    if (parsedDayPlan) {
+      const applied = applyDayPlanToItineraryPlans(nextItineraryPlans, parsedDayPlan);
+      nextItineraryPlans = applied.plans;
+      dayPlanDaysApplied = applied.daysApplied;
+      if (dayPlanDaysApplied > 0) {
+        nextUpdateFeed = [
+          {
+            id: `feed-dayplan-${generateId()}`,
+            reservationId: "",
+            kind: "day-plan-itinerary",
+            severity: "info",
+            summary: parsedDayPlan.title || "Day plan itinerary",
+            detail: `Applied ${dayPlanDaysApplied} day${dayPlanDaysApplied === 1 ? "" : "s"} to your Plan tab from a forwarded itinerary.`,
+            provider: "email-forward",
+            appliedAt: new Date().toISOString(),
+          },
+          ...nextUpdateFeed,
+        ];
+      }
+      routeLogger.info("Parsed forwarded day-plan itinerary.", {
+        userId: targetUserId,
+        tripId: targetTrip.id,
+        title: parsedDayPlan.title,
+        daysFound: parsedDayPlan.days.length,
+        daysApplied: dayPlanDaysApplied,
+        confidence: parsedDayPlan.confidence,
+      });
+    }
+
+    if (acceptedDraftCount === 0 && dayPlanDaysApplied === 0) {
+      const legacyHint =
+        legacyDocFilenames.length > 0
+          ? " Old Word .doc files are not supported — save as .docx and forward again."
+          : "";
       return {
         ok: true,
         status: 200,
-        message: duplicateDraftCount > 0 ? "Duplicate reservation dropped." : "No reservation extracted from email.",
+        message:
+          duplicateDraftCount > 0
+            ? "Duplicate reservation dropped."
+            : `No reservation or day plan extracted from email.${legacyHint}`,
         userId: targetUserId,
         tripId: targetTrip.id,
       };
@@ -1160,6 +1233,21 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
           : expanded;
       }
     }
+    // Expand trip window from day-plan dates when needed.
+    if (parsedDayPlan) {
+      for (const day of parsedDayPlan.days) {
+        const expanded = expandTripWindowIfNeeded(targetTrip, day.dateKey);
+        if (expanded) {
+          tripWindowPatch = tripWindowPatch
+            ? {
+                startDate:
+                  expanded.startDate < tripWindowPatch.startDate ? expanded.startDate : tripWindowPatch.startDate,
+                endDate: expanded.endDate > tripWindowPatch.endDate ? expanded.endDate : tripWindowPatch.endDate,
+              }
+            : expanded;
+        }
+      }
+    }
 
     const updated = await updateTrip(
       targetTrip.id,
@@ -1167,6 +1255,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         reservations: nextReservations,
         reviewQueue: nextQueue,
         updateFeed: nextUpdateFeed,
+        ...(nextItineraryPlans ? { itineraryPlans: nextItineraryPlans } : {}),
         ...(tripWindowPatch ?? {}),
         minutesToDeparture:
           computeMinutesToDeparture({
@@ -1185,10 +1274,13 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       return { ok: false, status: 500, message: "Trip update failed.", userId: targetUserId, tripId: targetTrip.id };
     }
 
+    const notifyPlanTab = dayPlanDaysApplied > 0 && acceptedDraftCount === 0;
     const notificationSent = await sendPushNotification(targetUserId, {
-      title: "Forwarded reservation received",
-      body: buildPushBody(),
-      url: `/travel-assistant?tripId=${encodeURIComponent(targetTrip.id)}&tab=flights`,
+      title: notifyPlanTab ? "Day plan itinerary received" : "Forwarded reservation received",
+      body: notifyPlanTab
+        ? `${parsedDayPlan?.title ?? "Itinerary"} — ${dayPlanDaysApplied} days on your Plan tab.`
+        : buildPushBody(),
+      url: `/travel-assistant?tripId=${encodeURIComponent(targetTrip.id)}&tab=${notifyPlanTab ? "itinerary" : "flights"}`,
     });
 
     routeLogger.info("Forwarded email auto-imported to live trip.", {
@@ -1196,6 +1288,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       tripId: targetTrip.id,
       acceptedDraftCount,
       duplicateDraftCount,
+      dayPlanDaysApplied,
       score: parserConfidenceScore,
       status: parserParsingStatus,
       usedAiFallback: parserUsedAiFallback,
@@ -1204,7 +1297,12 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
     return {
       ok: true,
       status: 200,
-      message: "Forwarded email auto-imported to live trip.",
+      message:
+        dayPlanDaysApplied > 0 && acceptedDraftCount === 0
+          ? `Day plan applied (${dayPlanDaysApplied} days). Open the Plan tab.`
+          : dayPlanDaysApplied > 0
+            ? `Forwarded email imported (${acceptedDraftCount} reservations, ${dayPlanDaysApplied} plan days).`
+            : "Forwarded email auto-imported to live trip.",
       userId: targetUserId,
       tripId: targetTrip.id,
     };
