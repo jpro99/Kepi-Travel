@@ -15,6 +15,7 @@ import {
   reservationHasSourceEmail,
   type ReservationLinkInput,
 } from "@/lib/travelAssistant/reservationLinks";
+import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
 
 interface SpreadsheetReservation extends ReservationLinkInput {
@@ -64,7 +65,7 @@ function summarizeReservation(reservation: SpreadsheetReservation): string {
     return [fn, `${dep}→${arr}`, time].filter(Boolean).join(" · ");
   }
   if (reservation.type === "hotel") {
-    return [reservation.provider || reservation.title, reservation.confirmationCode].filter(Boolean).join(" · ");
+    return [reservationPropertyName(reservation), reservation.confirmationCode].filter(Boolean).join(" · ");
   }
   return [reservation.provider || reservation.title, reservation.location].filter(Boolean).join(" · ");
 }

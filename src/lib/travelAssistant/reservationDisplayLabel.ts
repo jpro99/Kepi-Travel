@@ -1,14 +1,18 @@
+import { extractHotelPropertyName } from "@/lib/travelAssistant/hotelPropertyName";
+
 const OTA_PROVIDERS = new Set([
   "booking.com",
+  "booking",
   "expedia",
   "hotels.com",
   "google",
-  "hotels.com",
   "agoda",
   "priceline",
   "kayak",
   "trip.com",
   "hotwire",
+  "airbnb",
+  "vrbo",
 ]);
 
 export interface ReservationLabelInput {
@@ -16,13 +20,53 @@ export interface ReservationLabelInput {
   title?: string;
   provider?: string;
   location?: string;
+  notes?: string;
   flightDepartureAirport?: string;
   flightArrivalAirport?: string;
 }
 
 export function isOtaProvider(provider: string | undefined | null): boolean {
   if (!provider?.trim()) return false;
-  return OTA_PROVIDERS.has(provider.trim().toLowerCase());
+  const normalized = provider.trim().toLowerCase().replace(/\s+/g, "");
+  if (OTA_PROVIDERS.has(normalized)) return true;
+  if (OTA_PROVIDERS.has(provider.trim().toLowerCase())) return true;
+  return /booking\.com|expedia|hotels\.com|airbnb|vrbo|agoda/i.test(provider);
+}
+
+/**
+ * Hotel / stay property name for UI — never an OTA brand when a real name exists.
+ * KEPI_DESIGN_LAW I25.
+ */
+export function reservationPropertyName(reservation: ReservationLabelInput): string {
+  if (reservation.type !== "hotel") {
+    return reservation.title?.trim() || reservation.provider?.trim() || "Reservation";
+  }
+  const title = reservation.title?.trim() ?? "";
+  const provider = reservation.provider?.trim() ?? "";
+  const location = reservation.location?.trim() ?? "";
+  const notes = reservation.notes?.trim() ?? "";
+
+  if (title && !isOtaProvider(title)) return title;
+  if (provider && !isOtaProvider(provider)) return provider;
+  // Salvage property name from confirmation notes when title was stored as the OTA brand.
+  if (notes) {
+    const fromNotes = extractHotelPropertyName("", notes);
+    if (fromNotes) return fromNotes;
+  }
+  if (location) return location;
+  if (title) return title;
+  if (provider) return provider;
+  return "Hotel";
+}
+
+/** Prefer a real property name when the stored title is an OTA brand (I25). */
+export function coerceHotelTitle(reservation: ReservationLabelInput): string {
+  if (reservation.type !== "hotel") {
+    return reservation.title?.trim() || "";
+  }
+  const title = reservation.title?.trim() ?? "";
+  if (title && !isOtaProvider(title)) return title;
+  return reservationPropertyName(reservation);
 }
 
 /** Prefer hotel name over OTA provider for display. */
@@ -34,13 +78,7 @@ export function reservationDisplayLabel(reservation: ReservationLabelInput): str
   }
 
   if (reservation.type === "hotel") {
-    const title = reservation.title?.trim();
-    const provider = reservation.provider?.trim();
-    if (title && (!provider || isOtaProvider(provider))) return `🏨 ${title}`;
-    if (title && provider) return `🏨 ${title}`;
-    if (provider) return `🏨 ${provider}`;
-    if (reservation.location?.trim()) return `🏨 ${reservation.location.trim()}`;
-    return "🏨 Hotel";
+    return `🏨 ${reservationPropertyName(reservation)}`;
   }
 
   return reservation.title?.trim() || reservation.provider?.trim() || "Reservation";
@@ -48,5 +86,8 @@ export function reservationDisplayLabel(reservation: ReservationLabelInput): str
 
 export function reservationProviderBadge(provider: string | undefined | null): string | null {
   if (!provider?.trim() || !isOtaProvider(provider)) return null;
-  return provider.trim();
+  // Normalize common short forms for the badge.
+  const raw = provider.trim();
+  if (/^booking$/i.test(raw)) return "Booking.com";
+  return raw;
 }

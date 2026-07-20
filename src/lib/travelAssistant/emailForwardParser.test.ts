@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   extractBestLocalTimeFromEmailBody,
   extractFlightLegsFromEmailBody,
+  extractHotelPropertyName,
   parseForwardedEmail,
   prepareEmailBodyForParsing,
   stripForwardEnvelopeHeaders,
@@ -365,6 +366,51 @@ Meet at Monopoli Harbor
     });
     assert.equal(result.draft.type, "dinner");
     assert.notEqual(result.draft.type, "ride");
+  } finally {
+    if (previousKey === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = previousKey;
+    }
+  }
+});
+
+test("extractHotelPropertyName reads You're confirmed at Casa de Elena (I25)", () => {
+  const body = `
+Booking.com confirmation
+Confirmation number: 12345678283
+
+You're confirmed at Casa de Elena
+Check-in: Saturday, September 6, 2026
+Check-out: Tuesday, September 9, 2026
+`;
+  assert.equal(extractHotelPropertyName("Booking.com confirmation 283", body), "Casa de Elena");
+});
+
+test("parseForwardedEmail prefers property name over Booking.com as title (I25)", async () => {
+  const previousKey = process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  try {
+    const body = `
+Booking.com
+Confirmation number: 12345678283
+
+You're confirmed at Casa de Elena
+Check-in: Saturday, September 6, 2026 from 15:00
+Check-out: Tuesday, September 9, 2026 until 11:00
+Polignano a Mare, Italy
+`;
+    const result = await parseForwardedEmail({
+      subject: "Booking.com confirmation 283",
+      from: "noreply@booking.com",
+      text: body,
+      html: "",
+      attachments: [],
+    });
+    assert.equal(result.draft.type, "hotel");
+    assert.equal(result.draft.title, "Casa de Elena");
+    assert.match(result.draft.provider, /booking\.com/i);
+    assert.notEqual(result.draft.title.toLowerCase(), "booking.com");
   } finally {
     if (previousKey === undefined) {
       delete process.env.ANTHROPIC_API_KEY;

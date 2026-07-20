@@ -16,6 +16,7 @@ import { ReservationQuickLinks } from "@/components/travelAssistant/ReservationQ
 import { DayWalkthroughBlock } from "@/components/travelAssistant/DayWalkthroughBlock";
 import { buildDayWalkthrough } from "@/lib/travelAssistant/dayWalkthrough";
 import type { ReservationLinkInput } from "@/lib/travelAssistant/reservationLinks";
+import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -342,7 +343,11 @@ function ReservationCard({
           </>
         ) : (
           <>
-            <p className={`mt-2 text-xl font-bold ${isPast ? "text-slate-400" : cfg.accent}`}>{reservation.provider || reservation.title}</p>
+            <p className={`mt-2 text-xl font-bold ${isPast ? "text-slate-400" : cfg.accent}`}>
+              {reservation.type === "hotel"
+                ? reservationPropertyName(reservation)
+                : reservation.provider || reservation.title}
+            </p>
             {reservation.location ? <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">📍 {reservation.location}</p> : null}
             {isPlanned ? (
               <p className="mt-2 text-xs leading-relaxed text-amber-700 dark:text-amber-200">

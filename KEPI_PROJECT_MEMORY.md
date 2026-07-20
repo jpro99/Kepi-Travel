@@ -5,6 +5,10 @@
 
 Last updated: 2026-07-17 (Europe trip airports BRI/FCO/VCE/MUC bundled)
 
+## Decision 2026-07-20 — OTA hotel forwards show property name (I25)
+
+Booking.com / Expedia / Airbnb forwards must headline the **property** (e.g. Casa de Elena), not the OTA. Parser reads “You’re confirmed at …”; UI uses `reservationPropertyName`; day chips + walkthrough say check-in / staying / check-out (including same-day moves). Existing bad titles salvaged from notes when possible — otherwise re-forward or edit the reservation title.
+
 ## Decision 2026-07-17 — Europe trip indoor airports (Jeff)
 
 Trip path ONT→SEA→**BRI**→**FCO**→**VCE** (Marco Polo)→**MUC**. All four now have bundled schematic Kepi layouts (OSM gate clusters + terminal curbs surveyed; security estimate; no surveyed walking line yet). Venice = VCE not TSF. FCO OSM currently only cleanly clusters A+E — B/C/D omitted until tagged. Next upgrades: amenities + footway overlays per airport; trip-driven auto-queue still not built.

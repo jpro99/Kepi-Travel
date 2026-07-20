@@ -1,4 +1,5 @@
 import { airportToCity } from "@/lib/travelAssistant/buildTripLegs";
+import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
 import { canonicalFlightDepartureDay } from "@/lib/travelAssistant/tripWindow";
 
 export interface DayWalkthroughReservation {
@@ -8,6 +9,7 @@ export interface DayWalkthroughReservation {
   provider?: string;
   localTime: string;
   location?: string;
+  notes?: string;
   flightNumber?: string;
   flightDepartureAirport?: string;
   flightArrivalAirport?: string;
@@ -94,7 +96,13 @@ function airlineLabel(reservation: DayWalkthroughReservation): string {
 }
 
 function hotelName(reservation: DayWalkthroughReservation): string {
-  return reservation.provider?.trim() || reservation.title?.trim() || "your hotel";
+  return reservationPropertyName({
+    type: reservation.type,
+    title: reservation.title,
+    provider: reservation.provider,
+    location: reservation.location,
+    notes: reservation.notes,
+  });
 }
 
 function isFirstTripDay(dateKey: string, tripStartDate: string | null | undefined): boolean {
@@ -229,12 +237,35 @@ export function buildDayWalkthrough(input: BuildDayWalkthroughInput): DayWalkthr
     paragraphs.push(describeFlightOnDay(flight, dateKey));
   }
 
-  if (primaryHotel && hotelRole === "check-in" && hasFlights) {
-    paragraphs.push(`When you're ready, check in at ${hotelName(primaryHotel)}.`);
-  } else if (primaryHotel && hotelRole === "check-in" && !hasFlights) {
-    paragraphs.push(`Check in at ${hotelName(primaryHotel)} when you arrive.`);
-  } else if (primaryHotel && hotelRole === "checkout" && hasFlights) {
-    paragraphs.push(`Checkout from ${hotelName(primaryHotel)} is today — confirm the time with the property.`);
+  // Describe every hotel role on this day (checkout → check-in same day must both show).
+  const checkoutHotels = hotels.filter((h) => hotelRoleOnDay(h, dateKey) === "checkout");
+  const checkinHotels = hotels.filter((h) => hotelRoleOnDay(h, dateKey) === "check-in");
+  const stayHotels = hotels.filter((h) => hotelRoleOnDay(h, dateKey) === "stay");
+
+  for (const hotel of checkoutHotels) {
+    // Already covered in the checkout-day headline block when there's a single primary hotel.
+    if (hotel === primaryHotel && hotelRole === "checkout" && !hasFlights) continue;
+    paragraphs.push(
+      hasFlights
+        ? `Checkout from ${hotelName(hotel)} is today — confirm the time with the property.`
+        : `You're checking out of ${hotelName(hotel)} today.`,
+    );
+  }
+  for (const hotel of checkinHotels) {
+    paragraphs.push(
+      hasFlights
+        ? `When you're ready, check in at ${hotelName(hotel)}.`
+        : `Check in at ${hotelName(hotel)} when you arrive.`,
+    );
+  }
+  if (checkoutHotels.length > 0 && checkinHotels.length > 0) {
+    paragraphs.push(
+      `Same-day move: leaving ${hotelName(checkoutHotels[0]!)} and settling into ${hotelName(checkinHotels[0]!)}.`,
+    );
+  }
+  for (const hotel of stayHotels) {
+    if (hotel === primaryHotel && hotelRole === "stay" && !hasFlights) continue; // already in headline block
+    paragraphs.push(`You're staying at ${hotelName(hotel)}.`);
   }
 
   for (const reservation of other) {

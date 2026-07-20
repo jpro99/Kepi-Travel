@@ -106,3 +106,60 @@ test("stale flightDate does not attach flight to wrong day", () => {
   const mayDay = reservationsForDayWalkthrough("2026-05-29", [staleMayFlight]);
   assert.equal(mayDay.length, 0);
 });
+
+test("Booking.com OTA title shows property name Casa de Elena (I25)", () => {
+  const hotel = {
+    id: "h-ota",
+    type: "hotel",
+    title: "Booking.com",
+    provider: "Booking.com",
+    localTime: "2026-09-06T15:00:00",
+    checkOutDate: "2026-09-09",
+    location: "Polignano a Mare",
+    notes: "You're confirmed at Casa de Elena. Confirmation 12345678283.",
+  };
+  const walkthrough = buildDayWalkthrough({
+    dateKey: "2026-09-07",
+    reservations: [hotel],
+    tripStartDate: "2026-09-05",
+    tripEndDate: "2026-09-20",
+    stayCity: "Polignano a Mare",
+    dayIndexInLeg: 2,
+  });
+  const text = walkthrough.paragraphs.join(" ");
+  assert.match(text, /Casa de Elena/i);
+  assert.doesNotMatch(text, /staying at Booking\.com/i);
+});
+
+test("same-day checkout and check-in both named", () => {
+  const leaving = {
+    id: "h-out",
+    type: "hotel",
+    title: "Hotel San Nicola",
+    provider: "Direct",
+    localTime: "2026-09-05T15:00:00",
+    checkOutDate: "2026-09-08",
+    location: "Bari",
+  };
+  const arriving = {
+    id: "h-in",
+    type: "hotel",
+    title: "Casa de Elena",
+    provider: "Booking.com",
+    localTime: "2026-09-08T15:00:00",
+    checkOutDate: "2026-09-11",
+    location: "Polignano a Mare",
+  };
+  const walkthrough = buildDayWalkthrough({
+    dateKey: "2026-09-08",
+    reservations: [leaving, arriving],
+    tripStartDate: "2026-09-05",
+    tripEndDate: "2026-09-20",
+    stayCity: "Polignano a Mare",
+    dayIndexInLeg: 1,
+  });
+  const text = walkthrough.paragraphs.join(" ");
+  assert.match(text, /Hotel San Nicola/i);
+  assert.match(text, /Casa de Elena/i);
+  assert.match(text, /Same-day move/i);
+});

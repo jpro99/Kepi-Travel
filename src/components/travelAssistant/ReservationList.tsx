@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
 
 type ReservationType = "flight" | "hotel" | "train" | "ride" | "dinner";
 type Confidence = "high" | "medium" | "low";
@@ -182,7 +183,11 @@ export function ReservationList({
                     </span>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold">
-                        {reservation.type === "flight" ? getFlightNumber(reservation) : reservation.title}
+                        {reservation.type === "flight"
+                          ? getFlightNumber(reservation)
+                          : reservation.type === "hotel"
+                            ? reservationPropertyName(reservation)
+                            : reservation.title}
                       </p>
                       <p className="truncate text-xs text-slate-600 dark:text-slate-400">
                         {reservation.provider} • {reservation.localTime}

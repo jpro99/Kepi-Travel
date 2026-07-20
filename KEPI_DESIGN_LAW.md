@@ -443,10 +443,10 @@ Missing ground connectors must show distance, labeled mode estimates, map deep l
 
 **Test:** `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`
 
-**I25 — Hotel name beats OTA provider in UI**  
-Reservation drawers, timeline cards, and edit surfaces show the **hotel property name** as the headline. Booking.com / Expedia / etc. are source badges — never the primary title.
+**I25 — Hotel name beats OTA provider in UI**
+Reservation drawers, timeline cards, and edit surfaces show the **hotel property name** as the headline. Booking.com / Expedia / etc. are source badges — never the primary title. Email forwards that say “You’re confirmed at Casa de Elena” must set `title` to the property (not the OTA). Day walkthroughs name check-in / staying / check-out (including same-day hotel moves).
 
-**Test:** `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/buildTripLegs.test.ts`
+**Test:** `src/lib/travelAssistant/reservationDisplayLabel.test.ts`, `src/lib/travelAssistant/emailForwardParser.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts`, `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/buildTripLegs.test.ts`
 
 ---
 
@@ -600,7 +600,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | G14 | `src/lib/travelAssistant/tripSpendSummary.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
-| I22, I23, I24, I25 | `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts` |
+| I22, I23, I24, I25 | `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/reservationDisplayLabel.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

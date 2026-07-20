@@ -16,6 +16,7 @@ import {
   reservationHasSourceEmail,
   type ReservationLinkInput,
 } from "@/lib/travelAssistant/reservationLinks";
+import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
 
 interface BriefReservation extends ReservationLinkInput {
   id: string;
@@ -55,7 +56,7 @@ function summarizeBooked(reservation: BriefReservation): string {
     return [reservation.flightNumber, `${dep} → ${arr}`].filter(Boolean).join(" · ");
   }
   if (reservation.type === "hotel") {
-    return [reservation.provider || reservation.title, reservation.confirmationCode].filter(Boolean).join(" · ");
+    return [reservationPropertyName(reservation), reservation.confirmationCode].filter(Boolean).join(" · ");
   }
   return [reservation.provider || reservation.title, reservation.location].filter(Boolean).join(" · ");
 }

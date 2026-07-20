@@ -169,6 +169,10 @@ import { buildTransportConflictReservationIds } from "@/lib/travelAssistant/rese
 import { computeTripSpend } from "@/lib/travelAssistant/tripSpendSummary";
 import { preDepartureStayDecisionId, type TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 import { resolveBoardingPassUrl } from "@/lib/travelAssistant/reservationLinks";
+import {
+  coerceHotelTitle,
+  reservationPropertyName,
+} from "@/lib/travelAssistant/reservationDisplayLabel";
 import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
@@ -1031,7 +1035,7 @@ function getFriendlyReservationTitle(reservation: Reservation): string {
     return flightNumber ? `${reservation.provider} ${flightNumber}` : `${reservation.provider} flight`;
   }
   if (reservation.type === "hotel") {
-    return `${reservation.provider} check-in`;
+    return `${reservationPropertyName(reservation)} check-in`;
   }
   return reservation.title;
 }
@@ -1248,7 +1252,7 @@ function resolveHotelCardData(reservation: Reservation): {
   )?.[1]?.trim() ?? "";
 
   return {
-    hotelName: reservation.provider.trim() || reservation.title.trim() || "Hotel",
+    hotelName: reservationPropertyName(reservation),
     checkInDate: formatHotelDate(reservation.localTime),
     checkOutDate: formatHotelDate(checkOutCandidate || ""),
     roomType: roomTypeCandidate || roomTypeFromNotes || "Not set",
@@ -5944,7 +5948,11 @@ export default function TravelAssistantPage() {
           kind: reservation.type === "hotel" ? "hotel" : reservation.type === "flight" ? "flight" : "import",
           title: `${reservation.type === "hotel" ? "Hotel" : reservation.type === "flight" ? "Flight" : "Booking"} added`,
           confirmationCode: reservation.confirmationCode.trim(),
-          detail: `${reservation.provider || reservation.title || "Reservation"} is on your timeline.`,
+          detail: `${
+            reservation.type === "hotel"
+              ? reservationPropertyName(reservation)
+              : reservation.provider || reservation.title || "Reservation"
+          } is on your timeline.`,
           syncedToTrip: true,
         });
       } else {
@@ -7006,7 +7014,7 @@ export default function TravelAssistantPage() {
         if (reservation) {
           setDrawerDraft({
             type: reservation.type,
-            title: reservation.title,
+            title: coerceHotelTitle(reservation),
             provider: reservation.provider,
             localTime: reservation.localTime,
             timezone: reservation.timezone,
@@ -9012,11 +9020,14 @@ export default function TravelAssistantPage() {
         ) : null}
         <div className="mt-4 space-y-3 text-sm">
           <label className="block">
-            <span className="mb-1 block text-sm font-semibold text-slate-800">Title</span>
+            <span className="mb-1 block text-sm font-semibold text-slate-800">
+              {drawerDraft.type === "hotel" ? "Hotel / property name" : "Title"}
+            </span>
             <input
               value={drawerDraft.title}
               onChange={(event) => setDrawerDraft((prev) => ({ ...prev, title: event.target.value }))}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-400"
+              placeholder={drawerDraft.type === "hotel" ? "e.g. Casa de Elena" : undefined}
             />
           </label>
           <div className="grid gap-3 md:grid-cols-2">

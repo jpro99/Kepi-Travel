@@ -19,7 +19,11 @@ import { DayWalkthroughBlock } from "@/components/travelAssistant/DayWalkthrough
 import type { TripActionItem } from "@/lib/travelAssistant/tripActionItems";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
 import type { ItineraryPlansData } from "@/lib/travelAssistant/itineraryDayPlan";
-import { reservationDisplayLabel } from "@/lib/travelAssistant/reservationDisplayLabel";
+import {
+  reservationDisplayLabel,
+  reservationPropertyName,
+  reservationProviderBadge,
+} from "@/lib/travelAssistant/reservationDisplayLabel";
 
 const SYSTEM_FONT =
   '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif';
@@ -42,6 +46,7 @@ type TimelineReservation = {
   location?: string;
   confirmationCode?: string;
   flightAirline?: string;
+  notes?: string;
 };
 
 interface ItineraryTimelineProps {
@@ -141,22 +146,46 @@ function reservationsForDay(dateKey: string, reservations: TimelineReservation[]
   });
 }
 
+function hotelRoleOnDay(reservation: TimelineReservation, dateKey: string): "check-in" | "checkout" | "stay" {
+  const start = reservation.localTime.trim().slice(0, 10);
+  const end = reservation.checkOutDate?.slice(0, 10) ?? start;
+  if (dateKey === start) return "check-in";
+  if (dateKey === end) return "checkout";
+  return "stay";
+}
+
 function reservationInlineLabel(reservation: TimelineReservation): string {
   if (reservation.type === "flight") {
     return `${reservation.flightNumber ?? reservation.title} · ${reservation.flightDepartureAirport} → ${reservation.flightArrivalAirport}`;
   }
   if (reservation.type === "hotel") {
-    return reservation.provider || reservation.title;
+    return reservationPropertyName(reservation);
   }
   return reservation.title || reservation.provider;
 }
 
-function reservationInlineMeta(reservation: TimelineReservation): string | null {
+function reservationInlineMeta(reservation: TimelineReservation, dateKey?: string): string | null {
   if (reservation.type === "flight") {
     const time = formatTimeRange(reservation.flightDepartureTime ?? reservation.localTime, reservation.flightArrivalTime);
     const duration = flightDuration(reservation.flightDepartureTime, reservation.flightArrivalTime);
     const airline = reservation.flightAirline ?? reservation.provider;
     return [time, duration, airline].filter(Boolean).join(" · ") || null;
+  }
+  if (reservation.type === "hotel") {
+    const parts: string[] = [];
+    if (dateKey) {
+      const role = hotelRoleOnDay(reservation, dateKey);
+      if (role === "check-in") parts.push("Check-in today");
+      else if (role === "checkout") parts.push("Check-out today");
+      else parts.push("Staying tonight");
+    }
+    const badge = reservationProviderBadge(reservation.provider);
+    if (badge) parts.push(`Booked via ${badge}`);
+    if (reservation.confirmationCode?.trim()) {
+      parts.push(`Confirmation ${reservation.confirmationCode.trim()}`);
+    }
+    if (reservation.location?.trim()) parts.push(reservation.location.trim());
+    return parts.length > 0 ? parts.join(" · ") : null;
   }
   if (reservation.confirmationCode?.trim()) {
     return `Confirmation ${reservation.confirmationCode.trim()}`;
@@ -169,6 +198,7 @@ function DayInlineDetails({
   reservations,
   dayNotes,
   onEditPlan,
+  onReservationTap,
   tripStartDate,
   tripEndDate,
   stayCity,
@@ -179,6 +209,7 @@ function DayInlineDetails({
   reservations: TimelineReservation[];
   dayNotes: Record<string, string>;
   onEditPlan: (dateKey: string) => void;
+  onReservationTap: (id: string) => void;
   tripStartDate: string | null;
   tripEndDate: string | null;
   stayCity?: string | null;
@@ -203,19 +234,24 @@ function DayInlineDetails({
       {dayReservations.length > 0 ? (
         <ul className="space-y-2">
           {dayReservations.map((reservation) => (
-            <li
-              key={reservation.id}
-              className="rounded-xl bg-white px-4 py-3 ring-1 ring-[#E5E5EA]"
-            >
-              <p className="text-[14px] font-semibold text-[#1D1D1F]">
-                <span className="mr-1.5" aria-hidden>
-                  {reservation.type === "flight" ? "✈" : reservation.type === "hotel" ? "🏨" : "•"}
-                </span>
-                {reservationInlineLabel(reservation)}
-              </p>
-              {reservationInlineMeta(reservation) ? (
-                <p className="mt-1 text-[13px] text-[#6E6E73]">{reservationInlineMeta(reservation)}</p>
-              ) : null}
+            <li key={reservation.id}>
+              <button
+                type="button"
+                onClick={() => onReservationTap(reservation.id)}
+                className="w-full rounded-xl bg-white px-4 py-3 text-left ring-1 ring-[#E5E5EA] transition hover:ring-[#f4c95d]/60"
+              >
+                <p className="text-[14px] font-semibold text-[#1D1D1F]">
+                  <span className="mr-1.5" aria-hidden>
+                    {reservation.type === "flight" ? "✈" : reservation.type === "hotel" ? "🏨" : "•"}
+                  </span>
+                  {reservationInlineLabel(reservation)}
+                </p>
+                {reservationInlineMeta(reservation, dateKey) ? (
+                  <p className="mt-1 text-[13px] text-[#6E6E73]">
+                    {reservationInlineMeta(reservation, dateKey)}
+                  </p>
+                ) : null}
+              </button>
             </li>
           ))}
         </ul>
@@ -407,6 +443,7 @@ function DestinationBlock({
   onMissionAction,
   onSelectedDateKeyChange,
   onEditDay,
+  onReservationTap,
   blockRef,
   suppressPlanningAlerts = false,
   defaultExpanded = false,
@@ -424,6 +461,7 @@ function DestinationBlock({
   onMissionAction?: (item: TripActionItem) => void;
   onSelectedDateKeyChange?: (dateKey: string) => void;
   onEditDay: (dateKey: string) => void;
+  onReservationTap: (id: string) => void;
   blockRef: (node: HTMLDivElement | null) => void;
   suppressPlanningAlerts?: boolean;
   defaultExpanded?: boolean;
@@ -596,7 +634,7 @@ function DestinationBlock({
                     </span>
                     {hotel ? (
                       <span className="max-w-[9rem] shrink-0 truncate text-xs font-medium text-[#1D1D1F]">
-                        {hotel.provider || hotel.title}
+                        {reservationPropertyName(hotel)}
                       </span>
                     ) : suppressPlanningAlerts ? null : (
                       <span className="shrink-0 text-xs font-semibold text-amber-600">No hotel</span>
@@ -616,6 +654,7 @@ function DestinationBlock({
                       reservations={reservations}
                       dayNotes={dayNotes}
                       onEditPlan={onEditDay}
+                      onReservationTap={onReservationTap}
                       tripStartDate={tripStartDate}
                       tripEndDate={tripEndDate}
                       stayCity={leg.label}
@@ -810,6 +849,7 @@ export function ItineraryTimeline({
               onMissionAction={onMissionAction}
               onSelectedDateKeyChange={onSelectedDateKeyChange}
               onEditDay={setEditDateKey}
+              onReservationTap={onReservationTap}
               defaultExpanded={chapterIndex === 0}
               blockRef={(node) => {
                 if (node) blockRefs.current.set(chapter.stay!.leg.id, node);

@@ -1,10 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { htmlToPlainConfirmationText } from "@/lib/travelAssistant/confirmationDocumentText";
 import { mergePdfSectionIntoBody } from "@/lib/travelAssistant/emailSourceText";
+import { extractHotelPropertyName } from "@/lib/travelAssistant/hotelPropertyName";
 import { formatFewShotBlock } from "@/lib/travelAssistant/mlReadiness/fewShotExamples";
 import { EMAIL_FORWARD_PARSER_VERSION } from "@/lib/travelAssistant/mlReadiness/parserVersion";
 import type { FewShotParseExample } from "@/lib/travelAssistant/mlReadiness/types";
 import { logger } from "@/lib/logger";
+
+export { extractHotelPropertyName };
 
 const MODEL = "claude-sonnet-4-5";
 const HIGH_CONFIDENCE_THRESHOLD = 70;
@@ -514,7 +517,17 @@ function normalizeType(rawType: string): ForwardedReservationType | null {
 
 function formatProviderFromSender(sender: string): string {
   const domainMatch = sender.match(/@([a-z0-9.-]+\.[a-z]{2,})/iu);
-  const host = domainMatch?.[1]?.split(".")[0] ?? "";
+  const domain = domainMatch?.[1]?.toLowerCase() ?? "";
+  if (!domain) {
+    return "";
+  }
+  if (domain.includes("booking.com")) return "Booking.com";
+  if (domain.includes("expedia.")) return "Expedia";
+  if (domain.includes("hotels.com")) return "Hotels.com";
+  if (domain.includes("airbnb.")) return "Airbnb";
+  if (domain.includes("vrbo.")) return "Vrbo";
+  if (domain.includes("agoda.")) return "Agoda";
+  const host = domain.split(".")[0] ?? "";
   if (!host) {
     return "";
   }
@@ -524,6 +537,8 @@ function formatProviderFromSender(sender: string): string {
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join(" ");
 }
+
+const OTA_TITLE_DENYLIST = /^(booking\.com|booking|expedia|hotels\.com|airbnb|vrbo|agoda|trip\.com|priceline|kayak)$/iu;
 
 function normalizeConfirmationCode(value: string): string {
   return value.trim().toUpperCase().replace(/[^A-Z0-9-]/gu, "");
@@ -1098,24 +1113,15 @@ function buildRegexCandidates(input: {
     }
   }
 
-  const hotelNameMatch = combined.match(/(?:hotel|property|stay at|accommodation)\s*[:\-]?\s*([A-Z][A-Za-z0-9 '&.-]{2,60})/iu);
-  if (hotelNameMatch?.[1]) {
-    const hotelName = normalizeWhitespace(hotelNameMatch[1]);
-    if (hotelName) {
-      candidates.type = candidates.type ?? { value: "hotel", confidence: 0.8, source: "regex" };
-      candidates.title = candidates.title ?? {
-        value: hotelName,
-        confidence: 0.78,
-        source: "regex",
-      };
-      if (!candidates.provider) {
-        candidates.provider = {
-          value: hotelName.split(" ").slice(0, 2).join(" "),
-          confidence: 0.6,
-          source: "regex",
-        };
-      }
-    }
+  const hotelPropertyName = extractHotelPropertyName(subject, text);
+  if (hotelPropertyName) {
+    candidates.type = candidates.type ?? { value: "hotel", confidence: 0.86, source: "regex" };
+    // Property name always wins as title — never leave Booking.com as the headline (I25).
+    candidates.title = {
+      value: hotelPropertyName,
+      confidence: 0.9,
+      source: "regex",
+    };
   }
 
   // Handle "Confirmation #\n49932361" where newline separates # from code
@@ -1192,13 +1198,24 @@ function buildRegexCandidates(input: {
 
   if (!candidates.title) {
     const normalizedSubject = normalizeWhitespace(subject);
-    if (normalizedSubject) {
-      candidates.title = {
-        value: normalizedSubject,
-        confidence: 0.72,
-        source: "regex",
-      };
+    if (normalizedSubject && !OTA_TITLE_DENYLIST.test(normalizedSubject)) {
+      // Strip leading OTA brand from subjects like "Booking.com confirmation 283…"
+      const withoutOta = normalizedSubject
+        .replace(/^(booking\.com|expedia|hotels\.com|airbnb|vrbo)\s*[:\-]?\s*/iu, "")
+        .trim();
+      if (withoutOta.length >= 3 && !OTA_TITLE_DENYLIST.test(withoutOta)) {
+        candidates.title = {
+          value: withoutOta,
+          confidence: 0.62,
+          source: "regex",
+        };
+      }
     }
+  }
+
+  // Never keep an OTA brand as the hotel title when we have a real provider badge.
+  if (candidates.title?.value && OTA_TITLE_DENYLIST.test(candidates.title.value)) {
+    delete candidates.title;
   }
 
   return candidates;
@@ -1228,6 +1245,7 @@ async function runAiFallback(
     "IMPORTANT: This may be a multi-leg itinerary. Scan for EVERY individual flight segment. For example HND→HNL→SEA→ONT has 3 flights — return 3 separate objects in reservations[]. Each object must have its own flightNumber, departureAirport, arrivalAirport, and localTime (departure time for that specific leg).",
     "Use type values only: flight, hotel, train, ride, dinner. Use \"dinner\" for restaurant reservations, tours, excursions, boat trips, classes, tastings, or any other bookable activity that is not a flight/hotel/train/car ride.",
     "CRITICAL for localTime: For flights, use the scheduled DEPARTURE time (not email send time, not boarding time, not purchase/booking/transaction date). Ignore 'Date:' and 'Sent:' lines from forward headers. For hotels, use the check-in date and time if stated, otherwise just the check-in date at 15:00 local time. NEVER guess or infer a year — if the year is not explicitly in the email use the current year only if the date is clearly in the future, otherwise leave localTime empty.",
+    "For hotels, set title to the PROPERTY name (e.g. Casa de Elena), NEVER Booking.com / Expedia / Airbnb. Put the OTA in provider. Phrases like \"You're confirmed at Casa de Elena\" mean title=Casa de Elena, provider=Booking.com.",
     "For hotels, set checkOutDate to the check-out date in YYYY-MM-DD format. The email may use formats like 'Friday, 29-May-2026' or 'May 29, 2026' — convert to YYYY-MM-DD e.g. 2026-05-29. Also set localTime to the check-in date and time e.g. '2026-05-24 15:00'. For flights, leave checkOutDate empty.",
     "The departure time is the scheduled time the plane leaves the gate. Format: 'YYYY-MM-DD HH:mm' in 24-hour.",
     "For flights, set flightNumber to IATA airline code + flight number. If the email says 'Alaska Airlines Flight 832' write AS832. If it says 'Hawaiian Airlines Flight 12' write HA12. Common IATA codes: AS=Alaska Airlines, HA=Hawaiian Airlines, UA=United Airlines, AA=American Airlines, DL=Delta, WN=Southwest, B6=JetBlue, KE=Korean Air, NH=ANA, JL=JAL. NEVER use just the number alone — always prefix with the 2-letter IATA code. Never use credit card numbers like VI3557.",
