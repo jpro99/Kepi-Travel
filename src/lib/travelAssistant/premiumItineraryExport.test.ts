@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildPremiumExportRows,
+  buildPremiumItineraryCsv,
+  buildPremiumItineraryExcelXml,
   buildPremiumItineraryHtml,
   formatTripDayLabel,
   isWithinTripExportWindow,
@@ -119,4 +121,34 @@ test("print HTML uses Day column, no Timezone/Owner, and type colors", () => {
   assert.match(html, /type-hotel/);
   assert.match(html, /print-color-adjust:\s*exact/);
   assert.match(html, /landscape/);
+});
+
+test("Excel export is SpreadsheetML that Excel opens, with logistics + day-plan sheets", () => {
+  const rows = buildPremiumExportRows(
+    [
+      {
+        type: "flight",
+        title: "AS654",
+        provider: "Alaska",
+        localTime: "2026-09-01 13:00",
+        location: "Ontario",
+      },
+    ],
+    { tripStartDate: "2026-09-01", tripEndDate: "2026-09-20" },
+  );
+  const xml = buildPremiumItineraryExcelXml({
+    rows,
+    tripName: "Europe 2026",
+    dayPlanLines: [{ dayLabel: "Day 1 · Mon, Sep 1, 2026", line: "Arrive Bari" }],
+  });
+  assert.match(xml, /mso-application progid="Excel\.Sheet"/);
+  assert.match(xml, /ss:Name="Itinerary"/);
+  assert.match(xml, /ss:Name="Day plan"/);
+  assert.match(xml, /AS654/);
+  assert.match(xml, /Arrive Bari/);
+  assert.match(xml, /Europe 2026/);
+
+  const csv = buildPremiumItineraryCsv(rows);
+  assert.equal(csv.charCodeAt(0), 0xfeff);
+  assert.match(csv, /Day,Type,Title/);
 });

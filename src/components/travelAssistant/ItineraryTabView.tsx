@@ -65,6 +65,8 @@ interface ItineraryTabViewProps {
   onGapActionTap?: (action: TripGapNavigationAction) => void;
   onPrint: () => void;
   onExportPdf: () => void;
+  /** Microsoft Excel workbook (.xls SpreadsheetML). */
+  onExportExcel?: () => void;
   /** Friend-share narrative day-plan PDF (Puglia-style letter). */
   onExportDayPlanPdf?: () => void;
   onShareLink: () => void;
@@ -105,6 +107,7 @@ export function ItineraryTabView({
   onGapActionTap,
   onPrint,
   onExportPdf,
+  onExportExcel,
   onExportDayPlanPdf,
   onShareLink,
   missionItems: _missionItems = [],
@@ -194,6 +197,15 @@ export function ItineraryTabView({
           >
             {tPlan("pdf")}
           </button>
+          {onExportExcel ? (
+            <button
+              type="button"
+              onClick={onExportExcel}
+              className="rounded-xl border border-white/20 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/10"
+            >
+              {tPlan("excel")}
+            </button>
+          ) : null}
           {onExportDayPlanPdf ? (
             <button
               type="button"

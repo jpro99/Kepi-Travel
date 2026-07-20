@@ -208,7 +208,104 @@ export function buildPremiumItineraryCsv(rows: PremiumExportRow[]): string {
       .map(csvEscape)
       .join(","),
   );
-  return [header.join(","), ...body].join("\n");
+  // UTF-8 BOM so Microsoft Excel opens accents correctly on Windows.
+  return `\uFEFF${[header.join(","), ...body].join("\n")}`;
+}
+
+function xmlEscape(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function excelStringCell(value: string): string {
+  return `<Cell><Data ss:Type="String">${xmlEscape(value)}</Data></Cell>`;
+}
+
+export interface PremiumExcelDayPlanLine {
+  dayLabel: string;
+  line: string;
+}
+
+/**
+ * SpreadsheetML (.xls) — opens natively in Microsoft Excel without a client library.
+ * Sheet 1 = logistics table (same columns as Print/PDF). Sheet 2 = day-plan bullets when provided.
+ */
+export function buildPremiumItineraryExcelXml(input: {
+  rows: PremiumExportRow[];
+  dayPlanLines?: PremiumExcelDayPlanLine[];
+  tripName?: string;
+}): string {
+  const headerCells = [
+    "Day",
+    "Type",
+    "Title",
+    "Provider",
+    "Local Time",
+    "Location",
+    "Confirmation",
+    "Notes",
+  ]
+    .map(excelStringCell)
+    .join("");
+
+  const logisticsRows = input.rows
+    .map(
+      (row) =>
+        `<Row>${[
+          row.dayLabel,
+          row.itemType,
+          row.title,
+          row.provider,
+          row.localTime,
+          row.location,
+          row.confirmation,
+          row.notes,
+        ]
+          .map(excelStringCell)
+          .join("")}</Row>`,
+    )
+    .join("");
+
+  const tripTitle = input.tripName?.trim() || "Trip itinerary";
+  const dayPlanLines = input.dayPlanLines ?? [];
+  const dayPlanSheet =
+    dayPlanLines.length === 0
+      ? ""
+      : [
+          `<Worksheet ss:Name="Day plan">`,
+          `<Table>`,
+          `<Row>${excelStringCell("Day")}${excelStringCell("Plan")}</Row>`,
+          ...dayPlanLines.map(
+            (line) => `<Row>${excelStringCell(line.dayLabel)}${excelStringCell(line.line)}</Row>`,
+          ),
+          `</Table>`,
+          `</Worksheet>`,
+        ].join("");
+
+  return [
+    `<?xml version="1.0"?>`,
+    `<?mso-application progid="Excel.Sheet"?>`,
+    `<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"`,
+    ` xmlns:o="urn:schemas-microsoft-com:office:office"`,
+    ` xmlns:x="urn:schemas-microsoft-com:office:excel"`,
+    ` xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"`,
+    ` xmlns:html="http://www.w3.org/TR/REC-html40">`,
+    `<DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">`,
+    `<Title>${xmlEscape(tripTitle)}</Title>`,
+    `<Author>Kepi Travel</Author>`,
+    `</DocumentProperties>`,
+    `<Worksheet ss:Name="Itinerary">`,
+    `<Table>`,
+    `<Row>${headerCells}</Row>`,
+    logisticsRows,
+    `</Table>`,
+    `</Worksheet>`,
+    dayPlanSheet,
+    `</Workbook>`,
+  ].join("");
 }
 
 export function buildPremiumItineraryHtml({

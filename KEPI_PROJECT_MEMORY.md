@@ -5,6 +5,10 @@
 
 Last updated: 2026-07-17 (Europe trip airports BRI/FCO/VCE/MUC bundled)
 
+## Decision 2026-07-20 — Plan Excel export (I26)
+
+Plan header **Excel** downloads SpreadsheetML `.xls` (Itinerary logistics + Day plan sheets) that opens in Microsoft Excel. No new npm dependency.
+
 ## Decision 2026-07-20 — Plan Timeline = day-plan letter (I28)
 
 Plan **Timeline** uses the narrative Day-plan PDF layout (editable/draggable bullets), not photo-card timeline. No random Unsplash/picsum city thumbs. Strip “Applied AI fallback…” from traveler notes.

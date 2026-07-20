@@ -175,10 +175,13 @@ import {
 } from "@/lib/travelAssistant/reservationDisplayLabel";
 import {
   buildPremiumExportRows,
-  buildPremiumItineraryCsv,
+  buildPremiumItineraryExcelXml,
   buildPremiumItineraryHtml,
 } from "@/lib/travelAssistant/premiumItineraryExport";
-import { buildNarrativeItineraryHtml } from "@/lib/travelAssistant/narrativeItineraryExport";
+import {
+  buildNarrativeDaySections,
+  buildNarrativeItineraryHtml,
+} from "@/lib/travelAssistant/narrativeItineraryExport";
 import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
@@ -8175,12 +8178,16 @@ export default function TravelAssistantPage() {
   ]);
 
   const handleExportExcel = (): void => {
-    const csv = buildPremiumItineraryCsv(exportRows);
+    const stamp = new Date().toISOString().slice(0, 10);
+    const xml = buildPremiumItineraryExcelXml({
+      rows: exportRows,
+      tripName: activeTrip?.name ?? "Trip itinerary",
+    });
     downloadBlob(
-      `itinerary-${new Date().toISOString().slice(0, 10)}.csv`,
-      new Blob([csv], { type: "text/csv;charset=utf-8" }),
+      `itinerary-${stamp}.xls`,
+      new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8" }),
     );
-    setToast("Excel export downloaded (CSV format).");
+    setToast("Excel workbook downloaded (.xls) — opens in Microsoft Excel.");
   };
 
   const handleExportWord = (): void => {
@@ -8257,6 +8264,36 @@ export default function TravelAssistantPage() {
 
   const handleConsumerItineraryPdf = (): void => {
     handleConsumerItineraryPrint();
+  };
+
+  const handleConsumerItineraryExcel = (): void => {
+    const tripName = activeTrip?.name ?? "Trip itinerary";
+    const stamp = new Date().toISOString().slice(0, 10);
+    const dayPlanLines = buildNarrativeDaySections({
+      tripStartDate: consumerTripStartDate ?? activeTrip?.startDate,
+      tripEndDate: consumerTripEndDate ?? activeTrip?.endDate,
+      itineraryPlans: itineraryPrefs.itineraryPlans,
+      dayNotes: itineraryPrefs.dayNotes,
+      reservations: consumerReservationsSorted,
+    }).flatMap((section) => {
+      if (section.bullets.length === 0) {
+        return [{ dayLabel: section.heading, line: "" }];
+      }
+      return section.bullets.map((bullet) => ({
+        dayLabel: section.heading,
+        line: bullet,
+      }));
+    });
+    const xml = buildPremiumItineraryExcelXml({
+      rows: consumerItineraryExportRows,
+      dayPlanLines,
+      tripName,
+    });
+    downloadBlob(
+      `${tripName.replace(/[^\w\- ]+/gu, "").trim() || "itinerary"}-${stamp}.xls`,
+      new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8" }),
+    );
+    setToast("Excel workbook downloaded — open in Microsoft Excel.");
   };
 
   const handleConsumerDayPlanPdf = (): void => {
@@ -9967,6 +10004,7 @@ export default function TravelAssistantPage() {
               onGapActionTap={handleItineraryGapAction}
               onPrint={handleConsumerItineraryPrint}
               onExportPdf={handleConsumerItineraryPdf}
+              onExportExcel={handleConsumerItineraryExcel}
               onExportDayPlanPdf={handleConsumerDayPlanPdf}
               onShareLink={handleShareItineraryLink}
               missionItems={tripPlanningActions}

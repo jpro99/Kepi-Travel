@@ -21,6 +21,7 @@
     "setDatesHint": "Set dates on Trip to unlock your timeline",
     "print": "Print",
     "pdf": "PDF",
+    "excel": "Excel",
     "share": "Share",
     "savedFlash": "Saved ✓",
     "autoSaveHint": "Auto-saves as you type"

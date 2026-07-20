@@ -448,8 +448,8 @@ Reservation drawers, timeline cards, and edit surfaces show the **hotel property
 
 **Test:** `src/lib/travelAssistant/reservationDisplayLabel.test.ts`, `src/lib/travelAssistant/emailForwardParser.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts`, `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/buildTripLegs.test.ts`
 
-**I26 — Print/PDF itinerary is chronological and scannable**
-Static itinerary Print/PDF/CSV uses a **Day** column (trip day number + date), not Owner. No timezone column. Rows sort by local departure/check-in time (Ontario before Seattle on the same day). Flights/hotels/trains/rides are **color-coded**. Print CSS stays dense (landscape, tight padding, `print-color-adjust: exact`) so the PDF matches the on-screen Adaptive Travel Assistant look. Dates far outside the trip window (e.g. 2018 voucher bleed) are omitted from the export.
+**I26 — Print/PDF/Excel itinerary is chronological and scannable**
+Static itinerary Print/PDF/CSV/Excel uses a **Day** column (trip day number + date), not Owner. No timezone column. Rows sort by local departure/check-in time (Ontario before Seattle on the same day). Flights/hotels/trains/rides are **color-coded**. Print CSS stays dense (landscape, tight padding, `print-color-adjust: exact`) so the PDF matches the on-screen Adaptive Travel Assistant look. Dates far outside the trip window (e.g. 2018 voucher bleed) are omitted from the export. Plan **Excel** downloads a SpreadsheetML `.xls` (Itinerary + Day plan sheets) that opens in Microsoft Excel.
 
 **Test:** `src/lib/travelAssistant/premiumItineraryExport.test.ts`
 
