@@ -143,7 +143,11 @@ function isDeniedFlightAirlineCode(code: string, context: string): boolean {
 }
 
 const RESERVATION_TYPE_KEYWORDS: Array<{ type: ForwardedReservationType; pattern: RegExp; confidence: number }> = [
-  { type: "flight", pattern: /\b(flight|airline|boarding|terminal|gate)\b/iu, confidence: 0.78 },
+  {
+    type: "flight",
+    pattern: /\b(flight\s*(?:number|#|coupon)?|airlines?|airways|boarding\s*pass|departure\s*airport|arrival\s*airport)\b/iu,
+    confidence: 0.78,
+  },
   { type: "hotel", pattern: /\b(hotel|check-?in|check out|room|suite|stay)\b/iu, confidence: 0.78 },
   { type: "train", pattern: /\b(train|rail|amtrak|station|platform)\b/iu, confidence: 0.75 },
   {
@@ -255,10 +259,86 @@ function extractOriginalEmailFromForwardChain(text: string): string {
 }
 
 const NON_TRAVEL_DATE_CONTEXT =
-  /\b(?:purchase(?:d)?|booked on|booking date|transaction date|order date|payment date|issued on|date of issue|receipt date|ticketed on|sales date|invoice date|email sent|sent on|forwarded message)\b/iu;
+  /\b(?:purchase(?:d)?|booked on|booking date|transaction date|order date|payment date|issued on|date of issue|receipt date|ticketed on|sales date|invoice date|email sent|sent on|forwarded message|e-?t-?a\b|esta\b|visa[- ]exempt|visa waiver|electronic system for travel authorization|hazardous materials|conditions of carriage|privacy policy|data protection|effective\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})\b/iu;
 
 const TRAVEL_DATE_CONTEXT =
   /\b(?:depart(?:ure|s|ing)?|arriv(?:al|es|ing)?|scheduled|flight|gate|terminal|boarding|check-?in|check out|leaves| lands|segment|itinerary)\b/iu;
+
+/** English words / labels that must never be treated as PNR / confirmation codes. */
+const CONFIRMATION_CODE_WORD_DENYLIST = new Set([
+  "RECEIPT",
+  "CODE",
+  "NUMBER",
+  "DETAILS",
+  "PENDING",
+  "CONFIRMED",
+  "RESERVED",
+  "BOOKING",
+  "TRAVEL",
+  "FLIGHT",
+  "HOTEL",
+  "TICKET",
+  "MANAGE",
+  "VIEW",
+  "FORWARDED",
+  "MESSAGE",
+  "YOUR",
+  "TRIP",
+  "TRIPS",
+  "ITINERARY",
+  "ALASKA",
+  "UNITED",
+  "DELTA",
+  "AMERICAN",
+  "HAWAIIAN",
+  "OUTBOUND",
+  "INBOUND",
+  "RETURN",
+  "CONFIRMATION",
+  "CAREFULLY",
+  "PLEASE",
+  "REVIEW",
+  "IMPORTANT",
+  "HELPFUL",
+  "INFORMATION",
+  "CUSTOMER",
+  "SERVICES",
+  "CHOOSING",
+  "THANK",
+  "ABOUT",
+  "THESE",
+  "THERE",
+  "THEIR",
+  "WHICH",
+  "WHERE",
+  "WHILE",
+  "BEFORE",
+  "AFTER",
+  "UNDER",
+  "ABOVE",
+  "ITALY",
+  "ROME",
+  "AIRWAYS",
+  "ELECTRONIC",
+  "DOCUMENT",
+  "DOCUMENTS",
+  "PASSENGER",
+  "PASSENGERS",
+]);
+
+const AIRLINE_PROVIDER_PATTERNS: Array<{ pattern: RegExp; provider: string }> = [
+  { pattern: /\bITA\s*Airways\b/iu, provider: "ITA Airways" },
+  { pattern: /\bAlaska\s*Airlines\b/iu, provider: "Alaska Airlines" },
+  { pattern: /\bHawaiian\s*Airlines\b/iu, provider: "Hawaiian Airlines" },
+  { pattern: /\bAmerican\s*Airlines\b/iu, provider: "American Airlines" },
+  { pattern: /\bUnited\s*Airlines\b/iu, provider: "United Airlines" },
+  { pattern: /\bDelta\s*Air\s*Lines\b/iu, provider: "Delta Air Lines" },
+  { pattern: /\bAir\s*France\b/iu, provider: "Air France" },
+  { pattern: /\bBritish\s*Airways\b/iu, provider: "British Airways" },
+  { pattern: /\bLufthansa\b/iu, provider: "Lufthansa" },
+  { pattern: /\bSouthwest\s*Airlines\b/iu, provider: "Southwest Airlines" },
+  { pattern: /\bJetBlue\b/iu, provider: "JetBlue" },
+];
 
 const EMAIL_HEADER_METADATA_LINE =
   /^(?:From|To|Cc|Bcc|Reply-To|Subject|Sent|Date|De|Para|Objet|Fecha):\s*/iu;
@@ -315,15 +395,30 @@ function lineMentionsIsoDay(line: string, isoDay: string): boolean {
   return false;
 }
 
+function isImplausibleTravelDate(isoLocalTime: string): boolean {
+  const day = isoLocalTime.trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(day)) return false;
+  const year = Number(day.slice(0, 4));
+  const nowYear = new Date().getUTCFullYear();
+  // Legal footnotes (e.g. eTA Effective March 15, 2016) must never become flight dates.
+  if (year < nowYear - 1) return true;
+  const ms = Date.parse(`${day}T12:00:00Z`);
+  if (Number.isNaN(ms)) return false;
+  // More than ~18 months in the past without a nearby flight number is not a live itinerary.
+  return ms < Date.now() - 548 * 86_400_000;
+}
+
 function localTimeIsTravelContext(localTime: string, lineAwareText: string): boolean {
   const day = localTime.trim().slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(day)) return true;
+  if (isImplausibleTravelDate(localTime)) return false;
   const lines = lineAwareText.split("\n");
   for (let index = 0; index < lines.length; index += 1) {
     const contextLines = [lines[index - 1], lines[index], lines[index + 1]].filter(Boolean);
     const mentionsDay = contextLines.some((line) => lineMentionsIsoDay(line, day));
     if (!mentionsDay) continue;
     const context = contextLines.join(" ");
+    // Legal/visa boilerplate wins even when the same paragraph mentions "boarding".
     if (NON_TRAVEL_DATE_CONTEXT.test(context)) return false;
     if (TRAVEL_DATE_CONTEXT.test(context)) return true;
   }
@@ -333,13 +428,62 @@ function localTimeIsTravelContext(localTime: string, lineAwareText: string): boo
 function sanitizeTravelLocalTime(candidates: CandidateMap, lineAwareText: string): CandidateMap {
   const localTime = candidates.localTime;
   if (!localTime?.value.trim()) return candidates;
-  if (localTime.source === "regex" && candidates.flightNumber?.value?.trim()) {
+  const hasFlightNumber = Boolean(candidates.flightNumber?.value?.trim());
+  if (isImplausibleTravelDate(localTime.value) && !hasFlightNumber) {
+    const next = { ...candidates };
+    delete next.localTime;
+    return next;
+  }
+  if (localTime.source === "regex" && hasFlightNumber) {
     return candidates;
   }
   if (localTimeIsTravelContext(localTime.value, lineAwareText)) return candidates;
   const next = { ...candidates };
   delete next.localTime;
   return next;
+}
+
+function isAllowedConfirmationCode(raw: string): boolean {
+  const code = normalizeConfirmationCode(raw);
+  if (code.length < 5 || code.length > 12) return false;
+  if (CONFIRMATION_CODE_WORD_DENYLIST.has(code)) return false;
+  // Ticket numbers like 055-4208939987 are not PNRs.
+  if (/^\d{3}-\d+$/u.test(raw.trim()) || /^\d{10,}$/u.test(code)) return false;
+  return true;
+}
+
+/**
+ * Prefer explicit "Reservation code Z84T4Z" / "Confirmation ABC123" labels.
+ * Never grab the next English word after bare "confirmation" (e.g. "carefully").
+ */
+export function extractConfirmationCodeFromText(text: string): string | null {
+  const combined = text.trim();
+  if (!combined) return null;
+
+  const labeledPatterns = [
+    /\breservation\s+code\s*[:#]?\s*([A-Z0-9]{5,8})\b/iu,
+    /\b(?:confirmation|record\s*locator|pnr)\s*(?:number|code|#)\s*[:#]?\s*([A-Z0-9]{5,8})\b/iu,
+    /\b(?:confirmation|record\s*locator|pnr)\s+#\s*([A-Z0-9]{5,8})\b/iu,
+    /\bbooking\s*(?:ref(?:erence)?|code|number)\s*[:#]?\s*([A-Z0-9]{5,8})\b/iu,
+    // "Confirmation ABC123" / "Confirmation: LDM-2291" — never "confirmation carefully"
+    /\bconfirmation\s*[:#]?\s*([A-Z0-9-]{5,12})\b/iu,
+  ];
+  for (const pattern of labeledPatterns) {
+    const match = combined.match(pattern);
+    const code = match?.[1] ?? "";
+    if (code && isAllowedConfirmationCode(code)) {
+      return normalizeConfirmationCode(code);
+    }
+  }
+  return null;
+}
+
+function extractAirlineProvider(subject: string, text: string): string | null {
+  const combined = `${subject}\n${text}`;
+  for (const entry of AIRLINE_PROVIDER_PATTERNS) {
+    if (entry.pattern.test(combined)) return entry.provider;
+  }
+  return null;
 }
 
 function findTimeOnNearbyLines(lines: string[], index: number): string | null {
@@ -376,7 +520,8 @@ function extractBestLocalTimeCandidate(
       .filter(Boolean)
       .join(" ");
     if (EMAIL_HEADER_DATE_LINE.test(line.trim())) continue;
-    if (NON_TRAVEL_DATE_CONTEXT.test(context) && !TRAVEL_DATE_CONTEXT.test(context)) continue;
+    // Visa/eTA/legal footnotes often mention "boarding" — still not a flight date.
+    if (NON_TRAVEL_DATE_CONTEXT.test(context)) continue;
 
     const combinedDateTime = line.match(
       /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})\s+at\s+(\d{1,2}:\d{2}\s*(?:AM|PM))\b/iu,
@@ -421,8 +566,8 @@ function extractBestLocalTimeCandidate(
     const bDefault = b.localTime.endsWith(" 12:00") ? 1 : 0;
     return aDefault - bDefault;
   });
-  const best = scored[0];
-  if (!best || best.score < 1) return null;
+  const best = scored.find((entry) => !isImplausibleTravelDate(entry.localTime) && entry.score >= 1);
+  if (!best) return null;
   return {
     localTime: best.localTime,
     confidence: Math.min(0.82, 0.42 + best.score * 0.07),
@@ -1125,43 +1270,13 @@ function buildRegexCandidates(input: {
     };
   }
 
-  // Handle "Confirmation #\n49932361" where newline separates # from code
-  const inlineConfirmationMatch = combined.match(
-    /\b(?:confirmation|record locator|pnr)\s+#?\s*([A-Z0-9]{4,10})\b/iu,
-  );
-  const confirmationMatch = combined.match(
-    /(?:confirmation(?:\s*(?:number|code|#|receipt))?|booking\s*(?:ref(?:erence)?|code|#|number)|record locator|pnr|itinerary\s*(?:number|#)?|reservation\s*(?:number|#)?)[^A-Za-z0-9]{0,30}([A-Za-z0-9-]{4,20})/iu,
-  );
-  // Denylist common English words that regex may incorrectly grab as confirmation codes
-  const CONFIRMATION_CODE_WORD_DENYLIST = new Set([
-    "RECEIPT", "CODE", "NUMBER", "DETAILS", "PENDING", "CONFIRMED", "RESERVED", "BOOKING", "TRAVEL",
-    "FLIGHT", "HOTEL", "TICKET", "MANAGE", "VIEW", "FORWARDED", "MESSAGE", "YOUR", "TRIP", "TRIPS",
-    "ITINERARY", "ALASKA", "UNITED", "DELTA", "AMERICAN", "HAWAIIAN", "OUTBOUND", "INBOUND", "RETURN",
-    "CONFIRMATION",
-  ]);
-  const inlineCode = inlineConfirmationMatch?.[1]?.toUpperCase();
-  const matchedCode = confirmationMatch?.[1]?.toUpperCase();
-  const chosenCode =
-    inlineCode && !CONFIRMATION_CODE_WORD_DENYLIST.has(inlineCode)
-      ? inlineCode
-      : matchedCode && !CONFIRMATION_CODE_WORD_DENYLIST.has(matchedCode)
-        ? matchedCode
-        : "";
-  if (chosenCode) {
+  const extractedConfirmation = extractConfirmationCodeFromText(combined);
+  if (extractedConfirmation) {
     candidates.confirmationCode = {
-      value: normalizeConfirmationCode(chosenCode),
-      confidence: inlineCode === chosenCode ? 0.94 : 0.92,
+      value: extractedConfirmation,
+      confidence: 0.94,
       source: "regex",
     };
-  } else {
-    const fallbackConfirmationMatch = combined.match(/\b([A-Z0-9]{5,12})\b/u);
-    if (fallbackConfirmationMatch?.[1]) {
-      candidates.confirmationCode = {
-        value: normalizeConfirmationCode(fallbackConfirmationMatch[1]),
-        confidence: 0.56,
-        source: "regex",
-      };
-    }
   }
 
   const reservationType = normalizeType(candidates.type?.value ?? "") ?? undefined;
@@ -1186,9 +1301,17 @@ function buildRegexCandidates(input: {
     };
   }
 
-  if (!candidates.provider) {
+  const airlineProvider = extractAirlineProvider(subject, text);
+  if (airlineProvider) {
+    candidates.provider = {
+      value: airlineProvider,
+      confidence: 0.9,
+      source: "regex",
+    };
+  } else if (!candidates.provider) {
     const providerFromSender = formatProviderFromSender(from);
-    if (providerFromSender) {
+    // Forward envelope From: you@gmail.com is not the airline.
+    if (providerFromSender && !/^gmail$/iu.test(providerFromSender)) {
       candidates.provider = {
         value: providerFromSender,
         confidence: 0.7,
@@ -1200,13 +1323,18 @@ function buildRegexCandidates(input: {
   if (!candidates.title) {
     const normalizedSubject = normalizeWhitespace(subject);
     if (normalizedSubject && !OTA_TITLE_DENYLIST.test(normalizedSubject)) {
-      // Strip leading OTA brand from subjects like "Booking.com confirmation 283…"
+      // Strip leading OTA brand / Fwd: wrappers from subjects.
       const withoutOta = normalizedSubject
+        .replace(/^(?:fwd|fw|re)\s*:\s*/iu, "")
         .replace(/^(booking\.com|expedia|hotels\.com|airbnb|vrbo)\s*[:\-]?\s*/iu, "")
         .trim();
       if (withoutOta.length >= 3 && !OTA_TITLE_DENYLIST.test(withoutOta)) {
+        const withCode =
+          extractedConfirmation && !withoutOta.toUpperCase().includes(extractedConfirmation)
+            ? `${withoutOta} (${extractedConfirmation})`
+            : withoutOta;
         candidates.title = {
-          value: withoutOta,
+          value: withCode,
           confidence: 0.62,
           source: "regex",
         };
@@ -1273,7 +1401,7 @@ async function runAiFallback(
       max_tokens: 8000,  // 8000 handles up to ~30 flight legs safely
       temperature: 0,
       system:
-        "You extract travel reservations from forwarded emails. Return ONLY a JSON object with a reservations array. CRITICAL RULES:\n(1) For FLIGHTS: scan the entire email for every individual flight segment. A 3-leg itinerary like HND→HNL→SEA→ONT has 3 separate flights — return 3 objects. NEVER merge segments into one. Each segment has its own flight number, departure airport, arrival airport, and departure time.\n(2) type=flight ONLY when a flight number or airline is present. type=hotel for hotels even if they mention arrival/departure dates.\n(3) localTime = scheduled DEPARTURE time of that specific flight leg in YYYY-MM-DD HH:mm 24-hour format. Never use email send time, purchase date, booking date, transaction date, or forward-header Date/Sent metadata.\n(4) flightNumber = 2-letter IATA code + flight number. If email says 'Alaska Airlines Flight 832' write AS832. If 'Hawaiian Airlines Flight 12' write HA12. Key codes: AS=Alaska, HA=Hawaiian, UA=United, AA=American, DL=Delta, KE=Korean Air, NH=ANA, JL=JAL, AZ=ITA Airways, FR=Ryanair, U2=easyJet, W4=Wizz Air. NEVER return number alone. VI3557 is a credit card, NOT a flight number.\n(5) departureAirport = IATA code of origin. arrivalAirport = IATA code of destination. Both must be set for every flight. Bari=BRI, Venice=VCE.\n(6) timezone = IANA timezone of the departure city e.g. Asia/Tokyo, Pacific/Honolulu, America/Los_Angeles, Europe/Rome.\n(7) location = departure city or airport name.\n(8) If a field is not in the email, use empty string. Never guess or invent values.",
+        "You extract travel reservations from forwarded emails. Return ONLY a JSON object with a reservations array. CRITICAL RULES:\n(1) For FLIGHTS: scan the entire email for every individual flight segment. A 3-leg itinerary like HND→HNL→SEA→ONT has 3 separate flights — return 3 objects. NEVER merge segments into one. Each segment has its own flight number, departure airport, arrival airport, and departure time.\n(2) type=flight ONLY when a flight number or airline is present. type=hotel for hotels even if they mention arrival/departure dates.\n(3) localTime = scheduled DEPARTURE time of that specific flight leg in YYYY-MM-DD HH:mm 24-hour format. Never use email send time, purchase date, booking date, transaction date, forward-header Date/Sent metadata, or legal/visa boilerplate dates (e.g. 'Effective March 15, 2016' eTA/ESTA notices).\n(4) confirmationCode = the airline PNR / reservation code (e.g. Reservation code Z84T4Z). Never use English words like carefully, receipt, or confirmation.\n(5) flightNumber = 2-letter IATA code + flight number. If email says 'Alaska Airlines Flight 832' write AS832. If 'Hawaiian Airlines Flight 12' write HA12. Key codes: AS=Alaska, HA=Hawaiian, UA=United, AA=American, DL=Delta, KE=Korean Air, NH=ANA, JL=JAL, AZ=ITA Airways, FR=Ryanair, U2=easyJet, W4=Wizz Air. NEVER return number alone. VI3557 is a credit card, NOT a flight number.\n(6) departureAirport = IATA code of origin. arrivalAirport = IATA code of destination. Both must be set for every flight. Bari=BRI, Venice=VCE.\n(7) timezone = IANA timezone of the departure city e.g. Asia/Tokyo, Pacific/Honolulu, America/Los_Angeles, Europe/Rome.\n(8) location = departure city or airport name.\n(9) If a field is not in the email, use empty string. Never guess or invent values. If only a reservation code is present and flight times are in an unread PDF, leave localTime/flightNumber empty.",
       messages: [
         {
           role: "user",

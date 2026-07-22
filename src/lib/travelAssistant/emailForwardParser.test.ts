@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   extractBestLocalTimeFromEmailBody,
+  extractConfirmationCodeFromText,
   extractFlightLegsFromEmailBody,
   extractHotelPropertyName,
   parseForwardedEmail,
@@ -411,6 +412,50 @@ Polignano a Mare, Italy
     assert.equal(result.draft.title, "Casa de Elena");
     assert.match(result.draft.provider, /booking\.com/i);
     assert.notEqual(result.draft.title.toLowerCase(), "booking.com");
+  } finally {
+    if (previousKey === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = previousKey;
+    }
+  }
+});
+
+const itaBoilerplateEmail = `
+ITA Airways Electronic travel receipt
+Dear Customer STEPHANIE RUSSELL, thank you for choosing ITA Airways services.
+Please review this booking confirmation carefully as it includes some important and helpful information about your next trip.
+Reservation code Z84T4Z
+Your document(s) is/are: STEPHANIE RUSSELL: 055-4208939987 055-4208939989 055-2116012180
+We encourage you to keep this email as confirmation of your reservation.
+Effective March 15, 2016, Visa-exempt foreign nationals travelling to Canada by air must obtain a new entry requirement, known as an eTA.
+Canadian authorities will not allow boarding on flights to Canada for passengers who have not obtained an eTA.
+`;
+
+test("extractConfirmationCodeFromText prefers Reservation code over carefully", () => {
+  assert.equal(extractConfirmationCodeFromText(itaBoilerplateEmail), "Z84T4Z");
+  assert.equal(
+    extractConfirmationCodeFromText("Please review this booking confirmation carefully as it includes"),
+    null,
+  );
+});
+
+test("ITA receipt boilerplate does not invent 2016 flight dates or CAREFULLY codes", async () => {
+  const previousKey = process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  try {
+    const result = await parseForwardedEmail({
+      subject: "Fwd: ITA Airways Electronic travel receipt",
+      from: "jeff@gmail.com",
+      text: itaBoilerplateEmail,
+      html: "",
+      attachments: [{ filename: "eticket.pdf", contentType: "application/pdf", size: 12000 }],
+    });
+    assert.equal(result.draft.confirmationCode, "Z84T4Z");
+    assert.match(result.draft.provider, /ITA Airways/i);
+    assert.doesNotMatch(result.draft.localTime, /^2016-/);
+    assert.notEqual(result.draft.confirmationCode, "CAREFULLY");
+    assert.notEqual(result.draft.provider.toLowerCase(), "gmail");
   } finally {
     if (previousKey === undefined) {
       delete process.env.ANTHROPIC_API_KEY;

@@ -5,6 +5,10 @@
 
 Last updated: 2026-07-17 (Europe trip airports BRI/FCO/VCE/MUC bundled)
 
+## Decision 2026-07-22 — Email parse: no legal-footnote dates / CAREFULLY PNRs (I29)
+
+ITA/Alaska-style forwards: ignore eTA/visa “Effective March 15, 2016” dates; prefer `Reservation code Z84T4Z`; never treat “confirmation carefully” as a PNR; airline from body/subject not Gmail. PDF may still hold the real legs — empty times beat invented 2016.
+
 ## Decision 2026-07-20 — Plan Excel export (I26)
 
 Plan header **Excel** downloads SpreadsheetML `.xls` (Itinerary logistics + Day plan sheets) that opens in Microsoft Excel. No new npm dependency.

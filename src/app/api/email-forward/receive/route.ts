@@ -819,9 +819,14 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       }
 
       const iataPrefix = parserFlightNumber.slice(0, 2).toUpperCase();
-      const resolvedAirline = parserType === "flight"
-        ? (isEmailProviderName && iataPrefix.length === 2 ? `${iataPrefix} Airlines` : rawAirline || "Unknown Airline")
-        : "";
+      const resolvedAirline =
+        parserType === "flight"
+          ? isEmailProviderName
+            ? /^[A-Z]{2}\d/u.test(parserFlightNumber)
+              ? `${iataPrefix} Airlines`
+              : ""
+            : rawAirline || "Unknown Airline"
+          : "";
 
       const parserDepartureAirport =
         typeof parserDraftRecord.departureAirport === "string"
