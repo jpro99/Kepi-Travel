@@ -42,6 +42,7 @@ import {
 import {
   applyDayPlanToItineraryPlans,
   parseDayPlanItinerary,
+  remapParsedDayPlanToTripWindow,
 } from "@/lib/travelAssistant/parseDayPlanItinerary";
 import { normalizeItineraryPlans } from "@/lib/travelAssistant/itineraryDayPlan";
 import { resolveReservationPricing, resolvePricingNearBooking } from "@/lib/travelAssistant/parseReservationMiles";
@@ -1194,13 +1195,21 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         tripStartDate: targetTrip.startDate,
         tripEndDate: targetTrip.endDate,
       });
-    // Re-parse with trip year once we know the target trip dates.
-    const parsedDayPlanForTrip =
+    // Re-parse with trip year once we know the target trip dates, then force
+    // month/day dates into this trip window (Word docs often omit / misstate year).
+    const parsedDayPlanForTripRaw =
       parseDayPlanItinerary(earlyDayPlanSource, {
         subject: parserSubject,
         tripStartDate: targetTrip.startDate,
         tripEndDate: targetTrip.endDate,
       }) ?? parsedDayPlan;
+    const parsedDayPlanForTrip = parsedDayPlanForTripRaw
+      ? remapParsedDayPlanToTripWindow(
+          parsedDayPlanForTripRaw,
+          targetTrip.startDate,
+          targetTrip.endDate,
+        )
+      : null;
     let dayPlanDaysApplied = 0;
     let nextItineraryPlans = targetTrip.itineraryPlans
       ? normalizeItineraryPlans(targetTrip.itineraryPlans)
@@ -1217,7 +1226,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
             kind: "day-plan-itinerary",
             severity: "info",
             summary: parsedDayPlanForTrip.title || "Day plan itinerary",
-            detail: `Applied ${dayPlanDaysApplied} day${dayPlanDaysApplied === 1 ? "" : "s"} to your Plan tab from a forwarded itinerary.`,
+            detail: `Applied ${dayPlanDaysApplied} day${dayPlanDaysApplied === 1 ? "" : "s"} to ${targetTrip.name} (dates inside this trip).`,
             provider: "email-forward",
             appliedAt: new Date().toISOString(),
           },
@@ -1227,6 +1236,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       routeLogger.info("Parsed forwarded day-plan itinerary.", {
         userId: targetUserId,
         tripId: targetTrip.id,
+        tripName: targetTrip.name,
         title: parsedDayPlanForTrip.title,
         daysFound: parsedDayPlanForTrip.days.length,
         daysApplied: dayPlanDaysApplied,
@@ -1330,7 +1340,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
     const notificationSent = await sendPushNotification(targetUserId, {
       title: notifyPlanTab ? "Day plan itinerary received" : "Forwarded reservation received",
       body: notifyPlanTab
-        ? `${parsedDayPlanForTrip?.title ?? "Itinerary"} — ${dayPlanDaysApplied} days on your Plan tab.`
+        ? `${parsedDayPlanForTrip?.title ?? "Itinerary"} — ${dayPlanDaysApplied} days added to ${targetTrip.name}.`
         : buildPushBody(),
       url: `/travel-assistant?tripId=${encodeURIComponent(targetTrip.id)}&tab=${notifyPlanTab ? "itinerary" : "flights"}`,
     });
@@ -1351,9 +1361,9 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       status: 200,
       message:
         dayPlanDaysApplied > 0 && acceptedDraftCount === 0
-          ? `Day plan applied (${dayPlanDaysApplied} days). Open the Plan tab.`
+          ? `Day plan applied to ${targetTrip.name} (${dayPlanDaysApplied} days). Open the Plan tab.`
           : dayPlanDaysApplied > 0
-            ? `Forwarded email imported (${acceptedDraftCount} reservations, ${dayPlanDaysApplied} plan days).`
+            ? `Forwarded email imported to ${targetTrip.name} (${acceptedDraftCount} reservations, ${dayPlanDaysApplied} plan days).`
             : "Forwarded email auto-imported to live trip.",
       userId: targetUserId,
       tripId: targetTrip.id,

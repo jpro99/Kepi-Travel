@@ -19,6 +19,8 @@ Forwarded `.docx` itineraries (Puglia-style day bullets) extract via mammoth, pa
 
 **Incident 2026-07-20:** First day-plan forward could create/activate an empty shell trip so Plan looked wiped. Fix: day-plan forwards never create trips; never rewrite `reservations` on day-plan-only updates; GET `/api/trips` recovers active trip to the richest booking trip if active is empty.
 
+**Incident 2026-07-22:** Wife’s Puglia Word forward applied 11 days to empty “Trip to Polignano a Mare” (2025 dates) instead of Europe 2026. Merged notes into Europe 2026 (2026-09-02…12) and deleted orphan. Rule: day-plan dates inside a trip window (month/day, remap year) always attach to that booked trip.
+
 ## Decision 2026-07-20 — Print/PDF itinerary (I26)
 
 Print/PDF/CSV: **Day** (not Owner), no Timezone, chronological local-time sort, type color rows, dense landscape print matching Adaptive Travel Assistant chrome. Out-of-window junk dates (e.g. 2018) dropped when trip dates exist.

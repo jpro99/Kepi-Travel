@@ -454,9 +454,9 @@ Static itinerary Print/PDF/CSV/Excel uses a **Day** column (trip day number + da
 **Test:** `src/lib/travelAssistant/premiumItineraryExport.test.ts`
 
 **I27 — Word day-plan itineraries land on Plan days + friend-share letter**
-Forwarded **.docx** day plans (e.g. “Puglia Itinerary: SEPT 2–12”) are extracted, parsed into dated bullets, and written to `itineraryPlans` / Plan day notes — not treated as empty booking confirmations. Push/open Plan tab. **Day plan PDF** prints a portrait letter (title, stay block, Day N · date · city + bullets) for sharing with friends. Legacy `.doc` is unsupported (re-save as `.docx`).
+Forwarded **.docx** day plans (e.g. “Puglia Itinerary: SEPT 2–12”) are extracted, parsed into dated bullets, and written to `itineraryPlans` / Plan day notes — not treated as empty booking confirmations. Push/open Plan tab. **Day plan PDF** prints a portrait letter (title, stay block, Day N · date · city + bullets) for sharing with friends. Legacy `.doc` is unsupported (re-save as `.docx`). If day-plan dates fall inside an existing trip window (month/day match even when the Word year is wrong), attach to that trip — never a new empty shell. Confirm in the toast/feed by trip name.
 
-**Test:** `src/lib/travelAssistant/parseDayPlanItinerary.test.ts`, `src/lib/travelAssistant/narrativeItineraryExport.test.ts`
+**Test:** `src/lib/travelAssistant/parseDayPlanItinerary.test.ts`, `src/lib/travelAssistant/narrativeItineraryExport.test.ts`, `src/lib/travelAssistant/tripEmailAttach.test.ts`
 
 **I28 — Plan Timeline is the day-plan letter (not photo cards)**
 Timeline shows the same narrative day-plan layout as Day plan PDF: trip title, stay block, Day N · date · city, editable/draggable bullet lines. No random city thumbnails (source.unsplash / picsum). Internal parser jargon (e.g. “Applied AI fallback…”) never appears in traveler notes.
@@ -617,7 +617,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
 | I22, I23, I24, I25 | `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/reservationDisplayLabel.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts` |
 | I26 | `src/lib/travelAssistant/premiumItineraryExport.test.ts` |
-| I27 | `src/lib/travelAssistant/parseDayPlanItinerary.test.ts`, `src/lib/travelAssistant/narrativeItineraryExport.test.ts` |
+| I27 | `src/lib/travelAssistant/parseDayPlanItinerary.test.ts`, `src/lib/travelAssistant/narrativeItineraryExport.test.ts`, `src/lib/travelAssistant/tripEmailAttach.test.ts` |
 | I28 | `src/lib/travelAssistant/narrativeItineraryExport.test.ts`, `src/lib/travelAssistant/sanitizeTravelerNotes.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |

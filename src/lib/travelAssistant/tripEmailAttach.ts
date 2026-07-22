@@ -8,9 +8,12 @@ import {
   computeMinutesToDeparture,
   dateOnly,
   isTripShellConfigured,
+  remapDayKeyIntoTripWindow,
   reservationPrimaryDate,
   reservationWithinTripWindow,
 } from "@/lib/travelAssistant/tripWindow";
+
+export { remapDayKeyIntoTripWindow } from "@/lib/travelAssistant/tripWindow";
 import {
   createTrip,
   getActiveTrip,
@@ -188,9 +191,52 @@ export async function recoverActiveTripIfEmptyShell(userId: string): Promise<{
   };
 }
 
+/** How many day-plan dates land in the trip after year/month-day remapping. */
+export function countDayPlanOverlapWithTrip(
+  dayKeys: string[],
+  trip: Pick<TravelTrip, "startDate" | "endDate">,
+): number {
+  return dayKeys.filter((key) => Boolean(remapDayKeyIntoTripWindow(key, trip.startDate, trip.endDate))).length;
+}
+
+/**
+ * Pick the trip this day plan belongs to: dates inside an existing trip window win.
+ * Prefers trips with bookings over empty shells when overlap ties.
+ */
+export function pickBestTripForDayPlan(
+  trips: TravelTrip[],
+  dayKeys: string[],
+  activeTripId?: string | null,
+): TravelTrip | null {
+  const keys = dayKeys.map((key) => dateOnly(key)).filter((key) => /^\d{4}-\d{2}-\d{2}$/u.test(key));
+  if (keys.length === 0) return null;
+
+  const ranked = trips
+    .filter((candidate) => isTripShellConfigured(candidate))
+    .map((trip) => ({
+      trip,
+      matchCount: countDayPlanOverlapWithTrip(keys, trip),
+      reservationCount: Array.isArray(trip.reservations) ? trip.reservations.length : 0,
+    }))
+    .filter((entry) => entry.matchCount > 0)
+    .sort((left, right) => {
+      if (right.matchCount !== left.matchCount) return right.matchCount - left.matchCount;
+      if (right.reservationCount !== left.reservationCount) {
+        return right.reservationCount - left.reservationCount;
+      }
+      if (activeTripId) {
+        if (left.trip.id === activeTripId) return -1;
+        if (right.trip.id === activeTripId) return 1;
+      }
+      return 0;
+    });
+
+  return ranked[0]?.trip ?? null;
+}
+
 /**
  * Day-plan Word forwards must never create a new empty trip.
- * Prefer active trip with bookings, then date overlap, then richest trip.
+ * If day-plan dates fall inside an existing trip window (even wrong year), that trip wins.
  */
 export async function resolveTargetTripForDayPlanForward(
   userId: string,
@@ -199,6 +245,22 @@ export async function resolveTargetTripForDayPlanForward(
   const recovered = await recoverActiveTripIfEmptyShell(userId);
   const allTrips = await listTrips(userId);
   const activeTrip = recovered.trip ?? (await getActiveTrip(userId));
+
+  const overlapping = pickBestTripForDayPlan(allTrips, dayKeys, activeTrip?.id ?? null);
+  if (overlapping) {
+    // Empty shell that only matches by wrong-year dates loses to a booked trip with same month/days.
+    if ((overlapping.reservations?.length ?? 0) > 0) {
+      return activateTripIfNeeded(overlapping, userId);
+    }
+    const bookedOverlap = pickBestTripForDayPlan(
+      allTrips.filter((trip) => (trip.reservations?.length ?? 0) > 0),
+      dayKeys,
+      activeTrip?.id ?? null,
+    );
+    if (bookedOverlap) {
+      return activateTripIfNeeded(bookedOverlap, userId);
+    }
+  }
 
   if (activeTrip && (activeTrip.reservations?.length ?? 0) > 0) {
     return activeTrip;

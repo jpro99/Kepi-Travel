@@ -4,6 +4,7 @@ import {
   applyDayPlanToItineraryPlans,
   looksLikeDayPlanItinerary,
   parseDayPlanItinerary,
+  remapParsedDayPlanToTripWindow,
 } from "./parseDayPlanItinerary";
 
 const pugliaDoc = `
@@ -76,6 +77,27 @@ test("parses Sept days onto 2026 trip dates with bullets", () => {
   assert.match(sept3!.bullets.join(" "), /GetYourGuide/i);
   assert.equal(sept4!.heading, "BEST VIEWPOINTS");
   assert.match(sept2!.location ?? "", /Polignano/i);
+});
+
+test("remapParsedDayPlanToTripWindow shifts wrong-year days into the trip", () => {
+  const remapped = remapParsedDayPlanToTripWindow(
+    {
+      title: "Puglia",
+      headerLines: [],
+      days: [
+        { dateKey: "2025-09-02", bullets: ["Arrive Bari"] },
+        { dateKey: "2025-09-03", bullets: ["Boat tour"] },
+      ],
+      confidence: 0.9,
+      kind: "day-plan-itinerary",
+    },
+    "2026-09-01",
+    "2026-09-25",
+  );
+  assert.deepEqual(
+    remapped.days.map((d) => d.dateKey),
+    ["2026-09-02", "2026-09-03"],
+  );
 });
 
 test("applyDayPlanToItineraryPlans writes Plan notes without wiping existing", () => {

@@ -94,6 +94,34 @@ export function reservationWithinTripWindow(
   return day >= padStart && day <= padEnd;
 }
 
+/**
+ * Remap a day-plan date into a trip window by month/day when the year is wrong
+ * (Word docs often say "SEPT 2–12" with no year, or a stale year).
+ */
+export function remapDayKeyIntoTripWindow(
+  dateKey: string,
+  tripStartDate: string | null | undefined,
+  tripEndDate: string | null | undefined,
+): string | null {
+  const day = dateOnly(dateKey);
+  const start = dateOnly(tripStartDate);
+  const end = dateOnly(tripEndDate);
+  if (!day || !/^\d{4}-\d{2}-\d{2}$/u.test(day) || !start || !end) return null;
+  if (reservationWithinTripWindow(day, start, end)) return day;
+
+  const monthDay = day.slice(5); // MM-DD
+  if (!/^\d{2}-\d{2}$/u.test(monthDay)) return null;
+  const startYear = Number(start.slice(0, 4));
+  const endYear = Number(end.slice(0, 4));
+  if (!Number.isFinite(startYear) || !Number.isFinite(endYear)) return null;
+
+  for (let year = startYear; year <= endYear; year += 1) {
+    const candidate = `${year}-${monthDay}`;
+    if (reservationWithinTripWindow(candidate, start, end)) return candidate;
+  }
+  return null;
+}
+
 export function shiftIsoDate(isoDate: string, deltaDays: number): string {
   const base = Date.parse(`${isoDate}T12:00:00`);
   if (Number.isNaN(base)) return isoDate;

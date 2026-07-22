@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   countDraftDatesInTripWindow,
+  countDayPlanOverlapWithTrip,
   detectFlightScheduleChange,
   expandTripWindowIfNeeded,
   inferTripWindowFromDrafts,
   pickBestMatchingTripForDrafts,
+  pickBestTripForDayPlan,
   pickRichestTripByReservations,
+  remapDayKeyIntoTripWindow,
 } from "@/lib/travelAssistant/tripEmailAttach";
 import type { TravelTrip } from "@/lib/travelAssistant/tripStore";
 import { reservationWithinTripWindow } from "@/lib/travelAssistant/tripWindow";
@@ -118,7 +121,9 @@ test("pickBestMatchingTripForDrafts does not return a trip when no draft dates o
 });
 
 test("reservationWithinTripWindow allows reservations within padded window", () => {
-  assert.equal(reservationWithinTripWindow("2026-09-02", "2026-09-05", "2026-09-12"), true);
+  // Default pad is ±2 days from trip start/end.
+  assert.equal(reservationWithinTripWindow("2026-09-03", "2026-09-05", "2026-09-12"), true);
+  assert.equal(reservationWithinTripWindow("2026-09-02", "2026-09-05", "2026-09-12"), false);
   assert.equal(reservationWithinTripWindow("2026-08-20", "2026-09-05", "2026-09-12"), false);
 });
 
@@ -136,4 +141,31 @@ test("pickRichestTripByReservations prefers the trip that still has bookings", (
     reservations: [{ id: "f1" }, { id: "h1" }] as TravelTrip["reservations"],
   });
   assert.equal(pickRichestTripByReservations([emptyShell, europe])?.id, "europe");
+});
+
+test("day-plan dates inside a trip window attach to that trip even with wrong year (I27)", () => {
+  const emptyShell = makeTrip({
+    id: "empty-2025",
+    name: "Trip to Polignano a Mare",
+    destination: "Polignano a Mare",
+    startDate: "2025-09-02",
+    endDate: "2025-09-12",
+    reservations: [],
+  });
+  const europe = makeTrip({
+    id: "europe-2026",
+    name: "Europe 2026",
+    destination: "Italy",
+    startDate: "2026-09-01",
+    endDate: "2026-09-25",
+    reservations: [{ id: "f1" }, { id: "h1" }] as TravelTrip["reservations"],
+  });
+  const dayKeys = ["2025-09-02", "2025-09-05", "2025-09-12"];
+
+  assert.equal(remapDayKeyIntoTripWindow("2025-09-02", europe.startDate, europe.endDate), "2026-09-02");
+  assert.equal(countDayPlanOverlapWithTrip(dayKeys, europe), 3);
+  assert.equal(countDayPlanOverlapWithTrip(dayKeys, emptyShell), 3);
+
+  const picked = pickBestTripForDayPlan([emptyShell, europe], dayKeys, emptyShell.id);
+  assert.equal(picked?.id, "europe-2026");
 });

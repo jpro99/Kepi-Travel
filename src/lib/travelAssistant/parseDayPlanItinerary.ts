@@ -10,6 +10,7 @@ import {
   type DayPlanRecord,
   type ItineraryPlansData,
 } from "@/lib/travelAssistant/itineraryDayPlan";
+import { remapDayKeyIntoTripWindow } from "@/lib/travelAssistant/tripWindow";
 
 export interface ParsedDayPlanDay {
   dateKey: string;
@@ -346,6 +347,26 @@ function formatDayNotes(day: ParsedDayPlanDay): string {
     lines.push(`• ${bullet.replace(/^[•\-\*]\s*/u, "")}`);
   }
   return lines.join("\n").trim();
+}
+
+/**
+ * Shift day-plan dates into the target trip window when month/day matches
+ * (wrong year from Word "SEPT 2–12" without a year).
+ */
+export function remapParsedDayPlanToTripWindow(
+  parsed: ParsedDayPlanItinerary,
+  tripStartDate: string | null | undefined,
+  tripEndDate: string | null | undefined,
+): ParsedDayPlanItinerary {
+  const remappedDays: ParsedDayPlanDay[] = [];
+  for (const day of parsed.days) {
+    const nextKey = remapDayKeyIntoTripWindow(day.dateKey, tripStartDate, tripEndDate);
+    if (!nextKey) continue;
+    remappedDays.push({ ...day, dateKey: nextKey });
+  }
+  if (remappedDays.length === 0) return parsed;
+  remappedDays.sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+  return { ...parsed, days: remappedDays };
 }
 
 /**
