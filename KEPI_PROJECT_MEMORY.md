@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-17 (Europe trip airports BRI/FCO/VCE/MUC bundled)
+Last updated: 2026-07-22 (core pipeline audit; airport-map expansion frozen)
+
+## Decision 2026-07-22 — Freeze airport-map expansion (Jeff)
+
+Pause new airport-map work. SEA stays the showcase (`routeGrade: surveyed`). LAX/ONT stay schematic/partial. Do not add airports, new M-laws under maps, or touch `osmImport` / `controlPointTransform` / `layouts/` / `kepi-airport-bot` unless Jeff explicitly reopens. Redirect effort to whole-trip pipeline. Audit: `KEPI_CORE_PIPELINE_AUDIT_2026-07-22.md`.
 
 ## Decision 2026-07-22 — Email parse: no legal-footnote dates / CAREFULLY PNRs (I29)
 
