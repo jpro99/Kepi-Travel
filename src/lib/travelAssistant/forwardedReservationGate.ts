@@ -35,8 +35,16 @@ export function evaluateForwardedReservationGate(
     reasons.push(`Low parsing confidence (${input.confidenceScore}/100).`);
   }
 
+  if (input.parsingStatus === "needs-review") {
+    reasons.push("Parser confidence needs a quick review before import.");
+  }
+
   if (input.parsingStatus === "needs-user-input") {
     reasons.push("Parser flagged fields that need your input.");
+  }
+
+  if (input.missingFields && input.missingFields.length > 0) {
+    reasons.push(`Missing fields: ${input.missingFields.join(", ")}.`);
   }
 
   if (

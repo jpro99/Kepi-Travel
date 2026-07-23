@@ -453,6 +453,11 @@ Forwarded airline receipts must not treat visa/eTA boilerplate dates (e.g. “Ef
 
 **Test:** `src/lib/travelAssistant/emailForwardParser.test.ts`
 
+**I30 — Gate on raw parse before enrich; never invent missing fields to pass review**
+`evaluateForwardedReservationGate` must run on **raw** parser fields before `enrichReservationForAutoImport`. Hold `needs-review` (40–69), honor `missingFields`, and never auto-import when location/time were empty but enrich would invent `"Hotel stay"` / today's noon. Day-plan forwards still queue/import booking-shaped drafts; out-of-window drafts go to review — never silent drop. Duplicate detection uses one shared `isDuplicateReservation` with empty-composite guard.
+
+**Test:** `src/lib/travelAssistant/forwardedReservationGate.test.ts`, `src/lib/travelAssistant/forwardedDraftImport.test.ts`, `src/lib/travelAssistant/reservationDuplicates.test.ts`
+
 **I26 — Print/PDF/Excel itinerary is chronological and scannable**
 Static itinerary Print/PDF/CSV/Excel uses a **Day** column (trip day number + date), not Owner. No timezone column. Rows sort by local departure/check-in time (Ontario before Seattle on the same day). Flights/hotels/trains/rides are **color-coded**. Print CSS stays dense (landscape, tight padding, `print-color-adjust: exact`) so the PDF matches the on-screen Adaptive Travel Assistant look. Dates far outside the trip window (e.g. 2018 voucher bleed) are omitted from the export. Plan **Excel** downloads a SpreadsheetML `.xls` (Itinerary + Day plan sheets) that opens in Microsoft Excel.
 
@@ -625,6 +630,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I27 | `src/lib/travelAssistant/parseDayPlanItinerary.test.ts`, `src/lib/travelAssistant/narrativeItineraryExport.test.ts`, `src/lib/travelAssistant/tripEmailAttach.test.ts` |
 | I28 | `src/lib/travelAssistant/narrativeItineraryExport.test.ts`, `src/lib/travelAssistant/sanitizeTravelerNotes.test.ts` |
 | I29 | `src/lib/travelAssistant/emailForwardParser.test.ts` |
+| I30 | `src/lib/travelAssistant/forwardedReservationGate.test.ts`, `src/lib/travelAssistant/forwardedDraftImport.test.ts`, `src/lib/travelAssistant/reservationDuplicates.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

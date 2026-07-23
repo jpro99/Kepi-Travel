@@ -53,7 +53,25 @@ test("hotels dedupe on check-in date and location not provider alone", () => {
     provider: "Hyatt",
     localTime: "2026-09-15 15:00",
     location: "Rome, Italy",
-    confirmationCode: "H123",
+    confirmationCode: "H456",
   };
   assert.equal(isDuplicateReservation(existing, differentCity), false);
+});
+
+test("empty composite signals must not dedupe each other (Problem 6)", () => {
+  const emptyA = {
+    type: "",
+    provider: "",
+    localTime: "",
+    location: "",
+    confirmationCode: "",
+  };
+  const emptyB = {
+    type: "",
+    provider: "",
+    localTime: "",
+    location: "",
+    confirmationCode: "",
+  };
+  assert.equal(isDuplicateReservation(emptyA, emptyB), false);
 });

@@ -14,6 +14,10 @@ interface BugReportModalProps {
 interface SubmitResult {
   ticketId: string;
   message: string;
+  issueUrl?: string | null;
+  githubIssueCreated?: boolean;
+  smsSent?: boolean;
+  filingWarnings?: string[];
 }
 
 const CATEGORIES: { value: BugCategory; label: string }[] = [
@@ -74,7 +78,16 @@ export function BugReportModal({ open, initialCategory = "crash", onClose }: Bug
       if (!response.ok) {
         throw new Error(payload.error ?? `Submission failed (${response.status})`);
       }
-      setResult({ ticketId: payload.ticketId ?? "BUG", message: payload.message ?? "Report received." });
+      setResult({
+        ticketId: payload.ticketId ?? "BUG",
+        message: payload.message ?? "Report received.",
+        issueUrl: payload.issueUrl ?? null,
+        githubIssueCreated: payload.githubIssueCreated,
+        smsSent: payload.smsSent,
+        filingWarnings: Array.isArray(payload.filingWarnings)
+          ? payload.filingWarnings.filter((entry): entry is string => typeof entry === "string")
+          : [],
+      });
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Could not submit report.");
     } finally {
@@ -115,6 +128,21 @@ export function BugReportModal({ open, initialCategory = "crash", onClose }: Bug
             <p className="mt-3 text-base font-bold text-emerald-700 dark:text-emerald-300">Report received</p>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{result.message}</p>
             <p className="mt-1 text-xs text-slate-500">Ticket #{result.ticketId}</p>
+            {result.githubIssueCreated && result.issueUrl ? (
+              <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">
+                GitHub issue filed:{" "}
+                <a href={result.issueUrl} target="_blank" rel="noreferrer" className="underline">
+                  {result.issueUrl}
+                </a>
+              </p>
+            ) : null}
+            {result.filingWarnings && result.filingWarnings.length > 0 ? (
+              <ul className="mt-3 space-y-1 text-left text-xs text-amber-700 dark:text-amber-300">
+                {result.filingWarnings.map((warning) => (
+                  <li key={warning}>• {warning}</li>
+                ))}
+              </ul>
+            ) : null}
             <button
               type="button"
               onClick={onClose}

@@ -12,15 +12,40 @@ export interface DuplicateReservationFields extends FlightLegMatchFields {
   flightNumber?: string;
   flightDepartureAirport?: string;
   flightArrivalAirport?: string;
+  departureAirport?: string;
+  arrivalAirport?: string;
 }
 
-function normalizeDuplicateValue(value: string): string {
-  return value.trim().toLowerCase();
+function normalizeDuplicateValue(value: unknown): string {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function hasFullCompositeSignal(
+  reservationType: string,
+  draftType: string,
+  reservationProvider: string,
+  draftProvider: string,
+  reservationLocalTime: string,
+  draftLocalTime: string,
+  reservationLocation: string,
+  draftLocation: string,
+): boolean {
+  return (
+    reservationType.length > 0 &&
+    draftType.length > 0 &&
+    reservationProvider.length > 0 &&
+    draftProvider.length > 0 &&
+    reservationLocalTime.length > 0 &&
+    draftLocalTime.length > 0 &&
+    reservationLocation.length > 0 &&
+    draftLocation.length > 0
+  );
 }
 
 /**
  * True when draft is already represented on the trip.
  * Multi-leg tickets share one PNR — flights must match by leg (route / flight # / date), not code alone.
+ * Empty composite fields must never match (ENGINEERING_NOTES Problem 6).
  */
 export function isDuplicateReservation(
   reservation: DuplicateReservationFields,
@@ -36,9 +61,20 @@ export function isDuplicateReservation(
   const reservationCode = normalizeDuplicateValue(reservation.confirmationCode ?? "");
   const draftCode = normalizeDuplicateValue(draft.confirmationCode ?? "");
 
+  if (reservationCode.length > 0 && draftCode.length > 0 && reservationCode === draftCode) {
+    return true;
+  }
+
+  if (reservationType !== draftType) {
+    return false;
+  }
+
+  const reservationLocalTime = normalizeDuplicateValue(reservation.localTime);
+  const draftLocalTime = normalizeDuplicateValue(draft.localTime);
+
   if (reservationType === "hotel" && draftType === "hotel") {
-    const reservationDate = normalizeDuplicateValue(reservation.localTime).slice(0, 10);
-    const draftDate = normalizeDuplicateValue(draft.localTime).slice(0, 10);
+    const reservationDate = reservationLocalTime.slice(0, 10);
+    const draftDate = draftLocalTime.slice(0, 10);
     const reservationLocation = normalizeDuplicateValue(reservation.location);
     const draftLocation = normalizeDuplicateValue(draft.location);
     if (
@@ -64,16 +100,33 @@ export function isDuplicateReservation(
 
   if (reservationCode.length > 0 && draftCode.length > 0 && reservationCode === draftCode) {
     if (reservationType === draftType) {
-      return (
-        normalizeDuplicateValue(reservation.localTime) === normalizeDuplicateValue(draft.localTime)
-      );
+      return reservationLocalTime === draftLocalTime;
     }
   }
 
+  const reservationProvider = normalizeDuplicateValue(reservation.provider);
+  const draftProvider = normalizeDuplicateValue(draft.provider);
+  const reservationLocation = normalizeDuplicateValue(reservation.location);
+  const draftLocation = normalizeDuplicateValue(draft.location);
+
+  if (
+    !hasFullCompositeSignal(
+      reservationType,
+      draftType,
+      reservationProvider,
+      draftProvider,
+      reservationLocalTime,
+      draftLocalTime,
+      reservationLocation,
+      draftLocation,
+    )
+  ) {
+    return false;
+  }
+
   return (
-    reservationType === draftType &&
-    normalizeDuplicateValue(reservation.provider) === normalizeDuplicateValue(draft.provider) &&
-    normalizeDuplicateValue(reservation.localTime) === normalizeDuplicateValue(draft.localTime) &&
-    normalizeDuplicateValue(reservation.location) === normalizeDuplicateValue(draft.location)
+    reservationProvider === draftProvider &&
+    reservationLocalTime === draftLocalTime &&
+    reservationLocation === draftLocation
   );
 }

@@ -56,7 +56,7 @@ function cityKey(value: string): string {
 }
 
 function reservationBooked(reservation: HotelStayMapReservation): boolean {
-  return !isPlannedReservation(reservation);
+  return !isPlannedReservation({ ...reservation, type: reservation.type ?? "hotel" });
 }
 
 function pointFromReservation(reservation: HotelStayMapReservation): HotelStayMapPoint | null {

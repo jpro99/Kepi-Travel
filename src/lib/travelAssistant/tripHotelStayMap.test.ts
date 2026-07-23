@@ -77,7 +77,8 @@ describe("buildHotelStayMapPoints", () => {
           cityIata: "BRI",
           checkIn: "2026-09-06",
           checkOut: "2026-09-09",
-          status: "needs_hotel",
+          nights: 3,
+          status: "needed",
         },
       ],
     });

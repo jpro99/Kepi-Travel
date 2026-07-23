@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-22 (core pipeline audit; airport-map expansion frozen)
+Last updated: 2026-07-23 (I30 ingest gate + silent-drop fixes)
+
+## Decision 2026-07-23 — I30 ingest gate before enrich (Jeff approved build)
+Gate runs on raw parser fields before enrich; hold `needs-review`; honor `missingFields`. Day-plan forwards still import booking-shaped drafts; out-of-window drafts queue for review. Unified `reservationDuplicates` empty-composite guard. Bug-report API surfaces `filingWarnings` when GH/Twilio not configured.
 
 ## Decision 2026-07-22 — Freeze airport-map expansion (Jeff)
 

@@ -72,3 +72,44 @@ test("evaluateForwardedReservationGate holds implausible drafts even at high con
   assert.equal(result.needsReview, true);
   assert.ok(result.reasons.some((reason) => reason.includes("both")));
 });
+
+test("evaluateForwardedReservationGate holds needs-review status (40-69) for review", () => {
+  const result = evaluateForwardedReservationGate({
+    type: "hotel",
+    localTime: "2026-09-14 15:00",
+    location: "Monopoli",
+    confidenceScore: 55,
+    parsingStatus: "needs-review",
+    now: NOW,
+  });
+  assert.equal(result.needsReview, true);
+  assert.ok(result.reasons.some((reason) => reason.includes("quick review")));
+});
+
+test("evaluateForwardedReservationGate honors missingFields", () => {
+  const result = evaluateForwardedReservationGate({
+    type: "flight",
+    localTime: "2026-09-14 08:45",
+    flightDepartureAirport: "ONT",
+    flightArrivalAirport: "SEA",
+    confidenceScore: 90,
+    parsingStatus: "auto-parsed",
+    missingFields: ["departureAirport", "localTime"],
+    now: NOW,
+  });
+  assert.equal(result.needsReview, true);
+  assert.ok(result.reasons.some((reason) => reason.includes("Missing fields")));
+});
+
+test("evaluateForwardedReservationGate holds hotel missing raw location and time", () => {
+  const result = evaluateForwardedReservationGate({
+    type: "hotel",
+    localTime: "",
+    location: "",
+    confidenceScore: 85,
+    parsingStatus: "auto-parsed",
+    now: NOW,
+  });
+  assert.equal(result.needsReview, true);
+  assert.ok(result.reasons.some((reason) => reason.includes("Missing check-in")));
+});

@@ -132,6 +132,15 @@ export async function POST(req: Request) {
     labels: githubLabels,
   });
 
+  const githubConfigured = Boolean(
+    process.env.GITHUB_TOKEN?.trim() || process.env.BUG_REPORT_GITHUB_TOKEN?.trim(),
+  );
+  const twilioConfigured = Boolean(
+    process.env.TWILIO_ACCOUNT_SID?.trim() &&
+      process.env.TWILIO_AUTH_TOKEN?.trim() &&
+      process.env.TWILIO_FROM_NUMBER?.trim(),
+  );
+
   // SMS Jeff if real code bug
   const ownerPhone = process.env.OWNER_PHONE_NUMBER?.trim() || process.env.JEFF_PHONE_NUMBER?.trim();
   let smsSent = false;
@@ -152,10 +161,32 @@ export async function POST(req: Request) {
     });
   }
 
+  const filingWarnings: string[] = [];
+  if (!githubConfigured) {
+    filingWarnings.push(
+      "GitHub issue filing is not configured — set GITHUB_TOKEN or BUG_REPORT_GITHUB_TOKEN on Vercel and in .env.local.",
+    );
+  } else if (!issue) {
+    filingWarnings.push("GitHub issue filing failed — check token scope (issues:write on jpro99/Kepi-Travel).");
+  }
+  if (classification.isCodeBug && !ownerPhone) {
+    filingWarnings.push(
+      "Owner SMS phone is not configured — set OWNER_PHONE_NUMBER (or JEFF_PHONE_NUMBER) on Vercel and in .env.local.",
+    );
+  } else if (classification.isCodeBug && ownerPhone && !smsSent && !twilioConfigured) {
+    filingWarnings.push(
+      "Twilio SMS is not configured — set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER.",
+    );
+  }
+
   const userMessage = classification.isCodeBug
     ? smsSent
       ? "Thanks — we've filed a bug and Jeff is being notified. We'll have AI look at it right away."
-      : "Thanks — your report has been filed. The team will review it shortly."
+      : issue
+        ? "Thanks — your report has been filed. The team will review it shortly."
+        : filingWarnings.length > 0
+          ? "Thanks — we saved your report, but automatic filing is not fully configured yet."
+          : "Thanks — your report has been filed. The team will review it shortly."
     : "Thanks for the report. It looks like this might not be a code error — our team will review and follow up if needed.";
 
   return NextResponse.json(
@@ -165,7 +196,10 @@ export async function POST(req: Request) {
       confidence: classification.confidence,
       isCodeBug: classification.isCodeBug,
       issueUrl: issue?.url ?? null,
+      issueNumber: issue?.number ?? null,
+      githubIssueCreated: Boolean(issue),
       smsSent,
+      filingWarnings,
     },
     { headers: rateLimit.headers },
   );

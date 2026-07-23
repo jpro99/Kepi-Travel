@@ -3,7 +3,10 @@ import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservatio
 import {
   enrichReservationFromTripPeers,
   hydrateReservationPricing,
+  type PricingPeerResolvable,
 } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
+import type { CashUsdResolvable } from "@/lib/travelAssistant/parseReservationCashUsd";
+import type { MilesResolvable } from "@/lib/travelAssistant/parseReservationMiles";
 
 export interface TripSpendReservation {
   id: string;
@@ -46,7 +49,7 @@ export function isSpendTrackedReservation(reservation: TripSpendReservation): bo
 }
 
 function hasCashPrice(reservation: TripSpendReservation): boolean {
-  return resolveReservationCashUsd(reservation) != null;
+  return resolveReservationCashUsd(asPricingInput(reservation)) != null;
 }
 
 function hasPointsPrice(reservation: TripSpendReservation): boolean {
@@ -61,11 +64,32 @@ export function reservationHasAnyPrice(reservation: TripSpendReservation): boole
   return hasCashPrice(reservation) || hasPointsPrice(reservation);
 }
 
+type SpendPricingInput = CashUsdResolvable & MilesResolvable & PricingPeerResolvable & { id: string };
+
+function asPricingInput(reservation: TripSpendReservation): SpendPricingInput {
+  return {
+    id: reservation.id,
+    sourceEmailId: reservation.sourceEmailId,
+    quotedPriceUsd: reservation.quotedPriceUsd,
+    quotedPointsMiles: reservation.quotedPointsMiles,
+    quotedMilesEarned: reservation.quotedMilesEarned,
+    pointsProgram: reservation.pointsProgram,
+    notes: reservation.notes,
+    originalEmailText: reservation.originalEmailText,
+    confirmationCode: reservation.confirmationCode ?? undefined,
+    title: reservation.title,
+  };
+}
+
 function hydrateSpendReservation(
   reservation: TripSpendReservation,
   allReservations: TripSpendReservation[],
 ): TripSpendReservation {
-  return hydrateReservationPricing(enrichReservationFromTripPeers(reservation, allReservations));
+  const normalized = asPricingInput(reservation);
+  const normalizedPeers = allReservations.map(asPricingInput);
+  const enriched = enrichReservationFromTripPeers(normalized, normalizedPeers);
+  const hydrated = hydrateReservationPricing(enriched);
+  return { ...reservation, ...hydrated };
 }
 
 /** Multi-leg bookings that share one confirmation or one forwarded email. */
@@ -120,7 +144,8 @@ export function reservationMissingPrice(
 ): boolean {
   if (!isSpendTrackedReservation(reservation)) return false;
   if (!allReservations || allReservations.length === 0) {
-    return !reservationHasAnyPrice(hydrateReservationPricing(reservation));
+    const hydrated = hydrateReservationPricing(asPricingInput(reservation));
+    return !reservationHasAnyPrice({ ...hydrated, id: reservation.id });
   }
   if (reservationGroupHasAnyPrice(reservation, allReservations)) {
     return false;
@@ -147,7 +172,7 @@ export function computeTripSpend(reservations: TripSpendReservation[]): TripSpen
     }
     byType[type].count += 1;
 
-    let cash = resolveReservationCashUsd(reservation) ?? 0;
+    let cash = resolveReservationCashUsd(asPricingInput(reservation)) ?? 0;
     if (cash > 0 && reservation.originalEmailText?.trim()) {
       const dedupeKey = `${reservation.originalEmailText.trim().slice(0, 256)}::${cash}`;
       if (countedEmailTotals.has(dedupeKey)) {
@@ -208,8 +233,11 @@ function shouldShowSharedEmailCashOnLeg(
   const sorted = [...allReservations].sort((left, right) =>
     (left.id ?? "").localeCompare(right.id ?? ""),
   );
+  const normalizedPeers = allReservations.map(asPricingInput);
   const firstLeg = sorted.find((candidate) => {
-    const hydrated = hydrateReservationPricing(enrichReservationFromTripPeers(candidate, allReservations));
+    const hydrated = hydrateReservationPricing(
+      enrichReservationFromTripPeers(asPricingInput(candidate), normalizedPeers),
+    );
     if (resolveReservationCashUsd(hydrated) !== cashUsd) return false;
     if (!hydrated.originalEmailText?.trim()) return false;
     return `${hydrated.originalEmailText.trim().slice(0, 256)}::${cashUsd}` === dedupeKey;
@@ -222,8 +250,10 @@ export function formatReservationCostLine(
   options?: { allReservations?: TripSpendReservation[] },
 ): string | null {
   const peers = options?.allReservations ?? [];
+  const normalized = asPricingInput(reservation);
+  const normalizedPeers = peers.map(asPricingInput);
   const hydrated = hydrateReservationPricing(
-    peers.length > 0 ? enrichReservationFromTripPeers(reservation, peers) : reservation,
+    peers.length > 0 ? enrichReservationFromTripPeers(normalized, normalizedPeers) : normalized,
   );
   const parts: string[] = [];
   const cashUsd = resolveReservationCashUsd(hydrated);

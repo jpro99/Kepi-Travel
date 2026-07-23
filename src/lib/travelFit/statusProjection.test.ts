@@ -50,7 +50,7 @@ test("buildStatusProjections merges wallet baseline with Kepi flights", () => {
         flightArrivalAirport: "SEA",
       },
     ],
-    genomeStatuses: [],
+    statuses: [],
   });
   const alaska = projections.find((p) => p.program.includes("Alaska"));
   assert.ok(alaska);

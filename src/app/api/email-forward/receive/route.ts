@@ -29,6 +29,11 @@ import {
 } from "@/lib/travelAssistant/flightItinerarySync";
 import { enrichReservationForAutoImport } from "@/lib/travelAssistant/autoImportReservation";
 import { evaluateForwardedReservationGate } from "@/lib/travelAssistant/forwardedReservationGate";
+import {
+  OUT_OF_WINDOW_REVIEW_REASON,
+  selectDraftsToImport,
+} from "@/lib/travelAssistant/forwardedDraftImport";
+import { isDuplicateReservation } from "@/lib/travelAssistant/reservationDuplicates";
 import { drainForwardReviewQueue } from "@/lib/travelAssistant/drainForwardReviewQueue";
 import { getFewShotExamplesForEmail } from "@/lib/travelAssistant/mlReadiness/fewShotExamples";
 import { EMAIL_FORWARD_PARSER_VERSION } from "@/lib/travelAssistant/mlReadiness/parserVersion";
@@ -95,10 +100,6 @@ function confidenceToDraftValue(score: number): "high" | "medium" | "low" {
 
 function buildPushBody(): string {
   return "New reservation added to your trip";
-}
-
-function normalizeDuplicateValue(value: unknown): string {
-  return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -199,84 +200,6 @@ function normalizeIncomingWebhookBody(body: unknown): Record<string, unknown> {
     firstDefined(root.attachments, data?.attachments, nestedEmail?.attachments),
   );
   return normalized;
-}
-
-function isDuplicateReservation(
-  existing: {
-    type?: string;
-    provider?: string;
-    localTime?: string;
-    location?: string;
-    confirmationCode?: string;
-    flightNumber?: string;
-    flightDepartureAirport?: string;
-    flightArrivalAirport?: string;
-    departureAirport?: string;
-    arrivalAirport?: string;
-  },
-  candidate: {
-    type?: string;
-    provider?: string;
-    localTime?: string;
-    location?: string;
-    confirmationCode?: string;
-    flightNumber?: string;
-    flightDepartureAirport?: string;
-    flightArrivalAirport?: string;
-    departureAirport?: string;
-    arrivalAirport?: string;
-  },
-): boolean {
-  const existingType = normalizeDuplicateValue(existing.type);
-  const candidateType = normalizeDuplicateValue(candidate.type);
-  if (existingType === "flight" && candidateType === "flight") {
-    return isSameFlightLeg(existing, candidate);
-  }
-  const existingCode = normalizeDuplicateValue(existing.confirmationCode);
-  const candidateCode = normalizeDuplicateValue(candidate.confirmationCode);
-  if (existingCode.length > 0 && candidateCode.length > 0 && existingCode === candidateCode) {
-    return true;
-  }
-  if (existingType !== candidateType) {
-    return false;
-  }
-  const existingLocalTime = normalizeDuplicateValue(existing.localTime);
-  const candidateLocalTime = normalizeDuplicateValue(candidate.localTime);
-  // For hotels: match on check-in date (first 10 chars) + location
-  // Never match on provider since it's often "Gmail" or similar
-  if (existingType === "hotel") {
-    const existingDate = existingLocalTime.slice(0, 10);
-    const candidateDate = candidateLocalTime.slice(0, 10);
-    const existingLocation = normalizeDuplicateValue(existing.location);
-    const candidateLocation = normalizeDuplicateValue(candidate.location);
-    if (existingDate.length === 10 && candidateDate.length === 10 && existingDate === candidateDate &&
-        existingLocation.length > 0 && candidateLocation.length > 0 && existingLocation === candidateLocation) {
-      return true;
-    }
-    return false;
-  }
-  const existingProvider = normalizeDuplicateValue(existing.provider);
-  const candidateProvider = normalizeDuplicateValue(candidate.provider);
-  const existingLocation = normalizeDuplicateValue(existing.location);
-  const candidateLocation = normalizeDuplicateValue(candidate.location);
-  const hasFullCompositeSignal =
-    existingType.length > 0 &&
-    candidateType.length > 0 &&
-    existingProvider.length > 0 &&
-    candidateProvider.length > 0 &&
-    existingLocalTime.length > 0 &&
-    candidateLocalTime.length > 0 &&
-    existingLocation.length > 0 &&
-    candidateLocation.length > 0;
-  if (!hasFullCompositeSignal) {
-    return false;
-  }
-  return (
-    existingType === candidateType &&
-    existingProvider === candidateProvider &&
-    existingLocalTime === candidateLocalTime &&
-    existingLocation === candidateLocation
-  );
 }
 
 function isDuplicateAgainstReviewQueue(
@@ -727,7 +650,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       sourceLinks: emailSourceLinks.length > 0 ? emailSourceLinks : undefined,
     };
     // Day-plan Word docs are not booking confirmations — skip reservation import entirely.
-    const draftsToImport = isDayPlanForward ? [] : parserDraftRecords;
+    const draftsToImport = selectDraftsToImport(parserDraftRecords, isDayPlanForward);
     for (const parserDraftRecord of draftsToImport) {
       const draftPrimaryDate = reservationPrimaryDate({
         type: typeof parserDraftRecord.type === "string" ? parserDraftRecord.type : undefined,
@@ -739,20 +662,6 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
             : undefined,
         checkOutDate: typeof parserDraftRecord.checkOutDate === "string" ? parserDraftRecord.checkOutDate : undefined,
       });
-      if (
-        draftPrimaryDate &&
-        isTripShellConfigured(targetTrip) &&
-        !reservationWithinTripWindow(draftPrimaryDate, targetTrip.startDate, targetTrip.endDate)
-      ) {
-        routeLogger.info("Skipped forwarded draft outside target trip window.", {
-          userId: targetUserId,
-          tripId: targetTrip.id,
-          draftPrimaryDate,
-          tripStart: targetTrip.startDate,
-          tripEnd: targetTrip.endDate,
-        });
-        continue;
-      }
       const rawType = parserDraftRecord.type;
       const parserType: SessionReservation["type"] =
         rawType === "flight" ||
@@ -894,6 +803,59 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
             : undefined,
         ...emailSourceMetadata,
       };
+
+      if (
+        draftPrimaryDate &&
+        isTripShellConfigured(targetTrip) &&
+        !reservationWithinTripWindow(draftPrimaryDate, targetTrip.startDate, targetTrip.endDate)
+      ) {
+        nextQueue = [
+          {
+            id: `review-email-${generateId()}`,
+            reasons: [OUT_OF_WINDOW_REVIEW_REASON],
+            impact: "This booking falls outside your trip dates — confirm or move it before it goes live.",
+            draft: {
+              type: parserType,
+              title: parserTitle,
+              provider: parserProvider,
+              localTime: parserLocalTime,
+              timezone: parserTimezone || "Etc/UTC",
+              location: parserLocation,
+              confirmationCode: parserConfirmationCode,
+              assignedTo: parserAssignedTo.length > 0 ? parserAssignedTo : defaultAssignees,
+              stage: targetTrip.stage,
+              critical: parserType === "flight" || parserType === "train" || parserType === "ride",
+              confidence: confidenceToDraftValue(parserConfidenceScore),
+              notes: parserNotesText,
+              flightNumber: parserType === "flight" ? parserFlightNumber : "",
+              flightAirline: resolvedAirline,
+              flightDate: parserType === "flight" ? parserLocalTime.slice(0, 10) : "",
+              flightDepartureAirport: parsedReservation.flightDepartureAirport,
+              flightArrivalAirport: parsedReservation.flightArrivalAirport,
+              flightDepartureTime: parsedReservation.flightDepartureTime,
+              checkOutDate: parsedReservation.checkOutDate,
+            },
+            sourceChannel: "email-forward" as const,
+            parseConfidenceScore: parserConfidenceScore,
+            parsingStatus: parserParsingStatus,
+            missingFields: parserMissingFields,
+            reviewStatus: "pending" as const,
+            parserNotes,
+            parserVersion: parserResult.parserVersion ?? EMAIL_FORWARD_PARSER_VERSION,
+            ...emailSourceMetadata,
+          },
+          ...nextQueue,
+        ];
+        routeLogger.info("Forwarded draft outside trip window queued for review.", {
+          userId: targetUserId,
+          tripId: targetTrip.id,
+          draftPrimaryDate,
+          tripStart: targetTrip.startDate,
+          tripEnd: targetTrip.endDate,
+        });
+        acceptedDraftCount += 1;
+        continue;
+      }
 
       const plannedReplacementIndex = findPlannedReplacementIndex(nextReservations, parsedReservation);
       if (plannedReplacementIndex >= 0) {
@@ -1079,33 +1041,13 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         continue;
       }
 
-      const enrichedFields = enrichReservationForAutoImport({
-        type: parserType,
-        title: parserTitle,
-        provider: parserProvider,
-        localTime: parserLocalTime,
-        timezone: parserTimezone || "Etc/UTC",
-        location: parserLocation,
-        confirmationCode: parserConfirmationCode,
-        notes: parserNotesText,
-        flightNumber: parserType === "flight" ? parserFlightNumber : "",
-        flightAirline: resolvedAirline,
-        flightDate: parserType === "flight" ? parserLocalTime.slice(0, 10) : "",
-        flightDepartureAirport:
-          parserType === "flight" ? parsedReservation.flightDepartureAirport : "",
-        flightArrivalAirport:
-          parserType === "flight" ? parsedReservation.flightArrivalAirport : "",
-        flightDepartureTime: parserType === "flight" && parserLocalTime ? parserLocalTime : "",
-        checkOutDate: parserType === "hotel" ? parsedReservation.checkOutDate : "",
-      });
-
       const gateResult = evaluateForwardedReservationGate({
         type: parserType,
-        localTime: enrichedFields.localTime,
-        location: enrichedFields.location,
+        localTime: parserLocalTime,
+        location: parserLocation,
         checkOutDate: parsedReservation.checkOutDate,
-        flightDepartureAirport: enrichedFields.flightDepartureAirport ?? parsedReservation.flightDepartureAirport,
-        flightArrivalAirport: enrichedFields.flightArrivalAirport ?? parsedReservation.flightArrivalAirport,
+        flightDepartureAirport: parsedReservation.flightDepartureAirport,
+        flightArrivalAirport: parsedReservation.flightArrivalAirport,
         quotedPriceUsd: parsedReservation.quotedPriceUsd,
         confidenceScore: parserConfidenceScore,
         parsingStatus: parserParsingStatus,
@@ -1119,24 +1061,24 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
             reasons: gateResult.reasons,
             impact: "This reservation needs a quick check before it's added to your trip.",
             draft: {
-              type: enrichedFields.type,
-              title: enrichedFields.title,
-              provider: enrichedFields.provider,
-              localTime: enrichedFields.localTime,
-              timezone: enrichedFields.timezone,
-              location: enrichedFields.location,
+              type: parserType,
+              title: parserTitle,
+              provider: parserProvider,
+              localTime: parserLocalTime,
+              timezone: parserTimezone || "Etc/UTC",
+              location: parserLocation,
               confirmationCode: parserConfirmationCode,
               assignedTo: parserAssignedTo.length > 0 ? parserAssignedTo : defaultAssignees,
               stage: targetTrip.stage,
               critical: parserType === "flight" || parserType === "train" || parserType === "ride",
               confidence: confidenceToDraftValue(parserConfidenceScore),
               notes: parserNotesText,
-              flightNumber: enrichedFields.flightNumber ?? parsedReservation.flightNumber,
-              flightAirline: enrichedFields.flightAirline ?? parsedReservation.flightAirline,
-              flightDate: enrichedFields.flightDate ?? parsedReservation.flightDate,
-              flightDepartureAirport: enrichedFields.flightDepartureAirport ?? parsedReservation.flightDepartureAirport,
-              flightArrivalAirport: enrichedFields.flightArrivalAirport ?? parsedReservation.flightArrivalAirport,
-              flightDepartureTime: enrichedFields.flightDepartureTime ?? parsedReservation.flightDepartureTime,
+              flightNumber: parserType === "flight" ? parserFlightNumber : "",
+              flightAirline: resolvedAirline,
+              flightDate: parserType === "flight" ? parserLocalTime.slice(0, 10) : "",
+              flightDepartureAirport: parsedReservation.flightDepartureAirport,
+              flightArrivalAirport: parsedReservation.flightArrivalAirport,
+              flightDepartureTime: parsedReservation.flightDepartureTime,
               checkOutDate: parsedReservation.checkOutDate,
             },
             sourceChannel: "email-forward" as const,
@@ -1160,6 +1102,26 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         acceptedDraftCount += 1;
         continue;
       }
+
+      const enrichedFields = enrichReservationForAutoImport({
+        type: parserType,
+        title: parserTitle,
+        provider: parserProvider,
+        localTime: parserLocalTime,
+        timezone: parserTimezone || "Etc/UTC",
+        location: parserLocation,
+        confirmationCode: parserConfirmationCode,
+        notes: parserNotesText,
+        flightNumber: parserType === "flight" ? parserFlightNumber : "",
+        flightAirline: resolvedAirline,
+        flightDate: parserType === "flight" ? parserLocalTime.slice(0, 10) : "",
+        flightDepartureAirport:
+          parserType === "flight" ? parsedReservation.flightDepartureAirport : "",
+        flightArrivalAirport:
+          parserType === "flight" ? parsedReservation.flightArrivalAirport : "",
+        flightDepartureTime: parserType === "flight" && parserLocalTime ? parserLocalTime : "",
+        checkOutDate: parserType === "hotel" ? parsedReservation.checkOutDate : "",
+      });
 
       const autoImportedReservation: SessionReservation = {
         ...(parsedReservation as SessionReservation),
