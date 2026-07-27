@@ -473,6 +473,11 @@ Timeline shows the same narrative day-plan layout as Day plan PDF: trip title, s
 
 **Test:** `src/lib/travelAssistant/narrativeItineraryExport.test.ts`, `src/lib/travelAssistant/sanitizeTravelerNotes.test.ts`
 
+**I31 — Day-plan Timeline collapses details; never shows duplicated activity blocks**
+Timeline shows **headline** stays/activities by default. Hotel fine print (address, check-in/out, breakfast, tourist tax) and activity logistics nest under the headline and expand/collapse on tap — so a stay day does not look packed. Exact duplicate lines and repeated consecutive bullet blocks from Word/import merges are deduped for display and persisted once so Day 3 does not list the same boat tour twice.
+
+**Test:** `src/lib/travelAssistant/dayPlanBulletGroups.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -631,6 +636,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I28 | `src/lib/travelAssistant/narrativeItineraryExport.test.ts`, `src/lib/travelAssistant/sanitizeTravelerNotes.test.ts` |
 | I29 | `src/lib/travelAssistant/emailForwardParser.test.ts` |
 | I30 | `src/lib/travelAssistant/forwardedReservationGate.test.ts`, `src/lib/travelAssistant/forwardedDraftImport.test.ts`, `src/lib/travelAssistant/reservationDuplicates.test.ts` |
+| I31 | `src/lib/travelAssistant/dayPlanBulletGroups.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

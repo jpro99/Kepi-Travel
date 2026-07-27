@@ -2,6 +2,7 @@
  * Friend-share day-plan PDF — narrative layout like Jeff's Puglia Word doc (not the logistics table).
  */
 
+import { dedupeDayPlanBullets } from "@/lib/travelAssistant/dayPlanBulletGroups";
 import type { ItineraryPlansData } from "@/lib/travelAssistant/itineraryDayPlan";
 import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
 import { sanitizeTravelerNotes } from "@/lib/travelAssistant/sanitizeTravelerNotes";
@@ -89,12 +90,17 @@ export function narrativeTripDayNumber(
   return Math.floor((dayMs - startMs) / 86_400_000) + 1;
 }
 
-export function notesToBullets(notes: string): string[] {
+/** Split day notes into lines without dedupe (used to detect stale duplicate imports). */
+export function parseDayPlanBulletLines(notes: string): string[] {
   return sanitizeTravelerNotes(notes)
     .split(/\r?\n/u)
     .map((line) => line.replace(/^\s*[•\-\*]\s*/u, "").trim())
     .filter(Boolean)
     .filter((line) => !/^stay in /iu.test(line) && !/^hotel:/iu.test(line));
+}
+
+export function notesToBullets(notes: string): string[] {
+  return dedupeDayPlanBullets(parseDayPlanBulletLines(notes));
 }
 
 export function bulletsToDayNotes(bullets: string[]): string {
