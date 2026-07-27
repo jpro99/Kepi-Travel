@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type BugCategory = "crash" | "wrong-data" | "missing-feature" | "slow" | "other";
 
@@ -38,6 +38,32 @@ export function BugReportModal({ open, initialCategory = "crash", onClose }: Bug
   const [result, setResult] = useState<SubmitResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const resetForm = useCallback((): void => {
+    setCategory(initialCategory);
+    setWhatHappened("");
+    setWhatExpected("");
+    setScreenshotFile(null);
+    setScreenshotPreview(null);
+    setBusy(false);
+    setResult(null);
+    setError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }, [initialCategory]);
+
+  // Fresh form every time the modal opens (was stuck on "Report received").
+  useEffect(() => {
+    if (open) {
+      resetForm();
+    }
+  }, [open, resetForm]);
+
+  const handleClose = useCallback((): void => {
+    resetForm();
+    onClose();
+  }, [onClose, resetForm]);
 
   const handleScreenshot = (file: File): void => {
     if (!file.type.startsWith("image/")) {
@@ -114,7 +140,7 @@ export function BugReportModal({ open, initialCategory = "crash", onClose }: Bug
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="shrink-0 rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold hover:bg-slate-100 dark:border-slate-600 dark:hover:bg-slate-900"
           >
             Close
@@ -145,10 +171,17 @@ export function BugReportModal({ open, initialCategory = "crash", onClose }: Bug
             ) : null}
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="mt-5 min-h-[48px] w-full rounded-xl bg-emerald-600 text-sm font-bold text-white hover:bg-emerald-500"
             >
               Done
+            </button>
+            <button
+              type="button"
+              onClick={resetForm}
+              className="mt-2 min-h-[48px] w-full rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-900"
+            >
+              Report another problem
             </button>
           </div>
         ) : (
