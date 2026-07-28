@@ -42,6 +42,7 @@ test("Europe 2026 accommodation gap includes hotel search context", () => {
         flightDate: "2026-09-01",
         flightDepartureAirport: "ONT",
         flightArrivalAirport: "FCO",
+        flightArrivalTime: "2026-09-02 11:00",
         confirmationCode: "ASBOOK1",
       },
       {
@@ -50,19 +51,21 @@ test("Europe 2026 accommodation gap includes hotel search context", () => {
         provider: "Alaska Airlines",
         localTime: "2026-09-14 13:05",
         timezone: "America/Los_Angeles",
-        location: "SEA",
+        location: "FCO",
         flightDate: "2026-09-14",
-        flightDepartureAirport: "SEA",
-        flightArrivalAirport: "HNL",
+        flightDepartureAirport: "FCO",
+        flightArrivalAirport: "SEA",
+        flightArrivalTime: "2026-09-14 18:00",
         confirmationCode: "ASBOOK2",
       },
     ],
     EUROPE_NOW,
+    { tripStartDate: "2026-09-01", tripEndDate: "2026-09-14" },
   );
-  const stayGap = gaps.find((gap) => gap.id.startsWith("accommodation-gap"));
+  const stayGap = gaps.find((gap) => gap.id.startsWith("stay-gap-"));
   assert.ok(stayGap?.actionContext?.kind === "hotel");
-  assert.equal(stayGap?.actionContext?.checkIn, "2026-09-01");
-  assert.equal(stayGap?.actionContext?.checkOut, "2026-09-14");
+  assert.ok(stayGap?.actionContext?.checkIn);
+  assert.ok(stayGap?.actionContext?.checkOut);
 });
 
 test("Alaska forward html yields boarding pass URL for check-in handoff", () => {

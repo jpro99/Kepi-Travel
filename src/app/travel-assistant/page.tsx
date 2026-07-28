@@ -168,6 +168,7 @@ import { hydrateReservationsPricing, applyAcceptedReservationPricing } from "@/l
 import { buildTransportConflictReservationIds } from "@/lib/travelAssistant/reservationAttention";
 import { computeTripSpend } from "@/lib/travelAssistant/tripSpendSummary";
 import { preDepartureStayDecisionId, type TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
+import { homeBaseStayDecisionId } from "@/lib/travelAssistant/tripNightCoverage";
 import { resolveBoardingPassUrl } from "@/lib/travelAssistant/reservationLinks";
 import {
   coerceHotelTitle,
@@ -6039,41 +6040,62 @@ export default function TravelAssistantPage() {
     async (flightDay: string): Promise<void> => {
       if (!activeTripId) return;
       const segmentId = preDepartureStayDecisionId(flightDay);
+      const originFlight = (activeTrip?.reservations ?? [])
+        .filter((r) => r.type === "flight" && !r.plannedOnly)
+        .slice()
+        .sort((a, b) =>
+          (a.flightDate || a.localTime || "").localeCompare(b.flightDate || b.localTime || ""),
+        )[0];
+      const originIata = (originFlight?.flightDepartureAirport ?? "").trim().toUpperCase();
+      const homeBaseId = originIata ? homeBaseStayDecisionId(originIata) : null;
+      const nextDecisions: Record<string, "needs_hotel" | "skip"> = {
+        ...(tripStayDecisionsByTrip[activeTripId] ?? {}),
+        [segmentId]: "skip",
+      };
+      if (homeBaseId) nextDecisions[homeBaseId] = "skip";
+
       setTripStayDecisionsByTrip((prev) => ({
         ...prev,
-        [activeTripId]: {
-          ...(prev[activeTripId] ?? {}),
-          [segmentId]: "skip",
-        },
+        [activeTripId]: nextDecisions,
       }));
       setTrips((prev) =>
         prev.map((trip) =>
           trip.id === activeTripId
             ? {
                 ...trip,
-                stayDecisions: { ...(trip.stayDecisions ?? {}), [segmentId]: "skip" },
+                stayDecisions: { ...(trip.stayDecisions ?? {}), ...nextDecisions },
               }
             : trip,
         ),
       );
       try {
-        const response = await fetch("/api/hotels/stay-intent", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tripId: activeTripId,
-            segmentId,
-            intent: "skip",
-            stopKind: "destination",
-          }),
-        });
-        if (!response.ok) throw new Error("save failed");
+        const payloads = [
+          { segmentId, intent: "skip" as const, stopKind: "destination" as const },
+          ...(homeBaseId
+            ? [{ segmentId: homeBaseId, intent: "skip" as const, stopKind: "destination" as const }]
+            : []),
+        ];
+        for (const payload of payloads) {
+          const response = await fetch("/api/hotels/stay-intent", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              tripId: activeTripId,
+              ...payload,
+            }),
+          });
+          if (!response.ok) throw new Error("save failed");
+        }
       } catch {
         /* optimistic UI already updated */
       }
-      setToast(`Got it — no hotel needed the night before your ${flightDay} flight.`);
+      setToast(
+        originIata
+          ? `Got it — sleeping at home near ${originIata}. No hotel the night before outbound.`
+          : `Got it — no hotel needed the night before your ${flightDay} flight.`,
+      );
     },
-    [activeTripId, setToast],
+    [activeTripId, activeTrip, tripStayDecisionsByTrip, setToast],
   );
 
   const openManualHotelReservation = useCallback((): void => {

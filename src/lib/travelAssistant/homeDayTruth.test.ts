@@ -91,3 +91,32 @@ test("travel-day takeover for airborne and openAirportMode", () => {
   assert.equal(isTravelDayTakeover({ kind: "no-trip" }, true), true);
   assert.equal(isTravelDayTakeover({ kind: "no-trip" }, false), false);
 });
+
+test("multi-day same-airport hop is not a calm connection", () => {
+  const status = buildConnectionCalmStatus([
+    {
+      id: "a",
+      type: "flight",
+      localTime: "2026-09-02 16:40",
+      timezone: "Europe/Rome",
+      flightDepartureAirport: "FCO",
+      flightArrivalAirport: "BRI",
+      flightDepartureTime: "2026-09-02 15:35",
+      flightArrivalTime: "2026-09-02 16:40",
+      flightDate: "2026-09-02",
+    },
+    {
+      id: "b",
+      type: "flight",
+      localTime: "2026-09-08 10:00",
+      timezone: "Europe/Rome",
+      flightDepartureAirport: "BRI",
+      flightArrivalAirport: "FCO",
+      flightDepartureTime: "2026-09-08 10:00",
+      flightArrivalTime: "2026-09-08 11:10",
+      flightDate: "2026-09-08",
+    },
+  ]);
+  assert.equal(status.kind, "none");
+  assert.equal(status.line, null);
+});

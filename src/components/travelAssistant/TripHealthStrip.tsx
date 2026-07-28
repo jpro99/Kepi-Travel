@@ -15,6 +15,8 @@ interface TripHealthReservation {
   flightDate?: string;
   flightDepartureAirport?: string;
   flightArrivalAirport?: string;
+  flightArrivalTime?: string;
+  flightDepartureTime?: string;
   checkOutDate?: string;
   confirmationCode?: string;
   notes?: string;
@@ -24,6 +26,8 @@ interface TripHealthStripProps {
   reservations: TripHealthReservation[];
   missingPriceCount?: number;
   stayDecisions?: Record<string, "needs_hotel" | "skip">;
+  tripStartDate?: string | null;
+  tripEndDate?: string | null;
   onGapActionTap?: (action: TripGapNavigationAction) => void;
   onReviewPricing?: () => void;
   onSkipPreDepartureNight?: (flightDay: string) => void;
@@ -96,6 +100,8 @@ export function TripHealthStrip({
   reservations,
   missingPriceCount = 0,
   stayDecisions,
+  tripStartDate,
+  tripEndDate,
   onGapActionTap,
   onReviewPricing,
   onSkipPreDepartureNight,
@@ -111,7 +117,7 @@ export function TripHealthStrip({
         location: reservation.location ?? "",
       })),
       Date.now(),
-      { stayDecisions },
+      { stayDecisions, tripStartDate, tripEndDate },
     );
     const gapRows = groupGaps(gaps, onSkipPreDepartureNight);
     const pricingRows: HealthRow[] =
@@ -129,7 +135,15 @@ export function TripHealthStrip({
           ]
         : [];
     return [...pricingRows, ...gapRows];
-  }, [missingPriceCount, onReviewPricing, onSkipPreDepartureNight, reservations, stayDecisions]);
+  }, [
+    missingPriceCount,
+    onReviewPricing,
+    onSkipPreDepartureNight,
+    reservations,
+    stayDecisions,
+    tripStartDate,
+    tripEndDate,
+  ]);
 
   useEffect(() => {
     if (missingPriceCount <= 0) return;

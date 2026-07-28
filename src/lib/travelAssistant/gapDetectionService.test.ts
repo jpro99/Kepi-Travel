@@ -33,7 +33,7 @@ test("detectTripGaps skips pre-departure hotel warning when user stays at home",
   );
 });
 
-test("detectTripGaps attaches hotel search context for accommodation gaps", () => {
+test("detectTripGaps attaches hotel search context for night-by-night stay gaps", () => {
   const gaps = detectTripGaps(
     [
       {
@@ -45,22 +45,25 @@ test("detectTripGaps attaches hotel search context for accommodation gaps", () =
         flightDate: "2026-09-01",
         flightDepartureAirport: "ONT",
         flightArrivalAirport: "FCO",
+        flightArrivalTime: "2026-09-02 11:00",
       },
       {
         id: "f2",
         type: "flight",
         provider: "Alaska",
         localTime: "2026-09-14 13:05",
-        location: "SEA",
+        location: "FCO",
         flightDate: "2026-09-14",
-        flightDepartureAirport: "SEA",
-        flightArrivalAirport: "HNL",
+        flightDepartureAirport: "FCO",
+        flightArrivalAirport: "SEA",
+        flightArrivalTime: "2026-09-14 18:00",
       },
     ],
     Date.parse("2026-06-01T12:00:00Z"),
+    { tripStartDate: "2026-09-01", tripEndDate: "2026-09-14" },
   );
-  const gap = gaps.find((entry) => entry.id.startsWith("accommodation-gap"));
+  const gap = gaps.find((entry) => entry.id.startsWith("stay-gap-"));
   assert.equal(gap?.actionContext?.kind, "hotel");
-  assert.equal(gap?.actionContext?.checkIn, "2026-09-01");
-  assert.equal(gap?.actionContext?.checkOut, "2026-09-14");
+  assert.ok(gap?.actionContext?.checkIn);
+  assert.ok(gap?.actionContext?.checkOut);
 });

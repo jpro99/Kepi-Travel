@@ -5,7 +5,12 @@
 
 import { airportToCity } from "@/lib/travelAssistant/buildTripLegs";
 import { detectGroundConnectorGaps } from "@/lib/travelAssistant/groundConnectorGaps";
-import { deriveHotelSearchCityFromReservation } from "@/lib/hotels/hotelReservationCity";
+import {
+  buildTripNightCoverage,
+  hotelCoversNight,
+  preDepartureStayDecisionId as nightPreDepartureId,
+  shouldSkipPreDepartureHotelNag,
+} from "@/lib/travelAssistant/tripNightCoverage";
 
 export type GapSeverity = "critical" | "warning" | "info";
 
@@ -45,6 +50,9 @@ interface GapReservation {
   flightDate?: string;
   flightDepartureAirport?: string;
   flightArrivalAirport?: string;
+  flightArrivalTime?: string;
+  flightDepartureTime?: string;
+  title?: string;
   // All possible field names for checkout date across different storage formats
   checkOutDate?: string;
   checkoutDate?: string;
@@ -111,20 +119,15 @@ function addDays(dateKey: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function nightsBetween(fromKey: string, toKey: string): number {
-  const from = Date.parse(fromKey + "T12:00:00");
-  const to = Date.parse(toKey + "T12:00:00");
-  if (Number.isNaN(from) || Number.isNaN(to)) return 0;
-  return Math.round((to - from) / 86_400_000);
-}
-
 export interface TripGapDetectOptions {
   /** Keys like `pre-departure-2026-09-01` when user is staying home the night before a flight. */
   stayDecisions?: Record<string, "needs_hotel" | "skip">;
+  tripStartDate?: string | null;
+  tripEndDate?: string | null;
 }
 
 export function preDepartureStayDecisionId(flightDay: string): string {
-  return `pre-departure-${flightDay}`;
+  return nightPreDepartureId(flightDay);
 }
 
 export function detectTripGaps(
@@ -221,127 +224,102 @@ export function detectTripGaps(
     }
   }
 
-  // ── 2. No hotel night before a flight ───────────────────────────────────
-  // Only check the first flight of each departure day to avoid duplicate alerts
+  // ── 2. No hotel night before a flight (home-base + airborne aware) ──────
+  const firstOutbound = flights[0] ?? null;
+  const firstOutboundDay = firstOutbound ? flightDayKey(firstOutbound) : "";
+  const firstOutboundAirport = firstOutbound?.flightDepartureAirport?.trim().toUpperCase() ?? "";
   const checkedNightBefore = new Set<string>();
   for (const flight of flights) {
     const flightDay = flightDayKey(flight);
-    if (checkedNightBefore.has(flightDay)) continue; // already checked this day
+    if (checkedNightBefore.has(flightDay)) continue;
     checkedNightBefore.add(flightDay);
     const nightBeforeKey = addDays(flightDay, -1);
-    if (nightBeforeKey < todayKey) continue; // already past
-    const hasHotelCoveringNight = hotels.some((h) => {
-      const checkInKey = parseDayKey(h.localTime);
-      const checkOutKey = (
-        h.checkOutDate?.slice(0, 10) ||
-        h.checkoutDate?.slice(0, 10) ||
-        h.checkout_date?.slice(0, 10) ||
-        h.check_out_date?.slice(0, 10) ||
-        h.checkOut?.slice(0, 10) ||
-        h.endDate?.slice(0, 10) ||
-        extractCheckoutFromNotes(h.notes ?? "")
-      );
-      if (!checkOutKey) return false;
-      return checkInKey <= nightBeforeKey && checkOutKey > nightBeforeKey;
-    });
-    if (!hasHotelCoveringNight) {
-      const skipId = preDepartureStayDecisionId(flightDay);
-      if (options.stayDecisions?.[skipId] === "skip") continue;
-      gaps.push({
-        id: `no-hotel-night-before-${flightDay}`,
-        severity: "warning",
-        emoji: "🏨",
-        title: "No hotel night before your flight",
-        detail: `No accommodation found for ${nightBeforeKey}. Add a hotel if you need one — or mark "Staying at home" if you're sleeping at home.`,
-        actionLabel: "Add hotel",
-        actionTab: "reservations",
-        actionContext: {
-          kind: "hotel",
-          city: airportToCity(flight.flightDepartureAirport),
-          cityIata: flight.flightDepartureAirport?.trim().toUpperCase(),
-          checkIn: nightBeforeKey,
-          checkOut: flightDay,
+    if (nightBeforeKey < todayKey) continue;
+
+    const hasHotelCoveringNight = hotels.some((h) =>
+      hotelCoversNight(
+        {
+          id: h.id,
+          type: "hotel",
+          localTime: h.localTime,
+          checkOutDate: h.checkOutDate || extractCheckoutFromNotes(h.notes ?? ""),
+          checkoutDate: h.checkoutDate,
+          checkout_date: h.checkout_date,
+          check_out_date: h.check_out_date,
+          checkOut: h.checkOut,
+          endDate: h.endDate,
+          notes: h.notes,
         },
-      });
+        nightBeforeKey,
+      ),
+    );
+    if (hasHotelCoveringNight) continue;
+
+    if (
+      shouldSkipPreDepartureHotelNag({
+        flightDay,
+        nightBeforeKey,
+        flightDepartureAirport: flight.flightDepartureAirport,
+        firstOutboundAirport,
+        firstOutboundFlightDay: firstOutboundDay,
+        stayDecisions: options.stayDecisions,
+        reservations,
+      })
+    ) {
+      continue;
     }
+
+    gaps.push({
+      id: `no-hotel-night-before-${flightDay}`,
+      severity: "warning",
+      emoji: "🏨",
+      title: "No hotel night before your flight",
+      detail: `No accommodation found for ${nightBeforeKey}. Add a hotel if you need one — or mark "Staying at home" if you're sleeping at home.`,
+      actionLabel: "Add hotel",
+      actionTab: "reservations",
+      actionContext: {
+        kind: "hotel",
+        city: airportToCity(flight.flightDepartureAirport),
+        cityIata: flight.flightDepartureAirport?.trim().toUpperCase(),
+        checkIn: nightBeforeKey,
+        checkOut: flightDay,
+      },
+    });
   }
 
-  // ── 3. Long gap between reservations (>2 nights with no hotel) ──────────
-  for (let i = 0; i < flights.length - 1; i++) {
-    const landing = flights[i];
-    const nextDeparture = flights[i + 1];
-    const landingKey = flightDayKey(landing);
-    const nextDeptKey = flightDayKey(nextDeparture);
-    const nights = nightsBetween(landingKey, nextDeptKey);
-    if (nights > 1) {
-      const hasHotel = hotels.some((h) => {
-        // Only count hotel if check-in is confirmed between the two flights
-        // Do not assume duration — require explicit checkOutDate
-        const checkInKey = parseDayKey(h.localTime);
-        const checkOutKey = (
-          h.checkOutDate?.slice(0, 10) ||
-          h.checkoutDate?.slice(0, 10) ||
-          h.checkout_date?.slice(0, 10) ||
-          h.check_out_date?.slice(0, 10) ||
-          h.checkOut?.slice(0, 10) ||
-          h.endDate?.slice(0, 10) ||
-          extractCheckoutFromNotes(h.notes ?? "")
-        );
-        if (!checkInKey) return false;
-        // Hotel covers the gap if it checks in before next departure
-        // and checks out after landing (or at minimum checks in during the gap)
-        if (checkOutKey) {
-          return checkInKey <= nextDeptKey && checkOutKey > landingKey;
-        }
-        // No checkout date — only count if check-in is within the gap
-        return checkInKey > landingKey && checkInKey < nextDeptKey;
-      });
-      if (!hasHotel) {
-        const hotelsInGap = hotels.filter((h) => {
-          const checkInKey = parseDayKey(h.localTime);
-          if (!checkInKey) return false;
-          return checkInKey > landingKey && checkInKey < nextDeptKey;
-        });
-        const firstHotelInGap = hotelsInGap.sort((a, b) =>
-          parseDayKey(a.localTime).localeCompare(parseDayKey(b.localTime)),
-        )[0];
-        const gapCity = firstHotelInGap
-          ? deriveHotelSearchCityFromReservation({
-              id: firstHotelInGap.id,
-              title: (firstHotelInGap as GapReservation & { title?: string }).title,
-              provider: firstHotelInGap.provider,
-              location: firstHotelInGap.location,
-              localTime: firstHotelInGap.localTime,
-              checkOutDate: firstHotelInGap.checkOutDate,
-            }) ?? firstHotelInGap.location
-          : airportToCity(
-              (landing as GapReservation & { flightArrivalAirport?: string }).flightArrivalAirport ??
-                landing.location,
-            );
-        gaps.push({
-          id: `accommodation-gap-${landing.id}-${nextDeparture.id}`,
-          severity: nights > 3 ? "warning" : "info",
-          emoji: "🌙",
-          title: `${nights} nights without accommodation`,
-          detail: firstHotelInGap
-            ? `Hotels are booked elsewhere in this window — check ground transport to ${gapCity}.`
-            : `No hotel found between ${landingKey} and ${nextDeptKey}. Forward your hotel confirmation or add it manually.`,
-          actionLabel: firstHotelInGap ? "See routes" : "Add hotel",
-          actionTab: firstHotelInGap ? "trip" : "reservations",
-          actionContext: {
-            kind: firstHotelInGap ? "ground_routes" : "hotel",
-            city: gapCity,
-            cityIata: (
-              (landing as GapReservation & { flightArrivalAirport?: string }).flightArrivalAirport ?? ""
-            )
-              .trim()
-              .toUpperCase(),
-            checkIn: landingKey,
-            checkOut: nextDeptKey,
-          },
-        });
-      }
-    }
+  // ── 3. Night-by-night stay holes (never clear a whole span from one hotel) ─
+  const nightCoverage = buildTripNightCoverage({
+    reservations: reservations.map((r) => ({
+      ...r,
+      checkOutDate: r.checkOutDate || extractCheckoutFromNotes(r.notes ?? ""),
+      flightDepartureTime: r.flightDepartureTime || r.localTime,
+    })),
+    stayDecisions: options.stayDecisions,
+    tripStartDate: options.tripStartDate,
+    tripEndDate: options.tripEndDate,
+    nowMs,
+  });
+
+  for (const range of nightCoverage.uncoveredRanges) {
+    if (range.nightCount < 1) continue;
+    gaps.push({
+      id: `stay-gap-${range.startNight}-${range.endNight}`,
+      severity: range.nightCount >= 2 ? "warning" : "info",
+      emoji: "🌙",
+      title:
+        range.nightCount === 1
+          ? `1 night needs a stay · ${range.startNight}`
+          : `${range.nightCount} nights need a stay · ${range.startNight}–${range.endNight}`,
+      detail: `No hotel or Airbnb for ${range.startNight} through ${range.endNight} (${range.suggestedCity} area). Forward a confirmation or add the stay — this is a real hole in your trip.`,
+      actionLabel: "Add hotel",
+      actionTab: "reservations",
+      actionContext: {
+        kind: "hotel",
+        city: range.suggestedCity,
+        checkIn: range.startNight,
+        checkOut: addDays(range.endNight, 1),
+      },
+    });
   }
 
   // ── 4. Missing confirmation codes ────────────────────────────────────────
@@ -442,11 +420,18 @@ export function detectTripGaps(
     });
   }
 
-  // Deduplicate by id, limit to 6
+  // Deduplicate by id; prioritize real stay holes, then critical, keep top 8
   const seen = new Set<string>();
-  return gaps.filter((g) => {
+  const unique = gaps.filter((g) => {
     if (seen.has(g.id)) return false;
     seen.add(g.id);
     return true;
-  }).slice(0, 6);
+  });
+  const rank = (g: TripGap): number => {
+    if (g.id.startsWith("stay-gap-")) return 0;
+    if (g.severity === "critical") return 1;
+    if (g.severity === "warning") return 2;
+    return 3;
+  };
+  return unique.sort((a, b) => rank(a) - rank(b)).slice(0, 8);
 }

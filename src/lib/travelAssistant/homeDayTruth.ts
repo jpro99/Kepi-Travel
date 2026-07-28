@@ -9,6 +9,9 @@ import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 /** Show terminal explore promo only within this window of departure. */
 export const TERMINAL_EXPLORE_WINDOW_MS = 48 * 60 * 60 * 1000;
 
+/** Same-airport hops longer than this are not “connections” — hide calm OK line. */
+export const MAX_CONNECTION_CALM_MS = 8 * 60 * 60 * 1000;
+
 export function shouldShowTerminalExplorePromo(
   departureUtcMs: number | null | undefined,
   nowMs = Date.now(),
@@ -66,10 +69,13 @@ export function buildConnectionCalmStatus(
       };
     }
 
-    const gapMins = Math.round((next.departMs - prev.arriveMs) / 60_000);
+    const gapMs = next.departMs - prev.arriveMs;
+    const gapMins = Math.round(gapMs / 60_000);
     if (gapMins < 0) {
       return { kind: "conflict", line: "One connection needs a quick look." };
     }
+    // Multi-day same-airport hops (e.g. ~136h) are not connections — stay quiet.
+    if (gapMs > MAX_CONNECTION_CALM_MS) continue;
     const hours = Math.floor(gapMins / 60);
     const mins = gapMins % 60;
     const gapLabel =

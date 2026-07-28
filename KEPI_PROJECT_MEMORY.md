@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-28 (I33 Apple Home + Flights diet + travel-day)
+Last updated: 2026-07-28 (I34 night-by-night stays + completeness bar)
+
+## Decision 2026-07-28 — I34 stay holes + trip completeness (Jeff)
+Night-by-night hotel coverage (Venice must not hide Cortina/Ortisei). Home-base: no hotel nag before first outbound from ONT; “Staying at home” sets `home-base-{IATA}`. Trip Completeness bar on Home (Flights/Hotels green when set). Support chat uses same stay-hole list.
 
 ## Decision 2026-07-28 — I33 Apple chrome diet (Jeff approved A→B→C)
 A: Flights = tickets only (no TripFirst, one search surface, demote miles/cash badge, terminal promo ≤48h, gaps off Flights). B: Home single voice (check-in handoff, calm connection line, spend badge only when needed, no quick-link/tiles). C: Travel-day takeover (airborne / just-landed / at-airport → Airport Mode primary).

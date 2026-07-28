@@ -36,6 +36,7 @@ interface ItineraryTabViewProps {
     flightDepartureAirport?: string;
     flightArrivalAirport?: string;
     flightDepartureTime?: string;
+    flightArrivalTime?: string;
     flightDate?: string;
     checkOutDate?: string;
     location?: string;
@@ -159,6 +160,8 @@ export function ItineraryTabView({
         }))}
         missingPriceCount={missingPriceCount}
         stayDecisions={stayDecisions}
+        tripStartDate={tripStartDate}
+        tripEndDate={tripEndDate}
         onGapActionTap={onGapActionTap}
         onReviewPricing={onReviewPricing}
         onSkipPreDepartureNight={onSkipPreDepartureNight}

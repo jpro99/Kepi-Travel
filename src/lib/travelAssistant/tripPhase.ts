@@ -390,6 +390,8 @@ export function buildMissionControlSnapshot(
   const todayKey = isoDayFromMs(nowMs);
   const gaps = detectTripGaps(reservations, nowMs, {
     stayDecisions: input.stayDecisions,
+    tripStartDate: input.startDate,
+    tripEndDate: input.endDate,
   });
   const problem = detectProblem(reservations, input.liveStatusByReservationId, nowMs);
 

@@ -19,6 +19,8 @@ import {
   type ConnectionCalmStatus,
 } from "@/lib/travelAssistant/homeDayTruth";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
+import { addIsoDays, buildTripCompleteness } from "@/lib/travelAssistant/tripNightCoverage";
+import { TripCompletenessBar } from "@/components/travelAssistant/TripCompletenessBar";
 
 export interface MissionControlViewProps {
   tripName: string;
@@ -131,6 +133,17 @@ export function MissionControlView({
   const connectionCalm: ConnectionCalmStatus = useMemo(
     () => buildConnectionCalmStatus(reservations as TransportRouteReservation[]),
     [reservations],
+  );
+
+  const completeness = useMemo(
+    () =>
+      buildTripCompleteness({
+        reservations,
+        stayDecisions,
+        tripStartDate: startDate,
+        tripEndDate: endDate,
+      }),
+    [reservations, stayDecisions, startDate, endDate],
   );
 
   const atAirport =
@@ -294,6 +307,27 @@ export function MissionControlView({
         <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-white/60">Mission Control</p>
         <p className="mt-0.5 text-[15px] font-semibold leading-snug">{snap.identityLabel}</p>
       </div>
+
+      <TripCompletenessBar
+        completeness={completeness}
+        onOpenFlights={onOpenBook}
+        onOpenHotels={() => {
+          const gap = completeness.firstHotelGap;
+          if (gap && onGapActionTap) {
+            onGapActionTap({
+              tab: "reservations",
+              context: {
+                kind: "hotel",
+                city: gap.suggestedCity,
+                checkIn: gap.startNight,
+                checkOut: addIsoDays(gap.endNight, 1),
+              },
+            });
+            return;
+          }
+          onOpenBook();
+        }}
+      />
 
       <div className="grid grid-cols-3 gap-1 rounded-2xl bg-[#F5F5F7] p-1">
         {(

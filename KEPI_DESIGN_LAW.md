@@ -490,6 +490,11 @@ Flights is a ticket list — no TripFirst marketing, no duplicate search launche
 
 **Test:** `src/lib/travelAssistant/homeDayTruth.test.ts`
 
+**I34 — Night-by-night stay truth + trip completeness bar**
+Hotel gaps are computed **per sleep night** (check-in ≤ night < check-out). A Venice hotel must not clear Cortina/Ortisei nights. Never nag the night before the trip’s first outbound from home (home-base); overnight flights cover airborne nights. Home shows a **Trip status** bar (Flights | Hotels → gray/orange/green). Support chat must use the same stay-hole list — never say “everything is covered” when holes exist. Connection calm lines only for layovers ≤ 8h.
+
+**Test:** `src/lib/travelAssistant/tripNightCoverage.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -652,6 +657,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I31 | `src/lib/travelAssistant/dayPlanBulletGroups.test.ts` |
 | I32 | `src/lib/travelAssistant/tripPhase.test.ts` |
 | I33 | `src/lib/travelAssistant/homeDayTruth.test.ts` |
+| I34 | `src/lib/travelAssistant/tripNightCoverage.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |
