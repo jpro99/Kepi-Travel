@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-27 (I31 day-plan Timeline expand/collapse + dedupe)
+Last updated: 2026-07-28 (I32 Mission Control Home — Today/Week/Trip)
+
+## Decision 2026-07-28 — Mission Control Home (Jeff)
+Home is Mission Control with Today / This week / Trip zooms. Plan/Book/Airport Mode stay; Home composes trip truth and deep-links. No fabricated rebooking options.
 
 ## Decision 2026-07-23 — I30 ingest gate before enrich (Jeff approved build)
 Gate runs on raw parser fields before enrich; hold `needs-review`; honor `missingFields`. Day-plan forwards still import booking-shaped drafts; out-of-window drafts queue for review. Unified `reservationDuplicates` empty-composite guard. Bug-report API surfaces `filingWarnings` when GH/Twilio not configured.

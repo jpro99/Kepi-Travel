@@ -3,8 +3,7 @@
 import { LiveMapLink } from "@/components/travelAssistant/LiveMapLink";
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import { MobileAssistView } from "@/components/travelAssistant/mobile/MobileAssistView";
-import { TripHealthStrip } from "@/components/travelAssistant/TripHealthStrip";
+import { MissionControlView } from "@/components/travelAssistant/MissionControlView";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
 import { MobileItineraryReader } from "@/components/travelAssistant/mobile/MobileItineraryReader";
 import { MobilePlanNotebook } from "@/components/travelAssistant/mobile/MobilePlanNotebook";
@@ -21,7 +20,6 @@ import { MobileTripShellHeader } from "@/components/travelAssistant/mobile/Mobil
 import { MobileTripsView } from "@/components/travelAssistant/mobile/MobileTripsView";
 import { MobileBookHeader, MobileBookSegmentToggle } from "@/components/travelAssistant/mobile/MobileBookChrome";
 import type { MobilePrimaryTab } from "@/components/travelAssistant/mobile/mobileShellTypes";
-import { DestinationHeroPhoto, resolveHeroCity } from "@/components/travelAssistant/tripHeroVisuals";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 import type { StopDateRange } from "@/lib/decision/stopDates";
 import type { BookSubTab } from "@/lib/travelAssistant/consumerTabs";
@@ -159,24 +157,7 @@ interface MobileMapForwardShellProps {
   offlineKitReservationCount?: number;
   offlineKitSyncing?: boolean;
   onRefreshOfflineKit?: () => void;
-}
-
-function daysUntilTrip(startDate: string | null): number | null {
-  if (!startDate) return null;
-  const start = Date.parse(`${startDate.slice(0, 10)}T12:00:00Z`);
-  if (Number.isNaN(start)) return null;
-  return Math.max(0, Math.ceil((start - Date.now()) / 86_400_000));
-}
-
-function formatDateRange(startDate: string | null, endDate: string | null): string | null {
-  if (!startDate || !endDate) return null;
-  const fmt = (value: string) =>
-    new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  return `${fmt(startDate)} – ${fmt(endDate)}`;
+  onOpenAirportMode?: () => void;
 }
 
 function findPlannableAirport(reservations: Reservation[]): string | null {
@@ -285,6 +266,7 @@ export function MobileMapForwardShell({
   offlineKitReservationCount = 0,
   offlineKitSyncing = false,
   onRefreshOfflineKit,
+  onOpenAirportMode,
 }: MobileMapForwardShellProps) {
   const [planSegment, setPlanSegment] = useState<PlanSegment>("itinerary");
   const [showPointsLearn, setShowPointsLearn] = useState(false);
@@ -303,11 +285,7 @@ export function MobileMapForwardShell({
   );
   const flightCount = reservations.filter((r) => r.type === "flight").length;
   const hotelCount = hotelReservations.length;
-  const heroCity = resolveHeroCity(destination, reservations);
-  const dateRange = formatDateRange(startDate, endDate);
   const plannableAirport = useMemo(() => findPlannableAirport(reservations), [reservations]);
-
-  const countdown = daysUntilTrip(startDate);
 
   const tripHeader = hasActiveTrip ? (
     <MobileTripShellHeader
@@ -319,109 +297,37 @@ export function MobileMapForwardShell({
   ) : null;
 
   if (activeTab === "home") {
-    const subtitleParts = hasActiveTrip
-      ? [
-          destination ?? heroCity,
-          dateRange,
-          countdown != null && countdown > 0 ? `${countdown} day${countdown === 1 ? "" : "s"} away` : null,
-          flightCount > 0 || hotelCount > 0
-            ? `${flightCount} flight${flightCount === 1 ? "" : "s"} · ${hotelCount} hotel${hotelCount === 1 ? "" : "s"}`
-            : null,
-        ].filter(Boolean)
-      : [];
-
     return (
-      <div className="kepi-mobile-shell kepi-mobile-tab-pad space-y-5">
-        {hasActiveTrip ? (
-          <>
-            <div className="overflow-hidden rounded-[var(--radius-card)] bg-[#020818] shadow-[var(--shadow-card)] ring-1 ring-[var(--border-default)]">
-              <div className="relative min-h-[180px]">
-                <DestinationHeroPhoto city={heroCity} />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/55 to-slate-900/30" />
-                <div className="relative flex h-full min-h-[180px] flex-col justify-end p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-sky-300/90">Home</p>
-                      <h1 className="mt-1 text-[2rem] font-black leading-tight tracking-tight text-white">{tripName}</h1>
-                      <p className="mt-2 text-[17px] leading-snug text-sky-100/85">{subtitleParts.join(" · ")}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={onCreateTrip}
-                      className="shrink-0 rounded-full border border-sky-300/40 bg-sky-400/15 px-3 py-2 text-xs font-bold text-sky-100 active:opacity-80"
-                    >
-                      + New trip
-                    </button>
-                  </div>
-                </div>
-              </div>
+      <div className="kepi-mobile-shell kepi-mobile-tab-pad space-y-4">
+        <MissionControlView
+          tripName={tripName}
+          destination={destination}
+          startDate={startDate}
+          endDate={endDate}
+          reservations={reservations}
+          stayDecisions={stayDecisions}
+          liveStatus={liveStatus}
+          hasActiveTrip={hasActiveTrip}
+          onOpenBook={() => onNavigateTab("book")}
+          onOpenPlan={() => onNavigateTab("plan")}
+          onOpenAirportMode={() => {
+            if (onOpenAirportMode) onOpenAirportMode();
+            else onNavigateTab("map");
+          }}
+          onStartNewTrip={onStartNewTrip ?? onCreateTrip}
+          onImportFlights={onTalkPlanner}
+          onReservationTap={onReservationTap}
+          onGapActionTap={onGapActionTap}
+          onSeeAllAttention={() => onNavigateTab("plan")}
+        />
 
-              <div className="relative min-h-[240px] border-t border-white/10">
-                <TripHomeOverviewMap
-                  transportReservations={transportReservations}
-                  hotelReservations={hotelReservations}
-                  plannedFlightLegs={plannedFlightLegs}
-                  staySegments={staySegments}
-                  onReservationTap={onReservationTap}
-                  className="min-h-[240px]"
-                />
-              </div>
-            </div>
-          </>
-        ) : (
-          <header className="rounded-[var(--radius-card)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-card)]">
-            <p className="text-[13px] font-bold uppercase tracking-widest text-[var(--accent)]">Welcome</p>
-            <h1 className="mt-1 text-[2rem] font-black leading-tight tracking-tight text-[var(--text-primary)]">
-              Where to next?
-            </h1>
-            <p className="mt-2 text-[19px] leading-snug text-[var(--text-secondary)]">
-              Tell us your dates — or forward a booking email.
-            </p>
-          </header>
-        )}
-
-        {hasActiveTrip && onStartNewTrip ? (
-          <button
-            type="button"
-            onClick={onStartNewTrip}
-            className={`${juicyBtn} w-full bg-[#f4c95d] text-[#0b1f3a] shadow-md`}
-          >
-            + Start a new trip
-          </button>
-        ) : null}
-
-        {hasActiveTrip ? (
-          <>
-            <MobileAssistView
-              journeyPhase={journeyPhase}
-              reservations={reservations}
-              tripName={tripName}
-              locationStatus={locationStatus}
-              nearestAirport={nearestAirport}
-              onReservationTap={onReservationTap}
-              liveStatus={liveStatus}
-            />
-
-            {tripSpendSummary ? (
-              <TripSpendBadge
-                summary={tripSpendSummary}
-                problemCount={tripProblemCount}
-                onClick={() => onNavigateTab("book")}
-                alwaysActionable
-                className="w-full"
-              />
-            ) : null}
-          </>
-        ) : null}
-
-        {hasActiveTrip ? (
-          <TripHealthStrip
-            reservations={reservations}
-            missingPriceCount={missingPriceCount}
-            stayDecisions={stayDecisions}
-            onGapActionTap={onGapActionTap}
-            onReviewPricing={onReviewPricing}
-            onSkipPreDepartureNight={onSkipPreDepartureNight}
+        {hasActiveTrip && tripSpendSummary ? (
+          <TripSpendBadge
+            summary={tripSpendSummary}
+            problemCount={tripProblemCount}
+            onClick={() => onNavigateTab("book")}
+            alwaysActionable
+            className="w-full"
           />
         ) : null}
 
@@ -429,9 +335,8 @@ export function MobileMapForwardShell({
           <button
             type="button"
             onClick={onAddGroundTransport}
-            className="flex w-full min-h-[44px] items-center justify-center gap-2 rounded-full border border-dashed border-[var(--border-default)] bg-[var(--bg-card)]/80 px-4 py-2.5 text-[15px] font-medium text-[var(--text-secondary)] transition active:opacity-80"
+            className="flex w-full min-h-[48px] items-center justify-center gap-2 rounded-2xl border border-dashed border-[var(--border-default)] bg-[var(--bg-card)]/80 px-4 py-2.5 text-[15px] font-medium text-[var(--text-secondary)] transition active:opacity-80"
           >
-            <span aria-hidden>🚕</span>
             Add airport, hotel, or venue transfer
           </button>
         ) : null}

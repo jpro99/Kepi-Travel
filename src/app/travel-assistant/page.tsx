@@ -9831,6 +9831,10 @@ export default function TravelAssistantPage() {
                 onRefreshOfflineKit={() => {
                   void offlineKitSync.forceSync();
                 }}
+                onOpenAirportMode={() => {
+                  markLiveMapSessionActive();
+                  router.push("/travel-assistant/live-map?view=airport");
+                }}
                 bookSubTab={bookSubTab}
                 onBookSubTabChange={(subTab) => navigateToConsumerTab("book", { bookView: subTab })}
                 tripId={activeTripId}
@@ -9965,6 +9969,10 @@ export default function TravelAssistantPage() {
                 onOpenMap={() => {
                   markLiveMapSessionActive();
                   router.push("/travel-assistant/live-map");
+                }}
+                onOpenAirportMode={() => {
+                  markLiveMapSessionActive();
+                  router.push("/travel-assistant/live-map?view=airport");
                 }}
                 onAddGroundTransport={openManualGroundTransport}
                 onStartNewTrip={handleStartNewTrip}

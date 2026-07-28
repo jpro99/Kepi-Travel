@@ -478,6 +478,11 @@ Timeline shows **headline** stays/activities by default. Hotel fine print (addre
 
 **Test:** `src/lib/travelAssistant/dayPlanBulletGroups.test.ts`
 
+**I32 — Home is Mission Control (Today / Week / Trip)**
+Travel Assistant Home leads with one primary status card for the active zoom (**Today** · **This week** · **Trip**). Max three attention items on Home; overflow via See all into Plan/gaps. Problem/disruption overrides other phases. Never fabricate rebooking inventory. Mission Control composes existing trip/gap/status truth — it is not a second itinerary store. Airport Mode remains the walk-through; Home deep-links into it on travel day. 3-second rule: a stressed traveler knows the next action without hunting tabs.
+
+**Test:** `src/lib/travelAssistant/tripPhase.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -637,6 +642,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I29 | `src/lib/travelAssistant/emailForwardParser.test.ts` |
 | I30 | `src/lib/travelAssistant/forwardedReservationGate.test.ts`, `src/lib/travelAssistant/forwardedDraftImport.test.ts`, `src/lib/travelAssistant/reservationDuplicates.test.ts` |
 | I31 | `src/lib/travelAssistant/dayPlanBulletGroups.test.ts` |
+| I32 | `src/lib/travelAssistant/tripPhase.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |
