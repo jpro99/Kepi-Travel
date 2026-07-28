@@ -311,9 +311,9 @@ export function MissionControlView({
       <TripCompletenessBar
         completeness={completeness}
         onOpenFlights={onOpenBook}
-        onOpenHotels={() => {
-          const gap = completeness.firstHotelGap;
-          if (gap && onGapActionTap) {
+        onOpenPlan={onOpenPlan}
+        onFindStayForGap={(gap) => {
+          if (onGapActionTap) {
             onGapActionTap({
               tab: "reservations",
               context: {

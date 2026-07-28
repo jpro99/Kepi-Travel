@@ -491,7 +491,7 @@ Flights is a ticket list — no TripFirst marketing, no duplicate search launche
 **Test:** `src/lib/travelAssistant/homeDayTruth.test.ts`
 
 **I34 — Night-by-night stay truth + trip completeness bar**
-Hotel gaps are computed **per sleep night** (check-in ≤ night < check-out). A Venice hotel must not clear Cortina/Ortisei nights. Never nag the night before the trip’s first outbound from home (home-base); overnight flights cover airborne nights. Home shows a **Trip status** bar (Flights | Hotels → gray/orange/green). Support chat must use the same stay-hole list — never say “everything is covered” when holes exist. Connection calm lines only for layovers ≤ 8h.
+Hotel gaps are computed **per sleep night** (check-in ≤ night < check-out). A Venice hotel must not clear Cortina/Ortisei nights. Never nag the night before the trip’s first outbound from home (home-base); overnight flights cover airborne nights. Home shows a **Trip status** bar (Flights | Hotels → gray/orange/green). Support chat must use the same stay-hole list — never say “everything is covered” when holes exist. Connection calm lines only for layovers ≤ 8h. Sleep window skips same-day connection hubs (SEA on ONT→SEA→FCO). Hotels tap opens a **Stay gaps** sheet listing exact nights before any search/purchase. Labels use readable dates (“Sep 15 – 17”), never opaque `09-01 - 09-01`.
 
 **Test:** `src/lib/travelAssistant/tripNightCoverage.test.ts`
 

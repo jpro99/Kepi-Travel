@@ -79,11 +79,44 @@ test("I34: Venice hotel does not hide Cortina/Ortisei nights Sep 15–17", () =>
     ],
   });
 
+  // Same-day SEA connection must not start the sleep window on Sep 1.
+  assert.equal(coverage.windowStart, "2026-09-02");
   const gapDates = coverage.nights.filter((n) => n.status === "gap").map((n) => n.dateKey);
   assert.ok(gapDates.includes("2026-09-15"));
   assert.ok(gapDates.includes("2026-09-16"));
   assert.ok(gapDates.includes("2026-09-17"));
   assert.ok(coverage.uncoveredRanges.some((r) => r.startNight <= "2026-09-15" && r.endNight >= "2026-09-17"));
+});
+
+test("I34: completeness label lists readable stay ranges, not MM-DD junk", () => {
+  const completeness = buildTripCompleteness({
+    nowMs,
+    tripStartDate: "2026-09-01",
+    tripEndDate: "2026-09-18",
+    reservations: [
+      {
+        id: "as180",
+        type: "flight",
+        localTime: "2026-09-01 17:30",
+        flightDate: "2026-09-01",
+        flightDepartureAirport: "SEA",
+        flightArrivalAirport: "FCO",
+        flightArrivalTime: "2026-09-02 11:15",
+      },
+      {
+        id: "venice",
+        type: "hotel",
+        localTime: "2026-09-12 15:00",
+        checkOutDate: "2026-09-15",
+        location: "Venice",
+      },
+    ],
+  });
+  assert.equal(completeness.hotels, "orange");
+  assert.ok(completeness.hotelGaps.length >= 1);
+  assert.match(completeness.hotelsLabel, /Sep/iu);
+  assert.doesNotMatch(completeness.hotelsLabel, /09-01\s*-\s*09-01/u);
+  assert.match(completeness.summary, /Tap Hotels/iu);
 });
 
 test("I34: first outbound night-before is home-base — no nag", () => {

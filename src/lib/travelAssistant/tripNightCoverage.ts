@@ -44,7 +44,10 @@ export interface TripNightCoverage {
   hotelNightsInWindow: number;
   hotelNightsCovered: number;
   hotelNightsSkippedOrHome: number;
+  /** All gap nights in the window (includes past). */
   hotelNightsGap: number;
+  /** Future gap nights only — use this for UI counts. */
+  hotelNightsGapActionable: number;
 }
 
 export type CompletenessTone = "gray" | "orange" | "green";
@@ -57,7 +60,48 @@ export interface TripCompleteness {
   hotelsLabel: string;
   summary: string;
   firstHotelGap: UncoveredNightRange | null;
+  hotelGaps: UncoveredNightRange[];
   bookedFlightCount: number;
+}
+
+/** Human date for stay gaps — "Sep 15" / "Sep 15–17". */
+export function formatStayRangeLabel(startNight: string, endNight: string): string {
+  const fmt = (key: string): string => {
+    const ms = Date.parse(`${key}T12:00:00Z`);
+    if (Number.isNaN(ms)) return key.slice(5);
+    return new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  };
+  if (startNight === endNight) return fmt(startNight);
+  return `${fmt(startNight)} – ${fmt(endNight)}`;
+}
+
+/**
+ * First night the traveler actually sleeps away from home.
+ * Skips same-day connection hubs (ONT→SEA→FCO same day → start at FCO arrival).
+ */
+export function resolveFirstSleepNight(flights: NightCoverageReservation[]): string {
+  const ordered = flights
+    .filter(isBookedFlight)
+    .slice()
+    .sort((a, b) => flightDepDay(a).localeCompare(flightDepDay(b)));
+
+  for (let i = 0; i < ordered.length; i += 1) {
+    const flight = ordered[i]!;
+    const arrDay = flightArrDay(flight);
+    const arrAirport = (flight.flightArrivalAirport ?? "").trim().toUpperCase();
+    if (!arrDay || !arrAirport) continue;
+
+    const sameDayOnward = ordered.slice(i + 1).some((next) => {
+      const nextDep = (next.flightDepartureAirport ?? "").trim().toUpperCase();
+      const nextDepDay = flightDepDay(next);
+      return nextDep === arrAirport && nextDepDay === arrDay;
+    });
+    if (sameDayOnward) continue;
+
+    // Overnight arrival: sleep starts on arrival calendar day.
+    return arrDay;
+  }
+  return ordered[0] ? flightArrDay(ordered[0]) : "";
 }
 
 function dateOnly(value?: string | null): string {
@@ -227,23 +271,14 @@ export function buildTripNightCoverage(input: BuildTripNightCoverageInput): Trip
       ? decisions[preDepartureStayDecisionId(flightDepDay(firstFlight))] === "skip"
       : false);
 
-  // Destination sleep window: first arrival away from origin → night before trip end
-  // (or night before final return departure when trip end is missing).
-  let windowStart = "";
-  for (const f of flights) {
-    const arr = (f.flightArrivalAirport ?? "").trim().toUpperCase();
-    if (arr && arr !== originIata) {
-      windowStart = flightArrDay(f);
-      break;
-    }
-  }
+  // Destination sleep window: first real sleep night abroad (skip connection hubs).
+  let windowStart = resolveFirstSleepNight(flights);
   if (!windowStart) {
     windowStart =
       (hotels
         .map(hotelCheckInDay)
         .filter(Boolean)
         .sort()[0] ?? "") ||
-      (flights[0] ? flightArrDay(flights[0]) : "") ||
       dateOnly(input.tripStartDate);
   }
 
@@ -268,6 +303,7 @@ export function buildTripNightCoverage(input: BuildTripNightCoverageInput): Trip
       hotelNightsCovered: 0,
       hotelNightsSkippedOrHome: 0,
       hotelNightsGap: 0,
+      hotelNightsGapActionable: 0,
     };
   }
 
@@ -305,6 +341,7 @@ export function buildTripNightCoverage(input: BuildTripNightCoverageInput): Trip
     (n) => n.status === "skipped" || n.status === "home",
   ).length;
   const hotelNightsGap = inWindow.filter((n) => n.status === "gap").length;
+  const hotelNightsGapActionable = actionableGaps.length;
 
   return {
     windowStart,
@@ -315,6 +352,7 @@ export function buildTripNightCoverage(input: BuildTripNightCoverageInput): Trip
     hotelNightsCovered,
     hotelNightsSkippedOrHome,
     hotelNightsGap,
+    hotelNightsGapActionable,
   };
 }
 
@@ -380,10 +418,13 @@ export function buildTripCompleteness(input: {
     flightsLabel = `${bookedFlightCount} flight${bookedFlightCount === 1 ? "" : "s"} booked`;
   }
 
+  const gapCount = coverage.hotelNightsGapActionable;
+  const ranges = coverage.uncoveredRanges;
+
   let hotelsTone: CompletenessTone = "gray";
   let hotelsLabel = "No stay nights yet";
   if (coverage.hotelNightsInWindow > 0) {
-    if (coverage.hotelNightsGap === 0) {
+    if (gapCount === 0) {
       hotelsTone = "green";
       hotelsLabel =
         coverage.hotelNightsSkippedOrHome > 0
@@ -391,10 +432,14 @@ export function buildTripCompleteness(input: {
           : "Every night has a stay";
     } else {
       hotelsTone = "orange";
-      const first = coverage.uncoveredRanges[0];
-      hotelsLabel = first
-        ? `${coverage.hotelNightsGap} night${coverage.hotelNightsGap === 1 ? "" : "s"} need a stay · ${first.startNight.slice(5)}–${first.endNight.slice(5)}`
-        : `${coverage.hotelNightsGap} nights need a stay`;
+      const rangeBits = ranges
+        .slice(0, 2)
+        .map((r) => formatStayRangeLabel(r.startNight, r.endNight));
+      const more = ranges.length > 2 ? ` +${ranges.length - 2} more` : "";
+      hotelsLabel =
+        rangeBits.length > 0
+          ? `${gapCount} night${gapCount === 1 ? "" : "s"} open · ${rangeBits.join("; ")}${more}`
+          : `${gapCount} nights need a stay`;
     }
   } else if (bookedFlightCount > 0) {
     hotelsTone = "orange";
@@ -411,9 +456,11 @@ export function buildTripCompleteness(input: {
   const summary =
     overall === "green"
       ? "Trip is set — flights and stays are covered."
-      : overall === "orange"
-        ? "Trip in progress — finish the orange sections."
-        : "Add flights and stays to light this up.";
+      : overall === "orange" && gapCount > 0
+        ? `Tap Hotels to see which ${gapCount} night${gapCount === 1 ? "" : "s"} still need a place.`
+        : overall === "orange"
+          ? "Trip in progress — finish the orange sections."
+          : "Add flights and stays to light this up.";
 
   return {
     flights: flightsTone,
@@ -422,7 +469,8 @@ export function buildTripCompleteness(input: {
     flightsLabel,
     hotelsLabel,
     summary,
-    firstHotelGap: coverage.uncoveredRanges[0] ?? null,
+    firstHotelGap: ranges[0] ?? null,
+    hotelGaps: ranges,
     bookedFlightCount,
   };
 }
