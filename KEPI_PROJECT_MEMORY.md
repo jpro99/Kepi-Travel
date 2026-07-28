@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-28 (I32 Mission Control Home — Today/Week/Trip)
+Last updated: 2026-07-28 (F3 false CONNECTION ISSUE — no invented arrivals)
+
+## Incident 2026-07-28 — False CONNECTION ISSUE on ONT→SEA→FCO (Jeff)
+
+AS654 ONT→SEA had blank `flightArrivalTime` (UI showed "—"). Connection engine invented `depart+3h`, then flagged AS180 SEA→FCO as a conflict under mixed timezones. Real connection (~noon → ~2:30 SEA → 5:30 SEA) is fine. Fix: never invent arrival for conflict math; skip check when inbound arrival missing (F3). Test locks ONT–SEA–FCO case.
 
 ## Decision 2026-07-28 — Mission Control Home (Jeff)
 Home is Mission Control with Today / This week / Trip zooms. Plan/Book/Airport Mode stay; Home composes trip truth and deep-links. No fabricated rebooking options.

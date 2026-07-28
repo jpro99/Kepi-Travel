@@ -195,19 +195,23 @@ function departMsForReservation(reservation: TransportRouteReservation): number 
   return toUtcMs(reservation.localTime ?? "", reservation.timezone);
 }
 
+/**
+ * Arrival for connection math must be a real schedule field (F3).
+ * Never invent departure+Nh — that creates false CONNECTION ISSUE badges
+ * when inbound arrival is blank (common on multi-leg PNRs).
+ */
 function arriveMsForReservation(reservation: TransportRouteReservation): number {
   if (reservation.type === "flight") {
     const arr = reservation.flightArrivalTime ?? "";
-    if (arr.trim()) {
-      const ms = toUtcMs(arr, reservation.timezone);
-      if (Number.isFinite(ms)) return rollEarlyMorningDepartureMs(ms, arr);
-    }
-    const depMs = departMsForReservation(reservation);
-    if (Number.isFinite(depMs)) return depMs + 3 * 3_600_000;
+    if (!arr.trim()) return Number.NaN;
+    const ms = toUtcMs(arr, reservation.timezone);
+    if (Number.isFinite(ms)) return rollEarlyMorningDepartureMs(ms, arr);
+    return Number.NaN;
   }
-  const depMs = departMsForReservation(reservation);
-  if (Number.isFinite(depMs)) return depMs + 2 * 3_600_000;
-  return Number.NaN;
+  // Train/ride: only use explicit localTime when it includes a clock time.
+  const local = reservation.localTime?.trim() ?? "";
+  if (!/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/u.test(local)) return Number.NaN;
+  return toUtcMs(local, reservation.timezone);
 }
 
 function isBookedTransport(reservation: TransportRouteReservation): boolean {

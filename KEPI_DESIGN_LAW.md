@@ -72,7 +72,9 @@ Never headline "illegal", "impossible", or "rebook immediately" for through-tick
 Pre-compute `utcTime` and `seq` in context blocks. Use `Date.UTC` + `Intl` offset algorithm — never `new Date(localTimeString)` (browser TZ pollutes UTC).
 
 **F3 — Missing arrival times stay missing**  
-When arrival is not stored, show `[not stored — do not estimate]`. AI and UI must not invent arrival clocks.
+When arrival is not stored, show `[not stored — do not estimate]`. AI and UI must not invent arrival clocks. **Connection conflict detection must not invent `depart+Nh` arrivals** — blank inbound arrival means “skip connection check,” never a red CONNECTION ISSUE (false positives destroy trust).
+
+**Test:** `src/lib/travelAssistant/tripTransportRoute.test.ts`
 
 **F4 — Through-ticket connection thresholds**  
 Short connections on through-tickets (e.g. HNL 2–3.5h) are **warnings**, not critical panic, unless separate tickets.
@@ -620,6 +622,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | M36 | `src/lib/airportNav/doorMonotonicity.test.ts` |
 | M37 | `src/lib/airportNav/footwayGraph.test.ts`, `src/lib/airportNav/routeGradeHonesty.test.ts` |
 | M38 | `src/lib/airportNav/mapHelperNearby.test.ts` |
+| F3 | `src/lib/travelAssistant/tripTransportRoute.test.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
 | F8 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |

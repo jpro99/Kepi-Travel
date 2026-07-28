@@ -81,6 +81,50 @@ test("buildTripTransportRoute ignores return legs weeks after a prior arrival", 
   assert.equal(route.summary.conflicts, 0);
 });
 
+test("F3: missing inbound arrival must not invent a CONNECTION ISSUE (ONT–SEA–FCO)", () => {
+  // Jeff Europe: AS654 noon ONT→SEA (arrival blank in UI) then AS180 5:30pm SEA→FCO.
+  // Old bug: arriveMs = depart+3h under mixed TZ made SEA depart look "before" landing.
+  const route = buildTripTransportRoute([
+    {
+      id: "as654",
+      type: "flight",
+      title: "Alaska AS 654",
+      provider: "Alaska Airlines",
+      localTime: "2026-09-01 12:00",
+      timezone: "America/Los_Angeles",
+      confirmationCode: "DPNNWG",
+      flightDepartureAirport: "ONT",
+      flightArrivalAirport: "SEA",
+      flightDepartureTime: "2026-09-01 12:00",
+      flightArrivalTime: "",
+      flightDate: "2026-09-01",
+      flightAirline: "Alaska Airlines",
+      flightNumber: "AS654",
+    },
+    {
+      id: "as180",
+      type: "flight",
+      title: "Alaska AS 180",
+      provider: "Alaska Airlines",
+      localTime: "2026-09-01 17:30",
+      timezone: "Etc/UTC",
+      confirmationCode: "DPNNWG",
+      flightDepartureAirport: "SEA",
+      flightArrivalAirport: "FCO",
+      flightDepartureTime: "2026-09-01 17:30",
+      flightArrivalTime: "2026-09-02 11:15",
+      flightDate: "2026-09-01",
+      flightAirline: "Alaska Airlines",
+      flightNumber: "AS180",
+    },
+  ]);
+
+  assert.equal(route.summary.conflicts, 0);
+  assert.ok(route.segments.every((segment) => segment.status !== "conflict"));
+  const inbound = route.segments.find((segment) => segment.reservationId === "as654");
+  assert.equal(inbound?.arriveMs, null);
+});
+
 test("buildTripTransportRoute flags impossible connection when next departs before arrival", () => {
   const route = buildTripTransportRoute([
     {
