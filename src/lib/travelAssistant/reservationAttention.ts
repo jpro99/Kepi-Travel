@@ -51,9 +51,7 @@ export function reservationAttentionRingClass(kind: ReservationAttentionKind, is
   if (kind === "problem") {
     return "ring-red-500 bg-red-50/40 dark:ring-red-500/70 dark:bg-red-500/10";
   }
-  if (kind === "missing-price") {
-    return "ring-yellow-400 bg-yellow-50/30 dark:ring-yellow-500/60 dark:bg-yellow-500/5";
-  }
+  // Missing price is accounting, not travel-day panic — no yellow ring.
   return "ring-black/[0.06] dark:ring-white/[0.08]";
 }
 
@@ -82,12 +80,6 @@ export function reservationAttentionBadge(
         "rounded-full bg-red-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-950 dark:bg-red-500/30 dark:text-red-100",
     };
   }
-  if (kind === "missing-price") {
-    return {
-      label: "Add miles/cash",
-      className:
-        "rounded-full bg-yellow-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-yellow-900 dark:bg-yellow-500/30 dark:text-yellow-100",
-    };
-  }
+  // Demote "Add miles/cash" off the primary badge — soft footer CTA on the card instead.
   return null;
 }

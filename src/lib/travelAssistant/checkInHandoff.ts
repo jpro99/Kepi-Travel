@@ -3,6 +3,12 @@
  * Kepi does not render scannable boarding passes — it routes to the airline or Wallet.
  */
 
+import { canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
+import {
+  resolveBoardingPassUrl,
+  type ReservationSourceLink,
+} from "@/lib/travelAssistant/reservationLinks";
+
 export const CHECKIN_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export interface CheckInHandoffFlight {
@@ -174,4 +180,59 @@ export function buildCheckInHandoffContent(
     holdsBoardingPass: false,
     honestyNote: "Kepi opens your airline check-in — your boarding pass stays in Wallet or the airline app.",
   };
+}
+
+export interface CheckInSourceReservation {
+  id: string;
+  type?: string;
+  plannedOnly?: boolean;
+  localTime?: string;
+  timezone?: string;
+  flightNumber?: string;
+  flightAirline?: string;
+  provider?: string;
+  confirmationCode?: string;
+  flightDepartureAirport?: string;
+  flightDepartureTime?: string;
+  flightDate?: string;
+  boardingPassUrl?: string;
+  sourceLinks?: ReservationSourceLink[];
+  originalEmailText?: string;
+}
+
+/** Next upcoming flight with check-in open or a stored pass link — for Home. */
+export function resolveNextCheckInHandoff(
+  reservations: CheckInSourceReservation[],
+  nowMs = Date.now(),
+): CheckInHandoffContent | null {
+  const flights = reservations
+    .filter((r) => (r.type ?? "").toLowerCase() === "flight" && !r.plannedOnly)
+    .map((flight) => {
+      const departureUtcMs = parseDepartureUtcMs(
+        canonicalFlightDepartureLocalTime(flight),
+        flight.timezone,
+      );
+      return { flight, departureUtcMs };
+    })
+    .filter((row) => row.departureUtcMs != null && row.departureUtcMs > nowMs - 60 * 60_000)
+    .sort((a, b) => (a.departureUtcMs ?? 0) - (b.departureUtcMs ?? 0));
+
+  for (const row of flights) {
+    const content = buildCheckInHandoffContent({
+      id: row.flight.id,
+      flightNumber: row.flight.flightNumber,
+      flightAirline: row.flight.flightAirline,
+      provider: row.flight.provider,
+      confirmationCode: row.flight.confirmationCode,
+      flightDepartureAirport: row.flight.flightDepartureAirport,
+      departureUtcMs: row.departureUtcMs,
+      boardingPassUrl: resolveBoardingPassUrl({
+        boardingPassUrl: row.flight.boardingPassUrl,
+        sourceLinks: row.flight.sourceLinks,
+        originalEmailText: row.flight.originalEmailText,
+      }) ?? undefined,
+    }, nowMs);
+    if (content) return content;
+  }
+  return null;
 }

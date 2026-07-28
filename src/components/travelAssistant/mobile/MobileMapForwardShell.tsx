@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { MissionControlView } from "@/components/travelAssistant/MissionControlView";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
+import { resolveNextCheckInHandoff } from "@/lib/travelAssistant/checkInHandoff";
 import { MobileItineraryReader } from "@/components/travelAssistant/mobile/MobileItineraryReader";
 import { MobilePlanNotebook } from "@/components/travelAssistant/mobile/MobilePlanNotebook";
 import { MobileSettingsView } from "@/components/travelAssistant/mobile/MobileSettingsView";
@@ -208,7 +209,7 @@ export function MobileMapForwardShell({
   onAddBooking,
   onAddFlight,
   onAddHotel,
-  onAddGroundTransport,
+  onAddGroundTransport: _onAddGroundTransport,
   onTalkPlanner,
   emailForwardAddress,
   onCopyForwardAddress,
@@ -308,6 +309,9 @@ export function MobileMapForwardShell({
           stayDecisions={stayDecisions}
           liveStatus={liveStatus}
           hasActiveTrip={hasActiveTrip}
+          journeyPhase={journeyPhase}
+          locationStatus={locationStatus}
+          checkInHandoff={resolveNextCheckInHandoff(reservations)}
           onOpenBook={() => onNavigateTab("book")}
           onOpenPlan={() => onNavigateTab("plan")}
           onOpenAirportMode={() => {
@@ -321,24 +325,15 @@ export function MobileMapForwardShell({
           onSeeAllAttention={() => onNavigateTab("plan")}
         />
 
-        {hasActiveTrip && tripSpendSummary ? (
+        {hasActiveTrip &&
+        tripSpendSummary &&
+        (tripSpendSummary.missingPriceCount > 0 || (tripProblemCount ?? 0) > 0) ? (
           <TripSpendBadge
             summary={tripSpendSummary}
             problemCount={tripProblemCount}
             onClick={() => onNavigateTab("book")}
-            alwaysActionable
             className="w-full"
           />
-        ) : null}
-
-        {hasActiveTrip && onAddGroundTransport ? (
-          <button
-            type="button"
-            onClick={onAddGroundTransport}
-            className="flex w-full min-h-[48px] items-center justify-center gap-2 rounded-2xl border border-dashed border-[var(--border-default)] bg-[var(--bg-card)]/80 px-4 py-2.5 text-[15px] font-medium text-[var(--text-secondary)] transition active:opacity-80"
-          >
-            Add airport, hotel, or venue transfer
-          </button>
         ) : null}
 
         {!hasActiveTrip ? (
@@ -352,19 +347,6 @@ export function MobileMapForwardShell({
               Set dates manually
             </button>
           </section>
-        ) : null}
-
-        {hasActiveTrip ? (
-          <div className="grid grid-cols-2 gap-3">
-            <button type="button" onClick={() => onNavigateTab("book")} className={quickActionBtn}>
-              <p className="text-[15px] font-semibold text-[var(--text-muted)]">Bookings</p>
-              <p className="mt-1 text-[19px] font-bold text-[var(--text-primary)]">Flights & hotels</p>
-            </button>
-            <button type="button" onClick={() => onNavigateTab("plan")} className={quickActionBtn}>
-              <p className="text-[15px] font-semibold text-[var(--text-muted)]">Itinerary</p>
-              <p className="mt-1 text-[19px] font-bold text-[var(--text-primary)]">Plan your days</p>
-            </button>
-          </div>
         ) : null}
       </div>
     );

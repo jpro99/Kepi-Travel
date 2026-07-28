@@ -10,6 +10,15 @@ import {
   type ReadinessStatus,
 } from "@/lib/travelAssistant/tripPhase";
 import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
+import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
+import type { CheckInHandoffContent } from "@/lib/travelAssistant/checkInHandoff";
+import { CheckInHandoffCard } from "@/components/travelAssistant/CheckInHandoffCard";
+import {
+  buildConnectionCalmStatus,
+  isTravelDayTakeover,
+  type ConnectionCalmStatus,
+} from "@/lib/travelAssistant/homeDayTruth";
+import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 
 export interface MissionControlViewProps {
   tripName: string;
@@ -28,6 +37,10 @@ export interface MissionControlViewProps {
     }
   >;
   hasActiveTrip?: boolean;
+  /** Journey phase for travel-day takeover (airborne / just-landed). */
+  journeyPhase?: JourneyPhase;
+  checkInHandoff?: CheckInHandoffContent | null;
+  locationStatus?: "away" | "at-airport" | "in-terminal" | "airborne" | "unknown";
   onOpenBook: () => void;
   onOpenPlan: () => void;
   onOpenAirportMode: () => void;
@@ -76,6 +89,9 @@ export function MissionControlView({
   stayDecisions,
   liveStatus,
   hasActiveTrip = true,
+  journeyPhase,
+  checkInHandoff = null,
+  locationStatus = "unknown",
   onOpenBook,
   onOpenPlan,
   onOpenAirportMode,
@@ -111,6 +127,16 @@ export function MissionControlView({
       hasActiveTrip,
     ],
   );
+
+  const connectionCalm: ConnectionCalmStatus = useMemo(
+    () => buildConnectionCalmStatus(reservations as TransportRouteReservation[]),
+    [reservations],
+  );
+
+  const atAirport =
+    locationStatus === "at-airport" || locationStatus === "in-terminal";
+  const travelTakeover =
+    journeyPhase != null && isTravelDayTakeover(journeyPhase, snap.openAirportMode || atAirport);
 
   if (snap.phase === "no_trip") {
     return (
@@ -170,6 +196,9 @@ export function MissionControlView({
         : snap.week.flatMap((d) => d.attention).slice(0, 3);
 
   const primaryCta = (() => {
+    if (travelTakeover || atAirport || snap.openAirportMode) {
+      return { label: "Open Airport Mode", onClick: onOpenAirportMode };
+    }
     if (snap.phase === "problem" && snap.attentionTop3[0]) {
       return {
         label: snap.attentionTop3[0].actionLabel || "Open flights",
@@ -185,9 +214,6 @@ export function MissionControlView({
         },
       };
     }
-    if (snap.openAirportMode && (snap.phase === "departure_day" || snap.phase === "return_day")) {
-      return { label: "Open Airport Mode", onClick: onOpenAirportMode };
-    }
     if (heroAttention[0]?.actionLabel) {
       const item = heroAttention[0];
       return {
@@ -199,7 +225,8 @@ export function MissionControlView({
         },
       };
     }
-    if (activeStatus !== "set") {
+    // One gap voice: only one primary CTA when something needs you.
+    if (activeStatus !== "set" && heroAttention.length > 0) {
       return { label: "Open Plan", onClick: onOpenPlan };
     }
     return null;
@@ -210,6 +237,59 @@ export function MissionControlView({
       className="space-y-3"
       style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif' }}
     >
+      {journeyPhase?.kind === "airborne" ? (
+        <article className="rounded-2xl bg-[#007AFF] px-5 py-5 text-white shadow-[0_1px_3px_rgba(0,0,0,0.12)]">
+          <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-white/70">In the air</p>
+          <h2 className="mt-1 text-[22px] font-semibold tracking-tight">
+            {(journeyPhase.onFlight as { flightDepartureAirport?: string }).flightDepartureAirport ?? ""} →{" "}
+            {journeyPhase.landingAt}
+          </h2>
+          <p className="mt-1 text-[15px] text-white/85">Landing in {journeyPhase.landingIn}</p>
+          <button
+            type="button"
+            onClick={onOpenAirportMode}
+            className="mt-4 flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-white text-[17px] font-semibold text-[#007AFF]"
+          >
+            Open Airport Mode
+          </button>
+        </article>
+      ) : null}
+
+      {journeyPhase?.kind === "just-landed" ? (
+        <article className="rounded-2xl bg-[#34C759] px-5 py-5 text-white shadow-[0_1px_3px_rgba(0,0,0,0.12)]">
+          <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-white/80">Just landed</p>
+          <h2 className="mt-1 text-[22px] font-semibold tracking-tight">You&apos;re on the ground</h2>
+          <p className="mt-1 text-[15px] text-white/90">
+            {journeyPhase.landedMinutesAgo < 2
+              ? "Just now"
+              : `${journeyPhase.landedMinutesAgo} minutes ago`}
+          </p>
+          <button
+            type="button"
+            onClick={onOpenAirportMode}
+            className="mt-4 flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-white text-[17px] font-semibold text-[#1D1D1F]"
+          >
+            Open Airport Mode
+          </button>
+        </article>
+      ) : null}
+
+      {atAirport && journeyPhase?.kind !== "airborne" && journeyPhase?.kind !== "just-landed" ? (
+        <button
+          type="button"
+          onClick={onOpenAirportMode}
+          className="flex min-h-[56px] w-full items-center justify-between rounded-2xl bg-[#007AFF] px-5 text-left text-white"
+        >
+          <span>
+            <span className="block text-[13px] font-semibold text-white/80">
+              {locationStatus === "in-terminal" ? "In the terminal" : "At the airport"}
+            </span>
+            <span className="text-[17px] font-semibold">Open Airport Mode</span>
+          </span>
+          <span className="text-[15px] font-semibold text-white/90">Go</span>
+        </button>
+      ) : null}
+
       <div className="rounded-2xl bg-[#1D1D1F] px-4 py-3 text-white">
         <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-white/60">Mission Control</p>
         <p className="mt-0.5 text-[15px] font-semibold leading-snug">{snap.identityLabel}</p>
@@ -257,6 +337,18 @@ export function MissionControlView({
         {snap.leaveByHint && (snap.phase === "departure_day" || snap.phase === "return_day") ? (
           <p className="mt-3 rounded-xl bg-white px-3 py-2 text-[14px] font-medium text-[#1D1D1F]">
             {snap.leaveByHint}
+          </p>
+        ) : null}
+
+        {connectionCalm.line ? (
+          <p
+            className={`mt-3 rounded-xl px-3 py-2 text-[14px] font-medium ${
+              connectionCalm.kind === "conflict"
+                ? "bg-[#FF3B30]/10 text-[#1D1D1F]"
+                : "bg-white text-[#1D1D1F]"
+            }`}
+          >
+            {connectionCalm.line}
           </p>
         ) : null}
 
@@ -357,6 +449,8 @@ export function MissionControlView({
         </button>
       ) : null}
 
+      {checkInHandoff ? <CheckInHandoffCard content={checkInHandoff} /> : null}
+
       {snap.tonightHotel && (snap.phase === "at_destination" || snap.phase === "departure_day") ? (
         <article className="rounded-2xl bg-[#F5F5F7] p-4">
           <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
@@ -383,16 +477,6 @@ export function MissionControlView({
         </article>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <QuickLink label="Book" onClick={onOpenBook} />
-        <QuickLink label="Plan" onClick={onOpenPlan} />
-        <QuickLink label="Airport Mode" onClick={onOpenAirportMode} />
-        <QuickLink
-          label="Full itinerary"
-          onClick={onOpenPlan}
-        />
-      </div>
-
       {selectedDay ? (
         <DayDetailSheet
           day={selectedDay}
@@ -403,18 +487,6 @@ export function MissionControlView({
         />
       ) : null}
     </section>
-  );
-}
-
-function QuickLink({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="min-h-[48px] rounded-2xl bg-[#F5F5F7] px-3 text-[14px] font-semibold text-[#1D1D1F]"
-    >
-      {label}
-    </button>
   );
 }
 

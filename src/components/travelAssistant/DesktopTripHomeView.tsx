@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { MissionControlView } from "@/components/travelAssistant/MissionControlView";
 import type { TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
+import { resolveNextCheckInHandoff } from "@/lib/travelAssistant/checkInHandoff";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 import type { FlightSearchPlan, PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
 import type { InterCityTransportGap } from "@/lib/travelAssistant/interCityTransport";
@@ -86,6 +87,7 @@ export function DesktopTripHomeView({
   transportReservations: transportReservationsProp,
   plannedFlightLegs = [],
   staySegments = [],
+  locationStatus,
   onGapActionTap,
   onReservationTap,
   onOpenBook,
@@ -118,6 +120,9 @@ export function DesktopTripHomeView({
         stayDecisions={stayDecisions}
         liveStatus={liveStatus}
         hasActiveTrip={hasTrip}
+        journeyPhase={journeyPhase}
+        locationStatus={locationStatus}
+        checkInHandoff={resolveNextCheckInHandoff(reservations)}
         onOpenBook={onOpenBook}
         onOpenPlan={onOpenPlan}
         onOpenAirportMode={onOpenAirportMode}

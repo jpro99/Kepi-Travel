@@ -485,6 +485,11 @@ Travel Assistant Home leads with one primary status card for the active zoom (**
 
 **Test:** `src/lib/travelAssistant/tripPhase.test.ts`
 
+**I33 — Apple Home voice + Flights diet + travel-day takeover**
+Flights is a ticket list — no TripFirst marketing, no duplicate search launchers, no inter-city gap stack (Home/Plan own gaps), no terminal explore promo outside 48h of departure, no yellow “Add miles/cash” primary badge (soft footer only). Home is the single voice: leave-by + calm connection line (`buildConnectionCalmStatus`) + check-in handoff + one attention CTA; no Book/Plan/Airport quick-link grid or redundant Bookings/Itinerary tiles; trip spend badge only when pricing/problems need action. Travel day / airborne / just-landed / at-airport surfaces Airport Mode as the primary offer.
+
+**Test:** `src/lib/travelAssistant/homeDayTruth.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -646,6 +651,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I30 | `src/lib/travelAssistant/forwardedReservationGate.test.ts`, `src/lib/travelAssistant/forwardedDraftImport.test.ts`, `src/lib/travelAssistant/reservationDuplicates.test.ts` |
 | I31 | `src/lib/travelAssistant/dayPlanBulletGroups.test.ts` |
 | I32 | `src/lib/travelAssistant/tripPhase.test.ts` |
+| I33 | `src/lib/travelAssistant/homeDayTruth.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

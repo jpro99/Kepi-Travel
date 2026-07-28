@@ -5,10 +5,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { LiveMapLink } from "@/components/travelAssistant/LiveMapLink";
 import { hasAirportLayout } from "@/lib/airportNav/getLayout";
-import { selectPreviewAirportFlight } from "@/lib/travelAssistant/useActiveFlight";
-import { TripFlightLegPicker } from "@/components/travelAssistant/TripFlightLegPicker";
-import { InterCityTransportPrompts } from "@/components/travelAssistant/InterCityTransportPrompts";
-import { TripFirstBanner } from "@/components/travelAssistant/TripFirstBanner";
+import { selectPreviewAirportFlight, toUtcMs as flightToUtcMs } from "@/lib/travelAssistant/useActiveFlight";
 import { FlightSearchLauncher, type FlightSearchDefaults } from "@/components/travelAssistant/FlightSearchLauncher";
 import { ImportConfirmationDropzone } from "@/components/travelAssistant/ImportConfirmationDropzone";
 import { FlightSearchModal } from "@/components/travelAssistant/FlightSearchModal";
@@ -18,6 +15,7 @@ import type { QuickGroundMode } from "@/lib/travelAssistant/quickGroundTransport
 import { buildGateInstructions, getAirportNav, buildArrivalGuide } from "@/lib/travelAssistant/airportNavigation";
 import { isFlightStatusStale } from "@/lib/travelAssistant/flightStatusCadence";
 import { canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
+import { shouldShowTerminalExplorePromo } from "@/lib/travelAssistant/homeDayTruth";
 import {
   formatReservationCostLine,
   reservationMissingPrice,
@@ -33,7 +31,7 @@ import { TripTransportRouteMap } from "@/components/travelAssistant/TripTranspor
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import type { ItinerarySelfCheckResult } from "@/lib/travelAssistant/itinerarySelfCheck";
 import { flightCardTypography, guideCardTypography, hotelCardTypography } from "@/lib/ui/mobileTypography";
-import { appleBtnText, appleWarningPill } from "@/lib/ui/appleDesign";
+import { appleBtnText } from "@/lib/ui/appleDesign";
 
 /* ─── Types ──────────────────────────────────────────────────── */
 interface Reservation {
@@ -495,7 +493,7 @@ export function FlightsTab({
   onImportConfirmation,
   importConfirmationBusy = false,
   liveStatus = {}, locationStatus = "unknown", nearestAirport = "",
-  onReservationTap, onCheckStatus, onDelete, onAdd, onQuickGroundTransport,
+  onReservationTap, onCheckStatus, onDelete, onAdd,
   simplifiedMobile = false,
   enableBookSearch = false,
   hideRouteMap = false,
@@ -551,7 +549,21 @@ export function FlightsTab({
     [reservations, nowMs],
   );
   const previewDepartureIata = previewAirportFlight?.f.flightDepartureAirport ?? "";
-  const canExploreTerminal = hasAirportLayout(previewDepartureIata);
+  const previewDepUtcMs = previewAirportFlight
+    ? flightToUtcMs(
+        canonicalFlightDepartureLocalTime(previewAirportFlight.f) ||
+          previewAirportFlight.f.flightDepartureTime ||
+          previewAirportFlight.f.localTime ||
+          "",
+        previewAirportFlight.f.timezone,
+      )
+    : Number.NaN;
+  const canExploreTerminal =
+    hasAirportLayout(previewDepartureIata) &&
+    shouldShowTerminalExplorePromo(
+      Number.isFinite(previewDepUtcMs) ? previewDepUtcMs : null,
+      nowMs,
+    );
 
   // Are we currently airborne on a flight? (departed, not yet arrived)
   const airborneOnFlight = useMemo(() => [...upcoming, ...past].find(r => {
@@ -574,19 +586,20 @@ export function FlightsTab({
   // Show departure guide for the next upcoming (not yet departed) flight
   const showGuide = Boolean(nextFlight) && !airborneOnFlight;
 
+  // Book search chrome: one search surface only (launcher OR header buttons, not both).
+  const showSearchLauncher = showBookSearch && !enableBookSearch;
+
   return (
     <section className={`space-y-4 pb-6 ${type.section}`}>
-      {showBookSearch ? (
-        <>
-      <TripFirstBanner variant="flight" />
+      {showSearchLauncher ? (
+        <FlightSearchLauncher
+          tripName={tripName}
+          defaults={flightSearchDefaults}
+          onSearch={handleFlightSearch}
+        />
+      ) : null}
 
-      <FlightSearchLauncher
-        tripName={tripName}
-        defaults={flightSearchDefaults}
-        onSearch={handleFlightSearch}
-      />
-
-      {pendingForwardReview && onOpenForwardReview ? (
+      {showBookSearch && pendingForwardReview && onOpenForwardReview ? (
         <button
           type="button"
           onClick={() => onOpenForwardReview(pendingForwardReview.id)}
@@ -600,13 +613,11 @@ export function FlightsTab({
         </button>
       ) : null}
 
-      {onImportConfirmation ? (
+      {showBookSearch && onImportConfirmation ? (
         <ImportConfirmationDropzone
           busy={importConfirmationBusy}
           onFile={onImportConfirmation}
         />
-      ) : null}
-        </>
       ) : null}
 
       <FlightSearchModal
@@ -633,19 +644,7 @@ export function FlightsTab({
         />
       )}
 
-      {showBookSearch && onQuickGroundTransport ? (
-        <>
-      <InterCityTransportPrompts
-        legs={plannedFlightLegs}
-        onSearchFlights={handleFlightSearch}
-        onQuickGroundTransport={onQuickGroundTransport}
-      />
-
-      {plannedFlightLegs.some((leg) => leg.status === "needed") ? (
-        <TripFlightLegPicker legs={plannedFlightLegs} tripName={tripName} onSearch={handleFlightSearch} />
-      ) : null}
-        </>
-      ) : null}
+      {/* Ground gaps + needed legs live on Home/Plan — Flights stays ticket list only. */}
 
       {simplifiedMobile && !hideRouteMap ? (
         <TripTransportRouteMap
@@ -729,22 +728,24 @@ export function FlightsTab({
           <p className="text-4xl mb-3">🛫</p>
           <p className="font-semibold text-slate-900 dark:text-white">{t("emptyTitle")}</p>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">{t("emptyBody")}</p>
-          <button
-            type="button"
-            onClick={() =>
-              handleFlightSearch(
-                {
-                  mode: "oneway",
-                  summary: "Custom flight search",
-                  url: "",
-                },
-                [],
-              )
-            }
-            className="mb-3 w-full rounded-full bg-[#007AFF] px-6 py-2.5 text-sm font-bold text-white"
-          >
-            {t("searchFlights")}
-          </button>
+          {!enableBookSearch ? (
+            <button
+              type="button"
+              onClick={() =>
+                handleFlightSearch(
+                  {
+                    mode: "oneway",
+                    summary: "Custom flight search",
+                    url: "",
+                  },
+                  [],
+                )
+              }
+              className="mb-3 w-full rounded-full bg-[#007AFF] px-6 py-2.5 text-sm font-bold text-white"
+            >
+              {t("searchFlights")}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={onAdd}
@@ -812,8 +813,6 @@ export function FlightsTab({
                         <p className={listType.title}>{flightTitle}</p>
                         {attentionBadge && !past ? (
                           <span className={attentionBadge.className}>{attentionBadge.label}</span>
-                        ) : missingPrice && !past ? (
-                          <span className={appleWarningPill}>Add cost</span>
                         ) : costLine ? (
                           <span className="shrink-0 text-[17px] font-semibold text-[var(--text-primary)]">{costLine}</span>
                         ) : null}

@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-28 (F3 false CONNECTION ISSUE — no invented arrivals)
+Last updated: 2026-07-28 (I33 Apple Home + Flights diet + travel-day)
+
+## Decision 2026-07-28 — I33 Apple chrome diet (Jeff approved A→B→C)
+A: Flights = tickets only (no TripFirst, one search surface, demote miles/cash badge, terminal promo ≤48h, gaps off Flights). B: Home single voice (check-in handoff, calm connection line, spend badge only when needed, no quick-link/tiles). C: Travel-day takeover (airborne / just-landed / at-airport → Airport Mode primary).
 
 ## Incident 2026-07-28 — False CONNECTION ISSUE on ONT→SEA→FCO (Jeff)
 
