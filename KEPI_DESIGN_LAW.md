@@ -520,6 +520,11 @@ Airbnb confirmation emails show `Sat, Sep 12` / `Tue, Sep 15` without a year on 
 
 **Test:** `src/lib/travelAssistant/hotelStayDateExtract.test.ts`, `emailForwardParser.test.ts`, `confirmationHotelExtract.test.ts`
 
+**I40 — Stay Gaps must know airborne nights and homebound return**
+Blank `flightArrivalTime` on a long-haul (SEA→FCO) must not fall back to departure day — that opened “Sep 1 · near Polignano” while the traveler is overnight airborne. When arrival is missing, first sleep is dep+1 (ESTIMATE) after skipping same-day hubs; dep night is airborne. Never extend the sleep window past the day before the last return departure (no “Sep 25–27 · near Munich” after MUC→SEA). Venice Sep 15–17 after a Sep 12–15 Airbnb remains a real gap (checkout exclusive) unless another stay exists.
+
+**Test:** `src/lib/travelAssistant/tripNightCoverage.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -688,6 +693,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I37 | `src/lib/travelAssistant/tripWindowRepair.test.ts` |
 | I38 | `src/lib/travelAssistant/tripWindowRepair.test.ts`, `tripNightCoverage.test.ts` |
 | I39 | `src/lib/travelAssistant/hotelStayDateExtract.test.ts`, `emailForwardParser.test.ts`, `confirmationHotelExtract.test.ts` |
+| I40 | `src/lib/travelAssistant/tripNightCoverage.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

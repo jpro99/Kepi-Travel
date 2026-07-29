@@ -91,6 +91,27 @@ export function formatStayRangeLabel(startNight: string, endNight: string): stri
 }
 
 /**
+ * Arrival calendar day for sleep / airborne math (I40).
+ * Explicit `flightArrivalTime` wins. When arrival is blank (common on forwarded
+ * long-hauls), do NOT fall back to departure day — that made SEA→FCO look like a
+ * same-day landing and nagged Sep 1 for a Polignano hotel while airborne.
+ * Connection hubs still use departure day for same-day onward matching.
+ */
+export function flightArrivalDayForSleep(
+  flight: NightCoverageReservation,
+  options?: { forConnectionMatch?: boolean },
+): string {
+  const explicit = dateOnly(flight.flightArrivalTime);
+  if (explicit) return explicit;
+  const dep = flightDepDay(flight);
+  if (!dep) return "";
+  // Blank arrival + looking for a same-day connection: use dep day so ONT→SEA→FCO still chains.
+  if (options?.forConnectionMatch) return dep;
+  // Terminal / overnight ESTIMATE: sleep / airborne starts the next calendar day.
+  return addIsoDays(dep, 1);
+}
+
+/**
  * First night the traveler actually sleeps away from home.
  * Skips same-day connection hubs (ONT→SEA→FCO same day → start at FCO arrival).
  */
@@ -102,21 +123,23 @@ export function resolveFirstSleepNight(flights: NightCoverageReservation[]): str
 
   for (let i = 0; i < ordered.length; i += 1) {
     const flight = ordered[i]!;
-    const arrDay = flightArrDay(flight);
     const arrAirport = (flight.flightArrivalAirport ?? "").trim().toUpperCase();
-    if (!arrDay || !arrAirport) continue;
+    if (!arrAirport) continue;
+
+    const connectionDay = flightArrivalDayForSleep(flight, { forConnectionMatch: true });
+    if (!connectionDay) continue;
 
     const sameDayOnward = ordered.slice(i + 1).some((next) => {
       const nextDep = (next.flightDepartureAirport ?? "").trim().toUpperCase();
       const nextDepDay = flightDepDay(next);
-      return nextDep === arrAirport && nextDepDay === arrDay;
+      return nextDep === arrAirport && nextDepDay === connectionDay;
     });
     if (sameDayOnward) continue;
 
-    // Overnight arrival: sleep starts on arrival calendar day.
-    return arrDay;
+    // First real destination arrival (explicit, or dep+1 when arrival time is blank).
+    return flightArrivalDayForSleep(flight);
   }
-  return ordered[0] ? flightArrDay(ordered[0]) : "";
+  return ordered[0] ? flightArrivalDayForSleep(ordered[0]) : "";
 }
 
 function dateOnly(value?: string | null): string {
@@ -181,6 +204,7 @@ function flightDepDay(flight: NightCoverageReservation): string {
 }
 
 function flightArrDay(flight: NightCoverageReservation): string {
+  // Display / legacy: prefer explicit arrival, else dep day.
   return dateOnly(flight.flightArrivalTime) || flightDepDay(flight);
 }
 
@@ -195,8 +219,11 @@ function isBookedHotel(r: NightCoverageReservation): boolean {
 /** Overnight flight occupies sleep nights from dep day through day before arrival. */
 export function flightCoversNightAsAirborne(flight: NightCoverageReservation, nightKey: string): boolean {
   const dep = flightDepDay(flight);
-  const arr = flightArrDay(flight);
-  if (!dep || !arr || arr <= dep) return false;
+  if (!dep) return false;
+  const explicitArr = dateOnly(flight.flightArrivalTime);
+  // Blank arrival on a non-connection leg → ESTIMATE overnight (I40).
+  const arr = explicitArr || addIsoDays(dep, 1);
+  if (!arr || arr <= dep) return false;
   return dep <= nightKey && nightKey < arr;
 }
 
@@ -328,11 +355,17 @@ export function buildTripNightCoverage(input: BuildTripNightCoverageInput): Trip
   const lastFlightDep = lastFlight
     ? correctPastTravelIsoDate(flightDepDay(lastFlight), referenceDate)
     : "";
+  // Homebound cap (I40): only when the last flight departs *after* sleep window starts
+  // (true return). Outbound-only trips must not clamp Europe stays to the day before SEA→FCO.
+  const returnEndCap =
+    lastFlightDep && windowStart && lastFlightDep > windowStart
+      ? addIsoDays(lastFlightDep, -1)
+      : "";
 
   // Prefer reservation facts (last return / last checkout) over a possibly expanded tripEnd.
   let windowEnd = "";
-  if (lastFlightDep) {
-    windowEnd = addIsoDays(lastFlightDep, -1);
+  if (returnEndCap) {
+    windowEnd = returnEndCap;
   }
   if (lastHotelCheckout) {
     const hotelEnd = addIsoDays(lastHotelCheckout, -1);
@@ -342,23 +375,27 @@ export function buildTripNightCoverage(input: BuildTripNightCoverageInput): Trip
     windowEnd = addIsoDays(tripEnd, -1);
   }
 
-  // Trip end can extend past the last hotel/flight (ground stay), but never
-  // invent a months-long franken-window (I38 — 292 nights bug). Clamp into the
-  // allowed range — do not skip the entire extension when tripEnd is slightly past.
+  // Trip end can extend a short ground stay, but never past the homebound return (I40)
+  // and never into a months-long franken-window (I38).
   if (tripEnd && windowStart) {
     const tripWindowEnd = addIsoDays(tripEnd, -1);
     if (tripWindowEnd >= windowStart) {
       const anchored = windowEnd && windowEnd >= windowStart ? windowEnd : windowStart;
       const maxAllowed = addIsoDays(anchored, Math.min(14, MAX_TRIP_WINDOW_DAYS));
-      const candidate = tripWindowEnd <= maxAllowed ? tripWindowEnd : maxAllowed;
+      let candidate = tripWindowEnd <= maxAllowed ? tripWindowEnd : maxAllowed;
+      if (returnEndCap && candidate > returnEndCap) candidate = returnEndCap;
       if (candidate > (windowEnd || "")) {
         windowEnd = candidate;
       }
     }
   }
 
-  if (windowStart && windowEnd && windowEnd < windowStart && lastFlightDep) {
-    windowEnd = addIsoDays(lastFlightDep, -1);
+  if (returnEndCap && windowEnd && windowEnd > returnEndCap) {
+    windowEnd = returnEndCap;
+  }
+
+  if (windowStart && windowEnd && windowEnd < windowStart && returnEndCap) {
+    windowEnd = returnEndCap;
   }
 
   // Absolute span guard.
@@ -366,6 +403,7 @@ export function buildTripNightCoverage(input: BuildTripNightCoverageInput): Trip
     const span = nightsBetweenInclusive(windowStart, windowEnd);
     if (span > MAX_TRIP_WINDOW_DAYS) {
       windowEnd = addIsoDays(windowStart, MAX_TRIP_WINDOW_DAYS - 1);
+      if (returnEndCap && windowEnd > returnEndCap) windowEnd = returnEndCap;
     }
   }
 

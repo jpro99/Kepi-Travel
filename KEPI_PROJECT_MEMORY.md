@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-29 (I39 — Airbnb yearless Venice stay parse)
+Last updated: 2026-07-29 (I40 — Stay Gaps airborne + return cap)
+
+## Incident 2026-07-29 — Stay Gaps nagged Sep 1 Polignano + Sep 25–27 Munich (Jeff)
+Not an “AI misunderstanding” — deterministic night math. Blank AS180 `flightArrivalTime` made first sleep = Sep 1 and skipped airborne. Trip end +14 days past MUC→SEA invented Munich nights after flying home. Venice Sep 15–17 after Airbnb checkout Sep 15 is real (covers 12–14 only). Fix I40 in `tripNightCoverage`.
 
 ## Incident 2026-07-29 — Airbnb Venice forward never covered Sep 12–14 (Jeff)
 Airbnb cards are yearless (`Sat, Sep 12`); regex required a year, so check-in/out stayed empty and “Payment scheduled Aug 29, 2026” became fake check-in. Draft sat in review / covered zero nights. Fix I39: labeled yearless Check-in/Checkout + year from payment line + Address→Venice + ignore payment-scheduled as stay date. Re-forward Venice Airbnb after deploy (or confirm from review if a draft is waiting).

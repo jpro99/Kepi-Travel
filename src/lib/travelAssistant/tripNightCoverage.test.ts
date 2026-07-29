@@ -119,6 +119,103 @@ test("I34: completeness label lists readable stay ranges, not MM-DD junk", () =>
   assert.match(completeness.summary, /Tap Hotels/iu);
 });
 
+test("I40: blank AS180 arrival must not nag Sep 1 Polignano hotel while airborne", () => {
+  const coverage = buildTripNightCoverage({
+    nowMs,
+    tripStartDate: "2026-09-01",
+    tripEndDate: "2026-09-28",
+    reservations: [
+      {
+        id: "as654",
+        type: "flight",
+        localTime: "2026-09-01 12:00",
+        flightDate: "2026-09-01",
+        flightDepartureAirport: "ONT",
+        flightArrivalAirport: "SEA",
+        flightArrivalTime: "2026-09-01 14:30",
+      },
+      {
+        id: "as180",
+        type: "flight",
+        localTime: "2026-09-01 17:30",
+        flightDate: "2026-09-01",
+        flightDepartureAirport: "SEA",
+        flightArrivalAirport: "FCO",
+        // Blank arrival — live bug that made Sep 1 a Stay Gap near Polignano.
+        flightArrivalTime: "",
+      },
+      {
+        id: "polignano",
+        type: "hotel",
+        localTime: "2026-09-02 15:00",
+        checkOutDate: "2026-09-05",
+        location: "Polignano a Mare",
+      },
+      {
+        id: "return",
+        type: "flight",
+        localTime: "2026-09-25 10:00",
+        flightDate: "2026-09-25",
+        flightDepartureAirport: "MUC",
+        flightArrivalAirport: "SEA",
+        flightArrivalTime: "2026-09-25 18:00",
+      },
+    ],
+  });
+  assert.equal(coverage.windowStart, "2026-09-02");
+  const gapDates = coverage.nights.filter((n) => n.status === "gap").map((n) => n.dateKey);
+  assert.equal(gapDates.includes("2026-09-01"), false);
+  assert.equal(
+    coverage.nights.some((n) => n.dateKey === "2026-09-01"),
+    false,
+  );
+});
+
+test("I40: return flight caps Stay Gaps — no Sep 25–27 Munich after flying home", () => {
+  const completeness = buildTripCompleteness({
+    nowMs,
+    tripStartDate: "2026-09-01",
+    tripEndDate: "2026-09-28",
+    reservations: [
+      {
+        id: "as180",
+        type: "flight",
+        localTime: "2026-09-01 17:30",
+        flightDate: "2026-09-01",
+        flightDepartureAirport: "SEA",
+        flightArrivalAirport: "FCO",
+        flightArrivalTime: "2026-09-02 11:15",
+      },
+      {
+        id: "munich",
+        type: "hotel",
+        localTime: "2026-09-20 15:00",
+        checkOutDate: "2026-09-25",
+        location: "Munich",
+      },
+      {
+        id: "return",
+        type: "flight",
+        localTime: "2026-09-25 10:00",
+        flightDate: "2026-09-25",
+        flightDepartureAirport: "MUC",
+        flightArrivalAirport: "SEA",
+        flightArrivalTime: "2026-09-25 18:00",
+      },
+    ],
+  });
+  assert.equal(
+    completeness.hotelGaps.some(
+      (g) => g.startNight <= "2026-09-25" && g.endNight >= "2026-09-25",
+    ),
+    false,
+  );
+  assert.equal(
+    completeness.hotelGaps.some((g) => /Munich/i.test(g.suggestedCity) && g.startNight >= "2026-09-25"),
+    false,
+  );
+});
+
 test("I35: sleep window starts on first destination arrival — not hotel check-in before landing", () => {
   const coverage = buildTripNightCoverage({
     nowMs,
