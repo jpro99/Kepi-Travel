@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-28 (I37 trip window year repair — Stay Gaps 2025 bug)
+Last updated: 2026-07-28 (Apple landing redesign — free start, no invite barrier)
+
+## Decision 2026-07-28 — Landing redesign Apple calm (Jeff approved)
+Hero: Kepi + “Your trip, calmly handled.” + Start free (no invite). One phone demo carousel (stays / flights / Airport Mode) starts on tap. Two testimonials. Soft Free/Pro pricing. Invite/lifetime demoted to footer. No stats strip, dense feature grids, or competing CTAs.
 
 ## Incident 2026-07-28 — Stay Gaps still showing 2025 check-ins (Jeff screenshot)
 Root cause: trip.startDate/endDate stayed 2025, so hotel remap pulled corrected 2026 hotels *back* into 2025. Fix I37: reconcile trip bounds before remap; coverage also repairs window in-memory. Real open nights after NEREA (checkout morning Sep 8) and Venice remain Sep 8–11 and 15–17 unless other hotels exist — do not ask Jeff to resend NEREA/Ortisei for those nights.

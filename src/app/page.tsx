@@ -6,13 +6,13 @@ import { getSubscriptionRecord, isSubscriptionActive } from "@/lib/billing/subsc
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Kepi Travel — Plan, guide, and remember every journey",
+  title: "Kepi Travel — Your trip, calmly handled",
   description:
-    "Kepi Travel is an intelligent end-to-end travel companion. Plan your trip, navigate airports with Airport Mode, and hold onto memories — calmly, from booking through arrival.",
+    "Book anywhere. Forward confirmations. Kepi guides flights, stays, and Airport Mode — calmly, without overwhelm. Start free.",
   openGraph: {
-    title: "Kepi Travel — Plan, guide, and remember every journey",
+    title: "Kepi Travel — Your trip, calmly handled",
     description:
-      "Real-time airport guidance, live flight tracking, and a travel companion that stays with you from departure to memory.",
+      "A smart travel companion that hides the complexity. Start free — no invite required.",
     url: "/",
     type: "website",
   },

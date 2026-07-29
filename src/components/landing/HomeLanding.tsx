@@ -2,41 +2,97 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
-  Bell,
-  Camera,
-  CheckCircle2,
-  Compass,
-  MapPin,
-  Navigation,
+  BedDouble,
+  Check,
   Plane,
-  Play,
-  Shield,
-  Sparkles,
-  Timer,
+  Quote,
+  MapPinned,
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { InviteCodeForm } from "@/components/ui/InviteCodeForm";
-import {
-  appleBtnPrimary,
-  appleBtnSecondary,
-  appleCaption,
-  appleMetadata,
-  appleSectionHeader,
-} from "@/lib/ui/appleDesign";
-
-/* ─── Tokens (match globals.css / appleDesign.ts) ─────────────── */
+import { appleBtnPrimary } from "@/lib/ui/appleDesign";
 
 const pageBg = "bg-[var(--apple-bg)]";
 const textPrimary = "text-[var(--apple-text)]";
 const textSecondary = "text-[var(--apple-text-secondary)]";
-const container = "mx-auto w-full max-w-6xl px-4 sm:px-8";
-const sectionPad = "py-20 sm:py-28";
+const container = "mx-auto w-full max-w-5xl px-5 sm:px-8";
+const systemFont =
+  '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", sans-serif';
 
-/* ─── Motion helpers ──────────────────────────────────────────── */
+const HERO_IMAGE =
+  "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=2400&q=80";
+
+const demoSlides = [
+  {
+    id: "stay",
+    eyebrow: "Stays",
+    title: "Every night covered",
+    body: "Know which nights still need a place — before you leave home.",
+    icon: BedDouble,
+    phone: {
+      label: "Trip status",
+      headline: "Flights and stays set",
+      rows: [
+        { k: "Monopoli", v: "Sep 5 – 7" },
+        { k: "Venice", v: "Sep 12 – 14" },
+        { k: "Open nights", v: "Sep 8 – 11", warn: true },
+      ],
+    },
+  },
+  {
+    id: "flight",
+    eyebrow: "Flights",
+    title: "Calm when it counts",
+    body: "Leave-by times and connection checks — without the noise.",
+    icon: Plane,
+    phone: {
+      label: "Today",
+      headline: "Leave by 10:15",
+      rows: [
+        { k: "AS 180", v: "SEA → FCO" },
+        { k: "Connection", v: "Looks fine" },
+        { k: "Boards", v: "in 2h 10m" },
+      ],
+    },
+  },
+  {
+    id: "airport",
+    eyebrow: "Airport Mode",
+    title: "One screen at the airport",
+    body: "Gate, walk, and what to do next — when you’re already there.",
+    icon: MapPinned,
+    phone: {
+      label: "At the airport",
+      headline: "Gate B12",
+      rows: [
+        { k: "Security", v: "~18 min" },
+        { k: "Walk to gate", v: "12 min" },
+        { k: "Boarding", v: "1:25 PM" },
+      ],
+    },
+  },
+] as const;
+
+const testimonials = [
+  {
+    name: "Maya R.",
+    route: "NYC → Lisbon",
+    quote:
+      "Gate changed twice. Kepi quietly rerouted my steps — I boarded without sprinting.",
+    icon: Plane,
+  },
+  {
+    name: "David L.",
+    route: "Chicago → Tokyo",
+    quote:
+      "Airport Mode felt like someone who already knew the terminal walking with me.",
+    icon: MapPinned,
+  },
+] as const;
 
 function Reveal({
   children,
@@ -54,157 +110,21 @@ function Reveal({
   return (
     <motion.div
       className={className}
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 16 }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-60px" }}
-      transition={{ duration: 0.55, delay, ease: [0.22, 1, 0.36, 1] }}
+      viewport={{ once: true, margin: "-48px" }}
+      transition={{ duration: 0.5, delay, ease: [0.22, 1, 0.36, 1] }}
     >
       {children}
     </motion.div>
   );
 }
 
-/* ─── Data ────────────────────────────────────────────────────── */
-
-const navLinks = [
-  { href: "#features", label: "Features" },
-  { href: "#airport-mode", label: "Airport Mode" },
-  { href: "#journey", label: "Journey" },
-  { href: "#memories", label: "Memories" },
-  { href: "#pricing", label: "Pricing" },
-] as const;
-
-const pillars = [
-  {
-    title: "Plan",
-    description:
-      "Build a living itinerary — where to go, when to stay, what's missing. Compare options in Kepi, then book on Google or the airline when the price is right.",
-    icon: Compass,
-  },
-  {
-    title: "Guide",
-    description:
-      "Real-time guidance from packing through arrival. Gate changes, connection timing, and airport navigation — delivered when you need them, not all at once.",
-    icon: Navigation,
-  },
-  {
-    title: "Remember",
-    description:
-      "When the trip ends, Kepi helps you hold onto it — photo collages, route recaps, and a gentle archive of the journey you actually lived.",
-    icon: Camera,
-  },
-] as const;
-
-const airportFeatures = [
-  { icon: MapPin, label: "Terminal navigation", detail: "Step-by-step directions to your gate" },
-  { icon: Bell, label: "Gate & delay alerts", detail: "Calm notifications before things get urgent" },
-  { icon: Shield, label: "Checkpoint guidance", detail: "PreCheck, security, and lounge timing" },
-  { icon: Timer, label: "Leave-by timing", detail: "Know when to move — not just when you board" },
-] as const;
-
-const journeySteps = [
-  {
-    phase: "Before",
-    title: "Prepare with clarity",
-    body: "Packing cues, document checks, and a timeline that reflects your real reservations — not a generic checklist.",
-  },
-  {
-    phase: "During",
-    title: "Move with confidence",
-    body: "Airport Mode, live flight status, and connection awareness keep you oriented when terminals get loud and crowded.",
-  },
-  {
-    phase: "After",
-    title: "Land softly",
-    body: "Arrival guides, hotel check-in context, and shared family views so nobody is guessing on the other side.",
-  },
-] as const;
-
-const memoryTiles = [
-  {
-    src: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80",
-    alt: "Calm beach at golden hour",
-    caption: "Day 4 · Maui",
-  },
-  {
-    src: "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=800&q=80",
-    alt: "Window seat above the clouds",
-    caption: "En route · HNL",
-  },
-  {
-    src: "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80",
-    alt: "City street at dusk",
-    caption: "Evening walk · Lisbon",
-  },
-] as const;
-
-const stats = [
-  { value: "12k+", label: "Trips guided" },
-  { value: "4.9", label: "Traveler rating" },
-  { value: "98%", label: "On-time assist rate" },
-] as const;
-
-const testimonials = [
-  {
-    name: "Maya R.",
-    route: "NYC → Lisbon",
-    quote:
-      "Gate changed twice in twenty minutes. Kepi rerouted my airport steps and I still boarded without sprinting.",
-  },
-  {
-    name: "David L.",
-    route: "Chicago → Tokyo",
-    quote:
-      "Airport Mode felt like having someone who already knew the terminal walk me through it — quietly, clearly.",
-  },
-  {
-    name: "Priya S.",
-    route: "Austin family trip",
-    quote:
-      "The memory recap at the end was unexpectedly moving. It captured the trip better than my camera roll alone.",
-  },
-] as const;
-
-const pricingPlans = [
-  {
-    id: "free",
-    name: "Free",
-    price: "$0",
-    period: "/month",
-    description: "Essential travel execution for one active trip.",
-    cta: "Start free",
-    highlighted: false,
-    features: ["1 active trip", "Manual trip updates", "Core readiness board"],
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    price: "$9",
-    period: "/month",
-    description: "Automation and alerts for frequent travelers.",
-    cta: "Start Pro",
-    highlighted: true,
-    features: ["Unlimited trips", "Gmail import + AI guidance", "Push gate & delay alerts"],
-  },
-  {
-    id: "concierge",
-    name: "Concierge",
-    price: "$29",
-    period: "/month",
-    description: "Proactive support before disruption escalates.",
-    cta: "Start Concierge",
-    highlighted: false,
-    features: ["5-minute monitoring", "Auto-rebook workflows", "Priority concierge support"],
-  },
-] as const;
-
-/* ─── Subcomponents ───────────────────────────────────────────── */
-
 function LandingNavbar({ userId }: { userId: string | null }) {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const onScroll = (): void => setScrolled(window.scrollY > 24);
+    const onScroll = (): void => setScrolled(window.scrollY > 12);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -214,32 +134,19 @@ function LandingNavbar({ userId }: { userId: string | null }) {
     <header
       className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
         scrolled
-          ? "border-b border-[var(--apple-border)] bg-[var(--apple-card)]/92 shadow-[0_1px_0_rgba(0,0,0,0.04)] backdrop-blur-xl"
+          ? "border-b border-black/5 bg-white/90 shadow-[0_1px_0_rgba(0,0,0,0.04)] backdrop-blur-xl"
           : "bg-transparent"
       }`}
     >
-      <div className={`${container} flex h-16 items-center justify-between sm:h-[4.5rem]`}>
+      <div className={`${container} flex h-14 items-center justify-between sm:h-16`}>
         <Link href="/" className="shrink-0" aria-label="Kepi Travel home">
           <Logo size="sm" />
         </Link>
-
-        <nav className="hidden items-center gap-8 md:flex" aria-label="Primary">
-          {navLinks.map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              className={`text-[15px] font-medium ${textSecondary} transition-colors hover:text-[var(--apple-text)]`}
-            >
-              {link.label}
-            </a>
-          ))}
-        </nav>
-
         <div className="flex items-center gap-2 sm:gap-3">
           {userId ? (
             <Link
               href="/travel-assistant"
-              className={`${appleBtnPrimary} inline-flex min-h-[40px] items-center px-4 text-[15px]`}
+              className={`${appleBtnPrimary} inline-flex min-h-[40px] items-center px-4 text-[15px] shadow-[0_0_0_0_rgba(0,122,255,0.35)] transition hover:shadow-[0_0_24px_rgba(0,122,255,0.35)]`}
             >
               Open app
             </Link>
@@ -247,15 +154,17 @@ function LandingNavbar({ userId }: { userId: string | null }) {
             <>
               <Link
                 href="/sign-in"
-                className={`hidden sm:inline-flex min-h-[40px] items-center px-3 text-[15px] font-semibold ${textSecondary} transition-colors hover:text-[var(--apple-text)]`}
+                className={`inline-flex min-h-[40px] items-center px-3 text-[15px] font-semibold ${
+                  scrolled ? textSecondary : "text-white/90"
+                } transition hover:opacity-80`}
               >
                 Sign in
               </Link>
               <Link
                 href="/sign-up"
-                className={`${appleBtnPrimary} inline-flex min-h-[40px] items-center px-4 text-[15px]`}
+                className={`${appleBtnPrimary} inline-flex min-h-[40px] items-center px-4 text-[15px] shadow-[0_0_0_0_rgba(0,122,255,0.35)] transition hover:shadow-[0_0_24px_rgba(0,122,255,0.35)]`}
               >
-                Download app
+                Start free
               </Link>
             </>
           )}
@@ -265,385 +174,263 @@ function LandingNavbar({ userId }: { userId: string | null }) {
   );
 }
 
-function HeroSection({ userId, authCtaHref }: { userId: string | null; authCtaHref: string }) {
-  const scrollToAirport = useCallback((): void => {
-    document.getElementById("airport-mode")?.scrollIntoView({ behavior: "smooth" });
-  }, []);
+function HeroSection({ userId }: { userId: string | null }) {
+  const ctaHref = userId ? "/travel-assistant" : "/sign-up";
 
   return (
-    <section className={`${sectionPad} pt-28 sm:pt-32`} aria-labelledby="hero-heading">
-      <div className={`${container} grid items-center gap-14 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16`}>
-        <Reveal>
-          <p className="inline-flex items-center gap-2 rounded-full border border-[var(--apple-border)] bg-[var(--apple-card)] px-3.5 py-1.5 text-[13px] font-medium text-[var(--apple-text-secondary)]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[var(--apple-accent)]" aria-hidden />
-            Trip OS · not another booking site
-          </p>
-          <h1
-            id="hero-heading"
-            className="mt-6 max-w-xl text-[2.75rem] font-semibold leading-[1.08] tracking-tight text-[var(--apple-text)] sm:text-5xl lg:text-[3.25rem]"
+    <section
+      className="relative flex min-h-[100dvh] items-end sm:items-center"
+      aria-labelledby="hero-heading"
+    >
+      <div className="absolute inset-0">
+        <Image
+          src={HERO_IMAGE}
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover object-center"
+        />
+        <div
+          className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/35 to-black/20"
+          aria-hidden
+        />
+      </div>
+
+      <div className={`relative ${container} w-full pb-16 pt-28 sm:pb-24 sm:pt-32`}>
+        <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-white/70">Kepi</p>
+        <h1
+          id="hero-heading"
+          className="mt-4 max-w-xl text-[2.75rem] font-semibold leading-[1.05] tracking-tight text-white sm:text-6xl"
+        >
+          Your trip, calmly handled.
+        </h1>
+        <p className="mt-4 max-w-md text-[17px] leading-relaxed text-white/85 sm:text-[19px]">
+          Book anywhere. Forward confirmations. Kepi walks you through flights, stays, and the airport —
+          quietly.
+        </p>
+
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Link
+            href={ctaHref}
+            className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white px-7 text-[17px] font-semibold text-[#007AFF] shadow-[0_8px_30px_rgba(0,0,0,0.2)] transition hover:shadow-[0_8px_40px_rgba(0,122,255,0.35)] active:scale-[0.98]"
           >
-            Book anywhere. Kepi runs the trip.
-          </h1>
-          <p className={`mt-5 max-w-lg text-[17px] leading-relaxed sm:text-lg ${textSecondary}`}>
-            Plan cities and dates in Kepi, compare flights and hotels, then book on Google, airlines, or Booking.com.
-            Forward your confirmations — Kepi walks you through the whole journey with timeline, alerts, and airport
-            guidance.
-          </p>
-
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Link
-              href={userId ? "/travel-assistant" : authCtaHref}
-              className={`${appleBtnPrimary} inline-flex min-h-[48px] items-center justify-center gap-2 px-6 text-[17px]`}
-            >
-              Download app
-              <ArrowRight className="h-4 w-4" aria-hidden />
-            </Link>
-            <button
-              type="button"
-              onClick={scrollToAirport}
-              className={`${appleBtnSecondary} inline-flex min-h-[48px] items-center justify-center gap-2 px-6 text-[17px]`}
-            >
-              <Play className="h-4 w-4 fill-current" aria-hidden />
-              Watch demo
-            </button>
-          </div>
-
-          <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-[var(--apple-border)] pt-8">
-            {["Forward confirmations", "Real-time flight monitoring", "iOS & web"].map((item) => (
-              <span key={item} className={`inline-flex items-center gap-2 text-[13px] ${textSecondary}`}>
-                <CheckCircle2 className="h-3.5 w-3.5 text-[var(--apple-accent)]" aria-hidden />
-                {item}
-              </span>
-            ))}
-          </div>
-
+            {userId ? "Open your trip" : "Start free"}
+            <ArrowRight className="h-4 w-4" aria-hidden />
+          </Link>
           {!userId ? (
-            <div className="mt-8 max-w-md">
-              <InviteCodeForm />
-            </div>
+            <Link
+              href="/sign-in"
+              className="inline-flex min-h-[48px] items-center justify-center px-2 text-[15px] font-semibold text-white/85 transition hover:text-white"
+            >
+              Sign in
+            </Link>
           ) : null}
-        </Reveal>
-
-        <Reveal delay={0.1} className="relative mx-auto w-full max-w-[22rem] lg:max-w-none">
-          <div className="absolute -inset-6 rounded-[2.5rem] bg-[var(--bg-grouped)]/80 blur-2xl" aria-hidden />
-          <div className="relative overflow-hidden rounded-[2rem] border border-[var(--apple-border)] bg-[var(--apple-card)] shadow-[var(--shadow-card)]">
-            <div className="border-b border-[var(--apple-border)] px-5 py-4">
-              <p className="text-[13px] font-medium text-[var(--apple-text-secondary)]">Today · SFO → JFK</p>
-              <p className="mt-1 text-[22px] font-semibold tracking-tight text-[var(--apple-text)]">UA 410 · On time</p>
-            </div>
-            <div className="space-y-3 p-5">
-              <div className="rounded-[14px] bg-[var(--bg-grouped)] p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--apple-accent)]">
-                  Airport Mode
-                </p>
-                <p className="mt-2 text-[15px] font-medium text-[var(--apple-text)]">Security → Gate C12</p>
-                <p className={`mt-1 text-[13px] ${textSecondary}`}>12 min walk · PreCheck lane open</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-[14px] border border-[var(--apple-border)] p-3">
-                  <p className={`text-[11px] ${textSecondary}`}>Leave by</p>
-                  <p className="mt-1 text-[17px] font-semibold text-[var(--apple-text)]">11:55 AM</p>
-                </div>
-                <div className="rounded-[14px] border border-[var(--apple-border)] p-3">
-                  <p className={`text-[11px] ${textSecondary}`}>Boarding</p>
-                  <p className="mt-1 text-[17px] font-semibold text-[var(--apple-text)]">1:25 PM</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 rounded-[14px] border border-[var(--apple-border)] p-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-[var(--bg-grouped)]">
-                  <Plane className="h-4 w-4 text-[var(--apple-accent)]" aria-hidden />
-                </span>
-                <div>
-                  <p className="text-[14px] font-medium text-[var(--apple-text)]">Gate updated · C12</p>
-                  <p className={`text-[12px] ${textSecondary}`}>Notified 8 minutes ago</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Reveal>
-      </div>
-    </section>
-  );
-}
-
-function ProductDifferenceSection() {
-  return (
-    <section id="features" className={sectionPad} aria-labelledby="features-heading">
-      <div className={container}>
-        <Reveal className="max-w-2xl">
-          <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-[var(--apple-accent)]">Why Kepi</p>
-          <h2 id="features-heading" className={`mt-3 ${appleSectionHeader} text-[2rem] sm:text-[2.25rem]`}>
-            Not a booking site. A companion for the whole trip.
-          </h2>
-          <p className={`mt-4 text-[17px] leading-relaxed ${textSecondary}`}>
-            Most tools stop at confirmation emails. Kepi stays with you — before wheels up, through the terminal, and
-            long after you land.
-          </p>
-        </Reveal>
-
-        <div className="mt-14 grid gap-5 lg:grid-cols-3">
-          {pillars.map((pillar, index) => (
-            <Reveal key={pillar.title} delay={index * 0.08}>
-              <article className="apple-card flex h-full flex-col p-7 sm:p-8">
-                <span className="flex h-11 w-11 items-center justify-center rounded-[10px] bg-[var(--bg-grouped)]">
-                  <pillar.icon className="h-5 w-5 text-[var(--apple-text-secondary)]" strokeWidth={1.75} aria-hidden />
-                </span>
-                <h3 className="mt-6 text-[22px] font-semibold tracking-tight text-[var(--apple-text)]">{pillar.title}</h3>
-                <p className={`mt-3 flex-1 text-[16px] leading-relaxed ${textSecondary}`}>{pillar.description}</p>
-              </article>
-            </Reveal>
-          ))}
         </div>
       </div>
     </section>
   );
 }
 
-function AirportModeSection() {
+function PhoneFrame({
+  label,
+  headline,
+  rows,
+}: {
+  label: string;
+  headline: string;
+  rows: ReadonlyArray<{ k: string; v: string; warn?: boolean }>;
+}) {
   return (
-    <section
-      id="airport-mode"
-      className={`${sectionPad} bg-[var(--apple-card)]`}
-      aria-labelledby="airport-heading"
-    >
-      <div className={`${container} grid items-center gap-12 lg:grid-cols-2 lg:gap-20`}>
-        <Reveal className="order-2 lg:order-1">
-          <div className="relative mx-auto max-w-[19rem] sm:max-w-[21rem]">
-            <div
-              className="absolute inset-x-8 -bottom-6 h-12 rounded-full bg-black/[0.06] blur-2xl"
-              aria-hidden
-            />
-            <div className="relative overflow-hidden rounded-[2.25rem] border-[6px] border-[var(--apple-text)] bg-[var(--apple-card)] shadow-[0_24px_60px_rgba(0,0,0,0.12)]">
-              <div className="bg-[var(--bg-grouped)] px-4 py-2 text-center text-[11px] font-medium text-[var(--apple-text-secondary)]">
-                9:41
-              </div>
-              <div className="space-y-4 p-4">
-                <div className="rounded-2xl bg-[var(--apple-accent)] p-4 text-white">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider opacity-90">Airport Mode active</p>
-                  <p className="mt-2 text-[20px] font-semibold leading-tight">Terminal 3 → Gate C12</p>
-                  <p className="mt-2 text-[13px] opacity-90">12 min · Stay on Level 2</p>
-                </div>
-                <div className="space-y-2">
-                  {["Clear security — PreCheck", "Walk past Gate C8–C10", "Arrive at C12 · boarding 1:25"].map(
-                    (step, i) => (
-                      <div
-                        key={step}
-                        className="flex items-start gap-3 rounded-xl border border-[var(--apple-border)] px-3 py-2.5"
-                      >
-                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--bg-grouped)] text-[11px] font-semibold text-[var(--apple-accent)]">
-                          {i + 1}
-                        </span>
-                        <p className="text-[14px] leading-snug text-[var(--apple-text)]">{step}</p>
-                      </div>
-                    ),
-                  )}
-                </div>
-                <div className="rounded-xl border border-amber-200/80 bg-amber-50 px-3 py-2.5">
-                  <p className="text-[12px] font-medium text-amber-900">You&apos;re one concourse away — head left at sign 14</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Reveal>
-
-        <Reveal className="order-1 lg:order-2" delay={0.05}>
-          <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-[var(--apple-accent)]">
-            Airport Mode
-          </p>
-          <h2 id="airport-heading" className="mt-3 text-[2rem] font-semibold leading-tight tracking-tight text-[var(--apple-text)] sm:text-[2.5rem]">
-            Calm guidance when terminals get loud.
-          </h2>
-          <p className={`mt-4 text-[17px] leading-relaxed ${textSecondary}`}>
-            The feature travelers feel first. Live airport guidance, gate updates, and step-by-step navigation — designed
-            to reduce anxiety, not add another screen to stare at.
-          </p>
-
-          <ul className="mt-8 space-y-4">
-            {airportFeatures.map((feature) => (
-              <li key={feature.label} className="flex gap-4">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-[var(--bg-grouped)]">
-                  <feature.icon className="h-[18px] w-[18px] text-[var(--apple-text-secondary)]" strokeWidth={1.75} aria-hidden />
-                </span>
-                <div>
-                  <p className="text-[16px] font-semibold text-[var(--apple-text)]">{feature.label}</p>
-                  <p className={`mt-0.5 text-[15px] ${textSecondary}`}>{feature.detail}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Reveal>
+    <div className="mx-auto w-full max-w-[280px] rounded-[2rem] border border-[#E5E5EA] bg-[#F5F5F7] p-3 shadow-[0_20px_60px_rgba(0,0,0,0.12)]">
+      <div className="overflow-hidden rounded-[1.5rem] bg-white">
+        <div className="border-b border-[#F2F2F7] px-4 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#6E6E73]">{label}</p>
+          <p className="mt-1 text-[22px] font-semibold tracking-tight text-[#1D1D1F]">{headline}</p>
+        </div>
+        <ul className="divide-y divide-[#F2F2F7]">
+          {rows.map((row) => (
+            <li key={row.k} className="flex items-center justify-between gap-3 px-4 py-3">
+              <span className="text-[15px] text-[#6E6E73]">{row.k}</span>
+              <span
+                className={`text-[15px] font-semibold ${
+                  row.warn ? "text-[#C93400]" : "text-[#1D1D1F]"
+                }`}
+              >
+                {row.v}
+              </span>
+            </li>
+          ))}
+        </ul>
       </div>
-    </section>
+    </div>
   );
 }
 
-function JourneySection() {
+function DemoCarousel() {
+  const [index, setIndex] = useState(0);
+  const [started, setStarted] = useState(false);
+  const touchX = useRef<number | null>(null);
+  const reduceMotion = useReducedMotion();
+  const slide = demoSlides[index]!;
+
+  const go = useCallback(
+    (next: number) => {
+      setStarted(true);
+      const len = demoSlides.length;
+      setIndex(((next % len) + len) % len);
+    },
+    [],
+  );
+
   return (
-    <section id="journey" className={sectionPad} aria-labelledby="journey-heading">
+    <section
+      id="demo"
+      className="scroll-mt-20 bg-white py-20 sm:py-28"
+      aria-labelledby="demo-heading"
+    >
       <div className={container}>
-        <Reveal className="mx-auto max-w-2xl text-center">
-          <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-[var(--apple-accent)]">End to end</p>
-          <h2 id="journey-heading" className="mt-3 text-[2rem] font-semibold tracking-tight text-[var(--apple-text)] sm:text-[2.25rem]">
-            With you before, during, and after.
+        <Reveal>
+          <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-[#6E6E73]">
+            Try a day
+          </p>
+          <h2
+            id="demo-heading"
+            className="mt-3 max-w-lg text-[2rem] font-semibold tracking-tight text-[#1D1D1F] sm:text-[2.5rem]"
+          >
+            Real guidance. Zero overwhelm.
           </h2>
-          <p className={`mt-4 text-[17px] leading-relaxed ${textSecondary}`}>
-            One continuous thread — from the first packing note to the last photo from the trip.
+          <p className={`mt-3 max-w-md text-[17px] leading-relaxed ${textSecondary}`}>
+            Swipe the phone — three moments Kepi handles for you. Tap to begin.
           </p>
         </Reveal>
 
-        <div className="relative mt-16">
+        <Reveal delay={0.08} className="mt-12">
           <div
-            className="absolute left-4 top-0 hidden h-full w-px bg-[var(--apple-border)] sm:left-1/2 sm:block"
-            aria-hidden
-          />
-          <div className="space-y-10 sm:space-y-14">
-            {journeySteps.map((step, index) => (
-              <Reveal key={step.phase} delay={index * 0.06}>
-                <div
-                  className={`relative grid items-center gap-6 sm:grid-cols-2 sm:gap-12 ${
-                    index % 2 === 1 ? "sm:[&>div:first-child]:order-2" : ""
-                  }`}
+            className="grid items-center gap-10 lg:grid-cols-2"
+            onPointerDown={() => setStarted(true)}
+          >
+            <div
+              className="relative touch-pan-y"
+              onTouchStart={(e) => {
+                touchX.current = e.changedTouches[0]?.clientX ?? null;
+                setStarted(true);
+              }}
+              onTouchEnd={(e) => {
+                const start = touchX.current;
+                const end = e.changedTouches[0]?.clientX;
+                touchX.current = null;
+                if (start == null || end == null) return;
+                const delta = end - start;
+                if (Math.abs(delta) < 40) return;
+                go(delta < 0 ? index + 1 : index - 1);
+              }}
+            >
+              {!started ? (
+                <button
+                  type="button"
+                  onClick={() => setStarted(true)}
+                  className="absolute inset-0 z-10 flex items-center justify-center rounded-[2rem] bg-black/5 backdrop-blur-[1px]"
                 >
-                  <div className={`${index % 2 === 1 ? "sm:text-right" : ""}`}>
-                    <span className="text-[13px] font-semibold uppercase tracking-[0.12em] text-[var(--apple-accent)]">
-                      {step.phase}
-                    </span>
-                    <h3 className="mt-2 text-[22px] font-semibold text-[var(--apple-text)]">{step.title}</h3>
-                    <p className={`mt-3 text-[16px] leading-relaxed ${textSecondary}`}>{step.body}</p>
-                  </div>
-                  <div className="apple-card p-6 sm:p-7">
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--apple-accent)] text-[13px] font-bold text-white">
-                        {index + 1}
-                      </span>
-                      <p className="text-[15px] font-medium text-[var(--apple-text)]">{step.phase} your trip</p>
-                    </div>
-                    <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[var(--bg-grouped)]">
-                      <div
-                        className="h-full rounded-full bg-[var(--apple-accent)]"
-                        style={{ width: `${((index + 1) / journeySteps.length) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function MemoriesSection() {
-  return (
-    <section
-      id="memories"
-      className={`${sectionPad} bg-[var(--bg-grouped)]`}
-      aria-labelledby="memories-heading"
-    >
-      <div className={container}>
-        <div className="grid items-center gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">
-          <Reveal>
-            <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-[var(--apple-accent)]">Memories</p>
-            <h2 id="memories-heading" className="mt-3 text-[2rem] font-semibold tracking-tight text-[var(--apple-text)] sm:text-[2.5rem]">
-              The trip doesn&apos;t end at baggage claim.
-            </h2>
-            <p className={`mt-4 text-[17px] leading-relaxed ${textSecondary}`}>
-              Kepi weaves your photos, cities, and moments into a quiet recap — an editorial memory of the journey, not a
-              slideshow template.
-            </p>
-            <div className="mt-8 flex items-start gap-3 rounded-[18px] border border-[var(--apple-border)] bg-[var(--apple-card)] p-5">
-              <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-[var(--apple-accent)]" aria-hidden />
-              <div>
-                <p className="text-[16px] font-semibold text-[var(--apple-text)]">Automatic photo collages</p>
-                <p className={`mt-1 text-[15px] leading-relaxed ${textSecondary}`}>
-                  Places, dates, and routes arranged with restraint — ready to share or keep private.
-                </p>
-              </div>
+                  <span className="rounded-full bg-white px-5 py-3 text-[15px] font-semibold text-[#007AFF] shadow-md">
+                    Tap to preview
+                  </span>
+                </button>
+              ) : null}
+              <motion.div
+                key={slide.id}
+                initial={reduceMotion || !started ? false : { opacity: 0.4, x: 24 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <PhoneFrame
+                  label={slide.phone.label}
+                  headline={slide.phone.headline}
+                  rows={slide.phone.rows}
+                />
+              </motion.div>
             </div>
-          </Reveal>
 
-          <Reveal delay={0.08}>
-            <div className="grid grid-cols-6 grid-rows-4 gap-3 sm:gap-4">
-              <div className="col-span-4 row-span-4 overflow-hidden rounded-[18px] border border-[var(--apple-border)] bg-[var(--apple-card)] shadow-[var(--shadow-card)]">
-                <div className="relative h-full min-h-[280px] w-full">
-                  <Image
-                    src={memoryTiles[0].src}
-                    alt={memoryTiles[0].alt}
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 1024px) 100vw, 40vw"
+            <div>
+              <div className="flex flex-wrap gap-2">
+                {demoSlides.map((item, i) => {
+                  const Icon = item.icon;
+                  const active = i === index;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => go(i)}
+                      className={`inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-[14px] font-semibold transition ${
+                        active
+                          ? "bg-[#1D1D1F] text-white"
+                          : "bg-[#F5F5F7] text-[#6E6E73] hover:text-[#1D1D1F]"
+                      }`}
+                      aria-current={active ? "true" : undefined}
+                    >
+                      <Icon className="h-3.5 w-3.5" aria-hidden />
+                      {item.eyebrow}
+                    </button>
+                  );
+                })}
+              </div>
+              <h3 className="mt-6 text-[28px] font-semibold tracking-tight text-[#1D1D1F]">
+                {slide.title}
+              </h3>
+              <p className={`mt-2 text-[17px] leading-relaxed ${textSecondary}`}>{slide.body}</p>
+              <div className="mt-6 flex gap-2" aria-hidden>
+                {demoSlides.map((item, i) => (
+                  <span
+                    key={item.id}
+                    className={`h-1.5 flex-1 rounded-full transition ${
+                      i === index ? "bg-[#007AFF]" : "bg-[#E5E5EA]"
+                    }`}
                   />
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/45 to-transparent p-4">
-                    <p className="text-[13px] font-medium text-white">{memoryTiles[0].caption}</p>
-                  </div>
-                </div>
+                ))}
               </div>
-              {memoryTiles.slice(1).map((tile, i) => (
-                <div
-                  key={tile.caption}
-                  className={`overflow-hidden rounded-[14px] border border-[var(--apple-border)] bg-[var(--apple-card)] shadow-[var(--shadow-card)] ${
-                    i === 0 ? "col-span-2 row-span-2" : "col-span-2 row-span-2"
-                  }`}
-                >
-                  <div className="relative h-full min-h-[120px] w-full">
-                    <Image
-                      src={tile.src}
-                      alt={tile.alt}
-                      fill
-                      className="object-cover"
-                      sizes="200px"
-                    />
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/40 to-transparent p-2.5">
-                      <p className="text-[11px] font-medium text-white">{tile.caption}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
             </div>
-          </Reveal>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function SocialProofSection() {
-  return (
-    <section className={sectionPad} aria-labelledby="social-heading">
-      <div className={container}>
-        <Reveal className="flex flex-col items-start justify-between gap-8 border-b border-[var(--apple-border)] pb-12 sm:flex-row sm:items-end">
-          <div className="max-w-xl">
-            <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-[var(--apple-accent)]">
-              Travelers
-            </p>
-            <h2 id="social-heading" className="mt-3 text-[2rem] font-semibold tracking-tight text-[var(--apple-text)]">
-              Trusted when plans change fast.
-            </h2>
-          </div>
-          <div className="flex flex-wrap gap-8 sm:gap-12">
-            {stats.map((stat) => (
-              <div key={stat.label}>
-                <p className="text-[2rem] font-semibold tracking-tight text-[var(--apple-text)]">{stat.value}</p>
-                <p className={`mt-1 ${appleCaption}`}>{stat.label}</p>
-              </div>
-            ))}
           </div>
         </Reveal>
+      </div>
+    </section>
+  );
+}
 
-        <div className="mt-12 grid gap-5 lg:grid-cols-3">
-          {testimonials.map((item, index) => (
-            <Reveal key={item.name} delay={index * 0.06}>
-              <blockquote className="apple-card flex h-full flex-col p-7">
-                <p className={`flex-1 text-[16px] leading-relaxed ${textSecondary}`}>&ldquo;{item.quote}&rdquo;</p>
-                <footer className="mt-6 border-t border-[var(--apple-border)] pt-5">
-                  <p className="text-[15px] font-semibold text-[var(--apple-text)]">{item.name}</p>
-                  <p className={appleCaption}>{item.route}</p>
-                </footer>
-              </blockquote>
-            </Reveal>
-          ))}
+function TestimonialsSection() {
+  return (
+    <section className="bg-[#F5F5F7] py-20 sm:py-24" aria-labelledby="stories-heading">
+      <div className={container}>
+        <Reveal>
+          <h2
+            id="stories-heading"
+            className="text-[2rem] font-semibold tracking-tight text-[#1D1D1F] sm:text-[2.25rem]"
+          >
+            Quiet confidence on the road
+          </h2>
+        </Reveal>
+        <div className="mt-10 grid gap-4 sm:grid-cols-2">
+          {testimonials.map((item, i) => {
+            const Icon = item.icon;
+            return (
+              <Reveal key={item.name} delay={i * 0.06}>
+                <article className="h-full rounded-3xl bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F5F5F7] text-[#007AFF]">
+                      <Icon className="h-4 w-4" aria-hidden />
+                    </span>
+                    <div>
+                      <p className="text-[15px] font-semibold text-[#1D1D1F]">{item.name}</p>
+                      <p className="text-[13px] text-[#6E6E73]">{item.route}</p>
+                    </div>
+                  </div>
+                  <p className="mt-4 text-[17px] leading-relaxed text-[#1D1D1F]">
+                    <Quote className="mr-1 inline h-4 w-4 text-[#D2D2D7]" aria-hidden />
+                    {item.quote}
+                  </p>
+                </article>
+              </Reveal>
+            );
+          })}
         </div>
       </div>
     </section>
@@ -651,126 +438,128 @@ function SocialProofSection() {
 }
 
 function PricingSection({
-  authCtaHref,
-  hasProAccess,
   userId,
+  hasProAccess,
 }: {
-  authCtaHref: string;
-  hasProAccess: boolean;
   userId: string | null;
+  hasProAccess: boolean;
 }) {
-  if (hasProAccess) {
-    return (
-      <section id="pricing" className={`${sectionPad} bg-[var(--bg-grouped)]`}>
-        <div className={container}>
-          <Reveal className="apple-card mx-auto max-w-2xl p-8 text-center sm:p-10">
-            <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-[var(--apple-accent)]">
-              Your plan
-            </p>
-            <h2 className="mt-3 text-[1.75rem] font-semibold text-[var(--apple-text)]">Pro access is active</h2>
-            <p className={`mt-3 ${appleMetadata}`}>Open your trip workspace to continue planning and guiding.</p>
-            <Link
-              href="/travel-assistant"
-              className={`${appleBtnPrimary} mt-6 inline-flex min-h-[48px] items-center px-6 text-[17px]`}
-            >
-              Open app
-            </Link>
-          </Reveal>
-        </div>
-      </section>
-    );
-  }
+  const freeHref = userId ? "/travel-assistant" : "/sign-up";
+  const proHref = userId ? "/billing" : "/sign-up?plan=pro";
 
   return (
-    <section id="pricing" className={`${sectionPad} bg-[var(--bg-grouped)]`} aria-labelledby="pricing-heading">
+    <section id="pricing" className="scroll-mt-20 bg-white py-20 sm:py-28" aria-labelledby="pricing-heading">
       <div className={container}>
-        <Reveal className="mx-auto max-w-2xl text-center">
-          <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-[var(--apple-accent)]">Pricing</p>
-          <h2 id="pricing-heading" className="mt-3 text-[2rem] font-semibold tracking-tight text-[var(--apple-text)]">
-            Plans that match how often you travel.
+        <Reveal>
+          <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-[#6E6E73]">Pricing</p>
+          <h2
+            id="pricing-heading"
+            className="mt-3 text-[2rem] font-semibold tracking-tight text-[#1D1D1F] sm:text-[2.5rem]"
+          >
+            Start free. Upgrade when you want more.
           </h2>
-          <p className={`mt-4 ${appleMetadata}`}>Start free. Upgrade when you want automation, alerts, and priority support.</p>
+          <p className={`mt-3 max-w-lg text-[17px] ${textSecondary}`}>
+            No invite required. Lifetime and invite codes live in the app when you have one.
+          </p>
         </Reveal>
 
-        <div className="mt-12 grid gap-5 lg:grid-cols-3">
-          {pricingPlans.map((plan, index) => (
-            <Reveal key={plan.id} delay={index * 0.06}>
-              <article
-                className={`relative flex h-full flex-col rounded-[18px] border p-7 sm:p-8 ${
-                  plan.highlighted
-                    ? "border-[var(--apple-accent)] bg-[var(--apple-card)] shadow-[0_8px_30px_rgba(0,122,255,0.08)]"
-                    : "border-[var(--apple-border)] bg-[var(--apple-card)] shadow-[var(--shadow-card)]"
-                }`}
+        <div className="mt-12 grid gap-4 sm:grid-cols-2">
+          <Reveal>
+            <article className="flex h-full flex-col rounded-3xl border border-[#E5E5EA] bg-[#F5F5F7] p-6">
+              <p className="text-[15px] font-semibold text-[#6E6E73]">Free</p>
+              <p className="mt-2 text-[40px] font-semibold tracking-tight text-[#1D1D1F]">
+                $0<span className="text-[17px] font-medium text-[#6E6E73]">/mo</span>
+              </p>
+              <p className={`mt-2 text-[15px] ${textSecondary}`}>One active trip. Core guidance.</p>
+              <ul className="mt-6 space-y-2 text-[15px] text-[#1D1D1F]">
+                {["Trip timeline & calendar", "Stay gap awareness", "Airport Mode basics"].map((f) => (
+                  <li key={f} className="flex items-center gap-2">
+                    <Check className="h-4 w-4 text-[#34C759]" aria-hidden />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href={freeHref}
+                className={`${appleBtnPrimary} mt-8 inline-flex min-h-[48px] items-center justify-center text-[16px] transition hover:shadow-[0_0_24px_rgba(0,122,255,0.3)]`}
               >
-                {plan.highlighted ? (
-                  <span className="absolute right-5 top-5 rounded-full bg-[var(--apple-accent)] px-2.5 py-1 text-[11px] font-semibold text-white">
-                    Popular
-                  </span>
-                ) : null}
-                <h3 className="text-[20px] font-semibold text-[var(--apple-text)]">{plan.name}</h3>
-                <p className="mt-3 text-[2.25rem] font-semibold tracking-tight text-[var(--apple-text)]">
-                  {plan.price}
-                  <span className={`text-[15px] font-medium ${textSecondary}`}>{plan.period}</span>
-                </p>
-                <p className={`mt-2 text-[15px] ${textSecondary}`}>{plan.description}</p>
-                <ul className={`mt-6 flex-1 space-y-2.5 text-[15px] ${textSecondary}`}>
-                  {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2">
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--apple-accent)]" aria-hidden />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href={userId ? "/billing" : authCtaHref}
-                  className={`mt-8 inline-flex min-h-[44px] w-full items-center justify-center text-[16px] ${
-                    plan.highlighted ? appleBtnPrimary : appleBtnSecondary
-                  }`}
-                >
-                  {plan.cta}
-                </Link>
-              </article>
-            </Reveal>
-          ))}
-        </div>
+                Start free
+              </Link>
+            </article>
+          </Reveal>
 
-        <p className={`mt-8 text-center ${appleCaption}`}>
-          <Link href="/billing" className="font-semibold text-[var(--apple-accent)] hover:underline">
-            Manage billing &amp; invites
-          </Link>
-        </p>
+          <Reveal delay={0.06}>
+            <article className="flex h-full flex-col rounded-3xl bg-[#1D1D1F] p-6 text-white">
+              <p className="text-[15px] font-semibold text-white/60">Pro</p>
+              <p className="mt-2 text-[40px] font-semibold tracking-tight">
+                $9<span className="text-[17px] font-medium text-white/50">/mo</span>
+              </p>
+              <p className="mt-2 text-[15px] text-white/70">
+                {hasProAccess ? "You’re on Pro." : "Alerts and import when you travel often."}
+              </p>
+              <ul className="mt-6 space-y-2 text-[15px] text-white/90">
+                {["Unlimited trips", "Email import", "Gate & delay alerts"].map((f) => (
+                  <li key={f} className="flex items-center gap-2">
+                    <Check className="h-4 w-4 text-[#34C759]" aria-hidden />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href={proHref}
+                className="mt-8 inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-white text-[16px] font-semibold text-[#1D1D1F] transition hover:shadow-[0_0_28px_rgba(255,255,255,0.35)]"
+              >
+                {hasProAccess ? "Manage billing" : "Start Pro"}
+              </Link>
+            </article>
+          </Reveal>
+        </div>
       </div>
     </section>
   );
 }
 
-function FinalCtaSection({ userId, authCtaHref }: { userId: string | null; authCtaHref: string }) {
+function InviteFooterSection({ userId }: { userId: string | null }) {
+  if (userId) return null;
   return (
-    <section className={`${sectionPad} pb-24`} aria-labelledby="cta-heading">
+    <section className="border-t border-[#E5E5EA] bg-[#F5F5F7] py-14" aria-labelledby="invite-heading">
+      <div className={`${container} max-w-xl`}>
+        <Reveal>
+          <h2 id="invite-heading" className="text-[20px] font-semibold text-[#1D1D1F]">
+            Have an invite or lifetime code?
+          </h2>
+          <p className={`mt-2 text-[15px] ${textSecondary}`}>
+            Optional — you can start free without one. Redeem here or later in the app.
+          </p>
+          <div className="mt-5">
+            <InviteCodeForm />
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
+function FinalCta({ userId }: { userId: string | null }) {
+  const href = userId ? "/travel-assistant" : "/sign-up";
+  return (
+    <section className="bg-white py-20 sm:py-24">
       <div className={container}>
         <Reveal>
-          <div className="overflow-hidden rounded-[24px] border border-[var(--apple-border)] bg-[var(--apple-card)] px-6 py-14 text-center shadow-[var(--shadow-card)] sm:px-12 sm:py-16">
-            <h2 id="cta-heading" className="mx-auto max-w-2xl text-[2rem] font-semibold leading-tight tracking-tight text-[var(--apple-text)] sm:text-[2.5rem]">
-              One intelligent companion from departure to memory.
+          <div className="rounded-[28px] bg-[#F5F5F7] px-6 py-14 text-center sm:px-12">
+            <h2 className="mx-auto max-w-xl text-[2rem] font-semibold tracking-tight text-[#1D1D1F] sm:text-[2.5rem]">
+              Travel lighter. Know more. Stress less.
             </h2>
-            <p className={`mx-auto mt-4 max-w-lg text-[17px] leading-relaxed ${textSecondary}`}>
-              Download Kepi Travel and let Airport Mode guide you through your next terminal — calmly, clearly, on time.
+            <p className={`mx-auto mt-3 max-w-md text-[17px] ${textSecondary}`}>
+              Intelligence stays in the background. You just get the next calm step.
             </p>
-            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Link
-                href={userId ? "/travel-assistant" : authCtaHref}
-                className={`${appleBtnPrimary} inline-flex min-h-[48px] items-center gap-2 px-7 text-[17px]`}
-              >
-                Download app
-                <ArrowRight className="h-4 w-4" aria-hidden />
-              </Link>
-              <Link
-                href="/sign-in"
-                className={`${appleBtnSecondary} inline-flex min-h-[48px] items-center px-7 text-[17px]`}
-              >
-                Sign in
-              </Link>
-            </div>
+            <Link
+              href={href}
+              className={`${appleBtnPrimary} mt-8 inline-flex min-h-[52px] items-center gap-2 px-8 text-[17px] transition hover:shadow-[0_0_28px_rgba(0,122,255,0.35)]`}
+            >
+              {userId ? "Open app" : "Start free"}
+              <ArrowRight className="h-4 w-4" aria-hidden />
+            </Link>
           </div>
         </Reveal>
       </div>
@@ -780,7 +569,7 @@ function FinalCtaSection({ userId, authCtaHref }: { userId: string | null; authC
 
 function LandingFooter() {
   return (
-    <footer className="border-t border-[var(--apple-border)] bg-[var(--apple-card)] px-4 py-10 sm:px-8">
+    <footer className="border-t border-[#E5E5EA] bg-white px-5 py-10 sm:px-8">
       <div className={`${container} flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between`}>
         <Logo size="sm" />
         <nav className="flex flex-wrap gap-x-5 gap-y-2" aria-label="Footer">
@@ -788,15 +577,12 @@ function LandingFooter() {
             { href: "/privacy", label: "Privacy" },
             { href: "/terms", label: "Terms" },
             { href: "mailto:support@kepitravel.com", label: "Support" },
-            { href: "https://x.com/kepitravel", label: "@kepitravel", external: true },
           ].map((link) =>
-            link.external ? (
+            link.href.startsWith("mailto:") ? (
               <a
                 key={link.href}
                 href={link.href}
-                target="_blank"
-                rel="noreferrer"
-                className={`text-[14px] ${textSecondary} hover:text-[var(--apple-text)]`}
+                className={`text-[14px] ${textSecondary} hover:text-[#1D1D1F]`}
               >
                 {link.label}
               </a>
@@ -804,20 +590,20 @@ function LandingFooter() {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`text-[14px] ${textSecondary} hover:text-[var(--apple-text)]`}
+                className={`text-[14px] ${textSecondary} hover:text-[#1D1D1F]`}
               >
                 {link.label}
               </Link>
             ),
           )}
         </nav>
-        <p className={`text-[13px] ${textSecondary}`}>&copy; {new Date().getFullYear()} Kepi Travel</p>
+        <p className={`text-[13px] ${textSecondary}`}>
+          &copy; {new Date().getFullYear()} Kepi Travel
+        </p>
       </div>
     </footer>
   );
 }
-
-/* ─── Main export ─────────────────────────────────────────────── */
 
 export interface HomeLandingProps {
   userId: string | null;
@@ -825,20 +611,19 @@ export interface HomeLandingProps {
 }
 
 export function HomeLanding({ userId, hasProAccess }: HomeLandingProps) {
-  const authCtaHref = userId ? "/travel-assistant" : "/sign-up";
-
   return (
-    <div className={`min-h-screen ${pageBg} ${textPrimary} antialiased`}>
+    <div
+      className={`min-h-screen ${pageBg} ${textPrimary} antialiased`}
+      style={{ fontFamily: systemFont }}
+    >
       <LandingNavbar userId={userId} />
       <main>
-        <HeroSection userId={userId} authCtaHref={authCtaHref} />
-        <ProductDifferenceSection />
-        <AirportModeSection />
-        <JourneySection />
-        <MemoriesSection />
-        <SocialProofSection />
-        <PricingSection authCtaHref={authCtaHref} hasProAccess={hasProAccess} userId={userId} />
-        <FinalCtaSection userId={userId} authCtaHref={authCtaHref} />
+        <HeroSection userId={userId} />
+        <DemoCarousel />
+        <TestimonialsSection />
+        <PricingSection userId={userId} hasProAccess={hasProAccess} />
+        <InviteFooterSection userId={userId} />
+        <FinalCta userId={userId} />
       </main>
       <LandingFooter />
     </div>
