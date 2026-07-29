@@ -8,12 +8,15 @@ export interface ReviewDraftFlightFields {
   timezone: string;
   location: string;
   confirmationCode: string;
+  notes?: string;
+  checkOutDate?: string;
   flightNumber?: string;
   flightAirline?: string;
   flightDate?: string;
   flightDepartureAirport?: string;
   flightArrivalAirport?: string;
   flightDepartureTime?: string;
+  flightArrivalTime?: string;
 }
 
 const ITALIAN_AIRPORTS = new Set(["BRI", "FCO", "MXP", "VCE", "LIN", "NAP", "PSA", "BGY", "TRN", "FLR", "CTA", "PMO"]);

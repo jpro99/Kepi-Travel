@@ -495,6 +495,11 @@ Hotel gaps are computed **per sleep night** (check-in ≤ night < check-out). A 
 
 **Test:** `src/lib/travelAssistant/tripNightCoverage.test.ts`
 
+**I35 — Hotel dates remap into trip window + shared calendar sleep truth**
+Forwarded hotels often land as the wrong year (2025 in a 2026 Europe trip). On trip load and after forward drain, remap hotel check-in/out into `tripStart…tripEnd` by month/day (`hotelTripDateRepair`). Preserve `checkOutDate` through drain/import. Sleep window never seeds from hotel check-in when flights exist (no Sep 1 Polignano gap before a Sep 2 landing). Calendar Plan uses the same night-coverage gaps as Home Stay Gaps; amber “Needs stay” for real holes; **keep** split two-tone colors on city/hotel switch days (checkout → check-in). Booking.com checkout lines like `Check-out\nTuesday, September 8, 2026` must parse.
+
+**Test:** `src/lib/travelAssistant/hotelTripDateRepair.test.ts`, `confirmationHotelExtract.test.ts`, `drainForwardReviewQueue.test.ts`, `tripNightCoverage.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -658,6 +663,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I32 | `src/lib/travelAssistant/tripPhase.test.ts` |
 | I33 | `src/lib/travelAssistant/homeDayTruth.test.ts` |
 | I34 | `src/lib/travelAssistant/tripNightCoverage.test.ts` |
+| I35 | `src/lib/travelAssistant/hotelTripDateRepair.test.ts`, `confirmationHotelExtract.test.ts`, `drainForwardReviewQueue.test.ts`, `tripNightCoverage.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

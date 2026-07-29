@@ -26,6 +26,29 @@ test("extractHotelDraftsFromDocumentText parses hotel confirmation text", () => 
   assert.equal(drafts[0]?.confirmationCode, "HY123456");
 });
 
+const BOOKING_COM_NEREA = `
+Booking.com confirmation
+You're confirmed at NEREA Monopoli
+
+Check-in
+Friday, September 5, 2026
+From 15:00
+
+Check-out
+Tuesday, September 8, 2026
+Until 11:00
+
+Confirmation number: 1234567890
+`;
+
+test("I35: Booking.com weekday checkout on next line parses for NEREA", () => {
+  const drafts = extractHotelDraftsFromDocumentText(BOOKING_COM_NEREA);
+  assert.equal(drafts.length, 1);
+  assert.match(drafts[0]?.title ?? "", /NEREA/i);
+  assert.equal(drafts[0]?.localTime.slice(0, 10), "2026-09-05");
+  assert.equal(drafts[0]?.checkOutDate, "2026-09-08");
+});
+
 test("mergeConfirmationDrafts returns hotel drafts without AI", () => {
   const drafts = mergeConfirmationDrafts([], HOTEL_CONFIRMATION);
   assert.equal(drafts.length, 1);

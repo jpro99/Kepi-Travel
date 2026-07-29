@@ -31,6 +31,7 @@ import { postParseCorrection } from "@/lib/travelAssistant/mlReadiness/clientTel
 import { EMAIL_FORWARD_PARSER_VERSION } from "@/lib/travelAssistant/mlReadiness/parserVersion";
 import { sortReviewQueueForActiveLearning } from "@/lib/travelAssistant/mlReadiness/reviewQueueTriage";
 import { reconcileStoredFlightReservations } from "@/lib/travelAssistant/reconcileStoredFlightReservations";
+import { reconcileStoredHotelReservations } from "@/lib/travelAssistant/hotelTripDateRepair";
 import { canonicalFlightDepartureDay, canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
 import {
   nearestUpcomingFlightDepartureUtcMs,
@@ -2696,15 +2697,35 @@ export default function TravelAssistantPage() {
   const applyManagedTripToState = useCallback((trip: ManagedTrip, options?: { resetHighlight?: boolean }): void => {
     applyingTripStateRef.current = true;
     const hydratedReservations = hydrateReservationsPricing(trip.reservations);
-    const reconciled = reconcileStoredFlightReservations(hydratedReservations);
-    const drained = drainForwardReviewQueue(reconciled.reservations, trip.reviewQueue, () => `res-${generateId()}`);
-    const tripReservations = drained.reservations;
+    const reconciledFlights = reconcileStoredFlightReservations(hydratedReservations);
+    const reconciledHotels = reconcileStoredHotelReservations(
+      reconciledFlights.reservations,
+      trip.startDate,
+      trip.endDate,
+    );
+    const drained = drainForwardReviewQueue(
+      reconciledHotels.reservations,
+      trip.reviewQueue,
+      () => `res-${generateId()}`,
+    );
+    // Remap again after drain so newly imported hotels land in the trip window (I35).
+    const postDrainHotels = reconcileStoredHotelReservations(
+      drained.reservations,
+      trip.startDate,
+      trip.endDate,
+    );
+    const tripReservations = postDrainHotels.reservations;
     const tripReviewQueue = drained.reviewQueue as ReviewItem[];
-    const tripForState =
-      drained.changed || reconciled.changed || hydratedReservations !== trip.reservations
-        ? { ...trip, reservations: tripReservations, reviewQueue: tripReviewQueue }
-        : trip;
-    if (drained.changed || reconciled.changed || hydratedReservations !== trip.reservations) {
+    const reservationsChanged =
+      drained.changed ||
+      reconciledFlights.changed ||
+      reconciledHotels.changed ||
+      postDrainHotels.changed ||
+      hydratedReservations !== trip.reservations;
+    const tripForState = reservationsChanged
+      ? { ...trip, reservations: tripReservations, reviewQueue: tripReviewQueue }
+      : trip;
+    if (reservationsChanged) {
       void fetch(TRIP_API_ROUTE, {
         method: "PUT",
         credentials: "include",

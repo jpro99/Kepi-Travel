@@ -7,6 +7,7 @@ import {
   displayHotelForDay,
   type DayPlanRecord,
 } from "@/lib/travelAssistant/itineraryDayPlan";
+import { buildTripNightCoverage } from "@/lib/travelAssistant/tripNightCoverage";
 
 export const TRAVEL_LEG_COLOR = "#4A6FA5";
 
@@ -242,10 +243,27 @@ function hotelOnDay(reservations: LegReservation[], dateKey: string): LegReserva
   for (const r of reservations) {
     if (r.type !== "hotel") continue;
     const start = r.localTime.trim().slice(0, 10);
-    const end = r.checkOutDate?.slice(0, 10) ?? start;
-    if (start <= dateKey && dateKey <= end) return r;
+    const end = r.checkOutDate?.slice(0, 10) ?? "";
+    // Presence on calendar: check-in through checkout morning (inclusive end for "last morning").
+    if (end) {
+      if (start <= dateKey && dateKey <= end) return r;
+    } else if (start === dateKey) {
+      return r;
+    }
   }
   return null;
+}
+
+/** Sleep night needs a bed: check-in ≤ night < check-out. */
+function hotelCoversSleepOnDay(reservations: LegReservation[], dateKey: string): boolean {
+  for (const r of reservations) {
+    if (r.type !== "hotel") continue;
+    const start = r.localTime.trim().slice(0, 10);
+    const end = r.checkOutDate?.slice(0, 10) ?? "";
+    if (!start || !end) continue;
+    if (start <= dateKey && dateKey < end) return true;
+  }
+  return false;
 }
 
 function flightsOnDay(flights: LegReservation[], dateKey: string): LegReservation[] {
@@ -568,6 +586,18 @@ export function buildTripLegCalendarModel(
 
   const dayKeys = buildFullTripDayKeys(tripStartDate, tripEndDate, reservations);
   const flights = reservations.filter((r) => r.type === "flight");
+  // Shared sleep truth with Home / Stay Gaps (I34 / I35).
+  const nightCoverage = buildTripNightCoverage({
+    reservations,
+    tripStartDate,
+    tripEndDate,
+  });
+  const gapNights = new Set(
+    nightCoverage.nights.filter((n) => n.status === "gap").map((n) => n.dateKey),
+  );
+  const coveredNights = new Set(
+    nightCoverage.nights.filter((n) => n.status === "covered").map((n) => n.dateKey),
+  );
 
   for (let i = 0; i < dayKeys.length; i += 1) {
     const dateKey = dayKeys[i]!;
@@ -577,11 +607,14 @@ export function buildTripLegCalendarModel(
     const prevDayFlights = i > 0 ? flightsOnDay(flights, dayKeys[i - 1]!) : [];
     const prevLeg = i > 0 ? resolveLegForDate(legs, dayKeys[i - 1]!, prevDayFlights.length > 0) : null;
     const hotel = hotelOnDay(reservations, dateKey);
+    const sleepCovered = hotelCoversSleepOnDay(reservations, dateKey) || coveredNights.has(dateKey);
     const dayPlan = options.dayPlans?.[dateKey];
     const reservationHotel = hotel
       ? hotel.title?.trim() || hotel.provider?.trim() || hotel.location || "Hotel"
       : null;
     const hotelDisplay = displayHotelForDay({ plan: dayPlan, reservationHotel });
+    // Prefer real sleep coverage over day-plan "booked" flags when checkout is known.
+    const sleepBooked = sleepCovered || Boolean(hotelDisplay.booked && !hotel?.checkOutDate);
     const flightDetail = flightPrimaryDetail(dayFlights);
     const hotelCity = hotel
       ? deriveHotelSearchCityFromReservation({
@@ -610,7 +643,8 @@ export function buildTripLegCalendarModel(
     let transitionFromColor: string | null = null;
     let transitionToColor: string | null = null;
 
-    if (hasFlight && prevLeg && leg && prevLeg.id !== leg.id) {
+    // Split colors on city/hotel switch days (flight or land transfer) — keep both tones.
+    if (prevLeg && leg && prevLeg.id !== leg.id) {
       kind = "transition";
       transitionFromColor = prevLeg.color;
       transitionToColor = leg.color;
@@ -618,12 +652,13 @@ export function buildTripLegCalendarModel(
 
     const legDays = leg ? dayKeys.filter((k) => k >= leg.startDate && k <= leg.endDate) : [];
     const dayIndexInLeg = leg ? legDays.indexOf(dateKey) + 1 : 0;
+    const hotelNeeded = gapNights.has(dateKey);
 
     dayCells.set(dateKey, {
       dateKey,
-      kind,
+      kind: hotelNeeded && kind === "empty" ? "stay" : kind,
       legId: leg?.id ?? null,
-      color: leg?.color ?? null,
+      color: hotelNeeded && !leg ? "#FF9F0A" : leg?.color ?? null,
       ribbonPosition:
         leg && leg.startDate === leg.endDate
           ? "single"
@@ -633,7 +668,9 @@ export function buildTripLegCalendarModel(
               ? "last"
               : leg
                 ? "middle"
-                : "none",
+                : hotelNeeded
+                  ? "single"
+                  : "none",
       transitionFromColor,
       transitionToColor,
       cityName: displayCity,
@@ -642,10 +679,10 @@ export function buildTripLegCalendarModel(
       flightSummary: hasFlight ? summarizeFlights(dayFlights) : null,
       flightPrimary: hasFlight ? flightDetail.primary : null,
       flightExtraCount: hasFlight ? flightDetail.extraCount : 0,
-      hotelName: hotelDisplay.label || null,
+      hotelName: hotelDisplay.label || (sleepCovered && reservationHotel ? reservationHotel : null),
       hotelConfirmation: dayPlan?.hotelConfirmation?.trim() || hotel?.confirmationCode?.trim() || null,
-      hotelNeeded: Boolean(leg?.type === "stay" && !hotelDisplay.booked),
-      hotelBooked: Boolean(leg?.type === "stay" && hotelDisplay.booked),
+      hotelNeeded,
+      hotelBooked: Boolean(sleepBooked && !hotelNeeded),
       locationOverride: dayPlan?.location?.trim() || null,
     });
   }
@@ -679,6 +716,10 @@ export function ribbonPositionForGridCell(args: {
 }
 
 export function cellFillStyle(cell: DayLegCell, opacity = "E6"): { background?: string; backgroundColor?: string } {
+  // Amber wash for real sleep gaps — readable "needs stay" (I35). Keep split colors on transitions.
+  if (cell.hotelNeeded && cell.kind !== "transition") {
+    return { backgroundColor: `#FF9F0A${opacity}` };
+  }
   if (cell.kind === "transition" && cell.transitionFromColor && cell.transitionToColor) {
     return {
       background: `linear-gradient(90deg, ${cell.transitionFromColor}${opacity} 50%, ${cell.transitionToColor}${opacity} 50%)`,

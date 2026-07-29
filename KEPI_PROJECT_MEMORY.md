@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-28 (I34 night-by-night stays + completeness bar)
+Last updated: 2026-07-28 (I35 hotel date remap + calendar sleep truth)
+
+## Decision 2026-07-28 — I35 hotel year remap + calendar shared gaps (Jeff)
+Stay Gaps showed “No hotel” for nights that had Booking.com hotels (NEREA, Ortisei) because check-in/out were stored as 2025 and drain dropped `checkOutDate`. Fix: remap hotels into trip window on load; preserve checkout on drain; sleep window starts at first destination arrival; Calendar uses same night coverage + amber “Needs stay”; **keep** split two-tone colors on hotel/city switch days. Real gaps remain Sep 9–11 and Sep 16–17 after NEREA/Venice checkouts.
 
 ## Decision 2026-07-28 — I34 stay holes + trip completeness (Jeff)
 Night-by-night hotel coverage (Venice must not hide Cortina/Ortisei). Home-base: no hotel nag before first outbound from ONT; “Staying at home” sets `home-base-{IATA}`. Trip Completeness bar on Home (Flights/Hotels green when set). Support chat uses same stay-hole list.

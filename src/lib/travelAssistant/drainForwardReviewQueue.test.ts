@@ -80,6 +80,35 @@ test("drainForwardReviewQueue never auto-promotes items with explicit gate reaso
   assert.equal(result.reservations.length, 0);
 });
 
+test("I35: drainForwardReviewQueue preserves hotel checkOutDate", () => {
+  const result = drainForwardReviewQueue(
+    [],
+    [
+      {
+        id: "review-hotel",
+        sourceChannel: "email-forward",
+        sourceEmailSubject: "Fwd: Booking.com confirmation NEREA",
+        draft: {
+          type: "hotel",
+          title: "NEREA Monopoli",
+          provider: "Booking.com",
+          localTime: "2026-09-05 15:00",
+          timezone: "Europe/Rome",
+          location: "Monopoli",
+          confirmationCode: "ABC123",
+          checkOutDate: "2026-09-08",
+        },
+      },
+    ],
+    () => "res-hotel-1",
+  );
+  assert.equal(result.changed, true);
+  assert.equal(result.reservations.length, 1);
+  assert.equal(result.reservations[0]?.type, "hotel");
+  assert.equal(result.reservations[0]?.checkOutDate, "2026-09-08");
+  assert.equal(result.reservations[0]?.localTime.slice(0, 10), "2026-09-05");
+});
+
 test("drainForwardReviewQueue skips duplicates already on timeline", () => {
   const existing = {
     id: "res-existing",

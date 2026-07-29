@@ -119,6 +119,49 @@ test("I34: completeness label lists readable stay ranges, not MM-DD junk", () =>
   assert.match(completeness.summary, /Tap Hotels/iu);
 });
 
+test("I35: sleep window starts on first destination arrival — not hotel check-in before landing", () => {
+  const coverage = buildTripNightCoverage({
+    nowMs,
+    tripStartDate: "2026-09-01",
+    tripEndDate: "2026-09-25",
+    reservations: [
+      {
+        id: "as654",
+        type: "flight",
+        localTime: "2026-09-01 12:00",
+        flightDate: "2026-09-01",
+        flightDepartureAirport: "ONT",
+        flightArrivalAirport: "SEA",
+        flightArrivalTime: "2026-09-01 14:30",
+      },
+      {
+        id: "as180",
+        type: "flight",
+        localTime: "2026-09-01 17:30",
+        flightDate: "2026-09-01",
+        flightDepartureAirport: "SEA",
+        flightArrivalAirport: "FCO",
+        flightArrivalTime: "2026-09-02 11:15",
+      },
+      {
+        // Wrong-year hotel must not pull window to Sep 1 after remap in callers;
+        // coverage itself never seeds windowStart from hotels when flights exist.
+        id: "nerea",
+        type: "hotel",
+        localTime: "2026-09-05 15:00",
+        checkOutDate: "2026-09-08",
+        location: "Monopoli",
+      },
+    ],
+  });
+  assert.equal(coverage.windowStart, "2026-09-02");
+  const gapDates = coverage.nights.filter((n) => n.status === "gap").map((n) => n.dateKey);
+  assert.equal(gapDates.includes("2026-09-01"), false);
+  assert.ok(coverage.nights.some((n) => n.dateKey === "2026-09-05" && n.status === "covered"));
+  assert.ok(coverage.nights.some((n) => n.dateKey === "2026-09-07" && n.status === "covered"));
+  assert.ok(coverage.nights.some((n) => n.dateKey === "2026-09-08" && n.status === "gap"));
+});
+
 test("I34: first outbound night-before is home-base — no nag", () => {
   assert.equal(
     shouldSkipPreDepartureHotelNag({

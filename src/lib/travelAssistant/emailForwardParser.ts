@@ -1292,6 +1292,27 @@ function buildRegexCandidates(input: {
     }
   }
 
+  // Hotel checkout — Booking.com: "Check-out\nTuesday, September 8, 2026"
+  if (reservationType === "hotel" || /\bcheck[\s-]?out\b/iu.test(lineAwareText)) {
+    const checkoutWindow =
+      lineAwareText.match(/\bcheck[\s-]?out\b[:\s]*\n?\s*([^\n]{3,80})/iu)?.[1] ??
+      lineAwareText.match(/\bcheck[\s-]?out\b[^\n]{0,120}/iu)?.[0] ??
+      "";
+    const checkoutRaw = checkoutWindow
+      .replace(/^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,?\s+/iu, "")
+      .match(
+        /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4}|20\d{2}-\d{2}-\d{2}|\d{1,2}-[A-Za-z]{3}-\d{4})\b/iu,
+      )?.[1];
+    const checkoutIso = checkoutRaw ? parseDateCandidate(checkoutRaw) : null;
+    if (checkoutIso) {
+      candidates.checkOutDate = {
+        value: checkoutIso,
+        confidence: 0.9,
+        source: "regex",
+      };
+    }
+  }
+
   const timezone = resolveTimezone(combined);
   if (timezone) {
     candidates.timezone = {

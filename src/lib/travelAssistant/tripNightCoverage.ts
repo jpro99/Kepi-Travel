@@ -1,8 +1,11 @@
 /**
- * Night-by-night sleep coverage for a trip (I34).
+ * Night-by-night sleep coverage for a trip (I34 / I35).
  * Hotels = where you sleep. Never treat a partial hotel span as covering every night
  * between two flights. Home-base nights before first outbound are not hotel gaps.
+ * Callers should remap hotel years into the trip window before coverage (hotelTripDateRepair).
  */
+
+import { hotelCoversSleepNight } from "@/lib/travelAssistant/hotelTripDateRepair";
 
 export type NightStatus = "covered" | "skipped" | "gap" | "airborne" | "home";
 
@@ -151,10 +154,14 @@ function hotelCheckInDay(hotel: NightCoverageReservation): string {
 
 /** Hotel covers sleep night N when check-in ≤ N < check-out. */
 export function hotelCoversNight(hotel: NightCoverageReservation, nightKey: string): boolean {
-  const checkIn = hotelCheckInDay(hotel);
-  const checkOut = hotelCheckoutDay(hotel);
-  if (!checkIn || !checkOut) return false;
-  return checkIn <= nightKey && checkOut > nightKey;
+  return hotelCoversSleepNight(
+    {
+      localTime: hotel.localTime,
+      checkOutDate: hotelCheckoutDay(hotel) || hotel.checkOutDate,
+      notes: hotel.notes,
+    },
+    nightKey,
+  );
 }
 
 function flightDepDay(flight: NightCoverageReservation): string {
@@ -272,14 +279,18 @@ export function buildTripNightCoverage(input: BuildTripNightCoverageInput): Trip
       : false);
 
   // Destination sleep window: first real sleep night abroad (skip connection hubs).
+  // Never seed from hotel check-in when flights exist — that caused Sep 1 Polignano gaps
+  // before the Sep 2 landing.
   let windowStart = resolveFirstSleepNight(flights);
-  if (!windowStart) {
+  if (!windowStart && flights.length === 0) {
     windowStart =
       (hotels
         .map(hotelCheckInDay)
         .filter(Boolean)
         .sort()[0] ?? "") ||
       dateOnly(input.tripStartDate);
+  } else if (!windowStart) {
+    windowStart = dateOnly(input.tripStartDate);
   }
 
   const lastFlight = flights[flights.length - 1] ?? null;

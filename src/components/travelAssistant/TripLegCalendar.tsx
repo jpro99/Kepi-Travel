@@ -118,7 +118,7 @@ function cellThirdLine(
 ): { text: string; warning?: boolean } | null {
   if (!cell || cell.kind === "empty") return null;
   if (cell.hotelNeeded) {
-    return { text: "⚠ No hotel", warning: true };
+    return { text: "Needs stay", warning: true };
   }
   const walkthrough = walkthroughForCell(cell, reservations, tripStart, tripEnd);
   if (weather) {
@@ -214,7 +214,7 @@ function CalendarCell({
               }
         }
       >
-        {cell?.kind === "transition" ? (
+        {cell?.kind === "transition" && cell.flightSummary ? (
           <span className="pointer-events-none absolute inset-y-0 left-1/2 z-10 flex -translate-x-1/2 items-center text-xs text-white">
             ✈
           </span>
@@ -279,7 +279,7 @@ function CellPopover({
           {cell.hotelConfirmation ? ` · ${cell.hotelConfirmation}` : ""}
         </p>
       ) : cell.hotelNeeded ? (
-        <p className="mt-2 text-xs font-semibold text-amber-600">No hotel booked</p>
+        <p className="mt-2 text-xs font-semibold text-amber-700">Needs a place to sleep</p>
       ) : null}
     </div>
   );
@@ -356,7 +356,14 @@ function DayDetailPanel({
               {cell.hotelConfirmation ? ` · ${cell.hotelConfirmation}` : ""}
             </p>
           ) : cell.hotelNeeded ? (
-            <p className="mt-2 text-sm font-semibold text-amber-600">No hotel booked</p>
+            <p className="mt-2 text-sm font-semibold text-amber-700">Needs a place to sleep</p>
+          ) : null}
+          {cell.kind === "transition" ? (
+            <p className="mt-2 text-sm text-[#3A3A3C]">
+              {cell.flightSummary
+                ? `Travel day · ${cell.flightSummary}`
+                : "Switch day — checking out of one stay and into the next"}
+            </p>
           ) : null}
         </div>
         <button type="button" onClick={onClose} className="text-[#6E6E73] hover:text-[#1D1D1F]" aria-label="Close">
@@ -364,13 +371,13 @@ function DayDetailPanel({
         </button>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
-        {cell.hotelNeeded && cell.cityName && onPlanHotel ? (
+        {cell.hotelNeeded && onPlanHotel ? (
           <button
             type="button"
-            onClick={() => onPlanHotel(cell.dateKey, cell.cityName!)}
-            className="rounded-xl bg-[#f4c95d] px-4 py-2 text-sm font-extrabold text-[#1D1D1F]"
+            onClick={() => onPlanHotel(cell.dateKey, cell.cityName?.trim() || "your next city")}
+            className="rounded-xl bg-[#FF9F0A] px-4 py-2 text-sm font-extrabold text-[#1D1D1F]"
           >
-            Fix → Find hotels
+            Find a stay
           </button>
         ) : null}
         <button

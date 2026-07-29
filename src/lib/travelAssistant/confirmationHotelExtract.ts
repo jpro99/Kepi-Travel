@@ -15,18 +15,28 @@ const HOTEL_CONTEXT_RE =
 
 const HOTEL_NAME_PATTERNS: RegExp[] = [
   /(?:hotel|property)\s*(?:name)?\s*[:\-]\s*([^\n]{3,80})/iu,
-  /(?:reservation at|booking at|thank you for choosing|thank you for booking)\s+([A-Z0-9][^\n]{2,80})/iu,
+  /(?:you'?re confirmed at|confirmed at|reservation at|booking at|thank you for choosing|thank you for booking)\s+([A-Z0-9][^\n]{2,80})/iu,
   /\b((?:Hyatt|Marriott|Hilton|Sheraton|Westin|InterContinental|IHG|Accor|Radisson|Best Western|Holiday Inn)[^\n]{0,70})/iu,
-  /\b([A-Z][A-Za-z0-9'&.-]{2,40}\s+(?:Hotel|Resort|Suites|Inn|Lodge|Hostel))\b/u,
+  /\b([A-Z][A-Za-z0-9'&.-]{2,40}\s+(?:Hotel|Resort|Suites|Inn|Lodge|Hostel|Apartment))\b/u,
+  // Named B&B / boutique properties without Hotel suffix (Booking.com "NEREA Monopoli")
+  /\bat\s+([A-Z][A-Z0-9'&.-]{2,40}(?:\s+[A-Z][A-Za-z0-9'&.-]{2,40}){0,3})\b/u,
 ];
 
 function extractCheckOutDate(text: string): string {
-  const match = text.match(/\bcheck-?out\b[^\n]{0,120}/iu);
-  if (!match?.[0]) return "";
+  // Booking.com often puts the date on the next line: "Check-out\nTuesday, September 8, 2026"
+  const match =
+    text.match(/\bcheck[\s-]?out\b[:\s]*\n?\s*([^\n]{3,80})/iu) ??
+    text.match(/\bcheck[\s-]?out\b[^\n]{0,120}/iu);
+  if (!match) return "";
+  const window = (match[1] ?? match[0] ?? "").replace(
+    /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,?\s+/iu,
+    "",
+  );
   const dateMatch =
-    match[0].match(/\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})\b/iu) ??
-    match[0].match(/\b(\d{1,2}\/\d{1,2}\/\d{2,4})\b/u) ??
-    match[0].match(/\b(20\d{2}-\d{2}-\d{2})\b/u);
+    window.match(/\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})\b/iu) ??
+    window.match(/\b(\d{1,2}\/\d{1,2}\/\d{2,4})\b/u) ??
+    window.match(/\b(20\d{2}-\d{2}-\d{2})\b/u) ??
+    window.match(/\b(\d{1,2}-[A-Za-z]{3}-\d{4})\b/u);
   return dateMatch?.[1] ? normalizeScannedDate(dateMatch[1]) : "";
 }
 

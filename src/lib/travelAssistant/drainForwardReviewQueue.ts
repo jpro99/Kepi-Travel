@@ -102,12 +102,16 @@ export function drainForwardReviewQueue<TReservation extends DrainableReservatio
         timezone: item.draft.timezone ?? "Etc/UTC",
         location: item.draft.location ?? "",
         confirmationCode: item.draft.confirmationCode ?? "",
+        notes: item.draft.notes,
         flightNumber: item.draft.flightNumber,
         flightAirline: item.draft.flightAirline,
         flightDate: item.draft.flightDate,
         flightDepartureAirport: item.draft.flightDepartureAirport,
         flightArrivalAirport: item.draft.flightArrivalAirport,
         flightDepartureTime: item.draft.flightDepartureTime,
+        flightArrivalTime: item.draft.flightArrivalTime,
+        // Hotels: checkout must survive drain or Stay Gaps invent phantom holes (I35).
+        checkOutDate: item.draft.checkOutDate,
       }),
     );
 
@@ -131,6 +135,9 @@ export function drainForwardReviewQueue<TReservation extends DrainableReservatio
       flightDepartureAirport: enriched.flightDepartureAirport ?? "",
       flightArrivalAirport: enriched.flightArrivalAirport ?? "",
       flightDepartureTime: enriched.flightDepartureTime ?? enriched.localTime,
+      flightArrivalTime: enriched.flightArrivalTime,
+      checkOutDate: enriched.checkOutDate,
+      notes: enriched.notes,
     } as TReservation;
 
     nextReservations = [imported, ...nextReservations];

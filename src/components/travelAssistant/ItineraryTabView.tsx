@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { NarrativeDayPlanView } from "@/components/travelAssistant/NarrativeDayPlanView";
+import { TripCompletenessBar } from "@/components/travelAssistant/TripCompletenessBar";
 import { TripHealthStrip } from "@/components/travelAssistant/TripHealthStrip";
 import { TripLegCalendar } from "@/components/travelAssistant/TripLegCalendar";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
@@ -17,6 +18,10 @@ import type { PlanSubView } from "@/lib/travelAssistant/consumerTabs";
 import type { QuickGroundMode } from "@/lib/travelAssistant/quickGroundTransport";
 import type { TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 import { sanitizeTravelerNotes } from "@/lib/travelAssistant/sanitizeTravelerNotes";
+import {
+  addIsoDays,
+  buildTripCompleteness,
+} from "@/lib/travelAssistant/tripNightCoverage";
 
 interface ItineraryTabViewProps {
   tripName: string;
@@ -146,6 +151,17 @@ export function ItineraryTabView({
     onPlanSubViewChange("timeline");
   };
 
+  const completeness = useMemo(
+    () =>
+      buildTripCompleteness({
+        reservations,
+        stayDecisions,
+        tripStartDate,
+        tripEndDate,
+      }),
+    [reservations, stayDecisions, tripStartDate, tripEndDate],
+  );
+
   return (
     <section
       className="relative space-y-3 bg-white"
@@ -153,6 +169,26 @@ export function ItineraryTabView({
         fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif',
       }}
     >
+      <TripCompletenessBar
+        completeness={completeness}
+        onOpenPlan={() => onPlanSubViewChange("timeline")}
+        onFindStayForGap={(gap) => {
+          if (onGapActionTap) {
+            onGapActionTap({
+              tab: "reservations",
+              context: {
+                kind: "hotel",
+                city: gap.suggestedCity,
+                checkIn: gap.startNight,
+                checkOut: addIsoDays(gap.endNight, 1),
+              },
+            });
+            return;
+          }
+          onPlanHotel?.(gap.startNight, gap.suggestedCity);
+        }}
+      />
+
       <TripHealthStrip
         reservations={reservations.map((reservation) => ({
           ...reservation,
