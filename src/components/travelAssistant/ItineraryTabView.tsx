@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { NarrativeDayPlanView } from "@/components/travelAssistant/NarrativeDayPlanView";
 import { TripCompletenessBar } from "@/components/travelAssistant/TripCompletenessBar";
-import { TripHealthStrip } from "@/components/travelAssistant/TripHealthStrip";
 import { TripLegCalendar } from "@/components/travelAssistant/TripLegCalendar";
 import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
@@ -85,14 +84,28 @@ interface ItineraryTabViewProps {
   onReservationTap?: (id: string) => void;
 }
 
+function formatHumanTripRange(start: string | null | undefined, end: string | null | undefined): string {
+  const fmt = (key: string): string => {
+    const ms = Date.parse(`${key.slice(0, 10)}T12:00:00Z`);
+    if (Number.isNaN(ms)) return key.slice(0, 10);
+    return new Date(ms).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    });
+  };
+  if (!start || !end) return "";
+  return `${fmt(start)} – ${fmt(end)}`;
+}
+
 export function ItineraryTabView({
   tripName,
   tripStartDate,
   tripEndDate,
-  missingPriceCount = 0,
+  missingPriceCount: _missingPriceCount = 0,
   stayDecisions,
-  onReviewPricing,
-  onSkipPreDepartureNight,
+  onReviewPricing: _onReviewPricing,
+  onSkipPreDepartureNight: _onSkipPreDepartureNight,
   reservations,
   dayNotes,
   planSubView,
@@ -103,7 +116,6 @@ export function ItineraryTabView({
   onSelectedDateKeyChange,
   onHighlightedLegIdChange,
   onDayNoteChange,
-  // Day-plan sheet hooks retained for calendar / future Plan actions (I28 timeline uses notes only).
   onSaveDayPlan: _onSaveDayPlan,
   onApplyHotelToDays: _onApplyHotelToDays,
   onSaveLegLabel: _onSaveLegLabel,
@@ -128,6 +140,7 @@ export function ItineraryTabView({
   const tPlan = useTranslations("PlanTab");
   const hasTripDates = Boolean(tripStartDate && tripEndDate);
   const [planSavedFlash, setPlanSavedFlash] = useState(false);
+  const [shareSheetOpen, setShareSheetOpen] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -162,6 +175,8 @@ export function ItineraryTabView({
     [reservations, stayDecisions, tripStartDate, tripEndDate],
   );
 
+  const dateLabel = formatHumanTripRange(tripStartDate, tripEndDate);
+
   return (
     <section
       className="relative space-y-3 bg-white"
@@ -189,20 +204,6 @@ export function ItineraryTabView({
         }}
       />
 
-      <TripHealthStrip
-        reservations={reservations.map((reservation) => ({
-          ...reservation,
-          location: reservation.location ?? "",
-        }))}
-        missingPriceCount={missingPriceCount}
-        stayDecisions={stayDecisions}
-        tripStartDate={tripStartDate}
-        tripEndDate={tripEndDate}
-        onGapActionTap={onGapActionTap}
-        onReviewPricing={onReviewPricing}
-        onSkipPreDepartureNight={onSkipPreDepartureNight}
-      />
-
       {plannedFlightLegs.length > 0 && onSearchMissingFlights && onQuickGroundTransport ? (
         <InterCityTransportPrompts
           legs={plannedFlightLegs}
@@ -211,74 +212,120 @@ export function ItineraryTabView({
         />
       ) : null}
 
-      <header className="rounded-2xl bg-[#0F1923] px-5 py-5 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f4c95d]">{tNav("planTab")}</p>
-        <h1 className="mt-1 text-2xl font-bold text-white">{tripName}</h1>
-        {hasTripDates ? (
-          <p className="mt-1 text-sm text-slate-300">
-            {tripStartDate} → {tripEndDate}
-          </p>
-        ) : (
-          <p className="mt-1 text-sm text-slate-400">{tPlan("setDatesHint")}</p>
-        )}
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={onPrint}
-            className="rounded-xl border border-white/20 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/10"
-          >
-            {tPlan("print")}
-          </button>
-          <button
-            type="button"
-            onClick={onExportPdf}
-            className="rounded-xl border border-white/20 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/10"
-          >
-            {tPlan("pdf")}
-          </button>
-          {onExportExcel ? (
-            <button
-              type="button"
-              onClick={onExportExcel}
-              className="rounded-xl border border-white/20 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/10"
+      <header className="rounded-2xl bg-[#F5F5F7] px-5 py-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+              {tNav("planTab")}
+            </p>
+            <h1 className="mt-1 text-[28px] font-semibold tracking-tight text-[#1D1D1F]">{tripName}</h1>
+            {hasTripDates ? (
+              <p className="mt-1 text-[15px] text-[#6E6E73]">{dateLabel}</p>
+            ) : (
+              <p className="mt-1 text-[15px] text-[#6E6E73]">{tPlan("setDatesHint")}</p>
+            )}
+            <p
+              className={`mt-2 text-[12px] font-semibold ${
+                planSavedFlash ? "text-[#248A3D]" : "text-[#AEAEB2]"
+              }`}
             >
-              {tPlan("excel")}
-            </button>
-          ) : null}
-          {onExportDayPlanPdf ? (
-            <button
-              type="button"
-              onClick={onExportDayPlanPdf}
-              className="rounded-xl border border-[#f4c95d]/50 px-3 py-1.5 text-[11px] font-semibold text-[#f4c95d] hover:bg-white/10"
-            >
-              Day plan PDF
-            </button>
-          ) : null}
+              {planSavedFlash ? tPlan("savedFlash") : tPlan("autoSaveHint")}
+            </p>
+          </div>
           <button
             type="button"
-            onClick={onShareLink}
-            className="rounded-xl bg-[#f4c95d] px-3 py-1.5 text-[11px] font-extrabold text-[#1D1D1F]"
+            onClick={() => setShareSheetOpen(true)}
+            className="min-h-[44px] shrink-0 rounded-full bg-white px-4 text-[15px] font-semibold text-[#007AFF] shadow-sm"
           >
-            {tPlan("share")}
+            Share
           </button>
-          <span
-            className={`self-center text-[10px] font-semibold ${
-              planSavedFlash ? "text-emerald-400" : "text-slate-500"
-            }`}
-          >
-            {planSavedFlash ? tPlan("savedFlash") : tPlan("autoSaveHint")}
-          </span>
         </div>
       </header>
 
-      <div className="flex rounded-2xl bg-slate-100 p-1 dark:bg-slate-900">
+      {shareSheetOpen ? (
+        <div className="fixed inset-0 z-[130] flex items-end bg-black/40 sm:items-center sm:justify-center sm:p-6">
+          <div className="w-full rounded-t-3xl bg-white p-5 sm:max-w-md sm:rounded-3xl">
+            <header className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+                  Share & export
+                </p>
+                <h3 className="mt-1 text-[22px] font-semibold text-[#1D1D1F]">{tripName}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShareSheetOpen(false)}
+                className="min-h-[44px] rounded-full px-3 text-[15px] font-semibold text-[#007AFF]"
+              >
+                Close
+              </button>
+            </header>
+            <div className="mt-4 space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShareSheetOpen(false);
+                  onShareLink();
+                }}
+                className="flex min-h-[52px] w-full items-center rounded-2xl bg-[#007AFF] px-4 text-[16px] font-semibold text-white"
+              >
+                {tPlan("share")}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShareSheetOpen(false);
+                  onPrint();
+                }}
+                className="flex min-h-[52px] w-full items-center rounded-2xl bg-[#F5F5F7] px-4 text-[16px] font-semibold text-[#1D1D1F]"
+              >
+                {tPlan("print")}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShareSheetOpen(false);
+                  onExportPdf();
+                }}
+                className="flex min-h-[52px] w-full items-center rounded-2xl bg-[#F5F5F7] px-4 text-[16px] font-semibold text-[#1D1D1F]"
+              >
+                {tPlan("pdf")}
+              </button>
+              {onExportExcel ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShareSheetOpen(false);
+                    onExportExcel();
+                  }}
+                  className="flex min-h-[52px] w-full items-center rounded-2xl bg-[#F5F5F7] px-4 text-[16px] font-semibold text-[#1D1D1F]"
+                >
+                  {tPlan("excel")}
+                </button>
+              ) : null}
+              {onExportDayPlanPdf ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShareSheetOpen(false);
+                    onExportDayPlanPdf();
+                  }}
+                  className="flex min-h-[52px] w-full items-center rounded-2xl bg-[#F5F5F7] px-4 text-[16px] font-semibold text-[#1D1D1F]"
+                >
+                  Day plan PDF
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="flex rounded-2xl bg-[#F5F5F7] p-1">
         <button
           type="button"
           onClick={() => onPlanSubViewChange("timeline")}
           className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition ${
-            planSubView === "timeline"
-              ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white"
-              : "text-slate-500 dark:text-slate-400"
+            planSubView === "timeline" ? "bg-white text-[#1D1D1F] shadow-sm" : "text-[#6E6E73]"
           }`}
         >
           {tNav("timeline")}
@@ -287,9 +334,7 @@ export function ItineraryTabView({
           type="button"
           onClick={() => onPlanSubViewChange("calendar")}
           className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition ${
-            planSubView === "calendar"
-              ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white"
-              : "text-slate-500 dark:text-slate-400"
+            planSubView === "calendar" ? "bg-white text-[#1D1D1F] shadow-sm" : "text-[#6E6E73]"
           }`}
         >
           {tNav("calendar")}

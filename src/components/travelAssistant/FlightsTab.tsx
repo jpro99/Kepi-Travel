@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import Link from "next/link";
+import { useState, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { LiveMapLink } from "@/components/travelAssistant/LiveMapLink";
 import { hasAirportLayout } from "@/lib/airportNav/getLayout";
@@ -12,8 +11,6 @@ import { FlightSearchModal } from "@/components/travelAssistant/FlightSearchModa
 import type { FlightSearchPlan, PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
 import type { InterCityTransportGap } from "@/lib/travelAssistant/interCityTransport";
 import type { QuickGroundMode } from "@/lib/travelAssistant/quickGroundTransport";
-import { buildGateInstructions, getAirportNav, buildArrivalGuide } from "@/lib/travelAssistant/airportNavigation";
-import { isFlightStatusStale } from "@/lib/travelAssistant/flightStatusCadence";
 import { canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
 import { shouldShowTerminalExplorePromo } from "@/lib/travelAssistant/homeDayTruth";
 import {
@@ -30,7 +27,7 @@ import { BOOK_LIST_CARD_CLASS } from "@/components/travelAssistant/bookTabStyles
 import { TripTransportRouteMap } from "@/components/travelAssistant/TripTransportRouteMap";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import type { ItinerarySelfCheckResult } from "@/lib/travelAssistant/itinerarySelfCheck";
-import { flightCardTypography, guideCardTypography, hotelCardTypography } from "@/lib/ui/mobileTypography";
+import { flightCardTypography, hotelCardTypography } from "@/lib/ui/mobileTypography";
 import { appleBtnText } from "@/lib/ui/appleDesign";
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -192,293 +189,6 @@ function StatusBadge({ r, live }: { r: Reservation; live?: LiveStatusResult }) {
 }
 
 
-/* ─── Arrival guide card — universal, works for all airports ────── */
-function ArrivalGuideCard({ flight, simplifiedMobile = false }: { flight: Reservation; simplifiedMobile?: boolean }) {
-  const [expanded, setExpanded] = useState(false);
-  const iata = flight.flightArrivalAirport ?? "";
-  if (!iata) return null;
-
-  // Extract 2-letter airline code from flight number (e.g. "AS271" → "AS")
-  const airlineCode = flight.flightNumber?.match(/^([A-Z]{2})/)?.[1] ?? "";
-  const terminal = flight.flightArrivalTerminal ?? "";
-
-  const guide = buildArrivalGuide(iata, airlineCode, terminal);
-
-  return (
-    <div className={`rounded-3xl overflow-hidden shadow-xl ${
-      simplifiedMobile
-        ? "bg-[var(--bg-card)] ring-1 ring-[var(--border-default)]"
-        : "bg-gradient-to-br from-emerald-900 via-teal-950 to-slate-900"
-    }`}>
-      {/* Header */}
-      <div className="px-5 pt-4 pb-2 flex items-center justify-between">
-        <div>
-          <p className={`font-bold uppercase tracking-wide ${simplifiedMobile ? "text-sm text-emerald-700 dark:text-emerald-400" : "text-sm lg:text-[10px] lg:tracking-widest text-emerald-300/70"}`}>
-            Arriving · {iata} · {guide.airportName}
-          </p>
-          <p className={`text-xl font-black mt-0.5 ${simplifiedMobile ? "text-[var(--text-primary)]" : "text-white"}`}>Landing guide</p>
-        </div>
-        <span className="text-3xl">🛬</span>
-      </div>
-
-      {/* Step indicator — baggage → exit → transport */}
-      <div className="flex gap-0 mx-4 mb-3">
-        {["🧳 Bags", "🚪 Exit", "🚗 Ride"].map((label, i) => (
-          <div key={i} className="flex-1 text-center">
-            <div className={`h-1 rounded-full mx-0.5 ${i === 0 ? "bg-emerald-400" : simplifiedMobile ? "bg-[var(--bg-muted)]" : "bg-white/20"}`} />
-            <p className={`text-[9px] mt-1 font-medium ${simplifiedMobile ? "text-[var(--text-muted)]" : "text-white/40"}`}>{label}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Baggage claim — always visible */}
-      <div className={`mx-4 mb-2 rounded-2xl px-4 py-3 ${simplifiedMobile ? "bg-[var(--bg-muted)] border border-[var(--border-default)]" : "bg-white/10 border border-white/[0.08]"}`}>
-        <p className={`font-bold uppercase tracking-wide mb-2 ${simplifiedMobile ? "text-sm text-emerald-800 dark:text-emerald-300" : "text-sm lg:text-[10px] lg:tracking-widest text-emerald-200/60"}`}>
-          🧳 {guide.baggage.heading}
-        </p>
-        {guide.baggage.steps.map((step, i) => (
-          <div key={i} className="flex gap-2.5 mb-1.5 last:mb-0">
-            <span className="text-emerald-600 dark:text-emerald-400 text-xs font-bold shrink-0 mt-0.5">{i + 1}</span>
-            <p className={`text-sm leading-snug ${simplifiedMobile ? "text-[var(--text-primary)]" : "text-white/90"}`}>{step}</p>
-          </div>
-        ))}
-        <p className={`text-[11px] mt-2 ${simplifiedMobile ? "text-[var(--text-muted)]" : "text-emerald-200/40"}`}>~{guide.baggage.walkMinutes} min from gate to carousel</p>
-      </div>
-
-      {/* Exit directions — always visible */}
-      <div className={`mx-4 mb-2 rounded-2xl px-4 py-3 ${simplifiedMobile ? "bg-[var(--bg-muted)] border border-[var(--border-default)]" : "bg-white/10 border border-white/[0.08]"}`}>
-        <p className={`font-bold uppercase tracking-wide mb-2 ${simplifiedMobile ? "text-sm text-emerald-800 dark:text-emerald-300" : "text-sm lg:text-[10px] lg:tracking-widest text-emerald-200/60"}`}>
-          🚪 {guide.exit.heading}
-        </p>
-        {guide.exit.steps.map((step, i) => (
-          <div key={i} className="flex gap-2.5 mb-1.5 last:mb-0">
-            <span className="text-emerald-600 dark:text-emerald-400 text-xs font-bold shrink-0 mt-0.5">{i + 1}</span>
-            <p className={`text-sm leading-snug ${simplifiedMobile ? "text-[var(--text-primary)]" : "text-white/90"}`}>{step}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Rideshare — always visible */}
-      <div className={`mx-4 mb-2 rounded-2xl px-4 py-3 ${simplifiedMobile ? "bg-[var(--bg-muted)] border border-[var(--border-default)]" : "bg-white/10 border border-white/[0.08]"}`}>
-        <p className={`font-bold uppercase tracking-wide mb-2 ${simplifiedMobile ? "text-sm text-emerald-800 dark:text-emerald-300" : "text-sm lg:text-[10px] lg:tracking-widest text-emerald-200/60"}`}>
-          🚗 {guide.rideshare.heading}
-        </p>
-        <p className={`text-sm leading-snug ${simplifiedMobile ? "text-[var(--text-primary)]" : "text-white/90"}`}>{guide.rideshare.instructions}</p>
-      </div>
-
-      {/* Tips — collapsible */}
-      {guide.tips.length > 0 && (
-        <>
-          <button
-            type="button"
-            onClick={() => setExpanded(v => !v)}
-            className={`w-full px-4 py-2 text-center text-xs font-semibold transition ${simplifiedMobile ? "text-emerald-700 dark:text-emerald-400 hover:text-emerald-900" : "text-emerald-300/60 hover:text-emerald-200"}`}
-          >
-            {expanded ? "▲ Hide tips" : `▼ ${guide.tips.length} tip${guide.tips.length > 1 ? "s" : ""} for this airport`}
-          </button>
-          {expanded && (
-            <div className={`mx-4 mb-4 rounded-2xl px-4 py-3 space-y-2 ${simplifiedMobile ? "bg-[var(--bg-muted)] border border-[var(--border-default)]" : "bg-white/[0.06] border border-white/[0.06]"}`}>
-              {guide.tips.map((tip, i) => (
-                <div key={i} className="flex gap-2">
-                  <span className="text-emerald-600 dark:text-emerald-400 shrink-0">💡</span>
-                  <p className={`text-xs leading-relaxed ${simplifiedMobile ? "text-[var(--text-muted)]" : "text-white/70"}`}>{tip}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-
-      {!expanded && <div className="pb-1" />}
-    </div>
-  );
-}
-
-/* ─── Airport guide card ─────────────────────────────────────── */
-function AirportGuideCard({
-  flight, live, locationStatus, onCheckStatus, simplifiedMobile = false,
-}: {
-  flight: Reservation;
-  live?: LiveStatusResult;
-  locationStatus: string;
-  onCheckStatus: (id: string) => void;
-  simplifiedMobile?: boolean;
-}) {
-  const guideType = guideCardTypography(simplifiedMobile);
-  const gate = live?.departureGate || flight.flightDepartureGate || "";
-  const terminal = live?.departureTerminal || flight.flightDepartureTerminal || "";
-  const iata = flight.flightDepartureAirport ?? "";
-  const hasNav = Boolean(iata && getAirportNav(iata));
-  const hasGlobalEntry = false; // could be wired from profile later
-  const hasPrecheck = false;
-  const hasClear = false;
-
-  const { steps, totalMinutes } = useMemo(() =>
-    gate && iata
-      ? buildGateInstructions(iata, gate, terminal, hasClear, hasPrecheck, hasGlobalEntry)
-      : { steps: [], totalMinutes: 0 },
-    [gate, terminal, iata]
-  );
-
-  // Auto-check on mount — phase-aware stale threshold (90s within 6h, 5m otherwise)
-  useEffect(() => {
-    const lastChecked = live?.checkedAt ? Date.parse(live.checkedAt) : 0;
-    const departureLocal = canonicalFlightDepartureLocalTime(flight);
-    const depMs = Date.parse(departureLocal.replace("T", " ").slice(0, 16));
-    const isStale = isFlightStatusStale(live?.checkedAt, depMs);
-    if (live?.busy || !isStale) return;
-    const timer = setTimeout(() => {
-      onCheckStatus(flight.id);
-    }, 3000);
-    return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flight.id]);
-  const isAirside = locationStatus === "in-terminal";
-  const isAtAirport = locationStatus === "at-airport" || locationStatus === "in-terminal";
-  const minsToDep = minsUntilDep(flight);
-  const showTerminalNavigator = Boolean(iata) && isAtAirport;
-  const delay = live?.delayMinutes ?? flight.flightDelayMinutes ?? 0;
-  const status = (live?.flightStatus || flight.flightStatus || "").toLowerCase();
-  const cancelled = status === "cancelled";
-
-  return (
-    <div className={`rounded-3xl overflow-hidden shadow-xl ${
-      cancelled
-        ? "bg-red-50 ring-1 ring-red-200 dark:bg-red-950 dark:ring-red-900"
-        : simplifiedMobile
-          ? guideType.shell
-          : "bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900"
-    }`}>
-      {/* Header */}
-      <div className="px-5 pt-4 pb-3 flex items-start justify-between gap-3">
-        <div>
-          <p className={guideType.eyebrow}>
-            {isAirside ? "You're airside ·" : isAtAirport ? "You're at the airport ·" : "Next flight ·"} {iata} → {flight.flightArrivalAirport ?? ""}
-          </p>
-          <p className={`text-2xl font-black mt-1 leading-tight ${guideType.title}`}>
-            {flight.flightAirline ?? flight.provider}{flight.flightNumber ? ` ${flight.flightNumber}` : ""}
-          </p>
-          <p className={`font-semibold mt-1 ${guideType.subtitle} ${simplifiedMobile ? "text-lg" : "text-base"}`}>{fmt12(flight.flightDepartureTime ?? flight.localTime ?? "")} · {fmtDate(flight.flightDate ? flight.flightDate + " 00:00" : flight.localTime ?? "")}</p>
-        </div>
-        <StatusBadge r={flight} live={live} />
-      </div>
-
-      {/* Gate · Terminal · Seat row */}
-      <div className={`mx-4 mb-4 grid grid-cols-3 gap-3`}>
-        {[
-          { label: "GATE", value: gate || "—", highlight: Boolean(gate), loading: live?.busy && !gate },
-          { label: "TERMINAL", value: terminal || "—", highlight: Boolean(terminal) },
-          { label: "SEAT", value: flight.flightSeatNumber || "—", highlight: Boolean(flight.flightSeatNumber) },
-        ].map(({ label, value, highlight, loading }) => (
-          <div key={label} className={`${guideType.gateBox} ${guideType.gatePad}`}>
-            <p className={guideType.gateLabel}>{label}</p>
-            {loading ? (
-              <p className="text-sm text-[var(--text-muted)] animate-pulse mt-1">…</p>
-            ) : (
-              <p className={`${guideType.gateValue} ${highlight ? "text-[var(--text-primary)]" : "text-[var(--text-muted)] opacity-60"}`}>{value}</p>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Delay warning */}
-      {delay > 0 && !cancelled && (
-        <div className="mx-4 mb-3 rounded-2xl bg-amber-500/20 border border-amber-400/30 px-3 py-2">
-          <p className="text-amber-300 text-sm font-bold">⚠️ Delayed {delay} minutes</p>
-          <p className="text-amber-200/70 text-xs mt-0.5">New departure around {fmt12((new Date(Date.parse((flight.flightDepartureTime ?? flight.localTime ?? "").replace(" ","T")) + delay * 60_000)).toISOString().replace("T"," "))}</p>
-        </div>
-      )}
-
-      {/* Step-by-step nav to gate */}
-      {isAtAirport && gate && steps.length > 0 && (
-        <div className={`mx-4 mb-4 ${guideType.panel}`}>
-          <div className={`flex items-center justify-between px-4 py-2 border-b ${simplifiedMobile ? "border-[var(--border-default)]" : "border-white/10"}`}>
-            <p className={guideType.panelHeader}>
-              {hasNav ? `Route to Gate ${gate}` : `Getting to Gate ${gate}`}
-            </p>
-            {totalMinutes > 0 && (
-              <span className={`font-medium ${guideType.mutedText} ${simplifiedMobile ? "text-sm" : "text-sm lg:text-[10px]"}`}>~{totalMinutes} min</span>
-            )}
-          </div>
-          <div className={`divide-y ${simplifiedMobile ? "divide-[var(--border-default)]" : "divide-white/5"}`}>
-            {steps.map((step, i) => (
-              <div key={i} className="flex items-start gap-3 px-4 py-2.5">
-                <span className="text-sm shrink-0 mt-0.5">{step.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-xs leading-snug ${guideType.bodyText}`}>{step.text}</p>
-                  {step.detail && <p className={`text-[10px] mt-0.5 ${guideType.mutedText}`}>{step.detail}</p>}
-                  {step.minutes > 0 && <p className="text-[10px] mt-0.5 text-sky-600 dark:text-sky-400">~{step.minutes} min</p>}
-                </div>
-              </div>
-            ))}
-          </div>
-          {hasNav && (
-            <p className={`text-[9px] text-center pb-2 px-4 ${guideType.mutedText}`}>Based on {iata} layout · verify on airport boards</p>
-          )}
-        </div>
-      )}
-
-      {showTerminalNavigator ? (
-        <div className="mx-4 mb-3">
-          <LiveMapLink
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#007AFF] py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-500/30 transition hover:bg-[#0066DD]"
-          >
-            Open terminal navigator
-            <span aria-hidden>→</span>
-          </LiveMapLink>
-          <p className={`mt-2 text-center text-[10px] ${guideType.mutedText}`}>
-            {hasNav
-              ? `Gate routing · lounges · ${iata} terminal map`
-              : `Live map at ${iata} when you're at the airport`}
-          </p>
-        </div>
-      ) : null}
-
-      {/* No gate yet — prompt check status */}
-      {isAtAirport && !gate && (
-        <div className={`mx-4 mb-4 ${guideType.panel} px-4 py-3 flex items-center justify-between gap-3`}>
-          <div>
-            <p className={`text-sm font-semibold ${guideType.bodyText}`}>Gate not assigned yet</p>
-            <p className={`text-xs mt-0.5 ${guideType.mutedText}`}>Check the boards or tap to get live status</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => onCheckStatus(flight.id)}
-            disabled={live?.busy}
-            className="shrink-0 rounded-xl bg-[#007AFF] px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
-          >
-            {live?.busy ? "…" : "Check now"}
-          </button>
-        </div>
-      )}
-
-      {/* Refresh button */}
-      <div className="px-4 pb-4">
-        <button
-          type="button"
-          onClick={() => onCheckStatus(flight.id)}
-          disabled={live?.busy}
-          className={`w-full rounded-2xl font-bold disabled:opacity-50 transition flex items-center justify-center gap-2 ${guideType.refreshBtn} ${
-            simplifiedMobile
-              ? "bg-[var(--bg-muted)] border border-[var(--border-default)] text-[var(--text-primary)] hover:opacity-90"
-              : "bg-white/10 border border-white/15 text-white/80 hover:bg-white/15"
-          }`}
-        >
-          {live?.busy ? (
-            <><span className="animate-spin inline-block">↻</span> Checking live status…</>
-          ) : live?.error?.includes("Too many") ? (
-            <>↻ Refresh · rate limited — try in a moment</>
-          ) : (
-            <>↻ Refresh live status{live?.checkedAt
-              ? ` · ${new Date(live.checkedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
-              : ""}</>
-          )}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 /* ─── Main component ──────────────────────────────────────────── */
 export function FlightsTab({
   reservations,
@@ -492,7 +202,9 @@ export function FlightsTab({
   onOpenForwardReview,
   onImportConfirmation,
   importConfirmationBusy = false,
-  liveStatus = {}, locationStatus = "unknown", nearestAirport = "",
+  liveStatus = {},
+  locationStatus: _locationStatus = "unknown",
+  nearestAirport: _nearestAirport = "",
   onReservationTap, onCheckStatus, onDelete, onAdd,
   simplifiedMobile = false,
   enableBookSearch = false,
@@ -565,27 +277,6 @@ export function FlightsTab({
       nowMs,
     );
 
-  // Are we currently airborne on a flight? (departed, not yet arrived)
-  const airborneOnFlight = useMemo(() => [...upcoming, ...past].find(r => {
-    const depMs = parseFlightTimeMs(r.flightDepartureTime ?? r.localTime ?? "", r.timezone);
-    const arrMs = parseFlightTimeMs(r.flightArrivalTime ?? "", r.timezone);
-    return !isNaN(depMs) && nowMs > depMs &&
-      (isNaN(arrMs) ? nowMs - depMs < 18 * 3600_000 : nowMs < arrMs + 30 * 60_000);
-  }) ?? null, [upcoming, past, nowMs]);
-
-  // Did we just land? (within 2 hours of arrival time)
-  const justLanded = useMemo(() => [...upcoming, ...past].find(r => {
-    const arrMs = parseFlightTimeMs(r.flightArrivalTime ?? "", r.timezone);
-    return !isNaN(arrMs) && nowMs > arrMs && nowMs - arrMs < 2 * 3600_000;
-  }) ?? null, [upcoming, past, nowMs]);
-
-  // Show arrival guide when airborne (show destination info) or just landed
-  const showArrivalGuide = Boolean(airborneOnFlight ?? justLanded);
-  const arrivalFlight = airborneOnFlight ?? justLanded;
-
-  // Show departure guide for the next upcoming (not yet departed) flight
-  const showGuide = Boolean(nextFlight) && !airborneOnFlight;
-
   // Book search chrome: one search surface only (launcher OR header buttons, not both).
   const showSearchLauncher = showBookSearch && !enableBookSearch;
 
@@ -628,23 +319,7 @@ export function FlightsTab({
         onClose={() => setFlightSearchOpen(false)}
       />
 
-      {/* ── ARRIVAL GUIDE — shown when airborne or just landed ── */}
-      {!simplifiedMobile && showArrivalGuide && arrivalFlight && (
-        <ArrivalGuideCard flight={arrivalFlight} simplifiedMobile={simplifiedMobile} />
-      )}
-
-      {/* ── DEPARTURE GUIDE — gate/terminal/seat for next flight ── */}
-      {!simplifiedMobile && showGuide && nextFlight && (
-        <AirportGuideCard
-          flight={nextFlight}
-          live={liveStatus[nextFlight.id]}
-          locationStatus={locationStatus}
-          onCheckStatus={onCheckStatus}
-          simplifiedMobile={simplifiedMobile}
-        />
-      )}
-
-      {/* Ground gaps + needed legs live on Home/Plan — Flights stays ticket list only. */}
+      {/* I36: travel-day guides live on Home + Airport Mode only — Flights is tickets. */}
 
       {simplifiedMobile && !hideRouteMap ? (
         <TripTransportRouteMap
@@ -717,7 +392,7 @@ export function FlightsTab({
       ) : null}
 
       {/* Empty */}
-      {shown.length === 0 && !showGuide && (
+      {shown.length === 0 && (
         <div
           className={
             simplifiedMobile
@@ -893,7 +568,7 @@ export function FlightsTab({
             <div
               key={r.id}
               className={`${BOOK_LIST_CARD_CLASS} ${
-                isNext && !showGuide && attention === "none"
+                isNext && attention === "none"
                   ? "ring-[#007AFF]/40 dark:ring-[#0A84FF]/30 shadow-blue-500/10"
                   : reservationAttentionRingClass(attention, isPast)
               } ${isPast ? "opacity-60" : ""}`}

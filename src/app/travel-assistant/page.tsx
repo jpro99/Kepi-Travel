@@ -9694,22 +9694,13 @@ export default function TravelAssistantPage() {
                     Search
                   </button>
                 ) : null}
-                {isCompactViewport && !showUnconfiguredTripShell && activeTrip ? (
+                {!showUnconfiguredTripShell &&
+                activeTrip &&
+                (tripSpendSummary.missingPriceCount > 0 || transportConflictReservationIds.size > 0) ? (
                   <TripSpendBadge
                     summary={tripSpendSummary}
                     problemCount={transportConflictReservationIds.size}
                     onClick={() => navigateToBook("flights")}
-                    alwaysActionable
-                  />
-                ) : !isCompactViewport && !showUnconfiguredTripShell && activeTrip ? (
-                  <TripSpendBadge
-                    summary={tripSpendSummary}
-                    problemCount={transportConflictReservationIds.size}
-                    onClick={
-                      tripSpendSummary.missingPriceCount > 0 || transportConflictReservationIds.size > 0
-                        ? () => navigateToBook("flights")
-                        : undefined
-                    }
                   />
                 ) : null}
                 <div className="relative">

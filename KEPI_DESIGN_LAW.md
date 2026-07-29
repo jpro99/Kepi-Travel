@@ -500,6 +500,11 @@ Forwarded hotels often land as the wrong year (2025 in a 2026 Europe trip). On t
 
 **Test:** `src/lib/travelAssistant/hotelTripDateRepair.test.ts`, `confirmationHotelExtract.test.ts`, `drainForwardReviewQueue.test.ts`, `tripNightCoverage.test.ts`
 
+**I36 — Apple chrome diet: travel-day single screen + quiet green**
+On travel day (airborne / just-landed / at-airport / leave-soon), Home is **one** headline + **one** Airport Mode CTA — hide Mission Control label chrome, completeness bars, zoom picker, trip map, and transport prompts. When trip status is green, Trip Completeness is a single muted line (“Flights and stays set”). Plan keeps one gap surface (completeness / Stay Gaps) — no duplicate Trip Health strip. Flights is tickets only (no arrival/departure guide cards). Plan/Book use light Apple headers; exports live in a Share sheet; spend badge only when pricing/problems need action.
+
+**Test:** `src/lib/travelAssistant/homeDayTruth.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -664,6 +669,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I33 | `src/lib/travelAssistant/homeDayTruth.test.ts` |
 | I34 | `src/lib/travelAssistant/tripNightCoverage.test.ts` |
 | I35 | `src/lib/travelAssistant/hotelTripDateRepair.test.ts`, `confirmationHotelExtract.test.ts`, `drainForwardReviewQueue.test.ts`, `tripNightCoverage.test.ts` |
+| I36 | `src/lib/travelAssistant/homeDayTruth.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

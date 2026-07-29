@@ -83,13 +83,27 @@ test("real layover times produce calm OK line", () => {
   assert.match(status.line ?? "", /SEA connection looks fine/iu);
 });
 
-test("travel-day takeover for airborne and openAirportMode", () => {
+test("I36: travel-day takeover for airborne, just-landed, and openAirportMode", () => {
   assert.equal(
     isTravelDayTakeover({ kind: "airborne", onFlight: {} as never, landingAt: "FCO", landingIn: "2h" }, false),
     true,
   );
+  assert.equal(
+    isTravelDayTakeover(
+      { kind: "just-landed", flight: {} as never, landedMinutesAgo: 5 },
+      false,
+    ),
+    true,
+  );
   assert.equal(isTravelDayTakeover({ kind: "no-trip" }, true), true);
   assert.equal(isTravelDayTakeover({ kind: "no-trip" }, false), false);
+  assert.equal(
+    isTravelDayTakeover(
+      { kind: "pre-trip", daysUntil: 20, nextFlight: {} as never },
+      false,
+    ),
+    false,
+  );
 });
 
 test("multi-day same-airport hop is not a calm connection", () => {

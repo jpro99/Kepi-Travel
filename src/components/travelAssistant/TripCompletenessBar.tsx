@@ -41,6 +41,19 @@ export function TripCompletenessBar({
   const [sheetOpen, setSheetOpen] = useState(false);
   const gaps = completeness.hotelGaps ?? [];
 
+  // I36 — green is quiet. No dual bars or Flights/Hotels grid when everything is set.
+  if (completeness.overall === "green") {
+    return (
+      <section
+        className="rounded-2xl bg-[#F5F5F7] px-4 py-3"
+        style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif' }}
+        aria-label="Trip completeness"
+      >
+        <p className="text-[15px] font-medium text-[#6E6E73]">Flights and stays set</p>
+      </section>
+    );
+  }
+
   return (
     <section
       className="rounded-2xl bg-[#F5F5F7] px-4 py-3"
@@ -50,11 +63,7 @@ export function TripCompletenessBar({
       <div className="flex items-center justify-between gap-2">
         <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">Trip status</p>
         <p className={`text-[12px] font-semibold ${toneText(completeness.overall)}`}>
-          {completeness.overall === "green"
-            ? "Complete"
-            : completeness.overall === "orange"
-              ? "Needs stays or flights"
-              : "Not started"}
+          {completeness.overall === "orange" ? "Needs stays or flights" : "Not started"}
         </p>
       </div>
 

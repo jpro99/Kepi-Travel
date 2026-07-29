@@ -151,6 +151,90 @@ export function MissionControlView({
   const travelTakeover =
     journeyPhase != null && isTravelDayTakeover(journeyPhase, snap.openAirportMode || atAirport);
 
+  // I36 — Wallet-grade travel day: one headline, one CTA, nothing else.
+  if (travelTakeover) {
+    const gate = snap.nextFlight ? liveStatus?.[snap.nextFlight.id]?.departureGate : null;
+    const routeLabel = snap.nextFlight
+      ? `${snap.nextFlight.flightDepartureAirport ?? ""} → ${snap.nextFlight.flightArrivalAirport ?? ""}`
+      : snap.identityLabel;
+
+    let eyebrow = "Travel day";
+    let title = snap.leaveByHint || "You're traveling today";
+    let detail: string | null = routeLabel;
+    let tone: "blue" | "green" = "blue";
+
+    if (journeyPhase?.kind === "airborne") {
+      eyebrow = "In the air";
+      title = `${(journeyPhase.onFlight as { flightDepartureAirport?: string }).flightDepartureAirport ?? ""} → ${journeyPhase.landingAt}`;
+      detail = `Landing in ${journeyPhase.landingIn}`;
+    } else if (journeyPhase?.kind === "just-landed") {
+      eyebrow = "Just landed";
+      title = "You're on the ground";
+      detail =
+        journeyPhase.landedMinutesAgo < 2
+          ? "Just now"
+          : `${journeyPhase.landedMinutesAgo} minutes ago`;
+      tone = "green";
+    } else if (atAirport) {
+      eyebrow = locationStatus === "in-terminal" ? "In the terminal" : "At the airport";
+      title = gate ? `Gate ${gate}` : "Open Airport Mode";
+      detail = snap.nextFlight
+        ? `${snap.nextFlight.flightNumber || "Flight"} · ${routeLabel}`
+        : "Your next steps are on the airport map";
+    } else if (snap.leaveByHint) {
+      title = snap.leaveByHint;
+      detail = gate
+        ? `Gate ${gate} · ${routeLabel}`
+        : snap.nextFlight
+          ? `${snap.nextFlight.flightNumber || "Flight"} · ${routeLabel}`
+          : detail;
+    }
+
+    const heroBg = tone === "green" ? "#34C759" : "#007AFF";
+    const ctaText = tone === "green" ? "#1D1D1F" : "#007AFF";
+
+    return (
+      <section
+        className="space-y-3"
+        style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif' }}
+      >
+        <article
+          className="rounded-3xl px-5 py-8 text-white shadow-[0_1px_3px_rgba(0,0,0,0.12)]"
+          style={{ background: heroBg }}
+        >
+          <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-white/70">{eyebrow}</p>
+          <h2 className="mt-2 text-[28px] font-semibold tracking-tight leading-tight">{title}</h2>
+          {detail ? <p className="mt-2 text-[17px] text-white/85">{detail}</p> : null}
+          {connectionCalm.kind === "conflict" && connectionCalm.line ? (
+            <p className="mt-3 rounded-xl bg-white/15 px-3 py-2 text-[14px] font-medium text-white">
+              {connectionCalm.line}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={onOpenAirportMode}
+            className="mt-6 flex min-h-[56px] w-full items-center justify-center rounded-2xl bg-white text-[17px] font-semibold"
+            style={{ color: ctaText }}
+          >
+            Open Airport Mode
+          </button>
+        </article>
+
+        {checkInHandoff && journeyPhase?.kind !== "airborne" ? (
+          <CheckInHandoffCard content={checkInHandoff} />
+        ) : null}
+
+        <button
+          type="button"
+          onClick={onOpenPlan}
+          className="flex min-h-[44px] w-full items-center justify-center text-[15px] font-semibold text-[#007AFF]"
+        >
+          Trip overview
+        </button>
+      </section>
+    );
+  }
+
   if (snap.phase === "no_trip") {
     return (
       <section className="flex min-h-[60dvh] flex-col items-center justify-center px-4 py-12 text-center">
@@ -250,63 +334,7 @@ export function MissionControlView({
       className="space-y-3"
       style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif' }}
     >
-      {journeyPhase?.kind === "airborne" ? (
-        <article className="rounded-2xl bg-[#007AFF] px-5 py-5 text-white shadow-[0_1px_3px_rgba(0,0,0,0.12)]">
-          <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-white/70">In the air</p>
-          <h2 className="mt-1 text-[22px] font-semibold tracking-tight">
-            {(journeyPhase.onFlight as { flightDepartureAirport?: string }).flightDepartureAirport ?? ""} →{" "}
-            {journeyPhase.landingAt}
-          </h2>
-          <p className="mt-1 text-[15px] text-white/85">Landing in {journeyPhase.landingIn}</p>
-          <button
-            type="button"
-            onClick={onOpenAirportMode}
-            className="mt-4 flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-white text-[17px] font-semibold text-[#007AFF]"
-          >
-            Open Airport Mode
-          </button>
-        </article>
-      ) : null}
-
-      {journeyPhase?.kind === "just-landed" ? (
-        <article className="rounded-2xl bg-[#34C759] px-5 py-5 text-white shadow-[0_1px_3px_rgba(0,0,0,0.12)]">
-          <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-white/80">Just landed</p>
-          <h2 className="mt-1 text-[22px] font-semibold tracking-tight">You&apos;re on the ground</h2>
-          <p className="mt-1 text-[15px] text-white/90">
-            {journeyPhase.landedMinutesAgo < 2
-              ? "Just now"
-              : `${journeyPhase.landedMinutesAgo} minutes ago`}
-          </p>
-          <button
-            type="button"
-            onClick={onOpenAirportMode}
-            className="mt-4 flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-white text-[17px] font-semibold text-[#1D1D1F]"
-          >
-            Open Airport Mode
-          </button>
-        </article>
-      ) : null}
-
-      {atAirport && journeyPhase?.kind !== "airborne" && journeyPhase?.kind !== "just-landed" ? (
-        <button
-          type="button"
-          onClick={onOpenAirportMode}
-          className="flex min-h-[56px] w-full items-center justify-between rounded-2xl bg-[#007AFF] px-5 text-left text-white"
-        >
-          <span>
-            <span className="block text-[13px] font-semibold text-white/80">
-              {locationStatus === "in-terminal" ? "In the terminal" : "At the airport"}
-            </span>
-            <span className="text-[17px] font-semibold">Open Airport Mode</span>
-          </span>
-          <span className="text-[15px] font-semibold text-white/90">Go</span>
-        </button>
-      ) : null}
-
-      <div className="rounded-2xl bg-[#1D1D1F] px-4 py-3 text-white">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-white/60">Mission Control</p>
-        <p className="mt-0.5 text-[15px] font-semibold leading-snug">{snap.identityLabel}</p>
-      </div>
+      {/* Identity lives in the trip switcher — no black Mission Control label chrome (I36). */}
 
       <TripCompletenessBar
         completeness={completeness}

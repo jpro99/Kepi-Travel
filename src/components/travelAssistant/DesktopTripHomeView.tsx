@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import dynamic from "next/dynamic";
 import { MissionControlView } from "@/components/travelAssistant/MissionControlView";
 import type { TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
@@ -12,6 +13,8 @@ import type { QuickGroundMode } from "@/lib/travelAssistant/quickGroundTransport
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import type { HotelStayMapReservation } from "@/lib/travelAssistant/tripHotelStayMap";
 import { TripHomeTransportSection } from "@/components/travelAssistant/TripHomeTransportSection";
+import { isTravelDayTakeover } from "@/lib/travelAssistant/homeDayTruth";
+import { buildMissionControlSnapshot } from "@/lib/travelAssistant/tripPhase";
 
 const TripHomeOverviewMap = dynamic(
   () => import("@/components/travelAssistant/TripHomeOverviewMap").then((m) => m.TripHomeOverviewMap),
@@ -108,6 +111,22 @@ export function DesktopTripHomeView({
     (reservation) => reservation.type === "hotel",
   ) as HotelStayMapReservation[];
   const hasTrip = journeyPhase.kind !== "no-trip" && journeyPhase.kind !== "post-trip";
+  const atAirport = locationStatus === "at-airport" || locationStatus === "in-terminal";
+  const snap = useMemo(
+    () =>
+      buildMissionControlSnapshot({
+        name: tripName,
+        destination,
+        startDate,
+        endDate,
+        reservations,
+        stayDecisions,
+        liveStatusByReservationId: liveStatus,
+        hasActiveTrip: hasTrip,
+      }),
+    [tripName, destination, startDate, endDate, reservations, stayDecisions, liveStatus, hasTrip],
+  );
+  const travelTakeover = isTravelDayTakeover(journeyPhase, snap.openAirportMode || atAirport);
 
   return (
     <section className="mx-auto max-w-2xl space-y-5 px-1">
@@ -132,7 +151,8 @@ export function DesktopTripHomeView({
         onSeeAllAttention={onOpenPlan}
       />
 
-      {hasTrip ? (
+      {/* I36: on travel day, Home is the takeover screen only — no map/transport chrome. */}
+      {hasTrip && !travelTakeover ? (
         <div className="overflow-hidden rounded-2xl bg-[#F5F5F7]">
           <div className="flex items-center justify-between px-4 py-3">
             <p className="text-[13px] font-semibold text-[#6E6E73]">Trip map</p>
@@ -155,7 +175,7 @@ export function DesktopTripHomeView({
         </div>
       ) : null}
 
-      {hasTrip && onSearchFlights && onQuickGroundTransport ? (
+      {hasTrip && !travelTakeover && onSearchFlights && onQuickGroundTransport ? (
         <TripHomeTransportSection
           reservations={reservations}
           tripStart={startDate}
@@ -166,7 +186,7 @@ export function DesktopTripHomeView({
         />
       ) : null}
 
-      {hasTrip && onAddGroundTransport ? (
+      {hasTrip && !travelTakeover && onAddGroundTransport ? (
         <button
           type="button"
           onClick={onAddGroundTransport}

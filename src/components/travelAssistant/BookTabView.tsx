@@ -4,7 +4,6 @@ import { useTranslations } from "next-intl";
 import type { BookSubTab } from "@/lib/travelAssistant/consumerTabs";
 import { bookSubTabButtonClass, BOOK_SUBTAB_TOGGLE_CLASS } from "@/components/travelAssistant/bookTabStyles";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
-import { BookTravelFitStrip } from "@/components/travelAssistant/BookTravelFitStrip";
 import type { TripSpendSummary } from "@/lib/travelAssistant/tripSpendSummary";
 import { FlightsTab } from "@/components/travelAssistant/FlightsTab";
 import { HotelsTab } from "@/components/travelAssistant/HotelsTab";
@@ -166,18 +165,30 @@ export function BookTabView({
 }: BookTabViewProps) {
   const t = useTranslations("BookTab");
   const tTrip = useTranslations("TravelAssistant");
+  const showSpend =
+    Boolean(tripSpendSummary) &&
+    ((tripSpendSummary?.missingPriceCount ?? 0) > 0 || tripProblemCount > 0);
+
   return (
-    <section className="space-y-3">
-      <header className="rounded-2xl bg-[#0F1923] px-5 py-4 shadow-sm">
+    <section
+      className="space-y-3"
+      style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif' }}
+    >
+      {/* I36 — list-first Book: light header, spend only when something needs action. */}
+      <header className="rounded-2xl bg-[#F5F5F7] px-5 py-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f4c95d]">{t("headerEyebrow")}</p>
-            <h1 className="mt-1 text-xl font-bold text-white">{tripName ?? tTrip("defaultTripName")}</h1>
-            <p className="mt-1 text-sm text-slate-300">
+            <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+              {t("headerEyebrow")}
+            </p>
+            <h1 className="mt-1 text-[28px] font-semibold tracking-tight text-[#1D1D1F]">
+              {tripName ?? tTrip("defaultTripName")}
+            </h1>
+            <p className="mt-1 text-[15px] text-[#6E6E73]">
               {t("bookingCounts", { flights: flightCount, hotels: hotelCount })}
             </p>
           </div>
-          {tripSpendSummary ? (
+          {showSpend && tripSpendSummary ? (
             <TripSpendBadge
               summary={tripSpendSummary}
               problemCount={tripProblemCount}
@@ -203,10 +214,6 @@ export function BookTabView({
           {t("subTabHotels")}
         </button>
       </div>
-
-      {travelFitReservations && travelFitReservations.length > 0 ? (
-        <BookTravelFitStrip reservations={travelFitReservations} bookSubTab={bookSubTab} />
-      ) : null}
 
       {bookSubTab === "flights" ? (
         <FlightsTab

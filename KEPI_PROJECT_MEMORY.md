@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-28 (I35 hotel date remap + calendar sleep truth)
+Last updated: 2026-07-28 (I36 Apple chrome diet — travel-day single screen)
+
+## Decision 2026-07-28 — I36 Apple chrome diet (Jeff approved)
+Travel-day Home = one headline + Airport Mode CTA. Quiet green completeness. Remove Plan Trip Health strip (keep Trip status). Strip Flights guide cards. Light Plan/Book headers; Share sheet for exports; spend badge only when action needed. Split calendar colors stay (I35).
 
 ## Decision 2026-07-28 — I35 hotel year remap + calendar shared gaps (Jeff)
 Stay Gaps showed “No hotel” for nights that had Booking.com hotels (NEREA, Ortisei) because check-in/out were stored as 2025 and drain dropped `checkOutDate`. Fix: remap hotels into trip window on load; preserve checkout on drain; sleep window starts at first destination arrival; Calendar uses same night coverage + amber “Needs stay”; **keep** split two-tone colors on hotel/city switch days. Real gaps remain Sep 9–11 and Sep 16–17 after NEREA/Venice checkouts.
