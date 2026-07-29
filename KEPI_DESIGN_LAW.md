@@ -515,6 +515,11 @@ Do not set trip bounds to min/max of every raw reservation date. Stray 2025 left
 
 **Test:** `src/lib/travelAssistant/tripWindowRepair.test.ts`, `tripNightCoverage.test.ts`
 
+**I39 — Airbnb yearless Check-in/Checkout cards must become stay nights**
+Airbnb confirmation emails show `Sat, Sep 12` / `Tue, Sep 15` without a year on the date cards; the year often appears only on “Payment scheduled … 2026”. Parser must read labeled Check-in/Checkout (yearless OK), assign year from an explicit year in the email (not invent silently), never treat payment-scheduled dates as check-in, extract city from the Address line, and not require a confirmation code for Airbnb summary emails. Sep 12–15 covers sleep nights 12–14 only (checkout exclusive).
+
+**Test:** `src/lib/travelAssistant/hotelStayDateExtract.test.ts`, `emailForwardParser.test.ts`, `confirmationHotelExtract.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -682,6 +687,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I36 | `src/lib/travelAssistant/homeDayTruth.test.ts` |
 | I37 | `src/lib/travelAssistant/tripWindowRepair.test.ts` |
 | I38 | `src/lib/travelAssistant/tripWindowRepair.test.ts`, `tripNightCoverage.test.ts` |
+| I39 | `src/lib/travelAssistant/hotelStayDateExtract.test.ts`, `emailForwardParser.test.ts`, `confirmationHotelExtract.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

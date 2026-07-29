@@ -2,6 +2,10 @@ import Anthropic from "@anthropic-ai/sdk";
 import { htmlToPlainConfirmationText } from "@/lib/travelAssistant/confirmationDocumentText";
 import { mergePdfSectionIntoBody } from "@/lib/travelAssistant/emailSourceText";
 import { extractHotelPropertyName } from "@/lib/travelAssistant/hotelPropertyName";
+import {
+  extractHotelAddressLocation,
+  extractLabeledHotelStayDates,
+} from "@/lib/travelAssistant/hotelStayDateExtract";
 import { formatFewShotBlock } from "@/lib/travelAssistant/mlReadiness/fewShotExamples";
 import { EMAIL_FORWARD_PARSER_VERSION } from "@/lib/travelAssistant/mlReadiness/parserVersion";
 import type { FewShotParseExample } from "@/lib/travelAssistant/mlReadiness/types";
@@ -9,6 +13,10 @@ import { sanitizeTravelerNotes } from "@/lib/travelAssistant/sanitizeTravelerNot
 import { logger } from "@/lib/logger";
 
 export { extractHotelPropertyName };
+export {
+  extractHotelAddressLocation,
+  extractLabeledHotelStayDates,
+} from "@/lib/travelAssistant/hotelStayDateExtract";
 
 const MODEL = "claude-sonnet-4-5";
 const HIGH_CONFIDENCE_THRESHOLD = 70;
@@ -24,6 +32,7 @@ const FIELD_WEIGHTS = {
   localTime: 20,
   timezone: 8,
   location: 12,
+  checkOutDate: 12,
   flightNumber: 0,
 } as const;
 
@@ -259,7 +268,7 @@ function extractOriginalEmailFromForwardChain(text: string): string {
 }
 
 const NON_TRAVEL_DATE_CONTEXT =
-  /\b(?:purchase(?:d)?|booked on|booking date|transaction date|order date|payment date|issued on|date of issue|receipt date|ticketed on|sales date|invoice date|email sent|sent on|forwarded message|e-?t-?a\b|esta\b|visa[- ]exempt|visa waiver|electronic system for travel authorization|hazardous materials|conditions of carriage|privacy policy|data protection|effective\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})\b/iu;
+  /\b(?:purchase(?:d)?|booked on|booking date|transaction date|order date|payment date|payment scheduled|scheduled payment|payout|balance due|you will be charged|total charged|charged a total|issued on|date of issue|receipt date|ticketed on|sales date|invoice date|email sent|sent on|forwarded message|free cancellation|cancellation policy|e-?t-?a\b|esta\b|visa[- ]exempt|visa waiver|electronic system for travel authorization|hazardous materials|conditions of carriage|privacy policy|data protection|effective\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})\b/iu;
 
 const TRAVEL_DATE_CONTEXT =
   /\b(?:depart(?:ure|s|ing)?|arriv(?:al|es|ing)?|scheduled|flight|gate|terminal|boarding|check-?in|check out|leaves| lands|segment|itinerary)\b/iu;
@@ -547,7 +556,12 @@ function extractBestLocalTimeCandidate(
 
       let score = 0;
       if (TRAVEL_DATE_CONTEXT.test(context)) score += 5;
-      if (/\b(?:depart|departure|leaves|scheduled)\b/iu.test(context)) score += 3;
+      // Bare "scheduled" boosts flights; hotels must not prefer payment-scheduled dates (I39).
+      if (reservationType === "hotel") {
+        if (/\b(?:depart|departure|leaves)\b/iu.test(context)) score += 3;
+      } else if (/\b(?:depart|departure|leaves|scheduled)\b/iu.test(context)) {
+        score += 3;
+      }
       if (/^Departure\b/iu.test(line) || /^Departure\b/iu.test(lines[index - 1] ?? "")) score += 5;
       if (/\b(?:arrival|arrive|arriving|lands|landed)\b/iu.test(context)) score -= 4;
       if (reservationType === "hotel" && /\b(?:check-?in|check out|stay|night)\b/iu.test(context)) score += 4;
@@ -1270,6 +1284,14 @@ function buildRegexCandidates(input: {
     };
   }
 
+  // Airbnb / OTA "Entire home" without the word hotel still means a stay.
+  if (
+    !candidates.type &&
+    /\b(?:entire home|entire place|private room|hosted by|airbnb|vrbo)\b/iu.test(combined)
+  ) {
+    candidates.type = { value: "hotel", confidence: 0.84, source: "regex" };
+  }
+
   const extractedConfirmation = extractConfirmationCodeFromText(combined);
   if (extractedConfirmation) {
     candidates.confirmationCode = {
@@ -1280,37 +1302,69 @@ function buildRegexCandidates(input: {
   }
 
   const reservationType = normalizeType(candidates.type?.value ?? "") ?? undefined;
-  const bestLocalTime = extractBestLocalTimeCandidate(lineAwareText, reservationType);
-  if (bestLocalTime) {
+
+  // I39: labeled Check-in / Checkout cards (including yearless Airbnb "Sat, Sep 12").
+  const labeledStay =
+    reservationType === "hotel" || /\bcheck[\s-]?in\b/iu.test(lineAwareText)
+      ? extractLabeledHotelStayDates(lineAwareText)
+      : null;
+  if (labeledStay) {
+    candidates.type = candidates.type ?? { value: "hotel", confidence: 0.86, source: "regex" };
     candidates.localTime = {
-      value: bestLocalTime.localTime,
-      confidence: bestLocalTime.confidence,
+      value: labeledStay.checkInLocalTime,
+      confidence: 0.92,
       source: "regex",
     };
-    if (bestLocalTime.localTime.endsWith(" 12:00")) {
-      parserNotes.push("Time not found in email; defaulted to 12:00 local time for review.");
+    candidates.checkOutDate = {
+      value: labeledStay.checkOutDate,
+      confidence: 0.92,
+      source: "regex",
+    };
+  } else {
+    const bestLocalTime = extractBestLocalTimeCandidate(lineAwareText, reservationType);
+    if (bestLocalTime) {
+      candidates.localTime = {
+        value: bestLocalTime.localTime,
+        confidence: bestLocalTime.confidence,
+        source: "regex",
+      };
+      if (bestLocalTime.localTime.endsWith(" 12:00")) {
+        parserNotes.push("Time not found in email; defaulted to 12:00 local time for review.");
+      }
+    }
+
+    // Hotel checkout — Booking.com: "Check-out\nTuesday, September 8, 2026"
+    if (reservationType === "hotel" || /\bcheck[\s-]?out\b/iu.test(lineAwareText)) {
+      const checkoutWindow =
+        lineAwareText.match(/\bcheck[\s-]?out\b[:\s]*\n?\s*([^\n]{3,80})/iu)?.[1] ??
+        lineAwareText.match(/\bcheck[\s-]?out\b[^\n]{0,120}/iu)?.[0] ??
+        "";
+      const checkoutRaw = checkoutWindow
+        .replace(/^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,?\s+/iu, "")
+        .match(
+          /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4}|20\d{2}-\d{2}-\d{2}|\d{1,2}-[A-Za-z]{3}-\d{4})\b/iu,
+        )?.[1];
+      const checkoutIso = checkoutRaw ? parseDateCandidate(checkoutRaw) : null;
+      if (checkoutIso) {
+        candidates.checkOutDate = {
+          value: checkoutIso,
+          confidence: 0.9,
+          source: "regex",
+        };
+      }
     }
   }
 
-  // Hotel checkout — Booking.com: "Check-out\nTuesday, September 8, 2026"
-  if (reservationType === "hotel" || /\bcheck[\s-]?out\b/iu.test(lineAwareText)) {
-    const checkoutWindow =
-      lineAwareText.match(/\bcheck[\s-]?out\b[:\s]*\n?\s*([^\n]{3,80})/iu)?.[1] ??
-      lineAwareText.match(/\bcheck[\s-]?out\b[^\n]{0,120}/iu)?.[0] ??
-      "";
-    const checkoutRaw = checkoutWindow
-      .replace(/^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,?\s+/iu, "")
-      .match(
-        /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4}|20\d{2}-\d{2}-\d{2}|\d{1,2}-[A-Za-z]{3}-\d{4})\b/iu,
-      )?.[1];
-    const checkoutIso = checkoutRaw ? parseDateCandidate(checkoutRaw) : null;
-    if (checkoutIso) {
-      candidates.checkOutDate = {
-        value: checkoutIso,
-        confidence: 0.9,
-        source: "regex",
-      };
-    }
+  // Hotel city from Address line (Airbnb) — never leave location empty when address is present.
+  const hotelLocation = extractHotelAddressLocation(lineAwareText);
+  const isHotelDraft =
+    normalizeType(candidates.type?.value ?? "") === "hotel" || Boolean(labeledStay) || Boolean(hotelPropertyName);
+  if (hotelLocation && isHotelDraft) {
+    candidates.location = {
+      value: hotelLocation,
+      confidence: 0.88,
+      source: "regex",
+    };
   }
 
   const timezone = resolveTimezone(combined);
@@ -1394,14 +1448,14 @@ async function runAiFallback(
     '{ "reservations": [ { "type": "", "title": "", "provider": "", "confirmationCode": "", "localTime": "", "checkOutDate": "", "timezone": "", "location": "", "notes": "", "flightNumber": "", "departureAirport": "", "arrivalAirport": "" } ] }',
     "IMPORTANT: This may be a multi-leg itinerary. Scan for EVERY individual flight segment. For example HND→HNL→SEA→ONT has 3 flights — return 3 separate objects in reservations[]. Each object must have its own flightNumber, departureAirport, arrivalAirport, and localTime (departure time for that specific leg).",
     "Use type values only: flight, hotel, train, ride, dinner. Use \"dinner\" for restaurant reservations, tours, excursions, boat trips, classes, tastings, or any other bookable activity that is not a flight/hotel/train/car ride.",
-    "CRITICAL for localTime: For flights, use the scheduled DEPARTURE time (not email send time, not boarding time, not purchase/booking/transaction date). Ignore 'Date:' and 'Sent:' lines from forward headers. For hotels, use the check-in date and time if stated, otherwise just the check-in date at 15:00 local time. NEVER guess or infer a year — if the year is not explicitly in the email use the current year only if the date is clearly in the future, otherwise leave localTime empty.",
-    "For hotels, set title to the PROPERTY name (e.g. Casa de Elena), NEVER Booking.com / Expedia / Airbnb. Put the OTA in provider. Phrases like \"You're confirmed at Casa de Elena\" mean title=Casa de Elena, provider=Booking.com.",
-    "For hotels, set checkOutDate to the check-out date in YYYY-MM-DD format. The email may use formats like 'Friday, 29-May-2026' or 'May 29, 2026' — convert to YYYY-MM-DD e.g. 2026-05-29. Also set localTime to the check-in date and time e.g. '2026-05-24 15:00'. For flights, leave checkOutDate empty.",
+    "CRITICAL for localTime: For flights, use the scheduled DEPARTURE time (not email send time, not boarding time, not purchase/booking/transaction/payment date). Ignore 'Date:' and 'Sent:' lines from forward headers. For hotels, use Check-in / Checkout cards — Airbnb often shows 'Sat, Sep 12' without a year; take the year from another date in the email (e.g. payment Aug 29, 2026 → stay year 2026). NEVER use payment scheduled dates as check-in. Default hotel check-in time to 15:00 when only 'After 3:00 PM' is shown.",
+    "For hotels, set title to the PROPERTY name (e.g. Casa de Elena or Cosy, Romantic & Stylish Studio), NEVER Booking.com / Expedia / Airbnb. Put the OTA in provider. Phrases like \"You're confirmed at Casa de Elena\" mean title=Casa de Elena, provider=Booking.com.",
+    "For hotels, set checkOutDate to the check-out date in YYYY-MM-DD format. The email may use formats like 'Friday, 29-May-2026', 'May 29, 2026', or yearless 'Tue, Sep 15' — convert to YYYY-MM-DD. Also set localTime to the check-in date and time e.g. '2026-09-12 15:00'. For flights, leave checkOutDate empty.",
     "The departure time is the scheduled time the plane leaves the gate. Format: 'YYYY-MM-DD HH:mm' in 24-hour.",
     "For flights, set flightNumber to IATA airline code + flight number. If the email says 'Alaska Airlines Flight 832' write AS832. If it says 'Hawaiian Airlines Flight 12' write HA12. Common IATA codes: AS=Alaska Airlines, HA=Hawaiian Airlines, UA=United Airlines, AA=American Airlines, DL=Delta, WN=Southwest, B6=JetBlue, KE=Korean Air, NH=ANA, JL=JAL. NEVER use just the number alone — always prefix with the 2-letter IATA code. Never use credit card numbers like VI3557.",
     "For flights, set departureAirport to the IATA code of the origin airport and arrivalAirport to the IATA code of the destination. These are always in the email.",
     "For timezone: use the IATA timezone of the DEPARTURE airport city e.g. Pacific/Honolulu, America/New_York, Asia/Tokyo.",
-    "For location: set to the departure airport name or city, NOT the hotel address.",
+    "For location: for flights set the departure airport name or city. For hotels set the stay city from the Address line (e.g. Venice) — not the street alone.",
     "If any field is not explicitly stated in the email, return empty string. NEVER invent or guess dates, codes, or any other field.",
     "Do not include explanation text.",
     "",
@@ -1495,9 +1549,14 @@ function buildDraft(candidates: CandidateMap, parserNotes: string[]): ForwardedR
 function missingFieldsFromDraft(draft: ForwardedReservationDraft): ForwardedReservationField[] {
   const missing = new Set<ForwardedReservationField>();
   for (const field of REQUIRED_FIELDS) {
+    // Airbnb confirmation emails often omit a code in the summary body (I39).
+    if (draft.type === "hotel" && field === "confirmationCode") continue;
     if (!(draft[field] ?? "").trim()) {
       missing.add(field);
     }
+  }
+  if (draft.type === "hotel" && !(draft.checkOutDate ?? "").trim()) {
+    missing.add("checkOutDate");
   }
   return [...missing];
 }

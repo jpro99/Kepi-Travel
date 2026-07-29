@@ -49,6 +49,32 @@ test("I35: Booking.com weekday checkout on next line parses for NEREA", () => {
   assert.equal(drafts[0]?.checkOutDate, "2026-09-08");
 });
 
+test("I39: Airbnb yearless Venice confirmation covers Sep 12–15", () => {
+  const body = `
+Reservation confirmed
+Cosy, Romantic & Stylish Studio
+Entire home/apt hosted by Alessia
+Check-in
+Sat, Sep 12
+After 3:00 PM
+Checkout
+Tue, Sep 15
+By 10:00 AM
+Address
+Rio dei Miracoli, 30121 Venice, Veneto, Italy
+Scheduled payment
+Aug 29, 2026
+You will be charged a total of $736.44.
+`;
+  const drafts = extractHotelDraftsFromDocumentText(body);
+  assert.equal(drafts.length, 1);
+  assert.match(drafts[0]?.title ?? "", /Cosy, Romantic/i);
+  assert.equal(drafts[0]?.localTime, "2026-09-12 15:00");
+  assert.equal(drafts[0]?.checkOutDate, "2026-09-15");
+  assert.match(drafts[0]?.location ?? "", /Venice/i);
+  assert.match(drafts[0]?.provider ?? "", /Airbnb/i);
+});
+
 test("mergeConfirmationDrafts returns hotel drafts without AI", () => {
   const drafts = mergeConfirmationDrafts([], HOTEL_CONFIRMATION);
   assert.equal(drafts.length, 1);

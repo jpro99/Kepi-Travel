@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-29 (I38 — fix 292 nights open franken-window)
+Last updated: 2026-07-29 (I39 — Airbnb yearless Venice stay parse)
+
+## Incident 2026-07-29 — Airbnb Venice forward never covered Sep 12–14 (Jeff)
+Airbnb cards are yearless (`Sat, Sep 12`); regex required a year, so check-in/out stayed empty and “Payment scheduled Aug 29, 2026” became fake check-in. Draft sat in review / covered zero nights. Fix I39: labeled yearless Check-in/Checkout + year from payment line + Address→Venice + ignore payment-scheduled as stay date. Re-forward Venice Airbnb after deploy (or confirm from review if a draft is waiting).
 
 ## Incident 2026-07-29 — Home showed “292 nights open” (Jeff screenshot)
 Root cause: I37 expand-to-min/max across all reservation dates mixed 2025 leftovers with 2026 flights → ~Sep 2025–mid-2026 span. Labels hide year so it looked like “Sep 1; Sep 8–11”. Fix I38: dominant-year cluster + 90-day cap; sleep window end from last return/hotel, not franken tripEnd. Real open nights for Europe stay in the tens (e.g. Sep 2–4 before NEREA, Sep 8–11, mid-gap after Venice) — not hundreds.

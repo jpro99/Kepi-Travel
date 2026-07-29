@@ -465,6 +465,52 @@ test("ITA receipt boilerplate does not invent 2016 flight dates or CAREFULLY cod
   }
 });
 
+test("I39: Airbnb yearless Venice stay parses check-in/out city — not payment date", async () => {
+  const previousKey = process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  try {
+    const body = `
+Reservation confirmed
+Cosy, Romantic & Stylish Studio
+Entire home/apt hosted by Alessia
+Check-in
+Sat, Sep 12
+After 3:00 PM
+Checkout
+Tue, Sep 15
+By 10:00 AM
+Address
+Rio dei Miracoli, 30121 Venice, Veneto, Italy
+Guests
+2 adults
+Scheduled payment
+Aug 29, 2026
+You will be charged a total of $736.44. Payment is scheduled for Aug 29, 2026 with Mastercard 8881.
+`;
+    const result = await parseForwardedEmail({
+      subject: "Reservation confirmed - Cosy, Romantic & Stylish Studio",
+      from: "noreply@airbnb.com",
+      text: body,
+      html: "",
+      attachments: [],
+    });
+    assert.equal(result.draft.type, "hotel");
+    assert.match(result.draft.title, /Cosy, Romantic/i);
+    assert.match(result.draft.provider, /Airbnb/i);
+    assert.equal(result.draft.localTime, "2026-09-12 15:00");
+    assert.equal(result.draft.checkOutDate, "2026-09-15");
+    assert.match(result.draft.location, /Venice/i);
+    assert.doesNotMatch(result.draft.localTime, /^2026-08-29/);
+    assert.equal(result.parsingStatus, "auto-parsed");
+  } finally {
+    if (previousKey === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = previousKey;
+    }
+  }
+});
+
 test("parseForwardedEmail classifies a restaurant reservation as dinner, not ride", async () => {
   const previousKey = process.env.ANTHROPIC_API_KEY;
   delete process.env.ANTHROPIC_API_KEY;
