@@ -138,7 +138,8 @@ export function TripCompletenessBar({
                     {gap.suggestedCity ? ` · near ${gap.suggestedCity}` : ""}
                   </p>
                   <p className="mt-1 text-[12px] text-[#6E6E73]">
-                    Check-in {gap.startNight} · check-out {addIsoDays(gap.endNight, 1)}
+                    Check-in {formatStayRangeLabel(gap.startNight, gap.startNight)} · check-out{" "}
+                    {formatStayRangeLabel(addIsoDays(gap.endNight, 1), addIsoDays(gap.endNight, 1))}
                   </p>
                   <button
                     type="button"

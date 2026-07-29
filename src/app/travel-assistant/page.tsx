@@ -32,6 +32,10 @@ import { EMAIL_FORWARD_PARSER_VERSION } from "@/lib/travelAssistant/mlReadiness/
 import { sortReviewQueueForActiveLearning } from "@/lib/travelAssistant/mlReadiness/reviewQueueTriage";
 import { reconcileStoredFlightReservations } from "@/lib/travelAssistant/reconcileStoredFlightReservations";
 import { reconcileStoredHotelReservations } from "@/lib/travelAssistant/hotelTripDateRepair";
+import {
+  collectReservationDateKeys,
+  reconcileTripWindowDates,
+} from "@/lib/travelAssistant/tripWindowRepair";
 import { canonicalFlightDepartureDay, canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
 import {
   nearestUpcomingFlightDepartureUtcMs,
@@ -2698,10 +2702,18 @@ export default function TravelAssistantPage() {
     applyingTripStateRef.current = true;
     const hydratedReservations = hydrateReservationsPricing(trip.reservations);
     const reconciledFlights = reconcileStoredFlightReservations(hydratedReservations);
-    const reconciledHotels = reconcileStoredHotelReservations(
-      reconciledFlights.reservations,
+    // I37: bump stale 2025 trip bounds BEFORE hotel remap (remap into past window was the bug).
+    const tripBounds = reconcileTripWindowDates(
       trip.startDate,
       trip.endDate,
+      collectReservationDateKeys(reconciledFlights.reservations),
+    );
+    const windowStart = tripBounds.startDate || trip.startDate;
+    const windowEnd = tripBounds.endDate || trip.endDate;
+    const reconciledHotels = reconcileStoredHotelReservations(
+      reconciledFlights.reservations,
+      windowStart,
+      windowEnd,
     );
     const drained = drainForwardReviewQueue(
       reconciledHotels.reservations,
@@ -2711,8 +2723,8 @@ export default function TravelAssistantPage() {
     // Remap again after drain so newly imported hotels land in the trip window (I35).
     const postDrainHotels = reconcileStoredHotelReservations(
       drained.reservations,
-      trip.startDate,
-      trip.endDate,
+      windowStart,
+      windowEnd,
     );
     const tripReservations = postDrainHotels.reservations;
     const tripReviewQueue = drained.reviewQueue as ReviewItem[];
@@ -2722,10 +2734,18 @@ export default function TravelAssistantPage() {
       reconciledHotels.changed ||
       postDrainHotels.changed ||
       hydratedReservations !== trip.reservations;
-    const tripForState = reservationsChanged
-      ? { ...trip, reservations: tripReservations, reviewQueue: tripReviewQueue }
-      : trip;
-    if (reservationsChanged) {
+    const datesChanged = tripBounds.changed;
+    const tripForState =
+      reservationsChanged || datesChanged
+        ? {
+            ...trip,
+            startDate: windowStart || trip.startDate,
+            endDate: windowEnd || trip.endDate,
+            reservations: tripReservations,
+            reviewQueue: tripReviewQueue,
+          }
+        : trip;
+    if (reservationsChanged || datesChanged) {
       void fetch(TRIP_API_ROUTE, {
         method: "PUT",
         credentials: "include",
@@ -2734,6 +2754,8 @@ export default function TravelAssistantPage() {
           action: "update",
           id: trip.id,
           patch: {
+            startDate: tripForState.startDate,
+            endDate: tripForState.endDate,
             reservations: tripReservations,
             reviewQueue: tripReviewQueue,
           },

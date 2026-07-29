@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-28 (I36 Apple chrome diet — travel-day single screen)
+Last updated: 2026-07-28 (I37 trip window year repair — Stay Gaps 2025 bug)
+
+## Incident 2026-07-28 — Stay Gaps still showing 2025 check-ins (Jeff screenshot)
+Root cause: trip.startDate/endDate stayed 2025, so hotel remap pulled corrected 2026 hotels *back* into 2025. Fix I37: reconcile trip bounds before remap; coverage also repairs window in-memory. Real open nights after NEREA (checkout morning Sep 8) and Venice remain Sep 8–11 and 15–17 unless other hotels exist — do not ask Jeff to resend NEREA/Ortisei for those nights.
 
 ## Decision 2026-07-28 — I36 Apple chrome diet (Jeff approved)
 Travel-day Home = one headline + Airport Mode CTA. Quiet green completeness. Remove Plan Trip Health strip (keep Trip status). Strip Flights guide cards. Light Plan/Book headers; Share sheet for exports; spend badge only when action needed. Split calendar colors stay (I35).

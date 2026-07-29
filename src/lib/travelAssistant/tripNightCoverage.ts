@@ -5,7 +5,18 @@
  * Callers should remap hotel years into the trip window before coverage (hotelTripDateRepair).
  */
 
-import { hotelCoversSleepNight } from "@/lib/travelAssistant/hotelTripDateRepair";
+import {
+  hotelCoversSleepNight,
+  remapHotelDatesIntoTripWindow,
+} from "@/lib/travelAssistant/hotelTripDateRepair";
+import {
+  correctPastTravelIsoDate,
+  correctReservationTravelDates,
+} from "@/lib/travelAssistant/travelDateCorrection";
+import {
+  collectReservationDateKeys,
+  reconcileTripWindowDates,
+} from "@/lib/travelAssistant/tripWindowRepair";
 
 export type NightStatus = "covered" | "skipped" | "gap" | "airborne" | "home";
 
@@ -263,11 +274,26 @@ export interface BuildTripNightCoverageInput {
 export function buildTripNightCoverage(input: BuildTripNightCoverageInput): TripNightCoverage {
   const nowMs = input.nowMs ?? Date.now();
   const todayKey = new Date(nowMs).toISOString().slice(0, 10);
+  const referenceDate = new Date(nowMs);
+  // I37: never plan stay gaps against a stale 2025 trip window when we're in 2026.
+  const tripBounds = reconcileTripWindowDates(
+    input.tripStartDate,
+    input.tripEndDate,
+    collectReservationDateKeys(input.reservations),
+    referenceDate,
+  );
+  const tripStart = tripBounds.startDate;
+  const tripEnd = tripBounds.endDate;
+
   const flights = input.reservations
     .filter(isBookedFlight)
+    .map((f) => correctReservationTravelDates(f, referenceDate))
     .slice()
     .sort((a, b) => flightDepDay(a).localeCompare(flightDepDay(b)));
-  const hotels = input.reservations.filter(isBookedHotel);
+  // Remap hotels into the repaired window even if persistence hasn't caught up yet.
+  const hotels = input.reservations
+    .filter(isBookedHotel)
+    .map((h) => remapHotelDatesIntoTripWindow(h, tripStart, tripEnd));
   const decisions = input.stayDecisions ?? {};
 
   const firstFlight = flights[0] ?? null;
@@ -282,26 +308,40 @@ export function buildTripNightCoverage(input: BuildTripNightCoverageInput): Trip
   // Never seed from hotel check-in when flights exist — that caused Sep 1 Polignano gaps
   // before the Sep 2 landing.
   let windowStart = resolveFirstSleepNight(flights);
+  if (windowStart) {
+    windowStart = correctPastTravelIsoDate(windowStart, referenceDate);
+  }
   if (!windowStart && flights.length === 0) {
     windowStart =
       (hotels
         .map(hotelCheckInDay)
         .filter(Boolean)
         .sort()[0] ?? "") ||
-      dateOnly(input.tripStartDate);
+      tripStart;
   } else if (!windowStart) {
-    windowStart = dateOnly(input.tripStartDate);
+    windowStart = tripStart;
   }
 
   const lastFlight = flights[flights.length - 1] ?? null;
   let windowEnd = "";
-  if (dateOnly(input.tripEndDate)) {
-    windowEnd = addIsoDays(dateOnly(input.tripEndDate), -1);
+  if (tripEnd) {
+    windowEnd = addIsoDays(tripEnd, -1);
   } else if (lastFlight) {
-    windowEnd = addIsoDays(flightDepDay(lastFlight), -1);
+    windowEnd = addIsoDays(
+      correctPastTravelIsoDate(flightDepDay(lastFlight), referenceDate),
+      -1,
+    );
   } else if (hotels.length) {
     const lastCheckout = hotels.map(hotelCheckoutDay).filter(Boolean).sort().at(-1) ?? "";
     windowEnd = lastCheckout ? addIsoDays(lastCheckout, -1) : "";
+  }
+
+  // If trip end stayed in the wrong year vs flight-derived start, prefer flight return.
+  if (windowStart && windowEnd && windowEnd < windowStart && lastFlight) {
+    windowEnd = addIsoDays(
+      correctPastTravelIsoDate(flightDepDay(lastFlight), referenceDate),
+      -1,
+    );
   }
 
   if (!windowStart || !windowEnd || windowEnd < windowStart) {

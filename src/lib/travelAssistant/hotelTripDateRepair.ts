@@ -5,6 +5,7 @@
 
 import { dateOnly, remapDayKeyIntoTripWindow } from "@/lib/travelAssistant/tripWindow";
 import { correctReservationTravelDates } from "@/lib/travelAssistant/travelDateCorrection";
+import { reconcileTripWindowDates } from "@/lib/travelAssistant/tripWindowRepair";
 
 export interface HotelDateRepairFields {
   type?: string;
@@ -43,11 +44,17 @@ export function remapHotelDatesIntoTripWindow<T extends HotelDateRepairFields>(
   if ((reservation.type ?? "").toLowerCase() !== "hotel") return reservation;
 
   let next: T = { ...reservation };
-  const start = dateOnly(tripStartDate);
-  const end = dateOnly(tripEndDate);
 
   // First roll obviously past years forward (2025 → 2026 in July 2026).
   next = correctReservationTravelDates(next);
+
+  // Never remap into a stale past trip window — bump the window first (I37).
+  const bounds = reconcileTripWindowDates(tripStartDate, tripEndDate, [
+    next.localTime,
+    next.checkOutDate,
+  ]);
+  const start = bounds.startDate;
+  const end = bounds.endDate;
 
   if (!start || !end) return next;
 

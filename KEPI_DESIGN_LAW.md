@@ -505,6 +505,11 @@ On travel day (airborne / just-landed / at-airport / leave-soon), Home is **one*
 
 **Test:** `src/lib/travelAssistant/homeDayTruth.test.ts`
 
+**I37 — Never remap hotels into a past trip year**
+If `trip.startDate`/`endDate` are still 2025 while the traveler is in 2026, bump the trip window first, then remap hotels. Stay Gaps must never show `Check-in 2025-09-01` for a Europe 2026 trip. Sleep window still starts at first destination arrival (not Sep 1 airborne). NEREA Sep 5–8 covers nights 5–7 only; Sep 8–11 and 15–17 remain real open nights unless other stays exist.
+
+**Test:** `src/lib/travelAssistant/tripWindowRepair.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -670,6 +675,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I34 | `src/lib/travelAssistant/tripNightCoverage.test.ts` |
 | I35 | `src/lib/travelAssistant/hotelTripDateRepair.test.ts`, `confirmationHotelExtract.test.ts`, `drainForwardReviewQueue.test.ts`, `tripNightCoverage.test.ts` |
 | I36 | `src/lib/travelAssistant/homeDayTruth.test.ts` |
+| I37 | `src/lib/travelAssistant/tripWindowRepair.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |
