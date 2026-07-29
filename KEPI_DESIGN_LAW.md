@@ -510,6 +510,11 @@ If `trip.startDate`/`endDate` are still 2025 while the traveler is in 2026, bump
 
 **Test:** `src/lib/travelAssistant/tripWindowRepair.test.ts`
 
+**I38 — Never expand trip window across mixed years (no “292 nights open”)**
+Do not set trip bounds to min/max of every raw reservation date. Stray 2025 leftovers + 2026 flights made a year-long franken-window and Home showed “292 nights open · Sep 1…”. Use the dominant reservation year cluster, expand only inside that cluster, cap at 90 days, and anchor sleep-window end to last return / last hotel checkout (trip end may extend ≤14 days, never months).
+
+**Test:** `src/lib/travelAssistant/tripWindowRepair.test.ts`, `tripNightCoverage.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -676,6 +681,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I35 | `src/lib/travelAssistant/hotelTripDateRepair.test.ts`, `confirmationHotelExtract.test.ts`, `drainForwardReviewQueue.test.ts`, `tripNightCoverage.test.ts` |
 | I36 | `src/lib/travelAssistant/homeDayTruth.test.ts` |
 | I37 | `src/lib/travelAssistant/tripWindowRepair.test.ts` |
+| I38 | `src/lib/travelAssistant/tripWindowRepair.test.ts`, `tripNightCoverage.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

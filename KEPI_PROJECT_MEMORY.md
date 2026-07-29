@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-28 (Apple landing redesign — free start, no invite barrier)
+Last updated: 2026-07-29 (I38 — fix 292 nights open franken-window)
+
+## Incident 2026-07-29 — Home showed “292 nights open” (Jeff screenshot)
+Root cause: I37 expand-to-min/max across all reservation dates mixed 2025 leftovers with 2026 flights → ~Sep 2025–mid-2026 span. Labels hide year so it looked like “Sep 1; Sep 8–11”. Fix I38: dominant-year cluster + 90-day cap; sleep window end from last return/hotel, not franken tripEnd. Real open nights for Europe stay in the tens (e.g. Sep 2–4 before NEREA, Sep 8–11, mid-gap after Venice) — not hundreds.
 
 ## Decision 2026-07-28 — Landing redesign Apple calm (Jeff approved)
 Hero: Kepi + “Your trip, calmly handled.” + Start free (no invite). One phone demo carousel (stays / flights / Airport Mode) starts on tap. Two testimonials. Soft Free/Pro pricing. Invite/lifetime demoted to footer. No stats strip, dense feature grids, or competing CTAs.

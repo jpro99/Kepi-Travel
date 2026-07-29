@@ -15,6 +15,7 @@ import {
 } from "@/lib/travelAssistant/travelDateCorrection";
 import {
   collectReservationDateKeys,
+  MAX_TRIP_WINDOW_DAYS,
   reconcileTripWindowDates,
 } from "@/lib/travelAssistant/tripWindowRepair";
 
@@ -323,25 +324,49 @@ export function buildTripNightCoverage(input: BuildTripNightCoverageInput): Trip
   }
 
   const lastFlight = flights[flights.length - 1] ?? null;
+  const lastHotelCheckout = hotels.map(hotelCheckoutDay).filter(Boolean).sort().at(-1) ?? "";
+  const lastFlightDep = lastFlight
+    ? correctPastTravelIsoDate(flightDepDay(lastFlight), referenceDate)
+    : "";
+
+  // Prefer reservation facts (last return / last checkout) over a possibly expanded tripEnd.
   let windowEnd = "";
-  if (tripEnd) {
+  if (lastFlightDep) {
+    windowEnd = addIsoDays(lastFlightDep, -1);
+  }
+  if (lastHotelCheckout) {
+    const hotelEnd = addIsoDays(lastHotelCheckout, -1);
+    if (!windowEnd || hotelEnd > windowEnd) windowEnd = hotelEnd;
+  }
+  if (!windowEnd && tripEnd) {
     windowEnd = addIsoDays(tripEnd, -1);
-  } else if (lastFlight) {
-    windowEnd = addIsoDays(
-      correctPastTravelIsoDate(flightDepDay(lastFlight), referenceDate),
-      -1,
-    );
-  } else if (hotels.length) {
-    const lastCheckout = hotels.map(hotelCheckoutDay).filter(Boolean).sort().at(-1) ?? "";
-    windowEnd = lastCheckout ? addIsoDays(lastCheckout, -1) : "";
   }
 
-  // If trip end stayed in the wrong year vs flight-derived start, prefer flight return.
-  if (windowStart && windowEnd && windowEnd < windowStart && lastFlight) {
-    windowEnd = addIsoDays(
-      correctPastTravelIsoDate(flightDepDay(lastFlight), referenceDate),
-      -1,
-    );
+  // Trip end can extend past the last hotel/flight (ground stay), but never
+  // invent a months-long franken-window (I38 — 292 nights bug). Clamp into the
+  // allowed range — do not skip the entire extension when tripEnd is slightly past.
+  if (tripEnd && windowStart) {
+    const tripWindowEnd = addIsoDays(tripEnd, -1);
+    if (tripWindowEnd >= windowStart) {
+      const anchored = windowEnd && windowEnd >= windowStart ? windowEnd : windowStart;
+      const maxAllowed = addIsoDays(anchored, Math.min(14, MAX_TRIP_WINDOW_DAYS));
+      const candidate = tripWindowEnd <= maxAllowed ? tripWindowEnd : maxAllowed;
+      if (candidate > (windowEnd || "")) {
+        windowEnd = candidate;
+      }
+    }
+  }
+
+  if (windowStart && windowEnd && windowEnd < windowStart && lastFlightDep) {
+    windowEnd = addIsoDays(lastFlightDep, -1);
+  }
+
+  // Absolute span guard.
+  if (windowStart && windowEnd) {
+    const span = nightsBetweenInclusive(windowStart, windowEnd);
+    if (span > MAX_TRIP_WINDOW_DAYS) {
+      windowEnd = addIsoDays(windowStart, MAX_TRIP_WINDOW_DAYS - 1);
+    }
   }
 
   if (!windowStart || !windowEnd || windowEnd < windowStart) {
