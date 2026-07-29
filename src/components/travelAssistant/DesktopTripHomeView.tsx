@@ -66,6 +66,8 @@ interface DesktopTripHomeViewProps {
   onOpenAirportMode: () => void;
   onAddGroundTransport?: () => void;
   onStartNewTrip?: () => void;
+  showFreePlanNudge?: boolean;
+  onSeeProPlans?: () => void;
   onSearchFlights?: (plan: FlightSearchPlan, selectedLegs: PlannedFlightLeg[]) => void;
   onQuickGroundTransport?: (gap: InterCityTransportGap, mode: QuickGroundMode) => void;
   liveStatus?: Record<
@@ -99,6 +101,8 @@ export function DesktopTripHomeView({
   onOpenAirportMode,
   onAddGroundTransport,
   onStartNewTrip,
+  showFreePlanNudge = false,
+  onSeeProPlans,
   onSearchFlights,
   onQuickGroundTransport,
   liveStatus,
@@ -146,6 +150,8 @@ export function DesktopTripHomeView({
         onOpenPlan={onOpenPlan}
         onOpenAirportMode={onOpenAirportMode}
         onStartNewTrip={onStartNewTrip}
+        showFreePlanNudge={showFreePlanNudge}
+        onSeeProPlans={onSeeProPlans}
         onReservationTap={onReservationTap}
         onGapActionTap={onGapActionTap}
         onSeeAllAttention={onOpenPlan}

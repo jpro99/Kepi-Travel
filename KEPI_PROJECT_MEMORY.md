@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-29 (I40 — Stay Gaps airborne + return cap)
+Last updated: 2026-07-29 (I41 — Stay Gaps after-checkout copy + Free/Pro nudge)
+
+## Decision 2026-07-29 — Stay Gaps wording + Free/Pro clarity (Jeff approved)
+Gaps say “After Venice checkout” not “near Venice.” Soft Free banner on Home: 1 trip; Pro = unlimited + email import + alerts ($9). Forwarding stays free.
 
 ## Incident 2026-07-29 — Stay Gaps nagged Sep 1 Polignano + Sep 25–27 Munich (Jeff)
 Not an “AI misunderstanding” — deterministic night math. Blank AS180 `flightArrivalTime` made first sleep = Sep 1 and skipped airborne. Trip end +14 days past MUC→SEA invented Munich nights after flying home. Venice Sep 15–17 after Airbnb checkout Sep 15 is real (covers 12–14 only). Fix I40 in `tripNightCoverage`.

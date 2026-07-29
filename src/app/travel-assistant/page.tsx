@@ -3149,7 +3149,10 @@ export default function TravelAssistantPage() {
     const tripLimit = billingStatus?.usage?.tripLimit ?? 1;
     const allowCreation = hasProAccess || tripLimit === null || trips.length < tripLimit;
     if (!allowCreation) {
-      openUpgradeModal("multi-trip", "Free includes one trip. Upgrade to add and manage multiple trips.");
+      openUpgradeModal(
+        "multi-trip",
+        "Free includes 1 trip. Upgrade to Pro for unlimited trips, email import, and gate alerts — $9/mo.",
+      );
       return false;
     }
     return true;
@@ -9870,6 +9873,12 @@ export default function TravelAssistantPage() {
                 trialDaysRemaining={trialDaysRemaining}
                 trialExpiresAt={trialExpiresAt}
                 hasProAccess={hasProAccess}
+                onSeeProPlans={() =>
+                  openUpgradeModal(
+                    "multi-trip",
+                    "Free includes 1 trip. Pro unlocks unlimited trips, email import, and gate alerts — $9/mo.",
+                  )
+                }
                 emailForwardSetupMessage={emailForwardSetupMessage}
                 missingPriceCount={tripSpendSummary.missingPriceCount}
                 stayDecisions={activeStayDecisions}
@@ -10032,6 +10041,13 @@ export default function TravelAssistantPage() {
                 }}
                 onAddGroundTransport={openManualGroundTransport}
                 onStartNewTrip={handleStartNewTrip}
+                showFreePlanNudge={!hasProAccess && !billingLoading}
+                onSeeProPlans={() =>
+                  openUpgradeModal(
+                    "multi-trip",
+                    "Free includes 1 trip. Pro unlocks unlimited trips, email import, and gate alerts — $9/mo.",
+                  )
+                }
                 onSearchFlights={(plan) => handleFlightSearchPlan(plan)}
                 onQuickGroundTransport={handleQuickGroundTransport}
                 liveStatus={flightStatusCheckByReservationId}
@@ -10767,7 +10783,10 @@ export default function TravelAssistantPage() {
             }}
             onImportGmail={() => setGmailScopeModalOpen(true)}
             onRequestGmailUpgrade={() =>
-              openUpgradeModal("gmail-import", "Upgrade to Pro to import reservations from your connected email account.")
+              openUpgradeModal(
+                "gmail-import",
+                "Free can forward confirmations to your Kepi address. Pro adds one-tap Gmail import plus unlimited trips — $9/mo.",
+              )
             }
             onCopyForwardAddress={() => {
               void handleCopyForwardAddress();
@@ -11352,7 +11371,10 @@ export default function TravelAssistantPage() {
                     onImportParsedReservations={handleImportParsedReservations}
                     canUseGmailImport={canUseGmailImport}
                     onRequestUpgradeForGmailImport={() =>
-                      openUpgradeModal("gmail-import", "Upgrade to Pro to import reservations from your connected email account.")
+                      openUpgradeModal(
+                        "gmail-import",
+                        "Free can forward confirmations to your Kepi address. Pro adds one-tap Gmail import plus unlimited trips — $9/mo.",
+                      )
                     }
                   />
                 </article>

@@ -44,11 +44,16 @@ export interface NightCoverageReservation {
   hotelSearchCity?: string;
 }
 
+/** Why we named this gap relative to a nearby stay (I41 — avoid “near Venice” confusion). */
+export type StayGapContext = "after_checkout" | "before_checkin" | "open";
+
 export interface UncoveredNightRange {
   startNight: string;
   endNight: string;
   nightCount: number;
   suggestedCity: string;
+  /** How suggestedCity relates to the hole — drives traveler-facing copy. */
+  gapContext: StayGapContext;
 }
 
 export interface TripNightCoverage {
@@ -88,6 +93,23 @@ export function formatStayRangeLabel(startNight: string, endNight: string): stri
   };
   if (startNight === endNight) return fmt(startNight);
   return `${fmt(startNight)} – ${fmt(endNight)}`;
+}
+
+/**
+ * Traveler-facing gap context (I41).
+ * Prefer "After Venice checkout" over "near Venice" so checkout-exclusive nights
+ * are not mistaken for a missing Airbnb.
+ */
+export function formatStayGapContextLabel(gap: Pick<UncoveredNightRange, "suggestedCity" | "gapContext">): string {
+  const city = (gap.suggestedCity ?? "").trim();
+  const hasCity = Boolean(city) && city.toLowerCase() !== "your next city";
+  if (gap.gapContext === "after_checkout") {
+    return hasCity ? `After ${city} checkout` : "After your last stay";
+  }
+  if (gap.gapContext === "before_checkin") {
+    return hasCity ? `Before ${city} check-in` : "Before your next stay";
+  }
+  return hasCity ? `Near ${city}` : "Needs a stay";
 }
 
 /**
@@ -273,17 +295,26 @@ function makeRange(
   const after = [...hotels]
     .filter((h) => hotelCheckInDay(h) && hotelCheckInDay(h) >= endNight)
     .sort((a, b) => hotelCheckInDay(a).localeCompare(hotelCheckInDay(b)))[0];
-  const suggestedCity =
-    before?.hotelSearchCity?.trim() ||
-    after?.hotelSearchCity?.trim() ||
-    before?.location?.trim() ||
-    after?.location?.trim() ||
-    "your next city";
+
+  // Prefer the prior stay (checkout side) — that's the Jeff Venice confusion case.
+  let gapContext: StayGapContext = "open";
+  let suggestedCity = "your next city";
+  if (before) {
+    gapContext = "after_checkout";
+    suggestedCity =
+      before.hotelSearchCity?.trim() || before.location?.trim() || before.title?.trim() || "your next city";
+  } else if (after) {
+    gapContext = "before_checkin";
+    suggestedCity =
+      after.hotelSearchCity?.trim() || after.location?.trim() || after.title?.trim() || "your next city";
+  }
+
   return {
     startNight,
     endNight,
     nightCount: nightsBetweenInclusive(startNight, endNight),
     suggestedCity,
+    gapContext,
   };
 }
 
@@ -546,9 +577,11 @@ export function buildTripCompleteness(input: {
           : "Every night has a stay";
     } else {
       hotelsTone = "orange";
-      const rangeBits = ranges
-        .slice(0, 2)
-        .map((r) => formatStayRangeLabel(r.startNight, r.endNight));
+      const rangeBits = ranges.slice(0, 2).map((r) => {
+        const dates = formatStayRangeLabel(r.startNight, r.endNight);
+        const ctx = formatStayGapContextLabel(r);
+        return `${dates} (${ctx})`;
+      });
       const more = ranges.length > 2 ? ` +${ranges.length - 2} more` : "";
       hotelsLabel =
         rangeBits.length > 0

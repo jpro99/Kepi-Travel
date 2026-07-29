@@ -525,6 +525,11 @@ Blank `flightArrivalTime` on a long-haul (SEA→FCO) must not fall back to depar
 
 **Test:** `src/lib/travelAssistant/tripNightCoverage.test.ts`
 
+**I41 — Stay Gaps copy: after checkout, not “near city”; Free vs Pro is obvious**
+Label gaps as **After {city} checkout** / **Before {city} check-in** — never imply the prior Airbnb is missing when nights are checkout-exclusive. Soft Free plan banner on Home: 1 trip free; email import + unlimited trips are Pro ($9). Upgrade modal states the same split; Free can still forward to the Kepi address.
+
+**Test:** `src/lib/travelAssistant/tripNightCoverage.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -694,6 +699,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I38 | `src/lib/travelAssistant/tripWindowRepair.test.ts`, `tripNightCoverage.test.ts` |
 | I39 | `src/lib/travelAssistant/hotelStayDateExtract.test.ts`, `emailForwardParser.test.ts`, `confirmationHotelExtract.test.ts` |
 | I40 | `src/lib/travelAssistant/tripNightCoverage.test.ts` |
+| I41 | `src/lib/travelAssistant/tripNightCoverage.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

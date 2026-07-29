@@ -21,6 +21,7 @@ import {
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import { addIsoDays, buildTripCompleteness } from "@/lib/travelAssistant/tripNightCoverage";
 import { TripCompletenessBar } from "@/components/travelAssistant/TripCompletenessBar";
+import { FreePlanSoftBanner } from "@/components/billing/FreePlanSoftBanner";
 
 export interface MissionControlViewProps {
   tripName: string;
@@ -43,6 +44,9 @@ export interface MissionControlViewProps {
   journeyPhase?: JourneyPhase;
   checkInHandoff?: CheckInHandoffContent | null;
   locationStatus?: "away" | "at-airport" | "in-terminal" | "airborne" | "unknown";
+  /** Soft Free→Pro clarity (I41). Hidden when Pro/lifetime. */
+  showFreePlanNudge?: boolean;
+  onSeeProPlans?: () => void;
   onOpenBook: () => void;
   onOpenPlan: () => void;
   onOpenAirportMode: () => void;
@@ -94,6 +98,8 @@ export function MissionControlView({
   journeyPhase,
   checkInHandoff = null,
   locationStatus = "unknown",
+  showFreePlanNudge = false,
+  onSeeProPlans,
   onOpenBook,
   onOpenPlan,
   onOpenAirportMode,
@@ -335,6 +341,10 @@ export function MissionControlView({
       style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif' }}
     >
       {/* Identity lives in the trip switcher — no black Mission Control label chrome (I36). */}
+
+      {showFreePlanNudge && onSeeProPlans ? (
+        <FreePlanSoftBanner visible onSeePro={onSeeProPlans} />
+      ) : null}
 
       <TripCompletenessBar
         completeness={completeness}

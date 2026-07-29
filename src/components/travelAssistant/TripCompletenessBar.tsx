@@ -6,7 +6,11 @@ import type {
   CompletenessTone,
   UncoveredNightRange,
 } from "@/lib/travelAssistant/tripNightCoverage";
-import { addIsoDays, formatStayRangeLabel } from "@/lib/travelAssistant/tripNightCoverage";
+import {
+  addIsoDays,
+  formatStayGapContextLabel,
+  formatStayRangeLabel,
+} from "@/lib/travelAssistant/tripNightCoverage";
 
 interface TripCompletenessBarProps {
   completeness: TripCompleteness;
@@ -112,7 +116,7 @@ export function TripCompletenessBar({
                   {gaps.reduce((sum, g) => sum + g.nightCount, 0)} {nightWord(gaps.reduce((sum, g) => sum + g.nightCount, 0))} still open
                 </h3>
                 <p className="mt-1 text-[15px] text-[#6E6E73]">
-                  These are the nights with no hotel or Airbnb on your trip.
+                  Sleep nights with no stay — checkout morning is not a hotel night.
                 </p>
               </div>
               <button
@@ -134,11 +138,10 @@ export function TripCompletenessBar({
                     {formatStayRangeLabel(gap.startNight, gap.endNight)}
                   </p>
                   <p className="mt-0.5 text-[14px] text-[#6E6E73]">
-                    {gap.nightCount} {nightWord(gap.nightCount)}
-                    {gap.suggestedCity ? ` · near ${gap.suggestedCity}` : ""}
+                    {gap.nightCount} {nightWord(gap.nightCount)} · {formatStayGapContextLabel(gap)}
                   </p>
                   <p className="mt-1 text-[12px] text-[#6E6E73]">
-                    Check-in {formatStayRangeLabel(gap.startNight, gap.startNight)} · check-out{" "}
+                    Need a stay: check-in {formatStayRangeLabel(gap.startNight, gap.startNight)} · leave{" "}
                     {formatStayRangeLabel(addIsoDays(gap.endNight, 1), addIsoDays(gap.endNight, 1))}
                   </p>
                   <button

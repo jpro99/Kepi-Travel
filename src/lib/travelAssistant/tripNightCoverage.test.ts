@@ -4,6 +4,7 @@ import {
   buildTripCompleteness,
   buildTripNightCoverage,
   flightCoversNightAsAirborne,
+  formatStayGapContextLabel,
   hotelCoversNight,
   shouldSkipPreDepartureHotelNag,
 } from "@/lib/travelAssistant/tripNightCoverage";
@@ -117,6 +118,46 @@ test("I34: completeness label lists readable stay ranges, not MM-DD junk", () =>
   assert.match(completeness.hotelsLabel, /Sep/iu);
   assert.doesNotMatch(completeness.hotelsLabel, /09-01\s*-\s*09-01/u);
   assert.match(completeness.summary, /Tap Hotels/iu);
+});
+
+test("I41: Stay Gaps say After Venice checkout — not near Venice", () => {
+  const coverage = buildTripNightCoverage({
+    nowMs,
+    tripStartDate: "2026-09-01",
+    tripEndDate: "2026-09-25",
+    reservations: [
+      {
+        id: "as180",
+        type: "flight",
+        localTime: "2026-09-01 17:30",
+        flightDate: "2026-09-01",
+        flightDepartureAirport: "SEA",
+        flightArrivalAirport: "FCO",
+        flightArrivalTime: "2026-09-02 11:15",
+      },
+      {
+        id: "venice",
+        type: "hotel",
+        localTime: "2026-09-12 15:00",
+        checkOutDate: "2026-09-15",
+        location: "Venice",
+      },
+      {
+        id: "return",
+        type: "flight",
+        localTime: "2026-09-25 10:00",
+        flightDate: "2026-09-25",
+        flightDepartureAirport: "MUC",
+        flightArrivalAirport: "SEA",
+        flightArrivalTime: "2026-09-25 18:00",
+      },
+    ],
+  });
+  const afterVenice = coverage.uncoveredRanges.find((r) => r.startNight === "2026-09-15");
+  assert.ok(afterVenice);
+  assert.equal(afterVenice!.gapContext, "after_checkout");
+  assert.equal(formatStayGapContextLabel(afterVenice!), "After Venice checkout");
+  assert.doesNotMatch(formatStayGapContextLabel(afterVenice!), /near Venice/i);
 });
 
 test("I40: blank AS180 arrival must not nag Sep 1 Polignano hotel while airborne", () => {

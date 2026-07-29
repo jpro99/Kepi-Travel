@@ -114,6 +114,7 @@ interface MobileMapForwardShellProps {
   trialDaysRemaining: number;
   trialExpiresAt: string | null;
   hasProAccess: boolean;
+  onSeeProPlans?: () => void;
   emailForwardSetupMessage?: string | null;
   missingPriceCount?: number;
   stayDecisions?: Record<string, "needs_hotel" | "skip">;
@@ -223,6 +224,7 @@ export function MobileMapForwardShell({
   trialDaysRemaining,
   trialExpiresAt,
   hasProAccess,
+  onSeeProPlans,
   emailForwardSetupMessage,
   missingPriceCount = 0,
   stayDecisions,
@@ -320,6 +322,13 @@ export function MobileMapForwardShell({
           }}
           onStartNewTrip={onStartNewTrip ?? onCreateTrip}
           onImportFlights={onTalkPlanner}
+          showFreePlanNudge={!hasProAccess && !billingLoading}
+          onSeeProPlans={
+            onSeeProPlans ??
+            (() => {
+              onNavigateTab("more");
+            })
+          }
           onReservationTap={onReservationTap}
           onGapActionTap={onGapActionTap}
           onSeeAllAttention={() => onNavigateTab("plan")}

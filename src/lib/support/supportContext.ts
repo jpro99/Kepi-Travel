@@ -1,6 +1,10 @@
 import { getActiveTrip } from "@/lib/travelAssistant/tripStore";
 import { detectTripGaps } from "@/lib/travelAssistant/gapDetectionService";
-import { buildTripCompleteness, buildTripNightCoverage } from "@/lib/travelAssistant/tripNightCoverage";
+import {
+  buildTripCompleteness,
+  buildTripNightCoverage,
+  formatStayGapContextLabel,
+} from "@/lib/travelAssistant/tripNightCoverage";
 
 function truncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) {
@@ -40,7 +44,7 @@ export async function buildSupportContext(userId: string): Promise<string> {
   });
 
   const stayHoleLines = nightCoverage.uncoveredRanges.slice(0, 5).map((range, index) => {
-    return `${index + 1}. ${range.nightCount} night(s) ${range.startNight}–${range.endNight} (${range.suggestedCity})`;
+    return `${index + 1}. ${range.nightCount} night(s) ${range.startNight}–${range.endNight} (${formatStayGapContextLabel(range)})`;
   });
 
   const reservationLines = reservations.slice(0, 20).map((reservation, index) => {

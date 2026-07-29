@@ -7,6 +7,7 @@ import { airportToCity } from "@/lib/travelAssistant/buildTripLegs";
 import { detectGroundConnectorGaps } from "@/lib/travelAssistant/groundConnectorGaps";
 import {
   buildTripNightCoverage,
+  formatStayGapContextLabel,
   hotelCoversNight,
   preDepartureStayDecisionId as nightPreDepartureId,
   shouldSkipPreDepartureHotelNag,
@@ -310,7 +311,7 @@ export function detectTripGaps(
         range.nightCount === 1
           ? `1 night needs a stay · ${range.startNight}`
           : `${range.nightCount} nights need a stay · ${range.startNight}–${range.endNight}`,
-      detail: `No hotel or Airbnb for ${range.startNight} through ${range.endNight} (${range.suggestedCity} area). Forward a confirmation or add the stay — this is a real hole in your trip.`,
+      detail: `No hotel or Airbnb for sleep nights ${range.startNight} through ${range.endNight} (${formatStayGapContextLabel(range)}). Checkout morning is not covered — forward a confirmation or add the stay.`,
       actionLabel: "Add hotel",
       actionTab: "reservations",
       actionContext: {

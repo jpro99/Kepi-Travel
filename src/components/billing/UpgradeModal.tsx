@@ -34,7 +34,7 @@ const PLAN_OPTIONS: PlanOption[] = [
     title: "Pro",
     priceLabel: "$9/month",
     blurb: "Premium execution automation for frequent travel.",
-    perks: ["Gmail import", "AI itinerary guidance", "Push delay and gate alerts"],
+    perks: ["Unlimited trips", "Gmail / email import", "Gate & delay alerts", "AI itinerary guidance"],
   },
   {
     id: "concierge",
