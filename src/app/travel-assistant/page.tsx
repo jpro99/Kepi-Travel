@@ -6342,6 +6342,7 @@ export default function TravelAssistantPage() {
       const result = await subscribeToWebPushNotifications();
       if (result.ok) {
         setPushSubscribed(true);
+        void trackEvent({ type: "push_subscribed", userId: user?.id ?? null });
         const successMessage = "✅ Push alerts enabled! You'll be notified of gate changes and delays.";
         setPushMessage(successMessage);
         setToast("Flight alerts enabled ✓");
@@ -6363,7 +6364,7 @@ export default function TravelAssistantPage() {
     } finally {
       setPushBusy(false);
     }
-  }, [hasProAccess, isLifetime, isTrial, openUpgradeModal, pushBusy, setToast]);
+  }, [hasProAccess, isLifetime, isTrial, openUpgradeModal, pushBusy, setToast, user?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -10077,6 +10078,11 @@ export default function TravelAssistantPage() {
                 onSearchFlights={(plan) => handleFlightSearchPlan(plan)}
                 onQuickGroundTransport={handleQuickGroundTransport}
                 liveStatus={flightStatusCheckByReservationId}
+                pushSubscribed={pushSubscribed}
+                pushBusy={pushBusy}
+                onEnablePush={() => {
+                  void handleEnablePush();
+                }}
               />
             )
           ) : consumerTab === "itinerary" ? (

@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-30 (10/10 roadmap batch: F12 status, hide sci-fi, PostHog, free invite, I45)
+Last updated: 2026-07-30 (Batch 1: F13 push flightDate + Home alerts trust)
+
+## Decision 2026-07-30 — Batch 1 status/push trust (Jeff approved build)
+Ship gate/delay alerts that key by reservation `flightDate` (F13), Home “Enable flight alerts” + honest next-flight status line, PostHog `push_subscribed` / `flight_status_push_sent`. Env already has FlightAware + AeroDataBox + VAPID. Next: Batch 2 travel-day surface; airports still frozen until travel-day opens show in PostHog.
 
 ## Decision 2026-07-30 — Path to must-have (Jeff approved build order)
 Goal: travel-day family opens Kepi first — not “beat Flighty on every feature.” Ordered ship: (1) Flight status authority — FlightAware OR AeroDataBox enables live; FA wins merge; push bridge on background path (F12). (2) Hide sci-fi Dreamcaster/Sovereign/Guardian URLs+APIs. (3) PostHog optional via `NEXT_PUBLIC_POSTHOG_KEY` + travel-day events. (4) Free viral wedge — Share defaults view-only for Free (“Invite family to this trip”). (5) I45 archive hotel forwards (2018 payment-only) never invent March 2027 / auto-add. Next: PostHog project key in Vercel; FlightAware key if not already; measure travel-day opens before more SEA airports.

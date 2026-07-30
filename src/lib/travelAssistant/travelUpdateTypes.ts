@@ -32,6 +32,8 @@ export interface TravelUpdateEvent {
   };
   delayMinutes?: number;
   updatedLocation?: string;
+  /** YYYY-MM-DD from the reservation localTime — required for push snapshot keys (F13). */
+  flightDate?: string;
 }
 
 export interface TravelUpdateProvider {

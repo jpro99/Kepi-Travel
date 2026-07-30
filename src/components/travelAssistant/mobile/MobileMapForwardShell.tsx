@@ -330,6 +330,9 @@ export function MobileMapForwardShell({
             })
           }
           missingPriceCount={missingPriceCount}
+          pushSubscribed={pushSubscribed}
+          pushBusy={pushBusy}
+          onEnablePush={onEnablePush}
           onReservationTap={onReservationTap}
           onGapActionTap={onGapActionTap}
           onSeeAllAttention={() => onNavigateTab("plan")}

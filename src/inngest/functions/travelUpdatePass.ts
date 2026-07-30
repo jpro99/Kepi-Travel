@@ -16,6 +16,8 @@ import type { TravelUpdateEvent } from "@/lib/travelAssistant/travelUpdateTypes"
 import { runWithKvUserContext } from "@/lib/travelAssistant/kvUserContext";
 import { hasLiveFlightStatusCredentials } from "@/lib/travelAssistant/flightStatusCredentials";
 import { maybeSendFlightStatusPushAlerts } from "@/lib/travelAssistant/flightStatusPushBridge";
+import { resolvePushFlightDate } from "@/lib/travelAssistant/resolvePushFlightDate";
+import { trackEvent } from "@/lib/analytics/trackEvent";
 
 const TravelUpdateRequestedEventSchema = z.object({
   userId: z.string().min(1),
@@ -59,10 +61,10 @@ async function dispatchPushAlerts(userId: string, updates: readonly TravelUpdate
       (update.kind === "gate-change"
         ? update.updatedLocation?.replace(/^Gate\s*/iu, "").trim()
         : "");
-    // Diff-based gate/delay pushes via shared bridge (F12) — works even when kind is on-time with a new gate.
+    // Diff-based gate/delay pushes via shared bridge (F12/F13) — key by reservation flightDate, not "today".
     const bridge = await maybeSendFlightStatusPushAlerts(userId, {
       flightNumber,
-      flightDate: new Date().toISOString().slice(0, 10),
+      flightDate: resolvePushFlightDate(update),
       departureGate: gate || undefined,
       delayMinutes: update.delayMinutes ?? null,
       flightStatus:
@@ -70,9 +72,20 @@ async function dispatchPushAlerts(userId: string, updates: readonly TravelUpdate
           ? "delayed"
           : update.kind === "cancellation"
             ? "cancelled"
-            : "scheduled",
+            : update.kind === "gate-change"
+              ? "gate-change"
+              : "scheduled",
     });
     sent += bridge.sent;
+    if (bridge.sent > 0) {
+      void trackEvent({
+        type: "flight_status_push_sent",
+        userId,
+        flightNumber,
+        flightDate: resolvePushFlightDate(update),
+        count: bridge.sent,
+      });
+    }
 
     if (update.kind === "gate-change" && update.updatedLocation && bridge.sent === 0) {
       const newGate = update.updatedLocation.replace(/^Gate\s*/i, "").trim() || update.updatedLocation;

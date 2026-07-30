@@ -24,6 +24,17 @@ import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransp
 import { addIsoDays, buildTripCompleteness } from "@/lib/travelAssistant/tripNightCoverage";
 import { TripCompletenessBar } from "@/components/travelAssistant/TripCompletenessBar";
 import { FreePlanSoftBanner } from "@/components/billing/FreePlanSoftBanner";
+import { formatFlightStatusTrustLine } from "@/lib/travelAssistant/flightStatusTrustLine";
+
+export interface MissionControlLiveStatus {
+  flightStatus?: string;
+  delayMinutes?: number | null;
+  departureGate?: string;
+  onTime?: boolean | null;
+  checkedAt?: string;
+  busy?: boolean;
+  error?: string | null;
+}
 
 export interface MissionControlViewProps {
   tripName: string;
@@ -32,15 +43,7 @@ export interface MissionControlViewProps {
   endDate?: string | null;
   reservations: MissionControlReservation[];
   stayDecisions?: Record<string, "needs_hotel" | "skip">;
-  liveStatus?: Record<
-    string,
-    {
-      flightStatus?: string;
-      delayMinutes?: number | null;
-      departureGate?: string;
-      onTime?: boolean | null;
-    }
-  >;
+  liveStatus?: Record<string, MissionControlLiveStatus>;
   hasActiveTrip?: boolean;
   /** Journey phase for travel-day takeover (airborne / just-landed). */
   journeyPhase?: JourneyPhase;
@@ -51,6 +54,10 @@ export interface MissionControlViewProps {
   onSeeProPlans?: () => void;
   /** For prep-mode Watch (I43). */
   missingPriceCount?: number;
+  /** Batch 1 — gate/delay push onboarding on Home. */
+  pushSubscribed?: boolean;
+  pushBusy?: boolean;
+  onEnablePush?: () => void;
   onOpenBook: () => void;
   onOpenPlan: () => void;
   onOpenAirportMode: () => void;
@@ -119,6 +126,9 @@ export function MissionControlView({
   showFreePlanNudge = false,
   onSeeProPlans,
   missingPriceCount = 0,
+  pushSubscribed = false,
+  pushBusy = false,
+  onEnablePush,
   onOpenBook,
   onOpenPlan,
   onOpenAirportMode,
@@ -488,6 +498,29 @@ export function MissionControlView({
           </p>
         ) : null}
 
+        {showTravelOps && !pushSubscribed && onEnablePush ? (
+          <div className="mt-3 rounded-xl bg-white px-3 py-3 text-left">
+            <p className="text-[13px] font-semibold text-[#6E6E73]">Flight alerts</p>
+            <p className="mt-0.5 text-[14px] text-[#1D1D1F]">
+              Turn on notifications for gate changes and delays — even when the app is closed.
+            </p>
+            <button
+              type="button"
+              disabled={pushBusy}
+              onClick={onEnablePush}
+              className="mt-2 min-h-[44px] w-full rounded-xl bg-[#007AFF] px-3 text-[15px] font-semibold text-white disabled:opacity-60"
+            >
+              {pushBusy ? "Enabling…" : "Enable flight alerts"}
+            </button>
+          </div>
+        ) : null}
+
+        {showTravelOps && pushSubscribed ? (
+          <p className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-[13px] font-medium text-[#1D1D1F]">
+            Flight alerts on — we&apos;ll notify you on gate changes and delays.
+          </p>
+        ) : null}
+
         {showTravelOps && snap.nextFlight && (zoom === "today" || snap.phase === "departure_day") ? (
           <button
             type="button"
@@ -499,11 +532,9 @@ export function MissionControlView({
               {snap.nextFlight.flightNumber || "Flight"} ·{" "}
               {snap.nextFlight.flightDepartureAirport} → {snap.nextFlight.flightArrivalAirport}
             </p>
-            {liveStatus?.[snap.nextFlight.id]?.departureGate ? (
-              <p className="mt-1 text-[14px] text-[#007AFF]">
-                Gate {liveStatus[snap.nextFlight.id]!.departureGate}
-              </p>
-            ) : null}
+            <p className="mt-1 text-[14px] text-[#007AFF]">
+              {formatFlightStatusTrustLine(liveStatus?.[snap.nextFlight.id])}
+            </p>
           </button>
         ) : null}
 

@@ -17,7 +17,15 @@ export type KepiAnalyticsEvent =
   | { type: "home_opened"; userId: string | null; tripId: string | null; daysUntilDeparture: number | null }
   | { type: "airport_mode_opened"; userId: string | null; tripId: string | null; airportIata: string | null }
   | { type: "flight_status_checked"; userId: string | null; tripId: string | null; flightNumber: string | null; source: "manual" | "auto" }
-  | { type: "trip_invite_email_sent"; userId: string; tripId: string; readOnly: boolean };
+  | { type: "trip_invite_email_sent"; userId: string; tripId: string; readOnly: boolean }
+  | { type: "push_subscribed"; userId: string | null }
+  | {
+      type: "flight_status_push_sent";
+      userId: string;
+      flightNumber: string;
+      flightDate: string;
+      count: number;
+    };
 
 export type AnalyticsPrimitive = string | number | boolean | null;
 export type AnalyticsProperties = Record<string, AnalyticsPrimitive>;

@@ -1,5 +1,3 @@
-import "server-only";
-
 import { isFeatureEnabled, getUserPlan } from "@/lib/billing/planGate";
 import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 import { logger } from "@/lib/logger";

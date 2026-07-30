@@ -78,8 +78,14 @@ interface DesktopTripHomeViewProps {
       departureGate: string;
       departureTerminal: string;
       onTime: boolean | null;
+      checkedAt?: string;
+      busy?: boolean;
+      error?: string | null;
     }
   >;
+  pushSubscribed?: boolean;
+  pushBusy?: boolean;
+  onEnablePush?: () => void;
 }
 
 export function DesktopTripHomeView({
@@ -108,6 +114,9 @@ export function DesktopTripHomeView({
   liveStatus,
   stayDecisions,
   missingPriceCount = 0,
+  pushSubscribed = false,
+  pushBusy = false,
+  onEnablePush,
 }: DesktopTripHomeViewProps) {
   const transportReservations =
     transportReservationsProp ??
@@ -154,6 +163,9 @@ export function DesktopTripHomeView({
         showFreePlanNudge={showFreePlanNudge}
         onSeeProPlans={onSeeProPlans}
         missingPriceCount={missingPriceCount}
+        pushSubscribed={pushSubscribed}
+        pushBusy={pushBusy}
+        onEnablePush={onEnablePush}
         onReservationTap={onReservationTap}
         onGapActionTap={onGapActionTap}
         onSeeAllAttention={onOpenPlan}

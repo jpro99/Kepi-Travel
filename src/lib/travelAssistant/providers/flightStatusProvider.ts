@@ -21,6 +21,16 @@ function extractFlightNumber(reservation: UpdatableReservation): string | null {
   return m?.[1] ?? null;
 }
 
+function gateLocation(snapshot: MergedFlightStatusSnapshot): string | undefined {
+  if (!snapshot.departureGate) return undefined;
+  return [
+    snapshot.departureTerminal ? `Terminal ${snapshot.departureTerminal}` : "",
+    `Gate ${snapshot.departureGate}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 function toEvent(reservation: UpdatableReservation, snapshot: MergedFlightStatusSnapshot): TravelUpdateEvent {
   const kind = snapshotToUpdateKind(snapshot);
   const effectiveDelay = snapshot.delayMinutes ?? (kind === "delay" ? 30 : 0);
@@ -31,48 +41,47 @@ function toEvent(reservation: UpdatableReservation, snapshot: MergedFlightStatus
     snapshot.departureAirport && snapshot.arrivalAirport
       ? `${snapshot.departureAirport}→${snapshot.arrivalAirport}`
       : "";
+  const date = flightDate(reservation);
+  const location = gateLocation(snapshot);
+  const base = {
+    provider: "flight-status-provider" as const,
+    target: {
+      reservationType: "flight" as const,
+      confirmationCode: reservation.confirmationCode,
+      titleHint: reservation.title,
+    },
+    flightDate: date,
+    ...(location ? { updatedLocation: location } : {}),
+  };
 
   if (kind === "cancellation") {
     return {
-      provider: "flight-status-provider",
+      ...base,
       kind: "cancellation",
       severity: "critical",
       summary: `${reservation.title} cancelled`,
       detail: `Live flight data reports cancellation. ${route}${gateNote}. Contact airline immediately.`,
-      target: { reservationType: "flight", confirmationCode: reservation.confirmationCode, titleHint: reservation.title },
     };
   }
 
   if (kind === "delay" || effectiveDelay >= 15) {
     const severity = effectiveDelay >= 45 ? "critical" : "warning";
     return {
-      provider: "flight-status-provider",
+      ...base,
       kind: "delay",
       severity,
       summary: `${reservation.title} delayed ${effectiveDelay} min`,
       detail: `Live flight data reports ${effectiveDelay}-minute delay. ${route}${gateNote}.`,
-      target: { reservationType: "flight", confirmationCode: reservation.confirmationCode, titleHint: reservation.title },
       delayMinutes: effectiveDelay,
     };
   }
 
   return {
-    provider: "flight-status-provider",
+    ...base,
     kind: "on-time",
     severity: "info",
     summary: `${reservation.title} on time${snapshot.departureGate ? ` · Gate ${snapshot.departureGate}` : ""}`,
     detail: `Live flight data: on time. ${route}${gateNote}.`,
-    target: { reservationType: "flight", confirmationCode: reservation.confirmationCode, titleHint: reservation.title },
-    ...(snapshot.departureGate
-      ? {
-          updatedLocation: [
-            snapshot.departureTerminal ? `Terminal ${snapshot.departureTerminal}` : "",
-            `Gate ${snapshot.departureGate}`,
-          ]
-            .filter(Boolean)
-            .join(" · "),
-        }
-      : {}),
   };
 }
 
@@ -84,6 +93,7 @@ function mockUpdate(reservation: UpdatableReservation): TravelUpdateEvent {
     summary: `${reservation.title} — status unavailable (no API key)`,
     detail: "Set FLIGHTAWARE_AEROAPI_KEY and/or AERODATABOX_API_KEY to enable live flight alerts.",
     target: { reservationType: "flight", confirmationCode: reservation.confirmationCode, titleHint: reservation.title },
+    flightDate: flightDate(reservation),
   };
 }
 

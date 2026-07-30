@@ -95,6 +95,11 @@ Within **6 hours** of departure, client and server polls must run at least every
 
 **Test:** `src/lib/travelAssistant/flightStatusCredentials.test.ts`
 
+**F13 — Push snapshots key by reservation flightDate**  
+Background and interactive gate/delay pushes must key status snapshots by the flight's **reservation date** (`YYYY-MM-DD` from `localTime` / `flightDate`), never silently by "today." Using today caused alerts to miss or collide across days. Providers must attach `flightDate` on `TravelUpdateEvent`.
+
+**Test:** `src/lib/travelAssistant/resolvePushFlightDate.test.ts`, `src/lib/travelAssistant/flightStatusPushBridge.test.ts`, `src/lib/travelAssistant/flightStatusTrustLine.test.ts`
+
 **F10 — Check-in handoff is honest**  
 Check-in prompts open at **24h before departure**. Kepi may deep-link to airline check-in or a stored Wallet/pass URL — never render a scannable barcode it does not hold. UI must state where the boarding pass actually lives.
 
@@ -703,6 +708,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | F11, G13 | `src/lib/travelAssistant/europe2026TripPass.test.ts` |
 | F9 | `src/lib/travelAssistant/flightStatusLookup.test.ts` |
 | F12 | `src/lib/travelAssistant/flightStatusCredentials.test.ts` |
+| F13 | `src/lib/travelAssistant/resolvePushFlightDate.test.ts`, `flightStatusPushBridge.test.ts`, `flightStatusTrustLine.test.ts` |
 | G13 | `src/lib/travelAssistant/gapDetectionService.test.ts` |
 | G8 | `src/lib/travelAssistant/dayPlanLines.test.ts` |
 | G10 | `src/lib/travelAssistant/tripActionItems.test.ts` |
