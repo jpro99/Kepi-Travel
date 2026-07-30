@@ -10,6 +10,8 @@ interface ShareModalProps {
   tripId: string | null;
   tripName: string | null;
   onClose: () => void;
+  /** When false, invite defaults to view-only (free viral wedge). */
+  hasProAccess?: boolean;
 }
 
 interface SharePayload {
@@ -25,9 +27,15 @@ interface SharePayload {
   intendedEmail?: string | null;
 }
 
-export function ShareModal({ open, tripId, tripName, onClose }: ShareModalProps) {
+export function ShareModal({
+  open,
+  tripId,
+  tripName,
+  onClose,
+  hasProAccess = false,
+}: ShareModalProps) {
   const [expiresInDays, setExpiresInDays] = useState(30);
-  const [readOnly, setReadOnly] = useState(false);
+  const [readOnly, setReadOnly] = useState(!hasProAccess);
   const [showPersonalNotes, setShowPersonalNotes] = useState(true);
   const [recipientEmail, setRecipientEmail] = useState("");
   const [busy, setBusy] = useState(false);
@@ -194,8 +202,11 @@ export function ShareModal({ open, tripId, tripName, onClose }: ShareModalProps)
       setErrorMessage(null);
       setSuccessMessage(null);
       setRecipientEmail("");
+      return;
     }
-  }, [open]);
+    // Free users land on view-only — invite family without hitting Pro 402 first.
+    setReadOnly(!hasProAccess);
+  }, [open, hasProAccess]);
 
   if (!open) {
     return null;
@@ -210,11 +221,12 @@ export function ShareModal({ open, tripId, tripName, onClose }: ShareModalProps)
       >
         <header className="flex items-start justify-between gap-2">
           <div>
-            <h2 className="text-lg font-semibold">Share Trip</h2>
+            <h2 className="text-lg font-semibold">Invite family to this trip</h2>
             <p className="text-xs text-slate-600 dark:text-slate-300">
               {tripName ? `Sharing ${tripName}. ` : ""}
-              Invite your partner or friend by email. With <strong>Edit together</strong> on, they open the trip in
-              their own Kepi account and you both can change flights, hotels, and notes.
+              {hasProAccess
+                ? "Send a view link for free, or turn off View only so you both edit together (Pro)."
+                : "Free includes view-only invites — family opens the trip on their phone. Edit together unlocks with Pro."}
             </p>
           </div>
           <button
@@ -252,8 +264,9 @@ export function ShareModal({ open, tripId, tripName, onClose }: ShareModalProps)
             />
           </label>
           <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-            Only this email can open the link. They sign in with that address. Both of you need Pro or Lifetime to
-            edit together.
+            {hasProAccess
+              ? "Only this email can open the link. Both of you need Pro or Lifetime to edit together."
+              : "View-only works on Free. They sign in with this email and see the same itinerary — upgrade later to edit together."}
           </p>
           <button
             type="button"

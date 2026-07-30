@@ -3,10 +3,13 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-30 (I44 calendar switch-day honesty)
+Last updated: 2026-07-30 (10/10 roadmap batch: F12 status, hide sci-fi, PostHog, free invite, I45)
+
+## Decision 2026-07-30 — Path to must-have (Jeff approved build order)
+Goal: travel-day family opens Kepi first — not “beat Flighty on every feature.” Ordered ship: (1) Flight status authority — FlightAware OR AeroDataBox enables live; FA wins merge; push bridge on background path (F12). (2) Hide sci-fi Dreamcaster/Sovereign/Guardian URLs+APIs. (3) PostHog optional via `NEXT_PUBLIC_POSTHOG_KEY` + travel-day events. (4) Free viral wedge — Share defaults view-only for Free (“Invite family to this trip”). (5) I45 archive hotel forwards (2018 payment-only) never invent March 2027 / auto-add. Next: PostHog project key in Vercel; FlightAware key if not already; measure travel-day opens before more SEA airports.
 
 ## Decision 2026-07-30 — Calendar: check-in day split, not day-after (Jeff approved)
-False “Switch day” on Sep 3 (first full Polignano day) came from painting any leg-id change as a transition. Fix I44: Travel|City split only when travel+stay overlap (landing/check-in) or stay→stay; mid-stay days solid. Booked hotel city beats leftover day notes (“Leave Ortisei, go to Munich” on wrong day). Pending (not shipped): archive gate for 2018 hotel forwards without stay dates → do not invent March 2027 / auto-add to trip.
+False “Switch day” on Sep 3 (first full Polignano day) came from painting any leg-id change as a transition. Fix I44: Travel|City split only when travel+stay overlap (landing/check-in) or stay→stay; mid-stay days solid. Booked hotel city beats leftover day notes (“Leave Ortisei, go to Munich” on wrong day).
 
 ## Decision 2026-07-30 — Prep Home + smarter pricing (Jeff approved)
 When trip is >14 days out, Home is prep mode (countdown, documents/entry guidance with official link, stays/pricing) — hide connection/next-flight chrome. Email cash parse: Airbnb “charged a total” beats “per night”; fall back to full email if near-booking slice misses payment. Spend badge opens itemized pricing sheet (needs price vs logged).

@@ -1,0 +1,278 @@
+{
+  "iata": "MUC",
+  "fetchedAt": "2026-07-17T17:35:42.305Z",
+  "stats": {
+    "gates": 166,
+    "lounges": 8,
+    "terminals": 6,
+    "clusters": 9
+  },
+  "gateClusters": [
+    {
+      "key": "G",
+      "count": 39,
+      "centroid": [
+        11.79238,
+        48.353218
+      ],
+      "sample": [
+        "G47,G48",
+        "G45,G46",
+        "G43,G44",
+        "G41,G42",
+        "G39,G40",
+        "G37,G38",
+        "G35,G36",
+        "G33,G34"
+      ]
+    },
+    {
+      "key": "A",
+      "count": 28,
+      "centroid": [
+        11.781489,
+        48.356041
+      ],
+      "sample": [
+        "A28",
+        "A26/27",
+        "A24/A25",
+        "A23",
+        "A21/22",
+        "A20",
+        "A18/A19",
+        "A16/A17"
+      ]
+    },
+    {
+      "key": "H",
+      "count": 25,
+      "centroid": [
+        11.79241,
+        48.354333
+      ],
+      "sample": [
+        "H05,H06",
+        "H03,H04",
+        "H01,H02",
+        "H19,H20",
+        "H17,H18",
+        "H15,H16",
+        "H13,H14",
+        "H11,H12"
+      ]
+    },
+    {
+      "key": "K",
+      "count": 23,
+      "centroid": [
+        11.798582,
+        48.354831
+      ],
+      "sample": [
+        "K28,K30",
+        "K27",
+        "K25",
+        "K24,K26",
+        "K23",
+        "K21",
+        "K22",
+        "K19"
+      ]
+    },
+    {
+      "key": "L",
+      "count": 18,
+      "centroid": [
+        11.798283,
+        48.354773
+      ],
+      "sample": [
+        "L28,L30",
+        "L27",
+        "L25",
+        "L24,L26",
+        "L23",
+        "L21",
+        "L22",
+        "L19"
+      ]
+    },
+    {
+      "key": "D",
+      "count": 11,
+      "centroid": [
+        11.784529,
+        48.349818
+      ],
+      "sample": [
+        "D23",
+        "D21",
+        "D20",
+        "D17",
+        "D16",
+        "D15",
+        "D14",
+        "D11/D12"
+      ]
+    },
+    {
+      "key": "B",
+      "count": 10,
+      "centroid": [
+        11.7837,
+        48.35438
+      ],
+      "sample": [
+        "B17/C01",
+        "B14",
+        "B12",
+        "B11",
+        "B15/B16",
+        "B08/B09",
+        "B5",
+        "B2"
+      ]
+    },
+    {
+      "key": "C",
+      "count": 6,
+      "centroid": [
+        11.784061,
+        48.352432
+      ],
+      "sample": [
+        "C10/D01",
+        "C9",
+        "C8",
+        "C06/C07",
+        "C5",
+        "C03/C04"
+      ]
+    },
+    {
+      "key": "J",
+      "count": 6,
+      "centroid": [
+        11.799458,
+        48.354616
+      ],
+      "sample": [
+        "J06",
+        "J05",
+        "J04",
+        "J03",
+        "J02",
+        "J01"
+      ]
+    }
+  ],
+  "lounges": [
+    {
+      "name": "Lufthansa Senator Lounge",
+      "pos": [
+        11.791897,
+        48.354621
+      ]
+    },
+    {
+      "name": "Lufthansa Senator Cafe",
+      "pos": [
+        11.792275,
+        48.353826
+      ]
+    },
+    {
+      "name": "Lufthansa Senator & Business Lounge",
+      "pos": [
+        11.792066,
+        48.353814
+      ]
+    },
+    {
+      "name": "Lufthansa Lounge",
+      "pos": [
+        11.791014,
+        48.354699
+      ]
+    },
+    {
+      "name": "First Class Lounge",
+      "pos": [
+        11.792042,
+        48.354863
+      ]
+    },
+    {
+      "name": "Lufthansa Senator Lounge",
+      "pos": [
+        11.799122,
+        48.355553
+      ]
+    },
+    {
+      "name": "Lufthansa Business Class Lounge",
+      "pos": [
+        11.799101,
+        48.355671
+      ]
+    },
+    {
+      "name": "Lufthansa Senator Lounge",
+      "pos": [
+        11.791215,
+        48.353596
+      ]
+    }
+  ],
+  "terminals": [
+    {
+      "id": "way/4446890",
+      "name": "Flughafen München, Munich Airport Centre",
+      "pos": [
+        11.786145,
+        48.353789
+      ]
+    },
+    {
+      "id": "way/4447199",
+      "name": "Terminal F",
+      "pos": [
+        11.790627,
+        48.357823
+      ]
+    },
+    {
+      "id": "way/158982502",
+      "name": "General Aviation Terminal",
+      "pos": [
+        11.801729,
+        48.35779
+      ]
+    },
+    {
+      "id": "way/360544293",
+      "name": "Terminal 2",
+      "pos": [
+        11.791344,
+        48.354214
+      ]
+    },
+    {
+      "id": "relation/7290182",
+      "name": "Terminal 2 Satellit",
+      "pos": [
+        11.798682,
+        48.354732
+      ]
+    },
+    {
+      "id": "relation/20577238",
+      "name": "Terminal 1",
+      "pos": [
+        11.781907,
+        48.353573
+      ]
+    }
+  ]
+}

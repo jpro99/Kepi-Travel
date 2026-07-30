@@ -1,11 +1,11 @@
 /**
- * Flight status provider — AeroDataBox primary, optional FlightAware AeroAPI secondary.
- * Background polling uses merged snapshots; discrepancies are logged for calibration.
+ * Flight status provider — FlightAware preferred when present, AeroDataBox co-source.
+ * Background polling uses merged snapshots; discrepancies are logged for calibration (F12).
  */
 
 import type { TravelUpdateProvider, TravelUpdateEvent, UpdatableReservation } from "@/lib/travelAssistant/travelUpdateTypes";
 import { fetchMergedFlightStatusSnapshot, snapshotToUpdateKind } from "@/lib/travelAssistant/flightStatusLookup";
-import { resolveAeroDataBoxApiKey } from "@/lib/travelAssistant/flightStatusSources/aeroDataBoxSource";
+import { hasLiveFlightStatusCredentials } from "@/lib/travelAssistant/flightStatusCredentials";
 import type { MergedFlightStatusSnapshot } from "@/lib/travelAssistant/flightStatusMerge";
 
 function flightDate(reservation: UpdatableReservation): string {
@@ -82,7 +82,7 @@ function mockUpdate(reservation: UpdatableReservation): TravelUpdateEvent {
     kind: "on-time",
     severity: "info",
     summary: `${reservation.title} — status unavailable (no API key)`,
-    detail: "Set AERODATABOX_API_KEY in Vercel environment variables to enable live flight alerts.",
+    detail: "Set FLIGHTAWARE_AEROAPI_KEY and/or AERODATABOX_API_KEY to enable live flight alerts.",
     target: { reservationType: "flight", confirmationCode: reservation.confirmationCode, titleHint: reservation.title },
   };
 }
@@ -94,7 +94,7 @@ export function createFlightStatusProviderFromEnv(): TravelUpdateProvider {
       const flights = args.reservations.filter((reservation) => reservation.type === "flight");
       if (flights.length === 0) return [];
 
-      if (!resolveAeroDataBoxApiKey()) {
+      if (!hasLiveFlightStatusCredentials()) {
         return flights.map(mockUpdate);
       }
 

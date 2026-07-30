@@ -7740,6 +7740,13 @@ export default function TravelAssistantPage() {
           credentials: "include",
           cache: "no-store",
         });
+        void trackEvent({
+          type: "flight_status_checked",
+          userId: user?.id ?? null,
+          tripId: activeTripId,
+          flightNumber: lookupInput.flightNumber,
+          source: "manual",
+        });
         const payload = (await response.json()) as {
           error?: string;
           flightNumber?: string;
@@ -7838,13 +7845,23 @@ export default function TravelAssistantPage() {
         setToast(message);
       }
     },
-    [queueMutation, reservations, setToast],
+    [queueMutation, reservations, setToast, user?.id, activeTripId],
   );
   // Keep ref in sync so the flight-polling useEffect (declared above) can call it
   // Must be done in useEffect to avoid "Cannot access refs during render" lint error
   useEffect(() => {
     handleCheckFlightStatusRef.current = handleCheckFlightStatus;
   }, [handleCheckFlightStatus]);
+
+  useEffect(() => {
+    if (consumerTab !== "trip" || !activeTripId) return;
+    void trackEvent({
+      type: "home_opened",
+      userId: user?.id ?? null,
+      tripId: activeTripId,
+      daysUntilDeparture: null,
+    });
+  }, [consumerTab, activeTripId, user?.id]);
 
   const acceptReviewWithDraft = (reviewId: string, draftOverride?: ReservationDraft): boolean => {
     const target = reviewQueue.find((item) => item.id === reviewId);
@@ -10622,6 +10639,7 @@ export default function TravelAssistantPage() {
             tripId={activeTripId}
             tripName={activeTrip?.name ?? null}
             onClose={() => setShareModalOpen(false)}
+            hasProAccess={hasProAccess || isLifetime}
           />
         )}
         <GmailImportScopeModal

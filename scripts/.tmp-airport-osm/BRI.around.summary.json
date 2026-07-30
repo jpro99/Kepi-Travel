@@ -1,0 +1,54 @@
+{
+  "iata": "BRI",
+  "fetchedAt": "2026-07-17T17:28:58.077Z",
+  "stats": {
+    "gates": 14,
+    "lounges": 0,
+    "terminals": 1,
+    "clusters": 2
+  },
+  "gateClusters": [
+    {
+      "key": "A",
+      "count": 11,
+      "centroid": [
+        16.764503,
+        41.134981
+      ],
+      "sample": [
+        "A5",
+        "A7 A8",
+        "A4",
+        "A1",
+        "A3",
+        "A2",
+        "A9",
+        "A10"
+      ]
+    },
+    {
+      "key": "B",
+      "count": 3,
+      "centroid": [
+        16.762816,
+        41.134477
+      ],
+      "sample": [
+        "B1",
+        "B2",
+        "B3 B4"
+      ]
+    }
+  ],
+  "lounges": [],
+  "terminals": [
+    {
+      "id": "way/24995995",
+      "name": "Aeroporto Karol Wojtyła Bari Palese",
+      "pos": [
+        16.76418,
+        41.134554
+      ]
+    }
+  ]
+}

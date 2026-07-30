@@ -86,9 +86,14 @@ When flights change, hotel stay segments recompute via shared trip modules (`der
 Auto flight-status polling only for flights within 24h; must not spam or crash when provider is down.
 
 **F9 — Flight status freshness is phase-aware**  
-Within **6 hours** of departure, client and server polls must run at least every **90 seconds** when the app is open or a background sweep is active. Between 6–24 hours, **5 minutes** is acceptable. Primary source is **AeroDataBox**; optional **FlightAware AeroAPI** merges when configured — discrepancies are logged, never silently discarded.
+Within **6 hours** of departure, client and server polls must run at least every **90 seconds** when the app is open or a background sweep is active. Between 6–24 hours, **5 minutes** is acceptable. **FlightAware AeroAPI** is preferred when configured (`authorityRank` higher); **AeroDataBox** co-sources. Either key enables live mode. Discrepancies are logged, never silently discarded.
 
 **Test:** `src/lib/travelAssistant/flightStatusCadence.test.ts`, `src/lib/travelAssistant/flightStatusMerge.test.ts`
+
+**F12 — Live status + push must not depend on AeroDataBox alone**  
+`hasLiveFlightStatusCredentials()` is true when FlightAware **or** AeroDataBox is set. Client lookup and Inngest auto mode must not 503/mock solely because AeroDataBox is missing. Gate/delay pushes use the shared push bridge on lookup and background update paths.
+
+**Test:** `src/lib/travelAssistant/flightStatusCredentials.test.ts`
 
 **F10 — Check-in handoff is honest**  
 Check-in prompts open at **24h before departure**. Kepi may deep-link to airline check-in or a stored Wallet/pass URL — never render a scannable barcode it does not hold. UI must state where the boarding pass actually lives.
@@ -545,6 +550,11 @@ Do not paint the first full stay day after travel as a “switch day.” Arrival
 
 **Test:** `src/lib/travelAssistant/buildTripLegs.test.ts`
 
+**I45 — Historical hotel forwards must not invent future stays**
+If the original email `Date:`/`Sent:` is ~13+ months old **and** the body has no Check-in/Checkout stay cards, do not auto-import and do not keep invented future check-in dates (e.g. 2018 Summer In Italy → March 2027). Queue for review with an archive reason.
+
+**Test:** `src/lib/travelAssistant/historicalEmailForward.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -692,6 +702,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | F11 | `src/lib/travelAssistant/reservationLinks.test.ts` |
 | F11, G13 | `src/lib/travelAssistant/europe2026TripPass.test.ts` |
 | F9 | `src/lib/travelAssistant/flightStatusLookup.test.ts` |
+| F12 | `src/lib/travelAssistant/flightStatusCredentials.test.ts` |
 | G13 | `src/lib/travelAssistant/gapDetectionService.test.ts` |
 | G8 | `src/lib/travelAssistant/dayPlanLines.test.ts` |
 | G10 | `src/lib/travelAssistant/tripActionItems.test.ts` |
@@ -718,6 +729,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I42 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts`, `tripSpendSummary.test.ts` |
 | I43 | `src/lib/travelAssistant/homeDayTruth.test.ts` |
 | I44 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
+| I45 | `src/lib/travelAssistant/historicalEmailForward.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

@@ -82,6 +82,10 @@ Jeff's Italy trip exposed a **category error**: Kepi treated **where the plane l
 
 - Weeks out → prep Watch (documents, stays, pricing, official entry links). Do not overwhelm with connection/gate chrome until the travel window.
 
+### 9. Path to must-have (2026-07-30)
+
+Score as **family trip execution**, not Flighty clone. Order of work: **status trust → cut dead sci-fi → measure travel-day opens → free invite wedge → then airports.** Do not expand SEA-quality maps until analytics show travel-day habit. Archive forwards without stay dates never invent future check-ins.
+
 ---
 
 ## Decision checklist (before shipping a feature)
@@ -128,5 +132,6 @@ If any answer is wrong, fix the reasoning — not just the symptom.
 
 | Date | Note |
 |------|------|
+| 2026-07-30 | 10/10 path: status authority (F12), hide sci-fi, PostHog, free view invite, I45 archive; calendar I44 |
 | 2026-07-30 | Calendar switch-day honesty (I44); prep vs travel chrome; archive-forward caution; clarify agents append lessons here |
 | 2026-07-08 | Initial Neuro Brain — whole-trip execution philosophy, Jeff intent, apply checklist, next-update map |

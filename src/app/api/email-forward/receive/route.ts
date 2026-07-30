@@ -29,6 +29,7 @@ import {
 } from "@/lib/travelAssistant/flightItinerarySync";
 import { enrichReservationForAutoImport } from "@/lib/travelAssistant/autoImportReservation";
 import { evaluateForwardedReservationGate } from "@/lib/travelAssistant/forwardedReservationGate";
+import { evaluateHistoricalHotelForward } from "@/lib/travelAssistant/historicalEmailForward";
 import {
   OUT_OF_WINDOW_REVIEW_REASON,
   selectDraftsToImport,
@@ -1041,30 +1042,49 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         continue;
       }
 
+      const sourceTextForArchive = storedSourceText || parserOriginalEmailText;
+      const historicalGate = evaluateHistoricalHotelForward({
+        type: parserType,
+        rawEmailText: sourceTextForArchive,
+        localTime: parserLocalTime,
+      });
+      let gatedLocalTime = parserLocalTime;
+      let gatedCheckOut = parsedReservation.checkOutDate;
+      if (historicalGate.clearInventedDates) {
+        gatedLocalTime = "";
+        gatedCheckOut = "";
+      }
+
       const gateResult = evaluateForwardedReservationGate({
         type: parserType,
-        localTime: parserLocalTime,
+        localTime: gatedLocalTime,
         location: parserLocation,
-        checkOutDate: parsedReservation.checkOutDate,
+        checkOutDate: gatedCheckOut,
         flightDepartureAirport: parsedReservation.flightDepartureAirport,
         flightArrivalAirport: parsedReservation.flightArrivalAirport,
         quotedPriceUsd: parsedReservation.quotedPriceUsd,
         confidenceScore: parserConfidenceScore,
-        parsingStatus: parserParsingStatus,
+        parsingStatus: historicalGate.blockAutoImport ? "needs-review" : parserParsingStatus,
         missingFields: parserMissingFields,
       });
+      if (historicalGate.blockAutoImport) {
+        gateResult.needsReview = true;
+        gateResult.reasons = [...historicalGate.reasons, ...gateResult.reasons];
+      }
 
       if (gateResult.needsReview) {
         nextQueue = [
           {
             id: `review-email-${generateId()}`,
             reasons: gateResult.reasons,
-            impact: "This reservation needs a quick check before it's added to your trip.",
+            impact: historicalGate.blockAutoImport
+              ? "Old or incomplete hotel confirmation — not added to your trip until you confirm."
+              : "This reservation needs a quick check before it's added to your trip.",
             draft: {
               type: parserType,
               title: parserTitle,
               provider: parserProvider,
-              localTime: parserLocalTime,
+              localTime: gatedLocalTime,
               timezone: parserTimezone || "Etc/UTC",
               location: parserLocation,
               confirmationCode: parserConfirmationCode,
@@ -1079,7 +1099,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
               flightDepartureAirport: parsedReservation.flightDepartureAirport,
               flightArrivalAirport: parsedReservation.flightArrivalAirport,
               flightDepartureTime: parsedReservation.flightDepartureTime,
-              checkOutDate: parsedReservation.checkOutDate,
+              checkOutDate: gatedCheckOut,
             },
             sourceChannel: "email-forward" as const,
             parseConfidenceScore: parserConfidenceScore,
@@ -1098,6 +1118,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
           type: parserType,
           confidenceScore: parserConfidenceScore,
           reasons: gateResult.reasons,
+          historicalArchive: historicalGate.blockAutoImport,
         });
         acceptedDraftCount += 1;
         continue;

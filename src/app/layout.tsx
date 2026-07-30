@@ -9,6 +9,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { SplashTransition } from "@/components/native/SplashTransition";
 import { StandaloneViewportFix } from "@/components/native/StandaloneViewportFix";
 import { SupportChat } from "@/components/support/SupportChat";
+import { PostHogProvider } from "@/components/analytics/PostHogProvider";
 import { BillingProvider } from "@/lib/billing/BillingContext";
 import { verifyEnvFromExampleAtBoot } from "../../scripts/verify-env";
 import "./globals.css";
@@ -174,8 +175,10 @@ export default async function RootLayout({
         <ClerkProvider>
           <NextIntlClientProvider locale={locale} messages={messages}>
             <BillingProvider>
-              <SplashTransition>{children}</SplashTransition>
-              <SupportChat />
+              <PostHogProvider>
+                <SplashTransition>{children}</SplashTransition>
+                <SupportChat />
+              </PostHogProvider>
               <Analytics />
               <SpeedInsights />
             </BillingProvider>

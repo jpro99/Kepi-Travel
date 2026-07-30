@@ -14,6 +14,8 @@ import {
 import { sendDisruptionAlert } from "@/lib/email/emailService";
 import type { TravelUpdateEvent } from "@/lib/travelAssistant/travelUpdateTypes";
 import { runWithKvUserContext } from "@/lib/travelAssistant/kvUserContext";
+import { hasLiveFlightStatusCredentials } from "@/lib/travelAssistant/flightStatusCredentials";
+import { maybeSendFlightStatusPushAlerts } from "@/lib/travelAssistant/flightStatusPushBridge";
 
 const TravelUpdateRequestedEventSchema = z.object({
   userId: z.string().min(1),
@@ -50,13 +52,40 @@ async function dispatchPushAlerts(userId: string, updates: readonly TravelUpdate
     if (update.target.reservationType !== "flight") {
       continue;
     }
-    if (update.kind === "gate-change" && update.updatedLocation) {
+    const flightNumber = extractFlightNumber(update);
+    const gateMatch = update.updatedLocation?.match(/\bGate\s+([A-Z0-9]+)\b/iu);
+    const gate =
+      gateMatch?.[1] ??
+      (update.kind === "gate-change"
+        ? update.updatedLocation?.replace(/^Gate\s*/iu, "").trim()
+        : "");
+    // Diff-based gate/delay pushes via shared bridge (F12) — works even when kind is on-time with a new gate.
+    const bridge = await maybeSendFlightStatusPushAlerts(userId, {
+      flightNumber,
+      flightDate: new Date().toISOString().slice(0, 10),
+      departureGate: gate || undefined,
+      delayMinutes: update.delayMinutes ?? null,
+      flightStatus:
+        update.kind === "delay"
+          ? "delayed"
+          : update.kind === "cancellation"
+            ? "cancelled"
+            : "scheduled",
+    });
+    sent += bridge.sent;
+
+    if (update.kind === "gate-change" && update.updatedLocation && bridge.sent === 0) {
       const newGate = update.updatedLocation.replace(/^Gate\s*/i, "").trim() || update.updatedLocation;
-      const ok = await sendGateChangeAlert(userId, extractFlightNumber(update), newGate);
+      const ok = await sendGateChangeAlert(userId, flightNumber, newGate);
       if (ok) sent += 1;
     }
-    if (update.kind === "delay" && typeof update.delayMinutes === "number" && update.delayMinutes > 0) {
-      const ok = await sendDelayAlert(userId, extractFlightNumber(update), update.delayMinutes);
+    if (
+      update.kind === "delay" &&
+      typeof update.delayMinutes === "number" &&
+      update.delayMinutes > 0 &&
+      bridge.sent === 0
+    ) {
+      const ok = await sendDelayAlert(userId, flightNumber, update.delayMinutes);
       if (ok) sent += 1;
     }
   }
@@ -79,13 +108,13 @@ function resolveEffectiveUpdateMode(requestedMode: "off" | "mock" | "auto" | und
   if (requestedMode !== "auto") {
     return { mode: requestedMode, usedMockFallback: false };
   }
-  if (process.env.AERODATABOX_API_KEY?.trim()) {
+  if (hasLiveFlightStatusCredentials()) {
     return { mode: requestedMode, usedMockFallback: false };
   }
   return {
     mode: "mock",
     usedMockFallback: true,
-    reason: "AERODATABOX_API_KEY missing; background updates forced to mock mode.",
+    reason: "No live flight status key (FLIGHTAWARE_AEROAPI_KEY or AERODATABOX_API_KEY); background updates forced to mock mode.",
   };
 }
 
@@ -112,7 +141,7 @@ export const travelUpdatePass = inngest.createFunction(
       try {
         const modeResolution = resolveEffectiveUpdateMode(parsed.data.mode);
         if (modeResolution.usedMockFallback) {
-          logger.info("Switching travel update pass to mock mode due to missing AeroDataBox key.", {
+          logger.info("Switching travel update pass to mock mode due to missing live flight status keys.", {
             userId: parsed.data.userId,
             requestedMode: parsed.data.mode,
           });

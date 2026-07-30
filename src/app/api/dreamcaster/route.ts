@@ -1,10 +1,6 @@
-import { NextResponse } from 'next/server';
-import { generateTripCanvas } from '@/lib/server/ai/dreamcaster';
+import { NextResponse } from "next/server";
 
-export async function POST(request: Request) {
-  const { prompt } = await request.json();
-
-  const tripCanvas = await generateTripCanvas(prompt);
-
-  return NextResponse.json(tripCanvas);
+/** Hidden prototype API — 10/10 focus. */
+export async function POST() {
+  return NextResponse.json({ error: "Not found" }, { status: 404 });
 }

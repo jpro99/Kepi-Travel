@@ -1,28 +1,10 @@
-import { NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
-import type { GuardianProfile } from '@/lib/guardian/types';
+import { NextResponse } from "next/server";
 
-const dataFilePath = path.join(process.cwd(), 'src', 'data', 'guardian-profile.json');
-
-async function getProfile(): Promise<GuardianProfile> {
-  const fileContents = await fs.readFile(dataFilePath, 'utf8');
-  return JSON.parse(fileContents);
+/** Hidden prototype API — 10/10 focus. */
+export async function GET() {
+  return NextResponse.json({ error: "Not found" }, { status: 404 });
 }
 
-async function saveProfile(profile: GuardianProfile): Promise<void> {
-  await fs.writeFile(dataFilePath, JSON.stringify(profile, null, 2), 'utf8');
-}
-
-export async function GET(request: Request) {
-  const profile = await getProfile();
-  return NextResponse.json(profile);
-}
-
-export async function POST(request: Request) {
-  const newProfile = await request.json();
-  const currentProfile = await getProfile();
-  const updatedProfile = { ...currentProfile, ...newProfile };
-  await saveProfile(updatedProfile);
-  return NextResponse.json(updatedProfile);
+export async function POST() {
+  return NextResponse.json({ error: "Not found" }, { status: 404 });
 }

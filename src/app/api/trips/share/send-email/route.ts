@@ -108,7 +108,6 @@ export async function POST(req: Request) {
         expiresInDays: result.options.expiresInDays,
       });
     }
-
     const url = new URL(req.url);
     const shareUrl = `${url.origin}/share/${result.token}`;
     const canEditTogether = result.options.readOnly !== true;
@@ -165,6 +164,13 @@ export async function POST(req: Request) {
         { status: 502, headers: rateLimit.headers },
       );
     }
+
+    void trackServerEvent({
+      type: "trip_invite_email_sent",
+      userId,
+      tripId: parsed.data.tripId,
+      readOnly: result.options.readOnly,
+    });
 
     return NextResponse.json(
       {

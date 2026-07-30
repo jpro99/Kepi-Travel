@@ -13,7 +13,11 @@ export type KepiAnalyticsEvent =
   | { type: "upgrade_completed"; userId: string; newPlan: "pro" | "concierge" }
   | { type: "gmail_import_triggered"; userId: string; maxResults: number; tripId?: string; lookbackDays?: number; tripStartDate?: string | null; tripEndDate?: string | null }
   | { type: "ai_suggestion_requested"; userId: string; suggestionType: string; tripId?: string }
-  | { type: "invite_code_redeemed"; userId: string; inviteType: string; inviteCode: string };
+  | { type: "invite_code_redeemed"; userId: string; inviteType: string; inviteCode: string }
+  | { type: "home_opened"; userId: string | null; tripId: string | null; daysUntilDeparture: number | null }
+  | { type: "airport_mode_opened"; userId: string | null; tripId: string | null; airportIata: string | null }
+  | { type: "flight_status_checked"; userId: string | null; tripId: string | null; flightNumber: string | null; source: "manual" | "auto" }
+  | { type: "trip_invite_email_sent"; userId: string; tripId: string; readOnly: boolean };
 
 export type AnalyticsPrimitive = string | number | boolean | null;
 export type AnalyticsProperties = Record<string, AnalyticsPrimitive>;
@@ -54,6 +58,18 @@ export async function trackEvent(event: KepiAnalyticsEvent): Promise<void> {
 
   if (process.env.NODE_ENV !== "production") {
     console.info("[ANALYTICS][DEV]", event.type, properties);
+  }
+
+  try {
+    if (typeof window !== "undefined") {
+      const { capturePostHogEvent } = await import("@/components/analytics/PostHogProvider");
+      capturePostHogEvent(event.type, properties);
+    }
+  } catch {
+    // PostHog optional.
+  }
+
+  if (process.env.NODE_ENV !== "production") {
     return;
   }
 

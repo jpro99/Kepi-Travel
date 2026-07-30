@@ -15,7 +15,7 @@ import {
   fetchMergedFlightStatusSnapshot,
   mergedSnapshotToFlightLookupResponse,
 } from "@/lib/travelAssistant/flightStatusLookup";
-import { resolveAeroDataBoxApiKey } from "@/lib/travelAssistant/flightStatusSources/aeroDataBoxSource";
+import { hasLiveFlightStatusCredentials } from "@/lib/travelAssistant/flightStatusCredentials";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
@@ -107,10 +107,12 @@ export async function GET(req: Request) {
     );
   }
 
-  const apiKey = resolveAeroDataBoxApiKey();
-  if (!apiKey) {
+  if (!hasLiveFlightStatusCredentials()) {
     return NextResponse.json(
-      { error: "Flight lookup unavailable: AERODATABOX_API_KEY is missing." },
+      {
+        error:
+          "Flight lookup unavailable: set FLIGHTAWARE_AEROAPI_KEY and/or AERODATABOX_API_KEY.",
+      },
       { status: 503, headers: rateLimit.headers },
     );
   }
