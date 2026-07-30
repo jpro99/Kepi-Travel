@@ -7,6 +7,7 @@ import { ThemePicker } from "@/components/ThemeToggle";
 import { LanguageSettingsCard } from "@/components/LanguageSettingsCard";
 import { OfflineTravelKitSettingsCard } from "@/components/travelAssistant/OfflineTravelKitSettingsCard";
 import { PlanRedeemCard } from "@/components/billing/PlanRedeemCard";
+import { DeleteAccountSection } from "@/components/account/DeleteAccountSection";
 import { appleBtnPrimary, appleCard, appleCaption, appleCardTitle, appleMetadata } from "@/lib/ui/appleDesign";
 
 interface MobileSettingsViewProps {
@@ -201,6 +202,8 @@ export function MobileSettingsView({
         <span className={appleCardTitle}>{t("cacheTitle")}</span>
         <p className={`${appleCaption} mt-0.5`}>{t("cacheBody")}</p>
       </button>
+
+      <DeleteAccountSection />
 
       <button
         type="button"

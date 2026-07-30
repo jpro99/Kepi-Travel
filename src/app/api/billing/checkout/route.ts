@@ -4,6 +4,11 @@ import { getUserPlan } from "@/lib/billing/planGate";
 import type { BillingPlanId } from "@/lib/billing/plans";
 import { getStripeClient } from "@/lib/billing/stripeClient";
 import { getSubscriptionRecord } from "@/lib/billing/subscriptionStore";
+import {
+  IOS_IAP_REQUIRED_MESSAGE,
+  mustBlockStripeDigitalCheckout,
+  resolveClientBillingPlatform,
+} from "@/lib/billing/nativeBillingGate";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { logger } from "@/lib/logger";
 import { enforceRateLimit } from "@/lib/rateLimit";
@@ -16,6 +21,8 @@ const CheckoutBodySchema = z.object({
   targetPlan: z.enum(["pro", "concierge"]).default("pro"),
   successPath: z.string().trim().min(1).max(200).default("/billing?checkout=success"),
   cancelPath: z.string().trim().min(1).max(200).default("/billing?checkout=cancelled"),
+  /** Capacitor clients send ios_native / android_native so we can enforce App Store IAP rules. */
+  clientPlatform: z.enum(["web", "ios_native", "android_native", "unknown"]).optional(),
 });
 
 function resolveStripePriceId(plan: "pro" | "concierge"): string | null {
@@ -86,6 +93,16 @@ export async function POST(req: Request) {
     );
   }
   const targetPlan = parsedBody.data.targetPlan;
+  const clientPlatform = resolveClientBillingPlatform(parsedBody.data.clientPlatform);
+  if (mustBlockStripeDigitalCheckout(clientPlatform)) {
+    routeLogger.warn("Blocked Stripe checkout from native iOS client (IAP required).", {
+      clientPlatform,
+    });
+    return NextResponse.json(
+      { error: IOS_IAP_REQUIRED_MESSAGE, code: "ios_iap_required" },
+      { status: 403, headers: rateLimit.headers },
+    );
+  }
   const stripePriceId = resolveStripePriceId(targetPlan);
   if (!stripePriceId) {
     routeLogger.warn("Stripe checkout unavailable due to missing plan price id.", { targetPlan });

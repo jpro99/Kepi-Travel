@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-30 (Onboarding: real web-push subscribe + iOS Add to Home Screen)
+Last updated: 2026-07-30 (App Store readiness: account deletion + block Stripe on iOS native)
+
+## Decision 2026-07-30 — App Store: account deletion + no Stripe IAP substitute (Jeff)
+Claude audit verified: no StoreKit/RevenueCat; Pro/Concierge is Stripe-only; no in-app delete. Shipped: `POST /api/account/delete` + Delete account in More/Billing (type DELETE). Native Capacitor **iOS** blocks Stripe Checkout (client + API `clientPlatform: ios_native`) until Apple IAP/RevenueCat. Web + PWA keep Stripe. **Next before App Store submit:** RevenueCat + StoreKit products mirroring Pro/Concierge; do not submit iOS binary that sells digital subs via Stripe.
 
 ## Decision 2026-07-30 — Onboarding must register push, not just permission (Jeff approved)
 Step 3 “Turn on alerts” must call `subscribeToWebPushNotifications()` (same path as Home). Claiming “enabled” from `Notification.requestPermission()` alone left users without a server push subscription. iOS copy: Share → Add to Home Screen first. Only show “alerts on” when subscription is active.

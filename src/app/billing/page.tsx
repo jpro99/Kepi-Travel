@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useSearchParams } from "next/navigation";
 import type { PlanFeature } from "@/lib/billing/plans";
 import { ReferralCard } from "@/components/referral/ReferralCard";
+import { DeleteAccountSection } from "@/components/account/DeleteAccountSection";
 import { BILLING_PLANS, PLAN_FEATURE_LABELS, formatPlanPrice } from "@/lib/billing/plans";
 import { useBilling } from "@/lib/billing/BillingContext";
 
@@ -94,6 +95,12 @@ function BillingPageContent() {
     setBusy(true);
     setActionError(null);
     try {
+      const { detectClientBillingPlatform, IOS_IAP_REQUIRED_MESSAGE, mustBlockStripeDigitalCheckout } =
+        await import("@/lib/billing/nativeBillingGate");
+      const clientPlatform = detectClientBillingPlatform();
+      if (mustBlockStripeDigitalCheckout(clientPlatform)) {
+        throw new Error(IOS_IAP_REQUIRED_MESSAGE);
+      }
       const response = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -101,6 +108,7 @@ function BillingPageContent() {
           targetPlan,
           successPath: "/billing?checkout=success",
           cancelPath: "/billing?checkout=cancelled",
+          clientPlatform,
         }),
       });
       const payload = (await response.json()) as { error?: string; url?: string };
@@ -505,6 +513,10 @@ function BillingPageContent() {
       </section>
 
       <ReferralCard />
+
+      <div className="mt-6">
+        <DeleteAccountSection />
+      </div>
 
       {checkoutMessage ? (
         <p className="rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-2 text-sm text-cyan-900">{checkoutMessage}</p>

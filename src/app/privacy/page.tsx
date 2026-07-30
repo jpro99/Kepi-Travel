@@ -16,7 +16,10 @@ export default function PrivacyPage() {
             <li>Data collection and purpose</li>
             <li>Authentication and account security</li>
             <li>Email integration permissions</li>
-            <li>Data retention and deletion controls</li>
+            <li>
+              Data retention and deletion controls — signed-in users can permanently delete their account
+              in More → Delete account (or Billing), which removes trip data and the Clerk login.
+            </li>
           </ul>
         </div>
         <Link

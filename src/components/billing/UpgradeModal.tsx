@@ -5,6 +5,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { trackEvent } from "@/lib/analytics/trackEvent";
 import type { BillingPlanId, BillingStatusPlan, PlanFeature } from "@/lib/billing/plans";
+import {
+  detectClientBillingPlatform,
+  IOS_IAP_REQUIRED_MESSAGE,
+  mustBlockStripeDigitalCheckout,
+} from "@/lib/billing/nativeBillingGate";
 
 export interface UpgradeModalGateContext {
   feature: PlanFeature;
@@ -97,6 +102,10 @@ export function UpgradeModal({ open, gate, currentPlan = "free", onClose }: Upgr
       targetPlan,
     });
     try {
+      const clientPlatform = detectClientBillingPlatform();
+      if (mustBlockStripeDigitalCheckout(clientPlatform)) {
+        throw new Error(IOS_IAP_REQUIRED_MESSAGE);
+      }
       const response = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -104,6 +113,7 @@ export function UpgradeModal({ open, gate, currentPlan = "free", onClose }: Upgr
           targetPlan,
           successPath: "/billing?checkout=success",
           cancelPath: "/billing?checkout=cancelled",
+          clientPlatform,
         }),
       });
       const payload = (await response.json()) as {

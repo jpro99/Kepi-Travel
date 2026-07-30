@@ -24,7 +24,7 @@ export interface BillingSubscriptionRecord {
   trialExpiresAt: string | null;
 }
 
-const FREE_SUBSCRIPTION_RECORD: BillingSubscriptionRecord = {
+export const FREE_SUBSCRIPTION_RECORD: BillingSubscriptionRecord = {
   plan: "free",
   stripeCustomerId: null,
   stripeSubscriptionId: null,
