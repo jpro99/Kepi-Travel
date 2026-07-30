@@ -540,6 +540,11 @@ When `daysUntilDeparture > 14`, Home is prep mode: countdown Watch (documents, s
 
 **Test:** `src/lib/travelAssistant/homeDayTruth.test.ts`
 
+**I44 — Calendar split only on arrival or real hotel switches**
+Do not paint the first full stay day after travel as a “switch day.” Arrival/check-in day (travel + stay both cover) gets Travel | City split; mid-stay days are solid city color. Stay→stay land transfers keep the split. Booked hotel city beats leftover day-plan notes for the cell label.
+
+**Test:** `src/lib/travelAssistant/buildTripLegs.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -712,6 +717,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I41 | `src/lib/travelAssistant/tripNightCoverage.test.ts` |
 | I42 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts`, `tripSpendSummary.test.ts` |
 | I43 | `src/lib/travelAssistant/homeDayTruth.test.ts` |
+| I44 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

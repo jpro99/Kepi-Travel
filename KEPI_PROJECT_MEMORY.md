@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-30 (I42 pricing sheet + I43 prep-mode Home)
+Last updated: 2026-07-30 (I44 calendar switch-day honesty)
+
+## Decision 2026-07-30 — Calendar: check-in day split, not day-after (Jeff approved)
+False “Switch day” on Sep 3 (first full Polignano day) came from painting any leg-id change as a transition. Fix I44: Travel|City split only when travel+stay overlap (landing/check-in) or stay→stay; mid-stay days solid. Booked hotel city beats leftover day notes (“Leave Ortisei, go to Munich” on wrong day). Pending (not shipped): archive gate for 2018 hotel forwards without stay dates → do not invent March 2027 / auto-add to trip.
 
 ## Decision 2026-07-30 — Prep Home + smarter pricing (Jeff approved)
 When trip is >14 days out, Home is prep mode (countdown, documents/entry guidance with official link, stays/pricing) — hide connection/next-flight chrome. Email cash parse: Airbnb “charged a total” beats “per night”; fall back to full email if near-booking slice misses payment. Spend badge opens itemized pricing sheet (needs price vs logged).

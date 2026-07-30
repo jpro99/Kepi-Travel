@@ -2,12 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildTripLegs,
+  buildTripLegCalendarModel,
   airportToCity,
   countNights,
   dedupeFlights,
   buildLegendLegs,
   humanTravelLegLabel,
+  resolveDayCellTransition,
   STAY_LEG_PALETTE,
+  TRAVEL_LEG_COLOR,
 } from "@/lib/travelAssistant/buildTripLegs";
 
 test("humanTravelLegLabel uses city names not airport chains", () => {
@@ -246,4 +249,127 @@ test("buildTripLegs with VCE-MUC creates distinct Munich leg Sep 20-24", () => {
   assert.ok(munich);
   assert.equal(munich!.color, "#C4943A");
   assert.ok(munich!.startDate >= "2026-09-20");
+});
+
+test("I44: first full stay day after travel is solid stay, not a false switch day", () => {
+  const travel = {
+    id: "leg-travel-outbound",
+    type: "travel" as const,
+    label: "Travel",
+    startDate: "2026-09-01",
+    endDate: "2026-09-02",
+    color: TRAVEL_LEG_COLOR,
+  };
+  const stay = {
+    id: "leg-stay-polignano",
+    type: "stay" as const,
+    label: "Polignano a Mare",
+    startDate: "2026-09-02",
+    endDate: "2026-09-04",
+    color: "#C17F59",
+  };
+
+  // Arrival day: travel + stay overlap → split.
+  const arrival = resolveDayCellTransition({
+    covering: [travel, stay],
+    prevLeg: travel,
+    leg: travel,
+    hasFlight: true,
+  });
+  assert.equal(arrival.kind, "transition");
+  assert.equal(arrival.transitionFromColor, TRAVEL_LEG_COLOR);
+  assert.equal(arrival.transitionToColor, stay.color);
+
+  // Sep 3: first full day in city — solid stay (Jeff Europe calendar bug).
+  const fullDay = resolveDayCellTransition({
+    covering: [stay],
+    prevLeg: travel,
+    leg: stay,
+    hasFlight: false,
+  });
+  assert.equal(fullDay.kind, "stay");
+  assert.equal(fullDay.transitionFromColor, null);
+
+  // Real hotel switch day stays a transition.
+  const nextStay = {
+    id: "leg-stay-monopoli",
+    type: "stay" as const,
+    label: "Monopoli",
+    startDate: "2026-09-05",
+    endDate: "2026-09-07",
+    color: "#2D8A6E",
+  };
+  const switchDay = resolveDayCellTransition({
+    covering: [nextStay],
+    prevLeg: stay,
+    leg: nextStay,
+    hasFlight: false,
+  });
+  assert.equal(switchDay.kind, "transition");
+});
+
+test("I44: calendar model paints arrival split on check-in day, solid stay the next day", () => {
+  const model = buildTripLegCalendarModel(
+    [
+      {
+        id: "f1",
+        type: "flight",
+        title: "SEA-FCO",
+        provider: "Alaska",
+        localTime: "2026-09-01 17:30",
+        flightDate: "2026-09-01",
+        flightDepartureAirport: "SEA",
+        flightArrivalAirport: "FCO",
+        flightArrivalTime: "2026-09-02 14:00",
+      },
+      {
+        id: "f2",
+        type: "flight",
+        title: "FCO-BRI",
+        provider: "ITA",
+        localTime: "2026-09-02 15:35",
+        flightDate: "2026-09-02",
+        flightDepartureAirport: "FCO",
+        flightArrivalAirport: "BRI",
+        flightArrivalTime: "2026-09-02 16:40",
+      },
+      {
+        id: "h1",
+        type: "hotel",
+        title: "A Casa di Elena",
+        provider: "Booking.com",
+        localTime: "2026-09-02 15:00",
+        location: "Polignano a Mare, Italy",
+        confirmationCode: "6088406203",
+        checkOutDate: "2026-09-05",
+      },
+      {
+        id: "f3",
+        type: "flight",
+        title: "Return",
+        provider: "LH",
+        localTime: "2026-09-25 10:00",
+        flightDate: "2026-09-25",
+        flightDepartureAirport: "MUC",
+        flightArrivalAirport: "SEA",
+      },
+    ],
+    "2026-09-01",
+    "2026-09-25",
+    {
+      dayNotes: {
+        "2026-09-03": "Stay in Monopoli\nLeave Ortisei, go to Munich",
+      },
+    },
+  );
+
+  const sep2 = model.dayCells.get("2026-09-02");
+  const sep3 = model.dayCells.get("2026-09-03");
+  assert.ok(sep2 && sep3);
+  assert.equal(sep2.kind, "transition");
+  assert.equal(sep2.transitionFromColor, TRAVEL_LEG_COLOR);
+  assert.ok(sep2.transitionToColor);
+  assert.equal(sep3.kind, "stay");
+  assert.equal(sep3.transitionFromColor, null);
+  assert.match(sep3.cityName ?? "", /Polignano/i);
 });

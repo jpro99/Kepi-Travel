@@ -1,10 +1,10 @@
 # Kepi Neuro Brain — product reasoning layer
 
-**Last updated:** 2026-07-08  
+**Last updated:** 2026-07-30  
 **Owner:** Jeff Russell  
 **Purpose:** Capture *why* Jeff asks for changes so agents, bots, and future ML can apply the same thinking across the whole site — not just the file that was edited last.
 
-This is **not** a trained neural network. It is the **reasoning graph** Kepi should follow until we have enough labeled outcomes to learn weights.
+This is **not** a trained neural network. It is the **reasoning graph** Kepi should follow until we have enough labeled outcomes to learn weights. Agents must **read and append** here when Jeff corrects trip truth (calendar, stays, forwards) so the next session does not re-learn the same lesson from scratch.
 
 ---
 
@@ -70,6 +70,18 @@ Jeff's Italy trip exposed a **category error**: Kepi treated **where the plane l
 - Legend and calendar must reflect **every** stay leg (see I21).
 - Connection-only cities (e.g. Seattle) should **collapse** — not full mission tabs.
 
+### 7. Calendar paints the traveler’s day, not leg-id churn
+
+- **Check-in / landing day** may split Travel | City.
+- **First full day in a city** is solid city color — never a fake “switch day.”
+- Split + “checking out / into next” only for real stay→stay moves.
+- Booked hotel city beats stale day-plan notes on that date.
+- Old archive forwards (e.g. 2018 payment emails with no stay dates) must not invent future check-ins or join the live trip (pending I45).
+
+### 8. Prep vs travel day chrome
+
+- Weeks out → prep Watch (documents, stays, pricing, official entry links). Do not overwhelm with connection/gate chrome until the travel window.
+
 ---
 
 ## Decision checklist (before shipping a feature)
@@ -116,4 +128,5 @@ If any answer is wrong, fix the reasoning — not just the symptom.
 
 | Date | Note |
 |------|------|
+| 2026-07-30 | Calendar switch-day honesty (I44); prep vs travel chrome; archive-forward caution; clarify agents append lessons here |
 | 2026-07-08 | Initial Neuro Brain — whole-trip execution philosophy, Jeff intent, apply checklist, next-update map |

@@ -301,6 +301,67 @@ export function resolveLegForDate(
   return covering.sort((a, b) => b.startDate.localeCompare(a.startDate))[0]!;
 }
 
+/**
+ * I44 — Split colors only for real overlaps / hotel switches.
+ * Do not paint the first full stay day after travel as a false "switch day".
+ */
+export function resolveDayCellTransition(args: {
+  covering: BuiltTripLeg[];
+  prevLeg: BuiltTripLeg | null;
+  leg: BuiltTripLeg | null;
+  hasFlight: boolean;
+}): {
+  kind: DayCellKind;
+  transitionFromColor: string | null;
+  transitionToColor: string | null;
+} {
+  const travelCover = args.covering.find((l) => l.type === "travel") ?? null;
+  const stayCover =
+    [...args.covering]
+      .filter((l) => l.type === "stay")
+      .sort((a, b) => b.startDate.localeCompare(a.startDate))[0] ?? null;
+
+  // Arrival / departure day: travel + stay both cover → Travel | City split.
+  if (travelCover && stayCover) {
+    return {
+      kind: "transition",
+      transitionFromColor: travelCover.color,
+      transitionToColor: stayCover.color,
+    };
+  }
+
+  const baseKind: DayCellKind = args.leg
+    ? args.leg.type === "travel"
+      ? "travel"
+      : "stay"
+    : "empty";
+
+  if (!args.prevLeg || !args.leg || args.prevLeg.id === args.leg.id) {
+    return { kind: baseKind, transitionFromColor: null, transitionToColor: null };
+  }
+
+  // Land transfer between booked stay cities.
+  if (args.prevLeg.type === "stay" && args.leg.type === "stay") {
+    return {
+      kind: "transition",
+      transitionFromColor: args.prevLeg.color,
+      transitionToColor: args.leg.color,
+    };
+  }
+
+  // Flight day where the resolved leg changes (e.g. outbound start).
+  if (args.hasFlight && (args.prevLeg.type === "travel" || args.leg.type === "travel")) {
+    return {
+      kind: "transition",
+      transitionFromColor: args.prevLeg.color,
+      transitionToColor: args.leg.color,
+    };
+  }
+
+  // First full day in city after travel (no flight today) — solid stay, not "switch day".
+  return { kind: baseKind, transitionFromColor: null, transitionToColor: null };
+}
+
 function mergeAdjacentLegs(legs: BuiltTripLeg[]): BuiltTripLeg[] {
   if (legs.length === 0) return legs;
   const sorted = [...legs].sort((a, b) => compareDateKeys(a.startDate, b.startDate));
@@ -606,6 +667,7 @@ export function buildTripLegCalendarModel(
     const leg = resolveLegForDate(legs, dateKey, hasFlight);
     const prevDayFlights = i > 0 ? flightsOnDay(flights, dayKeys[i - 1]!) : [];
     const prevLeg = i > 0 ? resolveLegForDate(legs, dayKeys[i - 1]!, prevDayFlights.length > 0) : null;
+    const covering = legs.filter((candidate) => legCoversDate(candidate, dateKey));
     const hotel = hotelOnDay(reservations, dateKey);
     const sleepCovered = hotelCoversSleepOnDay(reservations, dateKey) || coveredNights.has(dateKey);
     const dayPlan = options.dayPlans?.[dateKey];
@@ -633,22 +695,22 @@ export function buildTripLegCalendarModel(
       tripStartDate,
       tripEndDate,
     );
+    // Sleep truth: booked hotel city beats leftover day-plan notes (I44).
     const displayCity =
-      dayPlan?.location?.trim() ||
       hotelCity ||
-      noteCity ||
-      (leg?.type === "stay" ? leg.label : null);
+      dayPlan?.location?.trim() ||
+      (leg?.type === "stay" ? leg.label : null) ||
+      noteCity;
 
-    let kind: DayCellKind = leg ? (leg.type === "travel" ? "travel" : "stay") : "empty";
-    let transitionFromColor: string | null = null;
-    let transitionToColor: string | null = null;
-
-    // Split colors on city/hotel switch days (flight or land transfer) — keep both tones.
-    if (prevLeg && leg && prevLeg.id !== leg.id) {
-      kind = "transition";
-      transitionFromColor = prevLeg.color;
-      transitionToColor = leg.color;
-    }
+    const transition = resolveDayCellTransition({
+      covering,
+      prevLeg,
+      leg,
+      hasFlight,
+    });
+    let kind: DayCellKind = transition.kind;
+    let transitionFromColor = transition.transitionFromColor;
+    let transitionToColor = transition.transitionToColor;
 
     const legDays = leg ? dayKeys.filter((k) => k >= leg.startDate && k <= leg.endDate) : [];
     const dayIndexInLeg = leg ? legDays.indexOf(dateKey) + 1 : 0;

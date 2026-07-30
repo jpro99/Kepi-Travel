@@ -362,7 +362,10 @@ function DayDetailPanel({
             <p className="mt-2 text-sm text-[#3A3A3C]">
               {cell.flightSummary
                 ? `Travel day · ${cell.flightSummary}`
-                : "Switch day — checking out of one stay and into the next"}
+                : cell.transitionFromColor === TRAVEL_LEG_COLOR ||
+                    cell.transitionToColor === TRAVEL_LEG_COLOR
+                  ? "Arrival / check-in — travel meets your stay"
+                  : "Switch day — checking out of one stay and into the next"}
             </p>
           ) : null}
         </div>
