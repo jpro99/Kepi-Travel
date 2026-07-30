@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-30 (Batch 1: F13 push flightDate + Home alerts trust)
+Last updated: 2026-07-30 (Onboarding: real web-push subscribe + iOS Add to Home Screen)
+
+## Decision 2026-07-30 — Onboarding must register push, not just permission (Jeff approved)
+Step 3 “Turn on alerts” must call `subscribeToWebPushNotifications()` (same path as Home). Claiming “enabled” from `Notification.requestPermission()` alone left users without a server push subscription. iOS copy: Share → Add to Home Screen first. Only show “alerts on” when subscription is active.
 
 ## Decision 2026-07-30 — Batch 1 status/push trust (Jeff approved build)
 Ship gate/delay alerts that key by reservation `flightDate` (F13), Home “Enable flight alerts” + honest next-flight status line, PostHog `push_subscribed` / `flight_status_push_sent`. Env already has FlightAware + AeroDataBox + VAPID. Next: Batch 2 travel-day surface; airports still frozen until travel-day opens show in PostHog.

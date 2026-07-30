@@ -132,6 +132,7 @@ If any answer is wrong, fix the reasoning — not just the symptom.
 
 | Date | Note |
 |------|------|
+| 2026-07-30 | Onboarding alerts: real web-push subscribe + iOS home-screen hint |
 | 2026-07-30 | Batch 1: F13 push keyed by flightDate; Home alerts prompt + trust line |
 | 2026-07-30 | 10/10 path: status authority (F12), hide sci-fi, PostHog, free view invite, I45 archive; calendar I44 |
 | 2026-07-30 | Calendar switch-day honesty (I44); prep vs travel chrome; archive-forward caution; clarify agents append lessons here |

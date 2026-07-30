@@ -12,6 +12,12 @@ import {
 } from "@/components/onboarding/TripSetupForm";
 import { Logo } from "@/components/ui/Logo";
 import { redeemInviteCodeClient } from "@/lib/invite/redeemInviteCodeClient";
+import {
+  readWebPushSubscriptionActive,
+  subscribeToWebPushNotifications,
+} from "@/lib/push/webPushClient";
+import { trackEvent } from "@/lib/analytics/trackEvent";
+import { useAuth } from "@clerk/nextjs";
 
 const TOTAL_STEPS = 5;
 
@@ -87,6 +93,7 @@ function createDefaultResponse(): OnboardingResponse {
 
 export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
   const searchParams = useSearchParams();
+  const { userId } = useAuth();
   const t = useTranslations("OnboardingFlow");
   const tTripSetup = useTranslations("TripSetupForm");
   const [isLoading, setIsLoading] = useState(true);
@@ -107,6 +114,7 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
   const [gmailMessage, setGmailMessage] = useState<string | null>(null);
 
   const [notificationsBusy, setNotificationsBusy] = useState(false);
+  const [pushAlertsReady, setPushAlertsReady] = useState(false);
   const [notificationsPromptSeen, setNotificationsPromptSeen] = useState<boolean>(() => notificationsSeenCookiePresent());
   const [gmailBusy, setGmailBusy] = useState(false);
   const [gmailConnected, setGmailConnected] = useState(false);
@@ -558,33 +566,44 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
     await completeOnboarding();
   }, [completeOnboarding, currentStep, markNotificationsPromptSeen, notificationsPromptSeen]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void readWebPushSubscriptionActive().then((active) => {
+      if (!cancelled && active) {
+        setPushAlertsReady(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleEnableNotifications = useCallback(async (): Promise<void> => {
     if (notificationsBusy) return;
     setNotificationsBusy(true);
+    setNotificationsMessage(null);
     try {
-      if (typeof window === "undefined" || !("Notification" in window)) {
-        setNotificationsMessage(t("notificationsUnsupported"));
-        await markNotificationsPromptSeen();
-        return;
-      }
-      const permission =
-        Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
-      if (permission === "granted") {
+      // Full web-push subscribe (not Notification.permission alone) — otherwise gate/delay never deliver.
+      const result = await subscribeToWebPushNotifications();
+      if (result.ok) {
+        setPushAlertsReady(true);
         setNotificationsMessage(t("notificationsEnabled"));
+        void trackEvent({ type: "push_subscribed", userId: userId ?? null });
         await markNotificationsPromptSeen();
         return;
       }
-      if (permission === "denied") {
-        setNotificationsMessage(t("notificationsDenied"));
+      setNotificationsMessage(result.message || t("notificationsDismissed"));
+      if (result.requiresPro) {
         await markNotificationsPromptSeen();
-        return;
       }
-      setNotificationsMessage(t("notificationsDismissed"));
-      await markNotificationsPromptSeen();
+    } catch (error) {
+      setNotificationsMessage(
+        error instanceof Error ? error.message : t("notificationsUnsupported"),
+      );
     } finally {
       setNotificationsBusy(false);
     }
-  }, [markNotificationsPromptSeen, notificationsBusy, t]);
+  }, [markNotificationsPromptSeen, notificationsBusy, t, userId]);
 
   const handleCopyForwardAddress = useCallback(async (): Promise<void> => {
     if (!forwardAddress) return;
@@ -777,14 +796,17 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
 
           {currentStep === 3 ? (
             <div className="space-y-3 text-sm">
-              {notificationsPromptSeen ? (
-                <p className="text-slate-700 dark:text-slate-300">
-                  Notification preference already saved. You can manage alerts any time from settings.
+              {pushAlertsReady ? (
+                <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-slate-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-slate-100">
+                  {t("notificationsReady")}
                 </p>
               ) : (
                 <>
                   <p className="text-slate-700 dark:text-slate-300">
                     {t("notificationsDescription")}
+                  </p>
+                  <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                    {t("notificationsIosHint")}
                   </p>
                   <button
                     type="button"
@@ -792,13 +814,20 @@ export function OnboardingFlow({ onCreateFirstTrip }: OnboardingFlowProps) {
                       void handleEnableNotifications();
                     }}
                     disabled={notificationsBusy}
-                    className="rounded-lg bg-cyan-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="min-h-[48px] w-full rounded-lg bg-cyan-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {notificationsBusy ? t("requesting") : t("enableNotifications")}
                   </button>
+                  {notificationsPromptSeen ? (
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {t("notificationsRetryHint")}
+                    </p>
+                  ) : null}
                 </>
               )}
-              {notificationsMessage ? <p className="text-xs text-slate-600 dark:text-slate-400">{notificationsMessage}</p> : null}
+              {notificationsMessage ? (
+                <p className="text-xs text-slate-600 dark:text-slate-400">{notificationsMessage}</p>
+              ) : null}
             </div>
           ) : null}
 
