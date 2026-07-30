@@ -329,18 +329,18 @@ export function MobileMapForwardShell({
               onNavigateTab("more");
             })
           }
+          missingPriceCount={missingPriceCount}
           onReservationTap={onReservationTap}
           onGapActionTap={onGapActionTap}
           onSeeAllAttention={() => onNavigateTab("plan")}
         />
 
-        {hasActiveTrip &&
-        tripSpendSummary &&
-        (tripSpendSummary.missingPriceCount > 0 || (tripProblemCount ?? 0) > 0) ? (
+        {hasActiveTrip && tripSpendSummary ? (
           <TripSpendBadge
             summary={tripSpendSummary}
             problemCount={tripProblemCount}
-            onClick={() => onNavigateTab("book")}
+            onClick={onReviewPricing ?? (() => onNavigateTab("book"))}
+            alwaysActionable
             className="w-full"
           />
         ) : null}

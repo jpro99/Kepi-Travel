@@ -76,6 +76,35 @@ test("resolveReservationCashUsd scopes ITA EUR to matching flight leg", () => {
   );
 });
 
+test("I42: Airbnb charged-a-total wins over nearby per-night amount", () => {
+  const text = `
+Cosy, Romantic & Stylish Studio
+$245 per night
+Scheduled payment
+You will be charged a total of $736.44. Payment is scheduled for Aug 29, 2026.
+`;
+  assert.equal(parseCashUsdFromText(text), 736);
+});
+
+test("I42: long Airbnb email still resolves total when title window misses payment block", () => {
+  const pad = "x".repeat(800);
+  const text = `
+Reservation confirmed
+Cosy, Romantic & Stylish Studio
+${pad}
+Address Rio dei Miracoli Venice
+${pad}
+You will be charged a total of $736.44 with Mastercard.
+`;
+  assert.equal(
+    resolveReservationCashUsd({
+      title: "Cosy, Romantic & Stylish Studio",
+      originalEmailText: text,
+    }),
+    736,
+  );
+});
+
 test("resolveReservationCashUsd prefers stored quotedPriceUsd", () => {
   assert.equal(
     resolveReservationCashUsd({

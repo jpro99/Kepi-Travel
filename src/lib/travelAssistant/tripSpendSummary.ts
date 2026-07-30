@@ -21,6 +21,9 @@ export interface TripSpendReservation {
   pointsProgram?: string;
   notes?: string;
   originalEmailText?: string;
+  flightNumber?: string;
+  flightDepartureAirport?: string;
+  flightArrivalAirport?: string;
 }
 
 export interface TripSpendSummary {
@@ -78,6 +81,9 @@ function asPricingInput(reservation: TripSpendReservation): SpendPricingInput {
     originalEmailText: reservation.originalEmailText,
     confirmationCode: reservation.confirmationCode ?? undefined,
     title: reservation.title,
+    flightNumber: reservation.flightNumber,
+    flightDepartureAirport: reservation.flightDepartureAirport,
+    flightArrivalAirport: reservation.flightArrivalAirport,
   };
 }
 
@@ -209,8 +215,46 @@ export function computeTripSpend(reservations: TripSpendReservation[]): TripSpen
   };
 }
 
+export interface TripSpendLineItem {
+  id: string;
+  type: string;
+  title: string;
+  cashUsd?: number;
+  points?: number;
+  needsPrice: boolean;
+}
+
+/** Itemized spend for the pricing review sheet (I42). */
+export function buildTripSpendLineItems(reservations: TripSpendReservation[]): TripSpendLineItem[] {
+  const items: TripSpendLineItem[] = [];
+  for (const raw of reservations) {
+    if (!isSpendTrackedReservation(raw)) continue;
+    const reservation = hydrateSpendReservation(raw, reservations);
+    const cash = resolveReservationCashUsd(asPricingInput(reservation));
+    const points = hasPointsPrice(reservation) ? Math.round(reservation.quotedPointsMiles!) : undefined;
+    const needsPrice = reservationMissingPrice(reservation, reservations);
+    items.push({
+      id: reservation.id,
+      type: (reservation.type ?? "other").trim() || "other",
+      title: reservation.title?.trim() || "Reservation",
+      cashUsd: cash != null && cash > 0 ? cash : undefined,
+      points: points != null && points > 0 ? points : undefined,
+      needsPrice,
+    });
+  }
+  // Needs-price first, then by type.
+  return items.sort((a, b) => {
+    if (a.needsPrice !== b.needsPrice) return a.needsPrice ? -1 : 1;
+    return a.type.localeCompare(b.type) || a.title.localeCompare(b.title);
+  });
+}
+
 export function formatTripCashTotal(usd: number): string {
-  return `$${usd.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  const whole = Number.isInteger(usd);
+  return `$${usd.toLocaleString("en-US", {
+    minimumFractionDigits: whole ? 0 : 2,
+    maximumFractionDigits: whole ? 0 : 2,
+  })}`;
 }
 
 export function formatTripPointsTotal(points: number): string {

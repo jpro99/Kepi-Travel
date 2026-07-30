@@ -45,8 +45,8 @@ export function TripSpendBadge({
     hasProblems
       ? `${problemCount} trip issue${problemCount === 1 ? "" : "s"} — tap to review in Book.`
       : needsAttention
-        ? `${summary.missingPriceCount} reservation${summary.missingPriceCount === 1 ? "" : "s"} need miles or cash logged — tap to review in Book.`
-        : "Trip spend tracked from cash and points on your reservations";
+        ? `${summary.missingPriceCount} reservation${summary.missingPriceCount === 1 ? "" : "s"} need miles or cash logged — tap to see which.`
+        : "Trip spend — tap for the itemized cash and miles breakdown";
 
   const body = (
     <div className="flex flex-col items-end gap-0.5">
@@ -67,7 +67,7 @@ export function TripSpendBadge({
         </span>
       ) : needsAttention ? (
         <span className="text-[10px] font-bold uppercase tracking-wide text-yellow-900 dark:text-yellow-200">
-          {summary.missingPriceCount} need pricing · tap to fix
+          {summary.missingPriceCount} need pricing · tap to see which
         </span>
       ) : hasPoints && !hasCash ? (
         <span className="text-[10px] font-bold uppercase tracking-wide text-sky-800 dark:text-sky-300">

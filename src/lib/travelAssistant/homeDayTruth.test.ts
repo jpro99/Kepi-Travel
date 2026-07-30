@@ -2,8 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildConnectionCalmStatus,
+  buildHomePrepWatchItems,
   isTravelDayTakeover,
+  resolveHomePrepBand,
   shouldShowTerminalExplorePromo,
+  shouldShowTravelOpsChrome,
   TERMINAL_EXPLORE_WINDOW_MS,
 } from "@/lib/travelAssistant/homeDayTruth";
 
@@ -133,4 +136,21 @@ test("multi-day same-airport hop is not a calm connection", () => {
   ]);
   assert.equal(status.kind, "none");
   assert.equal(status.line, null);
+});
+
+test("I43: prep band hides travel-ops chrome a month out", () => {
+  assert.equal(resolveHomePrepBand(35), "far");
+  assert.equal(shouldShowTravelOpsChrome(35), false);
+  assert.equal(shouldShowTravelOpsChrome(3), true);
+  const items = buildHomePrepWatchItems({
+    daysUntilDeparture: 35,
+    destination: "Italy",
+    hotelCities: ["Venice", "Monopoli"],
+    staysComplete: true,
+    missingPriceCount: 2,
+  });
+  assert.ok(items.some((i) => /prep mode|weeks/i.test(i.title)));
+  assert.ok(items.some((i) => /Schengen|Italy/i.test(i.title)));
+  assert.ok(items.some((i) => /price/i.test(i.title)));
+  assert.equal(buildHomePrepWatchItems({ daysUntilDeparture: 2 }).length, 0);
 });

@@ -530,6 +530,16 @@ Label gaps as **After {city} checkout** / **Before {city} check-in** — never i
 
 **Test:** `src/lib/travelAssistant/tripNightCoverage.test.ts`
 
+**I42 — Email cash parse must prefer charged totals; pricing tap is itemized**
+Airbnb/Booking “charged a total of $X” wins over nearby “$Y per night”. Near-booking text windows must fall back to the full email when the slice has no cash. Spend badge opens an itemized sheet: which bookings still need price, and cash/miles already logged per reservation (accurate trip cost).
+
+**Test:** `src/lib/travelAssistant/parseReservationCashUsd.test.ts`, `tripSpendSummary.test.ts`
+
+**I43 — Prep-mode Home when departure is still weeks out**
+When `daysUntilDeparture > 14`, Home is prep mode: countdown Watch (documents, stays, pricing, official entry guidance with travel.state.gov — not immigration advice). Hide connection-calm and next-flight travel chrome so “Today looks light” / FCO connection noise does not overwhelm.
+
+**Test:** `src/lib/travelAssistant/homeDayTruth.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -700,6 +710,8 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I39 | `src/lib/travelAssistant/hotelStayDateExtract.test.ts`, `emailForwardParser.test.ts`, `confirmationHotelExtract.test.ts` |
 | I40 | `src/lib/travelAssistant/tripNightCoverage.test.ts` |
 | I41 | `src/lib/travelAssistant/tripNightCoverage.test.ts` |
+| I42 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts`, `tripSpendSummary.test.ts` |
+| I43 | `src/lib/travelAssistant/homeDayTruth.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

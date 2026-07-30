@@ -94,3 +94,98 @@ export function isTravelDayTakeover(phase: JourneyPhase, openAirportMode: boolea
   if (phase.kind === "airborne" || phase.kind === "just-landed") return true;
   return openAirportMode;
 }
+
+/** Hide connection / next-flight “today” chrome when trip is still weeks out (I43). */
+export const PREP_MODE_MIN_DAYS = 14;
+
+export type HomePrepBand = "far" | "getting_ready" | "final_week" | "travel_window";
+
+export function resolveHomePrepBand(daysUntilDeparture: number | null | undefined): HomePrepBand {
+  if (daysUntilDeparture == null || !Number.isFinite(daysUntilDeparture)) return "travel_window";
+  if (daysUntilDeparture > 30) return "far";
+  if (daysUntilDeparture > PREP_MODE_MIN_DAYS) return "getting_ready";
+  if (daysUntilDeparture > 6) return "final_week";
+  return "travel_window";
+}
+
+export function shouldShowTravelOpsChrome(daysUntilDeparture: number | null | undefined): boolean {
+  return resolveHomePrepBand(daysUntilDeparture) === "travel_window";
+}
+
+export interface HomePrepWatchItem {
+  id: string;
+  title: string;
+  detail: string;
+  href?: string;
+}
+
+/**
+ * Prep-mode Watch items when departure is still weeks away.
+ * Visa/entry is guidance with an official link — never invented legal advice.
+ */
+export function buildHomePrepWatchItems(input: {
+  daysUntilDeparture: number | null | undefined;
+  destination?: string | null;
+  hotelCities?: string[];
+  staysComplete?: boolean;
+  missingPriceCount?: number;
+}): HomePrepWatchItem[] {
+  const band = resolveHomePrepBand(input.daysUntilDeparture);
+  if (band === "travel_window") return [];
+
+  const days = input.daysUntilDeparture ?? 0;
+  const items: HomePrepWatchItem[] = [];
+  const places = [input.destination, ...(input.hotelCities ?? [])]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  const schengenHint =
+    /\b(italy|italia|rome|venice|monopoli|polignano|lecce|munich|germany|france|spain|schengen|europe)\b/iu.test(
+      places,
+    );
+
+  if (band === "far" || band === "getting_ready") {
+    items.push({
+      id: "prep-countdown",
+      title:
+        days > 30
+          ? `Trip in about ${Math.round(days / 7)} weeks — prep mode`
+          : `${days} days until departure — getting ready`,
+      detail: "Not travel day yet. Focus on documents and trip completeness, not gates or connections.",
+    });
+  } else if (band === "final_week") {
+    items.push({
+      id: "prep-final-week",
+      title: `Final week · ${days} day${days === 1 ? "" : "s"} out`,
+      detail: "Confirm stays, transfers, and offline apps. Flight connection checks move here soon.",
+    });
+  }
+
+  if (schengenHint && (band === "far" || band === "getting_ready")) {
+    items.push({
+      id: "prep-entry",
+      title: "Italy / Schengen entry (typical US tourist stay)",
+      detail:
+        "Short tourist visits are usually visa-free for US passports (under 90 days in Schengen). Confirm your passport and situation on the official site — Kepi is not immigration advice.",
+      href: "https://travel.state.gov/content/travel/en/international-travel/International-Travel-Country-Information-Pages/Italy.html",
+    });
+  }
+
+  if (input.staysComplete) {
+    items.push({
+      id: "prep-stays-set",
+      title: "Flights and stays look set",
+      detail: "Nice — keep forwarding anything new so the timeline stays accurate.",
+    });
+  }
+
+  if ((input.missingPriceCount ?? 0) > 0) {
+    items.push({
+      id: "prep-pricing",
+      title: `${input.missingPriceCount} booking${input.missingPriceCount === 1 ? "" : "s"} still need a price logged`,
+      detail: "Tap the spend badge to see which ones and fill cash or miles.",
+    });
+  }
+
+  return items.slice(0, 4);
+}

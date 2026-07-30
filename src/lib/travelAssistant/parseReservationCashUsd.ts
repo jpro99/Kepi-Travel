@@ -6,7 +6,7 @@
 import { parseMilesFromText } from "@/lib/travelAssistant/parseReservationMiles";
 
 const TOTAL_CONTEXT =
-  /\b(?:grand\s+total|total\s+(?:amount|price|cost|paid|charge|due|fare|for\s+trip|purchase\s+price)|amount\s+(?:paid|charged|due)|you\s+paid|price\s+paid|ticket\s+total|trip\s+total|booking\s+total|reservation\s+total|payment\s+total|purchase\s+total|charged\s+today|credit\s+card\s+charge|total\s+charges\s+for\s+air\s+travel)\b/iu;
+  /\b(?:grand\s+total|total\s+(?:amount|price|cost|paid|charge|due|fare|for\s+trip|purchase\s+price)|amount\s+(?:paid|charged|due)|you\s+paid|you\s+will\s+be\s+charged|will\s+be\s+charged\s+a\s+total|charged\s+a\s+total|price\s+paid|ticket\s+total|trip\s+total|booking\s+total|reservation\s+total|payment\s+total|purchase\s+total|charged\s+today|credit\s+card\s+charge|total\s+charges\s+for\s+air\s+travel|total\s+balance\s+due)\b/iu;
 
 const TICKET_VALUE_CONTEXT =
   /\b(?:new\s+ticket\s+value|ticket\s+value|original\s+ticket\s+value|fare\s+amount|airfare(?:\s+charges)?|summary\s+of\s+airfare)\b/iu;
@@ -205,11 +205,14 @@ function scoreAmountMatch(fullText: string, start: number, end: number): number 
   const windowEnd = Math.min(fullText.length, end + 90);
   const context = fullText.slice(windowStart, windowEnd);
   let score = 10;
-  if (TICKET_VALUE_CONTEXT.test(context)) score += 140;
-  if (TOTAL_CONTEXT.test(context)) score += 100;
+  const isTicketValue = TICKET_VALUE_CONTEXT.test(context);
+  const isStrongTotal = TOTAL_CONTEXT.test(context);
+  if (isTicketValue) score += 140;
+  if (isStrongTotal) score += 100;
   if (ZERO_DUE_CONTEXT.test(context)) score -= 150;
-  if (PENALTY_CONTEXT.test(context) && !TICKET_VALUE_CONTEXT.test(context)) score -= 60;
-  if (/\b(?:miles?|points?)\b/iu.test(context) && !TICKET_VALUE_CONTEXT.test(context)) score -= 40;
+  // Airbnb/Booking often put "per night" near "charged a total" — never let nightly kill a strong total (I42).
+  if (PENALTY_CONTEXT.test(context) && !isTicketValue && !isStrongTotal) score -= 60;
+  if (/\b(?:miles?|points?)\b/iu.test(context) && !isTicketValue && !isStrongTotal) score -= 40;
   if (/\bUSD\b/u.test(context)) score += 5;
   if (/\b(?:EUR|€)\b/u.test(context)) score += 4;
   if (/\$\s*[\d,]+(?:\.\d{2})?\s*(?:USD)?/u.test(context)) score += 3;
@@ -285,7 +288,7 @@ export function parseCashUsdFromText(text: string): number | undefined {
   }
 
   const patterns: RegExp[] = [
-    /\b(?:grand\s+total|total(?:\s+(?:amount|price|cost|paid|charge|due|fare))?|amount\s+(?:paid|charged|due)|you\s+paid|purchase\s+total|ticket\s+total|trip\s+total|payment\s+total|room\s+total|stay\s+total|reservation\s+total)\b[^$\d]{0,24}\$?\s*([\d,]+(?:\.\d{2})?)/giu,
+    /\b(?:grand\s+total|total(?:\s+(?:amount|price|cost|paid|charge|due|fare|balance))?|amount\s+(?:paid|charged|due)|you\s+paid|you\s+will\s+be\s+charged(?:\s+a\s+total)?|charged\s+a\s+total|will\s+be\s+charged\s+a\s+total|purchase\s+total|ticket\s+total|trip\s+total|payment\s+total|room\s+total|stay\s+total|reservation\s+total)\b[^$\d]{0,40}\$?\s*([\d,]+(?:\.\d{2})?)/giu,
     /\b(?:USD|US\$)\s*([\d,]+(?:\.\d{2})?)/giu,
     /\$\s*([\d,]+(?:\.\d{2})?)(?:\s*(?:USD|US\$|usd))?/giu,
     /\b([\d,]+(?:\.\d{2})?)\s*(?:USD|US\$|US\s*dollars?)\b/giu,
@@ -353,7 +356,12 @@ function pricingTextForReservation(reservation: CashUsdResolvable): string {
     departureAirport: reservation.flightDepartureAirport,
     arrivalAirport: reservation.flightArrivalAirport,
   });
-  return nearText ?? combined;
+  // Prefer near-booking slice when it yields a cash total; otherwise use the full email (I42).
+  if (nearText) {
+    const nearCash = parseCashUsdFromText(nearText);
+    if (nearCash != null) return nearText;
+  }
+  return combined;
 }
 
 export function resolveReservationCashUsd(reservation: CashUsdResolvable): number | undefined {
@@ -373,6 +381,13 @@ export function resolveReservationCashUsd(reservation: CashUsdResolvable): numbe
   if (isZeroCashDueContext(pricingText) && isAwardOnlyReservationText(pricingText)) {
     return undefined;
   }
-  const parsed = parseCashUsdFromText(pricingText);
+  let parsed = parseCashUsdFromText(pricingText);
+  // Double fallback: full notes+email if sliced text still failed.
+  if (parsed == null) {
+    const full = [reservation.notes, reservation.originalEmailText].filter(Boolean).join("\n");
+    if (full && full !== pricingText) {
+      parsed = parseCashUsdFromText(full);
+    }
+  }
   return parsed != null ? Math.round(parsed) : undefined;
 }

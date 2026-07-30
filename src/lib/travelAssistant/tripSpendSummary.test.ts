@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildTripSpendLineItems,
   computeTripSpend,
   reservationHasAnyPrice,
   reservationMissingPrice,
@@ -115,4 +116,25 @@ test("forwarded email legs share pricing via sourceEmailId without duplicate mis
   const summary = computeTripSpend(reservations);
   assert.equal(summary.cashTotalUsd, 892);
   assert.equal(summary.missingPriceCount, 0);
+});
+
+test("I42: buildTripSpendLineItems lists needs-price first and Airbnb email cash", () => {
+  const reservations = [
+    {
+      id: "h1",
+      type: "hotel",
+      title: "Cosy, Romantic & Stylish Studio",
+      originalEmailText:
+        "$245 per night. You will be charged a total of $736.44. Payment scheduled.",
+    },
+    { id: "r1", type: "ride", title: "Uber to airport" },
+    { id: "f1", type: "flight", title: "SEA-FCO", quotedPriceUsd: 1200 },
+  ];
+  const items = buildTripSpendLineItems(reservations);
+  assert.equal(items[0]?.id, "r1");
+  assert.equal(items[0]?.needsPrice, true);
+  const airbnb = items.find((i) => i.id === "h1");
+  assert.equal(airbnb?.needsPrice, false);
+  assert.equal(airbnb?.cashUsd, 736);
+  assert.equal(items.find((i) => i.id === "f1")?.cashUsd, 1200);
 });

@@ -107,6 +107,7 @@ export function DesktopTripHomeView({
   onQuickGroundTransport,
   liveStatus,
   stayDecisions,
+  missingPriceCount = 0,
 }: DesktopTripHomeViewProps) {
   const transportReservations =
     transportReservationsProp ??
@@ -152,6 +153,7 @@ export function DesktopTripHomeView({
         onStartNewTrip={onStartNewTrip}
         showFreePlanNudge={showFreePlanNudge}
         onSeeProPlans={onSeeProPlans}
+        missingPriceCount={missingPriceCount}
         onReservationTap={onReservationTap}
         onGapActionTap={onGapActionTap}
         onSeeAllAttention={onOpenPlan}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 import {
   buildMissionControlSnapshot,
@@ -15,7 +15,9 @@ import type { CheckInHandoffContent } from "@/lib/travelAssistant/checkInHandoff
 import { CheckInHandoffCard } from "@/components/travelAssistant/CheckInHandoffCard";
 import {
   buildConnectionCalmStatus,
+  buildHomePrepWatchItems,
   isTravelDayTakeover,
+  shouldShowTravelOpsChrome,
   type ConnectionCalmStatus,
 } from "@/lib/travelAssistant/homeDayTruth";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
@@ -47,6 +49,8 @@ export interface MissionControlViewProps {
   /** Soft Free→Pro clarity (I41). Hidden when Pro/lifetime. */
   showFreePlanNudge?: boolean;
   onSeeProPlans?: () => void;
+  /** For prep-mode Watch (I43). */
+  missingPriceCount?: number;
   onOpenBook: () => void;
   onOpenPlan: () => void;
   onOpenAirportMode: () => void;
@@ -71,8 +75,22 @@ function statusLabel(status: ReadinessStatus): string {
   return "Needs you";
 }
 
-function heroTitle(status: ReadinessStatus, zoom: MissionControlZoom, day?: DayReadiness): string {
+function heroTitle(
+  status: ReadinessStatus,
+  zoom: MissionControlZoom,
+  options?: { day?: DayReadiness; daysUntil?: number | null; prepMode?: boolean },
+): string {
   if (status === "problem") return "Action needed";
+  if (options?.prepMode && (zoom === "today" || zoom === "trip")) {
+    const days = options.daysUntil;
+    if (days != null && days > 30) {
+      return `Trip in about ${Math.max(1, Math.round(days / 7))} weeks`;
+    }
+    if (days != null && days > 0) {
+      return `${days} day${days === 1 ? "" : "s"} until departure`;
+    }
+    return "Prep for your trip";
+  }
   if (zoom === "today") {
     if (status === "set") return "Today is set";
     if (status === "watch") return "Today looks light";
@@ -100,6 +118,7 @@ export function MissionControlView({
   locationStatus = "unknown",
   showFreePlanNudge = false,
   onSeeProPlans,
+  missingPriceCount = 0,
   onOpenBook,
   onOpenPlan,
   onOpenAirportMode,
@@ -110,6 +129,7 @@ export function MissionControlView({
   onSeeAllAttention,
 }: MissionControlViewProps) {
   const [zoom, setZoom] = useState<MissionControlZoom>("today");
+  const [zoomTouched, setZoomTouched] = useState(false);
   const [selectedDay, setSelectedDay] = useState<DayReadiness | null>(null);
 
   const snap = useMemo(
@@ -136,9 +156,20 @@ export function MissionControlView({
     ],
   );
 
+  const showTravelOps = shouldShowTravelOpsChrome(snap.daysUntilDeparture);
+  const prepMode = !showTravelOps;
+
+  useEffect(() => {
+    if (zoomTouched) return;
+    if (prepMode) setZoom("trip");
+  }, [prepMode, zoomTouched]);
+
   const connectionCalm: ConnectionCalmStatus = useMemo(
-    () => buildConnectionCalmStatus(reservations as TransportRouteReservation[]),
-    [reservations],
+    () =>
+      showTravelOps
+        ? buildConnectionCalmStatus(reservations as TransportRouteReservation[])
+        : { kind: "none", line: null },
+    [reservations, showTravelOps],
   );
 
   const completeness = useMemo(
@@ -151,6 +182,27 @@ export function MissionControlView({
       }),
     [reservations, stayDecisions, startDate, endDate],
   );
+
+  const prepWatchItems = useMemo(() => {
+    const hotelCities = reservations
+      .filter((r) => (r.type ?? "").toLowerCase() === "hotel")
+      .map((r) => r.location?.trim() || r.title?.trim() || "")
+      .filter(Boolean);
+    return buildHomePrepWatchItems({
+      daysUntilDeparture: snap.daysUntilDeparture,
+      destination,
+      hotelCities,
+      staysComplete: completeness.flights === "green" && completeness.hotels === "green",
+      missingPriceCount,
+    });
+  }, [
+    reservations,
+    snap.daysUntilDeparture,
+    destination,
+    completeness.flights,
+    completeness.hotels,
+    missingPriceCount,
+  ]);
 
   const atAirport =
     locationStatus === "at-airport" || locationStatus === "in-terminal";
@@ -285,14 +337,17 @@ export function MissionControlView({
 
   const activeStatus =
     zoom === "today" ? snap.today.status : zoom === "week" ? weekStatus(snap.week) : snap.tripStatus;
-  const activeSummary =
-    zoom === "today"
+  const activeSummary = prepMode
+    ? prepWatchItems[0]?.detail ??
+      "Prep mode — documents, stays, and pricing. Connection checks show closer to departure."
+    : zoom === "today"
       ? snap.today.summary
       : zoom === "week"
         ? weekSummary(snap.week)
         : snap.tripSummary;
-  const heroAttention =
-    zoom === "today"
+  const heroAttention = prepMode
+    ? []
+    : zoom === "today"
       ? snap.today.attention.slice(0, 3)
       : zoom === "trip"
         ? snap.attentionTop3
@@ -380,7 +435,10 @@ export function MissionControlView({
             <button
               key={key}
               type="button"
-              onClick={() => setZoom(key)}
+              onClick={() => {
+                setZoomTouched(true);
+                setZoom(key);
+              }}
               className={`min-h-[44px] rounded-xl text-[14px] font-semibold transition ${
                 active ? "bg-white text-[#1D1D1F] shadow-sm" : "text-[#6E6E73]"
               }`}
@@ -402,17 +460,23 @@ export function MissionControlView({
           {statusLabel(activeStatus)}
         </p>
         <h2 className="mt-1 text-[22px] font-semibold tracking-tight text-[#1D1D1F]">
-          {heroTitle(activeStatus, zoom, snap.today)}
+          {heroTitle(activeStatus, zoom, {
+            day: snap.today,
+            daysUntil: snap.daysUntilDeparture,
+            prepMode,
+          })}
         </h2>
         <p className="mt-1 text-[15px] leading-relaxed text-[#6E6E73]">{activeSummary}</p>
 
-        {snap.leaveByHint && (snap.phase === "departure_day" || snap.phase === "return_day") ? (
+        {showTravelOps &&
+        snap.leaveByHint &&
+        (snap.phase === "departure_day" || snap.phase === "return_day") ? (
           <p className="mt-3 rounded-xl bg-white px-3 py-2 text-[14px] font-medium text-[#1D1D1F]">
             {snap.leaveByHint}
           </p>
         ) : null}
 
-        {connectionCalm.line ? (
+        {showTravelOps && connectionCalm.line ? (
           <p
             className={`mt-3 rounded-xl px-3 py-2 text-[14px] font-medium ${
               connectionCalm.kind === "conflict"
@@ -424,7 +488,7 @@ export function MissionControlView({
           </p>
         ) : null}
 
-        {snap.nextFlight && (zoom === "today" || snap.phase === "departure_day") ? (
+        {showTravelOps && snap.nextFlight && (zoom === "today" || snap.phase === "departure_day") ? (
           <button
             type="button"
             onClick={() => onReservationTap?.(snap.nextFlight!.id)}
@@ -441,6 +505,30 @@ export function MissionControlView({
               </p>
             ) : null}
           </button>
+        ) : null}
+
+        {prepMode && prepWatchItems.length > 0 ? (
+          <ul className="mt-3 space-y-2">
+            {prepWatchItems.map((item) => (
+              <li
+                key={item.id}
+                className="rounded-xl bg-white px-3 py-2.5 text-[14px] text-[#1D1D1F]"
+              >
+                <p className="font-semibold">{item.title}</p>
+                <p className="mt-0.5 text-[13px] text-[#6E6E73]">{item.detail}</p>
+                {item.href ? (
+                  <a
+                    href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1 inline-block text-[13px] font-semibold text-[#007AFF]"
+                  >
+                    Official travel.state.gov guidance
+                  </a>
+                ) : null}
+              </li>
+            ))}
+          </ul>
         ) : null}
 
         {heroAttention.length > 0 ? (
@@ -507,7 +595,7 @@ export function MissionControlView({
         </div>
       ) : null}
 
-      {zoom === "today" ? (
+      {zoom === "today" && showTravelOps ? (
         <button
           type="button"
           onClick={() => setSelectedDay(snap.today)}

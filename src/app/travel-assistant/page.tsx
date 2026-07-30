@@ -169,9 +169,10 @@ import { ItineraryTabView } from "@/components/travelAssistant/ItineraryTabView"
 import { BookTabView } from "@/components/travelAssistant/BookTabView";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
+import { TripPricingReviewSheet } from "@/components/travelAssistant/TripPricingReviewSheet";
 import { hydrateReservationsPricing, applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import { buildTransportConflictReservationIds } from "@/lib/travelAssistant/reservationAttention";
-import { computeTripSpend } from "@/lib/travelAssistant/tripSpendSummary";
+import { buildTripSpendLineItems, computeTripSpend } from "@/lib/travelAssistant/tripSpendSummary";
 import { preDepartureStayDecisionId, type TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 import { homeBaseStayDecisionId } from "@/lib/travelAssistant/tripNightCoverage";
 import { resolveBoardingPassUrl } from "@/lib/travelAssistant/reservationLinks";
@@ -1994,6 +1995,7 @@ export default function TravelAssistantPage() {
   const [showAdvancedShortcut] = useState(false);
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [manualReservationModalOpen, setManualReservationModalOpen] = useState(false);
+  const [pricingReviewOpen, setPricingReviewOpen] = useState(false);
   const [manualReservationPresetType, setManualReservationPresetType] = useState<"flight" | "hotel" | "car" | null>(null);
   const [hotelSearchModalOpen, setHotelSearchModalOpen] = useState(false);
   const [inlineHotelSearchOpen, setInlineHotelSearchOpen] = useState(false);
@@ -4384,9 +4386,17 @@ export default function TravelAssistantPage() {
     [consumerReservationsSorted],
   );
 
-  const tripSpendSummary = useMemo(
-    () => computeTripSpend(advancedWorkspaceEnabled ? reservations : consumerReservationsSorted),
+  const tripSpendReservations = useMemo(
+    () => (advancedWorkspaceEnabled ? reservations : consumerReservationsSorted),
     [advancedWorkspaceEnabled, consumerReservationsSorted, reservations],
+  );
+  const tripSpendSummary = useMemo(
+    () => computeTripSpend(tripSpendReservations),
+    [tripSpendReservations],
+  );
+  const tripSpendLineItems = useMemo(
+    () => buildTripSpendLineItems(tripSpendReservations),
+    [tripSpendReservations],
   );
   const activeStayDecisions = useMemo(
     () => (activeTripId ? tripStayDecisionsByTrip[activeTripId] ?? {} : {}),
@@ -9719,13 +9729,12 @@ export default function TravelAssistantPage() {
                     Search
                   </button>
                 ) : null}
-                {!showUnconfiguredTripShell &&
-                activeTrip &&
-                (tripSpendSummary.missingPriceCount > 0 || transportConflictReservationIds.size > 0) ? (
+                {!showUnconfiguredTripShell && activeTrip ? (
                   <TripSpendBadge
                     summary={tripSpendSummary}
                     problemCount={transportConflictReservationIds.size}
-                    onClick={() => navigateToBook("flights")}
+                    onClick={() => setPricingReviewOpen(true)}
+                    alwaysActionable
                   />
                 ) : null}
                 <div className="relative">
@@ -9882,7 +9891,7 @@ export default function TravelAssistantPage() {
                 emailForwardSetupMessage={emailForwardSetupMessage}
                 missingPriceCount={tripSpendSummary.missingPriceCount}
                 stayDecisions={activeStayDecisions}
-                onReviewPricing={() => navigateToBook("flights")}
+                onReviewPricing={() => setPricingReviewOpen(true)}
                 onGapActionTap={handleItineraryGapAction}
                 onSkipPreDepartureNight={(flightDay) => {
                   void handleSkipPreDepartureNight(flightDay);
@@ -10023,7 +10032,7 @@ export default function TravelAssistantPage() {
                 nearestAirport={guidanceNearestAirport}
                 missingPriceCount={tripSpendSummary.missingPriceCount}
                 stayDecisions={activeStayDecisions}
-                onReviewPricing={() => navigateToBook("flights")}
+                onReviewPricing={() => setPricingReviewOpen(true)}
                 onGapActionTap={handleItineraryGapAction}
                 onSkipPreDepartureNight={(flightDay) => {
                   void handleSkipPreDepartureNight(flightDay);
@@ -10060,7 +10069,7 @@ export default function TravelAssistantPage() {
               tripEndDate={activeTrip?.endDate ?? null}
               missingPriceCount={tripSpendSummary.missingPriceCount}
               stayDecisions={activeStayDecisions}
-              onReviewPricing={() => navigateToBook("flights")}
+              onReviewPricing={() => setPricingReviewOpen(true)}
               onSkipPreDepartureNight={(flightDay) => {
                 void handleSkipPreDepartureNight(flightDay);
               }}
@@ -10158,7 +10167,7 @@ export default function TravelAssistantPage() {
               hotelCount={wizardHotelCount}
               tripSpendSummary={tripSpendSummary}
               tripProblemCount={transportConflictReservationIds.size}
-              onReviewPricing={() => navigateToBook("flights")}
+              onReviewPricing={() => setPricingReviewOpen(true)}
             />
           ) : consumerTab === "photos" ? (
             <section className="space-y-4">
@@ -11511,6 +11520,13 @@ export default function TravelAssistantPage() {
         gate={upgradeModalGate}
         currentPlan={billingStatusPlan}
         onClose={closeUpgradeModal}
+      />
+      <TripPricingReviewSheet
+        open={pricingReviewOpen}
+        summary={tripSpendSummary}
+        lineItems={tripSpendLineItems}
+        onClose={() => setPricingReviewOpen(false)}
+        onOpenReservation={(id) => openDrawer("reservation", id)}
       />
       <GmailImportScopeModal
         key={gmailScopeModalKey}

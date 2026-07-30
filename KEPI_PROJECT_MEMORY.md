@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-29 (I41 — Stay Gaps after-checkout copy + Free/Pro nudge)
+Last updated: 2026-07-30 (I42 pricing sheet + I43 prep-mode Home)
+
+## Decision 2026-07-30 — Prep Home + smarter pricing (Jeff approved)
+When trip is >14 days out, Home is prep mode (countdown, documents/entry guidance with official link, stays/pricing) — hide connection/next-flight chrome. Email cash parse: Airbnb “charged a total” beats “per night”; fall back to full email if near-booking slice misses payment. Spend badge opens itemized pricing sheet (needs price vs logged).
 
 ## Decision 2026-07-29 — Stay Gaps wording + Free/Pro clarity (Jeff approved)
 Gaps say “After Venice checkout” not “near Venice.” Soft Free banner on Home: 1 trip; Pro = unlimited + email import + alerts ($9). Forwarding stays free.
