@@ -18,30 +18,32 @@ function createSubscription(suffix: string) {
   };
 }
 
-test("flight status push bridge stores baseline without alerting", async () => {
+async function withAdminPushHarness(
+  run: (ctx: { userId: string; flightNumber: string }) => Promise<void>,
+): Promise<void> {
+  // userId "1" is always treated as admin → Pro push feature enabled
   const userId = "1";
+  const flightNumber = `T${generateId().replace(/[^a-zA-Z0-9]/gu, "").slice(0, 6).toUpperCase()}`;
   const previousPublic = process.env.VAPID_PUBLIC_KEY;
   const previousPrivate = process.env.VAPID_PRIVATE_KEY;
   const previousMailto = process.env.VAPID_MAILTO;
   process.env.VAPID_PUBLIC_KEY = "test-public";
   process.env.VAPID_PRIVATE_KEY = "test-private";
   process.env.VAPID_MAILTO = "alerts@example.com";
+
   setWebPushClientForTests({
-    setVapidDetails() {},
-    async sendNotification() {},
+    setVapidDetails() {
+      // noop
+    },
+    async sendNotification() {
+      // noop default — tests that need capture override via nested client if needed
+    },
   });
+
   try {
     await unsubscribeUser(userId);
-    await subscribeUser(userId, createSubscription(`baseline-${generateId()}`));
-    const first = await maybeSendFlightStatusPushAlerts(userId, {
-      flightNumber: "AS832",
-      flightDate: "2026-07-01",
-      departureGate: "C12",
-      delayMinutes: 0,
-      flightStatus: "scheduled",
-    });
-    assert.equal(first.sent, 0);
-    assert.equal(first.skippedReason, "baseline");
+    await subscribeUser(userId, createSubscription(`f13-${flightNumber}`));
+    await run({ userId, flightNumber });
   } finally {
     await unsubscribeUser(userId);
     setWebPushClientForTests(null);
@@ -49,6 +51,20 @@ test("flight status push bridge stores baseline without alerting", async () => {
     process.env.VAPID_PRIVATE_KEY = previousPrivate;
     process.env.VAPID_MAILTO = previousMailto;
   }
+}
+
+test("flight status push bridge stores baseline without alerting", async () => {
+  await withAdminPushHarness(async ({ userId, flightNumber }) => {
+    const first = await maybeSendFlightStatusPushAlerts(userId, {
+      flightNumber,
+      flightDate: "2026-07-01",
+      departureGate: "C12",
+      delayMinutes: 0,
+      flightStatus: "scheduled",
+    });
+    assert.equal(first.sent, 0);
+    assert.equal(first.skippedReason, "baseline");
+  });
 });
 
 test("flight status push bridge skips without pro subscription or push registration", async () => {
@@ -72,8 +88,7 @@ test("flight status push bridge skips without pro subscription or push registrat
 });
 
 test("flight status push bridge alerts once on gate change for same flightDate (F13)", async () => {
-  // userId "1" is always treated as admin → Pro push feature enabled
-  const userId = "1";
+  const notifications: Array<{ title: string; body: string }> = [];
   const previousPublic = process.env.VAPID_PUBLIC_KEY;
   const previousPrivate = process.env.VAPID_PRIVATE_KEY;
   const previousMailto = process.env.VAPID_MAILTO;
@@ -81,7 +96,9 @@ test("flight status push bridge alerts once on gate change for same flightDate (
   process.env.VAPID_PRIVATE_KEY = "test-private";
   process.env.VAPID_MAILTO = "alerts@example.com";
 
-  const notifications: Array<{ title: string; body: string }> = [];
+  const userId = "1";
+  const flightNumber = `G${generateId().replace(/[^a-zA-Z0-9]/gu, "").slice(0, 6).toUpperCase()}`;
+
   setWebPushClientForTests({
     setVapidDetails() {
       // noop
@@ -94,10 +111,10 @@ test("flight status push bridge alerts once on gate change for same flightDate (
 
   try {
     await unsubscribeUser(userId);
-    await subscribeUser(userId, createSubscription(`gate-f13-${generateId()}`));
+    await subscribeUser(userId, createSubscription(`gate-${flightNumber}`));
 
     const baseline = await maybeSendFlightStatusPushAlerts(userId, {
-      flightNumber: "AS832",
+      flightNumber,
       flightDate: "2026-09-14",
       departureGate: "C12",
       delayMinutes: 0,
@@ -107,7 +124,7 @@ test("flight status push bridge alerts once on gate change for same flightDate (
     assert.equal(baseline.skippedReason, "baseline");
 
     const changed = await maybeSendFlightStatusPushAlerts(userId, {
-      flightNumber: "AS832",
+      flightNumber,
       flightDate: "2026-09-14",
       departureGate: "D4",
       delayMinutes: 0,
@@ -118,9 +135,9 @@ test("flight status push bridge alerts once on gate change for same flightDate (
     assert.match(notifications[0]?.title ?? "", /Gate changed/i);
     assert.match(notifications[0]?.body ?? "", /D4/);
 
-    // Wrong date key must not see prior gate — new baseline, no alert
+    // Different date = different snapshot key → new baseline, no alert
     const otherDay = await maybeSendFlightStatusPushAlerts(userId, {
-      flightNumber: "AS832",
+      flightNumber,
       flightDate: "2026-09-15",
       departureGate: "E1",
       delayMinutes: 0,
