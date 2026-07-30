@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { resetAdminUserIdsCacheForTests } from "@/lib/admin/adminAccess";
 import { maybeSendFlightStatusPushAlerts } from "@/lib/travelAssistant/flightStatusPushBridge";
 import {
   setWebPushClientForTests,
@@ -18,35 +19,49 @@ function createSubscription(suffix: string) {
   };
 }
 
-async function withAdminPushHarness(
-  run: (ctx: { userId: string; flightNumber: string }) => Promise<void>,
+function uniqueFlightNumber(prefix: string): string {
+  return `${prefix}${generateId().replace(/[^a-zA-Z0-9]/gu, "").slice(0, 6).toUpperCase()}`;
+}
+
+async function withIsolatedAdminPush(
+  run: (ctx: {
+    userId: string;
+    flightNumber: string;
+    notifications: Array<{ title: string; body: string }>;
+  }) => Promise<void>,
 ): Promise<void> {
-  // userId "1" is always treated as admin → Pro push feature enabled
-  const userId = "1";
-  const flightNumber = `T${generateId().replace(/[^a-zA-Z0-9]/gu, "").slice(0, 6).toUpperCase()}`;
+  const userId = `push-admin-${generateId()}`;
+  const flightNumber = uniqueFlightNumber("T");
+  const previousAdmin = process.env.ADMIN_USER_IDS;
   const previousPublic = process.env.VAPID_PUBLIC_KEY;
   const previousPrivate = process.env.VAPID_PRIVATE_KEY;
   const previousMailto = process.env.VAPID_MAILTO;
+
+  process.env.ADMIN_USER_IDS = userId;
+  resetAdminUserIdsCacheForTests();
   process.env.VAPID_PUBLIC_KEY = "test-public";
   process.env.VAPID_PRIVATE_KEY = "test-private";
   process.env.VAPID_MAILTO = "alerts@example.com";
 
+  const notifications: Array<{ title: string; body: string }> = [];
   setWebPushClientForTests({
     setVapidDetails() {
       // noop
     },
-    async sendNotification() {
-      // noop default — tests that need capture override via nested client if needed
+    async sendNotification(_subscription, payload) {
+      const parsed = JSON.parse(payload ?? "{}") as { title: string; body: string };
+      notifications.push({ title: parsed.title, body: parsed.body });
     },
   });
 
   try {
-    await unsubscribeUser(userId);
-    await subscribeUser(userId, createSubscription(`f13-${flightNumber}`));
-    await run({ userId, flightNumber });
+    await subscribeUser(userId, createSubscription(userId));
+    await run({ userId, flightNumber, notifications });
   } finally {
     await unsubscribeUser(userId);
     setWebPushClientForTests(null);
+    process.env.ADMIN_USER_IDS = previousAdmin;
+    resetAdminUserIdsCacheForTests();
     process.env.VAPID_PUBLIC_KEY = previousPublic;
     process.env.VAPID_PRIVATE_KEY = previousPrivate;
     process.env.VAPID_MAILTO = previousMailto;
@@ -54,7 +69,7 @@ async function withAdminPushHarness(
 }
 
 test("flight status push bridge stores baseline without alerting", async () => {
-  await withAdminPushHarness(async ({ userId, flightNumber }) => {
+  await withIsolatedAdminPush(async ({ userId, flightNumber }) => {
     const first = await maybeSendFlightStatusPushAlerts(userId, {
       flightNumber,
       flightDate: "2026-07-01",
@@ -88,31 +103,7 @@ test("flight status push bridge skips without pro subscription or push registrat
 });
 
 test("flight status push bridge alerts once on gate change for same flightDate (F13)", async () => {
-  const notifications: Array<{ title: string; body: string }> = [];
-  const previousPublic = process.env.VAPID_PUBLIC_KEY;
-  const previousPrivate = process.env.VAPID_PRIVATE_KEY;
-  const previousMailto = process.env.VAPID_MAILTO;
-  process.env.VAPID_PUBLIC_KEY = "test-public";
-  process.env.VAPID_PRIVATE_KEY = "test-private";
-  process.env.VAPID_MAILTO = "alerts@example.com";
-
-  const userId = "1";
-  const flightNumber = `G${generateId().replace(/[^a-zA-Z0-9]/gu, "").slice(0, 6).toUpperCase()}`;
-
-  setWebPushClientForTests({
-    setVapidDetails() {
-      // noop
-    },
-    async sendNotification(_subscription, payload) {
-      const parsed = JSON.parse(payload ?? "{}") as { title: string; body: string };
-      notifications.push({ title: parsed.title, body: parsed.body });
-    },
-  });
-
-  try {
-    await unsubscribeUser(userId);
-    await subscribeUser(userId, createSubscription(`gate-${flightNumber}`));
-
+  await withIsolatedAdminPush(async ({ userId, flightNumber, notifications }) => {
     const baseline = await maybeSendFlightStatusPushAlerts(userId, {
       flightNumber,
       flightDate: "2026-09-14",
@@ -130,12 +121,11 @@ test("flight status push bridge alerts once on gate change for same flightDate (
       delayMinutes: 0,
       flightStatus: "scheduled",
     });
-    assert.equal(changed.sent, 1);
+    assert.equal(changed.sent, 1, `expected gate push, got ${JSON.stringify(changed)}`);
     assert.equal(notifications.length, 1);
     assert.match(notifications[0]?.title ?? "", /Gate changed/i);
     assert.match(notifications[0]?.body ?? "", /D4/);
 
-    // Different date = different snapshot key → new baseline, no alert
     const otherDay = await maybeSendFlightStatusPushAlerts(userId, {
       flightNumber,
       flightDate: "2026-09-15",
@@ -146,11 +136,5 @@ test("flight status push bridge alerts once on gate change for same flightDate (
     assert.equal(otherDay.sent, 0);
     assert.equal(otherDay.skippedReason, "baseline");
     assert.equal(notifications.length, 1);
-  } finally {
-    await unsubscribeUser(userId);
-    setWebPushClientForTests(null);
-    process.env.VAPID_PUBLIC_KEY = previousPublic;
-    process.env.VAPID_PRIVATE_KEY = previousPrivate;
-    process.env.VAPID_MAILTO = previousMailto;
-  }
+  });
 });
