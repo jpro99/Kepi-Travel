@@ -61,10 +61,10 @@ When several flight legs share a confirmation code or the same forwarded email, 
 
 **Test:** `src/lib/travelAssistant/tripSpendSummary.test.ts`
 
-**G15 — App Store account deletion + no Stripe IAP substitute on iOS native**  
-Signed-in users must be able to permanently delete their account in-app (More / Billing → Delete account → type `DELETE`). Capacitor **iOS** must not open Stripe Checkout for Pro/Concierge; that requires Apple IAP (RevenueCat/StoreKit). Web and PWA may keep Stripe.
+**G15 — App Store account deletion + RevenueCat IAP on iOS native**  
+Signed-in users must be able to permanently delete their account in-app (More / Billing → Delete account → type `DELETE`). Capacitor **iOS** must not open Stripe Checkout for Pro/Concierge — use RevenueCat/StoreKit entitlements `kepi_pro` / `kepi_concierge` instead. Web and PWA may keep Stripe.
 
-**Test:** `src/lib/billing/nativeBillingGate.test.ts`
+**Test:** `src/lib/billing/nativeBillingGate.test.ts`, `src/lib/billing/revenueCatCatalog.test.ts`
 
 ---
 
@@ -718,7 +718,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | G8 | `src/lib/travelAssistant/dayPlanLines.test.ts` |
 | G10 | `src/lib/travelAssistant/tripActionItems.test.ts` |
 | G14 | `src/lib/travelAssistant/tripSpendSummary.test.ts` |
-| G15 | `src/lib/billing/nativeBillingGate.test.ts` |
+| G15 | `src/lib/billing/nativeBillingGate.test.ts`, `revenueCatCatalog.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
 | I22, I23, I24, I25 | `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/reservationDisplayLabel.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts` |

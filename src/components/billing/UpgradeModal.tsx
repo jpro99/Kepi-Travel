@@ -2,14 +2,21 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
 import { useTranslations } from "next-intl";
 import { trackEvent } from "@/lib/analytics/trackEvent";
 import type { BillingPlanId, BillingStatusPlan, PlanFeature } from "@/lib/billing/plans";
+import { useBilling } from "@/lib/billing/BillingContext";
 import {
   detectClientBillingPlatform,
   IOS_IAP_REQUIRED_MESSAGE,
   mustBlockStripeDigitalCheckout,
 } from "@/lib/billing/nativeBillingGate";
+import {
+  isRevenueCatIosReady,
+  purchasePlanViaRevenueCat,
+  restoreRevenueCatPurchases,
+} from "@/lib/billing/revenueCatClient";
 
 export interface UpgradeModalGateContext {
   feature: PlanFeature;
@@ -52,9 +59,12 @@ const PLAN_OPTIONS: PlanOption[] = [
 
 export function UpgradeModal({ open, gate, currentPlan = "free", onClose }: UpgradeModalProps) {
   const t = useTranslations("UpgradeModal");
+  const { userId } = useAuth();
+  const { refresh } = useBilling();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [targetPlan, setTargetPlan] = useState<PaidPlanTarget>("pro");
+  const iosIapReady = isRevenueCatIosReady();
 
   const featureLabel = useMemo(() => {
     if (!gate) {
@@ -104,7 +114,30 @@ export function UpgradeModal({ open, gate, currentPlan = "free", onClose }: Upgr
     try {
       const clientPlatform = detectClientBillingPlatform();
       if (mustBlockStripeDigitalCheckout(clientPlatform)) {
-        throw new Error(IOS_IAP_REQUIRED_MESSAGE);
+        if (!userId) {
+          throw new Error("Sign in to purchase with Apple.");
+        }
+        if (!iosIapReady) {
+          throw new Error(IOS_IAP_REQUIRED_MESSAGE);
+        }
+        const purchase = await purchasePlanViaRevenueCat(userId, targetPlan);
+        if (!purchase.ok) {
+          if (purchase.cancelled) {
+            setBusy(false);
+            return;
+          }
+          throw new Error(purchase.message);
+        }
+        await fetch("/api/billing/revenuecat/sync", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ entitlementIds: purchase.entitlementIds }),
+        });
+        await refresh();
+        onClose();
+        setBusy(false);
+        return;
       }
       const response = await fetch("/api/billing/checkout", {
         method: "POST",
@@ -133,6 +166,30 @@ export function UpgradeModal({ open, gate, currentPlan = "free", onClose }: Upgr
       throw new Error(t("checkoutIncomplete"));
     } catch (checkoutError) {
       setError(checkoutError instanceof Error ? checkoutError.message : t("upgradeCheckoutFailed"));
+      setBusy(false);
+    }
+  };
+
+  const handleRestore = async (): Promise<void> => {
+    if (busy || !userId || !iosIapReady) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const restored = await restoreRevenueCatPurchases(userId);
+      if (!restored.ok) {
+        throw new Error(restored.message);
+      }
+      await fetch("/api/billing/revenuecat/sync", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entitlementIds: restored.entitlementIds }),
+      });
+      await refresh();
+      onClose();
+    } catch (restoreError) {
+      setError(restoreError instanceof Error ? restoreError.message : "Could not restore purchases.");
+    } finally {
       setBusy(false);
     }
   };
@@ -205,6 +262,12 @@ export function UpgradeModal({ open, gate, currentPlan = "free", onClose }: Upgr
 
         {error ? <p className="mt-3 text-xs text-red-500 dark:text-red-300">{error}</p> : null}
 
+        {iosIapReady ? (
+          <p className="mt-3 text-xs text-slate-600 dark:text-slate-400">
+            On iPhone, upgrades use Apple In-App Purchase (App Store). Stripe checkout stays on the website.
+          </p>
+        ) : null}
+
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -214,8 +277,26 @@ export function UpgradeModal({ open, gate, currentPlan = "free", onClose }: Upgr
             }}
             className="rounded-lg bg-cyan-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {busy ? t("startingCheckout") : `Upgrade to ${targetPlan === "pro" ? "Pro" : "Concierge"}`}
+            {busy
+              ? iosIapReady
+                ? "Connecting to App Store…"
+                : t("startingCheckout")
+              : iosIapReady
+                ? `Subscribe with Apple — ${targetPlan === "pro" ? "Pro" : "Concierge"}`
+                : `Upgrade to ${targetPlan === "pro" ? "Pro" : "Concierge"}`}
           </button>
+          {iosIapReady ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                void handleRestore();
+              }}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-100 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-900"
+            >
+              Restore purchases
+            </button>
+          ) : null}
           <Link
             href="/billing"
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-900"

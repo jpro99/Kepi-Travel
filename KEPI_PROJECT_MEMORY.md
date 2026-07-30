@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-30 (App Store readiness: account deletion + block Stripe on iOS native)
+Last updated: 2026-07-30 (RevenueCat IAP code path shipped — ASC/RC dashboard still Jeff)
+
+## Decision 2026-07-30 — RevenueCat IAP scope shipped in code (Jeff approved)
+Native iOS upgrades use `@revenuecat/purchases-capacitor` (entitlements `kepi_pro` / `kepi_concierge`, products default `kepi_pro_monthly` / `kepi_concierge_monthly`). Webhooks: `POST /api/billing/revenuecat/webhook` (public; auth via `REVENUECAT_WEBHOOK_AUTHORIZATION`). Client sync: `POST /api/billing/revenuecat/sync`. Stripe still blocked on Capacitor iOS; web/PWA Stripe unchanged. **Jeff still must:** create App Store Connect subscriptions, attach in RevenueCat, set Vercel `NEXT_PUBLIC_REVENUECAT_IOS_API_KEY` + webhook auth, point webhook to `https://kepitravel.com/api/billing/revenuecat/webhook`, run `npx cap sync ios`.
 
 ## Decision 2026-07-30 — App Store: account deletion + no Stripe IAP substitute (Jeff)
 Claude audit verified: no StoreKit/RevenueCat; Pro/Concierge is Stripe-only; no in-app delete. Shipped: `POST /api/account/delete` + Delete account in More/Billing (type DELETE). Native Capacitor **iOS** blocks Stripe Checkout (client + API `clientPlatform: ios_native`) until Apple IAP/RevenueCat. Web + PWA keep Stripe. **Next before App Store submit:** RevenueCat + StoreKit products mirroring Pro/Concierge; do not submit iOS binary that sells digital subs via Stripe.

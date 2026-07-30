@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
 import type { PlanFeature } from "@/lib/billing/plans";
 import { ReferralCard } from "@/components/referral/ReferralCard";
 import { DeleteAccountSection } from "@/components/account/DeleteAccountSection";
@@ -30,6 +31,7 @@ export default function BillingPage() {
 
 function BillingPageContent() {
   const searchParams = useSearchParams();
+  const { userId } = useAuth();
   const { status, loading, error: billingContextError, refresh: refreshBillingStatus, plan: billingStatusPlan } = useBilling();
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -97,9 +99,32 @@ function BillingPageContent() {
     try {
       const { detectClientBillingPlatform, IOS_IAP_REQUIRED_MESSAGE, mustBlockStripeDigitalCheckout } =
         await import("@/lib/billing/nativeBillingGate");
+      const { isRevenueCatIosReady, purchasePlanViaRevenueCat } = await import("@/lib/billing/revenueCatClient");
       const clientPlatform = detectClientBillingPlatform();
       if (mustBlockStripeDigitalCheckout(clientPlatform)) {
-        throw new Error(IOS_IAP_REQUIRED_MESSAGE);
+        if (!isRevenueCatIosReady()) {
+          throw new Error(IOS_IAP_REQUIRED_MESSAGE);
+        }
+        if (!userId) {
+          throw new Error("Sign in on the iOS app to subscribe with Apple.");
+        }
+        const purchase = await purchasePlanViaRevenueCat(userId, targetPlan);
+        if (!purchase.ok) {
+          if (purchase.cancelled) {
+            setBusy(false);
+            return;
+          }
+          throw new Error(purchase.message);
+        }
+        await fetch("/api/billing/revenuecat/sync", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ entitlementIds: purchase.entitlementIds }),
+        });
+        await refreshBillingStatus();
+        setBusy(false);
+        return;
       }
       const response = await fetch("/api/billing/checkout", {
         method: "POST",
@@ -120,7 +145,7 @@ function BillingPageContent() {
       setActionError(checkoutError instanceof Error ? checkoutError.message : "Could not start checkout.");
       setBusy(false);
     }
-  }, [busy, targetPlan]);
+  }, [busy, refreshBillingStatus, targetPlan, userId]);
 
   const handleManageSubscription = useCallback(async (): Promise<void> => {
     if (busy) return;

@@ -33,4 +33,4 @@ export function detectClientBillingPlatform(): ClientBillingPlatform {
 }
 
 export const IOS_IAP_REQUIRED_MESSAGE =
-  "Subscriptions on the iOS app must use Apple In-App Purchase. Open kepitravel.com in Safari to manage billing on the web for now, or wait for App Store billing (coming next).";
+  "Subscriptions on the iOS app use Apple In-App Purchase. Set NEXT_PUBLIC_REVENUECAT_IOS_API_KEY and finish App Store Connect + RevenueCat products, then retry — or manage billing on kepitravel.com in Safari.";
