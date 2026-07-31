@@ -4,7 +4,7 @@ import { z } from "zod";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { getResendClient } from "@/lib/email/resendClient";
 import { logger } from "@/lib/logger";
-import { parseForwardedEmail } from "@/lib/travelAssistant/emailForwardParser";
+import { assessForwardedDraft, parseForwardedEmail } from "@/lib/travelAssistant/emailForwardParser";
 import type { SessionReservation } from "@/lib/travelAssistant/clientSessionState";
 import { resolveUserIdByForwardAddress } from "@/lib/travelAssistant/emailForwardSetupStore";
 import { sendPushNotification } from "@/lib/travelAssistant/pushNotificationService";
@@ -34,6 +34,13 @@ import {
   OUT_OF_WINDOW_REVIEW_REASON,
   selectDraftsToImport,
 } from "@/lib/travelAssistant/forwardedDraftImport";
+import {
+  canMutateLiveFromForward,
+  isKnownReservationType,
+  PROPOSED_UPDATE_REVIEW_IMPACT,
+  UNKNOWN_TYPE_REVIEW_REASON,
+} from "@/lib/travelAssistant/forwardedIngestDecision";
+import { shouldSkipWebhookSignatureVerification } from "@/lib/travelAssistant/emailForwardWebhookAuth";
 import { isDuplicateReservation } from "@/lib/travelAssistant/reservationDuplicates";
 import { drainForwardReviewQueue } from "@/lib/travelAssistant/drainForwardReviewQueue";
 import { getFewShotExamplesForEmail } from "@/lib/travelAssistant/mlReadiness/fewShotExamples";
@@ -296,6 +303,19 @@ function verifyResendWebhookSignature(rawBody: string, headers: Headers, request
   const expectedSecret = process.env.RESEND_WEBHOOK_SECRET?.trim() ?? "";
   const receivedSignature = extractIncomingWebhookSignature(headers);
   if (!expectedSecret) {
+    // F12: production fail-closed; local/dev may skip so Jeff can test without Svix.
+    if (
+      !shouldSkipWebhookSignatureVerification({
+        resendWebhookSecret: expectedSecret,
+        vercelEnv: process.env.VERCEL_ENV,
+        nodeEnv: process.env.NODE_ENV,
+      })
+    ) {
+      console.error("[email-forward-webhook] RESEND_WEBHOOK_SECRET missing in production — rejecting.", {
+        requestId,
+      });
+      return false;
+    }
     console.info("[email-forward-webhook] Signature verification skipped (RESEND_WEBHOOK_SECRET not set).", {
       requestId,
       receivedSignature,
@@ -569,7 +589,6 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
     const parserNotes = Array.isArray(parserResult?.parserNotes)
       ? parserResult.parserNotes.filter((note): note is string => typeof note === "string" && note.trim().length > 0)
       : [];
-    const parserMissingFields = parserResult.missingFields;
     const parserConfidenceScore = Number.isFinite(parserResult?.confidenceScore) ? parserResult.confidenceScore : 0;
     const parserParsingStatus =
       parserResult?.parsingStatus === "auto-parsed" ||
@@ -664,6 +683,8 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         checkOutDate: typeof parserDraftRecord.checkOutDate === "string" ? parserDraftRecord.checkOutDate : undefined,
       });
       const rawType = parserDraftRecord.type;
+      const knownReservationType = isKnownReservationType(rawType);
+      // Unknown types use "ride" only as a review-card placeholder — never auto-import (F11).
       const parserType: SessionReservation["type"] =
         rawType === "flight" ||
         rawType === "hotel" ||
@@ -680,6 +701,50 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       const parserConfirmationCode =
         typeof parserDraftRecord.confirmationCode === "string" ? parserDraftRecord.confirmationCode : "";
       const parserNotesText = typeof parserDraftRecord.notes === "string" ? parserDraftRecord.notes : "";
+      // F7: per-draft score/status/missingFields — do not reuse the email-level primary draft.
+      const draftAssessment = assessForwardedDraft(
+        {
+          type: typeof rawType === "string" ? rawType : parserType,
+          title: parserTitle,
+          provider: parserProvider,
+          confirmationCode: parserConfirmationCode,
+          localTime: parserLocalTime,
+          timezone: parserTimezone,
+          location: parserLocation,
+          notes: parserNotesText,
+          flightNumber:
+            typeof parserDraftRecord.flightNumber === "string"
+              ? parserDraftRecord.flightNumber
+              : typeof parserDraftRecord.flight_number === "string"
+                ? parserDraftRecord.flight_number
+                : "",
+          checkOutDate:
+            typeof parserDraftRecord.checkOutDate === "string" ? parserDraftRecord.checkOutDate : "",
+          departureAirport:
+            typeof parserDraftRecord.departureAirport === "string"
+              ? parserDraftRecord.departureAirport
+              : typeof parserDraftRecord.flightDepartureAirport === "string"
+                ? parserDraftRecord.flightDepartureAirport
+                : "",
+          arrivalAirport:
+            typeof parserDraftRecord.arrivalAirport === "string"
+              ? parserDraftRecord.arrivalAirport
+              : typeof parserDraftRecord.flightArrivalAirport === "string"
+                ? parserDraftRecord.flightArrivalAirport
+                : "",
+        },
+        parserConfidenceScore,
+      );
+      let draftConfidenceScore = draftAssessment.confidenceScore;
+      let draftParsingStatus = draftAssessment.parsingStatus;
+      let draftMissingFields = draftAssessment.missingFields;
+      if (!knownReservationType) {
+        draftParsingStatus = "needs-user-input";
+        draftConfidenceScore = Math.min(draftConfidenceScore, 39);
+        if (!draftMissingFields.includes("type")) {
+          draftMissingFields = ["type", ...draftMissingFields];
+        }
+      }
       const parserAssignedToRaw = parserDraftRecord.assignedTo;
       const parserAssignedTo = Array.isArray(parserAssignedToRaw)
         ? parserAssignedToRaw.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
@@ -773,7 +838,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         assignedTo: parserAssignedTo.length > 0 ? parserAssignedTo : defaultAssignees,
         stage: targetTrip.stage,
         critical: parserType === "flight" || parserType === "train" || parserType === "ride",
-        confidence: confidenceToDraftValue(parserConfidenceScore),
+        confidence: confidenceToDraftValue(draftConfidenceScore),
         notes: parserNotesText,
         source: "imported" as const,
         plannedOnly: false,
@@ -826,7 +891,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
               assignedTo: parserAssignedTo.length > 0 ? parserAssignedTo : defaultAssignees,
               stage: targetTrip.stage,
               critical: parserType === "flight" || parserType === "train" || parserType === "ride",
-              confidence: confidenceToDraftValue(parserConfidenceScore),
+              confidence: confidenceToDraftValue(draftConfidenceScore),
               notes: parserNotesText,
               flightNumber: parserType === "flight" ? parserFlightNumber : "",
               flightAirline: resolvedAirline,
@@ -837,9 +902,9 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
               checkOutDate: parsedReservation.checkOutDate,
             },
             sourceChannel: "email-forward" as const,
-            parseConfidenceScore: parserConfidenceScore,
-            parsingStatus: parserParsingStatus,
-            missingFields: parserMissingFields,
+            parseConfidenceScore: draftConfidenceScore,
+            parsingStatus: draftParsingStatus,
+            missingFields: draftMissingFields,
             reviewStatus: "pending" as const,
             parserNotes,
             parserVersion: parserResult.parserVersion ?? EMAIL_FORWARD_PARSER_VERSION,
@@ -858,7 +923,107 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         continue;
       }
 
-      const plannedReplacementIndex = findPlannedReplacementIndex(nextReservations, parsedReservation);
+      // F6: gate on raw/per-draft fields BEFORE planned replace / flight merge / auto-import.
+      const sourceTextForArchive = storedSourceText || parserOriginalEmailText;
+      const historicalGate = evaluateHistoricalHotelForward({
+        type: parserType,
+        rawEmailText: sourceTextForArchive,
+        localTime: parserLocalTime,
+      });
+      let gatedLocalTime = parserLocalTime;
+      let gatedCheckOut = parsedReservation.checkOutDate;
+      if (historicalGate.clearInventedDates) {
+        gatedLocalTime = "";
+        gatedCheckOut = "";
+      }
+
+      const gateResult = evaluateForwardedReservationGate({
+        type: parserType,
+        localTime: gatedLocalTime,
+        location: parserLocation,
+        checkOutDate: gatedCheckOut,
+        flightDepartureAirport: parsedReservation.flightDepartureAirport,
+        flightArrivalAirport: parsedReservation.flightArrivalAirport,
+        quotedPriceUsd: parsedReservation.quotedPriceUsd,
+        confidenceScore: draftConfidenceScore,
+        parsingStatus: historicalGate.blockAutoImport ? "needs-review" : draftParsingStatus,
+        missingFields: draftMissingFields,
+      });
+      if (historicalGate.blockAutoImport) {
+        gateResult.needsReview = true;
+        gateResult.reasons = [...historicalGate.reasons, ...gateResult.reasons];
+      }
+      if (!knownReservationType) {
+        gateResult.needsReview = true;
+        if (!gateResult.reasons.includes(UNKNOWN_TYPE_REVIEW_REASON)) {
+          gateResult.reasons = [UNKNOWN_TYPE_REVIEW_REASON, ...gateResult.reasons];
+        }
+      }
+
+      const plannedReplacementIndexPreview = findPlannedReplacementIndex(nextReservations, parsedReservation);
+      const matchingReservationIndexPreview = nextReservations.findIndex((reservation) =>
+        isDuplicateReservation(reservation, parsedReservation),
+      );
+      const wouldMutateExisting =
+        plannedReplacementIndexPreview >= 0 || matchingReservationIndexPreview >= 0;
+
+      if (!canMutateLiveFromForward(gateResult.needsReview)) {
+        nextQueue = [
+          {
+            id: `review-email-${generateId()}`,
+            reasons: gateResult.reasons,
+            impact: historicalGate.blockAutoImport
+              ? "Old or incomplete hotel confirmation — not added to your trip until you confirm."
+              : wouldMutateExisting
+                ? PROPOSED_UPDATE_REVIEW_IMPACT
+                : "This reservation needs a quick check before it's added to your trip.",
+            draft: {
+              type: parserType,
+              title: parserTitle,
+              provider: parserProvider,
+              localTime: gatedLocalTime,
+              timezone: parserTimezone || "Etc/UTC",
+              location: parserLocation,
+              confirmationCode: parserConfirmationCode,
+              assignedTo: parserAssignedTo.length > 0 ? parserAssignedTo : defaultAssignees,
+              stage: targetTrip.stage,
+              critical: parserType === "flight" || parserType === "train" || parserType === "ride",
+              confidence: confidenceToDraftValue(draftConfidenceScore),
+              notes: parserNotesText,
+              flightNumber: parserType === "flight" ? parserFlightNumber : "",
+              flightAirline: resolvedAirline,
+              flightDate: parserType === "flight" ? parserLocalTime.slice(0, 10) : "",
+              flightDepartureAirport: parsedReservation.flightDepartureAirport,
+              flightArrivalAirport: parsedReservation.flightArrivalAirport,
+              flightDepartureTime: parsedReservation.flightDepartureTime,
+              checkOutDate: gatedCheckOut,
+            },
+            sourceChannel: "email-forward" as const,
+            parseConfidenceScore: draftConfidenceScore,
+            parsingStatus: draftParsingStatus,
+            missingFields: draftMissingFields,
+            reviewStatus: "pending" as const,
+            parserNotes,
+            parserVersion: parserResult.parserVersion ?? EMAIL_FORWARD_PARSER_VERSION,
+            ...emailSourceMetadata,
+          },
+          ...nextQueue,
+        ];
+        routeLogger.info("Forwarded reservation routed to review queue (did not meet auto-import bar).", {
+          userId: targetUserId,
+          tripId: targetTrip.id,
+          type: parserType,
+          confidenceScore: draftConfidenceScore,
+          reasons: gateResult.reasons,
+          historicalArchive: historicalGate.blockAutoImport,
+          wouldMutateExisting,
+          unknownType: !knownReservationType,
+        });
+        acceptedDraftCount += 1;
+        continue;
+      }
+
+      const plannedReplacementIndex = plannedReplacementIndexPreview;
       if (plannedReplacementIndex >= 0) {
         const replaced = mergeIncomingOverPlanned(
           nextReservations[plannedReplacementIndex] as SessionReservation,
@@ -879,9 +1044,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         continue;
       }
 
-      const matchingReservationIndex = nextReservations.findIndex((reservation) =>
-        isDuplicateReservation(reservation, parsedReservation),
-      );
+      const matchingReservationIndex = matchingReservationIndexPreview;
       const hasMatchingReservation = matchingReservationIndex !== -1;
       // Only check queue for duplicates (not adding to queue anymore, but keep for safety)
       const hasMatchingQueuedDraft = isDuplicateAgainstReviewQueue(nextQueue, parsedReservation);
@@ -965,9 +1128,10 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
               },
               parseConfidenceScore: Math.max(
                 typeof reviewRecord.parseConfidenceScore === "number" ? reviewRecord.parseConfidenceScore : 0,
-                parserConfidenceScore,
+                draftConfidenceScore,
               ),
-              parsingStatus: parserParsingStatus,
+              parsingStatus: draftParsingStatus,
+              missingFields: draftMissingFields,
               parserNotes,
             };
           });
@@ -1042,88 +1206,6 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         continue;
       }
 
-      const sourceTextForArchive = storedSourceText || parserOriginalEmailText;
-      const historicalGate = evaluateHistoricalHotelForward({
-        type: parserType,
-        rawEmailText: sourceTextForArchive,
-        localTime: parserLocalTime,
-      });
-      let gatedLocalTime = parserLocalTime;
-      let gatedCheckOut = parsedReservation.checkOutDate;
-      if (historicalGate.clearInventedDates) {
-        gatedLocalTime = "";
-        gatedCheckOut = "";
-      }
-
-      const gateResult = evaluateForwardedReservationGate({
-        type: parserType,
-        localTime: gatedLocalTime,
-        location: parserLocation,
-        checkOutDate: gatedCheckOut,
-        flightDepartureAirport: parsedReservation.flightDepartureAirport,
-        flightArrivalAirport: parsedReservation.flightArrivalAirport,
-        quotedPriceUsd: parsedReservation.quotedPriceUsd,
-        confidenceScore: parserConfidenceScore,
-        parsingStatus: historicalGate.blockAutoImport ? "needs-review" : parserParsingStatus,
-        missingFields: parserMissingFields,
-      });
-      if (historicalGate.blockAutoImport) {
-        gateResult.needsReview = true;
-        gateResult.reasons = [...historicalGate.reasons, ...gateResult.reasons];
-      }
-
-      if (gateResult.needsReview) {
-        nextQueue = [
-          {
-            id: `review-email-${generateId()}`,
-            reasons: gateResult.reasons,
-            impact: historicalGate.blockAutoImport
-              ? "Old or incomplete hotel confirmation — not added to your trip until you confirm."
-              : "This reservation needs a quick check before it's added to your trip.",
-            draft: {
-              type: parserType,
-              title: parserTitle,
-              provider: parserProvider,
-              localTime: gatedLocalTime,
-              timezone: parserTimezone || "Etc/UTC",
-              location: parserLocation,
-              confirmationCode: parserConfirmationCode,
-              assignedTo: parserAssignedTo.length > 0 ? parserAssignedTo : defaultAssignees,
-              stage: targetTrip.stage,
-              critical: parserType === "flight" || parserType === "train" || parserType === "ride",
-              confidence: confidenceToDraftValue(parserConfidenceScore),
-              notes: parserNotesText,
-              flightNumber: parserType === "flight" ? parserFlightNumber : "",
-              flightAirline: resolvedAirline,
-              flightDate: parserType === "flight" ? parserLocalTime.slice(0, 10) : "",
-              flightDepartureAirport: parsedReservation.flightDepartureAirport,
-              flightArrivalAirport: parsedReservation.flightArrivalAirport,
-              flightDepartureTime: parsedReservation.flightDepartureTime,
-              checkOutDate: gatedCheckOut,
-            },
-            sourceChannel: "email-forward" as const,
-            parseConfidenceScore: parserConfidenceScore,
-            parsingStatus: parserParsingStatus,
-            missingFields: parserMissingFields,
-            reviewStatus: "pending" as const,
-            parserNotes,
-            parserVersion: parserResult.parserVersion ?? EMAIL_FORWARD_PARSER_VERSION,
-            ...emailSourceMetadata,
-          },
-          ...nextQueue,
-        ];
-        routeLogger.info("Forwarded reservation routed to review queue (did not meet auto-import bar).", {
-          userId: targetUserId,
-          tripId: targetTrip.id,
-          type: parserType,
-          confidenceScore: parserConfidenceScore,
-          reasons: gateResult.reasons,
-          historicalArchive: historicalGate.blockAutoImport,
-        });
-        acceptedDraftCount += 1;
-        continue;
-      }
-
       const enrichedFields = enrichReservationForAutoImport({
         type: parserType,
         title: parserTitle,
@@ -1169,8 +1251,8 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         flightNumber: parserFlightNumber || null,
         localTime: enrichedFields.localTime,
         confirmationCode: parserConfirmationCode || null,
-        confidenceScore: parserConfidenceScore,
-        missingFields: parserMissingFields,
+        confidenceScore: draftConfidenceScore,
+        missingFields: draftMissingFields,
       });
       acceptedDraftCount += 1;
     }

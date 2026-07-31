@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { drainForwardReviewQueue } from "./drainForwardReviewQueue";
+import {
+  DRAIN_DUPLICATE_REVIEW_REASON,
+  drainForwardReviewQueue,
+} from "./drainForwardReviewQueue";
 
 test("drainForwardReviewQueue imports email-forward items and clears stale May dates", () => {
   const result = drainForwardReviewQueue(
@@ -10,6 +13,7 @@ test("drainForwardReviewQueue imports email-forward items and clears stale May d
         id: "review-1",
         sourceChannel: "email-forward",
         sourceEmailSubject: "Fwd: itinerary",
+        parsingStatus: "auto-parsed",
         draft: {
           type: "flight",
           title: "HND to ONT",
@@ -63,6 +67,7 @@ test("drainForwardReviewQueue never auto-promotes items with explicit gate reaso
     id: "review-gated",
     sourceChannel: "email-forward" as const,
     sourceEmailSubject: "Fwd: itinerary",
+    parsingStatus: "auto-parsed" as const,
     reasons: ["Low parsing confidence (22/100).", "Missing departure airport, arrival airport, or departure time."],
     draft: {
       type: "flight",
@@ -80,6 +85,52 @@ test("drainForwardReviewQueue never auto-promotes items with explicit gate reaso
   assert.equal(result.reservations.length, 0);
 });
 
+test("F9: email-forward without parsingStatus is default-deny", () => {
+  const legacyItem = {
+    id: "review-legacy",
+    sourceChannel: "email-forward" as const,
+    sourceEmailSubject: "Fwd: itinerary",
+    draft: {
+      type: "flight",
+      title: "HND to ONT",
+      provider: "OR Airlines",
+      localTime: "2026-09-12 09:40",
+      timezone: "Etc/UTC",
+      location: "HND -> ONT",
+      confirmationCode: "XYZ",
+      flightNumber: "OR101",
+      flightDepartureAirport: "HND",
+      flightArrivalAirport: "ONT",
+    },
+  };
+  const result = drainForwardReviewQueue([], [legacyItem], () => "res-legacy");
+  assert.equal(result.changed, false);
+  assert.equal(result.reviewQueue.length, 1);
+  assert.equal(result.reservations.length, 0);
+});
+
+test("F9: needs-review status is not auto-promoted even without reasons", () => {
+  const mediumItem = {
+    id: "review-medium",
+    sourceChannel: "email-forward" as const,
+    sourceEmailSubject: "Fwd: itinerary",
+    parsingStatus: "needs-review" as const,
+    draft: {
+      type: "hotel",
+      title: "Hotel Roma",
+      provider: "Hyatt",
+      localTime: "2026-09-09 15:00",
+      timezone: "Europe/Rome",
+      location: "Monopoli",
+      confirmationCode: "HY123",
+    },
+  };
+  const result = drainForwardReviewQueue([], [mediumItem], () => "res-medium");
+  assert.equal(result.changed, false);
+  assert.equal(result.reviewQueue.length, 1);
+  assert.equal(result.reservations.length, 0);
+});
+
 test("I35: drainForwardReviewQueue preserves hotel checkOutDate", () => {
   const result = drainForwardReviewQueue(
     [],
@@ -88,6 +139,7 @@ test("I35: drainForwardReviewQueue preserves hotel checkOutDate", () => {
         id: "review-hotel",
         sourceChannel: "email-forward",
         sourceEmailSubject: "Fwd: Booking.com confirmation NEREA",
+        parsingStatus: "auto-parsed",
         draft: {
           type: "hotel",
           title: "NEREA Monopoli",
@@ -109,7 +161,7 @@ test("I35: drainForwardReviewQueue preserves hotel checkOutDate", () => {
   assert.equal(result.reservations[0]?.localTime.slice(0, 10), "2026-09-05");
 });
 
-test("drainForwardReviewQueue skips duplicates already on timeline", () => {
+test("F10: drain keeps duplicate review items with an explicit reason", () => {
   const existing = {
     id: "res-existing",
     type: "flight",
@@ -130,6 +182,7 @@ test("drainForwardReviewQueue skips duplicates already on timeline", () => {
         id: "review-dup",
         sourceChannel: "email-forward",
         sourceEmailSubject: "Fwd: itinerary",
+        parsingStatus: "auto-parsed",
         draft: {
           type: "flight",
           title: "HND to ONT",
@@ -147,6 +200,7 @@ test("drainForwardReviewQueue skips duplicates already on timeline", () => {
     () => "res-new",
   );
   assert.equal(result.changed, true);
-  assert.equal(result.reviewQueue.length, 0);
   assert.equal(result.reservations.length, 1);
+  assert.equal(result.reviewQueue.length, 1);
+  assert.ok(result.reviewQueue[0]?.reasons?.includes(DRAIN_DUPLICATE_REVIEW_REASON));
 });

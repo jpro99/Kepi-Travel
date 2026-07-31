@@ -1561,6 +1561,81 @@ function missingFieldsFromDraft(draft: ForwardedReservationDraft): ForwardedRese
   return [...missing];
 }
 
+export interface AssessForwardedDraftInput {
+  type?: string | null;
+  title?: string | null;
+  provider?: string | null;
+  confirmationCode?: string | null;
+  localTime?: string | null;
+  timezone?: string | null;
+  location?: string | null;
+  notes?: string | null;
+  flightNumber?: string | null;
+  checkOutDate?: string | null;
+  departureAirport?: string | null;
+  arrivalAirport?: string | null;
+  flightDepartureAirport?: string | null;
+  flightArrivalAirport?: string | null;
+}
+
+export interface AssessForwardedDraftResult {
+  missingFields: ForwardedReservationField[];
+  confidenceScore: number;
+  parsingStatus: ForwardedParsingStatus;
+}
+
+/**
+ * Per-draft gate inputs (F7). Uses the same missing-field penalty and 70/40
+ * status bands as the email-level parse result — so a strong first leg cannot
+ * launder a weak second draft in a multi-booking forward.
+ */
+export function assessForwardedDraft(
+  draft: AssessForwardedDraftInput,
+  emailScore: number,
+): AssessForwardedDraftResult {
+  const typeValue = (draft.type ?? "").trim().toLowerCase();
+  const normalizedType: ForwardedReservationType =
+    typeValue === "flight" ||
+    typeValue === "hotel" ||
+    typeValue === "train" ||
+    typeValue === "ride" ||
+    typeValue === "dinner"
+      ? typeValue
+      : "ride";
+  const normalized: ForwardedReservationDraft = {
+    type: normalizedType,
+    title: (draft.title ?? "").trim(),
+    provider: (draft.provider ?? "").trim(),
+    confirmationCode: (draft.confirmationCode ?? "").trim(),
+    localTime: (draft.localTime ?? "").trim(),
+    timezone: (draft.timezone ?? "").trim() || "Etc/UTC",
+    location: (draft.location ?? "").trim(),
+    notes: (draft.notes ?? "").trim(),
+    flightNumber: (draft.flightNumber ?? "").trim(),
+    checkOutDate: (draft.checkOutDate ?? "").trim(),
+    departureAirport: (
+      draft.departureAirport ??
+      draft.flightDepartureAirport ??
+      ""
+    )
+      .trim()
+      .toUpperCase()
+      .slice(0, 4),
+    arrivalAirport: (draft.arrivalAirport ?? draft.flightArrivalAirport ?? "")
+      .trim()
+      .toUpperCase()
+      .slice(0, 4),
+  };
+  const missingFields = missingFieldsFromDraft(normalized);
+  const baseScore = Number.isFinite(emailScore) ? emailScore : 0;
+  const confidenceScore = Math.max(0, Math.min(100, Math.round(baseScore - missingFields.length * 6)));
+  return {
+    missingFields,
+    confidenceScore,
+    parsingStatus: statusFromScore(confidenceScore),
+  };
+}
+
 function draftIdentityKey(draft: ForwardedReservationDraft): string {
   if (draft.type === "flight") {
     return [

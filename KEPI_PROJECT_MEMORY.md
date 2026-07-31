@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-30 (RevenueCat IAP code path shipped — ASC/RC dashboard still Jeff)
+Last updated: 2026-07-31 (Ingest F6/F7/F9–F12 closed — gate before live mutate)
+
+## Decision 2026-07-31 — Email-forward ingest F6/F7/F9–F12 (audit close-out)
+Gate runs before planned-replace / flight-merge; per-draft `assessForwardedDraft` scores; drain default-deny unless `parsingStatus === "auto-parsed"`; duplicate drain keeps queue item with reason; unknown types forced to review; production fail-closed if `RESEND_WEBHOOK_SECRET` unset. F1–F5 already PASS from I30.
 
 ## Decision 2026-07-30 — RevenueCat IAP scope shipped in code (Jeff approved)
 Native iOS upgrades use `@revenuecat/purchases-capacitor` (entitlements `kepi_pro` / `kepi_concierge`, products default `kepi_pro_monthly` / `kepi_concierge_monthly`). Webhooks: `POST /api/billing/revenuecat/webhook` (public; auth via `REVENUECAT_WEBHOOK_AUTHORIZATION`). Client sync: `POST /api/billing/revenuecat/sync`. Stripe still blocked on Capacitor iOS; web/PWA Stripe unchanged. **Jeff still must:** create App Store Connect subscriptions, attach in RevenueCat, set Vercel `NEXT_PUBLIC_REVENUECAT_IOS_API_KEY` + webhook auth, point webhook to `https://kepitravel.com/api/billing/revenuecat/webhook`, run `npx cap sync ios`.

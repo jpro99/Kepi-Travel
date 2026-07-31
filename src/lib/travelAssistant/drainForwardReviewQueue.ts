@@ -2,10 +2,14 @@ import { enrichReservationForAutoImport } from "@/lib/travelAssistant/autoImport
 import { isDuplicateReservation, type DuplicateReservationFields } from "@/lib/travelAssistant/reservationDuplicates";
 import { prepareReviewDraftForAccept } from "@/lib/travelAssistant/prepareReviewDraftForAccept";
 
+export const DRAIN_DUPLICATE_REVIEW_REASON = "Already on your trip — duplicate skipped.";
+
 export interface DrainableReviewItem {
   id: string;
   /** Explicit reasons a human should look at this before it becomes trip fact. */
   reasons?: string[];
+  /** When set, only `auto-parsed` email/gmail items without reasons may auto-promote (F9). */
+  parsingStatus?: "auto-parsed" | "needs-review" | "needs-user-input";
   draft: DuplicateReservationFields & {
     type: string;
     title: string;
@@ -60,18 +64,19 @@ function isAutoImportReviewItem(item: DrainableReviewItem): boolean {
   if (Array.isArray(item.reasons) && item.reasons.length > 0) {
     return false;
   }
+  // F9: default-deny for email/gmail unless explicitly auto-parsed.
+  // Legacy/malformed rows without parsingStatus stay in the queue.
   if (item.sourceChannel === "email-forward" || item.sourceChannel === "gmail-import") {
-    return true;
+    return item.parsingStatus === "auto-parsed";
   }
-  const subject = item.sourceEmailSubject?.trim() ?? "";
-  return subject.length > 0;
+  return false;
 }
 
 /**
  * Move forwarded/import review items into live reservations — but only when they carry
- * no explicit review reason (see `isAutoImportReviewItem`). Items with `reasons` (from
- * `evaluateForwardedReservationGate`) require an explicit human confirm step and are
- * left untouched in the queue.
+ * no explicit review reason and parsingStatus is auto-parsed (see `isAutoImportReviewItem`).
+ * Items with `reasons` (from `evaluateForwardedReservationGate`) require an explicit
+ * human confirm step and are left untouched in the queue.
  */
 export function drainForwardReviewQueue<TReservation extends DrainableReservation>(
   reservations: TReservation[],
@@ -116,6 +121,15 @@ export function drainForwardReviewQueue<TReservation extends DrainableReservatio
     );
 
     if (nextReservations.some((reservation) => isDuplicateReservation(reservation, enriched))) {
+      // F10: keep the review item visible with an explicit reason — never silent-delete.
+      const existingReasons = Array.isArray(item.reasons) ? item.reasons : [];
+      const nextReasons = existingReasons.includes(DRAIN_DUPLICATE_REVIEW_REASON)
+        ? existingReasons
+        : [...existingReasons, DRAIN_DUPLICATE_REVIEW_REASON];
+      remainingQueue.push({
+        ...item,
+        reasons: nextReasons,
+      });
       changed = true;
       continue;
     }
