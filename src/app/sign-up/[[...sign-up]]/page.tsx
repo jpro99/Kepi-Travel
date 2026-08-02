@@ -1,26 +1,34 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { SignUp } from "@clerk/nextjs";
 import Link from "next/link";
+import { isValidInviteCode, normalizeInviteCode } from "@/lib/invite/redeemInviteCodeClient";
+import { authPathWithInviteCode, persistPendingInviteCode } from "@/lib/invite/pendingInviteCode";
 
 function SignUpPageInner() {
   const searchParams = useSearchParams();
-  const inviteCode = (
-    searchParams.get("code") ??
-    searchParams.get("inviteCode") ??
-    searchParams.get("redeem") ??
-    ""
-  ).toUpperCase();
+  const inviteCode = normalizeInviteCode(
+    searchParams.get("code") ?? searchParams.get("inviteCode") ?? searchParams.get("redeem") ?? "",
+  );
+  const validInviteCode = isValidInviteCode(inviteCode) ? inviteCode : "";
 
   const redirectParam = searchParams.get("redirect_url")?.trim() ?? "";
   const safeRedirect =
     redirectParam.startsWith("/") && !redirectParam.startsWith("//") ? redirectParam : null;
 
-  const forceRedirectUrl = inviteCode
-    ? `/travel-assistant?redeem=${encodeURIComponent(inviteCode)}`
+  const forceRedirectUrl = validInviteCode
+    ? `/travel-assistant?redeem=${encodeURIComponent(validInviteCode)}`
     : safeRedirect ?? "/travel-assistant";
+
+  const signInUrl = authPathWithInviteCode("/sign-in", validInviteCode);
+
+  useEffect(() => {
+    if (validInviteCode) {
+      persistPendingInviteCode(validInviteCode);
+    }
+  }, [validInviteCode]);
 
   return (
     <main className="min-h-[100dvh] overflow-y-auto bg-[#f0f4f8] p-4 dark:bg-slate-950">
@@ -30,17 +38,20 @@ function SignUpPageInner() {
           <p className="mt-1 text-sm text-slate-500">Create your account</p>
         </div>
 
-        {inviteCode ? (
+        {validInviteCode ? (
           <div className="mb-4 rounded-2xl bg-gradient-to-r from-sky-600 to-sky-500 px-5 py-3 text-center">
             <p className="text-xs font-bold uppercase tracking-wider text-sky-100">Invite code applied</p>
-            <p className="font-mono text-lg font-black tracking-widest text-white">{inviteCode}</p>
+            <p className="font-mono text-lg font-black tracking-widest text-white">{validInviteCode}</p>
+            <p className="mt-1 text-[11px] text-sky-100">
+              Sign up with the same email this invite was sent to.
+            </p>
           </div>
         ) : null}
 
         <div className="rounded-2xl bg-white p-4 shadow-lg dark:bg-slate-900">
           <SignUp
             forceRedirectUrl={forceRedirectUrl}
-            signInUrl="/sign-in"
+            signInUrl={signInUrl}
             appearance={{
               elements: {
                 rootBox: "w-full",
@@ -52,7 +63,7 @@ function SignUpPageInner() {
 
         <p className="mt-4 text-center text-xs text-slate-500 dark:text-slate-400">
           Already have an account?{" "}
-          <Link href="/sign-in" className="font-semibold text-sky-600 hover:underline dark:text-sky-400">
+          <Link href={signInUrl} className="font-semibold text-sky-600 hover:underline dark:text-sky-400">
             Sign in
           </Link>
         </p>

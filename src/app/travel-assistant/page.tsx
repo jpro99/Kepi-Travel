@@ -63,6 +63,7 @@ import {
   type SessionReservation,
 } from "@/lib/travelAssistant/clientSessionState";
 import { useAutoRedeemInviteFromUrl } from "@/hooks/useAutoRedeemInviteFromUrl";
+import { InviteRedeemBanner } from "@/components/invite/InviteRedeemBanner";
 import { useBrowserConnectivity } from "@/hooks/useBrowserConnectivity";
 import { useOfflineTravelKitSync } from "@/hooks/useOfflineTravelKitSync";
 import { scheduleLocalNotification, triggerHaptic } from "@/lib/native/capacitorBridge";
@@ -9832,6 +9833,8 @@ export default function TravelAssistantPage() {
               reservationCount={consumerReservationsSorted.length}
             />
           ) : null}
+
+          <InviteRedeemBanner />
 
           {!isCompactViewport ? (
           <ConsumerDesktopTabBar

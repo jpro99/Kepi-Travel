@@ -109,6 +109,7 @@ const footerText: CSSProperties = {
 };
 
 export function InviteEmail({
+  recipientEmail,
   inviteCode,
   inviteType,
   redeemUrl,
@@ -154,9 +155,24 @@ export function InviteEmail({
           </a>
 
           <p style={helpText}>
-            Or visit <span style={{ color: "#0ea5e9" }}>{appHostname}</span> and enter your code manually.
+            Tap Activate → create your account → {isLifetime ? "Lifetime" : "your trial"} turns on
+            automatically. No app certificate to install.
             <br />
-            This invite is single-use and linked to your account once redeemed.
+            <strong style={{ color: "#0f172a" }}>
+              Sign up with the same email this invite was sent to
+            </strong>
+            {recipientEmail ? (
+              <>
+                {" "}
+                (<span style={{ fontFamily: "monospace" }}>{recipientEmail}</span>).
+              </>
+            ) : (
+              <> (the address that received this message).</>
+            )}
+            <br />
+            Or visit <span style={{ color: "#0ea5e9" }}>{appHostname}</span> and enter code{" "}
+            <span style={{ fontFamily: "monospace", fontWeight: 700 }}>{inviteCode}</span> on Billing.
+            This invite is single-use.
           </p>
         </div>
 

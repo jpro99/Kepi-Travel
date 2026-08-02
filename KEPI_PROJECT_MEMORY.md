@@ -3,7 +3,7 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-31 (Ingest F6/F7/F9–F12 closed — gate before live mutate)
+Last updated: 2026-08-02 (Lifetime invite unlock UX — visible redeem + code preserve)
 
 ## Decision 2026-07-31 — Email-forward ingest F6/F7/F9–F12 (audit close-out)
 Gate runs before planned-replace / flight-merge; per-draft `assessForwardedDraft` scores; drain default-deny unless `parsingStatus === "auto-parsed"`; duplicate drain keeps queue item with reason; unknown types forced to review; production fail-closed if `RESEND_WEBHOOK_SECRET` unset. F1–F5 already PASS from I30.
@@ -625,7 +625,7 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 
 ---
 
-## Lifetime invite flow (2026-07-12)
+## Lifetime invite flow (2026-07-12; unlock UX 2026-08-02)
 
 **User expectation:** Admin sends lifetime invite email → recipient clicks link → **Lifetime/Pro is on automatically** — no manual redeem in More tab, no onboarding step 1 "Next" required.
 
@@ -634,9 +634,10 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 2. Unsigned → `/sign-up?code=XXX` → Clerk → `/travel-assistant?redeem=XXX`
 3. `useAutoRedeemInviteFromUrl` POSTs `/api/invite/redeem`, refreshes billing, strips URL params
 4. Onboarding also redeems on load / skip / complete (belt-and-suspenders)
+5. **2026-08-02:** Code preserved across Sign in/Sign up + `localStorage` pending code; success/error **InviteRedeemBanner** with Retry; failures are not sticky (only successes remembered). Email copy requires same recipient email — no certificate framing.
 
 **Gotchas:**
-- Invite codes with `intendedEmail` require sign-up with that exact email (403 otherwise).
+- Invite codes with `intendedEmail` require sign-up with that exact email (403 otherwise) — banner now surfaces this.
 - `redeemInviteCodeClient` in `@/lib/invite/redeemInviteCodeClient` — use everywhere (More tab, onboarding, URL hook).
 - **Never** leave JSX referencing a prop name that was renamed in destructuring (`onCreateTrip` vs `onStartNewTrip` in `DesktopTripHomeView` caused production `ReferenceError` after onboarding).
 - **Never** `kvStoreDel(onboarding-complete)` on progress PUT — returning users with trips must auto-skip onboarding (`listTrips` check on GET). Only show `OnboardingFlow` when `!tripsLoading && trips.length === 0`.
