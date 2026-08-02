@@ -36,6 +36,8 @@ test("drainForwardReviewQueue imports email-forward items and clears stale May d
   assert.equal(result.changed, true);
   assert.equal(result.reviewQueue.length, 0);
   assert.equal(result.reservations.length, 1);
+  assert.equal(result.promoted.length, 1);
+  assert.equal(result.promoted[0]?.title, "HND to ONT");
   assert.equal(result.reservations[0]?.localTime, "2026-09-12 09:40");
   assert.equal(result.reservations[0]?.flightDate, "2026-09-12");
   assert.equal(result.reservations[0]?.flightDepartureTime, "2026-09-12 09:40");
@@ -201,6 +203,7 @@ test("F10: drain keeps duplicate review items with an explicit reason", () => {
   );
   assert.equal(result.changed, true);
   assert.equal(result.reservations.length, 1);
+  assert.equal(result.promoted.length, 0);
   assert.equal(result.reviewQueue.length, 1);
   assert.ok(result.reviewQueue[0]?.reasons?.includes(DRAIN_DUPLICATE_REVIEW_REASON));
 });

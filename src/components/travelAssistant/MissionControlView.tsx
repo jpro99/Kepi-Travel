@@ -25,6 +25,7 @@ import { addIsoDays, buildTripCompleteness } from "@/lib/travelAssistant/tripNig
 import { TripCompletenessBar } from "@/components/travelAssistant/TripCompletenessBar";
 import { FreePlanSoftBanner } from "@/components/billing/FreePlanSoftBanner";
 import { formatFlightStatusTrustLine } from "@/lib/travelAssistant/flightStatusTrustLine";
+import { pickHomeNextAction } from "@/lib/travelAssistant/homeNextAction";
 
 export interface MissionControlLiveStatus {
   flightStatus?: string;
@@ -66,6 +67,9 @@ export interface MissionControlViewProps {
   onReservationTap?: (id: string) => void;
   onGapActionTap?: (action: TripGapNavigationAction) => void;
   onSeeAllAttention?: () => void;
+  /** Pending review-queue items (Plan B — next-action when nothing else ranks higher). */
+  unresolvedReviewCount?: number;
+  onOpenReview?: () => void;
 }
 
 function statusColor(status: ReadinessStatus): string {
@@ -137,6 +141,8 @@ export function MissionControlView({
   onReservationTap,
   onGapActionTap,
   onSeeAllAttention,
+  unresolvedReviewCount = 0,
+  onOpenReview,
 }: MissionControlViewProps) {
   const [zoom, setZoom] = useState<MissionControlZoom>("today");
   const [zoomTouched, setZoomTouched] = useState(false);
@@ -363,42 +369,58 @@ export function MissionControlView({
         ? snap.attentionTop3
         : snap.week.flatMap((d) => d.attention).slice(0, 3);
 
-  const primaryCta = (() => {
-    if (travelTakeover || atAirport || snap.openAirportMode) {
-      return { label: "Open Airport Mode", onClick: onOpenAirportMode };
+  // Plan B: one next action wins the Home hero — not a wall of equal cards.
+  const nextAction = pickHomeNextAction({
+    openAirportMode: snap.openAirportMode,
+    atAirport,
+    attentionTop3: snap.attentionTop3,
+    prepWatchItems,
+    prepMode,
+    unresolvedReviewCount,
+    nextFlight: snap.nextFlight,
+  });
+
+  const runNextAction = () => {
+    if (nextAction.kind === "airport") {
+      onOpenAirportMode();
+      return;
     }
-    if (snap.phase === "problem" && snap.attentionTop3[0]) {
-      return {
-        label: snap.attentionTop3[0].actionLabel || "Open flights",
-        onClick: () => {
-          const item = snap.attentionTop3[0]!;
-          if (item.reservationId && onReservationTap) onReservationTap(item.reservationId);
-          else if (item.actionTab && onGapActionTap) {
-            onGapActionTap({
-              tab: item.actionTab,
-              context: item.actionContext,
-            });
-          } else onOpenBook();
-        },
-      };
+    if (nextAction.kind === "review") {
+      (onOpenReview ?? onOpenPlan)();
+      return;
     }
-    if (heroAttention[0]?.actionLabel) {
-      const item = heroAttention[0];
-      return {
-        label: item.actionLabel!,
-        onClick: () => {
-          if (item.actionTab && onGapActionTap) {
-            onGapActionTap({ tab: item.actionTab, context: item.actionContext });
-          } else onOpenBook();
-        },
-      };
+    if (nextAction.kind === "prep") {
+      if (nextAction.prepHref && typeof window !== "undefined") {
+        window.open(nextAction.prepHref, "_blank", "noopener,noreferrer");
+        return;
+      }
+      onOpenPlan();
+      return;
     }
-    // One gap voice: only one primary CTA when something needs you.
-    if (activeStatus !== "set" && heroAttention.length > 0) {
-      return { label: "Open Plan", onClick: onOpenPlan };
+    if (nextAction.kind === "flight" && nextAction.reservationId && onReservationTap) {
+      onReservationTap(nextAction.reservationId);
+      return;
     }
-    return null;
-  })();
+    if (nextAction.kind === "attention" && nextAction.attention) {
+      const item = nextAction.attention;
+      if (item.reservationId && onReservationTap) {
+        onReservationTap(item.reservationId);
+        return;
+      }
+      if (item.actionTab && onGapActionTap) {
+        onGapActionTap({ tab: item.actionTab, context: item.actionContext });
+        return;
+      }
+      onOpenBook();
+      return;
+    }
+    onOpenPlan();
+  };
+
+  const alsoAttention =
+    nextAction.kind === "attention" && nextAction.attention
+      ? heroAttention.filter((item) => item.id !== nextAction.attention!.id).slice(0, 2)
+      : heroAttention.slice(0, 2);
 
   return (
     <section
@@ -538,46 +560,81 @@ export function MissionControlView({
           </button>
         ) : null}
 
-        {prepMode && prepWatchItems.length > 0 ? (
+        <div
+          className={`mt-4 rounded-2xl px-4 py-4 ${
+            nextAction.kind === "ready"
+              ? "bg-white"
+              : nextAction.kind === "airport" || nextAction.kind === "attention"
+                ? "bg-white ring-1 ring-[#007AFF]/25"
+                : "bg-white"
+          }`}
+        >
+          <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#007AFF]">
+            {nextAction.eyebrow}
+          </p>
+          <p className="mt-1 text-[20px] font-semibold leading-snug tracking-tight text-[#1D1D1F]">
+            {nextAction.title}
+          </p>
+          {nextAction.detail ? (
+            <p className="mt-1 text-[14px] leading-relaxed text-[#6E6E73]">{nextAction.detail}</p>
+          ) : null}
+          <button
+            type="button"
+            onClick={runNextAction}
+            className="mt-4 flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-[#007AFF] px-4 text-[17px] font-semibold text-white"
+          >
+            {nextAction.ctaLabel}
+          </button>
+        </div>
+
+        {alsoAttention.length > 0 ? (
+          <div className="mt-3">
+            <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6E6E73]">Also</p>
+            <ul className="mt-1.5 space-y-2">
+              {alsoAttention.map((item) => (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (item.reservationId && onReservationTap) {
+                        onReservationTap(item.reservationId);
+                        return;
+                      }
+                      if (item.actionTab && onGapActionTap) {
+                        onGapActionTap({ tab: item.actionTab, context: item.actionContext });
+                        return;
+                      }
+                      onOpenPlan();
+                    }}
+                    className="flex w-full items-start gap-2 rounded-xl bg-white/80 px-3 py-2.5 text-left text-[14px] text-[#1D1D1F]"
+                  >
+                    <span
+                      className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+                      style={{ background: statusColor(item.status) }}
+                      aria-hidden
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold">{item.title}</p>
+                      {item.detail ? (
+                        <p className="mt-0.5 text-[13px] text-[#6E6E73]">{item.detail}</p>
+                      ) : null}
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {prepMode && prepWatchItems.length > 1 ? (
           <ul className="mt-3 space-y-2">
-            {prepWatchItems.map((item) => (
+            {prepWatchItems.slice(1).map((item) => (
               <li
                 key={item.id}
-                className="rounded-xl bg-white px-3 py-2.5 text-[14px] text-[#1D1D1F]"
+                className="rounded-xl bg-white/80 px-3 py-2.5 text-[14px] text-[#1D1D1F]"
               >
                 <p className="font-semibold">{item.title}</p>
                 <p className="mt-0.5 text-[13px] text-[#6E6E73]">{item.detail}</p>
-                {item.href ? (
-                  <a
-                    href={item.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-1 inline-block text-[13px] font-semibold text-[#007AFF]"
-                  >
-                    Official travel.state.gov guidance
-                  </a>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-
-        {heroAttention.length > 0 ? (
-          <ul className="mt-3 space-y-2">
-            {heroAttention.map((item) => (
-              <li
-                key={item.id}
-                className="flex items-start gap-2 rounded-xl bg-white px-3 py-2.5 text-[14px] text-[#1D1D1F]"
-              >
-                <span
-                  className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
-                  style={{ background: statusColor(item.status) }}
-                  aria-hidden
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold">{item.title}</p>
-                  {item.detail ? <p className="mt-0.5 text-[13px] text-[#6E6E73]">{item.detail}</p> : null}
-                </div>
               </li>
             ))}
           </ul>
@@ -590,16 +647,6 @@ export function MissionControlView({
             className="mt-2 text-[14px] font-semibold text-[#007AFF]"
           >
             See all ({snap.attentionOverflow + snap.attentionTop3.length})
-          </button>
-        ) : null}
-
-        {primaryCta ? (
-          <button
-            type="button"
-            onClick={primaryCta.onClick}
-            className="mt-4 flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-[#007AFF] px-4 text-[17px] font-semibold text-white"
-          >
-            {primaryCta.label}
           </button>
         ) : null}
       </article>

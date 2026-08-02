@@ -160,6 +160,8 @@ interface MobileMapForwardShellProps {
   offlineKitSyncing?: boolean;
   onRefreshOfflineKit?: () => void;
   onOpenAirportMode?: () => void;
+  unresolvedReviewCount?: number;
+  onOpenReview?: () => void;
 }
 
 function findPlannableAirport(reservations: Reservation[]): string | null {
@@ -270,6 +272,8 @@ export function MobileMapForwardShell({
   offlineKitSyncing = false,
   onRefreshOfflineKit,
   onOpenAirportMode,
+  unresolvedReviewCount = 0,
+  onOpenReview,
 }: MobileMapForwardShellProps) {
   const [planSegment, setPlanSegment] = useState<PlanSegment>("itinerary");
   const [showPointsLearn, setShowPointsLearn] = useState(false);
@@ -336,6 +340,8 @@ export function MobileMapForwardShell({
           onReservationTap={onReservationTap}
           onGapActionTap={onGapActionTap}
           onSeeAllAttention={() => onNavigateTab("plan")}
+          unresolvedReviewCount={unresolvedReviewCount}
+          onOpenReview={onOpenReview ?? (() => onNavigateTab("plan"))}
         />
 
         {hasActiveTrip && tripSpendSummary ? (

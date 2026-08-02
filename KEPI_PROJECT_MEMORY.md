@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-02 (Lifetime invite unlock UX — visible redeem + code preserve)
+Last updated: 2026-08-02 (Plan B Home next-action + import celebration)
+
+## Decision 2026-08-02 — Plan B Home engagement (Jeff approved)
+Home is a coach, not a filing cabinet: one **Next up** action via `pickHomeNextAction` in MissionControl (desktop + mobile). Silent drain auto-imports celebrate with `PostBookingConfirmation` + toast. Lifetime invite unlock UX shipped earlier same day.
 
 ## Decision 2026-07-31 — Email-forward ingest F6/F7/F9–F12 (audit close-out)
 Gate runs before planned-replace / flight-merge; per-draft `assessForwardedDraft` scores; drain default-deny unless `parsingStatus === "auto-parsed"`; duplicate drain keeps queue item with reason; unknown types forced to review; production fail-closed if `RESEND_WEBHOOK_SECRET` unset. F1–F5 already PASS from I30.

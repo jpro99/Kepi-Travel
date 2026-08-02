@@ -86,6 +86,8 @@ interface DesktopTripHomeViewProps {
   pushSubscribed?: boolean;
   pushBusy?: boolean;
   onEnablePush?: () => void;
+  unresolvedReviewCount?: number;
+  onOpenReview?: () => void;
 }
 
 export function DesktopTripHomeView({
@@ -117,6 +119,8 @@ export function DesktopTripHomeView({
   pushSubscribed = false,
   pushBusy = false,
   onEnablePush,
+  unresolvedReviewCount = 0,
+  onOpenReview,
 }: DesktopTripHomeViewProps) {
   const transportReservations =
     transportReservationsProp ??
@@ -169,6 +173,8 @@ export function DesktopTripHomeView({
         onReservationTap={onReservationTap}
         onGapActionTap={onGapActionTap}
         onSeeAllAttention={onOpenPlan}
+        unresolvedReviewCount={unresolvedReviewCount}
+        onOpenReview={onOpenReview}
       />
 
       {/* I36: on travel day, Home is the takeover screen only — no map/transport chrome. */}

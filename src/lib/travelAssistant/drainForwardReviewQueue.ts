@@ -78,17 +78,30 @@ function isAutoImportReviewItem(item: DrainableReviewItem): boolean {
  * Items with `reasons` (from `evaluateForwardedReservationGate`) require an explicit
  * human confirm step and are left untouched in the queue.
  */
+export interface DrainPromotedReservation {
+  id: string;
+  type: string;
+  title: string;
+  confirmationCode: string;
+}
+
 export function drainForwardReviewQueue<TReservation extends DrainableReservation>(
   reservations: TReservation[],
   reviewQueue: DrainableReviewItem[],
   createId: () => string,
-): { reservations: TReservation[]; reviewQueue: DrainableReviewItem[]; changed: boolean } {
+): {
+  reservations: TReservation[];
+  reviewQueue: DrainableReviewItem[];
+  changed: boolean;
+  promoted: DrainPromotedReservation[];
+} {
   if (reviewQueue.length === 0) {
-    return { reservations, reviewQueue, changed: false };
+    return { reservations, reviewQueue, changed: false, promoted: [] };
   }
 
   let nextReservations = [...reservations];
   const remainingQueue: DrainableReviewItem[] = [];
+  const promoted: DrainPromotedReservation[] = [];
   let changed = false;
 
   for (const item of reviewQueue) {
@@ -134,9 +147,10 @@ export function drainForwardReviewQueue<TReservation extends DrainableReservatio
       continue;
     }
 
+    const id = createId();
     const imported = {
       ...enriched,
-      id: createId(),
+      id,
       source: "imported",
       sourceEmailSubject: item.sourceEmailSubject,
       sourceEmailId: item.sourceEmailId,
@@ -155,16 +169,23 @@ export function drainForwardReviewQueue<TReservation extends DrainableReservatio
     } as TReservation;
 
     nextReservations = [imported, ...nextReservations];
+    promoted.push({
+      id,
+      type: enriched.type,
+      title: enriched.title?.trim() || enriched.provider?.trim() || "Booking",
+      confirmationCode: enriched.confirmationCode?.trim() || "",
+    });
     changed = true;
   }
 
   if (!changed) {
-    return { reservations, reviewQueue, changed: false };
+    return { reservations, reviewQueue, changed: false, promoted: [] };
   }
 
   return {
     reservations: nextReservations,
     reviewQueue: remainingQueue,
     changed: true,
+    promoted,
   };
 }

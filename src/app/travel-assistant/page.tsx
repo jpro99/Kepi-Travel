@@ -2822,6 +2822,25 @@ export default function TravelAssistantPage() {
     if (options?.resetHighlight) {
       setHighlightedReservationId(null);
     }
+    // Plan B: celebrate silent auto-import from drain (was previously invisible).
+    if (drained.promoted.length > 0) {
+      const first = drained.promoted[0]!;
+      const kind =
+        first.type === "hotel" ? "hotel" : first.type === "flight" ? "flight" : "import";
+      const more =
+        drained.promoted.length > 1 ? ` (+${drained.promoted.length - 1} more)` : "";
+      setPostBookingConfirmation({
+        kind,
+        title: `We got it — ${first.title}${more}`,
+        confirmationCode: first.confirmationCode || undefined,
+        detail:
+          drained.promoted.length === 1
+            ? "Added to your trip from a forwarded email."
+            : `${drained.promoted.length} bookings from forwarded email are now on your trip.`,
+        syncedToTrip: true,
+      });
+      setToast(`Added to your trip: ${first.title}${more}`);
+    }
     queueMicrotask(() => {
       applyingTripStateRef.current = false;
     });
@@ -9930,6 +9949,14 @@ export default function TravelAssistantPage() {
                   markLiveMapSessionActive();
                   router.push("/travel-assistant/live-map?view=airport");
                 }}
+                unresolvedReviewCount={unresolvedReviewCount}
+                onOpenReview={() => {
+                  setConsumerReviewQueueSession({
+                    open: true,
+                    processed: 0,
+                    total: reviewQueue.length,
+                  });
+                }}
                 bookSubTab={bookSubTab}
                 onBookSubTabChange={(subTab) => navigateToConsumerTab("book", { bookView: subTab })}
                 tripId={activeTripId}
@@ -10085,6 +10112,14 @@ export default function TravelAssistantPage() {
                 pushBusy={pushBusy}
                 onEnablePush={() => {
                   void handleEnablePush();
+                }}
+                unresolvedReviewCount={unresolvedReviewCount}
+                onOpenReview={() => {
+                  setConsumerReviewQueueSession({
+                    open: true,
+                    processed: 0,
+                    total: reviewQueue.length,
+                  });
                 }}
               />
             )
