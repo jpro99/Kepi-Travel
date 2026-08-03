@@ -100,6 +100,11 @@ Within **6 hours** of departure, client and server polls must run at least every
 
 **Test:** `src/lib/travelAssistant/flightStatusCredentials.test.ts`
 
+**F14 — Book flight search is advisor + honest handoff**
+Book → Flights search ranks personalized top picks (overall / cash / miles, multi-origin incl. nearby SoCal like PSP) via fused search + traveler genome — not a raw Duffel dump with locked-looking prices. External CTAs are Google Flights / Seats.aero verify only: never put a dollar amount on a handoff button; never show Duffel Airways / test carriers as airlines; quote lines say confirm on Google.
+
+**Test:** `src/lib/flights/bookFlightAdvisorPicks.test.ts`
+
 **F13 — Push snapshots key by reservation flightDate**  
 Background and interactive gate/delay pushes must key status snapshots by the flight's **reservation date** (`YYYY-MM-DD` from `localTime` / `flightDate`), never silently by "today." Using today caused alerts to miss or collide across days. Providers must attach `flightDate` on `TravelUpdateEvent`.
 
@@ -719,6 +724,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | F9 | `src/lib/travelAssistant/flightStatusLookup.test.ts` |
 | F12 | `src/lib/travelAssistant/flightStatusCredentials.test.ts` |
 | F13 | `src/lib/travelAssistant/resolvePushFlightDate.test.ts`, `flightStatusPushBridge.test.ts`, `flightStatusTrustLine.test.ts` |
+| F14 | `src/lib/flights/bookFlightAdvisorPicks.test.ts` |
 | G13 | `src/lib/travelAssistant/gapDetectionService.test.ts` |
 | G8 | `src/lib/travelAssistant/dayPlanLines.test.ts` |
 | G10 | `src/lib/travelAssistant/tripActionItems.test.ts` |

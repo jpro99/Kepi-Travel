@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-03 (I46 calendar return-day / no Munich after home)
+Last updated: 2026-08-03 (F14 Book flight advisor + honest handoff)
+
+## Decision 2026-08-03 — Book flights = advisor hybrid (Jeff approved)
+Book search uses fused ranking + genome origins (ONT/PSP/SoCal) for Top picks (overall / cash / miles / Alaska). CTAs are Google Flights / Seats verify only — no dollar on handoff buttons, no Duffel Airways. Full Command Deck stays off Book. Law F14.
 
 ## Decision 2026-08-03 — Calendar return day: no Munich after home (Jeff approved)
 `fillCoverageGaps` must not extend the last stay past the final return travel day when `tripEndDate` is later. Return walkthrough/label names the ultimate home city (Ontario), not the connection (Rome); same-day multi-leg shows full chain. Law I46.

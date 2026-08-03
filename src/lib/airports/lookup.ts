@@ -5,7 +5,10 @@ const AIRPORTS: Record<string, { iata: string; name: string; city: string; count
   // California
   lax: { iata: "LAX", name: "Los Angeles International", city: "Los Angeles", country: "US" },
   ont: { iata: "ONT", name: "Ontario International", city: "Ontario, CA", country: "US" },
+  psp: { iata: "PSP", name: "Palm Springs International", city: "Palm Springs", country: "US" },
   sna: { iata: "SNA", name: "John Wayne Airport", city: "Orange County / Irvine", country: "US" },
+  bur: { iata: "BUR", name: "Hollywood Burbank", city: "Burbank", country: "US" },
+  lgb: { iata: "LGB", name: "Long Beach Airport", city: "Long Beach", country: "US" },
   sfo: { iata: "SFO", name: "San Francisco International", city: "San Francisco", country: "US" },
   san: { iata: "SAN", name: "San Diego International", city: "San Diego", country: "US" },
   smf: { iata: "SMF", name: "Sacramento International", city: "Sacramento", country: "US" },

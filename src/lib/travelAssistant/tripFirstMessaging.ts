@@ -27,12 +27,13 @@ export function buildForwardAfterBookHint(): string {
   return "After you book, forward the confirmation email to your Kepi address — it appears on your timeline automatically.";
 }
 
+/** External handoff CTA — never embed a dollar amount (F14). Price stays on the card disclaimer. */
 export function buildFlightCashBookLabel(input: {
   airlineName: string;
-  priceUsd: number;
+  priceUsd?: number;
 }): string {
-  const airline = input.airlineName.split(/\s+/)[0] || "Airline";
-  return `Book on ${airline} or Google · $${Math.round(input.priceUsd)} ↗`;
+  void input.priceUsd;
+  return "Compare on Google Flights ↗";
 }
 
 export function buildFlightAwardBookLabel(program: string): string {
