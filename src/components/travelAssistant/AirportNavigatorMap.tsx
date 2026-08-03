@@ -880,6 +880,8 @@ export function AirportNavigatorMap({
   const activeRouteRef = useRef<ComputedRoute | null>(null);
   const [navCalibration, setNavCalibration] = useState<NavTimingCalibrationStore | null>(null);
   const [journeyPhase, setJourneyPhase] = useState<JourneyPhaseId>("landside");
+  /** Parent-owned coach vs full-day checklist for AirportNavigatorFallback. */
+  const [fullDayView, setFullDayView] = useState(false);
   const quietMode = !previewMode && journeyPhase === "security";
   // Honesty gate (KEPI_DESIGN_LAW M30): only draw a precise walking line when the
   // graph follows verified corridors. Schematic layouts (straight-line skeletons
@@ -2378,6 +2380,8 @@ export function AirportNavigatorMap({
         eligibleLoungeNames={eligibleLoungeNames}
         fill={fill}
         onSwitchToFamilyView={onSwitchToFamilyView}
+        fullDayView={fullDayView}
+        onToggleFullDayView={() => setFullDayView((prev) => !prev)}
         layoutLoadFailed={layoutStatus === "error"}
         familyPins={familyPins}
         onFamilyPinTap={onFamilyPinTap}

@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-03 (F14 Book flight advisor + honest handoff)
+Last updated: 2026-08-03 (Airport Day Coach Task A — time budget + full-day toggle)
+
+## Decision 2026-08-03 — Airport Day Coach Task A shipped; Task B blocked on mode derivation (Jeff approved)
+Departure fallback (`AirportNavigatorFallback`): time-budget reassurance under header (“until departure”, not boarding); parent-owned Full day / Coach view toggle collapses path to current+next (check-in included). No completion tracking yet. **Do not start arrival Task B** until Jeff decides how `mode: depart|arrive` is derived (`journeyPhase` vs live `"landed"` vs both). Map expansion still frozen.
 
 ## Decision 2026-08-03 — Book flights = advisor hybrid (Jeff approved)
 Book search uses fused ranking + genome origins (ONT/PSP/SoCal) for Top picks (overall / cash / miles / Alaska). CTAs are Google Flights / Seats verify only — no dollar on handoff buttons, no Duffel Airways. Full Command Deck stays off Book. Law F14.

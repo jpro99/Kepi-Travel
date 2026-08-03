@@ -10,6 +10,11 @@ import {
   getAirportWayfindingResource,
   wayfindingHonestyTier,
 } from "@/lib/airportNav/officialWayfinding";
+import {
+  departureTimeBudgetReassurance,
+  selectDayCoachVisibleSteps,
+  type DayCoachPathStep,
+} from "@/lib/travelAssistant/airportDayCoach";
 
 interface AirportNavigatorFallbackProps {
   iata: string;
@@ -29,6 +34,9 @@ interface AirportNavigatorFallbackProps {
   eligibleLoungeNames?: string[];
   fill?: boolean;
   onSwitchToFamilyView?: () => void;
+  /** Parent-owned: show every path step vs coach (current + next). */
+  fullDayView?: boolean;
+  onToggleFullDayView?: () => void;
   /** True when layout API failed (not merely unsupported). */
   layoutLoadFailed?: boolean;
   familyPins?: FamilyAirportPin[];
@@ -60,6 +68,8 @@ export function AirportNavigatorFallback({
   eligibleLoungeNames = [],
   fill = false,
   onSwitchToFamilyView,
+  fullDayView = false,
+  onToggleFullDayView,
   layoutLoadFailed = false,
   familyPins = [],
   onFamilyPinTap,
@@ -92,6 +102,30 @@ export function AirportNavigatorFallback({
     ? `Check in with ${airlineName.trim()} — app, kiosk, or counter`
     : "Check in — airline app, kiosk, or counter";
 
+  const pathSteps = useMemo((): DayCoachPathStep[] => {
+    const checkIn: DayCoachPathStep = {
+      id: "check-in",
+      icon: "🧳",
+      text: checkInLine,
+      detail: "Drop bags if needed, then head to security",
+    };
+    const fromGuide = guide.steps.map((step, index) => ({
+      id: `guide-${index}`,
+      icon: step.icon,
+      text: step.text,
+      detail: step.detail,
+      minutes: step.minutes > 0 ? step.minutes : undefined,
+    }));
+    return [checkIn, ...fromGuide];
+  }, [checkInLine, guide]);
+
+  const { visible: visiblePathSteps, hiddenCount } = useMemo(
+    () => selectDayCoachVisibleSteps(pathSteps, fullDayView),
+    [pathSteps, fullDayView],
+  );
+
+  const timeBudgetLine = departureTimeBudgetReassurance(minutesToDeparture);
+
   return (
     <div
       data-testid="airport-nav-fallback"
@@ -103,8 +137,22 @@ export function AirportNavigatorFallback({
       style={fill ? undefined : { maxHeight: 520 }}
     >
       <div className="space-y-4 p-4 sm:p-5">
-        <div className="rounded-2xl border border-sky-400/25 bg-sky-500/10 px-4 py-3">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-200">
+        <div className="relative rounded-2xl border border-sky-400/25 bg-sky-500/10 px-4 py-3">
+          {onToggleFullDayView ? (
+            <button
+              type="button"
+              data-testid="airport-fallback-day-view-toggle"
+              onClick={onToggleFullDayView}
+              className="absolute right-3 top-3 rounded-lg border border-sky-400/30 bg-transparent px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-sky-200/90 active:opacity-80"
+            >
+              {fullDayView ? "Coach view" : "Full day view"}
+            </button>
+          ) : null}
+          <p
+            className={`text-[10px] font-bold uppercase tracking-[0.18em] text-sky-200 ${
+              onToggleFullDayView ? "pr-24" : ""
+            }`}
+          >
             {layoutLoadFailed
               ? "Kepi terminal map temporarily unavailable"
               : strongOfficial
@@ -171,25 +219,26 @@ export function AirportNavigatorFallback({
           <p className="mt-3 text-xs text-sky-100/80">
             📍 {proximityLabel(proximityStatus || proximity.status)}
           </p>
+          {timeBudgetLine ? (
+            <p
+              data-testid="airport-fallback-time-budget"
+              className="mt-2 inline-flex rounded-full border border-sky-400/25 bg-sky-500/10 px-2.5 py-1 text-[11px] font-semibold text-sky-100/90"
+            >
+              {timeBudgetLine}
+            </p>
+          ) : null}
         </div>
 
         <section>
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-200/80">Your path today</p>
           <ol className="mt-2 space-y-2">
-            <li className="flex gap-3 rounded-xl bg-white/5 px-3 py-2.5">
-              <span className="text-lg" aria-hidden>🧳</span>
-              <div>
-                <p className="text-sm font-semibold">{checkInLine}</p>
-                <p className="text-xs text-slate-400">Drop bags if needed, then head to security</p>
-              </div>
-            </li>
-            {guide.steps.map((step, index) => (
-              <li key={`${step.text}-${index}`} className="flex gap-3 rounded-xl bg-white/5 px-3 py-2.5">
+            {visiblePathSteps.map((step) => (
+              <li key={step.id} className="flex gap-3 rounded-xl bg-white/5 px-3 py-2.5">
                 <span className="text-lg" aria-hidden>{step.icon}</span>
                 <div>
                   <p className="text-sm font-semibold">{step.text}</p>
                   {step.detail ? <p className="text-xs text-slate-400">{step.detail}</p> : null}
-                  {step.minutes > 0 ? (
+                  {step.minutes != null && step.minutes > 0 ? (
                     <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">
                       ~{step.minutes} min
                     </p>
@@ -197,6 +246,26 @@ export function AirportNavigatorFallback({
                 </div>
               </li>
             ))}
+            {hiddenCount > 0 ? (
+              <li
+                data-testid="airport-fallback-more-steps"
+                className="rounded-xl border border-sky-400/20 bg-sky-500/10 px-3 py-2.5 text-xs font-semibold text-sky-100/85"
+              >
+                {hiddenCount} more step{hiddenCount === 1 ? "" : "s"}
+                {onToggleFullDayView ? (
+                  <>
+                    {" · "}
+                    <button
+                      type="button"
+                      onClick={onToggleFullDayView}
+                      className="underline decoration-sky-400/50 underline-offset-2"
+                    >
+                      Full day view
+                    </button>
+                  </>
+                ) : null}
+              </li>
+            ) : null}
           </ol>
           {guide.totalMinutes > 0 ? (
             <p className="mt-2 text-xs font-semibold text-slate-400">
