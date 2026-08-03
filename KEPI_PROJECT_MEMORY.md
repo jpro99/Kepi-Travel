@@ -3,7 +3,10 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-02 (Plan B Home next-action + import celebration)
+Last updated: 2026-08-03 (I46 calendar return-day / no Munich after home)
+
+## Decision 2026-08-03 — Calendar return day: no Munich after home (Jeff approved)
+`fillCoverageGaps` must not extend the last stay past the final return travel day when `tripEndDate` is later. Return walkthrough/label names the ultimate home city (Ontario), not the connection (Rome); same-day multi-leg shows full chain. Law I46.
 
 ## Decision 2026-08-02 — Plan B Home engagement (Jeff approved)
 Home is a coach, not a filing cabinet: one **Next up** action via `pickHomeNextAction` in MissionControl (desktop + mobile). Silent drain auto-imports celebrate with `PostBookingConfirmation` + toast. Lifetime invite unlock UX shipped earlier same day.

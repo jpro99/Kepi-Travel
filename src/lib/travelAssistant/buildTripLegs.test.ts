@@ -40,6 +40,36 @@ test("humanTravelLegLabel uses city names not airport chains", () => {
     "Fly to Rome · 2 flights",
   );
   assert.equal(humanTravelLegLabel([], { isReturn: true }), "Return home");
+  assert.equal(
+    humanTravelLegLabel(
+      [
+        {
+          id: "r1",
+          type: "flight",
+          title: "",
+          provider: "",
+          localTime: "2026-09-25 11:00",
+          flightNumber: "AZ 612",
+          flightDepartureAirport: "MUC",
+          flightArrivalAirport: "FCO",
+          flightDepartureTime: "2026-09-25 11:00",
+        },
+        {
+          id: "r2",
+          type: "flight",
+          title: "",
+          provider: "",
+          localTime: "2026-09-25 16:00",
+          flightNumber: "AZ 620",
+          flightDepartureAirport: "FCO",
+          flightArrivalAirport: "ONT",
+          flightDepartureTime: "2026-09-25 16:00",
+        },
+      ],
+      { isReturn: true },
+    ),
+    "Return home to Ontario",
+  );
 });
 
 test("airportToCity resolves common IATA codes", () => {
@@ -372,4 +402,91 @@ test("I44: calendar model paints arrival split on check-in day, solid stay the n
   assert.equal(sep3.kind, "stay");
   assert.equal(sep3.transitionFromColor, null);
   assert.match(sep3.cityName ?? "", /Polignano/i);
+});
+
+test("I46: MUC→FCO→ONT return does not paint Munich after return; trip end may be later", () => {
+  const reservations = [
+    {
+      id: "f1",
+      type: "flight",
+      title: "Outbound",
+      provider: "Alaska",
+      localTime: "2026-09-01 08:00",
+      flightDate: "2026-09-01",
+      flightNumber: "AS 180",
+      flightDepartureAirport: "ONT",
+      flightArrivalAirport: "FCO",
+      flightDepartureTime: "2026-09-01 08:00",
+      flightArrivalTime: "2026-09-02 08:00",
+    },
+    {
+      id: "f2",
+      type: "flight",
+      title: "To Bari",
+      provider: "ITA",
+      localTime: "2026-09-02 14:00",
+      flightDate: "2026-09-02",
+      flightDepartureAirport: "FCO",
+      flightArrivalAirport: "BRI",
+      flightDepartureTime: "2026-09-02 14:00",
+    },
+    {
+      id: "f3",
+      type: "flight",
+      title: "To Venice",
+      provider: "ITA",
+      localTime: "2026-09-12 10:00",
+      flightDate: "2026-09-12",
+      flightDepartureAirport: "BRI",
+      flightArrivalAirport: "VCE",
+      flightDepartureTime: "2026-09-12 10:00",
+    },
+    {
+      id: "f4",
+      type: "flight",
+      title: "MUC-FCO",
+      provider: "ITA",
+      localTime: "2026-09-25 11:00",
+      flightDate: "2026-09-25",
+      flightNumber: "AZ 612",
+      flightDepartureAirport: "MUC",
+      flightArrivalAirport: "FCO",
+      flightDepartureTime: "2026-09-25 11:00",
+      flightArrivalTime: "2026-09-25 12:30",
+    },
+    {
+      id: "f5",
+      type: "flight",
+      title: "FCO-ONT",
+      provider: "ITA",
+      localTime: "2026-09-25 16:00",
+      flightDate: "2026-09-25",
+      flightNumber: "AZ 620",
+      flightDepartureAirport: "FCO",
+      flightArrivalAirport: "ONT",
+      flightDepartureTime: "2026-09-25 16:00",
+      flightArrivalTime: "2026-09-25 20:00",
+    },
+  ];
+
+  const legs = buildTripLegs(reservations, "2026-09-01", "2026-09-28");
+  const munich = legs.find((l) => l.type === "stay" && l.label === "Munich");
+  assert.ok(munich, "Munich stay must exist before return");
+  assert.ok(munich!.endDate <= "2026-09-24", `Munich must end before return, got ${munich!.endDate}`);
+  assert.ok(
+    !legs.some((l) => l.type === "stay" && l.startDate > "2026-09-25"),
+    "no stay legs after return travel day",
+  );
+  const returnLeg = legs.find((l) => l.type === "travel" && /Ontario|Return home/i.test(l.label));
+  assert.ok(returnLeg, `return leg should name home city, got ${legs.filter((l) => l.type === "travel").map((l) => l.label).join(" | ")}`);
+
+  const model = buildTripLegCalendarModel(reservations, "2026-09-01", "2026-09-28");
+  const sep25 = model.dayCells.get("2026-09-25");
+  const sep26 = model.dayCells.get("2026-09-26");
+  const sep28 = model.dayCells.get("2026-09-28");
+  assert.ok(sep25);
+  assert.match(sep25!.flightPrimary?.route ?? "", /ONT/);
+  assert.match(sep25!.flightSummary ?? "", /ONT/);
+  assert.notEqual(sep26?.cityName, "Munich");
+  assert.notEqual(sep28?.cityName, "Munich");
 });

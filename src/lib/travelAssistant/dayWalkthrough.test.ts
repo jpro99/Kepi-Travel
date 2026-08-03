@@ -131,6 +131,62 @@ test("Booking.com OTA title shows property name Casa de Elena (I25)", () => {
   assert.doesNotMatch(text, /staying at Booking\.com/i);
 });
 
+test("I46: homebound return day names Ontario not Rome connection", () => {
+  const outbound = {
+    id: "f-out",
+    type: "flight",
+    title: "AS 180",
+    provider: "Alaska",
+    localTime: "2026-09-01 08:00",
+    flightDate: "2026-09-01",
+    flightNumber: "AS180",
+    flightAirline: "Alaska",
+    flightDepartureAirport: "ONT",
+    flightArrivalAirport: "FCO",
+    flightDepartureTime: "2026-09-01 08:00",
+    flightArrivalTime: "2026-09-02 08:00",
+  };
+  const mucFco = {
+    id: "f-muc",
+    type: "flight",
+    title: "AZ 612",
+    provider: "ITA",
+    localTime: "2026-09-25 11:00",
+    flightDate: "2026-09-25",
+    flightNumber: "AZ612",
+    flightAirline: "ITA Airways",
+    flightDepartureAirport: "MUC",
+    flightArrivalAirport: "FCO",
+    flightDepartureTime: "2026-09-25 11:00",
+    flightArrivalTime: "2026-09-25 12:30",
+  };
+  const fcoOnt = {
+    id: "f-ont",
+    type: "flight",
+    title: "AZ 620",
+    provider: "ITA",
+    localTime: "2026-09-25 16:00",
+    flightDate: "2026-09-25",
+    flightNumber: "AZ620",
+    flightAirline: "ITA Airways",
+    flightDepartureAirport: "FCO",
+    flightArrivalAirport: "ONT",
+    flightDepartureTime: "2026-09-25 16:00",
+    flightArrivalTime: "2026-09-25 20:00",
+  };
+  const walkthrough = buildDayWalkthrough({
+    dateKey: "2026-09-25",
+    reservations: [outbound, mucFco, fcoOnt],
+    tripStartDate: "2026-09-01",
+    tripEndDate: "2026-09-28",
+  });
+  assert.match(walkthrough.headline, /Ontario/i);
+  assert.doesNotMatch(walkthrough.headline, /off to Rome/i);
+  const text = walkthrough.paragraphs.join(" ");
+  assert.match(text, /Ontario/i);
+  assert.match(text, /via Rome/i);
+});
+
 test("same-day checkout and check-in both named", () => {
   const leaving = {
     id: "h-out",

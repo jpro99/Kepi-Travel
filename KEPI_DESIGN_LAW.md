@@ -565,6 +565,11 @@ If the original email `Date:`/`Sent:` is ~13+ months old **and** the body has no
 
 **Test:** `src/lib/travelAssistant/historicalEmailForward.test.ts`
 
+**I46 — Return travel ends the stay paint; homebound copy uses final city**
+Do not extend the last European stay through `tripEndDate` after the final return travel day (`fillCoverageGaps` caps at return). Return-day labels and walkthroughs name the ultimate home city (e.g. Ontario), not the connection (Rome), and surface the full same-day chain (MUC→FCO→ONT).
+
+**Test:** `src/lib/travelAssistant/buildTripLegs.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -742,6 +747,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I43 | `src/lib/travelAssistant/homeDayTruth.test.ts` |
 | I44 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
 | I45 | `src/lib/travelAssistant/historicalEmailForward.test.ts` |
+| I46 | `src/lib/travelAssistant/buildTripLegs.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

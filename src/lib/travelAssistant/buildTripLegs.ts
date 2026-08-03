@@ -169,16 +169,34 @@ function summarizeFlights(flights: LegReservation[]): string {
   return route.join(" → ");
 }
 
+function shortCityName(city: string): string {
+  return city.split(",")[0]?.trim() || city;
+}
+
+function sortLegFlightsByDeparture(flights: LegReservation[]): LegReservation[] {
+  return [...flights].sort((a, b) => {
+    const aKey = `${flightDepartureDate(a)} ${a.flightDepartureTime ?? a.localTime ?? ""}`;
+    const bKey = `${flightDepartureDate(b)} ${b.flightDepartureTime ?? b.localTime ?? ""}`;
+    return aKey.localeCompare(bKey);
+  });
+}
+
 /** Place-first Plan labels — city names, not raw airport chains (KEPI_DESIGN_LAW I11). */
 export function humanTravelLegLabel(
   flights: LegReservation[],
   options?: { isReturn?: boolean },
 ): string {
-  if (options?.isReturn) return "Return home";
-  if (flights.length === 0) return "Travel day";
-  const last = flights[flights.length - 1]!;
-  const destCity = airportToCity(last.flightArrivalAirport);
-  if (flights.length > 1) return `Fly to ${destCity} · ${flights.length} flights`;
+  const sorted = sortLegFlightsByDeparture(flights);
+  if (options?.isReturn) {
+    if (sorted.length === 0) return "Return home";
+    const last = sorted[sorted.length - 1]!;
+    const dest = shortCityName(airportToCity(last.flightArrivalAirport));
+    return dest && dest !== "Unknown" ? `Return home to ${dest}` : "Return home";
+  }
+  if (sorted.length === 0) return "Travel day";
+  const last = sorted[sorted.length - 1]!;
+  const destCity = shortCityName(airportToCity(last.flightArrivalAirport));
+  if (sorted.length > 1) return `Fly to ${destCity} · ${sorted.length} flights`;
   const fn = (last.flightNumber ?? "").trim();
   return fn ? `Fly to ${destCity} · ${fn}` : `Fly to ${destCity}`;
 }
@@ -200,16 +218,25 @@ function flightPrimaryDetail(flights: LegReservation[]): {
   extraCount: number;
 } {
   if (flights.length === 0) return { primary: null, extraCount: 0 };
-  const first = flights[0]!;
+  const sorted = sortLegFlightsByDeparture(flights);
+  const first = sorted[0]!;
+  const last = sorted[sorted.length - 1]!;
   const dep = first.flightDepartureAirport?.toUpperCase() ?? "?";
-  const arr = first.flightArrivalAirport?.toUpperCase() ?? "?";
+  // Multi-leg same-day: show ultimate arrival (MUC→FCO→ONT), not just the first hop.
+  const arr = last.flightArrivalAirport?.toUpperCase() ?? "?";
+  const mid =
+    sorted.length > 2
+      ? ` · ${sorted.length - 1} stops`
+      : sorted.length === 2
+        ? ` via ${first.flightArrivalAirport?.toUpperCase() ?? "?"}`
+        : "";
   return {
     primary: {
       number: (first.flightNumber ?? first.title ?? "Flight").trim(),
       depTime: formatFlightDepTime(first.flightDepartureTime ?? first.localTime),
-      route: `${dep} → ${arr}`,
+      route: `${dep} → ${arr}${mid}`,
     },
-    extraCount: Math.max(0, flights.length - 1),
+    extraCount: Math.max(0, sorted.length - 1),
   };
 }
 
@@ -387,7 +414,19 @@ function mergeAdjacentLegs(legs: BuiltTripLeg[]): BuiltTripLeg[] {
 function fillCoverageGaps(legs: BuiltTripLeg[], tripStart: string, tripEnd: string): BuiltTripLeg[] {
   const dayKeys = buildFullTripDayKeys(tripStart, tripEnd, []);
   let result = mergeAdjacentLegs([...legs]);
-  const uncovered = dayKeys.filter((dk) => !legForDate(result, dk));
+
+  // Do not invent stay days after the final return travel leg (Jeff Europe calendar:
+  // MUC→home on the 25th must not paint 26–28 as "still in Munich").
+  const lastTravelEnd = [...result]
+    .filter((l) => l.type === "travel")
+    .sort((a, b) => compareDateKeys(b.endDate, a.endDate))[0]?.endDate;
+  const coverageEnd =
+    lastTravelEnd && compareDateKeys(lastTravelEnd, tripEnd) < 0 ? lastTravelEnd : tripEnd;
+
+  const uncovered = dayKeys.filter((dk) => {
+    if (compareDateKeys(dk, coverageEnd) > 0) return false;
+    return !legForDate(result, dk);
+  });
   if (uncovered.length === 0) return result;
 
   const ranges: Array<{ start: string; end: string }> = [];
@@ -407,17 +446,25 @@ function fillCoverageGaps(legs: BuiltTripLeg[], tripStart: string, tripEnd: stri
 
   let stayColorIndex = result.filter((l) => l.type === "stay").length;
   for (const range of ranges) {
+    // Never stretch a European stay into days after the last travel (return) day.
+    if (lastTravelEnd && compareDateKeys(range.start, lastTravelEnd) > 0) {
+      continue;
+    }
+    const cappedEnd =
+      lastTravelEnd && compareDateKeys(range.end, lastTravelEnd) > 0 ? lastTravelEnd : range.end;
+    if (compareDateKeys(range.start, cappedEnd) > 0) continue;
+
     const before = [...result]
       .filter((l) => l.endDate < range.start)
       .sort((a, b) => compareDateKeys(b.endDate, a.endDate))[0];
     const after = [...result]
-      .filter((l) => l.startDate > range.end)
+      .filter((l) => l.startDate > cappedEnd)
       .sort((a, b) => compareDateKeys(a.startDate, b.startDate))[0];
 
     if (before?.type === "stay" && after?.type === "stay" && before.label !== after.label) {
       const boundary = addDays(after.startDate, -1);
-      if (compareDateKeys(range.end, boundary) <= 0) {
-        before.endDate = maxDateKey(before.endDate, range.end);
+      if (compareDateKeys(cappedEnd, boundary) <= 0) {
+        before.endDate = maxDateKey(before.endDate, cappedEnd);
       } else if (compareDateKeys(range.start, after.startDate) >= 0) {
         after.startDate = minDateKey(after.startDate, range.start);
       } else {
@@ -435,7 +482,14 @@ function fillCoverageGaps(legs: BuiltTripLeg[], tripStart: string, tripEnd: stri
     }
 
     if (before?.type === "stay" && !after) {
-      before.endDate = maxDateKey(before.endDate, range.end);
+      // Cap stay extension at the day before return travel when return sits on coverageEnd.
+      const stayCap =
+        lastTravelEnd && compareDateKeys(lastTravelEnd, cappedEnd) === 0
+          ? addDays(lastTravelEnd, -1)
+          : cappedEnd;
+      if (compareDateKeys(stayCap, before.startDate) >= 0) {
+        before.endDate = maxDateKey(before.endDate, minDateKey(stayCap, cappedEnd));
+      }
       continue;
     }
 
@@ -447,7 +501,7 @@ function fillCoverageGaps(legs: BuiltTripLeg[], tripStart: string, tripEnd: stri
       type: "stay",
       label,
       startDate: range.start,
-      endDate: range.end,
+      endDate: cappedEnd,
       color,
     });
   }

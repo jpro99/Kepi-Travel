@@ -81,11 +81,6 @@ function formatFriendlyTime(raw: string | undefined): string | null {
   return `${hour}:${minute} ${ampm}`;
 }
 
-function cityFromAirport(iata: string | undefined): string {
-  if (!iata?.trim()) return "your destination";
-  return airportToCity(iata);
-}
-
 function airlineLabel(reservation: DayWalkthroughReservation): string {
   const number = reservation.flightNumber?.trim();
   const airline = reservation.flightAirline ?? reservation.provider;
@@ -126,8 +121,8 @@ function hotelRoleOnDay(hotel: DayWalkthroughReservation, dateKey: string): Hote
 function describeFlightOnDay(flight: DayWalkthroughReservation, dateKey: string): string {
   const depKey = flightDepartureDateKey(flight);
   const arrKey = dateKeyFromTime(flight.flightArrivalTime);
-  const depCity = cityFromAirport(flight.flightDepartureAirport);
-  const arrCity = cityFromAirport(flight.flightArrivalAirport);
+  const depCity = cityFromAirport(flight.flightDepartureAirport) ?? "your departure";
+  const arrCity = cityFromAirport(flight.flightArrivalAirport) ?? "your destination";
   const label = airlineLabel(flight);
 
   if (depKey === dateKey && arrKey === dateKey) {
@@ -149,10 +144,53 @@ function describeFlightOnDay(flight: DayWalkthroughReservation, dateKey: string)
     : `You arrive in ${arrCity} today on ${label}.`;
 }
 
+function cityFromAirport(iata: string | undefined): string | null {
+  if (!iata?.trim()) return null;
+  const city = airportToCity(iata);
+  if (!city || city === iata.toUpperCase()) return iata.toUpperCase();
+  // "Ontario, CA" → "Ontario" for headlines
+  return city.split(",")[0]?.trim() || city;
+}
+
+function sortFlightsByDeparture(flights: DayWalkthroughReservation[]): DayWalkthroughReservation[] {
+  return [...flights].sort((a, b) => {
+    const aKey = `${flightDepartureDateKey(a)} ${a.flightDepartureTime ?? a.localTime ?? ""}`;
+    const bKey = `${flightDepartureDateKey(b)} ${b.flightDepartureTime ?? b.localTime ?? ""}`;
+    return aKey.localeCompare(bKey);
+  });
+}
+
+/** Ultimate arrival city for the day's departing chain (sorted by time — not reservation order). */
 function finalDestinationCity(flights: DayWalkthroughReservation[]): string | null {
-  const last = flights[flights.length - 1];
+  const sorted = sortFlightsByDeparture(flights);
+  const last = sorted[sorted.length - 1];
   if (!last?.flightArrivalAirport) return null;
   return cityFromAirport(last.flightArrivalAirport);
+}
+
+function tripOriginCity(reservations: DayWalkthroughReservation[]): string | null {
+  const outbound = sortFlightsByDeparture(reservations.filter((r) => r.type === "flight"));
+  if (outbound.length === 0) return null;
+  return cityFromAirport(outbound[0]?.flightDepartureAirport);
+}
+
+function isHomeboundTravelDay(
+  departingFlights: DayWalkthroughReservation[],
+  allReservations: DayWalkthroughReservation[],
+): boolean {
+  if (departingFlights.length === 0) return false;
+  const finalCity = finalDestinationCity(departingFlights);
+  const originCity = tripOriginCity(allReservations);
+  if (finalCity && originCity && finalCity.toLowerCase() === originCity.toLowerCase()) {
+    return true;
+  }
+  // Same IATA: last arrival matches first outbound departure airport.
+  const sortedDay = sortFlightsByDeparture(departingFlights);
+  const lastArr = sortedDay[sortedDay.length - 1]?.flightArrivalAirport?.trim().toUpperCase();
+  const firstOut = sortFlightsByDeparture(allReservations.filter((r) => r.type === "flight"))[0]
+    ?.flightDepartureAirport?.trim()
+    .toUpperCase();
+  return Boolean(lastArr && firstOut && lastArr === firstOut);
 }
 
 export function buildDayWalkthrough(input: BuildDayWalkthroughInput): DayWalkthrough {
@@ -200,9 +238,23 @@ export function buildDayWalkthrough(input: BuildDayWalkthroughInput): DayWalkthr
   } else if (travelOnly && isFirst) {
     headline = "Your first travel day";
     paragraphs.push("This is where your trip begins — today is about getting where you're going by air.");
-  } else if (travelOnly && isLast) {
-    headline = "Heading home";
-    paragraphs.push("Today's a travel day — you'll be in transit as your trip winds down.");
+  } else if (
+    travelOnly &&
+    (isLast || isHomeboundTravelDay(departingFlights, reservations))
+  ) {
+    const home = finalDestinationCity(departingFlights);
+    const via =
+      departingFlights.length > 1
+        ? cityFromAirport(sortFlightsByDeparture(departingFlights)[0]?.flightArrivalAirport)
+        : null;
+    headline = home ? `Heading home to ${home}` : "Heading home";
+    paragraphs.push(
+      home && via && via.toLowerCase() !== home.toLowerCase()
+        ? `Today's a travel day — you're heading home to ${home}, via ${via}.`
+        : home
+          ? `Today's a travel day — you're heading home to ${home}.`
+          : "Today's a travel day — you'll be in transit as your trip winds down.",
+    );
   } else if (travelOnly) {
     const dest = finalDestinationCity(departingFlights) ?? "your next stop";
     headline = `Travel day — off to ${dest}`;
