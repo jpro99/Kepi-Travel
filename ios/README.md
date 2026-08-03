@@ -2,6 +2,20 @@
 
 Native iOS is required for **background location while the phone is locked**. The web/PWA cannot request Apple's "Always Allow" location permission — Safari pauses GPS when the screen locks.
 
+**Bundle ID:** `com.kepitravel.app` (must match App Store Connect).  
+**Display name:** Kepi Travel.
+
+## TestFlight (Jeff — current path)
+
+Jeff’s Mac uses **CocoaPods** (`App.xcworkspace`), not SPM. Simulator already works. Last blocker was signing: *team has no devices* → plug in iPhone once, then Archive.
+
+1. Paid **Apple Developer Program** ($99) required for TestFlight (free Personal Team cannot ship TestFlight).
+2. Open `ios/App/App.xcworkspace` → **TARGETS → App → Signing & Capabilities** → Team + Automatically manage signing.
+3. Plug in iPhone → ▶ Run once (registers device) → clear red signing errors.
+4. Destination **Any iOS Device (arm64)** → **Product → Archive** → **Distribute App → App Store Connect → Upload**.
+5. [App Store Connect](https://appstoreconnect.apple.com) → Apps → create **Kepi Travel** with bundle id `com.kepitravel.app` → **TestFlight** tab → add yourself → install via TestFlight app on iPhone.
+6. **Mac:** use https://kepitravel.com in the browser today. After TestFlight, Apple Silicon Macs can also run the iPhone app; a separate Mac App Store build is not set up yet.
+
 ## Generate and sync
 
 ```bash

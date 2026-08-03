@@ -3,7 +3,7 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-07-17 (Jeff Mac iOS running via CocoaPods)
+Last updated: 2026-08-03 (TestFlight path — status for Jeff)
 
 ## Decision 2026-07-17 — CapApp-SPM empty JSON on fresh Xcode 26 (Jeff)
 
@@ -37,6 +37,18 @@ cat ios-capapp-spm-diagnose.txt
 5. Native shell loads **https://kepitravel.com** (production web).
 
 **Do not re-suggest:** Homebrew cocoapods, SPM CapApp-SPM fix loops, or Lockdown Mode (already Off) unless Jeff asks.
+
+## Decision 2026-08-03 — TestFlight status (Jeff)
+
+**Done:** Simulator runs via CocoaPods; Signing UI found; Team “Jeffery Russell”; bundle id in use locally `com.kepitravel.app`; app loads kepitravel.com.
+
+**Blocked last time:** Archive/signing — *Your team has no devices…* / no provisioning profile for `com.kepitravel.app`. Fix = plug in iPhone + ▶ Run once, then Archive. TestFlight also requires **paid** Apple Developer Program (not free Personal Team).
+
+**Repo aligned:** `PRODUCT_BUNDLE_IDENTIFIER` / `capacitor.config.ts` appId = `com.kepitravel.app`; display name “Kepi Travel”.
+
+**Mac downloads:** No native Mac App Store build yet — use website. iPhone TestFlight app can run on Apple Silicon Mac later.
+
+**Agent cannot do:** Apple login, $99 enrollment, Archive upload, App Store Connect app creation — Jeff must do those on the Mac.
 
 ## Decision 2026-07-16 — iOS CapApp-SPM / Xcode build (Jeff MacBook Air)
 
