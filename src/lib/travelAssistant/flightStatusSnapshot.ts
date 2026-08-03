@@ -11,6 +11,8 @@ export interface FlightStatusSnapshot {
   departureTerminal: string;
   departureAirport: string;
   arrivalAirport: string;
+  /** Destination baggage claim / belt when the source provides it (never invent). */
+  baggageClaim: string;
   authorityRank: number;
 }
 

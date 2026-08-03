@@ -42,6 +42,8 @@ export interface FlightLookupResponseBody {
   departureGate: string;
   arrivalTerminal: string;
   arrivalGate: string;
+  /** Live baggage claim/belt when FA/ADB provide it; empty when unknown. */
+  baggageClaim: string;
   delayMinutes: number | null;
   onTime: boolean | null;
   flightStatus: string;
@@ -80,6 +82,7 @@ export function mergedSnapshotToFlightLookupResponse(
     departureGate: merged.departureGate,
     arrivalTerminal: "",
     arrivalGate: "",
+    baggageClaim: merged.baggageClaim.trim(),
     delayMinutes,
     onTime: delayMinutes === null ? null : delayMinutes <= 0,
     flightStatus: mapSnapshotStatus(merged.status),

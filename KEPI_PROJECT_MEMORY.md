@@ -3,10 +3,13 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-03 (Airport Day Coach Task B — arrival via journeyPhase)
+Last updated: 2026-08-03 (live baggage claim on arrival coach)
+
+## Decision 2026-08-03 — Live baggage claim on arrival coach (Jeff approved build)
+FlightAware `baggage_claim` + AeroDataBox `arrival.baggageBelt` parsed into `FlightStatusSnapshot.baggageClaim`; merge fills from secondary when primary empty. Arrival Day Coach fetches flight-lookup and shows “Carousel X — from live flight status” only when a real value exists — never invent. Map expansion still frozen.
 
 ## Decision 2026-08-03 — Airport Day Coach Task B: arrive mode from journeyPhase (Jeff approved)
-`deriveAirportDayCoachMode`: `journeyPhase.kind === "just-landed"` → arrive; else depart. Arrival IATA for navigator; hide immigration/customs when dep/arr countries match (`resolveAirport`). Orphan `ArrivalMode.tsx` removed (absorbed into fallback). Live status `"landed"` is enrichment only, not the trigger. **Follow-up (not built):** per-flight baggage carousel from FlightAware/AeroDataBox — disruption path already surfaces `baggageClaim` sometimes; do not invent carousel numbers. Map expansion still frozen.
+`deriveAirportDayCoachMode`: `journeyPhase.kind === "just-landed"` → arrive; else depart. Arrival IATA for navigator; hide immigration/customs when dep/arr countries match (`resolveAirport`). Orphan `ArrivalMode.tsx` removed (absorbed into fallback). Live status `"landed"` is enrichment only, not the trigger.
 
 ## Decision 2026-08-03 — Airport Day Coach Task A shipped
 Departure fallback: time-budget reassurance (“until departure”); parent-owned Full day / Coach view toggle.

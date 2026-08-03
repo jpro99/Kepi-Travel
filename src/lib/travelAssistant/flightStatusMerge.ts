@@ -9,27 +9,22 @@ export interface MergedFlightStatusSnapshot extends FlightStatusSnapshot {
   discrepancies: FlightStatusSourceDiscrepancy[];
 }
 
+function fieldValue(snapshot: FlightStatusSnapshot, field: string): string {
+  if (field === "status") return snapshot.status;
+  if (field === "delayMinutes") return String(snapshot.delayMinutes ?? "");
+  if (field === "departureGate") return snapshot.departureGate;
+  if (field === "departureTerminal") return snapshot.departureTerminal;
+  if (field === "baggageClaim") return snapshot.baggageClaim;
+  return "";
+}
+
 function compareField(
   field: string,
   left: FlightStatusSnapshot,
   right: FlightStatusSnapshot,
 ): FlightStatusSourceDiscrepancy | null {
-  const leftValue =
-    field === "status"
-      ? left.status
-      : field === "delayMinutes"
-        ? String(left.delayMinutes ?? "")
-        : field === "departureGate"
-          ? left.departureGate
-          : left.departureTerminal;
-  const rightValue =
-    field === "status"
-      ? right.status
-      : field === "delayMinutes"
-        ? String(right.delayMinutes ?? "")
-        : field === "departureGate"
-          ? right.departureGate
-          : right.departureTerminal;
+  const leftValue = fieldValue(left, field);
+  const rightValue = fieldValue(right, field);
   if (!leftValue || !rightValue || leftValue === rightValue) return null;
   return {
     field,
@@ -38,6 +33,18 @@ function compareField(
     primarySource: left.source,
     secondarySource: right.source,
   };
+}
+
+function fillBaggageClaim(
+  authoritative: FlightStatusSnapshot,
+  snapshots: FlightStatusSnapshot[],
+): string {
+  if (authoritative.baggageClaim.trim()) return authoritative.baggageClaim.trim();
+  for (const entry of snapshots) {
+    const claim = entry.baggageClaim.trim();
+    if (claim) return claim;
+  }
+  return "";
 }
 
 function pickAuthoritativeSnapshot(
@@ -60,13 +67,20 @@ export function mergeFlightStatusSnapshots(
   const secondary = usable.filter((entry) => entry.source !== authoritative.source);
   const discrepancies: FlightStatusSourceDiscrepancy[] = [];
   for (const candidate of secondary) {
-    for (const field of ["status", "delayMinutes", "departureGate", "departureTerminal"] as const) {
+    for (const field of [
+      "status",
+      "delayMinutes",
+      "departureGate",
+      "departureTerminal",
+      "baggageClaim",
+    ] as const) {
       const mismatch = compareField(field, authoritative, candidate);
       if (mismatch) discrepancies.push(mismatch);
     }
   }
   return {
     ...authoritative,
+    baggageClaim: fillBaggageClaim(authoritative, usable),
     mergedFrom: usable.map((entry) => entry.source),
     discrepancies,
   };

@@ -1034,6 +1034,12 @@ export function LiveMapPage() {
                 journeyPhase.kind === "just-landed" ? journeyPhase.landedMinutesAgo : null
               }
               hotelLabel={hotelLabel}
+              flightDate={
+                navFlight.f.flightDate?.trim() ||
+                navFlight.f.flightArrivalTime?.trim()?.slice(0, 10) ||
+                navFlight.f.localTime?.trim()?.slice(0, 10) ||
+                null
+              }
               flightStatusLabel={
                 coachMode === "arrive"
                   ? "Landed"

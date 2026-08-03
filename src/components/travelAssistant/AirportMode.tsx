@@ -603,6 +603,12 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
             journeyPhase.kind === "just-landed" ? journeyPhase.landedMinutesAgo : null
           }
           hotelLabel={hotelLabel}
+          flightDate={
+            arrived.flightDate?.trim() ||
+            arrived.flightArrivalTime?.trim()?.slice(0, 10) ||
+            arrived.localTime?.trim()?.slice(0, 10) ||
+            null
+          }
           flightStatusLabel="Landed"
           flightDelayed={false}
           proximityStatus={proximity.status}

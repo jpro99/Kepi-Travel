@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
 import { buildGateInstructions, getAirportNav } from "@/lib/travelAssistant/airportNavigation";
@@ -13,6 +13,7 @@ import {
 import {
   buildArrivalDayCoachPath,
   departureTimeBudgetReassurance,
+  formatLiveBaggageCarouselNote,
   selectDayCoachVisibleSteps,
   type AirportDayCoachMode,
   type DayCoachPathStep,
@@ -37,6 +38,8 @@ interface AirportNavigatorFallbackProps {
   landedMinutesAgo?: number | null;
   hotelLabel?: string | null;
   hotelDropoff?: { label: string; lat: number; lon: number } | null;
+  /** YYYY-MM-DD for live baggage lookup on arrive. */
+  flightDate?: string | null;
   proximityStatus?: string;
   userLat: number | null;
   userLon: number | null;
@@ -77,6 +80,7 @@ export function AirportNavigatorFallback({
   landedMinutesAgo = null,
   hotelLabel = null,
   hotelDropoff = null,
+  flightDate = null,
   proximityStatus = "away",
   userLat,
   userLon,
@@ -92,7 +96,44 @@ export function AirportNavigatorFallback({
 }: AirportNavigatorFallbackProps) {
   const code = iata.trim().toUpperCase();
   const isArrive = coachMode === "arrive";
+  const [liveBaggageClaim, setLiveBaggageClaim] = useState<string | null>(null);
   const nav = getAirportNav(code);
+
+  useEffect(() => {
+    if (!isArrive) {
+      setLiveBaggageClaim(null);
+      return;
+    }
+    const number = flightNumber?.trim();
+    const date = (flightDate?.trim() ?? "").slice(0, 10);
+    const airline = airlineName?.trim() || "Airline";
+    if (!number || !date || !/^\d{4}-\d{2}-\d{2}$/u.test(date)) return;
+
+    let cancelled = false;
+    const params = new URLSearchParams({
+      action: "flight-lookup",
+      flightNumber: number,
+      airline,
+      flightDate: date,
+    });
+    void fetch(`/api/travel-updates?${params.toString()}`, {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store",
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((payload: { baggageClaim?: string } | null) => {
+        if (cancelled) return;
+        const claim = payload?.baggageClaim?.trim() ?? "";
+        setLiveBaggageClaim(claim || null);
+      })
+      .catch(() => {
+        if (!cancelled) setLiveBaggageClaim(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isArrive, flightNumber, flightDate, airlineName]);
   const officialWayfinding = getAirportWayfindingResource(code);
   const wayfindingTier = wayfindingHonestyTier(officialWayfinding);
   const strongOfficial = wayfindingTier === "strong";
@@ -128,6 +169,7 @@ export function AirportNavigatorFallback({
         departureIata: departureAirport,
         arrivalTerminal,
         hotelLabel,
+        baggageCarouselNote: formatLiveBaggageCarouselNote(liveBaggageClaim),
       });
     }
     const checkIn: DayCoachPathStep = {
@@ -152,6 +194,7 @@ export function AirportNavigatorFallback({
     departureAirport,
     arrivalTerminal,
     hotelLabel,
+    liveBaggageClaim,
     checkInLine,
     guide,
   ]);

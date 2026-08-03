@@ -14,6 +14,7 @@ const base: FlightStatusSnapshot = {
   departureTerminal: "2",
   departureAirport: "SEA",
   arrivalAirport: "HNL",
+  baggageClaim: "",
   authorityRank: 2,
 };
 
@@ -40,4 +41,40 @@ test("mergeFlightStatusSnapshots returns single-source snapshot without discrepa
   assert.ok(merged);
   assert.deepEqual(merged.discrepancies, []);
   assert.deepEqual(merged.mergedFrom, ["aerodatabox"]);
+});
+
+test("mergeFlightStatusSnapshots fills baggageClaim from secondary when primary empty", () => {
+  const merged = mergeFlightStatusSnapshots([
+    {
+      ...base,
+      source: "flightaware",
+      authorityRank: 3,
+      baggageClaim: "",
+    },
+    {
+      ...base,
+      baggageClaim: "5",
+    },
+  ]);
+  assert.ok(merged);
+  assert.equal(merged.source, "flightaware");
+  assert.equal(merged.baggageClaim, "5");
+});
+
+test("mergeFlightStatusSnapshots keeps authoritative baggageClaim when present", () => {
+  const merged = mergeFlightStatusSnapshots([
+    {
+      ...base,
+      source: "flightaware",
+      authorityRank: 3,
+      baggageClaim: "A3",
+    },
+    {
+      ...base,
+      baggageClaim: "5",
+    },
+  ]);
+  assert.ok(merged);
+  assert.equal(merged.baggageClaim, "A3");
+  assert.ok(merged.discrepancies.some((d) => d.field === "baggageClaim"));
 });

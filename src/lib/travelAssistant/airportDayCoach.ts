@@ -57,6 +57,18 @@ export function selectDayCoachVisibleSteps<T>(
   return { visible: steps.slice(0, 2) as T[], hiddenCount: steps.length - 2 };
 }
 
+
+/** Format a live FA/ADB baggage claim for the arrival coach. Null if empty/untrusted. */
+export function formatLiveBaggageCarouselNote(raw: string | null | undefined): string | null {
+  const claim = (raw ?? "").trim();
+  if (!claim || claim.length > 24) return null;
+  if (!/^[A-Za-z0-9][A-Za-z0-9\s\-/#.]{0,22}$/u.test(claim)) return null;
+  if (/carousel|belt|claim/i.test(claim)) {
+    return `${claim} — from live flight status`;
+  }
+  return `Carousel ${claim} — from live flight status`;
+}
+
 export interface ArrivalDayCoachInput {
   iata: string;
   flightNumber?: string | null;

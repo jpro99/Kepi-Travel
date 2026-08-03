@@ -14,6 +14,7 @@ const merged: MergedFlightStatusSnapshot = {
   departureTerminal: "2",
   departureAirport: "SEA",
   arrivalAirport: "HNL",
+  baggageClaim: "7",
   authorityRank: 3,
   mergedFrom: ["aerodatabox", "flightaware"],
   discrepancies: [],
@@ -25,5 +26,6 @@ test("mergedSnapshotToFlightLookupResponse maps gate delay and merge metadata", 
   assert.equal(body.departureGate, "C12");
   assert.equal(body.delayMinutes, 25);
   assert.equal(body.flightStatus, "delayed");
+  assert.equal(body.baggageClaim, "7");
   assert.deepEqual(body.mergedFrom, ["aerodatabox", "flightaware"]);
 });

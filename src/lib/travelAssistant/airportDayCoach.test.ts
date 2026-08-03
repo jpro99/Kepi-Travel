@@ -4,6 +4,7 @@ import {
   buildArrivalDayCoachPath,
   departureTimeBudgetReassurance,
   deriveAirportDayCoachMode,
+  formatLiveBaggageCarouselNote,
   isInternationalArrivalFlight,
   selectDayCoachVisibleSteps,
 } from "./airportDayCoach";
@@ -69,5 +70,24 @@ test("buildArrivalDayCoachPath never invents carousel numbers without curated no
   const bags = steps.find((s) => s.id === "bags")!;
   assert.match(bags.detail ?? "", /airport screens/i);
   assert.doesNotMatch(bags.detail ?? "", /Carousel \d+/i);
+});
+
+test("formatLiveBaggageCarouselNote accepts real claim ids only", () => {
+  assert.equal(formatLiveBaggageCarouselNote("5"), "Carousel 5 — from live flight status");
+  assert.equal(formatLiveBaggageCarouselNote("Belt 3"), "Belt 3 — from live flight status");
+  assert.equal(formatLiveBaggageCarouselNote(""), null);
+  assert.equal(formatLiveBaggageCarouselNote("???"), null);
+});
+
+test("buildArrivalDayCoachPath prefers live baggage note over screens fallback", () => {
+  const steps = buildArrivalDayCoachPath({
+    iata: "MNL",
+    departureIata: "SEA",
+    flightNumber: "PR 102",
+    baggageCarouselNote: formatLiveBaggageCarouselNote("12"),
+  });
+  const bags = steps.find((s) => s.id === "bags")!;
+  assert.match(bags.detail ?? "", /Carousel 12/);
+  assert.match(bags.detail ?? "", /live flight status/i);
 });
 

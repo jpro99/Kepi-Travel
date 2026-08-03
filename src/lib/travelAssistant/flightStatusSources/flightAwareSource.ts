@@ -62,6 +62,8 @@ export async function fetchFlightAwareFlightSnapshot(input: {
       departureTerminal: readString(best.terminal_origin),
       departureAirport: readAirportCode(best.origin),
       arrivalAirport: readAirportCode(best.destination),
+      // AeroAPI field: baggage_claim (nullable string at destination).
+      baggageClaim: readString(best.baggage_claim),
       authorityRank: 3,
     };
   } catch {

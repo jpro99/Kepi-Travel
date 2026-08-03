@@ -20,6 +20,10 @@ const AeroFlightSchema = z.object({
   arrival: z
     .object({
       airport: z.object({ iata: z.string().optional().nullable() }).optional().nullable(),
+      /** Baggage belt(s) for arriving flights when AeroDataBox has them. */
+      baggageBelt: z.string().optional().nullable(),
+      terminal: z.string().optional().nullable(),
+      gate: z.string().optional().nullable(),
     })
     .optional()
     .nullable(),
@@ -91,6 +95,7 @@ export async function fetchAeroDataBoxFlightSnapshot(input: {
       departureTerminal: (best.departure?.terminal ?? "").trim(),
       departureAirport: (best.departure?.airport?.iata ?? "").trim().toUpperCase(),
       arrivalAirport: (best.arrival?.airport?.iata ?? "").trim().toUpperCase(),
+      baggageClaim: (best.arrival?.baggageBelt ?? "").trim(),
       authorityRank: 2,
     };
   } finally {
