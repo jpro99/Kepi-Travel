@@ -19,6 +19,11 @@ import { AirportNavigatorMap } from "@/components/travelAssistant/AirportNavigat
 // guard never runs in the client bundle. Single source of truth for the schema.
 import type { TravelProfile } from "@/app/api/travel-profile/route";
 import { selectActiveFlight, type FlightReservation } from "@/lib/travelAssistant/useActiveFlight";
+import {
+  deriveAirportDayCoachMode,
+} from "@/lib/travelAssistant/airportDayCoach";
+import { computeJourneyPhase } from "@/lib/travelAssistant/journeyPhase";
+import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
 import { evaluateLoungeEligibility } from "@/lib/airportNav/loungeRules";
 import { buildPostBookingBriefing } from "@/lib/airportNav/postBookingBriefing";
 import {
@@ -457,11 +462,38 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
 
   // Find active flight — shared selector (single source of truth with Map page)
   const activeFlight = useMemo(() => selectActiveFlight(reservations, now), [reservations, now]);
+  const journeyPhase = useMemo(
+    () => computeJourneyPhase({ reservations, nowMs: now }),
+    [reservations, now],
+  );
+  const coachMode = deriveAirportDayCoachMode(journeyPhase);
+  const navigatorFlight = useMemo(() => {
+    if (journeyPhase.kind === "just-landed") {
+      const f = journeyPhase.flight as FlightReservation;
+      return { f, utcMs: now };
+    }
+    return activeFlight;
+  }, [journeyPhase, activeFlight, now]);
+  const hotelLabel = useMemo(() => {
+    const hotel = reservations.find((r) => r.type === "hotel");
+    if (!hotel) return null;
+    const label = reservationPropertyName({
+      type: hotel.type,
+      title: hotel.title,
+      provider: hotel.provider,
+      location: hotel.location,
+    });
+    return label.trim() || null;
+  }, [reservations]);
+  const navIata =
+    coachMode === "arrive"
+      ? (navigatorFlight?.f.flightArrivalAirport ?? "")
+      : (navigatorFlight?.f.flightDepartureAirport ?? "");
 
   // Airport proximity
   const proximity = useMemo(() =>
-    getAirportProximity(userLat, userLon, activeFlight?.f.flightDepartureAirport),
-    [userLat, userLon, activeFlight]
+    getAirportProximity(userLat, userLon, navIata || activeFlight?.f.flightDepartureAirport),
+    [userLat, userLon, navIata, activeFlight]
   );
 
   // Resolve status for this flight's airline (matched, not just first entry)
@@ -544,6 +576,47 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
       nowMs: now,
     });
   }, [activeFlight, profile?.clear, cardLoungeEligibility, hasPrecheck, now]);
+
+  // Arrival coach: journeyPhase just-landed — render navigator even when departure window closed.
+  if (coachMode === "arrive" && navigatorFlight) {
+    const arrived = navigatorFlight.f;
+    const navCredentialsArrive = {
+      tsaPreCheck: Boolean(profile?.tsa_precheck || profile?.global_entry),
+      clear: Boolean(profile?.clear),
+      known: Boolean(
+        profile && (typeof profile.tsa_precheck === "boolean" || typeof profile.clear === "boolean"),
+      ),
+    };
+    return (
+      <div className="space-y-3" data-testid="airport-mode-arrive">
+        <AirportNavigatorMap
+          iata={navIata}
+          gateCode={arrived.flightArrivalGate ?? arrived.flightDepartureGate ?? null}
+          airlineName={arrived.flightAirline ?? arrived.provider ?? null}
+          flightNumber={arrived.flightNumber ?? null}
+          arrivalAirport={arrived.flightArrivalAirport ?? null}
+          departureAirport={arrived.flightDepartureAirport ?? null}
+          departureTerminal={arrived.flightDepartureTerminal ?? null}
+          arrivalTerminal={arrived.flightArrivalTerminal ?? null}
+          coachMode="arrive"
+          landedMinutesAgo={
+            journeyPhase.kind === "just-landed" ? journeyPhase.landedMinutesAgo : null
+          }
+          hotelLabel={hotelLabel}
+          flightStatusLabel="Landed"
+          flightDelayed={false}
+          proximityStatus={proximity.status}
+          minutesToDeparture={0}
+          userLat={userLat}
+          userLon={userLon}
+          userAccuracyM={userAccuracyM}
+          credentials={navCredentialsArrive}
+          onCredentialsAnswer={() => undefined}
+          eligibleLoungeNames={[]}
+        />
+      </div>
+    );
+  }
 
   if (!activeFlight) return null;
 
@@ -848,7 +921,10 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
           airlineName={f.flightAirline ?? f.provider ?? null}
           flightNumber={f.flightNumber ?? null}
           arrivalAirport={f.flightArrivalAirport ?? null}
+          departureAirport={f.flightDepartureAirport ?? null}
           departureTerminal={f.flightDepartureTerminal ?? null}
+          arrivalTerminal={f.flightArrivalTerminal ?? null}
+          coachMode="depart"
           departureClockLabel={fmtTime(deptUtcMs)}
           flightStatusLabel={
             isDelayed

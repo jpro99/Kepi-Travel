@@ -91,3 +91,39 @@ export function buildRideToAirportDeepLinks(airportIata: string): GroundTranspor
     dropoffLabel: airport.name,
   };
 }
+
+/** Uber/Lyft from airport curb — optional hotel/city dropoff when coords exist. */
+export function buildRideFromAirportDeepLinks(
+  airportIata: string,
+  dropoff?: GroundTransportPoint | null,
+): GroundTransportDeepLinks | null {
+  const airport = getAirportByIata(airportIata);
+  if (!airport) return null;
+  const pickup: GroundTransportPoint = {
+    label: airport.name,
+    lat: airport.lat,
+    lon: airport.lon,
+  };
+  if (
+    dropoff &&
+    isPlausibleCoordinate(dropoff.lat, dropoff.lon)
+  ) {
+    return buildGroundTransportDeepLinks({ pickup, dropoff });
+  }
+  const uberParams = new URLSearchParams({
+    action: "setPickup",
+    "pickup[latitude]": String(airport.lat),
+    "pickup[longitude]": String(airport.lon),
+    "pickup[nickname]": airport.name,
+  });
+  const lyftParams = new URLSearchParams({
+    "pickup[latitude]": String(airport.lat),
+    "pickup[longitude]": String(airport.lon),
+  });
+  return {
+    uberUrl: `https://m.uber.com/ul/?${uberParams.toString()}`,
+    lyftUrl: `https://lyft.com/ride?${lyftParams.toString()}`,
+    pickupLabel: airport.name,
+    dropoffLabel: dropoff?.label?.trim() || "Your destination",
+  };
+}

@@ -11,10 +11,13 @@ import {
   wayfindingHonestyTier,
 } from "@/lib/airportNav/officialWayfinding";
 import {
+  buildArrivalDayCoachPath,
   departureTimeBudgetReassurance,
   selectDayCoachVisibleSteps,
+  type AirportDayCoachMode,
   type DayCoachPathStep,
 } from "@/lib/travelAssistant/airportDayCoach";
+import { buildRideFromAirportDeepLinks } from "@/lib/travelAssistant/groundTransportDeepLinks";
 
 interface AirportNavigatorFallbackProps {
   iata: string;
@@ -22,11 +25,18 @@ interface AirportNavigatorFallbackProps {
   airlineName: string | null;
   flightNumber?: string | null;
   arrivalAirport?: string | null;
+  departureAirport?: string | null;
   departureTerminal?: string | null;
+  arrivalTerminal?: string | null;
   departureClockLabel?: string | null;
   flightStatusLabel?: string | null;
   flightDelayed?: boolean;
   minutesToDeparture: number;
+  /** Parent-derived: journeyPhase just-landed → arrive. */
+  coachMode?: AirportDayCoachMode;
+  landedMinutesAgo?: number | null;
+  hotelLabel?: string | null;
+  hotelDropoff?: { label: string; lat: number; lon: number } | null;
   proximityStatus?: string;
   userLat: number | null;
   userLon: number | null;
@@ -56,11 +66,17 @@ export function AirportNavigatorFallback({
   airlineName,
   flightNumber,
   arrivalAirport,
+  departureAirport,
   departureTerminal,
+  arrivalTerminal,
   departureClockLabel,
   flightStatusLabel,
   flightDelayed = false,
   minutesToDeparture,
+  coachMode = "depart",
+  landedMinutesAgo = null,
+  hotelLabel = null,
+  hotelDropoff = null,
   proximityStatus = "away",
   userLat,
   userLon,
@@ -75,6 +91,7 @@ export function AirportNavigatorFallback({
   onFamilyPinTap,
 }: AirportNavigatorFallbackProps) {
   const code = iata.trim().toUpperCase();
+  const isArrive = coachMode === "arrive";
   const nav = getAirportNav(code);
   const officialWayfinding = getAirportWayfindingResource(code);
   const wayfindingTier = wayfindingHonestyTier(officialWayfinding);
@@ -103,6 +120,16 @@ export function AirportNavigatorFallback({
     : "Check in — airline app, kiosk, or counter";
 
   const pathSteps = useMemo((): DayCoachPathStep[] => {
+    if (isArrive) {
+      return buildArrivalDayCoachPath({
+        iata: code,
+        flightNumber,
+        airlineName,
+        departureIata: departureAirport,
+        arrivalTerminal,
+        hotelLabel,
+      });
+    }
     const checkIn: DayCoachPathStep = {
       id: "check-in",
       icon: "🧳",
@@ -117,14 +144,29 @@ export function AirportNavigatorFallback({
       minutes: step.minutes > 0 ? step.minutes : undefined,
     }));
     return [checkIn, ...fromGuide];
-  }, [checkInLine, guide]);
+  }, [
+    isArrive,
+    code,
+    flightNumber,
+    airlineName,
+    departureAirport,
+    arrivalTerminal,
+    hotelLabel,
+    checkInLine,
+    guide,
+  ]);
 
   const { visible: visiblePathSteps, hiddenCount } = useMemo(
     () => selectDayCoachVisibleSteps(pathSteps, fullDayView),
     [pathSteps, fullDayView],
   );
 
-  const timeBudgetLine = departureTimeBudgetReassurance(minutesToDeparture);
+  const timeBudgetLine = isArrive ? null : departureTimeBudgetReassurance(minutesToDeparture);
+  const rideLinks = useMemo(
+    () => (isArrive ? buildRideFromAirportDeepLinks(code, hotelDropoff) : null),
+    [isArrive, code, hotelDropoff],
+  );
+  const nextUp = visiblePathSteps[0] ?? null;
 
   return (
     <div
@@ -153,14 +195,21 @@ export function AirportNavigatorFallback({
               onToggleFullDayView ? "pr-24" : ""
             }`}
           >
-            {layoutLoadFailed
-              ? "Kepi terminal map temporarily unavailable"
-              : strongOfficial
-                ? "Kepi checklist · official live map below"
-                : "Your guide for this airport"}
+            {isArrive
+              ? "Just landed · arrival coach"
+              : layoutLoadFailed
+                ? "Kepi terminal map temporarily unavailable"
+                : strongOfficial
+                  ? "Kepi checklist · official live map below"
+                  : "Your guide for this airport"}
           </p>
           <p className="mt-1 text-sm leading-relaxed text-sky-50/95">
-            {layoutLoadFailed ? (
+            {isArrive ? (
+              <>
+                Kepi coaches the arrivals process for <span className="font-bold">{code}</span> — bags, exit,
+                and ride. This is not indoor GPS; follow airport signs and open the official map below.
+              </>
+            ) : layoutLoadFailed ? (
               <>
                 We couldn&apos;t load Kepi&apos;s terminal map for <span className="font-bold">{code}</span> right now.
                 Use the checklist below — we&apos;ll retry when you reopen the map.
@@ -184,37 +233,66 @@ export function AirportNavigatorFallback({
             so they never look like the primary tool. */}
         {strongOfficial ? <OfficialAirportMapLink iata={code} /> : null}
 
-        <div className="rounded-2xl bg-black/35 px-4 py-3 backdrop-blur">
+        <div className="rounded-2xl bg-black/35 px-4 py-3 backdrop-blur" data-testid={isArrive ? "airport-nav-fallback-arrive" : "airport-nav-fallback-depart"}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest text-sky-200/80">
-                {nav?.name ?? code} · {code}
+                {isArrive ? `Just landed · ${code}` : `${nav?.name ?? code} · ${code}`}
               </p>
-              <p className="mt-1 text-xl font-black">
-                Gate {gateCode?.toUpperCase() ?? "TBD"}
-                {departureTerminal ? (
-                  <span className="ml-2 text-sm font-semibold text-sky-200/80">Term {departureTerminal}</span>
-                ) : null}
-              </p>
-              {flightNumber ? (
-                <p className="mt-0.5 text-sm text-slate-300">
-                  {flightNumber}
-                  {arrivalAirport ? ` → ${arrivalAirport}` : ""}
-                  {departureClockLabel ? ` · ${departureClockLabel}` : ""}
-                </p>
-              ) : null}
+              {isArrive ? (
+                <>
+                  <p className="mt-1 text-xl font-black">
+                    {flightNumber?.trim() || "Arrived"}
+                    {arrivalTerminal ? (
+                      <span className="ml-2 text-sm font-semibold text-sky-200/80">Term {arrivalTerminal}</span>
+                    ) : null}
+                  </p>
+                  <p className="mt-0.5 text-sm text-slate-300">
+                    {departureAirport ? `${departureAirport} → ${code}` : code}
+                    {typeof landedMinutesAgo === "number"
+                      ? landedMinutesAgo < 2
+                        ? " · just now"
+                        : ` · ${landedMinutesAgo}m ago`
+                      : ""}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="mt-1 text-xl font-black">
+                    Gate {gateCode?.toUpperCase() ?? "TBD"}
+                    {departureTerminal ? (
+                      <span className="ml-2 text-sm font-semibold text-sky-200/80">Term {departureTerminal}</span>
+                    ) : null}
+                  </p>
+                  {flightNumber ? (
+                    <p className="mt-0.5 text-sm text-slate-300">
+                      {flightNumber}
+                      {arrivalAirport ? ` → ${arrivalAirport}` : ""}
+                      {departureClockLabel ? ` · ${departureClockLabel}` : ""}
+                    </p>
+                  ) : null}
+                </>
+              )}
             </div>
-            <div className="text-right">
-              <p className={`text-lg font-black ${minutesToDeparture < 45 ? "text-amber-300" : "text-white"}`}>
-                {minutesToDeparture > 0 ? `${Math.round(minutesToDeparture)}m` : "Now"}
-              </p>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">to departure</p>
-              {flightStatusLabel ? (
-                <p className={`mt-1 text-xs font-bold ${flightDelayed ? "text-amber-300" : "text-emerald-300"}`}>
+            {!isArrive ? (
+              <div className="text-right">
+                <p className={`text-lg font-black ${minutesToDeparture < 45 ? "text-amber-300" : "text-white"}`}>
+                  {minutesToDeparture > 0 ? `${Math.round(minutesToDeparture)}m` : "Now"}
+                </p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">to departure</p>
+                {flightStatusLabel ? (
+                  <p className={`mt-1 text-xs font-bold ${flightDelayed ? "text-amber-300" : "text-emerald-300"}`}>
+                    {flightStatusLabel}
+                  </p>
+                ) : null}
+              </div>
+            ) : flightStatusLabel ? (
+              <div className="text-right">
+                <p className={`text-xs font-bold ${flightDelayed ? "text-amber-300" : "text-emerald-300"}`}>
                   {flightStatusLabel}
                 </p>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
           </div>
           <p className="mt-3 text-xs text-sky-100/80">
             📍 {proximityLabel(proximityStatus || proximity.status)}
@@ -228,6 +306,17 @@ export function AirportNavigatorFallback({
             </p>
           ) : null}
         </div>
+
+        {nextUp ? (
+          <section
+            data-testid="airport-fallback-next-up"
+            className="rounded-2xl border border-sky-400/25 bg-sky-500/10 px-4 py-3"
+          >
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-200">Next up</p>
+            <p className="mt-1 text-lg font-black text-white">{nextUp.text}</p>
+            {nextUp.detail ? <p className="mt-1 text-sm text-sky-100/85">{nextUp.detail}</p> : null}
+          </section>
+        ) : null}
 
         <section>
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-200/80">Your path today</p>
@@ -267,7 +356,7 @@ export function AirportNavigatorFallback({
               </li>
             ) : null}
           </ol>
-          {guide.totalMinutes > 0 ? (
+          {!isArrive && guide.totalMinutes > 0 ? (
             <p className="mt-2 text-xs font-semibold text-slate-400">
               Estimated {guide.totalMinutes} min after you&apos;re at security
             </p>
@@ -276,7 +365,19 @@ export function AirportNavigatorFallback({
 
         {!strongOfficial ? <OfficialAirportMapLink iata={code} /> : null}
 
-        {eligibleLoungeNames.length > 0 ? (
+        {isArrive && rideLinks ? (
+          <a
+            data-testid="airport-fallback-uber"
+            href={rideLinks.uberUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block w-full rounded-2xl bg-[#f4c95d] px-4 py-3.5 text-center text-sm font-bold text-[#0b1f3a] shadow-lg active:opacity-90"
+          >
+            {hotelLabel?.trim() ? `Call Uber to ${hotelLabel.trim()}` : "Call Uber from airport"}
+          </a>
+        ) : null}
+
+        {!isArrive && eligibleLoungeNames.length > 0 ? (
           <section className="rounded-2xl border border-sky-400/20 bg-sky-500/10 px-4 py-3">
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-200">Lounges you may use</p>
             <ul className="mt-2 space-y-1">
@@ -338,9 +439,11 @@ export function AirportNavigatorFallback({
         ) : null}
 
         <p className="text-center text-[10px] leading-relaxed text-slate-500">
-          {strongOfficial
-            ? `Kepi keeps the trip context; ${officialWayfinding?.provider} provides the verified live airport map.`
-            : `Kepi GPS geofencing is active. No verified indoor step-by-step map is registered for ${code} — follow airport signs and staff.`}
+          {isArrive
+            ? `Arrival coach for ${code} — not a Kepi indoor walk line. Follow signs and the official map.`
+            : strongOfficial
+              ? `Kepi keeps the trip context; ${officialWayfinding?.provider} provides the verified live airport map.`
+              : `Kepi GPS geofencing is active. No verified indoor step-by-step map is registered for ${code} — follow airport signs and staff.`}
         </p>
       </div>
     </div>

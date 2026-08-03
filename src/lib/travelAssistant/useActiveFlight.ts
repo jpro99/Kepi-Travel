@@ -23,6 +23,12 @@ import {
 import type { TravelProfile } from "@/app/api/travel-profile/route";
 import { evaluateLoungeEligibility, listLoungesForAirport } from "@/lib/airportNav/loungeRules";
 import { matchAirlineStatusForFlight } from "@/lib/travelAssistant/syncTravelBenefits";
+import {
+  deriveAirportDayCoachMode,
+  type AirportDayCoachMode,
+} from "@/lib/travelAssistant/airportDayCoach";
+import { computeJourneyPhase, type JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
+import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
 
 export interface FlightReservation {
   id: string;
@@ -140,6 +146,11 @@ interface TripsResponse {
 export function useActiveFlight(): {
   activeFlight: ActiveFlight | null;
   previewFlight: ActiveFlight | null;
+  /** Prefer just-landed flight for Airport Mode / navigator when journeyPhase says so. */
+  navigatorFlight: ActiveFlight | null;
+  journeyPhase: JourneyPhase;
+  coachMode: AirportDayCoachMode;
+  hotelLabel: string | null;
   loading: boolean;
 } {
   const [reservations, setReservations] = useState<FlightReservation[]>([]);
@@ -173,7 +184,39 @@ export function useActiveFlight(): {
 
   const activeFlight = useMemo(() => selectActiveFlight(reservations, nowMs), [reservations, nowMs]);
   const previewFlight = useMemo(() => selectPreviewAirportFlight(reservations, nowMs), [reservations, nowMs]);
-  return { activeFlight, previewFlight, loading };
+  const journeyPhase = useMemo(
+    () => computeJourneyPhase({ reservations, nowMs }),
+    [reservations, nowMs],
+  );
+  const coachMode = deriveAirportDayCoachMode(journeyPhase);
+  const navigatorFlight = useMemo(() => {
+    if (journeyPhase.kind === "just-landed") {
+      const f = journeyPhase.flight as FlightReservation;
+      const utcMs = toUtcMs(f.flightArrivalTime ?? f.localTime, f.timezone);
+      return { f, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
+    }
+    return activeFlight ?? previewFlight;
+  }, [journeyPhase, activeFlight, previewFlight, nowMs]);
+  const hotelLabel = useMemo(() => {
+    const hotel = reservations.find((r) => r.type === "hotel");
+    if (!hotel) return null;
+    const label = reservationPropertyName({
+      type: hotel.type,
+      title: hotel.title,
+      provider: hotel.provider,
+      location: hotel.location,
+    });
+    return label.trim() || null;
+  }, [reservations]);
+  return {
+    activeFlight,
+    previewFlight,
+    navigatorFlight,
+    journeyPhase,
+    coachMode,
+    hotelLabel,
+    loading,
+  };
 }
 
 export interface NavigatorCredentials {

@@ -115,7 +115,14 @@ export function LiveMapPage() {
   const urlTripId = searchParams.get("tripId");
   const urlView = searchParams.get("view");
   const preferAirportView = urlView === "airport";
-  const { activeFlight, previewFlight } = useActiveFlight();
+  const {
+    activeFlight,
+    previewFlight,
+    navigatorFlight,
+    coachMode,
+    journeyPhase,
+    hotelLabel,
+  } = useActiveFlight();
   const [mapView, setMapView] = useState<"family" | "airport">(() => (preferAirportView ? "airport" : "family"));
   const mapEl = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -651,7 +658,7 @@ export function LiveMapPage() {
 
   /* ── Airport Navigator integration (shared selection — Map button asks
         the SAME question AirportMode does, via useActiveFlight) ── */
-  const navFlight = activeFlight ?? previewFlight;
+  const navFlight = navigatorFlight;
   const { credentials: navCredentials, profile: navProfile, saveCredentials } = useNavigatorCredentials();
   const [navLat, setNavLat] = useState<number | null>(null);
   const [navLon, setNavLon] = useState<number | null>(null);
@@ -688,15 +695,24 @@ export function LiveMapPage() {
     };
   }, []);
 
+  const navIata =
+    coachMode === "arrive"
+      ? (navFlight?.f.flightArrivalAirport ?? "")
+      : (navFlight?.f.flightDepartureAirport ?? "");
+
   const navProximity = useMemo(
-    () => getAirportProximity(navLat, navLon, navFlight?.f.flightDepartureAirport),
-    [navLat, navLon, navFlight],
+    () => getAirportProximity(navLat, navLon, navIata),
+    [navLat, navLon, navIata],
   );
 
-  const atDepartureAirport =
+  const atNavAirport =
     navProximity.status === "at-airport" || navProximity.status === "in-terminal";
 
-  const airportLiveMode = Boolean(activeFlight && atDepartureAirport);
+  const airportLiveMode = Boolean(
+    coachMode === "arrive"
+      ? journeyPhase.kind === "just-landed" && atNavAirport
+      : activeFlight && atNavAirport,
+  );
   const airportPreviewMode = Boolean(navFlight && !airportLiveMode);
 
   useEffect(() => {
@@ -745,7 +761,7 @@ export function LiveMapPage() {
       }
       return;
     }
-    if (preferAirportView || atDepartureAirport) {
+    if (preferAirportView || atNavAirport) {
       if (!autoAirportRef.current) {
         autoAirportRef.current = true;
         setMapView("airport");
@@ -756,7 +772,7 @@ export function LiveMapPage() {
     if (!preferAirportView) {
       setMapView((prev) => (prev === "airport" ? "family" : prev));
     }
-  }, [atDepartureAirport, activeFlight, preferAirportView]);
+  }, [atNavAirport, activeFlight, preferAirportView]);
 
   const navEligibleLounges = useMemo(
     () =>
@@ -895,12 +911,12 @@ export function LiveMapPage() {
 
   const familyAirportPins = useMemo(
     () =>
-      activeFlight
-        ? buildFamilyAirportPins(members, locations, activeFlight.f.flightDepartureAirport ?? "", {
+      navIata
+        ? buildFamilyAirportPins(members, locations, navIata, {
             excludeMemberId: myMemberId,
           })
         : [],
-    [activeFlight, members, locations, myMemberId],
+    [navIata, members, locations, myMemberId],
   );
 
   const handleFamilyPinTap = useCallback(
@@ -1005,16 +1021,25 @@ export function LiveMapPage() {
               fill
               previewMode={airportPreviewMode}
               maptilerKey={maptilerKey}
-              iata={navFlight.f.flightDepartureAirport ?? ""}
+              iata={navIata}
               gateCode={navFlight.f.flightDepartureGate ?? null}
               airlineName={navFlight.f.flightAirline ?? navFlight.f.provider ?? null}
               flightNumber={navFlight.f.flightNumber ?? null}
               arrivalAirport={navFlight.f.flightArrivalAirport ?? null}
+              departureAirport={navFlight.f.flightDepartureAirport ?? null}
               departureTerminal={navFlight.f.flightDepartureTerminal ?? null}
+              arrivalTerminal={navFlight.f.flightArrivalTerminal ?? null}
+              coachMode={coachMode}
+              landedMinutesAgo={
+                journeyPhase.kind === "just-landed" ? journeyPhase.landedMinutesAgo : null
+              }
+              hotelLabel={hotelLabel}
               flightStatusLabel={
-                (navFlight.f.flightDelayMinutes ?? 0) > 0
-                  ? `Delayed +${navFlight.f.flightDelayMinutes}m`
-                  : navFlight.f.flightStatus ?? (navFlight.f.flightOnTime === false ? "Delayed" : "On time")
+                coachMode === "arrive"
+                  ? "Landed"
+                  : (navFlight.f.flightDelayMinutes ?? 0) > 0
+                    ? `Delayed +${navFlight.f.flightDelayMinutes}m`
+                    : navFlight.f.flightStatus ?? (navFlight.f.flightOnTime === false ? "Delayed" : "On time")
               }
               flightDelayed={(navFlight.f.flightDelayMinutes ?? 0) > 0 || navFlight.f.flightOnTime === false}
               proximityStatus={airportLiveMode ? navProximity.status : "preview"}
@@ -1024,7 +1049,7 @@ export function LiveMapPage() {
               userAccuracyM={navAccuracyM}
               credentials={navCredentials}
               onCredentialsAnswer={saveCredentials}
-              eligibleLoungeNames={navEligibleLounges}
+              eligibleLoungeNames={coachMode === "arrive" ? [] : navEligibleLounges}
               onSwitchToFamilyView={() => setMapView("family")}
               familyPins={airportLiveMode ? familyAirportPins : []}
               onFamilyPinTap={handleFamilyPinTap}

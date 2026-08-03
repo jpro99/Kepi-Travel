@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildGroundTransportDeepLinks,
   buildLyftDeepLink,
+  buildRideFromAirportDeepLinks,
   buildRideToAirportDeepLinks,
   buildUberDeepLink,
   isPlausibleCoordinate,
@@ -36,6 +37,24 @@ test("buildRideToAirportDeepLinks prefills airport dropoff", () => {
   assert.ok(links);
   assert.match(links!.uberUrl, /dropoff%5Blatitude%5D=47\.4502/);
   assert.equal(links!.dropoffLabel, "Seattle");
+});
+
+test("buildRideFromAirportDeepLinks prefills airport pickup", () => {
+  const links = buildRideFromAirportDeepLinks("SEA");
+  assert.ok(links);
+  assert.match(links!.uberUrl, /pickup%5Blatitude%5D=47\.4502/);
+  assert.equal(links!.pickupLabel, "Seattle");
+});
+
+test("buildRideFromAirportDeepLinks includes hotel dropoff when coords exist", () => {
+  const links = buildRideFromAirportDeepLinks("SEA", {
+    label: "Downtown Seattle",
+    lat: 47.6062,
+    lon: -122.3321,
+  });
+  assert.ok(links);
+  assert.match(links!.uberUrl, /dropoff%5Blatitude%5D=47\.6062/);
+  assert.equal(links!.dropoffLabel, "Downtown Seattle");
 });
 
 test("isPlausibleCoordinate rejects invalid coordinates", () => {

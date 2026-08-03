@@ -3,10 +3,13 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-03 (Airport Day Coach Task A — time budget + full-day toggle)
+Last updated: 2026-08-03 (Airport Day Coach Task B — arrival via journeyPhase)
 
-## Decision 2026-08-03 — Airport Day Coach Task A shipped; Task B blocked on mode derivation (Jeff approved)
-Departure fallback (`AirportNavigatorFallback`): time-budget reassurance under header (“until departure”, not boarding); parent-owned Full day / Coach view toggle collapses path to current+next (check-in included). No completion tracking yet. **Do not start arrival Task B** until Jeff decides how `mode: depart|arrive` is derived (`journeyPhase` vs live `"landed"` vs both). Map expansion still frozen.
+## Decision 2026-08-03 — Airport Day Coach Task B: arrive mode from journeyPhase (Jeff approved)
+`deriveAirportDayCoachMode`: `journeyPhase.kind === "just-landed"` → arrive; else depart. Arrival IATA for navigator; hide immigration/customs when dep/arr countries match (`resolveAirport`). Orphan `ArrivalMode.tsx` removed (absorbed into fallback). Live status `"landed"` is enrichment only, not the trigger. **Follow-up (not built):** per-flight baggage carousel from FlightAware/AeroDataBox — disruption path already surfaces `baggageClaim` sometimes; do not invent carousel numbers. Map expansion still frozen.
+
+## Decision 2026-08-03 — Airport Day Coach Task A shipped
+Departure fallback: time-budget reassurance (“until departure”); parent-owned Full day / Coach view toggle.
 
 ## Decision 2026-08-03 — Book flights = advisor hybrid (Jeff approved)
 Book search uses fused ranking + genome origins (ONT/PSP/SoCal) for Top picks (overall / cash / miles / Alaska). CTAs are Google Flights / Seats verify only — no dollar on handoff buttons, no Duffel Airways. Full Command Deck stays off Book. Law F14.

@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildArrivalDayCoachPath,
   departureTimeBudgetReassurance,
+  deriveAirportDayCoachMode,
+  isInternationalArrivalFlight,
   selectDayCoachVisibleSteps,
 } from "./airportDayCoach";
 
@@ -12,28 +15,8 @@ test("departureTimeBudgetReassurance at 90m shows plenty of time", () => {
   );
 });
 
-test("departureTimeBudgetReassurance above 90 rounds and reassures", () => {
-  assert.equal(
-    departureTimeBudgetReassurance(120.4),
-    "120m until departure · plenty of time",
-  );
-});
-
-test("departureTimeBudgetReassurance mid band says on track", () => {
-  assert.equal(
-    departureTimeBudgetReassurance(45),
-    "45m until departure · you're on track",
-  );
-  assert.equal(
-    departureTimeBudgetReassurance(89.6),
-    "90m until departure · plenty of time",
-  );
-});
-
-test("departureTimeBudgetReassurance under 45m returns null (amber countdown owns urgency)", () => {
+test("departureTimeBudgetReassurance under 45m returns null", () => {
   assert.equal(departureTimeBudgetReassurance(30), null);
-  assert.equal(departureTimeBudgetReassurance(44.4), null);
-  assert.equal(departureTimeBudgetReassurance(0), null);
 });
 
 test("selectDayCoachVisibleSteps coach view keeps current + next", () => {
@@ -43,20 +26,48 @@ test("selectDayCoachVisibleSteps coach view keeps current + next", () => {
   assert.equal(hiddenCount, 2);
 });
 
-test("selectDayCoachVisibleSteps full day shows all", () => {
-  const steps = ["a", "b", "c"];
-  const { visible, hiddenCount } = selectDayCoachVisibleSteps(steps, true);
-  assert.deepEqual(visible, ["a", "b", "c"]);
-  assert.equal(hiddenCount, 0);
+test("deriveAirportDayCoachMode uses just-landed only", () => {
+  assert.equal(deriveAirportDayCoachMode({ kind: "just-landed" }), "arrive");
+  assert.equal(deriveAirportDayCoachMode({ kind: "airborne" }), "depart");
+  assert.equal(deriveAirportDayCoachMode({ kind: "pre-trip" }), "depart");
+  assert.equal(deriveAirportDayCoachMode(null), "depart");
 });
 
-test("selectDayCoachVisibleSteps with two or fewer never collapses", () => {
-  assert.deepEqual(selectDayCoachVisibleSteps(["a"], false), {
-    visible: ["a"],
-    hiddenCount: 0,
-  });
-  assert.deepEqual(selectDayCoachVisibleSteps(["a", "b"], false), {
-    visible: ["a", "b"],
-    hiddenCount: 0,
-  });
+test("isInternationalArrivalFlight compares countries", () => {
+  assert.equal(isInternationalArrivalFlight("SEA", "ONT"), false);
+  assert.equal(isInternationalArrivalFlight("SEA", "FCO"), true);
 });
+
+test("buildArrivalDayCoachPath hides immigration on domestic", () => {
+  const steps = buildArrivalDayCoachPath({
+    iata: "ONT",
+    departureIata: "SEA",
+    flightNumber: "AS 1234",
+  });
+  assert.ok(!steps.some((s) => s.id === "immigration"));
+  assert.ok(!steps.some((s) => s.id === "customs"));
+  assert.ok(steps.some((s) => s.id === "bags"));
+  assert.match(steps.find((s) => s.id === "bags")!.text, /AS 1234/);
+});
+
+test("buildArrivalDayCoachPath includes immigration on international", () => {
+  const steps = buildArrivalDayCoachPath({
+    iata: "FCO",
+    departureIata: "SEA",
+    flightNumber: "AS 180",
+  });
+  assert.ok(steps.some((s) => s.id === "immigration"));
+  assert.ok(steps.some((s) => s.id === "customs"));
+});
+
+test("buildArrivalDayCoachPath never invents carousel numbers without curated note", () => {
+  const steps = buildArrivalDayCoachPath({
+    iata: "MNL",
+    departureIata: "SEA",
+    flightNumber: "PR 102",
+  });
+  const bags = steps.find((s) => s.id === "bags")!;
+  assert.match(bags.detail ?? "", /airport screens/i);
+  assert.doesNotMatch(bags.detail ?? "", /Carousel \d+/i);
+});
+

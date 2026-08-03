@@ -58,10 +58,17 @@ interface AirportNavigatorMapProps {
   /** Flight hero card data — everything glanceable, zero hunting. */
   flightNumber?: string | null;
   arrivalAirport?: string | null;
+  departureAirport?: string | null;
   departureTerminal?: string | null;
+  arrivalTerminal?: string | null;
   departureClockLabel?: string | null;
   flightStatusLabel?: string | null;
   flightDelayed?: boolean;
+  /** Parent-derived from journeyPhase (just-landed → arrive). */
+  coachMode?: "depart" | "arrive";
+  landedMinutesAgo?: number | null;
+  hotelLabel?: string | null;
+  hotelDropoff?: { label: string; lat: number; lon: number } | null;
   /** "in-terminal" auto-expands the map to full screen once (auto-pop). */
   proximityStatus?: string;
   /** Explore terminal layout before travel day — no live GPS routing. */
@@ -794,10 +801,16 @@ export function AirportNavigatorMap({
   eligibleLoungeNames = [],
   flightNumber = null,
   arrivalAirport = null,
+  departureAirport = null,
   departureTerminal = null,
+  arrivalTerminal = null,
   departureClockLabel = null,
   flightStatusLabel = null,
   flightDelayed = false,
+  coachMode = "depart",
+  landedMinutesAgo = null,
+  hotelLabel = null,
+  hotelDropoff = null,
   proximityStatus = "away",
   previewMode = false,
   maptilerKey = "",
@@ -2360,7 +2373,8 @@ export function AirportNavigatorMap({
   }, [previewMode, activeRoute, snapped, userLon, userLat, deviceHeading, currentStepIdx, activeDestName]);
 
   /* ── Render ─────────────────────────────────────────────────────────── */
-  if (layoutStatus === "unsupported" || layoutStatus === "error") {
+  // Arrival coach always uses the honesty fallback (not departure-oriented indoor maps).
+  if (coachMode === "arrive" || layoutStatus === "unsupported" || layoutStatus === "error") {
     return (
       <AirportNavigatorFallback
         iata={iata}
@@ -2368,11 +2382,17 @@ export function AirportNavigatorMap({
         airlineName={airlineName}
         flightNumber={flightNumber}
         arrivalAirport={arrivalAirport}
+        departureAirport={departureAirport}
         departureTerminal={departureTerminal}
+        arrivalTerminal={arrivalTerminal}
         departureClockLabel={departureClockLabel}
         flightStatusLabel={flightStatusLabel}
         flightDelayed={flightDelayed}
         minutesToDeparture={minutesToDeparture}
+        coachMode={coachMode}
+        landedMinutesAgo={landedMinutesAgo}
+        hotelLabel={hotelLabel}
+        hotelDropoff={hotelDropoff}
         proximityStatus={proximityStatus}
         userLat={userLat}
         userLon={userLon}
@@ -2382,7 +2402,7 @@ export function AirportNavigatorMap({
         onSwitchToFamilyView={onSwitchToFamilyView}
         fullDayView={fullDayView}
         onToggleFullDayView={() => setFullDayView((prev) => !prev)}
-        layoutLoadFailed={layoutStatus === "error"}
+        layoutLoadFailed={coachMode !== "arrive" && layoutStatus === "error"}
         familyPins={familyPins}
         onFamilyPinTap={onFamilyPinTap}
       />
