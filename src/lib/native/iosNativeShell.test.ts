@@ -55,8 +55,18 @@ test("G22 native shell scripts and README stay on App.xcodeproj", () => {
   assert.match(readme, /ios:fix/);
   assert.match(fix, /swift-tools-version: 5\.9/);
   assert.match(fix, /capacitor-swift-pm/);
+  assert.match(fix, /origin\/main -- ios/);
+  assert.doesNotMatch(fix, /NUCLEAR/);
   assert.doesNotMatch(fix, /sudo /);
   assert.match(pkgJson, /"ios:fix"/);
+});
+
+test("G22 App.xcodeproj has no CocoaPods build files", () => {
+  const pbx = readSrc("ios/App/App.xcodeproj/project.pbxproj");
+  assert.doesNotMatch(pbx, /Pods-App/);
+  assert.doesNotMatch(pbx, /\[CP\]/);
+  assert.match(pbx, /CapApp-SPM/);
+  assert.match(pbx, /com\.kepitravel\.app/);
 });
 
 test("G22 Info.plist keeps TestFlight identity + dark status bar on light chrome", () => {

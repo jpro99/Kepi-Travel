@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-12 (Native iOS SPM shell Picasso slice)
+Last updated: 2026-08-12 (Mac ios/ CocoaPods leftover)
+
+## Incident 2026-08-12 — Mac `ios:fix` NUCLEAR / empty iPhone destinations
+
+Jeff’s Mac still had a **local CocoaPods `ios/`** (old nuclear script). That makes `Pods-App` errors and `Supported platforms for the buildables in the current scheme is empty`. Fix: quit Xcode, `git checkout origin/main -- ios/`, then `npm run ios:fix`. Do not use CocoaPods. Confirmations untouched.
 
 ## Decision 2026-08-12 — Native iOS SPM-safe shell (Picasso slice 7)
 

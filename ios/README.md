@@ -6,20 +6,24 @@ Open **`ios/App/App.xcodeproj`** — not `.xcworkspace`. This project uses **Swi
 
 ## You + partner (TestFlight)
 
-1. On the Mac: quit Xcode, then:
+1. On the Mac: quit Xcode (⌘Q), then paste this in **Terminal**:
 
    ```bash
    cd ~/Documents/Kepi-Travel
-   git pull origin main
    unset SDKROOT
+   git fetch origin main
+   git checkout origin/main -- ios/ scripts/ios-fix-capapp-spm.sh
+   git pull origin main
    npm install
    npm run ios:fix
    open ios/App/App.xcodeproj
    ```
 
+   `git checkout origin/main -- ios/` replaces a stale local CocoaPods project (the “NUCLEAR fix” / `Pods-App` error and empty iPhone destinations).
+
 2. Signing & Capabilities → Team (your Apple Developer account)
 3. Bundle ID must be `com.kepitravel.app`
-4. In Xcode: **File → Packages → Reset Package Caches** → **Resolve Package Versions** → **Product → Clean Build Folder**
+4. Skip **File → Packages** if it is gray. **Product → Clean Build Folder**, pick your iPhone, press **▶ Run**.
 5. Product → Destination → **your iPhone** (or hers, one at a time) → ▶ Run for a local install
 6. For both phones without cables: **Product → Archive → Distribute App → App Store Connect → TestFlight**
 7. In App Store Connect, add her Apple ID as an **Internal Tester**, then she installs **TestFlight** and Kepi
@@ -36,7 +40,8 @@ swift package resolve
 ```
 
 - If **hellospm fails** → Xcode/Swift on the Mac, not Kepi. Try `unset SDKROOT`. Do not reinstall Homebrew or CocoaPods.
-- If Xcode wants `Pods-App.debug.xcconfig`: `npm run ios:reset` then `npm run ios:fix` and open `.xcodeproj`.
+- If you see **NUCLEAR fix** or `project.pbxproj still references CocoaPods`: that is an old local `ios/` tree. Quit Xcode, then `git checkout origin/main -- ios/` and `npm run ios:fix`.
+- If Xcode says **Supported platforms … is empty**: same cause — restore `ios/` from main, then Clean → Run. Skip File → Packages if it is gray.
 - If CapApp-SPM shows empty JSON after `npx cap sync ios`: `npm run ios:fix` (restores remote-only Swift 5.9).
 
 ## Privacy strings (already in Info.plist)

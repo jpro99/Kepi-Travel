@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Restore CapApp-SPM to remote-only Capacitor core (Swift tools 5.9).
-# Fixes Xcode "Missing or empty JSON output from manifest compilation for capapp-spm".
+# Also replaces a stale local CocoaPods ios/ tree with origin/main.
 # No sudo, no CocoaPods, no DerivedData wipe.
 set -euo pipefail
 
@@ -13,6 +13,23 @@ cd "$ROOT"
 echo "==> Kepi iOS CapApp-SPM fix (remote-only, tools 5.9)"
 echo "    repo: $ROOT"
 echo "    Quit Xcode (⌘Q) if it is open."
+
+restore_ios_from_main() {
+  echo "==> Local ios/ still has CocoaPods refs — restoring from origin/main"
+  git fetch origin main
+  git checkout origin/main -- ios/
+}
+
+if [[ -f "$PBX" ]] && grep -qE 'Pods-App|\[CP\]' "$PBX"; then
+  restore_ios_from_main
+fi
+
+if [[ -f "$PBX" ]] && grep -qE 'Pods-App|\[CP\]' "$PBX"; then
+  echo "ERROR: project.pbxproj still references CocoaPods after restore."
+  echo "Quit Xcode, then run:"
+  echo "  git fetch origin main && git checkout origin/main -- ios/ && npm run ios:fix"
+  exit 1
+fi
 
 mkdir -p "$ROOT/ios/App/CapApp-SPM/Sources/CapApp-SPM"
 if [[ ! -f "$ROOT/ios/App/CapApp-SPM/Sources/CapApp-SPM/CapApp-SPM.swift" ]]; then
@@ -60,14 +77,8 @@ rm -rf \
   "$ROOT/ios/App/Podfile.lock" \
   "$ROOT/ios/App/App.xcworkspace"
 
-if grep -qi 'Pods-App\|\[CP\]' "$PBX" 2>/dev/null; then
-  echo "ERROR: project.pbxproj still references CocoaPods."
-  echo "Run: git checkout origin/main -- ios/   then re-run npm run ios:fix."
-  exit 1
-fi
-
 echo "    wrote CapApp-SPM Package.swift (remote capacitor-swift-pm 8.4.1)"
 echo ""
 echo "OK — open ios/App/App.xcodeproj (not .xcworkspace)."
-echo "In Xcode: Packages → Reset Package Caches → Resolve Package Versions → Clean → Run."
-echo "Do NOT run pod install."
+echo "Skip File → Packages if it is gray. In Xcode: Product → Clean Build Folder → pick iPhone → Run."
+echo "Do not use CocoaPods."
