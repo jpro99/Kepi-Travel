@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import type { IncidentAutopilotAction, IncidentAutopilotRecommendation } from "@/lib/travelAssistant/incidentAutopilot";
+import { showDisruptionLabControls } from "@/lib/travelAssistant/disruptionCalm";
 
 type DisruptionScenario = "missed-flight" | "train-delay" | "ride-no-show";
 
@@ -50,6 +51,7 @@ export function DisruptionRecovery({
     <section data-testid="disruption-recovery-panel" className="rounded-2xl border border-slate-200 bg-white/90 p-4 dark:border-slate-700 dark:bg-slate-900/70">
       <h2 className="text-lg font-semibold">{t("title")}</h2>
       <p className="text-xs text-slate-600 dark:text-slate-400">{t("subtitle")}</p>
+      {showDisruptionLabControls() ? (
       <div className="mt-3 flex flex-wrap gap-2">
         <button
           type="button"
@@ -80,6 +82,7 @@ export function DisruptionRecovery({
           {t("clearSimulation")}
         </button>
       </div>
+      ) : null}
       <div className="mt-3 rounded-xl border border-violet-500/30 bg-violet-100/60 p-3 dark:bg-violet-500/10">
         <p className="text-sm font-semibold text-violet-900 dark:text-violet-100">{t("autopilotTitle")}</p>
         <p className="text-xs text-violet-800 dark:text-violet-100/80">

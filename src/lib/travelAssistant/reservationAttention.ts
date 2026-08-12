@@ -1,5 +1,6 @@
 import { buildTripTransportRoute, type TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import { reservationMissingPrice, type TripSpendReservation } from "@/lib/travelAssistant/tripSpendSummary";
+import { disruptionCalmBadge, disruptionCalmKind } from "@/lib/travelAssistant/disruptionCalm";
 
 export type ReservationAttentionKind = "none" | "missing-price" | "problem";
 
@@ -49,7 +50,7 @@ export function reservationAttentionKind(
 export function reservationAttentionRingClass(kind: ReservationAttentionKind, isPast = false): string {
   if (isPast) return "ring-slate-100 dark:ring-slate-800 opacity-55";
   if (kind === "problem") {
-    return "ring-red-500 bg-red-50/40 dark:ring-red-500/70 dark:bg-red-500/10";
+    return "ring-amber-400 bg-amber-50/50 dark:ring-amber-500/50 dark:bg-amber-500/10";
   }
   // Missing price is accounting, not travel-day panic — no yellow ring.
   return "ring-black/[0.06] dark:ring-white/[0.08]";
@@ -57,28 +58,15 @@ export function reservationAttentionRingClass(kind: ReservationAttentionKind, is
 
 export function reservationAttentionBadge(
   kind: ReservationAttentionKind,
-  options?: { connectionIssue?: boolean; flightDelayed?: boolean },
+  options?: { connectionIssue?: boolean; flightDelayed?: boolean; cancelled?: boolean },
 ): { label: string; className: string } | null {
   if (kind === "problem") {
-    if (options?.connectionIssue) {
-      return {
-        label: "Connection issue",
-        className:
-          "rounded-full bg-red-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-950 dark:bg-red-500/30 dark:text-red-100",
-      };
-    }
-    if (options?.flightDelayed) {
-      return {
-        label: "Flight problem",
-        className:
-          "rounded-full bg-red-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-950 dark:bg-red-500/30 dark:text-red-100",
-      };
-    }
-    return {
-      label: "Needs attention",
-      className:
-        "rounded-full bg-red-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-950 dark:bg-red-500/30 dark:text-red-100",
-    };
+    const calmKind = disruptionCalmKind({
+      cancelled: options?.cancelled,
+      delayed: options?.flightDelayed,
+      connectionConflict: options?.connectionIssue,
+    });
+    return disruptionCalmBadge(calmKind === "none" ? "delay" : calmKind);
   }
   // Demote "Add miles/cash" off the primary badge — soft footer CTA on the card instead.
   return null;

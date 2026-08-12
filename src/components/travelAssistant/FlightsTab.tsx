@@ -30,6 +30,7 @@ import {
   reservationAttentionKind,
   reservationAttentionRingClass,
 } from "@/lib/travelAssistant/reservationAttention";
+import { disruptionCalmFooterCta, disruptionCalmKind } from "@/lib/travelAssistant/disruptionCalm";
 
 import { BOOK_LIST_CARD_CLASS } from "@/components/travelAssistant/bookTabStyles";
 import { TripTransportRouteMap } from "@/components/travelAssistant/TripTransportRouteMap";
@@ -515,11 +516,12 @@ export function FlightsTab({
           const attention = reservationAttentionKind(r, transportConflictIds);
           const attentionBadge = reservationAttentionBadge(attention, {
             connectionIssue: Boolean(transportConflictIds?.has(r.id)),
+            cancelled: /cancel/iu.test(live?.flightStatus || r.flightStatus || ""),
             flightDelayed:
               attention === "problem" &&
               !transportConflictIds?.has(r.id) &&
               (Boolean(live?.delayMinutes && live.delayMinutes > 0) ||
-                /cancel|delay|divert/iu.test(live?.flightStatus || r.flightStatus || "")),
+                /delay|divert/iu.test(live?.flightStatus || r.flightStatus || "")),
           });
 
           if (simplifiedMobile) {
@@ -734,13 +736,21 @@ export function FlightsTab({
                   </button>
                 </div>
               ) : attention === "problem" && !isPast ? (
-                <div className="border-t border-red-200 px-5 py-2 dark:border-red-500/30">
+                <div className="border-t border-amber-200 px-5 py-2 dark:border-amber-500/30">
                   <button
                     type="button"
                     onClick={() => onReservationTap(r.id)}
-                    className="text-xs font-bold text-red-800 dark:text-red-200"
+                    className="text-xs font-bold text-amber-900 dark:text-amber-200"
                   >
-                    {transportConflictIds?.has(r.id) ? "Connection problem — tap to review →" : "Flight issue — tap to review →"}
+                    {disruptionCalmFooterCta(
+                      disruptionCalmKind({
+                        cancelled: /cancel/iu.test(live?.flightStatus || r.flightStatus || ""),
+                        delayed:
+                          Boolean(live?.delayMinutes && live.delayMinutes > 0) ||
+                          /delay|divert/iu.test(live?.flightStatus || r.flightStatus || ""),
+                        connectionConflict: Boolean(transportConflictIds?.has(r.id)),
+                      }),
+                    ) ?? "Check this flight →"}
                   </button>
                 </div>
               ) : null}

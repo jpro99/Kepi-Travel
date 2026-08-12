@@ -4812,13 +4812,13 @@ export default function TravelAssistantPage() {
     const connectionIssues = transportConflictReservationIds.size;
     if (tripStatus === "red" || activeScenario !== "none" || delayedFlight || connectionIssues > 0) {
       return {
-        title: connectionIssues > 0 ? "Connection problem 🔴" : "Flight delayed 🔴",
+        title: connectionIssues > 0 ? "Short layover" : "Flight running late",
         detail:
           connectionIssues > 0
-            ? `${connectionIssues} connection issue${connectionIssues === 1 ? "" : "s"} on your route — check Flights.`
+            ? `${connectionIssues} short layover${connectionIssues === 1 ? "" : "s"} on your route — check Flights.`
             : delayedFlight
-              ? `${delayedFlight.provider} needs attention.`
-              : "Something changed. Kepi can help fix it.",
+              ? `${delayedFlight.provider} needs a look.`
+              : "Something changed. Check the next flight.",
         tone: "border-red-200 bg-red-50 text-red-950 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-50",
       };
     }

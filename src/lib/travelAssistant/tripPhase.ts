@@ -10,6 +10,7 @@ import {
   reservationPrimaryDate,
 } from "@/lib/travelAssistant/tripWindow";
 import { toUtcMs } from "@/lib/travelAssistant/journeyPhase";
+import { disruptionCalmHomeCopy } from "@/lib/travelAssistant/disruptionCalm";
 
 export type MissionControlPhase =
   | "no_trip"
@@ -210,12 +211,16 @@ function detectProblem(
     const live = liveStatusByReservationId?.[flight.id];
     const statusText = (live?.flightStatus ?? "").toLowerCase();
     if (/cancel/u.test(statusText)) {
+      const copy = disruptionCalmHomeCopy({
+        kind: "cancel",
+        flightLabel: flight.flightNumber || flight.title || "Flight",
+      });
       return {
         id: `problem-cancel-${flight.id}`,
         status: "problem",
-        title: `${flight.flightNumber || flight.title || "Flight"} was cancelled`,
-        detail: "Open Book or your airline to rebook — Kepi will not invent replacement flights.",
-        actionLabel: "Open flights",
+        title: copy.title,
+        detail: copy.detail,
+        actionLabel: copy.ctaLabel,
         actionTab: "book",
         reservationId: flight.id,
       };
@@ -224,18 +229,18 @@ function detectProblem(
       (typeof live?.delayMinutes === "number" && live.delayMinutes >= 60) ||
       /delay/u.test(statusText)
     ) {
-      const delay =
-        typeof live?.delayMinutes === "number" && live.delayMinutes > 0
-          ? `${live.delayMinutes} min`
-          : "significantly";
+      const copy = disruptionCalmHomeCopy({
+        kind: "delay",
+        flightLabel: flight.flightNumber || flight.title || "Flight",
+        delayMinutes: live?.delayMinutes,
+        gate: live?.departureGate,
+      });
       return {
         id: `problem-delay-${flight.id}`,
         status: "problem",
-        title: `${flight.flightNumber || "Flight"} delayed ${delay}`,
-        detail: live?.departureGate
-          ? `Check gate ${live.departureGate} and connection times.`
-          : "Check status and connections before you leave.",
-        actionLabel: "Flight details",
+        title: copy.title,
+        detail: copy.detail,
+        actionLabel: copy.ctaLabel,
         actionTab: "book",
         reservationId: flight.id,
       };

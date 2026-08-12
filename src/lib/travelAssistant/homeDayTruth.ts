@@ -5,6 +5,7 @@
 
 import { buildTripTransportRoute, type TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
+import { connectionConflictCalmLine } from "@/lib/travelAssistant/disruptionCalm";
 
 /** Show terminal explore promo only within this window of departure. */
 export const TERMINAL_EXPLORE_WINDOW_MS = 48 * 60 * 60 * 1000;
@@ -48,7 +49,7 @@ export function buildConnectionCalmStatus(
     const n = route.summary.conflicts;
     return {
       kind: "conflict",
-      line: n === 1 ? "One connection needs a quick look." : `${n} connections need a quick look.`,
+      line: connectionConflictCalmLine(n),
     };
   }
 
@@ -72,7 +73,7 @@ export function buildConnectionCalmStatus(
     const gapMs = next.departMs - prev.arriveMs;
     const gapMins = Math.round(gapMs / 60_000);
     if (gapMins < 0) {
-      return { kind: "conflict", line: "One connection needs a quick look." };
+      return { kind: "conflict", line: connectionConflictCalmLine(1) };
     }
     // Multi-day same-airport hops (e.g. ~136h) are not connections — stay quiet.
     if (gapMs > MAX_CONNECTION_CALM_MS) continue;

@@ -86,6 +86,11 @@ Consumer Map opens on the trip overview map (booked stays + route + next departu
 
 **Test:** `src/lib/travelAssistant/mapTabLead.test.ts`
 
+**G20 — Disruption help is one calm next action**  
+Delay and connection help on the consumer path is a single factual next step (check the flight, review layover time, airline handles rebooking). No “connection issue” / “flight problem” headlines, no simulate-disruption controls in production, no “rebook immediately” / “illegal” / “impossible” copy (**F1**, **I32**). Lab recovery autopilot stays advanced-workspace-only.
+
+**Test:** `src/lib/travelAssistant/disruptionCalm.test.ts`
+
 ---
 
 ## FLIGHTS LAWS
@@ -754,6 +759,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | G17 | `src/lib/travelAssistant/hotelBookLead.test.ts` |
 | G18 | `src/lib/travelAssistant/flightBookLead.test.ts` |
 | G19 | `src/lib/travelAssistant/mapTabLead.test.ts` |
+| G20 | `src/lib/travelAssistant/disruptionCalm.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
 | I22, I23, I24, I25 | `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/reservationDisplayLabel.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts` |

@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-12 (Map tab trip-first Picasso slice)
+Last updated: 2026-08-12 (Disruption calm Picasso slice)
+
+## Decision 2026-08-12 — Disruption help is calm (Picasso slice 5)
+
+Home/Flights delay and layover copy is factual (G20): “Short layover”, “Delayed”, “Cancelled” — not “connection issue”. Cancel still says Kepi will not invent seats (I32). Simulate-disruption buttons hidden in production. Confirmations on the trip are untouched.
 
 ## Decision 2026-08-12 — Map tab trip-first (Picasso slice 4)
 

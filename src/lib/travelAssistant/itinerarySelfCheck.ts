@@ -10,6 +10,7 @@ import {
   type TransportRouteReservation,
   type TripTransportRoute,
 } from "@/lib/travelAssistant/tripTransportRoute";
+import { itineraryConnectionSelfCheckQuestion } from "@/lib/travelAssistant/disruptionCalm";
 
 export type ItineraryCheckStatus = "pass" | "warn" | "fail";
 
@@ -148,7 +149,7 @@ export function runItinerarySelfCheck(args: {
 
   items.push({
     id: "connections",
-    question: "Do your booked flights connect without impossible gaps?",
+    question: itineraryConnectionSelfCheckQuestion(),
     status: route.summary.conflicts === 0 ? "pass" : "fail",
     answer:
       route.summary.conflicts === 0
