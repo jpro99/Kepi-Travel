@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-12 (Flights itinerary-first + Picasso merge to main)
+Last updated: 2026-08-12 (Map tab trip-first Picasso slice)
+
+## Decision 2026-08-12 — Map tab trip-first (Picasso slice 4)
+
+Map opens on **stay pins + route** (G19). Family location is a secondary “Share location with family” link, not a co-equal pill. Desktop Map tab stays in the app shell (no dump into the family cockpit). Live map hides Dark/Sat style lab; Airport / Family labels are text-only. Confirmations already on the trip are untouched.
 
 ## Decision 2026-08-12 — Flights tab itinerary-first (Picasso slice 3)
 

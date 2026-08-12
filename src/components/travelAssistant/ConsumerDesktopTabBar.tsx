@@ -7,10 +7,9 @@ import { CONSUMER_TAB_BAR, type ConsumerTab } from "@/lib/travelAssistant/consum
 interface ConsumerDesktopTabBarProps {
   activeTab: ConsumerTab;
   onSelectTab: (tab: ConsumerTab) => void;
-  onMapTab?: () => void;
 }
 
-export function ConsumerDesktopTabBar({ activeTab, onSelectTab, onMapTab }: ConsumerDesktopTabBarProps) {
+export function ConsumerDesktopTabBar({ activeTab, onSelectTab }: ConsumerDesktopTabBarProps) {
   const t = useTranslations("ConsumerNav");
 
   return (
@@ -22,13 +21,7 @@ export function ConsumerDesktopTabBar({ activeTab, onSelectTab, onMapTab }: Cons
           <button
             key={tab}
             type="button"
-            onClick={() => {
-              if (tab === "map") {
-                onMapTab?.();
-                return;
-              }
-              onSelectTab(tab);
-            }}
+            onClick={() => onSelectTab(tab)}
             className={`relative flex min-h-[48px] min-w-[4.5rem] flex-1 flex-col items-center justify-center gap-0.5 py-2.5 transition-all ${
               active
                 ? "text-[var(--accent)]"

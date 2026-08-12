@@ -28,6 +28,8 @@ import { FamilyRallyStrip } from "@/components/travelAssistant/FamilyRallyStrip"
 import { readCompassHeading, requestDeviceOrientationPermission } from "@/lib/map/deviceCompass";
 import { isAppleMobile } from "@/lib/ui/isStandaloneApp";
 import { leaveLiveMap, isLiveMapSessionActive, markLiveMapSessionActive } from "@/lib/travelAssistant/liveMapSession";
+import { hideLiveMapStyleLab, liveMapViewLabel } from "@/lib/travelAssistant/mapTabLead";
+import { ArrowUp, Compass } from "lucide-react";
 import { MOBILE_TAB_BAR_CLEARANCE } from "@/components/travelAssistant/mobile/mobileShellTypes";
 import { MobileTabBarNav } from "@/components/travelAssistant/mobile/useMobileTabNavigation";
 
@@ -1092,8 +1094,8 @@ export function LiveMapPage() {
             style={{ top: "max(3.6rem, calc(env(safe-area-inset-top) + 3.1rem))" }}
           >
             {([
-              ["airport", airportPreviewMode ? "✈ Plan airport" : "✈ Airport"],
-              ["family", "👪 Family"],
+              ["airport", liveMapViewLabel("airport", airportPreviewMode)],
+              ["family", liveMapViewLabel("family", false)],
             ] as ["airport" | "family", string][]).map(([viewId, viewLabel]) => (
               <button
                 key={viewId}
@@ -1144,9 +1146,10 @@ export function LiveMapPage() {
               }`}
               title={headingUp ? "Heading up — tap for north up" : "North up — tap for heading up"}
             >
-              {headingUp ? "🧭" : "⬆️"}
+              {headingUp ? <Compass className="h-5 w-5" strokeWidth={2} aria-hidden /> : <ArrowUp className="h-5 w-5" strokeWidth={2} aria-hidden />}
             </button>
           </div>
+          {!hideLiveMapStyleLab() ? (
           <div className={`flex overflow-hidden rounded-2xl border shadow-lg self-end ${lightChrome ? "border-slate-200" : "border-white/15"}`}>
             {([["dark", "Dark"], ["streets", "Map"], ["satellite", "Sat+"]] as [MapStyleId, string][]).map(([styleId, styleLabel]) => (
               <button
@@ -1159,6 +1162,7 @@ export function LiveMapPage() {
               </button>
             ))}
           </div>
+          ) : null}
         </div>
 
         {/* Desktop back + title + style toggle */}
@@ -1179,6 +1183,7 @@ export function LiveMapPage() {
               {liveCount > 0 ? `${liveCount} live · updates every 10s` : "No live locations"}
             </p>
           </div>
+          {!hideLiveMapStyleLab() ? (
           <div className="flex overflow-hidden rounded-full border border-white/10 shadow-lg">
             {([["dark", "Dark"], ["streets", "Map"], ["satellite", "Sat+"]] as [MapStyleId, string][]).map(([styleId, styleLabel]) => (
               <button
@@ -1191,6 +1196,7 @@ export function LiveMapPage() {
               </button>
             ))}
           </div>
+          ) : null}
           {/* Heading-up toggle */}
           <button
             type="button"
@@ -1202,7 +1208,7 @@ export function LiveMapPage() {
             }`}
             title={headingUp ? "Heading up (tap for north up)" : "North up (tap for heading up)"}
           >
-            {headingUp ? "🧭" : "⬆️"}
+            {headingUp ? <Compass className="h-5 w-5" strokeWidth={2} aria-hidden /> : <ArrowUp className="h-5 w-5" strokeWidth={2} aria-hidden />}
           </button>
         </div>
 

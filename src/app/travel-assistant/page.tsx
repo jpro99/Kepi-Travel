@@ -168,6 +168,7 @@ import {
 import { useItineraryPanelPrefs } from "@/components/travelAssistant/TripItineraryPanel";
 import { ItineraryTabView } from "@/components/travelAssistant/ItineraryTabView";
 import { BookTabView } from "@/components/travelAssistant/BookTabView";
+import { MapTabView } from "@/components/travelAssistant/MapTabView";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
 import { TripPricingReviewSheet } from "@/components/travelAssistant/TripPricingReviewSheet";
@@ -9859,10 +9860,6 @@ export default function TravelAssistantPage() {
           <ConsumerDesktopTabBar
             activeTab={consumerTab}
             onSelectTab={navigateToConsumerTab}
-            onMapTab={() => {
-              markLiveMapSessionActive();
-              router.push("/travel-assistant/live-map");
-            }}
           />
           ) : null}
 
@@ -10088,10 +10085,7 @@ export default function TravelAssistantPage() {
                 onReservationTap={(id) => openDrawer("reservation", id)}
                 onOpenBook={() => navigateToBook("flights")}
                 onOpenPlan={() => navigateToConsumerTab("itinerary")}
-                onOpenMap={() => {
-                  markLiveMapSessionActive();
-                  router.push("/travel-assistant/live-map");
-                }}
+                onOpenMap={() => navigateToConsumerTab("map")}
                 onOpenAirportMode={() => {
                   markLiveMapSessionActive();
                   router.push("/travel-assistant/live-map?view=airport");
@@ -10229,6 +10223,17 @@ export default function TravelAssistantPage() {
               tripSpendSummary={tripSpendSummary}
               tripProblemCount={transportConflictReservationIds.size}
               onReviewPricing={() => setPricingReviewOpen(true)}
+            />
+          ) : consumerTab === "map" ? (
+            <MapTabView
+              transportReservations={transportRouteReservations}
+              hotelReservations={consumerReservationsSorted.filter(
+                (reservation) => reservation.type === "hotel",
+              ) as import("@/lib/travelAssistant/tripHotelStayMap").HotelStayMapReservation[]}
+              plannedFlightLegs={plannedFlightLegs}
+              staySegments={tripStaySegments}
+              onReservationTap={(id) => openDrawer("reservation", id)}
+              locationStatus={guidanceLocationStatus}
             />
           ) : consumerTab === "photos" ? (
             <section className="space-y-4">

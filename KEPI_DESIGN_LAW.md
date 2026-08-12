@@ -81,6 +81,11 @@ If the trip has upcoming flights, Flights must open on those tickets with live s
 
 **Test:** `src/lib/travelAssistant/flightBookLead.test.ts`
 
+**G19 — Map tab leads with trip truth (stay pins + next airport)**  
+Consumer Map opens on the trip overview map (booked stays + route + next departure). Family live location is a single secondary link — not a co-equal pill or the default full-screen family cockpit. No Dark/Sat style lab or emoji view chrome on the consumer Map path. Airport indoor map stays one tap (Plan {IATA} / Airport mode), same as G18 and M11.
+
+**Test:** `src/lib/travelAssistant/mapTabLead.test.ts`
+
 ---
 
 ## FLIGHTS LAWS
@@ -748,6 +753,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | G16 | `src/lib/travelAssistant/consumerTabs.test.ts` |
 | G17 | `src/lib/travelAssistant/hotelBookLead.test.ts` |
 | G18 | `src/lib/travelAssistant/flightBookLead.test.ts` |
+| G19 | `src/lib/travelAssistant/mapTabLead.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
 | I22, I23, I24, I25 | `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/reservationDisplayLabel.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts` |

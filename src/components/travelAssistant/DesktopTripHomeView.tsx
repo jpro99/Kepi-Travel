@@ -187,7 +187,7 @@ export function DesktopTripHomeView({
               onClick={onOpenMap}
               className="min-h-[44px] text-[14px] font-semibold text-[#007AFF]"
             >
-              Open Live Map
+              Open map
             </button>
           </div>
           <TripHomeOverviewMap
