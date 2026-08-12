@@ -67,7 +67,7 @@ Signed-in users must be able to permanently delete their account in-app (More / 
 **Test:** `src/lib/billing/nativeBillingGate.test.ts`, `src/lib/billing/revenueCatCatalog.test.ts`
 
 **G16 — Consumer chrome is Apple-simple (no emoji tabs, no demo import in production)**  
-Tab bars use Lucide line icons + short labels — never emoji as navigation chrome. Production builds must not show “Choose sample import” or other lab/demo ingest UI. iOS `Info.plist` display name is **Kepi Travel**, bundle id `com.kepitravel.app`, with location/notification privacy strings and `WKAppBoundDomains` for kepitravel.com.
+Tab bars use Lucide line icons + short labels — never emoji as navigation chrome. Production builds must not show “Choose sample import” or other lab/demo ingest UI. iOS `Info.plist` display name is **Kepi Travel**, bundle id `com.kepitravel.app`, with location/notification privacy strings. Native WKWebView must load Clerk sign-in (do not app-bind only kepitravel.com).
 
 **Test:** `src/lib/travelAssistant/consumerTabs.test.ts`
 
@@ -98,6 +98,11 @@ Consumer More section headers, empty Home, and Plan empty states use Lucide line
 
 **G22 — Native iOS shell is SPM-safe and light after splash**  
 CapApp-SPM uses Swift tools **5.9** and remote `capacitor-swift-pm` only — no `node_modules` path deps, no Swift 6.0 (Xcode 26 empty-JSON). WKWebView chrome after splash is light (`#F5F5F7`, dark status-bar icons) to match **G21**. Open `App.xcodeproj`, never CocoaPods. `npm run ios:fix` restores the manifest after `cap sync`.
+
+**Test:** `src/lib/native/iosNativeShell.test.ts`
+
+**G23 — Native WKWebView must show the live site, including Clerk**  
+The iOS shell loads https://kepitravel.com. Do not set `WKAppBoundDomains` to only kepitravel.com, and do not set `limitsNavigationsToAppBoundDomains: true` — that blocks Clerk (`*.clerk.accounts.dev`) and paints a blank Simulator/phone. Sign-in and trip UI must appear after splash.
 
 **Test:** `src/lib/native/iosNativeShell.test.ts`
 
@@ -772,6 +777,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | G20 | `src/lib/travelAssistant/disruptionCalm.test.ts` |
 | G21 | `src/lib/travelAssistant/consumerVisualChrome.test.ts` |
 | G22 | `src/lib/native/iosNativeShell.test.ts` |
+| G23 | `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
 | I22, I23, I24, I25 | `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/reservationDisplayLabel.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts` |

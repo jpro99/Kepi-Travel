@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-12 (Mac ios/ CocoaPods leftover)
+Last updated: 2026-08-12 (iOS blank WKWebView / Clerk)
+
+## Incident 2026-08-12 — Simulator iPhone blank on kepitravel.com
+
+Native WKWebView was app-bound to **only kepitravel.com**, which blocks Clerk (`*.clerk.accounts.dev`) and paints a blank light screen. Fix G23: remove `WKAppBoundDomains`, `limitsNavigationsToAppBoundDomains: false`. Jeff: pull main, `npm run ios:fix`, Run again. Confirmations untouched.
 
 ## Incident 2026-08-12 — Mac `ios:fix` NUCLEAR / empty iPhone destinations
 

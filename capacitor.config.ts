@@ -27,10 +27,13 @@ const config: CapacitorConfig = {
     /** Light Apple chrome — matches G21 consumer Home after splash */
     backgroundColor: "#F5F5F7",
     contentInset: "automatic",
-    scrollEnabled: false,
+    scrollEnabled: true,
     overrideUserInterfaceStyle: "automatic",
-    /** Restrict outbound navigation to our own origin */
-    limitsNavigationsToAppBoundDomains: true,
+    /**
+     * Must stay false. App-bound-only kepitravel.com blocks Clerk
+     * (clerk.accounts.dev) and the WKWebView paints blank.
+     */
+    limitsNavigationsToAppBoundDomains: false,
   },
 
   experimental: {

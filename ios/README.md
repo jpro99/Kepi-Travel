@@ -28,7 +28,7 @@ Open **`ios/App/App.xcodeproj`** — not `.xcworkspace`. This project uses **Swi
 6. For both phones without cables: **Product → Archive → Distribute App → App Store Connect → TestFlight**
 7. In App Store Connect, add her Apple ID as an **Internal Tester**, then she installs **TestFlight** and Kepi
 
-If Swift Package Manager is still broken on this Mac (`hellospm` fails `swift package resolve`), use Safari → Share → **Add to Home Screen** on kepitravel.com until Xcode SPM works. The web app is the same trip.
+If the Simulator iPhone is a **blank light screen**, Clerk was blocked by app-bound domains (fixed on main). Quit Xcode, `git pull origin main`, `npm run ios:fix`, then ▶ Run again. Sign in with the same Kepi account. For the real phone, pick the physical iPhone at the top — not “iPhone 16”.
 
 ## SPM errors
 

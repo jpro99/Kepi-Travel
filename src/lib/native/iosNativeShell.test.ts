@@ -72,8 +72,15 @@ test("G22 App.xcodeproj has no CocoaPods build files", () => {
 test("G22 Info.plist keeps TestFlight identity + dark status bar on light chrome", () => {
   const plist = readSrc("ios/App/App/Info.plist");
   assert.match(plist, /<string>Kepi Travel<\/string>/);
-  assert.match(plist, /WKAppBoundDomains/);
-  assert.match(plist, /kepitravel\.com/);
   assert.match(plist, /UIStatusBarStyleDarkContent/);
   assert.doesNotMatch(plist, /UIStatusBarStyleLightContent/);
+});
+
+test("G23 native WKWebView is not app-bound to kepitravel.com only", () => {
+  const plist = readSrc("ios/App/App/Info.plist");
+  const cap = readSrc("capacitor.config.ts");
+  assert.doesNotMatch(plist, /WKAppBoundDomains/);
+  assert.match(cap, /limitsNavigationsToAppBoundDomains:\s*false/);
+  assert.match(cap, /https:\/\/kepitravel\.com/);
+  assert.match(cap, /clerk\.accounts\.dev/);
 });

@@ -49,14 +49,13 @@ test("G16 consumer tab bar is labels only — no emoji chrome", () => {
   }
 });
 
-test("iOS Info.plist is ready for TestFlight (display name, privacy, app-bound domain)", () => {
+test("iOS Info.plist is ready for TestFlight (display name, privacy, bundle id)", () => {
   const plist = readFileSync(join(process.cwd(), "ios/App/App/Info.plist"), "utf8");
   assert.match(plist, /<string>Kepi Travel<\/string>/);
   assert.match(plist, /NSLocationWhenInUseUsageDescription/);
   assert.match(plist, /NSLocationAlwaysAndWhenInUseUsageDescription/);
   assert.match(plist, /NSUserNotificationsUsageDescription/);
-  assert.match(plist, /WKAppBoundDomains/);
-  assert.match(plist, /kepitravel.com/);
+  assert.doesNotMatch(plist, /WKAppBoundDomains/);
   const pbx = readFileSync(join(process.cwd(), "ios/App/App.xcodeproj/project.pbxproj"), "utf8");
   assert.match(pbx, /PRODUCT_BUNDLE_IDENTIFIER = com\.kepitravel\.app;/);
   assert.doesNotMatch(pbx, /com\.kepi\.travelassistant/);
