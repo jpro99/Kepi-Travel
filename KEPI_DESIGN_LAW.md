@@ -96,6 +96,11 @@ Consumer More section headers, empty Home, and Plan empty states use Lucide line
 
 **Test:** `src/lib/travelAssistant/consumerVisualChrome.test.ts`
 
+**G22 — Native iOS shell is SPM-safe and light after splash**  
+CapApp-SPM uses Swift tools **5.9** and remote `capacitor-swift-pm` only — no `node_modules` path deps, no Swift 6.0 (Xcode 26 empty-JSON). WKWebView chrome after splash is light (`#F5F5F7`, dark status-bar icons) to match **G21**. Open `App.xcodeproj`, never CocoaPods. `npm run ios:fix` restores the manifest after `cap sync`.
+
+**Test:** `src/lib/native/iosNativeShell.test.ts`
+
 ---
 
 ## FLIGHTS LAWS
@@ -766,6 +771,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | G19 | `src/lib/travelAssistant/mapTabLead.test.ts` |
 | G20 | `src/lib/travelAssistant/disruptionCalm.test.ts` |
 | G21 | `src/lib/travelAssistant/consumerVisualChrome.test.ts` |
+| G22 | `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
 | I22, I23, I24, I25 | `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/reservationDisplayLabel.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts` |

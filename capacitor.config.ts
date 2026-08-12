@@ -24,8 +24,8 @@ const config: CapacitorConfig = {
   },
 
   ios: {
-    /** Deep navy — visible before the WKWebView finishes painting */
-    backgroundColor: "#0b1f3a",
+    /** Light Apple chrome — matches G21 consumer Home after splash */
+    backgroundColor: "#F5F5F7",
     contentInset: "automatic",
     scrollEnabled: false,
     overrideUserInterfaceStyle: "automatic",
@@ -36,8 +36,23 @@ const config: CapacitorConfig = {
   experimental: {
     ios: {
       spm: {
-        /** Xcode 16+/26 SPM manifest needs Swift tools 6+ */
-        swiftToolsVersion: "6.0",
+        /**
+         * Capacitor 8 default. Do NOT set 6.0 — it can break CapApp-SPM
+         * manifest compilation ("Missing or empty JSON output from
+         * manifest compilation for capapp-spm") on Xcode 26.
+         */
+        swiftToolsVersion: "5.9",
+        /**
+         * If `npx cap sync ios` re-adds plugins, symlink them instead of
+         * embedding ../../../node_modules paths. Then run `npm run ios:fix`
+         * to restore remote-only CapApp-SPM until SPM is stable.
+         */
+        packageOptions: {
+          "@capacitor/haptics": { symlink: true },
+          "@capacitor/local-notifications": { symlink: true },
+          "@capacitor/push-notifications": { symlink: true },
+          "@capacitor/status-bar": { symlink: true },
+        },
       },
     },
   },
@@ -45,9 +60,7 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       /**
-       * Kepi splash: gold "K" on deep navy.
-       * Replace ios/App/App/Assets.xcassets/Splash.imageset with a
-       * 2732×2732 gold-K-on-#0b1f3a PNG before building in Xcode.
+       * Kepi splash: gold "K" on deep navy (G4), then light WKWebView (G21).
        * SplashTransition.tsx handles the in-app fade after hydration.
        */
       launchShowDuration: 500,
@@ -59,9 +72,9 @@ const config: CapacitorConfig = {
     },
 
     StatusBar: {
-      /** Light (white icons) on our navy background */
-      style: "LIGHT",
-      backgroundColor: "#0b1f3a",
+      /** Dark icons on light G21 chrome (Capacitor Style.Dark = dark glyphs) */
+      style: "DARK",
+      backgroundColor: "#F5F5F7",
       overlaysWebView: false,
     },
 

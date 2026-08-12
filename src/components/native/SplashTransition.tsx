@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { isNative } from "@/lib/native/platform";
+import { isNative, setStatusBarStyle } from "@/lib/native/platform";
 
 interface SplashTransitionProps {
   children: ReactNode;
@@ -18,7 +18,11 @@ export function SplashTransition({ children }: SplashTransitionProps) {
 
   useEffect(() => {
     if (!nativeContext) return;
-    const timeout = window.setTimeout(() => setVisible(false), 650);
+    void setStatusBarStyle("light");
+    const timeout = window.setTimeout(() => {
+      setVisible(false);
+      void setStatusBarStyle("dark");
+    }, 650);
     return () => window.clearTimeout(timeout);
   }, [nativeContext]);
 

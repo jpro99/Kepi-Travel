@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-12 (Visual chrome Picasso slice)
+Last updated: 2026-08-12 (Native iOS SPM shell Picasso slice)
+
+## Decision 2026-08-12 — Native iOS SPM-safe shell (Picasso slice 7)
+
+CapApp-SPM is Swift tools **5.9** + remote Capacitor core only (G22) so Xcode 26 can resolve packages. WKWebView after splash is light `#F5F5F7` (matches G21). `npm run ios:fix` after pull — do not use CocoaPods. Confirmations on the trip are untouched. Jeff still runs this on the MacBook Air (`unset SDKROOT`, then `ios:fix`, then `App.xcodeproj`). If hellospm still fails, Safari → Add to Home Screen.
 
 ## Decision 2026-08-12 — Visual chrome Lucide + light cards (Picasso slice 6)
 
