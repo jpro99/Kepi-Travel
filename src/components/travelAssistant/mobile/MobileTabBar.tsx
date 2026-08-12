@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
+import { ConsumerTabIcon } from "@/components/travelAssistant/ConsumerTabIcon";
 import type { MobilePrimaryTab } from "@/components/travelAssistant/mobile/mobileShellTypes";
 import { MOBILE_PRIMARY_TABS } from "@/components/travelAssistant/mobile/mobileShellTypes";
 
@@ -60,7 +61,12 @@ export function MobileTabBar({ activeTab, onSelectTab, className = "", hidden = 
               }`}
               aria-current={active ? "page" : undefined}
             >
-              <span className={`font-bold leading-none tracking-tight ${active ? "text-[17px]" : "text-[16px]"}`}>
+              <ConsumerTabIcon
+                tab={id}
+                className={active ? "h-[22px] w-[22px]" : "h-5 w-5"}
+                strokeWidth={active ? 2.35 : 1.75}
+              />
+              <span className={`font-semibold leading-none tracking-tight ${active ? "text-[12px]" : "text-[11px]"}`}>
                 {label}
               </span>
               {active ? (

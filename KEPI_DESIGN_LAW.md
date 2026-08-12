@@ -66,6 +66,11 @@ Signed-in users must be able to permanently delete their account in-app (More / 
 
 **Test:** `src/lib/billing/nativeBillingGate.test.ts`, `src/lib/billing/revenueCatCatalog.test.ts`
 
+**G16 — Consumer chrome is Apple-simple (no emoji tabs, no demo import in production)**  
+Tab bars use Lucide line icons + short labels — never emoji as navigation chrome. Production builds must not show “Choose sample import” or other lab/demo ingest UI. iOS `Info.plist` display name is **Kepi Travel**, bundle id `com.kepitravel.app`, with location/notification privacy strings and `WKAppBoundDomains` for kepitravel.com.
+
+**Test:** `src/lib/travelAssistant/consumerTabs.test.ts`
+
 ---
 
 ## FLIGHTS LAWS
@@ -730,6 +735,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | G10 | `src/lib/travelAssistant/tripActionItems.test.ts` |
 | G14 | `src/lib/travelAssistant/tripSpendSummary.test.ts` |
 | G15 | `src/lib/billing/nativeBillingGate.test.ts`, `revenueCatCatalog.test.ts` |
+| G16 | `src/lib/travelAssistant/consumerTabs.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
 | I22, I23, I24, I25 | `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/reservationDisplayLabel.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts` |

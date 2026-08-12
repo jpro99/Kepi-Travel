@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
 import {
+  CONSUMER_TAB_BAR,
   normalizeConsumerTabParam,
   orientationTabToConsumerTab,
   resolveBookSubTab,
@@ -35,4 +38,26 @@ test("orientationTabToConsumerTab routes reservations to book", () => {
   assert.equal(orientationTabToConsumerTab("reservations"), "book");
   assert.equal(orientationTabToConsumerTab("calendar"), "itinerary");
   assert.equal(orientationTabToConsumerTab("flights"), "book");
+});
+
+test("G16 consumer tab bar is labels only — no emoji chrome", () => {
+  for (const row of CONSUMER_TAB_BAR) {
+    assert.equal(row.length, 2);
+    assert.equal(typeof row[0], "string");
+    assert.equal(typeof row[1], "string");
+    assert.doesNotMatch(row[1], /[\u{1F300}-\u{1FAFF}]/u);
+  }
+});
+
+test("iOS Info.plist is ready for TestFlight (display name, privacy, app-bound domain)", () => {
+  const plist = readFileSync(join(process.cwd(), "ios/App/App/Info.plist"), "utf8");
+  assert.match(plist, /<string>Kepi Travel<\/string>/);
+  assert.match(plist, /NSLocationWhenInUseUsageDescription/);
+  assert.match(plist, /NSLocationAlwaysAndWhenInUseUsageDescription/);
+  assert.match(plist, /NSUserNotificationsUsageDescription/);
+  assert.match(plist, /WKAppBoundDomains/);
+  assert.match(plist, /kepitravel.com/);
+  const pbx = readFileSync(join(process.cwd(), "ios/App/App.xcodeproj/project.pbxproj"), "utf8");
+  assert.match(pbx, /PRODUCT_BUNDLE_IDENTIFIER = com\.kepitravel\.app;/);
+  assert.doesNotMatch(pbx, /com\.kepi\.travelassistant/);
 });

@@ -7,14 +7,14 @@ export type PlanSubView = "timeline" | "calendar";
 
 export const CONSUMER_TABS: ConsumerTab[] = ["trip", "itinerary", "book", "map", "photos", "more"];
 
-/** Tab bar labels/icons — shared by desktop and mobile nav. */
-export const CONSUMER_TAB_BAR: ReadonlyArray<readonly [ConsumerTab, string, string]> = [
-  ["trip", "Home", "🏠"],
-  ["itinerary", "Plan", "📋"],
-  ["book", "Book", "🎫"],
-  ["map", "Map", "🗺"],
-  ["photos", "Photos", "📷"],
-  ["more", "More", "···"],
+/** Tab bar labels — icons are Lucide via ConsumerTabIcon (G16: no emoji chrome). */
+export const CONSUMER_TAB_BAR: ReadonlyArray<readonly [ConsumerTab, string]> = [
+  ["trip", "Home"],
+  ["itinerary", "Plan"],
+  ["book", "Book"],
+  ["map", "Map"],
+  ["photos", "Photos"],
+  ["more", "More"],
 ];
 
 export function isConsumerTab(value: string): value is ConsumerTab {

@@ -22,12 +22,12 @@ export function ShareTripCard({
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
-            {isSharedWithMe ? "Shared trip" : "Invite partner"}
+            {isSharedWithMe ? "Shared trip" : "Share with your partner"}
           </p>
           <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
             {isSharedWithMe
-              ? "You're editing this trip with the owner. Changes sync for both of you."
-              : "Send the whole trip to your partner or friend. With Pro on both sides, you can edit flights, hotels, and notes together — or download a JSON backup."}
+              ? "You're on this trip together. Changes show up for both of you."
+              : "Send a link. They open it on iPhone or the web — same itinerary, no extra app hunt."}
           </p>
           {isSharedWithMe ? (
             <p className="mt-2 inline-flex rounded-full bg-sky-500/15 px-2.5 py-1 text-[11px] font-semibold text-sky-700 dark:text-sky-300">
@@ -44,8 +44,8 @@ export function ShareTripCard({
             className="mt-3 min-h-[48px] w-full rounded-xl bg-sky-600 py-2.5 text-sm font-bold text-white transition hover:bg-sky-500 disabled:opacity-50"
           >
             {isSharedWithMe
-              ? `Download or re-share "${tripName}"`
-              : `Invite & download "${tripName}"`}
+              ? `Share "${tripName}" again`
+              : `Share "${tripName}"`}
           </button>
         </div>
       </div>

@@ -10513,10 +10513,10 @@ export default function TravelAssistantPage() {
                     disabled={pushBusy}
                     className="mt-3 w-full rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-sky-500 disabled:opacity-60"
                   >
-                    {pushBusy ? "Enabling..." : "🔔 Enable flight alerts"}
+                    {pushBusy ? "Enabling..." : "Enable flight alerts"}
                   </button>
                 ) : (
-                  <p className="mt-3 text-sm font-semibold text-emerald-600 dark:text-emerald-400">🔔 Alerts are on</p>
+                  <p className="mt-3 text-sm font-semibold text-emerald-600 dark:text-emerald-400">Alerts are on</p>
                 )}
                 {pushMessage && (
                   <p className={`mt-2 text-xs ${pushMessage.startsWith("✅") ? "text-emerald-700 dark:text-emerald-300" : "text-rose-600 dark:text-rose-400"}`}>
@@ -11357,6 +11357,7 @@ export default function TravelAssistantPage() {
                 </article>
 
                 <article className="space-y-6">
+                  {process.env.NODE_ENV !== "production" ? (
                   <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
                     <h2 className="text-lg font-semibold">Email import workflow</h2>
                     <p className="text-xs text-slate-400">
@@ -11425,6 +11426,7 @@ export default function TravelAssistantPage() {
                       </button>
                     </div>
                   </div>
+                  ) : null}
 
                   <ReviewQueue
                     reviewQueue={triagedReviewQueue}

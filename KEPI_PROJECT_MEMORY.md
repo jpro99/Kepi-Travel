@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-03 (live baggage claim on arrival coach)
+Last updated: 2026-08-12 (Apple-simple shell + iOS TestFlight for partner)
+
+## Decision 2026-08-12 — Picasso trip shell + iOS for Jeff and wife (Jeff approved)
+
+20-day trip: hide lab UI, Lucide tab chrome (G16), Share copy for partner, iOS `Info.plist` privacy + `com.kepitravel.app` + display name **Kepi Travel**. Native still needs working `swift package resolve` on the MacBook Air; fallback is Home Screen web app. Jeff: import confirmations, enable alerts, share trip link, TestFlight her Apple ID when SPM works.
 
 ## Decision 2026-08-03 — Live baggage claim on arrival coach (Jeff approved build)
 FlightAware `baggage_claim` + AeroDataBox `arrival.baggageBelt` parsed into `FlightStatusSnapshot.baggageClaim`; merge fills from secondary when primary empty. Arrival Day Coach fetches flight-lookup and shows “Carousel X — from live flight status” only when a real value exists — never invent. Map expansion still frozen.
