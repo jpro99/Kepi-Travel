@@ -1,10 +1,18 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
+import { Plane } from "lucide-react";
 import { LiveMapLink } from "@/components/travelAssistant/LiveMapLink";
 import { hasAirportLayout } from "@/lib/airportNav/getLayout";
 import { selectPreviewAirportFlight, toUtcMs as flightToUtcMs } from "@/lib/travelAssistant/useActiveFlight";
+import {
+  flightBookLeadMode,
+  nextFlightShowsStatusChrome,
+  shouldAutoCheckNextFlightStatus,
+  showFlightSearchLauncherAtTop,
+  showNextFlightAirportMapCta,
+} from "@/lib/travelAssistant/flightBookLead";
 import { FlightSearchLauncher, type FlightSearchDefaults } from "@/components/travelAssistant/FlightSearchLauncher";
 import { ImportConfirmationDropzone } from "@/components/travelAssistant/ImportConfirmationDropzone";
 import { FlightSearchModal } from "@/components/travelAssistant/FlightSearchModal";
@@ -188,6 +196,32 @@ function StatusBadge({ r, live }: { r: Reservation; live?: LiveStatusResult }) {
   return null;
 }
 
+function AirportMapRow({
+  iata,
+  rich,
+}: {
+  iata: string;
+  rich: boolean;
+}) {
+  const t = useTranslations("FlightsTab");
+  return (
+    <LiveMapLink
+      href="/travel-assistant/live-map?view=airport"
+      className="block w-full border-t border-[var(--border-default)] px-4 py-3 text-left transition active:opacity-80"
+    >
+      <p className="text-[15px] font-semibold text-[var(--text-primary)]">
+        {rich ? t("exploreTerminalTitle", { iata }) : t("airportMapTitle", { iata })}
+      </p>
+      <p className="mt-0.5 text-[13px] leading-snug text-[var(--text-secondary)]">
+        {rich ? t("exploreTerminalBody") : t("airportMapBody")}
+      </p>
+      <p className="mt-1 text-[15px] font-semibold text-[var(--accent)]">
+        {rich ? t("exploreTerminalCta") : t("airportMapCta")}
+      </p>
+    </LiveMapLink>
+  );
+}
+
 
 /* ─── Main component ──────────────────────────────────────────── */
 export function FlightsTab({
@@ -251,6 +285,28 @@ export function FlightsTab({
   }, [reservations]);
 
   const shown = showPast ? [...upcoming, ...past] : upcoming;
+  const lead = flightBookLeadMode({ upcomingFlightCount: upcoming.length });
+
+  const autoCheckedNextIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!nextFlight) return;
+    if (autoCheckedNextIdRef.current === nextFlight.id) return;
+    const live = liveStatus[nextFlight.id];
+    const hasLive = Boolean(
+      live && !live.busy && (live.checkedAt || live.flightStatus) && !live.error,
+    );
+    if (
+      !shouldAutoCheckNextFlightStatus({
+        hasNextFlight: true,
+        hasLiveStatus: hasLive,
+        hoursUntilDeparture: minsUntilDep(nextFlight) / 60,
+      })
+    ) {
+      return;
+    }
+    autoCheckedNextIdRef.current = nextFlight.id;
+    onCheckStatus(nextFlight.id);
+  }, [nextFlight, liveStatus, onCheckStatus]);
 
   // Determine what to show at the top — Apple approach:
   // The app knows where you are in your journey and shows the right card automatically
@@ -278,7 +334,11 @@ export function FlightsTab({
     );
 
   // Book search chrome: one search surface only (launcher OR header buttons, not both).
-  const showSearchLauncher = showBookSearch && !enableBookSearch;
+  // G18 — launcher only when there are no upcoming tickets.
+  const showSearchLauncher =
+    showBookSearch &&
+    !enableBookSearch &&
+    showFlightSearchLauncherAtTop(lead, flightSearchOpen);
 
   return (
     <section className={`space-y-4 pb-6 ${type.section}`}>
@@ -344,13 +404,29 @@ export function FlightsTab({
             </p>
           </div>
           {!enableBookSearch ? (
-            <button
-              type="button"
-              onClick={onAdd}
-              className={`shrink-0 ${simplifiedMobile ? listType.addBtn : type.addBtn}`}
-            >
-              {t("addExisting")}
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              {lead === "itinerary" ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleFlightSearch(
+                      { mode: "oneway", summary: "Custom flight search", url: "" },
+                      [],
+                    )
+                  }
+                  className={`shrink-0 ${simplifiedMobile ? listType.addBtn : type.addBtn}`}
+                >
+                  {t("searchFlights")}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={onAdd}
+                className={`shrink-0 ${simplifiedMobile ? listType.addBtn : type.addBtn}`}
+              >
+                {t("addExisting")}
+              </button>
+            </div>
           ) : null}
         </div>
         {enableBookSearch ? (
@@ -378,19 +454,6 @@ export function FlightsTab({
         ) : null}
       </div>
 
-      {canExploreTerminal ? (
-        <LiveMapLink
-          href="/travel-assistant/live-map?view=airport"
-          className="block w-full rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-50 to-blue-50 px-4 py-3 text-left shadow-sm transition active:opacity-90 dark:border-sky-500/30 dark:from-sky-950/50 dark:to-blue-950/40"
-        >
-          <p className="text-sm font-bold text-sky-950 dark:text-sky-100">
-            {t("exploreTerminalTitle", { iata: previewDepartureIata })}
-          </p>
-          <p className="mt-0.5 text-xs leading-snug text-sky-900/80 dark:text-sky-100/80">{t("exploreTerminalBody")}</p>
-          <p className="mt-1.5 text-xs font-semibold text-[#007AFF] dark:text-[#0A84FF]">{t("exploreTerminalCta")}</p>
-        </LiveMapLink>
-      ) : null}
-
       {/* Empty */}
       {shown.length === 0 && (
         <div
@@ -400,7 +463,9 @@ export function FlightsTab({
               : "rounded-3xl border border-dashed border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-10 text-center"
           }
         >
-          <p className="text-4xl mb-3">🛫</p>
+          <p className="mb-3 text-[var(--text-tertiary)]">
+            <Plane className="mx-auto h-8 w-8" strokeWidth={1.75} aria-hidden />
+          </p>
           <p className="font-semibold text-slate-900 dark:text-white">{t("emptyTitle")}</p>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">{t("emptyBody")}</p>
           {!enableBookSearch ? (
@@ -468,11 +533,20 @@ export function FlightsTab({
               r.flightNumber?.trim() ||
               r.title?.trim() ||
               `${r.flightAirline ?? r.provider} flight`.trim();
+            const showStatusChrome = isNext
+              ? nextFlightShowsStatusChrome({ isNextFlight: isNext, isPast })
+              : !isPast;
+            const showAirportMap =
+              isNext &&
+              showNextFlightAirportMapCta({
+                hasNextFlight: true,
+                departureIata: dep === "---" ? "" : dep,
+              });
 
             return (
               <div
                 key={r.id}
-                className={`${listType.card} overflow-hidden ${past ? "opacity-60" : ""}`}
+                className={`${listType.card} overflow-hidden ${isPast ? "opacity-60" : ""}`}
               >
                 <button
                   type="button"
@@ -480,17 +554,20 @@ export function FlightsTab({
                   className="w-full p-4 text-left"
                 >
                   <div className="flex items-start gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-[var(--bg-grouped)] text-lg text-[var(--text-secondary)]">
-                      ✈️
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-[var(--bg-grouped)] text-[var(--text-secondary)]">
+                      <Plane className="h-5 w-5" strokeWidth={1.85} aria-hidden />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
                         <p className={listType.title}>{flightTitle}</p>
-                        {attentionBadge && !past ? (
-                          <span className={attentionBadge.className}>{attentionBadge.label}</span>
-                        ) : costLine ? (
-                          <span className="shrink-0 text-[17px] font-semibold text-[var(--text-primary)]">{costLine}</span>
-                        ) : null}
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          {showStatusChrome ? <StatusBadge r={r} live={live} /> : null}
+                          {attentionBadge && !isPast ? (
+                            <span className={attentionBadge.className}>{attentionBadge.label}</span>
+                          ) : costLine ? (
+                            <span className="text-[17px] font-semibold text-[var(--text-primary)]">{costLine}</span>
+                          ) : null}
+                        </div>
                       </div>
                       <p className={listType.location}>{routeLine}</p>
                       <p className={`${listType.metadata} mt-1`}>{timeLine}</p>
@@ -501,6 +578,10 @@ export function FlightsTab({
                     <span className="mt-1 shrink-0 text-[13px] text-[var(--text-tertiary)]">{isOpen ? "▲" : "▼"}</span>
                   </div>
                 </button>
+
+                {showAirportMap ? (
+                  <AirportMapRow iata={dep} rich={canExploreTerminal} />
+                ) : null}
 
                 {(isOpen || r.confirmationCode || r.flightSeatNumber) && (
                   <div className="space-y-3 border-t border-[var(--border-default)] px-4 pb-4 pt-3">
@@ -521,7 +602,7 @@ export function FlightsTab({
                         <p className={listType.detailLabel}>Trip cost</p>
                         <p className={`${listType.detailValue} mt-0.5`}>{costLine}</p>
                       </div>
-                    ) : missingPrice && !past ? (
+                    ) : missingPrice && !isPast ? (
                       <button
                         type="button"
                         onClick={() => onReservationTap(r.id)}
@@ -700,6 +781,13 @@ export function FlightsTab({
                   🗑
                 </button>
               </div>
+              {isNext &&
+              showNextFlightAirportMapCta({
+                hasNextFlight: true,
+                departureIata: dep === "---" ? "" : dep,
+              }) ? (
+                <AirportMapRow iata={dep} rich={canExploreTerminal} />
+              ) : null}
             </div>
           );
         })}

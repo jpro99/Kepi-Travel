@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-12 (Hotels stays-first + Apple Book chrome)
+Last updated: 2026-08-12 (Flights itinerary-first + Picasso merge to main)
+
+## Decision 2026-08-12 — Flights tab itinerary-first (Picasso slice 3)
+
+Book → Flights opens on **upcoming tickets** with live status on the next flight (G18). Search launcher only when none are booked. Airport map is one tap on the next departure (not only the 48h terminal promo). Jeff: merge Picasso to main after this slice.
 
 ## Decision 2026-08-12 — Hotels tab stays-first (Picasso slice 2)
 

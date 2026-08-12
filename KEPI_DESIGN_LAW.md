@@ -76,6 +76,11 @@ If the trip has upcoming hotel reservations, Hotels must open on those stays (da
 
 **Test:** `src/lib/travelAssistant/hotelBookLead.test.ts`
 
+**G18 — Book → Flights leads with the next ticket and live status**  
+If the trip has upcoming flights, Flights must open on those tickets with live status (and gate when known) on the next flight — not a search launcher. Airport map is one tap on the next departure, not only the 48h terminal promo. Search appears when there are no upcoming flights, or when the traveler taps Search.
+
+**Test:** `src/lib/travelAssistant/flightBookLead.test.ts`
+
 ---
 
 ## FLIGHTS LAWS
@@ -742,6 +747,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | G15 | `src/lib/billing/nativeBillingGate.test.ts`, `revenueCatCatalog.test.ts` |
 | G16 | `src/lib/travelAssistant/consumerTabs.test.ts` |
 | G17 | `src/lib/travelAssistant/hotelBookLead.test.ts` |
+| G18 | `src/lib/travelAssistant/flightBookLead.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
 | I22, I23, I24, I25 | `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/reservationDisplayLabel.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts` |
