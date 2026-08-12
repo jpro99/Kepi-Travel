@@ -25,6 +25,8 @@ import {
 import { BOOK_ICON_TILE_CLASS, BOOK_LIST_CARD_CLASS } from "@/components/travelAssistant/bookTabStyles";
 import { hotelCardTypography } from "@/lib/ui/mobileTypography";
 import { appleBtnText, appleWarningPill } from "@/lib/ui/appleDesign";
+import { hotelBookLeadMode, showHotelSearchLauncherAtTop } from "@/lib/travelAssistant/hotelBookLead";
+import { Building2 } from "lucide-react";
 
 interface Reservation {
   id: string;
@@ -117,23 +119,6 @@ function isPastCheckout(checkOut: string): boolean {
   return !isNaN(ms) && Date.now() > ms + 86400_000;
 }
 
-// City emoji lookup
-function cityEmoji(location: string): string {
-  const l = location.toLowerCase();
-  if (l.includes("tokyo") || l.includes("japan")) return "🗼";
-  if (l.includes("paris") || l.includes("france")) return "🗼";
-  if (l.includes("london")) return "🎡";
-  if (l.includes("new york") || l.includes("nyc")) return "🗽";
-  if (l.includes("los angeles") || l.includes("la ")) return "🌴";
-  if (l.includes("hawaii") || l.includes("honolulu")) return "🌺";
-  if (l.includes("dubai")) return "🏙";
-  if (l.includes("singapore")) return "🦁";
-  if (l.includes("sydney") || l.includes("australia")) return "🦘";
-  if (l.includes("rome") || l.includes("italy")) return "🏛";
-  if (l.includes("bangkok") || l.includes("thailand")) return "🐘";
-  return "🏨";
-}
-
 export function HotelsTab({
   reservations,
   mapReservations,
@@ -180,10 +165,18 @@ export function HotelsTab({
   const shown = showPast ? [...upcoming, ...past] : upcoming;
   const staySegmentsNeedingHotel = segmentsNeedingHotel(staySegments);
   const showBookSearch = !simplifiedMobile || enableBookSearch;
+  const lead = hotelBookLeadMode({
+    upcomingStayCount: upcoming.length,
+    nightsNeedingHotel: staySegmentsNeedingHotel.length,
+  });
+  const showTopSearchLauncher =
+    showBookSearch &&
+    Boolean(onLaunchHotelSearch) &&
+    showHotelSearchLauncherAtTop(lead, inlineHotelSearchActive);
 
   return (
     <section className={`space-y-4 pb-6 ${type.section}`}>
-      {showBookSearch && onLaunchHotelSearch && !inlineHotelSearchActive ? (
+      {showTopSearchLauncher && onLaunchHotelSearch ? (
         <HotelSearchLauncher
           tripName={tripName}
           defaults={hotelSearchDefaults}
@@ -298,7 +291,7 @@ export function HotelsTab({
         ) : null}
       </div>
 
-      {showBookSearch && plannedStayCities.length > 0 && onPickPlannedCity ? (
+      {showBookSearch && plannedStayCities.length > 0 && onPickPlannedCity && lead !== "stays" ? (
         <TripHotelCityPicker
           cities={plannedStayCities}
           tripName={tripName}
@@ -306,7 +299,7 @@ export function HotelsTab({
         />
       ) : null}
 
-      {showBookSearch && staySegmentsNeedingHotel.length > 0 && onSearchSegment && plannedStayCities.length === 0 ? (
+      {showBookSearch && staySegmentsNeedingHotel.length > 0 && onSearchSegment && plannedStayCities.length === 0 && lead !== "stays" ? (
         <TripStayPlanner
           segments={staySegments}
           tripName={tripName}
@@ -330,7 +323,9 @@ export function HotelsTab({
       {/* Empty state */}
       {shown.length === 0 && (
         <div className="rounded-3xl border border-dashed border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-10 text-center">
-          <p className="text-4xl mb-3">🏨</p>
+          <p className="mb-3 text-[var(--text-tertiary)]">
+            <Building2 className="mx-auto h-8 w-8" strokeWidth={1.75} aria-hidden />
+          </p>
           <p className="font-semibold text-slate-900 dark:text-white">{t("emptyTitle")}</p>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">
             {enableBookSearch ? t("emptyBodyBook") : t("emptyBodyDefault")}
@@ -387,10 +382,12 @@ export function HotelsTab({
           const nights = nightsCount(checkIn, checkOut);
           const past = isPastCheckout(checkOut);
           const isOpen = expanded === r.id;
-          const emoji = cityEmoji(r.location ?? "");
           const missingPrice = reservationMissingPrice(r, reservations);
           const costLine = formatReservationCostLine(r, { allReservations: shown });
           const attention = reservationAttentionKind(r);
+          const stayIcon = (
+            <Building2 className="h-5 w-5 text-[var(--text-secondary)]" strokeWidth={1.85} aria-hidden />
+          );
 
           if (simplifiedMobile) {
             const stayRange =
@@ -411,8 +408,8 @@ export function HotelsTab({
                   className="w-full p-4 text-left"
                 >
                   <div className="flex items-start gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-[var(--bg-grouped)] text-lg text-[var(--text-secondary)]">
-                      {emoji}
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-[var(--bg-grouped)]">
+                      {stayIcon}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
@@ -498,7 +495,7 @@ export function HotelsTab({
                 className="w-full text-left"
               >
                 <div className="flex items-start gap-4 p-5">
-                  <div className={BOOK_ICON_TILE_CLASS}>{emoji}</div>
+                  <div className={BOOK_ICON_TILE_CLASS}>{stayIcon}</div>
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
@@ -606,6 +603,18 @@ export function HotelsTab({
           );
         })}
       </div>
+
+      {showBookSearch && staySegmentsNeedingHotel.length > 0 && onSearchSegment && lead === "stays" ? (
+        <TripStayPlanner
+          segments={staySegments}
+          tripName={tripName}
+          tripId={tripId}
+          usuallySkipsConnections={usuallySkipsConnections}
+          onSearchSegment={onSearchSegment}
+          onAddCityStay={onAddCityStay}
+          onSetStayIntent={onSetStayIntent}
+        />
+      ) : null}
 
       {shown.length > 0 && enableBookSearch ? (
         <button

@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-12 (Apple-simple shell + iOS TestFlight for partner)
+Last updated: 2026-08-12 (Hotels stays-first + Apple Book chrome)
+
+## Decision 2026-08-12 — Hotels tab stays-first (Picasso slice 2)
+
+Book → Hotels opens on **booked stays** (G17). Search launcher only when nights are uncovered. City picker/stay planner no longer sit above existing hotels. Partner share still later when she’s home.
 
 ## Decision 2026-08-12 — Picasso trip shell + iOS for Jeff and wife (Jeff approved)
 

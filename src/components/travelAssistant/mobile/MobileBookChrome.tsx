@@ -30,7 +30,7 @@ export function MobileBookHeader({
   const isActionable = Boolean(onReviewPricing && (needsAttention || problemCount > 0));
 
   const spendLine = tripSpendSummary ? (
-    <p className="mt-2 text-[15px] text-sky-200/90">
+    <p className="mt-2 text-[15px] text-[var(--text-secondary)]">
       {hasCash ? formatTripCashTotal(tripSpendSummary.cashTotalUsd) : hasPoints ? "$0 cash" : "$0"}
       {hasCash ? " spent" : ""}
       {hasPoints ? ` · ${formatTripPointsTotal(tripSpendSummary.pointsTotal)}` : ""}
@@ -43,7 +43,7 @@ export function MobileBookHeader({
       <button
         type="button"
         onClick={isActionable ? onReviewPricing : undefined}
-        className={`mt-1 text-left text-[13px] font-bold uppercase tracking-wide text-[#f4c95d] ${isActionable ? "underline underline-offset-2" : ""}`}
+        className={`mt-1 text-left text-[13px] font-semibold text-[var(--warning)] ${isActionable ? "underline underline-offset-2" : ""}`}
       >
         {problemCount > 0
           ? `${problemCount} issue${problemCount === 1 ? "" : "s"} · tap to fix`
@@ -52,11 +52,13 @@ export function MobileBookHeader({
     ) : null;
 
   return (
-    <header className="rounded-2xl bg-[#0F1923] px-5 py-4 shadow-sm">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f4c95d]">Book</p>
-      <h1 className="mt-1 text-[1.75rem] font-black leading-tight tracking-tight text-white">{tripName}</h1>
-      <p className="mt-1 text-[17px] text-slate-300">
-        {flightCount} flight{flightCount === 1 ? "" : "s"} · {hotelCount} hotel{hotelCount === 1 ? "" : "s"}
+    <header className="rounded-[18px] bg-[var(--bg-card)] px-5 py-4 shadow-sm ring-1 ring-[var(--border-default)]">
+      <p className="text-[13px] font-medium text-[var(--text-secondary)]">Book</p>
+      <h1 className="mt-0.5 text-[22px] font-semibold leading-tight tracking-tight text-[var(--text-primary)]">
+        {tripName}
+      </h1>
+      <p className="mt-1 text-[15px] text-[var(--text-secondary)]">
+        {flightCount} flight{flightCount === 1 ? "" : "s"} · {hotelCount} stay{hotelCount === 1 ? "" : "s"}
       </p>
       {spendLine}
       {attentionLine}

@@ -71,6 +71,11 @@ Tab bars use Lucide line icons + short labels — never emoji as navigation chro
 
 **Test:** `src/lib/travelAssistant/consumerTabs.test.ts`
 
+**G17 — Book → Hotels leads with stays you already have**  
+If the trip has upcoming hotel reservations, Hotels must open on those stays (dates, nights, map) — not a search launcher or “which city next” cockpit. Search and stay-gap planner appear only when nights are still uncovered, or when the traveler taps Find.
+
+**Test:** `src/lib/travelAssistant/hotelBookLead.test.ts`
+
 ---
 
 ## FLIGHTS LAWS
@@ -736,6 +741,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | G14 | `src/lib/travelAssistant/tripSpendSummary.test.ts` |
 | G15 | `src/lib/billing/nativeBillingGate.test.ts`, `revenueCatCatalog.test.ts` |
 | G16 | `src/lib/travelAssistant/consumerTabs.test.ts` |
+| G17 | `src/lib/travelAssistant/hotelBookLead.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
 | I22, I23, I24, I25 | `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/reservationDisplayLabel.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts` |
