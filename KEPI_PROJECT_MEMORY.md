@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-12 (Disruption calm Picasso slice)
+Last updated: 2026-08-12 (Visual chrome Picasso slice)
+
+## Decision 2026-08-12 — Visual chrome Lucide + light cards (Picasso slice 6)
+
+Consumer More, empty Home, and Plan empty states use Lucide + light Apple cards (G21). No emoji section headers, no navy empty-trip cockpit. Gold Talk CTA kept. Confirmations on the trip are untouched.
 
 ## Decision 2026-08-12 — Disruption help is calm (Picasso slice 5)
 

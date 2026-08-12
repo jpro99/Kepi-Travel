@@ -12,6 +12,7 @@ import { MobileSettingsView } from "@/components/travelAssistant/mobile/MobileSe
 import { TripMemoriesPanel } from "@/components/travelAssistant/TripMemoriesPanel";
 import { PointsTravelProfileCard } from "@/components/travelAssistant/PointsTravelProfileCard";
 import { PointsMilesLearnPanel } from "@/components/travelAssistant/PointsMilesLearnPanel";
+import { ConsumerSectionIcon } from "@/components/travelAssistant/ConsumerSectionIcon";
 import { TravelFitCard } from "@/components/travelAssistant/TravelFitCard";
 import { TravelStyleBadge } from "@/components/travelAssistant/TravelStyleQuiz";
 import { LoyaltyWalletSection } from "@/components/loyalty/LoyaltyWalletSection";
@@ -554,10 +555,15 @@ export function MobileMapForwardShell({
       <button
         type="button"
         onClick={() => setShowPointsLearn(true)}
-        className="w-full rounded-2xl bg-gradient-to-br from-sky-600 to-indigo-600 px-5 py-4 text-left text-white shadow-md"
+        className="w-full rounded-2xl bg-[var(--bg-card)] px-5 py-4 text-left ring-1 ring-[var(--border-default)]"
       >
-        <p className="text-[19px] font-bold">📚 New to points & miles?</p>
-        <p className="mt-1 text-[15px] text-white/90">Learn Rakuten, lounges, cards, and how Kepi helps</p>
+        <div className="flex items-center gap-3">
+          <ConsumerSectionIcon section="points" tiled />
+          <div>
+            <p className="text-[19px] font-bold text-[var(--text-primary)]">New to points & miles?</p>
+            <p className="mt-1 text-[15px] text-[var(--text-secondary)]">Learn Rakuten, lounges, cards, and how Kepi helps</p>
+          </div>
+        </div>
       </button>
 
       {hasActiveTrip ? (
@@ -577,7 +583,7 @@ export function MobileMapForwardShell({
 
       <div className="overflow-hidden rounded-2xl bg-[var(--bg-card)] ring-1 ring-[var(--border-default)]">
         <div className="flex items-center gap-3 border-b border-[var(--border-default)] px-5 py-4">
-          <span className="text-xl">🎯</span>
+          <ConsumerSectionIcon section="fit" tiled />
           <div>
             <p className="text-[19px] font-bold text-[var(--text-primary)]">Travel Fit</p>
             <p className="mt-0.5 text-[15px] text-[var(--text-secondary)]">
@@ -593,7 +599,7 @@ export function MobileMapForwardShell({
 
       <div className="overflow-hidden rounded-2xl bg-[var(--bg-card)] ring-1 ring-[var(--border-default)]">
         <div className="flex items-center gap-3 border-b border-[var(--border-default)] px-5 py-4">
-          <span className="text-xl">💳</span>
+          <ConsumerSectionIcon section="cards" tiled />
           <div>
             <p className="text-[19px] font-bold text-[var(--text-primary)]">Card wallet</p>
             <p className="mt-0.5 text-[15px] text-[var(--text-secondary)]">Cards you hold — names only</p>
@@ -606,7 +612,7 @@ export function MobileMapForwardShell({
 
       <div className="overflow-hidden rounded-2xl bg-[var(--bg-card)] ring-1 ring-[var(--border-default)]">
         <div className="flex items-center gap-3 px-5 py-4">
-          <span className="text-xl">✈️</span>
+          <ConsumerSectionIcon section="loyalty" tiled />
           <div>
             <p className="text-[19px] font-bold text-[var(--text-primary)]">Loyalty wallet</p>
             <p className="mt-0.5 text-[15px] text-[var(--text-secondary)]">Miles, points, and status</p>

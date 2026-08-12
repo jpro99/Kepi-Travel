@@ -244,6 +244,8 @@ import { SmartPackingList } from "@/components/travelAssistant/SmartPackingList"
 import { LoyaltyWalletSection } from "@/components/loyalty/LoyaltyWalletSection";
 import { PointsTravelProfileCard } from "@/components/travelAssistant/PointsTravelProfileCard";
 import { PointsMilesLearnPanel } from "@/components/travelAssistant/PointsMilesLearnPanel";
+import { ConsumerSectionIcon } from "@/components/travelAssistant/ConsumerSectionIcon";
+import { EMPTY_HOME_CARD_CLASS } from "@/lib/travelAssistant/consumerVisualChrome";
 import { TravelFitCard } from "@/components/travelAssistant/TravelFitCard";
 import {
   TravelStyleBadge,
@@ -10015,11 +10017,11 @@ export default function TravelAssistantPage() {
           ) : consumerTab === "trip" ? (
             journeyPhase.kind === "no-trip" || showUnconfiguredTripShell ? (
               <section className="space-y-4">
-                <div className="rounded-3xl overflow-hidden bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 shadow-xl">
+                <div className={EMPTY_HOME_CARD_CLASS}>
                   <div className="px-5 pt-6 pb-4">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-sky-300/70">{tApp("homeEmptyEyebrow")}</p>
-                    <p className="text-2xl font-black text-white mt-1">{tApp("homeEmptyTitle")}</p>
-                    <p className="text-sky-100/70 text-sm mt-2 leading-relaxed">{tApp("homeEmptyBody")}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#6E6E73]">{tApp("homeEmptyEyebrow")}</p>
+                    <p className="text-2xl font-black text-[#1D1D1F] dark:text-white mt-1">{tApp("homeEmptyTitle")}</p>
+                    <p className="text-[#6E6E73] text-sm mt-2 leading-relaxed">{tApp("homeEmptyBody")}</p>
                   </div>
                   <div className="mx-4 mb-4 space-y-3">
                     <button
@@ -10029,11 +10031,11 @@ export default function TravelAssistantPage() {
                     >
                       {tApp("homeEmptyTalkCta")}
                     </button>
-                    <p className="text-center text-xs text-sky-200/40">{tApp("homeEmptyOr")}</p>
+                    <p className="text-center text-xs text-[#6E6E73]">{tApp("homeEmptyOr")}</p>
                     <button
                       type="button"
                       onClick={() => void handleCreateTrip()}
-                      className="w-full rounded-2xl border border-white/10 bg-white/8 py-3 text-center text-sm font-semibold text-white active:opacity-80"
+                      className="w-full rounded-2xl border border-black/[0.08] bg-white py-3 text-center text-sm font-semibold text-[#1D1D1F] active:opacity-80 dark:border-white/10 dark:bg-slate-800 dark:text-white"
                     >
                       {tApp("homeEmptyManualDates")}
                     </button>
@@ -10041,7 +10043,7 @@ export default function TravelAssistantPage() {
                       <button
                         type="button"
                         onClick={() => void handleCreateTrip()}
-                        className="w-full rounded-2xl border border-sky-300/30 bg-sky-400/10 py-3 text-center text-sm font-semibold text-sky-100 active:opacity-80"
+                        className="w-full rounded-2xl border border-[#f4c95d]/40 bg-[#f4c95d]/15 py-3 text-center text-sm font-semibold text-[#1D1D1F] active:opacity-80 dark:text-[#f4c95d]"
                       >
                         + Add new trip
                       </button>
@@ -10049,13 +10051,13 @@ export default function TravelAssistantPage() {
                     <button
                       type="button"
                       onClick={() => navigateToBook("flights")}
-                      className="w-full rounded-2xl border border-white/10 bg-white/8 py-3 text-center text-sm font-semibold text-white active:opacity-80"
+                      className="w-full rounded-2xl border border-black/[0.08] bg-white py-3 text-center text-sm font-semibold text-[#1D1D1F] active:opacity-80 dark:border-white/10 dark:bg-slate-800 dark:text-white"
                     >
                       {tApp("homeEmptyAddFlight")}
                     </button>
-                    <div className="rounded-2xl bg-white/8 border border-white/10 px-4 py-3">
-                      <p className="text-white/60 text-xs leading-relaxed">
-                        💡 <span className="text-white/80 font-medium">{tApp("homeEmptyForwardLabel")}</span>{" "}
+                    <div className="rounded-2xl border border-black/[0.06] bg-white px-4 py-3 dark:border-white/10 dark:bg-slate-800">
+                      <p className="text-xs leading-relaxed text-[#6E6E73]">
+                        <span className="font-medium text-[#1D1D1F] dark:text-white">{tApp("homeEmptyForwardLabel")}</span>{" "}
                         {tApp("homeEmptyForwardBody", { address: emptyStateForwardAddress })}
                       </p>
                     </div>
@@ -10279,12 +10281,17 @@ export default function TravelAssistantPage() {
               <button
                 type="button"
                 onClick={() => setShowPointsLearn(true)}
-                className="w-full rounded-3xl bg-gradient-to-br from-sky-600 to-indigo-600 px-5 py-4 text-left text-white shadow-md"
+                className="w-full rounded-3xl bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/[0.08] px-5 py-4 text-left"
               >
-                <p className="font-semibold text-lg">📚 New to points & miles?</p>
-                <p className="mt-1 text-sm text-white/90">
-                  Learn Rakuten stacking, lounge access, and how Kepi uses your card wallet
-                </p>
+                <div className="flex items-center gap-3">
+                  <ConsumerSectionIcon section="points" tiled />
+                  <div>
+                    <p className="font-semibold text-lg text-slate-900 dark:text-white">New to points & miles?</p>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                      Learn Rakuten stacking, lounge access, and how Kepi uses your card wallet
+                    </p>
+                  </div>
+                </div>
               </button>
               <button
                 type="button"
@@ -10293,7 +10300,7 @@ export default function TravelAssistantPage() {
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <span className="text-xl">🗂️</span>
+                    <ConsumerSectionIcon section="trips" tiled />
                     <div>
                       <p className="font-semibold text-slate-900 dark:text-white">{tApp("moreMyTripsTitle")}</p>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
@@ -10307,7 +10314,7 @@ export default function TravelAssistantPage() {
               {/* Travel Fit — learns your habits over time */}
               <div className="rounded-3xl bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/[0.08] overflow-hidden">
                 <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 dark:border-slate-800">
-                  <span className="text-xl">🎯</span>
+                  <ConsumerSectionIcon section="fit" tiled />
                   <div>
                     <p className="font-semibold text-slate-900 dark:text-white">{tApp("moreTravelFitTitle")}</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{tApp("moreTravelFitSubtitle")}</p>
@@ -10326,7 +10333,7 @@ export default function TravelAssistantPage() {
               {/* Card wallet for earn suggestions */}
               <div className="rounded-3xl bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/[0.08] overflow-hidden">
                 <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 dark:border-slate-800">
-                  <span className="text-xl">💳</span>
+                  <ConsumerSectionIcon section="cards" tiled />
                   <div>
                     <p className="font-semibold text-slate-900 dark:text-white">{tApp("moreCardWalletTitle")}</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{tApp("moreCardWalletSubtitle")}</p>
@@ -10340,7 +10347,7 @@ export default function TravelAssistantPage() {
               {/* Loyalty Wallet */}
               <div className="rounded-3xl bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/[0.08] overflow-hidden">
                 <div className="flex items-center gap-3 px-5 py-4">
-                  <span className="text-xl">💳</span>
+                  <ConsumerSectionIcon section="loyalty" tiled />
                   <div>
                     <p className="font-semibold text-slate-900 dark:text-white">{tApp("moreLoyaltyTitle")}</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{tApp("moreLoyaltySubtitle")}</p>
@@ -10359,7 +10366,7 @@ export default function TravelAssistantPage() {
                   onClick={() => document.getElementById("packing-section")?.classList.toggle("hidden")}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="text-xl">🎒</span>
+                    <ConsumerSectionIcon section="packing" tiled />
                     <div>
                       <p className="font-semibold text-slate-900 dark:text-white">{tApp("morePackingTitle")}</p>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{tApp("morePackingSubtitle")}</p>
@@ -10379,7 +10386,7 @@ export default function TravelAssistantPage() {
                     return (
                       <div className="mb-4">
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3 mt-3">
-                          ✨ Smart list for {dest}
+                          Smart list for {dest}
                         </p>
                         <SmartPackingList
                           destination={dest}
@@ -10592,7 +10599,10 @@ export default function TravelAssistantPage() {
                 }}
                 className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
               >
-                🔄 {tMore("cacheTitle")}
+                <span className="flex items-center gap-3">
+                  <ConsumerSectionIcon section="refresh" className="h-5 w-5" />
+                  {tMore("cacheTitle")}
+                </span>
                 <p className="mt-0.5 text-xs font-normal text-slate-500 dark:text-slate-400">{tMore("cacheBody")}</p>
               </button>
 

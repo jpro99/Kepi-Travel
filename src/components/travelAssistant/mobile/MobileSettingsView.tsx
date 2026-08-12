@@ -8,6 +8,7 @@ import { LanguageSettingsCard } from "@/components/LanguageSettingsCard";
 import { OfflineTravelKitSettingsCard } from "@/components/travelAssistant/OfflineTravelKitSettingsCard";
 import { PlanRedeemCard } from "@/components/billing/PlanRedeemCard";
 import { DeleteAccountSection } from "@/components/account/DeleteAccountSection";
+import { ConsumerSectionIcon } from "@/components/travelAssistant/ConsumerSectionIcon";
 import { appleBtnPrimary, appleCard, appleCaption, appleCardTitle, appleMetadata } from "@/lib/ui/appleDesign";
 
 interface MobileSettingsViewProps {
@@ -173,7 +174,10 @@ export function MobileSettingsView({
         onClick={() => openBugReport()}
         className={`block w-full p-4 text-left font-semibold text-[var(--text-primary)] ${appleCard}`}
       >
-        🐛 Report a bug or crash
+        <span className="flex items-center gap-3">
+          <ConsumerSectionIcon section="bug" className="h-5 w-5" />
+          Report a bug or crash
+        </span>
         <p className={`${appleCaption} mt-0.5 font-normal`}>
           AI reviews your report and texts Jeff if it&apos;s a real code issue.
         </p>

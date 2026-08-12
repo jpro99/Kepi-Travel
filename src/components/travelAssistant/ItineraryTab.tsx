@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from 'react';
+import { CalendarDays } from "lucide-react";
 import { AddReservationModal, type ItineraryReservation } from './AddReservationModal';
 
 interface ItineraryTabProps {
@@ -86,7 +87,7 @@ export function ItineraryTab({ reservations, onAddReservation, onDeleteReservati
 
             {sortedReservations.length === 0 ? (
                  <div className="rounded-3xl border border-dashed border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-10 text-center">
-                    <p className="text-4xl mb-3">✈️</p>
+                    <CalendarDays className="mx-auto mb-3 h-10 w-10 text-slate-400" strokeWidth={1.5} aria-hidden />
                     <p className="font-semibold text-slate-900 dark:text-white">Your itinerary is empty</p>
                     <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">Add a flight, hotel, or other reservation to get started.</p>
                     <button type="button" onClick={() => setIsModalOpen(true)} className="rounded-full bg-[#007AFF] px-6 py-2.5 text-sm font-bold text-white">Add Reservation</button>

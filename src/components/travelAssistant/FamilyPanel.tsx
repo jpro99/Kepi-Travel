@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { LiveMapLink } from "@/components/travelAssistant/LiveMapLink";
+import { ConsumerSectionIcon } from "@/components/travelAssistant/ConsumerSectionIcon";
 
 const FamilyMap = dynamic(
   () => import("@/components/travelAssistant/FamilyMap").then((m) => m.FamilyMap),
@@ -328,7 +329,7 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
     return (
       <div className="rounded-3xl bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/[0.08] p-5 space-y-4">
         <div className="flex items-center gap-3">
-          <span className="text-2xl">👨‍👩‍👧</span>
+          <ConsumerSectionIcon section="family" className="h-6 w-6" />
           <div>
             <h2 className="font-bold text-slate-900 dark:text-white">Family Groups</h2>
             <span className="text-[10px] font-bold uppercase tracking-wider text-[#007AFF]">Pro feature</span>

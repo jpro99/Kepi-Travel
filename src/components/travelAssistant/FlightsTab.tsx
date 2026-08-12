@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { Plane } from "lucide-react";
+import { Plane, Trash2 } from "lucide-react";
 import { LiveMapLink } from "@/components/travelAssistant/LiveMapLink";
 import { hasAirportLayout } from "@/lib/airportNav/getLayout";
 import { selectPreviewAirportFlight, toUtcMs as flightToUtcMs } from "@/lib/travelAssistant/useActiveFlight";
@@ -690,7 +690,7 @@ export function FlightsTab({
                   <div className={`flex flex-col items-center gap-1.5 shrink-0 px-2 ${type.routeMid}`}>
                     <div className="flex items-center gap-1.5">
                       <div className="h-px w-10 bg-slate-300 dark:bg-slate-600" />
-                      <span className="text-slate-500 dark:text-slate-400 text-xl leading-none" aria-hidden>✈</span>
+                      <Plane className="h-4 w-4 text-slate-500 dark:text-slate-400" strokeWidth={1.85} aria-hidden />
                       <div className="h-px w-10 bg-slate-300 dark:bg-slate-600" />
                     </div>
                     <p className={dateText}>{date}</p>
@@ -787,8 +787,9 @@ export function FlightsTab({
                 </button>
                 <button type="button"
                   onClick={() => { if (window.confirm("Delete this flight?")) onDelete(r.id); }}
-                  className={type.deleteBtn}>
-                  🗑
+                  className={`${type.deleteBtn} inline-flex items-center justify-center`}
+                  aria-label="Delete this flight">
+                  <Trash2 className="h-4 w-4" strokeWidth={1.85} aria-hidden />
                 </button>
               </div>
               {isNext &&

@@ -91,6 +91,11 @@ Delay and connection help on the consumer path is a single factual next step (ch
 
 **Test:** `src/lib/travelAssistant/disruptionCalm.test.ts`
 
+**G21 — Consumer More, empty Home, and Plan use Lucide + light cards**  
+Consumer More section headers, empty Home, and Plan empty states use Lucide line icons and light Apple cards (`#F5F5F7` / `#1D1D1F`). No emoji section headers, no navy empty-trip cockpit. Gold `#f4c95d` CTAs stay (G4).
+
+**Test:** `src/lib/travelAssistant/consumerVisualChrome.test.ts`
+
 ---
 
 ## FLIGHTS LAWS
@@ -760,6 +765,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | G18 | `src/lib/travelAssistant/flightBookLead.test.ts` |
 | G19 | `src/lib/travelAssistant/mapTabLead.test.ts` |
 | G20 | `src/lib/travelAssistant/disruptionCalm.test.ts` |
+| G21 | `src/lib/travelAssistant/consumerVisualChrome.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
 | I22, I23, I24, I25 | `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/reservationDisplayLabel.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts` |
