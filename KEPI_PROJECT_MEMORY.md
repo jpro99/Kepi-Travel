@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-14 (iOS blue hang — splash overlay + Capacitor exit)
+Last updated: 2026-08-14 (Home Screen for this trip; pause Xcode)
+
+## Decision 2026-08-14 — This trip uses Safari Add to Home Screen (Jeff)
+
+Jeff added kepitravel.com to the iPad Home Screen and will do the same on his wife’s iPhone. Pause Xcode / cable / TestFlight for this trip. Same signed-in site; confirmations untouched. Native App Store shell is later, not required to travel.
 
 ## Incident 2026-08-14 — iPad still blue after second rebuild (~10 min)
 
