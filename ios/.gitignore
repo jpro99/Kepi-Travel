@@ -1,15 +1,15 @@
 App/build
 App/Pods
 App/output
-App/App/public
 DerivedData
 xcuserdata
 
 # Cordova plugins for Capacitor
 capacitor-cordova-ios-plugins
 
-# Generated Config files
-App/App/config.xml
+# `npx cap copy` may add extra web files — keep the committed fallback
+App/App/public/*
+!App/App/public/index.html
 
 # CapApp-SPM plugin symlinks (recreated by cap sync — absolute paths)
 App/CapApp-SPM/symlinks/

@@ -70,6 +70,38 @@ let package = Package(
 )
 SWIFT
 
+DEBUGXC="$ROOT/ios/debug.xcconfig"
+cat > "$DEBUGXC" <<'XCC'
+# Must stay false on device installs. true makes the app wait for the Mac
+# debug server — unplug or open from the icon and you get a blank blue screen.
+CAPACITOR_DEBUG = false
+XCC
+echo "    wrote debug.xcconfig (CAPACITOR_DEBUG=false)"
+
+mkdir -p "$ROOT/ios/App/App/public"
+cat > "$ROOT/ios/App/App/public/index.html" <<'HTML'
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="refresh" content="0;url=https://kepitravel.com" />
+    <title>Kepi Travel</title>
+    <script>location.replace("https://kepitravel.com");</script>
+  </head>
+  <body>Opening Kepi…</body>
+</html>
+HTML
+echo "    wrote public/index.html (Capacitor will not exit without this folder)"
+
+cat > "$ROOT/ios/App/App/config.xml" <<'XML'
+<?xml version='1.0' encoding='utf-8'?>
+<widget version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+  <access origin="*" />
+</widget>
+XML
+echo "    wrote config.xml"
+
 CAPJSON="$ROOT/ios/App/App/capacitor.config.json"
 cat > "$CAPJSON" <<'JSON'
 {

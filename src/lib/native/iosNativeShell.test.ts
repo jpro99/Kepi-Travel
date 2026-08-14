@@ -7,6 +7,7 @@ import {
   IOS_CAPACITOR_SPM_GIT,
   IOS_DISPLAY_NAME,
   IOS_SPM_TOOLS_VERSION,
+  IOS_PRODUCTION_URL,
   IOS_WEBVIEW_BACKGROUND,
   capAppSpmAllowsLocalNodeModules,
   iosSpmUsesSwiftTools6,
@@ -79,13 +80,31 @@ test("G22 Info.plist keeps TestFlight identity + dark status bar on light chrome
 test("G24 device install loads kepitravel.com without the Mac debugger", () => {
   const bundled = readSrc("ios/App/App/capacitor.config.json");
   const debugXc = readSrc("ios/debug.xcconfig");
+  const plist = readSrc("ios/App/App/Info.plist");
+  const bridge = readSrc("ios/App/App/KepiBridgeViewController.swift");
+  const fallback = readSrc("ios/App/App/public/index.html");
+  const storyboard = readSrc("ios/App/App/Base.lproj/Main.storyboard");
+  const launch = readSrc("ios/App/App/Base.lproj/LaunchScreen.storyboard");
   const fix = readSrc("scripts/ios-fix-capapp-spm.sh");
+  const gitignore = readSrc("ios/.gitignore");
+  assert.equal(IOS_PRODUCTION_URL, "https://kepitravel.com");
   assert.match(bundled, /"url":\s*"https:\/\/kepitravel\.com"/);
   assert.match(bundled, /"appId":\s*"com\.kepitravel\.app"/);
   assert.match(debugXc, /CAPACITOR_DEBUG = false/);
   assert.doesNotMatch(debugXc, /CAPACITOR_DEBUG = true/);
+  assert.match(plist, /<key>CAPACITOR_DEBUG<\/key>\s*<string>false<\/string>/);
+  assert.doesNotMatch(plist, /\$\(CAPACITOR_DEBUG\)/);
+  assert.match(bridge, /KepiBridgeViewController/);
+  assert.match(bridge, /https:\/\/kepitravel\.com/);
+  assert.doesNotMatch(bridge, /super\.instanceDescriptor/);
+  assert.match(storyboard, /customClass="KepiBridgeViewController"/);
+  assert.match(fallback, /https:\/\/kepitravel\.com/);
+  assert.match(launch, /Kepi Travel/);
+  assert.doesNotMatch(launch, /image="Splash"/);
   assert.match(fix, /capacitor\.config\.json/);
+  assert.match(fix, /public\/index\.html/);
   assert.match(fix, /https:\/\/kepitravel\.com/);
+  assert.match(gitignore, /!App\/App\/public\/index\.html/);
 });
 
 test("G23 native WKWebView is not app-bound to kepitravel.com only", () => {

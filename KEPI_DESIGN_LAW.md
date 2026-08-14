@@ -107,7 +107,8 @@ The iOS shell loads https://kepitravel.com. Do not set `WKAppBoundDomains` to on
 **Test:** `src/lib/native/iosNativeShell.test.ts`
 
 **G24 — Native app must open kepitravel.com without the Mac attached**  
-A device install (home-screen tap, cable unplugged) loads `https://kepitravel.com` from the bundled `capacitor.config.json`. `CAPACITOR_DEBUG` stays false so the WKWebView does not wait for Xcode. No blank launch-screen hang after force-quit.
+A device install (home-screen tap, cable unplugged) loads `https://kepitravel.com` from the bundled `capacitor.config.json`. `CAPACITOR_DEBUG` stays false so the WKWebView does not wait for Xcode. No blank launch-screen hang after force-quit.  
+The repo must ship `ios/App/App/public/index.html` (Capacitor `exit(1)` if that folder is missing) and `KepiBridgeViewController` must set `serverURL` without using a persisted live-reload path. Launch screen is light `#F5F5F7` with “Kepi Travel” — never a navy image that can hang for minutes.
 
 **Test:** `src/lib/native/iosNativeShell.test.ts`
 

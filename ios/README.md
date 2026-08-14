@@ -28,7 +28,7 @@ Open **`ios/App/App.xcodeproj`** — not `.xcworkspace`. This project uses **Swi
 6. For both phones without cables: **Product → Archive → Distribute App → App Store Connect → TestFlight**
 7. In App Store Connect, add her Apple ID as an **Internal Tester**, then she installs **TestFlight** and Kepi
 
-If the iPad/iPhone is a **blank blue screen** after you unplug or tap the icon: the Debug build was waiting for the Mac. Pull main, `npm run ios:fix`, ▶ Run on the device, click **Stop**, unplug, then open **Kepi Travel** from the home screen.
+If the iPad/iPhone is a **blank blue screen** for more than a few seconds: do not wait — that build will not load. Quit Xcode, pull main, `npm run ios:fix`, **Product → Clean Build Folder**, ▶ Run on the device. The new launch screen is light gray with “Kepi Travel” (not navy). Then click **Stop**, unplug, and open **Kepi Travel** from the home screen.
 
 ## SPM errors
 

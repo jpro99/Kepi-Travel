@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-14 (iOS blank blue after unplug)
+Last updated: 2026-08-14 (iOS blue splash hang — missing public/)
+
+## Incident 2026-08-14 — iPad still navy/blue after G24 rebuild
+
+G24 bundled `server.url` but Capacitor still `exit(1)` when `ios/App/App/public` is missing (it was gitignored). A 10-minute blue screen is the launch splash, not a slow site load. Fix: commit `public/index.html` + `config.xml`, hardcode `CAPACITOR_DEBUG=false`, `KepiBridgeViewController` forces https://kepitravel.com (ignore stale live-reload path), light launch screen. Jeff: pull, ios:fix, Clean, Run on iPad. Confirmations untouched.
 
 ## Incident 2026-08-14 — iPad blank blue after unplug / home-screen open
 
