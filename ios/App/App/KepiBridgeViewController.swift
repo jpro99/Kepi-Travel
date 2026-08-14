@@ -1,13 +1,29 @@
 import Capacitor
-import Foundation
+import UIKit
 
-/// Forces the WKWebView onto kepitravel.com.
-/// Capacitor otherwise exits if `public/` is missing, or can keep a stale
-/// live-reload path from a previous Xcode debug session (blank navy splash).
+/// Loads kepitravel.com without Capacitor's `loadWebView()` fatal path.
+/// `CAPBridgeViewController.viewDidLoad` calls `exit(1)` when `public/` is
+/// missing from the bundle — that leaves the launch screen up forever.
 final class KepiBridgeViewController: CAPBridgeViewController {
+    private static let productionURL = URL(string: "https://kepitravel.com")!
+
     override func instanceDescriptor() -> InstanceDescriptor {
         let descriptor = InstanceDescriptor()
-        descriptor.serverURL = "https://kepitravel.com"
+        descriptor.serverURL = Self.productionURL.absoluteString
         return descriptor
+    }
+
+    override func viewDidLoad() {
+        // Do not call super — that runs loadWebView() → fatalLoadError() → exit(1).
+        loadProductionSite()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        loadProductionSite()
+    }
+
+    private func loadProductionSite() {
+        webView?.load(URLRequest(url: Self.productionURL))
     }
 }

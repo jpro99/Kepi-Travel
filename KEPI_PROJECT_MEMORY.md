@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-14 (iOS blue splash hang — missing public/)
+Last updated: 2026-08-14 (iOS blue hang — splash overlay + Capacitor exit)
+
+## Incident 2026-08-14 — iPad still blue after second rebuild (~10 min)
+
+Two causes: (1) Capacitor `loadWebView()` `exit(1)` if `public/` missing — skip `super.viewDidLoad` and load https://kepitravel.com directly; AppDelegate retries if the WKWebView is not on kepitravel.com. (2) `SplashTransition` navy overlay + `opacity: 0` on children when Capacitor marks the page native — if hydration lags the trip is hidden under blue. Overlay removed (pass-through). Vercel deploy fixes (2) without a native rebuild if the WebView already loads the site. Confirmations untouched.
 
 ## Incident 2026-08-14 — iPad still navy/blue after G24 rebuild
 

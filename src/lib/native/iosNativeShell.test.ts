@@ -97,6 +97,15 @@ test("G24 device install loads kepitravel.com without the Mac debugger", () => {
   assert.match(bridge, /KepiBridgeViewController/);
   assert.match(bridge, /https:\/\/kepitravel\.com/);
   assert.doesNotMatch(bridge, /super\.instanceDescriptor/);
+  assert.match(bridge, /Do not call super/);
+  assert.match(bridge, /loadProductionSite/);
+  const delegate = readSrc("ios/App/App/AppDelegate.swift");
+  assert.match(delegate, /loadKepiIfNeeded/);
+  assert.match(delegate, /kepitravel\.com/);
+  const splash = readSrc("src/components/native/SplashTransition.tsx");
+  assert.doesNotMatch(splash, /#0b1f3a/);
+  assert.doesNotMatch(splash, /opacity:\s*visible \? 0/);
+  assert.match(splash, /return <>\{children\}<\/>/);
   assert.match(storyboard, /customClass="KepiBridgeViewController"/);
   assert.match(fallback, /https:\/\/kepitravel\.com/);
   assert.match(launch, /Kepi Travel/);

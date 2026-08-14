@@ -66,9 +66,9 @@ const config: CapacitorConfig = {
        * Kepi splash: gold "K" on deep navy (G4), then light WKWebView (G21).
        * SplashTransition.tsx handles the in-app fade after hydration.
        */
-      launchShowDuration: 500,
+      launchShowDuration: 0,
       launchAutoHide: true,
-      backgroundColor: "#0b1f3a",
+      backgroundColor: "#F5F5F7",
       showSpinner: false,
       splashFullScreen: true,
       splashImmersive: true,
