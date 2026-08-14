@@ -28,7 +28,7 @@ Open **`ios/App/App.xcodeproj`** — not `.xcworkspace`. This project uses **Swi
 6. For both phones without cables: **Product → Archive → Distribute App → App Store Connect → TestFlight**
 7. In App Store Connect, add her Apple ID as an **Internal Tester**, then she installs **TestFlight** and Kepi
 
-If the Simulator iPhone is a **blank light screen**, Clerk was blocked by app-bound domains (fixed on main). Quit Xcode, `git pull origin main`, `npm run ios:fix`, then ▶ Run again. Sign in with the same Kepi account. For the real phone, pick the physical iPhone at the top — not “iPhone 16”.
+If the iPad/iPhone is a **blank blue screen** after you unplug or tap the icon: the Debug build was waiting for the Mac. Pull main, `npm run ios:fix`, ▶ Run on the device, click **Stop**, unplug, then open **Kepi Travel** from the home screen.
 
 ## SPM errors
 

@@ -76,6 +76,18 @@ test("G22 Info.plist keeps TestFlight identity + dark status bar on light chrome
   assert.doesNotMatch(plist, /UIStatusBarStyleLightContent/);
 });
 
+test("G24 device install loads kepitravel.com without the Mac debugger", () => {
+  const bundled = readSrc("ios/App/App/capacitor.config.json");
+  const debugXc = readSrc("ios/debug.xcconfig");
+  const fix = readSrc("scripts/ios-fix-capapp-spm.sh");
+  assert.match(bundled, /"url":\s*"https:\/\/kepitravel\.com"/);
+  assert.match(bundled, /"appId":\s*"com\.kepitravel\.app"/);
+  assert.match(debugXc, /CAPACITOR_DEBUG = false/);
+  assert.doesNotMatch(debugXc, /CAPACITOR_DEBUG = true/);
+  assert.match(fix, /capacitor\.config\.json/);
+  assert.match(fix, /https:\/\/kepitravel\.com/);
+});
+
 test("G23 native WKWebView is not app-bound to kepitravel.com only", () => {
   const plist = readSrc("ios/App/App/Info.plist");
   const cap = readSrc("capacitor.config.ts");

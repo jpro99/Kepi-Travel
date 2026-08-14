@@ -9,7 +9,6 @@ xcuserdata
 capacitor-cordova-ios-plugins
 
 # Generated Config files
-App/App/capacitor.config.json
 App/App/config.xml
 
 # CapApp-SPM plugin symlinks (recreated by cap sync — absolute paths)

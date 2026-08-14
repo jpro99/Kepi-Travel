@@ -106,6 +106,11 @@ The iOS shell loads https://kepitravel.com. Do not set `WKAppBoundDomains` to on
 
 **Test:** `src/lib/native/iosNativeShell.test.ts`
 
+**G24 — Native app must open kepitravel.com without the Mac attached**  
+A device install (home-screen tap, cable unplugged) loads `https://kepitravel.com` from the bundled `capacitor.config.json`. `CAPACITOR_DEBUG` stays false so the WKWebView does not wait for Xcode. No blank launch-screen hang after force-quit.
+
+**Test:** `src/lib/native/iosNativeShell.test.ts`
+
 ---
 
 ## FLIGHTS LAWS
@@ -778,6 +783,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | G21 | `src/lib/travelAssistant/consumerVisualChrome.test.ts` |
 | G22 | `src/lib/native/iosNativeShell.test.ts` |
 | G23 | `src/lib/native/iosNativeShell.test.ts` |
+| G24 | `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
 | I22, I23, I24, I25 | `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/reservationDisplayLabel.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts` |

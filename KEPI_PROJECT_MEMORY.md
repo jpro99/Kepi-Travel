@@ -3,7 +3,13 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-12 (iOS blank WKWebView / Clerk)
+Last updated: 2026-08-14 (iOS blank blue after unplug)
+
+## Incident 2026-08-14 — iPad blank blue after unplug / home-screen open
+
+Debug builds had `CAPACITOR_DEBUG=true` and a gitignored `capacitor.config.json`, so the app waited for the Mac debugger. Force-quit + icon tap stayed on the navy splash. Fix G24: bundle `server.url` https://kepitravel.com, `CAPACITOR_DEBUG=false`. Jeff: pull, ios:fix, Run on iPad again, Stop, then open from the icon. Confirmations untouched.
+
+## Incident 2026-08-12 — Simulator iPhone blank on kepitravel.com
 
 ## Incident 2026-08-12 — Simulator iPhone blank on kepitravel.com
 

@@ -70,6 +70,33 @@ let package = Package(
 )
 SWIFT
 
+CAPJSON="$ROOT/ios/App/App/capacitor.config.json"
+cat > "$CAPJSON" <<'JSON'
+{
+  "appId": "com.kepitravel.app",
+  "appName": "Kepi Travel",
+  "webDir": "out",
+  "server": {
+    "url": "https://kepitravel.com",
+    "cleartext": false,
+    "allowNavigation": [
+      "kepitravel.com",
+      "*.kepitravel.com",
+      "*.clerk.com",
+      "*.clerk.accounts.dev"
+    ]
+  },
+  "ios": {
+    "backgroundColor": "#F5F5F7",
+    "contentInset": "automatic",
+    "scrollEnabled": true,
+    "overrideUserInterfaceStyle": "automatic",
+    "limitsNavigationsToAppBoundDomains": false
+  }
+}
+JSON
+echo "    wrote capacitor.config.json (https://kepitravel.com)"
+
 rm -rf "$ROOT/ios/App/CapApp-SPM/symlinks"
 rm -rf \
   "$ROOT/ios/App/Pods" \
