@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-14 (Home Screen for this trip; pause Xcode)
+Last updated: 2026-08-14 (Life360-style Always location required)
+
+## Requirement 2026-08-14 — Family map must work like Life360 (Jeff)
+
+Once she taps yes, Jeff must see her 24/7 with the phone silenced or in a pocket. Home Screen / website GPS cannot do that (Apple stops JS location when the screen locks). Today’s Capacitor shell is the same website in a WebView — installing Xcode as-is would not add Always tracking. Real Always needs native `CLLocationManager` + `UIBackgroundModes: location` + TestFlight, then she chooses Always Allow once. Confirmations untouched. Do not tell Jeff Home Screen can replace Life360 for this.
 
 ## Decision 2026-08-14 — This trip uses Safari Add to Home Screen (Jeff)
 
