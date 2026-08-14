@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-14 (Life360-style Always location required)
+Last updated: 2026-08-14 (Always + Precise native tracker + TestFlight)
+
+## Shipped 2026-08-14 — Always + Precise family GPS (M20)
+
+Native TestFlight app: `KepiAlwaysLocation` + token POST `/api/family/native-location`. She taps Always Allow + Precise once. Home Screen still cannot do this. Jeff: pull, ios:fix, Archive for TestFlight (Any iOS Device — not simulator). Confirmations untouched.
 
 ## Requirement 2026-08-14 — Family map must work like Life360 (Jeff)
 

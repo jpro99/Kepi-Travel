@@ -7,6 +7,7 @@ import {
   IOS_CAPACITOR_SPM_GIT,
   IOS_DISPLAY_NAME,
   IOS_SPM_TOOLS_VERSION,
+  IOS_NATIVE_LOCATION_URL,
   IOS_PRODUCTION_URL,
   IOS_WEBVIEW_BACKGROUND,
   capAppSpmAllowsLocalNodeModules,
@@ -114,6 +115,27 @@ test("G24 device install loads kepitravel.com without the Mac debugger", () => {
   assert.match(fix, /public\/index\.html/);
   assert.match(fix, /https:\/\/kepitravel\.com/);
   assert.match(gitignore, /!App\/App\/public\/index\.html/);
+});
+
+test("M20 native Always tracker ships in the iOS shell", () => {
+  const plist = readSrc("ios/App/App/Info.plist");
+  const always = readSrc("ios/App/App/KepiAlwaysLocation.swift");
+  const bridge = readSrc("ios/App/App/KepiLocationBridge.swift");
+  const vc = readSrc("ios/App/App/KepiBridgeViewController.swift");
+  const web = readSrc("src/lib/native/alwaysLocationBridge.ts");
+  const mw = readSrc("src/middleware.ts");
+  assert.equal(IOS_NATIVE_LOCATION_URL, "https://kepitravel.com/api/family/native-location");
+  assert.match(plist, /<string>location<\/string>/);
+  assert.match(plist, /NSLocationAlwaysAndWhenInUseUsageDescription/);
+  assert.match(plist, /Always Allow/);
+  assert.match(always, /allowsBackgroundLocationUpdates = true/);
+  assert.match(always, /requestAlwaysAuthorization/);
+  assert.match(always, /kCLLocationAccuracyBest/);
+  assert.match(bridge, /kepiLocation/);
+  assert.match(vc, /KepiLocationBridge/);
+  assert.match(web, /location-session/);
+  assert.match(web, /kepiLocation/);
+  assert.match(mw, /\/api\/family\/native-location/);
 });
 
 test("G23 native WKWebView is not app-bound to kepitravel.com only", () => {

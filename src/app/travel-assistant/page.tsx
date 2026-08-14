@@ -79,6 +79,7 @@ import {
   ensureDefaultFamilySharingOn,
   isFamilySharingActive,
 } from "@/lib/family/locationSharingPrefs";
+import { stopNativeAlwaysLocation, syncNativeAlwaysLocation } from "@/lib/native/alwaysLocationBridge";
 import { reconcileTripItinerary } from "@/lib/travelAssistant/itinerarySelfCheck";
 import { normalizeItineraryPlans } from "@/lib/travelAssistant/itineraryDayPlan";
 import { buildTripLegCalendarModel } from "@/lib/travelAssistant/buildTripLegs";
@@ -2064,6 +2065,7 @@ export default function TravelAssistantPage() {
     // Persistent family sharing — default on until user explicitly stops
     if (isFamilySharingActive()) {
       startPersistentFamilyLocationWatch();
+      void syncNativeAlwaysLocation();
     }
 
     // Burst a fresh GPS fix when returning from lock screen / background
@@ -2071,12 +2073,19 @@ export default function TravelAssistantPage() {
       if (document.visibilityState === "visible" && isFamilySharingActive()) {
         startPersistentFamilyLocationWatch();
         burstFamilyLocationFix();
+        void syncNativeAlwaysLocation();
       }
     };
     document.addEventListener("visibilitychange", onVisible);
 
-    const onStart = () => resumePersistentFamilyLocationWatch();
-    const onStop = () => stopPersistentFamilyLocationWatch();
+    const onStart = () => {
+      resumePersistentFamilyLocationWatch();
+      void syncNativeAlwaysLocation();
+    };
+    const onStop = () => {
+      stopPersistentFamilyLocationWatch();
+      stopNativeAlwaysLocation();
+    };
     window.addEventListener("kepi:family-start-sharing", onStart);
     window.addEventListener("kepi:family-stop-sharing", onStop);
 

@@ -271,6 +271,11 @@ When a more accurate GPS reading arrives (e.g. house after Wi‑Fi placed the pi
 
 **Test:** `src/lib/family/locationFixUpgrade.test.ts`, `src/lib/family/geolocationQuality.test.ts`
 
+**M20 — Native Always + Precise family location**  
+TestFlight / Xcode Kepi uses iOS `CLLocation` **Always** + **Precise** and keeps publishing while the phone is locked, silenced, or in a pocket. Home Screen / Safari cannot. The web app mints a location token; native POSTs to `/api/family/native-location`. Same publish rules as in-app `update-location` (no coarse first pin).
+
+**Test:** `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts`
+
 **M9 — Ground transport uses honest deep links first**  
 Uber/Lyft actions must prefill pickup/dropoff from known trip locations via universal deep links. Native in-app ride booking is deferred until a partner API is approved — never fake a booked ride.
 
@@ -786,6 +791,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | G22 | `src/lib/native/iosNativeShell.test.ts` |
 | G23 | `src/lib/native/iosNativeShell.test.ts` |
 | G24 | `src/lib/native/iosNativeShell.test.ts` |
+| M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
 | I22, I23, I24, I25 | `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/reservationDisplayLabel.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts` |

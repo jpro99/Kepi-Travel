@@ -27,9 +27,16 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Kepi uses your location to show airport walking directions and your place on the trip map.</string>
+	<string>Kepi uses your precise location for airport walking directions and the family trip map.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Kepi can update your family map while the phone is locked so your partner can see you’re still on the way — only if you choose Always Allow.</string>
+	<string>Kepi keeps sharing your precise location with family on this trip while the phone is locked or in your pocket, so your partner can see you are still on the way. Choose Always Allow once.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Kepi keeps sharing your precise location with family on this trip while the phone is locked or in your pocket. Choose Always Allow once.</string>
+	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
+	<dict>
+		<key>familyMap</key>
+		<string>Kepi needs Precise Location so your family map pin is on the street, not a city-wide guess.</string>
+	</dict>
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>Kepi sends gate changes, delays, and departure reminders for this trip.</string>
 	<key>NSCameraUsageDescription</key>
@@ -40,6 +47,7 @@
 	<string>Kepi can save trip photos to your library.</string>
 	<key>UIBackgroundModes</key>
 	<array>
+		<string>location</string>
 		<string>remote-notification</string>
 		<string>fetch</string>
 	</array>

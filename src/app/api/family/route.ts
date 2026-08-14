@@ -6,12 +6,12 @@ import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 import { logger } from "@/lib/logger";
 import { generateId } from "@/lib/utils/generateId";
 import { getResendClient, getResendFromEmail, isResendConfigured } from "@/lib/email/resendClient";
-import { haversineMeters } from "@/lib/geo/haversineMeters";
 import {
-  effectiveAccuracyMeters,
-  MIN_BOOTSTRAP_ACCURACY_M,
-  shouldPreferIncomingLocationFix,
-} from "@/lib/family/locationFixUpgrade";
+  FAMILY_LOCATION_KEY,
+  FAMILY_MEMBERSHIP_KEY,
+  persistFamilyMemberLocation,
+  resolveFamilyMembership,
+} from "@/lib/family/persistFamilyLocation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,9 +20,7 @@ export const dynamic = "force-dynamic";
 // v2: multi-group support — groups stored as an array
 const FAMILY_GROUPS_KEY = "family:groups:v2";
 const FAMILY_GROUPS_KEY_LEGACY = "family:group"; // migrate from v1
-const FAMILY_LOCATION_KEY = (memberId: string) => `family:location:${memberId}`;
 const FAMILY_INVITE_INDEX_KEY = (code: string) => `family:invite-index:${code}`;
-const FAMILY_MEMBERSHIP_KEY = "family:membership"; // { ownerId, groupId, inviteCode }
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 const MemberSchema = z.object({
@@ -169,28 +167,7 @@ async function getClerkDisplayName(userId: string): Promise<string | null> {
 }
 
 // ── Resolve membership record, handling all corrupted formats ────────────────
-function resolveMembership(raw: unknown, selfUserId: string): { ownerId: string; groupId: string; inviteCode: string } | null {
-  if (!raw || typeof raw !== "object") return null;
-  const r = raw as Record<string, unknown>;
-
-  // Unwrap double-nested ownerId: { "ownerId": { "ownerId": "...", "groupId": "..." }, "groupId": "..." }
-  let ownerId = r.ownerId;
-  let groupId = r.groupId as string ?? "";
-  const inviteCode = r.inviteCode as string ?? "";
-
-  // If ownerId is itself an object (corrupted double-nest), extract from it
-  if (ownerId && typeof ownerId === "object" && "ownerId" in (ownerId as object)) {
-    const nested = ownerId as Record<string, unknown>;
-    ownerId = nested.ownerId;
-    // Use the nested groupId (which should be the OWNER's group, not ours)
-    if (nested.groupId && typeof nested.groupId === "string") {
-      groupId = nested.groupId as string;
-    }
-  }
-
-  if (typeof ownerId !== "string" || !ownerId || ownerId === selfUserId) return null;
-  return { ownerId, groupId, inviteCode };
-}
+const resolveMembership = resolveFamilyMembership;
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 export async function GET(req: Request) {
@@ -328,67 +305,16 @@ export async function POST(request: Request) {
     const mem = resolveMembership(rawMem, userId);
     if (mem) ns = mem.ownerId;
 
-    const prev = await kvStoreGet<z.infer<typeof LocationSchema>>(FAMILY_LOCATION_KEY(userId), { userId: ns });
-    const hasAccuracy = typeof d.accuracy === "number" && Number.isFinite(d.accuracy) && d.accuracy > 0;
-    const incomingAccuracy = hasAccuracy ? d.accuracy! : null;
-
-    // First fix — only persist when accuracy is usable (avoids locking a Wi‑Fi mis-pin).
-    if (!prev) {
-      const incAcc = effectiveAccuracyMeters(d.accuracy);
-      if (incAcc > MIN_BOOTSTRAP_ACCURACY_M) {
-        return NextResponse.json({ ok: true, skipped: true, reason: "awaiting_precise_fix" });
-      }
-      const loc: z.infer<typeof LocationSchema> = {
+    return NextResponse.json(
+      await persistFamilyMemberLocation({
+        memberId: userId,
+        ownerNamespace: ns,
         lat: d.lat,
         lon: d.lon,
         accuracy: d.accuracy,
-        updatedAt: new Date().toISOString(),
-        memberId: userId,
         label: d.label,
-      };
-      await kvStoreSet(FAMILY_LOCATION_KEY(userId), loc, { userId: ns });
-      return NextResponse.json({ ok: true, location: loc });
-    }
-
-    if (
-      shouldPreferIncomingLocationFix(
-        { lat: prev.lat, lon: prev.lon, accuracy: prev.accuracy },
-        { lat: d.lat, lon: d.lon, accuracy: d.accuracy },
-      )
-    ) {
-      const loc: z.infer<typeof LocationSchema> = {
-        lat: d.lat,
-        lon: d.lon,
-        accuracy: d.accuracy,
-        updatedAt: new Date().toISOString(),
-        memberId: userId,
-        label: d.label,
-      };
-      await kvStoreSet(FAMILY_LOCATION_KEY(userId), loc, { userId: ns });
-      return NextResponse.json({ ok: true, location: loc, upgraded: true });
-    }
-
-    if (incomingAccuracy != null && incomingAccuracy > 200) {
-      return NextResponse.json({ ok: true, location: prev, skipped: true });
-    }
-
-    if (incomingAccuracy != null && incomingAccuracy > 80) {
-      const jumpM = haversineMeters(prev.lat, prev.lon, d.lat, d.lon);
-      const prevAcc = prev.accuracy ?? 999;
-      if (jumpM > 150 && incomingAccuracy > prevAcc && prevAcc <= 60) {
-        return NextResponse.json({ ok: true, location: prev, skipped: true });
-      }
-    }
-
-    const loc: z.infer<typeof LocationSchema> = {
-      lat: d.lat, lon: d.lon,
-      accuracy: d.accuracy,
-      updatedAt: new Date().toISOString(),
-      memberId: userId,
-      label: d.label,
-    };
-    await kvStoreSet(FAMILY_LOCATION_KEY(userId), loc, { userId: ns });
-    return NextResponse.json({ ok: true, location: loc });
+      }),
+    );
   }
 
   const groups = await loadGroups(userId);

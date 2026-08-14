@@ -405,14 +405,14 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
           <div className={`mx-4 mb-4 rounded-2xl px-3 py-2.5 text-[11px] leading-relaxed ${
             sharingLocation ? "bg-white/15 text-emerald-50" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
           }`}>
-            <p className="font-semibold">iPhone while locked</p>
+            <p className="font-semibold">Always + Precise (TestFlight app)</p>
             <p className="mt-1 opacity-90">
-              Safari and home-screen web apps cannot keep GPS running when the screen locks — that is an Apple limit, not something we can fix in JavaScript alone.
+              Safari and Home Screen icons stop GPS when the phone locks. The TestFlight Kepi app keeps a precise pin after she taps Always Allow once — including silenced and in a pocket.
             </p>
             <ul className="mt-2 space-y-1 list-disc pl-4 opacity-90">
-              <li>Settings → Privacy → Location Services → Safari (or Kepi) → <strong>While Using</strong> + turn on <strong>Precise Location</strong></li>
-              <li>Disable Low Power Mode while traveling — it delays GPS updates</li>
-              <li>For true &quot;Always&quot; tracking with the screen off, install the native Kepi app (coming soon) and choose <strong>Always Allow</strong> location</li>
+              <li>Install Kepi from TestFlight (not Add to Home Screen) on both phones</li>
+              <li>When asked, Allow → then Settings → Kepi Travel → Location → <strong>Always</strong> + <strong>Precise Location</strong></li>
+              <li>Tap Start sharing once. She should not have to approve again.</li>
             </ul>
           </div>
         )}

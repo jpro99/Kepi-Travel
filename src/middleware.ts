@@ -27,6 +27,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/auth(.*)",
   "/api/flights/award-search(.*)",
   "/api/flights/search(.*)",
+  "/api/family/native-location(.*)",
 ]);
 
 function clerkEnvReady(): boolean {

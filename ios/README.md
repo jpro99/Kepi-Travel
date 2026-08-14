@@ -4,13 +4,16 @@ Native shell loads **https://kepitravel.com** in a WKWebView so you and your par
 
 Open **`ios/App/App.xcodeproj`** — not `.xcworkspace`. This project uses **Swift Package Manager** (`CapApp-SPM`), not CocoaPods. Do not use CocoaPods.
 
-## You + partner (TestFlight)
+Always + Precise family GPS runs only in this native app (TestFlight or ▶ Run). Safari Add to Home Screen cannot keep GPS on when the phone is locked.
 
-1. On the Mac: quit Xcode (⌘Q), then paste this in **Terminal**:
+## TestFlight (both iPad and iPhone)
+
+1. Quit Xcode (⌘Q), then in Terminal:
 
    ```bash
    cd ~/Documents/Kepi-Travel
    unset SDKROOT
+   git checkout -- package-lock.json
    git fetch origin main
    git checkout origin/main -- ios/ scripts/ios-fix-capapp-spm.sh
    git pull origin main
@@ -19,16 +22,27 @@ Open **`ios/App/App.xcodeproj`** — not `.xcworkspace`. This project uses **Swi
    open ios/App/App.xcodeproj
    ```
 
-   `git checkout origin/main -- ios/` replaces a stale local CocoaPods project (the “NUCLEAR fix” / `Pods-App` error and empty iPhone destinations).
+2. Signing & Capabilities → **App** target → **Debug and Release** → Team **Jeffery Russell**, Automatically manage signing, bundle `com.kepitravel.app`. Archive uses **Release** — Team on Debug only is why TestFlight fails.
 
-2. Signing & Capabilities → Team (your Apple Developer account)
-3. Bundle ID must be `com.kepitravel.app`
-4. Skip **File → Packages** if it is gray. **Product → Clean Build Folder**, pick your iPhone, press **▶ Run**.
-5. Product → Destination → **your iPhone** (or hers, one at a time) → ▶ Run for a local install
-6. For both phones without cables: **Product → Archive → Distribute App → App Store Connect → TestFlight**
-7. In App Store Connect, add her Apple ID as an **Internal Tester**, then she installs **TestFlight** and Kepi
+3. Destination must be **Any iOS Device (arm64)** — not Simulator, not **My Mac (Designed for iPhone)**. Those cannot Archive.
 
-If the iPad/iPhone is a **blank blue screen** for more than a few seconds: do not wait. The live site may already be under a stuck overlay (fixed on kepitravel.com) or the native shell never left launch. Quit Xcode, pull main, `npm run ios:fix`, **Product → Clean Build Folder**, ▶ Run. Meanwhile Safari → kepitravel.com → Share → Add to Home Screen still works.
+4. **Product → Clean Build Folder**, then **Product → Archive**. Wait until the Organizer window lists the archive.
+
+5. **Distribute App → App Store Connect → Upload** (not Ad Hoc, not Development). Encryption: **No** (ITSAppUsesNonExemptEncryption is already false).
+
+6. First time only: [App Store Connect](https://appstoreconnect.apple.com) → My Apps → **+** → New App → iOS, bundle `com.kepitravel.app`, name **Kepi Travel**.
+
+7. After processing (email / TestFlight tab): Internal Testing → add **your Apple ID** and **hers**. She installs the **TestFlight** app from the App Store, accepts the invite, installs **Kepi Travel**.
+
+8. On her phone, open Kepi → sign in → Map → Family → **Start sharing**. When iOS asks: Allow, then Settings → Kepi Travel → Location → **Always** + **Precise Location**. After that she does not approve again.
+
+If Archive is gray: destination is still a simulator or Mac. Switch to **Any iOS Device (arm64)**.
+
+If signing errors: Team on **Release**, not only Debug.
+
+## Local cable install (one device)
+
+Product → Destination → **Jeff's iPad** or her iPhone → ▶ Run. Same Always prompt. Stop in Xcode, unplug, open the icon.
 
 ## SPM errors
 
@@ -40,10 +54,9 @@ swift package resolve
 ```
 
 - If **hellospm fails** → Xcode/Swift on the Mac, not Kepi. Try `unset SDKROOT`. Do not reinstall Homebrew or CocoaPods.
-- If you see **NUCLEAR fix** or `project.pbxproj still references CocoaPods`: that is an old local `ios/` tree. Quit Xcode, then `git checkout origin/main -- ios/` and `npm run ios:fix`.
-- If Xcode says **Supported platforms … is empty**: same cause — restore `ios/` from main, then Clean → Run. Skip File → Packages if it is gray.
-- If CapApp-SPM shows empty JSON after `npx cap sync ios`: `npm run ios:fix` (restores remote-only Swift 5.9).
+- If you see **NUCLEAR fix** or `project.pbxproj still references CocoaPods`: Quit Xcode, then `git checkout origin/main -- ios/` and `npm run ios:fix`.
+- If Xcode says **Supported platforms … is empty**: same cause — restore `ios/` from main, then Clean → Run.
 
 ## Privacy strings (already in Info.plist)
 
-Location (airport + family map), notifications (gate/delay), camera/photos (trip memories). First launch on her phone will ask — she should Allow notifications and location **While Using** (Always only if you use family map while locked).
+Location Always + Precise (family map), notifications, camera/photos. First TestFlight launch asks — she should choose **Always Allow** and keep **Precise Location** on.

@@ -8,6 +8,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        KepiAlwaysLocation.shared.prepareOnLaunch()
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             Self.loadKepiIfNeeded(from: self.window ?? application.windows.first)
         }

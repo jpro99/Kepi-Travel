@@ -15,6 +15,10 @@ final class KepiBridgeViewController: CAPBridgeViewController {
 
     override func viewDidLoad() {
         // Do not call super — that runs loadWebView() → fatalLoadError() → exit(1).
+        if let controller = webView?.configuration.userContentController {
+            controller.removeScriptMessageHandler(forName: "kepiLocation")
+            controller.add(KepiLocationBridge.shared, name: "kepiLocation")
+        }
         loadProductionSite()
     }
 
