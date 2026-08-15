@@ -22,6 +22,7 @@ interface NarrativeDayPlanViewProps {
   dayNotes: Record<string, string>;
   itineraryPlans: ItineraryPlansData;
   onDayNoteChange: (dateKey: string, value: string) => void;
+  onPasteDayPlan?: (sourceText: string) => void | Promise<void>;
   onReservationTap?: (id: string) => void;
   selectedDateKey?: string | null;
 }
@@ -35,6 +36,7 @@ export function NarrativeDayPlanView({
   dayNotes,
   itineraryPlans,
   onDayNoteChange,
+  onPasteDayPlan,
   selectedDateKey = null,
 }: NarrativeDayPlanViewProps) {
   const sections = useMemo(
@@ -61,6 +63,9 @@ export function NarrativeDayPlanView({
   );
 
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [pasteBusy, setPasteBusy] = useState(false);
 
   useEffect(() => {
     if (!selectedDateKey) return;
@@ -211,6 +216,64 @@ export function NarrativeDayPlanView({
           );
         })}
       </div>
+      {onPasteDayPlan ? (
+        <footer className="mt-8 border-t border-[#E8E0D4] pt-4">
+          {pasteOpen ? (
+            <div className="space-y-3">
+              <p
+                className="text-[15px] text-[#6E6E73]"
+                style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}
+              >
+                Paste the Word / email day plan (Sept 3 boat tour, viewpoints, gelato). Hotel
+                confirmations stay as they are.
+              </p>
+              <textarea
+                value={pasteText}
+                onChange={(event) => setPasteText(event.target.value)}
+                rows={8}
+                className="w-full rounded-xl border border-[#E8E0D4] bg-white px-3 py-3 text-[16px] leading-snug text-[#1D1D1F] outline-none"
+                placeholder="Puglia Itinerary: SEPT 2–12&#10;Sept 3:&#10;• Boat tour — 10 am GetYourGuide"
+              />
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={pasteBusy || !pasteText.trim()}
+                  onClick={() => {
+                    setPasteBusy(true);
+                    void Promise.resolve(onPasteDayPlan(pasteText))
+                      .then(() => {
+                        setPasteText("");
+                        setPasteOpen(false);
+                      })
+                      .finally(() => setPasteBusy(false));
+                  }}
+                  className="min-h-[44px] rounded-full bg-[#007AFF] px-4 text-[15px] font-semibold text-white disabled:opacity-50"
+                  style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}
+                >
+                  {pasteBusy ? "Adding…" : "Add to Plan"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPasteOpen(false)}
+                  className="min-h-[44px] rounded-full px-4 text-[15px] font-semibold text-[#6E6E73]"
+                  style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setPasteOpen(true)}
+              className="min-h-[44px] text-[15px] font-semibold text-[#007AFF]"
+              style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}
+            >
+              Paste itinerary
+            </button>
+          )}
+        </footer>
+      ) : null}
     </article>
   );
 }

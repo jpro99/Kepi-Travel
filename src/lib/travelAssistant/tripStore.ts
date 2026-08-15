@@ -6,6 +6,7 @@ import type {
 import type { BookingWizardProgress } from "@/lib/travelAssistant/bookingWizard";
 import { normalizeBookingWizard } from "@/lib/travelAssistant/bookingWizard";
 import {
+  mergeItineraryPlansPreferExistingNotes,
   normalizeItineraryPlans,
   type ItineraryPlansData,
 } from "@/lib/travelAssistant/itineraryDayPlan";
@@ -264,10 +265,17 @@ export async function updateTrip(
   if (!existing) {
     return null;
   }
+  const nextItineraryPlans = patch.itineraryPlans
+    ? mergeItineraryPlansPreferExistingNotes(
+        normalizeItineraryPlans(patch.itineraryPlans),
+        existing.itineraryPlans ?? normalizeItineraryPlans(undefined),
+      )
+    : existing.itineraryPlans;
   const updated: TravelTrip = {
     ...existing,
     ...patch,
     reservations: patch.reservations ? [...patch.reservations] : existing.reservations,
+    itineraryPlans: nextItineraryPlans,
     stayDecisions: patch.stayDecisions
       ? { ...existing.stayDecisions, ...patch.stayDecisions }
       : existing.stayDecisions,

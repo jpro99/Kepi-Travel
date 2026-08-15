@@ -35,7 +35,9 @@ export const EMPTY_DAY_PLAN = (location = ""): DayPlanRecord => ({
 });
 
 export function emptyItineraryPlans(): ItineraryPlansData {
-  return { dayPlans: {}, legLabelOverrides: {}, updatedAt: new Date().toISOString() };
+  // Empty local shells must not stamp "now" — a fresh timestamp beats
+  // server day-plan notes in hydrate and wipes Sept 3–4 activities (I50).
+  return { dayPlans: {}, legLabelOverrides: {}, updatedAt: "" };
 }
 
 export function normalizeItineraryPlans(raw: unknown): ItineraryPlansData {
@@ -82,7 +84,95 @@ export function normalizeItineraryPlans(raw: unknown): ItineraryPlansData {
   return {
     dayPlans,
     legLabelOverrides,
-    updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : new Date().toISOString(),
+    updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : "",
+    letterHeader,
+  };
+}
+
+export function dayPlanHasActivityNotes(plan?: DayPlanRecord | null): boolean {
+  return Boolean(plan?.notes?.trim());
+}
+
+export function itineraryPlansActivityNoteCount(plans: ItineraryPlansData): number {
+  return Object.values(plans.dayPlans).filter((plan) => dayPlanHasActivityNotes(plan)).length;
+}
+
+export function itineraryPlansNeedDayPlanBackfill(
+  plans: ItineraryPlansData,
+  dayNotes: Record<string, string> = {},
+): boolean {
+  if (itineraryPlansActivityNoteCount(plans) > 0) return false;
+  for (const note of Object.values(dayNotes)) {
+    const hasActivity = note.split(/\r?\n/u).some((line) => {
+      const trimmed = line.trim();
+      return trimmed.length > 0 && !/^stay in /iu.test(trimmed) && !/^hotel:/iu.test(trimmed);
+    });
+    if (hasActivity) return false;
+  }
+  return true;
+}
+
+/**
+ * Keep forwarded Word-day notes when a newer empty local/client shell arrives.
+ * Hydrate fills every empty day from the server. Persist only restores notes
+ * when the incoming patch has no activity notes at all (hotel-only wipe).
+ */
+export function mergeItineraryPlansPreferExistingNotes(
+  incoming: ItineraryPlansData,
+  existing: ItineraryPlansData,
+  options: { fillEmptyDays?: boolean } = {},
+): ItineraryPlansData {
+  const incomingEmpty = itineraryPlansActivityNoteCount(incoming) === 0;
+  const fillEmptyDays = options.fillEmptyDays ?? incomingEmpty;
+  const dateKeys = new Set([...Object.keys(incoming.dayPlans), ...Object.keys(existing.dayPlans)]);
+  const dayPlans: Record<string, DayPlanRecord> = {};
+  let tookExistingNotes = false;
+
+  for (const key of dateKeys) {
+    const next = incoming.dayPlans[key];
+    const prev = existing.dayPlans[key];
+    if (!next && prev) {
+      dayPlans[key] = prev;
+      if (dayPlanHasActivityNotes(prev)) tookExistingNotes = true;
+      continue;
+    }
+    if (next && !prev) {
+      dayPlans[key] = next;
+      continue;
+    }
+    if (next && prev) {
+      if (fillEmptyDays && !dayPlanHasActivityNotes(next) && dayPlanHasActivityNotes(prev)) {
+        dayPlans[key] = {
+          ...next,
+          notes: prev.notes,
+          dayHeading: next.dayHeading?.trim() || prev.dayHeading,
+          location: next.location?.trim() || prev.location,
+        };
+        tookExistingNotes = true;
+      } else {
+        dayPlans[key] = next;
+      }
+    }
+  }
+
+  const incomingHeader = incoming.letterHeader;
+  const existingHeader = existing.letterHeader;
+  const letterHeader =
+    incomingHeader && (incomingHeader.lines.length > 0 || incomingHeader.title?.trim())
+      ? incomingHeader
+      : existingHeader;
+
+  const incomingTime = Date.parse(incoming.updatedAt || "0");
+  const existingTime = Date.parse(existing.updatedAt || "0");
+  const newer =
+    Number.isFinite(existingTime) && (!Number.isFinite(incomingTime) || existingTime > incomingTime)
+      ? existing.updatedAt
+      : incoming.updatedAt || existing.updatedAt;
+
+  return {
+    dayPlans,
+    legLabelOverrides: { ...existing.legLabelOverrides, ...incoming.legLabelOverrides },
+    updatedAt: tookExistingNotes ? new Date().toISOString() : newer,
     letterHeader,
   };
 }

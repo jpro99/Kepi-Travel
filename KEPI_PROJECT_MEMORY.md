@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-15 (Activity facts on the activity day)
+Last updated: 2026-08-15 (Plan Sept 3–4 empty stay days)
+
+## Incident 2026-08-15 — Plan Sept 3–4 only showed “Staying at A Casa di Elena”
+
+Jeff on Plan (`tab=itinerary`): hotel stay facts correct; Word-doc activities (boat tour, GetYourGuide, viewpoints, gelato) missing. Cause: empty local `itineraryPlans` stamped `updatedAt: now` and beat server notes; persist could wipe Redis. Fix I50: merge empty days from server, refuse empty-shell wipe, backfill from stored email / Gmail / Paste itinerary. Do not tell him to re-import hotel/flight confirmations.
 
 ## Decision 2026-08-15 — Excursions print on the activity day (Jeff)
 

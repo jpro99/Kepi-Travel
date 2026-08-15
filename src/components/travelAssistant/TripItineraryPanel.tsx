@@ -14,6 +14,7 @@ import {
   dayPlanToNote,
   emptyItineraryPlans,
   mergeDayPlan,
+  mergeItineraryPlansPreferExistingNotes,
   normalizeItineraryPlans,
   parseDayPlanFromNote,
   type DayPlanRecord,
@@ -345,25 +346,25 @@ export function useItineraryPanelPrefs(tripId: string | null) {
       if (!tripId || !raw) return;
       const normalized = normalizeItineraryPlans(raw);
       setItineraryPlans((local) => {
-        const localTime = Date.parse(local.updatedAt || "0");
-        const serverTime = Date.parse(normalized.updatedAt || "0");
-        if (Number.isFinite(localTime) && Number.isFinite(serverTime) && localTime >= serverTime) {
-          return local;
-        }
+        const merged = mergeItineraryPlansPreferExistingNotes(local, normalized, {
+          fillEmptyDays: true,
+        });
         if (typeof window !== "undefined") {
-          window.localStorage.setItem(`kepi:itinerary-plans:${tripId}`, JSON.stringify(normalized));
+          window.localStorage.setItem(`kepi:itinerary-plans:${tripId}`, JSON.stringify(merged));
         }
         setDayNotes((prev) => {
           const next = { ...prev };
-          for (const [dateKey, plan] of Object.entries(normalized.dayPlans)) {
-            next[dateKey] = dayPlanToNote(plan);
+          for (const [dateKey, plan] of Object.entries(merged.dayPlans) as Array<
+            [string, DayPlanRecord]
+          >) {
+            if (plan.notes.trim()) next[dateKey] = dayPlanToNote(plan);
           }
           if (typeof window !== "undefined") {
             window.localStorage.setItem(`kepi:day-notes:${tripId}`, JSON.stringify(next));
           }
           return next;
         });
-        return normalized;
+        return merged;
       });
     },
     [tripId],

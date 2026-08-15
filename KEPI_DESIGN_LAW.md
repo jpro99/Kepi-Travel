@@ -543,7 +543,7 @@ Static itinerary Print/PDF/CSV/Excel uses a **Day** column (trip day number + da
 **Test:** `src/lib/travelAssistant/premiumItineraryExport.test.ts`
 
 **I27 — Word day-plan itineraries land on Plan days + friend-share letter**
-Forwarded **.docx** day plans (e.g. “Puglia Itinerary: SEPT 2–12”) are extracted, parsed into dated bullets, and written to `itineraryPlans` / Plan day notes — not treated as empty booking confirmations. Push/open Plan tab. **Day plan PDF** prints a portrait letter (title, stay block, Day N · date · city + bullets) for sharing with friends. Legacy `.doc` is unsupported (re-save as `.docx`). If day-plan dates fall inside an existing trip window (month/day match even when the Word year is wrong), attach to that trip — never a new empty shell. Confirm in the toast/feed by trip name.
+Forwarded **.docx** day plans (e.g. “Puglia Itinerary: SEPT 2–12”) are extracted, parsed into dated bullets, and written to `itineraryPlans` / Plan day notes — not treated as empty booking confirmations. Push/open Plan tab. **Day plan PDF** prints a portrait letter (title, stay block, Day N · date · city + bullets) for sharing with friends. Legacy `.doc` is unsupported (re-save as `.docx`). If day-plan dates fall inside an existing trip window (month/day match even when the Word year is wrong), attach to that trip — never a new empty shell. Confirm in the toast/feed by trip name. Empty local Plan shells must not hide those notes (I50).
 
 **Test:** `src/lib/travelAssistant/parseDayPlanItinerary.test.ts`, `src/lib/travelAssistant/narrativeItineraryExport.test.ts`, `src/lib/travelAssistant/tripEmailAttach.test.ts`
 
@@ -646,6 +646,11 @@ Do not pile every hotel at the top of Plan. Polignano / A Casa di Elena check-in
 A forwarded PDF, Gmail import, or confirmation for a tour / boat / dinner / GetYourGuide booking prints under that calendar day (name, time, confirmation) — same letter rule as hotel check-in (I48). Do not leave Sept 3 empty when the boat tour is already on the trip.
 
 **Test:** `src/lib/travelAssistant/letterDayPlan.test.ts`, `src/lib/travelAssistant/gmailImportProvider.test.ts`
+
+**I50 — Mid-stay Plan days show Word activities, not only “Staying at”**  
+Sept 3–4 (and any hotel mid-stay) must show forwarded / pasted day-plan bullets (boat tour, viewpoints, gelato). A newer empty local `itineraryPlans` shell must not beat server notes, and an empty persist must not wipe Redis. Opening Plan backfills from stored email text, Gmail itinerary mail, or **Paste itinerary**.
+
+**Test:** `src/lib/travelAssistant/itineraryPlansHydrate.test.ts`
 
 ---
 
@@ -840,6 +845,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I47 | `src/lib/travelAssistant/letterDayPlan.test.ts` |
 | I48 | `src/lib/travelAssistant/letterDayPlan.test.ts` |
 | I49 | `src/lib/travelAssistant/letterDayPlan.test.ts` |
+| I50 | `src/lib/travelAssistant/itineraryPlansHydrate.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

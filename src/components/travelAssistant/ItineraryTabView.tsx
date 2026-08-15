@@ -67,6 +67,7 @@ interface ItineraryTabViewProps {
   onSaveLegLabel: (legId: string, label: string) => void;
   getDayPlan: (dateKey: string, fallbackLocation: string) => DayPlanRecord;
   itineraryPlans: ItineraryPlansData;
+  onPasteDayPlan?: (sourceText: string) => void | Promise<void>;
   onPlanDay: (dateKey: string, intent: ParsedDayIntent, mode: DayPlanMode) => void;
   onGapActionTap?: (action: TripGapNavigationAction) => void;
   onPrint: () => void;
@@ -122,6 +123,7 @@ export function ItineraryTabView({
   onSaveLegLabel: _onSaveLegLabel,
   getDayPlan: _getDayPlan,
   itineraryPlans,
+  onPasteDayPlan,
   onPlanDay: _onPlanDay,
   onGapActionTap,
   onPrint,
@@ -351,6 +353,7 @@ export function ItineraryTabView({
             reservations={reservations}
             dayNotes={dayNotes}
             itineraryPlans={itineraryPlans}
+            onPasteDayPlan={onPasteDayPlan}
             onDayNoteChange={handleDayNoteChange}
             onReservationTap={onReservationTap}
             selectedDateKey={selectedDateKey ?? scrollToDateKey}

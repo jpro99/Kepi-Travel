@@ -26,6 +26,12 @@ import {
 import { MAX_MINUTES_TO_DEPARTURE } from "@/lib/travelAssistant/tripWindow";
 import { recoverActiveTripIfEmptyShell } from "@/lib/travelAssistant/tripEmailAttach";
 import { generateId } from "@/lib/utils/generateId";
+import {
+  backfillDayPlansFromSources,
+  collectDayPlanSourcesFromTrip,
+} from "@/lib/travelAssistant/backfillDayPlans";
+import { applyDayPlanToItineraryPlans, remapParsedDayPlanToTripWindow } from "@/lib/travelAssistant/parseDayPlanItinerary";
+import { importGmailTravelInbox } from "@/lib/travelAssistant/gmailImportProvider";
 
 async function listTripsIncludingCollaborations(userId: string) {
   const [owned, collaborative] = await Promise.all([
@@ -159,6 +165,12 @@ const PutBodySchema = z.discriminatedUnion("action", [
     action: z.literal("update"),
     id: z.string().trim().min(1),
     patch: TripPatchSchema,
+  }),
+  z.object({
+    action: z.literal("backfill-day-plans"),
+    id: z.string().trim().min(1),
+    sourceText: z.string().max(200_000).optional(),
+    subject: z.string().max(300).optional(),
   }),
 ]);
 
@@ -422,6 +434,83 @@ export async function PUT(req: Request) {
       if (!existingTrip) {
         return NextResponse.json({ error: "Trip not found" }, { status: 404, headers: auth.headers });
       }
+    }
+
+    if (parsed.data.action === "backfill-day-plans") {
+      const sources = collectDayPlanSourcesFromTrip(existingTrip);
+      if (parsed.data.sourceText?.trim()) {
+        sources.unshift({
+          subject: parsed.data.subject?.trim() || "Pasted itinerary",
+          body: parsed.data.sourceText,
+        });
+      }
+      let result = backfillDayPlansFromSources({
+        existing: existingTrip.itineraryPlans,
+        sources,
+        tripStartDate: existingTrip.startDate,
+        tripEndDate: existingTrip.endDate,
+      });
+      if (result.daysApplied === 0 && !parsed.data.sourceText?.trim()) {
+        try {
+          const imported = await importGmailTravelInbox({
+            userId: writeOwnerUserId,
+            maxResults: 50,
+            lookbackDays: 180,
+            tripStartDate: existingTrip.startDate.slice(0, 10),
+            tripEndDate: existingTrip.endDate.slice(0, 10),
+          });
+          if (imported.dayPlan) {
+            const remapped = remapParsedDayPlanToTripWindow(
+              imported.dayPlan,
+              existingTrip.startDate,
+              existingTrip.endDate,
+            );
+            result = applyDayPlanToItineraryPlans(existingTrip.itineraryPlans, remapped);
+          }
+        } catch {
+          // Gmail is optional recovery — stored email / paste still apply above.
+        }
+      }
+      if (result.daysApplied > 0) {
+        const nextFeed = [
+          {
+            id: `feed-dayplan-${generateId()}`,
+            reservationId: "",
+            kind: "day-plan-itinerary",
+            severity: "info",
+            summary: "Day plan itinerary",
+            detail: `Applied ${result.daysApplied} day${result.daysApplied === 1 ? "" : "s"} to ${existingTrip.name}.`,
+            provider: "plan-backfill",
+            appliedAt: new Date().toISOString(),
+          },
+          ...(existingTrip.updateFeed ?? []),
+        ];
+        const updated = await updateTrip(
+          existingTrip.id,
+          { itineraryPlans: result.plans, updateFeed: nextFeed },
+          writeOwnerUserId,
+        );
+        const snapshot = await resolveActiveTrip(auth.userId);
+        return NextResponse.json(
+          {
+            trip: updated,
+            daysApplied: result.daysApplied,
+            itineraryPlans: updated?.itineraryPlans ?? result.plans,
+            trips: snapshot.trips,
+            activeTripId: snapshot.activeTripId,
+            activeTrip: snapshot.activeTrip,
+          },
+          { headers: auth.headers },
+        );
+      }
+      return NextResponse.json(
+        {
+          trip: existingTrip,
+          daysApplied: 0,
+          itineraryPlans: existingTrip.itineraryPlans ?? null,
+        },
+        { headers: auth.headers },
+      );
     }
 
     const patchReservationCount = Array.isArray(parsed.data.patch.reservations) ? parsed.data.patch.reservations.length : null;
