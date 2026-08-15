@@ -22,6 +22,10 @@ is system gray / navy / Lucide.
 3. `src/app/globals.css` — `--apple-*` tokens
 4. `CLAUDE.md` § Mobile UI rule
 5. `NEURO_BRAIN.md` — trip-execution, not a booking dashboard
+6. `.claude/skills/hig/SKILL.md` — Apple HIG **facts only** (installed AppleSkill pack)
+
+Claude Code also loads `.claude/skills/AppleSkill/SKILL.md` (same rules, this
+file wins for Kepi tokens).
 
 If Jeff asks what is wrong or how something should look: **analyze and propose
 only**. Do not edit until he says go ahead / build it / fix it.

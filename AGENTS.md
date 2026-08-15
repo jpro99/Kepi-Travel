@@ -91,7 +91,7 @@ For each finding:
 - Use `.claude/agents/` for specialist subagents.
 - Route to read-only subagents first.
 - Use Playwright MCP for browser flow validation when available.
-- Consumer chrome / Apple HIG: `.claude/agents/apple-design-reviewer.md` + `.cursor/skills/kepi-apple-bot/SKILL.md`
+- Consumer chrome / Apple HIG: `.claude/skills/AppleSkill/SKILL.md` + `.claude/skills/hig/` + `.cursor/skills/kepi-apple-bot/SKILL.md`
 
 ## Project memory (agents)
 

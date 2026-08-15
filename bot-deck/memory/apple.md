@@ -7,6 +7,7 @@ Owns consumer visual chrome (Apple HIG / Picasso). Playbook:
 
 - Light default (`#F5F5F7` / `#1D1D1F`). Gold CTA `#f4c95d`. Lucide, not emoji.
 - Tokens: `src/lib/ui/appleDesign.ts` + `src/app/globals.css` `--apple-*`
+- Installed: `.claude/skills/AppleSkill/SKILL.md` + HIG corpus `.claude/skills/hig/`
 - Discuss-before-code on “how should this look?”
 - Not a Bot Deck assignee id (same as points/card) — conductor routes here
 

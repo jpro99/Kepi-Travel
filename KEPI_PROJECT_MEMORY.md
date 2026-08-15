@@ -13,6 +13,13 @@ Visual / Picasso / HIG / “does this look like Apple?” work routes to
 and `src/app/globals.css`. Discuss-before-code still applies when Jeff only asks
 how something should look. Not a Bot Deck assignee id (same as points/card).
 
+## Decision 2026-08-15 — AppleSkill installed (Claude Code + Cursor)
+
+Installed `Prisma-Labs-Dev/apple-skills` skill `hig` into `.claude/skills/hig/`
+and `.agents/skills/hig/` (`skills-lock.json`). Named entry:
+`.claude/skills/AppleSkill/SKILL.md`. Kepi G4/G21 tokens win over generic HIG
+aesthetics. Did **not** install the full SwiftUI/iOS 26 pack (wrong stack).
+
 ## Shipped 2026-08-14 — Always + Precise family GPS (M20)
 
 Native TestFlight app: `KepiAlwaysLocation` + token POST `/api/family/native-location`. She taps Always Allow + Precise once. Home Screen still cannot do this. Jeff: pull, ios:fix, Archive for TestFlight (Any iOS Device — not simulator). Confirmations untouched.
