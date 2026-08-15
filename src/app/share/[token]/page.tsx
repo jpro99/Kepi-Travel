@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { ShareAccessGate } from "@/components/share/ShareTripPhotosNav";
 import { SharedTripView } from "@/components/share/SharedTripView";
@@ -15,10 +14,10 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
 
   if (result.status === "expired") {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-[#0d1117] px-4 text-center text-slate-300">
+      <div className="flex min-h-dvh items-center justify-center bg-[#F5F5F7] px-4 text-center text-[#1D1D1F]">
         <div>
-          <p className="text-lg font-bold">This share link has expired.</p>
-          <p className="mt-2 text-sm text-slate-500">Ask the trip owner to send a fresh link from Kepi Travel.</p>
+          <p className="text-[22px] font-semibold">This share link has expired.</p>
+          <p className="mt-2 text-[15px] text-[#6E6E73]">Ask the trip owner to send a fresh link from Kepi Travel.</p>
         </div>
       </div>
     );
@@ -26,10 +25,10 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
 
   if (result.status === "revoked") {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-[#0d1117] px-4 text-center text-slate-300">
+      <div className="flex min-h-dvh items-center justify-center bg-[#F5F5F7] px-4 text-center text-[#1D1D1F]">
         <div>
-          <p className="text-lg font-bold">This share link was revoked.</p>
-          <p className="mt-2 text-sm text-slate-500">The owner turned off sharing for this trip.</p>
+          <p className="text-[22px] font-semibold">This share link was revoked.</p>
+          <p className="mt-2 text-[15px] text-[#6E6E73]">The owner turned off sharing for this trip.</p>
         </div>
       </div>
     );

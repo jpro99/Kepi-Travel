@@ -7,13 +7,12 @@ export type PlanSubView = "timeline" | "calendar";
 
 export const CONSUMER_TABS: ConsumerTab[] = ["trip", "itinerary", "book", "map", "photos", "more"];
 
-/** Tab bar labels — icons are Lucide via ConsumerTabIcon (G16: no emoji chrome). */
+/** Tab bar labels — icons are Lucide via ConsumerTabIcon (G16: no emoji chrome). Photos lives in More (G25). */
 export const CONSUMER_TAB_BAR: ReadonlyArray<readonly [ConsumerTab, string]> = [
   ["trip", "Home"],
   ["itinerary", "Plan"],
   ["book", "Book"],
   ["map", "Map"],
-  ["photos", "Photos"],
   ["more", "More"],
 ];
 

@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { GmailImportScopeModal, type GmailImportScope } from "@/components/travelAssistant/GmailImportScopeModal";
 import { postSuggestionOutcome } from "@/lib/travelAssistant/mlReadiness/clientTelemetry";
 import { sortReviewQueueForActiveLearning } from "@/lib/travelAssistant/mlReadiness/reviewQueueTriage";
+import { fromDatetimeLocalValue, toDatetimeLocalValue } from "@/lib/ui/datetimeLocalValue";
 
 type TripStage = "readiness" | "pre-departure" | "airport" | "arrival" | "recovery";
 type ReservationType = "flight" | "hotel" | "train" | "ride" | "dinner";
@@ -97,11 +98,17 @@ const MISSING_FIELD_LABELS: Record<MissingField, string> = {
   type: "Type",
   title: "Title",
   provider: "Provider",
-  confirmationCode: "Confirmation Code",
-  localTime: "Local Time (YYYY-MM-DD HH:MM)",
-  timezone: "Timezone",
+  confirmationCode: "Confirmation code",
+  localTime: "Departure date & time",
+  timezone: "Your timezone",
   location: "Location",
 };
+
+function reviewStatusLabel(status: ParsingStatus): string {
+  if (status === "auto-parsed") return "Looks good";
+  if (status === "needs-review") return "One field to check";
+  return "Help us read this";
+}
 
 function getConfidenceScore(item: ReviewItem): number {
   if (typeof item.parseConfidenceScore === "number" && Number.isFinite(item.parseConfidenceScore)) {
@@ -266,7 +273,6 @@ export function ReviewQueue({
       </div>
       <div className="mt-3 space-y-3">
         {sortedReviewQueue.map((item) => {
-          const score = getConfidenceScore(item);
           const status = getParsingStatus(item);
           const missingFields = getMissingFields(item);
           const statusClass =
@@ -275,8 +281,7 @@ export function ReviewQueue({
               : status === "needs-review"
                 ? "border-amber-400/40 bg-amber-500/10"
                 : "border-red-500 bg-red-500/10";
-          const statusLabel =
-            status === "auto-parsed" ? "Auto-parsed" : status === "needs-review" ? "Needs review" : "Needs your help";
+          const statusLabel = reviewStatusLabel(status);
           const draftPatch = assistDraftById[item.id] ?? {};
           const showOriginal = expandedOriginalById[item.id] ?? status === "needs-user-input";
 
@@ -296,7 +301,7 @@ export function ReviewQueue({
                         : "bg-red-500/20 text-red-700 dark:text-red-200"
                   }`}
                 >
-                  {statusLabel} ({score})
+                  {statusLabel}
                 </span>
               </div>
               <p className="text-xs text-slate-600 dark:text-slate-400">{t("source", { subject: item.sourceEmailSubject })}</p>
@@ -372,18 +377,21 @@ export function ReviewQueue({
                         <label key={`${item.id}-${field}`} className="text-xs text-red-700 dark:text-red-200">
                           {MISSING_FIELD_LABELS[field]}
                           <input
-                            type="text"
-                            value={currentValue}
+                            type={field === "localTime" ? "datetime-local" : "text"}
+                            value={field === "localTime" ? toDatetimeLocalValue(currentValue) : currentValue}
                             onChange={(event) =>
                               setAssistDraftById((prev) => ({
                                 ...prev,
                                 [item.id]: {
                                   ...(prev[item.id] ?? {}),
-                                  [field]: event.target.value,
+                                  [field]:
+                                    field === "localTime"
+                                      ? fromDatetimeLocalValue(event.target.value)
+                                      : event.target.value,
                                 },
                               }))
                             }
-                            className="mt-1 w-full rounded-md border border-red-500/80 bg-white px-2 py-1 text-xs dark:bg-slate-900"
+                            className="mt-1 w-full rounded-md border border-red-500/80 bg-white px-2 py-1 text-[16px] dark:bg-slate-900"
                           />
                         </label>
                       );

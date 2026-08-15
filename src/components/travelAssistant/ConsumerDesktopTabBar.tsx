@@ -30,7 +30,7 @@ export function ConsumerDesktopTabBar({ activeTab, onSelectTab }: ConsumerDeskto
           >
             <ConsumerTabIcon tab={tab} className="h-5 w-5" strokeWidth={active ? 2.25 : 1.75} />
             <span
-              className={`text-sm font-semibold tracking-tight lg:text-[10px] ${
+              className={`text-sm font-semibold tracking-tight lg:text-[11px] ${
                 active ? "text-[var(--accent)]" : ""
               }`}
             >

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { TripRating } from "@/lib/learning/tripInsights";
+import { appleBtnPrimary } from "@/lib/ui/appleDesign";
 
 interface TripReviewProps {
   tripId: string;
@@ -195,12 +196,12 @@ export function TripReview({ tripId, destination, departDate, returnDate, flight
         </button>
         {step < steps.length - 1 ? (
           <button type="button" onClick={() => setStep(s => s + 1)}
-            className="flex-1 py-3 rounded-2xl bg-[#f4c95d] text-[#0b1f3a] text-sm font-black">
+            className={`${appleBtnPrimary} flex-1 py-3 text-sm`}>
             Next →
           </button>
         ) : (
           <button type="button" onClick={submit} disabled={saving}
-            className="flex-1 py-3 rounded-2xl bg-[#f4c95d] text-[#0b1f3a] text-sm font-black disabled:opacity-50">
+            className={`${appleBtnPrimary} flex-1 py-3 text-sm disabled:opacity-50`}>
             {saving ? "Saving…" : "Done ✓"}
           </button>
         )}

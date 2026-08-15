@@ -113,6 +113,11 @@ The repo must ship `ios/App/App/public/index.html` (Capacitor `exit(1)` if that 
 
 **Test:** `src/lib/native/iosNativeShell.test.ts`
 
+**G25 — Apple chrome: light share, five tabs, human review**  
+Share views use Picasso light (`#F5F5F7` / `#1D1D1F`), never GitHub dark (`#0d1117`). Consumer tab bar is five items (Home · Plan · Book · Map · More); Photos opens from More and stays a valid deep-link tab. Review badges never show raw parse scores; repair date/time uses `datetime-local`, not ISO `YYYY-MM-DD HH:MM` copy. System actions use `#007AFF`; brand gold `#f4c95d` is Talk / brand / star ratings only.
+
+**Test:** `src/lib/ui/appleStylePass.test.ts`
+
 ---
 
 ## FLIGHTS LAWS
@@ -791,6 +796,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | G22 | `src/lib/native/iosNativeShell.test.ts` |
 | G23 | `src/lib/native/iosNativeShell.test.ts` |
 | G24 | `src/lib/native/iosNativeShell.test.ts` |
+| G25 | `src/lib/ui/appleStylePass.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |

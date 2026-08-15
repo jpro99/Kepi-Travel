@@ -1,9 +1,18 @@
 import Link from "next/link";
+import { MapPin } from "lucide-react";
 import { ShareTripPhotosNav } from "@/components/share/ShareTripPhotosNav";
 import { SharedTripReservations } from "@/components/share/SharedTripReservations";
 import { JoinCollaborateButton } from "@/components/share/JoinCollaborateButton";
 import { TripMemoriesPanel } from "@/components/travelAssistant/TripMemoriesPanel";
 import type { TripShareOptions } from "@/lib/travelAssistant/tripShareStore";
+import {
+  appleBody,
+  appleBtnText,
+  appleCaption,
+  appleCard,
+  appleMetadata,
+  applePageTitle,
+} from "@/lib/ui/appleDesign";
 
 interface SharedReservation {
   id: string;
@@ -42,22 +51,27 @@ export function SharedTripView({
   expiresAt,
 }: SharedTripViewProps) {
   return (
-    <div className="min-h-dvh bg-[#0d1117] px-4 py-6 text-[#e6edf3]">
+    <div className="min-h-dvh bg-[#F5F5F7] px-4 py-6 text-[#1D1D1F]">
       <div className="mx-auto max-w-md">
         <header className="mb-6">
           <div className="mb-1 flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-400 text-sm font-black text-[#0d1117]">
+            <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-[#007AFF] text-sm font-semibold text-white">
               K
             </div>
-            <span className="text-sm text-slate-400">Shared via Kepi Travel</span>
+            <span className={appleMetadata}>Shared via Kepi Travel</span>
           </div>
-          <h1 className="mt-2 text-3xl font-black">{tripName}</h1>
-          {destination ? <p className="mt-1 text-base text-slate-400">📍 {destination}</p> : null}
-          <p className="mt-2 text-xs text-slate-500">
+          <h1 className={`${applePageTitle} mt-2 text-[28px]`}>{tripName}</h1>
+          {destination ? (
+            <p className={`${appleBody} mt-1 flex items-center gap-1.5 text-[17px] text-[#6E6E73]`}>
+              <MapPin className="h-4 w-4 shrink-0" strokeWidth={1.85} aria-hidden />
+              {destination}
+            </p>
+          ) : null}
+          <p className={`${appleCaption} mt-2`}>
             {startDate} → {endDate}
             {options.readOnly ? " · View only" : " · Edit together"}
           </p>
-          <p className="mt-1 text-xs text-slate-600">Link expires {new Date(expiresAt).toLocaleDateString()}</p>
+          <p className={`${appleCaption} mt-1`}>Link expires {new Date(expiresAt).toLocaleDateString()}</p>
         </header>
 
         {!options.readOnly ? <JoinCollaborateButton token={token} tripName={tripName} /> : null}
@@ -66,10 +80,7 @@ export function SharedTripView({
 
         <SharedTripReservations reservations={reservations} />
 
-        <div
-          id="trip-photos"
-          className="mt-8 scroll-mt-6 rounded-2xl border border-slate-700 bg-[#161b22] p-4 text-slate-100 [&_h2]:text-white [&_p]:text-slate-300 [&_textarea]:bg-[#0d1117] [&_textarea]:text-slate-100 [&_input]:bg-[#0d1117] [&_input]:text-slate-100"
-        >
+        <div id="trip-photos" className={`mt-8 scroll-mt-6 p-4 ${appleCard}`}>
           <TripMemoriesPanel
             tripId={null}
             tripName={tripName}
@@ -81,9 +92,9 @@ export function SharedTripView({
           />
         </div>
 
-        <p className="mt-8 text-center text-sm text-slate-600">
+        <p className={`${appleCaption} mt-8 text-center`}>
           Shared via{" "}
-          <Link href="https://kepitravel.com" className="text-sky-400 hover:underline">
+          <Link href="https://kepitravel.com" className={appleBtnText}>
             kepitravel.com
           </Link>
           {options.readOnly ? " · view only" : " · paid partners can edit together"}

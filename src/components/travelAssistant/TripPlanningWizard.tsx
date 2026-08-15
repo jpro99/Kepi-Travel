@@ -12,6 +12,7 @@ import {
 import type { BookingWizardPhase } from "@/lib/travelAssistant/bookingWizard";
 import type { HotelSearchResult } from "@/lib/hotels/types";
 import { TripHotelSearch } from "@/components/travelAssistant/TripHotelSearch";
+import { appleBtnPrimary } from "@/lib/ui/appleDesign";
 
 export interface TripPlanningWizardProps {
   open: boolean;
@@ -175,7 +176,7 @@ export function TripPlanningWizard({
               </div>
               <Link
                 href={`/book?prompt=${encodeURIComponent(`Flights for ${draft.destination || "my trip"} departing ${draft.departureDate}`)}`}
-                className="block w-full rounded-2xl bg-[#f4c95d] py-3.5 text-center text-sm font-black text-[#0b1f3a]"
+                className={`${appleBtnPrimary} block w-full py-3.5 text-center text-sm`}
               >
                 Search flights in Trip Planner →
               </Link>
@@ -262,7 +263,7 @@ export function TripPlanningWizard({
             <button
               type="button"
               onClick={() => onMarkPhaseDone("flights")}
-              className="w-full rounded-2xl bg-[#0b1f3a] py-3.5 text-sm font-black text-[#f4c95d]"
+              className={`${appleBtnPrimary} w-full py-3.5 text-sm`}
             >
               Done with flights →
             </button>
@@ -271,7 +272,7 @@ export function TripPlanningWizard({
             <button
               type="button"
               onClick={() => onMarkPhaseDone("hotels")}
-              className="w-full rounded-2xl bg-[#0b1f3a] py-3.5 text-sm font-black text-[#f4c95d]"
+              className={`${appleBtnPrimary} w-full py-3.5 text-sm`}
             >
               Done with hotels →
             </button>
@@ -280,7 +281,7 @@ export function TripPlanningWizard({
             <button
               type="button"
               onClick={() => onMarkPhaseDone("excursions")}
-              className="w-full rounded-2xl bg-[#0b1f3a] py-3.5 text-sm font-black text-[#f4c95d]"
+              className={`${appleBtnPrimary} w-full py-3.5 text-sm`}
             >
               Finish planning
             </button>

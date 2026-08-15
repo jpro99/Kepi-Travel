@@ -40,7 +40,7 @@ export function MobileTabBar({ activeTab, onSelectTab, className = "", hidden = 
       }}
       aria-label="Main navigation"
     >
-      <div className="mx-auto grid max-w-lg grid-cols-6 gap-0.5">
+      <div className="mx-auto grid max-w-lg grid-cols-5 gap-0.5">
         {MOBILE_PRIMARY_TABS.map(({ id }) => {
           const active = activeTab === id;
           const labelKey =

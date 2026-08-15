@@ -35,6 +35,7 @@ import { TripFirstBanner } from "@/components/travelAssistant/TripFirstBanner";
 import type { HotelStayProfile } from "@/lib/memory/hotelStayProfile";
 import { hotelParticipatesInPoints, HOTEL_CHAINS, matchHotelChain, type HotelChainId } from "@/lib/loyalty/chainRegistry";
 import { isCompactViewportClient } from "@/lib/ui/isCompactViewport";
+import { appleBtnPrimary } from "@/lib/ui/appleDesign";
 import { useStableDefaultSync } from "@/lib/ui/useStableDefaultSync";
 
 type PayMode = "any" | "cash" | "points";
@@ -579,7 +580,7 @@ export function TripHotelSearch({
                 key={suggestion}
                 type="button"
                 onClick={() => applyDestinationSuggestion(suggestion)}
-                className="rounded-full bg-[#f4c95d] px-4 py-2 text-sm font-semibold text-[#0b1f3a]"
+                className={`${appleBtnPrimary} rounded-full px-4 py-2 text-sm`}
               >
                 {suggestion}
               </button>
@@ -654,14 +655,14 @@ export function TripHotelSearch({
           type="button"
           disabled={loading}
           onClick={() => void runSearch()}
-          className={`${SEARCH_PRIMARY_BUTTON} bg-[#0b1f3a] text-[#f4c95d] disabled:opacity-60`}
+          className={`${SEARCH_PRIMARY_BUTTON} ${appleBtnPrimary} disabled:opacity-60`}
         >
           {loading ? "Searching…" : "Search hotels"}
         </button>
       </section>
 
       {hasSearched ? (
-        <div className="rounded-3xl bg-[#fafafa] p-4 dark:bg-[#0b1f3a] md:p-6">
+        <div className="rounded-3xl bg-[#fafafa] p-4 dark:bg-slate-900 md:p-6">
           <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-2xl font-black text-slate-900 dark:text-white">{resolvedCity ?? city}</h2>
@@ -682,7 +683,7 @@ export function TripHotelSearch({
                 <button
                   type="button"
                   onClick={() => setResultsView((view) => (view === "map" ? "list" : "map"))}
-                  className="rounded-full bg-[#f4c95d] px-4 py-2 text-sm font-bold text-[#0b1f3a]"
+                  className={`${appleBtnPrimary} rounded-full px-4 py-2 text-sm font-bold`}
                 >
                   {resultsView === "map" ? "List" : "Map"}
                 </button>
@@ -773,7 +774,7 @@ export function TripHotelSearch({
             <div className="mb-4 space-y-2 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-slate-900/50">
               <p className="text-sm text-slate-600 dark:text-slate-300">{inventoryNote}</p>
               {googleHotelsUrl ? (
-                <a href={googleHotelsUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-[#0b1f3a] underline dark:text-[#f4c95d]">
+                <a href={googleHotelsUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-[#007AFF] underline">
                   Browse all on Google →
                 </a>
               ) : null}
@@ -909,7 +910,7 @@ export function TripHotelSearch({
                   href={googleHotelsUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex text-sm font-semibold text-[#0b1f3a] underline dark:text-[#f4c95d]"
+                  className="inline-flex text-sm font-semibold text-[#007AFF] underline"
                 >
                   Browse all on Google Hotels →
                 </a>
