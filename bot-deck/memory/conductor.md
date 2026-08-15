@@ -40,8 +40,9 @@ When auditing or building, ask: *Does this help the traveler execute the full tr
 |-------|--------|
 | **Next week** | **2** — Trip-state engine & disruption handling |
 | **Last run** | 2026-07-06 — Week 1 Ingestion & parsing |
-| **Last report** | `memory/audits/2026-07-06-week01-ingestion.md` |
-| **Jeff decision** | pending — pick item to build (e.g. "build #1") |
+| **Last full audit** | 2026-08-15 — Claude Code base (`memory/audits/2026-08-15-claude-code-base.md`) |
+| **Last report** | `memory/audits/2026-08-15-claude-code-base.md` |
+| **Jeff decision** | pending — pick item to build (e.g. "build SEC-1" or "build #1") |
 
 ### Known / accepted (do not re-flag in audits)
 
@@ -54,12 +55,14 @@ When auditing or building, ask: *Does this help the traveler execute the full tr
 
 | Date | Week | Focus | Top finding | Decision |
 |------|------|-------|-------------|----------|
+| 2026-08-15 | full | Claude Code base | RevenueCat client sync self-grant + hotel pay-then-book no refund | pending |
 | 2026-07-06 | 1 | Ingestion & parsing | No user-visible PDF/pricing parse status; stale Re-scan copy | pending |
 
 ## Changelog
 
 | Date | Note |
 |------|------|
+| 2026-08-15 | Full Claude Code audit (7 specialist lanes). No app code. Jeff picks before build. ETIAS not in operation — do not add as required prep. |
 | 2026-07-08 | Whole-trip execution philosophy synced from KEPI_PROJECT_MEMORY; hotel-first timeline shipped |
 | 2026-07-06 | Weekly Audit skill + Week 1 ingestion report; next rotation Week 2 |
 | 2026-06-15 | Bot Deck created; conductor owns master coordination |
