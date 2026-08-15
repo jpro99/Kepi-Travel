@@ -6446,16 +6446,22 @@ export default function TravelAssistantPage() {
           error?: string;
           foundCount?: number;
           reservations?: GmailImportedReservation[];
+          dayPlan?: Parameters<typeof itineraryPrefs.applyImportedDayPlan>[0] | null;
         };
         if (!response.ok) {
           throw new Error(payload.error ?? `Email import endpoint returned ${response.status}`);
         }
         const importedReservations = payload.reservations ?? [];
         const foundCount = payload.foundCount ?? importedReservations.length;
+        const dayPlanDays = payload.dayPlan
+          ? itineraryPrefs.applyImportedDayPlan(payload.dayPlan)
+          : 0;
         setGmailImportMessage(
-          foundCount > 0
-            ? `Found ${foundCount} matching email${foundCount === 1 ? "" : "s"}.`
-            : "No matching emails found for this scope.",
+          dayPlanDays > 0
+            ? `Added ${dayPlanDays} itinerary day${dayPlanDays === 1 ? "" : "s"} to Plan.`
+            : foundCount > 0
+              ? `Found ${foundCount} matching email${foundCount === 1 ? "" : "s"}.`
+              : "No matching emails found for this scope.",
         );
         if (importedReservations.length > 0) {
           handleImportParsedReservations(importedReservations);
@@ -6466,7 +6472,7 @@ export default function TravelAssistantPage() {
         setGmailImportBusy(false);
       }
     },
-    [gmailImportBusy, gmailImportMaxResults, handleImportParsedReservations],
+    [gmailImportBusy, gmailImportMaxResults, handleImportParsedReservations, itineraryPrefs],
   );
 
   const handleImportAction = (target: "live" | "review"): void => {

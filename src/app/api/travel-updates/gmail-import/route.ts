@@ -5,7 +5,7 @@ import { isAutomatedTestRuntime } from "@/lib/auth/mockClerkAuth";
 import { getUserPlan } from "@/lib/billing/planGate";
 import { enforceRateLimit } from "@/lib/rateLimit";
 import { logger } from "@/lib/logger";
-import { importGmailParsedReservations } from "@/lib/travelAssistant/gmailImportProvider";
+import { importGmailTravelInbox } from "@/lib/travelAssistant/gmailImportProvider";
 import { getGmailConnectionStatus } from "@/lib/travelAssistant/gmailOAuthService";
 import { generateId } from "@/lib/utils/generateId";
 
@@ -127,7 +127,7 @@ export async function POST(req: Request) {
     tripEndDate: parsed.data.tripEndDate ?? null,
   });
 
-  const reservations = await importGmailParsedReservations({
+  const imported = await importGmailTravelInbox({
     userId,
     maxResults: parsed.data.maxResults,
     lookbackDays: parsed.data.lookbackDays,
@@ -139,10 +139,12 @@ export async function POST(req: Request) {
     lookbackDays: parsed.data.lookbackDays,
     tripStartDate: parsed.data.tripStartDate ?? null,
     tripEndDate: parsed.data.tripEndDate ?? null,
-    importedCount: reservations.length,
+    importedCount: imported.reservations.length,
+    dayPlanDays: imported.dayPlan?.days.length ?? 0,
   });
   return NextResponse.json({
-    foundCount: reservations.length,
-    reservations,
+    foundCount: imported.reservations.length,
+    reservations: imported.reservations,
+    dayPlan: imported.dayPlan,
   });
 }

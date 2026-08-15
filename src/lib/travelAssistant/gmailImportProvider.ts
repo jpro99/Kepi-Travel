@@ -4,6 +4,10 @@ import {
   readGmailConnectionRecord,
   resolveGmailOAuthConfig,
 } from "@/lib/travelAssistant/gmailOAuthService";
+import {
+  pickDayPlanFromImportedMail,
+  type ParsedDayPlanItinerary,
+} from "@/lib/travelAssistant/parseDayPlanItinerary";
 
 const GMAIL_IMPORT_QUERY_KEYWORDS =
   "subject:(confirmation OR itinerary OR booking OR reservation OR ticket OR flight OR hotel OR train)";
@@ -295,7 +299,7 @@ async function readMessages(args: {
   lookbackDays?: number;
   tripStartDate?: string;
   tripEndDate?: string;
-}): Promise<ParsedReservation[]> {
+}): Promise<{ reservations: ParsedReservation[]; dayPlan: ParsedDayPlanItinerary | null }> {
   const listResponse = await args.gmailClient.users.messages.list({
     userId: "me",
     q: buildGmailImportQuery(args.lookbackDays),
@@ -306,10 +310,11 @@ async function readMessages(args: {
     .map((message) => message?.id ?? null)
     .filter((id): id is string => typeof id === "string" && id.length > 0);
   if (messageIds.length === 0) {
-    return [];
+    return { reservations: [], dayPlan: null };
   }
 
   const parsedReservations: ParsedReservation[] = [];
+  const dayPlanSources: Array<{ subject: string; body: string }> = [];
   for (const id of messageIds) {
     const messageResponse = await args.gmailClient.users.messages.get({
       userId: "me",
@@ -323,6 +328,7 @@ async function readMessages(args: {
       headerValue(payload?.headers, "Date") ??
       (messageResponse.data.internalDate ? new Date(Number(messageResponse.data.internalDate)).toISOString() : new Date().toISOString());
     const body = extractPlainTextBody(payload);
+    dayPlanSources.push({ subject, body });
     const parsedReservation = parseEmailToParsedReservation({
       messageId: id,
       sender,
@@ -341,17 +347,24 @@ async function readMessages(args: {
     }
   }
 
-  return parsedReservations;
+  return {
+    reservations: parsedReservations,
+    dayPlan: pickDayPlanFromImportedMail(dayPlanSources, {
+      tripStartDate: args.tripStartDate,
+      tripEndDate: args.tripEndDate,
+    }),
+  };
 }
 
-export async function importGmailParsedReservations(args: {
+export async function importGmailTravelInbox(args: {
   userId: string;
   maxResults?: number;
   lookbackDays?: number;
   tripStartDate?: string;
   tripEndDate?: string;
   gmailClient?: GmailApiClient;
-}): Promise<ParsedReservation[]> {
+}): Promise<{ reservations: ParsedReservation[]; dayPlan: ParsedDayPlanItinerary | null }> {
+  const empty = { reservations: [] as ParsedReservation[], dayPlan: null };
   const maxResults = args.maxResults ?? 10;
   const gmailClient = args.gmailClient ?? (await createAuthorizedGmailClient(args.userId));
   if (!gmailClient) {
@@ -359,7 +372,7 @@ export async function importGmailParsedReservations(args: {
       scope: "travelAssistant/gmailImportProvider",
       userId: args.userId,
     });
-    return [];
+    return empty;
   }
 
   try {
@@ -376,6 +389,18 @@ export async function importGmailParsedReservations(args: {
       userId: args.userId,
       error,
     });
-    return [];
+    return empty;
   }
+}
+
+export async function importGmailParsedReservations(args: {
+  userId: string;
+  maxResults?: number;
+  lookbackDays?: number;
+  tripStartDate?: string;
+  tripEndDate?: string;
+  gmailClient?: GmailApiClient;
+}): Promise<ParsedReservation[]> {
+  const imported = await importGmailTravelInbox(args);
+  return imported.reservations;
 }

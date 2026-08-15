@@ -10,6 +10,7 @@ import {
   serializeDayLinesForEditor,
 } from "@/lib/travelAssistant/dayPlanLines";
 import { buildDayStayTimeline } from "@/lib/travelAssistant/dayStayTimeline";
+import { formatLetterDayHeading } from "@/lib/travelAssistant/letterDayPlan";
 
 interface ItineraryDayEditorProps {
   dateKey: string;
@@ -82,16 +83,18 @@ export function ItineraryDayEditor({
   };
 
   const headline = daySnapshot?.headline ?? parsedIntent?.summary ?? null;
+  const letterHeading = formatLetterDayHeading(dateKey);
 
   return (
     <div className="space-y-3">
+      <h3 className="text-[20px] font-bold text-[#1D1D1F]">{letterHeading}</h3>
       {headline ? (
         <div className={`rounded-xl px-3 py-2 text-sm font-semibold ${intentChipClass(parsedIntent?.kind)}`}>
-          Kepi reads: {headline}
+          {headline}
         </div>
       ) : (
-        <p className="rounded-xl border border-dashed border-slate-200 px-3 py-2 text-sm text-slate-500 dark:border-slate-700">
-          Add where you&apos;re staying or traveling — one clear line per idea.
+        <p className="rounded-xl border border-dashed border-[#E8E0D4] bg-[#FAF6EF] px-3 py-2 text-[15px] text-[#6E6E73]">
+          Add a line the way you would in a Word itinerary — boat tour, gelato, checkout.
         </p>
       )}
 

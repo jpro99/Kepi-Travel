@@ -20,6 +20,10 @@ import {
   type ItineraryPlansData,
 } from "@/lib/travelAssistant/itineraryDayPlan";
 import {
+  applyDayPlanToItineraryPlans,
+  type ParsedDayPlanItinerary,
+} from "@/lib/travelAssistant/parseDayPlanItinerary";
+import {
   reconcilePlanNoteWithHotels,
   type ReconcilePlanNoteResult,
 } from "@/lib/travelAssistant/reconcilePlanNoteWithHotels";
@@ -506,6 +510,20 @@ export function useItineraryPanelPrefs(tripId: string | null) {
     [dayNotes, itineraryPlans.dayPlans],
   );
 
+  const applyImportedDayPlan = useCallback(
+    (parsed: ParsedDayPlanItinerary): number => {
+      const applied = applyDayPlanToItineraryPlans(itineraryPlans, parsed);
+      setItineraryPlans(applied.plans);
+      setDayNotes((prev) => {
+        const next = { ...prev, ...applied.dayNotes };
+        queuePersistToTrip(applied.plans, next);
+        return next;
+      });
+      return applied.daysApplied;
+    },
+    [itineraryPlans, queuePersistToTrip],
+  );
+
   const replaceDayNotes = useCallback(
     (notes: Record<string, string>): void => {
       setDayNotes(notes);
@@ -533,6 +551,7 @@ export function useItineraryPanelPrefs(tripId: string | null) {
     reconcileDayNote,
     applyReconciledPlans,
     replaceDayNotes,
+    applyImportedDayPlan,
     hotelNotebookNote,
     updateHotelNotebookNote,
     itineraryPlans,

@@ -228,6 +228,25 @@ function extractStayMeta(lines: string[]): {
   return { headerLines, stayLocation, stayAddress, checkInHint, checkOutHint };
 }
 
+/** Pick the richest Word-style day plan from forwarded / Gmail message bodies. */
+export function pickDayPlanFromImportedMail(
+  messages: Array<{ subject?: string; body: string }>,
+  options: { tripStartDate?: string | null; tripEndDate?: string | null } = {},
+): ParsedDayPlanItinerary | null {
+  let best: ParsedDayPlanItinerary | null = null;
+  for (const message of messages) {
+    const subject = message.subject ?? "";
+    const parsed = parseDayPlanItinerary(`${subject}\n${message.body}`, {
+      subject,
+      tripStartDate: options.tripStartDate,
+      tripEndDate: options.tripEndDate,
+    });
+    if (!parsed || parsed.days.length < 2) continue;
+    if (!best || parsed.days.length > best.days.length) best = parsed;
+  }
+  return best;
+}
+
 export function parseDayPlanItinerary(
   text: string,
   options: { subject?: string; tripStartDate?: string | null; tripEndDate?: string | null } = {},
@@ -341,12 +360,10 @@ export function parseDayPlanItinerary(
 }
 
 function formatDayNotes(day: ParsedDayPlanDay): string {
-  const lines: string[] = [];
-  if (day.heading) lines.push(day.heading);
-  for (const bullet of day.bullets) {
-    lines.push(`• ${bullet.replace(/^[•\-\*]\s*/u, "")}`);
-  }
-  return lines.join("\n").trim();
+  return day.bullets
+    .map((bullet) => `• ${bullet.replace(/^[•\-\*]\s*/u, "")}`)
+    .join("\n")
+    .trim();
 }
 
 /**
@@ -381,16 +398,21 @@ export function applyDayPlanToItineraryPlans(
   let daysApplied = 0;
   const dayNotes: Record<string, string> = {};
 
-  // Prefatory stay logistics on the first day if present
-  const firstDay = parsed.days[0];
-  if (firstDay && parsed.headerLines.length > 0) {
-    const headerBlock = parsed.headerLines.map((l) => l.replace(/^[•\-\*]\s*/u, "")).join("\n");
-    const existingPlan = plans.dayPlans[firstDay.dateKey] ?? EMPTY_DAY_PLAN(firstDay.location ?? "");
-    if (!existingPlan.notes.includes(headerBlock.slice(0, 40))) {
-      existingPlan.notes = [headerBlock, existingPlan.notes].filter(Boolean).join("\n\n");
+  if (parsed.headerLines.length > 0 || parsed.title.trim()) {
+    const incomingLines = parsed.headerLines.map((line) => line.replace(/^[•\-\*]\s*/u, "").trim()).filter(Boolean);
+    const prevLines = plans.letterHeader?.lines ?? [];
+    const mergedLines = [...prevLines];
+    for (const line of incomingLines) {
+      if (!mergedLines.some((existing) => existing.toLowerCase() === line.toLowerCase())) {
+        mergedLines.push(line);
+      }
     }
-    if (parsed.stayLocation && !existingPlan.location) existingPlan.location = parsed.stayLocation;
-    plans.dayPlans[firstDay.dateKey] = existingPlan;
+    plans.letterHeader = {
+      title: parsed.title.trim() || plans.letterHeader?.title,
+      lines: mergedLines,
+      stayLocation: parsed.stayLocation || plans.letterHeader?.stayLocation,
+      stayAddress: parsed.stayAddress || plans.letterHeader?.stayAddress,
+    };
   }
 
   for (const day of parsed.days) {
@@ -400,6 +422,7 @@ export function applyDayPlanToItineraryPlans(
     const next: DayPlanRecord = { ...prev };
     if (day.location) next.location = day.location;
     else if (parsed.stayLocation && !next.location) next.location = parsed.stayLocation;
+    if (day.heading?.trim()) next.dayHeading = day.heading.trim();
 
     if (incoming) {
       if (!next.notes.trim()) {

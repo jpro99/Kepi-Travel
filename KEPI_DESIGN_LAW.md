@@ -632,6 +632,11 @@ Do not extend the last European stay through `tripEndDate` after the final retur
 
 **Test:** `src/lib/travelAssistant/buildTripLegs.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts`
 
+**I47 — Plan letter matches the forwarded Word itinerary**  
+Timeline and day view look like the Word letter: title + month range (`SEPT 2–12`), stay facts always visible (address, check-in/out, tax), day headers like `Sept 2` / `Sept 4: BEST VIEWPOINTS`, every activity bullet visible and editable. Stay fine print is a stay block — not collapsed under Details (I31 still dedupes repeats). Forwards and Gmail itinerary mail parse onto the matching trip dates.
+
+**Test:** `src/lib/travelAssistant/letterDayPlan.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -822,6 +827,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I44 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
 | I45 | `src/lib/travelAssistant/historicalEmailForward.test.ts` |
 | I46 | `src/lib/travelAssistant/buildTripLegs.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts` |
+| I47 | `src/lib/travelAssistant/letterDayPlan.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

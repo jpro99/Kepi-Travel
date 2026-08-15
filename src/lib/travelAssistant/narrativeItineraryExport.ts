@@ -4,6 +4,7 @@
 
 import { dedupeDayPlanBullets } from "@/lib/travelAssistant/dayPlanBulletGroups";
 import type { ItineraryPlansData } from "@/lib/travelAssistant/itineraryDayPlan";
+import { formatLetterDayHeading, splitLetterStayAndActivities } from "@/lib/travelAssistant/letterDayPlan";
 import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
 import { sanitizeTravelerNotes } from "@/lib/travelAssistant/sanitizeTravelerNotes";
 import {
@@ -37,6 +38,7 @@ export interface NarrativeDaySection {
   location: string;
   hotelLine: string | null;
   bullets: string[];
+  stayLines: string[];
   bookingLines: string[];
 }
 
@@ -170,13 +172,15 @@ export function buildNarrativeDaySections(input: {
     const rawNote =
       (plan?.notes ? plan.notes : "") ||
       (input.dayNotes?.[dateKey] ?? "").trim();
-    const bullets = notesToBullets(rawNote);
+    const rawBullets = notesToBullets(rawNote);
+    const split = splitLetterStayAndActivities(rawBullets);
+    const bullets = split.activityLines.filter(
+      (line) => line.trim().toLowerCase() !== (plan?.dayHeading ?? "").trim().toLowerCase(),
+    );
     const location = plan?.location?.trim() || "";
     const dayNumber = narrativeTripDayNumber(dateKey, start);
     const prettyDate = formatNarrativePrettyDate(dateKey);
-    const heading = [dayNumber ? `Day ${dayNumber}` : null, prettyDate, location || null]
-      .filter(Boolean)
-      .join(" · ");
+    const heading = formatLetterDayHeading(dateKey, plan?.dayHeading);
     const hotelLine =
       plan?.hotelBooked && plan.hotelName.trim()
         ? `Hotel: ${plan.hotelName.trim()}${
@@ -196,6 +200,7 @@ export function buildNarrativeDaySections(input: {
       location,
       hotelLine,
       bullets,
+      stayLines: split.stayLines,
       bookingLines,
     };
   });

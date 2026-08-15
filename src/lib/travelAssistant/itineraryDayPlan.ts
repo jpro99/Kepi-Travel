@@ -6,12 +6,23 @@ export interface DayPlanRecord {
   hotelConfirmation: string;
   hotelBooked: boolean;
   notes: string;
+  /** Word day subtitle — e.g. BEST VIEWPOINTS on Sept 4 (I47). */
+  dayHeading?: string;
+}
+
+export interface LetterStayHeader {
+  title?: string;
+  lines: string[];
+  stayLocation?: string;
+  stayAddress?: string;
 }
 
 export interface ItineraryPlansData {
   dayPlans: Record<string, DayPlanRecord>;
   legLabelOverrides: Record<string, string>;
   updatedAt: string;
+  /** Stay facts from a forwarded Word letter — always visible on Plan (I47). */
+  letterHeader?: LetterStayHeader;
 }
 
 export const EMPTY_DAY_PLAN = (location = ""): DayPlanRecord => ({
@@ -20,6 +31,7 @@ export const EMPTY_DAY_PLAN = (location = ""): DayPlanRecord => ({
   hotelConfirmation: "",
   hotelBooked: false,
   notes: "",
+  dayHeading: "",
 });
 
 export function emptyItineraryPlans(): ItineraryPlansData {
@@ -40,6 +52,7 @@ export function normalizeItineraryPlans(raw: unknown): ItineraryPlansData {
         hotelConfirmation: typeof v.hotelConfirmation === "string" ? v.hotelConfirmation : "",
         hotelBooked: Boolean(v.hotelBooked),
         notes: typeof v.notes === "string" ? v.notes : "",
+        dayHeading: typeof v.dayHeading === "string" ? v.dayHeading : "",
       };
     }
   }
@@ -49,10 +62,28 @@ export function normalizeItineraryPlans(raw: unknown): ItineraryPlansData {
       if (typeof value === "string" && value.trim()) legLabelOverrides[key] = value.trim();
     }
   }
+  const rawHeader = (record as { letterHeader?: unknown }).letterHeader;
+  let letterHeader: LetterStayHeader | undefined;
+  if (rawHeader && typeof rawHeader === "object") {
+    const header = rawHeader as Partial<LetterStayHeader>;
+    const lines = Array.isArray(header.lines)
+      ? header.lines.filter((line): line is string => typeof line === "string" && line.trim().length > 0)
+      : [];
+    if (lines.length > 0 || (typeof header.title === "string" && header.title.trim())) {
+      letterHeader = {
+        title: typeof header.title === "string" ? header.title.trim() : undefined,
+        lines,
+        stayLocation: typeof header.stayLocation === "string" ? header.stayLocation : undefined,
+        stayAddress: typeof header.stayAddress === "string" ? header.stayAddress : undefined,
+      };
+    }
+  }
+
   return {
     dayPlans,
     legLabelOverrides,
     updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : new Date().toISOString(),
+    letterHeader,
   };
 }
 
