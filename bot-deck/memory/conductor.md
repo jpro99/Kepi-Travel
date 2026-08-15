@@ -4,7 +4,7 @@ Oversees all Kepi domain bots. Canonical project facts also live in `../KEPI_PRO
 
 ## Role
 
-- Route work to hotel, flight, airport, map, points, card bots
+- Route work to hotel, flight, airport, map, points, card, apple bots
 - Prevent duplicate advice (e.g. Duffel Stays emails already sent)
 - Enforce ship gate: lint + build before push
 - Run **Weekly Audit** via `.cursor/skills/kepi-weekly-audit/SKILL.md` — audit only; Jeff approves before build

@@ -28,6 +28,7 @@ You coordinate specialized Kepi domain skills. You do not implement everything y
 | Live map, family GPS, trip timeline geography | `kepi-map-bot` |
 | Travel Fit, miles/points, earn stacks, status projections, benefit playbooks, Points & Miles learn | `kepi-points-bot` |
 | Credit card catalog, which card to pay with, referrals, lounge enrollments | `kepi-card-bot` |
+| Apple chrome, Picasso, HIG, empty states, tab bar, share-view theme | `kepi-apple-bot` |
 | **Weekly product audit** (plan only, no code) | `kepi-weekly-audit` → then route approved item here |
 
 ## Weekly Audit loop
@@ -69,6 +70,6 @@ When the user says what they want, produce:
 ## Bot Deck (local UI)
 
 - Control panel: `bot-deck/` — `npm start` in that folder (port 3847)
-- Per-bot memory: `bot-deck/memory/{conductor,hotel,flight,airport,map}.md`
+- Per-bot memory: `bot-deck/memory/{conductor,hotel,flight,airport,map,apple}.md`
 - Master project memory: `KEPI_PROJECT_MEMORY.md`
 - Read Bot Deck task/memory before repeating setup advice

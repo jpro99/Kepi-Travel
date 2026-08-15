@@ -1,0 +1,20 @@
+---
+description: Consumer chrome — read the Apple skill before UI / Picasso / HIG work
+globs: "**/appleDesign.ts,**/globals.css,**/consumerVisualChrome*,**/ConsumerSectionIcon*,**/MobileTabBar*,**/MissionControlView*,**/SharedTripView*,**/OnboardingFlow*"
+alwaysApply: false
+---
+
+# Apple skill (required before consumer chrome work)
+
+**Before changing consumer visual chrome, empty states, tab bar, share-view
+theme, or answering “does this look like Apple?”:**
+
+1. **Read** `.claude/skills/AppleSkill/SKILL.md` then `.cursor/skills/kepi-apple-bot/SKILL.md`
+2. **Read** `KEPI_DESIGN_LAW.md` G4, G16, G20, G21, I33, I36
+3. Use tokens in `src/lib/ui/appleDesign.ts` and `src/app/globals.css`
+
+Rules:
+- Light default. No navy empty-trip cockpit. No emoji tab/section chrome.
+- Gold `#f4c95d` is the brand CTA. System blue `#007AFF` is iOS affordance.
+- Discuss-before-code if Jeff only asked how it should look.
+- Confirmations already on the trip stay untouched.

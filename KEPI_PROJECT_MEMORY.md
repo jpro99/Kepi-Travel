@@ -3,7 +3,22 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-14 (Always + Precise native tracker + TestFlight)
+Last updated: 2026-08-15 (Apple skill — kepi-apple-bot)
+
+## Decision 2026-08-15 — Apple skill owns consumer chrome
+
+Visual / Picasso / HIG / “does this look like Apple?” work routes to
+`.cursor/skills/kepi-apple-bot/SKILL.md`. Claude Code reviewer:
+`.claude/agents/apple-design-reviewer.md`. Tokens stay in `src/lib/ui/appleDesign.ts`
+and `src/app/globals.css`. Discuss-before-code still applies when Jeff only asks
+how something should look. Not a Bot Deck assignee id (same as points/card).
+
+## Decision 2026-08-15 — AppleSkill installed (Claude Code + Cursor)
+
+Installed `Prisma-Labs-Dev/apple-skills` skill `hig` into `.claude/skills/hig/`
+and `.agents/skills/hig/` (`skills-lock.json`). Named entry:
+`.claude/skills/AppleSkill/SKILL.md`. Kepi G4/G21 tokens win over generic HIG
+aesthetics. Did **not** install the full SwiftUI/iOS 26 pack (wrong stack).
 
 ## Shipped 2026-08-14 — Always + Precise family GPS (M20)
 
@@ -649,6 +664,7 @@ Project skills live in `.cursor/skills/` — these are **playbooks for Cursor ag
 | **Points** | `.cursor/skills/kepi-points-bot/SKILL.md` | `bot-deck/memory/points.md` |
 | **Card** | `.cursor/skills/kepi-card-bot/SKILL.md` | `bot-deck/memory/points.md` (shared) |
 | **Weekly Audit** | `.cursor/skills/kepi-weekly-audit/SKILL.md` | `bot-deck/memory/conductor.md` § Weekly Audit |
+| **Apple** | `.cursor/skills/kepi-apple-bot/SKILL.md` | `bot-deck/memory/apple.md` |
 
 ## Weekly Audit (product loop)
 
