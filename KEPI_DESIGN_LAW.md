@@ -648,7 +648,7 @@ A forwarded PDF, Gmail import, or confirmation for a tour / boat / dinner / GetY
 **Test:** `src/lib/travelAssistant/letterDayPlan.test.ts`, `src/lib/travelAssistant/gmailImportProvider.test.ts`
 
 **I50 — Mid-stay Plan days show Word activities, not only “Staying at”**  
-Sept 3–4 (and any hotel mid-stay) must show forwarded / pasted day-plan bullets (boat tour, viewpoints, gelato). A newer empty local `itineraryPlans` shell must not beat server notes, and an empty persist must not wipe Redis. Opening Plan backfills from stored email text, Gmail itinerary mail, or **Paste itinerary**.
+Sept 3–4 (and any hotel mid-stay) must show forwarded / pasted day-plan bullets (boat tour, viewpoints, gelato). A newer empty local `itineraryPlans` shell must not beat server notes, and an empty persist must not wipe Redis. Opening Plan backfills from stored email text, Gmail itinerary mail, or **Paste itinerary**. Plan backfill/paste must be declared **after** `setToast` — never read it in a `const` initializer above that line (TDZ crash: `Cannot access 's1' before initialization`).
 
 **Test:** `src/lib/travelAssistant/itineraryPlansHydrate.test.ts`
 

@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-15 (Plan Sept 3–4 empty stay days)
+Last updated: 2026-08-15 (Plan TDZ crash after I50)
+
+## Incident 2026-08-15 — Plan tab red-screen TDZ after I50 deploy
+
+`Something went wrong` / `Cannot access 's1' before initialization` on `/travel-assistant?tab=itinerary`. Cause: day-plan backfill called `setToast` in a `useCallback` declared above `const setToast`. Confirmations untouched. Hard-refresh after the follow-up deploy.
 
 ## Incident 2026-08-15 — Plan Sept 3–4 only showed “Staying at A Casa di Elena”
 

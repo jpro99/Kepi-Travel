@@ -2403,86 +2403,6 @@ export default function TravelAssistantPage() {
     }
   }, [activeTrip?.id, activeTrip?.itineraryPlans, itineraryPrefs.hydrateFromTrip]);
 
-  const dayPlanBackfillTriedRef = useRef<string | null>(null);
-
-  const applyBackfillItineraryPlans = useCallback(
-    (payload: { daysApplied?: number; itineraryPlans?: unknown }): void => {
-      if (payload.itineraryPlans) {
-        itineraryPrefs.hydrateFromTrip(payload.itineraryPlans);
-      }
-      if ((payload.daysApplied ?? 0) > 0) {
-        setToast(
-          `Added ${payload.daysApplied} itinerary day${payload.daysApplied === 1 ? "" : "s"} to Plan.`,
-        );
-      }
-    },
-    [itineraryPrefs, setToast],
-  );
-
-  useEffect(() => {
-    if (consumerTab !== "itinerary" || !activeTrip?.id) return;
-    if (dayPlanBackfillTriedRef.current === activeTrip.id) return;
-    if (!itineraryPlansNeedDayPlanBackfill(itineraryPrefs.itineraryPlans, itineraryPrefs.dayNotes)) {
-      return;
-    }
-    if (!activeTrip.reservations.some((reservation) => reservation.type === "hotel")) return;
-    dayPlanBackfillTriedRef.current = activeTrip.id;
-    void fetch("/api/trips", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "backfill-day-plans", id: activeTrip.id }),
-    })
-      .then(async (response) => {
-        const payload = (await response.json()) as {
-          daysApplied?: number;
-          itineraryPlans?: unknown;
-        };
-        applyBackfillItineraryPlans(payload);
-      })
-      .catch(() => undefined);
-  }, [
-    activeTrip?.id,
-    activeTrip?.reservations,
-    applyBackfillItineraryPlans,
-    consumerTab,
-    itineraryPrefs.dayNotes,
-    itineraryPrefs.itineraryPlans,
-  ]);
-
-  const handlePasteDayPlan = useCallback(
-    async (sourceText: string): Promise<void> => {
-      if (!activeTrip?.id || !sourceText.trim()) return;
-      try {
-        const response = await fetch("/api/trips", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "backfill-day-plans",
-            id: activeTrip.id,
-            sourceText,
-            subject: "Pasted itinerary",
-          }),
-        });
-        const payload = (await response.json()) as {
-          daysApplied?: number;
-          itineraryPlans?: unknown;
-          error?: string;
-        };
-        if (!response.ok) {
-          setToast(payload.error ?? "Could not apply that itinerary.");
-          return;
-        }
-        applyBackfillItineraryPlans(payload);
-        if ((payload.daysApplied ?? 0) === 0) {
-          setToast("No day-by-day plan found in that text.");
-        }
-      } catch {
-        setToast("Could not apply that itinerary.");
-      }
-    },
-    [activeTrip?.id, applyBackfillItineraryPlans, setToast],
-  );
-
   const tripListRows = useMemo<TripListRowInput[]>(
     () =>
       trips.map((trip) => ({
@@ -2644,6 +2564,86 @@ export default function TravelAssistantPage() {
     setToastTone(resolvedTone);
     setToastRaw(normalized);
   }, []);
+
+  const dayPlanBackfillTriedRef = useRef<string | null>(null);
+
+  const applyBackfillItineraryPlans = useCallback(
+    (payload: { daysApplied?: number; itineraryPlans?: unknown }): void => {
+      if (payload.itineraryPlans) {
+        itineraryPrefs.hydrateFromTrip(payload.itineraryPlans);
+      }
+      if ((payload.daysApplied ?? 0) > 0) {
+        setToast(
+          `Added ${payload.daysApplied} itinerary day${payload.daysApplied === 1 ? "" : "s"} to Plan.`,
+        );
+      }
+    },
+    [itineraryPrefs, setToast],
+  );
+
+  useEffect(() => {
+    if (consumerTab !== "itinerary" || !activeTrip?.id) return;
+    if (dayPlanBackfillTriedRef.current === activeTrip.id) return;
+    if (!itineraryPlansNeedDayPlanBackfill(itineraryPrefs.itineraryPlans, itineraryPrefs.dayNotes)) {
+      return;
+    }
+    if (!activeTrip.reservations.some((reservation) => reservation.type === "hotel")) return;
+    dayPlanBackfillTriedRef.current = activeTrip.id;
+    void fetch("/api/trips", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "backfill-day-plans", id: activeTrip.id }),
+    })
+      .then(async (response) => {
+        const payload = (await response.json()) as {
+          daysApplied?: number;
+          itineraryPlans?: unknown;
+        };
+        applyBackfillItineraryPlans(payload);
+      })
+      .catch(() => undefined);
+  }, [
+    activeTrip?.id,
+    activeTrip?.reservations,
+    applyBackfillItineraryPlans,
+    consumerTab,
+    itineraryPrefs.dayNotes,
+    itineraryPrefs.itineraryPlans,
+  ]);
+
+  const handlePasteDayPlan = useCallback(
+    async (sourceText: string): Promise<void> => {
+      if (!activeTrip?.id || !sourceText.trim()) return;
+      try {
+        const response = await fetch("/api/trips", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "backfill-day-plans",
+            id: activeTrip.id,
+            sourceText,
+            subject: "Pasted itinerary",
+          }),
+        });
+        const payload = (await response.json()) as {
+          daysApplied?: number;
+          itineraryPlans?: unknown;
+          error?: string;
+        };
+        if (!response.ok) {
+          setToast(payload.error ?? "Could not apply that itinerary.");
+          return;
+        }
+        applyBackfillItineraryPlans(payload);
+        if ((payload.daysApplied ?? 0) === 0) {
+          setToast("No day-by-day plan found in that text.");
+        }
+      } catch {
+        setToast("Could not apply that itinerary.");
+      }
+    },
+    [activeTrip?.id, applyBackfillItineraryPlans, setToast],
+  );
 
   // Auto-apply new deploys. This is a PWA (next-pwa service worker) whose SW
   // skipWaiting()+clients.claim() so a freshly-built worker activates and takes

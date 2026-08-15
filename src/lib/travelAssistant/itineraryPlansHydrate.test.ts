@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   emptyItineraryPlans,
   mergeItineraryPlansPreferExistingNotes,
@@ -124,4 +126,17 @@ test("I50: backfill from stored email text writes Sept 3–4 activities", () => 
   assert.ok(result.daysApplied >= 3);
   assert.match(result.plans.dayPlans["2026-09-03"]?.notes ?? "", /Boat tour/i);
   assert.match(result.plans.dayPlans["2026-09-04"]?.notes ?? "", /gelato/i);
+});
+
+test("I50: Plan page does not read setToast before it is declared (TDZ)", () => {
+  const src = readFileSync(join(process.cwd(), "src/app/travel-assistant/page.tsx"), "utf8");
+  const decl = src.search(/const setToast = useCallback/u);
+  assert.ok(decl > 0, "setToast declaration missing");
+  const before = src.slice(0, decl);
+  const uses = before.match(/\bsetToast\b/gu) ?? [];
+  assert.equal(
+    uses.length,
+    0,
+    "setToast is read before initialization — Plan tab crashes (Cannot access before initialization)",
+  );
 });
