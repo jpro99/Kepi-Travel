@@ -113,6 +113,11 @@ The repo must ship `ios/App/App/public/index.html` (Capacitor `exit(1)` if that 
 
 **Test:** `src/lib/native/iosNativeShell.test.ts`
 
+**G26 — Home is a trip execution card**  
+Home answers four questions: Are you okay? What’s next? When do you leave? What can break? Leave-by never invents drive time (I32). A gate change is one event (“Was C12, now B4”); do not invent walking-delta (“6 gates / 4 minutes”) unless both gates are surveyed. Empty stored gate + live gate is an assignment, not a change.
+
+**Test:** `src/lib/travelAssistant/tripWalk.test.ts`
+
 ---
 
 ## FLIGHTS LAWS
@@ -791,6 +796,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | G22 | `src/lib/native/iosNativeShell.test.ts` |
 | G23 | `src/lib/native/iosNativeShell.test.ts` |
 | G24 | `src/lib/native/iosNativeShell.test.ts` |
+| G26 | `src/lib/travelAssistant/tripWalk.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |

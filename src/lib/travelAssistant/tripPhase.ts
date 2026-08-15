@@ -42,6 +42,8 @@ export interface MissionControlReservation {
   flightArrivalTime?: string;
   flightDepartureAirport?: string;
   flightArrivalAirport?: string;
+  /** Confirmation / last-saved gate. Empty + live gate is assignment, not a change (G26). */
+  flightDepartureGate?: string;
   checkOutDate?: string;
   hotelSearchCity?: string;
 }

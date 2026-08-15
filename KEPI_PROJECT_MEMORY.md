@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-14 (Always + Precise native tracker + TestFlight)
+Last updated: 2026-08-15 (TripWalk Home execution card)
+
+## Decision 2026-08-15 — TripWalk Home execution card (Jeff: build / merge / push)
+
+Home composes one TripWalk card: okay / next / leave-by / can-break. Gate change is one event (was X, now Y) with no invented walking-delta. Leave-by still uses `getLeaveByHint` (drive time not included). Took Claude’s sacred interrupt + confidence-or-silence; took Perplexity’s four Home questions. Rejected airport-only, on-device LLM as brain, Wallet-inferred CLEAR, CBP autofill, Mappedin/AR, invented TSA waits. Confirmations untouched.
 
 ## Shipped 2026-08-14 — Always + Precise family GPS (M20)
 

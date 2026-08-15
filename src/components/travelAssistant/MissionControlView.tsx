@@ -25,7 +25,7 @@ import { addIsoDays, buildTripCompleteness } from "@/lib/travelAssistant/tripNig
 import { TripCompletenessBar } from "@/components/travelAssistant/TripCompletenessBar";
 import { FreePlanSoftBanner } from "@/components/billing/FreePlanSoftBanner";
 import { formatFlightStatusTrustLine } from "@/lib/travelAssistant/flightStatusTrustLine";
-import { pickHomeNextAction } from "@/lib/travelAssistant/homeNextAction";
+import { resolveTripWalk } from "@/lib/travelAssistant/tripWalk";
 
 export interface MissionControlLiveStatus {
   flightStatus?: string;
@@ -222,6 +222,40 @@ export function MissionControlView({
 
   const atAirport =
     locationStatus === "at-airport" || locationStatus === "in-terminal";
+  const walk = useMemo(
+    () =>
+      resolveTripWalk({
+        journeyPhase,
+        locationStatus,
+        openAirportMode: snap.openAirportMode,
+        atAirport,
+        attentionTop3: snap.attentionTop3,
+        prepWatchItems,
+        prepMode,
+        unresolvedReviewCount,
+        nextFlight: snap.nextFlight,
+        leaveByHint: snap.leaveByHint,
+        liveDepartureGate: snap.nextFlight
+          ? liveStatus?.[snap.nextFlight.id]?.departureGate
+          : undefined,
+        storedDepartureGate: snap.nextFlight?.flightDepartureGate,
+        connectionCalm,
+      }),
+    [
+      journeyPhase,
+      locationStatus,
+      snap.openAirportMode,
+      snap.attentionTop3,
+      snap.nextFlight,
+      snap.leaveByHint,
+      atAirport,
+      prepWatchItems,
+      prepMode,
+      unresolvedReviewCount,
+      liveStatus,
+      connectionCalm,
+    ],
+  );
   const travelTakeover =
     journeyPhase != null && isTravelDayTakeover(journeyPhase, snap.openAirportMode || atAirport);
 
@@ -249,6 +283,10 @@ export function MissionControlView({
           ? "Just now"
           : `${journeyPhase.landedMinutesAgo} minutes ago`;
       tone = "green";
+    } else if (walk.gateChange) {
+      eyebrow = "Gate changed";
+      title = `Gate changed to ${walk.gateChange.to}`;
+      detail = `Was ${walk.gateChange.from}.`;
     } else if (atAirport) {
       eyebrow = locationStatus === "in-terminal" ? "In the terminal" : "At the airport";
       title = gate ? `Gate ${gate}` : "Open Airport Mode";
@@ -369,16 +407,8 @@ export function MissionControlView({
         ? snap.attentionTop3
         : snap.week.flatMap((d) => d.attention).slice(0, 3);
 
-  // Plan B: one next action wins the Home hero — not a wall of equal cards.
-  const nextAction = pickHomeNextAction({
-    openAirportMode: snap.openAirportMode,
-    atAirport,
-    attentionTop3: snap.attentionTop3,
-    prepWatchItems,
-    prepMode,
-    unresolvedReviewCount,
-    nextFlight: snap.nextFlight,
-  });
+  // G26: one TripWalk card — okay / next / leave-by / can-break.
+  const nextAction = walk.next;
 
   const runNextAction = () => {
     if (nextAction.kind === "airport") {
@@ -500,13 +530,41 @@ export function MissionControlView({
         </h2>
         <p className="mt-1 text-[15px] leading-relaxed text-[#6E6E73]">{activeSummary}</p>
 
-        {showTravelOps &&
-        snap.leaveByHint &&
-        (snap.phase === "departure_day" || snap.phase === "return_day") ? (
-          <p className="mt-3 rounded-xl bg-white px-3 py-2 text-[14px] font-medium text-[#1D1D1F]">
-            {snap.leaveByHint}
-          </p>
-        ) : null}
+        <dl className="mt-3 space-y-2 rounded-xl bg-white px-3 py-3">
+          <div>
+            <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+              Are you okay?
+            </dt>
+            <dd className="mt-0.5 text-[15px] font-semibold text-[#1D1D1F]">{walk.okay.line}</dd>
+          </div>
+          <div>
+            <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+              What’s next?
+            </dt>
+            <dd className="mt-0.5 text-[15px] font-semibold text-[#1D1D1F]">{walk.next.title}</dd>
+          </div>
+          <div>
+            <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+              When do you leave?
+            </dt>
+            <dd className="mt-0.5 text-[15px] font-medium leading-snug text-[#1D1D1F]">
+              {walk.leaveBy ??
+                (prepMode
+                  ? "Not the leave window yet"
+                  : "Drive time not included — we will not invent it")}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+              What can break?
+            </dt>
+            <dd className="mt-0.5 text-[15px] font-medium leading-snug text-[#1D1D1F]">
+              {walk.canBreak.length > 0
+                ? walk.canBreak.map((item) => item.title).join(" · ")
+                : "Nothing flagged"}
+            </dd>
+          </div>
+        </dl>
 
         {showTravelOps && connectionCalm.line ? (
           <p
