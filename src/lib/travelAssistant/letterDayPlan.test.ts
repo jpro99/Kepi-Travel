@@ -10,11 +10,15 @@ import {
 import { buildNarrativeDaySections } from "./narrativeItineraryExport";
 import {
   buildLetterCityRanges,
+  dayHasLetterContent,
   formatLetterCityRange,
+  formatLetterClock,
   formatLetterDayHeading,
   formatLetterMonthRange,
+  letterStayFactsForDay,
   letterTitleLine,
   splitLetterStayAndActivities,
+  stayRoleOnDay,
 } from "./letterDayPlan";
 
 const pugliaDoc = `
@@ -117,6 +121,78 @@ test("I47: Gmail/forward body with the Word letter parses onto Sept days", () =>
   assert.ok(parsed!.days.some((day) => day.dateKey === "2026-09-03"));
 });
 
+test("I48: Polignano check-in facts land on Sept 2, not in a hotel pile", () => {
+  const casa = {
+    type: "hotel",
+    title: "A Casa di Elena",
+    provider: "Booking.com",
+    localTime: "2026-09-02 16:00",
+    checkOutDate: "2026-09-05 10:00",
+    location: "Polignano a Mare",
+    confirmationCode: "283",
+  };
+  const lecce = {
+    type: "hotel",
+    title: "Loft Ru",
+    provider: "Booking.com",
+    localTime: "2026-09-08 16:00",
+    checkOutDate: "2026-09-12 10:00",
+    location: "Lecce",
+    confirmationCode: "-BOOKING-",
+  };
+  assert.equal(stayRoleOnDay(casa, "2026-09-02"), "check_in");
+  assert.equal(stayRoleOnDay(casa, "2026-09-03"), "staying");
+  assert.equal(stayRoleOnDay(casa, "2026-09-05"), "check_out");
+  assert.equal(formatLetterClock("2026-09-02 16:00"), "4:00 PM");
+
+  const sept2 = letterStayFactsForDay("2026-09-02", [casa, lecce]);
+  assert.ok(sept2.some((line) => /Check in · A Casa di Elena/u.test(line)));
+  assert.ok(sept2.some((line) => /Check-in Sept 2 at 4:00 PM/u.test(line)));
+  assert.ok(sept2.some((line) => /Check-out Sept 5 at 10:00 AM/u.test(line)));
+  assert.ok(sept2.some((line) => /Confirmation 283/u.test(line)));
+  assert.ok(!sept2.some((line) => /Loft Ru/u.test(line)));
+
+  const sept8 = letterStayFactsForDay("2026-09-08", [casa, lecce]);
+  assert.ok(sept8.some((line) => /Loft Ru/u.test(line)));
+  assert.ok(!sept8.some((line) => /A Casa di Elena/u.test(line)));
+
+  const pugliaHeader = {
+    stayLocation: "Polignano a Mare",
+    lines: ["Address: 13 Vico Gualdella, 70044 Polignano a Mare, Italy $704"],
+  };
+  const sept2WithLetter = letterStayFactsForDay("2026-09-02", [casa, lecce], pugliaHeader);
+  const sept8WithLetter = letterStayFactsForDay("2026-09-08", [casa, lecce], pugliaHeader);
+  assert.ok(sept2WithLetter.some((line) => /Vico Gualdella/u.test(line)));
+  assert.ok(!sept8WithLetter.some((line) => /Vico Gualdella/u.test(line)));
+
+  const sameDay = letterStayFactsForDay("2026-09-02", [
+    {
+      type: "hotel",
+      title: "A Casa di Elena",
+      provider: "Booking.com",
+      localTime: "2026-09-02 16:00",
+      checkOutDate: "2026-09-02 16:00",
+      location: "Polignano a Mare",
+      confirmationCode: "283",
+    },
+  ]);
+  assert.ok(sameDay.some((line) => /Check in · A Casa di Elena/u.test(line)));
+  assert.ok(sameDay.some((line) => /Confirmation 283/u.test(line)));
+  assert.ok(dayHasLetterContent({ bookingLines: ["✈ AZ 1607 · FCO → BRI · 15:35"] }));
+  assert.ok(!dayHasLetterContent({ bullets: [], stayFacts: [], bookingLines: [] }));
+
+  const sections = buildNarrativeDaySections({
+    tripStartDate: "2026-09-02",
+    tripEndDate: "2026-09-08",
+    reservations: [casa, lecce],
+  });
+  const day2 = sections.find((day) => day.dateKey === "2026-09-02");
+  assert.ok(day2);
+  assert.ok(dayHasLetterContent(day2!));
+  assert.ok(day2!.stayFacts.some((line) => /A Casa di Elena/u.test(line)));
+  assert.ok(!day2!.stayFacts.some((line) => /Loft Ru/u.test(line)));
+});
+
 test("I47: Plan letter view is a paper itinerary, not collapsed Details cards", () => {
   const src = readFileSync(
     join(process.cwd(), "src/components/travelAssistant/NarrativeDayPlanView.tsx"),
@@ -124,6 +200,8 @@ test("I47: Plan letter view is a paper itinerary, not collapsed Details cards", 
   );
   assert.match(src, /#FAF6EF/);
   assert.match(src, /letterTitleLine/);
+  assert.match(src, /stayFacts/);
   assert.doesNotMatch(src, /Tap a stay or activity to expand/);
   assert.doesNotMatch(src, /Hide details/i);
+  assert.doesNotMatch(src, /fromHotels\.flatMap/);
 });

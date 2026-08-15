@@ -4,8 +4,11 @@
 
 import { dedupeDayPlanBullets } from "@/lib/travelAssistant/dayPlanBulletGroups";
 import type { ItineraryPlansData } from "@/lib/travelAssistant/itineraryDayPlan";
-import { formatLetterDayHeading, splitLetterStayAndActivities } from "@/lib/travelAssistant/letterDayPlan";
-import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
+import {
+  formatLetterDayHeading,
+  letterStayFactsForDay,
+  splitLetterStayAndActivities,
+} from "@/lib/travelAssistant/letterDayPlan";
 import { sanitizeTravelerNotes } from "@/lib/travelAssistant/sanitizeTravelerNotes";
 import {
   canonicalFlightDepartureDay,
@@ -39,6 +42,7 @@ export interface NarrativeDaySection {
   hotelLine: string | null;
   bullets: string[];
   stayLines: string[];
+  stayFacts: string[];
   bookingLines: string[];
 }
 
@@ -122,14 +126,7 @@ function bookingLineForReservation(reservation: NarrativeHotelStay): string | nu
     return `✈ ${fn} · ${dep} → ${arr}${time ? ` · ${time}` : ""}`;
   }
   if (reservation.type === "hotel") {
-    const name = reservationPropertyName({
-      type: "hotel",
-      title: reservation.title,
-      provider: reservation.provider,
-      location: reservation.location,
-      notes: reservation.notes,
-    });
-    return `🏨 ${name}`;
+    return null;
   }
   if (reservation.type === "train") {
     return `🚆 ${reservation.title || reservation.provider || "Train"}`;
@@ -188,9 +185,10 @@ export function buildNarrativeDaySections(input: {
           }`
         : null;
     const bookingLines = reservations
-      .filter((r) => reservationTouchesDay(r, dateKey))
+      .filter((r) => (r.type ?? "") !== "hotel" && reservationTouchesDay(r, dateKey))
       .map((r) => bookingLineForReservation(r))
       .filter((line): line is string => Boolean(line));
+    const stayFacts = letterStayFactsForDay(dateKey, reservations, input.itineraryPlans?.letterHeader);
 
     return {
       dateKey,
@@ -201,41 +199,10 @@ export function buildNarrativeDaySections(input: {
       hotelLine,
       bullets,
       stayLines: split.stayLines,
+      stayFacts,
       bookingLines,
     };
   });
-}
-
-function hotelBlockHtml(hotels: NarrativeHotelStay[]): string {
-  const stays = hotels.filter((h) => (h.type ?? "hotel") === "hotel");
-  if (stays.length === 0) return "";
-  const parts = stays.map((hotel) => {
-    const name = reservationPropertyName({
-      type: "hotel",
-      title: hotel.title,
-      provider: hotel.provider,
-      location: hotel.location,
-      notes: hotel.notes,
-    });
-    const checkIn = dateOnly(hotel.localTime);
-    const checkOut = dateOnly(hotel.checkOutDate);
-    const lines = [
-      `<p class="stay-name">${escapeHtml(name)}</p>`,
-      hotel.location ? `<p>${escapeHtml(hotel.location)}</p>` : "",
-      checkIn || checkOut
-        ? `<p>Check-in ${escapeHtml(checkIn || "—")} · Check-out ${escapeHtml(checkOut || "—")}</p>`
-        : "",
-      hotel.confirmationCode
-        ? `<p>Confirmation ${escapeHtml(hotel.confirmationCode)}${
-            hotel.provider && /booking|expedia|airbnb/i.test(hotel.provider)
-              ? ` · via ${escapeHtml(hotel.provider)}`
-              : ""
-          }</p>`
-        : "",
-    ];
-    return `<div class="stay">${lines.filter(Boolean).join("")}</div>`;
-  });
-  return `<section class="stay-section"><h2>Where you're staying</h2>${parts.join("")}</section>`;
 }
 
 export function buildNarrativeItineraryHtml(input: {
@@ -256,7 +223,13 @@ export function buildNarrativeItineraryHtml(input: {
     itineraryPlans: input.itineraryPlans,
     dayNotes: input.dayNotes,
     reservations: input.hotels,
-  }).filter((section) => section.bullets.length > 0 || section.bookingLines.length > 0 || section.location);
+  }).filter(
+    (section) =>
+      section.bullets.length > 0 ||
+      section.bookingLines.length > 0 ||
+      section.stayFacts.length > 0 ||
+      section.location,
+  );
 
   const daySections = sections
     .map((section) => {
@@ -269,12 +242,20 @@ export function buildNarrativeItineraryHtml(input: {
               .map((b) => `<li>${escapeHtml(b)}</li>`)
               .join("")}</ul>`
           : "";
+      const stayFacts =
+        section.stayFacts.length > 0
+          ? `<ul class="stay-facts">${section.stayFacts
+              .map((line) => `<li>${escapeHtml(line)}</li>`)
+              .join("")}</ul>`
+          : "";
       const list =
         section.bullets.length > 0
           ? `<ul>${section.bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join("")}</ul>`
-          : `<p class="empty">Open day — add plans in Kepi.</p>`;
+          : stayFacts || bookings
+            ? ""
+            : `<p class="empty">Open day — add plans in Kepi.</p>`;
 
-      return `<section class="day"><h2>${escapeHtml(section.heading)}</h2>${hotelLine}${bookings}${list}</section>`;
+      return `<section class="day"><h2>${escapeHtml(section.heading)}</h2>${hotelLine}${stayFacts}${bookings}${list}</section>`;
     })
     .join("");
 
@@ -308,7 +289,6 @@ export function buildNarrativeItineraryHtml(input: {
     `<p class="sub">${escapeHtml(rangeLabel)}${
       input.destination ? ` · ${escapeHtml(input.destination)}` : ""
     }</p>`,
-    hotelBlockHtml(input.hotels ?? []),
     daySections || "<p class='empty'>No day plans yet — forward a Word itinerary or add notes on Plan.</p>",
     `<p class="footer">Shared from Kepi Travel${
       input.generatedAt ? ` · ${escapeHtml(input.generatedAt)}` : ""

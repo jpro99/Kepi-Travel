@@ -45,6 +45,7 @@ interface ItineraryTabViewProps {
     checkOutDate?: string;
     location?: string;
     confirmationCode?: string;
+    notes?: string;
     flightAirline?: string;
   }[];
   dayNotes: Record<string, string>;

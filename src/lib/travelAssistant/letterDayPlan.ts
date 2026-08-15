@@ -1,9 +1,11 @@
 /**
- * Word-letter day plan (I47) — headings and stay facts like Puglia_itinerary.docx.
- * Dedupe still applies (I31). Stay fine print is a stay block, not a collapsed day.
+ * Word-letter day plan (I47 / I48) — headings and stay facts like Puglia_itinerary.docx.
+ * Stay facts belong on the check-in / check-out day, not in one pile at the top.
  */
 
 import { isDayPlanDetailLine } from "@/lib/travelAssistant/dayPlanBulletGroups";
+import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
+import { dateOnly } from "@/lib/travelAssistant/tripWindow";
 
 const MONTH_SHORT = [
   "Jan",
@@ -156,4 +158,148 @@ export function letterTitleLine(
   const range = formatLetterMonthRange(startDate, endDate);
   const name = tripName.trim() || "Trip itinerary";
   return range ? `${name}: ${range}` : name;
+}
+
+export interface LetterStayReservation {
+  type?: string;
+  title?: string;
+  provider?: string;
+  localTime?: string;
+  checkOutDate?: string;
+  location?: string;
+  confirmationCode?: string;
+  notes?: string;
+}
+
+export type LetterStayRole = "check_in" | "check_out" | "staying";
+
+/** Clock from a stored local time — "2026-09-02 16:00" → "4:00 PM". */
+export function formatLetterClock(value?: string | null): string {
+  const match = /(\d{1,2}):(\d{2})/u.exec((value ?? "").trim());
+  if (!match) return "";
+  let hour = Number(match[1]);
+  if (!Number.isFinite(hour)) return "";
+  const minute = match[2];
+  const suffix = hour >= 12 ? "PM" : "AM";
+  hour = hour % 12 || 12;
+  return `${hour}:${minute} ${suffix}`;
+}
+
+export function stayRoleOnDay(
+  stay: LetterStayReservation,
+  dateKey: string,
+): LetterStayRole | null {
+  if ((stay.type ?? "hotel") !== "hotel") return null;
+  const checkIn = dateOnly(stay.localTime);
+  const checkOut = dateOnly(stay.checkOutDate);
+  if (checkIn && checkIn === dateKey) return "check_in";
+  if (checkOut && checkOut === dateKey) return "check_out";
+  if (checkIn && checkOut && checkIn < dateKey && dateKey < checkOut) return "staying";
+  return null;
+}
+
+function stayName(stay: LetterStayReservation): string {
+  return reservationPropertyName({
+    type: "hotel",
+    title: stay.title,
+    provider: stay.provider,
+    location: stay.location,
+    notes: stay.notes,
+  });
+}
+
+function confirmationLine(stay: LetterStayReservation): string | null {
+  const code = stay.confirmationCode?.trim();
+  if (!code) return null;
+  const via = stay.provider?.trim();
+  return via ? `Confirmation ${code} · via ${via}` : `Confirmation ${code}`;
+}
+
+function datedClock(dateKey: string, localTime?: string | null): string {
+  const day = formatLetterDayHeading(dateKey);
+  const clock = formatLetterClock(localTime);
+  return clock ? `${day} at ${clock}` : day;
+}
+
+/**
+ * Hotel facts for one calendar day only.
+ * Check-in day gets name, address, times, confirmation.
+ * Check-out day gets the leave line.
+ * Mid-stay is one "Staying at" line — never a dump of every hotel.
+ */
+export function letterStayFactsForDay(
+  dateKey: string,
+  stays: LetterStayReservation[],
+  letterHeader?: { lines?: string[]; stayLocation?: string } | null,
+): string[] {
+  const lines: string[] = [];
+  const hotels = stays.filter((stay) => (stay.type ?? "hotel") === "hotel");
+  const checkIns = hotels.filter((stay) => stayRoleOnDay(stay, dateKey) === "check_in");
+
+  for (const stay of hotels) {
+    const role = stayRoleOnDay(stay, dateKey);
+    if (!role) continue;
+    const name = stayName(stay);
+    const checkIn = dateOnly(stay.localTime);
+    const checkOut = dateOnly(stay.checkOutDate);
+    if (role === "check_in") {
+      lines.push(`Check in · ${name || "Hotel"}`);
+      if (stay.location?.trim() && stay.location.trim() !== name) {
+        lines.push(stay.location.trim());
+      }
+      if (checkIn) lines.push(`Check-in ${datedClock(checkIn, stay.localTime)}`);
+      if (checkOut) lines.push(`Check-out ${datedClock(checkOut, stay.checkOutDate)}`);
+      const confirmation = confirmationLine(stay);
+      if (confirmation) lines.push(confirmation);
+      continue;
+    }
+    if (role === "check_out") {
+      lines.push(`Check out · ${name || "Hotel"}`);
+      if (checkOut) lines.push(`Check-out ${datedClock(checkOut, stay.checkOutDate)}`);
+      const confirmation = confirmationLine(stay);
+      if (confirmation) lines.push(confirmation);
+      continue;
+    }
+    if (name) lines.push(`Staying at ${name}`);
+  }
+
+  const headerLines = (letterHeader?.lines ?? []).map((line) => line.trim()).filter(Boolean);
+  if (headerLines.length > 0 && checkIns.length > 0) {
+    const city = (letterHeader?.stayLocation ?? "").trim().toLowerCase();
+    const matchesCity = checkIns.some((stay) => {
+      const loc = (stay.location ?? "").trim().toLowerCase();
+      const title = (stay.title ?? "").trim().toLowerCase();
+      const haystack = `${stay.location ?? ""} ${stay.title ?? ""} ${stay.notes ?? ""}`.toLowerCase();
+      if (city) {
+        return haystack.includes(city) || (loc.length > 0 && (city.includes(loc) || loc.includes(city)));
+      }
+      const tokens = [loc, title].filter((token) => token.length >= 4);
+      return tokens.some((token) =>
+        headerLines.some((line) => line.toLowerCase().includes(token)),
+      );
+    });
+    if (matchesCity) {
+      for (const line of headerLines) {
+        if (!lines.some((existing) => existing.toLowerCase() === line.toLowerCase())) {
+          lines.push(line);
+        }
+      }
+    }
+  }
+
+  return lines;
+}
+
+export function dayHasLetterContent(input: {
+  bullets?: string[];
+  stayFacts?: string[];
+  bookingLines?: string[];
+  hotelLine?: string | null;
+}): boolean {
+  return (
+    (input.bullets?.length ?? 0) > 0 ||
+    (input.stayFacts?.length ?? 0) > 0 ||
+    (input.bookingLines?.length ?? 0) > 0 ||
+    Boolean(input.hotelLine?.trim())
+  );
 }

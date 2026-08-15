@@ -49,8 +49,10 @@ test("narrative PDF looks like a day-plan letter, not a logistics table", () => 
   assert.match(html, /Sept 2/);
   assert.match(html, /Polignano/);
   assert.match(html, /Boat tour/);
-  assert.match(html, /Where you're staying/);
-  assert.match(html, /Casa de Elena/);
+  assert.match(html, /Check in · Casa de Elena/);
+  assert.match(html, /Check-in Sept 2 at 4:00 PM/);
+  assert.match(html, /Confirmation 283/);
+  assert.doesNotMatch(html, /Where you're staying/);
   assert.doesNotMatch(html, /<th>Day<\/th>/);
   assert.doesNotMatch(html, /Timezone/);
   assert.match(html, /Georgia/);

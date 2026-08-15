@@ -637,6 +637,11 @@ Timeline and day view look like the Word letter: title + month range (`SEPT 2–
 
 **Test:** `src/lib/travelAssistant/letterDayPlan.test.ts`
 
+**I48 — Stay facts belong on the check-in and check-out day**  
+Do not pile every hotel at the top of Plan. Polignano / A Casa di Elena check-in, check-out, confirmation, and time go under **Sept 2** (and checkout under the checkout date). Never show “Nothing on this day yet” when a flight or hotel already sits on that day.
+
+**Test:** `src/lib/travelAssistant/letterDayPlan.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -828,6 +833,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I45 | `src/lib/travelAssistant/historicalEmailForward.test.ts` |
 | I46 | `src/lib/travelAssistant/buildTripLegs.test.ts`, `src/lib/travelAssistant/dayWalkthrough.test.ts` |
 | I47 | `src/lib/travelAssistant/letterDayPlan.test.ts` |
+| I48 | `src/lib/travelAssistant/letterDayPlan.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

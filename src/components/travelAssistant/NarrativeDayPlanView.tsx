@@ -1,20 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   buildNarrativeDaySections,
   bulletsToDayNotes,
-  notesToBullets,
   type NarrativeHotelStay,
 } from "@/lib/travelAssistant/narrativeItineraryExport";
 import type { ItineraryPlansData } from "@/lib/travelAssistant/itineraryDayPlan";
 import {
   buildLetterCityRanges,
+  dayHasLetterContent,
   letterTitleLine,
-  splitLetterStayAndActivities,
 } from "@/lib/travelAssistant/letterDayPlan";
-import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
-import { dateOnly } from "@/lib/travelAssistant/tripWindow";
 
 interface NarrativeDayPlanViewProps {
   tripName: string;
@@ -27,32 +24,6 @@ interface NarrativeDayPlanViewProps {
   onDayNoteChange: (dateKey: string, value: string) => void;
   onReservationTap?: (id: string) => void;
   selectedDateKey?: string | null;
-}
-
-function hotelStayLines(hotel: NarrativeHotelStay): string[] {
-  const lines: string[] = [];
-  const name = reservationPropertyName({
-    type: "hotel",
-    title: hotel.title,
-    provider: hotel.provider,
-    location: hotel.location,
-    notes: hotel.notes,
-  });
-  if (name) lines.push(name);
-  if (hotel.location?.trim()) lines.push(hotel.location.trim());
-  const checkIn = dateOnly(hotel.localTime);
-  const checkOut = dateOnly(hotel.checkOutDate);
-  if (checkIn || checkOut) {
-    lines.push(`Check-in ${checkIn || "—"} · Check-out ${checkOut || "—"}`);
-  }
-  if (hotel.confirmationCode?.trim()) {
-    lines.push(
-      `Confirmation ${hotel.confirmationCode.trim()}${
-        hotel.provider?.trim() ? ` · via ${hotel.provider.trim()}` : ""
-      }`,
-    );
-  }
-  return lines;
 }
 
 export function NarrativeDayPlanView({
@@ -78,29 +49,9 @@ export function NarrativeDayPlanView({
     [dayNotes, itineraryPlans, reservations, tripEndDate, tripStartDate],
   );
 
-  const hotels = useMemo(
-    () => reservations.filter((reservation) => (reservation.type ?? "") === "hotel"),
-    [reservations],
-  );
-
   const cityRanges = useMemo(() => buildLetterCityRanges(sections), [sections]);
   const rangeForDay = (dateKey: string) =>
     cityRanges.find((range) => range.startKey === dateKey) ?? null;
-
-  const stayLines = useMemo(() => {
-    const fromLetter = itineraryPlans.letterHeader?.lines ?? [];
-    const fromDays = sections.flatMap((section) => section.stayLines);
-    const fromHotels = hotels.flatMap((hotel) => hotelStayLines(hotel));
-    const seen = new Set<string>();
-    const merged: string[] = [];
-    for (const line of [...fromLetter, ...fromDays, ...fromHotels]) {
-      const key = line.trim().toLowerCase();
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      merged.push(line.trim());
-    }
-    return merged;
-  }, [hotels, itineraryPlans.letterHeader?.lines, sections]);
 
   const title = letterTitleLine(
     tripName,
@@ -110,29 +61,12 @@ export function NarrativeDayPlanView({
   );
 
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const cleanedDateKeysRef = useRef(new Set<string>());
 
   useEffect(() => {
     if (!selectedDateKey) return;
     const node = document.getElementById(`narrative-day-${selectedDateKey}`);
     node?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [selectedDateKey]);
-
-  useEffect(() => {
-    for (const section of sections) {
-      if (cleanedDateKeysRef.current.has(section.dateKey)) continue;
-      const planNotes = itineraryPlans.dayPlans[section.dateKey]?.notes ?? "";
-      const noteNotes = dayNotes[section.dateKey] ?? "";
-      const source = planNotes.trim() || noteNotes;
-      if (!source.trim()) continue;
-      cleanedDateKeysRef.current.add(section.dateKey);
-      const raw = notesToBullets(source);
-      const activities = splitLetterStayAndActivities(raw).activityLines;
-      if (raw.length !== activities.length) {
-        onDayNoteChange(section.dateKey, bulletsToDayNotes(activities));
-      }
-    }
-  }, [dayNotes, itineraryPlans.dayPlans, onDayNoteChange, sections]);
 
   const commitBullets = (dateKey: string, bullets: string[]): void => {
     onDayNoteChange(dateKey, bulletsToDayNotes(bullets.map((line) => line.trim()).filter(Boolean)));
@@ -182,25 +116,11 @@ export function NarrativeDayPlanView({
         ) : null}
       </header>
 
-      {stayLines.length > 0 ? (
-        <section className="mb-6 border-b border-[#E8E0D4] pb-4">
-          <ul className="space-y-1.5 text-[16px] leading-snug">
-            {stayLines.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        </section>
-      ) : hotels.length === 0 ? (
-        <p className="mb-6 text-[15px] leading-relaxed text-[#6E6E73]">
-          Forward a Word itinerary or add the stay address here. Check-in, late fees, and tax stay
-          visible — they are not hidden behind Details.
-        </p>
-      ) : null}
-
       <div className="space-y-7">
         {sections.map((section) => {
           const range = rangeForDay(section.dateKey);
           const isSelected = selectedDateKey === section.dateKey;
+          const hasContent = dayHasLetterContent(section);
           return (
             <section
               key={section.dateKey}
@@ -212,14 +132,23 @@ export function NarrativeDayPlanView({
               ) : null}
               <h3 className="mb-2 text-[20px] font-bold text-[#1D1D1F]">{section.heading}</h3>
               {section.bookingLines.length > 0 ? (
-                <ul className="mb-2 space-y-1 text-[15px] text-[#6E6E73]">
+                <ul className="mb-2 space-y-1 text-[16px] leading-snug text-[#1D1D1F]">
                   {section.bookingLines.map((line) => (
                     <li key={line}>{line}</li>
                   ))}
                 </ul>
               ) : null}
+              {section.stayFacts.length > 0 ? (
+                <ul className="mb-3 space-y-1 text-[16px] leading-snug text-[#1D1D1F]">
+                  {section.stayFacts.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              ) : section.hotelLine ? (
+                <p className="mb-3 text-[16px] leading-snug text-[#1D1D1F]">{section.hotelLine}</p>
+              ) : null}
               <ul className="space-y-2">
-                {section.bullets.length === 0 ? (
+                {!hasContent ? (
                   <li className="text-[16px] italic text-[#8E8E93]">Nothing on this day yet.</li>
                 ) : (
                   section.bullets.map((bullet, index) => (

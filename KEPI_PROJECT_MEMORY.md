@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-15 (Plan letter matches wife Word itinerary)
+Last updated: 2026-08-15 (Stay facts on the check-in day)
+
+## Decision 2026-08-15 — Stay facts go on the check-in day (Jeff)
+
+Do not dump every hotel at the top of Plan. A Casa di Elena / Polignano check-in, times, and confirmation belong under Sept 2. Checkout belongs on the checkout date. Confirmations untouched.
 
 ## Decision 2026-08-15 — Plan Timeline is her Word letter (Jeff)
 
