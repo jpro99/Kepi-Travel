@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { ShareAccessGate } from "@/components/share/ShareTripPhotosNav";
 import { SharedTripView } from "@/components/share/SharedTripView";

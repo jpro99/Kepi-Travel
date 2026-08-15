@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { openBugReport, openSupportChat } from "@/components/support/SupportChat";
 import { ThemePicker } from "@/components/ThemeToggle";
