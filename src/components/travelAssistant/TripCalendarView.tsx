@@ -213,7 +213,7 @@ export function TripCalendarView({
               backgroundPosition: "center",
             }}
           >
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f4c95d]">Calendar</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#007AFF]">Calendar</p>
             <p className="mt-1 text-2xl font-extrabold text-white">
               {MONTH_NAMES[gridMonth]} {gridYear}
             </p>
@@ -233,7 +233,7 @@ export function TripCalendarView({
           {DAY_NAMES.map((d, idx) => (
             <div
               key={`${d}-${idx}`}
-              className="py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400"
+              className="py-2 text-center text-[11px] font-semibold uppercase tracking-wider text-slate-400"
             >
               {d}
             </div>
@@ -263,7 +263,7 @@ export function TripCalendarView({
                 onClick={() => setSelectedKey(dateKey)}
                 className={`relative flex min-h-[56px] flex-col items-center justify-start rounded-xl px-0.5 py-1.5 transition ${
                   isSelected
-                    ? "bg-[#0F1923] text-white shadow-lg ring-2 ring-[#f4c95d] dark:bg-[#f4c95d] dark:text-[#0F1923]"
+                    ? "bg-[#0F1923] text-white shadow-lg ring-2 ring-[#007AFF] dark:bg-[#007AFF] dark:text-white"
                     : inTripWindow
                       ? "bg-white hover:bg-slate-50 dark:bg-slate-900/80 dark:hover:bg-slate-800"
                       : "bg-white/60 text-slate-400 dark:bg-slate-900/40"
@@ -272,7 +272,7 @@ export function TripCalendarView({
                 <span
                   className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-extrabold ${
                     isToday && !isSelected
-                      ? "bg-[#f4c95d] text-[#0F1923]"
+                      ? "bg-[#007AFF] text-white"
                       : ""
                   }`}
                 >
@@ -299,7 +299,7 @@ export function TripCalendarView({
                     {hasHotel ? (
                       <span
                         className={`h-1.5 w-1.5 rounded-full ${
-                          isSelected ? "bg-[#f4c95d]" : "bg-[#f4c95d]/80"
+                          isSelected ? "bg-[#007AFF]" : "bg-[#007AFF]/80"
                         }`}
                       />
                     ) : null}
@@ -332,7 +332,7 @@ export function TripCalendarView({
               onClick={() => setZoom(mode)}
               className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold capitalize transition ${
                 zoom === mode
-                  ? "bg-[#0F1923] text-white dark:bg-[#f4c95d] dark:text-[#0F1923]"
+                  ? "bg-[#0F1923] text-white dark:bg-[#007AFF] dark:text-white"
                   : "text-slate-600 dark:text-slate-300"
               }`}
             >
@@ -396,11 +396,11 @@ export function TripCalendarView({
                 onClick={() => setSelectedKey(key)}
                 className={`rounded-2xl border p-2 text-left transition ${
                   isSelected
-                    ? "border-[#f4c95d] bg-[#0F1923] text-white shadow-lg"
+                    ? "border-[#007AFF] bg-[#0F1923] text-white shadow-lg"
                     : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
                 }`}
               >
-                <p className="text-[9px] font-semibold uppercase opacity-70">
+                <p className="text-[11px] font-semibold uppercase opacity-70">
                   {day.toLocaleDateString("en-US", { weekday: "short" })}
                 </p>
                 <p className="text-xl font-extrabold">{day.getDate()}</p>
@@ -467,7 +467,7 @@ export function TripCalendarView({
 
       {compact && activeSelectedKey && selectedStayCity ? (
         <div className="rounded-2xl bg-slate-100/80 px-4 py-3 dark:bg-slate-800/60">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Selected</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Selected</p>
           <p className="text-sm font-extrabold text-slate-900 dark:text-white">
             {selectedDate?.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
             {" · "}

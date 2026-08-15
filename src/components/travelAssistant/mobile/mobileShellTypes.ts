@@ -13,13 +13,12 @@ export const MOBILE_CONTENT_BOTTOM_PAD = `calc(${MOBILE_TAB_BAR_CLEARANCE} + 1re
 /** Fixed toast / FAB offset above the tab bar. */
 export const MOBILE_FLOATING_ABOVE_TAB_BAR = `calc(${MOBILE_TAB_BAR_CLEARANCE} + 0.75rem)`;
 
-/** Same mental model as desktop: Home → Plan → Book → Map → Photos → More */
+/** Tab bar: Home → Plan → Book → Map → More. Photos opens from More (G25). */
 export const MOBILE_PRIMARY_TABS: Array<{ id: MobilePrimaryTab; label: string }> = [
   { id: "home", label: "Home" },
   { id: "plan", label: "Plan" },
   { id: "book", label: "Book" },
   { id: "map", label: "Map" },
-  { id: "photos", label: "Photos" },
   { id: "more", label: "More" },
 ];
 
@@ -37,6 +36,8 @@ const LEGACY_MOBILE_TAB_ALIASES: Record<string, MobilePrimaryTab> = {
 };
 
 export function isMobilePrimaryTab(value: string | null): value is MobilePrimaryTab {
+  if (!value) return false;
+  if (value === "photos") return true;
   return MOBILE_PRIMARY_TABS.some((tab) => tab.id === value);
 }
 

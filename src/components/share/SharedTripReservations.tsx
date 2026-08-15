@@ -1,19 +1,21 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Plane, Hotel, Utensils, Train, Car, MapPin } from "lucide-react";
 import { SharedHotelDetailSheet } from "@/components/share/SharedHotelDetailSheet";
 import {
   buildSharedHotelContact,
   type SharedHotelReservationInput,
 } from "@/lib/travelAssistant/sharedHotelInfo";
+import { appleCaption, appleCard, appleCardTitle, appleMetadata } from "@/lib/ui/appleDesign";
 
-const TYPE_EMOJI: Record<string, string> = {
-  flight: "✈️",
-  hotel: "🏨",
-  dinner: "🍽",
-  train: "🚆",
-  ride: "🚗",
-};
+const TYPE_ICON = {
+  flight: Plane,
+  hotel: Hotel,
+  dinner: Utensils,
+  train: Train,
+  ride: Car,
+} as const;
 
 function formatDate(localTime: string): string {
   const ms = Date.parse(localTime.replace(" ", "T"));
@@ -55,52 +57,45 @@ export function SharedTripReservations({ reservations }: SharedTripReservationsP
         {sorted.map((reservation) => {
           const isHotel = reservation.type === "hotel";
           const CardTag = isHotel ? "button" : "article";
+          const TypeIcon = TYPE_ICON[reservation.type as keyof typeof TYPE_ICON];
           return (
             <CardTag
               key={reservation.id}
               type={isHotel ? "button" : undefined}
               onClick={isHotel ? () => setActiveHotelId(reservation.id) : undefined}
-              className={`w-full rounded-2xl border p-4 text-left transition ${
-                reservation.type === "flight"
-                  ? "border-violet-500/30 bg-gradient-to-br from-[#1a1030] to-[#0d1117]"
-                  : "border-slate-700 bg-[#161b22]"
-              } ${isHotel ? "cursor-pointer hover:border-emerald-500/40 hover:bg-[#1a2330] active:scale-[0.99]" : ""}`}
+              className={`w-full p-4 text-left ${appleCard} ${isHotel ? "min-h-[48px] active:opacity-80" : ""}`}
             >
               <div className="mb-2 flex items-start justify-between gap-2">
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${
-                    reservation.type === "flight"
-                      ? "bg-violet-500/20 text-violet-300"
-                      : reservation.type === "hotel"
-                        ? "bg-emerald-500/15 text-emerald-300"
-                        : "bg-slate-800 text-slate-400"
-                  }`}
-                >
-                  {TYPE_EMOJI[reservation.type] ?? "📌"} {reservation.type}
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F5F5F7] px-2 py-0.5 text-[13px] font-medium capitalize text-[#6E6E73]">
+                  {TypeIcon ? <TypeIcon className="h-3.5 w-3.5" strokeWidth={1.85} aria-hidden /> : null}
+                  {reservation.type}
                 </span>
-                <span className="text-sm text-slate-400">{formatDate(reservation.localTime)}</span>
+                <span className={appleMetadata}>{formatDate(reservation.localTime)}</span>
               </div>
-              <p className="text-lg font-bold">{reservation.title || reservation.provider}</p>
+              <p className={appleCardTitle}>{reservation.title || reservation.provider}</p>
               {reservation.provider && reservation.title ? (
-                <p className="text-sm text-slate-400">{reservation.provider}</p>
+                <p className={`${appleMetadata} mt-0.5`}>{reservation.provider}</p>
               ) : null}
               {reservation.localTime && reservation.type !== "hotel" ? (
-                <p className="mt-1 text-sm text-slate-300">{formatTime(reservation.localTime)}</p>
+                <p className={`${appleMetadata} mt-1`}>{formatTime(reservation.localTime)}</p>
               ) : null}
               {reservation.type === "hotel" && reservation.checkOutDate ? (
-                <p className="mt-1 text-sm text-slate-300">
+                <p className={`${appleMetadata} mt-1`}>
                   Check-in {formatDate(reservation.localTime)}
                   {reservation.checkOutDate ? ` · Out ${formatDate(reservation.checkOutDate)}` : ""}
                 </p>
               ) : null}
               {reservation.location ? (
-                <p className="mt-1 text-xs text-slate-500">📍 {reservation.location}</p>
+                <p className={`${appleCaption} mt-1 flex items-center gap-1`}>
+                  <MapPin className="h-3.5 w-3.5 shrink-0" strokeWidth={1.85} aria-hidden />
+                  {reservation.location}
+                </p>
               ) : null}
               {isHotel ? (
-                <p className="mt-3 text-xs font-semibold text-emerald-300">Tap for address & phone →</p>
+                <p className="mt-3 text-[15px] font-semibold text-[#007AFF]">Address & phone</p>
               ) : null}
               {reservation.notes && reservation.type !== "hotel" ? (
-                <p className="mt-2 text-xs text-slate-400">{reservation.notes}</p>
+                <p className={`${appleCaption} mt-2`}>{reservation.notes}</p>
               ) : null}
             </CardTag>
           );

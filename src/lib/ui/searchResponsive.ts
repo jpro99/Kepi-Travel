@@ -20,16 +20,16 @@ export const SEARCH_MODAL_PANEL =
 export const SEARCH_RESULTS_GRID = "space-y-3 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0 xl:gap-5";
 
 export const SEARCH_LABEL =
-  "mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-500 sm:text-xs md:mb-2";
+  "mb-1.5 block text-[13px] font-semibold uppercase tracking-widest text-slate-500 sm:text-sm md:mb-2";
 
 export const SEARCH_LABEL_DARK =
-  "mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-500 sm:text-xs md:mb-2";
+  "mb-1.5 block text-[13px] font-semibold uppercase tracking-widest text-slate-500 sm:text-sm md:mb-2";
 
 export const SEARCH_INPUT_LIGHT =
   "w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-base text-slate-900 outline-none ring-sky-300 focus-visible:ring-2 dark:border-slate-600 dark:bg-slate-950 dark:text-white md:px-5 md:py-4 md:text-lg";
 
 export const SEARCH_INPUT_DARK =
-  "w-full rounded-2xl border border-slate-700 bg-slate-800/80 px-4 py-3.5 text-base text-white placeholder:text-slate-500 focus:border-[#f4c95d]/60 focus:outline-none md:px-5 md:py-4 md:text-lg";
+  "w-full rounded-2xl border border-slate-700 bg-slate-800/80 px-4 py-3.5 text-base text-white placeholder:text-slate-500 focus:border-[#007AFF]/60 focus:outline-none md:px-5 md:py-4 md:text-lg";
 
 export const SEARCH_SELECT_DARK =
   "w-full rounded-2xl border border-slate-700 bg-slate-800/80 px-4 py-3.5 text-base text-white focus:outline-none md:px-5 md:py-4 md:text-lg";

@@ -29,6 +29,7 @@ interface MobileSettingsViewProps {
   offlineKitReservationCount?: number;
   offlineKitSyncing?: boolean;
   onRefreshOfflineKit?: () => void;
+  onOpenPhotos?: () => void;
   onSignOut: () => void;
 }
 
@@ -50,6 +51,7 @@ export function MobileSettingsView({
   offlineKitReservationCount = 0,
   offlineKitSyncing = false,
   onRefreshOfflineKit,
+  onOpenPhotos,
   onSignOut,
 }: MobileSettingsViewProps) {
   const locale = useLocale();
@@ -149,6 +151,20 @@ export function MobileSettingsView({
                   : t("planFreeBody")}
         </p>
       </article>
+
+      {onOpenPhotos ? (
+        <button
+          type="button"
+          onClick={onOpenPhotos}
+          className={`block w-full p-4 text-left font-semibold text-[var(--text-primary)] ${appleCard}`}
+        >
+          <span className="flex items-center gap-3">
+            <ConsumerSectionIcon section="photos" className="h-5 w-5" />
+            Photos
+          </span>
+          <p className={`${appleCaption} mt-0.5 font-normal`}>Trip memories and keepsake collage</p>
+        </button>
+      ) : null}
 
       <PlanRedeemCard compact />
 

@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { appleBody, appleBtnPrimary, appleBtnText, appleCaption, appleCard, appleCardTitle } from "@/lib/ui/appleDesign";
 
 interface JoinCollaborateButtonProps {
   token: string;
@@ -49,9 +50,9 @@ export function JoinCollaborateButton({ token, tripName }: JoinCollaborateButton
   }, [busy, router, token]);
 
   return (
-    <div className="mb-6 rounded-2xl border border-sky-500/40 bg-sky-500/10 p-4">
-      <p className="text-sm font-bold text-sky-100">Edit this trip together</p>
-      <p className="mt-1 text-xs leading-relaxed text-sky-100/80">
+    <div className={`mb-6 p-4 ${appleCard}`}>
+      <p className={appleCardTitle}>Edit this trip together</p>
+      <p className={`${appleBody} mt-1 text-[15px] text-[#6E6E73]`}>
         Open <strong>{tripName}</strong> in your Kepi account. You and the owner can both add flights,
         hotels, and notes — same trip, shared.
       </p>
@@ -59,19 +60,19 @@ export function JoinCollaborateButton({ token, tripName }: JoinCollaborateButton
         type="button"
         disabled={busy}
         onClick={() => void handleJoin()}
-        className="mt-3 min-h-[48px] w-full rounded-xl bg-[#007AFF] px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+        className={`mt-3 min-h-[48px] w-full ${appleBtnPrimary} disabled:opacity-60`}
       >
         {busy ? "Opening…" : "Open in My Trips & edit together"}
       </button>
       {needsUpgrade ? (
-        <p className="mt-2 text-center text-xs text-amber-200">
+        <p className={`${appleCaption} mt-2 text-center`}>
           Need Pro or Lifetime?{" "}
-          <Link href="/billing" className="font-semibold underline">
+          <Link href="/billing" className={appleBtnText}>
             Upgrade here
           </Link>
         </p>
       ) : null}
-      {error ? <p className="mt-2 text-xs text-rose-300">{error}</p> : null}
+      {error ? <p className="mt-2 text-[13px] text-[var(--destructive)]">{error}</p> : null}
     </div>
   );
 }

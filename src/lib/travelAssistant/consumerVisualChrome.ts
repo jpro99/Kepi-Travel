@@ -11,6 +11,7 @@ export const CONSUMER_SECTION_KEYS = [
   "loyalty",
   "packing",
   "family",
+  "photos",
   "bug",
   "trash",
   "refresh",

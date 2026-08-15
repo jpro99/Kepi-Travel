@@ -40,6 +40,15 @@ test("orientationTabToConsumerTab routes reservations to book", () => {
   assert.equal(orientationTabToConsumerTab("flights"), "book");
 });
 
+test("G25 consumer tab bar is five items — Photos is not a bar tab", () => {
+  assert.equal(CONSUMER_TAB_BAR.length, 5);
+  assert.deepEqual(
+    CONSUMER_TAB_BAR.map(([id]) => id),
+    ["trip", "itinerary", "book", "map", "more"],
+  );
+  assert.equal(normalizeConsumerTabParam("photos"), "photos");
+});
+
 test("G16 consumer tab bar is labels only — no emoji chrome", () => {
   for (const row of CONSUMER_TAB_BAR) {
     assert.equal(row.length, 2);

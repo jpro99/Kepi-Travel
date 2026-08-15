@@ -287,6 +287,7 @@ import {
   MOBILE_CONTENT_BOTTOM_PAD,
 } from "@/components/travelAssistant/mobile/mobileShellTypes";
 import { isCompactViewportClient } from "@/lib/ui/isCompactViewport";
+import { fromDatetimeLocalValue, toDatetimeLocalValue } from "@/lib/ui/datetimeLocalValue";
 import { useMobilePrimaryTab } from "@/components/travelAssistant/mobile/useMobilePrimaryTab";
 import { PlannerTab } from "@/components/travelAssistant/PlannerTab";
 
@@ -7058,7 +7059,12 @@ export default function TravelAssistantPage() {
               flightDepartureTime: reviewItem.draft.flightDepartureTime,
             }),
           );
-          setDrawerDraft(prepared);
+          setDrawerDraft({
+            ...prepared,
+            timezone:
+              prepared.timezone?.trim() ||
+              (typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : ""),
+          });
         }
       }
       setFlightLookupError(null);
@@ -9070,7 +9076,7 @@ export default function TravelAssistantPage() {
             role="alert"
             className="mt-3 rounded-xl border-2 border-rose-600 bg-rose-50 px-3 py-3 text-sm font-semibold text-rose-950"
           >
-            Something is still missing. Check route, departure time (YYYY-MM-DD HH:MM), and timezone — then tap{" "}
+            Something is still missing. Check route, departure date & time, and timezone — then tap{" "}
             <strong>Save + accept</strong>.
           </div>
         ) : null}
@@ -9112,12 +9118,17 @@ export default function TravelAssistantPage() {
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-sm font-semibold text-slate-800">Local time</span>
+              <span className="mb-1 block text-sm font-semibold text-slate-800">Departure date & time</span>
               <input
-                value={drawerDraft.localTime}
-                onChange={(event) => setDrawerDraft((prev) => ({ ...prev, localTime: event.target.value }))}
-                placeholder="2026-09-12 09:40"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-400"
+                type="datetime-local"
+                value={toDatetimeLocalValue(drawerDraft.localTime)}
+                onChange={(event) =>
+                  setDrawerDraft((prev) => ({
+                    ...prev,
+                    localTime: fromDatetimeLocalValue(event.target.value),
+                  }))
+                }
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-[16px] text-slate-900 placeholder:text-slate-400"
               />
             </label>
             <label className="block">
@@ -10300,6 +10311,22 @@ export default function TravelAssistantPage() {
                       Learn Rakuten stacking, lounge access, and how Kepi uses your card wallet
                     </p>
                   </div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => navigateToConsumerTab("photos")}
+                className="w-full rounded-3xl bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/[0.08] px-5 py-4 text-left"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <ConsumerSectionIcon section="photos" tiled />
+                    <div>
+                      <p className="font-semibold text-slate-900 dark:text-white">{tApp("photosTitle")}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{tApp("photosSubtitle")}</p>
+                    </div>
+                  </div>
+                  <span className="text-slate-400 text-sm">›</span>
                 </div>
               </button>
               <button

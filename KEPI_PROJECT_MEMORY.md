@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-14 (Always + Precise native tracker + TestFlight)
+Last updated: 2026-08-15 (Apple style pass)
+
+## Decision 2026-08-15 — Apple style pass (Jeff approved)
+
+Share view is Picasso light (`#F5F5F7`). Tab bar is five items; Photos opens from More. Review badges never show raw ML scores; repair uses `datetime-local`. System blue `#007AFF` for chrome CTAs; gold stays Talk / brand / star ratings. Confirmations untouched.
 
 ## Shipped 2026-08-14 — Always + Precise family GPS (M20)
 

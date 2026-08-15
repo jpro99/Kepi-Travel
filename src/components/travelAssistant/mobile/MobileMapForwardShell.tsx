@@ -641,6 +641,7 @@ export function MobileMapForwardShell({
         offlineKitReservationCount={offlineKitReservationCount}
         offlineKitSyncing={offlineKitSyncing}
         onRefreshOfflineKit={onRefreshOfflineKit}
+        onOpenPhotos={() => onNavigateTab("photos")}
         onSignOut={onSignOut}
       />
         </>

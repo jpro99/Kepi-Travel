@@ -28,6 +28,7 @@ test("G21 section keys cover More / empty Home / Plan chrome", () => {
     "loyalty",
     "packing",
     "family",
+    "photos",
     "bug",
     "trash",
     "refresh",
@@ -74,4 +75,5 @@ test("G21 consumer More, empty Home, and Plan use Lucide — no emoji chrome", (
   assert.match(icon, /Bug/);
   assert.match(icon, /Trash2/);
   assert.match(icon, /RefreshCw/);
+  assert.match(icon, /Camera/);
 });
