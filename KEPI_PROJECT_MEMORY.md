@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-14 (Always + Precise native tracker + TestFlight)
+Last updated: 2026-08-15 (Claude Code base audit — plan only)
+
+## Audit 2026-08-15 — Claude Code base (no code)
+
+Full specialist audit written to `bot-deck/memory/audits/2026-08-15-claude-code-base.md`. Top verified issues: RevenueCat `/api/billing/revenuecat/sync` trusts client entitlements; hotel Stripe capture before LiteAPI book has no refund; `next.config.ts` is unused on Next 14. **ETIAS is not in operation** (official EU site 2026-08-15) — do not add as a required prep item. Jeff must pick what to build; discuss-before-code still applies.
 
 ## Shipped 2026-08-14 — Always + Precise family GPS (M20)
 
