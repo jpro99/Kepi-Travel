@@ -91,6 +91,7 @@ For each finding:
 - Use `.claude/agents/` for specialist subagents.
 - Route to read-only subagents first.
 - Use Playwright MCP for browser flow validation when available.
+- Consumer chrome / Apple HIG: `.claude/agents/apple-design-reviewer.md` + `.cursor/skills/kepi-apple-bot/SKILL.md`
 
 ## Project memory (agents)
 
@@ -116,6 +117,7 @@ For each finding:
 | Map | `.cursor/skills/kepi-map-bot/SKILL.md` |
 | Points / Travel Fit | `.cursor/skills/kepi-points-bot/SKILL.md` |
 | Card earn | `.cursor/skills/kepi-card-bot/SKILL.md` |
+| Apple / Picasso chrome | `.cursor/skills/kepi-apple-bot/SKILL.md` |
 
 These are agent playbooks, not autonomous runtime bots. Jeff instructs the conductor; conductor routes to domain skills.
 

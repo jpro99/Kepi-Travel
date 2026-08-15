@@ -95,3 +95,4 @@ When building any mobile overlay, sheet, reader, or full-screen view:
 - Provide one unified vertical scroll area with `-webkit-overflow-scrolling: touch`.
 - Never set `document.body.style.overflow = "hidden"` on mobile overlays — it breaks pinch-zoom scrolling on iOS.
 - Apple-style: clean headers, generous tap targets (48px+), cream/paper or system gray backgrounds.
+- Consumer chrome playbook: `.cursor/skills/kepi-apple-bot/SKILL.md`
