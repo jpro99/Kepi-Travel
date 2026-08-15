@@ -6,6 +6,8 @@ import { dedupeDayPlanBullets } from "@/lib/travelAssistant/dayPlanBulletGroups"
 import type { ItineraryPlansData } from "@/lib/travelAssistant/itineraryDayPlan";
 import {
   formatLetterDayHeading,
+  isLetterActivityType,
+  letterActivityFactsForDay,
   letterStayFactsForDay,
   splitLetterStayAndActivities,
 } from "@/lib/travelAssistant/letterDayPlan";
@@ -43,6 +45,7 @@ export interface NarrativeDaySection {
   bullets: string[];
   stayLines: string[];
   stayFacts: string[];
+  activityFacts: string[];
   bookingLines: string[];
 }
 
@@ -125,7 +128,7 @@ function bookingLineForReservation(reservation: NarrativeHotelStay): string | nu
     const time = (reservation.flightDepartureTime || reservation.localTime || "").trim().slice(11, 16);
     return `✈ ${fn} · ${dep} → ${arr}${time ? ` · ${time}` : ""}`;
   }
-  if (reservation.type === "hotel") {
+  if (reservation.type === "hotel" || isLetterActivityType(reservation.type)) {
     return null;
   }
   if (reservation.type === "train") {
@@ -189,6 +192,7 @@ export function buildNarrativeDaySections(input: {
       .map((r) => bookingLineForReservation(r))
       .filter((line): line is string => Boolean(line));
     const stayFacts = letterStayFactsForDay(dateKey, reservations, input.itineraryPlans?.letterHeader);
+    const activityFacts = letterActivityFactsForDay(dateKey, reservations);
 
     return {
       dateKey,
@@ -200,6 +204,7 @@ export function buildNarrativeDaySections(input: {
       bullets,
       stayLines: split.stayLines,
       stayFacts,
+      activityFacts,
       bookingLines,
     };
   });
@@ -228,6 +233,7 @@ export function buildNarrativeItineraryHtml(input: {
       section.bullets.length > 0 ||
       section.bookingLines.length > 0 ||
       section.stayFacts.length > 0 ||
+      section.activityFacts.length > 0 ||
       section.location,
   );
 
@@ -248,14 +254,20 @@ export function buildNarrativeItineraryHtml(input: {
               .map((line) => `<li>${escapeHtml(line)}</li>`)
               .join("")}</ul>`
           : "";
+      const activityFacts =
+        section.activityFacts.length > 0
+          ? `<ul class="activity-facts">${section.activityFacts
+              .map((line) => `<li>${escapeHtml(line)}</li>`)
+              .join("")}</ul>`
+          : "";
       const list =
         section.bullets.length > 0
           ? `<ul>${section.bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join("")}</ul>`
-          : stayFacts || bookings
+          : stayFacts || activityFacts || bookings
             ? ""
             : `<p class="empty">Open day — add plans in Kepi.</p>`;
 
-      return `<section class="day"><h2>${escapeHtml(section.heading)}</h2>${hotelLine}${stayFacts}${bookings}${list}</section>`;
+      return `<section class="day"><h2>${escapeHtml(section.heading)}</h2>${hotelLine}${stayFacts}${bookings}${activityFacts}${list}</section>`;
     })
     .join("");
 

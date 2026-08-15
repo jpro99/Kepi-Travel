@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-15 (Stay facts on the check-in day)
+Last updated: 2026-08-15 (Activity facts on the activity day)
+
+## Decision 2026-08-15 — Excursions print on the activity day (Jeff)
+
+PDF / mail / Gmail tour confirmations (GetYourGuide, boat, dinner) belong under that date on Plan Timeline — name, time, confirmation. Same rule as hotel check-in. Confirmations untouched.
 
 ## Decision 2026-08-15 — Stay facts go on the check-in day (Jeff)
 

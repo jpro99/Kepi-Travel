@@ -41,6 +41,14 @@ test("narrative PDF looks like a day-plan letter, not a logistics table", () => 
         location: "Polignano a Mare",
         confirmationCode: "283",
       },
+      {
+        type: "dinner",
+        title: "Sunset Boat Excursion",
+        provider: "GetYourGuide",
+        localTime: "2026-09-03 10:00",
+        location: "Monopoli Harbor",
+        confirmationCode: "EXC-4471",
+      },
     ],
     generatedAt: "test",
   });
@@ -49,6 +57,8 @@ test("narrative PDF looks like a day-plan letter, not a logistics table", () => 
   assert.match(html, /Sept 2/);
   assert.match(html, /Polignano/);
   assert.match(html, /Boat tour/);
+  assert.match(html, /Sunset Boat Excursion/);
+  assert.match(html, /Confirmation EXC-4471/);
   assert.match(html, /Check in · Casa de Elena/);
   assert.match(html, /Check-in Sept 2 at 4:00 PM/);
   assert.match(html, /Confirmation 283/);

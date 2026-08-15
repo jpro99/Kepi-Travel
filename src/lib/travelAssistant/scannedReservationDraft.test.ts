@@ -4,9 +4,16 @@ import {
   buildScannedReservationDraft,
   isConfirmationScanUpload,
   normalizeScannedDate,
+  normalizeScannedReservationType,
   parseScannedReservationsJson,
 } from "./scannedReservationDraft";
 import { resolveConfirmationScanKind } from "./confirmationDocumentText";
+
+test("normalizeScannedReservationType maps excursion and tour to dinner", () => {
+  assert.equal(normalizeScannedReservationType("excursion"), "dinner");
+  assert.equal(normalizeScannedReservationType("tour"), "dinner");
+  assert.equal(normalizeScannedReservationType("activity"), "dinner");
+});
 
 test("isConfirmationScanUpload accepts pdf, images, html, and text", () => {
   assert.equal(isConfirmationScanUpload(new File(["x"], "ticket.pdf", { type: "application/pdf" })), true);

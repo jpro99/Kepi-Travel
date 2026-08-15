@@ -10,11 +10,11 @@ import {
 } from "@/lib/travelAssistant/parseDayPlanItinerary";
 
 const GMAIL_IMPORT_QUERY_KEYWORDS =
-  "subject:(confirmation OR itinerary OR booking OR reservation OR ticket OR flight OR hotel OR train)";
+  "subject:(confirmation OR itinerary OR booking OR reservation OR ticket OR flight OR hotel OR train OR excursion OR tour OR getyourguide OR viator)";
 
 const ALLOWED_LOOKBACK_DAYS = new Set([30, 60, 90, 180]);
 
-type ParsedReservationType = "flight" | "hotel" | "train" | "ride";
+type ParsedReservationType = "flight" | "hotel" | "train" | "ride" | "dinner";
 type ParsedReservationConfidence = "high" | "medium" | "low";
 
 export interface ParsedReservation {
@@ -153,6 +153,13 @@ function extractReservationType(subject: string, body: string): ParsedReservatio
   if (/(train|rail|amtrak|platform|coach|station)/i.test(text)) {
     return "train";
   }
+  if (
+    /(excursion|guided tour|walking tour|boat (?:ride|tour|excursion)|getyourguide|viator|snorkel|scuba|day trip|cooking class|wine tasting|dinner reservation|restaurant reservation)/i.test(
+      text,
+    )
+  ) {
+    return "dinner";
+  }
   if (/(car rental|car reservation|uber|lyft|pickup|driver|ride)/i.test(text)) {
     return "ride";
   }
@@ -166,7 +173,7 @@ function extractConfirmationCode(subject: string, body: string): string {
       /(?:confirmation|booking|reservation|ticket|record locator|pnr)(?:\s+(?:code|number|no\.?|id|is)|\s*[:#-])\s*([A-Z0-9-]{4,18})/i,
     )?.[1] ??
     null;
-  if (explicit) {
+  if (explicit && /\d/u.test(explicit)) {
     return explicit.toUpperCase();
   }
 
@@ -185,6 +192,12 @@ function extractLocation(type: ParsedReservationType, body: string): string {
   if (type === "flight") return "Confirm terminal";
   if (type === "hotel") return "Confirm property location";
   if (type === "train") return "Confirm station";
+  if (type === "dinner") {
+    const meet =
+      body.match(/(?:meet(?:ing)?\s+(?:at|point)|location)[ \t]*[:\-]?\s*([^\n]+)/i)?.[1];
+    if (meet?.trim()) return meet.trim();
+    return "";
+  }
   return "Confirm pickup zone";
 }
 
@@ -199,10 +212,15 @@ function formatDateTimeLocal(valueMs: number): string {
 }
 
 function extractDateIso(receivedAt: string, body: string): string {
+  const monthDate =
+    body.match(
+      /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2},?\s+\d{4}(?:\s+at\s+\d{1,2}:\d{2}\s*[ap]m)?/iu,
+    )?.[0] ?? null;
   const byLabel =
     body.match(/(?:departure|arrival|check-in|check in|pickup|time)[ \t]*[:\-][ \t]*([^\n]+)/i)?.[1] ??
+    monthDate ??
     body.match(/\b([A-Z][a-z]{2,8}\s+\d{1,2},?\s+\d{4}[^,\n]*)/)?.[1];
-  const parsed = Date.parse(byLabel ?? "");
+  const parsed = Date.parse((byLabel ?? "").replace(/\s+at\s+/iu, " "));
   if (!Number.isNaN(parsed)) {
     return new Date(parsed).toISOString();
   }

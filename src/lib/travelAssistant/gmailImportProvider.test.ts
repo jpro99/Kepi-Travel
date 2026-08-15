@@ -33,6 +33,27 @@ test("flight confirmation email parses to a flight reservation", () => {
   assert.equal(parsed.reservation.confirmationCode, "Y8Q4D2");
 });
 
+test("GetYourGuide excursion email parses to dinner on the tour date", () => {
+  const parsed = parseEmailToParsedReservation({
+    messageId: "excursion-message",
+    sender: "no-reply@getyourguide.com",
+    subject: "Booking confirmed: Sunset Boat Excursion",
+    receivedAt: "2026-08-01T10:00:00.000Z",
+    body: [
+      "Your reservation is confirmed!",
+      "Sunset Boat Excursion — Monopoli Coastline Tour",
+      "Confirmation: EXC-4471",
+      "Saturday, September 3, 2026 at 10:00 AM",
+      "Meet at Monopoli Harbor",
+    ].join("\n"),
+  });
+
+  assert.equal(parsed.reservation.type, "dinner");
+  assert.equal(parsed.reservation.confirmationCode, "EXC-4471");
+  assert.match(parsed.reservation.localTime, /^2026-09-03 /u);
+  assert.match(parsed.reservation.location, /Monopoli Harbor/u);
+});
+
 test("hotel booking email parses to a hotel reservation", () => {
   const parsed = parseEmailToParsedReservation({
     messageId: "hotel-message",

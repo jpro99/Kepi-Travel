@@ -1,5 +1,7 @@
 import { parseCashUsdFromText, parseCashUsdFromUnknown } from "@/lib/travelAssistant/parseReservationCashUsd";
 
+export type ScannedReservationType = "flight" | "hotel" | "train" | "ride" | "dinner";
+
 export interface ScannedReservationDraft {
   type: ScannedReservationType;
   title: string;
@@ -34,7 +36,15 @@ export function normalizeScannedReservationType(rawType: unknown): ScannedReserv
   if (normalized === "flight" || normalized === "hotel" || normalized === "train" || normalized === "ride") {
     return normalized;
   }
-  if (normalized === "restaurant" || normalized === "meal" || normalized === "dining" || normalized === "dinner") {
+  if (
+    normalized === "restaurant" ||
+    normalized === "meal" ||
+    normalized === "dining" ||
+    normalized === "dinner" ||
+    normalized === "activity" ||
+    normalized === "excursion" ||
+    normalized === "tour"
+  ) {
     return "dinner";
   }
   if (normalized === "car" || normalized === "rental" || normalized === "taxi" || normalized === "transfer") {

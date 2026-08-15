@@ -147,6 +147,13 @@ export function NarrativeDayPlanView({
               ) : section.hotelLine ? (
                 <p className="mb-3 text-[16px] leading-snug text-[#1D1D1F]">{section.hotelLine}</p>
               ) : null}
+              {section.activityFacts.length > 0 ? (
+                <ul className="mb-3 space-y-1 text-[16px] leading-snug text-[#1D1D1F]">
+                  {section.activityFacts.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              ) : null}
               <ul className="space-y-2">
                 {!hasContent ? (
                   <li className="text-[16px] italic text-[#8E8E93]">Nothing on this day yet.</li>

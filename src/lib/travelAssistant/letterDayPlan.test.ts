@@ -15,6 +15,7 @@ import {
   formatLetterClock,
   formatLetterDayHeading,
   formatLetterMonthRange,
+  letterActivityFactsForDay,
   letterStayFactsForDay,
   letterTitleLine,
   splitLetterStayAndActivities,
@@ -193,6 +194,42 @@ test("I48: Polignano check-in facts land on Sept 2, not in a hotel pile", () => 
   assert.ok(!day2!.stayFacts.some((line) => /Loft Ru/u.test(line)));
 });
 
+test("I49: excursion confirmation prints on the activity day, not in a pile", () => {
+  const boat = {
+    type: "dinner",
+    title: "Sunset Boat Excursion — Monopoli Coastline Tour",
+    provider: "GetYourGuide",
+    localTime: "2026-09-03 10:00",
+    location: "Monopoli Harbor",
+    confirmationCode: "EXC-4471",
+  };
+  const dinner = {
+    type: "dinner",
+    title: "Osteria del Porto",
+    provider: "TheFork",
+    localTime: "2026-09-08 20:00",
+    location: "Lecce",
+    confirmationCode: "TF-19",
+  };
+  const sept3 = letterActivityFactsForDay("2026-09-03", [boat, dinner]);
+  assert.ok(sept3.some((line) => /Sunset Boat Excursion/u.test(line)));
+  assert.ok(sept3.some((line) => /Sept 3 at 10:00 AM/u.test(line)));
+  assert.ok(sept3.some((line) => /Confirmation EXC-4471/u.test(line)));
+  assert.ok(!sept3.some((line) => /Osteria/u.test(line)));
+
+  const sections = buildNarrativeDaySections({
+    tripStartDate: "2026-09-02",
+    tripEndDate: "2026-09-08",
+    reservations: [boat, dinner],
+  });
+  const day3 = sections.find((day) => day.dateKey === "2026-09-03");
+  const day8 = sections.find((day) => day.dateKey === "2026-09-08");
+  assert.ok(dayHasLetterContent(day3!));
+  assert.ok(day3!.activityFacts.some((line) => /Sunset Boat Excursion/u.test(line)));
+  assert.ok(!day3!.activityFacts.some((line) => /Osteria/u.test(line)));
+  assert.ok(day8!.activityFacts.some((line) => /Osteria/u.test(line)));
+});
+
 test("I47: Plan letter view is a paper itinerary, not collapsed Details cards", () => {
   const src = readFileSync(
     join(process.cwd(), "src/components/travelAssistant/NarrativeDayPlanView.tsx"),
@@ -201,6 +238,7 @@ test("I47: Plan letter view is a paper itinerary, not collapsed Details cards", 
   assert.match(src, /#FAF6EF/);
   assert.match(src, /letterTitleLine/);
   assert.match(src, /stayFacts/);
+  assert.match(src, /activityFacts/);
   assert.doesNotMatch(src, /Tap a stay or activity to expand/);
   assert.doesNotMatch(src, /Hide details/i);
   assert.doesNotMatch(src, /fromHotels\.flatMap/);

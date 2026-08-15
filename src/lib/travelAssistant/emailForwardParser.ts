@@ -162,7 +162,7 @@ const RESERVATION_TYPE_KEYWORDS: Array<{ type: ForwardedReservationType; pattern
   {
     type: "dinner",
     pattern:
-      /\b(dinner reservation|restaurant reservation|table for\s*\d+|party of\s*\d+|reservation for\s*\d+|excursion|guided tour|walking tour|boat (?:ride|tour|excursion)|snorkel(?:ing)?|scuba|day trip|cooking class|wine tasting|ticket confirmation)\b/iu,
+      /\b(dinner reservation|restaurant reservation|table for\s*\d+|party of\s*\d+|reservation for\s*\d+|excursion|guided tour|walking tour|boat (?:ride|tour|excursion)|getyourguide|viator|airbnb experience|snorkel(?:ing)?|scuba|day trip|cooking class|wine tasting|ticket confirmation)\b/iu,
     confidence: 0.68,
   },
   { type: "ride", pattern: /\b(car rental|uber|lyft|taxi|ride|pickup|dropoff)\b/iu, confidence: 0.72 },

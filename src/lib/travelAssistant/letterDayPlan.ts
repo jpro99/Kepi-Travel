@@ -1,6 +1,6 @@
 /**
- * Word-letter day plan (I47 / I48) — headings and stay facts like Puglia_itinerary.docx.
- * Stay facts belong on the check-in / check-out day, not in one pile at the top.
+ * Word-letter day plan (I47 / I48 / I49) — headings, stay facts, and activity facts.
+ * Stay and excursion facts belong on the matching calendar day, not in one pile.
  */
 
 import { isDayPlanDetailLine } from "@/lib/travelAssistant/dayPlanBulletGroups";
@@ -290,15 +290,49 @@ export function letterStayFactsForDay(
   return lines;
 }
 
+const ACTIVITY_TYPES = new Set(["dinner", "activity", "excursion", "tour"]);
+
+export function isLetterActivityType(type?: string | null): boolean {
+  return ACTIVITY_TYPES.has((type ?? "").trim().toLowerCase());
+}
+
+/**
+ * Excursion / dinner / tour facts for one calendar day only (I49).
+ * A GetYourGuide boat tour on Sept 3 prints under Sept 3 — name, time, confirmation.
+ */
+export function letterActivityFactsForDay(
+  dateKey: string,
+  reservations: LetterStayReservation[],
+): string[] {
+  const lines: string[] = [];
+  for (const item of reservations) {
+    if (!isLetterActivityType(item.type)) continue;
+    const day = dateOnly(item.localTime);
+    if (!day || day !== dateKey) continue;
+    const name = item.title?.trim() || "Activity";
+    lines.push(name);
+    const location = item.location?.trim() ?? "";
+    if (location && location.toLowerCase() !== name.toLowerCase() && !/^confirm /iu.test(location)) {
+      lines.push(location);
+    }
+    lines.push(datedClock(day, item.localTime));
+    const confirmation = confirmationLine(item);
+    if (confirmation) lines.push(confirmation);
+  }
+  return lines;
+}
+
 export function dayHasLetterContent(input: {
   bullets?: string[];
   stayFacts?: string[];
+  activityFacts?: string[];
   bookingLines?: string[];
   hotelLine?: string | null;
 }): boolean {
   return (
     (input.bullets?.length ?? 0) > 0 ||
     (input.stayFacts?.length ?? 0) > 0 ||
+    (input.activityFacts?.length ?? 0) > 0 ||
     (input.bookingLines?.length ?? 0) > 0 ||
     Boolean(input.hotelLine?.trim())
   );
