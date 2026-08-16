@@ -269,7 +269,12 @@ import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntell
 import { useTranslations } from "next-intl";
 import { openSupportChat } from "@/components/support/SupportChat";
 import { ConciergePanel } from "@/components/travelAssistant/ConciergePanel";
-import { trackEvent } from "@/lib/analytics/trackEvent";
+import {
+  formatCalendarSyncSummary,
+  postCalendarSyncRequest,
+  runCalendarSyncWithRetries,
+  type CalendarSyncSource,
+} from "@/lib/travelAssistant/calendarSyncClient";
 import { useBilling } from "@/lib/billing/BillingContext";
 import type { PlanFeature } from "@/lib/billing/plans";
 import { AdvancedModeToggle } from "@/components/ui/AdvancedModeToggle";
@@ -1466,30 +1471,6 @@ function buildUpdateReplayKey(update: TravelUpdateEvent): string {
     update.updatedLocation ?? "",
     update.summary,
   ].join("|");
-}
-
-function toCalendarSyncReservationPayload(reservation: Reservation): {
-  id: string;
-  type: ReservationType;
-  title: string;
-  confirmationCode: string;
-  localTime: string;
-  location: string;
-  timezone: string;
-  provider: string;
-  notes: string;
-} {
-  return {
-    id: reservation.id,
-    type: reservation.type,
-    title: reservation.title,
-    confirmationCode: reservation.confirmationCode,
-    localTime: reservation.localTime,
-    location: reservation.location,
-    timezone: reservation.timezone,
-    provider: reservation.provider,
-    notes: reservation.notes,
-  };
 }
 
 function downloadBlob(filename: string, blob: Blob): void {
@@ -6434,7 +6415,10 @@ export default function TravelAssistantPage() {
           setToast("Could not save imported reservations to your trip.");
         });
       }
-      void syncReservationsToGoogleCalendar(nextReservations, "gmail-import");
+      void syncReservationsToGoogleCalendar(nextReservations, {
+        source: "background",
+        reservationIds: newReservations.map((reservation) => reservation.id),
+      });
       queueMutation(`Imported ${newReservations.length} reservation${newReservations.length === 1 ? "" : "s"} from email.`, {
         key: "gmail-import",
         fingerprint: `gmail:${importedReservations.map((item) => item.messageId).join(",")}`,
@@ -7046,51 +7030,48 @@ export default function TravelAssistantPage() {
   }, [activeTripId, queueMutation, refreshTripsFromServer, rescanImportsBusy, setToast]);
 
   const syncReservationsToGoogleCalendar = useCallback(
-    async (reservationSnapshot: Reservation[], source: "manual" | "review-accept"): Promise<void> => {
-      setCalendarSyncInFlight(true);
-      setCalendarSyncTone("neutral");
-      setCalendarSyncMessage("Syncing reservations to Google Calendar...");
-      try {
-        const response = await fetch("/api/travel-updates/calendar-sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            reservations: reservationSnapshot.map(toCalendarSyncReservationPayload),
-          }),
-        });
-        const payload = (await response.json()) as {
-          ok?: boolean;
-          error?: string;
-          created?: number;
-          updated?: number;
-          skipped?: number;
-          failed?: number;
-        };
-        if (!response.ok || payload.ok === false) {
-          throw new Error(payload.error ?? `Calendar sync failed with status ${response.status}`);
-        }
-        const summary = `Calendar sync complete: ${payload.created ?? 0} created, ${payload.updated ?? 0} updated, ${payload.skipped ?? 0} skipped${
-          payload.failed && payload.failed > 0 ? `, ${payload.failed} failed` : ""
-        }.`;
-        setCalendarSyncTone("success");
-        setCalendarSyncMessage(summary);
-        if (source === "manual") {
+    (
+      reservationSnapshot: Reservation[],
+      options: { source: CalendarSyncSource; reservationIds?: string[] },
+    ): void => {
+      const runManual = async (): Promise<void> => {
+        setCalendarSyncInFlight(true);
+        setCalendarSyncTone("neutral");
+        setCalendarSyncMessage("Syncing reservations to Google Calendar...");
+        try {
+          const result = await postCalendarSyncRequest(reservationSnapshot);
+          if (!result.ok) {
+            throw new Error(result.payload.error ?? `Calendar sync failed with status ${result.status}`);
+          }
+          const summary = formatCalendarSyncSummary(result.payload);
+          setCalendarSyncTone("success");
+          setCalendarSyncMessage(summary);
           setToast(summary);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Unknown calendar sync error.";
+          setCalendarSyncTone("error");
+          setCalendarSyncMessage(`Calendar sync failed: ${message}`);
+          setToast(`Calendar sync failed: ${message}`);
+        } finally {
+          setCalendarSyncInFlight(false);
         }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown calendar sync error.";
-        setCalendarSyncTone("error");
-        setCalendarSyncMessage(`Calendar sync failed: ${message}`);
-        setToast(`Calendar sync failed: ${message}`);
-      } finally {
-        setCalendarSyncInFlight(false);
+      };
+
+      const runBackground = async (): Promise<void> => {
+        await runCalendarSyncWithRetries(reservationSnapshot, options.reservationIds);
+      };
+
+      if (options.source === "manual") {
+        void runManual();
+        return;
       }
+      void runBackground();
     },
     [setToast],
   );
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleManualCalendarSync = useCallback((): void => {
-    void syncReservationsToGoogleCalendar(reservations, "manual");
+    void syncReservationsToGoogleCalendar(reservations, { source: "manual" });
   }, [reservations, syncReservationsToGoogleCalendar]);
 
   const openDrawer = useCallback(
@@ -8106,7 +8087,10 @@ export default function TravelAssistantPage() {
       key: "review-accept",
       reservationId: newReservation.id,
     });
-    void syncReservationsToGoogleCalendar(nextReservations, "review-accept");
+    void syncReservationsToGoogleCalendar(nextReservations, {
+      source: "background",
+      reservationIds: [newReservation.id],
+    });
     if (activeDrawer?.kind === "review" && activeDrawer.id === reviewId) {
       closeDrawer();
     }

@@ -5,19 +5,25 @@ import { logger } from "@/lib/logger";
 import { enforceRateLimit } from "@/lib/rateLimit";
 import {
   deleteCalendarEvent,
+  isCalendarSyncConfigured,
   syncAllReservations,
 } from "@/lib/travelAssistant/calendarSyncService";
+import {
+  filterCalendarSyncReservations,
+  toCalendarSyncReservationPayload,
+  type CalendarSyncReservationPayload,
+} from "@/lib/travelAssistant/calendarSyncPayload";
 import { readTravelRuntimeState } from "@/lib/travelAssistant/updateRuntimeStateStore";
 import { generateId } from "@/lib/utils/generateId";
 
 const ReservationSchema = z.object({
   id: z.string().min(1),
   type: z.enum(["flight", "hotel", "train", "ride", "dinner"]),
-  title: z.string().min(1),
-  confirmationCode: z.string().min(1),
-  localTime: z.string().min(1),
-  location: z.string().min(1),
-  timezone: z.string().min(1),
+  title: z.string().optional(),
+  confirmationCode: z.string().optional(),
+  localTime: z.string().optional(),
+  location: z.string().optional(),
+  timezone: z.string().optional(),
   provider: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -90,7 +96,38 @@ export async function POST(req: Request) {
   }
 
   const runtimeState = await readTravelRuntimeState();
-  const reservations = parsed.data.reservations ?? runtimeState.reservations;
+  const incoming = parsed.data.reservations ?? runtimeState.reservations;
+  const reservations = filterCalendarSyncReservations(incoming).map((reservation) =>
+    toCalendarSyncReservationPayload({
+      id: reservation.id,
+      type: reservation.type as CalendarSyncReservationPayload["type"],
+      title: reservation.title ?? "",
+      confirmationCode: reservation.confirmationCode,
+      localTime: reservation.localTime ?? "",
+      location: reservation.location ?? "",
+      timezone: reservation.timezone ?? "Etc/UTC",
+      provider: reservation.provider,
+      notes: reservation.notes,
+    }),
+  );
+  const unavailable = !isCalendarSyncConfigured(userId);
+
+  if (reservations.length === 0) {
+    routeLogger.info("Calendar sync skipped — no sync-ready reservations.", {
+      incomingCount: incoming.length,
+      unavailable,
+    });
+    return NextResponse.json({
+      ok: true,
+      totalReservations: 0,
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      failed: 0,
+      unavailable,
+      results: [],
+    });
+  }
 
   const result = await syncAllReservations(userId, reservations);
   routeLogger.info("Calendar sync request completed.", {
@@ -99,9 +136,11 @@ export async function POST(req: Request) {
     updated: result.updated,
     skipped: result.skipped,
     failed: result.failed,
+    unavailable,
   });
   return NextResponse.json({
     ok: true,
+    unavailable,
     ...result,
   });
 }
