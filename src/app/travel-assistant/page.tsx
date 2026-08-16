@@ -275,6 +275,12 @@ import {
   runCalendarSyncWithRetries,
   type CalendarSyncSource,
 } from "@/lib/travelAssistant/calendarSyncClient";
+import { buildMissionControlSnapshot } from "@/lib/travelAssistant/tripPhase";
+import {
+  buildTripReadinessSummary,
+  detectScheduleCollisions,
+  suggestConsumerTripStage,
+} from "@/lib/travelAssistant/tripOrchestration";
 import { useBilling } from "@/lib/billing/BillingContext";
 import type { PlanFeature } from "@/lib/billing/plans";
 import { AdvancedModeToggle } from "@/components/ui/AdvancedModeToggle";
@@ -9063,6 +9069,71 @@ export default function TravelAssistantPage() {
     };
   }, [consumerTab, pendingMoreScrollTarget]);
 
+  const readinessChecklistForHome = useMemo(
+    () =>
+      readinessItems.map((item) => ({
+        id: item.id,
+        title: item.title,
+        complete: item.complete,
+        required: item.required,
+      })),
+    [readinessItems],
+  );
+
+  useEffect(() => {
+    if (advancedModeEnabled || !activeTrip) return;
+    const passportComplete = readinessItems.find((item) => item.id === "ready-passport")?.complete ?? false;
+    const snap = buildMissionControlSnapshot({
+      name: activeTrip.name,
+      destination: consumerTripDestination ?? activeTrip.destination,
+      startDate: consumerTripStartDate ?? activeTrip.startDate,
+      endDate: consumerTripEndDate ?? activeTrip.endDate,
+      reservations: consumerReservationsSorted,
+      stayDecisions: activeStayDecisions,
+      passportComplete,
+      hasActiveTrip: true,
+    });
+    const collisions = detectScheduleCollisions(consumerReservationsSorted);
+    const summary = buildTripReadinessSummary({
+      tripLabel: consumerTripDestination?.trim() || activeTrip.name || "Your trip",
+      checklistItems: readinessChecklistForHome,
+      gapAttentionCount: snap.attentionTop3.filter(
+        (item) => item.status === "needs_you" || item.status === "problem",
+      ).length,
+      reviewCount: unresolvedReviewCount,
+      entryItems: [],
+      collisions,
+    });
+    const hasBlockingGaps = snap.attentionTop3.some(
+      (item) => item.status === "problem" || item.status === "needs_you",
+    );
+    const suggested = suggestConsumerTripStage({
+      current: tripStage,
+      missionPhase: snap.phase,
+      daysUntilDeparture: snap.daysUntilDeparture,
+      readinessLevel: summary.level,
+      hasBlockingGaps,
+      reviewCount: unresolvedReviewCount,
+      journeyPhaseKind: journeyPhase.kind,
+    });
+    if (suggested && suggested !== tripStage) {
+      setTripStage(suggested);
+    }
+  }, [
+    activeStayDecisions,
+    activeTrip,
+    advancedModeEnabled,
+    consumerReservationsSorted,
+    consumerTripDestination,
+    consumerTripEndDate,
+    consumerTripStartDate,
+    journeyPhase.kind,
+    readinessChecklistForHome,
+    readinessItems,
+    tripStage,
+    unresolvedReviewCount,
+  ]);
+
   const consumerPrimaryAction = (() => {
     if (tripStatus === "red" || activeScenario !== "none" || delayedFlight) {
       return {
@@ -10104,6 +10175,8 @@ export default function TravelAssistantPage() {
                 }}
                 unresolvedReviewCount={unresolvedReviewCount}
                 onOpenReview={handleOpenConsumerReviewQueue}
+                readinessChecklist={readinessChecklistForHome}
+                onOpenReadiness={openReadinessChecklistInMoreTab}
                 bookSubTab={bookSubTab}
                 onBookSubTabChange={(subTab) => navigateToConsumerTab("book", { bookView: subTab })}
                 tripId={activeTripId}
@@ -10259,6 +10332,8 @@ export default function TravelAssistantPage() {
                 }}
                 unresolvedReviewCount={unresolvedReviewCount}
                 onOpenReview={handleOpenConsumerReviewQueue}
+                readinessChecklist={readinessChecklistForHome}
+                onOpenReadiness={openReadinessChecklistInMoreTab}
                 travelerType={neuroTravelerType}
               />
             )
@@ -10306,9 +10381,11 @@ export default function TravelAssistantPage() {
               onSearchMissingFlights={(plan) => handleFlightSearchPlan(plan)}
               onQuickGroundTransport={handleQuickGroundTransport}
               travelerType={neuroTravelerType}
-              unresolvedReviewCount={unresolvedReviewCount}
-              onOpenReview={handleOpenConsumerReviewQueue}
-            />
+                unresolvedReviewCount={unresolvedReviewCount}
+                onOpenReview={handleOpenConsumerReviewQueue}
+                readinessChecklist={readinessChecklistForHome}
+                onOpenReadiness={openReadinessChecklistInMoreTab}
+              />
             </PlanTabErrorBoundary>
           ) : consumerTab === "book" ? (
             <BookTabView

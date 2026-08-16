@@ -26,6 +26,11 @@ import { TripCompletenessBar } from "@/components/travelAssistant/TripCompletene
 import { FreePlanSoftBanner } from "@/components/billing/FreePlanSoftBanner";
 import { formatFlightStatusTrustLine } from "@/lib/travelAssistant/flightStatusTrustLine";
 import { resolveTripWalk } from "@/lib/travelAssistant/tripWalk";
+import {
+  buildTripReadinessSummary,
+  detectScheduleCollisions,
+  type ReadinessChecklistItem,
+} from "@/lib/travelAssistant/tripOrchestration";
 
 export interface MissionControlLiveStatus {
   flightStatus?: string;
@@ -70,6 +75,9 @@ export interface MissionControlViewProps {
   /** Pending review-queue items (Plan B — next-action when nothing else ranks higher). */
   unresolvedReviewCount?: number;
   onOpenReview?: () => void;
+  /** G31 — persisted readiness checklist (More tab). */
+  readinessChecklist?: ReadinessChecklistItem[];
+  onOpenReadiness?: () => void;
 }
 
 function statusColor(status: ReadinessStatus): string {
@@ -143,10 +151,10 @@ export function MissionControlView({
   onSeeAllAttention,
   unresolvedReviewCount = 0,
   onOpenReview,
+  readinessChecklist = [],
+  onOpenReadiness,
 }: MissionControlViewProps) {
-  const [zoom, setZoom] = useState<MissionControlZoom>("today");
-  const [zoomTouched, setZoomTouched] = useState(false);
-  const [selectedDay, setSelectedDay] = useState<DayReadiness | null>(null);
+  const passportComplete = readinessChecklist.find((item) => item.id === "ready-passport")?.complete ?? false;
 
   const snap = useMemo(
     () =>
@@ -159,6 +167,7 @@ export function MissionControlView({
         stayDecisions,
         liveStatusByReservationId: liveStatus,
         hasActiveTrip,
+        passportComplete,
       }),
     [
       tripName,
@@ -169,6 +178,7 @@ export function MissionControlView({
       stayDecisions,
       liveStatus,
       hasActiveTrip,
+      passportComplete,
     ],
   );
 
@@ -210,6 +220,7 @@ export function MissionControlView({
       hotelCities,
       staysComplete: completeness.flights === "green" && completeness.hotels === "green",
       missingPriceCount,
+      passportComplete,
     });
   }, [
     reservations,
@@ -218,7 +229,36 @@ export function MissionControlView({
     completeness.flights,
     completeness.hotels,
     missingPriceCount,
+    passportComplete,
   ]);
+
+  const readinessSummary = useMemo(() => {
+    if (!hasActiveTrip) return null;
+    const collisions = detectScheduleCollisions(reservations);
+    const gapAttentionCount = snap.attentionTop3.filter(
+      (item) => item.status === "needs_you" || item.status === "problem",
+    ).length;
+    return buildTripReadinessSummary({
+      tripLabel: destination?.trim() || tripName,
+      checklistItems: readinessChecklist,
+      gapAttentionCount,
+      reviewCount: unresolvedReviewCount,
+      entryItems: [],
+      collisions,
+    });
+  }, [
+    hasActiveTrip,
+    reservations,
+    snap.attentionTop3,
+    destination,
+    tripName,
+    readinessChecklist,
+    unresolvedReviewCount,
+  ]);
+
+  const [zoom, setZoom] = useState<MissionControlZoom>("today");
+  const [zoomTouched, setZoomTouched] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<DayReadiness | null>(null);
 
   const atAirport =
     locationStatus === "at-airport" || locationStatus === "in-terminal";
@@ -616,6 +656,32 @@ export function MissionControlView({
               {formatFlightStatusTrustLine(liveStatus?.[snap.nextFlight.id])}
             </p>
           </button>
+        ) : null}
+
+        {readinessSummary && prepMode ? (
+          <div className="mt-4 rounded-2xl bg-white px-4 py-4">
+            <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+              Trip readiness
+            </p>
+            <p className="mt-1 text-[20px] font-semibold leading-snug tracking-tight text-[#1D1D1F]">
+              {readinessSummary.headline}
+            </p>
+            <p className="mt-1 text-[14px] leading-relaxed text-[#6E6E73]">{readinessSummary.detail}</p>
+            {readinessSummary.totalEssentials > 0 ? (
+              <p className="mt-2 text-[13px] text-[#6E6E73]">
+                {readinessSummary.completedEssentials} of {readinessSummary.totalEssentials} essentials checked
+              </p>
+            ) : null}
+            {onOpenReadiness && readinessSummary.level !== "ready" ? (
+              <button
+                type="button"
+                onClick={onOpenReadiness}
+                className="mt-3 min-h-[44px] text-[15px] font-semibold text-[#007AFF]"
+              >
+                Open checklist
+              </button>
+            ) : null}
+          </div>
         ) : null}
 
         <div

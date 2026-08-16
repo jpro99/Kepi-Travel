@@ -136,6 +136,11 @@ Kepi trip is truth; Google Calendar is an optional mirror. Never toast “sync f
 
 **Test:** `src/lib/travelAssistant/calendarSyncPayload.test.ts`
 
+**G31 — Trip orchestration: gentle docs, honest readiness, schedule overlap, stage hints**  
+Home shows a trusted readiness summary in prep mode. Passport/entry nudges are gentle with official links — never immigration advice. Schedule overlaps (dinner vs flight) surface on Home/Plan. Consumer trip stage advances forward only when dates and readiness allow — no quiz, no regression.
+
+**Test:** `src/lib/travelAssistant/tripOrchestration.test.ts`
+
 ---
 
 ## FLIGHTS LAWS
@@ -893,6 +898,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | G28 | `src/lib/travelAssistant/reviewCtaHonesty.test.ts` |
 | G29 | `src/lib/travelAssistant/reviewCtaHonesty.test.ts`, `src/lib/travelAssistant/activityTicketExtract.test.ts` |
 | G30 | `src/lib/travelAssistant/calendarSyncPayload.test.ts` |
+| G31 | `src/lib/travelAssistant/tripOrchestration.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |

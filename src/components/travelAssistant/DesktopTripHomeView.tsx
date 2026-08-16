@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import dynamic from "next/dynamic";
 import { MissionControlView } from "@/components/travelAssistant/MissionControlView";
 import type { TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
+import type { ReadinessChecklistItem } from "@/lib/travelAssistant/tripOrchestration";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 import { resolveNextCheckInHandoff } from "@/lib/travelAssistant/checkInHandoff";
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
@@ -89,6 +90,8 @@ interface DesktopTripHomeViewProps {
   onEnablePush?: () => void;
   unresolvedReviewCount?: number;
   onOpenReview?: () => void;
+  readinessChecklist?: ReadinessChecklistItem[];
+  onOpenReadiness?: () => void;
   travelerType?: TravelStyleMode | null;
 }
 
@@ -123,6 +126,8 @@ export function DesktopTripHomeView({
   onEnablePush,
   unresolvedReviewCount = 0,
   onOpenReview,
+  readinessChecklist = [],
+  onOpenReadiness,
   travelerType = null,
 }: DesktopTripHomeViewProps) {
   const transportReservations =
@@ -178,6 +183,8 @@ export function DesktopTripHomeView({
         onSeeAllAttention={onOpenPlan}
         unresolvedReviewCount={unresolvedReviewCount}
         onOpenReview={onOpenReview}
+        readinessChecklist={readinessChecklist}
+        onOpenReadiness={onOpenReadiness}
       />
 
       {/* I36: on travel day, Home is the takeover screen only — no map/transport chrome. */}

@@ -32,6 +32,7 @@ import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransp
 import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 import type { TripSpendSummary } from "@/lib/travelAssistant/tripSpendSummary";
 import type { TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
+import type { ReadinessChecklistItem } from "@/lib/travelAssistant/tripOrchestration";
 import type { HotelStayMapReservation } from "@/lib/travelAssistant/tripHotelStayMap";
 
 type PlanSegment = "itinerary" | "notebook";
@@ -158,6 +159,8 @@ interface MobileMapForwardShellProps {
   onOpenAirportMode?: () => void;
   unresolvedReviewCount?: number;
   onOpenReview?: () => void;
+  readinessChecklist?: ReadinessChecklistItem[];
+  onOpenReadiness?: () => void;
 }
 
 const juicyBtn =
@@ -255,6 +258,8 @@ export function MobileMapForwardShell({
   onOpenAirportMode,
   unresolvedReviewCount = 0,
   onOpenReview,
+  readinessChecklist = [],
+  onOpenReadiness,
 }: MobileMapForwardShellProps) {
   const [planSegment, setPlanSegment] = useState<PlanSegment>("itinerary");
   const [showPointsLearn, setShowPointsLearn] = useState(false);
@@ -322,6 +327,8 @@ export function MobileMapForwardShell({
           onSeeAllAttention={() => onNavigateTab("plan")}
           unresolvedReviewCount={unresolvedReviewCount}
           onOpenReview={onOpenReview ?? (() => onNavigateTab("plan"))}
+          readinessChecklist={readinessChecklist}
+          onOpenReadiness={onOpenReadiness}
         />
 
         {hasActiveTrip && tripSpendSummary ? (
