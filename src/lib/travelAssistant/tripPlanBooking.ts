@@ -26,7 +26,6 @@ import {
 } from "@/lib/travelAssistant/quickGroundTransport";
 import { coverHopWithBookedFacts } from "@/lib/travelAssistant/bookedHopCoverage";
 import {
-  airportServesStayCity,
   inboundFlightCoversMetroTransfer,
   isLocalGroundHop,
 } from "@/lib/travelAssistant/metroAirportCoverage";
