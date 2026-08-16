@@ -119,7 +119,7 @@ Home answers four questions: Are you okay? What’s next? When do you leave? Wha
 **Test:** `src/lib/travelAssistant/tripWalk.test.ts`
 
 **G27 — Review bookings must open a visible surface**  
-A Home or Plan CTA that says bookings need your OK must mount a review sheet or drawer. Setting a session flag with no UI is a ghost and must not ship. Copy must not claim leftovers are missing from the trip — high-confidence forwards are already trip fact; the inbox is the unsure remainder. Suggest Add / Already on the trip / Not mine. Never silent auto-approve the leftover queue.
+A Home or Plan CTA that says bookings need your OK must mount a review sheet or drawer. Setting a session flag with no UI is a ghost and must not ship. Copy must not claim leftovers are missing from the trip — high-confidence forwards are already trip fact; the inbox is the unsure remainder. The sheet must show the original email/PDF text when the parse is empty — never only “date not parsed yet.” Do not offer Add to trip when there is no date, place, or confirmation. Suggest Already on the trip / Not mine. Never silent auto-approve the leftover queue.
 
 **Test:** `src/lib/travelAssistant/reviewCtaHonesty.test.ts`
 

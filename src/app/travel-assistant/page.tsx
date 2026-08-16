@@ -10724,6 +10724,9 @@ export default function TravelAssistantPage() {
                   reasons: activeConsumerReviewItem.reasons,
                   impact: activeConsumerReviewItem.impact,
                   sourceEmailSubject: activeConsumerReviewItem.sourceEmailSubject,
+                  originalEmailText: activeConsumerReviewItem.originalEmailText,
+                  hasPdfAttachment: activeConsumerReviewItem.hasPdfAttachment,
+                  parseConfidenceScore: activeConsumerReviewItem.parseConfidenceScore,
                   draft: {
                     type: activeConsumerReviewItem.draft.type,
                     title: activeConsumerReviewItem.draft.title,

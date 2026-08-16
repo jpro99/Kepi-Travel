@@ -9,6 +9,10 @@ Last updated: 2026-08-16 (G27 review inbox sheet)
 
 Agents must not guess or ghost. Check the real booked facts end-to-end before shipping. Do it correctly the first time — retries cost Jeff more money. Motto for how Kepi thinks (not UI copy): **We search and find, so you don't have to miss — and we put your mind at ease.** Catch real misses; do not invent gaps. Also in `NEURO_BRAIN.md` § 10 and `.cursor/rules/35-find-the-truth.mdc`.
 
+## Incident 2026-08-16 — Review sheet showed empty Train tickets (Jeff)
+
+Sheet opened (G27) but 1 of 6 was “Train tickets / date not parsed / 0/100” with no original email. Jeff could not see what to approve. Empty leftovers must show the original forward and must not offer Add to trip. Confirmations untouched.
+
 ## Incident 2026-08-16 — Review bookings did nothing (Jeff)
 
 Home Trip showed “6 bookings waiting for your OK.” The blue button set `consumerReviewQueueSession.open` and rendered no sheet. N1 would not have blocked that ship — it scores taps after the fact, and a dead button logs nothing. Never-ghost / G27 now requires a visible review surface. Inbox leftovers are not “missing from the trip.” Confirmations untouched.

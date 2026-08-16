@@ -58,23 +58,65 @@ test("G27: duplicate confirmation is presented as already on the trip", () => {
   assert.equal(presented.headline, "A Casa di Elena");
 });
 
-test("G27: a new leftover tells the real parser reason", () => {
+test("G27: a leftover with facts tells the real parser reason", () => {
   const presented = presentReviewInboxItem(
     {
       id: "review-new",
-      reasons: ["Missing check-in time or location."],
+      reasons: ["Low parsing confidence (32/100)."],
       draft: {
         type: "hotel",
         title: "Unknown stay",
         provider: "Hotel",
-        localTime: "",
-        location: "",
+        localTime: "2026-09-04",
+        location: "Monopoli",
         confirmationCode: "",
       },
     },
     [],
   );
   assert.equal(presented.alreadyOnTrip, false);
-  assert.equal(presented.why, "Missing check-in time or location.");
-  assert.equal(presented.confirmation, "No confirmation code yet");
+  assert.equal(presented.why, "Low parsing confidence (32/100).");
+  assert.equal(presented.when, "Fri, Sep 4");
+  assert.equal(presented.where, "Monopoli");
+  assert.equal(presented.canAddToTrip, true);
+});
+
+test("G27: empty leftover shows the original forward and does not offer Add", () => {
+  const presented = presentReviewInboxItem(
+    {
+      id: "review-train",
+      reasons: ["Low parsing confidence (0/100)."],
+      sourceEmailSubject: "Trenitalia ticket Lecce – Venezia S. Lucia",
+      originalEmailText: "Venezia S. Lucia  13/09/2026  10:42\nLecce  06:20",
+      hasPdfAttachment: true,
+      parseConfidenceScore: 0,
+      draft: {
+        type: "train",
+        title: "Train tickets",
+        provider: "",
+        localTime: "",
+        location: "",
+        confirmationCode: "",
+      },
+    },
+    [
+      {
+        type: "train",
+        title: "Lecce → Venezia S. Lucia",
+        provider: "Trenitalia",
+        localTime: "2026-09-13 06:20",
+        location: "Venezia S. Lucia",
+        confirmationCode: "TICKET-1",
+      },
+    ],
+  );
+  assert.equal(presented.canAddToTrip, false);
+  assert.equal(presented.when, null);
+  assert.equal(presented.where, null);
+  assert.equal(presented.confirmation, null);
+  assert.ok(presented.sourceBody?.includes("Venezia S. Lucia"));
+  assert.equal(presented.sourceSubject, "Trenitalia ticket Lecce – Venezia S. Lucia");
+  assert.match(presented.why, /original is below/u);
+  assert.equal(presented.liveHints.length, 1);
+  assert.match(presented.liveHints[0] ?? "", /Lecce/u);
 });

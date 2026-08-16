@@ -42,7 +42,7 @@ export function ConsumerReviewSheet({
       suggestionKey: shown.alreadyOnTrip ? "already-on-trip" : "review-leftover",
       outcome: "impression",
       honest: true,
-      metadata: { remaining: total, alreadyOnTrip: shown.alreadyOnTrip },
+      metadata: { remaining: total, alreadyOnTrip: shown.alreadyOnTrip, canAddToTrip: shown.canAddToTrip },
     });
     // One impression per leftover id — parent rebuilds the item object each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- itemId is the honesty key
@@ -89,16 +89,61 @@ export function ConsumerReviewSheet({
             >
               {presented.headline}
             </h2>
-            <p className="mt-3 text-[20px] leading-snug text-[#1D1D1F]">{presented.when}</p>
-            <p className="mt-1 text-[20px] leading-snug text-[#1D1D1F]">{presented.where}</p>
-            <p className="mt-4 text-[17px] text-[#6E6E73]">Confirmation · {presented.confirmation}</p>
-            <p className="mt-6 text-[20px] leading-relaxed text-[#1D1D1F]">{presented.why}</p>
-            <p className="mt-3 text-[15px] leading-relaxed text-[#6E6E73]">
-              High-confidence forwards are already on Plan. This leftover is here because Kepi was not sure.
-            </p>
+            <p className="mt-3 text-[20px] leading-relaxed text-[#1D1D1F]">{presented.why}</p>
+            {presented.when ? (
+              <p className="mt-4 text-[20px] leading-snug text-[#1D1D1F]">{presented.when}</p>
+            ) : null}
+            {presented.where ? (
+              <p className="mt-1 text-[20px] leading-snug text-[#1D1D1F]">{presented.where}</p>
+            ) : null}
+            {presented.confirmation ? (
+              <p className="mt-2 text-[17px] text-[#6E6E73]">Confirmation · {presented.confirmation}</p>
+            ) : null}
+
+            {presented.liveHints.length > 0 ? (
+              <div className="mt-6 rounded-2xl bg-white px-4 py-4">
+                <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-[#6E6E73]">
+                  Already on Plan
+                </p>
+                <ul className="mt-2 space-y-2">
+                  {presented.liveHints.map((hint) => (
+                    <li key={hint} className="text-[20px] leading-snug text-[#1D1D1F]">
+                      {hint}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            <div className="mt-6 rounded-2xl bg-white px-4 py-4">
+              <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-[#6E6E73]">
+                Original
+              </p>
+              {presented.sourceSubject ? (
+                <p className="mt-2 text-[20px] font-semibold leading-snug text-[#1D1D1F]">
+                  {presented.sourceSubject}
+                </p>
+              ) : null}
+              {presented.hasPdf ? (
+                <p className="mt-2 text-[17px] text-[#6E6E73]">This leftover came from a PDF ticket.</p>
+              ) : null}
+              {presented.sourceBody ? (
+                <pre
+                  className="mt-3 whitespace-pre-wrap break-words font-sans text-[20px] leading-relaxed text-[#1D1D1F]"
+                  style={{ fontFamily: "inherit" }}
+                >
+                  {presented.sourceBody}
+                </pre>
+              ) : (
+                <p className="mt-3 text-[20px] leading-relaxed text-[#6E6E73]">
+                  No original email was saved with this leftover. If this is a ticket you already forwarded, tap
+                  Already on the trip.
+                </p>
+              )}
+            </div>
 
             <div className="mt-8 space-y-3">
-              {presented.alreadyOnTrip ? (
+              {presented.alreadyOnTrip || !presented.canAddToTrip ? (
                 <button
                   type="button"
                   onClick={onAlreadyOnTrip}
@@ -115,7 +160,7 @@ export function ConsumerReviewSheet({
                   Add to trip
                 </button>
               )}
-              {!presented.alreadyOnTrip ? (
+              {presented.canAddToTrip && !presented.alreadyOnTrip ? (
                 <button
                   type="button"
                   onClick={onAlreadyOnTrip}
