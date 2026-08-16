@@ -141,6 +141,11 @@ Home shows a trusted readiness summary in prep mode. Passport/entry nudges are g
 
 **Test:** `src/lib/travelAssistant/tripOrchestration.test.ts`
 
+**M39 — Travel-day flight order + today focus + terminal coach**  
+All flight lists sort by canonical departure time (Ontario before Seattle on the same day). Travel day picks today’s earliest leg for Home, Map preview, and airport navigator. Schematic airports show “Terminal guide · pins approximate · follow airport signs.” Depart coach leads with airline + terminal when known (e.g. Alaska · Terminal 2 at ONT).
+
+**Test:** `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts`
+
 ---
 
 ## FLIGHTS LAWS
@@ -899,6 +904,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | G29 | `src/lib/travelAssistant/reviewCtaHonesty.test.ts`, `src/lib/travelAssistant/activityTicketExtract.test.ts` |
 | G30 | `src/lib/travelAssistant/calendarSyncPayload.test.ts` |
 | G31 | `src/lib/travelAssistant/tripOrchestration.test.ts` |
+| M39 | `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |

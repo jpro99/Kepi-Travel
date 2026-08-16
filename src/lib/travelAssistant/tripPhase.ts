@@ -16,6 +16,7 @@ import {
   reservationPrimaryDate,
 } from "@/lib/travelAssistant/tripWindow";
 import { toUtcMs } from "@/lib/travelAssistant/journeyPhase";
+import { selectTravelDayDepartureFlight, sortFlightsByDeparture } from "@/lib/travelAssistant/flightSort";
 import { disruptionCalmHomeCopy } from "@/lib/travelAssistant/disruptionCalm";
 
 export type MissionControlPhase =
@@ -342,7 +343,9 @@ function buildDayReadiness(
   allGaps: TripGap[],
   nowMs: number,
 ): DayReadiness {
-  const flights = reservations.filter(isBookedFlight).filter((f) => flightDepDay(f) === dateKey);
+  const flights = sortFlightsByDeparture(
+    reservations.filter(isBookedFlight).filter((f) => flightDepDay(f) === dateKey),
+  );
   const hotels = reservations.filter(isBookedHotel).filter((h) => hotelCoversDay(h, dateKey));
   const dayGaps = allGaps.filter((gap) => {
     const ctx = gap.actionContext;
@@ -466,7 +469,16 @@ export function buildMissionControlSnapshot(
   let tripStatus: ReadinessStatus = statusFromGaps(gaps);
   if (problem) tripStatus = "problem";
 
-  const nextFlight = firstOutboundFlight(reservations, nowMs);
+  const nextFlight = (() => {
+    if (phase === "departure_day" || phase === "return_day") {
+      const todayPick = selectTravelDayDepartureFlight(
+        reservations.filter(isBookedFlight),
+        nowMs,
+      );
+      if (todayPick) return todayPick.f;
+    }
+    return firstOutboundFlight(reservations, nowMs);
+  })();
   const leaveByHint =
     phase === "departure_day" || phase === "return_day" || phase === "countdown"
       ? nextFlight

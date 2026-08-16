@@ -29,6 +29,13 @@ import {
 } from "@/lib/travelAssistant/airportDayCoach";
 import { computeJourneyPhase, type JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
+import {
+  flightDepartureUtcMs,
+  formatTravelDayFlightLabel,
+  selectTravelDayDepartureFlight,
+  type TravelDayFlightPick,
+} from "@/lib/travelAssistant/flightSort";
+import { canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
 
 export interface FlightReservation {
   id: string;
@@ -60,29 +67,9 @@ export interface ActiveFlight {
   utcMs: number;
 }
 
-/** Local "YYYY-MM-DD HH:MM" + IANA timezone → UTC ms (Intl offset method). */
+/** @deprecated Prefer flightDepartureUtcMs — kept for existing tests/imports. */
 export function toUtcMs(localTime: string, timezone?: string): number {
-  const s = localTime.trim().replace("T", " ").slice(0, 16);
-  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(s);
-  if (!m) return NaN;
-  const approxUtc = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
-  if (!timezone) return approxUtc;
-  try {
-    const fmt = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-    const parts = Object.fromEntries(fmt.formatToParts(new Date(approxUtc)).map((p) => [p.type, p.value]));
-    const asIfUtc = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute);
-    return approxUtc - (asIfUtc - approxUtc);
-  } catch {
-    return approxUtc;
-  }
+  return flightDepartureUtcMs({ localTime, timezone });
 }
 
 const WINDOW_AHEAD_MIN = 12 * 60; // 12h — early airport arrival still gets navigator
@@ -99,7 +86,7 @@ export function selectActiveFlight(
   return (
     reservations
       .filter((r) => r.type === "flight")
-      .map((f) => ({ f, utcMs: toUtcMs(f.localTime, f.timezone) }))
+      .map((f) => ({ f, utcMs: flightDepartureUtcMs(f) }))
       .filter(
         ({ utcMs }) =>
           !isNaN(utcMs) &&
@@ -118,11 +105,16 @@ export function selectPreviewAirportFlight(
   reservations: FlightReservation[],
   nowMs: number,
 ): ActiveFlight | null {
+  const todayPick = selectTravelDayDepartureFlight(reservations, nowMs);
+  if (todayPick) {
+    return { f: todayPick.f as FlightReservation, utcMs: todayPick.utcMs };
+  }
+
   const graceMs = WINDOW_BEHIND_MIN * 60_000;
   return (
     reservations
       .filter((r) => r.type === "flight" && r.flightDepartureAirport)
-      .map((f) => ({ f, utcMs: toUtcMs(f.localTime, f.timezone) }))
+      .map((f) => ({ f, utcMs: flightDepartureUtcMs(f) }))
       .filter(({ utcMs }) => !isNaN(utcMs) && utcMs > nowMs - graceMs)
       .sort((a, b) => a.utcMs - b.utcMs)[0] ?? null
   );
@@ -151,6 +143,8 @@ export function useActiveFlight(): {
   journeyPhase: JourneyPhase;
   coachMode: AirportDayCoachMode;
   hotelLabel: string | null;
+  travelDayFlight: TravelDayFlightPick<FlightReservation> | null;
+  travelDayFlightLabel: string | null;
   loading: boolean;
 } {
   const [reservations, setReservations] = useState<FlightReservation[]>([]);
@@ -208,6 +202,14 @@ export function useActiveFlight(): {
     });
     return label.trim() || null;
   }, [reservations]);
+  const travelDayFlight = useMemo(
+    () => selectTravelDayDepartureFlight(reservations, nowMs),
+    [reservations, nowMs],
+  );
+  const travelDayFlightLabel = useMemo(
+    () => (travelDayFlight ? formatTravelDayFlightLabel(travelDayFlight.f) : null),
+    [travelDayFlight],
+  );
   return {
     activeFlight,
     previewFlight,
@@ -215,6 +217,8 @@ export function useActiveFlight(): {
     journeyPhase,
     coachMode,
     hotelLabel,
+    travelDayFlight,
+    travelDayFlightLabel,
     loading,
   };
 }

@@ -12,7 +12,9 @@ import {
 } from "@/lib/airportNav/officialWayfinding";
 import {
   buildArrivalDayCoachPath,
+  buildDepartCheckInCoachStep,
   departureTimeBudgetReassurance,
+  deriveAirportDayCoachMode,
   formatLiveBaggageCarouselNote,
   selectDayCoachVisibleSteps,
   type AirportDayCoachMode,
@@ -156,10 +158,6 @@ export function AirportNavigatorFallback({
     [code, gateCode, departureTerminal, credentials.clear, credentials.tsaPreCheck],
   );
 
-  const checkInLine = airlineName?.trim()
-    ? `Check in with ${airlineName.trim()} — app, kiosk, or counter`
-    : "Check in — airline app, kiosk, or counter";
-
   const pathSteps = useMemo((): DayCoachPathStep[] => {
     if (isArrive) {
       return buildArrivalDayCoachPath({
@@ -172,12 +170,12 @@ export function AirportNavigatorFallback({
         baggageCarouselNote: formatLiveBaggageCarouselNote(liveBaggageClaim),
       });
     }
-    const checkIn: DayCoachPathStep = {
-      id: "check-in",
-      icon: "🧳",
-      text: checkInLine,
-      detail: "Drop bags if needed, then head to security",
-    };
+    const checkIn = buildDepartCheckInCoachStep({
+      iata: code,
+      airlineName,
+      flightNumber,
+      departureTerminal,
+    });
     const fromGuide = guide.steps.map((step, index) => ({
       id: `guide-${index}`,
       icon: step.icon,
@@ -195,7 +193,6 @@ export function AirportNavigatorFallback({
     arrivalTerminal,
     hotelLabel,
     liveBaggageClaim,
-    checkInLine,
     guide,
   ]);
 

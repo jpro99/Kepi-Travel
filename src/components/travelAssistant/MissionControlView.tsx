@@ -31,6 +31,7 @@ import {
   detectScheduleCollisions,
   type ReadinessChecklistItem,
 } from "@/lib/travelAssistant/tripOrchestration";
+import { formatTravelDayFlightLabel } from "@/lib/travelAssistant/flightSort";
 
 export interface MissionControlLiveStatus {
   flightStatus?: string;
@@ -306,9 +307,12 @@ export function MissionControlView({
       ? `${snap.nextFlight.flightDepartureAirport ?? ""} → ${snap.nextFlight.flightArrivalAirport ?? ""}`
       : snap.identityLabel;
 
-    let eyebrow = "Travel day";
+    let eyebrow = snap.phase === "departure_day" ? "Today" : "Travel day";
     let title = snap.leaveByHint || "You're traveling today";
-    let detail: string | null = routeLabel;
+    let detail: string | null =
+      snap.phase === "departure_day" && snap.nextFlight
+        ? formatTravelDayFlightLabel(snap.nextFlight)
+        : routeLabel;
     let tone: "blue" | "green" = "blue";
 
     if (journeyPhase?.kind === "airborne") {

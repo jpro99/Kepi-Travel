@@ -2489,7 +2489,7 @@ export function AirportNavigatorMap({
           </p>
           {!preciseRouteEnabled ? (
             <p className="mt-1 text-[11px] leading-snug text-amber-200/90">
-              Approximate layout — pins from OpenStreetMap. We show the walking route once corridors are verified.
+              Terminal guide · pins approximate · follow airport signs
             </p>
           ) : null}
         </div>
@@ -2499,7 +2499,7 @@ export function AirportNavigatorMap({
           style={{ top: fill ? "max(4.5rem, calc(env(safe-area-inset-top) + 4rem))" : "3.25rem" }}
         >
           <p className="text-[11px] leading-snug text-amber-100/90">
-            📍 Approximate layout — pins placed from OpenStreetMap. Walking route appears once {iata}&apos;s corridors are verified.
+            Terminal guide · pins approximate · follow airport signs
           </p>
         </div>
       ) : null}

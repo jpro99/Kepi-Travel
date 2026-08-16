@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildArrivalDayCoachPath,
+  buildDepartCheckInCoachStep,
   departureTimeBudgetReassurance,
   deriveAirportDayCoachMode,
   formatLiveBaggageCarouselNote,
@@ -32,6 +33,17 @@ test("deriveAirportDayCoachMode uses just-landed only", () => {
   assert.equal(deriveAirportDayCoachMode({ kind: "airborne" }), "depart");
   assert.equal(deriveAirportDayCoachMode({ kind: "pre-trip" }), "depart");
   assert.equal(deriveAirportDayCoachMode(null), "depart");
+});
+
+test("M39: buildDepartCheckInCoachStep uses Alaska Terminal 2 at ONT", () => {
+  const step = buildDepartCheckInCoachStep({
+    iata: "ONT",
+    airlineName: "Alaska Airlines",
+    flightNumber: "AS654",
+  });
+  assert.match(step.text, /Alaska/i);
+  assert.match(step.text, /Terminal 2/i);
+  assert.match(step.detail ?? "", /AS654/);
 });
 
 test("isInternationalArrivalFlight compares countries", () => {
