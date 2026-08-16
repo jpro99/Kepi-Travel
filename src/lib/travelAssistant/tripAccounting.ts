@@ -42,6 +42,15 @@ export interface LifetimeAccountingSummary {
   trips: TripAccountingRow[];
 }
 
+export const EMPTY_LIFETIME_ACCOUNTING: LifetimeAccountingSummary = {
+  cashTotalUsd: 0,
+  pointsTotal: 0,
+  tripCount: 0,
+  tripsWithSpendCount: 0,
+  missingPriceCount: 0,
+  trips: [],
+};
+
 export function formatLedgerLineLabel(reservation: TripSpendReservation): string {
   if ((reservation.type ?? "").toLowerCase() === "flight") {
     const fn = reservation.flightNumber?.trim();

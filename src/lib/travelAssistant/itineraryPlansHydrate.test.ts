@@ -155,3 +155,22 @@ test("I50: Plan page does not read setToast before it is declared (TDZ)", () => 
     "setToast is read before initialization — Plan tab crashes (Cannot access before initialization)",
   );
 });
+
+test("G32: trip ledger symbols are not read before declaration in page.tsx (TDZ)", () => {
+  const src = readFileSync(join(process.cwd(), "src/app/travel-assistant/page.tsx"), "utf8");
+  for (const symbol of [
+    "lifetimeTripAccounting",
+    "handleLedgerOpenReservation",
+    "activeTripLedgerLabel",
+    "tripListRowsWithSpend",
+  ]) {
+    const decl = src.search(new RegExp(`const ${symbol} =`));
+    assert.ok(decl > 0, `${symbol} declaration missing`);
+    const before = src.slice(0, decl);
+    assert.equal(
+      (before.match(new RegExp(`\\b${symbol}\\b`, "gu")) ?? []).length,
+      0,
+      `${symbol} is read before initialization — travel-assistant crashes (Cannot access before initialization)`,
+    );
+  }
+});

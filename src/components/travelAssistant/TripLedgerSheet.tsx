@@ -339,6 +339,3 @@ export function TripLedgerSheet({
     </div>
   );
 }
-
-/** @deprecated Use TripLedgerSheet */
-export const TripPricingReviewSheet = TripLedgerSheet;
