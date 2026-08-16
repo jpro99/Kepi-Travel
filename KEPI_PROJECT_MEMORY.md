@@ -207,7 +207,7 @@ Goal: travel-day family opens Kepi first — not “beat Flighty on every featur
 False “Switch day” on Sep 3 (first full Polignano day) came from painting any leg-id change as a transition. Fix I44: Travel|City split only when travel+stay overlap (landing/check-in) or stay→stay; mid-stay days solid. Booked hotel city beats leftover day notes (“Leave Ortisei, go to Munich” on wrong day).
 
 ## Decision 2026-07-30 — Prep Home + smarter pricing (Jeff approved)
-When trip is >14 days out, Home is prep mode (countdown, documents/entry guidance with official link, stays/pricing) — hide connection/next-flight chrome. Email cash parse: Airbnb “charged a total” beats “per night”; fall back to full email if near-booking slice misses payment. Spend badge opens itemized pricing sheet (needs price vs logged).
+When trip is >14 days out, Home is prep mode (countdown, documents/entry guidance with official link, stays/pricing) — hide connection/next-flight chrome. Email cash parse: Airbnb “charged a total” beats “per night”; fall back to full email if near-booking slice misses payment. Spend badge opens **Trip Ledger** (this trip itemized + all-trips lifetime total + CSV export for taxes).
 
 ## Decision 2026-07-29 — Stay Gaps wording + Free/Pro clarity (Jeff approved)
 Gaps say “After Venice checkout” not “near Venice.” Soft Free banner on Home: 1 trip; Pro = unlimited + email import + alerts ($9). Forwarding stays free.
