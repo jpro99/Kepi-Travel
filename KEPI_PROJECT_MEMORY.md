@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-16 (Plan stuck on stale TDZ bundle)
+Last updated: 2026-08-16 (Plan false missing-transport Lecce→Venice)
+
+## Decision 2026-08-16 — Lecce→Venice is already booked (Jeff)
+
+Plan Calendar still showed MISSING TRANSPORT / “How are you getting there?” for Sun Sep 13 Lecce → Venice (BDS→VCE) and Search flights opened a new Google Flights search. Jeff already forwarded the train PDF and the flight that lands in Venice. Do not ask him to re-import those confirmations. Do not treat that hop as an empty search.
 
 ## Incident 2026-08-16 — Plan still red-screens after I55 (`Cannot access 'M'`)
 
