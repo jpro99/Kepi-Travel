@@ -652,6 +652,11 @@ Sept 3–4 (and any hotel mid-stay) must show forwarded / pasted day-plan bullet
 
 **Test:** `src/lib/travelAssistant/itineraryPlansHydrate.test.ts`
 
+**I51 — Tap a Plan day to edit that day (type, paste, talk)**  
+Tapping **Sept 2** (or Edit / empty Add) opens a full-screen Apple sheet for **that date only**: stay facts read-only, activity lines type/paste/delete, Talk uses on-device speech, Done saves. Empty Add must not flash Saved. Hotel/flight confirmations stay bookings — never overwritten by voice.
+
+**Test:** `src/lib/travelAssistant/planDayEdit.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -846,6 +851,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I48 | `src/lib/travelAssistant/letterDayPlan.test.ts` |
 | I49 | `src/lib/travelAssistant/letterDayPlan.test.ts` |
 | I50 | `src/lib/travelAssistant/itineraryPlansHydrate.test.ts` |
+| I51 | `src/lib/travelAssistant/planDayEdit.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

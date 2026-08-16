@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { PlanDayEditSheet } from "@/components/travelAssistant/PlanDayEditSheet";
 import {
   buildNarrativeDaySections,
   bulletsToDayNotes,
@@ -12,6 +13,7 @@ import {
   dayHasLetterContent,
   letterTitleLine,
 } from "@/lib/travelAssistant/letterDayPlan";
+import { dayActivityLinesEqual } from "@/lib/travelAssistant/planDayEdit";
 
 interface NarrativeDayPlanViewProps {
   tripName: string;
@@ -66,6 +68,7 @@ export function NarrativeDayPlanView({
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [pasteBusy, setPasteBusy] = useState(false);
+  const [editingDateKey, setEditingDateKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedDateKey) return;
@@ -74,7 +77,10 @@ export function NarrativeDayPlanView({
   }, [selectedDateKey]);
 
   const commitBullets = (dateKey: string, bullets: string[]): void => {
-    onDayNoteChange(dateKey, bulletsToDayNotes(bullets.map((line) => line.trim()).filter(Boolean)));
+    const section = sections.find((item) => item.dateKey === dateKey);
+    const next = bullets.map((line) => line.trim()).filter(Boolean);
+    if (section && dayActivityLinesEqual(next, section.bullets)) return;
+    onDayNoteChange(dateKey, bulletsToDayNotes(next));
   };
 
   const updateBullet = (dateKey: string, index: number, value: string): void => {
@@ -94,16 +100,17 @@ export function NarrativeDayPlanView({
 
   const addBullet = (dateKey: string): void => {
     const typed = (drafts[dateKey] ?? "").trim();
-    const section = sections.find((item) => item.dateKey === dateKey);
-    const next = [...(section?.bullets ?? [])];
-    if (typed) {
-      next.push(typed);
-      setDrafts((prev) => ({ ...prev, [dateKey]: "" }));
-    } else {
-      next.push("");
+    if (!typed) {
+      setEditingDateKey(dateKey);
+      return;
     }
+    const section = sections.find((item) => item.dateKey === dateKey);
+    const next = [...(section?.bullets ?? []), typed];
+    setDrafts((prev) => ({ ...prev, [dateKey]: "" }));
     commitBullets(dateKey, next);
   };
+
+  const editingSection = sections.find((section) => section.dateKey === editingDateKey) ?? null;
 
   return (
     <article
@@ -135,7 +142,22 @@ export function NarrativeDayPlanView({
               {range ? (
                 <p className="mb-3 text-[17px] font-semibold text-[#1D1D1F]">{range.label}</p>
               ) : null}
-              <h3 className="mb-2 text-[20px] font-bold text-[#1D1D1F]">{section.heading}</h3>
+              <div className="mb-2 flex items-start justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingDateKey(section.dateKey)}
+                  className="min-h-[48px] min-w-0 flex-1 text-left"
+                >
+                  <h3 className="text-[20px] font-bold text-[#1D1D1F]">{section.heading}</h3>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingDateKey(section.dateKey)}
+                  className="min-h-[48px] shrink-0 text-[16px] font-semibold text-[#007AFF]"
+                >
+                  Edit
+                </button>
+              </div>
               {section.bookingLines.length > 0 ? (
                 <ul className="mb-2 space-y-1 text-[16px] leading-snug text-[#1D1D1F]">
                   {section.bookingLines.map((line) => (
@@ -273,6 +295,18 @@ export function NarrativeDayPlanView({
             </button>
           )}
         </footer>
+      ) : null}
+      {editingSection ? (
+        <PlanDayEditSheet
+          dateKey={editingSection.dateKey}
+          heading={editingSection.heading}
+          location={editingSection.location}
+          stayFacts={editingSection.stayFacts}
+          activityFacts={editingSection.activityFacts}
+          bullets={editingSection.bullets}
+          onSave={(next) => commitBullets(editingSection.dateKey, next)}
+          onClose={() => setEditingDateKey(null)}
+        />
       ) : null}
     </article>
   );

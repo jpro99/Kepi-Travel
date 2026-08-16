@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-15 (Plan TDZ crash after I50)
+Last updated: 2026-08-15 (Plan one-day edit sheet)
+
+## Decision 2026-08-15 — Tap a Plan day to edit it (Jeff approved)
+
+Timeline letter stays. Tap Sept 2 / Edit / empty Add opens a full-screen day sheet: type, paste, talk, delete that day only. Confirmations untouched.
 
 ## Incident 2026-08-15 — Plan tab red-screen TDZ after I50 deploy
 
