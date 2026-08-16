@@ -590,7 +590,7 @@ Component map: `TripHealthStrip`, `dedupeConsumerReservations`, `DesktopTripHome
 
 ## Post–Home/Plan polish (Jeff, 2026-06-15)
 
-- **Spend badge tappable** — header `TripSpendBadge` opens Trip Ledger (this trip + all trips lifetime total + CSV export)
+- **Spend badge tappable** — header `TripSpendBadge` opens Trip Ledger (this trip + all trips lifetime total + CSV export). Ledger sheet lazy-loads on open; hard-refresh if `Cannot access before initialization` after deploy (stale PWA chunk — I56).
 - **Mobile Home trip health** — `TripHealthStrip` on mobile Home tab
 - **Book tab unified** — shared header, toggle chrome, matching flight/hotel list cards via `bookTabStyles.ts`
 - **Book search on mobile** — flight/hotel launchers, leg picker, stay planner wired from `page.tsx`
