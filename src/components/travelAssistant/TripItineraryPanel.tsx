@@ -371,12 +371,25 @@ export function useItineraryPanelPrefs(tripId: string | null) {
   );
 
   const updateDayNote = (dateKey: string, value: string): void => {
-    setDayNotes((prev) => {
-      const next = { ...prev, [dateKey]: value };
-      if (tripId && typeof window !== "undefined") {
-        window.localStorage.setItem(`kepi:day-notes:${tripId}`, JSON.stringify(next));
-      }
-      return next;
+    setDayNotes((prevNotes) => {
+      const nextNotes = { ...prevNotes, [dateKey]: value };
+      setItineraryPlans((prevPlans) => {
+        const existing = prevPlans.dayPlans[dateKey] ?? mergeDayPlan(undefined, "");
+        const nextPlans: ItineraryPlansData = {
+          ...prevPlans,
+          dayPlans: {
+            ...prevPlans.dayPlans,
+            [dateKey]: {
+              ...existing,
+              notes: value,
+            },
+          },
+          updatedAt: new Date().toISOString(),
+        };
+        queuePersistToTrip(nextPlans, nextNotes);
+        return nextPlans;
+      });
+      return nextNotes;
     });
   };
 

@@ -13,7 +13,7 @@ import {
   dayHasLetterContent,
   letterTitleLine,
 } from "@/lib/travelAssistant/letterDayPlan";
-import { dayActivityLinesEqual } from "@/lib/travelAssistant/planDayEdit";
+import { dayActivityLinesEqual, splitPastedDayLines } from "@/lib/travelAssistant/planDayEdit";
 
 interface NarrativeDayPlanViewProps {
   tripName: string;
@@ -69,12 +69,19 @@ export function NarrativeDayPlanView({
   const [pasteText, setPasteText] = useState("");
   const [pasteBusy, setPasteBusy] = useState(false);
   const [editingDateKey, setEditingDateKey] = useState<string | null>(null);
+  const [undoDay, setUndoDay] = useState<{ dateKey: string; bullets: string[] } | null>(null);
 
   useEffect(() => {
     if (!selectedDateKey) return;
     const node = document.getElementById(`narrative-day-${selectedDateKey}`);
     node?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [selectedDateKey]);
+
+  useEffect(() => {
+    if (!undoDay) return;
+    const timer = window.setTimeout(() => setUndoDay(null), 12000);
+    return () => window.clearTimeout(timer);
+  }, [undoDay]);
 
   const commitBullets = (dateKey: string, bullets: string[]): void => {
     const section = sections.find((item) => item.dateKey === dateKey);
@@ -92,20 +99,23 @@ export function NarrativeDayPlanView({
 
   const removeBullet = (dateKey: string, index: number): void => {
     const section = sections.find((item) => item.dateKey === dateKey);
+    const current = section?.bullets ?? [];
+    setUndoDay({ dateKey, bullets: current });
     commitBullets(
       dateKey,
-      (section?.bullets ?? []).filter((_, itemIndex) => itemIndex !== index),
+      current.filter((_, itemIndex) => itemIndex !== index),
     );
   };
 
   const addBullet = (dateKey: string): void => {
-    const typed = (drafts[dateKey] ?? "").trim();
-    if (!typed) {
+    const typed = drafts[dateKey] ?? "";
+    const parts = splitPastedDayLines(typed);
+    if (parts.length === 0) {
       setEditingDateKey(dateKey);
       return;
     }
     const section = sections.find((item) => item.dateKey === dateKey);
-    const next = [...(section?.bullets ?? []), typed];
+    const next = [...(section?.bullets ?? []), ...parts];
     setDrafts((prev) => ({ ...prev, [dateKey]: "" }));
     commitBullets(dateKey, next);
   };
@@ -193,6 +203,18 @@ export function NarrativeDayPlanView({
                       <input
                         value={bullet}
                         onChange={(event) => updateBullet(section.dateKey, index, event.target.value)}
+                        onPaste={(event) => {
+                          const text = event.clipboardData?.getData("text") ?? "";
+                          const parts = splitPastedDayLines(text);
+                          if (parts.length <= 1 && !text.includes("\n")) return;
+                          event.preventDefault();
+                          const current = section.bullets.filter((_, itemIndex) => itemIndex !== index);
+                          commitBullets(section.dateKey, [
+                            ...current.slice(0, index),
+                            ...parts,
+                            ...current.slice(index),
+                          ]);
+                        }}
                         className="min-h-[44px] min-w-0 flex-1 border-0 bg-transparent text-[17px] leading-snug text-[#1D1D1F] outline-none"
                         placeholder="What are you doing?"
                       />
@@ -217,6 +239,14 @@ export function NarrativeDayPlanView({
                   onChange={(event) =>
                     setDrafts((prev) => ({ ...prev, [section.dateKey]: event.target.value }))
                   }
+                  onPaste={(event) => {
+                    const text = event.clipboardData?.getData("text") ?? "";
+                    const parts = splitPastedDayLines(text);
+                    if (parts.length === 0) return;
+                    event.preventDefault();
+                    commitBullets(section.dateKey, [...section.bullets, ...parts]);
+                    setDrafts((prev) => ({ ...prev, [section.dateKey]: "" }));
+                  }}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
                       event.preventDefault();
@@ -224,7 +254,7 @@ export function NarrativeDayPlanView({
                     }
                   }}
                   className="min-h-[44px] min-w-0 flex-1 border-0 bg-transparent text-[17px] leading-snug text-[#1D1D1F] outline-none"
-                  placeholder="Add a line — boat tour, gelato, checkout…"
+                  placeholder="Type or paste a line — test one two three"
                 />
                 <button
                   type="button"
@@ -238,6 +268,21 @@ export function NarrativeDayPlanView({
           );
         })}
       </div>
+      {undoDay ? (
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-white px-4 py-3 ring-1 ring-[#E8E0D4]">
+          <p className="text-[16px] text-[#1D1D1F]">Line deleted.</p>
+          <button
+            type="button"
+            onClick={() => {
+              commitBullets(undoDay.dateKey, undoDay.bullets);
+              setUndoDay(null);
+            }}
+            className="min-h-[48px] text-[16px] font-semibold text-[#007AFF]"
+          >
+            Undo
+          </button>
+        </div>
+      ) : null}
       {onPasteDayPlan ? (
         <footer className="mt-8 border-t border-[#E8E0D4] pt-4">
           {pasteOpen ? (

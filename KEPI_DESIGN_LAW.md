@@ -657,6 +657,11 @@ Tapping **Sept 2** (or Edit / empty Add) opens a full-screen Apple sheet for **t
 
 **Test:** `src/lib/travelAssistant/planDayEdit.test.ts`
 
+**I52 — Paste, Done, undo, and reorder must actually keep the day**  
+Pasting “test one two three” (or Notes / Word lines) must become bullets on that date. Done must write `itineraryPlans.dayPlans[date].notes` and persist — not only local `dayNotes` the letter ignores. Activity edits must not toast “Updated plan: stay in Bari”. Accidental ✕ has Undo. Lines reorder with drag / up-down. Talk and paste use the same save path.
+
+**Test:** `src/lib/travelAssistant/planDayEdit.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -852,6 +857,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I49 | `src/lib/travelAssistant/letterDayPlan.test.ts` |
 | I50 | `src/lib/travelAssistant/itineraryPlansHydrate.test.ts` |
 | I51 | `src/lib/travelAssistant/planDayEdit.test.ts` |
+| I52 | `src/lib/travelAssistant/planDayEdit.test.ts`, `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/narrativeItineraryExport.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

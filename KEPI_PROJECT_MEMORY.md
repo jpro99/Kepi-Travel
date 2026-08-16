@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-15 (Plan one-day edit sheet)
+Last updated: 2026-08-16 (Plan paste/save/undo)
+
+## Incident 2026-08-16 — Paste and Done did not keep the day (Jeff)
+
+Talk inserted a line; paste did not. Done toasted “Updated plan: stay in Bari” and the letter looked unchanged. Accidental ✕ had no Undo. Cause: Paste needed a second tap; activity save wrote `dayNotes` only while the letter read stale `plan.notes`; stay-reconcile treated Bari mention as a hotel rewrite. Confirmations untouched.
 
 ## Decision 2026-08-15 — Tap a Plan day to edit it (Jeff approved)
 

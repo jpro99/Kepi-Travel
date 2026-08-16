@@ -6,7 +6,7 @@ import {
   dayPlanToNote,
   type DayPlanRecord,
 } from "@/lib/travelAssistant/itineraryDayPlan";
-import { parseDayIntentFromLines } from "@/lib/travelAssistant/dayPlanLines";
+import { parseDayIntentFromLines, parseDayLines } from "@/lib/travelAssistant/dayPlanLines";
 import { parseDayIntent } from "@/lib/travelAssistant/parseDayIntent";
 import { buildHotelStaySpans, type HotelStayLegInput } from "@/lib/travelAssistant/hotelAnchoredStayLegs";
 
@@ -42,6 +42,27 @@ function enumerateDays(start: string, end: string): string[] {
   const keys: string[] = [];
   for (let d = start; compareDateKeys(d, end) <= 0; d = addDays(d, 1)) keys.push(d);
   return keys;
+}
+
+/**
+ * True only for a stay-city correction ("Leave Bari", "not staying in Bari").
+ * Activity paste / "test one two three" / a day that mentions Bari must not
+ * rewrite the timeline (I52).
+ */
+export function isStayCityCorrectionNote(note: string): boolean {
+  const trimmed = note.trim();
+  if (!trimmed) return false;
+  if (/^\s*leave\.?\s*$/iu.test(trimmed)) return true;
+
+  const lines = parseDayLines(trimmed);
+  if (lines.length > 2) return false;
+
+  if (parseRejectStayCity(trimmed)) return true;
+
+  const intent = lines.length === 1 ? parseDayIntent(lines[0] ?? "") : parseDayIntentFromLines(trimmed);
+  if (intent?.kind === "depart") return true;
+  if (intent?.kind === "move" && intent.fromCity && intent.toCity) return true;
+  return false;
 }
 
 /** Detect when the traveler rejects an airport city as their actual stay. */
@@ -143,6 +164,15 @@ function resolveTargetStayCity(input: ReconcilePlanNoteInput): {
  * with booked hotels in other cities and propagate forward on the timeline.
  */
 export function reconcilePlanNoteWithHotels(input: ReconcilePlanNoteInput): ReconcilePlanNoteResult {
+  if (!isStayCityCorrectionNote(input.note)) {
+    return {
+      applied: false,
+      summary: null,
+      dayPlans: input.dayPlans,
+      dayNotes: input.dayNotes,
+    };
+  }
+
   const { targetCity, headline } = resolveTargetStayCity(input);
   if (!targetCity || !headline) {
     return {

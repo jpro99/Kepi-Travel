@@ -1,5 +1,5 @@
 /**
- * One-day Plan editor helpers (I51) — type, paste, voice, delete for a single date.
+ * One-day Plan editor helpers (I51 / I52) — type, paste, voice, delete, reorder.
  */
 
 export function splitPastedDayLines(text: string): string[] {
@@ -28,4 +28,42 @@ export function planDayEditorTitle(heading: string, location?: string | null): s
     return `${day} · ${city}`;
   }
   return day || city || "This day";
+}
+
+/** Keep a blank row at the end so the next paste/type has a place to land. */
+export function padDayActivityLines(lines: string[]): string[] {
+  const next = normalizeDayActivityLines(lines);
+  return next.length > 0 ? [...next, ""] : [""];
+}
+
+/** Clipboard / textarea paste becomes real day lines (I52). */
+export function insertPastedDayLines(lines: string[], atIndex: number, pasted: string): string[] {
+  const incoming = splitPastedDayLines(pasted);
+  if (incoming.length === 0) return padDayActivityLines(lines);
+  const next = [...lines];
+  const index = Math.max(0, Math.min(atIndex, Math.max(next.length - 1, 0)));
+  const current = (next[index] ?? "").trim();
+  if (!current) {
+    next.splice(index, 1, ...incoming);
+  } else {
+    next.splice(index + 1, 0, ...incoming);
+  }
+  return padDayActivityLines(next);
+}
+
+export function appendPastedDayLines(lines: string[], pasted: string): string[] {
+  const incoming = splitPastedDayLines(pasted);
+  if (incoming.length === 0) return padDayActivityLines(lines);
+  return padDayActivityLines([...normalizeDayActivityLines(lines), ...incoming]);
+}
+
+export function moveDayActivityLine(lines: string[], from: number, to: number): string[] {
+  if (from === to || from < 0 || to < 0 || from >= lines.length || to >= lines.length) {
+    return lines;
+  }
+  const next = [...lines];
+  const [item] = next.splice(from, 1);
+  if (item === undefined) return lines;
+  next.splice(to, 0, item);
+  return next;
 }

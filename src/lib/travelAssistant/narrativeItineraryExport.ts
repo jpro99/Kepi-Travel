@@ -169,9 +169,9 @@ export function buildNarrativeDaySections(input: {
 
   return allKeys.map((dateKey) => {
     const plan = input.itineraryPlans?.dayPlans[dateKey];
-    const rawNote =
-      (plan?.notes ? plan.notes : "") ||
-      (input.dayNotes?.[dateKey] ?? "").trim();
+    const noteFromDays = (input.dayNotes?.[dateKey] ?? "").trim();
+    const noteFromPlan = (plan?.notes ?? "").trim();
+    const rawNote = noteFromDays || noteFromPlan;
     const rawBullets = notesToBullets(rawNote);
     const split = splitLetterStayAndActivities(rawBullets);
     const bullets = split.activityLines.filter(
