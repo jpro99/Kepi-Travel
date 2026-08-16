@@ -3,11 +3,15 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-16 (G28 auto-dismiss ticket terms)
+Last updated: 2026-08-16 (G29 Viator calm review)
 
 ## Decision 2026-08-16 — Forwarding is consent; review is for real conflicts (Jeff)
 
 Jeff: if he forwards a booking, he wants it on the trip. Do not make him scroll GetYourGuide Privacy Policy to tap Add. Match booking `GYGVN24XVY58` against the trip and dismiss. Only interrupt when dates/times are wrong or two activities collide. Legal-only “ticket instructions” PDFs are not bookings. Confirmations untouched.
+
+## Incident 2026-08-16 — Viator ticket-link review showed URL wall (Jeff)
+
+1 of 3 was “pickup for your tour” + Parser confidence + a viator.com/MptUrl tracking link and Add / Already / Not mine. End users must never see that. G29: read Viator Booking 1435134507, auto-dismiss link stubs, calm Apple copy only. Confirmations untouched.
 
 ## Incident 2026-08-16 — Ticket-terms sheet still asked Add and said “damage” (Jeff)
 

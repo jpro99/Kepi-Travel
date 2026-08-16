@@ -483,6 +483,7 @@ export function extractConfirmationCodeFromText(text: string): string | null {
   if (!combined) return null;
 
   const labeledPatterns = [
+    /\bviator\s+booking\s+(\d{6,14})\b/iu,
     /\bbooking\s+([A-Z0-9]{10,16})\b/iu,
     /\bcodice\s+prenotazione\s*[:#]?\s*([A-Z0-9]{5,8})\b/iu,
     /\bcodice\s+biglietto\s*[:#]?\s*([A-Z0-9]{6,12})\b/iu,
@@ -493,10 +494,16 @@ export function extractConfirmationCodeFromText(text: string): string | null {
     // "Confirmation ABC123" / "Confirmation: LDM-2291" — never "confirmation carefully"
     /\bconfirmation\s*[:#]?\s*([A-Z0-9-]{5,12})\b/iu,
   ];
-  for (const pattern of labeledPatterns) {
+  for (let index = 0; index < labeledPatterns.length; index += 1) {
+    const pattern = labeledPatterns[index];
     const match = combined.match(pattern);
     const code = match?.[1] ?? "";
-    if (code && isAllowedConfirmationCode(code)) {
+    if (!code) continue;
+    // Viator uses numeric-only booking IDs (6–14 digits) — not airline PNRs.
+    if (index === 0 && /^\d{6,14}$/u.test(code)) {
+      return code;
+    }
+    if (isAllowedConfirmationCode(code)) {
       return normalizeConfirmationCode(code);
     }
   }

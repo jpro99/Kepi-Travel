@@ -3,12 +3,18 @@ import test from "node:test";
 import {
   extractActivityBookingCode,
   extractActivityTicketFacts,
+  formatActivitySourceForDisplay,
+  isActivityLinkStubText,
   isGarbageConfirmationCode,
   isGarbageLeftoverTitle,
   isLegalBoilerplateText,
   isTicketInstructionsLeftover,
   stripLegalBoilerplate,
 } from "./activityTicketExtract";
+
+const viatorLinkStub = `Get your tickets [image: Go to Viator]
+https://www.viator.com/MptUrl?p=Alt5Y6Je0R1bqudLx9oBtcKvpXQqWGVA
+visit our Help`;
 
 const gygLegalPdf = `
 --- PDF attachment ---
@@ -67,5 +73,15 @@ test("G28: Ticket instructions subject is a leftover the traveler must not see",
     true,
   );
   assert.equal(isGarbageLeftoverTitle("damage"), true);
+  assert.equal(isGarbageLeftoverTitle("pickup for your tour"), true);
   assert.equal(isGarbageLeftoverTitle("GetYourGuide · GYGVN24XVY58"), false);
+});
+
+test("G29: Viator Booking 1435134507 reads from the subject", () => {
+  assert.equal(
+    extractActivityBookingCode("Fwd: Confirmed: Viator Booking 1435134507", viatorLinkStub),
+    "1435134507",
+  );
+  assert.equal(isActivityLinkStubText(viatorLinkStub), true);
+  assert.equal(formatActivitySourceForDisplay(viatorLinkStub), null);
 });
