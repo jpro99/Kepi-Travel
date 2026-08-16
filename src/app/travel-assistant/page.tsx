@@ -180,13 +180,14 @@ import { BookTabView } from "@/components/travelAssistant/BookTabView";
 import { MapTabView } from "@/components/travelAssistant/MapTabView";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
-import { TripLedgerSheet } from "@/components/travelAssistant/TripLedgerSheet";
 import { hydrateReservationsPricing, applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import { buildTransportConflictReservationIds } from "@/lib/travelAssistant/reservationAttention";
 import { computeTripSpend } from "@/lib/travelAssistant/tripSpendSummary";
 import {
   computeLifetimeAccounting,
   enrichTripSpendLineItems,
+  EMPTY_LIFETIME_ACCOUNTING,
+  type LifetimeAccountingSummary,
   type TripAccountingTripInput,
 } from "@/lib/travelAssistant/tripAccounting";
 import { preDepartureStayDecisionId, type TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
@@ -325,6 +326,10 @@ const FamilyPanel = lazy(async () => {
 const DisruptionRecovery = lazy(async () => {
   const loadedModule = await import("@/components/travelAssistant/DisruptionRecovery");
   return { default: loadedModule.DisruptionRecovery };
+});
+const TripLedgerSheet = lazy(async () => {
+  const loadedModule = await import("@/components/travelAssistant/TripLedgerSheet");
+  return { default: loadedModule.TripLedgerSheet };
 });
 
 type TripStage = TripFlowStage;
@@ -2409,7 +2414,6 @@ export default function TravelAssistantPage() {
         const spendReservations = trip.reservations.filter(
           (reservation) => !isOnboardingPlaceholderReservation(reservation),
         );
-        const summary = computeTripSpend(spendReservations);
         return {
           id: trip.id,
           name: trip.name,
@@ -2418,13 +2422,32 @@ export default function TravelAssistantPage() {
           endDate: trip.endDate,
           createdAt: trip.createdAt,
           reservationCount: spendReservations.length,
-          cashTotalUsd: summary.cashTotalUsd,
-          pointsTotal: summary.pointsTotal,
-          missingPriceCount: summary.missingPriceCount,
         };
       }),
     [trips],
   );
+
+  const tripListRowsWithSpend = useMemo<TripListRowInput[]>(() => {
+    if (!myTripsModalOpen) return tripListRows;
+    return trips.map((trip) => {
+      const spendReservations = trip.reservations.filter(
+        (reservation) => !isOnboardingPlaceholderReservation(reservation),
+      );
+      const summary = computeTripSpend(spendReservations);
+      return {
+        id: trip.id,
+        name: trip.name,
+        destination: trip.destination,
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+        createdAt: trip.createdAt,
+        reservationCount: spendReservations.length,
+        cashTotalUsd: summary.cashTotalUsd,
+        pointsTotal: summary.pointsTotal,
+        missingPriceCount: summary.missingPriceCount,
+      };
+    });
+  }, [trips, tripListRows, myTripsModalOpen]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -4519,7 +4542,10 @@ export default function TravelAssistantPage() {
     () => enrichTripSpendLineItems(tripSpendReservations),
     [tripSpendReservations],
   );
-  const lifetimeTripAccounting = useMemo(() => {
+  const lifetimeTripAccounting = useMemo((): LifetimeAccountingSummary => {
+    if (!pricingReviewOpen && !myTripsModalOpen) {
+      return EMPTY_LIFETIME_ACCOUNTING;
+    }
     const accountingTrips: TripAccountingTripInput[] = trips.map((trip) => ({
       id: trip.id,
       name: trip.name,
@@ -4529,7 +4555,7 @@ export default function TravelAssistantPage() {
       reservations: trip.reservations.filter((r) => !isOnboardingPlaceholderReservation(r)),
     }));
     return computeLifetimeAccounting(accountingTrips, activeTripId);
-  }, [trips, activeTripId]);
+  }, [trips, activeTripId, pricingReviewOpen, myTripsModalOpen]);
   const activeStayDecisions = useMemo(
     () => (activeTripId ? tripStayDecisionsByTrip[activeTripId] ?? {} : {}),
     [activeTripId, tripStayDecisionsByTrip],
@@ -9806,7 +9832,7 @@ export default function TravelAssistantPage() {
     <>
       <MyTripsModal
         open={myTripsModalOpen}
-        trips={tripListRows}
+        trips={tripListRowsWithSpend}
         activeTripId={activeTripId}
         deletingTripId={deletingTripId}
         busy={deletingTripId !== null}
@@ -11028,17 +11054,21 @@ export default function TravelAssistantPage() {
           <TravelStyleQuiz onComplete={handleTravelStyleComplete} onSkip={handleTravelStyleSkip} />
         ) : null}
         {tripManagementModals}
-        <TripLedgerSheet
-          open={pricingReviewOpen}
-          activeTripId={activeTripId}
-          activeTripLabel={activeTripLedgerLabel}
-          summary={tripSpendSummary}
-          lineItems={tripSpendLineItems}
-          lifetimeAccounting={lifetimeTripAccounting}
-          onClose={() => setPricingReviewOpen(false)}
-          onOpenReservation={handleLedgerOpenReservation}
-          onSelectTrip={(tripId) => void handleSwitchTrip(tripId)}
-        />
+        {pricingReviewOpen ? (
+          <Suspense fallback={null}>
+            <TripLedgerSheet
+              open={pricingReviewOpen}
+              activeTripId={activeTripId}
+              activeTripLabel={activeTripLedgerLabel}
+              summary={tripSpendSummary}
+              lineItems={tripSpendLineItems}
+              lifetimeAccounting={lifetimeTripAccounting}
+              onClose={() => setPricingReviewOpen(false)}
+              onOpenReservation={handleLedgerOpenReservation}
+              onSelectTrip={(tripId) => void handleSwitchTrip(tripId)}
+            />
+          </Suspense>
+        ) : null}
         {!tripsLoading && trips.length === 0 ? (
           <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
         ) : null}
@@ -11920,17 +11950,21 @@ export default function TravelAssistantPage() {
         currentPlan={billingStatusPlan}
         onClose={closeUpgradeModal}
       />
-      <TripLedgerSheet
-        open={pricingReviewOpen}
-        activeTripId={activeTripId}
-        activeTripLabel={activeTripLedgerLabel}
-        summary={tripSpendSummary}
-        lineItems={tripSpendLineItems}
-        lifetimeAccounting={lifetimeTripAccounting}
-        onClose={() => setPricingReviewOpen(false)}
-        onOpenReservation={handleLedgerOpenReservation}
-        onSelectTrip={(tripId) => void handleSwitchTrip(tripId)}
-      />
+      {pricingReviewOpen ? (
+        <Suspense fallback={null}>
+          <TripLedgerSheet
+            open={pricingReviewOpen}
+            activeTripId={activeTripId}
+            activeTripLabel={activeTripLedgerLabel}
+            summary={tripSpendSummary}
+            lineItems={tripSpendLineItems}
+            lifetimeAccounting={lifetimeTripAccounting}
+            onClose={() => setPricingReviewOpen(false)}
+            onOpenReservation={handleLedgerOpenReservation}
+            onSelectTrip={(tripId) => void handleSwitchTrip(tripId)}
+          />
+        </Suspense>
+      ) : null}
       <GmailImportScopeModal
         key={gmailScopeModalKey}
         open={gmailScopeModalOpen}
