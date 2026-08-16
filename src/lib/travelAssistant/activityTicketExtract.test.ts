@@ -4,7 +4,9 @@ import {
   extractActivityBookingCode,
   extractActivityTicketFacts,
   isGarbageConfirmationCode,
+  isGarbageLeftoverTitle,
   isLegalBoilerplateText,
+  isTicketInstructionsLeftover,
   stripLegalBoilerplate,
 } from "./activityTicketExtract";
 
@@ -54,4 +56,16 @@ Confirmation GYGVN24XVY58
   assert.equal(isLegalBoilerplateText(body), false);
   const facts = extractActivityTicketFacts(body, "Booking GYGVN24XVY58 confirmed");
   assert.equal(facts?.confirmationCode, "GYGVN24XVY58");
+});
+
+test("G28: Ticket instructions subject is a leftover the traveler must not see", () => {
+  assert.equal(
+    isTicketInstructionsLeftover(
+      "Fwd: Booking GYGVN24XVY58 confirmed | Ticket instructions",
+      "you may create a GetYourGuide Account using your existing social media",
+    ),
+    true,
+  );
+  assert.equal(isGarbageLeftoverTitle("damage"), true);
+  assert.equal(isGarbageLeftoverTitle("GetYourGuide · GYGVN24XVY58"), false);
 });

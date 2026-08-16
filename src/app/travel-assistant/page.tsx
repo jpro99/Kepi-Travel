@@ -8846,7 +8846,7 @@ export default function TravelAssistantPage() {
         persistReviewQueueToTrip(nextQueue, { reviewId: nextQueue[0]?.id ?? "review-resolve", source: "review-resolve" });
       }
       if (nextQueue.length === 0) {
-        setToast("Nothing to add — those leftovers were already on your trip or just ticket terms.");
+        setToast("All set — nothing needed your OK.");
         return;
       }
       setConsumerReviewQueueSession({

@@ -37,6 +37,10 @@ export function ConsumerReviewSheet({
   useEffect(() => {
     if (!open || !item) return;
     const shown = presentReviewInboxItem(item, liveReservations);
+    if (shown.autoResolve) {
+      onAlreadyOnTrip();
+      return;
+    }
     void postSuggestionOutcome({
       surface: "review-inbox-sheet",
       suggestionKey: shown.alreadyOnTrip ? "already-on-trip" : "review-leftover",
@@ -49,6 +53,16 @@ export function ConsumerReviewSheet({
   }, [open, itemId]);
 
   if (!open) return null;
+
+  if (presented?.autoResolve) {
+    return (
+      <div
+        className="fixed inset-0 z-[120] flex items-center justify-center bg-[#F5F5F7]"
+        style={{ height: "100dvh" }}
+        aria-hidden="true"
+      />
+    );
+  }
 
   return (
     <div

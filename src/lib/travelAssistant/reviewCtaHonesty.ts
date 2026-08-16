@@ -3,7 +3,9 @@ import { extractRailTicketFacts } from "@/lib/travelAssistant/railTicketExtract"
 import {
   extractActivityTicketFacts,
   isGarbageConfirmationCode,
+  isGarbageLeftoverTitle,
   isLegalBoilerplateText,
+  isTicketInstructionsLeftover,
   stripLegalBoilerplate,
 } from "@/lib/travelAssistant/activityTicketExtract";
 
@@ -128,14 +130,11 @@ function findLiveMatch(
   );
 }
 
-export function leftoverHasAddableFacts(draft: ReviewInboxDraft, sourceText = ""): boolean {
-  const code = draft.confirmationCode.trim();
-  const usableCode = code && !isGarbageConfirmationCode(code);
-  if (sourceText && isLegalBoilerplateText(sourceText) && !draft.localTime.trim() && !draft.location.trim()) {
+export function leftoverHasAddableFacts(draft: ReviewInboxDraft, sourceText = "", subject = ""): boolean {
+  if (isTicketInstructionsLeftover(subject, sourceText) || (sourceText && isLegalBoilerplateText(sourceText))) {
     return false;
   }
   if (draft.localTime.trim()) return true;
-  if (usableCode && draft.location.trim()) return true;
   if (draft.location.trim()) return true;
   if (draft.flightDepartureAirport?.trim() && draft.flightArrivalAirport?.trim()) return true;
   if (draft.flightDate?.trim()) return true;
@@ -151,15 +150,17 @@ export function enrichReviewInboxItemFromSource(item: ReviewInboxItemInput): Rev
     draft = { ...draft, confirmationCode: "" };
   }
   if (activity) {
-    const subjectTitle = /^fwd:/iu.test(draft.title.trim()) || draft.title.trim().length > 48;
     draft = {
       ...draft,
       type: "dinner",
-      title: subjectTitle || !draft.title.trim() ? activity.title : draft.title,
+      title: isGarbageLeftoverTitle(draft.title) ? activity.title : draft.title,
       provider: activity.provider || draft.provider,
       confirmationCode: activity.confirmationCode || draft.confirmationCode,
     };
-  } else if (rail && !leftoverHasAddableFacts(draft, source)) {
+    if (isTicketInstructionsLeftover(item.sourceEmailSubject ?? "", item.originalEmailText ?? "")) {
+      draft = { ...draft, localTime: "", location: "" };
+    }
+  } else if (rail && !leftoverHasAddableFacts(draft, source, item.sourceEmailSubject ?? "")) {
     draft = {
       ...draft,
       type: draft.type || "train",
@@ -196,7 +197,8 @@ export function shouldAutoResolveReviewLeftover(
   presented: Pick<ReviewInboxPresentation, "alreadyOnTrip" | "canAddToTrip" | "sourceKind">,
 ): boolean {
   if (presented.alreadyOnTrip) return true;
-  if (presented.sourceKind === "legal-terms" && !presented.canAddToTrip) return true;
+  if (presented.sourceKind === "legal-terms") return true;
+  if (!presented.canAddToTrip && presented.sourceKind === "empty") return false;
   return false;
 }
 
@@ -208,8 +210,8 @@ export function presentReviewInboxItem(
   const draft = enriched.draft;
   const match = findLiveMatch(draft, liveReservations);
   const rawSource = item.originalEmailText?.trim() || "";
-  const legalOnly = rawSource ? isLegalBoilerplateText(rawSource) : false;
-  const canAddToTrip = leftoverHasAddableFacts(draft, rawSource);
+  const legalOnly = isTicketInstructionsLeftover(item.sourceEmailSubject ?? "", rawSource);
+  const canAddToTrip = leftoverHasAddableFacts(draft, rawSource, item.sourceEmailSubject ?? "");
   const didEnrich =
     draft.localTime.trim() !== item.draft.localTime.trim() ||
     draft.location.trim() !== item.draft.location.trim() ||
@@ -263,7 +265,9 @@ export function presentReviewInboxItem(
 
   return {
     id: item.id,
-    headline: draft.title.trim() || draft.provider.trim() || sourceSubject || "Untitled leftover",
+    headline: isGarbageLeftoverTitle(draft.title)
+      ? draft.provider.trim() || draft.confirmationCode.trim() || "Booking"
+      : draft.title.trim() || draft.provider.trim() || sourceSubject || "Untitled leftover",
     when: formatWhen(draft.localTime),
     where: route || draft.location.trim() || null,
     confirmation: draft.confirmationCode.trim() || null,

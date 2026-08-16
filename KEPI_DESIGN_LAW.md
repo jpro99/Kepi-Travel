@@ -124,7 +124,7 @@ A Home or Plan CTA that says bookings need your OK must mount a review sheet or 
 **Test:** `src/lib/travelAssistant/reviewCtaHonesty.test.ts`
 
 **G28 — Review inbox is for real conflicts, not legal PDFs**  
-Forwarding a booking is consent to keep it. Match `Booking GYGVN24XVY58` (or the same code already on the trip) and dismiss — do not ask the traveler to add GetYourGuide Privacy Policy / Legal Notice. Do not bury actions under terms. Do not show unrelated flights as “Already on Plan” for a tour leftover. Auto-dismiss legal-only and already-on-trip leftovers (that is not auto-approving a new booking). Interrupt only when dates/times are wrong or two activities collide. Confirmations untouched.
+Forwarding a booking is consent to keep it. Match `Booking GYGVN24XVY58` (or the same code already on the trip) and dismiss — do not ask the traveler to add GetYourGuide Privacy Policy / Legal Notice. Do not bury actions under terms. Do not show unrelated flights as “Already on Plan” for a tour leftover. Auto-dismiss legal-only and already-on-trip leftovers (that is not auto-approving a new booking). A leftover titled “damage” with Add / Already / Not mine is a ghost — the traveler must never see it. Interrupt only when dates/times are wrong or two activities collide. Confirmations untouched.
 
 **Test:** `src/lib/travelAssistant/reviewCtaHonesty.test.ts`
 

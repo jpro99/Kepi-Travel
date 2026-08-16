@@ -229,3 +229,31 @@ test("G28: legal-only GetYourGuide PDF without a live match still does not offer
   assert.match(presented.why, /ticket terms/u);
   assert.equal(presented.confirmation, "GYGVN24XVY58");
 });
+
+test("G28: leftover titled damage with legal location still auto-resolves and never offers Add", () => {
+  const presented = presentReviewInboxItem(
+    {
+      id: "review-gyg-damage",
+      reasons: ["Low parsing confidence (19/100)."],
+      sourceEmailSubject: "Fwd: Booking GYGVN24XVY58 confirmed | Ticket instructions",
+      originalEmailText: `${gygLegalPdf}\nyou may create a GetYourGuide Account using your existing social media`,
+      hasPdfAttachment: true,
+      draft: {
+        type: "flight",
+        title: "damage",
+        provider: "",
+        localTime: "2025-10-01 12:00",
+        location: "you may create a GetYourGuide Account using your existing social media",
+        confirmationCode: "GYGVN24XVY58",
+      },
+    },
+    [],
+  );
+  assert.equal(presented.canAddToTrip, false);
+  assert.equal(presented.sourceKind, "legal-terms");
+  assert.equal(presented.autoResolve, "legal-terms");
+  assert.equal(shouldAutoResolveReviewLeftover(presented), true);
+  assert.notEqual(presented.headline.toLowerCase(), "damage");
+  assert.equal(presented.when, null);
+  assert.equal(presented.where, null);
+});

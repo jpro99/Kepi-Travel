@@ -62,13 +62,30 @@ export function stripLegalBoilerplate(text: string): string {
 }
 
 export function isLegalBoilerplateText(text: string): boolean {
-  if (!LEGAL_MARK_RE.test(text)) return false;
+  if (!LEGAL_MARK_RE.test(text) && !/\bticket instructions\b/iu.test(text)) return false;
   const stripped = stripLegalBoilerplate(text).replace(/---\s*PDF attachment\s*---/giu, "").trim();
-  if (stripped.length < 40) return true;
+  if (stripped.length < 80) return true;
   const hasTourFact =
     /\b(?:meet (?:at|in)|excursion|guided tour|boat tour|check-?in|partenza)\b/iu.test(stripped) &&
     /\b(?:20\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*)\b/iu.test(stripped);
   return !hasTourFact;
+}
+
+export function isTicketInstructionsLeftover(subject: string, text = ""): boolean {
+  const combined = `${subject}\n${text}`;
+  if (/\bticket instructions\b/iu.test(subject) && extractActivityBookingCode(subject, text)) {
+    return true;
+  }
+  return isLegalBoilerplateText(combined);
+}
+
+export function isGarbageLeftoverTitle(title: string): boolean {
+  const trimmed = title.trim();
+  if (!trimmed) return true;
+  if (/^fwd:/iu.test(trimmed)) return true;
+  const words = trimmed.split(/\s+/u);
+  if (words.length === 1 && !/\d/u.test(trimmed) && trimmed.length < 16) return true;
+  return false;
 }
 
 export function extractActivityTicketFacts(text: string, subject = ""): ActivityTicketFacts | null {
