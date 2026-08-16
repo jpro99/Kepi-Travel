@@ -86,6 +86,25 @@ test("day sections strip AI fallback jargon and support bullet reorder round-tri
   assert.deepEqual(notesToBullets(bulletsToDayNotes(reordered)), reordered);
 });
 
+test("I54: stay-only itineraryPlans notes do not blank a saved dayNotes paste", () => {
+  const plans = emptyItineraryPlans();
+  plans.dayPlans["2026-09-02"] = {
+    location: "Bari",
+    hotelName: "A Casa di Elena",
+    hotelConfirmation: "1",
+    hotelBooked: true,
+    notes: "Stay in Bari\nHotel: A Casa di Elena (1)",
+  };
+  const sections = buildNarrativeDaySections({
+    tripStartDate: "2026-09-02",
+    tripEndDate: "2026-09-02",
+    itineraryPlans: plans,
+    dayNotes: { "2026-09-02": "• test one two three" },
+  });
+  const day = sections.find((section) => section.dateKey === "2026-09-02");
+  assert.deepEqual(day?.bullets, ["test one two three"]);
+});
+
 test("I53: saved itineraryPlans notes show even if dayNotes still has a Bari wrap", () => {
   const plans = emptyItineraryPlans();
   plans.dayPlans["2026-09-02"] = {

@@ -108,6 +108,37 @@ test("I53: saved plan notes beat a stale Stay-in Bari wrap", () => {
   assert.equal(preferDayActivityNote("", "• Boat tour"), "• Boat tour");
 });
 
+test("I54: stay-only plan notes do not hide a just-saved paste", () => {
+  assert.equal(
+    preferDayActivityNote("Stay in Bari\nHotel: A Casa di Elena (1)", "• test one two three"),
+    "• test one two three",
+  );
+});
+
+test("I54: Save keeps the line on the letter", () => {
+  const letter = readFileSync(
+    join(process.cwd(), "src/components/travelAssistant/NarrativeDayPlanView.tsx"),
+    "utf8",
+  );
+  assert.match(letter, /savedBulletsByDay/);
+  assert.match(letter, /setSavedBulletsByDay/);
+
+  const page = readFileSync(join(process.cwd(), "src/app/travel-assistant/page.tsx"), "utf8");
+  assert.match(page, /itineraryPrefs\.updateDayNote\(dateKey, value\)/);
+  assert.doesNotMatch(
+    page.slice(page.search(/const handleItineraryDayNoteChange/), page.search(/const handleItineraryDayNoteChange/) + 400),
+    /reconcileDayNote/,
+  );
+
+  const prefs = readFileSync(
+    join(process.cwd(), "src/components/travelAssistant/TripItineraryPanel.tsx"),
+    "utf8",
+  );
+  assert.match(prefs, /dayNotesRef\.current = nextNotes/);
+  assert.match(prefs, /itineraryPlansRef\.current = nextPlans/);
+  assert.doesNotMatch(prefs, /setDayNotes\(\(prevNotes\) => \{[\s\S]*setItineraryPlans/);
+});
+
 test("I53: Save always writes the day and returns to it", () => {
   const sheet = readFileSync(join(process.cwd(), "src/components/travelAssistant/PlanDayEditSheet.tsx"), "utf8");
   assert.match(sheet, />\s*Save\s*</);

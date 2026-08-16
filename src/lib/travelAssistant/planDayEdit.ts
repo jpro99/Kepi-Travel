@@ -57,13 +57,25 @@ export function appendPastedDayLines(lines: string[], pasted: string): string[] 
   return padDayActivityLines([...normalizeDayActivityLines(lines), ...incoming]);
 }
 
+/** Activity bullets only — “Stay in Bari” / “Hotel:” are bookings, not the day list. */
+export function activityLinesFromNote(note: string): string[] {
+  return note
+    .split(/\r?\n/u)
+    .map((line) => line.replace(/^\s*[•\-\*▪◦]\s*/u, "").trim())
+    .filter((line) => Boolean(line) && !/^stay in /iu.test(line) && !/^hotel:/iu.test(line));
+}
+
 /**
- * Saved itineraryPlans.notes win over a stale dayNotes wrap (I53).
- * dayNotes is only the fallback when the trip plan has no activity text yet.
+ * Show the note that actually has day activities (I54).
+ * A stay-only plan.notes (“Stay in Bari”) must not hide a just-saved paste.
  */
 export function preferDayActivityNote(planNotes: string, dayNote: string): string {
   const fromPlan = planNotes.trim();
   const fromDays = dayNote.trim();
+  const planActs = activityLinesFromNote(fromPlan);
+  const dayActs = activityLinesFromNote(fromDays);
+  if (planActs.length > 0) return fromPlan;
+  if (dayActs.length > 0) return fromDays;
   return fromPlan || fromDays;
 }
 

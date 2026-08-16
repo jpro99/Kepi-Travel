@@ -275,6 +275,10 @@ export function useItineraryPanelPrefs(tripId: string | null) {
   const [hotelNotebookNote, setHotelNotebookNote] = useState("");
   const [itineraryPlans, setItineraryPlans] = useState<ItineraryPlansData>(emptyItineraryPlans());
   const persistTimerRef = useRef<number | null>(null);
+  const dayNotesRef = useRef(dayNotes);
+  const itineraryPlansRef = useRef(itineraryPlans);
+  dayNotesRef.current = dayNotes;
+  itineraryPlansRef.current = itineraryPlans;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -345,53 +349,62 @@ export function useItineraryPanelPrefs(tripId: string | null) {
     (raw: unknown): void => {
       if (!tripId || !raw) return;
       const normalized = normalizeItineraryPlans(raw);
-      setItineraryPlans((local) => {
-        const merged = mergeItineraryPlansPreferExistingNotes(local, normalized, {
-          fillEmptyDays: true,
-        });
+      const local = itineraryPlansRef.current;
+      const localMs = Date.parse(local.updatedAt || "0");
+      const serverMs = Date.parse(normalized.updatedAt || "0");
+      const merged = mergeItineraryPlansPreferExistingNotes(local, normalized, {
+        fillEmptyDays: true,
+      });
+      if (Number.isFinite(localMs) && localMs > serverMs) {
+        itineraryPlansRef.current = merged;
+        setItineraryPlans(merged);
         if (typeof window !== "undefined") {
           window.localStorage.setItem(`kepi:itinerary-plans:${tripId}`, JSON.stringify(merged));
         }
-        setDayNotes((prev) => {
-          const next = { ...prev };
-          for (const [dateKey, plan] of Object.entries(merged.dayPlans) as Array<
-            [string, DayPlanRecord]
-          >) {
-            if (next[dateKey]?.trim()) continue;
-            if (plan.notes.trim()) next[dateKey] = plan.notes;
-          }
-          if (typeof window !== "undefined") {
-            window.localStorage.setItem(`kepi:day-notes:${tripId}`, JSON.stringify(next));
-          }
-          return next;
-        });
-        return merged;
+        return;
+      }
+      itineraryPlansRef.current = merged;
+      setItineraryPlans(merged);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(`kepi:itinerary-plans:${tripId}`, JSON.stringify(merged));
+      }
+      setDayNotes((prev) => {
+        const next = { ...prev };
+        for (const [dateKey, plan] of Object.entries(merged.dayPlans) as Array<
+          [string, DayPlanRecord]
+        >) {
+          if (next[dateKey]?.trim()) continue;
+          if (plan.notes.trim()) next[dateKey] = plan.notes;
+        }
+        dayNotesRef.current = next;
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(`kepi:day-notes:${tripId}`, JSON.stringify(next));
+        }
+        return next;
       });
     },
     [tripId],
   );
 
   const updateDayNote = (dateKey: string, value: string): void => {
-    setDayNotes((prevNotes) => {
-      const nextNotes = { ...prevNotes, [dateKey]: value };
-      setItineraryPlans((prevPlans) => {
-        const existing = prevPlans.dayPlans[dateKey] ?? mergeDayPlan(undefined, "");
-        const nextPlans: ItineraryPlansData = {
-          ...prevPlans,
-          dayPlans: {
-            ...prevPlans.dayPlans,
-            [dateKey]: {
-              ...existing,
-              notes: value,
-            },
-          },
-          updatedAt: new Date().toISOString(),
-        };
-        queuePersistToTrip(nextPlans, nextNotes);
-        return nextPlans;
-      });
-      return nextNotes;
-    });
+    const nextNotes = { ...dayNotesRef.current, [dateKey]: value };
+    const existing = itineraryPlansRef.current.dayPlans[dateKey] ?? mergeDayPlan(undefined, "");
+    const nextPlans: ItineraryPlansData = {
+      ...itineraryPlansRef.current,
+      dayPlans: {
+        ...itineraryPlansRef.current.dayPlans,
+        [dateKey]: {
+          ...existing,
+          notes: value,
+        },
+      },
+      updatedAt: new Date().toISOString(),
+    };
+    dayNotesRef.current = nextNotes;
+    itineraryPlansRef.current = nextPlans;
+    setDayNotes(nextNotes);
+    setItineraryPlans(nextPlans);
+    queuePersistToTrip(nextPlans, nextNotes);
   };
 
   const applyReconciledPlans = useCallback(

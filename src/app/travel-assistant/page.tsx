@@ -9793,36 +9793,9 @@ export default function TravelAssistantPage() {
 
   const handleItineraryDayNoteChange = useCallback(
     (dateKey: string, value: string): void => {
-      const tripStart = consumerTripStartDate ?? activeTrip?.startDate ?? null;
-      const tripEnd = activeTrip?.endDate ?? null;
-      if (!tripStart || !tripEnd) {
-        itineraryPrefs.updateDayNote(dateKey, value);
-        return;
-      }
-
-      const model = buildTripLegCalendarModel(consumerReservationsSorted, tripStart, tripEnd, {
-        dayPlans: itineraryPrefs.itineraryPlans.dayPlans,
-        dayNotes: { ...itineraryPrefs.dayNotes, [dateKey]: value },
-      });
-      const inferredStayCity = model.dayCells.get(dateKey)?.cityName ?? null;
-      const summary = itineraryPrefs.reconcileDayNote({
-        dateKey,
-        value,
-        tripStartDate: tripStart,
-        tripEndDate: tripEnd,
-        hotels: consumerReservationsSorted.filter((reservation) => reservation.type === "hotel"),
-        inferredStayCity,
-      });
-      if (summary) setToast(summary);
+      itineraryPrefs.updateDayNote(dateKey, value);
     },
-    [
-      activeTrip?.endDate,
-      activeTrip?.startDate,
-      consumerReservationsSorted,
-      consumerTripStartDate,
-      itineraryPrefs,
-      setToast,
-    ],
+    [itineraryPrefs],
   );
 
   if (!advancedWorkspaceEnabled) {

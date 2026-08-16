@@ -41,17 +41,19 @@ export function NarrativeDayPlanView({
   onPasteDayPlan,
   selectedDateKey = null,
 }: NarrativeDayPlanViewProps) {
-  const sections = useMemo(
-    () =>
-      buildNarrativeDaySections({
-        tripStartDate,
-        tripEndDate,
-        itineraryPlans,
-        dayNotes,
-        reservations,
-      }),
-    [dayNotes, itineraryPlans, reservations, tripEndDate, tripStartDate],
-  );
+  const sections = useMemo(() => {
+    const built = buildNarrativeDaySections({
+      tripStartDate,
+      tripEndDate,
+      itineraryPlans,
+      dayNotes,
+      reservations,
+    });
+    return built.map((section) => {
+      const saved = savedBulletsByDay[section.dateKey];
+      return saved ? { ...section, bullets: saved } : section;
+    });
+  }, [dayNotes, itineraryPlans, reservations, savedBulletsByDay, tripEndDate, tripStartDate]);
 
   const cityRanges = useMemo(() => buildLetterCityRanges(sections), [sections]);
   const rangeForDay = (dateKey: string) =>
@@ -71,6 +73,7 @@ export function NarrativeDayPlanView({
   const [editingDateKey, setEditingDateKey] = useState<string | null>(null);
   const [undoDay, setUndoDay] = useState<{ dateKey: string; bullets: string[] } | null>(null);
   const [savedDateKey, setSavedDateKey] = useState<string | null>(null);
+  const [savedBulletsByDay, setSavedBulletsByDay] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     if (!selectedDateKey) return;
@@ -104,6 +107,7 @@ export function NarrativeDayPlanView({
     const next = bullets.map((line) => line.trim()).filter(Boolean);
     if (!force && section && dayActivityLinesEqual(next, section.bullets)) return;
     onDayNoteChange(dateKey, bulletsToDayNotes(next));
+    setSavedBulletsByDay((prev) => ({ ...prev, [dateKey]: next }));
     setSavedDateKey(dateKey);
   };
 

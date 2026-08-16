@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-16 (Plan Save stays on the day)
+Last updated: 2026-08-16 (Plan Save not locked)
+
+## Incident 2026-08-16 — Save still blanked Sept 2 (Jeff)
+
+Not locked. Paste worked; Save returned to Sept 2 with only “type or paste a line.” Cause: stay-only `plan.notes` (“Stay in Bari”) hid the saved `dayNotes`, and updateDayNote nested setState so itineraryPlans never got the line. Confirmations untouched.
 
 ## Incident 2026-08-16 — Save still dropped the day and scrolled to the bottom (Jeff)
 

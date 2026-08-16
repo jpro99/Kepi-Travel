@@ -667,6 +667,11 @@ The day sheet button is **Save** (not Okay/Done). Save always persists that date
 
 **Test:** `src/lib/travelAssistant/planDayEdit.test.ts`
 
+**I54 — Save is not locked; stay-only notes cannot blank the day**  
+A “Stay in Bari” / Hotel line on the trip plan is a booking fact, not a lock. Save must write both `dayNotes` and `itineraryPlans.notes` in one turn (no nested setState). The letter must keep the pasted lines on that day. Activity Save must not run stay-city reconcile.
+
+**Test:** `src/lib/travelAssistant/planDayEdit.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -864,6 +869,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I51 | `src/lib/travelAssistant/planDayEdit.test.ts` |
 | I52 | `src/lib/travelAssistant/planDayEdit.test.ts`, `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/narrativeItineraryExport.test.ts` |
 | I53 | `src/lib/travelAssistant/planDayEdit.test.ts`, `src/lib/travelAssistant/narrativeItineraryExport.test.ts` |
+| I54 | `src/lib/travelAssistant/planDayEdit.test.ts`, `src/lib/travelAssistant/narrativeItineraryExport.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |
