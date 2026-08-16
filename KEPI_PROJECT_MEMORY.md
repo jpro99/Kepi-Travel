@@ -3,11 +3,15 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-16 (never guess / Apple hop truth)
+Last updated: 2026-08-16 (neuro feedback loop N1)
 
 ## Operating rule 2026-08-16 — Never guess, never ghost, find the truth (Jeff)
 
 Agents must not guess or ghost. Check the real booked facts end-to-end before shipping. Do it correctly the first time — retries cost Jeff more money. Motto for how Kepi thinks (not UI copy): **We search and find, so you don't have to miss — and we put your mind at ease.** Catch real misses; do not invent gaps. Also in `NEURO_BRAIN.md` § 10 and `.cursor/rules/35-find-the-truth.mdc`.
+
+## Decision 2026-08-16 — Neuro Brain is a feedback loop, not a model (Jeff)
+
+Neuro Brain is **not** neuroscience and **not** a custom net. It is: measure honest actions → identify winners per traveler type → amplify winners → debug failures → ship weekly. Year-1 “smarter” = measured decisions, not a model that “realized it was wrong.” User taps are labels **only if the UI was honest**. Ghost prompts (Search flights for a hop that is already booked) must never be scored as winners. `search-flights` stays last and is never amplified above See routes / ground. Digest: `GET /api/ml-readiness/suggestion-outcomes`. Copyable Demand Generator prompt: `bot-deck/memory/demand-generator-pro-neuro-prompt.md`. Law **N1**. Do not A/B invented CLEAR / walking-delta / fake buffers.
 
 ## Decision 2026-08-16 — Apple hop truth on Plan (Jeff)
 
@@ -437,9 +441,9 @@ Kepi does **not** train a custom neural net in-product. ML readiness means:
 3. **Active-learning triage** — review queue sorted by implausibility + low confidence + missing fields first.
 4. **Held-out parse eval** — frozen fixtures in `src/lib/travelAssistant/__fixtures__/parse-eval/`; never tune prompts against them.
 5. **Few-shot from corrections** — email-forward AI fallback injects similar user corrections when available.
-6. **Suggestion outcomes** — stub logging (`impression`/`click`/etc.) for future bandits; Trip health missing-pricing CTA wired first.
+6. **Suggestion outcomes** — Redis list via `/api/ml-readiness/suggestion-outcomes` (`impression`/`dismiss`/`accept`/`click`). Inter-city transport + input-style card + Trip health missing-pricing are wired. **N1:** score only `metadata.honest !== false`; min 5 impressions before amplify; `search-flights` locked last.
 
-Later (optional): embedding retrieval, ranker, bandit — only after correction volume justifies it.
+Later (optional): embedding retrieval, ranker, bandit — only after correction volume justifies it. The neuro loop is the weekly digest of those outcomes, not a trained net.
 
 ---
 
@@ -792,6 +796,7 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 
 | Date | Note |
 |------|------|
+| 2026-08-16 | **N1 neuro feedback loop:** honest-only scoring, Search flights locked last, weekly digest GET, Demand Generator prompt. Confirmations untouched. |
 | 2026-07-14 | **"Nothing changed after deploy" = PWA service worker, not a code/deploy failure.** This app is `next-pwa` (`public/sw.js`, `register:true`, `skipWaiting`). The SW is network-first for `/_next/static/` + navigations, so online users DO get fresh code — but the *already-open page* keeps running the old JS bundle until reloaded. Before blaming the fix, verify: commits on `origin/main` (`git log origin/main`) + the **Deploy** workflow ran `--prod` and succeeded (`gh run list --branch main`). Fixed durably: `src/app/travel-assistant/page.tsx` now auto-reloads once on SW `controllerchange` (guarded vs. loops + first-install) and polls `registration.update()` on load/tab-refocus, so future deploys appear without a manual clear. Immediate see-it-now: Settings → 🔄 Clear cache, or hard-reload. |
 | 2026-07-06 | **Atrius embed deprioritized:** enterprise-only pricing, likely inaccessible at current scale; sent one no-cost outreach email, no BD push planned until real terms/scale change. Kepi's own schematic + routing pipeline remains primary. |
 | 2026-07-12 | **Lifetime auto-redeem** from email links. **Crash fix:** `onCreateTrip` → `onStartNewTrip`. **Returning users:** stop wiping `onboarding-complete` on progress PUT; auto-complete when trips exist; don't show onboarding until trips finish loading. |

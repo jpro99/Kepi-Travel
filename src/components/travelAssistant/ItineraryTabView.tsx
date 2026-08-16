@@ -21,6 +21,7 @@ import {
   addIsoDays,
   buildTripCompleteness,
 } from "@/lib/travelAssistant/tripNightCoverage";
+import type { TravelStyleMode } from "@/lib/traveler/types";
 
 interface ItineraryTabViewProps {
   tripName: string;
@@ -84,6 +85,7 @@ interface ItineraryTabViewProps {
   onSearchMissingFlights?: (plan: FlightSearchPlan, selectedLegs: PlannedFlightLeg[]) => void;
   onQuickGroundTransport?: (gap: InterCityTransportGap, mode: QuickGroundMode) => void;
   onReservationTap?: (id: string) => void;
+  travelerType?: TravelStyleMode | null;
 }
 
 function formatHumanTripRange(start: string | null | undefined, end: string | null | undefined): string {
@@ -138,6 +140,7 @@ export function ItineraryTabView({
   onSearchMissingFlights,
   onQuickGroundTransport,
   onReservationTap,
+  travelerType = null,
 }: ItineraryTabViewProps) {
   const tNav = useTranslations("ConsumerNav");
   const tPlan = useTranslations("PlanTab");
@@ -212,6 +215,7 @@ export function ItineraryTabView({
           legs={plannedFlightLegs}
           onSearchFlights={onSearchMissingFlights}
           onQuickGroundTransport={onQuickGroundTransport}
+          travelerType={travelerType}
         />
       ) : null}
 

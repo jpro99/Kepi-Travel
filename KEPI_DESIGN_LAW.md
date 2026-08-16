@@ -781,6 +781,15 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 
 ---
 
+## NEURO LAWS
+
+**N1 — Score only honest actions; never amplify ghosts**  
+The neuro loop measures taps only when the UI was truthful (`metadata.honest !== false`). Ghost prompts (Search flights for a hop that is already booked) must not be scored as winners. `search-flights` is locked last and never amplified above See routes or ground. An action needs **≥5 honest impressions** before `amplify`. Same Redis store as `/api/ml-readiness/suggestion-outcomes` — do not invent a second outcomes list. Suggest only; never silent apply.
+
+**Test:** `src/lib/neuro/neuroLoop.test.ts`
+
+---
+
 ## Test index
 
 | Law | Test file |
@@ -902,5 +911,6 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | D19, D20 | `src/lib/airportNav/airportLayoutStore.test.ts` |
 | D20 | `src/lib/airportNav/airportLayoutPackage.test.ts` |
 | D21, M14 | `src/lib/airportNav/airportCurationQueue.test.ts` |
+| N1 | `src/lib/neuro/neuroLoop.test.ts` |
 
 New laws must add a row here when a test exists.

@@ -15,6 +15,7 @@ import type { HotelStayMapReservation } from "@/lib/travelAssistant/tripHotelSta
 import { TripHomeTransportSection } from "@/components/travelAssistant/TripHomeTransportSection";
 import { isTravelDayTakeover } from "@/lib/travelAssistant/homeDayTruth";
 import { buildMissionControlSnapshot } from "@/lib/travelAssistant/tripPhase";
+import type { TravelStyleMode } from "@/lib/traveler/types";
 
 const TripHomeOverviewMap = dynamic(
   () => import("@/components/travelAssistant/TripHomeOverviewMap").then((m) => m.TripHomeOverviewMap),
@@ -88,6 +89,7 @@ interface DesktopTripHomeViewProps {
   onEnablePush?: () => void;
   unresolvedReviewCount?: number;
   onOpenReview?: () => void;
+  travelerType?: TravelStyleMode | null;
 }
 
 export function DesktopTripHomeView({
@@ -121,6 +123,7 @@ export function DesktopTripHomeView({
   onEnablePush,
   unresolvedReviewCount = 0,
   onOpenReview,
+  travelerType = null,
 }: DesktopTripHomeViewProps) {
   const transportReservations =
     transportReservationsProp ??
@@ -209,6 +212,7 @@ export function DesktopTripHomeView({
           plannedFlightLegs={plannedFlightLegs}
           onSearchFlights={onSearchFlights}
           onQuickGroundTransport={onQuickGroundTransport}
+          travelerType={travelerType}
         />
       ) : null}
 

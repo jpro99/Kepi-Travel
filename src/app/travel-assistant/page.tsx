@@ -255,7 +255,7 @@ import {
   skipTravelStyleOnGenome,
 } from "@/components/travelAssistant/TravelStyleQuiz";
 import type { TravelStyleProfile } from "@/lib/traveler/types";
-import { guidanceToneFromStyle } from "@/lib/travelStyle/travelStyleQuiz";
+import { effectiveDominantMode, guidanceToneFromStyle } from "@/lib/travelStyle/travelStyleQuiz";
 import { ReferralCard } from "@/components/referral/ReferralCard";
 import { WeatherCard } from "@/components/travelAssistant/WeatherCard";
 import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntelligencePanel";
@@ -4881,6 +4881,8 @@ export default function TravelAssistantPage() {
       returnDate: returnLeg?.departureDate,
     };
   }, [plannedFlightLegs]);
+
+  const neuroTravelerType = effectiveDominantMode(travelStyleProfile);
 
   const itinerarySelfCheck = useMemo(
     () =>
@@ -10188,6 +10190,7 @@ export default function TravelAssistantPage() {
                     total: reviewQueue.length,
                   });
                 }}
+                travelerType={neuroTravelerType}
               />
             )
           ) : consumerTab === "itinerary" ? (
@@ -10233,6 +10236,7 @@ export default function TravelAssistantPage() {
               plannedFlightLegs={plannedFlightLegs}
               onSearchMissingFlights={(plan) => handleFlightSearchPlan(plan)}
               onQuickGroundTransport={handleQuickGroundTransport}
+              travelerType={neuroTravelerType}
             />
             </PlanTabErrorBoundary>
           ) : consumerTab === "book" ? (

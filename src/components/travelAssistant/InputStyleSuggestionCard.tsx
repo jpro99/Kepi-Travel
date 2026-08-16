@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { postSuggestionOutcome } from "@/lib/travelAssistant/mlReadiness/clientTelemetry";
 
 interface InputStyleSuggestion {
   channel: string;
@@ -24,6 +25,16 @@ export function InputStyleSuggestionCard({ onAccept }: InputStyleSuggestionCardP
       .catch(() => setSuggestion(null));
   }, []);
 
+  useEffect(() => {
+    if (!suggestion || dismissed) return;
+    void postSuggestionOutcome({
+      surface: "input-style-suggestion",
+      suggestionKey: suggestion.channel,
+      outcome: "impression",
+      honest: true,
+    });
+  }, [suggestion, dismissed]);
+
   if (!suggestion || dismissed) return null;
 
   return (
@@ -33,6 +44,12 @@ export function InputStyleSuggestionCard({ onAccept }: InputStyleSuggestionCardP
         <button
           type="button"
           onClick={() => {
+            void postSuggestionOutcome({
+              surface: "input-style-suggestion",
+              suggestionKey: suggestion.channel,
+              outcome: "accept",
+              honest: true,
+            });
             onAccept?.(suggestion.channel);
             setDismissed(true);
           }}
@@ -44,14 +61,11 @@ export function InputStyleSuggestionCard({ onAccept }: InputStyleSuggestionCardP
           type="button"
           onClick={() => {
             setDismissed(true);
-            void fetch("/api/ml-readiness/suggestion-outcomes", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                surface: "input-style-suggestion",
-                suggestionKey: suggestion.channel,
-                outcome: "dismiss",
-              }),
+            void postSuggestionOutcome({
+              surface: "input-style-suggestion",
+              suggestionKey: suggestion.channel,
+              outcome: "dismiss",
+              honest: true,
             });
           }}
           className="rounded-md px-2 py-1 text-cyan-800 underline dark:text-cyan-200"

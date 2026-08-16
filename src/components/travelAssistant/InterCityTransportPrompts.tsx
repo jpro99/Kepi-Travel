@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   buildFlightSearchPlan,
@@ -18,11 +18,14 @@ import {
   type QuickGroundMode,
 } from "@/lib/travelAssistant/quickGroundTransport";
 import { TransportRouteSheet } from "@/components/travelAssistant/TransportRouteSheet";
+import { postSuggestionOutcome } from "@/lib/travelAssistant/mlReadiness/clientTelemetry";
+import type { TravelStyleMode } from "@/lib/traveler/types";
 
 interface InterCityTransportPromptsProps {
   legs: PlannedFlightLeg[];
   onSearchFlights: (plan: FlightSearchPlan, selectedLegs: PlannedFlightLeg[]) => void;
   onQuickGroundTransport: (gap: InterCityTransportGap, mode: QuickGroundMode) => void;
+  travelerType?: TravelStyleMode | null;
 }
 
 const QUICK_GROUND_MODES: QuickGroundMode[] = ["uber", "taxi", "metro", "train"];
@@ -44,6 +47,7 @@ export function InterCityTransportPrompts({
   legs,
   onSearchFlights,
   onQuickGroundTransport,
+  travelerType = null,
 }: InterCityTransportPromptsProps) {
   const t = useTranslations("GroundTransport");
   const gaps = listMissingTransportGaps(legs);
@@ -51,12 +55,49 @@ export function InterCityTransportPrompts({
   const routeSuggestion = routeGap
     ? suggestInterCityRoute(routeGap.fromLabel, routeGap.toLabel, routeGap.fromIata, routeGap.toIata)
     : null;
+  const gapSignature = gaps.map((gap) => gap.id).join("|");
+  const searchFlightsVisible = useMemo(
+    () =>
+      gaps.some((gap) => {
+        const suggestion = suggestInterCityRoute(gap.fromLabel, gap.toLabel, gap.fromIata, gap.toIata);
+        return !suggestion?.hideFlights;
+      }),
+    [gaps],
+  );
+
+  useEffect(() => {
+    if (gaps.length === 0) return;
+    const keys = ["see-routes", "ground-uber", "ground-taxi", "ground-metro", "ground-train"];
+    if (searchFlightsVisible) keys.push("search-flights");
+    for (const suggestionKey of keys) {
+      void postSuggestionOutcome({
+        surface: "inter-city-transport",
+        suggestionKey,
+        outcome: "impression",
+        travelerType,
+        honest: true,
+        metadata: { gapCount: gaps.length },
+      });
+    }
+  }, [gapSignature, gaps.length, searchFlightsVisible, travelerType]);
 
   if (gaps.length === 0) return null;
+
+  const logClick = (suggestionKey: string, extra?: Record<string, string | number | boolean | null>): void => {
+    void postSuggestionOutcome({
+      surface: "inter-city-transport",
+      suggestionKey,
+      outcome: "click",
+      travelerType,
+      honest: true,
+      metadata: extra,
+    });
+  };
 
   const searchOne = (gap: InterCityTransportGap): void => {
     const plan = buildFlightSearchPlan([gap.leg]);
     if (!plan) return;
+    logClick("search-flights", { gapId: gap.id, scope: "one" });
     onSearchFlights(plan, [gap.leg]);
   };
 
@@ -64,6 +105,7 @@ export function InterCityTransportPrompts({
     const selected = gaps.map((gap) => gap.leg);
     const plan = buildFlightSearchPlan(selected);
     if (!plan) return;
+    logClick("search-flights", { scope: "all" });
     onSearchFlights(plan, selected);
   };
 
@@ -127,7 +169,10 @@ export function InterCityTransportPrompts({
                   <button
                     type="button"
                     data-testid={`see-routes-${gap.id}`}
-                    onClick={() => setRouteGap(gap)}
+                    onClick={() => {
+                      logClick("see-routes", { gapId: gap.id });
+                      setRouteGap(gap);
+                    }}
                     className="rounded-full bg-[#0F1923] px-4 py-2 text-xs font-bold text-white active:opacity-80 dark:bg-[#f4c95d] dark:text-[#0F1923]"
                   >
                     {t("seeRoutes")}
@@ -137,7 +182,10 @@ export function InterCityTransportPrompts({
                       key={`${gap.id}-${mode}`}
                       type="button"
                       data-testid={`quick-ground-${mode}-${gap.id}`}
-                      onClick={() => onQuickGroundTransport(gap, mode)}
+                      onClick={() => {
+                        logClick(`ground-${mode}`, { gapId: gap.id, mode });
+                        onQuickGroundTransport(gap, mode);
+                      }}
                       className="rounded-full border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-bold text-slate-800 shadow-sm active:opacity-80 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                     >
                       {quickGroundModeEmoji(mode)} {quickGroundLabel(mode, t)}
@@ -164,7 +212,10 @@ export function InterCityTransportPrompts({
         route={routeSuggestion}
         onClose={() => setRouteGap(null)}
         onPickMode={(mode) => {
-          if (routeGap) onQuickGroundTransport(routeGap, mode);
+          if (routeGap) {
+            logClick(`ground-${mode}`, { gapId: routeGap.id, mode, via: "route-sheet" });
+            onQuickGroundTransport(routeGap, mode);
+          }
           setRouteGap(null);
         }}
       />

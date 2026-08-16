@@ -52,6 +52,7 @@ export interface SuggestionOutcomeEvent {
   surface: string;
   suggestionKey: string;
   outcome: SuggestionOutcomeKind;
+  /** travelerType, variant, honest live here. honest === false is a ghost — neuro loop excludes it. */
   metadata?: Record<string, string | number | boolean | null>;
 }
 

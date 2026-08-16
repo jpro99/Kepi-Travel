@@ -16,6 +16,10 @@ export async function postSuggestionOutcome(input: {
   surface: string;
   suggestionKey: string;
   outcome: "impression" | "dismiss" | "accept" | "click";
+  travelerType?: string | null;
+  variant?: string;
+  /** false = ghost prompt. Neuro loop will not score it as a winner. */
+  honest?: boolean;
   metadata?: Record<string, string | number | boolean | null>;
 }): Promise<void> {
   try {

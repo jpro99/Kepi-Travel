@@ -4,7 +4,7 @@
 **Owner:** Jeff Russell  
 **Purpose:** Capture *why* Jeff asks for changes so agents, bots, and future ML can apply the same thinking across the whole site — not just the file that was edited last.
 
-This is **not** a trained neural network. It is the **reasoning graph** Kepi should follow until we have enough labeled outcomes to learn weights. Agents must **read and append** here when Jeff corrects trip truth (calendar, stays, forwards) so the next session does not re-learn the same lesson from scratch.
+This is **not** a trained neural network and **not** neuroscience. It is the **feedback loop** Kepi follows: measure honest actions → identify winners per traveler type → amplify winners → debug failures → ship weekly. The prose in this file is the reasoning graph agents read until those labeled outcomes justify weights. Agents must **read and append** here when Jeff corrects trip truth (calendar, stays, forwards) so the next session does not re-learn the same lesson from scratch.
 
 ---
 
@@ -95,6 +95,15 @@ Score as **family trip execution**, not Flighty clone. Order of work: **status t
 - Motto for how Kepi thinks (not UI copy): **We search and find, so you don't have to miss — and we put your mind at ease.**
 - Catch real misses. Do not invent ghost gaps.
 
+### 11. Feedback loop (shipped 2026-08-16, N1)
+
+- User actions are labels **only if the UI was honest**. `metadata.honest === false` is a ghost — excluded from winners.
+- Year-1 “smarter” = measured decisions per traveler type (`quick_board` | `route_scout` | `travel_companion` | `flight_plan`), not a model that “realized it was wrong.”
+- Amplify See routes / ground after ≥5 honest impressions. **`search-flights` is locked last** — never promote a shopping CTA above a booked-fact path.
+- Do not A/B invented CLEAR, walking-delta, or fake buffers. Gate copy stays: was X, now Y; confidence or silence (G26).
+- Weekly digest: `GET /api/ml-readiness/suggestion-outcomes` (signed-in). Same store as the 2026-07-06 stub — do not invent a second outcomes list.
+- Replay-the-trip is a **deterministic booked-facts engine**, not an LLM that invents times. Suggest only; never silent apply.
+
 ---
 
 ## Decision checklist (before shipping a feature)
@@ -126,13 +135,13 @@ If any answer is wrong, fix the reasoning — not just the symptom.
 | P2 | **Support chat** | Pass active trip summary in every turn (`buildSupportContext`) |
 | P2 | **Spanish i18n** | Home headers, gap banners, Book CTAs, More settings — see `messages/es.json` |
 | P2 | **Award / multi-city** | Same hotel-first + connector rules for award strategies |
-| P3 | **ML readiness** | Log when user overrides timeline reconciliation → `suggestion-outcomes` |
+| P3 | **ML readiness** | Weekly digest is live. Next: log timeline-reconciliation overrides with `honest: true` into the same store |
 
 ---
 
 ## What Neuro Brain is NOT
 
-- Not permission to train a custom model before we have correction triplets and outcome labels (`KEPI_PROJECT_MEMORY.md` § ML readiness).
+- Not permission to train a custom model. Correction triplets + honest suggestion outcomes are the labels. The loop scores them; it does not train a net (`KEPI_PROJECT_MEMORY.md` § ML readiness).
 - Not a replacement for design laws — laws are enforced in CI; this file explains **why** they exist.
 - Not user PII storage — end-user prefs stay in Redis (`hotelStayProfile`, `traveler-genome`).
 
@@ -142,6 +151,7 @@ If any answer is wrong, fix the reasoning — not just the symptom.
 
 | Date | Note |
 |------|------|
+| 2026-08-16 | Feedback loop shipped (N1): honest-only scores, Search flights locked last, weekly digest |
 | 2026-08-16 | Never guess / never ghost; Apple hop truth; motto: search and find so you don't miss |
 | 2026-07-30 | RevenueCat IAP code path for Capacitor iOS (Stripe remains web) |
 | 2026-07-30 | Onboarding alerts: real web-push subscribe + iOS home-screen hint |

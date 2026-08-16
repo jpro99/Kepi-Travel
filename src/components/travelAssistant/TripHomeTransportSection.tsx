@@ -13,6 +13,7 @@ import {
   type GroundConnectorGap,
 } from "@/lib/travelAssistant/groundConnectorGaps";
 import type { QuickGroundMode } from "@/lib/travelAssistant/quickGroundTransport";
+import type { TravelStyleMode } from "@/lib/traveler/types";
 
 interface TripHomeTransportSectionProps {
   reservations: Array<{
@@ -32,6 +33,7 @@ interface TripHomeTransportSectionProps {
   plannedFlightLegs: PlannedFlightLeg[];
   onSearchFlights: (plan: FlightSearchPlan, selectedLegs: PlannedFlightLeg[]) => void;
   onQuickGroundTransport: (gap: InterCityTransportGap, mode: QuickGroundMode) => void;
+  travelerType?: TravelStyleMode | null;
 }
 
 export function TripHomeTransportSection({
@@ -41,6 +43,7 @@ export function TripHomeTransportSection({
   plannedFlightLegs,
   onSearchFlights,
   onQuickGroundTransport,
+  travelerType = null,
 }: TripHomeTransportSectionProps) {
   const handleConnectorGround = (gap: GroundConnectorGap, mode: QuickGroundMode): void => {
     onQuickGroundTransport(groundConnectorToInterCityGap(gap), mode);
@@ -58,6 +61,7 @@ export function TripHomeTransportSection({
         legs={plannedFlightLegs}
         onSearchFlights={onSearchFlights}
         onQuickGroundTransport={onQuickGroundTransport}
+        travelerType={travelerType}
       />
     </div>
   );
