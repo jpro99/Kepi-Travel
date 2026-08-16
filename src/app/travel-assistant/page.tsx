@@ -164,6 +164,8 @@ import { ConsumerReviewSheet } from "@/components/travelAssistant/ConsumerReview
 import {
   enrichReviewInboxItemFromSource,
   leftoverHasAddableFacts,
+  presentReviewInboxItem,
+  shouldAutoResolveReviewLeftover,
 } from "@/lib/travelAssistant/reviewCtaHonesty";
 import { GmailImportScopeModal, type GmailImportScope } from "@/components/travelAssistant/GmailImportScopeModal";
 import {
@@ -8786,7 +8788,7 @@ export default function TravelAssistantPage() {
         return;
       }
       let changed = false;
-      const nextQueue = reviewQueue.map((item) => {
+      const nextQueue = reviewQueue.flatMap((item) => {
         const enriched = enrichReviewInboxItemFromSource({
           id: item.id,
           reasons: item.reasons,
@@ -8801,31 +8803,51 @@ export default function TravelAssistantPage() {
             confirmationCode: item.draft.confirmationCode,
           },
         });
+        const presented = presentReviewInboxItem(
+          {
+            ...enriched,
+            hasPdfAttachment: item.hasPdfAttachment,
+            parseConfidenceScore: item.parseConfidenceScore,
+          },
+          reservations,
+        );
+        if (shouldAutoResolveReviewLeftover(presented)) {
+          changed = true;
+          return [];
+        }
         if (
           enriched.draft.localTime === item.draft.localTime &&
           enriched.draft.location === item.draft.location &&
-          enriched.draft.confirmationCode === item.draft.confirmationCode
+          enriched.draft.confirmationCode === item.draft.confirmationCode &&
+          enriched.draft.type === item.draft.type
         ) {
-          return item;
+          return [item];
         }
         changed = true;
-        return {
-          ...item,
-          draft: {
-            ...item.draft,
-            title: enriched.draft.title || item.draft.title,
-            provider: enriched.draft.provider || item.draft.provider,
-            localTime: enriched.draft.localTime || item.draft.localTime,
-            location: enriched.draft.location || item.draft.location,
-            confirmationCode: enriched.draft.confirmationCode || item.draft.confirmationCode,
-            timezone: item.draft.timezone || "Europe/Rome",
+        return [
+          {
+            ...item,
+            draft: {
+              ...item.draft,
+              type: (enriched.draft.type || item.draft.type) as typeof item.draft.type,
+              title: enriched.draft.title || item.draft.title,
+              provider: enriched.draft.provider || item.draft.provider,
+              localTime: enriched.draft.localTime || item.draft.localTime,
+              location: enriched.draft.location || item.draft.location,
+              confirmationCode: enriched.draft.confirmationCode || item.draft.confirmationCode,
+              timezone: item.draft.timezone || "Europe/Rome",
+            },
+            reasons: item.reasons.filter((reason) => !/low parsing confidence/i.test(reason)),
           },
-          reasons: item.reasons.filter((reason) => !/low parsing confidence/i.test(reason)),
-        };
+        ];
       });
       if (changed) {
         setReviewQueue(nextQueue);
-        persistReviewQueueToTrip(nextQueue, { reviewId: nextQueue[0]?.id ?? "rail-enrich", source: "rail-enrich" });
+        persistReviewQueueToTrip(nextQueue, { reviewId: nextQueue[0]?.id ?? "review-resolve", source: "review-resolve" });
+      }
+      if (nextQueue.length === 0) {
+        setToast("Nothing to add — those leftovers were already on your trip or just ticket terms.");
+        return;
       }
       setConsumerReviewQueueSession({
         open: true,
@@ -8833,7 +8855,7 @@ export default function TravelAssistantPage() {
         total: nextQueue.length,
       });
     },
-    [persistReviewQueueToTrip, reviewQueue, setToast],
+    [persistReviewQueueToTrip, reservations, reviewQueue, setToast],
   );
 
   const handleConsumerReviewQueueAction = (action: "accept" | "delete"): void => {

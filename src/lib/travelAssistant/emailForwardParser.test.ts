@@ -436,6 +436,14 @@ test("extractConfirmationCodeFromText reads Codice prenotazione", () => {
   assert.equal(extractConfirmationCodeFromText("Codice prenotazione ABC12X\nLecce 13/09/2026"), "ABC12X");
 });
 
+test("I59: Booking GYGVN24XVY58 is not ERENCE from booking reference", () => {
+  assert.equal(
+    extractConfirmationCodeFromText("Fwd: Booking GYGVN24XVY58 confirmed | Ticket instructions"),
+    "GYGVN24XVY58",
+  );
+  assert.equal(extractConfirmationCodeFromText("Please review this booking reference on the site"), null);
+});
+
 test("extractConfirmationCodeFromText prefers Reservation code over carefully", () => {
   assert.equal(extractConfirmationCodeFromText(itaBoilerplateEmail), "Z84T4Z");
   assert.equal(
@@ -576,6 +584,37 @@ Binario 9
     assert.equal(result.draft.timezone, "Europe/Rome");
     assert.ok(result.confidenceScore > 40);
     assert.notEqual(result.parsingStatus, "needs-user-input");
+  } finally {
+    if (previousKey === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = previousKey;
+    }
+  }
+});
+
+test("I59: GetYourGuide ticket-instructions PDF is a dinner booking, not a flight", async () => {
+  const previousKey = process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  try {
+    const result = await parseForwardedEmail({
+      subject: "Fwd: Booking GYGVN24XVY58 confirmed | Ticket instructions",
+      from: "no-reply@getyourguide.com",
+      text: `--- PDF attachment ---
+
+Legal Notice
+Privacy Policy
+General Terms and Conditions
+Version 1. Oct. 2025
+Airline and flight changes are the carrier's responsibility.
+`,
+      html: "",
+      attachments: [{ filename: "ticket-instructions.pdf", contentType: "application/pdf" }],
+    });
+    assert.equal(result.draft.type, "dinner");
+    assert.equal(result.draft.confirmationCode, "GYGVN24XVY58");
+    assert.equal(result.draft.provider, "GetYourGuide");
+    assert.notEqual(result.draft.confirmationCode, "ERENCE");
   } finally {
     if (previousKey === undefined) {
       delete process.env.ANTHROPIC_API_KEY;

@@ -1,10 +1,17 @@
 import { isDuplicateReservation, type DuplicateReservationFields } from "@/lib/travelAssistant/reservationDuplicates";
 import { extractRailTicketFacts } from "@/lib/travelAssistant/railTicketExtract";
+import {
+  extractActivityTicketFacts,
+  isGarbageConfirmationCode,
+  isLegalBoilerplateText,
+  stripLegalBoilerplate,
+} from "@/lib/travelAssistant/activityTicketExtract";
 
 /**
  * G27 — a Review bookings CTA is honest only when a visible surface is mounted.
  * A session flag with no UI is a ghost (Home 2026-08-16).
  * An empty leftover must show the original forward — not just "not parsed yet."
+ * G28 — do not ask anyone to add GetYourGuide legal terms. Match the booking ID.
  */
 export type ReviewCtaSurface = "none" | "session-flag-only" | "review-sheet" | "review-drawer";
 
@@ -55,8 +62,10 @@ export interface ReviewInboxPresentation {
   canAddToTrip: boolean;
   sourceSubject: string | null;
   sourceBody: string | null;
+  sourceKind: "booking" | "legal-terms" | "empty";
   hasPdf: boolean;
   liveHints: string[];
+  autoResolve: "already-on-trip" | "legal-terms" | null;
 }
 
 function formatWhen(localTime: string): string | null {
@@ -93,48 +102,102 @@ function trainHopOverlap(reservation: DuplicateReservationFields, draft: ReviewI
   return stationTokens(`${draft.location} ${draft.title}`).some((token) => live.has(token));
 }
 
+function confirmationOverlap(reservation: DuplicateReservationFields, draft: ReviewInboxDraft): boolean {
+  const draftCode = draft.confirmationCode.trim().toLowerCase();
+  if (!draftCode || isGarbageConfirmationCode(draftCode)) return false;
+  const hay = [
+    reservation.confirmationCode ?? "",
+    reservation.title ?? "",
+    reservation.provider ?? "",
+    reservation.location ?? "",
+  ]
+    .join(" ")
+    .toLowerCase();
+  return hay.includes(draftCode);
+}
+
 function findLiveMatch(
   draft: ReviewInboxDraft,
   liveReservations: DuplicateReservationFields[],
 ): DuplicateReservationFields | null {
   return (
     liveReservations.find((reservation) => isDuplicateReservation(reservation, draft)) ??
+    liveReservations.find((reservation) => confirmationOverlap(reservation, draft)) ??
     liveReservations.find((reservation) => trainHopOverlap(reservation, draft)) ??
     null
   );
 }
 
-export function enrichReviewInboxItemFromSource(item: ReviewInboxItemInput): ReviewInboxItemInput {
-  if (leftoverHasAddableFacts(item.draft)) return item;
-  const facts = extractRailTicketFacts(item.originalEmailText ?? "", item.sourceEmailSubject ?? "");
-  if (!facts) return item;
-  return {
-    ...item,
-    draft: {
-      ...item.draft,
-      type: item.draft.type || "train",
-      title: facts.title || item.draft.title,
-      provider: facts.provider || item.draft.provider,
-      localTime: facts.localTime || item.draft.localTime,
-      location: facts.location || item.draft.location,
-      confirmationCode: facts.confirmationCode || item.draft.confirmationCode,
-    },
-  };
-}
-
-export function leftoverHasAddableFacts(draft: ReviewInboxDraft): boolean {
+export function leftoverHasAddableFacts(draft: ReviewInboxDraft, sourceText = ""): boolean {
+  const code = draft.confirmationCode.trim();
+  const usableCode = code && !isGarbageConfirmationCode(code);
+  if (sourceText && isLegalBoilerplateText(sourceText) && !draft.localTime.trim() && !draft.location.trim()) {
+    return false;
+  }
   if (draft.localTime.trim()) return true;
-  if (draft.confirmationCode.trim()) return true;
+  if (usableCode && draft.location.trim()) return true;
   if (draft.location.trim()) return true;
   if (draft.flightDepartureAirport?.trim() && draft.flightArrivalAirport?.trim()) return true;
   if (draft.flightDate?.trim()) return true;
   return false;
 }
 
+export function enrichReviewInboxItemFromSource(item: ReviewInboxItemInput): ReviewInboxItemInput {
+  const source = `${item.sourceEmailSubject ?? ""}\n${item.originalEmailText ?? ""}`;
+  const activity = extractActivityTicketFacts(item.originalEmailText ?? "", item.sourceEmailSubject ?? "");
+  const rail = extractRailTicketFacts(item.originalEmailText ?? "", item.sourceEmailSubject ?? "");
+  let draft = { ...item.draft };
+  if (isGarbageConfirmationCode(draft.confirmationCode)) {
+    draft = { ...draft, confirmationCode: "" };
+  }
+  if (activity) {
+    const subjectTitle = /^fwd:/iu.test(draft.title.trim()) || draft.title.trim().length > 48;
+    draft = {
+      ...draft,
+      type: "dinner",
+      title: subjectTitle || !draft.title.trim() ? activity.title : draft.title,
+      provider: activity.provider || draft.provider,
+      confirmationCode: activity.confirmationCode || draft.confirmationCode,
+    };
+  } else if (rail && !leftoverHasAddableFacts(draft, source)) {
+    draft = {
+      ...draft,
+      type: draft.type || "train",
+      title: rail.title || draft.title,
+      provider: rail.provider || draft.provider,
+      localTime: rail.localTime || draft.localTime,
+      location: rail.location || draft.location,
+      confirmationCode: rail.confirmationCode || draft.confirmationCode,
+    };
+  }
+  return { ...item, draft };
+}
+
 function liveHint(reservation: DuplicateReservationFields): string {
   const title = reservation.title?.trim() || reservation.provider?.trim() || reservation.type;
   const when = formatWhen(reservation.localTime ?? "");
   return when ? `${title} · ${when}` : title;
+}
+
+function relevantLiveHints(
+  draft: ReviewInboxDraft,
+  liveReservations: DuplicateReservationFields[],
+  match: DuplicateReservationFields | null,
+): string[] {
+  if (match) return [liveHint(match)];
+  const type = (draft.type || "").trim().toLowerCase();
+  return liveReservations
+    .filter((reservation) => reservation.type.trim().toLowerCase() === type)
+    .map(liveHint)
+    .slice(0, 3);
+}
+
+export function shouldAutoResolveReviewLeftover(
+  presented: Pick<ReviewInboxPresentation, "alreadyOnTrip" | "canAddToTrip" | "sourceKind">,
+): boolean {
+  if (presented.alreadyOnTrip) return true;
+  if (presented.sourceKind === "legal-terms" && !presented.canAddToTrip) return true;
+  return false;
 }
 
 export function presentReviewInboxItem(
@@ -144,33 +207,59 @@ export function presentReviewInboxItem(
   const enriched = enrichReviewInboxItemFromSource(item);
   const draft = enriched.draft;
   const match = findLiveMatch(draft, liveReservations);
-  const canAddToTrip = leftoverHasAddableFacts(draft);
+  const rawSource = item.originalEmailText?.trim() || "";
+  const legalOnly = rawSource ? isLegalBoilerplateText(rawSource) : false;
+  const canAddToTrip = leftoverHasAddableFacts(draft, rawSource);
   const didEnrich =
     draft.localTime.trim() !== item.draft.localTime.trim() ||
-    draft.location.trim() !== item.draft.location.trim();
+    draft.location.trim() !== item.draft.location.trim() ||
+    draft.confirmationCode.trim() !== item.draft.confirmationCode.trim();
   const reasons = (item.reasons ?? []).map((reason) => reason.trim()).filter(Boolean);
-  const sourceBody = item.originalEmailText?.trim() || null;
   const sourceSubject = item.sourceEmailSubject?.trim() || null;
+  const stripped = rawSource ? stripLegalBoilerplate(rawSource) : "";
+  const sourceKind: ReviewInboxPresentation["sourceKind"] = !rawSource
+    ? "empty"
+    : legalOnly
+      ? "legal-terms"
+      : "booking";
+  const sourceBody =
+    sourceKind === "legal-terms"
+      ? null
+      : stripped
+        ? stripped.slice(0, 800)
+        : rawSource.slice(0, 800) || null;
+
   const why = match
-    ? `This looks like ${match.title?.trim() || match.provider || "a booking"} already on your trip.`
-    : didEnrich
-      ? "Read from the original ticket below."
-      : !canAddToTrip
-        ? sourceBody
-          ? "Kepi could not read a date, place, or confirmation. The original is below — that is what you decide from."
-          : "Kepi could not read a date, place, or confirmation, and no original email was saved with this leftover."
-        : reasons[0] ||
-          item.impact?.trim() ||
-          "The parser was not sure enough to add this by itself.";
+    ? `This booking is already on your trip (${match.title?.trim() || match.provider || "saved booking"}). You do not need to add it again.`
+    : sourceKind === "legal-terms"
+      ? draft.confirmationCode
+        ? `This PDF is ticket terms, not the tour. Booking ${draft.confirmationCode} is the confirmation — Kepi will not add a legal notice to your trip.`
+        : "This PDF is ticket terms, not a booking. Forwarding it does not add Privacy Policy text to your trip."
+      : didEnrich
+        ? "Read from the original ticket below."
+        : !canAddToTrip
+          ? sourceBody
+            ? "Kepi could not read a date, place, or confirmation. The original is below — that is what you decide from."
+            : "Kepi could not read a date, place, or confirmation, and no original email was saved with this leftover."
+          : reasons[0] ||
+            item.impact?.trim() ||
+            "The parser was not sure enough to add this by itself.";
 
   const route =
-    item.draft.flightDepartureAirport?.trim() && item.draft.flightArrivalAirport?.trim()
+    item.draft.flightDepartureAirport?.trim() && item.draft.flightArrivalAirport?.trim() && draft.type === "flight"
       ? `${item.draft.flightDepartureAirport.trim()} → ${item.draft.flightArrivalAirport.trim()}`
       : "";
 
-  const sameType = liveReservations.filter(
-    (reservation) => reservation.type.trim().toLowerCase() === (draft.type || item.draft.type).trim().toLowerCase(),
-  );
+  const alreadyOnTrip = Boolean(match);
+  const autoResolve = shouldAutoResolveReviewLeftover({
+    alreadyOnTrip,
+    canAddToTrip,
+    sourceKind,
+  })
+    ? alreadyOnTrip
+      ? "already-on-trip"
+      : "legal-terms"
+    : null;
 
   return {
     id: item.id,
@@ -179,12 +268,14 @@ export function presentReviewInboxItem(
     where: route || draft.location.trim() || null,
     confirmation: draft.confirmationCode.trim() || null,
     why,
-    alreadyOnTrip: Boolean(match),
+    alreadyOnTrip,
     matchedTitle: match?.title?.trim() || match?.provider?.trim() || null,
-    canAddToTrip,
+    canAddToTrip: canAddToTrip && !alreadyOnTrip,
     sourceSubject,
     sourceBody,
+    sourceKind,
     hasPdf: Boolean(item.hasPdfAttachment),
-    liveHints: sameType.map(liveHint).slice(0, 4),
+    liveHints: relevantLiveHints(draft, liveReservations, match),
+    autoResolve,
   };
 }

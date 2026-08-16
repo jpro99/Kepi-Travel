@@ -75,13 +75,17 @@ export function ConsumerReviewSheet({
       </header>
 
       <div
-        className="min-h-0 flex-1 overflow-y-auto px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+        className="min-h-0 flex-1 overflow-y-auto px-5"
         style={{ WebkitOverflowScrolling: "touch" }}
       >
         {presented ? (
           <>
             <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-[#6E6E73]">
-              {presented.alreadyOnTrip ? "Already on your trip" : "Needs your OK"}
+              {presented.alreadyOnTrip
+                ? "Already on your trip"
+                : presented.sourceKind === "legal-terms"
+                  ? "Ticket terms — not a booking"
+                  : "Needs your OK"}
             </p>
             <h2
               id="consumer-review-sheet-title"
@@ -115,68 +119,49 @@ export function ConsumerReviewSheet({
               </div>
             ) : null}
 
-            <div className="mt-6 rounded-2xl bg-white px-4 py-4">
-              <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-[#6E6E73]">
-                Original
-              </p>
-              {presented.sourceSubject ? (
-                <p className="mt-2 text-[20px] font-semibold leading-snug text-[#1D1D1F]">
-                  {presented.sourceSubject}
+            {presented.sourceKind === "legal-terms" ? (
+              <div className="mt-6 rounded-2xl bg-white px-4 py-4">
+                <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-[#6E6E73]">
+                  Original
                 </p>
-              ) : null}
-              {presented.hasPdf ? (
-                <p className="mt-2 text-[17px] text-[#6E6E73]">This leftover came from a PDF ticket.</p>
-              ) : null}
-              {presented.sourceBody ? (
-                <pre
-                  className="mt-3 whitespace-pre-wrap break-words font-sans text-[20px] leading-relaxed text-[#1D1D1F]"
-                  style={{ fontFamily: "inherit" }}
-                >
-                  {presented.sourceBody}
-                </pre>
-              ) : (
+                {presented.sourceSubject ? (
+                  <p className="mt-2 text-[20px] font-semibold leading-snug text-[#1D1D1F]">
+                    {presented.sourceSubject}
+                  </p>
+                ) : null}
                 <p className="mt-3 text-[20px] leading-relaxed text-[#6E6E73]">
-                  No original email was saved with this leftover. If this is a ticket you already forwarded, tap
-                  Already on the trip.
+                  The attached PDF is GetYourGuide ticket terms (privacy policy and conditions). Kepi does not
+                  add that text to your trip.
                 </p>
-              )}
-            </div>
-
-            <div className="mt-8 space-y-3">
-              {presented.alreadyOnTrip || !presented.canAddToTrip ? (
-                <button
-                  type="button"
-                  onClick={onAlreadyOnTrip}
-                  className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-[#007AFF] px-4 text-[17px] font-semibold text-white"
-                >
-                  Already on the trip
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={onAddToTrip}
-                  className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-[#007AFF] px-4 text-[17px] font-semibold text-white"
-                >
-                  Add to trip
-                </button>
-              )}
-              {presented.canAddToTrip && !presented.alreadyOnTrip ? (
-                <button
-                  type="button"
-                  onClick={onAlreadyOnTrip}
-                  className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-white px-4 text-[17px] font-semibold text-[#007AFF]"
-                >
-                  Already on the trip
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={onNotMine}
-                className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-white px-4 text-[17px] font-semibold text-[#FF3B30]"
-              >
-                Not mine
-              </button>
-            </div>
+              </div>
+            ) : (
+              <div className="mt-6 rounded-2xl bg-white px-4 py-4">
+                <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-[#6E6E73]">
+                  Original
+                </p>
+                {presented.sourceSubject ? (
+                  <p className="mt-2 text-[20px] font-semibold leading-snug text-[#1D1D1F]">
+                    {presented.sourceSubject}
+                  </p>
+                ) : null}
+                {presented.hasPdf ? (
+                  <p className="mt-2 text-[17px] text-[#6E6E73]">This leftover came from a PDF ticket.</p>
+                ) : null}
+                {presented.sourceBody ? (
+                  <pre
+                    className="mt-3 whitespace-pre-wrap break-words font-sans text-[20px] leading-relaxed text-[#1D1D1F]"
+                    style={{ fontFamily: "inherit" }}
+                  >
+                    {presented.sourceBody}
+                  </pre>
+                ) : (
+                  <p className="mt-3 text-[20px] leading-relaxed text-[#6E6E73]">
+                    No original email was saved with this leftover. If this is a ticket you already forwarded, tap
+                    Already on the trip.
+                  </p>
+                )}
+              </div>
+            )}
           </>
         ) : (
           <>
@@ -189,14 +174,57 @@ export function ConsumerReviewSheet({
             <p className="mt-3 text-[20px] leading-relaxed text-[#6E6E73]">
               Nothing left to check. Your trip bookings stay as they are.
             </p>
+          </>
+        )}
+      </div>
+
+      <div
+        className="shrink-0 space-y-3 border-t border-black/5 bg-[#F5F5F7] px-5 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+      >
+        {presented ? (
+          <>
+            {presented.alreadyOnTrip || !presented.canAddToTrip ? (
+              <button
+                type="button"
+                onClick={onAlreadyOnTrip}
+                className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-[#007AFF] px-4 text-[17px] font-semibold text-white"
+              >
+                {presented.sourceKind === "legal-terms" && !presented.alreadyOnTrip ? "Got it" : "Already on the trip"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onAddToTrip}
+                className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-[#007AFF] px-4 text-[17px] font-semibold text-white"
+              >
+                Add to trip
+              </button>
+            )}
+            {presented.canAddToTrip && !presented.alreadyOnTrip ? (
+              <button
+                type="button"
+                onClick={onAlreadyOnTrip}
+                className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-white px-4 text-[17px] font-semibold text-[#007AFF]"
+              >
+                Already on the trip
+              </button>
+            ) : null}
             <button
               type="button"
-              onClick={onClose}
-              className="mt-8 flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-[#007AFF] px-4 text-[17px] font-semibold text-white"
+              onClick={onNotMine}
+              className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-white px-4 text-[17px] font-semibold text-[#FF3B30]"
             >
-              Done
+              Not mine
             </button>
           </>
+        ) : (
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-[#007AFF] px-4 text-[17px] font-semibold text-white"
+          >
+            Done
+          </button>
         )}
       </div>
     </div>

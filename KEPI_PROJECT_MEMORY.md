@@ -3,7 +3,15 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-16 (I58 Trenitalia DD/MM parse)
+Last updated: 2026-08-16 (G28 GetYourGuide legal leftover)
+
+## Decision 2026-08-16 — Forwarding is consent; review is for real conflicts (Jeff)
+
+Jeff: if he forwards a booking, he wants it on the trip. Do not make him scroll GetYourGuide Privacy Policy to tap Add. Match booking `GYGVN24XVY58` against the trip and dismiss. Only interrupt when dates/times are wrong or two activities collide. Legal-only “ticket instructions” PDFs are not bookings. Confirmations untouched.
+
+## Incident 2026-08-16 — Review sheet asked to add GetYourGuide legal terms (Jeff)
+
+2 of 6 was “Fwd: Booking GYGVN24XVY58 confirmed | Ticket instructions”, 19/100, confirmation **ERENCE**, Add buried under Legal Notice. Already on Plan listed unrelated flights. Parser split `booking reference` into `ERENCE` and typed the leftover as a flight. G28 / I59. Do not ask him to re-forward the PDF.
 
 ## Incident 2026-08-16 — Trenitalia leftover scored 0/100 (Jeff)
 

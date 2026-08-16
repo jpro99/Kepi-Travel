@@ -11,6 +11,7 @@ import { EMAIL_FORWARD_PARSER_VERSION } from "@/lib/travelAssistant/mlReadiness/
 import type { FewShotParseExample } from "@/lib/travelAssistant/mlReadiness/types";
 import { sanitizeTravelerNotes } from "@/lib/travelAssistant/sanitizeTravelerNotes";
 import { extractRailTicketFacts } from "@/lib/travelAssistant/railTicketExtract";
+import { extractActivityTicketFacts, stripLegalBoilerplate } from "@/lib/travelAssistant/activityTicketExtract";
 import { logger } from "@/lib/logger";
 
 export { extractHotelPropertyName };
@@ -334,6 +335,16 @@ const CONFIRMATION_CODE_WORD_DENYLIST = new Set([
   "DOCUMENTS",
   "PASSENGER",
   "PASSENGERS",
+  "REFERENCE",
+  "ERENCE",
+  "INSTRUCTIONS",
+  "NOTICE",
+  "PRIVACY",
+  "POLICY",
+  "LEGAL",
+  "TERMS",
+  "CONDITIONS",
+  "GENERAL",
 ]);
 
 const AIRLINE_PROVIDER_PATTERNS: Array<{ pattern: RegExp; provider: string }> = [
@@ -377,6 +388,7 @@ export function prepareEmailBodyForParsing(rawText: string): { collapsed: string
   let lineAware = rawText.replace(/\r\n/g, "\n");
   lineAware = extractOriginalEmailFromForwardChain(lineAware);
   lineAware = stripForwardEnvelopeHeaders(lineAware);
+  lineAware = stripLegalBoilerplate(lineAware);
   return {
     lineAware,
     collapsed: normalizeWhitespace(lineAware),
@@ -471,12 +483,13 @@ export function extractConfirmationCodeFromText(text: string): string | null {
   if (!combined) return null;
 
   const labeledPatterns = [
+    /\bbooking\s+([A-Z0-9]{10,16})\b/iu,
     /\bcodice\s+prenotazione\s*[:#]?\s*([A-Z0-9]{5,8})\b/iu,
     /\bcodice\s+biglietto\s*[:#]?\s*([A-Z0-9]{6,12})\b/iu,
     /\breservation\s+code\s*[:#]?\s*([A-Z0-9]{5,8})\b/iu,
     /\b(?:confirmation|record\s*locator|pnr)\s*(?:number|code|#)\s*[:#]?\s*([A-Z0-9]{5,8})\b/iu,
     /\b(?:confirmation|record\s*locator|pnr)\s+#\s*([A-Z0-9]{5,8})\b/iu,
-    /\bbooking\s*(?:ref(?:erence)?|code|number)\s*[:#]?\s*([A-Z0-9]{5,8})\b/iu,
+    /\bbooking\s+(?:reference|ref|code|number)\b\s*[:#]?\s*([A-Z0-9]{5,12})\b/iu,
     // "Confirmation ABC123" / "Confirmation: LDM-2291" — never "confirmation carefully"
     /\bconfirmation\s*[:#]?\s*([A-Z0-9-]{5,12})\b/iu,
   ];
@@ -1225,10 +1238,25 @@ function buildRegexCandidates(input: {
   const combined = `${subject}\n${text}`.trim();
   const candidates: CandidateMap = {};
 
-  const hasFlightContext = FLIGHT_CONTEXT_RE.test(combined);
+  const activityFacts = extractActivityTicketFacts(lineAwareText, subject);
+  if (activityFacts) {
+    candidates.type = { value: "dinner", confidence: 0.9, source: "regex" };
+    if (activityFacts.title) {
+      candidates.title = { value: activityFacts.title, confidence: 0.86, source: "regex" };
+    }
+    if (activityFacts.provider) {
+      candidates.provider = { value: activityFacts.provider, confidence: 0.88, source: "regex" };
+    }
+    if (activityFacts.confirmationCode) {
+      candidates.confirmationCode = { value: activityFacts.confirmationCode, confidence: 0.92, source: "regex" };
+    }
+  }
+
+  const hasFlightContext = !activityFacts && FLIGHT_CONTEXT_RE.test(combined);
 
   const flightNumberMatch = hasFlightContext ? combined.match(/\b([A-Z]{2})\s?(\d{2,4})\b/u) : null;
   if (
+    !activityFacts &&
     flightNumberMatch &&
     !isDeniedFlightAirlineCode(flightNumberMatch[1] ?? "", combined)
   ) {
@@ -1248,7 +1276,7 @@ function buildRegexCandidates(input: {
       confidence: 0.95,
       source: "regex",
     };
-  } else {
+  } else if (!activityFacts) {
     for (const keyword of RESERVATION_TYPE_KEYWORDS) {
       if (keyword.pattern.test(combined)) {
         candidates.type = {
