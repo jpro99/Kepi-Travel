@@ -122,6 +122,14 @@ test("I54: Save keeps the line on the letter", () => {
   );
   assert.match(letter, /savedBulletsByDay/);
   assert.match(letter, /setSavedBulletsByDay/);
+  const savedDecl = letter.search(/const \[savedBulletsByDay,/u);
+  assert.ok(savedDecl > 0, "savedBulletsByDay state missing");
+  const savedBefore = letter.slice(0, savedDecl);
+  assert.equal(
+    (savedBefore.match(/\bsavedBulletsByDay\b/gu) ?? []).length,
+    0,
+    "savedBulletsByDay is read before useState — Plan tab crashes (Cannot access before initialization)",
+  );
 
   const page = readFileSync(join(process.cwd(), "src/app/travel-assistant/page.tsx"), "utf8");
   assert.match(page, /itineraryPrefs\.updateDayNote\(dateKey, value\)/);

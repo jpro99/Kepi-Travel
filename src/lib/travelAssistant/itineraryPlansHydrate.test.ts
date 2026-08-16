@@ -128,6 +128,21 @@ test("I50: backfill from stored email text writes Sept 3–4 activities", () => 
   assert.match(result.plans.dayPlans["2026-09-04"]?.notes ?? "", /gelato/i);
 });
 
+test("I55: Plan letter does not read savedBulletsByDay before useState (TDZ)", () => {
+  const src = readFileSync(
+    join(process.cwd(), "src/components/travelAssistant/NarrativeDayPlanView.tsx"),
+    "utf8",
+  );
+  const decl = src.search(/const \[savedBulletsByDay,/u);
+  assert.ok(decl > 0, "savedBulletsByDay state missing");
+  const before = src.slice(0, decl);
+  assert.equal(
+    (before.match(/\bsavedBulletsByDay\b/gu) ?? []).length,
+    0,
+    "savedBulletsByDay is read before initialization — Plan tab crashes (Cannot access 'M' before initialization)",
+  );
+});
+
 test("I50: Plan page does not read setToast before it is declared (TDZ)", () => {
   const src = readFileSync(join(process.cwd(), "src/app/travel-assistant/page.tsx"), "utf8");
   const decl = src.search(/const setToast = useCallback/u);

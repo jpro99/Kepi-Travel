@@ -41,6 +41,15 @@ export function NarrativeDayPlanView({
   onPasteDayPlan,
   selectedDateKey = null,
 }: NarrativeDayPlanViewProps) {
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [pasteBusy, setPasteBusy] = useState(false);
+  const [editingDateKey, setEditingDateKey] = useState<string | null>(null);
+  const [undoDay, setUndoDay] = useState<{ dateKey: string; bullets: string[] } | null>(null);
+  const [savedDateKey, setSavedDateKey] = useState<string | null>(null);
+  const [savedBulletsByDay, setSavedBulletsByDay] = useState<Record<string, string[]>>({});
+
   const sections = useMemo(() => {
     const built = buildNarrativeDaySections({
       tripStartDate,
@@ -65,15 +74,6 @@ export function NarrativeDayPlanView({
     tripEndDate,
     itineraryPlans.letterHeader?.title,
   );
-
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [pasteOpen, setPasteOpen] = useState(false);
-  const [pasteText, setPasteText] = useState("");
-  const [pasteBusy, setPasteBusy] = useState(false);
-  const [editingDateKey, setEditingDateKey] = useState<string | null>(null);
-  const [undoDay, setUndoDay] = useState<{ dateKey: string; bullets: string[] } | null>(null);
-  const [savedDateKey, setSavedDateKey] = useState<string | null>(null);
-  const [savedBulletsByDay, setSavedBulletsByDay] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     if (!selectedDateKey) return;

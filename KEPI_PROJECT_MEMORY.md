@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-16 (Plan Save not locked)
+Last updated: 2026-08-16 (Plan TDZ after Save fix)
+
+## Incident 2026-08-16 — Plan tab red-screen after I54 (`Cannot access 'M'`)
+
+Jeff on `/travel-assistant?tab=itinerary`: `Something went wrong` / `Cannot access 'M' before initialization`. Cause: `savedBulletsByDay` used in `useMemo` deps before `useState`. Same TDZ class as I50 `s1`/`setToast`. Confirmations untouched. Hard-refresh after deploy.
 
 ## Incident 2026-08-16 — Save still blanked Sept 2 (Jeff)
 
