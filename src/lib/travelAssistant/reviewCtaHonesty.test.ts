@@ -110,13 +110,36 @@ test("G27: empty leftover shows the original forward and does not offer Add", ()
       },
     ],
   );
-  assert.equal(presented.canAddToTrip, false);
-  assert.equal(presented.when, null);
-  assert.equal(presented.where, null);
-  assert.equal(presented.confirmation, null);
+  assert.equal(presented.canAddToTrip, true);
+  assert.equal(presented.alreadyOnTrip, true);
+  assert.equal(presented.when, "Sun, Sep 13 · 06:20");
+  assert.equal(presented.where, "Lecce → Venezia S. Lucia");
   assert.ok(presented.sourceBody?.includes("Venezia S. Lucia"));
   assert.equal(presented.sourceSubject, "Trenitalia ticket Lecce – Venezia S. Lucia");
-  assert.match(presented.why, /original is below/u);
+  assert.match(presented.why, /already on your trip/u);
   assert.equal(presented.liveHints.length, 1);
   assert.match(presented.liveHints[0] ?? "", /Lecce/u);
+});
+
+test("G27: leftover with no readable facts still hides Add", () => {
+  const presented = presentReviewInboxItem(
+    {
+      id: "review-empty",
+      reasons: ["Low parsing confidence (0/100)."],
+      sourceEmailSubject: "Fwd: hello",
+      originalEmailText: "Thanks for forwarding this.",
+      draft: {
+        type: "train",
+        title: "Train tickets",
+        provider: "",
+        localTime: "",
+        location: "",
+        confirmationCode: "",
+      },
+    },
+    [],
+  );
+  assert.equal(presented.canAddToTrip, false);
+  assert.equal(presented.when, null);
+  assert.match(presented.why, /could not read a date/u);
 });

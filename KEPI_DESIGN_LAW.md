@@ -692,6 +692,11 @@ A hotel-city move (Lecce → Venice) is covered when a booked flight arrives at 
 
 **Test:** `src/lib/travelAssistant/bookedHopCoverage.test.ts`
 
+**I58 — European rail tickets use DD/MM dates and station names**  
+Trenitalia / Italo PDFs print `13/09/2026`, Partenza/Arrivo, station names, binario, and Codice prenotazione. Do not read `13/09` as month 13. A leftover that still has the original ticket must show the date, route, and times — not “Train tickets / 0/100.” Confirmations untouched.
+
+**Test:** `src/lib/travelAssistant/railTicketExtract.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -903,6 +908,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | I55 | `src/lib/travelAssistant/itineraryPlansHydrate.test.ts`, `src/lib/travelAssistant/planDayEdit.test.ts` |
 | I56 | `src/lib/pwa/recoverStaleClientBundle.test.ts` |
 | I57 | `src/lib/travelAssistant/bookedHopCoverage.test.ts` |
+| I58 | `src/lib/travelAssistant/railTicketExtract.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

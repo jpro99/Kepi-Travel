@@ -5,6 +5,7 @@ import {
 
 export interface DuplicateReservationFields extends FlightLegMatchFields {
   type: string;
+  title?: string;
   provider: string;
   localTime: string;
   location: string;

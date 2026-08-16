@@ -10,6 +10,7 @@ import { formatFewShotBlock } from "@/lib/travelAssistant/mlReadiness/fewShotExa
 import { EMAIL_FORWARD_PARSER_VERSION } from "@/lib/travelAssistant/mlReadiness/parserVersion";
 import type { FewShotParseExample } from "@/lib/travelAssistant/mlReadiness/types";
 import { sanitizeTravelerNotes } from "@/lib/travelAssistant/sanitizeTravelerNotes";
+import { extractRailTicketFacts } from "@/lib/travelAssistant/railTicketExtract";
 import { logger } from "@/lib/logger";
 
 export { extractHotelPropertyName };
@@ -158,7 +159,7 @@ const RESERVATION_TYPE_KEYWORDS: Array<{ type: ForwardedReservationType; pattern
     confidence: 0.78,
   },
   { type: "hotel", pattern: /\b(hotel|check-?in|check out|room|suite|stay)\b/iu, confidence: 0.78 },
-  { type: "train", pattern: /\b(train|rail|amtrak|station|platform)\b/iu, confidence: 0.75 },
+  { type: "train", pattern: /\b(train|rail|amtrak|station|platform|trenitalia|italo|partenza|binario|stazione)\b/iu, confidence: 0.75 },
   {
     type: "dinner",
     pattern:
@@ -271,7 +272,7 @@ const NON_TRAVEL_DATE_CONTEXT =
   /\b(?:purchase(?:d)?|booked on|booking date|transaction date|order date|payment date|payment scheduled|scheduled payment|payout|balance due|you will be charged|total charged|charged a total|issued on|date of issue|receipt date|ticketed on|sales date|invoice date|email sent|sent on|forwarded message|free cancellation|cancellation policy|e-?t-?a\b|esta\b|visa[- ]exempt|visa waiver|electronic system for travel authorization|hazardous materials|conditions of carriage|privacy policy|data protection|effective\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})\b/iu;
 
 const TRAVEL_DATE_CONTEXT =
-  /\b(?:depart(?:ure|s|ing)?|arriv(?:al|es|ing)?|scheduled|flight|gate|terminal|boarding|check-?in|check out|leaves| lands|segment|itinerary)\b/iu;
+  /\b(?:depart(?:ure|s|ing)?|arriv(?:al|es|ing)?|scheduled|flight|gate|terminal|boarding|check-?in|check out|leaves| lands|segment|itinerary|train|rail|partenza|arrivo|binario|platform|stazione|trenitalia|italo)\b/iu;
 
 /** English words / labels that must never be treated as PNR / confirmation codes. */
 const CONFIRMATION_CODE_WORD_DENYLIST = new Set([
@@ -470,6 +471,8 @@ export function extractConfirmationCodeFromText(text: string): string | null {
   if (!combined) return null;
 
   const labeledPatterns = [
+    /\bcodice\s+prenotazione\s*[:#]?\s*([A-Z0-9]{5,8})\b/iu,
+    /\bcodice\s+biglietto\s*[:#]?\s*([A-Z0-9]{6,12})\b/iu,
     /\breservation\s+code\s*[:#]?\s*([A-Z0-9]{5,8})\b/iu,
     /\b(?:confirmation|record\s*locator|pnr)\s*(?:number|code|#)\s*[:#]?\s*([A-Z0-9]{5,8})\b/iu,
     /\b(?:confirmation|record\s*locator|pnr)\s+#\s*([A-Z0-9]{5,8})\b/iu,
@@ -746,9 +749,14 @@ function parseDateCandidate(raw: string): string | null {
   }
   const usMatch = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/u.exec(input);
   if (usMatch) {
-    const month = Number(usMatch[1]);
-    const day = Number(usMatch[2]);
+    let month = Number(usMatch[1]);
+    let day = Number(usMatch[2]);
     const year = Number(usMatch[3].length === 2 ? `20${usMatch[3]}` : usMatch[3]);
+    if (month > 12 && day <= 12) {
+      const swap = month;
+      month = day;
+      day = swap;
+    }
     const parsed = Date.parse(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T00:00:00Z`);
     if (Number.isNaN(parsed)) {
       return null;
@@ -1301,6 +1309,32 @@ function buildRegexCandidates(input: {
     };
   }
 
+  const railFacts = extractRailTicketFacts(lineAwareText, subject);
+  if (railFacts) {
+    candidates.type = { value: "train", confidence: 0.9, source: "regex" };
+    if (railFacts.title) {
+      candidates.title = { value: railFacts.title, confidence: 0.88, source: "regex" };
+    }
+    if (railFacts.provider) {
+      candidates.provider = { value: railFacts.provider, confidence: 0.86, source: "regex" };
+    }
+    if (railFacts.localTime) {
+      candidates.localTime = { value: railFacts.localTime, confidence: 0.9, source: "regex" };
+    }
+    if (railFacts.location) {
+      candidates.location = { value: railFacts.location, confidence: 0.88, source: "regex" };
+    }
+    if (railFacts.confirmationCode) {
+      candidates.confirmationCode = { value: railFacts.confirmationCode, confidence: 0.86, source: "regex" };
+    }
+    if (railFacts.timezone) {
+      candidates.timezone = { value: railFacts.timezone, confidence: 0.8, source: "regex" };
+    }
+    if (railFacts.notes) {
+      candidates.notes = { value: railFacts.notes, confidence: 0.7, source: "regex" };
+    }
+  }
+
   const reservationType = normalizeType(candidates.type?.value ?? "") ?? undefined;
 
   // I39: labeled Check-in / Checkout cards (including yearless Airbnb "Sat, Sep 12").
@@ -1320,7 +1354,7 @@ function buildRegexCandidates(input: {
       confidence: 0.92,
       source: "regex",
     };
-  } else {
+  } else if (!candidates.localTime) {
     const bestLocalTime = extractBestLocalTimeCandidate(lineAwareText, reservationType);
     if (bestLocalTime) {
       candidates.localTime = {
@@ -1368,7 +1402,7 @@ function buildRegexCandidates(input: {
   }
 
   const timezone = resolveTimezone(combined);
-  if (timezone) {
+  if (timezone && !(timezone === "Etc/UTC" && candidates.timezone)) {
     candidates.timezone = {
       value: timezone,
       confidence: timezone === "Etc/UTC" ? 0.45 : 0.8,

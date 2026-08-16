@@ -161,6 +161,10 @@ import { QuickAddLane } from "@/components/travelAssistant/QuickAddLane";
 import { ReservationList } from "@/components/travelAssistant/ReservationList";
 import { ReviewQueue } from "@/components/travelAssistant/ReviewQueue";
 import { ConsumerReviewSheet } from "@/components/travelAssistant/ConsumerReviewSheet";
+import {
+  enrichReviewInboxItemFromSource,
+  leftoverHasAddableFacts,
+} from "@/lib/travelAssistant/reviewCtaHonesty";
 import { GmailImportScopeModal, type GmailImportScope } from "@/components/travelAssistant/GmailImportScopeModal";
 import {
   ManualReservationEntryModal,
@@ -7995,17 +7999,41 @@ export default function TravelAssistantPage() {
   ): boolean => {
     const target = reviewQueue.find((item) => item.id === reviewId);
     if (!target) return false;
+    const sourceDraft = draftOverride ?? target.draft;
+    const sourceFacts = {
+      type: sourceDraft.type,
+      title: sourceDraft.title,
+      provider: sourceDraft.provider,
+      localTime: sourceDraft.localTime,
+      location: sourceDraft.location,
+      confirmationCode: sourceDraft.confirmationCode,
+      flightNumber: sourceDraft.flightNumber,
+      flightDepartureAirport: sourceDraft.flightDepartureAirport,
+      flightArrivalAirport: sourceDraft.flightArrivalAirport,
+      flightDate: sourceDraft.flightDate,
+    };
+    const mergedDraft = leftoverHasAddableFacts(sourceFacts)
+      ? sourceDraft
+      : {
+          ...sourceDraft,
+          ...enrichReviewInboxItemFromSource({
+            id: target.id,
+            sourceEmailSubject: target.sourceEmailSubject,
+            originalEmailText: target.originalEmailText,
+            draft: sourceFacts,
+          }).draft,
+        };
     const draft = applyAcceptedReservationPricing(
       enrichReservationForAutoImport(
         prepareReviewDraftForAccept({
-      ...(draftOverride ?? target.draft),
-      type: (draftOverride ?? target.draft).type,
-      title: (draftOverride ?? target.draft).title,
-      provider: (draftOverride ?? target.draft).provider,
-      localTime: (draftOverride ?? target.draft).localTime,
-      timezone: (draftOverride ?? target.draft).timezone,
-      location: (draftOverride ?? target.draft).location,
-      confirmationCode: (draftOverride ?? target.draft).confirmationCode,
+      ...mergedDraft,
+      type: mergedDraft.type,
+      title: mergedDraft.title,
+      provider: mergedDraft.provider,
+      localTime: mergedDraft.localTime,
+      timezone: mergedDraft.timezone,
+      location: mergedDraft.location,
+      confirmationCode: mergedDraft.confirmationCode,
       flightNumber: (draftOverride ?? target.draft).flightNumber,
       flightAirline: (draftOverride ?? target.draft).flightAirline,
       flightDate: (draftOverride ?? target.draft).flightDate,
@@ -8757,13 +8785,55 @@ export default function TravelAssistantPage() {
         setToast("Review queue is already clear.");
         return;
       }
+      let changed = false;
+      const nextQueue = reviewQueue.map((item) => {
+        const enriched = enrichReviewInboxItemFromSource({
+          id: item.id,
+          reasons: item.reasons,
+          sourceEmailSubject: item.sourceEmailSubject,
+          originalEmailText: item.originalEmailText,
+          draft: {
+            type: item.draft.type,
+            title: item.draft.title,
+            provider: item.draft.provider,
+            localTime: item.draft.localTime,
+            location: item.draft.location,
+            confirmationCode: item.draft.confirmationCode,
+          },
+        });
+        if (
+          enriched.draft.localTime === item.draft.localTime &&
+          enriched.draft.location === item.draft.location &&
+          enriched.draft.confirmationCode === item.draft.confirmationCode
+        ) {
+          return item;
+        }
+        changed = true;
+        return {
+          ...item,
+          draft: {
+            ...item.draft,
+            title: enriched.draft.title || item.draft.title,
+            provider: enriched.draft.provider || item.draft.provider,
+            localTime: enriched.draft.localTime || item.draft.localTime,
+            location: enriched.draft.location || item.draft.location,
+            confirmationCode: enriched.draft.confirmationCode || item.draft.confirmationCode,
+            timezone: item.draft.timezone || "Europe/Rome",
+          },
+          reasons: item.reasons.filter((reason) => !/low parsing confidence/i.test(reason)),
+        };
+      });
+      if (changed) {
+        setReviewQueue(nextQueue);
+        persistReviewQueueToTrip(nextQueue, { reviewId: nextQueue[0]?.id ?? "rail-enrich", source: "rail-enrich" });
+      }
       setConsumerReviewQueueSession({
         open: true,
         processed: 0,
-        total: reviewQueue.length,
+        total: nextQueue.length,
       });
     },
-    [reviewQueue.length, setToast],
+    [persistReviewQueueToTrip, reviewQueue, setToast],
   );
 
   const handleConsumerReviewQueueAction = (action: "accept" | "delete"): void => {

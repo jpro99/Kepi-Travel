@@ -432,6 +432,10 @@ Effective March 15, 2016, Visa-exempt foreign nationals travelling to Canada by 
 Canadian authorities will not allow boarding on flights to Canada for passengers who have not obtained an eTA.
 `;
 
+test("extractConfirmationCodeFromText reads Codice prenotazione", () => {
+  assert.equal(extractConfirmationCodeFromText("Codice prenotazione ABC12X\nLecce 13/09/2026"), "ABC12X");
+});
+
 test("extractConfirmationCodeFromText prefers Reservation code over carefully", () => {
   assert.equal(extractConfirmationCodeFromText(itaBoilerplateEmail), "Z84T4Z");
   assert.equal(
@@ -538,4 +542,53 @@ Friday, September 18, 2026 at 7:30 PM
       process.env.ANTHROPIC_API_KEY = previousKey;
     }
   }
+});
+
+test("I58: Trenitalia 13/09/2026 is September 13 with Lecce → Venezia stations", async () => {
+  const previousKey = process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  try {
+    const ticket = `
+TRENITALIA
+BIGLIETTO DI VIAGGIO
+Codice prenotazione ABC12X
+PARTENZA
+Lecce
+13/09/2026 06:20
+Binario 2
+ARRIVO
+Venezia S. Lucia
+13/09/2026 14:42
+Binario 9
+`;
+    const result = await parseForwardedEmail({
+      subject: "Train tickets",
+      from: "noreply@trenitalia.com",
+      text: ticket,
+      html: "",
+      attachments: [],
+    });
+    assert.equal(result.draft.type, "train");
+    assert.equal(result.draft.localTime, "2026-09-13 06:20");
+    assert.equal(result.draft.location, "Lecce → Venezia S. Lucia");
+    assert.equal(result.draft.confirmationCode, "ABC12X");
+    assert.equal(result.draft.provider, "Trenitalia");
+    assert.equal(result.draft.timezone, "Europe/Rome");
+    assert.ok(result.confidenceScore > 40);
+    assert.notEqual(result.parsingStatus, "needs-user-input");
+  } finally {
+    if (previousKey === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = previousKey;
+    }
+  }
+});
+
+test("US 09/13/2026 stays September 13 for flights", () => {
+  const localTime = extractBestLocalTimeFromEmailBody(
+    "Flight AS654\nDeparture ONT\n09/13/2026 8:45 AM\nArrival SEA",
+    "flight",
+  );
+  assert.equal(localTime, "2026-09-13 08:45");
 });

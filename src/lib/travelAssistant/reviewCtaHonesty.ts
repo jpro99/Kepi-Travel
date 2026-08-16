@@ -1,4 +1,5 @@
 import { isDuplicateReservation, type DuplicateReservationFields } from "@/lib/travelAssistant/reservationDuplicates";
+import { extractRailTicketFacts } from "@/lib/travelAssistant/railTicketExtract";
 
 /**
  * G27 — a Review bookings CTA is honest only when a visible surface is mounted.
@@ -74,11 +75,51 @@ function formatWhen(localTime: string): string | null {
   return time ? `${dateLabel} · ${time}` : dateLabel;
 }
 
+function stationTokens(value: string): string[] {
+  return value
+    .toLowerCase()
+    .split(/[^a-zà-ÿ]+/u)
+    .filter((part) => part.length >= 4);
+}
+
+function trainHopOverlap(reservation: DuplicateReservationFields, draft: ReviewInboxDraft): boolean {
+  if (reservation.type.trim().toLowerCase() !== "train" || draft.type.trim().toLowerCase() !== "train") {
+    return false;
+  }
+  const reservationDay = (reservation.localTime ?? "").slice(0, 10);
+  const draftDay = draft.localTime.slice(0, 10);
+  if (!reservationDay || reservationDay !== draftDay) return false;
+  const live = new Set(stationTokens(`${reservation.location} ${reservation.title ?? ""}`));
+  return stationTokens(`${draft.location} ${draft.title}`).some((token) => live.has(token));
+}
+
 function findLiveMatch(
   draft: ReviewInboxDraft,
   liveReservations: DuplicateReservationFields[],
 ): DuplicateReservationFields | null {
-  return liveReservations.find((reservation) => isDuplicateReservation(reservation, draft)) ?? null;
+  return (
+    liveReservations.find((reservation) => isDuplicateReservation(reservation, draft)) ??
+    liveReservations.find((reservation) => trainHopOverlap(reservation, draft)) ??
+    null
+  );
+}
+
+export function enrichReviewInboxItemFromSource(item: ReviewInboxItemInput): ReviewInboxItemInput {
+  if (leftoverHasAddableFacts(item.draft)) return item;
+  const facts = extractRailTicketFacts(item.originalEmailText ?? "", item.sourceEmailSubject ?? "");
+  if (!facts) return item;
+  return {
+    ...item,
+    draft: {
+      ...item.draft,
+      type: item.draft.type || "train",
+      title: facts.title || item.draft.title,
+      provider: facts.provider || item.draft.provider,
+      localTime: facts.localTime || item.draft.localTime,
+      location: facts.location || item.draft.location,
+      confirmationCode: facts.confirmationCode || item.draft.confirmationCode,
+    },
+  };
 }
 
 export function leftoverHasAddableFacts(draft: ReviewInboxDraft): boolean {
@@ -100,20 +141,27 @@ export function presentReviewInboxItem(
   item: ReviewInboxItemInput,
   liveReservations: DuplicateReservationFields[],
 ): ReviewInboxPresentation {
-  const match = findLiveMatch(item.draft, liveReservations);
-  const canAddToTrip = leftoverHasAddableFacts(item.draft);
+  const enriched = enrichReviewInboxItemFromSource(item);
+  const draft = enriched.draft;
+  const match = findLiveMatch(draft, liveReservations);
+  const canAddToTrip = leftoverHasAddableFacts(draft);
+  const didEnrich =
+    draft.localTime.trim() !== item.draft.localTime.trim() ||
+    draft.location.trim() !== item.draft.location.trim();
   const reasons = (item.reasons ?? []).map((reason) => reason.trim()).filter(Boolean);
   const sourceBody = item.originalEmailText?.trim() || null;
   const sourceSubject = item.sourceEmailSubject?.trim() || null;
   const why = match
     ? `This looks like ${match.title?.trim() || match.provider || "a booking"} already on your trip.`
-    : !canAddToTrip
-      ? sourceBody
-        ? "Kepi could not read a date, place, or confirmation. The original is below — that is what you decide from."
-        : "Kepi could not read a date, place, or confirmation, and no original email was saved with this leftover."
-      : reasons[0] ||
-        item.impact?.trim() ||
-        "The parser was not sure enough to add this by itself.";
+    : didEnrich
+      ? "Read from the original ticket below."
+      : !canAddToTrip
+        ? sourceBody
+          ? "Kepi could not read a date, place, or confirmation. The original is below — that is what you decide from."
+          : "Kepi could not read a date, place, or confirmation, and no original email was saved with this leftover."
+        : reasons[0] ||
+          item.impact?.trim() ||
+          "The parser was not sure enough to add this by itself.";
 
   const route =
     item.draft.flightDepartureAirport?.trim() && item.draft.flightArrivalAirport?.trim()
@@ -121,15 +169,15 @@ export function presentReviewInboxItem(
       : "";
 
   const sameType = liveReservations.filter(
-    (reservation) => reservation.type.trim().toLowerCase() === item.draft.type.trim().toLowerCase(),
+    (reservation) => reservation.type.trim().toLowerCase() === (draft.type || item.draft.type).trim().toLowerCase(),
   );
 
   return {
     id: item.id,
-    headline: item.draft.title.trim() || item.draft.provider.trim() || sourceSubject || "Untitled leftover",
-    when: formatWhen(item.draft.localTime),
-    where: route || item.draft.location.trim() || null,
-    confirmation: item.draft.confirmationCode.trim() || null,
+    headline: draft.title.trim() || draft.provider.trim() || sourceSubject || "Untitled leftover",
+    when: formatWhen(draft.localTime),
+    where: route || draft.location.trim() || null,
+    confirmation: draft.confirmationCode.trim() || null,
     why,
     alreadyOnTrip: Boolean(match),
     matchedTitle: match?.title?.trim() || match?.provider?.trim() || null,
