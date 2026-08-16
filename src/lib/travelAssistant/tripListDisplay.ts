@@ -8,6 +8,9 @@ export interface TripListRowInput {
   endDate: string;
   createdAt: string;
   reservationCount: number;
+  cashTotalUsd?: number;
+  pointsTotal?: number;
+  missingPriceCount?: number;
 }
 
 function isGenericTripName(name: string): boolean {

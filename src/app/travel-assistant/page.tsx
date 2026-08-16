@@ -130,6 +130,7 @@ import { MyTripsModal } from "@/components/travelAssistant/MyTripsModal";
 import { ImportTripPickerModal } from "@/components/travelAssistant/ImportTripPickerModal";
 import {
   formatTripDateRange,
+  formatTripListTitle,
   isEmptyTripShell,
   type TripListRowInput,
 } from "@/lib/travelAssistant/tripListDisplay";
@@ -179,10 +180,15 @@ import { BookTabView } from "@/components/travelAssistant/BookTabView";
 import { MapTabView } from "@/components/travelAssistant/MapTabView";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
-import { TripPricingReviewSheet } from "@/components/travelAssistant/TripPricingReviewSheet";
+import { TripLedgerSheet } from "@/components/travelAssistant/TripLedgerSheet";
 import { hydrateReservationsPricing, applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import { buildTransportConflictReservationIds } from "@/lib/travelAssistant/reservationAttention";
-import { buildTripSpendLineItems, computeTripSpend } from "@/lib/travelAssistant/tripSpendSummary";
+import { computeTripSpend } from "@/lib/travelAssistant/tripSpendSummary";
+import {
+  computeLifetimeAccounting,
+  enrichTripSpendLineItems,
+  type TripAccountingTripInput,
+} from "@/lib/travelAssistant/tripAccounting";
 import { preDepartureStayDecisionId, type TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 import { homeBaseStayDecisionId } from "@/lib/travelAssistant/tripNightCoverage";
 import { resolveBoardingPassUrl } from "@/lib/travelAssistant/reservationLinks";
@@ -2399,15 +2405,24 @@ export default function TravelAssistantPage() {
 
   const tripListRows = useMemo<TripListRowInput[]>(
     () =>
-      trips.map((trip) => ({
-        id: trip.id,
-        name: trip.name,
-        destination: trip.destination,
-        startDate: trip.startDate,
-        endDate: trip.endDate,
-        createdAt: trip.createdAt,
-        reservationCount: trip.reservations.filter((reservation) => !isOnboardingPlaceholderReservation(reservation)).length,
-      })),
+      trips.map((trip) => {
+        const spendReservations = trip.reservations.filter(
+          (reservation) => !isOnboardingPlaceholderReservation(reservation),
+        );
+        const summary = computeTripSpend(spendReservations);
+        return {
+          id: trip.id,
+          name: trip.name,
+          destination: trip.destination,
+          startDate: trip.startDate,
+          endDate: trip.endDate,
+          createdAt: trip.createdAt,
+          reservationCount: spendReservations.length,
+          cashTotalUsd: summary.cashTotalUsd,
+          pointsTotal: summary.pointsTotal,
+          missingPriceCount: summary.missingPriceCount,
+        };
+      }),
     [trips],
   );
 
@@ -4501,9 +4516,20 @@ export default function TravelAssistantPage() {
     [tripSpendReservations],
   );
   const tripSpendLineItems = useMemo(
-    () => buildTripSpendLineItems(tripSpendReservations),
+    () => enrichTripSpendLineItems(tripSpendReservations),
     [tripSpendReservations],
   );
+  const lifetimeTripAccounting = useMemo(() => {
+    const accountingTrips: TripAccountingTripInput[] = trips.map((trip) => ({
+      id: trip.id,
+      name: trip.name,
+      destination: trip.destination,
+      startDate: trip.startDate,
+      endDate: trip.endDate,
+      reservations: trip.reservations.filter((r) => !isOnboardingPlaceholderReservation(r)),
+    }));
+    return computeLifetimeAccounting(accountingTrips, activeTripId);
+  }, [trips, activeTripId]);
   const activeStayDecisions = useMemo(
     () => (activeTripId ? tripStayDecisionsByTrip[activeTripId] ?? {} : {}),
     [activeTripId, tripStayDecisionsByTrip],
@@ -7168,6 +7194,28 @@ export default function TravelAssistantPage() {
     },
     [handleSwitchTrip, openDrawer],
   );
+
+  const handleLedgerOpenReservation = useCallback(
+    (reservationId: string, tripId?: string): void => {
+      setPricingReviewOpen(false);
+      if (tripId && tripId !== activeTripId) {
+        void handleSwitchTrip(tripId).then(() => openDrawer("reservation", reservationId));
+        return;
+      }
+      openDrawer("reservation", reservationId);
+    },
+    [activeTripId, handleSwitchTrip, openDrawer],
+  );
+
+  const activeTripLedgerLabel = useMemo(() => {
+    if (!activeTrip) return "This trip";
+    return formatTripListTitle({
+      name: activeTrip.name,
+      destination: activeTrip.destination,
+      startDate: activeTrip.startDate,
+      endDate: activeTrip.endDate,
+    });
+  }, [activeTrip]);
 
   const mobileSearchTrips = useMemo(
     () =>
@@ -10980,6 +11028,17 @@ export default function TravelAssistantPage() {
           <TravelStyleQuiz onComplete={handleTravelStyleComplete} onSkip={handleTravelStyleSkip} />
         ) : null}
         {tripManagementModals}
+        <TripLedgerSheet
+          open={pricingReviewOpen}
+          activeTripId={activeTripId}
+          activeTripLabel={activeTripLedgerLabel}
+          summary={tripSpendSummary}
+          lineItems={tripSpendLineItems}
+          lifetimeAccounting={lifetimeTripAccounting}
+          onClose={() => setPricingReviewOpen(false)}
+          onOpenReservation={handleLedgerOpenReservation}
+          onSelectTrip={(tripId) => void handleSwitchTrip(tripId)}
+        />
         {!tripsLoading && trips.length === 0 ? (
           <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
         ) : null}
@@ -11861,12 +11920,16 @@ export default function TravelAssistantPage() {
         currentPlan={billingStatusPlan}
         onClose={closeUpgradeModal}
       />
-      <TripPricingReviewSheet
+      <TripLedgerSheet
         open={pricingReviewOpen}
+        activeTripId={activeTripId}
+        activeTripLabel={activeTripLedgerLabel}
         summary={tripSpendSummary}
         lineItems={tripSpendLineItems}
+        lifetimeAccounting={lifetimeTripAccounting}
         onClose={() => setPricingReviewOpen(false)}
-        onOpenReservation={(id) => openDrawer("reservation", id)}
+        onOpenReservation={handleLedgerOpenReservation}
+        onSelectTrip={(tripId) => void handleSwitchTrip(tripId)}
       />
       <GmailImportScopeModal
         key={gmailScopeModalKey}

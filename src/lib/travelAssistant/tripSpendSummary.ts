@@ -219,6 +219,9 @@ export interface TripSpendLineItem {
   id: string;
   type: string;
   title: string;
+  /** Apple-style display label (e.g. AS654 · ONT → SEA). */
+  label?: string;
+  confirmationCode?: string;
   cashUsd?: number;
   points?: number;
   needsPrice: boolean;
