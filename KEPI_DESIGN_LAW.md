@@ -141,6 +141,11 @@ Home shows a trusted readiness summary in prep mode. Passport/entry nudges are g
 
 **Test:** `src/lib/travelAssistant/tripOrchestration.test.ts`
 
+**G32 — Trip ledger: itemized spend, lifetime total, CSV for family accounting**  
+Spend badge opens a Trip Ledger sheet (consumer + advanced). **This trip** groups flights/stays with labels like `AS654 · ONT → SEA` and cash/miles per booking. **All trips** shows a running lifetime cash total, past-trip rows with per-trip spend, drill-down line items, and **Export CSV** for taxes/family records. My Trips list shows each trip’s logged spend when available.
+
+**Test:** `src/lib/travelAssistant/tripAccounting.test.ts`, `src/lib/travelAssistant/tripSpendSummary.test.ts`
+
 **M39 — Travel-day flight order + today focus + terminal coach**  
 All flight lists sort by canonical departure time (Ontario before Seattle on the same day). Travel day picks today’s earliest leg for Home, Map preview, and airport navigator. Schematic airports show “Terminal guide · pins approximate · follow airport signs.” Depart coach leads with airline + terminal when known (e.g. Alaska · Terminal 2 at ONT).
 
@@ -635,8 +640,8 @@ Label gaps as **After {city} checkout** / **Before {city} check-in** — never i
 
 **Test:** `src/lib/travelAssistant/tripNightCoverage.test.ts`
 
-**I42 — Email cash parse must prefer charged totals; pricing tap is itemized**
-Airbnb/Booking “charged a total of $X” wins over nearby “$Y per night”. Near-booking text windows must fall back to the full email when the slice has no cash. Spend badge opens an itemized sheet: which bookings still need price, and cash/miles already logged per reservation (accurate trip cost).
+**I42 — Email cash parse must prefer charged totals; pricing tap is itemized ledger**
+Airbnb/Booking “charged a total of $X” wins over nearby “$Y per night”. Near-booking text windows must fall back to the full email when the slice has no cash. Spend badge opens the Trip Ledger (this trip + all trips lifetime total + CSV export): which bookings still need price, and cash/miles logged per reservation.
 
 **Test:** `src/lib/travelAssistant/parseReservationCashUsd.test.ts`, `tripSpendSummary.test.ts`
 
@@ -904,6 +909,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | G29 | `src/lib/travelAssistant/reviewCtaHonesty.test.ts`, `src/lib/travelAssistant/activityTicketExtract.test.ts` |
 | G30 | `src/lib/travelAssistant/calendarSyncPayload.test.ts` |
 | G31 | `src/lib/travelAssistant/tripOrchestration.test.ts` |
+| G32 | `src/lib/travelAssistant/tripAccounting.test.ts`, `src/lib/travelAssistant/tripSpendSummary.test.ts` |
 | M39 | `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |

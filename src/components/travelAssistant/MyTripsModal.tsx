@@ -8,6 +8,7 @@ import {
   sortTripsForDisplay,
   type TripListRowInput,
 } from "@/lib/travelAssistant/tripListDisplay";
+import { formatTripCashTotal } from "@/lib/travelAssistant/tripSpendSummary";
 
 export interface MyTripsModalProps {
   open: boolean;
@@ -95,6 +96,15 @@ export function MyTripsModal({
                       >
                         <p className="truncate font-bold text-slate-900 dark:text-white">{formatTripListTitle(trip)}</p>
                         <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{formatTripListSubtitle(trip)}</p>
+                        {(trip.cashTotalUsd ?? 0) > 0 || (trip.pointsTotal ?? 0) > 0 ? (
+                          <p className="mt-1 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                            {(trip.cashTotalUsd ?? 0) > 0 ? formatTripCashTotal(trip.cashTotalUsd!) : "$0"}
+                            {(trip.pointsTotal ?? 0) > 0 ? ` · ${(trip.pointsTotal ?? 0).toLocaleString("en-US")} pts` : ""}
+                            {(trip.missingPriceCount ?? 0) > 0
+                              ? ` · ${trip.missingPriceCount} need pricing`
+                              : ""}
+                          </p>
+                        ) : null}
                         <div className="mt-2 flex flex-wrap gap-2">
                           {isActive ? (
                             <span className="rounded-full bg-sky-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
