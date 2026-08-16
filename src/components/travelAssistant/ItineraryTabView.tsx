@@ -86,6 +86,8 @@ interface ItineraryTabViewProps {
   onQuickGroundTransport?: (gap: InterCityTransportGap, mode: QuickGroundMode) => void;
   onReservationTap?: (id: string) => void;
   travelerType?: TravelStyleMode | null;
+  unresolvedReviewCount?: number;
+  onOpenReview?: () => void;
 }
 
 function formatHumanTripRange(start: string | null | undefined, end: string | null | undefined): string {
@@ -141,6 +143,8 @@ export function ItineraryTabView({
   onQuickGroundTransport,
   onReservationTap,
   travelerType = null,
+  unresolvedReviewCount = 0,
+  onOpenReview,
 }: ItineraryTabViewProps) {
   const tNav = useTranslations("ConsumerNav");
   const tPlan = useTranslations("PlanTab");
@@ -239,13 +243,24 @@ export function ItineraryTabView({
               {planSavedFlash ? tPlan("savedFlash") : tPlan("autoSaveHint")}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => setShareSheetOpen(true)}
-            className="min-h-[44px] shrink-0 rounded-full bg-white px-4 text-[15px] font-semibold text-[#007AFF] shadow-sm"
-          >
-            Share
-          </button>
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            {unresolvedReviewCount > 0 && onOpenReview ? (
+              <button
+                type="button"
+                onClick={onOpenReview}
+                className="min-h-[44px] rounded-full bg-[#007AFF] px-4 text-[15px] font-semibold text-white"
+              >
+                {unresolvedReviewCount === 1 ? "1 to review" : `${unresolvedReviewCount} to review`}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setShareSheetOpen(true)}
+              className="min-h-[44px] rounded-full bg-white px-4 text-[15px] font-semibold text-[#007AFF] shadow-sm"
+            >
+              Share
+            </button>
+          </div>
         </div>
       </header>
 

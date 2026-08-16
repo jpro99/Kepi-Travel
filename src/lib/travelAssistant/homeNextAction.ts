@@ -1,4 +1,5 @@
 import type { AttentionItem, MissionControlReservation } from "@/lib/travelAssistant/tripPhase";
+import { REVIEW_INBOX_HONEST_DETAIL } from "@/lib/travelAssistant/reviewCtaHonesty";
 
 export type HomeNextActionKind =
   | "airport"
@@ -73,7 +74,7 @@ export function pickHomeNextAction(input: {
         reviewCount === 1
           ? "1 booking waiting for your OK"
           : `${reviewCount} bookings waiting for your OK`,
-      detail: "Confirm them so they show up on your trip timeline.",
+      detail: REVIEW_INBOX_HONEST_DETAIL,
       ctaLabel: reviewCount === 1 ? "Review booking" : "Review bookings",
     };
   }

@@ -118,6 +118,11 @@ Home answers four questions: Are you okay? What’s next? When do you leave? Wha
 
 **Test:** `src/lib/travelAssistant/tripWalk.test.ts`
 
+**G27 — Review bookings must open a visible surface**  
+A Home or Plan CTA that says bookings need your OK must mount a review sheet or drawer. Setting a session flag with no UI is a ghost and must not ship. Copy must not claim leftovers are missing from the trip — high-confidence forwards are already trip fact; the inbox is the unsure remainder. Suggest Add / Already on the trip / Not mine. Never silent auto-approve the leftover queue.
+
+**Test:** `src/lib/travelAssistant/reviewCtaHonesty.test.ts`
+
 ---
 
 ## FLIGHTS LAWS
@@ -861,6 +866,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | G23 | `src/lib/native/iosNativeShell.test.ts` |
 | G24 | `src/lib/native/iosNativeShell.test.ts` |
 | G26 | `src/lib/travelAssistant/tripWalk.test.ts` |
+| G27 | `src/lib/travelAssistant/reviewCtaHonesty.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |

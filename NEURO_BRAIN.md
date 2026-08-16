@@ -151,6 +151,7 @@ If any answer is wrong, fix the reasoning — not just the symptom.
 
 | Date | Note |
 |------|------|
+| 2026-08-16 | G27: Review bookings must mount a sheet — N1 would not have blocked the dead Home CTA |
 | 2026-08-16 | Feedback loop shipped (N1): honest-only scores, Search flights locked last, weekly digest |
 | 2026-08-16 | Never guess / never ghost; Apple hop truth; motto: search and find so you don't miss |
 | 2026-07-30 | RevenueCat IAP code path for Capacitor iOS (Stripe remains web) |

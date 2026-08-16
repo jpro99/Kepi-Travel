@@ -12,5 +12,6 @@ alwaysApply: true
 - Take the time to do it correctly the first time. Five or ten retries cost Jeff more than one thorough pass.
 - Motto for how Kepi thinks (not UI copy): **We search and find, so you don't have to miss — and we put your mind at ease.**
 - Booked confirmations beat invented airport pairs. Search flights is a last resort when that date window has no transport.
+- A CTA that claims an inbox or next step must open a visible surface. A session flag with no sheet is a ghost (G27). N1 scores honest taps after the fact — it does not block a dead button from shipping.
 
 See `NEURO_BRAIN.md` § 10 and `KEPI_PROJECT_MEMORY.md` (no-guess rule).

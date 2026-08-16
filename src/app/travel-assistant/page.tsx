@@ -160,6 +160,7 @@ import { ThemeHeaderPicker, ThemePicker, ThemeToggle } from "@/components/ThemeT
 import { QuickAddLane } from "@/components/travelAssistant/QuickAddLane";
 import { ReservationList } from "@/components/travelAssistant/ReservationList";
 import { ReviewQueue } from "@/components/travelAssistant/ReviewQueue";
+import { ConsumerReviewSheet } from "@/components/travelAssistant/ConsumerReviewSheet";
 import { GmailImportScopeModal, type GmailImportScope } from "@/components/travelAssistant/GmailImportScopeModal";
 import {
   ManualReservationEntryModal,
@@ -7987,7 +7988,11 @@ export default function TravelAssistantPage() {
     });
   }, [consumerTab, activeTripId, user?.id]);
 
-  const acceptReviewWithDraft = (reviewId: string, draftOverride?: ReservationDraft): boolean => {
+  const acceptReviewWithDraft = (
+    reviewId: string,
+    draftOverride?: ReservationDraft,
+    options?: { keepInboxOpen?: boolean },
+  ): boolean => {
     const target = reviewQueue.find((item) => item.id === reviewId);
     if (!target) return false;
     const draft = applyAcceptedReservationPricing(
@@ -8075,15 +8080,17 @@ export default function TravelAssistantPage() {
     if (activeDrawer?.kind === "review" && activeDrawer.id === reviewId) {
       closeDrawer();
     }
-    setConsumerTab("book");
-    setBookSubTab("flights");
-    setPostBookingConfirmation({
-      kind: newReservation.type === "hotel" ? "hotel" : newReservation.type === "flight" ? "flight" : "import",
-      title: `${newReservation.type === "hotel" ? "Hotel" : newReservation.type === "flight" ? "Flight" : "Booking"} added`,
-      confirmationCode: newReservation.confirmationCode?.trim() || undefined,
-      detail: `${newReservation.provider || newReservation.title} is on your flights timeline.`,
-      syncedToTrip: true,
-    });
+    if (!options?.keepInboxOpen) {
+      setConsumerTab("book");
+      setBookSubTab("flights");
+      setPostBookingConfirmation({
+        kind: newReservation.type === "hotel" ? "hotel" : newReservation.type === "flight" ? "flight" : "import",
+        title: `${newReservation.type === "hotel" ? "Hotel" : newReservation.type === "flight" ? "Flight" : "Booking"} added`,
+        confirmationCode: newReservation.confirmationCode?.trim() || undefined,
+        detail: `${newReservation.provider || newReservation.title} is on your flights timeline.`,
+        syncedToTrip: true,
+      });
+    }
     void postParseCorrection({
       reviewItemId: target.id,
       parserGuess: target.draft as Record<string, unknown>,
@@ -8099,8 +8106,8 @@ export default function TravelAssistantPage() {
     return true;
   };
 
-  const handleAcceptReview = (reviewId: string): boolean => {
-    return acceptReviewWithDraft(reviewId);
+  const handleAcceptReview = (reviewId: string, options?: { keepInboxOpen?: boolean }): boolean => {
+    return acceptReviewWithDraft(reviewId, undefined, options);
   };
 
   const handleConfirmIncompleteReview = (reviewId: string, updates: Partial<ReservationDraft>): void => {
@@ -8769,12 +8776,9 @@ export default function TravelAssistantPage() {
       return;
     }
     if (action === "accept") {
-      const accepted = handleAcceptReview(currentItem.id);
-      if (!accepted) {
-        return;
-      }
+      handleAcceptReview(currentItem.id, { keepInboxOpen: true });
     } else {
-      handleRejectReview(currentItem.id);
+      handleRejectReview(currentItem.id, { source: "skip-review" });
     }
     setConsumerReviewQueueSession((prev) =>
       prev.open
@@ -9113,7 +9117,8 @@ export default function TravelAssistantPage() {
     travelStyleQuizOpen ||
     myTripsModalOpen ||
     manualReservationModalOpen ||
-    Boolean(activeDrawer);
+    Boolean(activeDrawer) ||
+    consumerReviewQueueSession.open;
 
   const activeDrawerPanel =
     activeDrawer && drawerPortalReady
@@ -10022,13 +10027,7 @@ export default function TravelAssistantPage() {
                   router.push("/travel-assistant/live-map?view=airport");
                 }}
                 unresolvedReviewCount={unresolvedReviewCount}
-                onOpenReview={() => {
-                  setConsumerReviewQueueSession({
-                    open: true,
-                    processed: 0,
-                    total: reviewQueue.length,
-                  });
-                }}
+                onOpenReview={handleOpenConsumerReviewQueue}
                 bookSubTab={bookSubTab}
                 onBookSubTabChange={(subTab) => navigateToConsumerTab("book", { bookView: subTab })}
                 tripId={activeTripId}
@@ -10183,13 +10182,7 @@ export default function TravelAssistantPage() {
                   void handleEnablePush();
                 }}
                 unresolvedReviewCount={unresolvedReviewCount}
-                onOpenReview={() => {
-                  setConsumerReviewQueueSession({
-                    open: true,
-                    processed: 0,
-                    total: reviewQueue.length,
-                  });
-                }}
+                onOpenReview={handleOpenConsumerReviewQueue}
                 travelerType={neuroTravelerType}
               />
             )
@@ -10237,6 +10230,8 @@ export default function TravelAssistantPage() {
               onSearchMissingFlights={(plan) => handleFlightSearchPlan(plan)}
               onQuickGroundTransport={handleQuickGroundTransport}
               travelerType={neuroTravelerType}
+              unresolvedReviewCount={unresolvedReviewCount}
+              onOpenReview={handleOpenConsumerReviewQueue}
             />
             </PlanTabErrorBoundary>
           ) : consumerTab === "book" ? (
@@ -10720,6 +10715,38 @@ export default function TravelAssistantPage() {
         <div aria-live="polite" aria-atomic="true" className="sr-only">
           {toast ?? ""}
         </div>
+        <ConsumerReviewSheet
+          open={consumerReviewQueueSession.open}
+          item={
+            activeConsumerReviewItem
+              ? {
+                  id: activeConsumerReviewItem.id,
+                  reasons: activeConsumerReviewItem.reasons,
+                  impact: activeConsumerReviewItem.impact,
+                  sourceEmailSubject: activeConsumerReviewItem.sourceEmailSubject,
+                  draft: {
+                    type: activeConsumerReviewItem.draft.type,
+                    title: activeConsumerReviewItem.draft.title,
+                    provider: activeConsumerReviewItem.draft.provider,
+                    localTime: activeConsumerReviewItem.draft.localTime,
+                    location: activeConsumerReviewItem.draft.location,
+                    confirmationCode: activeConsumerReviewItem.draft.confirmationCode,
+                    flightNumber: activeConsumerReviewItem.draft.flightNumber,
+                    flightDepartureAirport: activeConsumerReviewItem.draft.flightDepartureAirport,
+                    flightArrivalAirport: activeConsumerReviewItem.draft.flightArrivalAirport,
+                    flightDate: activeConsumerReviewItem.draft.flightDate,
+                  },
+                }
+              : null
+          }
+          liveReservations={reservations}
+          index={consumerReviewQueueSession.processed}
+          total={consumerReviewQueueSession.total}
+          onClose={() => setConsumerReviewQueueSession({ open: false, processed: 0, total: 0 })}
+          onAddToTrip={() => handleConsumerReviewQueueAction("accept")}
+          onAlreadyOnTrip={() => handleConsumerReviewQueueAction("delete")}
+          onNotMine={() => handleConsumerReviewQueueAction("delete")}
+        />
         {activeDrawerPanel}
         {deleteConfirmationDialog}
         {toast ? (

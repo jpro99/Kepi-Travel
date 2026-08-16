@@ -3,11 +3,15 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-16 (neuro feedback loop N1)
+Last updated: 2026-08-16 (G27 review inbox sheet)
 
 ## Operating rule 2026-08-16 — Never guess, never ghost, find the truth (Jeff)
 
 Agents must not guess or ghost. Check the real booked facts end-to-end before shipping. Do it correctly the first time — retries cost Jeff more money. Motto for how Kepi thinks (not UI copy): **We search and find, so you don't have to miss — and we put your mind at ease.** Catch real misses; do not invent gaps. Also in `NEURO_BRAIN.md` § 10 and `.cursor/rules/35-find-the-truth.mdc`.
+
+## Incident 2026-08-16 — Review bookings did nothing (Jeff)
+
+Home Trip showed “6 bookings waiting for your OK.” The blue button set `consumerReviewQueueSession.open` and rendered no sheet. N1 would not have blocked that ship — it scores taps after the fact, and a dead button logs nothing. Never-ghost / G27 now requires a visible review surface. Inbox leftovers are not “missing from the trip.” Confirmations untouched.
 
 ## Decision 2026-08-16 — Neuro Brain is a feedback loop, not a model (Jeff)
 
@@ -796,6 +800,7 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 
 | Date | Note |
 |------|------|
+| 2026-08-16 | **G27 Review bookings sheet:** dead Home CTA was a session flag with no UI. Apple inbox: Add / Already on trip / Not mine. |
 | 2026-08-16 | **N1 neuro feedback loop:** honest-only scoring, Search flights locked last, weekly digest GET, Demand Generator prompt. Confirmations untouched. |
 | 2026-07-14 | **"Nothing changed after deploy" = PWA service worker, not a code/deploy failure.** This app is `next-pwa` (`public/sw.js`, `register:true`, `skipWaiting`). The SW is network-first for `/_next/static/` + navigations, so online users DO get fresh code — but the *already-open page* keeps running the old JS bundle until reloaded. Before blaming the fix, verify: commits on `origin/main` (`git log origin/main`) + the **Deploy** workflow ran `--prod` and succeeded (`gh run list --branch main`). Fixed durably: `src/app/travel-assistant/page.tsx` now auto-reloads once on SW `controllerchange` (guarded vs. loops + first-install) and polls `registration.update()` on load/tab-refocus, so future deploys appear without a manual clear. Immediate see-it-now: Settings → 🔄 Clear cache, or hard-reload. |
 | 2026-07-06 | **Atrius embed deprioritized:** enterprise-only pricing, likely inaccessible at current scale; sent one no-cost outreach email, no BD push planned until real terms/scale change. Kepi's own schematic + routing pipeline remains primary. |
