@@ -19,7 +19,7 @@ import { FlightSearchModal } from "@/components/travelAssistant/FlightSearchModa
 import type { FlightSearchPlan, PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
 import type { InterCityTransportGap } from "@/lib/travelAssistant/interCityTransport";
 import type { QuickGroundMode } from "@/lib/travelAssistant/quickGroundTransport";
-import { canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
+import { sortFlightsByDeparture } from "@/lib/travelAssistant/flightSort";
 import { shouldShowTerminalExplorePromo } from "@/lib/travelAssistant/homeDayTruth";
 import {
   formatReservationCostLine,
@@ -278,8 +278,8 @@ export function FlightsTab({
       seen.add(key);
       return true;
     });
-    const up = deduped.filter(r => !isCompleted(r));
-    const pa = deduped.filter(r => isCompleted(r));
+    const up = sortFlightsByDeparture(deduped.filter(r => !isCompleted(r)));
+    const pa = sortFlightsByDeparture(deduped.filter(r => isCompleted(r)).reverse());
     // Next flight = earliest upcoming by departure time
     const next = [...up].sort((a,b) => minsUntilDep(a) - minsUntilDep(b))[0] ?? null;
     return { upcoming: up, past: pa, nextFlight: next };

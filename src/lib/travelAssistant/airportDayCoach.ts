@@ -145,3 +145,46 @@ export function buildArrivalDayCoachPath(input: ArrivalDayCoachInput): DayCoachP
 
   return steps;
 }
+
+/** Known airline → terminal hints when booking lacks terminal (curated, honest). */
+const AIRLINE_TERMINAL_HINTS: Record<string, Record<string, string>> = {
+  ONT: { AS: "2", Alaska: "2" },
+};
+
+function inferTerminalHint(iata: string, airlineName: string): string | null {
+  const code = iata.trim().toUpperCase();
+  const airline = airlineName.trim();
+  if (!code || !airline) return null;
+  const byAirport = AIRLINE_TERMINAL_HINTS[code];
+  if (!byAirport) return null;
+  const upper = airline.toUpperCase();
+  for (const [key, terminal] of Object.entries(byAirport)) {
+    if (upper.includes(key.toUpperCase())) return terminal;
+  }
+  return null;
+}
+
+/** Departure coach first step — airline + terminal when known (M39). */
+export function buildDepartCheckInCoachStep(input: {
+  iata: string;
+  airlineName?: string | null;
+  flightNumber?: string | null;
+  departureTerminal?: string | null;
+}): DayCoachPathStep {
+  const airline = input.airlineName?.trim() ?? "";
+  const terminal =
+    input.departureTerminal?.trim() ||
+    inferTerminalHint(input.iata, airline) ||
+    null;
+  const flight = input.flightNumber?.trim() ?? "";
+  const headParts = [airline || null, terminal ? `Terminal ${terminal}` : null].filter(Boolean);
+  const text = headParts.length > 0 ? `${headParts.join(" · ")} · check-in` : "Check in";
+  return {
+    id: "check-in",
+    icon: "🧳",
+    text,
+    detail: flight
+      ? `${flight} — airline app, kiosk, or counter`
+      : "Airline app, kiosk, or counter · drop bags if needed",
+  };
+}
