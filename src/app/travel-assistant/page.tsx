@@ -167,6 +167,7 @@ import {
 } from "@/components/travelAssistant/ManualReservationEntryModal";
 import { useItineraryPanelPrefs } from "@/components/travelAssistant/TripItineraryPanel";
 import { ItineraryTabView } from "@/components/travelAssistant/ItineraryTabView";
+import { PlanTabErrorBoundary } from "@/components/travelAssistant/PlanTabErrorBoundary";
 import { BookTabView } from "@/components/travelAssistant/BookTabView";
 import { MapTabView } from "@/components/travelAssistant/MapTabView";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
@@ -10187,6 +10188,7 @@ export default function TravelAssistantPage() {
               />
             )
           ) : consumerTab === "itinerary" ? (
+            <PlanTabErrorBoundary>
             <ItineraryTabView
               tripName={activeTrip?.name ?? tApp("defaultTripName")}
               tripStartDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
@@ -10229,6 +10231,7 @@ export default function TravelAssistantPage() {
               onSearchMissingFlights={(plan) => handleFlightSearchPlan(plan)}
               onQuickGroundTransport={handleQuickGroundTransport}
             />
+            </PlanTabErrorBoundary>
           ) : consumerTab === "book" ? (
             <BookTabView
               bookSubTab={bookSubTab}

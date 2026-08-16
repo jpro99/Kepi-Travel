@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-16 (Plan TDZ after Save fix)
+Last updated: 2026-08-16 (Plan stuck on stale TDZ bundle)
+
+## Incident 2026-08-16 — Plan still red-screens after I55 (`Cannot access 'M'`)
+
+Jeff: every Plan tap shows the same I54 chunk. I55 was live, but `?tab=itinerary` crashed before the page SW updater ran, and Try again remounted the same JS. I56: error page + Plan boundary clear PWA cache and reload once; layout DeployRefresh; SW `kepi-pwa-v38`. Confirmations untouched.
 
 ## Incident 2026-08-16 — Plan tab red-screen after I54 (`Cannot access 'M'`)
 

@@ -7,6 +7,7 @@ import { getLocale, getMessages } from "next-intl/server";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { SplashTransition } from "@/components/native/SplashTransition";
+import { DeployRefresh } from "@/components/pwa/DeployRefresh";
 import { StandaloneViewportFix } from "@/components/native/StandaloneViewportFix";
 import { SupportChat } from "@/components/support/SupportChat";
 import { PostHogProvider } from "@/components/analytics/PostHogProvider";
@@ -172,6 +173,7 @@ export default async function RootLayout({
       </head>
       <body className="min-h-full flex flex-col">
         <StandaloneViewportFix />
+        <DeployRefresh />
         <ClerkProvider>
           <NextIntlClientProvider locale={locale} messages={messages}>
             <BillingProvider>

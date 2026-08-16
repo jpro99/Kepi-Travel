@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import * as Sentry from "@sentry/nextjs";
+import { isStaleBundleError, recoverStaleClientBundle } from "@/lib/pwa/recoverStaleClientBundle";
 
 export default function GlobalError({
   error,
@@ -12,6 +13,9 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     Sentry.captureException(error);
+    if (isStaleBundleError(error)) {
+      void recoverStaleClientBundle();
+    }
   }, [error]);
 
   const errorMessage = typeof error?.message === "string" && error.message.length > 0 ? error.message : "Unknown error";
@@ -37,7 +41,13 @@ export default function GlobalError({
       </section>
       <button
         type="button"
-        onClick={() => unstable_retry()}
+        onClick={() => {
+          if (isStaleBundleError(error)) {
+            void recoverStaleClientBundle();
+            return;
+          }
+          unstable_retry();
+        }}
         className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
       >
         Try again

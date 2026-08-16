@@ -677,6 +677,11 @@ A “Stay in Bari” / Hotel line on the trip plan is a booking fact, not a lock
 
 **Test:** `src/lib/travelAssistant/itineraryPlansHydrate.test.ts`
 
+**I56 — Plan TDZ red-screen must unload the stale bundle**  
+`Cannot access 'M' before initialization` on Plan must clear the PWA cache and reload once. Try again must not remount the same crashed JS. A Plan crash must not skip the service-worker update. Confirmations untouched.
+
+**Test:** `src/lib/pwa/recoverStaleClientBundle.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -876,6 +881,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I53 | `src/lib/travelAssistant/planDayEdit.test.ts`, `src/lib/travelAssistant/narrativeItineraryExport.test.ts` |
 | I54 | `src/lib/travelAssistant/planDayEdit.test.ts`, `src/lib/travelAssistant/narrativeItineraryExport.test.ts` |
 | I55 | `src/lib/travelAssistant/itineraryPlansHydrate.test.ts`, `src/lib/travelAssistant/planDayEdit.test.ts` |
+| I56 | `src/lib/pwa/recoverStaleClientBundle.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |
