@@ -11,6 +11,7 @@ import {
   letterStayFactsForDay,
   splitLetterStayAndActivities,
 } from "@/lib/travelAssistant/letterDayPlan";
+import { preferDayActivityNote } from "@/lib/travelAssistant/planDayEdit";
 import { sanitizeTravelerNotes } from "@/lib/travelAssistant/sanitizeTravelerNotes";
 import {
   canonicalFlightDepartureDay,
@@ -171,7 +172,7 @@ export function buildNarrativeDaySections(input: {
     const plan = input.itineraryPlans?.dayPlans[dateKey];
     const noteFromDays = (input.dayNotes?.[dateKey] ?? "").trim();
     const noteFromPlan = (plan?.notes ?? "").trim();
-    const rawNote = noteFromDays || noteFromPlan;
+    const rawNote = preferDayActivityNote(noteFromPlan, noteFromDays);
     const rawBullets = notesToBullets(rawNote);
     const split = splitLetterStayAndActivities(rawBullets);
     const bullets = split.activityLines.filter(

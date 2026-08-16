@@ -57,6 +57,16 @@ export function appendPastedDayLines(lines: string[], pasted: string): string[] 
   return padDayActivityLines([...normalizeDayActivityLines(lines), ...incoming]);
 }
 
+/**
+ * Saved itineraryPlans.notes win over a stale dayNotes wrap (I53).
+ * dayNotes is only the fallback when the trip plan has no activity text yet.
+ */
+export function preferDayActivityNote(planNotes: string, dayNote: string): string {
+  const fromPlan = planNotes.trim();
+  const fromDays = dayNote.trim();
+  return fromPlan || fromDays;
+}
+
 export function moveDayActivityLine(lines: string[], from: number, to: number): string[] {
   if (from === to || from < 0 || to < 0 || from >= lines.length || to >= lines.length) {
     return lines;

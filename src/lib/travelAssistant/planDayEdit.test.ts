@@ -8,6 +8,7 @@ import {
   insertPastedDayLines,
   moveDayActivityLine,
   planDayEditorTitle,
+  preferDayActivityNote,
   splitPastedDayLines,
 } from "./planDayEdit";
 
@@ -39,7 +40,7 @@ test("I51: Plan day sheet is a full-screen Apple editor with Talk", () => {
   const sheet = readFileSync(join(process.cwd(), "src/components/travelAssistant/PlanDayEditSheet.tsx"), "utf8");
   assert.match(sheet, /100dvh/);
   assert.match(sheet, /"Talk"/);
-  assert.match(sheet, /\bDone\b/);
+  assert.match(sheet, /\bSave\b/);
   assert.match(sheet, /\bPaste\b/);
   assert.match(sheet, /Clear day/);
   assert.match(sheet, /webkitSpeechRecognition/);
@@ -97,4 +98,35 @@ test("I52: Plan day sheet pastes, undoes, and reorders", () => {
   );
   assert.match(prefs, /notes: value/);
   assert.match(prefs, /queuePersistToTrip\(nextPlans, nextNotes\)/);
+});
+
+test("I53: saved plan notes beat a stale Stay-in Bari wrap", () => {
+  assert.equal(
+    preferDayActivityNote("• test one two three", "Stay in Bari\nHotel: Elena\nold boat tour"),
+    "• test one two three",
+  );
+  assert.equal(preferDayActivityNote("", "• Boat tour"), "• Boat tour");
+});
+
+test("I53: Save always writes the day and returns to it", () => {
+  const sheet = readFileSync(join(process.cwd(), "src/components/travelAssistant/PlanDayEditSheet.tsx"), "utf8");
+  assert.match(sheet, />\s*Save\s*</);
+  assert.match(sheet, /onSave\(withPaste\)/);
+  assert.match(sheet, /window\.scrollTo/);
+  assert.doesNotMatch(sheet, /if \(!dayActivityLinesEqual\(withPaste, bullets\)\)/);
+
+  const letter = readFileSync(
+    join(process.cwd(), "src/components/travelAssistant/NarrativeDayPlanView.tsx"),
+    "utf8",
+  );
+  assert.match(letter, /commitBullets\(editingSection\.dateKey, next, true\)/);
+  assert.match(letter, /scrollToDay\(dateKey\)/);
+  assert.match(letter, /Saved on this day/);
+
+  const prefs = readFileSync(
+    join(process.cwd(), "src/components/travelAssistant/TripItineraryPanel.tsx"),
+    "utf8",
+  );
+  assert.match(prefs, /if \(next\[dateKey\]\?\.trim\(\)\) continue/);
+  assert.doesNotMatch(prefs, /next\[dateKey\] = dayPlanToNote\(plan\)/);
 });

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   appendPastedDayLines,
-  dayActivityLinesEqual,
   insertPastedDayLines,
   moveDayActivityLine,
   normalizeDayActivityLines,
@@ -58,11 +57,18 @@ export function PlanDayEditSheet({
   }, [dateKey]);
 
   useEffect(() => {
+    const scrollY = typeof window === "undefined" ? 0 : window.scrollY;
     return () => {
       try {
         recognitionRef.current?.abort();
       } catch {
         /* ignore */
+      }
+      if (typeof document !== "undefined") {
+        (document.activeElement as HTMLElement | null)?.blur?.();
+      }
+      if (typeof window !== "undefined") {
+        window.scrollTo(0, scrollY);
       }
     };
   }, []);
@@ -116,11 +122,9 @@ export function PlanDayEditSheet({
     const withPaste = pasteText.trim()
       ? normalizeDayActivityLines(appendPastedDayLines(lines, pasteText))
       : normalizeDayActivityLines(lines);
-    if (!dayActivityLinesEqual(withPaste, bullets)) {
-      onSave(withPaste);
-    }
+    onSave(withPaste);
     onClose();
-  }, [bullets, lines, onClose, onSave, pasteText]);
+  }, [lines, onClose, onSave, pasteText]);
 
   const startVoice = (): void => {
     if (typeof window === "undefined") return;
@@ -223,7 +227,7 @@ export function PlanDayEditSheet({
               onClick={persistAndClose}
               className="min-h-[52px] min-w-[72px] rounded-full bg-[#007AFF] px-5 text-[18px] font-bold text-white"
             >
-              Done
+              Save
             </button>
           </div>
           <div className="mt-3 flex flex-wrap justify-center gap-2">

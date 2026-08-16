@@ -336,7 +336,7 @@ export function useItineraryPanelPrefs(tripId: string | null) {
             patch: { itineraryPlans: nextPlans },
           }),
         }).catch(() => undefined);
-      }, 400);
+      }, 0);
     },
     [tripId],
   );
@@ -357,7 +357,8 @@ export function useItineraryPanelPrefs(tripId: string | null) {
           for (const [dateKey, plan] of Object.entries(merged.dayPlans) as Array<
             [string, DayPlanRecord]
           >) {
-            if (plan.notes.trim()) next[dateKey] = dayPlanToNote(plan);
+            if (next[dateKey]?.trim()) continue;
+            if (plan.notes.trim()) next[dateKey] = plan.notes;
           }
           if (typeof window !== "undefined") {
             window.localStorage.setItem(`kepi:day-notes:${tripId}`, JSON.stringify(next));

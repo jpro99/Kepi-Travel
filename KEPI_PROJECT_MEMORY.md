@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-16 (Plan paste/save/undo)
+Last updated: 2026-08-16 (Plan Save stays on the day)
+
+## Incident 2026-08-16 — Save still dropped the day and scrolled to the bottom (Jeff)
+
+Paste/reorder worked; Done/Okay did not keep Sept 2 and jumped to the end of the letter. Cause: letter preferred a stale Bari-wrapped `dayNotes` over the saved `plan.notes`; hydrate re-wrapped every day; closing the sheet scrolled iOS to the portal at the bottom. Confirmations untouched.
 
 ## Incident 2026-08-16 — Paste and Done did not keep the day (Jeff)
 

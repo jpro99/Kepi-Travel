@@ -662,6 +662,11 @@ Pasting “test one two three” (or Notes / Word lines) must become bullets on 
 
 **Test:** `src/lib/travelAssistant/planDayEdit.test.ts`
 
+**I53 — Save writes the day and stays on that day**  
+The day sheet button is **Save** (not Okay/Done). Save always persists that date’s lines. The letter shows `itineraryPlans.notes`, not a stale “Stay in Bari” dayNotes wrap. After Save, scroll stays on that day (Sept 2) — never jump to the bottom of the letter. Hydrate must not overwrite a just-saved day.
+
+**Test:** `src/lib/travelAssistant/planDayEdit.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -858,6 +863,7 @@ There is exactly one shared curation request per airport IATA. Repeat demand wit
 | I50 | `src/lib/travelAssistant/itineraryPlansHydrate.test.ts` |
 | I51 | `src/lib/travelAssistant/planDayEdit.test.ts` |
 | I52 | `src/lib/travelAssistant/planDayEdit.test.ts`, `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/narrativeItineraryExport.test.ts` |
+| I53 | `src/lib/travelAssistant/planDayEdit.test.ts`, `src/lib/travelAssistant/narrativeItineraryExport.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

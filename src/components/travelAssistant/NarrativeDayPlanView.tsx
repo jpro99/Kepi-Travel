@@ -70,6 +70,7 @@ export function NarrativeDayPlanView({
   const [pasteBusy, setPasteBusy] = useState(false);
   const [editingDateKey, setEditingDateKey] = useState<string | null>(null);
   const [undoDay, setUndoDay] = useState<{ dateKey: string; bullets: string[] } | null>(null);
+  const [savedDateKey, setSavedDateKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedDateKey) return;
@@ -83,11 +84,27 @@ export function NarrativeDayPlanView({
     return () => window.clearTimeout(timer);
   }, [undoDay]);
 
-  const commitBullets = (dateKey: string, bullets: string[]): void => {
+  useEffect(() => {
+    if (!savedDateKey) return;
+    const timer = window.setTimeout(() => setSavedDateKey(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [savedDateKey]);
+
+  const scrollToDay = (dateKey: string): void => {
+    requestAnimationFrame(() => {
+      document.getElementById(`narrative-day-${dateKey}`)?.scrollIntoView({
+        behavior: "auto",
+        block: "start",
+      });
+    });
+  };
+
+  const commitBullets = (dateKey: string, bullets: string[], force = false): void => {
     const section = sections.find((item) => item.dateKey === dateKey);
     const next = bullets.map((line) => line.trim()).filter(Boolean);
-    if (section && dayActivityLinesEqual(next, section.bullets)) return;
+    if (!force && section && dayActivityLinesEqual(next, section.bullets)) return;
     onDayNoteChange(dateKey, bulletsToDayNotes(next));
+    setSavedDateKey(dateKey);
   };
 
   const updateBullet = (dateKey: string, index: number, value: string): void => {
@@ -159,6 +176,9 @@ export function NarrativeDayPlanView({
                   className="min-h-[48px] min-w-0 flex-1 text-left"
                 >
                   <h3 className="text-[20px] font-bold text-[#1D1D1F]">{section.heading}</h3>
+                  {savedDateKey === section.dateKey ? (
+                    <p className="mt-1 text-[15px] font-semibold text-[#34C759]">Saved on this day</p>
+                  ) : null}
                 </button>
                 <button
                   type="button"
@@ -349,8 +369,13 @@ export function NarrativeDayPlanView({
           stayFacts={editingSection.stayFacts}
           activityFacts={editingSection.activityFacts}
           bullets={editingSection.bullets}
-          onSave={(next) => commitBullets(editingSection.dateKey, next)}
-          onClose={() => setEditingDateKey(null)}
+          onSave={(next) => commitBullets(editingSection.dateKey, next, true)}
+          onClose={() => {
+            const dateKey = editingSection.dateKey;
+            setEditingDateKey(null);
+            scrollToDay(dateKey);
+            window.setTimeout(() => scrollToDay(dateKey), 120);
+          }}
         />
       ) : null}
     </article>

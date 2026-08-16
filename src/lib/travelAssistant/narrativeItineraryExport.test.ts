@@ -86,20 +86,20 @@ test("day sections strip AI fallback jargon and support bullet reorder round-tri
   assert.deepEqual(notesToBullets(bulletsToDayNotes(reordered)), reordered);
 });
 
-test("I52: saved dayNotes beat a stale itineraryPlans note so paste actually shows", () => {
+test("I53: saved itineraryPlans notes show even if dayNotes still has a Bari wrap", () => {
   const plans = emptyItineraryPlans();
   plans.dayPlans["2026-09-02"] = {
     location: "Bari",
     hotelName: "A Casa di Elena",
     hotelConfirmation: "1",
     hotelBooked: true,
-    notes: "old boat tour that was deleted",
+    notes: "• test one two three",
   };
   const sections = buildNarrativeDaySections({
     tripStartDate: "2026-09-02",
     tripEndDate: "2026-09-02",
     itineraryPlans: plans,
-    dayNotes: { "2026-09-02": "• test one two three" },
+    dayNotes: { "2026-09-02": "Stay in Bari\nHotel: A Casa di Elena (1)\nold boat tour that was deleted" },
   });
   const day = sections.find((section) => section.dateKey === "2026-09-02");
   assert.deepEqual(day?.bullets, ["test one two three"]);
