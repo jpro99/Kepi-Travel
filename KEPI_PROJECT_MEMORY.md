@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-16 (G29 Viator calm review)
+Last updated: 2026-08-16 (G30 calm calendar sync)
+
+## Decision 2026-08-16 — Calendar sync is quiet background copy (Jeff)
+
+After approve, a “Calendar sync failed” toast appeared and vanished — confusing because trip save succeeded. G30: never toast calendar errors on approve/import; sync only the booking that changed; skip incomplete rows; background retry on transient failures. Trip is truth; calendar is optional mirror.
 
 ## Decision 2026-08-16 — Forwarding is consent; review is for real conflicts (Jeff)
 

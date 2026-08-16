@@ -131,6 +131,11 @@ Never show tracking URLs, “Parser confidence,” or garbage titles like “pic
 
 **Test:** `src/lib/travelAssistant/reviewCtaHonesty.test.ts`, `src/lib/travelAssistant/activityTicketExtract.test.ts`
 
+**G30 — Calendar sync is quiet background copy, not an approve-time error**  
+Kepi trip is truth; Google Calendar is an optional mirror. Never toast “sync failed” on approve or import. Sync only the booking that changed; skip rows missing date/place; retry transient failures in the background. Manual sync from settings may still report errors.
+
+**Test:** `src/lib/travelAssistant/calendarSyncPayload.test.ts`
+
 ---
 
 ## FLIGHTS LAWS
@@ -887,6 +892,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | G27 | `src/lib/travelAssistant/reviewCtaHonesty.test.ts` |
 | G28 | `src/lib/travelAssistant/reviewCtaHonesty.test.ts` |
 | G29 | `src/lib/travelAssistant/reviewCtaHonesty.test.ts`, `src/lib/travelAssistant/activityTicketExtract.test.ts` |
+| G30 | `src/lib/travelAssistant/calendarSyncPayload.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |

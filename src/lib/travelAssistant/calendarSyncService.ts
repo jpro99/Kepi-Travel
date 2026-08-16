@@ -374,6 +374,10 @@ async function syncReservationWithClient(args: {
   }
 }
 
+export function isCalendarSyncConfigured(userId: string): boolean {
+  return createAuthorizedCalendarClient(userId) !== null;
+}
+
 export async function syncReservationToCalendar(userId: string, reservation: CalendarReservation): Promise<CalendarSyncResult> {
   const calendarClient = createAuthorizedCalendarClient(userId);
   if (!calendarClient) {
