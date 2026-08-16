@@ -24,6 +24,7 @@ import {
   legCoveredByGroundTransport,
   type TripGroundTransportInput,
 } from "@/lib/travelAssistant/quickGroundTransport";
+import { coverHopWithBookedFacts } from "@/lib/travelAssistant/bookedHopCoverage";
 import {
   airportServesStayCity,
   inboundFlightCoversMetroTransfer,
@@ -66,6 +67,8 @@ interface TripFlightInput {
   flightDepartureTime?: string;
   localTime?: string;
   provider?: string;
+  title?: string;
+  location?: string;
 }
 
 function flightDateKey(flight: TripFlightInput): string | null {
@@ -200,13 +203,22 @@ export function buildPlannedFlightLegs(
       !metroTransferCovered &&
       leg.role === "connector" &&
       isLocalGroundHop(leg.fromLabel, leg.toLabel, leg.fromIata, leg.toIata);
+    const bookedFacts =
+      !flightCoverage.covered && !groundCoverage.covered && !metroTransferCovered && !localHopCovered
+        ? coverHopWithBookedFacts(leg, flights, groundTransport)
+        : { covered: false as const };
     const covered =
-      flightCoverage.covered || groundCoverage.covered || metroTransferCovered || localHopCovered;
+      flightCoverage.covered ||
+      groundCoverage.covered ||
+      metroTransferCovered ||
+      localHopCovered ||
+      bookedFacts.covered;
     const match = flightCoverage.covered ? flights.find((flight) => legMatchesFlight(leg, flight)) : undefined;
     const fn = match?.flightNumber?.trim();
     const summary =
       flightCoverage.summary ??
       groundCoverage.summary ??
+      bookedFacts.summary ??
       (metroTransferCovered
         ? "Land at regional airport — Uber/taxi typical"
         : localHopCovered
@@ -217,7 +229,11 @@ export function buildPlannedFlightLegs(
       ...leg,
       status: covered ? "booked" : "needed",
       bookedSummary: summary,
-      reservationId: flightCoverage.reservationId ?? groundCoverage.reservationId ?? match?.id,
+      reservationId:
+        flightCoverage.reservationId ??
+        groundCoverage.reservationId ??
+        bookedFacts.reservationId ??
+        match?.id,
     };
   });
 }

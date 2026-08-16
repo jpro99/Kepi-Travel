@@ -1,0 +1,16 @@
+---
+description: Never guess, never ghost — find trip truth end-to-end before shipping
+globs:
+alwaysApply: true
+---
+
+# Find the truth (Jeff, 2026-08-16)
+
+- **Never guess. Never ghost. Always find the truth.**
+- Do not infer a user's bookings, cities, or "what they probably meant." Read the code path and the booked facts (flight / train / ride / hotel) end-to-end.
+- Do not ship a local patch that "might" hide a symptom. Verify the original screen would go quiet for the real confirmation, and that a truly empty hop still nags.
+- Take the time to do it correctly the first time. Five or ten retries cost Jeff more than one thorough pass.
+- Motto for how Kepi thinks (not UI copy): **We search and find, so you don't have to miss — and we put your mind at ease.**
+- Booked confirmations beat invented airport pairs. Search flights is a last resort when that date window has no transport.
+
+See `NEURO_BRAIN.md` § 10 and `KEPI_PROJECT_MEMORY.md` (no-guess rule).

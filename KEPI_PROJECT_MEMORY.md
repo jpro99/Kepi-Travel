@@ -3,7 +3,15 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-16 (Plan false missing-transport Lecce→Venice)
+Last updated: 2026-08-16 (never guess / Apple hop truth)
+
+## Operating rule 2026-08-16 — Never guess, never ghost, find the truth (Jeff)
+
+Agents must not guess or ghost. Check the real booked facts end-to-end before shipping. Do it correctly the first time — retries cost Jeff more money. Motto for how Kepi thinks (not UI copy): **We search and find, so you don't have to miss — and we put your mind at ease.** Catch real misses; do not invent gaps. Also in `NEURO_BRAIN.md` § 10 and `.cursor/rules/35-find-the-truth.mdc`.
+
+## Decision 2026-08-16 — Apple hop truth on Plan (Jeff)
+
+Hotel cities are context. Sept 13 should show the train and/or Venice-arriving flight already on the trip. A yellow “How are you getting there?” + Search flights is allowed only when that date window has **no** flight, train, or ride. Messy Trenitalia PDFs (Venezia S. Lucia) still count. Do not ask Jeff to re-import those confirmations.
 
 ## Decision 2026-08-16 — Lecce→Venice is already booked (Jeff)
 
@@ -673,7 +681,8 @@ Component map: `TripHealthStrip`, `dedupeConsumerReservations`, `DesktopTripHome
 
 ## Itinerary transport rule (product)
 
-- When consecutive stay cities appear on the trip plan (e.g. Lecce → Venice → Cortina) and no flight/train/ride is booked for that hop, **Flights tab must prompt**: “How are you getting from [A] to [B]?” with **Search flights** and **Add train or transfer**.
+- When consecutive stay cities appear and that date window has **no** flight/train/ride, prompt “How are you getting from [A] to [B]?” Search flights is last resort.
+- A booked flight that **lands in the destination city** (FCO→VCE for Venice) or a train/ride on that day covers the hop — even if the invented pair was BDS→VCE or the PDF says Venezia S. Lucia.
 - Connector legs are enabled by default in `buildPlannedFlightLegs` / `buildFlightLegsFromStopRanges`.
 - City→airport resolution uses `resolveHotelDestinationSync` (Lecce→BDS, Cortina→VCE, Venice→VCE).
 

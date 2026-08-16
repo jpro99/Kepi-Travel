@@ -13,6 +13,7 @@ export interface TripGroundTransportInput {
   provider?: string;
   confirmationCode?: string | null;
   plannedOnly?: boolean;
+  localTime?: string;
 }
 
 export interface QuickGroundTransportDraft {

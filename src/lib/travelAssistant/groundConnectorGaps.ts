@@ -13,6 +13,7 @@ import {
 } from "@/lib/travelAssistant/itineraryPathCoverage";
 import { suggestInterCityRoute } from "@/lib/travelAssistant/interCityTransportSuggestions";
 import { legCoveredByGroundTransport } from "@/lib/travelAssistant/quickGroundTransport";
+import { coverHopWithBookedFacts } from "@/lib/travelAssistant/bookedHopCoverage";
 import { normalizeDayPlanCity } from "@/lib/travelAssistant/normalizeDayPlanCity";
 
 import type { PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
@@ -151,6 +152,16 @@ function flightsCoverHotelTransition(
   travelDate: string,
   nextStartDate: string,
 ): boolean {
+  const stubLeg = {
+    fromLabel: fromCity,
+    toLabel: toCity,
+    fromIata: iataForStayCity(fromCity) ?? "",
+    toIata: iataForStayCity(toCity) ?? "",
+    departureDate: travelDate,
+    role: "connector" as const,
+  };
+  if (coverHopWithBookedFacts(stubLeg, flights, []).covered) return true;
+
   const hops = buildBookedFlightHops(flights);
   if (!bookedFlightsConnectStayCities(hops, fromCity, toCity)) return false;
 

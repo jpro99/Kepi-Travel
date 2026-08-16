@@ -4836,6 +4836,8 @@ export default function TravelAssistantPage() {
             flightDepartureTime: reservation.flightDepartureTime,
             localTime: reservation.localTime,
             provider: reservation.provider,
+            title: reservation.title,
+            location: reservation.location,
           })),
         effectiveStopRanges,
         itineraryPrefs.dayNotes,
@@ -4851,6 +4853,7 @@ export default function TravelAssistantPage() {
             provider: reservation.provider,
             confirmationCode: reservation.confirmationCode,
             plannedOnly: reservation.plannedOnly,
+            localTime: reservation.localTime,
           })),
       ),
     [

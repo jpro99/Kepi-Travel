@@ -1,6 +1,6 @@
 # Kepi Neuro Brain — product reasoning layer
 
-**Last updated:** 2026-07-30  
+**Last updated:** 2026-08-16  
 **Owner:** Jeff Russell  
 **Purpose:** Capture *why* Jeff asks for changes so agents, bots, and future ML can apply the same thinking across the whole site — not just the file that was edited last.
 
@@ -57,6 +57,7 @@ Jeff's Italy trip exposed a **category error**: Kepi treated **where the plane l
 - Missing inter-city transport shows: distance band, mode estimates (clearly labeled), map deep link, soft recommendation.
 - **Never** prescribe "take the train" without options — liability and trust.
 - **Never** invent exact fares; ranges until live APIs.
+- **Apple hop truth:** show the booked train/flight on that day. Hotel cities are context, not a shopping list. Nag only when that date window has no flight, train, or ride. Search flights is last resort — never a replacement for a confirmation already on the trip.
 
 ### 5. Book anywhere; Kepi runs the trip
 
@@ -86,6 +87,14 @@ Jeff's Italy trip exposed a **category error**: Kepi treated **where the plane l
 
 Score as **family trip execution**, not Flighty clone. Order of work: **status trust → cut dead sci-fi → measure travel-day opens → free invite wedge → then airports.** Do not expand SEA-quality maps until analytics show travel-day habit. Archive forwards without stay dates never invent future check-ins. Push snapshots must key by reservation flightDate (F13), not "today."
 
+### 10. Never guess. Never ghost. Always find the truth. (Jeff, 2026-08-16)
+
+- Do not infer bookings, cities, or “what they probably meant.” Read the code path and the booked facts end-to-end.
+- Do not ship a local patch that might hide a symptom. Verify the original screen goes quiet for the real confirmation, and that a truly empty hop still nags.
+- Take the time to do it correctly the first time. Five or ten retries cost more than one thorough pass.
+- Motto for how Kepi thinks (not UI copy): **We search and find, so you don't have to miss — and we put your mind at ease.**
+- Catch real misses. Do not invent ghost gaps.
+
 ---
 
 ## Decision checklist (before shipping a feature)
@@ -97,7 +106,8 @@ Ask every time:
 3. **Note truth** — If the user types intent, does the system reconcile or ignore?  
 4. **Purchase truth** — Is this booked fact vs plan/suggestion clearly separated?  
 5. **Label truth** — Are we showing the traveler's asset name, not the aggregator?  
-6. **Locale truth** — Are new strings in `messages/en.json` + `messages/es.json`?
+6. **Locale truth** — Are new strings in `messages/en.json` + `messages/es.json`?  
+7. **No guess / no ghost** — Did we verify booked facts end-to-end, or are we inferring?
 
 If any answer is wrong, fix the reasoning — not just the symptom.
 
@@ -132,6 +142,7 @@ If any answer is wrong, fix the reasoning — not just the symptom.
 
 | Date | Note |
 |------|------|
+| 2026-08-16 | Never guess / never ghost; Apple hop truth; motto: search and find so you don't miss |
 | 2026-07-30 | RevenueCat IAP code path for Capacitor iOS (Stripe remains web) |
 | 2026-07-30 | Onboarding alerts: real web-push subscribe + iOS home-screen hint |
 | 2026-07-30 | Batch 1: F13 push keyed by flightDate; Home alerts prompt + trust line |
