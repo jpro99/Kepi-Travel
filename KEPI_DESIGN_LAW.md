@@ -904,6 +904,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | G29 | `src/lib/travelAssistant/reviewCtaHonesty.test.ts`, `src/lib/travelAssistant/activityTicketExtract.test.ts` |
 | G30 | `src/lib/travelAssistant/calendarSyncPayload.test.ts` |
 | G31 | `src/lib/travelAssistant/tripOrchestration.test.ts` |
+| M39 | `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |
