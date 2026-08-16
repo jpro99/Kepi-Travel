@@ -82,7 +82,6 @@ import {
 import { stopNativeAlwaysLocation, syncNativeAlwaysLocation } from "@/lib/native/alwaysLocationBridge";
 import { reconcileTripItinerary } from "@/lib/travelAssistant/itinerarySelfCheck";
 import { itineraryPlansNeedDayPlanBackfill, normalizeItineraryPlans } from "@/lib/travelAssistant/itineraryDayPlan";
-import { buildTripLegCalendarModel } from "@/lib/travelAssistant/buildTripLegs";
 import {
   buildIncidentAutopilotPlan,
   type IncidentAutopilotAction,
