@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-16 (G30 calm calendar sync)
+Last updated: 2026-08-16 (G31 trip orchestration)
+
+## Decision 2026-08-16 — End-to-end trip orchestration layer (Jeff)
+
+G31 ships gentle passport/entry nudges, Home readiness summary, schedule overlap detection, and forward-only consumer stage hints. Kepi trip is truth; orchestration guides — never quizzes. Visa/passport links go to official sites only.
 
 ## Decision 2026-08-16 — Calendar sync is quiet background copy (Jeff)
 

@@ -5,6 +5,12 @@
 
 import { detectTripGaps, type TripGap } from "@/lib/travelAssistant/gapDetectionService";
 import {
+  buildEntryGuidanceItems,
+  detectScheduleCollisions,
+  entryGuidanceToAttention,
+  scheduleCollisionToAttention,
+} from "@/lib/travelAssistant/tripOrchestration";
+import {
   canonicalFlightDepartureDay,
   dateOnly,
   reservationPrimaryDate,
@@ -64,6 +70,8 @@ export interface MissionControlTripInput {
   stayDecisions?: Record<string, "needs_hotel" | "skip">;
   liveStatusByReservationId?: Record<string, LiveFlightStatusHint>;
   hasActiveTrip?: boolean;
+  /** G31 — passport checklist item complete (More → readiness). */
+  passportComplete?: boolean;
 }
 
 export interface AttentionItem {
@@ -403,9 +411,42 @@ export function buildMissionControlSnapshot(
   const problem = detectProblem(reservations, input.liveStatusByReservationId, nowMs);
 
   const attentionFromGaps = gaps.map(gapToAttention);
+  const scheduleCollisions = detectScheduleCollisions(reservations);
+  const collisionAttention = scheduleCollisions.map(scheduleCollisionToAttention);
+
+  const daysUntilDeparture = (() => {
+    const start = dateOnly(input.startDate) || (firstOutboundFlight(reservations, nowMs) ? flightDepDay(firstOutboundFlight(reservations, nowMs)!) : "");
+    if (!start) return null;
+    return Math.ceil(
+      (Date.parse(`${start}T12:00:00Z`) - Date.parse(`${todayKey}T12:00:00Z`)) / MS_DAY,
+    );
+  })();
+
+  const hotelCities = reservations
+    .filter((r) => (r.type ?? "").toLowerCase() === "hotel")
+    .map((r) => r.location?.trim() || r.title?.trim() || "")
+    .filter(Boolean);
+
+  const entryAttention =
+    daysUntilDeparture != null && daysUntilDeparture > 6
+      ? buildEntryGuidanceItems({
+          destination: input.destination,
+          hotelCities,
+          daysUntilDeparture,
+          passportComplete: input.passportComplete,
+        })
+          .filter((item) => item.tone === "needs_you")
+          .map(entryGuidanceToAttention)
+      : [];
+
   const attentionAll: AttentionItem[] = problem
-    ? [problem, ...attentionFromGaps.filter((a) => a.id !== problem.id)]
-    : attentionFromGaps;
+    ? [
+        problem,
+        ...collisionAttention,
+        ...entryAttention,
+        ...attentionFromGaps.filter((a) => a.id !== problem.id),
+      ]
+    : [...collisionAttention, ...entryAttention, ...attentionFromGaps];
 
   const attentionTop3 = attentionAll.slice(0, 3);
   const attentionOverflow = Math.max(0, attentionAll.length - 3);
@@ -435,14 +476,6 @@ export function buildMissionControlSnapshot(
 
   const tonightHotel =
     reservations.filter(isBookedHotel).find((h) => hotelCoversDay(h, todayKey)) ?? null;
-
-  const daysUntilDeparture = (() => {
-    const start = dateOnly(input.startDate) || (nextFlight ? flightDepDay(nextFlight) : "");
-    if (!start) return null;
-    return Math.ceil(
-      (Date.parse(`${start}T12:00:00Z`) - Date.parse(`${todayKey}T12:00:00Z`)) / MS_DAY,
-    );
-  })();
 
   const tripName = input.name?.trim() || input.destination?.trim() || "Your trip";
 

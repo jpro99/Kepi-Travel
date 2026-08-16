@@ -127,8 +127,8 @@ export function PointsMilesLearnPanel({ onBack, onOpenCardWallet, compact = fals
   };
 
   const section = SECTIONS[activeSection]!;
+  const ownedCards = profile?.ownedCards ?? [];
   const completed = new Set(profile?.learnProgress ?? []);
-  const ownedIds = profile?.ownedCards.map((c) => c.cardId) ?? [];
 
   return (
     <div className={compact ? "space-y-4" : "mx-auto max-w-2xl space-y-5 pb-8"}>
@@ -222,16 +222,17 @@ export function PointsMilesLearnPanel({ onBack, onOpenCardWallet, compact = fals
         </div>
       </article>
 
-      {ownedIds.length > 0 ? (
+      {ownedCards.length > 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Your cards unlock</p>
           <ul className="mt-2 space-y-2">
-            {ownedIds.slice(0, 4).map((cardId) => {
-              const catalog = CARD_CATALOG.find((c) => c.id === cardId);
-              const playbooks = playbooksForCard(cardId);
+            {ownedCards.slice(0, 4).map((owned) => {
+              const catalog = CARD_CATALOG.find((c) => c.id === owned.cardId);
+              const playbooks = playbooksForCard(owned.cardId);
+              const displayName = catalog?.name ?? owned.label?.trim() || "Your card";
               return (
-                <li key={cardId} className="text-sm text-slate-700 dark:text-slate-200">
-                  <span className="font-semibold">{catalog?.name ?? cardId}</span>
+                <li key={owned.cardId} className="text-sm text-slate-700 dark:text-slate-200">
+                  <span className="font-semibold">{displayName}</span>
                   {playbooks.length > 0 ? (
                     <span className="text-slate-500"> — {playbooks.map((p) => p.title).join(", ")}</span>
                   ) : null}

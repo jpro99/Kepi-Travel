@@ -6,6 +6,7 @@
 import { buildTripTransportRoute, type TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 import { connectionConflictCalmLine } from "@/lib/travelAssistant/disruptionCalm";
+import { buildEntryGuidanceItems } from "@/lib/travelAssistant/tripOrchestration";
 
 /** Show terminal explore promo only within this window of departure. */
 export const TERMINAL_EXPLORE_WINDOW_MS = 48 * 60 * 60 * 1000;
@@ -130,20 +131,13 @@ export function buildHomePrepWatchItems(input: {
   hotelCities?: string[];
   staysComplete?: boolean;
   missingPriceCount?: number;
+  passportComplete?: boolean;
 }): HomePrepWatchItem[] {
   const band = resolveHomePrepBand(input.daysUntilDeparture);
   if (band === "travel_window") return [];
 
   const days = input.daysUntilDeparture ?? 0;
   const items: HomePrepWatchItem[] = [];
-  const places = [input.destination, ...(input.hotelCities ?? [])]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-  const schengenHint =
-    /\b(italy|italia|rome|venice|monopoli|polignano|lecce|munich|germany|france|spain|schengen|europe)\b/iu.test(
-      places,
-    );
 
   if (band === "far" || band === "getting_ready") {
     items.push({
@@ -162,13 +156,17 @@ export function buildHomePrepWatchItems(input: {
     });
   }
 
-  if (schengenHint && (band === "far" || band === "getting_ready")) {
+  for (const entry of buildEntryGuidanceItems({
+    destination: input.destination,
+    hotelCities: input.hotelCities,
+    daysUntilDeparture: input.daysUntilDeparture,
+    passportComplete: input.passportComplete,
+  })) {
     items.push({
-      id: "prep-entry",
-      title: "Italy / Schengen entry (typical US tourist stay)",
-      detail:
-        "Short tourist visits are usually visa-free for US passports (under 90 days in Schengen). Confirm your passport and situation on the official site — Kepi is not immigration advice.",
-      href: "https://travel.state.gov/content/travel/en/international-travel/International-Travel-Country-Information-Pages/Italy.html",
+      id: entry.id,
+      title: entry.title,
+      detail: entry.detail,
+      href: entry.href,
     });
   }
 
@@ -188,5 +186,5 @@ export function buildHomePrepWatchItems(input: {
     });
   }
 
-  return items.slice(0, 4);
+  return items.slice(0, 5);
 }
