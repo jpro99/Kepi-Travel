@@ -441,6 +441,10 @@ test("I59: Booking GYGVN24XVY58 is not ERENCE from booking reference", () => {
     extractConfirmationCodeFromText("Fwd: Booking GYGVN24XVY58 confirmed | Ticket instructions"),
     "GYGVN24XVY58",
   );
+  assert.equal(
+    extractConfirmationCodeFromText("Fwd: Confirmed: Viator Booking 1435134507"),
+    "1435134507",
+  );
   assert.equal(extractConfirmationCodeFromText("Please review this booking reference on the site"), null);
 });
 

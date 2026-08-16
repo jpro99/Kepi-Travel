@@ -126,7 +126,10 @@ A Home or Plan CTA that says bookings need your OK must mount a review sheet or 
 **G28 — Review inbox is for real conflicts, not legal PDFs**  
 Forwarding a booking is consent to keep it. Match `Booking GYGVN24XVY58` (or the same code already on the trip) and dismiss — do not ask the traveler to add GetYourGuide Privacy Policy / Legal Notice. Do not bury actions under terms. Do not show unrelated flights as “Already on Plan” for a tour leftover. Auto-dismiss legal-only and already-on-trip leftovers (that is not auto-approving a new booking). A leftover titled “damage” with Add / Already / Not mine is a ghost — the traveler must never see it. Interrupt only when dates/times are wrong or two activities collide. Confirmations untouched.
 
-**Test:** `src/lib/travelAssistant/reviewCtaHonesty.test.ts`
+**G29 — Review inbox is calm Apple, not parser chrome**  
+Never show tracking URLs, “Parser confidence,” or garbage titles like “pickup for your tour.” Viator `Booking 1435134507` ticket-link forwards auto-dismiss. Real bookings show date, place, and one clear action — not three buttons and a URL wall. Confirmations untouched.
+
+**Test:** `src/lib/travelAssistant/reviewCtaHonesty.test.ts`, `src/lib/travelAssistant/activityTicketExtract.test.ts`
 
 ---
 
@@ -883,6 +886,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | G26 | `src/lib/travelAssistant/tripWalk.test.ts` |
 | G27 | `src/lib/travelAssistant/reviewCtaHonesty.test.ts` |
 | G28 | `src/lib/travelAssistant/reviewCtaHonesty.test.ts` |
+| G29 | `src/lib/travelAssistant/reviewCtaHonesty.test.ts`, `src/lib/travelAssistant/activityTicketExtract.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
 | I8, I10, I12, I15, I17, I20, I21 | `src/lib/travelAssistant/buildTripLegs.test.ts` |

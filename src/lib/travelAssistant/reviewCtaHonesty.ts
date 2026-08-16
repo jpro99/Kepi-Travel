@@ -2,9 +2,12 @@ import { isDuplicateReservation, type DuplicateReservationFields } from "@/lib/t
 import { extractRailTicketFacts } from "@/lib/travelAssistant/railTicketExtract";
 import {
   extractActivityTicketFacts,
+  formatActivitySourceForDisplay,
+  isActivityLinkStubText,
+  isActivityNotificationLeftover,
   isGarbageConfirmationCode,
+  isGarbageLeftoverLocation,
   isGarbageLeftoverTitle,
-  isLegalBoilerplateText,
   isTicketInstructionsLeftover,
   stripLegalBoilerplate,
 } from "@/lib/travelAssistant/activityTicketExtract";
@@ -64,10 +67,10 @@ export interface ReviewInboxPresentation {
   canAddToTrip: boolean;
   sourceSubject: string | null;
   sourceBody: string | null;
-  sourceKind: "booking" | "legal-terms" | "empty";
+  sourceKind: "booking" | "legal-terms" | "ticket-link" | "empty";
   hasPdf: boolean;
   liveHints: string[];
-  autoResolve: "already-on-trip" | "legal-terms" | null;
+  autoResolve: "already-on-trip" | "legal-terms" | "ticket-link" | null;
 }
 
 function formatWhen(localTime: string): string | null {
@@ -131,14 +134,58 @@ function findLiveMatch(
 }
 
 export function leftoverHasAddableFacts(draft: ReviewInboxDraft, sourceText = "", subject = ""): boolean {
-  if (isTicketInstructionsLeftover(subject, sourceText) || (sourceText && isLegalBoilerplateText(sourceText))) {
-    return false;
-  }
+  if (isActivityNotificationLeftover(subject, sourceText)) return false;
   if (draft.localTime.trim()) return true;
-  if (draft.location.trim()) return true;
+  if (!isGarbageLeftoverLocation(draft.location) && draft.location.trim()) return true;
   if (draft.flightDepartureAirport?.trim() && draft.flightArrivalAirport?.trim()) return true;
   if (draft.flightDate?.trim()) return true;
   return false;
+}
+
+function isParserJargon(reason: string): boolean {
+  return /parser confidence|needs a quick review before import|parsing confidence|needs-review|needs-user-input/i.test(
+    reason,
+  );
+}
+
+function calmWhyForLeftover(input: {
+  match: DuplicateReservationFields | null;
+  sourceKind: ReviewInboxPresentation["sourceKind"];
+  draft: ReviewInboxDraft;
+  didEnrich: boolean;
+  canAddToTrip: boolean;
+  reasons: string[];
+  sourceBody: string | null;
+}): string {
+  if (input.match) {
+    const name = input.match.title?.trim() || input.match.provider?.trim() || "this booking";
+    return `This is already on your trip as ${name}. Nothing to add.`;
+  }
+  if (input.sourceKind === "ticket-link") {
+    return input.draft.confirmationCode
+      ? `This email is only a ticket link for booking ${input.draft.confirmationCode}. Kepi keeps the booking — not the tracking URL.`
+      : "This email is only a ticket link, not the tour details.";
+  }
+  if (input.sourceKind === "legal-terms") {
+    return input.draft.confirmationCode
+      ? `This is ticket terms for booking ${input.draft.confirmationCode}, not the tour itself.`
+      : "This is ticket terms, not a booking.";
+  }
+  if (input.didEnrich) {
+    return "We read this from your forwarded ticket.";
+  }
+  if (input.canAddToTrip) {
+    const humanReason = input.reasons.find((reason) => !isParserJargon(reason));
+    if (humanReason) return humanReason;
+    if (input.draft.localTime.trim() && !isGarbageLeftoverLocation(input.draft.location)) {
+      return "Please confirm the date and place look right before we add this.";
+    }
+    return "Please confirm this belongs on your trip.";
+  }
+  if (input.sourceBody) {
+    return "We could not read a date or place from this email.";
+  }
+  return "We could not read enough from this forward.";
 }
 
 export function enrichReviewInboxItemFromSource(item: ReviewInboxItemInput): ReviewInboxItemInput {
@@ -157,8 +204,12 @@ export function enrichReviewInboxItemFromSource(item: ReviewInboxItemInput): Rev
       provider: activity.provider || draft.provider,
       confirmationCode: activity.confirmationCode || draft.confirmationCode,
     };
-    if (isTicketInstructionsLeftover(item.sourceEmailSubject ?? "", item.originalEmailText ?? "")) {
-      draft = { ...draft, localTime: "", location: "" };
+    if (isActivityNotificationLeftover(item.sourceEmailSubject ?? "", item.originalEmailText ?? "")) {
+      draft = {
+        ...draft,
+        localTime: "",
+        location: isGarbageLeftoverLocation(draft.location) ? "" : draft.location,
+      };
     }
   } else if (rail && !leftoverHasAddableFacts(draft, source, item.sourceEmailSubject ?? "")) {
     draft = {
@@ -197,8 +248,7 @@ export function shouldAutoResolveReviewLeftover(
   presented: Pick<ReviewInboxPresentation, "alreadyOnTrip" | "canAddToTrip" | "sourceKind">,
 ): boolean {
   if (presented.alreadyOnTrip) return true;
-  if (presented.sourceKind === "legal-terms") return true;
-  if (!presented.canAddToTrip && presented.sourceKind === "empty") return false;
+  if (presented.sourceKind === "legal-terms" || presented.sourceKind === "ticket-link") return true;
   return false;
 }
 
@@ -210,6 +260,7 @@ export function presentReviewInboxItem(
   const draft = enriched.draft;
   const match = findLiveMatch(draft, liveReservations);
   const rawSource = item.originalEmailText?.trim() || "";
+  const linkStub = rawSource ? isActivityLinkStubText(`${item.sourceEmailSubject ?? ""}\n${rawSource}`) : false;
   const legalOnly = isTicketInstructionsLeftover(item.sourceEmailSubject ?? "", rawSource);
   const canAddToTrip = leftoverHasAddableFacts(draft, rawSource, item.sourceEmailSubject ?? "");
   const didEnrich =
@@ -223,29 +274,13 @@ export function presentReviewInboxItem(
     ? "empty"
     : legalOnly
       ? "legal-terms"
-      : "booking";
+      : linkStub
+        ? "ticket-link"
+        : "booking";
   const sourceBody =
-    sourceKind === "legal-terms"
+    sourceKind === "legal-terms" || sourceKind === "ticket-link"
       ? null
-      : stripped
-        ? stripped.slice(0, 800)
-        : rawSource.slice(0, 800) || null;
-
-  const why = match
-    ? `This booking is already on your trip (${match.title?.trim() || match.provider || "saved booking"}). You do not need to add it again.`
-    : sourceKind === "legal-terms"
-      ? draft.confirmationCode
-        ? `This PDF is ticket terms, not the tour. Booking ${draft.confirmationCode} is the confirmation — Kepi will not add a legal notice to your trip.`
-        : "This PDF is ticket terms, not a booking. Forwarding it does not add Privacy Policy text to your trip."
-      : didEnrich
-        ? "Read from the original ticket below."
-        : !canAddToTrip
-          ? sourceBody
-            ? "Kepi could not read a date, place, or confirmation. The original is below — that is what you decide from."
-            : "Kepi could not read a date, place, or confirmation, and no original email was saved with this leftover."
-          : reasons[0] ||
-            item.impact?.trim() ||
-            "The parser was not sure enough to add this by itself.";
+      : formatActivitySourceForDisplay(stripped || rawSource);
 
   const route =
     item.draft.flightDepartureAirport?.trim() && item.draft.flightArrivalAirport?.trim() && draft.type === "flight"
@@ -253,6 +288,15 @@ export function presentReviewInboxItem(
       : "";
 
   const alreadyOnTrip = Boolean(match);
+  const why = calmWhyForLeftover({
+    match,
+    sourceKind,
+    draft,
+    didEnrich,
+    canAddToTrip,
+    reasons,
+    sourceBody,
+  });
   const autoResolve = shouldAutoResolveReviewLeftover({
     alreadyOnTrip,
     canAddToTrip,
@@ -260,16 +304,31 @@ export function presentReviewInboxItem(
   })
     ? alreadyOnTrip
       ? "already-on-trip"
-      : "legal-terms"
+      : sourceKind === "ticket-link"
+        ? "ticket-link"
+        : "legal-terms"
     : null;
+
+  const originalTitle = item.draft.title.trim();
+  const enrichedTitle = draft.title.trim();
+  const headline =
+    sourceKind === "ticket-link" || sourceKind === "legal-terms"
+      ? draft.provider.trim()
+        ? `${draft.provider.trim()} tour`
+        : draft.confirmationCode.trim()
+          ? `Tour · ${draft.confirmationCode.trim()}`
+          : "Tour booking"
+      : !isGarbageLeftoverTitle(originalTitle) && originalTitle
+        ? originalTitle
+        : !isGarbageLeftoverTitle(enrichedTitle) && enrichedTitle
+          ? enrichedTitle
+          : draft.provider.trim() || "Booking";
 
   return {
     id: item.id,
-    headline: isGarbageLeftoverTitle(draft.title)
-      ? draft.provider.trim() || draft.confirmationCode.trim() || "Booking"
-      : draft.title.trim() || draft.provider.trim() || sourceSubject || "Untitled leftover",
+    headline,
     when: formatWhen(draft.localTime),
-    where: route || draft.location.trim() || null,
+    where: route || (isGarbageLeftoverLocation(draft.location) ? null : draft.location.trim() || null),
     confirmation: draft.confirmationCode.trim() || null,
     why,
     alreadyOnTrip,

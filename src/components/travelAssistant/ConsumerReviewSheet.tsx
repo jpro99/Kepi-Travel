@@ -20,6 +20,13 @@ interface ConsumerReviewSheetProps {
   onNotMine: () => void;
 }
 
+function statusLabel(presented: NonNullable<ReturnType<typeof presentReviewInboxItem>>): string {
+  if (presented.alreadyOnTrip) return "Already on your trip";
+  if (presented.sourceKind === "legal-terms") return "Ticket terms";
+  if (presented.sourceKind === "ticket-link") return "Ticket link";
+  return "Quick check";
+}
+
 export function ConsumerReviewSheet({
   open,
   item,
@@ -32,6 +39,7 @@ export function ConsumerReviewSheet({
   onNotMine,
 }: ConsumerReviewSheetProps) {
   const presented = item ? presentReviewInboxItem(item, liveReservations) : null;
+  const showDecisionButtons = Boolean(presented?.canAddToTrip && !presented.alreadyOnTrip);
 
   const itemId = item?.id ?? null;
   useEffect(() => {
@@ -95,11 +103,7 @@ export function ConsumerReviewSheet({
         {presented ? (
           <>
             <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-[#6E6E73]">
-              {presented.alreadyOnTrip
-                ? "Already on your trip"
-                : presented.sourceKind === "legal-terms"
-                  ? "Ticket terms — not a booking"
-                  : "Needs your OK"}
+              {statusLabel(presented)}
             </p>
             <h2
               id="consumer-review-sheet-title"
@@ -121,7 +125,7 @@ export function ConsumerReviewSheet({
             {presented.liveHints.length > 0 ? (
               <div className="mt-6 rounded-2xl bg-white px-4 py-4">
                 <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-[#6E6E73]">
-                  Already on Plan
+                  On your trip
                 </p>
                 <ul className="mt-2 space-y-2">
                   {presented.liveHints.map((hint) => (
@@ -133,49 +137,32 @@ export function ConsumerReviewSheet({
               </div>
             ) : null}
 
-            {presented.sourceKind === "legal-terms" ? (
+            {presented.sourceKind === "ticket-link" ? (
               <div className="mt-6 rounded-2xl bg-white px-4 py-4">
-                <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-[#6E6E73]">
-                  Original
-                </p>
-                {presented.sourceSubject ? (
-                  <p className="mt-2 text-[20px] font-semibold leading-snug text-[#1D1D1F]">
-                    {presented.sourceSubject}
-                  </p>
-                ) : null}
-                <p className="mt-3 text-[20px] leading-relaxed text-[#6E6E73]">
-                  The attached PDF is GetYourGuide ticket terms (privacy policy and conditions). Kepi does not
-                  add that text to your trip.
+                <p className="text-[20px] leading-relaxed text-[#6E6E73]">
+                  This forward was a ticket link from {presented.headline.startsWith("Viator") ? "Viator" : "your tour provider"}.
+                  Your trip keeps the booking — not the tracking URL.
                 </p>
               </div>
-            ) : (
+            ) : presented.sourceKind === "legal-terms" ? (
+              <div className="mt-6 rounded-2xl bg-white px-4 py-4">
+                <p className="text-[20px] leading-relaxed text-[#6E6E73]">
+                  The attachment is ticket terms, not the tour. Kepi does not add that to your trip.
+                </p>
+              </div>
+            ) : presented.sourceBody ? (
               <div className="mt-6 rounded-2xl bg-white px-4 py-4">
                 <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-[#6E6E73]">
-                  Original
+                  From your email
                 </p>
                 {presented.sourceSubject ? (
-                  <p className="mt-2 text-[20px] font-semibold leading-snug text-[#1D1D1F]">
-                    {presented.sourceSubject}
+                  <p className="mt-2 text-[17px] font-semibold leading-snug text-[#6E6E73]">
+                    {presented.sourceSubject.replace(/^fwd:\s*/iu, "")}
                   </p>
                 ) : null}
-                {presented.hasPdf ? (
-                  <p className="mt-2 text-[17px] text-[#6E6E73]">This leftover came from a PDF ticket.</p>
-                ) : null}
-                {presented.sourceBody ? (
-                  <pre
-                    className="mt-3 whitespace-pre-wrap break-words font-sans text-[20px] leading-relaxed text-[#1D1D1F]"
-                    style={{ fontFamily: "inherit" }}
-                  >
-                    {presented.sourceBody}
-                  </pre>
-                ) : (
-                  <p className="mt-3 text-[20px] leading-relaxed text-[#6E6E73]">
-                    No original email was saved with this leftover. If this is a ticket you already forwarded, tap
-                    Already on the trip.
-                  </p>
-                )}
+                <p className="mt-3 text-[20px] leading-relaxed text-[#1D1D1F]">{presented.sourceBody}</p>
               </div>
-            )}
+            ) : null}
           </>
         ) : (
           <>
@@ -183,29 +170,19 @@ export function ConsumerReviewSheet({
               id="consumer-review-sheet-title"
               className="text-[28px] font-semibold tracking-tight text-[#1D1D1F]"
             >
-              Inbox is clear
+              All set
             </h2>
             <p className="mt-3 text-[20px] leading-relaxed text-[#6E6E73]">
-              Nothing left to check. Your trip bookings stay as they are.
+              Nothing left to check. Your trip stays as it is.
             </p>
           </>
         )}
       </div>
 
-      <div
-        className="shrink-0 space-y-3 border-t border-black/5 bg-[#F5F5F7] px-5 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
-      >
+      <div className="shrink-0 space-y-3 border-t border-black/5 bg-[#F5F5F7] px-5 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         {presented ? (
-          <>
-            {presented.alreadyOnTrip || !presented.canAddToTrip ? (
-              <button
-                type="button"
-                onClick={onAlreadyOnTrip}
-                className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-[#007AFF] px-4 text-[17px] font-semibold text-white"
-              >
-                {presented.sourceKind === "legal-terms" && !presented.alreadyOnTrip ? "Got it" : "Already on the trip"}
-              </button>
-            ) : (
+          showDecisionButtons ? (
+            <>
               <button
                 type="button"
                 onClick={onAddToTrip}
@@ -213,8 +190,6 @@ export function ConsumerReviewSheet({
               >
                 Add to trip
               </button>
-            )}
-            {presented.canAddToTrip && !presented.alreadyOnTrip ? (
               <button
                 type="button"
                 onClick={onAlreadyOnTrip}
@@ -222,15 +197,23 @@ export function ConsumerReviewSheet({
               >
                 Already on the trip
               </button>
-            ) : null}
+              <button
+                type="button"
+                onClick={onNotMine}
+                className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-white px-4 text-[17px] font-semibold text-[#FF3B30]"
+              >
+                Not mine
+              </button>
+            </>
+          ) : (
             <button
               type="button"
-              onClick={onNotMine}
-              className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-white px-4 text-[17px] font-semibold text-[#FF3B30]"
+              onClick={onAlreadyOnTrip}
+              className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-[#007AFF] px-4 text-[17px] font-semibold text-white"
             >
-              Not mine
+              Got it
             </button>
-          </>
+          )
         ) : (
           <button
             type="button"

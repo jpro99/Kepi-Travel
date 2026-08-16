@@ -1,7 +1,7 @@
 /**
- * G28 / I59 — GetYourGuide “ticket instructions” PDFs are legal terms.
- * The booking ID is on the subject (Booking GYGVN24XVY58). Do not ask
- * anyone to add a Privacy Policy, and do not read REFERENCE as ERENCE.
+ * G28 / I59 / G29 — Activity provider emails (GetYourGuide, Viator).
+ * Ticket-instructions PDFs and ticket-link forwards are not bookings.
+ * Read booking IDs from the subject; never show tracking URLs or parser jargon.
  */
 
 export interface ActivityTicketFacts {
@@ -34,6 +34,12 @@ const GARBAGE_CONFIRMATION = new Set([
   "CONFIRMATION",
 ]);
 
+const GARBAGE_TITLE_RE =
+  /^(?:pickup for (?:your )?tour|get your tickets|visit our help|confirmed|booking|ticket instructions|damage)$/iu;
+
+const GARBAGE_LOCATION_RE =
+  /^(?:pickup for (?:your )?tour|get your tickets|visit our help|https?:\/\/)/iu;
+
 export function isGarbageConfirmationCode(raw: string): boolean {
   const code = raw.trim().toUpperCase().replace(/[^A-Z0-9]/gu, "");
   if (!code) return true;
@@ -45,8 +51,9 @@ export function isGarbageConfirmationCode(raw: string): boolean {
 
 export function extractActivityBookingCode(subject: string, text = ""): string {
   const combined = `${subject}\n${text}`;
-  const labeled = combined.match(/\bbooking\s+([A-Z0-9]{10,16})\b/iu);
-  const code = (labeled?.[1] ?? "").toUpperCase();
+  const viator = combined.match(/\bviator\s+booking\s+(\d{6,14})\b/iu);
+  const gyg = combined.match(/\bbooking\s+([A-Z0-9]{10,16})\b/iu);
+  const code = (viator?.[1] ?? gyg?.[1] ?? "").toUpperCase();
   if (code && !isGarbageConfirmationCode(code)) return code;
   return "";
 }
@@ -71,6 +78,20 @@ export function isLegalBoilerplateText(text: string): boolean {
   return !hasTourFact;
 }
 
+/** Viator "Get your tickets" + MptUrl tracking link — not an importable booking. */
+export function isActivityLinkStubText(text: string): boolean {
+  if (!/\b(?:viator\.com|getyourguide\.com)\b/iu.test(text)) return false;
+  const withoutUrls = text
+    .replace(/https?:\/\/\S+/giu, " ")
+    .replace(/\[image:[^\]]+\]/giu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+  const hasTourFact =
+    /\b(?:meet (?:at|in)|excursion|guided tour|boat tour)\b/iu.test(withoutUrls) &&
+    /\b(?:20\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2})/iu.test(withoutUrls);
+  return !hasTourFact;
+}
+
 export function isTicketInstructionsLeftover(subject: string, text = ""): boolean {
   const combined = `${subject}\n${text}`;
   if (/\bticket instructions\b/iu.test(subject) && extractActivityBookingCode(subject, text)) {
@@ -79,18 +100,44 @@ export function isTicketInstructionsLeftover(subject: string, text = ""): boolea
   return isLegalBoilerplateText(combined);
 }
 
+export function isActivityNotificationLeftover(subject: string, text = ""): boolean {
+  return isTicketInstructionsLeftover(subject, text) || isActivityLinkStubText(`${subject}\n${text}`);
+}
+
 export function isGarbageLeftoverTitle(title: string): boolean {
   const trimmed = title.trim();
   if (!trimmed) return true;
   if (/^fwd:/iu.test(trimmed)) return true;
-  const words = trimmed.split(/\s+/u);
-  if (words.length === 1 && !/\d/u.test(trimmed) && trimmed.length < 16) return true;
+  if (GARBAGE_TITLE_RE.test(trimmed)) return true;
   return false;
+}
+
+export function isGarbageLeftoverLocation(location: string): boolean {
+  const trimmed = location.trim();
+  if (!trimmed) return true;
+  if (GARBAGE_LOCATION_RE.test(trimmed)) return true;
+  if (/\b(?:you may|create an? account|social media|privacy policy|terms and conditions)\b/iu.test(trimmed)) {
+    return true;
+  }
+  if (trimmed.split(/\s+/u).length >= 8) return true;
+  return false;
+}
+
+export function formatActivitySourceForDisplay(text: string): string | null {
+  if (!text.trim()) return null;
+  if (isActivityLinkStubText(text)) return null;
+  let body = stripLegalBoilerplate(text);
+  body = body.replace(/https?:\/\/\S+/giu, "").replace(/\[image:[^\]]+\]/giu, "");
+  body = body.replace(/\s+/gu, " ").trim();
+  if (body.length < 12) return null;
+  return body.slice(0, 320);
 }
 
 export function extractActivityTicketFacts(text: string, subject = ""): ActivityTicketFacts | null {
   const combined = `${subject}\n${text}`;
-  const fromSubject = /\bbooking\s+[A-Z0-9]{10,16}\s+confirmed\b/iu.test(subject);
+  const fromSubject =
+    /\bbooking\s+[A-Z0-9]{10,16}\s+confirmed\b/iu.test(subject) ||
+    /\bviator\s+booking\s+\d{6,14}\b/iu.test(subject);
   if (!isActivityProviderText(combined) && !fromSubject) return null;
 
   const confirmationCode = extractActivityBookingCode(subject, text);
@@ -101,9 +148,13 @@ export function extractActivityTicketFacts(text: string, subject = ""): Activity
       : "";
   if (!confirmationCode && !provider) return null;
 
+  const title = confirmationCode
+    ? `${provider || "Tour"} · ${confirmationCode}`
+    : `${provider || "Tour"} booking`;
+
   return {
     type: "dinner",
-    title: confirmationCode ? `${provider || "Tour"} · ${confirmationCode}` : `${provider || "Tour"} booking`,
+    title,
     provider,
     confirmationCode,
   };

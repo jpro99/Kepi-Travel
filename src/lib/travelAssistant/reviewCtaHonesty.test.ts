@@ -76,7 +76,7 @@ test("G27: a leftover with facts tells the real parser reason", () => {
     [],
   );
   assert.equal(presented.alreadyOnTrip, false);
-  assert.equal(presented.why, "Low parsing confidence (32/100).");
+  assert.match(presented.why, /confirm/i);
   assert.equal(presented.when, "Fri, Sep 4");
   assert.equal(presented.where, "Monopoli");
   assert.equal(presented.canAddToTrip, true);
@@ -256,4 +256,68 @@ test("G28: leftover titled damage with legal location still auto-resolves and ne
   assert.notEqual(presented.headline.toLowerCase(), "damage");
   assert.equal(presented.when, null);
   assert.equal(presented.where, null);
+});
+
+const viatorLinkEmail = `Get your tickets [image: Go to Viator]
+https://www.viator.com/MptUrl?p=Alt5Y6Je0R1bqudLx9oBtcKvpXQqWGVA%2Blongtrackingurl
+visit our Help`;
+
+test("G29: Viator ticket-link email auto-resolves and never shows the tracking URL", () => {
+  const presented = presentReviewInboxItem(
+    {
+      id: "review-viator",
+      reasons: ["Parser confidence needs a quick review before import."],
+      sourceEmailSubject: "Fwd: Confirmed: Viator Booking 1435134507",
+      originalEmailText: viatorLinkEmail,
+      draft: {
+        type: "dinner",
+        title: "pickup for your tour",
+        provider: "Viator",
+        localTime: "",
+        location: "pickup for your tour",
+        confirmationCode: "1435134507",
+      },
+    },
+    [
+      {
+        type: "dinner",
+        title: "Boat tour Monopoli",
+        provider: "Viator",
+        localTime: "2026-09-03 10:00",
+        location: "Monopoli Harbor",
+        confirmationCode: "1435134507",
+      },
+    ],
+  );
+  assert.equal(presented.headline, "Viator tour");
+  assert.equal(presented.confirmation, "1435134507");
+  assert.equal(presented.sourceKind, "ticket-link");
+  assert.equal(presented.sourceBody, null);
+  assert.equal(presented.canAddToTrip, false);
+  assert.equal(presented.autoResolve, "already-on-trip");
+  assert.equal(shouldAutoResolveReviewLeftover(presented), true);
+  assert.doesNotMatch(presented.why, /parser confidence/i);
+});
+
+test("G29: Viator link stub without a live match still auto-dismisses", () => {
+  const presented = presentReviewInboxItem(
+    {
+      id: "review-viator-new",
+      reasons: ["Parser confidence needs a quick review before import."],
+      sourceEmailSubject: "Fwd: Confirmed: Viator Booking 1435134507",
+      originalEmailText: viatorLinkEmail,
+      draft: {
+        type: "dinner",
+        title: "pickup for your tour",
+        provider: "",
+        localTime: "",
+        location: "pickup for your tour",
+        confirmationCode: "1435134507",
+      },
+    },
+    [],
+  );
+  assert.equal(presented.autoResolve, "ticket-link");
+  assert.equal(presented.canAddToTrip, false);
+  assert.match(presented.why, /ticket link/i);
 });
