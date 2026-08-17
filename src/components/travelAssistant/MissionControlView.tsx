@@ -186,6 +186,10 @@ export function MissionControlView({
   const showTravelOps = shouldShowTravelOpsChrome(snap.daysUntilDeparture);
   const prepMode = !showTravelOps;
 
+  const [zoom, setZoom] = useState<MissionControlZoom>("today");
+  const [zoomTouched, setZoomTouched] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<DayReadiness | null>(null);
+
   useEffect(() => {
     if (zoomTouched) return;
     if (prepMode) setZoom("trip");
@@ -256,10 +260,6 @@ export function MissionControlView({
     readinessChecklist,
     unresolvedReviewCount,
   ]);
-
-  const [zoom, setZoom] = useState<MissionControlZoom>("today");
-  const [zoomTouched, setZoomTouched] = useState(false);
-  const [selectedDay, setSelectedDay] = useState<DayReadiness | null>(null);
 
   const atAirport =
     locationStatus === "at-airport" || locationStatus === "in-terminal";

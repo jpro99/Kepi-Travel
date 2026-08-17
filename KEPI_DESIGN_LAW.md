@@ -139,7 +139,7 @@ Kepi trip is truth; Google Calendar is an optional mirror. Never toast “sync f
 **G31 — Trip orchestration: gentle docs, honest readiness, schedule overlap, stage hints**  
 Home shows a trusted readiness summary in prep mode. Passport/entry nudges are gentle with official links — never immigration advice. Schedule overlaps (dinner vs flight) surface on Home/Plan. Consumer trip stage advances forward only when dates and readiness allow — no quiz, no regression.
 
-**Test:** `src/lib/travelAssistant/tripOrchestration.test.ts`
+**Test:** `src/lib/travelAssistant/tripOrchestration.test.ts`, `src/lib/travelAssistant/missionControlView.tdz.test.ts`
 
 **G32 — Trip ledger: itemized spend, lifetime total, CSV for family accounting**  
 Spend badge opens a Trip Ledger sheet (consumer + advanced). **This trip** groups flights/stays with labels like `AS654 · ONT → SEA` and cash/miles per booking. **All trips** shows a running lifetime cash total, past-trip rows with per-trip spend, drill-down line items, and **Export CSV** for taxes/family records. My Trips list shows each trip’s logged spend when available.
@@ -908,7 +908,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | G28 | `src/lib/travelAssistant/reviewCtaHonesty.test.ts` |
 | G29 | `src/lib/travelAssistant/reviewCtaHonesty.test.ts`, `src/lib/travelAssistant/activityTicketExtract.test.ts` |
 | G30 | `src/lib/travelAssistant/calendarSyncPayload.test.ts` |
-| G31 | `src/lib/travelAssistant/tripOrchestration.test.ts` |
+| G31 | `src/lib/travelAssistant/tripOrchestration.test.ts`, `src/lib/travelAssistant/missionControlView.tdz.test.ts` |
 | G32 | `src/lib/travelAssistant/tripAccounting.test.ts`, `src/lib/travelAssistant/tripSpendSummary.test.ts` |
 | M39 | `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
