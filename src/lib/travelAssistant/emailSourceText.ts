@@ -60,21 +60,29 @@ export function shouldReplaceStoredSourceText(existing: string, fetched: string)
   return next.length > current.length;
 }
 
-/** Keep PDF attachment section when trimming long forwarded email bodies. */
+/** Keep PDF attachment section and Purchase Summary when trimming long forwarded email bodies. */
 export function truncateEmailSourceText(text: string, maxChars = 12_000): string {
   const trimmed = text.trim();
   if (trimmed.length <= maxChars) return trimmed;
 
   const pdfSection = extractPdfAttachmentSection(trimmed);
-  if (!pdfSection) return trimmed.slice(0, maxChars);
+  const purchaseSummaryMatch = trimmed.match(/\bPurchase\s+Summary\b/iu);
+  const purchaseTail =
+    purchaseSummaryMatch && purchaseSummaryMatch.index != null
+      ? trimmed.slice(purchaseSummaryMatch.index).trim()
+      : "";
+
+  if (!pdfSection && !purchaseTail) return trimmed.slice(0, maxChars);
 
   const markerIndex = trimmed.indexOf(PDF_ATTACHMENT_MARKER);
   const body = markerIndex >= 0 ? trimmed.slice(0, markerIndex).trim() : trimmed;
-  const budgetForBody = maxChars - pdfSection.length - 2;
+  const reservedTail = [purchaseTail, pdfSection].filter(Boolean).join("\n\n");
+  const budgetForBody = maxChars - reservedTail.length - (reservedTail ? 2 : 0);
   if (budgetForBody <= 80) {
-    return pdfSection.slice(0, maxChars);
+    return reservedTail.slice(0, maxChars);
   }
-  return `${body.slice(0, budgetForBody)}\n\n${pdfSection}`.slice(0, maxChars);
+  const head = body.slice(0, budgetForBody).trim();
+  return reservedTail ? `${head}\n\n${reservedTail}`.slice(0, maxChars) : head.slice(0, maxChars);
 }
 
 /** When HTML body wins over plain text, keep any PDF section that was appended to plain text. */

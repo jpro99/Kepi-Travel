@@ -1,5 +1,6 @@
 import { isPlaceholderConfirmation } from "@/lib/travelAssistant/placeholderReservations";
 import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
+import { resolveReservationMiles } from "@/lib/travelAssistant/parseReservationMiles";
 import {
   enrichReservationFromTripPeers,
   hydrateReservationPricing,
@@ -56,11 +57,13 @@ function hasCashPrice(reservation: TripSpendReservation): boolean {
 }
 
 function hasPointsPrice(reservation: TripSpendReservation): boolean {
-  return (
-    typeof reservation.quotedPointsMiles === "number" &&
-    Number.isFinite(reservation.quotedPointsMiles) &&
-    reservation.quotedPointsMiles > 0
-  );
+  const miles = resolveReservationMiles(asPricingInput(reservation));
+  return miles.milesSpent != null && miles.milesSpent > 0;
+}
+
+function resolvedPoints(reservation: TripSpendReservation): number {
+  const miles = resolveReservationMiles(asPricingInput(reservation));
+  return miles.milesSpent != null && miles.milesSpent > 0 ? Math.round(miles.milesSpent) : 0;
 }
 
 export function reservationHasAnyPrice(reservation: TripSpendReservation): boolean {
@@ -188,7 +191,7 @@ export function computeTripSpend(reservations: TripSpendReservation[]): TripSpen
         countedEmailTotals.add(dedupeKey);
       }
     }
-    const points = hasPointsPrice(reservation) ? Math.round(reservation.quotedPointsMiles!) : 0;
+    const points = resolvedPoints(reservation);
     let countedPoints = points;
     if (countedPoints > 0 && reservation.originalEmailText?.trim()) {
       const dedupeKey = `${reservation.originalEmailText.trim().slice(0, 256)}::pts::${countedPoints}`;
@@ -244,7 +247,7 @@ export function buildTripSpendLineItems(reservations: TripSpendReservation[]): T
     if (!isSpendTrackedReservation(raw)) continue;
     const reservation = hydrateSpendReservation(raw, reservations);
     const cash = resolveReservationCashUsd(asPricingInput(reservation));
-    const points = hasPointsPrice(reservation) ? Math.round(reservation.quotedPointsMiles!) : undefined;
+    const points = resolvedPoints(reservation);
     const needsPrice = reservationMissingPrice(reservation, reservations);
     items.push({
       id: reservation.id,
@@ -322,8 +325,9 @@ export function formatReservationCostLine(
     parts.push(formatTripCashTotal(cashUsd));
   }
   if (hasPointsPrice(hydrated)) {
-    const pts = `${hydrated.quotedPointsMiles!.toLocaleString("en-US")} mi spent`;
-    parts.push(hydrated.pointsProgram ? `${pts} (${hydrated.pointsProgram})` : pts);
+    const miles = resolveReservationMiles(hydrated);
+    const pts = `${miles.milesSpent!.toLocaleString("en-US")} mi spent`;
+    parts.push(hydrated.pointsProgram || miles.program ? `${pts} (${hydrated.pointsProgram ?? miles.program})` : pts);
   }
   if (
     typeof hydrated.quotedMilesEarned === "number" &&

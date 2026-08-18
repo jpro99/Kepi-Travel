@@ -4,7 +4,9 @@ import {
 } from "@/lib/travelAssistant/parseReservationCashUsd";
 import {
   resolveReservationMiles,
+  resolveReservationPricing,
   type MilesResolvable,
+  type ReservationPricing,
 } from "@/lib/travelAssistant/parseReservationMiles";
 
 export interface PricingPeerResolvable extends CashUsdResolvable {
@@ -52,16 +54,23 @@ export function enrichReservationFromTripPeers<T extends PricingPeerResolvable>(
   return { ...reservation, originalEmailText: donor.originalEmailText };
 }
 
+export interface ApplyPricingOptions {
+  originalEmailText?: string;
+  /** When true (default for import/rescan), email source wins over stale stored quoted fields. */
+  reparseFromEmail?: boolean;
+}
+
+/** Parse pricing from email/notes — source of truth for forwarded confirmations. */
+export function resolvePricingFromEmailSource(
+  reservation: CashUsdResolvable & MilesResolvable,
+): ReservationPricing {
+  return resolveReservationPricing(reservation);
+}
+
 export function hydrateReservationQuotedPrice<T extends CashUsdResolvable>(reservation: T): T {
-  if (
-    typeof reservation.quotedPriceUsd === "number" &&
-    Number.isFinite(reservation.quotedPriceUsd) &&
-    reservation.quotedPriceUsd > 0
-  ) {
-    return reservation;
-  }
   const parsed = resolveReservationCashUsd(reservation);
   if (parsed == null || parsed <= 0) return reservation;
+  if (reservation.quotedPriceUsd === parsed) return reservation;
   return { ...reservation, quotedPriceUsd: parsed };
 }
 
@@ -72,19 +81,13 @@ export function hydrateReservationPricing<T extends CashUsdResolvable & MilesRes
   const miles = resolveReservationMiles(next);
 
   const patch: Partial<MilesResolvable> = {};
-  if (
-    (next.quotedPointsMiles == null || next.quotedPointsMiles <= 0) &&
-    miles.milesSpent != null
-  ) {
+  if (miles.milesSpent != null) {
     patch.quotedPointsMiles = miles.milesSpent;
   }
-  if (
-    (next.quotedMilesEarned == null || next.quotedMilesEarned <= 0) &&
-    miles.milesEarned != null
-  ) {
+  if (miles.milesEarned != null) {
     patch.quotedMilesEarned = miles.milesEarned;
   }
-  if (!next.pointsProgram?.trim() && miles.program) {
+  if (miles.program) {
     patch.pointsProgram = miles.program;
   }
 
@@ -118,20 +121,46 @@ export function hydrateReservationsPricing<T extends CashUsdResolvable & MilesRe
 /** Normalize cash + miles fields when accepting a review item or saving a reservation. */
 export function applyAcceptedReservationPricing<T extends CashUsdResolvable & MilesResolvable>(
   draft: T,
-  context?: { originalEmailText?: string },
+  context?: ApplyPricingOptions,
 ): T {
   const merged = {
     ...draft,
     originalEmailText: context?.originalEmailText?.trim() || draft.originalEmailText,
   };
+
+  const reparseFromEmail = context?.reparseFromEmail !== false;
+  const hasEmailSource = Boolean(merged.originalEmailText?.trim());
+
+  if (reparseFromEmail && hasEmailSource) {
+    const hydrated = hydrateReservationPricing(merged);
+    const pricing = resolvePricingFromEmailSource(hydrated);
+    return {
+      ...hydrated,
+      quotedPriceUsd: pricing.cashUsd != null && pricing.cashUsd > 0 ? pricing.cashUsd : undefined,
+      quotedPointsMiles: pricing.milesSpent,
+      quotedMilesEarned: pricing.milesEarned,
+      pointsProgram: pricing.program ?? hydrated.pointsProgram,
+    };
+  }
+
   const hydrated = hydrateReservationPricing(merged);
-  const cashUsd = resolveReservationCashUsd(hydrated);
-  const miles = resolveReservationMiles(hydrated);
+  const pricing = resolvePricingFromEmailSource(hydrated);
   return {
     ...hydrated,
-    quotedPriceUsd: cashUsd != null && cashUsd > 0 ? cashUsd : undefined,
-    quotedPointsMiles: miles.milesSpent,
-    quotedMilesEarned: miles.milesEarned,
-    pointsProgram: miles.program ?? hydrated.pointsProgram,
+    quotedPriceUsd:
+      hydrated.quotedPriceUsd != null && hydrated.quotedPriceUsd > 0
+        ? hydrated.quotedPriceUsd
+        : pricing.cashUsd != null && pricing.cashUsd > 0
+          ? pricing.cashUsd
+          : undefined,
+    quotedPointsMiles:
+      hydrated.quotedPointsMiles != null && hydrated.quotedPointsMiles > 0
+        ? hydrated.quotedPointsMiles
+        : pricing.milesSpent,
+    quotedMilesEarned:
+      hydrated.quotedMilesEarned != null && hydrated.quotedMilesEarned > 0
+        ? hydrated.quotedMilesEarned
+        : pricing.milesEarned,
+    pointsProgram: hydrated.pointsProgram?.trim() || pricing.program,
   };
 }

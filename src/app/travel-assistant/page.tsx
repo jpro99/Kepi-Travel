@@ -7412,7 +7412,7 @@ export default function TravelAssistantPage() {
           item.id === activeDrawer.id
             ? {
                 ...item,
-                ...applyAcceptedReservationPricing(drawerDraft),
+                ...applyAcceptedReservationPricing(drawerDraft, { reparseFromEmail: false }),
               }
             : item,
         ),
