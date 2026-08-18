@@ -22,6 +22,11 @@ export function selectPricingSourceText(input: PricingSourceHints): string {
     return combined;
   }
 
+  const purchaseSummaryIdx = combined.search(/\bPurchase\s+Summary\b/iu);
+  if (purchaseSummaryIdx >= 0 && /\bmiles?\b/iu.test(combined) && /\bUSD\b/iu.test(combined)) {
+    return combined.slice(purchaseSummaryIdx).trim();
+  }
+
   const nearText = extractNearBookingText(combined, {
     confirmationCode: input.confirmationCode,
     title: input.title,

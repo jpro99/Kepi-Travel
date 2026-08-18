@@ -1,4 +1,6 @@
 import {
+  isImplausibleSingleBookingCash,
+  isMilesQuantityMisreadAsCash,
   resolveReservationCashUsd,
   type CashUsdResolvable,
 } from "@/lib/travelAssistant/parseReservationCashUsd";
@@ -69,9 +71,21 @@ export function resolvePricingFromEmailSource(
 
 export function hydrateReservationQuotedPrice<T extends CashUsdResolvable>(reservation: T): T {
   const parsed = resolveReservationCashUsd(reservation);
-  if (parsed == null || parsed <= 0) return reservation;
-  if (reservation.quotedPriceUsd === parsed) return reservation;
-  return { ...reservation, quotedPriceUsd: parsed };
+  if (parsed != null && parsed > 0) {
+    if (reservation.quotedPriceUsd === parsed) return reservation;
+    return { ...reservation, quotedPriceUsd: parsed };
+  }
+  const stored = reservation.quotedPriceUsd;
+  if (typeof stored === "number" && Number.isFinite(stored) && stored > 0) {
+    const miles =
+      typeof reservation.quotedPointsMiles === "number" && reservation.quotedPointsMiles > 0
+        ? reservation.quotedPointsMiles
+        : undefined;
+    if (isImplausibleSingleBookingCash(stored) || isMilesQuantityMisreadAsCash(stored, miles)) {
+      return { ...reservation, quotedPriceUsd: undefined };
+    }
+  }
+  return reservation;
 }
 
 export function hydrateReservationPricing<T extends CashUsdResolvable & MilesResolvable>(

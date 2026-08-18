@@ -8,7 +8,7 @@ import { parseAwardMilesPlusCashFromText } from "@/lib/travelAssistant/parseAwar
 import { selectPricingSourceText } from "@/lib/travelAssistant/pricingSourceText";
 
 const TOTAL_CONTEXT =
-  /\b(?:grand\s+total|total\s+(?:amount|price|cost|paid|charge|due|fare|for\s+trip|purchase\s+price)|amount\s+(?:paid|charged|due)|you\s+paid|you\s+will\s+be\s+charged|will\s+be\s+charged\s+a\s+total|charged\s+a\s+total|price\s+paid|ticket\s+total|trip\s+total|booking\s+total|reservation\s+total|payment\s+total|purchase\s+total|charged\s+today|credit\s+card\s+charge|total\s+charges\s+for\s+air\s+travel|total\s+balance\s+due)\b/iu;
+  /\b(?:grand\s+total|total\s+(?:amount|price|cost|paid|charge|due|fare|for\s+trip|purchase\s+price)|amount\s+(?:paid|charged|due)|you\s+paid|you\s+will\s+be\s+charged|will\s+be\s+charged\s+a\s+total|charged\s+a\s+total|price\s+paid|ticket\s+total|trip\s+total|booking\s+total|reservation\s+total|payment\s+total|purchase\s+total|room\s+total|stay\s+total|charged\s+today|credit\s+card\s+charge|total\s+charges\s+for\s+air\s+travel|total\s+balance\s+due)\b/iu;
 
 const TICKET_VALUE_CONTEXT =
   /\b(?:new\s+ticket\s+value|ticket\s+value|original\s+ticket\s+value|fare\s+amount|airfare(?:\s+charges)?|summary\s+of\s+airfare)\b/iu;
@@ -86,7 +86,7 @@ function parseEuroAmount(raw: string): number | undefined {
 /** Parse cash amounts from raw API/scan fields (numbers, "$499", "499usd", etc.). */
 export function parseCashUsdFromUnknown(raw: unknown): number | undefined {
   if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
-    return Math.round(raw);
+    return clampParsedBookingCash(Math.round(raw));
   }
   if (typeof raw !== "string") return undefined;
   const trimmed = raw.trim();
@@ -97,7 +97,7 @@ export function parseCashUsdFromUnknown(raw: unknown): number | undefined {
   if (!digitsOnly) return undefined;
   const value = Number(digitsOnly);
   if (!Number.isFinite(value) || value <= 0 || value > 500_000) return undefined;
-  return Math.round(value);
+  return clampParsedBookingCash(Math.round(value));
 }
 
 /** Prefer a price near a confirmation code or property name within a longer document. */
@@ -203,9 +203,36 @@ export function extractNearBookingText(
   return undefined;
 }
 
-interface ScoredAmount {
-  usd: number;
-  score: number;
+/** Max credible cash for one booking parsed from email (taxes/fees on awards, not fare). */
+export const MAX_SINGLE_BOOKING_CASH_USD = 15_000;
+
+function isMilesQuantityMatch(haystack: string, end: number): boolean {
+  const after = haystack.slice(end, end + 24);
+  return /^\s*(?:miles?|points?|pts)\b/iu.test(after);
+}
+
+function clampParsedBookingCash(usd: number, _score = 0): number | undefined {
+  if (!Number.isFinite(usd) || usd <= 0) return undefined;
+  const rounded = Math.round(usd);
+  // Never let "Total 24,000 miles" become a $24,000 fare via a high context score.
+  if (rounded > MAX_SINGLE_BOOKING_CASH_USD) return undefined;
+  return rounded;
+}
+
+/** True when stored/parsed cash is actually a miles quantity (e.g. 24,000 mi → $24,000). */
+export function isMilesQuantityMisreadAsCash(cashUsd: number, milesSpent?: number): boolean {
+  const cash = Math.round(cashUsd);
+  if (!Number.isFinite(cash) || cash <= 0) return false;
+  if (milesSpent == null || !Number.isFinite(milesSpent) || milesSpent <= 0) return false;
+  const miles = Math.round(milesSpent);
+  if (cash === miles) return true;
+  // Per-passenger award line (12,000) stored as cash when trip total is 24,000.
+  if (miles >= 10_000 && miles % 2 === 0 && cash === miles / 2) return true;
+  return false;
+}
+
+export function isImplausibleSingleBookingCash(cashUsd: number): boolean {
+  return Number.isFinite(cashUsd) && cashUsd > MAX_SINGLE_BOOKING_CASH_USD;
 }
 
 function scoreAmountMatch(fullText: string, start: number, end: number): number {
@@ -220,7 +247,7 @@ function scoreAmountMatch(fullText: string, start: number, end: number): number 
   if (ZERO_DUE_CONTEXT.test(context)) score -= 150;
   // Airbnb/Booking often put "per night" near "charged a total" — never let nightly kill a strong total (I42).
   if (PENALTY_CONTEXT.test(context) && !isTicketValue && !isStrongTotal) score -= 60;
-  if (/\b(?:miles?|points?)\b/iu.test(context) && !isTicketValue && !isStrongTotal) score -= 40;
+  if (/\b(?:miles?|points?)\b/iu.test(context) && !isTicketValue && !isStrongTotal) score -= 200;
   if (/\bUSD\b/u.test(context)) score += 5;
   if (/\b(?:EUR|€)\b/u.test(context)) score += 4;
   if (/\$\s*[\d,]+(?:\.\d{2})?\s*(?:USD)?/u.test(context)) score += 3;
@@ -256,7 +283,14 @@ function sumTicketValuesFromText(haystack: string): number | undefined {
     if (usd != null) amounts.push(usd);
   }
   if (amounts.length === 0) return undefined;
+  // Forwarded threads can repeat dozens of ticket values — never sum into six figures.
+  if (amounts.length > 8) {
+    return Math.round(Math.max(...amounts));
+  }
   const total = amounts.reduce((sum, value) => sum + value, 0);
+  if (total > MAX_SINGLE_BOOKING_CASH_USD) {
+    return Math.round(Math.max(...amounts));
+  }
   return Math.round(total);
 }
 
@@ -267,7 +301,7 @@ export function parseCashUsdFromText(text: string): number | undefined {
 
   const awardTotal = parseAwardMilesPlusCashFromText(haystack);
   if (awardTotal != null) {
-    return Math.round(awardTotal.cashUsd);
+    return clampParsedBookingCash(awardTotal.cashUsd, 120);
   }
 
   if (isZeroCashDueContext(haystack) && isAwardOnlyReservationText(haystack)) {
@@ -276,7 +310,13 @@ export function parseCashUsdFromText(text: string): number | undefined {
 
   const ticketValueTotal = sumTicketValuesFromText(haystack);
   if (ticketValueTotal != null && ticketValueTotal > 0) {
-    return ticketValueTotal;
+    const clamped = clampParsedBookingCash(ticketValueTotal, 140);
+    if (clamped != null) return clamped;
+  }
+
+  interface ScoredAmount {
+    usd: number;
+    score: number;
   }
 
   const scored: ScoredAmount[] = [];
@@ -317,6 +357,7 @@ export function parseCashUsdFromText(text: string): number | undefined {
       if (usd == null) continue;
       const start = match.index ?? 0;
       const end = start + match[0].length;
+      if (isMilesQuantityMatch(haystack, end)) continue;
       scored.push({ usd, score: scoreAmountMatch(haystack, start, end) });
     }
   }
@@ -329,28 +370,21 @@ export function parseCashUsdFromText(text: string): number | undefined {
   const bestUsd = scored[0];
   const bestEur = scoredEur[0];
 
-  if (bestUsd && bestUsd.score >= 40) return Math.round(bestUsd.usd);
-  if (bestEur && bestEur.score >= 40) return Math.round(bestEur.usd);
-
-  const viableUsd = scored.filter((entry) => entry.score >= 0 && entry.usd >= 20);
-  if (viableUsd.length > 0) {
-    const top = viableUsd.sort((a, b) => b.usd - a.usd)[0];
-    if (top && top.score >= 0) return Math.round(top.usd);
+  if (bestUsd && bestUsd.score >= 40) {
+    const clamped = clampParsedBookingCash(bestUsd.usd, bestUsd.score);
+    if (clamped != null) return clamped;
+  }
+  if (bestEur && bestEur.score >= 40) {
+    const clamped = clampParsedBookingCash(bestEur.usd, bestEur.score);
+    if (clamped != null) return clamped;
   }
 
-  const viableEur = scoredEur.filter((entry) => entry.score >= 0 && entry.usd >= 5);
-  if (viableEur.length > 0) {
-    const top = viableEur.sort((a, b) => b.usd - a.usd)[0];
-    if (top && top.score >= 0) return Math.round(top.usd);
-  }
-
-  if (bestUsd && bestUsd.score >= 0) return Math.round(bestUsd.usd);
-  if (bestEur && bestEur.score >= 0) return Math.round(bestEur.usd);
   return undefined;
 }
 
 export interface CashUsdResolvable {
   quotedPriceUsd?: number;
+  quotedPointsMiles?: number;
   notes?: string;
   originalEmailText?: string;
   confirmationCode?: string;
@@ -358,6 +392,34 @@ export interface CashUsdResolvable {
   flightNumber?: string;
   flightDepartureAirport?: string;
   flightArrivalAirport?: string;
+}
+
+function milesHintForCashGuard(reservation: CashUsdResolvable, pricingText?: string): number | undefined {
+  if (
+    typeof reservation.quotedPointsMiles === "number" &&
+    Number.isFinite(reservation.quotedPointsMiles) &&
+    reservation.quotedPointsMiles > 0
+  ) {
+    return Math.round(reservation.quotedPointsMiles);
+  }
+  if (pricingText) {
+    const award = parseAwardMilesPlusCashFromText(pricingText);
+    if (award?.milesSpent) return award.milesSpent;
+    const miles = parseMilesFromText(pricingText);
+    if (miles.milesSpent != null) return miles.milesSpent;
+  }
+  return undefined;
+}
+
+function sanitizeResolvedCashUsd(
+  cashUsd: number | undefined,
+  milesSpent?: number,
+): number | undefined {
+  if (cashUsd == null || cashUsd <= 0) return undefined;
+  const rounded = Math.round(cashUsd);
+  if (isImplausibleSingleBookingCash(rounded)) return undefined;
+  if (isMilesQuantityMisreadAsCash(rounded, milesSpent)) return undefined;
+  return rounded;
 }
 
 function pricingTextForReservation(reservation: CashUsdResolvable): string {
@@ -386,8 +448,10 @@ export function resolveReservationCashUsd(reservation: CashUsdResolvable): numbe
       }
     }
     if (parsed != null && parsed > 0) {
-      return Math.round(parsed);
+      return sanitizeResolvedCashUsd(parsed, milesHintForCashGuard(reservation, pricingText));
     }
+    // Email is pricing source of truth — never resurrect stale quotedPriceUsd when re-parse rejects junk.
+    return undefined;
   }
 
   if (
@@ -395,7 +459,10 @@ export function resolveReservationCashUsd(reservation: CashUsdResolvable): numbe
     Number.isFinite(reservation.quotedPriceUsd) &&
     reservation.quotedPriceUsd > 0
   ) {
-    return Math.round(reservation.quotedPriceUsd);
+    return sanitizeResolvedCashUsd(
+      reservation.quotedPriceUsd,
+      milesHintForCashGuard(reservation),
+    );
   }
 
   return undefined;

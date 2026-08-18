@@ -147,9 +147,9 @@ Spend badge opens a Trip Ledger sheet (consumer + advanced). **This trip** group
 **Test:** `src/lib/travelAssistant/tripAccounting.test.ts`, `src/lib/travelAssistant/tripSpendSummary.test.ts`
 
 **G33 — Award emails with miles + cash taxes parse as both**  
-United / MileagePlus confirmations show `Total 24,000 miles + 195.80 USD` — parse the grand total for trip spend (cash taxes + miles redeemed). Never read `12,000` as $12. Email source text is the pricing source of truth (stored `quoted*` refreshed on load/rescan). Multi-leg bookings on one confirmation dedupe miles/cash once. Confirmations untouched.
+United / MileagePlus confirmations show `Total 24,000 miles + 195.80 USD` — parse the grand total for trip spend (cash taxes + miles redeemed). Never read `12,000` as $12. Email source text is the pricing source of truth (stored `quoted*` refreshed on load/rescan). Multi-leg bookings on one confirmation dedupe miles/cash once. Ignore spurious six-figure `USD` / eTicket numbers without a strong total line; never resurrect stale stored `quotedPriceUsd` when email re-parse rejects junk. Never treat `24,000` miles as $24,000 cash (six legs of that is the $144k badge). Confirmations untouched.
 
-**Test:** `src/lib/travelAssistant/parseReservationPricing.test.ts`, `src/lib/travelAssistant/pricingSourceText.test.ts`
+**Test:** `src/lib/travelAssistant/parseReservationPricing.test.ts`, `src/lib/travelAssistant/pricingSourceText.test.ts`, `src/lib/travelAssistant/parseReservationCashUsd.test.ts`, `src/lib/travelAssistant/tripSpendSummary.test.ts`
 
 **M39 — Travel-day flight order + today focus + terminal coach**  
 All flight lists sort by canonical departure time (Ontario before Seattle on the same day). Travel day picks today’s earliest leg for Home, Map preview, and airport navigator. Schematic airports show “Terminal guide · pins approximate · follow airport signs.” Depart coach leads with airline + terminal when known (e.g. Alaska · Terminal 2 at ONT).
@@ -920,7 +920,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | G30 | `src/lib/travelAssistant/calendarSyncPayload.test.ts` |
 | G31 | `src/lib/travelAssistant/tripOrchestration.test.ts`, `src/lib/travelAssistant/missionControlView.tdz.test.ts` |
 | G32 | `src/lib/travelAssistant/tripAccounting.test.ts`, `src/lib/travelAssistant/tripSpendSummary.test.ts` |
-| G33 | `src/lib/travelAssistant/parseReservationPricing.test.ts`, `src/lib/travelAssistant/pricingSourceText.test.ts` |
+| G33 | `src/lib/travelAssistant/parseReservationPricing.test.ts`, `src/lib/travelAssistant/pricingSourceText.test.ts`, `src/lib/travelAssistant/parseReservationCashUsd.test.ts`, `src/lib/travelAssistant/tripSpendSummary.test.ts` |
 | M39 | `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |

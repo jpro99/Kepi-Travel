@@ -145,6 +145,9 @@ function reservationNeedsPricingBackfill(reservation: SessionReservation): boole
   if (!award) return false;
   if (!hasPoints || !hasCash) return true;
   if (hasCash && (reservation.quotedPriceUsd ?? 0) < Math.round(award.cashUsd * 0.75)) return true;
+  // Miles stored as $24,000 (or any inflated cash) must re-parse from the award line.
+  if (hasCash && (reservation.quotedPriceUsd ?? 0) > Math.round(award.cashUsd * 4)) return true;
+  if (hasCash && hasPoints && reservation.quotedPriceUsd === reservation.quotedPointsMiles) return true;
   if (hasPoints && (reservation.quotedPointsMiles ?? 0) < Math.round(award.milesSpent * 0.75)) {
     return true;
   }

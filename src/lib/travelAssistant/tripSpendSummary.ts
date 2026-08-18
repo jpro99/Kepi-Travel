@@ -1,5 +1,9 @@
 import { isPlaceholderConfirmation } from "@/lib/travelAssistant/placeholderReservations";
-import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
+import {
+  isImplausibleSingleBookingCash,
+  isMilesQuantityMisreadAsCash,
+  resolveReservationCashUsd,
+} from "@/lib/travelAssistant/parseReservationCashUsd";
 import { resolveReservationMiles } from "@/lib/travelAssistant/parseReservationMiles";
 import {
   enrichReservationFromTripPeers,
@@ -88,6 +92,23 @@ function asPricingInput(reservation: TripSpendReservation): SpendPricingInput {
     flightDepartureAirport: reservation.flightDepartureAirport,
     flightArrivalAirport: reservation.flightArrivalAirport,
   };
+}
+
+function spendAmountDedupeKey(
+  reservation: TripSpendReservation,
+  kind: "cash" | "pts",
+  amount: number,
+): string {
+  const code = reservation.confirmationCode?.trim().toUpperCase() ?? "";
+  if (code.length >= 4 && !isPlaceholderConfirmation(code)) {
+    return `code:${code}::${kind}::${amount}`;
+  }
+  const emailId = reservation.sourceEmailId?.trim();
+  if (emailId) {
+    return `email:${emailId}::${kind}::${amount}`;
+  }
+  const text = reservation.originalEmailText?.trim().slice(0, 256) ?? "";
+  return `text:${text}::${kind}::${amount}`;
 }
 
 function hydrateSpendReservation(
@@ -183,8 +204,12 @@ export function computeTripSpend(reservations: TripSpendReservation[]): TripSpen
     byType[type].count += 1;
 
     let cash = resolveReservationCashUsd(asPricingInput(reservation)) ?? 0;
-    if (cash > 0 && reservation.originalEmailText?.trim()) {
-      const dedupeKey = `${reservation.originalEmailText.trim().slice(0, 256)}::${cash}`;
+    const pointsForGuard = resolvedPoints(reservation);
+    if (cash > 0 && (isImplausibleSingleBookingCash(cash) || isMilesQuantityMisreadAsCash(cash, pointsForGuard))) {
+      cash = 0;
+    }
+    if (cash > 0) {
+      const dedupeKey = spendAmountDedupeKey(reservation, "cash", cash);
       if (countedEmailTotals.has(dedupeKey)) {
         cash = 0;
       } else {
@@ -193,8 +218,8 @@ export function computeTripSpend(reservations: TripSpendReservation[]): TripSpen
     }
     const points = resolvedPoints(reservation);
     let countedPoints = points;
-    if (countedPoints > 0 && reservation.originalEmailText?.trim()) {
-      const dedupeKey = `${reservation.originalEmailText.trim().slice(0, 256)}::pts::${countedPoints}`;
+    if (countedPoints > 0) {
+      const dedupeKey = spendAmountDedupeKey(reservation, "pts", countedPoints);
       if (countedEmailPoints.has(dedupeKey)) {
         countedPoints = 0;
       } else {
