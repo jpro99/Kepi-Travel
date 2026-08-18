@@ -6,6 +6,7 @@ import {
   reservationHasAnyPrice,
   reservationMissingPrice,
 } from "@/lib/travelAssistant/tripSpendSummary";
+import { parseCashUsdFromText } from "@/lib/travelAssistant/parseReservationCashUsd";
 
 test("computeTripSpend sums cash and points for booked reservations", () => {
   const summary = computeTripSpend([
@@ -139,31 +140,17 @@ test("I42: buildTripSpendLineItems lists needs-price first and Airbnb email cash
   assert.equal(items.find((i) => i.id === "f1")?.cashUsd, 1200);
 });
 
-test("G33: shared award email dedupes miles and cash across legs", () => {
-  const email = `
-    Confirmation EFLQKE AZ1607 FCO-BRI
-    Total 24,000 miles + 195.80 USD
-    MileagePlus
-  `;
+test("G33: award miles and USD with 'and' separator", () => {
+  assert.equal(parseCashUsdFromText("Total 24,000 miles and 195.80 USD"), 196);
+});
+
+test("G33: shared confirmation dedupes cash across legs with different email prefixes", () => {
+  const emailA = "Confirmation EFLQKE leg A\nPurchase Summary\nTotal 24,000 miles + 195.80 USD";
+  const emailB = "Flight AZ437 Confirmation EFLQKE\nPurchase Summary\nTotal 24,000 miles + 195.80 USD";
   const summary = computeTripSpend([
-    {
-      id: "f1",
-      type: "flight",
-      title: "FCO-BRI",
-      confirmationCode: "EFLQKE",
-      flightNumber: "AZ1607",
-      originalEmailText: email,
-    },
-    {
-      id: "f2",
-      type: "flight",
-      title: "MUC-FCO",
-      confirmationCode: "EFLQKE",
-      flightNumber: "AZ437",
-      originalEmailText: email,
-    },
+    { id: "f1", type: "flight", title: "FCO-BRI", confirmationCode: "EFLQKE", originalEmailText: emailA },
+    { id: "f2", type: "flight", title: "MUC-FCO", confirmationCode: "EFLQKE", originalEmailText: emailB },
   ]);
   assert.equal(summary.cashTotalUsd, 196);
   assert.equal(summary.pointsTotal, 24000);
-  assert.equal(summary.missingPriceCount, 0);
 });

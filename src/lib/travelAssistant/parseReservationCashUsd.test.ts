@@ -123,3 +123,23 @@ test("G33: email source wins over stale stored quotedPriceUsd", () => {
     196,
   );
 });
+
+test("G33: spurious six-figure USD in email is ignored without strong total", () => {
+  assert.equal(parseCashUsdFromText("Reference 256519 USD in body"), undefined);
+  assert.equal(parseCashUsdFromText("USD 256519"), undefined);
+});
+
+test("G33: stale stored quotedPriceUsd ignored when email re-parse rejects junk", () => {
+  assert.equal(
+    resolveReservationCashUsd({
+      quotedPriceUsd: 256519,
+      originalEmailText: "Reference 256519 USD in body",
+    }),
+    undefined,
+  );
+});
+
+test("G33: forwarded thread with many ticket values uses max not sum", () => {
+  const lines = Array.from({ length: 20 }, () => "New Ticket Value: $1,386.43").join(" ");
+  assert.equal(parseCashUsdFromText(lines), 1386);
+});

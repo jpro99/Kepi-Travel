@@ -53,7 +53,7 @@ export interface AwardMilesPlusCashTotal {
 }
 
 const AWARD_MILES_PLUS_CASH_LINE =
-  /\b(?:grand\s+total|total(?:\s+per\s+passenger)?)\b[^0-9]{0,48}([0-9][0-9,\.]*)\s*miles?\s*\+\s*([0-9][0-9,\.]*)\s*(?:USD|US\$|US\s*dollars?)\b/giu;
+  /\b(?:grand\s+total|total(?:\s+per\s+passenger)?)\b[^0-9]{0,48}([0-9][0-9,\.]*)\s*miles?\s*(?:\+|\band\b|\bplus\b)\s*([0-9][0-9,\.]*)\s*(?:USD|US\$|US\s*dollars?)\b/giu;
 
 /** Parse award bookings that show miles and cash taxes on one total line. */
 export function parseAwardMilesPlusCashFromText(text: string): AwardMilesPlusCashTotal | undefined {
