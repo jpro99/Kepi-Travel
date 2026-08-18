@@ -144,6 +144,21 @@ test("G33: award miles and USD with 'and' separator", () => {
   assert.equal(parseCashUsdFromText("Total 24,000 miles and 195.80 USD"), 196);
 });
 
+test("G33: six legs with 24,000 miles stored as cash do not total $144k", () => {
+  const legs = ["FCO-BRI", "BRI-BDS", "BDS-VCE", "VCE-FCO", "MUC-FCO", "FCO-LAX"].map((title, index) => ({
+    id: `f${index + 1}`,
+    type: "flight",
+    title,
+    confirmationCode: "EFLQKE",
+    quotedPriceUsd: 24000,
+    quotedPointsMiles: 24000,
+  }));
+  const summary = computeTripSpend(legs);
+  assert.equal(summary.cashTotalUsd, 0);
+  assert.equal(summary.pointsTotal, 24000);
+  assert.ok(summary.cashTotalUsd < 1000);
+});
+
 test("G33: shared confirmation dedupes cash across legs with different email prefixes", () => {
   const emailA = "Confirmation EFLQKE leg A\nPurchase Summary\nTotal 24,000 miles + 195.80 USD";
   const emailB = "Flight AZ437 Confirmation EFLQKE\nPurchase Summary\nTotal 24,000 miles + 195.80 USD";

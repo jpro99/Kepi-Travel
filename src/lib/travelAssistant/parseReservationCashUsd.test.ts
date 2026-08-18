@@ -139,6 +139,24 @@ test("G33: stale stored quotedPriceUsd ignored when email re-parse rejects junk"
   );
 });
 
+test("G33: 24,000 miles stored as cash is not $24,000", () => {
+  assert.equal(
+    resolveReservationCashUsd({
+      quotedPriceUsd: 24000,
+      quotedPointsMiles: 24000,
+    }),
+    undefined,
+  );
+  assert.equal(
+    resolveReservationCashUsd({
+      quotedPriceUsd: 12000,
+      quotedPointsMiles: 24000,
+    }),
+    undefined,
+  );
+  assert.equal(resolveReservationCashUsd({ quotedPriceUsd: 24000 }), undefined);
+});
+
 test("G33: forwarded thread with many ticket values uses max not sum", () => {
   const lines = Array.from({ length: 20 }, () => "New Ticket Value: $1,386.43").join(" ");
   assert.equal(parseCashUsdFromText(lines), 1386);

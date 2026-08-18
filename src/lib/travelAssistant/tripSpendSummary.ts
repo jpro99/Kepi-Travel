@@ -1,5 +1,9 @@
 import { isPlaceholderConfirmation } from "@/lib/travelAssistant/placeholderReservations";
-import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
+import {
+  isImplausibleSingleBookingCash,
+  isMilesQuantityMisreadAsCash,
+  resolveReservationCashUsd,
+} from "@/lib/travelAssistant/parseReservationCashUsd";
 import { resolveReservationMiles } from "@/lib/travelAssistant/parseReservationMiles";
 import {
   enrichReservationFromTripPeers,
@@ -200,6 +204,10 @@ export function computeTripSpend(reservations: TripSpendReservation[]): TripSpen
     byType[type].count += 1;
 
     let cash = resolveReservationCashUsd(asPricingInput(reservation)) ?? 0;
+    const pointsForGuard = resolvedPoints(reservation);
+    if (cash > 0 && (isImplausibleSingleBookingCash(cash) || isMilesQuantityMisreadAsCash(cash, pointsForGuard))) {
+      cash = 0;
+    }
     if (cash > 0) {
       const dedupeKey = spendAmountDedupeKey(reservation, "cash", cash);
       if (countedEmailTotals.has(dedupeKey)) {

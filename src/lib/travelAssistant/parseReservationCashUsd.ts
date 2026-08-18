@@ -86,7 +86,7 @@ function parseEuroAmount(raw: string): number | undefined {
 /** Parse cash amounts from raw API/scan fields (numbers, "$499", "499usd", etc.). */
 export function parseCashUsdFromUnknown(raw: unknown): number | undefined {
   if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
-    return Math.round(raw);
+    return clampParsedBookingCash(Math.round(raw));
   }
   if (typeof raw !== "string") return undefined;
   const trimmed = raw.trim();
@@ -97,7 +97,7 @@ export function parseCashUsdFromUnknown(raw: unknown): number | undefined {
   if (!digitsOnly) return undefined;
   const value = Number(digitsOnly);
   if (!Number.isFinite(value) || value <= 0 || value > 500_000) return undefined;
-  return Math.round(value);
+  return clampParsedBookingCash(Math.round(value));
 }
 
 /** Prefer a price near a confirmation code or property name within a longer document. */
@@ -211,11 +211,28 @@ function isMilesQuantityMatch(haystack: string, end: number): boolean {
   return /^\s*(?:miles?|points?|pts)\b/iu.test(after);
 }
 
-function clampParsedBookingCash(usd: number, score = 0): number | undefined {
+function clampParsedBookingCash(usd: number, _score = 0): number | undefined {
   if (!Number.isFinite(usd) || usd <= 0) return undefined;
-  if (usd <= MAX_SINGLE_BOOKING_CASH_USD) return Math.round(usd);
-  if (score >= 100) return Math.round(usd);
-  return undefined;
+  const rounded = Math.round(usd);
+  // Never let "Total 24,000 miles" become a $24,000 fare via a high context score.
+  if (rounded > MAX_SINGLE_BOOKING_CASH_USD) return undefined;
+  return rounded;
+}
+
+/** True when stored/parsed cash is actually a miles quantity (e.g. 24,000 mi → $24,000). */
+export function isMilesQuantityMisreadAsCash(cashUsd: number, milesSpent?: number): boolean {
+  const cash = Math.round(cashUsd);
+  if (!Number.isFinite(cash) || cash <= 0) return false;
+  if (milesSpent == null || !Number.isFinite(milesSpent) || milesSpent <= 0) return false;
+  const miles = Math.round(milesSpent);
+  if (cash === miles) return true;
+  // Per-passenger award line (12,000) stored as cash when trip total is 24,000.
+  if (miles >= 10_000 && miles % 2 === 0 && cash === miles / 2) return true;
+  return false;
+}
+
+export function isImplausibleSingleBookingCash(cashUsd: number): boolean {
+  return Number.isFinite(cashUsd) && cashUsd > MAX_SINGLE_BOOKING_CASH_USD;
 }
 
 function scoreAmountMatch(fullText: string, start: number, end: number): number {
@@ -367,6 +384,7 @@ export function parseCashUsdFromText(text: string): number | undefined {
 
 export interface CashUsdResolvable {
   quotedPriceUsd?: number;
+  quotedPointsMiles?: number;
   notes?: string;
   originalEmailText?: string;
   confirmationCode?: string;
@@ -374,6 +392,34 @@ export interface CashUsdResolvable {
   flightNumber?: string;
   flightDepartureAirport?: string;
   flightArrivalAirport?: string;
+}
+
+function milesHintForCashGuard(reservation: CashUsdResolvable, pricingText?: string): number | undefined {
+  if (
+    typeof reservation.quotedPointsMiles === "number" &&
+    Number.isFinite(reservation.quotedPointsMiles) &&
+    reservation.quotedPointsMiles > 0
+  ) {
+    return Math.round(reservation.quotedPointsMiles);
+  }
+  if (pricingText) {
+    const award = parseAwardMilesPlusCashFromText(pricingText);
+    if (award?.milesSpent) return award.milesSpent;
+    const miles = parseMilesFromText(pricingText);
+    if (miles.milesSpent != null) return miles.milesSpent;
+  }
+  return undefined;
+}
+
+function sanitizeResolvedCashUsd(
+  cashUsd: number | undefined,
+  milesSpent?: number,
+): number | undefined {
+  if (cashUsd == null || cashUsd <= 0) return undefined;
+  const rounded = Math.round(cashUsd);
+  if (isImplausibleSingleBookingCash(rounded)) return undefined;
+  if (isMilesQuantityMisreadAsCash(rounded, milesSpent)) return undefined;
+  return rounded;
 }
 
 function pricingTextForReservation(reservation: CashUsdResolvable): string {
@@ -402,7 +448,7 @@ export function resolveReservationCashUsd(reservation: CashUsdResolvable): numbe
       }
     }
     if (parsed != null && parsed > 0) {
-      return Math.round(parsed);
+      return sanitizeResolvedCashUsd(parsed, milesHintForCashGuard(reservation, pricingText));
     }
     // Email is pricing source of truth — never resurrect stale quotedPriceUsd when re-parse rejects junk.
     return undefined;
@@ -413,7 +459,10 @@ export function resolveReservationCashUsd(reservation: CashUsdResolvable): numbe
     Number.isFinite(reservation.quotedPriceUsd) &&
     reservation.quotedPriceUsd > 0
   ) {
-    return Math.round(reservation.quotedPriceUsd);
+    return sanitizeResolvedCashUsd(
+      reservation.quotedPriceUsd,
+      milesHintForCashGuard(reservation),
+    );
   }
 
   return undefined;
