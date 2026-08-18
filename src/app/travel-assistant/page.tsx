@@ -67,6 +67,7 @@ import { InviteRedeemBanner } from "@/components/invite/InviteRedeemBanner";
 import { useBrowserConnectivity } from "@/hooks/useBrowserConnectivity";
 import { useOfflineTravelKitSync } from "@/hooks/useOfflineTravelKitSync";
 import { scheduleLocalNotification, triggerHaptic } from "@/lib/native/capacitorBridge";
+import { trackEvent } from "@/lib/analytics/trackEvent";
 import {
   burstFamilyLocationFix,
   resumePersistentFamilyLocationWatch,
