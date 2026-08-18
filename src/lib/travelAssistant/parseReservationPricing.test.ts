@@ -63,3 +63,40 @@ test("resolveReservationPricing combines cash and miles from email body", () => 
   assert.equal(pricing.cashUsd, 2773);
   assert.equal(pricing.program, "Atmos Rewards");
 });
+
+const UNITED_MILEAGEPLUS_AWARD = `
+Confirmation Number EFLQKE
+Flight 1 of 2 AZ1607 Economy (X)
+Departure Rome, IT (FCO) Wednesday, Sep 02, 2026 05:35 PM
+Arrival Bari, IT (BRI) Wednesday, Sep 02, 2026 06:40 PM
+Flight 2 of 2 AZ437 Economy (X)
+Departure Munich, DE (MUC) Friday, Sep 25, 2026 11:00 AM
+Arrival Rome, IT (FCO) Friday, Sep 25, 2026 12:35 PM
+Travelers RUSSELL/JEFFERYPAUL RUSSELL/STEPHANIE
+Purchase Summary
+Method of payment MileagePlus XXXXX585 and Visa ending in 3881
+Date of purchase Tuesday, Jun 23, 2026
+Airfare 0.00
+Italy Security Bag Charge 2.50
+Total Per Passenger 12,000 miles + 97.90 USD
+Total 24,000 miles + 195.80 USD
+Award Rules NON-END/-TRAN/-REF/UA ONLY
+`;
+
+test("G33: United award email parses 24,000 miles + $195.80 total", () => {
+  const pricing = resolveReservationPricing({
+    originalEmailText: UNITED_MILEAGEPLUS_AWARD,
+    confirmationCode: "EFLQKE",
+    flightNumber: "AZ1607",
+    flightDepartureAirport: "FCO",
+    flightArrivalAirport: "BRI",
+  });
+  assert.equal(pricing.milesSpent, 24000);
+  assert.equal(pricing.cashUsd, 196);
+  assert.equal(pricing.program, "United MileagePlus");
+});
+
+test("G33: resolveReservationCashUsd does not treat 12,000 as $12", () => {
+  assert.equal(parseCashUsdFromText("Total Per Passenger 12,000 miles + 97.90 USD"), 98);
+  assert.equal(parseCashUsdFromText("Total 24,000 miles + 195.80 USD"), 196);
+});

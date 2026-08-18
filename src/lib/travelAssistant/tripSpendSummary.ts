@@ -167,6 +167,7 @@ export function computeTripSpend(reservations: TripSpendReservation[]): TripSpen
   const byType: TripSpendSummary["byType"] = {};
 
   const countedEmailTotals = new Set<string>();
+  const countedEmailPoints = new Set<string>();
 
   for (const raw of reservations) {
     const reservation = hydrateSpendReservation(raw, reservations);
@@ -188,16 +189,25 @@ export function computeTripSpend(reservations: TripSpendReservation[]): TripSpen
       }
     }
     const points = hasPointsPrice(reservation) ? Math.round(reservation.quotedPointsMiles!) : 0;
+    let countedPoints = points;
+    if (countedPoints > 0 && reservation.originalEmailText?.trim()) {
+      const dedupeKey = `${reservation.originalEmailText.trim().slice(0, 256)}::pts::${countedPoints}`;
+      if (countedEmailPoints.has(dedupeKey)) {
+        countedPoints = 0;
+      } else {
+        countedEmailPoints.add(dedupeKey);
+      }
+    }
 
     if (cash > 0) {
       cashTotalUsd += cash;
       byType[type].cashUsd += cash;
     }
-    if (points > 0) {
-      pointsTotal += points;
-      byType[type].points += points;
+    if (countedPoints > 0) {
+      pointsTotal += countedPoints;
+      byType[type].points += countedPoints;
     }
-    if (cash > 0 || points > 0) {
+    if (cash > 0 || countedPoints > 0) {
       pricedCount += 1;
     }
     if (reservationMissingPrice(reservation, reservations)) {
