@@ -593,6 +593,7 @@ Component map: `TripHealthStrip`, `dedupeConsumerReservations`, `DesktopTripHome
 - **Spend badge tappable** — header `TripSpendBadge` opens Trip Ledger (this trip + all trips lifetime total + CSV export). Ledger sheet lazy-loads on open.
 - **Trip tab TDZ (2026-08-17):** `MissionControlView` read `zoomTouched` in a `useEffect` dep array before `useState` — caused `Cannot access 'Q' before initialization` on Home/Trip. Fixed by moving zoom state above that effect. Hard-refresh after deploy if stale PWA chunk (I56).
 - **Trip tab trackEvent (2026-08-18):** `home_opened` analytics in `travel-assistant/page.tsx` called `trackEvent` without import — `ReferenceError: trackEvent is not defined` on Trip tab. Fixed I60.
+- **Award pricing (2026-08-18):** United MileagePlus emails (`Total 24,000 miles + 195.80 USD`) now parse miles + tax cash for trip spend badge/ledger (G33). Re-forward or rescan if an old import missed pricing.
 - **Mobile Home trip health** — `TripHealthStrip` on mobile Home tab
 - **Book tab unified** — shared header, toggle chrome, matching flight/hotel list cards via `bookTabStyles.ts`
 - **Book search on mobile** — flight/hotel launchers, leg picker, stay planner wired from `page.tsx`

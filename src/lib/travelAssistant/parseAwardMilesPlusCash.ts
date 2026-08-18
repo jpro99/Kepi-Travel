@@ -87,6 +87,9 @@ export function parseAwardMilesPlusCashFromText(text: string): AwardMilesPlusCas
   }
 
   if (!best) return undefined;
-  const { score: _score, ...result } = best;
-  return result;
+  return {
+    milesSpent: best.milesSpent,
+    cashUsd: best.cashUsd,
+    perPassenger: best.perPassenger,
+  };
 }
