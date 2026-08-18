@@ -4,6 +4,7 @@
  */
 
 import { parseMilesFromText } from "@/lib/travelAssistant/parseReservationMiles";
+import { parseAwardMilesPlusCashFromText } from "@/lib/travelAssistant/parseAwardMilesPlusCash";
 
 const TOTAL_CONTEXT =
   /\b(?:grand\s+total|total\s+(?:amount|price|cost|paid|charge|due|fare|for\s+trip|purchase\s+price)|amount\s+(?:paid|charged|due)|you\s+paid|you\s+will\s+be\s+charged|will\s+be\s+charged\s+a\s+total|charged\s+a\s+total|price\s+paid|ticket\s+total|trip\s+total|booking\s+total|reservation\s+total|payment\s+total|purchase\s+total|charged\s+today|credit\s+card\s+charge|total\s+charges\s+for\s+air\s+travel|total\s+balance\s+due)\b/iu;
@@ -55,8 +56,14 @@ const EUR_TO_USD = 1.08;
 function parseMoneyToken(raw: string): number | undefined {
   let cleaned = raw.trim();
   if (!cleaned) return undefined;
-  if (/^\d{1,3}(?:\.\d{3})+,\d{2}$/u.test(cleaned) || (cleaned.includes(",") && !cleaned.includes("."))) {
+  // US thousands: 12,000 or 1,386.43
+  if (/^\d{1,3}(?:,\d{3})+(?:\.\d{2})?$/u.test(cleaned)) {
+    cleaned = cleaned.replace(/,/g, "");
+  } else if (/^\d{1,3}(?:\.\d{3})+,\d{2}$/u.test(cleaned)) {
     cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+  } else if (/^\d+,\d{2}$/u.test(cleaned) && !/,\d{3}/u.test(cleaned)) {
+    // European decimal (86,40) — not US thousands (12,000)
+    cleaned = cleaned.replace(",", ".");
   } else {
     cleaned = cleaned.replace(/,/g, "");
   }
@@ -168,7 +175,7 @@ export function extractNearBookingText(
   if (code && code.length >= 4) {
     const idx = haystack.toLowerCase().indexOf(code.toLowerCase());
     if (idx >= 0) {
-      const slice = sliceWindow(idx - 200, idx + 550);
+      const slice = sliceWindow(idx - 200, idx + 1100);
       if (slice) return slice;
     }
   }
@@ -256,6 +263,11 @@ function sumTicketValuesFromText(haystack: string): number | undefined {
 export function parseCashUsdFromText(text: string): number | undefined {
   const haystack = normalizeEmailText(text);
   if (!haystack) return undefined;
+
+  const awardTotal = parseAwardMilesPlusCashFromText(haystack);
+  if (awardTotal != null) {
+    return Math.round(awardTotal.cashUsd);
+  }
 
   if (isZeroCashDueContext(haystack) && isAwardOnlyReservationText(haystack)) {
     return undefined;

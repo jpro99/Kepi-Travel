@@ -7,6 +7,7 @@ import {
   resolveReservationCashUsd,
   type CashUsdResolvable,
 } from "@/lib/travelAssistant/parseReservationCashUsd";
+import { parseAwardMilesPlusCashFromText } from "@/lib/travelAssistant/parseAwardMilesPlusCash";
 
 function normalizeEmailText(text: string): string {
   return text
@@ -68,6 +69,21 @@ export interface ParsedMilesFromText {
 export function parseMilesFromText(text: string): ParsedMilesFromText {
   const haystack = normalizeEmailText(text);
   if (!haystack) return {};
+
+  const awardTotal = parseAwardMilesPlusCashFromText(haystack);
+  if (awardTotal != null) {
+    let program: string | undefined;
+    for (const hint of PROGRAM_HINTS) {
+      if (hint.pattern.test(haystack)) {
+        program = hint.program;
+        break;
+      }
+    }
+    return {
+      milesSpent: awardTotal.milesSpent,
+      ...(program ? { program } : {}),
+    };
+  }
 
   let milesSpent: number | undefined;
   for (const pattern of SPENT_PATTERNS) {

@@ -138,3 +138,32 @@ test("I42: buildTripSpendLineItems lists needs-price first and Airbnb email cash
   assert.equal(airbnb?.cashUsd, 736);
   assert.equal(items.find((i) => i.id === "f1")?.cashUsd, 1200);
 });
+
+test("G33: shared award email dedupes miles and cash across legs", () => {
+  const email = `
+    Confirmation EFLQKE AZ1607 FCO-BRI
+    Total 24,000 miles + 195.80 USD
+    MileagePlus
+  `;
+  const summary = computeTripSpend([
+    {
+      id: "f1",
+      type: "flight",
+      title: "FCO-BRI",
+      confirmationCode: "EFLQKE",
+      flightNumber: "AZ1607",
+      originalEmailText: email,
+    },
+    {
+      id: "f2",
+      type: "flight",
+      title: "MUC-FCO",
+      confirmationCode: "EFLQKE",
+      flightNumber: "AZ437",
+      originalEmailText: email,
+    },
+  ]);
+  assert.equal(summary.cashTotalUsd, 196);
+  assert.equal(summary.pointsTotal, 24000);
+  assert.equal(summary.missingPriceCount, 0);
+});
