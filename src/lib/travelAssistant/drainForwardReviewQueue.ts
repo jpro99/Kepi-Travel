@@ -1,4 +1,5 @@
 import { enrichReservationForAutoImport } from "@/lib/travelAssistant/autoImportReservation";
+import { applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import { isDuplicateReservation, type DuplicateReservationFields } from "@/lib/travelAssistant/reservationDuplicates";
 import { prepareReviewDraftForAccept } from "@/lib/travelAssistant/prepareReviewDraftForAccept";
 
@@ -148,7 +149,7 @@ export function drainForwardReviewQueue<TReservation extends DrainableReservatio
     }
 
     const id = createId();
-    const imported = {
+    const imported = applyAcceptedReservationPricing({
       ...enriched,
       id,
       source: "imported",
@@ -166,7 +167,10 @@ export function drainForwardReviewQueue<TReservation extends DrainableReservatio
       flightArrivalTime: enriched.flightArrivalTime,
       checkOutDate: enriched.checkOutDate,
       notes: enriched.notes,
-    } as TReservation;
+    } as TReservation, {
+      originalEmailText: item.originalEmailText,
+      reparseFromEmail: true,
+    });
 
     nextReservations = [imported, ...nextReservations];
     promoted.push({

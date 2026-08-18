@@ -8,6 +8,7 @@ import { isPlaceholderConfirmation } from "@/lib/travelAssistant/placeholderRese
 import { prepareReviewDraftForAccept } from "@/lib/travelAssistant/prepareReviewDraftForAccept";
 import { resolvePricingNearBooking } from "@/lib/travelAssistant/parseReservationMiles";
 import { applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
+import { parseAwardMilesPlusCashFromText } from "@/lib/travelAssistant/parseAwardMilesPlusCash";
 import { getResendClient } from "@/lib/email/resendClient";
 import { fetchReceivedEmailSourceText } from "@/lib/travelAssistant/receivedEmailPdfText";
 import { shouldReplaceStoredSourceText, truncateEmailSourceText } from "@/lib/travelAssistant/emailSourceText";
@@ -137,7 +138,17 @@ function reservationNeedsPricingBackfill(reservation: SessionReservation): boole
     typeof reservation.quotedPointsMiles === "number" &&
     Number.isFinite(reservation.quotedPointsMiles) &&
     reservation.quotedPointsMiles > 0;
-  return !hasCash && !hasPoints;
+  if (!hasCash && !hasPoints) return true;
+
+  const text = reservation.originalEmailText?.trim() ?? "";
+  const award = text ? parseAwardMilesPlusCashFromText(text) : undefined;
+  if (!award) return false;
+  if (!hasPoints || !hasCash) return true;
+  if (hasCash && (reservation.quotedPriceUsd ?? 0) < Math.round(award.cashUsd * 0.75)) return true;
+  if (hasPoints && (reservation.quotedPointsMiles ?? 0) < Math.round(award.milesSpent * 0.75)) {
+    return true;
+  }
+  return false;
 }
 
 async function backfillSourceTextFromResend(
@@ -178,7 +189,7 @@ async function backfillSourceTextFromResend(
       ...reservation,
       originalEmailText: truncateEmailSourceText(fetched.text),
       sourceEmailSubject: reservation.sourceEmailSubject?.trim() || fetched.subject,
-    });
+    }, { reparseFromEmail: true });
   });
 }
 
@@ -212,7 +223,7 @@ export async function rescanTripImports(
 
       const incoming = draftToIncomingReservation(draft, group.sourceText, group.subject);
       const merged = mergeRescanIntoExisting(match, incoming);
-      const priced = applyAcceptedReservationPricing(merged.reservation);
+      const priced = applyAcceptedReservationPricing(merged.reservation, { reparseFromEmail: true });
       const filledFields = [...merged.filledFields];
       for (const key of ["quotedPriceUsd", "quotedPointsMiles", "quotedMilesEarned", "pointsProgram", "originalEmailText"] as const) {
         const before = match[key];
@@ -225,8 +236,8 @@ export async function rescanTripImports(
           after != null &&
           !((typeof after === "number" && (!Number.isFinite(after) || after <= 0)) ||
             (typeof after === "string" && after.trim().length === 0));
-        if (wasEmpty && nowFilled && !filledFields.includes(key)) {
-          filledFields.push(key);
+        if ((wasEmpty && nowFilled) || (before !== after && nowFilled)) {
+          if (!filledFields.includes(key)) filledFields.push(key);
         }
       }
       byId.set(match.id, priced);
@@ -240,7 +251,9 @@ export async function rescanTripImports(
     }
   }
 
-  const updatedReservations = [...byId.values()].map((reservation) => applyAcceptedReservationPricing(reservation));
+  const updatedReservations = [...byId.values()].map((reservation) =>
+    applyAcceptedReservationPricing(reservation, { reparseFromEmail: true }),
+  );
   return {
     rescannedSources: groups.length,
     updatedReservations: results.filter((result) => result.filledFields.length > 0).length,

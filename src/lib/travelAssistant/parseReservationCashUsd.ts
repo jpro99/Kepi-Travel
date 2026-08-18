@@ -5,6 +5,7 @@
 
 import { parseMilesFromText } from "@/lib/travelAssistant/parseReservationMiles";
 import { parseAwardMilesPlusCashFromText } from "@/lib/travelAssistant/parseAwardMilesPlusCash";
+import { selectPricingSourceText } from "@/lib/travelAssistant/pricingSourceText";
 
 const TOTAL_CONTEXT =
   /\b(?:grand\s+total|total\s+(?:amount|price|cost|paid|charge|due|fare|for\s+trip|purchase\s+price)|amount\s+(?:paid|charged|due)|you\s+paid|you\s+will\s+be\s+charged|will\s+be\s+charged\s+a\s+total|charged\s+a\s+total|price\s+paid|ticket\s+total|trip\s+total|booking\s+total|reservation\s+total|payment\s+total|purchase\s+total|charged\s+today|credit\s+card\s+charge|total\s+charges\s+for\s+air\s+travel|total\s+balance\s+due)\b/iu;
@@ -360,23 +361,35 @@ export interface CashUsdResolvable {
 }
 
 function pricingTextForReservation(reservation: CashUsdResolvable): string {
-  const combined = [reservation.notes, reservation.originalEmailText].filter(Boolean).join("\n");
-  const nearText = extractNearBookingText(combined, {
-    confirmationCode: reservation.confirmationCode,
-    title: reservation.title,
-    flightNumber: reservation.flightNumber,
-    departureAirport: reservation.flightDepartureAirport,
-    arrivalAirport: reservation.flightArrivalAirport,
-  });
-  // Prefer near-booking slice when it yields a cash total; otherwise use the full email (I42).
-  if (nearText) {
-    const nearCash = parseCashUsdFromText(nearText);
-    if (nearCash != null) return nearText;
-  }
-  return combined;
+  return selectPricingSourceText(reservation);
 }
 
 export function resolveReservationCashUsd(reservation: CashUsdResolvable): number | undefined {
+  const hasSourceText = Boolean(
+    reservation.originalEmailText?.trim() || reservation.notes?.trim(),
+  );
+
+  if (hasSourceText) {
+    const pricingText = pricingTextForReservation(reservation);
+    const miles = parseMilesFromText(pricingText);
+    if (miles.milesSpent != null && isZeroCashDueContext(pricingText)) {
+      return undefined;
+    }
+    if (isZeroCashDueContext(pricingText) && isAwardOnlyReservationText(pricingText)) {
+      return undefined;
+    }
+    let parsed = parseCashUsdFromText(pricingText);
+    if (parsed == null) {
+      const full = [reservation.notes, reservation.originalEmailText].filter(Boolean).join("\n");
+      if (full && full !== pricingText) {
+        parsed = parseCashUsdFromText(full);
+      }
+    }
+    if (parsed != null && parsed > 0) {
+      return Math.round(parsed);
+    }
+  }
+
   if (
     typeof reservation.quotedPriceUsd === "number" &&
     Number.isFinite(reservation.quotedPriceUsd) &&
@@ -385,21 +398,5 @@ export function resolveReservationCashUsd(reservation: CashUsdResolvable): numbe
     return Math.round(reservation.quotedPriceUsd);
   }
 
-  const pricingText = pricingTextForReservation(reservation);
-  const miles = parseMilesFromText(pricingText);
-  if (miles.milesSpent != null && isZeroCashDueContext(pricingText)) {
-    return undefined;
-  }
-  if (isZeroCashDueContext(pricingText) && isAwardOnlyReservationText(pricingText)) {
-    return undefined;
-  }
-  let parsed = parseCashUsdFromText(pricingText);
-  // Double fallback: full notes+email if sliced text still failed.
-  if (parsed == null) {
-    const full = [reservation.notes, reservation.originalEmailText].filter(Boolean).join("\n");
-    if (full && full !== pricingText) {
-      parsed = parseCashUsdFromText(full);
-    }
-  }
-  return parsed != null ? Math.round(parsed) : undefined;
+  return undefined;
 }

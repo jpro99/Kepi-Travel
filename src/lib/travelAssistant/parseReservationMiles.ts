@@ -3,11 +3,11 @@
  */
 
 import {
-  extractNearBookingText,
   resolveReservationCashUsd,
   type CashUsdResolvable,
 } from "@/lib/travelAssistant/parseReservationCashUsd";
 import { parseAwardMilesPlusCashFromText } from "@/lib/travelAssistant/parseAwardMilesPlusCash";
+import { selectPricingSourceText } from "@/lib/travelAssistant/pricingSourceText";
 
 function normalizeEmailText(text: string): string {
   return text
@@ -134,18 +134,21 @@ export interface MilesResolvable {
 }
 
 function milesTextForReservation(reservation: MilesResolvable): string {
-  const combined = [reservation.notes, reservation.originalEmailText].filter(Boolean).join("\n");
-  const nearText = extractNearBookingText(combined, {
-    confirmationCode: reservation.confirmationCode,
-    title: reservation.title,
-    flightNumber: reservation.flightNumber,
-    departureAirport: reservation.flightDepartureAirport,
-    arrivalAirport: reservation.flightArrivalAirport,
-  });
-  return nearText ?? combined;
+  return selectPricingSourceText(reservation);
 }
 
 export function resolveReservationMiles(reservation: MilesResolvable): ParsedMilesFromText {
+  const hasSourceText = Boolean(
+    reservation.originalEmailText?.trim() || reservation.notes?.trim(),
+  );
+
+  if (hasSourceText) {
+    const parsed = parseMilesFromText(milesTextForReservation(reservation));
+    if (parsed.milesSpent != null || parsed.milesEarned != null || parsed.program) {
+      return parsed;
+    }
+  }
+
   const result: ParsedMilesFromText = {};
 
   if (
@@ -165,12 +168,6 @@ export function resolveReservationMiles(reservation: MilesResolvable): ParsedMil
   if (reservation.pointsProgram?.trim()) {
     result.program = reservation.pointsProgram.trim();
   }
-
-  const parsed = parseMilesFromText(milesTextForReservation(reservation));
-
-  if (result.milesSpent == null && parsed.milesSpent != null) result.milesSpent = parsed.milesSpent;
-  if (result.milesEarned == null && parsed.milesEarned != null) result.milesEarned = parsed.milesEarned;
-  if (!result.program && parsed.program) result.program = parsed.program;
 
   return result;
 }
@@ -201,15 +198,8 @@ export interface PricingNearBookingInput extends CashUsdResolvable, MilesResolva
 /** Resolve cash + miles from the slice of a confirmation most relevant to one booking. */
 export function resolvePricingNearBooking(input: PricingNearBookingInput): ReservationPricing {
   const combined = [input.notes, input.originalEmailText].filter(Boolean).join("\n");
-  const nearText = extractNearBookingText(combined, {
-    confirmationCode: input.confirmationCode,
-    title: input.title,
-    flightNumber: input.flightNumber,
-    departureAirport: input.departureAirport,
-    arrivalAirport: input.arrivalAirport,
-  });
   return resolveReservationPricing({
     ...input,
-    originalEmailText: nearText ?? input.originalEmailText,
+    originalEmailText: selectPricingSourceText({ ...input, notes: input.notes, originalEmailText: combined }),
   });
 }

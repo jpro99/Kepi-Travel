@@ -105,12 +105,21 @@ You will be charged a total of $736.44 with Mastercard.
   );
 });
 
-test("resolveReservationCashUsd prefers stored quotedPriceUsd", () => {
+test("resolveReservationCashUsd prefers stored quotedPriceUsd when no email source", () => {
   assert.equal(
     resolveReservationCashUsd({
       quotedPriceUsd: 200,
-      originalEmailText: "Total: $999",
     }),
     200,
+  );
+});
+
+test("G33: email source wins over stale stored quotedPriceUsd", () => {
+  assert.equal(
+    resolveReservationCashUsd({
+      quotedPriceUsd: 12,
+      originalEmailText: "Total 24,000 miles + 195.80 USD MileagePlus",
+    }),
+    196,
   );
 });
