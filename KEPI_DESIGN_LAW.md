@@ -730,6 +730,11 @@ Trenitalia / Italo PDFs print `13/09/2026`, Partenza/Arrivo, station names, bina
 
 **Test:** `src/lib/travelAssistant/activityTicketExtract.test.ts`
 
+**I60 — Trip tab analytics must import trackEvent**  
+`travel-assistant/page.tsx` calls `trackEvent` on Trip tab open (`home_opened`). Missing import crashes Trip: `trackEvent is not defined`. Confirmations untouched.
+
+**Test:** `src/lib/travelAssistant/travelAssistantPageAnalytics.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -949,6 +954,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | I57 | `src/lib/travelAssistant/bookedHopCoverage.test.ts` |
 | I58 | `src/lib/travelAssistant/railTicketExtract.test.ts` |
 | I59 | `src/lib/travelAssistant/activityTicketExtract.test.ts` |
+| I60 | `src/lib/travelAssistant/travelAssistantPageAnalytics.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |
