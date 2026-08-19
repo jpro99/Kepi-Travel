@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { fetchJson } from "@/lib/api/readJsonResponse";
 import { LOCAL_HABITS_DISCLOSURE, loadLocalTravelHabits, saveLocalTravelHabits } from "@/lib/travelAssistant/travelHabitsLocal";
 import type { TravelFitReport } from "@/lib/travelFit/types";
 import { EarnStackHint } from "@/components/travelAssistant/EarnStackHint";
@@ -44,13 +45,11 @@ export function TravelFitCard({ userId, reservations, travelStyle }: TravelFitCa
       setError(null);
       try {
         const local = userId ? loadLocalTravelHabits(userId) : null;
-        const res = await fetch("/api/travel-fit", {
+        const data = await fetchJson<{ report: TravelFitReport }>("/api/travel-fit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ reservations }),
         });
-        if (!res.ok) throw new Error("Could not load travel fit");
-        const data = (await res.json()) as { report: TravelFitReport };
         if (cancelled) return;
 
         const merged = local?.updatedAt && local.updatedAt > data.report.habits.updatedAt

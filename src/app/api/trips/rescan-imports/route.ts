@@ -43,6 +43,7 @@ export async function POST(req: Request) {
       ok: true,
       rescannedSources: result.rescannedSources,
       updatedReservations: result.updatedReservations,
+      pricingUpdatedCount: result.pricingUpdatedCount,
       skippedNoSource: result.skippedNoSource,
       unmatchedDrafts: result.unmatchedDrafts,
       results: result.results,
@@ -50,6 +51,9 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Re-scan failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: `Re-scan failed: ${message}` },
+      { status: 500 },
+    );
   }
 }

@@ -15,12 +15,38 @@ export function formatApiErrorMessage(payload: unknown, status: number): string 
   return `Something went wrong (${status}). Please try again.`;
 }
 
-export async function readJsonResponse<T>(response: Response): Promise<T> {
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) {
+function isJsonParseSyntaxError(error: unknown): boolean {
+  return (
+    error instanceof SyntaxError ||
+    (error instanceof Error && /is not valid JSON|Unexpected token/i.test(error.message))
+  );
+}
+
+/** Map fetch/JSON failures to calm copy — never show raw SyntaxError text in toasts. */
+export function userFacingFetchError(error: unknown, fallback: string): string {
+  if (isJsonParseSyntaxError(error)) {
+    return fallback;
+  }
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message.trim();
+  }
+  return fallback;
+}
+
+export async function parseResponseJson<T>(response: Response): Promise<T> {
+  const text = await response.text();
+  if (!text.trim()) {
     throw new Error(formatApiErrorMessage(null, response.status));
   }
-  const payload = (await response.json()) as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(formatApiErrorMessage(null, response.status));
+  }
+}
+
+export async function readJsonResponse<T>(response: Response): Promise<T> {
+  const payload = await parseResponseJson<T>(response);
   if (!response.ok) {
     throw new Error(formatApiErrorMessage(payload, response.status));
   }

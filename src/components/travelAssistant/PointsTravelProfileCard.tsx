@@ -5,6 +5,7 @@ import { CARD_CATALOG, findCard } from "@/lib/points/cardEarnRules";
 import { getCardBenefitProfile, listBenefitsForOwnedCards, summarizeCardBenefits } from "@/lib/points/cardBenefits";
 import { enrollmentHintsForCard, type CardEnrollmentState } from "@/lib/points/benefitPlaybooks";
 import type { PointsTravelProfile, SavedInvitationCode } from "@/lib/memory/pointsTravelProfile";
+import { fetchJson } from "@/lib/api/readJsonResponse";
 import { generateId } from "@/lib/utils/generateId";
 
 function cardDisplayName(profile: PointsTravelProfile, cardId: string): string {
@@ -28,13 +29,13 @@ export function PointsTravelProfileCard({ onOpenLearn }: { onOpenLearn?: () => v
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/points-profile", { cache: "no-store" });
-      if (!res.ok) return;
-      const data = (await res.json()) as { profile: PointsTravelProfile };
+      const data = await fetchJson<{ profile: PointsTravelProfile }>("/api/points-profile");
       setProfile({
         ...data.profile,
         invitationCodes: data.profile.invitationCodes ?? [],
       });
+    } catch {
+      /* signed out or transient API failure — keep empty state */
     } finally {
       setLoading(false);
     }
@@ -49,13 +50,11 @@ export function PointsTravelProfileCard({ onOpenLearn }: { onOpenLearn?: () => v
     setSaving(true);
     setMessage(null);
     try {
-      const res = await fetch("/api/points-profile", {
+      const data = await fetchJson<{ profile: PointsTravelProfile }>("/api/points-profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       });
-      if (!res.ok) throw new Error("Save failed");
-      const data = (await res.json()) as { profile: PointsTravelProfile };
       setProfile({
         ...data.profile,
         invitationCodes: data.profile.invitationCodes ?? [],

@@ -41,6 +41,7 @@ export interface RescanReservationResult {
 export interface RescanTripImportsResult {
   rescannedSources: number;
   updatedReservations: number;
+  pricingUpdatedCount: number;
   skippedNoSource: number;
   unmatchedDrafts: number;
   results: RescanReservationResult[];

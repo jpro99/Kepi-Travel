@@ -49,8 +49,18 @@ const PatchSchema = z.object({
 export async function GET() {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const profile = await getPointsTravelProfile(userId);
-  return NextResponse.json({ profile });
+  try {
+    const profile = await getPointsTravelProfile(userId);
+    return NextResponse.json({ profile });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: "Could not load card wallet",
+        detail: error instanceof Error ? error.message : "unknown",
+      },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(req: Request) {
@@ -70,7 +80,17 @@ export async function POST(req: Request) {
   }
 
   const existing = await getPointsTravelProfile(userId);
-  const saved = await savePointsTravelProfile({ ...existing, ...parsed.data, userId }, userId);
-  await syncTravelProfileBenefits(userId).catch(() => null);
-  return NextResponse.json({ ok: true, profile: saved });
+  try {
+    const saved = await savePointsTravelProfile({ ...existing, ...parsed.data, userId }, userId);
+    await syncTravelProfileBenefits(userId).catch(() => null);
+    return NextResponse.json({ ok: true, profile: saved });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: "Could not save card wallet",
+        detail: error instanceof Error ? error.message : "unknown",
+      },
+      { status: 500 },
+    );
+  }
 }

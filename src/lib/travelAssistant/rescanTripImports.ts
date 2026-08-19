@@ -4,7 +4,10 @@ import {
   parseForwardedEmail,
   type ForwardedReservationDraft,
 } from "@/lib/travelAssistant/emailForwardParser";
-import { isPlaceholderConfirmation } from "@/lib/travelAssistant/placeholderReservations";
+import {
+  isSpendTrackedReservation,
+  reservationMissingPrice,
+} from "@/lib/travelAssistant/tripSpendSummary";
 import { prepareReviewDraftForAccept } from "@/lib/travelAssistant/prepareReviewDraftForAccept";
 import { resolvePricingNearBooking } from "@/lib/travelAssistant/parseReservationMiles";
 import { applyAcceptedReservationPricing, hydrateReservationsPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
@@ -15,6 +18,7 @@ import {
   shouldReplaceStoredSourceText,
   truncateEmailSourceText,
 } from "@/lib/travelAssistant/emailSourceText";
+import { isPlaceholderConfirmation } from "@/lib/travelAssistant/placeholderReservations";
 import {
   isDuplicateReservation,
   type DuplicateReservationFields,
@@ -34,6 +38,22 @@ export {
   mergeRescanIntoExisting,
 } from "@/lib/travelAssistant/rescanTripImportsShared";
 export { reservationNeedsPricingBackfill } from "@/lib/travelAssistant/rescanPricingBackfill";
+
+function countPricingResolved(
+  before: SessionReservation[],
+  after: SessionReservation[],
+): number {
+  const trackedAfter = after.filter(isSpendTrackedReservation);
+  let count = 0;
+  for (const reservation of trackedAfter) {
+    if (reservationMissingPrice(reservation, trackedAfter)) continue;
+    const previous = before.find((entry) => entry.id === reservation.id);
+    if (previous && reservationMissingPrice(previous, before)) {
+      count += 1;
+    }
+  }
+  return count;
+}
 
 function draftToMatchFields(draft: ForwardedReservationDraft): DuplicateReservationFields {
   return {
@@ -181,21 +201,33 @@ async function backfillSourceTextFromResend(
 export async function rescanTripImports(
   reservations: SessionReservation[],
 ): Promise<RescanTripImportsResult> {
+  const beforeReservations = reservations.map((reservation) => ({ ...reservation }));
   const enrichedReservations = await backfillSourceTextFromResend(reservations);
-  const groups = groupRescannableBySource(enrichedReservations);
+  let workingReservations = hydrateReservationsPricing(
+    enrichedReservations.map((reservation) =>
+      applyAcceptedReservationPricing(reservation, { reparseFromEmail: true }),
+    ),
+  );
+  const groups = groupRescannableBySource(workingReservations);
   const skippedNoSource =
-    enrichedReservations.length -
+    workingReservations.length -
     groups.reduce((sum, group) => sum + group.reservationIds.length, 0);
-  const byId = new Map(enrichedReservations.map((reservation) => [reservation.id, { ...reservation }]));
+  const byId = new Map(workingReservations.map((reservation) => [reservation.id, { ...reservation }]));
   const results: RescanReservationResult[] = [];
   const matchedIds = new Set<string>();
   let unmatchedDrafts = 0;
 
   for (const group of groups) {
-    const parsed = await parseForwardedEmail({
-      subject: group.subject ?? "Imported confirmation",
-      text: group.sourceText,
-    });
+    let parsed: Awaited<ReturnType<typeof parseForwardedEmail>>;
+    try {
+      parsed = await parseForwardedEmail({
+        subject: group.subject ?? "Imported confirmation",
+        text: group.sourceText,
+      });
+    } catch {
+      unmatchedDrafts += 1;
+      continue;
+    }
 
     const drafts = parsed.drafts.length > 0 ? parsed.drafts : [parsed.draft];
     for (const draft of drafts) {
@@ -241,9 +273,12 @@ export async function rescanTripImports(
       applyAcceptedReservationPricing(reservation, { reparseFromEmail: true }),
     ),
   );
+  const pricingUpdatedCount = countPricingResolved(beforeReservations, updatedReservations);
+  const fieldUpdateCount = results.filter((result) => result.filledFields.length > 0).length;
   return {
     rescannedSources: groups.length,
-    updatedReservations: results.filter((result) => result.filledFields.length > 0).length,
+    updatedReservations: Math.max(fieldUpdateCount, pricingUpdatedCount),
+    pricingUpdatedCount,
     skippedNoSource,
     unmatchedDrafts,
     results,
