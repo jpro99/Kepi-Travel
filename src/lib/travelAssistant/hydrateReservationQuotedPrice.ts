@@ -1,3 +1,4 @@
+import { shouldReplaceStoredSourceText } from "@/lib/travelAssistant/emailSourceText";
 import {
   isImplausibleSingleBookingCash,
   isMilesQuantityMisreadAsCash,
@@ -51,20 +52,30 @@ export function enrichReservationFromTripPeers<T extends PricingPeerResolvable>(
   peers: T[],
 ): T {
   const donor = findPricingDonor(reservation, peers);
+  const selfText = reservation.originalEmailText?.trim() ?? "";
+  const donorText = donor?.originalEmailText?.trim() ?? "";
 
-  if (reservation.originalEmailText?.trim()) {
-    if (reservation.sourceEmailId?.trim() || !donor?.sourceEmailId?.trim()) {
-      return reservation;
-    }
+  if (donorText && shouldReplaceStoredSourceText(selfText, donorText)) {
+    return {
+      ...reservation,
+      originalEmailText: donorText,
+      sourceEmailId: reservation.sourceEmailId?.trim() || donor?.sourceEmailId,
+    };
+  }
+
+  if (!selfText && donorText) {
+    return {
+      ...reservation,
+      originalEmailText: donorText,
+      sourceEmailId: reservation.sourceEmailId?.trim() || donor?.sourceEmailId,
+    };
+  }
+
+  if (!reservation.sourceEmailId?.trim() && donor?.sourceEmailId?.trim()) {
     return { ...reservation, sourceEmailId: donor.sourceEmailId };
   }
 
-  if (!donor?.originalEmailText?.trim()) return reservation;
-  return {
-    ...reservation,
-    originalEmailText: donor.originalEmailText,
-    sourceEmailId: reservation.sourceEmailId?.trim() || donor.sourceEmailId,
-  };
+  return reservation;
 }
 
 export interface ApplyPricingOptions {
@@ -130,17 +141,109 @@ export function hydrateReservationsQuotedPrices<T extends CashUsdResolvable>(res
   return changed ? next : reservations;
 }
 
+function pricingPeerGroup<T extends PricingPeerResolvable>(
+  reservation: T,
+  all: T[],
+): T[] {
+  const code = reservation.confirmationCode?.trim().toUpperCase();
+  if (code) {
+    const byCode = all.filter((peer) => peer.confirmationCode?.trim().toUpperCase() === code);
+    if (byCode.length > 1) return byCode;
+  }
+  const emailId = reservation.sourceEmailId?.trim();
+  if (emailId) {
+    const byEmailId = all.filter((peer) => peer.sourceEmailId?.trim() === emailId);
+    if (byEmailId.length > 1) return byEmailId;
+  }
+  return [reservation];
+}
+
+/** After per-leg hydration, copy shared cash/miles/email text across multi-leg peer groups. */
+export function propagatePricingAcrossPeerGroups<T extends CashUsdResolvable & MilesResolvable & PricingPeerResolvable>(
+  reservations: T[],
+): T[] {
+  const visitedGroupKeys = new Set<string>();
+  let changed = false;
+  const next = reservations.map((reservation) => ({ ...reservation }));
+
+  for (const reservation of next) {
+    const group = pricingPeerGroup(reservation, next);
+    if (group.length <= 1) continue;
+
+    const groupKey =
+      reservation.confirmationCode?.trim().toUpperCase() ||
+      reservation.sourceEmailId?.trim() ||
+      reservation.id ||
+      "";
+    if (!groupKey || visitedGroupKeys.has(groupKey)) continue;
+    visitedGroupKeys.add(groupKey);
+
+    let bestText = "";
+    let bestCash: number | undefined;
+    let bestPoints: number | undefined;
+    let bestEarned: number | undefined;
+    let bestProgram: string | undefined;
+
+    for (const peer of group) {
+      const enriched = enrichReservationFromTripPeers(peer, next);
+      const hydrated = hydrateReservationPricing(enriched);
+      const peerText = hydrated.originalEmailText?.trim() ?? "";
+      if (peerText && shouldReplaceStoredSourceText(bestText, peerText)) {
+        bestText = peerText;
+      }
+      const cash = resolveReservationCashUsd(hydrated);
+      const miles = resolveReservationMiles(hydrated);
+      if (cash != null && cash > 0) bestCash = cash;
+      if (miles.milesSpent != null && miles.milesSpent > 0) bestPoints = miles.milesSpent;
+      if (miles.milesEarned != null && miles.milesEarned > 0) bestEarned = miles.milesEarned;
+      if (miles.program?.trim()) bestProgram = miles.program.trim();
+    }
+
+    if (!bestText && bestCash == null && bestPoints == null) continue;
+
+    for (const peer of group) {
+      const index = next.findIndex((entry) => entry.id != null && entry.id === peer.id);
+      if (index < 0) continue;
+      const current = next[index]!;
+      const patch: Partial<T> = {};
+      const currentText = current.originalEmailText?.trim() ?? "";
+      if (bestText && shouldReplaceStoredSourceText(currentText, bestText)) {
+        patch.originalEmailText = bestText;
+      }
+      if (bestCash != null && (current.quotedPriceUsd == null || current.quotedPriceUsd <= 0)) {
+        patch.quotedPriceUsd = bestCash;
+      }
+      if (bestPoints != null && (current.quotedPointsMiles == null || current.quotedPointsMiles <= 0)) {
+        patch.quotedPointsMiles = bestPoints;
+      }
+      if (bestEarned != null && (current.quotedMilesEarned == null || current.quotedMilesEarned <= 0)) {
+        patch.quotedMilesEarned = bestEarned;
+      }
+      if (bestProgram && !current.pointsProgram?.trim()) {
+        patch.pointsProgram = bestProgram;
+      }
+      if (Object.keys(patch).length === 0) continue;
+      next[index] = { ...current, ...patch };
+      changed = true;
+    }
+  }
+
+  return changed ? next : reservations;
+}
+
 export function hydrateReservationsPricing<T extends CashUsdResolvable & MilesResolvable & PricingPeerResolvable>(
   reservations: T[],
 ): T[] {
   let changed = false;
-  const next = reservations.map((reservation) => {
+  const hydrated = reservations.map((reservation) => {
     const peerEnriched = enrichReservationFromTripPeers(reservation, reservations);
-    const hydrated = hydrateReservationPricing(peerEnriched);
-    if (hydrated !== reservation) changed = true;
-    return hydrated;
+    const nextReservation = hydrateReservationPricing(peerEnriched);
+    if (nextReservation !== reservation) changed = true;
+    return nextReservation;
   });
-  return changed ? next : reservations;
+  const propagated = propagatePricingAcrossPeerGroups(hydrated);
+  if (propagated !== hydrated) changed = true;
+  return changed ? propagated : reservations;
 }
 
 /** Normalize cash + miles fields when accepting a review item or saving a reservation. */

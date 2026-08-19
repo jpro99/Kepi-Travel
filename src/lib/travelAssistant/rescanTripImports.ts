@@ -7,7 +7,7 @@ import {
 import { isPlaceholderConfirmation } from "@/lib/travelAssistant/placeholderReservations";
 import { prepareReviewDraftForAccept } from "@/lib/travelAssistant/prepareReviewDraftForAccept";
 import { resolvePricingNearBooking } from "@/lib/travelAssistant/parseReservationMiles";
-import { applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
+import { applyAcceptedReservationPricing, hydrateReservationsPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import { getResendClient } from "@/lib/email/resendClient";
 import { fetchReceivedEmailSourceText } from "@/lib/travelAssistant/receivedEmailPdfText";
 import { reservationNeedsPricingBackfill } from "@/lib/travelAssistant/rescanPricingBackfill";
@@ -236,8 +236,10 @@ export async function rescanTripImports(
     }
   }
 
-  const updatedReservations = [...byId.values()].map((reservation) =>
-    applyAcceptedReservationPricing(reservation, { reparseFromEmail: true }),
+  const updatedReservations = hydrateReservationsPricing(
+    [...byId.values()].map((reservation) =>
+      applyAcceptedReservationPricing(reservation, { reparseFromEmail: true }),
+    ),
   );
   return {
     rescannedSources: groups.length,

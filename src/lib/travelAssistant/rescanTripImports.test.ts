@@ -31,18 +31,32 @@ function sampleReservation(overrides: Partial<SessionReservation> = {}): Session
   };
 }
 
-test("canRescanReservation requires stored email source text", () => {
+test("canRescanReservation requires stored email source text or Resend id with missing pricing", () => {
   assert.equal(canRescanReservation(sampleReservation({ originalEmailText: "x".repeat(120) })), true);
   assert.equal(canRescanReservation(sampleReservation({ originalEmailText: "short" })), false);
   assert.equal(canRescanReservation(sampleReservation()), false);
+  assert.equal(
+    canRescanReservation(
+      sampleReservation({
+        originalEmailText: "short",
+        sourceEmailId: "email-ita-1",
+      }),
+    ),
+    true,
+  );
 });
 
-test("countRescannableReservations counts only reservations with enough source text", () => {
+test("countRescannableReservations counts Resend-backfillable flights missing pricing", () => {
   const count = countRescannableReservations([
     sampleReservation({ id: "a", originalEmailText: "x".repeat(120) }),
     sampleReservation({ id: "b" }),
+    sampleReservation({
+      id: "c",
+      originalEmailText: "ITA receipt Z84T4Z",
+      sourceEmailId: "email-ita-1",
+    }),
   ]);
-  assert.equal(count, 1);
+  assert.equal(count, 2);
 });
 
 test("reservationNeedsPricingBackfill when flight has points but no PDF cash", () => {

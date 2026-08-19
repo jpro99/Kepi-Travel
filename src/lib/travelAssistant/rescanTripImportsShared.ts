@@ -1,5 +1,6 @@
 import type { SessionReservation } from "@/lib/travelAssistant/clientSessionState";
 import { isPlaceholderConfirmation } from "@/lib/travelAssistant/placeholderReservations";
+import { reservationNeedsPricingBackfill } from "@/lib/travelAssistant/rescanPricingBackfill";
 import { mergeReservationPricingFields } from "@/lib/travelAssistant/reservationPricingMerge";
 
 export const MIN_RESCAN_SOURCE_CHARS = 80;
@@ -48,7 +49,9 @@ export interface RescanTripImportsResult {
 
 export function canRescanReservation(reservation: SessionReservation): boolean {
   const source = reservation.originalEmailText?.trim() ?? "";
-  return source.length >= MIN_RESCAN_SOURCE_CHARS;
+  if (source.length >= MIN_RESCAN_SOURCE_CHARS) return true;
+  if (reservation.sourceEmailId?.trim() && reservationNeedsPricingBackfill(reservation)) return true;
+  return false;
 }
 
 export function countRescannableReservations(reservations: SessionReservation[]): number {

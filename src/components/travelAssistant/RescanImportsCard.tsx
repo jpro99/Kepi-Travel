@@ -40,7 +40,7 @@ export function RescanImportsCard({
               : "No saved email source found for current bookings. Forward confirmations to Kepi or import via Gmail to enable re-scan."}
         </p>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Only fills blank fields — it won&apos;t overwrite details you&apos;ve already edited. PDF-only imports need to be uploaded again.
+          Only fills blank fields — it won&apos;t overwrite details you&apos;ve already edited. Flights missing PDF pricing will re-fetch attachments from saved emails when possible.
         </p>
 
         {lastSummary ? (
