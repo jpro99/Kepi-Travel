@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { fetchJson } from "@/lib/api/readJsonResponse";
 import { LoyaltyWallet } from "@/components/loyalty/LoyaltyWallet";
 import type { LoyaltyBalance } from "@/lib/loyalty/optimizer";
 
@@ -9,8 +10,7 @@ export function LoyaltyWalletSection() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    fetch("/api/loyalty")
-      .then((r) => r.json())
+    void fetchJson<{ balances?: LoyaltyBalance[] }>("/api/loyalty")
       .then((d) => {
         if (d.balances) setBalances(d.balances);
       })
@@ -19,15 +19,11 @@ export function LoyaltyWalletSection() {
   }, []);
 
   const handleUpdate = async (next: LoyaltyBalance[]) => {
-    const res = await fetch("/api/loyalty", {
+    const data = await fetchJson<{ balances?: LoyaltyBalance[] }>("/api/loyalty", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ balances: next }),
     });
-    if (!res.ok) {
-      throw new Error("Failed to save loyalty wallet");
-    }
-    const data = (await res.json()) as { balances?: LoyaltyBalance[] };
     setBalances(Array.isArray(data.balances) ? data.balances : next);
   };
 

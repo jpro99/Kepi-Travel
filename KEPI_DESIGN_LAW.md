@@ -156,6 +156,11 @@ ITA / European receipts often put `Total Amount EUR 149.78` only in the attached
 
 **Test:** `src/lib/travelAssistant/parseReservationCashUsd.test.ts`, `src/lib/travelAssistant/pricingSourceText.test.ts`, `src/lib/travelAssistant/rescanTripImports.test.ts`
 
+**G35 — API fetch errors never show raw JSON parse text**  
+When a route returns HTML/plain (“An error occurred…”) instead of JSON, client fetch helpers must surface calm copy — never `Unexpected token 'A'… is not valid JSON` in toasts. More tab card wallet, loyalty wallet, travel fit, trip load, and re-scan use `readJsonResponse` / `userFacingFetchError`.
+
+**Test:** `src/lib/api/readJsonResponse.test.ts`
+
 **M39 — Travel-day flight order + today focus + terminal coach**  
 All flight lists sort by canonical departure time (Ontario before Seattle on the same day). Travel day picks today’s earliest leg for Home, Map preview, and airport navigator. Schematic airports show “Terminal guide · pins approximate · follow airport signs.” Depart coach leads with airline + terminal when known (e.g. Alaska · Terminal 2 at ONT).
 
@@ -927,6 +932,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | G32 | `src/lib/travelAssistant/tripAccounting.test.ts`, `src/lib/travelAssistant/tripSpendSummary.test.ts` |
 | G33 | `src/lib/travelAssistant/parseReservationPricing.test.ts`, `src/lib/travelAssistant/pricingSourceText.test.ts`, `src/lib/travelAssistant/parseReservationCashUsd.test.ts`, `src/lib/travelAssistant/tripSpendSummary.test.ts` |
 | G34 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts`, `src/lib/travelAssistant/pricingSourceText.test.ts`, `src/lib/travelAssistant/rescanTripImports.test.ts` |
+| G35 | `src/lib/api/readJsonResponse.test.ts` |
 | M39 | `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |

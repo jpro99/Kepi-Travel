@@ -43,6 +43,7 @@ import {
 } from "@/lib/travelAssistant/flightStatusCadence";
 import { isDuplicateReservation } from "@/lib/travelAssistant/reservationDuplicates";
 import { countRescannableReservations } from "@/lib/travelAssistant/rescanTripImportsShared";
+import { parseResponseJson, userFacingFetchError } from "@/lib/api/readJsonResponse";
 import {
   nextTripStage,
   shouldQuickAddGoToReview,
@@ -3039,12 +3040,12 @@ export default function TravelAssistantPage() {
         }
         throw new Error(`Trip API returned ${response.status}`);
       }
-      const payload = (await response.json()) as {
+      const payload = await parseResponseJson<{
         trips?: unknown[];
         activeTripId?: string | null;
         activeTrip?: unknown;
         degraded?: boolean;
-      };
+      }>(response);
 
       const parsedTrips = Array.isArray(payload.trips)
         ? payload.trips.map((trip) => normalizeManagedTrip(trip)).filter((trip): trip is ManagedTrip => trip !== null)
@@ -3131,7 +3132,7 @@ export default function TravelAssistantPage() {
         }
       } catch (error) {
         setTripsLoading(false);
-        const message = error instanceof Error ? error.message : "Unknown trip load error";
+        const message = userFacingFetchError(error, "Could not load trips. Please try again.");
         setToast(`Unable to load trips: ${message}`);
       }
     };
@@ -7058,11 +7059,11 @@ export default function TravelAssistantPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tripId: activeTripId }),
       });
-      const payload = (await response.json()) as {
+      const payload = await parseResponseJson<{
         error?: string;
         updatedReservations?: number;
         rescannedSources?: number;
-      };
+      }>(response);
       if (!response.ok) {
         throw new Error(payload.error ?? "Re-scan failed");
       }
@@ -7081,7 +7082,7 @@ export default function TravelAssistantPage() {
       }
       queueMutation("Re-scanned saved confirmations.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Re-scan failed";
+      const message = userFacingFetchError(error, "Re-scan failed. Please try again.");
       setToast(message);
     } finally {
       setRescanImportsBusy(false);
