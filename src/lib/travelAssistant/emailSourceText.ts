@@ -57,6 +57,8 @@ export function shouldReplaceStoredSourceText(existing: string, fetched: string)
   if (!next) return false;
   if (!current) return true;
   if (next.includes(PDF_ATTACHMENT_MARKER) && !current.includes(PDF_ATTACHMENT_MARKER)) return true;
+  if (/\bnew\s+ticket\s+value\b/iu.test(next) && !/\bnew\s+ticket\s+value\b/iu.test(current)) return true;
+  if (/\bpurchase\s+summary\b/iu.test(next) && !/\bpurchase\s+summary\b/iu.test(current)) return true;
   return next.length > current.length;
 }
 

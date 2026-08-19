@@ -246,6 +246,19 @@ export function hydrateReservationsPricing<T extends CashUsdResolvable & MilesRe
   return changed ? propagated : reservations;
 }
 
+/** Parse email/notes and write one ticket total onto every leg in the PNR — no manual entry. */
+export function finalizeTripReservationPricing<T extends CashUsdResolvable & MilesResolvable & PricingPeerResolvable>(
+  reservations: T[],
+): T[] {
+  const repriced = reservations.map((reservation) =>
+    applyAcceptedReservationPricing(
+      enrichReservationFromTripPeers(reservation, reservations),
+      { reparseFromEmail: true },
+    ),
+  );
+  return hydrateReservationsPricing(repriced);
+}
+
 /** Normalize cash + miles fields when accepting a review item or saving a reservation. */
 export function applyAcceptedReservationPricing<T extends CashUsdResolvable & MilesResolvable>(
   draft: T,

@@ -182,7 +182,7 @@ import { BookTabView } from "@/components/travelAssistant/BookTabView";
 import { MapTabView } from "@/components/travelAssistant/MapTabView";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
-import { hydrateReservationsPricing, applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
+import { hydrateReservationsPricing, applyAcceptedReservationPricing, finalizeTripReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import { buildTransportConflictReservationIds } from "@/lib/travelAssistant/reservationAttention";
 import { computeTripSpend } from "@/lib/travelAssistant/tripSpendSummary";
 import {
@@ -1853,6 +1853,7 @@ export default function TravelAssistantPage() {
   const opsFetchInFlightRef = useRef(false);
   const tripsRef = useRef<ManagedTrip[]>([]);
   const activeTripIdRef = useRef<string | null>(null);
+  const autoPricingBackfillTripIdsRef = useRef<Set<string>>(new Set());
   const activeTripRuntimeSnapshotRef = useRef<ManagedTripRuntimeSnapshot | null>(null);
   const sessionHydratedRef = useRef(false);
   const tripsHydratedRef = useRef(false);
@@ -2829,7 +2830,7 @@ export default function TravelAssistantPage() {
 
   const applyManagedTripToState = useCallback((trip: ManagedTrip, options?: { resetHighlight?: boolean }): void => {
     applyingTripStateRef.current = true;
-    const hydratedReservations = hydrateReservationsPricing(trip.reservations);
+    const hydratedReservations = finalizeTripReservationPricing(trip.reservations);
     const reconciledFlights = reconcileStoredFlightReservations(hydratedReservations);
     // I37: bump stale 2025 trip bounds BEFORE hotel remap (remap into past window was the bug).
     const tripBounds = reconcileTripWindowDates(
@@ -7096,6 +7097,19 @@ export default function TravelAssistantPage() {
       setRescanImportsBusy(false);
     }
   }, [activeTripId, queueMutation, refreshTripsFromServer, rescanImportsBusy, setToast]);
+
+  // Apple-style: when saved confirmations contain a ticket total, log prices automatically.
+  useEffect(() => {
+    if (!activeTripId || rescanImportsBusy) return;
+    if (autoPricingBackfillTripIdsRef.current.has(activeTripId)) return;
+    const trip = trips.find((entry) => entry.id === activeTripId);
+    if (!trip) return;
+    const summary = computeTripSpend(trip.reservations);
+    if (summary.missingPriceCount === 0) return;
+    if (countRescannableReservations(trip.reservations) === 0) return;
+    autoPricingBackfillTripIdsRef.current.add(activeTripId);
+    void handleRescanImports();
+  }, [activeTripId, handleRescanImports, rescanImportsBusy, trips]);
 
   const syncReservationsToGoogleCalendar = useCallback(
     (

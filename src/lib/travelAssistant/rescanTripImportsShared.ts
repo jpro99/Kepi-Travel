@@ -119,7 +119,8 @@ export function groupRescannableBySource(
   for (const reservation of reservations) {
     if (!canRescanReservation(reservation)) continue;
     const sourceText = reservation.originalEmailText?.trim() ?? "";
-    const key = sourceText;
+    const emailId = reservation.sourceEmailId?.trim();
+    const key = sourceText || (emailId ? `email:${emailId}` : `id:${reservation.id}`);
     const existing = groups.get(key);
     if (existing) {
       existing.reservationIds.push(reservation.id);

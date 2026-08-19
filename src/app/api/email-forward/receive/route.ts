@@ -59,7 +59,7 @@ import {
 } from "@/lib/travelAssistant/parseDayPlanItinerary";
 import { normalizeItineraryPlans } from "@/lib/travelAssistant/itineraryDayPlan";
 import { resolveReservationPricing, resolvePricingNearBooking } from "@/lib/travelAssistant/parseReservationMiles";
-import { applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
+import { applyAcceptedReservationPricing, finalizeTripReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import {
   extractReservationSourceLinks,
   resolveBoardingPassUrl,
@@ -1053,19 +1053,20 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         const incoming = parsedReservation as SessionReservation;
         const scheduleChanges = detectFlightScheduleChange(existing, incoming);
         const merged = mergeFlightReservationUpdate(existing, incoming);
+        const priced = applyAcceptedReservationPricing(merged, { reparseFromEmail: true });
         nextReservations = nextReservations.map((reservation, index) =>
-          index === matchingReservationIndex ? merged : reservation,
+          index === matchingReservationIndex ? priced : reservation,
         );
         if (scheduleChanges.length > 0) {
           nextUpdateFeed = [
             {
               id: `feed-flight-change-${generateId()}`,
-              reservationId: merged.id,
+              reservationId: priced.id,
               kind: "flight-change",
               severity: "yellow",
               summary: "Your flights have changed — tap to review",
-              detail: `Updated ${scheduleChanges.join(", ")} for ${merged.flightNumber || merged.title}.`,
-              provider: merged.provider,
+              detail: `Updated ${scheduleChanges.join(", ")} for ${priced.flightNumber || priced.title}.`,
+              provider: priced.provider,
               appliedAt: new Date().toISOString(),
             },
             ...nextUpdateFeed,
@@ -1075,7 +1076,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         routeLogger.info("Flight refreshed from re-forwarded itinerary email.", {
           userId: targetUserId,
           tripId: targetTrip.id,
-          reservationId: merged.id,
+          reservationId: priced.id,
           scheduleChanges,
         });
         continue;
@@ -1336,6 +1337,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
 
     let tripWindowPatch: { startDate: string; endDate: string } | null = null;
     if (!dayPlanOnly) {
+      nextReservations = finalizeTripReservationPricing(nextReservations);
       nextReservations = dedupeFlightReservations(nextReservations);
       const drained = drainForwardReviewQueue(nextReservations, nextQueue, () => `res-email-${generateId()}`);
       nextReservations = drained.reservations;

@@ -10,7 +10,7 @@ import {
 } from "@/lib/travelAssistant/tripSpendSummary";
 import { prepareReviewDraftForAccept } from "@/lib/travelAssistant/prepareReviewDraftForAccept";
 import { resolvePricingNearBooking } from "@/lib/travelAssistant/parseReservationMiles";
-import { applyAcceptedReservationPricing, hydrateReservationsPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
+import { applyAcceptedReservationPricing, finalizeTripReservationPricing, hydrateReservationsPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import { getResendClient } from "@/lib/email/resendClient";
 import { fetchReceivedEmailSourceText } from "@/lib/travelAssistant/receivedEmailPdfText";
 import { reservationNeedsPricingBackfill } from "@/lib/travelAssistant/rescanPricingBackfill";
@@ -268,7 +268,7 @@ export async function rescanTripImports(
     }
   }
 
-  const updatedReservations = hydrateReservationsPricing(
+  const updatedReservations = finalizeTripReservationPricing(
     [...byId.values()].map((reservation) =>
       applyAcceptedReservationPricing(reservation, { reparseFromEmail: true }),
     ),

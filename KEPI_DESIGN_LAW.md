@@ -166,6 +166,11 @@ One PNR (e.g. DPNNWG, Z84T4Z) is one ledger row with one cash/miles total — no
 
 **Test:** `src/lib/travelAssistant/tripSpendSummary.test.ts`
 
+**G37 — Auto-log ticket total across every leg in a PNR**  
+When a forwarded confirmation contains one fare (Alaska New Ticket Value, ITA PDF, United Purchase Summary), parse it once and write `quotedPriceUsd` / miles to **every leg** on that confirmation — on import, re-forward, re-scan, and trip load. No manual “Add price” per segment.
+
+**Test:** `src/lib/travelAssistant/hydrateReservationQuotedPrice.test.ts`, `src/lib/travelAssistant/pricingSourceText.test.ts`
+
 **M39 — Travel-day flight order + today focus + terminal coach**  
 All flight lists sort by canonical departure time (Ontario before Seattle on the same day). Travel day picks today’s earliest leg for Home, Map preview, and airport navigator. Schematic airports show “Terminal guide · pins approximate · follow airport signs.” Depart coach leads with airline + terminal when known (e.g. Alaska · Terminal 2 at ONT).
 
@@ -939,6 +944,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | G34 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts`, `src/lib/travelAssistant/pricingSourceText.test.ts`, `src/lib/travelAssistant/rescanTripImports.test.ts`, `src/lib/travelAssistant/hydrateReservationQuotedPrice.test.ts` |
 | G35 | `src/lib/api/readJsonResponse.test.ts` |
 | G36 | `src/lib/travelAssistant/tripSpendSummary.test.ts` |
+| G37 | `src/lib/travelAssistant/hydrateReservationQuotedPrice.test.ts`, `src/lib/travelAssistant/pricingSourceText.test.ts` |
 | M39 | `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |

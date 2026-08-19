@@ -28,6 +28,11 @@ export function selectPricingSourceText(input: PricingSourceHints): string {
     return pdfSection;
   }
 
+  // Multi-leg PNR: Alaska/ITA put one ticket total at the top — leg slices miss it.
+  if (/\bnew\s+ticket\s+value\b/iu.test(combined) && parseCashUsdFromText(combined) != null) {
+    return combined;
+  }
+
   const purchaseSummaryIdx = combined.search(/\bPurchase\s+Summary\b/iu);
   if (purchaseSummaryIdx >= 0 && /\bmiles?\b/iu.test(combined) && /\bUSD\b/iu.test(combined)) {
     return combined.slice(purchaseSummaryIdx).trim();

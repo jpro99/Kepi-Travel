@@ -3,6 +3,7 @@ import test from "node:test";
 import { PDF_ATTACHMENT_MARKER } from "@/lib/travelAssistant/emailSourceText";
 import {
   enrichReservationFromTripPeers,
+  finalizeTripReservationPricing,
   hydrateReservationsPricing,
   propagatePricingAcrossPeerGroups,
 } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
@@ -86,4 +87,60 @@ test("propagatePricingAcrossPeerGroups copies cash and miles to every leg in PNR
   );
   assert.equal(persisted[0]?.quotedPriceUsd, 150);
   assert.equal(persisted[1]?.quotedPriceUsd, 150);
+});
+
+test("G37: finalizeTripReservationPricing auto-logs one Alaska ticket across four legs", () => {
+  const alaskaEmail =
+    "Confirmation DPNNWG\nSummary of airfare charges\nNew Ticket Value: $1,386.43\nTotal charges for air travel: USD $0.00\nAS654 ONT-SEA\nAS180 SEA-FCO";
+  const legs = [
+    {
+      id: "f1",
+      type: "flight",
+      title: "ONT-SEA",
+      confirmationCode: "DPNNWG",
+      sourceEmailId: "email-alaska",
+      originalEmailText: alaskaEmail,
+      flightNumber: "AS654",
+      flightDepartureAirport: "ONT",
+      flightArrivalAirport: "SEA",
+    },
+    {
+      id: "f2",
+      type: "flight",
+      title: "SEA-FCO",
+      confirmationCode: "DPNNWG",
+      sourceEmailId: "email-alaska",
+      flightNumber: "AS180",
+      flightDepartureAirport: "SEA",
+      flightArrivalAirport: "FCO",
+    },
+    {
+      id: "f3",
+      type: "flight",
+      title: "FCO-SEA",
+      confirmationCode: "DPNNWG",
+      sourceEmailId: "email-alaska",
+      flightNumber: "AS181",
+      flightDepartureAirport: "FCO",
+      flightArrivalAirport: "SEA",
+    },
+    {
+      id: "f4",
+      type: "flight",
+      title: "SEA-ONT",
+      confirmationCode: "DPNNWG",
+      sourceEmailId: "email-alaska",
+      flightNumber: "AS489",
+      flightDepartureAirport: "SEA",
+      flightArrivalAirport: "ONT",
+    },
+  ];
+
+  const finalized = finalizeTripReservationPricing(legs);
+  assert.equal(finalized[0]?.quotedPriceUsd, 1386);
+  assert.equal(finalized[1]?.quotedPriceUsd, 1386);
+  assert.equal(finalized[2]?.quotedPriceUsd, 1386);
+  assert.equal(finalized[3]?.quotedPriceUsd, 1386);
+  assert.equal(computeTripSpend(finalized).cashTotalUsd, 1386);
+  assert.equal(computeTripSpend(finalized).missingPriceCount, 0);
 });

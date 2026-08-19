@@ -81,3 +81,26 @@ test("G34: selectPricingSourceText prefers PDF attachment for ITA fare totals", 
     150,
   );
 });
+
+test("G37: selectPricingSourceText uses full email for Alaska New Ticket Value on any leg", () => {
+  const alaskaEmail =
+    "Confirmation DPNNWG\nNew Ticket Value: $1,386.43\nTotal charges USD $0\nAS489 SEA ONT";
+  const slice = selectPricingSourceText({
+    originalEmailText: alaskaEmail,
+    confirmationCode: "DPNNWG",
+    flightNumber: "AS489",
+    flightDepartureAirport: "SEA",
+    flightArrivalAirport: "ONT",
+  });
+  assert.match(slice, /New Ticket Value: \$1,386.43/u);
+  assert.equal(
+    resolveReservationCashUsd({
+      originalEmailText: alaskaEmail,
+      confirmationCode: "DPNNWG",
+      flightNumber: "AS489",
+      flightDepartureAirport: "SEA",
+      flightArrivalAirport: "ONT",
+    }),
+    1386,
+  );
+});
