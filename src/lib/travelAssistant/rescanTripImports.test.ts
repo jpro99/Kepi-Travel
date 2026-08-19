@@ -6,6 +6,7 @@ import {
   countRescannableReservations,
   mergeRescanIntoExisting,
 } from "@/lib/travelAssistant/rescanTripImportsShared";
+import { reservationNeedsPricingBackfill } from "@/lib/travelAssistant/rescanPricingBackfill";
 
 function sampleReservation(overrides: Partial<SessionReservation> = {}): SessionReservation {
   return {
@@ -42,6 +43,23 @@ test("countRescannableReservations counts only reservations with enough source t
     sampleReservation({ id: "b" }),
   ]);
   assert.equal(count, 1);
+});
+
+test("reservationNeedsPricingBackfill when flight has points but no PDF cash", () => {
+  const reservation = sampleReservation({
+    quotedPointsMiles: 15000,
+    originalEmailText: "ITA Airways Electronic travel receipt Reservation code Z84T4Z",
+    sourceEmailId: "email-ita-1",
+  });
+  assert.equal(reservationNeedsPricingBackfill(reservation), true);
+});
+
+test("reservationNeedsPricingBackfill when flight lacks PDF attachment section", () => {
+  const reservation = sampleReservation({
+    originalEmailText: "ITA Airways Electronic travel receipt Reservation code Z84T4Z",
+    sourceEmailId: "email-ita-1",
+  });
+  assert.equal(reservationNeedsPricingBackfill(reservation), true);
 });
 
 test("mergeRescanIntoExisting fills only empty fields and keeps user edits", () => {

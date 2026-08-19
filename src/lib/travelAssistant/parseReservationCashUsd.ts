@@ -6,6 +6,7 @@
 import { parseMilesFromText } from "@/lib/travelAssistant/parseReservationMiles";
 import { parseAwardMilesPlusCashFromText } from "@/lib/travelAssistant/parseAwardMilesPlusCash";
 import { selectPricingSourceText } from "@/lib/travelAssistant/pricingSourceText";
+import { extractPdfAttachmentSection } from "@/lib/travelAssistant/emailSourceText";
 
 const TOTAL_CONTEXT =
   /\b(?:grand\s+total|total\s+(?:amount|price|cost|paid|charge|due|fare|for\s+trip|purchase\s+price)|amount\s+(?:paid|charged|due)|you\s+paid|you\s+will\s+be\s+charged|will\s+be\s+charged\s+a\s+total|charged\s+a\s+total|price\s+paid|ticket\s+total|trip\s+total|booking\s+total|reservation\s+total|payment\s+total|purchase\s+total|room\s+total|stay\s+total|charged\s+today|credit\s+card\s+charge|total\s+charges\s+for\s+air\s+travel|total\s+balance\s+due)\b/iu;
@@ -265,7 +266,7 @@ function scoreEuroAmountMatch(fullText: string, start: number, end: number): num
   const context = fullText.slice(windowStart, windowEnd);
   let score = 8;
   if (TOTAL_CONTEXT.test(context)) score += 100;
-  if (/\b(?:totale|importo\s+totale|total\s+amount|amount\s+paid|taxes?\s+and\s+fees?)\b/iu.test(context)) {
+  if (/\b(?:totale|importo\s+totale|total\s+amount|amount\s+paid|taxes?\s+and\s+fees?|fare\s+details|payment\s+details)\b/iu.test(context)) {
     score += 80;
   }
   if (PENALTY_CONTEXT.test(context) && !TOTAL_CONTEXT.test(context)) score -= 50;
@@ -294,14 +295,18 @@ function sumTicketValuesFromText(haystack: string): number | undefined {
   return Math.round(total);
 }
 
-/** Parse the best-effort total cash amount from confirmation email text. */
-export function parseCashUsdFromText(text: string): number | undefined {
-  const haystack = normalizeEmailText(text);
+/** Parse cash from normalized email/PDF text (no PDF-section lift). */
+function parseCashUsdFromNormalizedHaystack(
+  haystack: string,
+  options?: { skipAward?: boolean },
+): number | undefined {
   if (!haystack) return undefined;
 
-  const awardTotal = parseAwardMilesPlusCashFromText(haystack);
-  if (awardTotal != null) {
-    return clampParsedBookingCash(awardTotal.cashUsd, 120);
+  if (!options?.skipAward) {
+    const awardTotal = parseAwardMilesPlusCashFromText(haystack);
+    if (awardTotal != null) {
+      return clampParsedBookingCash(awardTotal.cashUsd, 120);
+    }
   }
 
   if (isZeroCashDueContext(haystack) && isAwardOnlyReservationText(haystack)) {
@@ -323,7 +328,8 @@ export function parseCashUsdFromText(text: string): number | undefined {
   const scoredEur: ScoredEuroAmount[] = [];
 
   const eurPatterns: RegExp[] = [
-    /\b(?:grand\s+total|total(?:\s+(?:amount|price|cost|paid|charge|due|fare))?|amount\s+(?:paid|charged|due)|totale|importo\s+totale|you\s+paid|ticket\s+total|payment\s+total)\b[^€\d]{0,24}(?:€|EUR)\s*([\d.,]+)/giu,
+    /\bTotal\s+Amount\b[^€\d]{0,16}(?:€|EUR)\s*([\d.,]+)/giu,
+    /\b(?:grand\s+total|total(?:\s+(?:amount|price|cost|paid|charge|due|fare))?|amount\s+(?:paid|charged|due)|totale|importo\s+totale|you\s+paid|ticket\s+total|payment\s+total|fare)\b[^€\d]{0,24}(?:€|EUR)\s*([\d.,]+)/giu,
     /(?:€|EUR)\s*([\d.,]+)(?:\s*(?:EUR|€))?/giu,
     /\b([\d.,]+)\s*(?:EUR|€)\b/giu,
   ];
@@ -380,6 +386,27 @@ export function parseCashUsdFromText(text: string): number | undefined {
   }
 
   return undefined;
+}
+
+/** Parse the best-effort total cash amount from confirmation email text. */
+export function parseCashUsdFromText(text: string): number | undefined {
+  const haystack = normalizeEmailText(text);
+  if (!haystack) return undefined;
+
+  const awardTotal = parseAwardMilesPlusCashFromText(haystack);
+  if (awardTotal != null) {
+    return clampParsedBookingCash(awardTotal.cashUsd, 120);
+  }
+
+  const pdfSection = extractPdfAttachmentSection(text);
+  if (pdfSection) {
+    const fromPdf = parseCashUsdFromNormalizedHaystack(normalizeEmailText(pdfSection), {
+      skipAward: true,
+    });
+    if (fromPdf != null) return fromPdf;
+  }
+
+  return parseCashUsdFromNormalizedHaystack(haystack, { skipAward: true });
 }
 
 export interface CashUsdResolvable {

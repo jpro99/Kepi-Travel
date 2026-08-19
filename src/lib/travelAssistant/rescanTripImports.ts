@@ -8,10 +8,13 @@ import { isPlaceholderConfirmation } from "@/lib/travelAssistant/placeholderRese
 import { prepareReviewDraftForAccept } from "@/lib/travelAssistant/prepareReviewDraftForAccept";
 import { resolvePricingNearBooking } from "@/lib/travelAssistant/parseReservationMiles";
 import { applyAcceptedReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
-import { parseAwardMilesPlusCashFromText } from "@/lib/travelAssistant/parseAwardMilesPlusCash";
 import { getResendClient } from "@/lib/email/resendClient";
 import { fetchReceivedEmailSourceText } from "@/lib/travelAssistant/receivedEmailPdfText";
-import { shouldReplaceStoredSourceText, truncateEmailSourceText } from "@/lib/travelAssistant/emailSourceText";
+import { reservationNeedsPricingBackfill } from "@/lib/travelAssistant/rescanPricingBackfill";
+import {
+  shouldReplaceStoredSourceText,
+  truncateEmailSourceText,
+} from "@/lib/travelAssistant/emailSourceText";
 import {
   isDuplicateReservation,
   type DuplicateReservationFields,
@@ -30,6 +33,7 @@ export {
   countRescannableReservations,
   mergeRescanIntoExisting,
 } from "@/lib/travelAssistant/rescanTripImportsShared";
+export { reservationNeedsPricingBackfill } from "@/lib/travelAssistant/rescanPricingBackfill";
 
 function draftToMatchFields(draft: ForwardedReservationDraft): DuplicateReservationFields {
   return {
@@ -129,31 +133,6 @@ function findMatchingReservation(
   return null;
 }
 
-function reservationNeedsPricingBackfill(reservation: SessionReservation): boolean {
-  const hasCash =
-    typeof reservation.quotedPriceUsd === "number" &&
-    Number.isFinite(reservation.quotedPriceUsd) &&
-    reservation.quotedPriceUsd > 0;
-  const hasPoints =
-    typeof reservation.quotedPointsMiles === "number" &&
-    Number.isFinite(reservation.quotedPointsMiles) &&
-    reservation.quotedPointsMiles > 0;
-  if (!hasCash && !hasPoints) return true;
-
-  const text = reservation.originalEmailText?.trim() ?? "";
-  const award = text ? parseAwardMilesPlusCashFromText(text) : undefined;
-  if (!award) return false;
-  if (!hasPoints || !hasCash) return true;
-  if (hasCash && (reservation.quotedPriceUsd ?? 0) < Math.round(award.cashUsd * 0.75)) return true;
-  // Miles stored as $24,000 (or any inflated cash) must re-parse from the award line.
-  if (hasCash && (reservation.quotedPriceUsd ?? 0) > Math.round(award.cashUsd * 4)) return true;
-  if (hasCash && hasPoints && reservation.quotedPriceUsd === reservation.quotedPointsMiles) return true;
-  if (hasPoints && (reservation.quotedPointsMiles ?? 0) < Math.round(award.milesSpent * 0.75)) {
-    return true;
-  }
-  return false;
-}
-
 async function backfillSourceTextFromResend(
   reservations: SessionReservation[],
 ): Promise<SessionReservation[]> {
@@ -183,16 +162,19 @@ async function backfillSourceTextFromResend(
 
   return reservations.map((reservation) => {
     const emailId = reservation.sourceEmailId?.trim();
-    if (!emailId || !reservationNeedsPricingBackfill(reservation)) return reservation;
+    if (!emailId) return reservation;
     const fetched = sourceByEmailId.get(emailId);
     if (!fetched?.text) return reservation;
     const existingText = reservation.originalEmailText?.trim() ?? "";
     if (!shouldReplaceStoredSourceText(existingText, fetched.text)) return reservation;
-    return applyAcceptedReservationPricing({
-      ...reservation,
-      originalEmailText: truncateEmailSourceText(fetched.text),
-      sourceEmailSubject: reservation.sourceEmailSubject?.trim() || fetched.subject,
-    }, { reparseFromEmail: true });
+    return applyAcceptedReservationPricing(
+      {
+        ...reservation,
+        originalEmailText: truncateEmailSourceText(fetched.text),
+        sourceEmailSubject: reservation.sourceEmailSubject?.trim() || fetched.subject,
+      },
+      { reparseFromEmail: true },
+    );
   });
 }
 

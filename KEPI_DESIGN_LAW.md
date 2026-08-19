@@ -151,6 +151,11 @@ United / MileagePlus confirmations show `Total 24,000 miles + 195.80 USD` — pa
 
 **Test:** `src/lib/travelAssistant/parseReservationPricing.test.ts`, `src/lib/travelAssistant/pricingSourceText.test.ts`, `src/lib/travelAssistant/parseReservationCashUsd.test.ts`, `src/lib/travelAssistant/tripSpendSummary.test.ts`
 
+**G34 — Airline e-ticket PDF totals (ITA EUR) parse for trip spend**  
+ITA / European receipts often put `Total Amount EUR 149.78` only in the attached e-ticket PDF — email boilerplate alone has no fare. Parse PDF attachment text first; re-scan fetches PDF from Resend when flights still show “Add price”. Multi-leg PNR shares one total via confirmation dedupe. Confirmations untouched.
+
+**Test:** `src/lib/travelAssistant/parseReservationCashUsd.test.ts`, `src/lib/travelAssistant/pricingSourceText.test.ts`, `src/lib/travelAssistant/rescanTripImports.test.ts`
+
 **M39 — Travel-day flight order + today focus + terminal coach**  
 All flight lists sort by canonical departure time (Ontario before Seattle on the same day). Travel day picks today’s earliest leg for Home, Map preview, and airport navigator. Schematic airports show “Terminal guide · pins approximate · follow airport signs.” Depart coach leads with airline + terminal when known (e.g. Alaska · Terminal 2 at ONT).
 
@@ -921,6 +926,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | G31 | `src/lib/travelAssistant/tripOrchestration.test.ts`, `src/lib/travelAssistant/missionControlView.tdz.test.ts` |
 | G32 | `src/lib/travelAssistant/tripAccounting.test.ts`, `src/lib/travelAssistant/tripSpendSummary.test.ts` |
 | G33 | `src/lib/travelAssistant/parseReservationPricing.test.ts`, `src/lib/travelAssistant/pricingSourceText.test.ts`, `src/lib/travelAssistant/parseReservationCashUsd.test.ts`, `src/lib/travelAssistant/tripSpendSummary.test.ts` |
+| G34 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts`, `src/lib/travelAssistant/pricingSourceText.test.ts`, `src/lib/travelAssistant/rescanTripImports.test.ts` |
 | M39 | `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |

@@ -50,10 +50,21 @@ export function enrichReservationFromTripPeers<T extends PricingPeerResolvable>(
   reservation: T,
   peers: T[],
 ): T {
-  if (reservation.originalEmailText?.trim()) return reservation;
   const donor = findPricingDonor(reservation, peers);
+
+  if (reservation.originalEmailText?.trim()) {
+    if (reservation.sourceEmailId?.trim() || !donor?.sourceEmailId?.trim()) {
+      return reservation;
+    }
+    return { ...reservation, sourceEmailId: donor.sourceEmailId };
+  }
+
   if (!donor?.originalEmailText?.trim()) return reservation;
-  return { ...reservation, originalEmailText: donor.originalEmailText };
+  return {
+    ...reservation,
+    originalEmailText: donor.originalEmailText,
+    sourceEmailId: reservation.sourceEmailId?.trim() || donor.sourceEmailId,
+  };
 }
 
 export interface ApplyPricingOptions {

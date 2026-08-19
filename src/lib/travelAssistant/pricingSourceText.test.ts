@@ -52,3 +52,32 @@ test("G33: resolveReservationCashUsd reads award taxes from full email not leg s
     196,
   );
 });
+
+const ITA_BOILERPLATE_PDF = `
+ITA Airways Electronic travel receipt
+Reservation code Z84T4Z
+--- PDF attachment ---
+FARE DETAILS
+Fare EUR 133.00
+Total Amount EUR 149.78
+Flight AZ1616 BRI FCO
+`;
+
+test("G34: selectPricingSourceText prefers PDF attachment for ITA fare totals", () => {
+  const slice = selectPricingSourceText({
+    originalEmailText: ITA_BOILERPLATE_PDF,
+    confirmationCode: "Z84T4Z",
+    flightNumber: "AZ1616",
+    flightDepartureAirport: "BRI",
+    flightArrivalAirport: "FCO",
+  });
+  assert.match(slice, /PDF attachment/u);
+  assert.match(slice, /Total Amount EUR 149.78/u);
+  assert.equal(
+    resolveReservationCashUsd({
+      originalEmailText: ITA_BOILERPLATE_PDF,
+      confirmationCode: "Z84T4Z",
+    }),
+    150,
+  );
+});

@@ -4,6 +4,7 @@ import {
   parseCashUsdFromText,
   type CashUsdResolvable,
 } from "@/lib/travelAssistant/parseReservationCashUsd";
+import { extractPdfAttachmentSection } from "@/lib/travelAssistant/emailSourceText";
 
 export interface PricingSourceHints extends CashUsdResolvable {
   confirmationCode?: string;
@@ -20,6 +21,11 @@ export function selectPricingSourceText(input: PricingSourceHints): string {
 
   if (parseAwardMilesPlusCashFromText(combined)) {
     return combined;
+  }
+
+  const pdfSection = extractPdfAttachmentSection(combined);
+  if (pdfSection && parseCashUsdFromText(pdfSection) != null) {
+    return pdfSection;
   }
 
   const purchaseSummaryIdx = combined.search(/\bPurchase\s+Summary\b/iu);

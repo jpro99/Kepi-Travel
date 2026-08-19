@@ -157,6 +157,35 @@ test("G33: 24,000 miles stored as cash is not $24,000", () => {
   assert.equal(resolveReservationCashUsd({ quotedPriceUsd: 24000 }), undefined);
 });
 
+test("G34: ITA e-ticket PDF Total Amount EUR 149.78 parses from boilerplate + attachment", () => {
+  const boilerplate = `
+ITA Airways Electronic travel receipt
+Reservation code Z84T4Z
+Please review this booking confirmation carefully
+`;
+  const pdf = `
+--- PDF attachment ---
+FARE DETAILS
+Fare EUR 133.00
+Taxes EUR 0.83EX EUR 1.53FN EUR 6.50HB EUR 4.55IT
+Total Amount EUR 149.78
+Flight AZ1616 BRI FCO
+Flight AZ1467 FCO VCE
+`;
+  assert.equal(parseCashUsdFromText(boilerplate), undefined);
+  assert.equal(parseCashUsdFromText(boilerplate + pdf), 150);
+  assert.equal(
+    resolveReservationCashUsd({
+      originalEmailText: boilerplate + pdf,
+      confirmationCode: "Z84T4Z",
+      flightNumber: "AZ1616",
+      flightDepartureAirport: "BRI",
+      flightArrivalAirport: "FCO",
+    }),
+    150,
+  );
+});
+
 test("G33: forwarded thread with many ticket values uses max not sum", () => {
   const lines = Array.from({ length: 20 }, () => "New Ticket Value: $1,386.43").join(" ");
   assert.equal(parseCashUsdFromText(lines), 1386);
