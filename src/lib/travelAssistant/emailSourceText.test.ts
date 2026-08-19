@@ -30,6 +30,19 @@ test("shouldReplaceStoredSourceText prefers fetched text when PDF marker is new"
   assert.equal(shouldReplaceStoredSourceText("already has pdf\n\n--- PDF attachment ---\n\nold", "shorter"), false);
 });
 
+test("G38: later itinerary forward does not overwrite a New Ticket Value receipt", () => {
+  const receipt = "Confirmation DPNNWG\nNew Ticket Value: $1,386.43\nTotal charges USD $0.00";
+  const longItinerary = `AS654 ONT-SEA AS180 SEA-FCO Confirmation DPNNWG ${"itinerary ".repeat(400)}`;
+  assert.equal(shouldReplaceStoredSourceText(receipt, longItinerary), false);
+  assert.equal(shouldReplaceStoredSourceText(longItinerary, receipt), true);
+});
+
+test("truncateEmailSourceText keeps New Ticket Value when body is long", () => {
+  const body = `${"x".repeat(13_000)}\nNew Ticket Value: $1,386.43\nTotal charges USD $0.00`;
+  const stored = truncateEmailSourceText(body, 12_000);
+  assert.match(stored, /New Ticket Value: \$1,386\.43/);
+});
+
 test("truncateEmailSourceText keeps PDF attachment when body is long", () => {
   const body = "x".repeat(13_000);
   const pdf = "--- PDF attachment ---\n\nTotale EUR 86,40";

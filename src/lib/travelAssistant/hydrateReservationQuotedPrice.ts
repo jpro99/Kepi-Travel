@@ -259,6 +259,32 @@ export function finalizeTripReservationPricing<T extends CashUsdResolvable & Mil
   return hydrateReservationsPricing(repriced);
 }
 
+/** Stamp one forwarded confirmation onto every leg that shares its PNR. */
+export function applyIncomingSourceToPnrGroup<T extends CashUsdResolvable & MilesResolvable & PricingPeerResolvable>(
+  reservations: T[],
+  incomingSourceText: string,
+  confirmationCode?: string | null,
+): T[] {
+  const source = incomingSourceText.trim();
+  if (!source) return reservations;
+
+  const code = confirmationCode?.trim().toUpperCase();
+  return reservations.map((reservation) => {
+    const sameCode = Boolean(code && reservation.confirmationCode?.trim().toUpperCase() === code);
+    const sameEmail = Boolean(
+      reservation.originalEmailText?.trim() &&
+        source.includes(reservation.originalEmailText.trim().slice(0, 80)),
+    );
+    if (!sameCode && !sameEmail) return reservation;
+    const currentText = reservation.originalEmailText?.trim() ?? "";
+    const nextText = shouldReplaceStoredSourceText(currentText, source) ? source : currentText || source;
+    return applyAcceptedReservationPricing(
+      { ...reservation, originalEmailText: nextText },
+      { reparseFromEmail: true },
+    );
+  });
+}
+
 /** Normalize cash + miles fields when accepting a review item or saving a reservation. */
 export function applyAcceptedReservationPricing<T extends CashUsdResolvable & MilesResolvable>(
   draft: T,
@@ -275,11 +301,14 @@ export function applyAcceptedReservationPricing<T extends CashUsdResolvable & Mi
   if (reparseFromEmail && hasEmailSource) {
     const hydrated = hydrateReservationPricing(merged);
     const pricing = resolvePricingFromEmailSource(hydrated);
+    const parsedCash = pricing.cashUsd != null && pricing.cashUsd > 0 ? pricing.cashUsd : undefined;
+    const keptCash =
+      hydrated.quotedPriceUsd != null && hydrated.quotedPriceUsd > 0 ? hydrated.quotedPriceUsd : undefined;
     return {
       ...hydrated,
-      quotedPriceUsd: pricing.cashUsd != null && pricing.cashUsd > 0 ? pricing.cashUsd : undefined,
-      quotedPointsMiles: pricing.milesSpent,
-      quotedMilesEarned: pricing.milesEarned,
+      quotedPriceUsd: parsedCash ?? keptCash,
+      quotedPointsMiles: pricing.milesSpent ?? hydrated.quotedPointsMiles,
+      quotedMilesEarned: pricing.milesEarned ?? hydrated.quotedMilesEarned,
       pointsProgram: pricing.program ?? hydrated.pointsProgram,
     };
   }

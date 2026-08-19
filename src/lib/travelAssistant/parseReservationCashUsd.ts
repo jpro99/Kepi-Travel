@@ -38,7 +38,7 @@ const PENALTY_CONTEXT =
   /\b(?:per\s+night|\/\s*night|nightly|tax(?:es)?|fee(?:s)?|surcharge|gratuity|tip|deposit|balance\s+due|estimated|approx|award|\/\s*pax|each)\b/iu;
 
 const TICKET_VALUE_LINE =
-  /\b(?:new\s+ticket\s+value|ticket\s+value|original\s+ticket\s+value|total\s+fare)\b[^$\d]{0,24}\$?\s*([\d,]+(?:\.\d{2})?)/giu;
+  /\b(?:new\s+ticket\s+value|ticket\s+value|original\s+ticket\s+value|total\s+fare)\b[^$\d]{0,160}\$?\s*([\d,]+(?:\.\d{2})?)/giu;
 
 function normalizeEmailText(text: string): string {
   return text

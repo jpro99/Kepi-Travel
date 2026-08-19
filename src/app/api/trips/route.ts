@@ -16,6 +16,7 @@ import {
   listTrips,
   setActiveTrip,
   updateTrip,
+  type TravelTrip,
 } from "@/lib/travelAssistant/tripStore";
 import {
   listCollaborativeTripsForUser,
@@ -32,6 +33,33 @@ import {
 } from "@/lib/travelAssistant/backfillDayPlans";
 import { applyDayPlanToItineraryPlans, remapParsedDayPlanToTripWindow } from "@/lib/travelAssistant/parseDayPlanItinerary";
 import { importGmailTravelInbox } from "@/lib/travelAssistant/gmailImportProvider";
+import { finalizeTripReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
+
+function reservationPricingImproved(
+  before: TravelTrip["reservations"],
+  after: TravelTrip["reservations"],
+): boolean {
+  return after.some((reservation) => {
+    const previous = before.find((entry) => entry.id === reservation.id);
+    if (!previous) return Boolean(reservation.quotedPriceUsd || reservation.quotedPointsMiles);
+    const cashGained = (reservation.quotedPriceUsd ?? 0) > (previous.quotedPriceUsd ?? 0);
+    const milesGained = (reservation.quotedPointsMiles ?? 0) > (previous.quotedPointsMiles ?? 0);
+    const sourceGained =
+      (reservation.originalEmailText?.length ?? 0) > (previous.originalEmailText?.length ?? 0);
+    return cashGained || milesGained || sourceGained;
+  });
+}
+
+async function persistFinalizedTripPricing(trip: TravelTrip, userId: string): Promise<TravelTrip> {
+  const finalized = finalizeTripReservationPricing(trip.reservations);
+  if (!reservationPricingImproved(trip.reservations, finalized)) {
+    return trip;
+  }
+  return (await updateTrip(trip.id, { reservations: finalized }, userId)) ?? {
+    ...trip,
+    reservations: finalized,
+  };
+}
 
 async function listTripsIncludingCollaborations(userId: string) {
   const [owned, collaborative] = await Promise.all([
@@ -78,7 +106,12 @@ async function resolveActiveTrip(userId: string) {
   }
 
   const owned = await getTrip(preferred.id, userId);
-  return { trips, activeTrip: owned ?? preferred, activeTripId: preferred.id };
+  if (!owned) {
+    return { trips, activeTrip: preferred, activeTripId: preferred.id };
+  }
+  const priced = await persistFinalizedTripPricing(owned, userId);
+  const nextTrips = trips.map((trip) => (trip.id === priced.id ? { ...trip, reservations: priced.reservations } : trip));
+  return { trips: nextTrips, activeTrip: priced, activeTripId: preferred.id };
 }
 
 const TripStageSchema = z.enum(["readiness", "pre-departure", "airport", "arrival", "recovery"]);
@@ -257,7 +290,8 @@ export async function GET(req: Request) {
     if (tripId) {
       const owned = await getTrip(tripId, auth.userId);
       if (owned) {
-        return NextResponse.json({ trip: owned }, { headers: auth.headers });
+        const priced = await persistFinalizedTripPricing(owned, auth.userId);
+        return NextResponse.json({ trip: priced }, { headers: auth.headers });
       }
       const access = await resolveTripWriteAccess(auth.userId, tripId);
       if (access) {

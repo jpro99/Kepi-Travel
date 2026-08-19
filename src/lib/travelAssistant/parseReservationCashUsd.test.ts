@@ -186,6 +186,11 @@ Flight AZ1467 FCO VCE
   );
 });
 
+test("G38: New Ticket Value still parses when HTML leaves a wide gap", () => {
+  const text = "New Ticket Value          passenger fare details          $1,386.43";
+  assert.equal(parseCashUsdFromText(text), 1386);
+});
+
 test("G33: duplicate identical New Ticket Value lines parse once (DPNNWG)", () => {
   const text =
     "New Ticket Value: $1,386.43\nNew Ticket Value: $1,386.43\nTotal charges for air travel: USD $0.00";

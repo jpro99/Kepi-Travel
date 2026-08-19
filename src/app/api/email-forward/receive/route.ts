@@ -59,7 +59,11 @@ import {
 } from "@/lib/travelAssistant/parseDayPlanItinerary";
 import { normalizeItineraryPlans } from "@/lib/travelAssistant/itineraryDayPlan";
 import { resolveReservationPricing, resolvePricingNearBooking } from "@/lib/travelAssistant/parseReservationMiles";
-import { applyAcceptedReservationPricing, finalizeTripReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
+import {
+  applyAcceptedReservationPricing,
+  applyIncomingSourceToPnrGroup,
+  finalizeTripReservationPricing,
+} from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import {
   extractReservationSourceLinks,
   resolveBoardingPassUrl,
@@ -599,7 +603,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
     const parserOriginalEmailText =
       typeof parserResult?.originalEmailText === "string" ? parserResult.originalEmailText : "";
     const storedSourceText = truncateEmailSourceText(
-      ensurePdfInSourceText(parserOriginalEmailText, pdfAttachmentText),
+      ensurePdfInSourceText(parserText || parserOriginalEmailText, pdfAttachmentText),
     );
     const parserHasPdfAttachment = Boolean(parserResult?.hasPdfAttachment);
     const parserImageBasedEmail = Boolean(parserResult?.imageBasedEmail);
@@ -1337,6 +1341,22 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
 
     let tripWindowPatch: { startDate: string; endDate: string } | null = null;
     if (!dayPlanOnly) {
+      if (storedSourceText) {
+        const confirmationCodes = new Set(
+          draftsToImport
+            .map((draft) => (typeof draft.confirmationCode === "string" ? draft.confirmationCode.trim() : ""))
+            .filter((code) => code.length >= 4),
+        );
+        for (const reservation of nextReservations) {
+          const code = reservation.confirmationCode?.trim();
+          if (code && storedSourceText.toUpperCase().includes(code.toUpperCase())) {
+            confirmationCodes.add(code);
+          }
+        }
+        for (const code of confirmationCodes) {
+          nextReservations = applyIncomingSourceToPnrGroup(nextReservations, storedSourceText, code);
+        }
+      }
       nextReservations = finalizeTripReservationPricing(nextReservations);
       nextReservations = dedupeFlightReservations(nextReservations);
       const drained = drainForwardReviewQueue(nextReservations, nextQueue, () => `res-email-${generateId()}`);

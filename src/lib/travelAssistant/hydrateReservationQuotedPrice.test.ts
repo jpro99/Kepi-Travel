@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { PDF_ATTACHMENT_MARKER } from "@/lib/travelAssistant/emailSourceText";
 import {
+  applyIncomingSourceToPnrGroup,
   enrichReservationFromTripPeers,
   finalizeTripReservationPricing,
   hydrateReservationsPricing,
@@ -143,4 +144,18 @@ test("G37: finalizeTripReservationPricing auto-logs one Alaska ticket across fou
   assert.equal(finalized[3]?.quotedPriceUsd, 1386);
   assert.equal(computeTripSpend(finalized).cashTotalUsd, 1386);
   assert.equal(computeTripSpend(finalized).missingPriceCount, 0);
+});
+
+test("G38: incoming receipt prices every DPNNWG leg even after itinerary-only siblings", () => {
+  const receipt =
+    "Confirmation DPNNWG\nSummary of airfare charges\nNew Ticket Value: $1,386.43\nTotal charges for air travel: USD $0.00";
+  const legs = [
+    { id: "f1", type: "flight", title: "ONT-SEA", confirmationCode: "DPNNWG", originalEmailText: "AS654 itinerary only" },
+    { id: "f2", type: "flight", title: "SEA-FCO", confirmationCode: "DPNNWG" },
+    { id: "f3", type: "flight", title: "FCO-SEA", confirmationCode: "DPNNWG" },
+    { id: "f4", type: "flight", title: "SEA-ONT", confirmationCode: "DPNNWG" },
+  ];
+  const priced = applyIncomingSourceToPnrGroup(legs, receipt, "DPNNWG");
+  assert.equal(priced.every((leg) => leg.quotedPriceUsd === 1386), true);
+  assert.equal(computeTripSpend(priced).missingPriceCount, 0);
 });

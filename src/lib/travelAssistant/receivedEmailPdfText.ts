@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Resend } from "resend";
 import { extractAttachmentTextFromReceivedEmail } from "@/lib/travelAssistant/receivedEmailAttachmentText";
+import { htmlToPlainConfirmationText } from "@/lib/travelAssistant/confirmationDocumentText";
 import {
   appendDocxAttachmentText,
   appendPdfAttachmentText,
@@ -52,7 +53,9 @@ export async function fetchReceivedEmailSourceText(
     );
     const bodyText = receivedEmail.text?.trim() ?? "";
     const html = receivedEmail.html?.trim() ?? "";
-    const withPdf = appendPdfAttachmentText(bodyText, attachmentText.pdfText);
+    const htmlText = html ? htmlToPlainConfirmationText(html) : "";
+    const richerBody = htmlText.length > bodyText.length * 1.1 ? htmlText : bodyText || htmlText;
+    const withPdf = appendPdfAttachmentText(richerBody, attachmentText.pdfText);
     const combinedText = appendDocxAttachmentText(withPdf, attachmentText.docxText);
 
     return {

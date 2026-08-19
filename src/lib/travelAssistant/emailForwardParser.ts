@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { htmlToPlainConfirmationText } from "@/lib/travelAssistant/confirmationDocumentText";
-import { mergePdfSectionIntoBody } from "@/lib/travelAssistant/emailSourceText";
+import { mergePdfSectionIntoBody, sourceTextHasPricingSignal } from "@/lib/travelAssistant/emailSourceText";
 import { extractHotelPropertyName } from "@/lib/travelAssistant/hotelPropertyName";
 import {
   extractHotelAddressLocation,
@@ -253,18 +253,26 @@ export { EMAIL_FORWARD_PARSER_VERSION };
 
 function extractOriginalEmailFromForwardChain(text: string): string {
   // When an email is forwarded multiple times, Gmail adds repeated
-  // "---------- Forwarded message ---------" headers. Extract the LAST
-  // (deepest/original) block which contains the actual reservation data.
+  // "---------- Forwarded message ---------" headers. Prefer the deepest
+  // block — but keep the full thread when only an earlier block has the fare.
   const forwardMarker = "---------- Forwarded message ---------";
   const lastMarkerIdx = text.lastIndexOf(forwardMarker);
   if (lastMarkerIdx >= 0) {
-    return text.slice(lastMarkerIdx);
+    const lastBlock = text.slice(lastMarkerIdx);
+    if (sourceTextHasPricingSignal(lastBlock) || !sourceTextHasPricingSignal(text)) {
+      return lastBlock;
+    }
+    return text;
   }
   // Also handle "-----Original Message-----" style
   const originalMarker = "-----Original Message-----";
   const lastOriginalIdx = text.lastIndexOf(originalMarker);
   if (lastOriginalIdx >= 0) {
-    return text.slice(lastOriginalIdx);
+    const lastBlock = text.slice(lastOriginalIdx);
+    if (sourceTextHasPricingSignal(lastBlock) || !sourceTextHasPricingSignal(text)) {
+      return lastBlock;
+    }
+    return text;
   }
   return text;
 }

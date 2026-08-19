@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-16 (G31 trip orchestration)
+Last updated: 2026-08-19 (G38 PNR fare overwrite)
+
+## Incident 2026-08-19 — Re-forwards wiped DPNNWG / Z84T4Z prices (Jeff)
+
+Trip Accounting grouped DPNNWG (4 flights) and Z84T4Z (3 flights) but still showed Add price after multiple forwards. Later itinerary forwards were longer and replaced the receipt that had `New Ticket Value` / PDF fare. G38: never overwrite a priced source with a fare-less itinerary; stamp one total on every PNR leg. Confirmations untouched.
 
 ## Decision 2026-08-16 — End-to-end trip orchestration layer (Jeff)
 

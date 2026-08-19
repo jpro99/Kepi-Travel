@@ -182,7 +182,8 @@ import { BookTabView } from "@/components/travelAssistant/BookTabView";
 import { MapTabView } from "@/components/travelAssistant/MapTabView";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
-import { hydrateReservationsPricing, applyAcceptedReservationPricing, finalizeTripReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
+import { applyAcceptedReservationPricing, finalizeTripReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
+import { mergeReservationPricingFields } from "@/lib/travelAssistant/reservationPricingMerge";
 import { buildTransportConflictReservationIds } from "@/lib/travelAssistant/reservationAttention";
 import { computeTripSpend } from "@/lib/travelAssistant/tripSpendSummary";
 import {
@@ -2856,7 +2857,10 @@ export default function TravelAssistantPage() {
       windowStart,
       windowEnd,
     );
-    const tripReservations = postDrainHotels.reservations;
+    const tripReservations = postDrainHotels.reservations.map((reservation) => {
+      const previous = trip.reservations.find((entry) => entry.id === reservation.id);
+      return previous ? mergeReservationPricingFields(reservation, previous) : reservation;
+    });
     const tripReviewQueue = drained.reviewQueue as ReviewItem[];
     const reservationsChanged =
       drained.changed ||

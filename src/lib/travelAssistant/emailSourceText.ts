@@ -50,16 +50,55 @@ export function ensurePdfInSourceText(sourceText: string, pdfText: string): stri
   return appendPdfAttachmentText(existing, trimmedPdf);
 }
 
+/** True when email/PDF text contains a parseable ticket total or award summary. */
+export function sourceTextHasPricingSignal(text: string): boolean {
+  const haystack = text.trim();
+  if (!haystack) return false;
+  if (haystack.includes(PDF_ATTACHMENT_MARKER) && /\b(?:total\s+amount|totale|new\s+ticket\s+value|EUR|USD)\b/iu.test(haystack)) {
+    return true;
+  }
+  return (
+    /\bnew\s+ticket\s+value\b/iu.test(haystack) ||
+    /\boriginal\s+ticket\s+value\b/iu.test(haystack) ||
+    /\bticket\s+value\b[^$\d]{0,80}\$?\s*[\d,]+/iu.test(haystack) ||
+    /\bpurchase\s+summary\b/iu.test(haystack) ||
+    /\btotal\s+amount\b[^€\d]{0,40}(?:€|EUR)/iu.test(haystack) ||
+    /\b(?:grand\s+total|ticket\s+total|airfare\s+total)\b[^$\d]{0,40}\$?\s*[\d,]+/iu.test(haystack)
+  );
+}
+
 /** Prefer a fetched/stored source when it adds PDF pricing text the reservation never had. */
 export function shouldReplaceStoredSourceText(existing: string, fetched: string): boolean {
   const current = existing.trim();
   const next = fetched.trim();
   if (!next) return false;
   if (!current) return true;
+  const currentHasPrice = sourceTextHasPricingSignal(current);
+  const nextHasPrice = sourceTextHasPricingSignal(next);
+  // Later itinerary forwards are longer but drop the fare — never overwrite a priced receipt.
+  if (currentHasPrice && !nextHasPrice) return false;
+  if (nextHasPrice && !currentHasPrice) return true;
   if (next.includes(PDF_ATTACHMENT_MARKER) && !current.includes(PDF_ATTACHMENT_MARKER)) return true;
-  if (/\bnew\s+ticket\s+value\b/iu.test(next) && !/\bnew\s+ticket\s+value\b/iu.test(current)) return true;
-  if (/\bpurchase\s+summary\b/iu.test(next) && !/\bpurchase\s+summary\b/iu.test(current)) return true;
   return next.length > current.length;
+}
+
+function extractPricingTail(text: string): string {
+  const needles = [
+    /\bNew\s+Ticket\s+Value\b/iu,
+    /\bTicket\s+Value\b/iu,
+    /\bPurchase\s+Summary\b/iu,
+    /\bTotal\s+Amount\b/iu,
+    /\bSummary\s+of\s+airfare\b/iu,
+  ];
+  let earliest = -1;
+  for (const needle of needles) {
+    const match = text.match(needle);
+    if (match?.index != null && (earliest < 0 || match.index < earliest)) {
+      earliest = match.index;
+    }
+  }
+  if (earliest < 0) return "";
+  return text.slice(earliest).trim();
 }
 
 /** Keep PDF attachment section and Purchase Summary when trimming long forwarded email bodies. */
@@ -68,17 +107,13 @@ export function truncateEmailSourceText(text: string, maxChars = 12_000): string
   if (trimmed.length <= maxChars) return trimmed;
 
   const pdfSection = extractPdfAttachmentSection(trimmed);
-  const purchaseSummaryMatch = trimmed.match(/\bPurchase\s+Summary\b/iu);
-  const purchaseTail =
-    purchaseSummaryMatch && purchaseSummaryMatch.index != null
-      ? trimmed.slice(purchaseSummaryMatch.index).trim()
-      : "";
+  const pricingTail = extractPricingTail(trimmed);
 
-  if (!pdfSection && !purchaseTail) return trimmed.slice(0, maxChars);
+  if (!pdfSection && !pricingTail) return trimmed.slice(0, maxChars);
 
   const markerIndex = trimmed.indexOf(PDF_ATTACHMENT_MARKER);
   const body = markerIndex >= 0 ? trimmed.slice(0, markerIndex).trim() : trimmed;
-  const reservedTail = [purchaseTail, pdfSection].filter(Boolean).join("\n\n");
+  const reservedTail = [pricingTail, pdfSection].filter(Boolean).join("\n\n");
   const budgetForBody = maxChars - reservedTail.length - (reservedTail ? 2 : 0);
   if (budgetForBody <= 80) {
     return reservedTail.slice(0, maxChars);
