@@ -192,6 +192,7 @@ export function computeTripSpend(reservations: TripSpendReservation[]): TripSpen
 
   const countedEmailTotals = new Set<string>();
   const countedEmailPoints = new Set<string>();
+  const seenMissingGroups = new Set<string>();
 
   for (const raw of reservations) {
     const reservation = hydrateSpendReservation(raw, reservations);
@@ -239,7 +240,11 @@ export function computeTripSpend(reservations: TripSpendReservation[]): TripSpen
       pricedCount += 1;
     }
     if (reservationMissingPrice(reservation, reservations)) {
-      missingPriceIds.push(reservation.id);
+      const groupKey = pricingPeerGroupKey(reservation, reservations);
+      if (!seenMissingGroups.has(groupKey)) {
+        seenMissingGroups.add(groupKey);
+        missingPriceIds.push(reservation.id);
+      }
     }
   }
 
@@ -263,13 +268,99 @@ export interface TripSpendLineItem {
   cashUsd?: number;
   points?: number;
   needsPrice: boolean;
+  /** Multi-leg flight ticket — all reservation ids in the PNR group. */
+  legIds?: string[];
+  groupSize?: number;
 }
 
-/** Itemized spend for the pricing review sheet (I42). */
+/** Stable key for a multi-leg booking group (confirmation, forwarded email, or singleton). */
+export function pricingPeerGroupKey(
+  reservation: TripSpendReservation,
+  allReservations: TripSpendReservation[],
+): string {
+  const group = reservationPricingPeerGroup(reservation, allReservations);
+  if (group.length > 1) {
+    const code = reservation.confirmationCode?.trim().toUpperCase();
+    if (code) return `code:${code}`;
+    const emailId = reservation.sourceEmailId?.trim();
+    if (emailId) return `email:${emailId}`;
+    const textKey = hydrateSpendReservation(reservation, allReservations).originalEmailText
+      ?.trim()
+      .slice(0, 256);
+    if (textKey) return `text:${textKey}`;
+  }
+  return `id:${reservation.id}`;
+}
+
+function formatFlightLegLabel(reservation: TripSpendReservation): string {
+  const fn = reservation.flightNumber?.trim();
+  const route = [reservation.flightDepartureAirport, reservation.flightArrivalAirport]
+    .filter(Boolean)
+    .join(" → ");
+  if (fn && route) return `${fn} · ${route}`;
+  if (route) return route;
+  if (fn) return fn;
+  return reservation.title?.trim() || "Flight";
+}
+
+function resolveGroupPricing(
+  peerGroup: TripSpendReservation[],
+  allReservations: TripSpendReservation[],
+): { cashUsd?: number; points?: number } {
+  let cashUsd: number | undefined;
+  let points: number | undefined;
+  for (const peer of peerGroup) {
+    const hydrated = hydrateSpendReservation(peer, allReservations);
+    const cash = resolveReservationCashUsd(asPricingInput(hydrated));
+    const pts = resolvedPoints(hydrated);
+    if (cash != null && cash > 0 && cashUsd == null) {
+      cashUsd = cash;
+    }
+    if (pts > 0 && points == null) {
+      points = pts;
+    }
+  }
+  return { cashUsd, points };
+}
+
+/** Itemized spend for the pricing review sheet (I42). Multi-leg flights collapse to one row per PNR. */
 export function buildTripSpendLineItems(reservations: TripSpendReservation[]): TripSpendLineItem[] {
   const items: TripSpendLineItem[] = [];
+  const consumedIds = new Set<string>();
+
   for (const raw of reservations) {
     if (!isSpendTrackedReservation(raw)) continue;
+    if (consumedIds.has(raw.id)) continue;
+
+    const peerGroup = reservationPricingPeerGroup(raw, reservations);
+    const isFlightGroup =
+      (raw.type ?? "").trim().toLowerCase() === "flight" && peerGroup.length > 1;
+
+    if (isFlightGroup) {
+      for (const peer of peerGroup) consumedIds.add(peer.id);
+      const sortedPeers = [...peerGroup].sort((left, right) =>
+        (left.id ?? "").localeCompare(right.id ?? ""),
+      );
+      const primary = sortedPeers[0]!;
+      const { cashUsd, points } = resolveGroupPricing(peerGroup, reservations);
+      const needsPrice = !reservationGroupHasAnyPrice(primary, reservations);
+      const legLabels = sortedPeers.map((peer) => formatFlightLegLabel(peer));
+
+      items.push({
+        id: primary.id,
+        legIds: sortedPeers.map((peer) => peer.id),
+        groupSize: sortedPeers.length,
+        type: "flight",
+        title: primary.title?.trim() || "Flight",
+        label: legLabels.join(" · "),
+        confirmationCode: primary.confirmationCode?.trim() || undefined,
+        cashUsd,
+        points,
+        needsPrice,
+      });
+      continue;
+    }
+
     const reservation = hydrateSpendReservation(raw, reservations);
     const cash = resolveReservationCashUsd(asPricingInput(reservation));
     const points = resolvedPoints(reservation);
@@ -278,11 +369,17 @@ export function buildTripSpendLineItems(reservations: TripSpendReservation[]): T
       id: reservation.id,
       type: (reservation.type ?? "other").trim() || "other",
       title: reservation.title?.trim() || "Reservation",
+      label:
+        (reservation.type ?? "").trim().toLowerCase() === "flight"
+          ? formatFlightLegLabel(reservation)
+          : undefined,
+      confirmationCode: reservation.confirmationCode?.trim() || undefined,
       cashUsd: cash != null && cash > 0 ? cash : undefined,
       points: points != null && points > 0 ? points : undefined,
       needsPrice,
     });
   }
+
   // Needs-price first, then by type.
   return items.sort((a, b) => {
     if (a.needsPrice !== b.needsPrice) return a.needsPrice ? -1 : 1;
@@ -308,11 +405,23 @@ export function formatTripPointsTotal(points: number): string {
   return `${points.toLocaleString("en-US")} pts`;
 }
 
+/** One ticket price per PNR — show cash/miles on the first leg only in flight lists. */
+export function shouldShowSharedPricingOnLeg(
+  reservation: TripSpendReservation,
+  allReservations: TripSpendReservation[],
+): boolean {
+  const peerGroup = reservationPricingPeerGroup(reservation, allReservations);
+  if (peerGroup.length <= 1) return true;
+  const sorted = [...peerGroup].sort((left, right) => (left.id ?? "").localeCompare(right.id ?? ""));
+  return sorted[0]?.id === reservation.id;
+}
+
 function shouldShowSharedEmailCashOnLeg(
   reservation: TripSpendReservation,
   cashUsd: number,
   allReservations: TripSpendReservation[],
 ): boolean {
+  if (!shouldShowSharedPricingOnLeg(reservation, allReservations)) return false;
   if (!reservation.originalEmailText?.trim()) return true;
   const dedupeKey = `${reservation.originalEmailText.trim().slice(0, 256)}::${cashUsd}`;
   const sorted = [...allReservations].sort((left, right) =>
@@ -349,7 +458,10 @@ export function formatReservationCostLine(
   ) {
     parts.push(formatTripCashTotal(cashUsd));
   }
-  if (hasPointsPrice(hydrated)) {
+  if (
+    hasPointsPrice(hydrated) &&
+    (peers.length === 0 || shouldShowSharedPricingOnLeg(hydrated, peers))
+  ) {
     const miles = resolveReservationMiles(hydrated);
     const pts = `${miles.milesSpent!.toLocaleString("en-US")} mi spent`;
     parts.push(hydrated.pointsProgram || miles.program ? `${pts} (${hydrated.pointsProgram ?? miles.program})` : pts);

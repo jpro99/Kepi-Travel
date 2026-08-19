@@ -72,7 +72,7 @@ test("computeTripSpend inherits email pricing from sibling leg with same confirm
       confirmationCode: "AS123",
     },
   ]);
-  assert.equal(summary.cashTotalUsd, 2773);
+  assert.equal(summary.cashTotalUsd, 1386);
   assert.equal(summary.missingPriceCount, 0);
 });
 
@@ -168,4 +168,73 @@ test("G33: shared confirmation dedupes cash across legs with different email pre
   ]);
   assert.equal(summary.cashTotalUsd, 196);
   assert.equal(summary.pointsTotal, 24000);
+});
+
+test("G36: multi-leg PNR collapses to one ledger row with one price", () => {
+  const dpnnwgEmail =
+    "Confirmation DPNNWG\nNew Ticket Value: $1,386.43\nNew Ticket Value: $1,386.43";
+  const reservations = [
+    {
+      id: "f1",
+      type: "flight",
+      title: "ONT-SEA",
+      confirmationCode: "DPNNWG",
+      flightNumber: "AS654",
+      flightDepartureAirport: "ONT",
+      flightArrivalAirport: "SEA",
+      originalEmailText: dpnnwgEmail,
+    },
+    {
+      id: "f2",
+      type: "flight",
+      title: "SEA-FCO",
+      confirmationCode: "DPNNWG",
+      flightNumber: "AS180",
+      flightDepartureAirport: "SEA",
+      flightArrivalAirport: "FCO",
+    },
+    {
+      id: "f3",
+      type: "flight",
+      title: "FCO-SEA",
+      confirmationCode: "DPNNWG",
+      flightNumber: "AS181",
+      flightDepartureAirport: "FCO",
+      flightArrivalAirport: "SEA",
+    },
+    {
+      id: "f4",
+      type: "flight",
+      title: "SEA-ONT",
+      confirmationCode: "DPNNWG",
+      flightNumber: "AS489",
+      flightDepartureAirport: "SEA",
+      flightArrivalAirport: "ONT",
+    },
+  ];
+  const items = buildTripSpendLineItems(reservations);
+  const dpnnwg = items.filter((item) => item.confirmationCode === "DPNNWG");
+  assert.equal(dpnnwg.length, 1);
+  assert.equal(dpnnwg[0]?.groupSize, 4);
+  assert.equal(dpnnwg[0]?.cashUsd, 1386);
+  assert.equal(dpnnwg[0]?.needsPrice, false);
+  assert.match(dpnnwg[0]?.label ?? "", /AS654 · ONT → SEA/);
+  assert.match(dpnnwg[0]?.label ?? "", /AS489 · SEA → ONT/);
+});
+
+test("G36: missing price count is one per PNR group not per leg", () => {
+  const reservations = [
+    { id: "f1", type: "flight", title: "ONT-SEA", confirmationCode: "DPNNWG" },
+    { id: "f2", type: "flight", title: "SEA-FCO", confirmationCode: "DPNNWG" },
+    { id: "f3", type: "flight", title: "FCO-SEA", confirmationCode: "DPNNWG" },
+    { id: "f4", type: "flight", title: "SEA-ONT", confirmationCode: "DPNNWG" },
+    { id: "f5", type: "flight", title: "FCO-VCE", confirmationCode: "Z84T4Z" },
+    { id: "f6", type: "flight", title: "BRI-FCO", confirmationCode: "Z84T4Z" },
+    { id: "f7", type: "flight", title: "BRI-VCE", confirmationCode: "Z84T4Z" },
+    { id: "h1", type: "hotel", title: "Monopoli stay", confirmationCode: "HOTEL1" },
+  ];
+  const summary = computeTripSpend(reservations);
+  assert.equal(summary.missingPriceCount, 3);
+  const items = buildTripSpendLineItems(reservations);
+  assert.equal(items.filter((item) => item.needsPrice).length, 3);
 });

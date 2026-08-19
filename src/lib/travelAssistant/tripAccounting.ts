@@ -74,11 +74,14 @@ export function formatLedgerLineLabel(reservation: TripSpendReservation): string
 
 export function enrichTripSpendLineItems(reservations: TripSpendReservation[]): TripSpendLineItem[] {
   return buildTripSpendLineItems(reservations).map((item) => {
+    if (item.label?.trim()) {
+      return item;
+    }
     const reservation = reservations.find((r) => r.id === item.id);
     return {
       ...item,
       label: reservation ? formatLedgerLineLabel(reservation) : item.title,
-      confirmationCode: reservation?.confirmationCode?.trim() || undefined,
+      confirmationCode: reservation?.confirmationCode?.trim() || item.confirmationCode,
     };
   });
 }

@@ -284,6 +284,13 @@ function sumTicketValuesFromText(haystack: string): number | undefined {
     if (usd != null) amounts.push(usd);
   }
   if (amounts.length === 0) return undefined;
+  const uniqueAmounts = [...new Set(amounts)];
+  const passengerBlocks = haystack.match(/\bpassenger\s+\d+\b/gi);
+  const multiPassengerReceipt = (passengerBlocks?.length ?? 0) > 1;
+  // Forwarded threads repeat the same ticket value per leg — one PNR, one fare.
+  if (uniqueAmounts.length === 1 && !multiPassengerReceipt) {
+    return Math.round(uniqueAmounts[0]!);
+  }
   // Forwarded threads can repeat dozens of ticket values — never sum into six figures.
   if (amounts.length > 8) {
     return Math.round(Math.max(...amounts));

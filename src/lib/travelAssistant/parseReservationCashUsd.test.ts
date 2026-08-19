@@ -186,6 +186,12 @@ Flight AZ1467 FCO VCE
   );
 });
 
+test("G33: duplicate identical New Ticket Value lines parse once (DPNNWG)", () => {
+  const text =
+    "New Ticket Value: $1,386.43\nNew Ticket Value: $1,386.43\nTotal charges for air travel: USD $0.00";
+  assert.equal(parseCashUsdFromText(text), 1386);
+});
+
 test("G33: forwarded thread with many ticket values uses max not sum", () => {
   const lines = Array.from({ length: 20 }, () => "New Ticket Value: $1,386.43").join(" ");
   assert.equal(parseCashUsdFromText(lines), 1386);

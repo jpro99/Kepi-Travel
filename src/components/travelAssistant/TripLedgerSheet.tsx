@@ -60,7 +60,14 @@ function LedgerRow({
         <div className="min-w-0">
           <p className="truncate text-[15px] font-semibold text-[#1D1D1F]">{lineLabel(item)}</p>
           {item.confirmationCode ? (
-            <p className="text-[12px] text-[#6E6E73]">{item.confirmationCode}</p>
+            <p className="text-[12px] text-[#6E6E73]">
+              {item.confirmationCode}
+              {item.groupSize != null && item.groupSize > 1
+                ? ` · ${item.groupSize} flights`
+                : ""}
+            </p>
+          ) : item.groupSize != null && item.groupSize > 1 ? (
+            <p className="text-[12px] text-[#6E6E73]">{item.groupSize} flights</p>
           ) : null}
         </div>
         <PriceCell item={item} />
