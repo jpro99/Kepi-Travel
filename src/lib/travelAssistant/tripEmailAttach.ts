@@ -421,17 +421,38 @@ export function detectFlightScheduleChange(
   return changes;
 }
 
+function isEmptyIncomingValue(value: unknown): boolean {
+  if (value == null) return true;
+  if (typeof value === "number") return !Number.isFinite(value) || value <= 0;
+  if (typeof value === "string") return value.trim().length === 0;
+  if (Array.isArray(value)) return value.length === 0;
+  return false;
+}
+
+/**
+ * Re-forwarded itineraries carry blank pricing. Spreading them over a stored
+ * reservation used to erase a fare we had already parsed (G39).
+ */
 export function mergeFlightReservationUpdate(
   existing: SessionReservation,
   incoming: SessionReservation,
 ): SessionReservation {
-  const merged: SessionReservation = {
-    ...existing,
-    ...incoming,
-    id: existing.id,
-    assignedTo: existing.assignedTo.length > 0 ? existing.assignedTo : incoming.assignedTo,
-    notes: [existing.notes, incoming.notes].filter(Boolean).join(" ").trim(),
-    source: existing.source === "manual" ? existing.source : "imported",
-  };
+  const merged: SessionReservation = { ...existing };
+  for (const [key, value] of Object.entries(incoming)) {
+    if (isEmptyIncomingValue(value)) continue;
+    Object.assign(merged, { [key]: value });
+  }
+  merged.id = existing.id;
+  merged.assignedTo = existing.assignedTo.length > 0 ? existing.assignedTo : incoming.assignedTo;
+  merged.notes = [existing.notes, incoming.notes].filter(Boolean).join(" ").trim();
+  merged.source = existing.source === "manual" ? existing.source : "imported";
+  // Pricing + email source stay owned by the priced record until a better one arrives.
+  merged.quotedPriceUsd = existing.quotedPriceUsd;
+  merged.quotedPointsMiles = existing.quotedPointsMiles;
+  merged.quotedMilesEarned = existing.quotedMilesEarned;
+  merged.pointsProgram = existing.pointsProgram;
+  merged.originalEmailText = existing.originalEmailText;
+  merged.sourceEmailId = existing.sourceEmailId;
+  merged.sourceEmailSubject = existing.sourceEmailSubject;
   return mergeReservationPricingFields(merged, incoming) as SessionReservation;
 }

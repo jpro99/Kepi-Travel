@@ -6,13 +6,63 @@ import {
   detectFlightScheduleChange,
   expandTripWindowIfNeeded,
   inferTripWindowFromDrafts,
+  mergeFlightReservationUpdate,
   pickBestMatchingTripForDrafts,
   pickBestTripForDayPlan,
   pickRichestTripByReservations,
   remapDayKeyIntoTripWindow,
 } from "@/lib/travelAssistant/tripEmailAttach";
+import type { SessionReservation } from "@/lib/travelAssistant/clientSessionState";
 import type { TravelTrip } from "@/lib/travelAssistant/tripStore";
+import { computeTripSpend } from "@/lib/travelAssistant/tripSpendSummary";
 import { reservationWithinTripWindow } from "@/lib/travelAssistant/tripWindow";
+
+const DPNNWG_RECEIPT = `Summary of airfare charges
+New Ticket Value: $1,386.43
+Total charges for air travel: USD $0.00
+Confirmation code: DPNNWG`;
+
+function flightLeg(overrides: Partial<SessionReservation>): SessionReservation {
+  return {
+    id: "f1",
+    type: "flight",
+    title: "ONT-SEA",
+    provider: "Alaska Airlines",
+    localTime: "2026-09-01T12:00",
+    location: "ONT",
+    assignedTo: [],
+    notes: "",
+    confirmationCode: "DPNNWG",
+    source: "imported",
+    flightNumber: "AS654",
+    flightDepartureAirport: "ONT",
+    flightArrivalAirport: "SEA",
+    ...overrides,
+  } as SessionReservation;
+}
+
+test("G39: re-forwarded itinerary never erases a parsed ticket fare", () => {
+  const existing = flightLeg({
+    quotedPriceUsd: 1386,
+    originalEmailText: DPNNWG_RECEIPT,
+    sourceEmailId: "email-receipt",
+  });
+  const reforwardedItinerary = flightLeg({
+    id: "f-new",
+    quotedPriceUsd: undefined,
+    sourceEmailId: "email-itinerary",
+    originalEmailText:
+      "Your trip AS654 ONT to SEA. Confirmation code: DPNNWG. Check in 24 hours before departure and arrive early for airport security screening.",
+  });
+
+  const merged = mergeFlightReservationUpdate(existing, reforwardedItinerary);
+  assert.equal(merged.quotedPriceUsd, 1386);
+  assert.match(merged.originalEmailText ?? "", /New Ticket Value/u);
+
+  const summary = computeTripSpend([merged]);
+  assert.equal(summary.cashTotalUsd, 1386);
+  assert.equal(summary.missingPriceCount, 0);
+});
 
 function makeTrip(overrides: Partial<TravelTrip> & Pick<TravelTrip, "id" | "startDate" | "endDate">): TravelTrip {
   return {

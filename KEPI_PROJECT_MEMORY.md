@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-19 (G38 PNR fare overwrite)
+Last updated: 2026-08-19 (G39 re-forward wiped fares)
+
+## Incident 2026-08-19 — Re-forwarding DELETED prices, proven (Jeff)
+
+Root cause found by probe, not guesswork: `mergeFlightReservationUpdate` spread the incoming draft over the stored reservation, so a re-forwarded itinerary with `quotedPriceUsd: undefined` overwrote `1386` and replaced the receipt text. Every extra forward made it worse — exactly what Jeff reported. G39 fixes the merge, makes dedupe carry fares, and adds an inbox sweep that finds the receipt again. **Never ask Jeff to type prices manually.**
 
 ## Incident 2026-08-19 — Re-forwards wiped DPNNWG / Z84T4Z prices (Jeff)
 

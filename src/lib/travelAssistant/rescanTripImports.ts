@@ -14,6 +14,7 @@ import { applyAcceptedReservationPricing, finalizeTripReservationPricing, hydrat
 import { getResendClient } from "@/lib/email/resendClient";
 import { fetchReceivedEmailSourceText } from "@/lib/travelAssistant/receivedEmailPdfText";
 import { reservationNeedsPricingBackfill } from "@/lib/travelAssistant/rescanPricingBackfill";
+import { sweepInboxForMissingPrices } from "@/lib/travelAssistant/inboxPricingSweep";
 import {
   shouldReplaceStoredSourceText,
   truncateEmailSourceText,
@@ -202,7 +203,18 @@ export async function rescanTripImports(
   reservations: SessionReservation[],
 ): Promise<RescanTripImportsResult> {
   const beforeReservations = reservations.map((reservation) => ({ ...reservation }));
-  const enrichedReservations = await backfillSourceTextFromResend(reservations);
+  let enrichedReservations = await backfillSourceTextFromResend(reservations);
+
+  // G39 — when a fare is still missing, hunt the whole Kepi inbox for its receipt.
+  const sweepClient = getResendClient();
+  if (sweepClient) {
+    try {
+      const swept = await sweepInboxForMissingPrices(sweepClient, enrichedReservations);
+      enrichedReservations = swept.reservations;
+    } catch {
+      // Sweep is best-effort; re-scan continues with stored sources.
+    }
+  }
   let workingReservations = hydrateReservationsPricing(
     enrichedReservations.map((reservation) =>
       applyAcceptedReservationPricing(reservation, { reparseFromEmail: true }),

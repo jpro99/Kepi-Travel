@@ -3,6 +3,8 @@
  * Keeps one reservation per physical leg (flight number + route + departure day).
  */
 
+import { shouldReplaceStoredSourceText } from "@/lib/travelAssistant/emailSourceText";
+
 export interface FlightLegMatchFields {
   type?: string;
   localTime?: string;
@@ -13,6 +15,12 @@ export interface FlightLegMatchFields {
   flightArrivalAirport?: string;
   departureAirport?: string;
   arrivalAirport?: string;
+  quotedPriceUsd?: number;
+  quotedPointsMiles?: number;
+  quotedMilesEarned?: number;
+  pointsProgram?: string;
+  originalEmailText?: string;
+  sourceEmailId?: string;
 }
 
 function normalizeToken(value: string | undefined): string {
@@ -111,6 +119,38 @@ function flightLegRichness(fields: FlightLegMatchFields): number {
   return score;
 }
 
+function isEmptyPricingValue(value: unknown): boolean {
+  if (value == null) return true;
+  if (typeof value === "number") return !Number.isFinite(value) || value <= 0;
+  if (typeof value === "string") return value.trim().length === 0;
+  return false;
+}
+
+/** Collapsing duplicates must never drop a fare the other copy carried (G39). */
+function carryPricingForward<T extends FlightLegMatchFields>(winner: T, loser: T): T {
+  const next = { ...winner };
+  let changed = false;
+  for (const key of [
+    "quotedPriceUsd",
+    "quotedPointsMiles",
+    "quotedMilesEarned",
+    "pointsProgram",
+    "sourceEmailId",
+  ] as const) {
+    if (isEmptyPricingValue(next[key]) && !isEmptyPricingValue(loser[key])) {
+      Object.assign(next, { [key]: loser[key] });
+      changed = true;
+    }
+  }
+  const winnerText = winner.originalEmailText?.trim() ?? "";
+  const loserText = loser.originalEmailText?.trim() ?? "";
+  if (loserText && shouldReplaceStoredSourceText(winnerText, loserText)) {
+    next.originalEmailText = loserText;
+    changed = true;
+  }
+  return changed ? next : winner;
+}
+
 /** Collapse duplicate flight reservations after import — keeps the richest leg. */
 export function dedupeFlightReservations<T extends FlightLegMatchFields>(reservations: T[]): T[] {
   const kept: T[] = [];
@@ -124,10 +164,11 @@ export function dedupeFlightReservations<T extends FlightLegMatchFields>(reserva
       kept.push(reservation);
       continue;
     }
-    const existing = kept[matchIndex];
-    if (flightLegRichness(reservation) > flightLegRichness(existing)) {
-      kept[matchIndex] = reservation;
-    }
+    const existing = kept[matchIndex]!;
+    const winner =
+      flightLegRichness(reservation) > flightLegRichness(existing) ? reservation : existing;
+    const loser = winner === existing ? reservation : existing;
+    kept[matchIndex] = carryPricingForward(winner, loser);
   }
   return kept;
 }

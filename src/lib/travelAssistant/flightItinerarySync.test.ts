@@ -7,6 +7,34 @@ import {
   isSameFlightLeg,
 } from "@/lib/travelAssistant/flightItinerarySync";
 
+test("G39: dedupe carries the fare forward when collapsing duplicate legs", () => {
+  const priced = {
+    type: "flight",
+    flightNumber: "AS654",
+    flightDepartureAirport: "ONT",
+    flightArrivalAirport: "SEA",
+    localTime: "2026-09-01 12:00",
+    confirmationCode: "DPNNWG",
+    quotedPriceUsd: 1386,
+    originalEmailText: "New Ticket Value: $1,386.43 Confirmation code: DPNNWG",
+  };
+  const unpricedButRicher = {
+    type: "flight",
+    flightNumber: "AS654",
+    flightDepartureAirport: "ONT",
+    flightArrivalAirport: "SEA",
+    localTime: "2026-09-01 12:00",
+    confirmationCode: "DPNNWG",
+    originalEmailText: "Itinerary only for AS654 ONT to SEA",
+    quotedPriceUsd: undefined as number | undefined,
+  };
+
+  const deduped = dedupeFlightReservations([unpricedButRicher, priced]);
+  assert.equal(deduped.length, 1);
+  assert.equal(deduped[0]?.quotedPriceUsd, 1386);
+  assert.match(deduped[0]?.originalEmailText ?? "", /New Ticket Value/u);
+});
+
 test("isSameFlightLeg matches by flight number even when confirmation codes differ", () => {
   assert.equal(
     isSameFlightLeg(
