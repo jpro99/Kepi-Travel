@@ -186,6 +186,11 @@ Gmail import reads HTML bodies and PDF attachments, and re-scan searches the tra
 
 **Test:** `src/lib/travelAssistant/gmailPricingSweep.test.ts`, `src/lib/travelAssistant/pricingDiagnostics.test.ts`
 
+**G41 — Never gate the fare hunt behind stored email text**  
+A confirmation code alone makes a booking re-scannable: the inbox and Gmail sweeps search by code. `countRescannableReservations` must include unpriced bookings with a real code, the Re-scan button must stay enabled while a trip has bookings, and the auto-hunt must run on any missing fare. Verified end to end — reservations with no stored email must still reach a priced ledger row.
+
+**Test:** `src/lib/travelAssistant/pricingEndToEnd.test.ts`
+
 **M39 — Travel-day flight order + today focus + terminal coach**  
 All flight lists sort by canonical departure time (Ontario before Seattle on the same day). Travel day picks today’s earliest leg for Home, Map preview, and airport navigator. Schematic airports show “Terminal guide · pins approximate · follow airport signs.” Depart coach leads with airline + terminal when known (e.g. Alaska · Terminal 2 at ONT).
 
@@ -963,6 +968,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | G38 | `src/lib/travelAssistant/emailSourceText.test.ts`, `src/lib/travelAssistant/hydrateReservationQuotedPrice.test.ts` |
 | G39 | `src/lib/travelAssistant/tripEmailAttach.test.ts`, `src/lib/travelAssistant/flightItinerarySync.test.ts` |
 | G40 | `src/lib/travelAssistant/gmailPricingSweep.test.ts`, `src/lib/travelAssistant/pricingDiagnostics.test.ts` |
+| G41 | `src/lib/travelAssistant/pricingEndToEnd.test.ts` |
 | M39 | `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |

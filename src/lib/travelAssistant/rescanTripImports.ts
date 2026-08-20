@@ -11,11 +11,9 @@ import {
 import { prepareReviewDraftForAccept } from "@/lib/travelAssistant/prepareReviewDraftForAccept";
 import { resolvePricingNearBooking } from "@/lib/travelAssistant/parseReservationMiles";
 import { applyAcceptedReservationPricing, finalizeTripReservationPricing, hydrateReservationsPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
-import { getResendClient } from "@/lib/email/resendClient";
-import { fetchReceivedEmailSourceText } from "@/lib/travelAssistant/receivedEmailPdfText";
 import { reservationNeedsPricingBackfill } from "@/lib/travelAssistant/rescanPricingBackfill";
-import { sweepInboxForMissingPrices } from "@/lib/travelAssistant/inboxPricingSweep";
 import { sweepGmailForMissingPrices } from "@/lib/travelAssistant/gmailPricingSweep";
+import type { GmailApiClient } from "@/lib/travelAssistant/gmailImportProvider";
 import { buildPricingDiagnostics } from "@/lib/travelAssistant/pricingDiagnostics";
 import {
   shouldReplaceStoredSourceText,
@@ -156,11 +154,24 @@ function findMatchingReservation(
   return null;
 }
 
+/** Resend + inbox sweep are server-only; load them lazily so this module stays testable. */
+async function loadResendClient() {
+  try {
+    const { getResendClient } = await import("@/lib/email/resendClient");
+    return getResendClient();
+  } catch {
+    return null;
+  }
+}
+
 async function backfillSourceTextFromResend(
   reservations: SessionReservation[],
 ): Promise<SessionReservation[]> {
-  const resendClient = getResendClient();
+  const resendClient = await loadResendClient();
   if (!resendClient) return reservations;
+  const { fetchReceivedEmailSourceText } = await import(
+    "@/lib/travelAssistant/receivedEmailPdfText"
+  );
 
   const byEmailId = new Map<string, SessionReservation[]>();
   for (const reservation of reservations) {
@@ -203,15 +214,18 @@ async function backfillSourceTextFromResend(
 
 export async function rescanTripImports(
   reservations: SessionReservation[],
-  options?: { userId?: string },
+  options?: { userId?: string; gmailClient?: GmailApiClient },
 ): Promise<RescanTripImportsResult> {
   const beforeReservations = reservations.map((reservation) => ({ ...reservation }));
   let enrichedReservations = await backfillSourceTextFromResend(reservations);
 
   // G39 — when a fare is still missing, hunt the whole Kepi inbox for its receipt.
-  const sweepClient = getResendClient();
+  const sweepClient = await loadResendClient();
   if (sweepClient) {
     try {
+      const { sweepInboxForMissingPrices } = await import(
+        "@/lib/travelAssistant/inboxPricingSweep"
+      );
       const swept = await sweepInboxForMissingPrices(sweepClient, enrichedReservations);
       enrichedReservations = swept.reservations;
     } catch {
@@ -221,9 +235,13 @@ export async function rescanTripImports(
 
   // G40 — still missing? Search the traveler's own Gmail, PDFs included.
   let gmailConnected = true;
-  if (options?.userId) {
+  if (options?.userId || options?.gmailClient) {
     try {
-      const gmailSwept = await sweepGmailForMissingPrices(options.userId, enrichedReservations);
+      const gmailSwept = await sweepGmailForMissingPrices(
+        options?.userId ?? "",
+        enrichedReservations,
+        options?.gmailClient,
+      );
       enrichedReservations = gmailSwept.reservations;
       gmailConnected = gmailSwept.gmailAvailable;
     } catch {

@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-20 (G40 Gmail fare hunt)
+Last updated: 2026-08-20 (G41 fare hunt was unreachable)
+
+## Incident 2026-08-20 — The fare hunt was behind a disabled button (Jeff)
+
+G39/G40 shipped and nothing changed for Jeff because `countRescannableReservations` only counted bookings that already had stored email text. His DPNNWG legs had none, so the Re-scan button was **disabled** and the auto-hunt returned early — the Gmail sweep was unreachable code. G41 makes a confirmation code sufficient. **Lesson: verify the runtime path end to end before shipping, not just the unit under test.** Proven with `pricingEndToEnd.test.ts` and a live store probe (0 → $1,386 persisted across 4 legs).
 
 ## Decision 2026-08-20 — Kepi finds the fare, Jeff never types it (Jeff)
 

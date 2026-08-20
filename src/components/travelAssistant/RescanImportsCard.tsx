@@ -15,7 +15,8 @@ export function RescanImportsCard({
   lastSummary,
   onRescan,
 }: RescanImportsCardProps) {
-  const disabled = busy || rescannableCount === 0 || totalReservations === 0;
+  // G41 — never gate the hunt on stored email text; Kepi can search by confirmation code.
+  const disabled = busy || totalReservations === 0;
 
   return (
     <article className="rounded-3xl bg-white shadow-sm ring-1 ring-black/[0.06] dark:bg-slate-900 dark:ring-white/[0.08] overflow-hidden">
@@ -33,14 +34,14 @@ export function RescanImportsCard({
 
       <div className="px-5 py-4 space-y-3">
         <p className="text-sm text-slate-600 dark:text-slate-300">
-          {rescannableCount > 0
-            ? `${rescannableCount} booking${rescannableCount === 1 ? "" : "s"} on this trip still have saved email text to re-check.`
-            : totalReservations === 0
-              ? "Add bookings to this trip first, then re-scan if anything looks incomplete."
-              : "No saved email source found for current bookings. Forward confirmations to Kepi or import via Gmail to enable re-scan."}
+          {totalReservations === 0
+            ? "Add bookings to this trip first, then re-scan if anything looks incomplete."
+            : rescannableCount > 0
+              ? `${rescannableCount} booking${rescannableCount === 1 ? "" : "s"} on this trip still need details or pricing.`
+              : "Everything on this trip already has details and pricing."}
         </p>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Only fills blank fields — it won&apos;t overwrite details you&apos;ve already edited. Flights missing PDF pricing will re-fetch attachments from saved emails when possible.
+          Only fills blank fields — it won&apos;t overwrite details you&apos;ve already edited. Kepi searches your forwarded mail and connected Gmail — including PDF receipts — for any missing ticket total.
         </p>
 
         {lastSummary ? (

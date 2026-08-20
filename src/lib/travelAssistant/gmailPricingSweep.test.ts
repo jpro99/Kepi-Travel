@@ -53,7 +53,7 @@ function leg(id: string, title: string): SessionReservation {
     notes: "",
     confirmationCode: "DPNNWG",
     source: "imported",
-  } as SessionReservation;
+  } as unknown as SessionReservation;
 }
 
 test("G40: Gmail sweep prices every leg of an unpriced PNR from an HTML receipt", async () => {

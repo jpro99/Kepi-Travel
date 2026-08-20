@@ -7127,15 +7127,13 @@ export default function TravelAssistantPage() {
     }
   }, [activeTripId, queueMutation, refreshTripsFromServer, rescanImportsBusy, setToast]);
 
-  // Apple-style: when saved confirmations contain a ticket total, log prices automatically.
+  // Apple-style: any missing fare triggers the hunt — Kepi searches, the traveler never types.
   useEffect(() => {
     if (!activeTripId || rescanImportsBusy) return;
     if (autoPricingBackfillTripIdsRef.current.has(activeTripId)) return;
     const trip = trips.find((entry) => entry.id === activeTripId);
-    if (!trip) return;
-    const summary = computeTripSpend(trip.reservations);
-    if (summary.missingPriceCount === 0) return;
-    if (countRescannableReservations(trip.reservations) === 0) return;
+    if (!trip || trip.reservations.length === 0) return;
+    if (computeTripSpend(trip.reservations).missingPriceCount === 0) return;
     autoPricingBackfillTripIdsRef.current.add(activeTripId);
     void handleRescanImports();
   }, [activeTripId, handleRescanImports, rescanImportsBusy, trips]);

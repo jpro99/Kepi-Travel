@@ -1,5 +1,6 @@
 import type { SessionReservation } from "@/lib/travelAssistant/clientSessionState";
 import { isPlaceholderConfirmation } from "@/lib/travelAssistant/placeholderReservations";
+export { canSearchReservationForPricing as reservationSearchableForPricing };
 import { reservationNeedsPricingBackfill } from "@/lib/travelAssistant/rescanPricingBackfill";
 import { mergeReservationPricingFields } from "@/lib/travelAssistant/reservationPricingMerge";
 import type { PricingDiagnostic } from "@/lib/travelAssistant/pricingDiagnostics";
@@ -58,8 +59,20 @@ export function canRescanReservation(reservation: SessionReservation): boolean {
   return false;
 }
 
+/**
+ * G41 — a confirmation code alone is enough to re-scan: the inbox and Gmail
+ * sweeps search by code, so bookings with no stored email must not be gated out.
+ */
+export function canSearchReservationForPricing(reservation: SessionReservation): boolean {
+  const code = reservation.confirmationCode?.trim();
+  if (!code || code.length < 5 || isPlaceholderConfirmation(code)) return false;
+  return reservationNeedsPricingBackfill(reservation);
+}
+
 export function countRescannableReservations(reservations: SessionReservation[]): number {
-  return reservations.filter(canRescanReservation).length;
+  return reservations.filter(
+    (reservation) => canRescanReservation(reservation) || canSearchReservationForPricing(reservation),
+  ).length;
 }
 
 function isEmptyPricingField(value: unknown): boolean {
