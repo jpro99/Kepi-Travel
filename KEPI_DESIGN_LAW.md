@@ -191,6 +191,16 @@ A confirmation code alone makes a booking re-scannable: the inbox and Gmail swee
 
 **Test:** `src/lib/travelAssistant/pricingEndToEnd.test.ts`
 
+**G42 — Dropping a receipt prices the bookings already on the trip**  
+The ticket-scan API returns the document's plain text, and a dropped PDF/screenshot matches by confirmation code to price every leg of that PNR. It must never create duplicate legs just to carry a fare. The dropzone lives in Trip Accounting wherever an "Add price" row exists.
+
+**Test:** `src/lib/travelAssistant/scannedDocumentPricing.test.ts`
+
+**G43 — Ticket value beats amount due**  
+Exchanges show `Total charges for air travel: USD $0.00` because nothing more is owed; that is not the fare. Parse `New Ticket Value` / bare `Total` labels / collapsed PDF spacing, and only suppress a ticket value when miles were **actually redeemed** — loyalty branding alone is not payment.
+
+**Test:** `src/lib/travelAssistant/parseReservationCashUsd.test.ts`
+
 **M39 — Travel-day flight order + today focus + terminal coach**  
 All flight lists sort by canonical departure time (Ontario before Seattle on the same day). Travel day picks today’s earliest leg for Home, Map preview, and airport navigator. Schematic airports show “Terminal guide · pins approximate · follow airport signs.” Depart coach leads with airline + terminal when known (e.g. Alaska · Terminal 2 at ONT).
 
@@ -969,6 +979,8 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | G39 | `src/lib/travelAssistant/tripEmailAttach.test.ts`, `src/lib/travelAssistant/flightItinerarySync.test.ts` |
 | G40 | `src/lib/travelAssistant/gmailPricingSweep.test.ts`, `src/lib/travelAssistant/pricingDiagnostics.test.ts` |
 | G41 | `src/lib/travelAssistant/pricingEndToEnd.test.ts` |
+| G42 | `src/lib/travelAssistant/scannedDocumentPricing.test.ts` |
+| G43 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |
 | M39 | `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |

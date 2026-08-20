@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-20 (G41 fare hunt was unreachable)
+Last updated: 2026-08-20 (G42/G43 drop a PDF, ticket value beats amount due)
+
+## Incident 2026-08-20 — "You can read every number except the price" (Jeff)
+
+Jeff was right and it was two bugs. (1) The ticket-scan API **discarded the PDF plain text** and only returned drafts, so the proven `New Ticket Value` parser never saw the document; the scan also created new reservations instead of pricing existing ones. (2) The AI prompt said `cashUsd=0` for award tickets, so `Total charges for air travel: USD $0.00` beat `New Ticket Value: $1,386.43`. Probing 7 real Alaska layouts found 3 parser failures (loyalty branding without redeemed miles, bare `Total 1,386.43 USD`, collapsed PDF spacing) — all fixed. **Drag-and-drop lives in Trip Accounting whenever a row shows Add price.**
 
 ## Incident 2026-08-20 — The fare hunt was behind a disabled button (Jeff)
 

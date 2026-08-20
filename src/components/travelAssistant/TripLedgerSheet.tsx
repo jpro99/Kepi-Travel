@@ -8,6 +8,7 @@ import {
   formatTripCashTotal,
   formatTripPointsTotal,
 } from "@/lib/travelAssistant/tripSpendSummary";
+import { ImportConfirmationDropzone } from "@/components/travelAssistant/ImportConfirmationDropzone";
 
 type LedgerView = "this-trip" | "all-trips";
 
@@ -21,6 +22,9 @@ interface TripLedgerSheetProps {
   onClose: () => void;
   onOpenReservation?: (id: string, tripId?: string) => void;
   onSelectTrip?: (tripId: string) => void;
+  /** Drop a receipt right where the missing prices are (G42). */
+  onImportConfirmation?: (file: File) => void;
+  importBusy?: boolean;
 }
 
 function lineLabel(item: TripSpendLineItem): string {
@@ -136,6 +140,8 @@ export function TripLedgerSheet({
   onClose,
   onOpenReservation,
   onSelectTrip,
+  onImportConfirmation,
+  importBusy = false,
 }: TripLedgerSheetProps) {
   const [view, setView] = useState<LedgerView>("this-trip");
   const [drillTripId, setDrillTripId] = useState<string | null>(null);
@@ -267,6 +273,19 @@ export function TripLedgerSheet({
           ) : view === "this-trip" ? (
             <>
               <p className="text-[15px] font-medium text-[#1D1D1F]">{activeTripLabel}</p>
+              {onImportConfirmation && displaySummary.missingPriceCount > 0 ? (
+                <div className="mt-3 rounded-2xl bg-[#F5F5F7] p-3">
+                  <p className="mb-2 text-[13px] text-[#6E6E73]">
+                    Drop the airline receipt (PDF, screenshot, or email) and Kepi prices every flight
+                    on that confirmation.
+                  </p>
+                  <ImportConfirmationDropzone
+                    compact
+                    busy={importBusy}
+                    onFile={onImportConfirmation}
+                  />
+                </div>
+              ) : null}
               {groupedThisTrip.map((group) => (
                 <section key={group.type} className="mt-5">
                   <p className="text-[13px] font-semibold uppercase tracking-wide text-[#6E6E73]">

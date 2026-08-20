@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveConfirmationScanKind } from "@/lib/travelAssistant/confirmationDocumentText";
-import { extractConfirmationDocument } from "@/lib/travelAssistant/extractConfirmationDocument";
+import { extractConfirmationDocumentWithText } from "@/lib/travelAssistant/extractConfirmationDocument";
+import { truncateEmailSourceText } from "@/lib/travelAssistant/emailSourceText";
 import {
   CONFIRMATION_SCAN_MAX_BYTES,
   isConfirmationScanUpload,
@@ -41,9 +42,19 @@ export async function handleConfirmationScanUpload(
   const scanKind = resolveConfirmationScanKind(upload, fileBytes);
 
   try {
-    const drafts = await extractConfirmationDocument(upload, options.anthropicApiKey);
+    const { drafts, documentText } = await extractConfirmationDocumentWithText(
+      upload,
+      options.anthropicApiKey,
+    );
     return NextResponse.json(
-      { drafts, draft: drafts[0] ?? null, count: drafts.length, scanKind },
+      {
+        drafts,
+        draft: drafts[0] ?? null,
+        count: drafts.length,
+        scanKind,
+        // G42 — the client prices the whole PNR from this text.
+        documentText: truncateEmailSourceText(documentText),
+      },
       { headers },
     );
   } catch (error) {

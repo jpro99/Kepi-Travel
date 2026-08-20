@@ -186,6 +186,41 @@ Flight AZ1467 FCO VCE
   );
 });
 
+test("G43: real Alaska/airline PDF fare layouts all resolve to the ticket total", () => {
+  const cases: Array<[string, string]> = [
+    [
+      "classic exchange",
+      "Summary of airfare charges\nNew Ticket Value: $1,386.43\nAdditional Amount Due: $0.00\nTotal charges for air travel: USD $0.00",
+    ],
+    ["pdf column split", "Summary of airfare charges\nNew Ticket Value\n$1,386.43\nAdditional Amount Due\n$0.00"],
+    [
+      "loyalty branding without redeemed miles",
+      "Award travel confirmation\nAtmos Rewards Member: Gold\nNew Ticket Value: $1,386.43\nTotal charges for air travel: USD $0.00",
+    ],
+    ["bare total label", "Fare  1,205.00\nTaxes, fees and charges  181.43\nTotal  1,386.43 USD"],
+    ["collapsed spacing", "NewTicketValue:$1,386.43 TotalchargesforairtravelUSD$0.00"],
+    [
+      "two passengers sum",
+      "Passenger 1\nNew Ticket Value: $693.22\nPassenger 2\nNew Ticket Value: $693.21\nTotal charges for air travel: USD $0.00",
+    ],
+  ];
+
+  for (const [label, text] of cases) {
+    assert.equal(parseCashUsdFromText(text), 1386, `parse failed: ${label}`);
+    assert.equal(
+      resolveReservationCashUsd({ originalEmailText: text, confirmationCode: "DPNNWG" }),
+      1386,
+      `resolve failed: ${label}`,
+    );
+  }
+});
+
+test("G43: miles actually redeemed still suppress the ticket value", () => {
+  const text =
+    "Award travel confirmation. You redeemed 60,000 miles. Total amount due: $0.00. New Ticket Value: $1,386.43";
+  assert.equal(resolveReservationCashUsd({ originalEmailText: text }), undefined);
+});
+
 test("G38: New Ticket Value still parses when HTML leaves a wide gap", () => {
   const text = "New Ticket Value          passenger fare details          $1,386.43";
   assert.equal(parseCashUsdFromText(text), 1386);

@@ -35,8 +35,11 @@ const SCAN_SYSTEM_PROMPT = [
   "flightNumber = 2-letter IATA airline code + number (AS832, AZ1234, GA123). Never credit-card fragments.",
   "departureAirport / arrivalAirport = IATA codes (BRI, FCO, CGK, DPS, SIN, MUC, SEA, ONT). Bali=DPS, Jakarta=CGK.",
   "timezone = IANA timezone of the DEPARTURE city (Europe/Rome, Asia/Jakarta, America/Los_Angeles).",
-  "For award tickets: cashUsd=0, fill pointsMiles + pointsProgram when visible.",
+  "For award tickets paid purely with miles: fill pointsMiles + pointsProgram, and set cashUsd to the cash taxes/fees actually charged (0 only when no cash was charged).",
   "When cash is paid, set cashUsd to the TOTAL in US dollars as a number (no currency symbol). Examples: $499 USD → 499, 499usd → 499, Total 1,284.50 USD → 1285.",
+  "TICKET VALUE vs AMOUNT DUE: exchanges and reissues show 'Total charges for air travel: USD $0.00' because nothing more is owed today. That is NOT the ticket price.",
+  "When 'New Ticket Value', 'Ticket Value', or 'Summary of airfare charges' shows an amount, set cashUsd to that ticket value — never to the $0.00 balance due.",
+  "If several passengers each list the same ticket value, cashUsd = the sum across passengers for that confirmation.",
   "Only extract fields explicitly visible. Do not invent confirmation codes or airports.",
 ].join("\n");
 
@@ -187,6 +190,25 @@ function regexDraftsFromPlainText(plainText: string, kind: ConfirmationScanKind)
     return [];
   }
   return mergeConfirmationDrafts([], plainText);
+}
+
+export interface ConfirmationScanExtraction {
+  drafts: ScannedReservationDraft[];
+  /** Full plain text of the document — the pricing source of truth (G42). */
+  documentText: string;
+}
+
+export async function extractConfirmationDocumentWithText(
+  file: File,
+  apiKey: string,
+): Promise<ConfirmationScanExtraction> {
+  const fileBytes = Buffer.from(await file.arrayBuffer());
+  const kind = resolveConfirmationScanKind(file, fileBytes);
+  const documentText = confirmationKindUsesTextExtraction(kind)
+    ? await extractConfirmationPlainText(fileBytes, kind)
+    : "";
+  const drafts = await extractConfirmationDocument(file, apiKey);
+  return { drafts, documentText };
 }
 
 export async function extractConfirmationDocument(

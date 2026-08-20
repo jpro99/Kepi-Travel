@@ -184,6 +184,7 @@ import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
 import { applyAcceptedReservationPricing, finalizeTripReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import { mergeReservationPricingFields } from "@/lib/travelAssistant/reservationPricingMerge";
+import { applyScannedDocumentPricing } from "@/lib/travelAssistant/scannedDocumentPricing";
 import { buildTransportConflictReservationIds } from "@/lib/travelAssistant/reservationAttention";
 import { computeTripSpend } from "@/lib/travelAssistant/tripSpendSummary";
 import {
@@ -6860,6 +6861,7 @@ export default function TravelAssistantPage() {
           drafts?: ReservationDraft[];
           count?: number;
           scanKind?: "pdf" | "image";
+          documentText?: string;
         };
         try {
           payload = (await response.json()) as typeof payload;
@@ -6923,6 +6925,35 @@ export default function TravelAssistantPage() {
             flightDepartureTime: pricedDraft.flightDepartureTime ?? pricedDraft.localTime,
           };
         });
+
+        // G42 — a dropped receipt prices the bookings already on this trip first.
+        const documentText = payload.documentText?.trim() ?? "";
+        if (documentText && activeTripId) {
+          const activeTrip = trips.find((entry) => entry.id === activeTripId);
+          if (activeTrip) {
+            const priced = applyScannedDocumentPricing(activeTrip.reservations, documentText);
+            if (priced.pricedCodes.length > 0) {
+              setReservations(priced.reservations as Reservation[]);
+              await fetch(TRIP_API_ROUTE, {
+                method: "PUT",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  action: "update",
+                  id: activeTripId,
+                  patch: { reservations: priced.reservations },
+                }),
+              }).catch(() => {
+                // Local state already shows the price; next sync retries.
+              });
+              await refreshTripsFromServer();
+              setToast(
+                `Priced ${priced.pricedLegCount} booking${priced.pricedLegCount === 1 ? "" : "s"} from ${file.name || "your file"} (${priced.pricedCodes.join(", ")}).`,
+              );
+              return;
+            }
+          }
+        }
 
         if (newReservations.length === 0) {
           setToast("Could not read any bookings from this file.");
@@ -11117,6 +11148,8 @@ export default function TravelAssistantPage() {
               onClose={() => setPricingReviewOpen(false)}
               onOpenReservation={handleLedgerOpenReservation}
               onSelectTrip={(tripId) => void handleSwitchTrip(tripId)}
+              onImportConfirmation={(file) => void handleTicketScanUpload(file)}
+              importBusy={ticketScanBusy}
             />
           </Suspense>
         ) : null}
@@ -12013,6 +12046,8 @@ export default function TravelAssistantPage() {
             onClose={() => setPricingReviewOpen(false)}
             onOpenReservation={handleLedgerOpenReservation}
             onSelectTrip={(tripId) => void handleSwitchTrip(tripId)}
+            onImportConfirmation={(file) => void handleTicketScanUpload(file)}
+            importBusy={ticketScanBusy}
           />
         </Suspense>
       ) : null}

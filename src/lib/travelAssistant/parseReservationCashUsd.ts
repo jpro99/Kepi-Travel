@@ -11,8 +11,9 @@ import { extractPdfAttachmentSection } from "@/lib/travelAssistant/emailSourceTe
 const TOTAL_CONTEXT =
   /\b(?:grand\s+total|total\s+(?:amount|price|cost|paid|charge|due|fare|for\s+trip|purchase\s+price)|amount\s+(?:paid|charged|due)|you\s+paid|you\s+will\s+be\s+charged|will\s+be\s+charged\s+a\s+total|charged\s+a\s+total|price\s+paid|ticket\s+total|trip\s+total|booking\s+total|reservation\s+total|payment\s+total|purchase\s+total|room\s+total|stay\s+total|charged\s+today|credit\s+card\s+charge|total\s+charges\s+for\s+air\s+travel|total\s+balance\s+due)\b/iu;
 
+// PDF text extraction often collapses spaces ("NewTicketValue:$1,386.43").
 const TICKET_VALUE_CONTEXT =
-  /\b(?:new\s+ticket\s+value|ticket\s+value|original\s+ticket\s+value|fare\s+amount|airfare(?:\s+charges)?|summary\s+of\s+airfare)\b/iu;
+  /\b(?:new\s*ticket\s*value|ticket\s*value|original\s*ticket\s*value|fare\s*amount|airfare(?:\s*charges)?|summary\s*of\s*airfare)\b/iu;
 
 const AWARD_ONLY_CONTEXT =
   /\b(?:award\s+(?:travel|ticket|redemption|booking)|mileage\s+plan\s+(?:award|redemption)|redeem(?:ed|ing)?\s+(?:with\s+)?(?:miles?|points?)|points?\s+(?:only|redemption|award))\b/iu;
@@ -38,7 +39,7 @@ const PENALTY_CONTEXT =
   /\b(?:per\s+night|\/\s*night|nightly|tax(?:es)?|fee(?:s)?|surcharge|gratuity|tip|deposit|balance\s+due|estimated|approx|award|\/\s*pax|each)\b/iu;
 
 const TICKET_VALUE_LINE =
-  /\b(?:new\s+ticket\s+value|ticket\s+value|original\s+ticket\s+value|total\s+fare)\b[^$\d]{0,160}\$?\s*([\d,]+(?:\.\d{2})?)/giu;
+  /\b(?:new\s*ticket\s*value|ticket\s*value|original\s*ticket\s*value|total\s*fare)\b[^$\d]{0,160}\$?\s*([\d,]+(?:\.\d{2})?)/giu;
 
 function normalizeEmailText(text: string): string {
   return text
@@ -236,13 +237,19 @@ export function isImplausibleSingleBookingCash(cashUsd: number): boolean {
   return Number.isFinite(cashUsd) && cashUsd > MAX_SINGLE_BOOKING_CASH_USD;
 }
 
+/** "Total  1,386.43 USD" — a bare Total label right before the amount is a real total. */
+function hasBareTotalLabelBefore(fullText: string, start: number): boolean {
+  const lead = fullText.slice(Math.max(0, start - 24), start);
+  return /\b(?:total|totale|amount)\b[^0-9A-Za-z]{0,8}$/iu.test(lead);
+}
+
 function scoreAmountMatch(fullText: string, start: number, end: number): number {
   const windowStart = Math.max(0, start - 90);
   const windowEnd = Math.min(fullText.length, end + 90);
   const context = fullText.slice(windowStart, windowEnd);
   let score = 10;
   const isTicketValue = TICKET_VALUE_CONTEXT.test(context);
-  const isStrongTotal = TOTAL_CONTEXT.test(context);
+  const isStrongTotal = TOTAL_CONTEXT.test(context) || hasBareTotalLabelBefore(fullText, start);
   if (isTicketValue) score += 140;
   if (isStrongTotal) score += 100;
   if (ZERO_DUE_CONTEXT.test(context)) score -= 150;
@@ -316,8 +323,13 @@ function parseCashUsdFromNormalizedHaystack(
     }
   }
 
+  // Only suppress a ticket value when miles were actually redeemed — loyalty
+  // branding alone ("Award travel", "Atmos Rewards Member") is not payment.
   if (isZeroCashDueContext(haystack) && isAwardOnlyReservationText(haystack)) {
-    return undefined;
+    const milesActuallySpent = parseMilesFromText(haystack).milesSpent;
+    if (milesActuallySpent != null && milesActuallySpent > 0) {
+      return undefined;
+    }
   }
 
   const ticketValueTotal = sumTicketValuesFromText(haystack);
@@ -471,7 +483,12 @@ export function resolveReservationCashUsd(reservation: CashUsdResolvable): numbe
     if (miles.milesSpent != null && isZeroCashDueContext(pricingText)) {
       return undefined;
     }
-    if (isZeroCashDueContext(pricingText) && isAwardOnlyReservationText(pricingText)) {
+    if (
+      isZeroCashDueContext(pricingText) &&
+      isAwardOnlyReservationText(pricingText) &&
+      miles.milesSpent != null &&
+      miles.milesSpent > 0
+    ) {
       return undefined;
     }
     let parsed = parseCashUsdFromText(pricingText);
