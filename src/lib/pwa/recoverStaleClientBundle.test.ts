@@ -20,6 +20,18 @@ test("I56: TDZ red-screen is a stale-bundle error", () => {
   assert.equal(isStaleBundleError({ message: "Network error" }), false);
 });
 
+test("G44: ReferenceError 'is not defined' triggers stale-bundle recovery", () => {
+  assert.equal(
+    isStaleBundleError({ message: "canonicalFlightDepartureLocalTime is not defined" }),
+    true,
+  );
+  assert.equal(
+    isStaleBundleError({ message: "ReferenceError: canonicalFlightDepartureLocalTime is not defined" }),
+    true,
+  );
+  assert.equal(isStaleBundleError({ message: "Failed to fetch" }), false);
+});
+
 test("I56: first TDZ recover clears caches and reloads once", async () => {
   const storage = new Map<string, string>();
   const deleted: string[] = [];
@@ -88,7 +100,7 @@ test("I56: error page recovers a TDZ instead of remounting the same JS", () => {
   assert.match(src, /isStaleBundleError\(error\)/);
   assert.match(src, /recoverStaleClientBundle/);
   const sw = readFileSync(join(process.cwd(), "public/sw.js"), "utf8");
-  assert.match(sw, /kepi-pwa-v38/);
+  assert.match(sw, /kepi-pwa-v39/);
   const layout = readFileSync(join(process.cwd(), "src/app/layout.tsx"), "utf8");
   assert.match(layout, /<DeployRefresh/);
   const page = readFileSync(join(process.cwd(), "src/app/travel-assistant/page.tsx"), "utf8");

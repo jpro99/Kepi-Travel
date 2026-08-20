@@ -202,9 +202,9 @@ Exchanges show `Total charges for air travel: USD $0.00` because nothing more is
 **Test:** `src/lib/travelAssistant/parseReservationCashUsd.test.ts`
 
 **G44 — Undefined identifiers fail the build**  
-`next.config` sets `ignoreBuildErrors`, so a missing import compiles and then throws `X is not defined` in the browser (the Book tab `canonicalFlightDepartureLocalTime` crash). `prebuild` runs `scripts/check-undefined-names.cjs` and fails on any TS2304/TS2552. Remember: `export { x } from "..."` does **not** bind `x` locally — import it too.
+`next.config` sets `ignoreBuildErrors`, so a missing import compiles and then throws `X is not defined` in the browser (the Book tab `canonicalFlightDepartureLocalTime` crash). `prebuild` runs `scripts/check-undefined-names.cjs` and fails on any TS2304/TS2552. Remember: `export { x } from "..."` does **not** bind `x` locally — import it too. After deploy, a cached PWA bundle can still throw that ReferenceError — `isStaleBundleError` treats `is not defined` like a TDZ and clears SW cache once.
 
-**Test:** `scripts/check-undefined-names.cjs` (prebuild gate)
+**Test:** `scripts/check-undefined-names.cjs` (prebuild gate), `src/components/travelAssistant/FlightsTab.imports.test.ts`, `src/lib/pwa/recoverStaleClientBundle.test.ts`
 
 **M39 — Travel-day flight order + today focus + terminal coach**  
 All flight lists sort by canonical departure time (Ontario before Seattle on the same day). Travel day picks today’s earliest leg for Home, Map preview, and airport navigator. Schematic airports show “Terminal guide · pins approximate · follow airport signs.” Depart coach leads with airline + terminal when known (e.g. Alaska · Terminal 2 at ONT).
@@ -986,7 +986,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | G41 | `src/lib/travelAssistant/pricingEndToEnd.test.ts` |
 | G42 | `src/lib/travelAssistant/scannedDocumentPricing.test.ts` |
 | G43 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |
-| G44 | `scripts/check-undefined-names.cjs` (prebuild gate) |
+| G44 | `scripts/check-undefined-names.cjs`, `FlightsTab.imports.test.ts`, `recoverStaleClientBundle.test.ts` |
 | M39 | `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
