@@ -6,11 +6,14 @@ import WebKit
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
+    private static let productionSignInURL = URL(string: "https://kepitravel.com/sign-in")!
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         KepiAlwaysLocation.shared.prepareOnLaunch()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            Self.loadKepiIfNeeded(from: self.window ?? application.windows.first)
+        for delay in [0.5, 1.0, 2.0, 4.0, 8.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                Self.loadKepiIfNeeded(from: self.window ?? application.windows.first)
+            }
         }
         return true
     }
@@ -42,10 +45,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     /// If Capacitor never navigated to the live site, force the WKWebView there.
     static func loadKepiIfNeeded(from window: UIWindow?) {
         guard let webView = findWebView(in: window) else { return }
-        let host = webView.url?.host ?? ""
+        let host = webView.url?.host?.lowercased() ?? ""
         if host.contains("kepitravel.com") { return }
-        guard let url = URL(string: "https://kepitravel.com") else { return }
-        webView.load(URLRequest(url: url))
+        webView.load(URLRequest(url: productionSignInURL))
     }
 
     private static func findWebView(in window: UIWindow?) -> WKWebView? {

@@ -36,6 +36,18 @@ Always + Precise family GPS runs only in this native app (TestFlight or ▶ Run)
 
 8. On her phone, open Kepi → sign in → Map → Family → **Start sharing**. When iOS asks: Allow, then Settings → Kepi Travel → Location → **Always** + **Precise Location**. After that she does not approve again.
 
+### Blue / blank screen on device
+
+The Aug 14 TestFlight build is stale. Always:
+
+1. `git pull origin main` — build **11** or newer (`CURRENT_PROJECT_VERSION` in Xcode).
+2. `npm run ios:fix` — writes `public/index.html` + `capacitor.config.json`.
+3. Xcode: **Product → Clean Build Folder** → pick the physical iPhone → **Run** (not Archives).
+4. Delete the old Kepi icon on the phone first, then Run installs fresh.
+5. You should briefly see **Opening Kepi Travel…** then the **sign-in** page — not a solid blue screen.
+
+If Safari opens `https://kepitravel.com` on her phone but the app stays blue, the Mac did not install build 11+ — repeat steps 1–4.
+
 If Archive is gray: destination is still a simulator or Mac. Switch to **Any iOS Device (arm64)**.
 
 If signing errors: Team on **Release**, not only Debug.
