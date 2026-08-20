@@ -2,6 +2,7 @@ import { parseLiteApiCancellationPolicies } from "@/lib/hotels/hotelCancellation
 import { readLiteApiErrorMessage } from "@/lib/providers/liteapi/readLiteApiError";
 import { cityFromAddress } from "@/lib/hotels/hotelCityScope";
 import type { HotelSearchResult } from "@/lib/hotels/types";
+import type { ResolvedHotelDestination } from "@/lib/hotels/resolveDestination";
 
 const LITEAPI_BASE = "https://api.liteapi.travel/v3.0";
 

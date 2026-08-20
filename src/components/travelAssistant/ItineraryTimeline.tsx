@@ -18,6 +18,7 @@ import { buildDayWalkthrough } from "@/lib/travelAssistant/dayWalkthrough";
 import { DayWalkthroughBlock } from "@/components/travelAssistant/DayWalkthroughBlock";
 import type { TripActionItem } from "@/lib/travelAssistant/tripActionItems";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
+import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
 import type { ItineraryPlansData } from "@/lib/travelAssistant/itineraryDayPlan";
 import {
   reservationDisplayLabel,

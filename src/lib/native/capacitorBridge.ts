@@ -6,6 +6,9 @@ import { LocalNotifications } from "@capacitor/local-notifications";
 import { PushNotifications } from "@capacitor/push-notifications";
 
 // Re-export canonical platform helpers so callers can use one import path.
+// Re-exports do not bind names locally — import what this module actually calls.
+import { isNative } from "@/lib/native/platform";
+
 export { isNative, isIOS, isAndroid, isAppMode, setStatusBarStyle } from "@/lib/native/platform";
 
 type NativePlatform = "ios" | "android";

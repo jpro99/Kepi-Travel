@@ -13,6 +13,10 @@ import { hasDisplayNightlyRate, hasKepiBookableLiveRate } from "@/lib/hotels/hot
 import { HotelInventoryBadgePill } from "@/components/travelAssistant/HotelInventoryBadgePill";
 import { resolveHotelInventoryBadge } from "@/lib/hotels/hotelInventoryBadge";
 import { resolveHotelBookingStrategy } from "@/lib/hotels/hotelBookingStrategy";
+import {
+  resolveHotelCancellationCopy,
+  type HotelCancellationSummary,
+} from "@/lib/hotels/hotelCancellation";
 import { normalizeHotelAvailabilityError } from "@/lib/hotels/hotelAvailabilityError";
 import type { RankedHotelSearchResult } from "@/lib/hotels/types";
 import { HotelPhotoGallery } from "@/components/travelAssistant/HotelPhotoGallery";

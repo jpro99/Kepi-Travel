@@ -20,6 +20,7 @@ import type { FlightSearchPlan, PlannedFlightLeg } from "@/lib/travelAssistant/t
 import type { InterCityTransportGap } from "@/lib/travelAssistant/interCityTransport";
 import type { QuickGroundMode } from "@/lib/travelAssistant/quickGroundTransport";
 import { sortFlightsByDeparture } from "@/lib/travelAssistant/flightSort";
+import { canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
 import { shouldShowTerminalExplorePromo } from "@/lib/travelAssistant/homeDayTruth";
 import {
   formatReservationCostLine,

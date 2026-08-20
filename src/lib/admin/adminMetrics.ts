@@ -10,6 +10,7 @@ import type {
   AdminRecentAlertEntry,
   AdminServiceStatus,
   AdminStatsResponse,
+  AdminSystemServiceHealth,
   AdminTopUserStat,
 } from "@/lib/admin/adminTypes";
 
