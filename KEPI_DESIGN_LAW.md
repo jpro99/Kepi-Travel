@@ -181,6 +181,11 @@ A longer re-forward without `New Ticket Value` / PDF / Purchase Summary must not
 
 **Test:** `src/lib/travelAssistant/tripEmailAttach.test.ts`, `src/lib/travelAssistant/flightItinerarySync.test.ts`
 
+**G40 — Kepi finds the fare; the traveler never types it**  
+Gmail import reads HTML bodies and PDF attachments, and re-scan searches the traveler's Gmail by confirmation code for the receipt behind an unpriced PNR. When a fare still cannot be found, say exactly why per confirmation (no email saved / itinerary without fare / total present but unparsed) — never a silent "no new prices."
+
+**Test:** `src/lib/travelAssistant/gmailPricingSweep.test.ts`, `src/lib/travelAssistant/pricingDiagnostics.test.ts`
+
 **M39 — Travel-day flight order + today focus + terminal coach**  
 All flight lists sort by canonical departure time (Ontario before Seattle on the same day). Travel day picks today’s earliest leg for Home, Map preview, and airport navigator. Schematic airports show “Terminal guide · pins approximate · follow airport signs.” Depart coach leads with airline + terminal when known (e.g. Alaska · Terminal 2 at ONT).
 
@@ -957,6 +962,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | G37 | `src/lib/travelAssistant/hydrateReservationQuotedPrice.test.ts`, `src/lib/travelAssistant/pricingSourceText.test.ts` |
 | G38 | `src/lib/travelAssistant/emailSourceText.test.ts`, `src/lib/travelAssistant/hydrateReservationQuotedPrice.test.ts` |
 | G39 | `src/lib/travelAssistant/tripEmailAttach.test.ts`, `src/lib/travelAssistant/flightItinerarySync.test.ts` |
+| G40 | `src/lib/travelAssistant/gmailPricingSweep.test.ts`, `src/lib/travelAssistant/pricingDiagnostics.test.ts` |
 | M39 | `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |

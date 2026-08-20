@@ -36,7 +36,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const result = await rescanTripImports(trip.reservations);
+    const result = await rescanTripImports(trip.reservations, { userId });
     const saved = await updateTrip(trip.id, { reservations: result.reservations }, userId);
 
     return NextResponse.json({
@@ -47,6 +47,8 @@ export async function POST(req: Request) {
       skippedNoSource: result.skippedNoSource,
       unmatchedDrafts: result.unmatchedDrafts,
       results: result.results,
+      pricingDiagnostics: result.pricingDiagnostics ?? [],
+      gmailConnected: result.gmailConnected !== false,
       reservations: saved?.reservations ?? result.reservations,
     });
   } catch (error) {

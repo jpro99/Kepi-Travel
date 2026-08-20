@@ -1,5 +1,6 @@
 import { google, type gmail_v1 } from "googleapis";
 import { logger } from "@/lib/logger";
+import { htmlToPlainConfirmationText } from "@/lib/travelAssistant/confirmationDocumentText";
 import {
   readGmailConnectionRecord,
   resolveGmailOAuthConfig,
@@ -37,7 +38,7 @@ export interface ParsedReservation {
   };
 }
 
-interface GmailApiClient {
+export interface GmailApiClient {
   users: {
     messages: {
       list(args: {
@@ -50,6 +51,13 @@ interface GmailApiClient {
         id: string;
         format: "full";
       }): Promise<{ data: gmail_v1.Schema$Message }>;
+      attachments?: {
+        get(args: {
+          userId: string;
+          messageId: string;
+          id: string;
+        }): Promise<{ data: { data?: string | null } }>;
+      };
     };
   };
 }
@@ -75,7 +83,7 @@ function resolveLegacyUserToken(userId: string, key: "GMAIL_REFRESH_TOKEN" | "GM
   return process.env[scopedKey]?.trim() || process.env[key]?.trim() || null;
 }
 
-async function createAuthorizedGmailClient(userId: string): Promise<GmailApiClient | null> {
+export async function createAuthorizedGmailClient(userId: string): Promise<GmailApiClient | null> {
   const oauthConfig = resolveGmailOAuthConfig();
   if (!oauthConfig) {
     return null;
@@ -105,9 +113,69 @@ async function createAuthorizedGmailClient(userId: string): Promise<GmailApiClie
 }
 
 function decodeBase64Url(input: string): string {
+  return decodeBase64UrlToBuffer(input).toString("utf8");
+}
+
+export function decodeBase64UrlToBuffer(input: string): Buffer {
   const normalized = input.replaceAll("-", "+").replaceAll("_", "/");
   const padLength = normalized.length % 4 === 0 ? 0 : 4 - (normalized.length % 4);
-  return Buffer.from(`${normalized}${"=".repeat(padLength)}`, "base64").toString("utf8");
+  return Buffer.from(`${normalized}${"=".repeat(padLength)}`, "base64");
+}
+
+export function gmailHeaderValue(
+  headers: gmail_v1.Schema$MessagePartHeader[] | undefined,
+  name: string,
+): string | null {
+  return headerValue(headers, name);
+}
+
+/** Prefer text/plain, fall back to text/html so HTML-only receipts still price (G40). */
+export function extractGmailBodyText(payload: gmail_v1.Schema$MessagePart | null | undefined): string {
+  const plain = extractPlainTextBody(payload);
+  if (plain.trim().length >= 40) return plain;
+  const html = extractHtmlBody(payload);
+  if (html.trim()) {
+    const asText = htmlToPlainConfirmationText(html);
+    if (asText.trim().length > plain.trim().length) return asText;
+  }
+  return plain;
+}
+
+function extractHtmlBody(part: gmail_v1.Schema$MessagePart | null | undefined): string {
+  if (!part) return "";
+  if (part.mimeType === "text/html" && part.body?.data) {
+    return decodeBase64Url(part.body.data);
+  }
+  for (const child of part.parts ?? []) {
+    const decoded = extractHtmlBody(child);
+    if (decoded.trim().length > 0) return decoded;
+  }
+  return "";
+}
+
+export interface GmailAttachmentRef {
+  filename: string;
+  mimeType: string;
+  attachmentId: string;
+}
+
+export function collectGmailAttachmentRefs(
+  part: gmail_v1.Schema$MessagePart | null | undefined,
+  found: GmailAttachmentRef[] = [],
+): GmailAttachmentRef[] {
+  if (!part) return found;
+  const attachmentId = part.body?.attachmentId;
+  if (attachmentId) {
+    found.push({
+      filename: part.filename ?? "",
+      mimeType: part.mimeType ?? "",
+      attachmentId,
+    });
+  }
+  for (const child of part.parts ?? []) {
+    collectGmailAttachmentRefs(child, found);
+  }
+  return found;
 }
 
 function headerValue(headers: gmail_v1.Schema$MessagePartHeader[] | undefined, name: string): string | null {
@@ -345,7 +413,7 @@ async function readMessages(args: {
     const receivedAt =
       headerValue(payload?.headers, "Date") ??
       (messageResponse.data.internalDate ? new Date(Number(messageResponse.data.internalDate)).toISOString() : new Date().toISOString());
-    const body = extractPlainTextBody(payload);
+    const body = extractGmailBodyText(payload);
     dayPlanSources.push({ subject, body });
     const parsedReservation = parseEmailToParsedReservation({
       messageId: id,

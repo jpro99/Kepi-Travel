@@ -7069,6 +7069,13 @@ export default function TravelAssistantPage() {
         updatedReservations?: number;
         pricingUpdatedCount?: number;
         rescannedSources?: number;
+        gmailConnected?: boolean;
+        pricingDiagnostics?: Array<{
+          confirmationCode: string;
+          legCount: number;
+          reason: string;
+          hasPricingSignal: boolean;
+        }>;
       }>(response);
       if (!response.ok) {
         throw new Error(payload.error ?? "Re-scan failed");
@@ -7088,10 +7095,28 @@ export default function TravelAssistantPage() {
         setRescanImportsSummary(summary);
         setToast(`Re-scan filled missing details on ${updated} booking${updated === 1 ? "" : "s"}.`);
       } else {
-        setRescanImportsSummary(
-          "Re-scan complete — still couldn't read prices from saved emails. Re-forward one confirmation if flights still show Add price.",
-        );
-        setToast("Re-scan complete — no new prices found in saved emails.");
+        const blocked = (payload.pricingDiagnostics ?? []).filter((item) => item.reason !== "priced");
+        const gmailOffline = payload.gmailConnected === false;
+        if (blocked.length > 0) {
+          const lines = blocked.slice(0, 3).map((item) => {
+            const legs = `${item.legCount} flight${item.legCount === 1 ? "" : "s"}`;
+            if (item.reason === "no-email-stored") {
+              return `${item.confirmationCode} (${legs}): no confirmation email saved.`;
+            }
+            if (item.reason === "email-has-no-fare") {
+              return `${item.confirmationCode} (${legs}): saved email is an itinerary with no ticket total.`;
+            }
+            return `${item.confirmationCode} (${legs}): a total is in the email but Kepi could not read it.`;
+          });
+          if (gmailOffline) {
+            lines.push("Connect Gmail in More so Kepi can search your receipts automatically.");
+          }
+          setRescanImportsSummary(lines.join(" "));
+          setToast(`Still missing pricing for ${blocked.length} confirmation${blocked.length === 1 ? "" : "s"}.`);
+        } else {
+          setRescanImportsSummary("Re-scan complete — every tracked booking already has a price.");
+          setToast("Re-scan complete — nothing new to price.");
+        }
       }
       queueMutation("Re-scanned saved confirmations.");
     } catch (error) {

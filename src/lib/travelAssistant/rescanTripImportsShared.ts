@@ -2,6 +2,7 @@ import type { SessionReservation } from "@/lib/travelAssistant/clientSessionStat
 import { isPlaceholderConfirmation } from "@/lib/travelAssistant/placeholderReservations";
 import { reservationNeedsPricingBackfill } from "@/lib/travelAssistant/rescanPricingBackfill";
 import { mergeReservationPricingFields } from "@/lib/travelAssistant/reservationPricingMerge";
+import type { PricingDiagnostic } from "@/lib/travelAssistant/pricingDiagnostics";
 
 export const MIN_RESCAN_SOURCE_CHARS = 80;
 
@@ -46,6 +47,8 @@ export interface RescanTripImportsResult {
   unmatchedDrafts: number;
   results: RescanReservationResult[];
   reservations: SessionReservation[];
+  pricingDiagnostics?: PricingDiagnostic[];
+  gmailConnected?: boolean;
 }
 
 export function canRescanReservation(reservation: SessionReservation): boolean {

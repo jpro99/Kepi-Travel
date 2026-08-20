@@ -15,6 +15,8 @@ import { getResendClient } from "@/lib/email/resendClient";
 import { fetchReceivedEmailSourceText } from "@/lib/travelAssistant/receivedEmailPdfText";
 import { reservationNeedsPricingBackfill } from "@/lib/travelAssistant/rescanPricingBackfill";
 import { sweepInboxForMissingPrices } from "@/lib/travelAssistant/inboxPricingSweep";
+import { sweepGmailForMissingPrices } from "@/lib/travelAssistant/gmailPricingSweep";
+import { buildPricingDiagnostics } from "@/lib/travelAssistant/pricingDiagnostics";
 import {
   shouldReplaceStoredSourceText,
   truncateEmailSourceText,
@@ -201,6 +203,7 @@ async function backfillSourceTextFromResend(
 
 export async function rescanTripImports(
   reservations: SessionReservation[],
+  options?: { userId?: string },
 ): Promise<RescanTripImportsResult> {
   const beforeReservations = reservations.map((reservation) => ({ ...reservation }));
   let enrichedReservations = await backfillSourceTextFromResend(reservations);
@@ -213,6 +216,18 @@ export async function rescanTripImports(
       enrichedReservations = swept.reservations;
     } catch {
       // Sweep is best-effort; re-scan continues with stored sources.
+    }
+  }
+
+  // G40 — still missing? Search the traveler's own Gmail, PDFs included.
+  let gmailConnected = true;
+  if (options?.userId) {
+    try {
+      const gmailSwept = await sweepGmailForMissingPrices(options.userId, enrichedReservations);
+      enrichedReservations = gmailSwept.reservations;
+      gmailConnected = gmailSwept.gmailAvailable;
+    } catch {
+      // Gmail sweep is best-effort.
     }
   }
   let workingReservations = hydrateReservationsPricing(
@@ -295,5 +310,7 @@ export async function rescanTripImports(
     unmatchedDrafts,
     results,
     reservations: updatedReservations,
+    pricingDiagnostics: buildPricingDiagnostics(updatedReservations),
+    gmailConnected,
   };
 }

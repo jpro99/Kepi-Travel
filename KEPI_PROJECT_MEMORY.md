@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-19 (G39 re-forward wiped fares)
+Last updated: 2026-08-20 (G40 Gmail fare hunt)
+
+## Decision 2026-08-20 — Kepi finds the fare, Jeff never types it (Jeff)
+
+After G39 the DPNNWG group still showed 4 flights with no price: Kepi had the code but never had a receipt with a total. Gmail import only read `text/plain` and skipped PDF attachments, and nothing ever searched Gmail by confirmation code. G40 adds HTML + PDF reading and a Gmail search per unpriced PNR, plus per-confirmation reasons instead of a silent "no new prices". **Manual price entry is not an acceptable answer for this product.**
 
 ## Incident 2026-08-19 — Re-forwarding DELETED prices, proven (Jeff)
 

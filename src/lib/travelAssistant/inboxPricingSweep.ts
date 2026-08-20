@@ -8,31 +8,19 @@ import {
   sourceTextHasPricingSignal,
   truncateEmailSourceText,
 } from "@/lib/travelAssistant/emailSourceText";
-import { isPlaceholderConfirmation } from "@/lib/travelAssistant/placeholderReservations";
 import { resolveReservationCashUsd } from "@/lib/travelAssistant/parseReservationCashUsd";
 import { resolveReservationMiles } from "@/lib/travelAssistant/parseReservationMiles";
 import { applyIncomingSourceToPnrGroup } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
-import { reservationMissingPrice } from "@/lib/travelAssistant/tripSpendSummary";
+import { unpricedConfirmationCodes } from "@/lib/travelAssistant/pricingDiagnostics";
 import { logger } from "@/lib/logger";
+
+export { unpricedConfirmationCodes };
 
 const SWEEP_SCOPE = "travelAssistant/inboxPricingSweep";
 const MAX_EMAILS_SCANNED = 120;
 const PAGE_SIZE = 50;
 /** Route budget is 60s — leave room for parsing and the trip save. */
 const SWEEP_TIME_BUDGET_MS = 35_000;
-
-/** Confirmation codes still missing a price — the codes worth hunting for. */
-export function unpricedConfirmationCodes(reservations: SessionReservation[]): string[] {
-  const codes = new Set<string>();
-  for (const reservation of reservations) {
-    if (!reservationMissingPrice(reservation, reservations)) continue;
-    const code = reservation.confirmationCode?.trim().toUpperCase();
-    if (!code || code.length < 5) continue;
-    if (isPlaceholderConfirmation(code)) continue;
-    codes.add(code);
-  }
-  return [...codes];
-}
 
 function textPricesCode(text: string, code: string): boolean {
   if (!text.toUpperCase().includes(code)) return false;
