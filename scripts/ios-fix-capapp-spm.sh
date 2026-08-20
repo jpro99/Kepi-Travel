@@ -72,8 +72,8 @@ SWIFT
 
 DEBUGXC="$ROOT/ios/debug.xcconfig"
 cat > "$DEBUGXC" <<'XCC'
-# Must stay false on device installs. true makes the app wait for the Mac
-# debug server — unplug or open from the icon and you get a blank blue screen.
+// Must stay false on device installs. true makes the app wait for the Mac
+// debug server — unplug or open from the icon and you get a blank blue screen.
 CAPACITOR_DEBUG = false
 XCC
 echo "    wrote debug.xcconfig (CAPACITOR_DEBUG=false)"

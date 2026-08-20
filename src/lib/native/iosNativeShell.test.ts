@@ -91,7 +91,8 @@ test("G24 device install loads kepitravel.com without the Mac debugger", () => {
   assert.equal(IOS_PRODUCTION_URL, "https://kepitravel.com");
   assert.match(bundled, /"url":\s*"https:\/\/kepitravel\.com"/);
   assert.match(bundled, /"appId":\s*"com\.kepitravel\.app"/);
-  assert.match(debugXc, /CAPACITOR_DEBUG = false/);
+  assert.doesNotMatch(debugXc, /^#/m);
+  assert.match(debugXc, /^\/\//m);
   assert.doesNotMatch(debugXc, /CAPACITOR_DEBUG = true/);
   assert.match(plist, /<key>CAPACITOR_DEBUG<\/key>\s*<string>false<\/string>/);
   assert.doesNotMatch(plist, /\$\(CAPACITOR_DEBUG\)/);
