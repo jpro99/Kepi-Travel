@@ -2,7 +2,11 @@ export const TDZ_RELOAD_KEY = "kepi:tdz-bundle-reload";
 
 export function isStaleBundleError(error: { message?: string } | null | undefined): boolean {
   const message = error?.message ?? "";
-  return /before initialization/i.test(message);
+  // TDZ from a mismatched chunk pair after deploy.
+  if (/before initialization/i.test(message)) return true;
+  // Missing import in an old cached bundle (e.g. canonicalFlightDepartureLocalTime on Book tab).
+  if (/\bis not defined\b/i.test(message)) return true;
+  return false;
 }
 
 export async function recoverStaleClientBundle(options?: {
