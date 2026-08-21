@@ -92,14 +92,6 @@ export function HotelDetailSheet({
   }, [user?.firstName, user?.lastName, user?.primaryEmailAddress?.emailAddress]);
 
   useEffect(() => {
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, []);
-
-  useEffect(() => {
     const liteApiId = extractLiteApiHotelId(hotel.id);
     const fallback = mergeHotelDetailMedia(null, hotel.photos.filter(Boolean));
     setDetailMedia(fallback);
@@ -286,13 +278,13 @@ export function HotelDetailSheet({
         type="button"
         aria-label="Close hotel details"
         onClick={onClose}
-        className="fixed inset-0 z-[95] bg-slate-950/60"
+        className="fixed inset-0 z-[95] overscroll-contain bg-slate-950/60"
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="hotel-detail-title"
-        className="fixed inset-x-0 bottom-0 z-[96] mx-auto max-h-[88vh] w-full max-w-2xl overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-950 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:rounded-2xl"
+        className="fixed inset-x-0 bottom-0 z-[96] mx-auto max-h-[88dvh] w-full max-w-2xl overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-950 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:rounded-2xl"
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2 dark:border-slate-800">
           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Hotel details</p>
@@ -301,7 +293,7 @@ export function HotelDetailSheet({
           </button>
         </div>
 
-        <div className="max-h-[calc(88vh-2.5rem)] overflow-y-auto">
+        <div className="max-h-[calc(88dvh-2.5rem)] overflow-y-auto overscroll-contain">
           <HotelPhotoGallery media={detailMedia} loading={mediaLoading} hotelName={hotel.name} />
 
           <div className="space-y-3 px-4 pb-4">

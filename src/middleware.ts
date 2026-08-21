@@ -25,7 +25,6 @@ const isPublicRoute = createRouteMatcher([
   "/api/billing/webhook(.*)",
   "/api/billing/revenuecat/webhook(.*)",
   "/api/auth(.*)",
-  "/api/flights/award-search(.*)",
   "/api/flights/search(.*)",
   "/api/family/native-location(.*)",
 ]);
@@ -59,10 +58,25 @@ const clerkHandler = clerkMiddleware(async (auth, req) => {
   return withNoCache(NextResponse.next());
 });
 
+function authUnavailableResponse(): NextResponse {
+  return withNoCache(
+    NextResponse.json({ error: "Authentication temporarily unavailable" }, { status: 503 }),
+  );
+}
+
 export default function middleware(req: NextRequest, event: NextFetchEvent) {
   if (!clerkEnvReady()) {
-    console.error("[middleware] Clerk env missing — allowing request without auth gate");
-    return withNoCache(NextResponse.next());
+    if (isPublicRoute(req)) {
+      console.error(
+        "[middleware] Clerk env missing — allowing public route without auth gate",
+      );
+      return withNoCache(NextResponse.next());
+    }
+    console.error(
+      "[middleware] Clerk env missing — failing closed for protected route:",
+      req.nextUrl.pathname,
+    );
+    return authUnavailableResponse();
   }
 
   return clerkHandler(req, event);
