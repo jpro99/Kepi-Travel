@@ -196,7 +196,7 @@ import {
 } from "@/lib/travelAssistant/tripAccounting";
 import { preDepartureStayDecisionId, type TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 import { homeBaseStayDecisionId } from "@/lib/travelAssistant/tripNightCoverage";
-import { resolveBoardingPassUrl } from "@/lib/travelAssistant/reservationLinks";
+import { resolveBoardingPassUrl, type ReservationSourceLink } from "@/lib/travelAssistant/reservationLinks";
 import {
   coerceHotelTitle,
   reservationPropertyName,
@@ -414,8 +414,12 @@ interface Reservation extends ReservationDraft {
   originalEmailText?: string;
   hasPdfAttachment?: boolean;
   manageUrl?: string;
-  sourceLinks?: Array<{ label: string; url: string; kind: string }>;
+  sourceLinks?: ReservationSourceLink[];
   boardingPassUrl?: string;
+  // Reservation objects flow through generic lib helpers (StoredFlightReservation,
+  // DrainableReservation, etc.) that carry `[key: string]: unknown` — this index
+  // signature keeps Reservation structurally assignable to those constraints.
+  [key: string]: unknown;
 }
 
 interface ReviewItem {
@@ -433,9 +437,10 @@ interface ReviewItem {
   imageBasedEmail?: boolean;
   sourceEmailId?: string;
   manageUrl?: string;
-  sourceLinks?: Array<{ label: string; url: string; kind: string }>;
+  sourceLinks?: ReservationSourceLink[];
   reviewStatus?: "pending" | "incomplete";
   parserNotes?: string[];
+  parserVersion?: string;
 }
 
 interface ReadinessItem {
@@ -2702,7 +2707,7 @@ export default function TravelAssistantPage() {
       // an existing controlled page gets a NEW worker (i.e. a real deploy).
       if (!hadControllerAtMount) return;
       reloading = true;
-      setToast("Updated to the latest version…", { force: true, tone: "subtle" });
+      setToast("Updated to the latest version…", { force: true, tone: "info" });
       window.setTimeout(() => window.location.reload(), 600);
     };
     sw.addEventListener("controllerchange", onControllerChange);
@@ -3149,7 +3154,10 @@ export default function TravelAssistantPage() {
   }, [refreshTripsFromServer, setToast]);
 
   useEffect(() => {
-    let timer: ReturnType<typeof setInterval> | null = null;
+    // `window.setInterval` always returns a browser `number` at runtime; ReturnType<> on this
+    // overloaded (DOM + @types/node) global picks up Node's `Timeout` overload instead, so the
+    // type is spelled out explicitly here rather than derived.
+    let timer: number | null = null;
     const pollTrips = () => {
       if (tripsLoading || document.visibilityState === "hidden") {
         return;
@@ -4453,7 +4461,7 @@ export default function TravelAssistantPage() {
     [storedTripPlan],
   );
   const pendingFlightChangeAlert = useMemo(
-    () => updateFeed.find((entry) => entry.kind === "flight-change") ?? null,
+    () => updateFeed.find((entry) => entry.kind === "gate-change") ?? null,
     [updateFeed],
   );
   const wizardFlightCount = useMemo(
@@ -6428,6 +6436,16 @@ export default function TravelAssistantPage() {
           critical: item.reservation.type === "flight" || item.reservation.type === "train" || item.reservation.type === "ride",
           confidence: item.reservation.confidence,
           notes: `Imported via email import from message ${item.messageId}.`,
+          // Gmail-imported reservations don't carry flight-leg detail yet — declare these
+          // optional fields so the enricher's return type keeps them for the flight-field
+          // fallbacks below (`pricedDraft.flightNumber` etc.).
+          flightNumber: undefined as string | undefined,
+          flightAirline: undefined as string | undefined,
+          flightDate: undefined as string | undefined,
+          flightDepartureAirport: undefined as string | undefined,
+          flightArrivalAirport: undefined as string | undefined,
+          flightDepartureTime: undefined as string | undefined,
+          flightArrivalTime: undefined as string | undefined,
         });
         const pricedDraft = applyAcceptedReservationPricing(enriched, { originalEmailText: item.body });
         if (reservations.some((reservation) => isDuplicateReservation(reservation, pricedDraft))) {
@@ -8217,6 +8235,11 @@ export default function TravelAssistantPage() {
     const pricedDraft = applyAcceptedReservationPricing(draft, { originalEmailText: target.originalEmailText });
     const newReservation: Reservation = {
       ...pricedDraft,
+      // `draft.type` widens to `string` when it flows through enrichReviewInboxItemFromSource's
+      // ReviewInboxDraft (a lib type whose `type` field is untyped `string`); the runtime value
+      // still only ever comes from ReservationType sources (sourceDraft.type, or the literal
+      // "dinner"/"train" the enricher assigns), so it's safe to re-narrow here.
+      type: draft.type as ReservationType,
       id: nextId("res"),
       source: "review-accepted",
       sourceEmailId: target.sourceEmailId,
@@ -8269,8 +8292,8 @@ export default function TravelAssistantPage() {
     }
     void postParseCorrection({
       reviewItemId: target.id,
-      parserGuess: target.draft as Record<string, unknown>,
-      corrected: pricedDraft as Record<string, unknown>,
+      parserGuess: target.draft as unknown as Record<string, unknown>,
+      corrected: pricedDraft as unknown as Record<string, unknown>,
       gateReasons: target.reasons,
       sourceChannel: target.sourceChannel,
       sourceEmailSubject: target.sourceEmailSubject,
@@ -8449,20 +8472,18 @@ export default function TravelAssistantPage() {
     setReviewQueue((prev) =>
       prev.map((item) => {
         if (item.id !== reviewId) return item;
-        const nextConfidence: Confidence =
+        // Re-parse only ever improves confidence one step (low -> medium -> high, high stays
+        // high) — nextConfidence can never come out "low", so reviewStatus always resolves to
+        // "pending" here.
+        const nextConfidence: "medium" | "high" =
           item.draft.confidence === "low" ? "medium" : item.draft.confidence === "medium" ? "high" : "high";
-        const parseConfidenceScore = nextConfidence === "high" ? 82 : nextConfidence === "medium" ? 58 : 35;
+        const parseConfidenceScore = nextConfidence === "high" ? 82 : 58;
         return {
           ...item,
           reasons: nextConfidence === "high" ? ["Parser confidence improved. Verify before accepting."] : item.reasons,
           parseConfidenceScore,
-          parsingStatus:
-            nextConfidence === "high"
-              ? "auto-parsed"
-              : nextConfidence === "medium"
-                ? "needs-review"
-                : "needs-user-input",
-          reviewStatus: nextConfidence === "low" ? "incomplete" : "pending",
+          parsingStatus: nextConfidence === "high" ? "auto-parsed" : "needs-review",
+          reviewStatus: "pending",
           draft: { ...item.draft, confidence: nextConfidence },
         };
       }),
@@ -9072,7 +9093,8 @@ export default function TravelAssistantPage() {
         return;
       }
       if (item.kind === "transport") {
-        setManualReservationPresetType("ride");
+        // Modal has no "ride" reservation type — "car" is the "Car rental / Ride" option.
+        setManualReservationPresetType("car");
         setManualReservationModalOpen(true);
         navigateToBook("flights");
         return;
@@ -10062,7 +10084,8 @@ export default function TravelAssistantPage() {
         return;
       }
       if (context?.kind === "transport") {
-        setManualReservationPresetType("ride");
+        // Modal has no "ride" reservation type — "car" is the "Car rental / Ride" option.
+        setManualReservationPresetType("car");
         setManualReservationModalOpen(true);
         navigateToBook("flights");
         return;
@@ -10537,11 +10560,11 @@ export default function TravelAssistantPage() {
               onSearchMissingFlights={(plan) => handleFlightSearchPlan(plan)}
               onQuickGroundTransport={handleQuickGroundTransport}
               travelerType={neuroTravelerType}
-                unresolvedReviewCount={unresolvedReviewCount}
-                onOpenReview={handleOpenConsumerReviewQueue}
-                readinessChecklist={readinessChecklistForHome}
-                onOpenReadiness={openReadinessChecklistInMoreTab}
-              />
+              unresolvedReviewCount={unresolvedReviewCount}
+              onOpenReview={handleOpenConsumerReviewQueue}
+              // Note: ItineraryTabView has no readiness-checklist UI (unlike the home views
+              // above) — readinessChecklist/onOpenReadiness intentionally omitted here.
+            />
             </PlanTabErrorBoundary>
           ) : consumerTab === "book" ? (
             <BookTabView
