@@ -3,6 +3,7 @@ import { z } from "zod";
 import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { fusedFlightSearch } from "@/lib/flights/fusedFlightSearch";
 import { fetchDuffelCashOffers } from "@/lib/flights/duffelAdapter";
+import { enforceRateLimit } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +19,20 @@ const BodySchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const userId = (await resolveAuthenticatedUserId()) ?? "anonymous";
+  const userId = await resolveAuthenticatedUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const rateLimit = await enforceRateLimit({
+    policyName: "ai-suggestions",
+    identifier: userId,
+    route: "flights-award-search",
+    requestId: `flights-award-search-${userId}-${Date.now()}`,
+  });
+  if (!rateLimit.allowed) {
+    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429, headers: rateLimit.headers });
+  }
 
   let body: unknown;
   try {

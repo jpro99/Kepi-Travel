@@ -9,6 +9,7 @@ import {
 } from "@/lib/flights/bookFlightAdvisorPicks";
 import { runFusedSearchForTrip } from "@/lib/flights/fusedFlightSearch";
 import type { FusedSearchResult } from "@/lib/flights/types";
+import { enforceRateLimit } from "@/lib/rateLimit";
 import { getTravelerGenome } from "@/lib/traveler/travelerGenomeStore";
 
 export const runtime = "nodejs";
@@ -48,7 +49,20 @@ function serializePick(pick: BookAdvisorPick) {
 }
 
 export async function POST(req: Request) {
-  const userId = (await resolveAuthenticatedUserId()) ?? "anonymous";
+  const userId = await resolveAuthenticatedUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const rateLimit = await enforceRateLimit({
+    policyName: "ai-suggestions",
+    identifier: userId,
+    route: "flights-advisor-search",
+    requestId: `flights-advisor-search-${userId}-${Date.now()}`,
+  });
+  if (!rateLimit.allowed) {
+    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429, headers: rateLimit.headers });
+  }
 
   let body: unknown;
   try {
