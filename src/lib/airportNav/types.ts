@@ -9,7 +9,7 @@
  * never from pretending GPS is indoor-precise.
  */
 
-export type SecurityLaneType = "standard" | "precheck" | "clear" | "clear_precheck" | "priority";
+export type SecurityLaneType = "standard" | "precheck" | "clear" | "clear_precheck" | "priority" | "customs";
 
 export type GraphNodeKind =
   | "junction"
@@ -21,7 +21,10 @@ export type GraphNodeKind =
   | "security_exit"
   | "train_platform"
   | "restroom"
-  | "landmark";
+  | "landmark"
+  | "customs"
+  | "baggage_claim"
+  | "ground_transport";
 
 export interface GraphNode {
   id: string;
@@ -72,7 +75,9 @@ export type PoiCategory =
   | "restroom"
   | "train"
   | "baggage"
-  | "amenity";
+  | "amenity"
+  | "customs"
+  | "ground_transport";
 
 export interface PoiDefinition {
   id: string;

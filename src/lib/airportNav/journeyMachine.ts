@@ -21,7 +21,15 @@ export type JourneyPhaseId =
   | "airside"
   | "lounge"
   | "at_gate"
-  | "boarding_soon";
+  | "boarding_soon"
+  // ── Arrivals (added 2026-08-21, LAX pilot — see LAX_ARRIVALS_RESEARCH_MEMO.md) ──
+  // Driven purely by which node kind the traveler is physically standing at,
+  // not inferred from flight itinerary — a domestic arrival simply never has
+  // a "customs" node to be near, so this never needs an "are you
+  // international?" guess.
+  | "customs"
+  | "baggage_claim"
+  | "ground_transport";
 
 export interface JourneyState {
   phase: JourneyPhaseId;
@@ -43,7 +51,7 @@ export type JourneyEvent =
       at: number;
     }
   | { type: "answer_through_security"; through: boolean; at: number }
-  | { type: "arrived_at_route_end"; poiCategory: "gate" | "lounge" | "checkin" | "security" | "restroom" | "train" | "baggage"; at: number }
+  | { type: "arrived_at_route_end"; poiCategory: "gate" | "lounge" | "checkin" | "security" | "restroom" | "train" | "baggage" | "customs" | "ground_transport"; at: number }
   | { type: "tick"; minutesToDeparture: number; at: number };
 
 export interface JourneyPrompt {
@@ -108,6 +116,31 @@ export function stepJourney(
       const node = nodeById(layout, event.nodeId);
       if (!node) return { state };
       const next: JourneyState = { ...state, lastNodeId: event.nodeId };
+
+      // ── Arrivals detection (LAX pilot) — handled before the departure-side
+      // airside/landside branching below, since these phases don't map onto
+      // that binary and shouldn't trigger its "are you through security" ask.
+      if (node.kind === "customs" && state.phase !== "customs") {
+        return {
+          state: enter(next, "customs", event.at),
+          announce: node.landmark ? `At ${node.landmark}.` : "At customs.",
+        };
+      }
+      if (node.kind === "baggage_claim" && state.phase !== "baggage_claim") {
+        return {
+          state: enter(next, "baggage_claim", event.at),
+          announce: "At baggage claim.",
+        };
+      }
+      if (node.kind === "ground_transport" && state.phase !== "ground_transport") {
+        return {
+          state: enter(next, "ground_transport", event.at),
+          announce: node.landmark ? `At ${node.landmark}.` : "At ground transportation.",
+        };
+      }
+      if (node.kind === "customs" || node.kind === "baggage_claim" || node.kind === "ground_transport") {
+        return { state: next };
+      }
 
       // ── Airside detection ──
       if (node.airside) {
@@ -251,5 +284,8 @@ export function phaseStatusLine(phase: JourneyPhaseId, gateCode: string | null):
     case "lounge": return "In the lounge · I'll watch the clock";
     case "at_gate": return `At ${gate} ✓`;
     case "boarding_soon": return "Boarding soon — stay close";
+    case "customs": return "At customs & immigration";
+    case "baggage_claim": return "At baggage claim";
+    case "ground_transport": return "Ground transportation";
   }
 }

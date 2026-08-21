@@ -527,6 +527,11 @@ Jeff can enable specific users (lifetime/free invites) as **map helpers**. Those
 
 **Test:** `src/lib/airportNav/mapHelperNearby.test.ts`
 
+**M40 — Arrivals phases are position-driven, never itinerary-inferred; customs is a real border crossing, not a bypass**
+Arrivals (`customs` / `baggage_claim` / `ground_transport` — added 2026-08-21, LAX pilot) detect purely from which real node kind the traveler is standing at, same honesty posture as departure phases — a domestic arrival simply never has a `customs` node nearby, so no "are you international?" guess is ever needed. Clearing CBP is a real government checkpoint, not a landside/airside bypass — the `customs → baggage_claim` edge must be `kind: "security_transition"` with `laneType: "customs"` so M31 still holds; `allowedLanes()` always includes `"customs"` (unlike TSA lanes, there's no credential-gated choice — every international arrival passes through it). LAX's ground-transport data (LAX-it rideshare pickup vs. the separate Terminal Connector/parking shuttle) is curated from LAX's own official public PDFs (`LAX_ARRIVALS_RESEARCH_MEMO.md`), not travel-blog aggregation — reading the airport's own current wayfinding documents directly is the standard first step for future airport passes, departures or arrivals. All new nodes ship `precision: "extrapolated"` (no OSM ground truth exists for customs/baggage/ground-transport anywhere) pending human verification against the real terminal, same bar as every other airport. **Currently dormant:** the shipped Arrival Day Coach (`coachMode`) always renders `AirportNavigatorFallback` for arrivals, never the live indoor map — this graph has no live UI path yet; wiring it in is a separate, later decision.
+
+**Test:** `src/lib/airportNav/journeyMachine.test.ts`, `src/lib/airportNav/layouts/laxNodeContainment.test.ts`, `src/lib/airportNav/pathfinder.test.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -1042,5 +1047,6 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | D20 | `src/lib/airportNav/airportLayoutPackage.test.ts` |
 | D21, M14 | `src/lib/airportNav/airportCurationQueue.test.ts` |
 | N1 | `src/lib/neuro/neuroLoop.test.ts` |
+| M40 | `src/lib/airportNav/journeyMachine.test.ts` |
 
 New laws must add a row here when a test exists.

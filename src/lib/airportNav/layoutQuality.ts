@@ -124,7 +124,7 @@ const ROUTABLE_DESTINATION_CATEGORIES = new Set(["gate", "lounge", "checkin", "s
  * be intentionally display-only, so an unreachable one is a warning, not a
  * ship-blocker — connecting them requires per-airport corridor data (verify-first).
  */
-const CONTEXTUAL_CATEGORIES = new Set(["amenity", "restroom"]);
+const CONTEXTUAL_CATEGORIES = new Set(["amenity", "restroom", "customs", "baggage", "ground_transport"]);
 /** Categories where a long airside route is expected, so backtracking matters. */
 const BACKTRACK_CATEGORIES = new Set(["gate", "lounge", "train"]);
 

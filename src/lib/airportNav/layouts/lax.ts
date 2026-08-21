@@ -23,6 +23,13 @@
  *
  * Inter-terminal walking follows the departures-level frontage (the horseshoe
  * sidewalk). The LAX Automated People Mover (APM) is not modeled yet.
+ *
+ * ARRIVALS (added 2026-08-21): TBIT customs/baggage claim + the two ground-
+ * transport systems (LAX-it rideshare pickup, Terminal Connector shuttle) are
+ * curated from LAX's own official PDFs, not travel-blog aggregation — see
+ * `LAX_ARRIVALS_RESEARCH_MEMO.md`. These nodes are precision: "extrapolated"
+ * (diagram-derived, no OSM ground truth exists for any of them) pending human
+ * verification against the real terminal, same bar as everything else here.
  */
 
 import type { AirportLayout, GraphEdge, GraphNode, PoiDefinition, TerminalZonePolygon } from "../types";
@@ -154,6 +161,81 @@ function buildLax(): { nodes: GraphNode[]; edges: GraphEdge[]; pois: PoiDefiniti
     pois.push({ id: `poi-${l.id}`, nodeId: l.id, category: "lounge", name: l.name, airline: l.airline, precision: "surveyed" });
   }
 
+  // ── Arrivals (added 2026-08-21) — DRAFT, not yet human-verified ──
+  // Sourced from LAX's own official public PDFs, read directly (not
+  // aggregated from travel blogs — see LAX_ARRIVALS_RESEARCH_MEMO.md):
+  //   - LAX Airline Location Map, flylax.com/media/6936, rev. SP26-0707
+  //   - LAX Ground Transportation Waiting Areas map, flylax.com/media/1793,
+  //     rev. SP26-0810
+  // OSM has no ground truth for customs, baggage claim, or ground-transport
+  // facilities, so every node below is precision: "extrapolated" (a
+  // diagram-derived relative position, not a surveyed coordinate) until a
+  // human confirms it against the real terminal — same bar as SEA (Decision
+  // 2026-07-15). Scope: international arrivals (TBIT) + the two ground-
+  // transport systems, which apply airport-wide. Per-terminal domestic
+  // baggage claim is intentionally NOT modeled yet — "Level 1, standard
+  // carousel" needs no special navigation help the way TBIT/LAX-it do.
+  {
+    const tbit = TERMINALS.find((t) => t.id === "tbit")!;
+    const customsPos: [number, number] = [-118.4101, 33.94305];
+    const baggagePos: [number, number] = [-118.40995, 33.94295];
+
+    // customs-tbit stays airside (the sterile international-arrivals corridor,
+    // same side of the border as the gate you deplaned at). baggage-tbit is
+    // landside — clearing the CBP desk IS the crossing, so (per M31) that leg
+    // must itself be a security_transition edge, not a plain walkway.
+    nodes.push({ id: "customs-tbit", pos: customsPos, kind: "customs", airside: true, landmark: "TBIT customs & immigration (CBP) — 3rd floor" });
+    nodes.push({ id: "baggage-tbit", pos: baggagePos, kind: "baggage_claim", airside: false, landmark: "TBIT international baggage claim — 1st floor" });
+
+    const gateToCustomsM = metersBetween(tbit.gate, customsPos);
+    const baggageToCurbM = metersBetween(baggagePos, tbit.curb);
+    edges.push({ id: "e-tbit-gate-customs", from: "gate-tbit", to: "customs-tbit", kind: "walkway", lengthM: Math.max(15, gateToCustomsM), traverseSeconds: walkSecs(Math.max(15, gateToCustomsM)), bidirectional: false });
+    // Wait time: secondary-source estimate (45–90 min at peak), not live data —
+    // see LAX_ARRIVALS_RESEARCH_MEMO.md. Using the midpoint, honestly labeled.
+    edges.push({ id: "e-tbit-customs-baggage", from: "customs-tbit", to: "baggage-tbit", kind: "security_transition", lengthM: 30, traverseSeconds: 60 * 60, bidirectional: false, laneType: "customs" });
+    edges.push({ id: "e-tbit-baggage-curb", from: "baggage-tbit", to: curbId("tbit"), kind: "walkway", lengthM: Math.max(15, baggageToCurbM), traverseSeconds: walkSecs(Math.max(15, baggageToCurbM)), bidirectional: true });
+
+    pois.push({
+      id: "poi-customs-tbit", nodeId: "customs-tbit", category: "customs", name: "Customs & Immigration (CBP)",
+      precision: "extrapolated",
+      notes: "All LAX international arrivals process through TBIT regardless of which terminal you land at (confirmed on LAX's own airline map — e.g. Alaska/United international arrivals route through Terminal 6/B, 'confirm with airline'). Flow: 5th floor arrivals hall → 3rd floor CBP/immigration (Global Entry kiosks available) → 1st floor baggage claim. Typical wait 45–90 min at peak — secondary-source estimate, not a live number.",
+    });
+    pois.push({
+      id: "poi-baggage-tbit", nodeId: "baggage-tbit", category: "baggage", name: "TBIT international baggage claim",
+      precision: "extrapolated",
+      notes: "Known exceptions from LAX's own airline map — not the default case: Aer Lingus/Flair arrive at TBIT and WALK to Terminal 4 for bags. Frontier/Sun Country/Cayman Airways/Viva Aerobus check in at Terminal 1, are bused to TBIT to arrive/depart, then bused BACK to Terminal 1 for baggage claim.",
+    });
+
+    // Ground transportation — three distinct systems per LAX's own Ground
+    // Transportation Waiting Areas map. Do not collapse into one "curb
+    // pickup" — that conflation is the error every secondary source made.
+    const t1 = TERMINALS.find((t) => t.id === "t1")!;
+    const laxItPos: [number, number] = [-118.397, 33.9458];
+    nodes.push({ id: "ground-laxit", pos: laxItPos, kind: "ground_transport", airside: false, landmark: "LAX-it — Uber/Lyft/Prime Time/taxi pickup" });
+    const t1ToLaxItM = metersBetween(t1.curb, laxItPos);
+    const baggageToLaxItM = metersBetween(baggagePos, laxItPos);
+    edges.push({ id: "e-t1-laxit", from: curbId("t1"), to: "ground-laxit", kind: "walkway", lengthM: Math.max(15, t1ToLaxItM), traverseSeconds: Math.max(walkSecs(t1ToLaxItM), 3 * 60), bidirectional: true });
+    edges.push({ id: "e-tbit-baggage-laxit", from: "baggage-tbit", to: "ground-laxit", kind: "walkway", lengthM: Math.max(15, baggageToLaxItM), traverseSeconds: Math.max(walkSecs(baggageToLaxItM), 8 * 60), bidirectional: true });
+
+    pois.push({
+      id: "poi-laxit", nodeId: "ground-laxit", category: "ground_transport", name: "LAX-it — Uber, Lyft, Prime Time, taxi",
+      precision: "extrapolated",
+      notes: "Consolidated rideshare/taxi pickup for ALL terminals, reached by the green-marked walking path along your terminal's arrivals-level frontage, or the free shuttle (stops every 3–5 min just outside baggage claim). Request your ride once you arrive; you'll get a zone number and the driver confirms via a PIN in-app. Walk time varies by terminal: ~3–8 min from Terminal 1/7, ~19 min from Terminal 4/5 (LAX's own published estimate). Pickup only — not for drop-off.",
+    });
+
+    // Terminal Connector / Metro Connector (pink) — SEPARATE from LAX-it:
+    // inter-terminal transfer + parking/employee lots. Hung off each
+    // terminal's existing curb node — no new geometry required.
+    for (const t of TERMINALS) {
+      pois.push({
+        id: `poi-connector-${t.id}`, nodeId: curbId(t.id), category: "ground_transport",
+        name: "Terminal Connector shuttle (parking/inter-terminal — not rideshare)",
+        precision: "schematic",
+        notes: "Pink-signed stop, runs ~every 10 min. For parking lots, employee lots, and terminal-to-terminal transfer only — NOT for Uber/Lyft/taxi (use LAX-it instead). A yellow taxi icon also appears at some individual terminal frontages on LAX's own map, suggesting curbside taxi may be available outside the LAX-it queue too — unconfirmed, needs an on-the-ground check.",
+      });
+    }
+  }
+
   return { nodes, edges, pois };
 }
 
@@ -174,8 +256,8 @@ const ZONES: TerminalZonePolygon[] = [
 export const LAX_LAYOUT: AirportLayout = {
   iata: "LAX",
   name: "Los Angeles International",
-  layoutVersion: "0.1.0-osm-horseshoe",
-  updatedAt: "2026-07-14",
+  layoutVersion: "0.2.0-arrivals-draft",
+  updatedAt: "2026-08-21",
   center: [-118.40853, 33.94254],
   zones: ZONES,
   nodes: BUILT.nodes,

@@ -33,6 +33,9 @@ const AirportLayoutSchema = z.object({
       "train_platform",
       "restroom",
       "landmark",
+      "customs",
+      "baggage_claim",
+      "ground_transport",
     ]),
     airside: z.boolean(),
     landmark: z.string().trim().min(1).optional(),
@@ -45,15 +48,15 @@ const AirportLayoutSchema = z.object({
     lengthM: z.number().finite().positive(),
     traverseSeconds: z.number().finite().positive(),
     bidirectional: z.boolean(),
-    laneType: z.enum(["standard", "precheck", "clear", "clear_precheck", "priority"]).optional(),
+    laneType: z.enum(["standard", "precheck", "clear", "clear_precheck", "priority", "customs"]).optional(),
   })).min(1),
   pois: z.array(z.object({
     id: z.string().trim().min(1),
     nodeId: z.string().trim().min(1),
-    category: z.enum(["gate", "checkin", "security", "lounge", "restroom", "train", "baggage", "amenity"]),
+    category: z.enum(["gate", "checkin", "security", "lounge", "restroom", "train", "baggage", "amenity", "customs", "ground_transport"]),
     name: z.string().trim().min(1),
     airline: z.string().trim().min(1).optional(),
-    lanes: z.array(z.enum(["standard", "precheck", "clear", "clear_precheck", "priority"])).optional(),
+    lanes: z.array(z.enum(["standard", "precheck", "clear", "clear_precheck", "priority", "customs"])).optional(),
     notes: z.string().trim().min(1).optional(),
     // Zoom-tiered POI detail + airline branding + door labels (M22). All optional
     // so existing curated packages remain valid unchanged.

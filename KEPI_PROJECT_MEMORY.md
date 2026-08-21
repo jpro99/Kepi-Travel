@@ -3,7 +3,65 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-20 (G42/G43 drop a PDF, ticket value beats amount due)
+Last updated: 2026-08-21 (LAX arrivals nav pilot — draft, dormant pending coachMode wiring)
+
+## Decision 2026-08-21 — Second live-nav pilot is LAX **arrivals-only**, not a full second airport
+
+**Why Jeff asked:** wants Kepi to "walk a person through the airport as much as possible" — the
+live turn-by-turn nav (arrow, position fusion, journey phases) only ever covered departures
+(check-in → security → gate). Arrivals (deplane → customs → baggage claim → ground transport) had
+zero indoor graph behind it, at any airport.
+
+**Decision:** Second pilot = **LAX, arrivals only** — not a full LAX departure rebuild (LAX already
+has departure curation from the 2026-07-14 "airport #2" pass; this is purely additive) and not a
+"hundreds of airports" push (full human-verified precision doesn't scale to that — see 2026-07-15
+narrow-scope decision, unchanged). Live turn-by-turn nav stays capped at verified pilots; a
+lighter "researched arrival-facts" tier (no geometry, just verified prose) is the realistic path
+for broader-than-two-airport coverage, not yet built.
+
+**Method upgrade — apply to every future airport pass:** draft data by reading the airport's own
+official, current public PDFs directly (found via web search, downloaded with a browser
+user-agent — flylax.com blocks the generic fetch tool's default UA — and read as images/PDFs),
+not by aggregating travel-blog summaries. This caught a real error on the first pass: blogs
+described "the LAX-it shuttle" as one system; LAX's own Ground Transportation Waiting Areas map
+(rev. SP26-0810) shows LAX-it (green, rideshare/taxi) and the Terminal Connector (pink,
+parking/inter-terminal) are separate systems. See `LAX_ARRIVALS_RESEARCH_MEMO.md`.
+
+**Shipped this session (draft, unverified, currently dormant — see below):**
+- `JourneyPhaseId` extended with `customs` / `baggage_claim` / `ground_transport`
+  (`journeyMachine.ts`), detected purely from node kind at the traveler's position — never
+  inferred from itinerary, so no "are you international?" guessing is needed.
+- `GraphNodeKind` extended with `customs` / `baggage_claim` / `ground_transport`; `PoiCategory`
+  with `customs` / `ground_transport` (`baggage` already existed); `SecurityLaneType` with
+  `customs` (CBP is a real border crossing, not a security bypass — see M40).
+- `LAX_LAYOUT` (`layouts/lax.ts`) gained a TBIT customs/baggage-claim chain and the two
+  ground-transport nodes (LAX-it, Terminal Connector), all `precision: "extrapolated"` — no OSM
+  ground truth exists for any of these anywhere, so nothing here is verified yet.
+- Design law **M40**. Test: `journeyMachine.test.ts` (+ existing cross-airport suites updated:
+  `layoutQuality.ts` CONTEXTUAL_CATEGORIES, `airportLayoutPackage.ts` Zod schema, `poiDetail.ts`
+  zoom tiers, `familyAirportSync.ts` phase labels — all were hand-mirrored enums that needed the
+  same update as `types.ts`, a recurring duplication risk worth knowing about next time a
+  category/kind is added).
+
+**Discovered mid-session — local checkout was ~200 commits stale (root-caused a failed push):**
+Work started from a local `main` pinned at `86a268a`; real `origin/main` was already at `84e8be5`.
+In that gap, remote had independently shipped an **Arrival Day Coach** (`coachMode: "depart" |
+"arrive"` on `AirportNavigatorMap`/`AirportNavigatorFallback` — live baggage-carousel number from
+FlightAware/AeroDataBox, ride-from-airport deep link, time-since-landed) and **deleted
+`ArrivalMode.tsx`** (superseded by the Coach). Also consumed M38/M39 (map helpers; travel-day
+flight order) — this session's law was renumbered M40 to avoid collision. **Lesson: verify the
+local checkout is actually current (`git fetch` + compare to `origin/main`) before trusting a
+"first pass" diagnosis of what exists in the codebase** — an out-of-date local tree produces
+confidently wrong "this doesn't exist yet" claims.
+
+**Not yet done / currently dormant:** the shipped Day Coach has no customs guidance and no indoor
+walking — it's live data + deep links, genuinely complementary to this session's graph, not
+redundant with it. But `coachMode === "arrive"` **always** renders the fallback Coach, never the
+live indoor map, so this session's customs/baggage/ground-transport graph currently has **no path
+to ever render** for a real arrival. Wiring the two together (or deciding they should stay separate)
+is its own next decision — Jeff chose "merge as dormant, wire later" over wiring it in this pass.
+LAX-it/customs coordinates are diagram-derived estimates, not click-to-place human-confirmed —
+same verification step SEA went through still applies before this is "real."
 
 ## Incident 2026-08-20 — "You can read every number except the price" (Jeff)
 

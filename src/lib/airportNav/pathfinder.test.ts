@@ -4,13 +4,15 @@ import { SEA_LAYOUT } from "@/lib/airportNav/layouts/sea";
 import { allowedLanes, computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
 
 test("security credentials choose the best available lane in order", () => {
+  // "customs" is always appended last — CBP isn't a credential-gated TSA
+  // choice, every international arrival passes through it (M40).
   assert.deepEqual(
     allowedLanes({ known: true, clear: true, tsaPreCheck: true }),
-    ["clear", "precheck", "standard"],
+    ["clear", "precheck", "standard", "customs"],
   );
   assert.deepEqual(
     allowedLanes({ known: true, clear: false, tsaPreCheck: true }),
-    ["precheck", "standard"],
+    ["precheck", "standard", "customs"],
   );
 });
 

@@ -221,6 +221,8 @@ const POI_ICON: Record<PoiDefinition["category"], string> = {
   train: "🚈",
   baggage: "🎒",
   amenity: "🍽",
+  customs: "🛂",
+  ground_transport: "🚕",
 };
 
 /** Category accent colors for the light "floor-plan" schematic (flysea-style). */
@@ -233,6 +235,8 @@ const POI_COLOR: Record<PoiDefinition["category"], string> = {
   train: "#7c3aed",
   baggage: "#b45309",
   amenity: "#0891b2",
+  customs: "#9333ea",
+  ground_transport: "#16a34a",
 };
 
 /** Light floor-plan palette — shared by the SVG schematic and the 3D map. */

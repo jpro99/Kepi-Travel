@@ -48,6 +48,10 @@ const PHASE_ORDER: JourneyPhaseId[] = [
   "lounge",
   "at_gate",
   "boarding_soon",
+  // Arrivals (added 2026-08-21, LAX pilot) — a later leg, so ranked last.
+  "customs",
+  "baggage_claim",
+  "ground_transport",
 ];
 
 export function humanJourneyPhaseLabel(phase: JourneyPhaseId): string {
@@ -59,6 +63,9 @@ export function humanJourneyPhaseLabel(phase: JourneyPhaseId): string {
     lounge: "Lounge",
     at_gate: "At gate",
     boarding_soon: "Boarding",
+    customs: "Customs",
+    baggage_claim: "Baggage claim",
+    ground_transport: "Ground transportation",
   };
   return labels[phase];
 }

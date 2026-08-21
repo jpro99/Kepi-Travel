@@ -49,6 +49,9 @@ export function allowedLanes(creds: TravelerSecurityCredentials): SecurityLaneTy
   if (creds.clear) lanes.push("clear");
   if (creds.tsaPreCheck) lanes.push("precheck");
   lanes.push("standard");
+  // Customs/immigration (CBP) isn't a credential-gated TSA lane choice — every
+  // international arrival passes through it, so it's always usable.
+  lanes.push("customs");
   return lanes;
 }
 
@@ -264,17 +267,21 @@ function buildInstructions(
     if (!fromNode || !toNode) continue;
 
     if (edge.kind === "security_transition") {
-      const laneLabel =
-        edge.laneType === "clear" ? "the CLEAR lane" :
-        edge.laneType === "precheck" ? "the TSA PreCheck lane" :
-        edge.laneType === "priority" ? "the priority lane" : "the standard lane";
+      const text =
+        edge.laneType === "customs"
+          ? "Go through customs & immigration"
+          : `Go through security using ${
+              edge.laneType === "clear" ? "the CLEAR lane" :
+              edge.laneType === "precheck" ? "the TSA PreCheck lane" :
+              edge.laneType === "priority" ? "the priority lane" : "the standard lane"
+            }`;
       instructions.push({
-        text: `Go through security using ${laneLabel}`,
+        text,
         maneuver: "security",
         atMeters: metersSoFar,
         landmark: fromNode.landmark,
       });
-      previousBearing = null; // orientation resets after security
+      previousBearing = null; // orientation resets after security/customs
     } else if (edge.kind === "train") {
       instructions.push({
         text: `Board the train toward ${toNode.landmark ?? "your concourse"}`,
