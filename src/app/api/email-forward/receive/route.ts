@@ -819,6 +819,13 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
           : typeof parserDraftRecord.flightArrivalAirport === "string"
             ? parserDraftRecord.flightArrivalAirport.trim()
             : "";
+      // Explicit arrival-local time, only when the parser actually captured one (F-arrival-tz).
+      const parserArrivalTime =
+        typeof parserDraftRecord.arrivalTime === "string"
+          ? parserDraftRecord.arrivalTime.trim()
+          : typeof parserDraftRecord.flightArrivalTime === "string"
+            ? parserDraftRecord.flightArrivalTime.trim()
+            : "";
 
       const emailPricing = resolvePricingNearBooking({
         notes: parserNotesText,
@@ -860,6 +867,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
           ? (typeof parserDraftRecord.arrivalAirport === "string" ? parserDraftRecord.arrivalAirport.trim().toUpperCase().slice(0, 4) : "")
           : "",
         flightDepartureTime: parserType === "flight" && parserLocalTime ? parserLocalTime : "",
+        flightArrivalTime: parserType === "flight" && parserArrivalTime ? parserArrivalTime : "",
         checkOutDate: parserType === "hotel"
           ? (typeof parserDraftRecord.checkOutDate === "string" ? parserDraftRecord.checkOutDate.trim().slice(0, 10) : "")
           : "",
@@ -903,6 +911,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
               flightDepartureAirport: parsedReservation.flightDepartureAirport,
               flightArrivalAirport: parsedReservation.flightArrivalAirport,
               flightDepartureTime: parsedReservation.flightDepartureTime,
+              flightArrivalTime: parsedReservation.flightArrivalTime,
               checkOutDate: parsedReservation.checkOutDate,
             },
             sourceChannel: "email-forward" as const,
@@ -1000,6 +1009,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
               flightDepartureAirport: parsedReservation.flightDepartureAirport,
               flightArrivalAirport: parsedReservation.flightArrivalAirport,
               flightDepartureTime: parsedReservation.flightDepartureTime,
+              flightArrivalTime: parsedReservation.flightArrivalTime,
               checkOutDate: gatedCheckOut,
             },
             sourceChannel: "email-forward" as const,
@@ -1130,6 +1140,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
                 flightArrivalAirport:
                   parsedReservation.flightArrivalAirport || existingDraft.flightArrivalAirport,
                 flightDepartureTime: parserLocalTime || existingDraft.flightDepartureTime,
+                flightArrivalTime: parserArrivalTime || existingDraft.flightArrivalTime,
               },
               parseConfidenceScore: Math.max(
                 typeof reviewRecord.parseConfidenceScore === "number" ? reviewRecord.parseConfidenceScore : 0,
@@ -1228,6 +1239,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         flightArrivalAirport:
           parserType === "flight" ? parsedReservation.flightArrivalAirport : "",
         flightDepartureTime: parserType === "flight" && parserLocalTime ? parserLocalTime : "",
+        flightArrivalTime: parserType === "flight" && parserArrivalTime ? parserArrivalTime : "",
         checkOutDate: parserType === "hotel" ? parsedReservation.checkOutDate : "",
       });
 
@@ -1246,6 +1258,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         flightDepartureAirport: enrichedFields.flightDepartureAirport ?? parsedReservation.flightDepartureAirport,
         flightArrivalAirport: enrichedFields.flightArrivalAirport ?? parsedReservation.flightArrivalAirport,
         flightDepartureTime: enrichedFields.flightDepartureTime ?? parsedReservation.flightDepartureTime,
+        flightArrivalTime: enrichedFields.flightArrivalTime ?? parsedReservation.flightArrivalTime,
       };
       nextReservations = [autoImportedReservation, ...nextReservations];
       routeLogger.info("Forwarded reservation auto-imported to live trip.", {

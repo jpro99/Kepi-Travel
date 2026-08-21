@@ -201,6 +201,7 @@ export type ForwardedReservationField =
   | "flightNumber"
   | "departureAirport"
   | "arrivalAirport"
+  | "arrivalTime"
   | "checkOutDate";
 export type ForwardedParsingStatus = "auto-parsed" | "needs-review" | "needs-user-input";
 export type ForwardedConfidenceLevel = "high" | "medium" | "low";
@@ -232,6 +233,7 @@ export interface ForwardedReservationDraft {
   checkOutDate?: string;
   departureAirport?: string;
   arrivalAirport?: string;
+  arrivalTime?: string;
 }
 
 export interface ForwardedEmailParseResult {
@@ -819,7 +821,8 @@ function resolveTimezone(text: string): string {
   return "Etc/UTC";
 }
 
-function parseAiCandidate(candidate: Record<string, unknown>): CandidateMap {
+/** Exported for direct unit testing of the AI JSON → candidate mapping (bypasses the network call). */
+export function parseAiCandidate(candidate: Record<string, unknown>): CandidateMap {
   const output: CandidateMap = {};
   const setIfPresent = (field: ForwardedReservationField, value: unknown, confidence = 0.78): void => {
     if (typeof value !== "string") {
@@ -863,6 +866,7 @@ function parseAiCandidate(candidate: Record<string, unknown>): CandidateMap {
   setIfPresent("flightNumber", candidate.flightNumber, 0.9);
   setIfPresent("departureAirport", candidate.departureAirport, 0.9);
   setIfPresent("arrivalAirport", candidate.arrivalAirport, 0.9);
+  setIfPresent("arrivalTime", candidate.arrivalTime, 0.74);
   setIfPresent("checkOutDate", candidate.checkOutDate, 0.85);
   return output;
 }
@@ -1522,13 +1526,14 @@ async function runAiFallback(
   const aiPrompt = [
     "Extract every travel reservation found in this email.",
     "Return strict JSON only with this shape:",
-    '{ "reservations": [ { "type": "", "title": "", "provider": "", "confirmationCode": "", "localTime": "", "checkOutDate": "", "timezone": "", "location": "", "notes": "", "flightNumber": "", "departureAirport": "", "arrivalAirport": "" } ] }',
+    '{ "reservations": [ { "type": "", "title": "", "provider": "", "confirmationCode": "", "localTime": "", "checkOutDate": "", "timezone": "", "location": "", "notes": "", "flightNumber": "", "departureAirport": "", "arrivalAirport": "", "arrivalTime": "" } ] }',
     "IMPORTANT: This may be a multi-leg itinerary. Scan for EVERY individual flight segment. For example HND→HNL→SEA→ONT has 3 flights — return 3 separate objects in reservations[]. Each object must have its own flightNumber, departureAirport, arrivalAirport, and localTime (departure time for that specific leg).",
     "Use type values only: flight, hotel, train, ride, dinner. Use \"dinner\" for restaurant reservations, tours, excursions, boat trips, classes, tastings, or any other bookable activity that is not a flight/hotel/train/car ride.",
     "CRITICAL for localTime: For flights, use the scheduled DEPARTURE time (not email send time, not boarding time, not purchase/booking/transaction/payment date). Ignore 'Date:' and 'Sent:' lines from forward headers. For hotels, use Check-in / Checkout cards — Airbnb often shows 'Sat, Sep 12' without a year; take the year from another date in the email (e.g. payment Aug 29, 2026 → stay year 2026). NEVER use payment scheduled dates as check-in. Default hotel check-in time to 15:00 when only 'After 3:00 PM' is shown.",
     "For hotels, set title to the PROPERTY name (e.g. Casa de Elena or Cosy, Romantic & Stylish Studio), NEVER Booking.com / Expedia / Airbnb. Put the OTA in provider. Phrases like \"You're confirmed at Casa de Elena\" mean title=Casa de Elena, provider=Booking.com.",
     "For hotels, set checkOutDate to the check-out date in YYYY-MM-DD format. The email may use formats like 'Friday, 29-May-2026', 'May 29, 2026', or yearless 'Tue, Sep 15' — convert to YYYY-MM-DD. Also set localTime to the check-in date and time e.g. '2026-09-12 15:00'. For flights, leave checkOutDate empty.",
     "The departure time is the scheduled time the plane leaves the gate. Format: 'YYYY-MM-DD HH:mm' in 24-hour.",
+    "For flights, set arrivalTime to the scheduled LOCAL arrival time at the ARRIVAL airport (not the departure airport's clock) ONLY if the email explicitly states a local arrival time. Format: 'YYYY-MM-DD HH:mm' in 24-hour. NEVER compute, estimate, or infer this from flight duration — if the email does not state it, leave arrivalTime empty.",
     "For flights, set flightNumber to IATA airline code + flight number. If the email says 'Alaska Airlines Flight 832' write AS832. If it says 'Hawaiian Airlines Flight 12' write HA12. Common IATA codes: AS=Alaska Airlines, HA=Hawaiian Airlines, UA=United Airlines, AA=American Airlines, DL=Delta, WN=Southwest, B6=JetBlue, KE=Korean Air, NH=ANA, JL=JAL. NEVER use just the number alone — always prefix with the 2-letter IATA code. Never use credit card numbers like VI3557.",
     "For flights, set departureAirport to the IATA code of the origin airport and arrivalAirport to the IATA code of the destination. These are always in the email.",
     "For timezone: use the IATA timezone of the DEPARTURE airport city e.g. Pacific/Honolulu, America/New_York, Asia/Tokyo.",
@@ -1553,7 +1558,7 @@ async function runAiFallback(
       max_tokens: 8000,  // 8000 handles up to ~30 flight legs safely
       temperature: 0,
       system:
-        "You extract travel reservations from forwarded emails. Return ONLY a JSON object with a reservations array. CRITICAL RULES:\n(1) For FLIGHTS: scan the entire email for every individual flight segment. A 3-leg itinerary like HND→HNL→SEA→ONT has 3 separate flights — return 3 objects. NEVER merge segments into one. Each segment has its own flight number, departure airport, arrival airport, and departure time.\n(2) type=flight ONLY when a flight number or airline is present. type=hotel for hotels even if they mention arrival/departure dates.\n(3) localTime = scheduled DEPARTURE time of that specific flight leg in YYYY-MM-DD HH:mm 24-hour format. Never use email send time, purchase date, booking date, transaction date, forward-header Date/Sent metadata, or legal/visa boilerplate dates (e.g. 'Effective March 15, 2016' eTA/ESTA notices).\n(4) confirmationCode = the airline PNR / reservation code (e.g. Reservation code Z84T4Z). Never use English words like carefully, receipt, or confirmation.\n(5) flightNumber = 2-letter IATA code + flight number. If email says 'Alaska Airlines Flight 832' write AS832. If 'Hawaiian Airlines Flight 12' write HA12. Key codes: AS=Alaska, HA=Hawaiian, UA=United, AA=American, DL=Delta, KE=Korean Air, NH=ANA, JL=JAL, AZ=ITA Airways, FR=Ryanair, U2=easyJet, W4=Wizz Air. NEVER return number alone. VI3557 is a credit card, NOT a flight number.\n(6) departureAirport = IATA code of origin. arrivalAirport = IATA code of destination. Both must be set for every flight. Bari=BRI, Venice=VCE.\n(7) timezone = IANA timezone of the departure city e.g. Asia/Tokyo, Pacific/Honolulu, America/Los_Angeles, Europe/Rome.\n(8) location = departure city or airport name.\n(9) If a field is not in the email, use empty string. Never guess or invent values. If only a reservation code is present and flight times are in an unread PDF, leave localTime/flightNumber empty.",
+        "You extract travel reservations from forwarded emails. Return ONLY a JSON object with a reservations array. CRITICAL RULES:\n(1) For FLIGHTS: scan the entire email for every individual flight segment. A 3-leg itinerary like HND→HNL→SEA→ONT has 3 separate flights — return 3 objects. NEVER merge segments into one. Each segment has its own flight number, departure airport, arrival airport, and departure time.\n(2) type=flight ONLY when a flight number or airline is present. type=hotel for hotels even if they mention arrival/departure dates.\n(3) localTime = scheduled DEPARTURE time of that specific flight leg in YYYY-MM-DD HH:mm 24-hour format. Never use email send time, purchase date, booking date, transaction date, forward-header Date/Sent metadata, or legal/visa boilerplate dates (e.g. 'Effective March 15, 2016' eTA/ESTA notices).\n(3b) arrivalTime = scheduled LOCAL arrival time at the ARRIVAL airport, YYYY-MM-DD HH:mm 24-hour format, ONLY if the email explicitly states it. Never compute or estimate it from flight duration — leave empty if not explicitly stated.\n(4) confirmationCode = the airline PNR / reservation code (e.g. Reservation code Z84T4Z). Never use English words like carefully, receipt, or confirmation.\n(5) flightNumber = 2-letter IATA code + flight number. If email says 'Alaska Airlines Flight 832' write AS832. If 'Hawaiian Airlines Flight 12' write HA12. Key codes: AS=Alaska, HA=Hawaiian, UA=United, AA=American, DL=Delta, KE=Korean Air, NH=ANA, JL=JAL, AZ=ITA Airways, FR=Ryanair, U2=easyJet, W4=Wizz Air. NEVER return number alone. VI3557 is a credit card, NOT a flight number.\n(6) departureAirport = IATA code of origin. arrivalAirport = IATA code of destination. Both must be set for every flight. Bari=BRI, Venice=VCE.\n(7) timezone = IANA timezone of the departure city e.g. Asia/Tokyo, Pacific/Honolulu, America/Los_Angeles, Europe/Rome.\n(8) location = departure city or airport name.\n(9) If a field is not in the email, use empty string. Never guess or invent values. If only a reservation code is present and flight times are in an unread PDF, leave localTime/flightNumber empty.",
       messages: [
         {
           role: "user",
@@ -1588,7 +1593,8 @@ async function runAiFallback(
   }
 }
 
-function buildDraft(candidates: CandidateMap, parserNotes: string[]): ForwardedReservationDraft {
+/** Exported for direct unit testing of the candidate → draft mapping. */
+export function buildDraft(candidates: CandidateMap, parserNotes: string[]): ForwardedReservationDraft {
   const typeValue = normalizeType(candidates.type?.value ?? "") ?? "ride";
   const notesSections = [
     normalizeWhitespace(candidates.notes?.value ?? ""),
@@ -1615,6 +1621,10 @@ function buildDraft(candidates: CandidateMap, parserNotes: string[]): ForwardedR
     arrivalAirport:
       typeValue === "flight"
         ? (candidates.arrivalAirport?.value ?? "").trim().toUpperCase().slice(0, 4)
+        : "",
+    arrivalTime:
+      typeValue === "flight"
+        ? normalizeWhitespace(candidates.arrivalTime?.value ?? "")
         : "",
     checkOutDate:
       typeValue === "hotel"

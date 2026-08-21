@@ -1,90 +1,90 @@
 // Airport lookup — resolve city names and codes to IATA
 // Covers US majors, EU majors, and common Kepi user destinations
 
-const AIRPORTS: Record<string, { iata: string; name: string; city: string; country: string }> = {
+const AIRPORTS: Record<string, { iata: string; name: string; city: string; country: string; tz: string }> = {
   // California
-  lax: { iata: "LAX", name: "Los Angeles International", city: "Los Angeles", country: "US" },
-  ont: { iata: "ONT", name: "Ontario International", city: "Ontario, CA", country: "US" },
-  psp: { iata: "PSP", name: "Palm Springs International", city: "Palm Springs", country: "US" },
-  sna: { iata: "SNA", name: "John Wayne Airport", city: "Orange County / Irvine", country: "US" },
-  bur: { iata: "BUR", name: "Hollywood Burbank", city: "Burbank", country: "US" },
-  lgb: { iata: "LGB", name: "Long Beach Airport", city: "Long Beach", country: "US" },
-  sfo: { iata: "SFO", name: "San Francisco International", city: "San Francisco", country: "US" },
-  san: { iata: "SAN", name: "San Diego International", city: "San Diego", country: "US" },
-  smf: { iata: "SMF", name: "Sacramento International", city: "Sacramento", country: "US" },
+  lax: { iata: "LAX", name: "Los Angeles International", city: "Los Angeles", country: "US", tz: "America/Los_Angeles" },
+  ont: { iata: "ONT", name: "Ontario International", city: "Ontario, CA", country: "US", tz: "America/Los_Angeles" },
+  psp: { iata: "PSP", name: "Palm Springs International", city: "Palm Springs", country: "US", tz: "America/Los_Angeles" },
+  sna: { iata: "SNA", name: "John Wayne Airport", city: "Orange County / Irvine", country: "US", tz: "America/Los_Angeles" },
+  bur: { iata: "BUR", name: "Hollywood Burbank", city: "Burbank", country: "US", tz: "America/Los_Angeles" },
+  lgb: { iata: "LGB", name: "Long Beach Airport", city: "Long Beach", country: "US", tz: "America/Los_Angeles" },
+  sfo: { iata: "SFO", name: "San Francisco International", city: "San Francisco", country: "US", tz: "America/Los_Angeles" },
+  san: { iata: "SAN", name: "San Diego International", city: "San Diego", country: "US", tz: "America/Los_Angeles" },
+  smf: { iata: "SMF", name: "Sacramento International", city: "Sacramento", country: "US", tz: "America/Los_Angeles" },
   // New York
-  jfk: { iata: "JFK", name: "John F. Kennedy International", city: "New York", country: "US" },
-  lga: { iata: "LGA", name: "LaGuardia Airport", city: "New York", country: "US" },
-  ewr: { iata: "EWR", name: "Newark Liberty International", city: "New York / Newark", country: "US" },
+  jfk: { iata: "JFK", name: "John F. Kennedy International", city: "New York", country: "US", tz: "America/New_York" },
+  lga: { iata: "LGA", name: "LaGuardia Airport", city: "New York", country: "US", tz: "America/New_York" },
+  ewr: { iata: "EWR", name: "Newark Liberty International", city: "New York / Newark", country: "US", tz: "America/New_York" },
   // Other US
-  ord: { iata: "ORD", name: "O'Hare International", city: "Chicago", country: "US" },
-  mdw: { iata: "MDW", name: "Midway International", city: "Chicago", country: "US" },
-  mia: { iata: "MIA", name: "Miami International", city: "Miami", country: "US" },
-  fll: { iata: "FLL", name: "Fort Lauderdale", city: "Fort Lauderdale", country: "US" },
-  atl: { iata: "ATL", name: "Hartsfield-Jackson Atlanta", city: "Atlanta", country: "US" },
-  dfw: { iata: "DFW", name: "Dallas/Fort Worth International", city: "Dallas", country: "US" },
-  iah: { iata: "IAH", name: "George Bush Intercontinental", city: "Houston", country: "US" },
-  sea: { iata: "SEA", name: "Seattle-Tacoma International", city: "Seattle", country: "US" },
-  den: { iata: "DEN", name: "Denver International", city: "Denver", country: "US" },
-  phx: { iata: "PHX", name: "Phoenix Sky Harbor", city: "Phoenix", country: "US" },
-  las: { iata: "LAS", name: "Harry Reid International", city: "Las Vegas", country: "US" },
-  bos: { iata: "BOS", name: "Boston Logan International", city: "Boston", country: "US" },
-  iad: { iata: "IAD", name: "Dulles International", city: "Washington DC", country: "US" },
-  dca: { iata: "DCA", name: "Reagan National", city: "Washington DC", country: "US" },
-  phl: { iata: "PHL", name: "Philadelphia International", city: "Philadelphia", country: "US" },
-  msp: { iata: "MSP", name: "Minneapolis-Saint Paul", city: "Minneapolis", country: "US" },
-  dtw: { iata: "DTW", name: "Detroit Metropolitan", city: "Detroit", country: "US" },
-  mco: { iata: "MCO", name: "Orlando International", city: "Orlando", country: "US" },
-  tpa: { iata: "TPA", name: "Tampa International", city: "Tampa", country: "US" },
+  ord: { iata: "ORD", name: "O'Hare International", city: "Chicago", country: "US", tz: "America/Chicago" },
+  mdw: { iata: "MDW", name: "Midway International", city: "Chicago", country: "US", tz: "America/Chicago" },
+  mia: { iata: "MIA", name: "Miami International", city: "Miami", country: "US", tz: "America/New_York" },
+  fll: { iata: "FLL", name: "Fort Lauderdale", city: "Fort Lauderdale", country: "US", tz: "America/New_York" },
+  atl: { iata: "ATL", name: "Hartsfield-Jackson Atlanta", city: "Atlanta", country: "US", tz: "America/New_York" },
+  dfw: { iata: "DFW", name: "Dallas/Fort Worth International", city: "Dallas", country: "US", tz: "America/Chicago" },
+  iah: { iata: "IAH", name: "George Bush Intercontinental", city: "Houston", country: "US", tz: "America/Chicago" },
+  sea: { iata: "SEA", name: "Seattle-Tacoma International", city: "Seattle", country: "US", tz: "America/Los_Angeles" },
+  den: { iata: "DEN", name: "Denver International", city: "Denver", country: "US", tz: "America/Denver" },
+  phx: { iata: "PHX", name: "Phoenix Sky Harbor", city: "Phoenix", country: "US", tz: "America/Phoenix" },
+  las: { iata: "LAS", name: "Harry Reid International", city: "Las Vegas", country: "US", tz: "America/Los_Angeles" },
+  bos: { iata: "BOS", name: "Boston Logan International", city: "Boston", country: "US", tz: "America/New_York" },
+  iad: { iata: "IAD", name: "Dulles International", city: "Washington DC", country: "US", tz: "America/New_York" },
+  dca: { iata: "DCA", name: "Reagan National", city: "Washington DC", country: "US", tz: "America/New_York" },
+  phl: { iata: "PHL", name: "Philadelphia International", city: "Philadelphia", country: "US", tz: "America/New_York" },
+  msp: { iata: "MSP", name: "Minneapolis-Saint Paul", city: "Minneapolis", country: "US", tz: "America/Chicago" },
+  dtw: { iata: "DTW", name: "Detroit Metropolitan", city: "Detroit", country: "US", tz: "America/Detroit" },
+  mco: { iata: "MCO", name: "Orlando International", city: "Orlando", country: "US", tz: "America/New_York" },
+  tpa: { iata: "TPA", name: "Tampa International", city: "Tampa", country: "US", tz: "America/New_York" },
   // Italy
-  fco: { iata: "FCO", name: "Fiumicino Airport", city: "Rome", country: "IT" },
-  cia: { iata: "CIA", name: "Ciampino Airport", city: "Rome", country: "IT" },
-  mxp: { iata: "MXP", name: "Malpensa International", city: "Milan", country: "IT" },
-  lin: { iata: "LIN", name: "Linate Airport", city: "Milan", country: "IT" },
-  vce: { iata: "VCE", name: "Marco Polo Airport", city: "Venice", country: "IT" },
-  bri: { iata: "BRI", name: "Bari Karol Wojtyla Airport", city: "Bari", country: "IT" },
-  nap: { iata: "NAP", name: "Naples International", city: "Naples", country: "IT" },
-  flr: { iata: "FLR", name: "Peretola Airport", city: "Florence", country: "IT" },
+  fco: { iata: "FCO", name: "Fiumicino Airport", city: "Rome", country: "IT", tz: "Europe/Rome" },
+  cia: { iata: "CIA", name: "Ciampino Airport", city: "Rome", country: "IT", tz: "Europe/Rome" },
+  mxp: { iata: "MXP", name: "Malpensa International", city: "Milan", country: "IT", tz: "Europe/Rome" },
+  lin: { iata: "LIN", name: "Linate Airport", city: "Milan", country: "IT", tz: "Europe/Rome" },
+  vce: { iata: "VCE", name: "Marco Polo Airport", city: "Venice", country: "IT", tz: "Europe/Rome" },
+  bri: { iata: "BRI", name: "Bari Karol Wojtyla Airport", city: "Bari", country: "IT", tz: "Europe/Rome" },
+  nap: { iata: "NAP", name: "Naples International", city: "Naples", country: "IT", tz: "Europe/Rome" },
+  flr: { iata: "FLR", name: "Peretola Airport", city: "Florence", country: "IT", tz: "Europe/Rome" },
   // Germany
-  muc: { iata: "MUC", name: "Munich Airport", city: "Munich", country: "DE" },
-  fra: { iata: "FRA", name: "Frankfurt Airport", city: "Frankfurt", country: "DE" },
-  ber: { iata: "BER", name: "Brandenburg Airport", city: "Berlin", country: "DE" },
-  ham: { iata: "HAM", name: "Hamburg Airport", city: "Hamburg", country: "DE" },
+  muc: { iata: "MUC", name: "Munich Airport", city: "Munich", country: "DE", tz: "Europe/Berlin" },
+  fra: { iata: "FRA", name: "Frankfurt Airport", city: "Frankfurt", country: "DE", tz: "Europe/Berlin" },
+  ber: { iata: "BER", name: "Brandenburg Airport", city: "Berlin", country: "DE", tz: "Europe/Berlin" },
+  ham: { iata: "HAM", name: "Hamburg Airport", city: "Hamburg", country: "DE", tz: "Europe/Berlin" },
   // UK
-  lhr: { iata: "LHR", name: "Heathrow Airport", city: "London", country: "GB" },
-  lgw: { iata: "LGW", name: "Gatwick Airport", city: "London", country: "GB" },
-  man: { iata: "MAN", name: "Manchester Airport", city: "Manchester", country: "GB" },
+  lhr: { iata: "LHR", name: "Heathrow Airport", city: "London", country: "GB", tz: "Europe/London" },
+  lgw: { iata: "LGW", name: "Gatwick Airport", city: "London", country: "GB", tz: "Europe/London" },
+  man: { iata: "MAN", name: "Manchester Airport", city: "Manchester", country: "GB", tz: "Europe/London" },
   // France
-  cdg: { iata: "CDG", name: "Charles de Gaulle", city: "Paris", country: "FR" },
-  ory: { iata: "ORY", name: "Orly Airport", city: "Paris", country: "FR" },
-  nce: { iata: "NCE", name: "Nice Côte d'Azur", city: "Nice", country: "FR" },
+  cdg: { iata: "CDG", name: "Charles de Gaulle", city: "Paris", country: "FR", tz: "Europe/Paris" },
+  ory: { iata: "ORY", name: "Orly Airport", city: "Paris", country: "FR", tz: "Europe/Paris" },
+  nce: { iata: "NCE", name: "Nice Côte d'Azur", city: "Nice", country: "FR", tz: "Europe/Paris" },
   // Spain
-  mad: { iata: "MAD", name: "Adolfo Suárez Madrid–Barajas", city: "Madrid", country: "ES" },
-  bcn: { iata: "BCN", name: "Barcelona El Prat", city: "Barcelona", country: "ES" },
+  mad: { iata: "MAD", name: "Adolfo Suárez Madrid–Barajas", city: "Madrid", country: "ES", tz: "Europe/Madrid" },
+  bcn: { iata: "BCN", name: "Barcelona El Prat", city: "Barcelona", country: "ES", tz: "Europe/Madrid" },
   // Netherlands
-  ams: { iata: "AMS", name: "Amsterdam Schiphol", city: "Amsterdam", country: "NL" },
+  ams: { iata: "AMS", name: "Amsterdam Schiphol", city: "Amsterdam", country: "NL", tz: "Europe/Amsterdam" },
   // Switzerland
-  zrh: { iata: "ZRH", name: "Zurich Airport", city: "Zurich", country: "CH" },
+  zrh: { iata: "ZRH", name: "Zurich Airport", city: "Zurich", country: "CH", tz: "Europe/Zurich" },
   // Portugal
-  lis: { iata: "LIS", name: "Humberto Delgado Airport", city: "Lisbon", country: "PT" },
+  lis: { iata: "LIS", name: "Humberto Delgado Airport", city: "Lisbon", country: "PT", tz: "Europe/Lisbon" },
   // Greece
-  ath: { iata: "ATH", name: "Athens International", city: "Athens", country: "GR" },
+  ath: { iata: "ATH", name: "Athens International", city: "Athens", country: "GR", tz: "Europe/Athens" },
   // Japan
-  nrt: { iata: "NRT", name: "Narita International", city: "Tokyo", country: "JP" },
-  hnd: { iata: "HND", name: "Haneda Airport", city: "Tokyo", country: "JP" },
-  kix: { iata: "KIX", name: "Kansai International", city: "Osaka", country: "JP" },
+  nrt: { iata: "NRT", name: "Narita International", city: "Tokyo", country: "JP", tz: "Asia/Tokyo" },
+  hnd: { iata: "HND", name: "Haneda Airport", city: "Tokyo", country: "JP", tz: "Asia/Tokyo" },
+  kix: { iata: "KIX", name: "Kansai International", city: "Osaka", country: "JP", tz: "Asia/Tokyo" },
   // Australia
-  syd: { iata: "SYD", name: "Sydney Airport", city: "Sydney", country: "AU" },
-  mel: { iata: "MEL", name: "Melbourne Airport", city: "Melbourne", country: "AU" },
+  syd: { iata: "SYD", name: "Sydney Airport", city: "Sydney", country: "AU", tz: "Australia/Sydney" },
+  mel: { iata: "MEL", name: "Melbourne Airport", city: "Melbourne", country: "AU", tz: "Australia/Melbourne" },
   // Canada
-  yyz: { iata: "YYZ", name: "Toronto Pearson", city: "Toronto", country: "CA" },
-  yvr: { iata: "YVR", name: "Vancouver International", city: "Vancouver", country: "CA" },
+  yyz: { iata: "YYZ", name: "Toronto Pearson", city: "Toronto", country: "CA", tz: "America/Toronto" },
+  yvr: { iata: "YVR", name: "Vancouver International", city: "Vancouver", country: "CA", tz: "America/Vancouver" },
   // Mexico
-  mex: { iata: "MEX", name: "Benito Juárez International", city: "Mexico City", country: "MX" },
-  cun: { iata: "CUN", name: "Cancún International", city: "Cancún", country: "MX" },
+  mex: { iata: "MEX", name: "Benito Juárez International", city: "Mexico City", country: "MX", tz: "America/Mexico_City" },
+  cun: { iata: "CUN", name: "Cancún International", city: "Cancún", country: "MX", tz: "America/Cancun" },
   // Hawaii
-  hnl: { iata: "HNL", name: "Daniel K. Inouye International", city: "Honolulu", country: "US" },
-  ogg: { iata: "OGG", name: "Kahului Airport", city: "Maui", country: "US" },
+  hnl: { iata: "HNL", name: "Daniel K. Inouye International", city: "Honolulu", country: "US", tz: "Pacific/Honolulu" },
+  ogg: { iata: "OGG", name: "Kahului Airport", city: "Maui", country: "US", tz: "Pacific/Honolulu" },
 };
 
 // City name aliases → lookup key
@@ -173,6 +173,13 @@ export function resolveAirport(input: string): AirportResult | null {
   }
 
   return null;
+}
+
+/** IANA timezone for a known IATA airport code, case-insensitive. Undefined if not in the lookup table. */
+export function timezoneForIata(iata: string): string | undefined {
+  const clean = iata.trim().toLowerCase();
+  if (!/^[a-z]{3}$/.test(clean)) return undefined;
+  return AIRPORTS[clean]?.tz;
 }
 
 export function suggestAirports(input: string): AirportResult[] {
