@@ -40,12 +40,9 @@ function normalizeForCompare(text: string): string {
 
 function filterUserLines(savedNote: string, bookedLines: BookedLine[]): string[] {
   const bookedNorm = new Set(bookedLines.map((b) => normalizeForCompare(`${b.emoji} ${b.text}`)));
-  bookedNorm.forEach((_, i) => {
-    const b = bookedLines[i];
-    if (b) {
-      bookedNorm.add(normalizeForCompare(b.text));
-      bookedNorm.add(normalizeForCompare(`fly ${b.text.replace(/^fly\s+/i, "")}`));
-    }
+  bookedLines.forEach((b) => {
+    bookedNorm.add(normalizeForCompare(b.text));
+    bookedNorm.add(normalizeForCompare(`fly ${b.text.replace(/^fly\s+/i, "")}`));
   });
   return parseDayLinesForEditor(savedNote).filter((line) => {
     const norm = normalizeForCompare(line);

@@ -228,7 +228,7 @@ export function ManualReservationEntryModal({
       if (d.flightNumber?.trim()) setFlightNumber(d.flightNumber.trim());
       setScanMessage(
         scannedDrafts.length > 1
-          ? `✓ Found ${scannedDrafts.length} bookings — ${lockReservationType === "hotel" ? "hotel" : "first leg"} filled; review and save.`
+          ? `✓ Found ${scannedDrafts.length} bookings — ${reservationType === "hotel" ? "hotel" : "first leg"} filled; review and save.`
           : "✓ Fields filled from your file — review and save.",
       );
     } catch (error) {

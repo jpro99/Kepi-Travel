@@ -304,7 +304,7 @@ export function TripHotelStayMap({
 
       const map = new maplibregl.Map({
         container: containerRef.current,
-        style: initialStyle,
+        style: initialStyle as unknown as string | import("maplibre-gl").StyleSpecification,
         center: [points[0]?.lon ?? 0, points[0]?.lat ?? 20],
         zoom: 4,
         maxZoom: 18,
@@ -394,7 +394,7 @@ export function TripHotelStayMap({
     if (!map || !mapReady || !maptilerKey) return;
     if (appliedStyleRef.current === mapStyle) return;
     appliedStyleRef.current = mapStyle;
-    map.setStyle(styleSpec);
+    map.setStyle(styleSpec as unknown as string | import("maplibre-gl").StyleSpecification);
     map.once("idle", () => {
       installStayLayers(map);
       void renderStayMarkers();

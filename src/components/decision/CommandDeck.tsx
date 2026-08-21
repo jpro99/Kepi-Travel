@@ -20,6 +20,7 @@ import type {
   CounterfactualMutation,
   DecisionBrief,
   DecisionQuestion,
+  FlightLegPlan,
   PaymentMode,
   PlanMode,
   SelectedStayActivation,
@@ -828,7 +829,7 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
         setBrief(data.brief);
         if (
           data.brief?.intent?.wantsAlaskaUpgrade ||
-          data.brief?.instrumentHighlights?.some((line) => /upgrade/i.test(line))
+          data.brief?.instrumentHighlights?.some((line: string) => /upgrade/i.test(line))
         ) {
           setPaymentMode("mix");
         } else if (data.brief?.paymentMode) {
@@ -838,7 +839,11 @@ export function CommandDeck({ embedded = false }: { embedded?: boolean }) {
           setPlanMode(data.brief.planMode);
         }
         if (data.brief?.flightLegs) {
-          setEnabledLegIds(data.brief.flightLegs.filter((leg) => leg.enabled).map((leg) => leg.id));
+          setEnabledLegIds(
+            data.brief.flightLegs
+              .filter((leg: FlightLegPlan) => leg.enabled)
+              .map((leg: FlightLegPlan) => leg.id),
+          );
         }
         if (mutation && data.counterfactual?.rankingChanged) {
           setCounterfactualNote("Ranking changed from your refinement ↑");

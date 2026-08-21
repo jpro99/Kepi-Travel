@@ -102,7 +102,10 @@ export function ImportTripPickerModal({
                     {formatTripListTitle(trip)}
                   </p>
                   <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                    {formatTripListSubtitle(trip)}
+                    {formatTripListSubtitle({
+                      ...trip,
+                      reservationCount: trip.reservations?.length ?? 0,
+                    })}
                   </p>
                   <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
                     {formatTripDateRange(trip.startDate, trip.endDate)}
