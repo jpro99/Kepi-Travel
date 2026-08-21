@@ -289,6 +289,9 @@
     "title": "Kepi Support",
     "subtitle": "Ask about your trip, reservations, billing, or how to use the app.",
     "chatHint": "The support chat should open automatically. Use the cyan chat bubble if it does not.",
+    "chatHintSignedOut": "Live chat is only available when you're signed in. Email us or sign in to your account below.",
+    "emailSupport": "Email support@kepitravel.com",
+    "signInToChat": "Sign in to chat",
     "backToTrip": "Back to your trip"
   },
   "GroundTransport": {

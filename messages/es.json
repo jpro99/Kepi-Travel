@@ -289,6 +289,9 @@
     "title": "Soporte Kepi",
     "subtitle": "Pregunta sobre tu viaje, reservas, facturación o cómo usar la app.",
     "chatHint": "El chat de soporte debería abrirse solo. Usa la burbuja cian si no aparece.",
+    "chatHintSignedOut": "El chat en vivo solo está disponible si iniciaste sesión. Escríbenos por correo o inicia sesión abajo.",
+    "emailSupport": "Escribir a support@kepitravel.com",
+    "signInToChat": "Iniciar sesión para chatear",
     "backToTrip": "Volver a tu viaje"
   },
   "GroundTransport": {
