@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 test("decision strategies route returns fast brief without live provider blocking", async () => {
-  process.env.NODE_ENV = "test";
+  (process.env as { NODE_ENV: string }).NODE_ENV = "test";
   const { POST } = await import("./route");
   const startedAt = Date.now();
   const response = await POST(
@@ -31,7 +31,7 @@ test("decision strategies route returns fast brief without live provider blockin
 });
 
 test("decision strategies route returns ranked playbook in full plan mode", async () => {
-  process.env.NODE_ENV = "test";
+  (process.env as { NODE_ENV: string }).NODE_ENV = "test";
   const { POST } = await import("./route");
   const response = await POST(
     new Request("http://localhost/api/decision/strategies", {
@@ -64,7 +64,7 @@ test("decision strategies route returns ranked playbook in full plan mode", asyn
 });
 
 test("decision strategies route parses Ontario CA as ONT origin", async () => {
-  process.env.NODE_ENV = "test";
+  (process.env as { NODE_ENV: string }).NODE_ENV = "test";
   const { POST } = await import("./route");
   const response = await POST(
     new Request("http://localhost/api/decision/strategies", {

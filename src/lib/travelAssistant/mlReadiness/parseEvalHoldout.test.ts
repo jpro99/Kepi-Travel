@@ -41,7 +41,7 @@ test("parse eval holdout fixtures remain stable (regex path, no AI key required)
     assert.equal(result.usedAiFallback, false, `${fixture.id}: should not require AI fallback`);
 
     for (const [field, expectedValue] of Object.entries(fixture.expected)) {
-      const actual = (result.draft as Record<string, unknown>)[field];
+      const actual = (result.draft as unknown as Record<string, unknown>)[field];
       assert.equal(actual, expectedValue, `${fixture.id}: ${field}`);
     }
   }

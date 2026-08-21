@@ -25,6 +25,7 @@ test("I30: raw gate holds incomplete hotel before enrich would invent defaults",
     localTime: "",
     location: "",
     timezone: "Etc/UTC",
+    confirmationCode: "",
   });
   assert.equal(enriched.location, "Hotel stay");
   assert.match(enriched.localTime, /^\d{4}-\d{2}-\d{2} 12:00$/u);

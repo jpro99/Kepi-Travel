@@ -3,10 +3,11 @@ import test from "node:test";
 import {
   DRAIN_DUPLICATE_REVIEW_REASON,
   drainForwardReviewQueue,
+  type DrainableReservation,
 } from "./drainForwardReviewQueue";
 
 test("drainForwardReviewQueue imports email-forward items and clears stale May dates", () => {
-  const result = drainForwardReviewQueue(
+  const result = drainForwardReviewQueue<DrainableReservation>(
     [],
     [
       {
@@ -134,7 +135,7 @@ test("F9: needs-review status is not auto-promoted even without reasons", () => 
 });
 
 test("I35: drainForwardReviewQueue preserves hotel checkOutDate", () => {
-  const result = drainForwardReviewQueue(
+  const result = drainForwardReviewQueue<DrainableReservation>(
     [],
     [
       {
