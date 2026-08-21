@@ -472,6 +472,20 @@ function pricingTextForReservation(reservation: CashUsdResolvable): string {
   return selectPricingSourceText(reservation);
 }
 
+function storedQuotedCashUsd(reservation: CashUsdResolvable, pricingText?: string): number | undefined {
+  if (
+    typeof reservation.quotedPriceUsd !== "number" ||
+    !Number.isFinite(reservation.quotedPriceUsd) ||
+    reservation.quotedPriceUsd <= 0
+  ) {
+    return undefined;
+  }
+  return sanitizeResolvedCashUsd(
+    reservation.quotedPriceUsd,
+    milesHintForCashGuard(reservation, pricingText),
+  );
+}
+
 export function resolveReservationCashUsd(reservation: CashUsdResolvable): number | undefined {
   const hasSourceText = Boolean(
     reservation.originalEmailText?.trim() || reservation.notes?.trim(),
@@ -480,6 +494,7 @@ export function resolveReservationCashUsd(reservation: CashUsdResolvable): numbe
   if (hasSourceText) {
     const pricingText = pricingTextForReservation(reservation);
     const miles = parseMilesFromText(pricingText);
+    // G43: award + $0 due is an active no-cash decision — do not resurrect ticket value stored as cash.
     if (miles.milesSpent != null && isZeroCashDueContext(pricingText)) {
       return undefined;
     }
@@ -501,20 +516,10 @@ export function resolveReservationCashUsd(reservation: CashUsdResolvable): numbe
     if (parsed != null && parsed > 0) {
       return sanitizeResolvedCashUsd(parsed, milesHintForCashGuard(reservation, pricingText));
     }
-    // Email is pricing source of truth — never resurrect stale quotedPriceUsd when re-parse rejects junk.
-    return undefined;
+    // G45: itinerary notes/email with no fare must not ignore a plausible typed/stored amount.
+    // G33: junk six-figure stored cash still dies in sanitizeResolvedCashUsd.
+    return storedQuotedCashUsd(reservation, pricingText);
   }
 
-  if (
-    typeof reservation.quotedPriceUsd === "number" &&
-    Number.isFinite(reservation.quotedPriceUsd) &&
-    reservation.quotedPriceUsd > 0
-  ) {
-    return sanitizeResolvedCashUsd(
-      reservation.quotedPriceUsd,
-      milesHintForCashGuard(reservation),
-    );
-  }
-
-  return undefined;
+  return storedQuotedCashUsd(reservation);
 }

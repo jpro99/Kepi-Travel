@@ -182,7 +182,11 @@ import { BookTabView } from "@/components/travelAssistant/BookTabView";
 import { MapTabView } from "@/components/travelAssistant/MapTabView";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
-import { applyAcceptedReservationPricing, finalizeTripReservationPricing } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
+import {
+  applyAcceptedReservationPricing,
+  finalizeTripReservationPricing,
+  stampPnrGroupFromEditedLeg,
+} from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import { mergeReservationPricingFields } from "@/lib/travelAssistant/reservationPricingMerge";
 import { applyScannedDocumentPricing } from "@/lib/travelAssistant/scannedDocumentPricing";
 import { buildTransportConflictReservationIds } from "@/lib/travelAssistant/reservationAttention";
@@ -7506,16 +7510,16 @@ export default function TravelAssistantPage() {
         closeDrawer();
         return;
       }
-      setReservations((prev) =>
-        prev.map((item) =>
-          item.id === activeDrawer.id
-            ? {
-                ...item,
-                ...applyAcceptedReservationPricing(drawerDraft, { reparseFromEmail: false }),
-              }
-            : item,
-        ),
-      );
+      setReservations((prev) => {
+        const existing = prev.find((item) => item.id === activeDrawer.id);
+        if (!existing) return prev;
+        const priced = {
+          ...existing,
+          ...applyAcceptedReservationPricing(drawerDraft, { reparseFromEmail: false }),
+        };
+        const next = prev.map((item) => (item.id === activeDrawer.id ? priced : item));
+        return stampPnrGroupFromEditedLeg(next, priced);
+      });
       queueMutation("Reservation updated.", {
         key: "reservation-update",
         reservationId: activeDrawer.id,

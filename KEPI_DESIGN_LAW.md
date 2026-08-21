@@ -206,6 +206,11 @@ Exchanges show `Total charges for air travel: USD $0.00` because nothing more is
 
 **Test:** `scripts/check-undefined-names.cjs` (prebuild gate)
 
+**G45 — A typed fare must clear Add price**  
+When the confirmation has no parseable cash (itinerary notes / fare-less forward), a plausible stored `quotedPriceUsd` from the reservation drawer counts. Do not keep saying “Add price” because notes or email exist. Email still wins when it has a real total. Award + $0 due still must not resurrect a ticket value stored as cash (G33/G43). Saving cash on one PNR leg stamps every flight on that confirmation.
+
+**Test:** `src/lib/travelAssistant/parseReservationCashUsd.test.ts`, `src/lib/travelAssistant/tripSpendSummary.test.ts`, `src/lib/travelAssistant/hydrateReservationQuotedPrice.test.ts`
+
 **G46 — Airport Day Coach advances from facts, not checkboxes**  
 The coach spotlight moves forward from booked/observed signals only: `just-landed` elapsed time, coarse GPS (`at-airport` / `in-terminal`), live baggage when the feed returns a real belt, and depart `LocationPhase` (time + geofence). Home TripWalk mirrors the same specific line — never generic “Open Airport Mode” when the next step is known. Optional manual “I’m through” is future; do not ship a frozen checklist.
 
@@ -1019,6 +1024,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | G42 | `src/lib/travelAssistant/scannedDocumentPricing.test.ts` |
 | G43 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |
 | G44 | `scripts/check-undefined-names.cjs` (prebuild gate) |
+| G45 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts`, `src/lib/travelAssistant/tripSpendSummary.test.ts`, `src/lib/travelAssistant/hydrateReservationQuotedPrice.test.ts` |
 | G46 | `src/lib/travelAssistant/airportDayCoach.test.ts`, `src/lib/travelAssistant/homeNextAction.test.ts` |
 | G47 | `src/lib/travelAssistant/connectionPlaybook.test.ts` |
 | G48 | `src/lib/airportNav/officialWayfinding.test.ts` |
