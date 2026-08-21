@@ -49,6 +49,9 @@ test("canRescanReservation requires stored email source text or Resend id with m
 test("countRescannableReservations counts Resend-backfillable flights missing pricing", () => {
   const count = countRescannableReservations([
     sampleReservation({ id: "a", originalEmailText: "x".repeat(120) }),
+    // "b" has no stored email text or id, but does have a real confirmation
+    // code and no pricing — G41 counts it too: the fare hunt must not be
+    // gated behind stored email text when a confirmation code can search.
     sampleReservation({ id: "b" }),
     sampleReservation({
       id: "c",
@@ -56,7 +59,7 @@ test("countRescannableReservations counts Resend-backfillable flights missing pr
       sourceEmailId: "email-ita-1",
     }),
   ]);
-  assert.equal(count, 2);
+  assert.equal(count, 3);
 });
 
 test("reservationNeedsPricingBackfill when flight has points but no PDF cash", () => {
