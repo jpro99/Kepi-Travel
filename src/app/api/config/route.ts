@@ -5,10 +5,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  // Try every possible env var name the user might have set
+  // This route is PUBLIC (see src/middleware.ts isPublicRoute) — only ever return the
+  // domain-allowlisted browser key. MAPTILER_KEY / MAPTILER_API_KEY are server-only,
+  // unrestricted, billable keys and must never be returned here (see src/app/api/maptiles/route.ts).
   const maptilerKey =
-    process.env.MAPTILER_KEY ||         // server-only, no domain restrictions — best
-    process.env.MAPTILER_API_KEY ||
     process.env.NEXT_PUBLIC_MAPTILER_KEY ||
     process.env.NEXT_PUBLIC_MAPLIBRE_KEY ||
     "";
