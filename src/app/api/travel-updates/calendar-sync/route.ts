@@ -96,7 +96,23 @@ export async function POST(req: Request) {
   }
 
   const runtimeState = await readTravelRuntimeState();
-  const incoming = parsed.data.reservations ?? runtimeState.reservations;
+  // Explicit shape (not inferred) because `parsed.data.reservations` and
+  // `runtimeState.reservations` are two different types that both satisfy
+  // filterCalendarSyncReservations's generic constraint individually, but
+  // TS can't unify them across the `??` union for generic inference. Every
+  // field here is already read defensively below (?? / ?.), so this is a
+  // type-only normalization, not a behavior change.
+  const incoming: Array<{
+    id: string;
+    type: string;
+    title?: string;
+    confirmationCode?: string;
+    localTime?: string;
+    location?: string;
+    timezone?: string;
+    provider?: string;
+    notes?: string;
+  }> = parsed.data.reservations ?? runtimeState.reservations;
   const reservations = filterCalendarSyncReservations(incoming).map((reservation) =>
     toCalendarSyncReservationPayload({
       id: reservation.id,
