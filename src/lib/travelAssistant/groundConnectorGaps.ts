@@ -42,7 +42,10 @@ interface ConnectorReservation {
   location?: string;
   checkOutDate?: string;
   title?: string;
-  confirmationCode?: string;
+  // Widened to accept null: callers (e.g. GroundConnectorPrompts' reservation
+  // shape) source this from stored reservation data where it's nullable, and
+  // this field isn't actually read anywhere in this file — only structural.
+  confirmationCode?: string | null;
 }
 
 /** Ground connectors are regional transfers — never cross-country legs. */

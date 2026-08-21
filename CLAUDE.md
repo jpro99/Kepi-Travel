@@ -84,7 +84,7 @@ Do not loop on the same failed fix. Do not touch unrelated files. Do not claim f
 - TypeScript: `ignoreBuildErrors: true` in next.config — run `npx tsc --noEmit` on edited files
 - Redis: check BOTH `UPSTASH_REDIS_*` and `KV_REST_API_*`
 - TDZ rule: never shadow function names with local variables in same scope
-- Clerk middleware: `src/proxy.ts` — add public routes there
+- Clerk middleware: `src/middleware.ts` — add public routes there
 - MapLibre: inline style objects only (CSP)
 
 ## Mobile UI rule (required)
