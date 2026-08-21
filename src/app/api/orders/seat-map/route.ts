@@ -5,6 +5,43 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
+interface DuffelAvailableService {
+  total_amount?: string;
+  total_currency?: string;
+}
+
+interface DuffelSeatDisclosure {
+  title?: string;
+}
+
+interface DuffelSeatElement {
+  type?: string;
+  designator?: string;
+  is_available?: boolean;
+  available_services?: DuffelAvailableService[];
+  disclosures?: DuffelSeatDisclosure[];
+}
+
+interface DuffelSeatSection {
+  elements?: DuffelSeatElement[];
+}
+
+interface DuffelSeatRow {
+  row_number?: string;
+  sections?: DuffelSeatSection[];
+}
+
+interface DuffelSeatCabin {
+  cabin_class?: string;
+  rows?: DuffelSeatRow[];
+}
+
+interface DuffelSeatMap {
+  segment_id?: string;
+  cabin_class_marketing_name?: string;
+  cabins?: DuffelSeatCabin[];
+}
+
 export async function GET(req: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -32,22 +69,22 @@ export async function GET(req: Request) {
     const data = await res.json();
 
     // Shape the seat map data for the UI
-    const seatMaps = (data.data ?? []).map((sm: Record<string, unknown>) => ({
+    const seatMaps = ((data.data ?? []) as DuffelSeatMap[]).map((sm) => ({
       segmentId: sm.segment_id,
       cabinClass: sm.cabin_class_marketing_name,
-      cabins: (sm.cabins as Record<string, unknown>[])?.map(cabin => ({
+      cabins: sm.cabins?.map(cabin => ({
         cabinClass: cabin.cabin_class,
-        rows: (cabin.rows as Record<string, unknown>[])?.map(row => ({
+        rows: cabin.rows?.map(row => ({
           rowNumber: row.row_number,
-          sections: (row.sections as Record<string, unknown>[])?.map(section => ({
-            seats: (section.elements as Record<string, unknown>[])
+          sections: row.sections?.map(section => ({
+            seats: section.elements
               ?.filter(el => el.type === "seat")
               ?.map(seat => ({
                 designator: seat.designator,         // e.g. "14A"
-                available: seat.available_services?.length > 0 || seat.is_available,
-                isExit: seat.disclosures?.some((d: Record<string, unknown>) => 
+                available: (seat.available_services?.length ?? 0) > 0 || seat.is_available,
+                isExit: seat.disclosures?.some((d) =>
                   String(d.title ?? "").toLowerCase().includes("exit")) ?? false,
-                isExtraLegroom: seat.disclosures?.some((d: Record<string, unknown>) => 
+                isExtraLegroom: seat.disclosures?.some((d) =>
                   String(d.title ?? "").toLowerCase().includes("legroom")) ?? false,
                 price: seat.available_services?.[0]?.total_amount
                   ? Number(seat.available_services[0].total_amount) : 0,

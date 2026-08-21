@@ -35,6 +35,7 @@ const PatchSchema = z.object({
   notes: z.string().optional(),
   cardEnrollments: z
     .record(
+      z.string(),
       z.object({
         priorityPassEnrolled: z.boolean().optional(),
         centurionDigitalReady: z.boolean().optional(),

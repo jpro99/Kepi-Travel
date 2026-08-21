@@ -5,7 +5,7 @@ import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { getResendClient } from "@/lib/email/resendClient";
 import { logger } from "@/lib/logger";
 import { assessForwardedDraft, parseForwardedEmail } from "@/lib/travelAssistant/emailForwardParser";
-import type { SessionReservation } from "@/lib/travelAssistant/clientSessionState";
+import type { SessionReservation, SessionReviewItem } from "@/lib/travelAssistant/clientSessionState";
 import { resolveUserIdByForwardAddress } from "@/lib/travelAssistant/emailForwardSetupStore";
 import { sendPushNotification } from "@/lib/travelAssistant/pushNotificationService";
 import { updateTrip } from "@/lib/travelAssistant/tripStore";
@@ -41,7 +41,7 @@ import {
   UNKNOWN_TYPE_REVIEW_REASON,
 } from "@/lib/travelAssistant/forwardedIngestDecision";
 import { shouldSkipWebhookSignatureVerification } from "@/lib/travelAssistant/emailForwardWebhookAuth";
-import { isDuplicateReservation } from "@/lib/travelAssistant/reservationDuplicates";
+import { isDuplicateReservation, type DuplicateReservationFields } from "@/lib/travelAssistant/reservationDuplicates";
 import { drainForwardReviewQueue } from "@/lib/travelAssistant/drainForwardReviewQueue";
 import { getFewShotExamplesForEmail } from "@/lib/travelAssistant/mlReadiness/fewShotExamples";
 import { EMAIL_FORWARD_PARSER_VERSION } from "@/lib/travelAssistant/mlReadiness/parserVersion";
@@ -112,6 +112,23 @@ function confidenceToDraftValue(score: number): "high" | "medium" | "low" {
 
 function buildPushBody(): string {
   return "New reservation added to your trip";
+}
+
+/**
+ * Widen the trip window to cover `next`, merging with any patch already accumulated.
+ * Factored out (rather than inlined as `patch = patch ? {...} : next` in the calling loops)
+ * because TS's control-flow narrowing of a self-reassigned `let` across loop iterations
+ * collapses to `never` for that pattern; a plain function call sidesteps it.
+ */
+function mergeTripWindow(
+  current: { startDate: string; endDate: string } | null,
+  next: { startDate: string; endDate: string },
+): { startDate: string; endDate: string } {
+  if (!current) return next;
+  return {
+    startDate: next.startDate < current.startDate ? next.startDate : current.startDate,
+    endDate: next.endDate > current.endDate ? next.endDate : current.endDate,
+  };
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -216,14 +233,7 @@ function normalizeIncomingWebhookBody(body: unknown): Record<string, unknown> {
 
 function isDuplicateAgainstReviewQueue(
   reviewQueue: unknown,
-  candidate: {
-    type?: string;
-    provider?: string;
-    localTime?: string;
-    location?: string;
-    confirmationCode?: string;
-    flightNumber?: string;
-  },
+  candidate: DuplicateReservationFields,
 ): boolean {
   if (!Array.isArray(reviewQueue)) {
     return false;
@@ -667,7 +677,9 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         ?.url ?? undefined;
     const emailSourceMetadata = {
       sourceEmailId: emailId || undefined,
-      sourceEmailSubject: parserSubject.trim() || undefined,
+      // SessionReviewItem.sourceEmailSubject is required (not optional) — always provide a
+      // real string (possibly empty) rather than undefined so review-queue items stay valid.
+      sourceEmailSubject: parserSubject.trim(),
       originalEmailText: storedSourceText || undefined,
       hasPdfAttachment: parserHasPdfAttachment || Boolean(pdfAttachmentText.trim()) || undefined,
       manageUrl: emailManageUrl,
@@ -1117,12 +1129,12 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
           );
         });
         if (queueIndex >= 0) {
-          const reviewRecord = asRecord(nextQueue[queueIndex]) ?? {};
-          const existingDraft = asRecord(reviewRecord.draft) ?? {};
+          const existingItem = nextQueue[queueIndex];
+          const existingDraft = existingItem.draft;
           nextQueue = nextQueue.map((item, index) => {
             if (index !== queueIndex) return item;
             return {
-              ...reviewRecord,
+              ...existingItem,
               draft: {
                 ...existingDraft,
                 title: parserTitle || existingDraft.title,
@@ -1143,7 +1155,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
                 flightArrivalTime: parserArrivalTime || existingDraft.flightArrivalTime,
               },
               parseConfidenceScore: Math.max(
-                typeof reviewRecord.parseConfidenceScore === "number" ? reviewRecord.parseConfidenceScore : 0,
+                typeof existingItem.parseConfidenceScore === "number" ? existingItem.parseConfidenceScore : 0,
                 draftConfidenceScore,
               ),
               parsingStatus: draftParsingStatus,
@@ -1374,7 +1386,12 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       nextReservations = dedupeFlightReservations(nextReservations);
       const drained = drainForwardReviewQueue(nextReservations, nextQueue, () => `res-email-${generateId()}`);
       nextReservations = drained.reservations;
-      nextQueue = drained.reviewQueue;
+      // drainForwardReviewQueue's declared DrainableReviewItem type is a looser structural
+      // subset of SessionReviewItem (no `impact`, optional `reasons`/`sourceEmailSubject`).
+      // At runtime every item it returns is either an original nextQueue entry passed through
+      // unchanged or `{ ...item, reasons }` — always a genuine SessionReviewItem — so this
+      // reflects that guarantee rather than papering over a real mismatch.
+      nextQueue = drained.reviewQueue as SessionReviewItem[];
 
       const reservationDates = nextReservations
         .map((reservation) => reservationPrimaryDate(reservation))
@@ -1382,13 +1399,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       for (const reservationDate of reservationDates) {
         const expanded = expandTripWindowIfNeeded(targetTrip, reservationDate);
         if (expanded) {
-          tripWindowPatch = tripWindowPatch
-            ? {
-                startDate:
-                  expanded.startDate < tripWindowPatch.startDate ? expanded.startDate : tripWindowPatch.startDate,
-                endDate: expanded.endDate > tripWindowPatch.endDate ? expanded.endDate : tripWindowPatch.endDate,
-              }
-            : expanded;
+          tripWindowPatch = mergeTripWindow(tripWindowPatch, expanded);
         }
       }
     }
@@ -1398,13 +1409,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       for (const day of parsedDayPlanForTrip.days) {
         const expanded = expandTripWindowIfNeeded(targetTrip, day.dateKey);
         if (expanded) {
-          tripWindowPatch = tripWindowPatch
-            ? {
-                startDate:
-                  expanded.startDate < tripWindowPatch.startDate ? expanded.startDate : tripWindowPatch.startDate,
-                endDate: expanded.endDate > tripWindowPatch.endDate ? expanded.endDate : tripWindowPatch.endDate,
-              }
-            : expanded;
+          tripWindowPatch = mergeTripWindow(tripWindowPatch, expanded);
         }
       }
     }

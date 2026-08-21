@@ -41,7 +41,7 @@ export async function POST(req: Request) {
     routeLogger.info("Confirmation scan request started.");
     const response = await handleConfirmationScanUpload(req, {
       anthropicApiKey,
-      rateLimitHeaders: rateLimit.headers,
+      rateLimitHeaders: Object.fromEntries(rateLimit.headers.entries()),
     });
     if (response.ok) {
       routeLogger.info("Confirmation scan request completed.");

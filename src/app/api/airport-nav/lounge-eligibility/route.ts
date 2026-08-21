@@ -17,6 +17,7 @@ const RequestSchema = z.object({
     loungeMemberships: z.array(z.string()).optional(),
     cardEnrollments: z
       .record(
+        z.string(),
         z.object({
           priorityPassEnrolled: z.boolean().optional(),
           centurionDigitalReady: z.boolean().optional(),
