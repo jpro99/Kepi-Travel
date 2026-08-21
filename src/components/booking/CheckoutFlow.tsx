@@ -51,14 +51,14 @@ function Field({ label, pIndex, field, type = "text", placeholder, required = fa
   return (
     <div className={half ? "flex-1" : "w-full"}>
       <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
-        {label}{required && <span className="text-red-400"> *</span>}
+        {label}{required && <span className="text-red-500"> *</span>}
       </label>
       <input type={type} value={val as string}
         onChange={e => onUpdate(pIndex, field, e.target.value)}
         placeholder={placeholder}
-        className={`w-full rounded-2xl border px-4 py-3 text-sm text-white bg-slate-800 focus:outline-none ${err ? "border-red-500/60" : "border-slate-700 focus:border-[#f4c95d]/60"}`}
+        className={`w-full rounded-2xl border px-4 py-3 text-sm text-slate-900 dark:text-white bg-white dark:bg-slate-800 focus:outline-none ${err ? "border-red-500/60" : "border-slate-300 dark:border-slate-700 focus:border-[#007AFF]/60 dark:focus:border-[#0A84FF]/60"}`}
       />
-      {err && <p className="text-[10px] text-red-400 mt-1">{err}</p>}
+      {err && <p className="text-[10px] text-red-600 dark:text-red-400 mt-1">{err}</p>}
     </div>
   );
 }
@@ -152,24 +152,24 @@ const validate = (): boolean => {
   // ── Confirmed ─────────────────────────────────────────────────────────────
   if (step === "confirmed") {
     return (
-      <div className="min-h-screen bg-[#0b1f3a] flex flex-col items-center justify-center px-6 text-center">
+      <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex flex-col items-center justify-center px-6 text-center">
         <div className="text-5xl mb-4">🎉</div>
-        <h2 className="text-2xl font-black text-white mb-2">You're booked!</h2>
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 px-6 py-4 mb-6 w-full max-w-sm">
-          <p className="text-xs text-slate-400 mb-1">Booking reference</p>
-          <p className="text-3xl font-black text-emerald-400 tracking-widest">{bookingRef}</p>
-          <p className="text-xs text-slate-400 mt-2">Screenshot or copy this — you'll need it at the airport</p>
+        <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white mb-2">You're booked!</h2>
+        <div className="rounded-2xl border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/20 px-6 py-4 mb-6 w-full max-w-sm">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Booking reference</p>
+          <p className="text-3xl font-black text-emerald-600 dark:text-emerald-400 tracking-widest">{bookingRef}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">Screenshot or copy this — you'll need it at the airport</p>
         </div>
-        <div className="rounded-2xl bg-[#111e33] border border-slate-700 px-5 py-4 mb-6 w-full max-w-sm text-left">
-          <p className="text-xs text-slate-400">{flight.airline} · {flight.fromIata} → {flight.toIata}</p>
-          <p className="font-bold text-white">{fmtDate(flight.departs)} · {fmt12(flight.departs)} → {fmt12(flight.arrives)}</p>
-          <p className="text-[#f4c95d] font-black text-lg mt-1">${Math.round(flight.price).toLocaleString()}</p>
+        <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-5 py-4 mb-6 w-full max-w-sm text-left">
+          <p className="text-xs text-slate-500 dark:text-slate-400">{flight.airline} · {flight.fromIata} → {flight.toIata}</p>
+          <p className="font-bold text-slate-900 dark:text-white">{fmtDate(flight.departs)} · {fmt12(flight.departs)} → {fmt12(flight.arrives)}</p>
+          <p className="text-[#007AFF] dark:text-[#0A84FF] font-black text-lg mt-1">${Math.round(flight.price).toLocaleString()}</p>
         </div>
-        <p className="text-xs text-slate-400 mb-6 max-w-sm">
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 max-w-sm">
           A confirmation email will be sent to {passengerForms[0]?.email}. Check your spam folder if it doesn't arrive within 10 minutes.
         </p>
         <button type="button" onClick={() => window.location.href = "/travel-assistant"}
-          className="w-full max-w-sm py-4 rounded-2xl bg-[#f4c95d] text-[#0b1f3a] font-black text-base">
+          className="w-full max-w-sm py-4 rounded-2xl bg-[#007AFF] dark:bg-[#0A84FF] text-white font-black text-base">
           View my trips →
         </button>
       </div>
@@ -179,12 +179,12 @@ const validate = (): boolean => {
   // ── Processing ─────────────────────────────────────────────────────────────
   if (step === "processing") {
     return (
-      <div className="min-h-screen bg-[#0b1f3a] flex flex-col items-center justify-center px-6 text-center">
+      <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex flex-col items-center justify-center px-6 text-center">
         <div className="text-4xl mb-4 animate-bounce">✈️</div>
-        <h2 className="text-xl font-black text-white mb-2">Booking your flight…</h2>
-        <p className="text-slate-400 text-sm">Confirming with the airline. Don't close this page.</p>
-        <div className="mt-6 h-1 w-48 bg-slate-700 rounded-full overflow-hidden">
-          <div className="h-full bg-[#f4c95d] rounded-full animate-pulse" style={{ width: "60%" }} />
+        <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white mb-2">Booking your flight…</h2>
+        <p className="text-slate-500 dark:text-slate-400 text-sm">Confirming with the airline. Don't close this page.</p>
+        <div className="mt-6 h-1 w-48 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+          <div className="h-full bg-[#007AFF] dark:bg-[#0A84FF] rounded-full animate-pulse" style={{ width: "60%" }} />
         </div>
       </div>
     );
@@ -193,16 +193,16 @@ const validate = (): boolean => {
   // ── Error ──────────────────────────────────────────────────────────────────
   if (step === "error") {
     return (
-      <div className="min-h-screen bg-[#0b1f3a] flex flex-col items-center justify-center px-6 text-center">
+      <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex flex-col items-center justify-center px-6 text-center">
         <div className="text-4xl mb-4">❌</div>
-        <h2 className="text-xl font-black text-white mb-2">Booking failed</h2>
-        <p className="text-slate-400 text-sm mb-4">{bookingError}</p>
+        <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white mb-2">Booking failed</h2>
+        <p className="text-slate-500 dark:text-slate-400 text-sm mb-4">{bookingError}</p>
         <p className="text-xs text-slate-500 mb-8">Your card was not charged. The flight may have sold out or the price changed.</p>
         <button type="button" onClick={() => setStep("review")}
-          className="w-full max-w-sm py-4 rounded-2xl bg-[#f4c95d] text-[#0b1f3a] font-black mb-3">
+          className="w-full max-w-sm py-4 rounded-2xl bg-[#007AFF] dark:bg-[#0A84FF] text-white font-black mb-3">
           Try again
         </button>
-        <button type="button" onClick={onCancel} className="text-slate-400 text-sm">
+        <button type="button" onClick={onCancel} className="text-slate-500 dark:text-slate-400 text-sm">
           Back to search
         </button>
       </div>
@@ -212,10 +212,10 @@ const validate = (): boolean => {
   // ── Seats ──────────────────────────────────────────────────────────────────
   if (step === "seats") {
     return (
-      <div className="min-h-screen bg-[#0b1f3a]">
-        <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-700/50">
-          <button type="button" onClick={() => setStep("passengers")} className="text-slate-400 text-sm">← Back</button>
-          <h1 className="text-base font-black text-white">Choose your seat</h1>
+      <div className="min-h-screen bg-slate-100 dark:bg-slate-950">
+        <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-200 dark:border-slate-800">
+          <button type="button" onClick={() => setStep("passengers")} className="text-slate-500 dark:text-slate-400 text-sm">← Back</button>
+          <h1 className="text-base font-semibold tracking-tight text-slate-900 dark:text-white">Choose your seat</h1>
         </div>
         <div className="px-4 py-5 max-w-lg mx-auto space-y-4">
           <SeatMap
@@ -224,7 +224,7 @@ const validate = (): boolean => {
             onSelect={seat => setSelectedSeat(seat === "skip" ? null : seat)}
           />
           <button type="button" onClick={() => setStep("review")}
-            className="w-full py-4 rounded-2xl bg-[#f4c95d] text-[#0b1f3a] font-black text-base active:opacity-80">
+            className="w-full py-4 rounded-2xl bg-[#007AFF] dark:bg-[#0A84FF] text-white font-black text-base active:opacity-80">
             {selectedSeat ? `Continue with seat ${selectedSeat} →` : "Continue without seat →"}
           </button>
         </div>
@@ -235,51 +235,51 @@ const validate = (): boolean => {
   // ── Review ──────────────────────────────────────────────────────────────────
   if (step === "review") {
     return (
-      <div className="min-h-screen bg-[#0b1f3a]">
-        <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-700/50">
-          <button type="button" onClick={() => setStep("passengers")} className="text-slate-400 text-sm">← Edit</button>
-          <h1 className="text-base font-black text-white">Review & pay</h1>
+      <div className="min-h-screen bg-slate-100 dark:bg-slate-950">
+        <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-200 dark:border-slate-800">
+          <button type="button" onClick={() => setStep("passengers")} className="text-slate-500 dark:text-slate-400 text-sm">← Edit</button>
+          <h1 className="text-base font-semibold tracking-tight text-slate-900 dark:text-white">Review & pay</h1>
         </div>
         <div className="px-4 py-5 max-w-lg mx-auto space-y-4">
           {/* Flight summary */}
-          <div className="rounded-2xl border border-slate-700 bg-[#111e33] px-5 py-4">
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-5 py-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Your flight</p>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-400">{flight.airline} · {flight.stops === 0 ? "Nonstop" : `${flight.stops} stop`}</p>
-                <p className="text-lg font-bold text-white">{flight.fromIata} → {flight.toIata}</p>
-                <p className="text-sm text-slate-300">{fmtDate(flight.departs)} · {fmt12(flight.departs)} → {fmt12(flight.arrives)}</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">{flight.airline} · {flight.stops === 0 ? "Nonstop" : `${flight.stops} stop`}</p>
+                <p className="text-lg font-bold text-slate-900 dark:text-white">{flight.fromIata} → {flight.toIata}</p>
+                <p className="text-sm text-slate-600 dark:text-slate-300">{fmtDate(flight.departs)} · {fmt12(flight.departs)} → {fmt12(flight.arrives)}</p>
               </div>
-              <p className="text-2xl font-black text-[#f4c95d]">${Math.round(flight.price)}</p>
+              <p className="text-2xl font-black text-[#007AFF] dark:text-[#0A84FF]">${Math.round(flight.price)}</p>
             </div>
           </div>
 
           {/* Passenger summary */}
           {passengerForms.map((p, i) => (
-            <div key={i} className="rounded-2xl border border-slate-700 bg-[#111e33] px-5 py-4">
+            <div key={i} className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-5 py-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">
                 Passenger {i + 1}
               </p>
-              <p className="font-bold text-white">{p.firstName} {p.lastName}</p>
-              <p className="text-sm text-slate-400">{p.email} · {p.phone}</p>
-              <p className="text-sm text-slate-400">DOB: {p.dateOfBirth}</p>
-              {p.passportNumber && <p className="text-sm text-slate-400">Passport: {p.passportNumber}</p>}
+              <p className="font-bold text-slate-900 dark:text-white">{p.firstName} {p.lastName}</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{p.email} · {p.phone}</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">DOB: {p.dateOfBirth}</p>
+              {p.passportNumber && <p className="text-sm text-slate-500 dark:text-slate-400">Passport: {p.passportNumber}</p>}
             </div>
           ))}
 
           {/* Price */}
-          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/10 px-5 py-4">
+          <div className="rounded-2xl border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/10 px-5 py-4">
             <div className="flex justify-between text-sm mb-1">
-              <span className="text-slate-400">Flights × {passengerCount}</span>
-              <span className="text-white">${(flight.price * passengerCount).toLocaleString()}</span>
+              <span className="text-slate-500 dark:text-slate-400">Flights × {passengerCount}</span>
+              <span className="text-slate-900 dark:text-white">${(flight.price * passengerCount).toLocaleString()}</span>
             </div>
             <div className="flex justify-between text-sm mb-3">
-              <span className="text-slate-400">Taxes & fees</span>
-              <span className="text-slate-400">Included</span>
+              <span className="text-slate-500 dark:text-slate-400">Taxes & fees</span>
+              <span className="text-slate-500 dark:text-slate-400">Included</span>
             </div>
             <div className="flex justify-between font-black">
-              <span className="text-white">Total charged now</span>
-              <span className="text-[#f4c95d] text-xl">${(flight.price * passengerCount).toLocaleString()}</span>
+              <span className="text-slate-900 dark:text-white">Total charged now</span>
+              <span className="text-[#007AFF] dark:text-[#0A84FF] text-xl">${(flight.price * passengerCount).toLocaleString()}</span>
             </div>
           </div>
 
@@ -291,7 +291,7 @@ const validate = (): boolean => {
             className="w-full py-4 rounded-2xl bg-emerald-500 text-white font-black text-base active:opacity-80">
             Confirm & pay ${(flight.price * passengerCount).toLocaleString()} →
           </button>
-          <button type="button" onClick={onCancel} className="w-full text-center text-slate-400 text-sm py-2">
+          <button type="button" onClick={onCancel} className="w-full text-center text-slate-500 dark:text-slate-400 text-sm py-2">
             Cancel
           </button>
         </div>
@@ -300,25 +300,25 @@ const validate = (): boolean => {
   }
 
   return (
-    <div className="min-h-screen bg-[#0b1f3a]">
-      <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-700/50">
-        <button type="button" onClick={onCancel} className="text-slate-400 text-sm">← Back</button>
-        <h1 className="text-base font-black text-white">Passenger details</h1>
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-950">
+      <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-200 dark:border-slate-800">
+        <button type="button" onClick={onCancel} className="text-slate-500 dark:text-slate-400 text-sm">← Back</button>
+        <h1 className="text-base font-semibold tracking-tight text-slate-900 dark:text-white">Passenger details</h1>
       </div>
 
       <div className="px-4 py-5 max-w-lg mx-auto">
         {/* Flight mini-card */}
-        <div className="rounded-2xl border border-slate-700 bg-[#111e33] px-4 py-3 mb-6 flex items-center justify-between">
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 mb-6 flex items-center justify-between">
           <div>
-            <p className="text-sm font-bold text-white">{flight.fromIata} → {flight.toIata}</p>
-            <p className="text-xs text-slate-400">{fmtDate(flight.departs)} · {fmt12(flight.departs)}</p>
+            <p className="text-sm font-bold text-slate-900 dark:text-white">{flight.fromIata} → {flight.toIata}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{fmtDate(flight.departs)} · {fmt12(flight.departs)}</p>
           </div>
-          <p className="text-lg font-black text-[#f4c95d]">${Math.round(flight.price)}</p>
+          <p className="text-lg font-black text-[#007AFF] dark:text-[#0A84FF]">${Math.round(flight.price)}</p>
         </div>
 
         {savedDetails?.firstName && (
           <button type="button" onClick={prefill}
-            className="w-full mb-4 py-3 rounded-2xl border border-[#f4c95d]/30 text-[#f4c95d] text-sm font-bold">
+            className="w-full mb-4 py-3 rounded-2xl border border-[#007AFF]/30 dark:border-[#0A84FF]/40 text-[#007AFF] dark:text-[#0A84FF] text-sm font-bold">
             ↩ Prefill from last booking
           </button>
         )}
@@ -326,7 +326,7 @@ const validate = (): boolean => {
         {passengerForms.map((_, pIndex) => (
           <div key={pIndex} className="mb-6">
             {passengerCount > 1 && (
-              <p className="text-sm font-black text-slate-400 mb-4">Passenger {pIndex + 1} of {passengerCount}</p>
+              <p className="text-sm font-black text-slate-500 dark:text-slate-400 mb-4">Passenger {pIndex + 1} of {passengerCount}</p>
             )}
             <div className="space-y-3">
               <div className="flex gap-3">
@@ -341,7 +341,7 @@ const validate = (): boolean => {
                   <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Gender *</label>
                   <select value={passengerForms[pIndex]?.gender ?? "m"}
                     onChange={e => updatePassenger(pIndex, "gender", e.target.value)}
-                    className="w-full rounded-2xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-white focus:outline-none">
+                    className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none">
                     <option value="m">Male</option>
                     <option value="f">Female</option>
                   </select>
@@ -349,7 +349,7 @@ const validate = (): boolean => {
               </div>
 
               {/* Passport — international flights */}
-              <div className="rounded-2xl border border-slate-700/50 bg-slate-800/30 px-4 py-4 space-y-3">
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/30 px-4 py-4 space-y-3">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Passport (required for international)</p>
                 <Field label="Passport number" pIndex={pIndex} field="passportNumber" placeholder="A12345678" errors={errors} formValues={passengerForms} onUpdate={updatePassenger} />
                 <div className="flex gap-3">
@@ -363,7 +363,7 @@ const validate = (): boolean => {
 
         <button type="button"
           onClick={() => { if (validate()) setStep("seats"); }}
-          className="w-full py-4 rounded-2xl bg-[#f4c95d] text-[#0b1f3a] font-black text-base active:opacity-80">
+          className="w-full py-4 rounded-2xl bg-[#007AFF] dark:bg-[#0A84FF] text-white font-black text-base active:opacity-80">
           Choose seats →
         </button>
         <p className="text-[10px] text-slate-500 text-center mt-3">

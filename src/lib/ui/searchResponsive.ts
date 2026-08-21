@@ -34,6 +34,9 @@ export const SEARCH_INPUT_DARK =
 export const SEARCH_SELECT_DARK =
   "w-full rounded-2xl border border-slate-700 bg-slate-800/80 px-4 py-3.5 text-base text-white focus:outline-none md:px-5 md:py-4 md:text-lg";
 
+export const SEARCH_SELECT_LIGHT =
+  "w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-base text-slate-900 outline-none ring-sky-300 focus-visible:ring-2 dark:border-slate-600 dark:bg-slate-950 dark:text-white md:px-5 md:py-4 md:text-lg";
+
 export const SEARCH_PRIMARY_BUTTON =
   "w-full rounded-2xl py-4 text-base font-black active:opacity-80 md:py-5 md:text-lg";
 
