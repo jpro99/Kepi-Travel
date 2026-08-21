@@ -1,10 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildDraft,
   extractBestLocalTimeFromEmailBody,
   extractConfirmationCodeFromText,
   extractFlightLegsFromEmailBody,
   extractHotelPropertyName,
+  parseAiCandidate,
   parseForwardedEmail,
   prepareEmailBodyForParsing,
   stripForwardEnvelopeHeaders,
@@ -634,4 +636,59 @@ test("US 09/13/2026 stays September 13 for flights", () => {
     "flight",
   );
   assert.equal(localTime, "2026-09-13 08:45");
+});
+
+test("AI-stated arrivalTime round-trips from raw AI JSON candidate through to the reservation draft (LAX->FCO)", () => {
+  // Shape of what the Anthropic response parser hands to parseAiCandidate — mirrors the
+  // JSON schema in the aiPrompt, including the new arrivalTime field.
+  const rawAiCandidate: Record<string, unknown> = {
+    type: "flight",
+    title: "ITA Airways AZ614",
+    provider: "ITA Airways",
+    confirmationCode: "Z84T4Z",
+    localTime: "2026-06-10 21:00",
+    timezone: "America/Los_Angeles",
+    location: "Los Angeles",
+    notes: "",
+    flightNumber: "AZ614",
+    departureAirport: "LAX",
+    arrivalAirport: "FCO",
+    arrivalTime: "2026-06-11 16:00",
+  };
+
+  const candidate = parseAiCandidate(rawAiCandidate);
+  assert.equal(candidate.arrivalTime?.value, "2026-06-11 16:00");
+  assert.equal(candidate.arrivalTime?.source, "ai");
+
+  const draft = buildDraft(candidate, []);
+  assert.equal(draft.type, "flight");
+  assert.equal(draft.departureAirport, "LAX");
+  assert.equal(draft.arrivalAirport, "FCO");
+  assert.equal(draft.localTime, "2026-06-10 21:00");
+  // The new field: the stated FCO-local arrival time survives candidate -> draft mapping
+  // untouched (still FCO-local — resolving it to a UTC instant is journeyPhase.ts's job).
+  assert.equal(draft.arrivalTime, "2026-06-11 16:00");
+});
+
+test("arrivalTime is left empty when the AI does not return one (never invented)", () => {
+  const rawAiCandidate: Record<string, unknown> = {
+    type: "flight",
+    title: "Alaska Airlines AS832",
+    provider: "Alaska Airlines",
+    localTime: "2026-05-29 08:00",
+    timezone: "Pacific/Honolulu",
+    departureAirport: "SEA",
+    arrivalAirport: "HNL",
+    flightNumber: "AS832",
+    // No arrivalTime field at all — matches today's typical AI response.
+  };
+
+  const candidate = parseAiCandidate(rawAiCandidate);
+  assert.equal(candidate.arrivalTime, undefined);
+
+  const draft = buildDraft(candidate, []);
+  assert.equal(draft.arrivalTime, "");
+  // Missing arrivalTime must never block auto-parsed status — it isn't a required field.
+  assert.equal(draft.departureAirport, "SEA");
+  assert.equal(draft.arrivalAirport, "HNL");
 });

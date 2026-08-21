@@ -6,6 +6,7 @@
 import {
   canonicalFlightDepartureLocalTime,
 } from "@/lib/travelAssistant/tripWindow";
+import { timezoneForIata } from "@/lib/airports/lookup";
 
 export interface JourneyReservation {
   id: string;
@@ -106,7 +107,12 @@ function flightDepartureUtcMs(flight: JourneyReservation): number {
 
 function flightArrivalUtcMs(flight: JourneyReservation): number {
   if (flight.flightArrivalTime?.trim()) {
-    const ms = toUtcMs(flight.flightArrivalTime, flight.timezone);
+    // The arrival-local time must be interpreted in the ARRIVAL airport's timezone —
+    // flight.timezone is always the DEPARTURE airport's zone (see emailForwardParser.ts
+    // prompt). Resolve via the arrival airport IATA code first; only fall back to the
+    // departure-derived timezone when the arrival airport isn't in our lookup table.
+    const arrivalTz = timezoneForIata(flight.flightArrivalAirport ?? "") ?? flight.timezone;
+    const ms = toUtcMs(flight.flightArrivalTime, arrivalTz);
     if (!Number.isNaN(ms)) return ms;
   }
   const depMs = flightDepartureUtcMs(flight);
