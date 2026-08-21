@@ -170,8 +170,8 @@ export function RecordTripModal({ open, loading = false, variant = "decision", o
 
   const isConsumer = variant === "consumer";
   const shellClass = isConsumer
-    ? "max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900"
-    : "max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl border border-white/15 bg-[#0b1f3a] p-5 shadow-2xl";
+    ? "max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+    : "max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-3xl border border-white/15 bg-[#0b1f3a] p-5 shadow-2xl";
   const titleClass = isConsumer ? "mt-1 text-xl font-bold text-slate-900 dark:text-white" : "mt-1 text-xl font-bold text-white";
   const kickerClass = isConsumer
     ? "text-[10px] font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400"

@@ -51,7 +51,7 @@ export function BookingWalkthroughModal({
       aria-modal="true"
       aria-labelledby="booking-walkthrough-title"
     >
-      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/15 bg-[#0b1f3a] p-5 shadow-2xl">
+      <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/15 bg-[#0b1f3a] p-5 shadow-2xl">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest text-[#f4c95d]">Booking walkthrough</p>

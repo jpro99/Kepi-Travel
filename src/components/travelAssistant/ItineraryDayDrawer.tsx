@@ -58,7 +58,7 @@ export function ItineraryDayDrawer({
         role="dialog"
         aria-modal="true"
         aria-labelledby="itinerary-day-drawer-title"
-        className="relative z-10 flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-[#FAFAF8] shadow-2xl dark:bg-[#0F1923] sm:rounded-3xl"
+        className="relative z-10 flex max-h-[88dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-[#FAFAF8] shadow-2xl dark:bg-[#0F1923] sm:rounded-3xl"
       >
         <div className="shrink-0 border-b border-slate-200/80 px-5 py-4 dark:border-slate-700/80">
           <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-300 dark:bg-slate-600 sm:hidden" />

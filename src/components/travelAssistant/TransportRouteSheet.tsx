@@ -35,7 +35,7 @@ export function TransportRouteSheet({ open, route, onClose, onPickMode }: Transp
           <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{route.hint}</p>
         </div>
 
-        <div className="max-h-[50vh] space-y-2 overflow-y-auto px-5 py-4">
+        <div className="max-h-[50dvh] space-y-2 overflow-y-auto px-5 py-4">
           {route.modes.map((mode) => (
             <button
               key={mode.mode}
