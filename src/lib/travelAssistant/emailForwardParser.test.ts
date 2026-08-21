@@ -467,7 +467,7 @@ test("ITA receipt boilerplate does not invent 2016 flight dates or CAREFULLY cod
       from: "jeff@gmail.com",
       text: itaBoilerplateEmail,
       html: "",
-      attachments: [{ filename: "eticket.pdf", contentType: "application/pdf", size: 12000 }],
+      attachments: [{ filename: "eticket.pdf", contentType: "application/pdf" }],
     });
     assert.equal(result.draft.confirmationCode, "Z84T4Z");
     assert.match(result.draft.provider, /ITA Airways/i);

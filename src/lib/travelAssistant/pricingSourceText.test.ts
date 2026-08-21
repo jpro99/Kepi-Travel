@@ -32,6 +32,8 @@ test("G33: stale $12 quoted is corrected from email on applyAcceptedReservationP
     title: "FCO-BRI",
     confirmationCode: "EFLQKE",
     quotedPriceUsd: 12,
+    quotedPointsMiles: undefined as number | undefined,
+    pointsProgram: undefined as string | undefined,
     originalEmailText: UNITED_EMAIL,
   });
   assert.equal(priced.quotedPriceUsd, 196);

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 test("decision flex-options route returns date flex without live keys", async () => {
-  process.env.NODE_ENV = "test";
+  (process.env as { NODE_ENV: string }).NODE_ENV = "test";
   const { POST } = await import("./route");
   const response = await POST(
     new Request("http://localhost/api/decision/flex-options", {
@@ -28,7 +28,7 @@ test("decision flex-options route returns date flex without live keys", async ()
 });
 
 test("decision flex-options route rejects missing strategyId and originIata", async () => {
-  process.env.NODE_ENV = "test";
+  (process.env as { NODE_ENV: string }).NODE_ENV = "test";
   const { POST } = await import("./route");
   const response = await POST(
     new Request("http://localhost/api/decision/flex-options", {

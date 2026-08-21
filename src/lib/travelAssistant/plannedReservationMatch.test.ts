@@ -61,10 +61,13 @@ test("upsertReservationReplacingPlanned replaces in place and keeps id", () => {
     id: "res-new",
     type: "flight",
     confirmationCode: "AS123",
+    plannedOnly: false,
     flightDepartureAirport: "SEA",
     flightArrivalAirport: "HND",
     flightDate: "2026-04-01",
     localTime: "2026-04-01 11:05",
+    location: "SEA → HND",
+    bookUrl: "",
     flightNumber: "AS65",
     source: "imported",
   };

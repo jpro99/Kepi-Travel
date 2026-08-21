@@ -33,6 +33,7 @@ test("G34 peer: sibling with boilerplate inherits PDF email text from donor leg"
       flightNumber: "AZ1616",
       flightDepartureAirport: "BRI",
       flightArrivalAirport: "FCO",
+      quotedPriceUsd: undefined as number | undefined,
     },
     {
       id: "leg-2",
@@ -42,6 +43,7 @@ test("G34 peer: sibling with boilerplate inherits PDF email text from donor leg"
       flightNumber: "AZ1467",
       flightDepartureAirport: "FCO",
       flightArrivalAirport: "VCE",
+      quotedPriceUsd: undefined as number | undefined,
     },
   ];
 
@@ -65,6 +67,7 @@ test("propagatePricingAcrossPeerGroups copies cash and miles to every leg in PNR
       flightNumber: "AZ1616",
       flightDepartureAirport: "BRI",
       flightArrivalAirport: "FCO",
+      quotedPriceUsd: undefined as number | undefined,
     },
     {
       id: "f2",
@@ -76,6 +79,7 @@ test("propagatePricingAcrossPeerGroups copies cash and miles to every leg in PNR
       flightNumber: "AZ1467",
       flightDepartureAirport: "FCO",
       flightArrivalAirport: "VCE",
+      quotedPriceUsd: undefined as number | undefined,
     },
   ];
 
@@ -100,10 +104,11 @@ test("G37: finalizeTripReservationPricing auto-logs one Alaska ticket across fou
       title: "ONT-SEA",
       confirmationCode: "DPNNWG",
       sourceEmailId: "email-alaska",
-      originalEmailText: alaskaEmail,
+      originalEmailText: alaskaEmail as string | undefined,
       flightNumber: "AS654",
       flightDepartureAirport: "ONT",
       flightArrivalAirport: "SEA",
+      quotedPriceUsd: undefined as number | undefined,
     },
     {
       id: "f2",
@@ -111,9 +116,11 @@ test("G37: finalizeTripReservationPricing auto-logs one Alaska ticket across fou
       title: "SEA-FCO",
       confirmationCode: "DPNNWG",
       sourceEmailId: "email-alaska",
+      originalEmailText: undefined as string | undefined,
       flightNumber: "AS180",
       flightDepartureAirport: "SEA",
       flightArrivalAirport: "FCO",
+      quotedPriceUsd: undefined as number | undefined,
     },
     {
       id: "f3",
@@ -121,9 +128,11 @@ test("G37: finalizeTripReservationPricing auto-logs one Alaska ticket across fou
       title: "FCO-SEA",
       confirmationCode: "DPNNWG",
       sourceEmailId: "email-alaska",
+      originalEmailText: undefined as string | undefined,
       flightNumber: "AS181",
       flightDepartureAirport: "FCO",
       flightArrivalAirport: "SEA",
+      quotedPriceUsd: undefined as number | undefined,
     },
     {
       id: "f4",
@@ -131,9 +140,11 @@ test("G37: finalizeTripReservationPricing auto-logs one Alaska ticket across fou
       title: "SEA-ONT",
       confirmationCode: "DPNNWG",
       sourceEmailId: "email-alaska",
+      originalEmailText: undefined as string | undefined,
       flightNumber: "AS489",
       flightDepartureAirport: "SEA",
       flightArrivalAirport: "ONT",
+      quotedPriceUsd: undefined as number | undefined,
     },
   ];
 
@@ -150,10 +161,38 @@ test("G38: incoming receipt prices every DPNNWG leg even after itinerary-only si
   const receipt =
     "Confirmation DPNNWG\nSummary of airfare charges\nNew Ticket Value: $1,386.43\nTotal charges for air travel: USD $0.00";
   const legs = [
-    { id: "f1", type: "flight", title: "ONT-SEA", confirmationCode: "DPNNWG", originalEmailText: "AS654 itinerary only" },
-    { id: "f2", type: "flight", title: "SEA-FCO", confirmationCode: "DPNNWG" },
-    { id: "f3", type: "flight", title: "FCO-SEA", confirmationCode: "DPNNWG" },
-    { id: "f4", type: "flight", title: "SEA-ONT", confirmationCode: "DPNNWG" },
+    {
+      id: "f1",
+      type: "flight",
+      title: "ONT-SEA",
+      confirmationCode: "DPNNWG",
+      originalEmailText: "AS654 itinerary only" as string | undefined,
+      quotedPriceUsd: undefined as number | undefined,
+    },
+    {
+      id: "f2",
+      type: "flight",
+      title: "SEA-FCO",
+      confirmationCode: "DPNNWG",
+      originalEmailText: undefined as string | undefined,
+      quotedPriceUsd: undefined as number | undefined,
+    },
+    {
+      id: "f3",
+      type: "flight",
+      title: "FCO-SEA",
+      confirmationCode: "DPNNWG",
+      originalEmailText: undefined as string | undefined,
+      quotedPriceUsd: undefined as number | undefined,
+    },
+    {
+      id: "f4",
+      type: "flight",
+      title: "SEA-ONT",
+      confirmationCode: "DPNNWG",
+      originalEmailText: undefined as string | undefined,
+      quotedPriceUsd: undefined as number | undefined,
+    },
   ];
   const priced = applyIncomingSourceToPnrGroup(legs, receipt, "DPNNWG");
   assert.equal(priced.every((leg) => leg.quotedPriceUsd === 1386), true);
