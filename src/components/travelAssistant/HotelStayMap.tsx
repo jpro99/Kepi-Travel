@@ -75,7 +75,7 @@ function createPricePin(
     ? `0 0 0 2px ${style.ring}, 0 0 0 4px rgba(255,255,255,0.9)`
     : style.fitLabel === "Top match"
       ? `0 0 0 2px ${style.ring}`
-      : undefined;
+      : "";
   badge.textContent = pin.text;
 
   const dot = document.createElement("span");

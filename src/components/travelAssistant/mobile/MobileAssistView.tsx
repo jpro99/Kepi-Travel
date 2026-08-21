@@ -9,7 +9,7 @@ import {
   buildCheckInHandoffContent,
   parseDepartureUtcMs,
 } from "@/lib/travelAssistant/checkInHandoff";
-import { resolveBoardingPassUrl } from "@/lib/travelAssistant/reservationLinks";
+import { resolveBoardingPassUrl, type ReservationSourceLink } from "@/lib/travelAssistant/reservationLinks";
 import { canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 
@@ -29,7 +29,7 @@ interface Reservation {
   flightDepartureTime?: string;
   flightArrivalTime?: string;
   boardingPassUrl?: string;
-  sourceLinks?: Array<{ label: string; url: string; kind: string }>;
+  sourceLinks?: ReservationSourceLink[];
   originalEmailText?: string;
 }
 

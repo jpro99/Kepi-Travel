@@ -1311,7 +1311,7 @@ export function AirportNavigatorMap({
       const targetPoi = layout?.pois.find((poi) => poi.id === activeRoute.toPoiId);
       haptic();
       sayAndShow(`You've arrived — ${activeDestName ?? "destination"}.`);
-      if (targetPoi) {
+      if (targetPoi && targetPoi.category !== "amenity") {
         processJourneyEvent({ type: "arrived_at_route_end", poiCategory: targetPoi.category, at: Date.now() });
       }
       endRoute();

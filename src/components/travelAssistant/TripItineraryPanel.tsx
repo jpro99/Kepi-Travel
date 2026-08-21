@@ -10,6 +10,7 @@ import type { DayPlanMode } from "@/components/travelAssistant/DayPlanSheet";
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
 import type { StopDateRange } from "@/lib/decision/stopDates";
 import type { FlightSearchPlan, PlannedFlightLeg, PlannedStayCity } from "@/lib/travelAssistant/tripPlanBooking";
+import type { ReservationSourceLink } from "@/lib/travelAssistant/reservationLinks";
 import {
   dayPlanToNote,
   emptyItineraryPlans,
@@ -62,7 +63,7 @@ interface TripItineraryPanelProps {
     originalEmailText?: string;
     hasPdfAttachment?: boolean;
     manageUrl?: string;
-    sourceLinks?: Array<{ label: string; url: string; kind: string }>;
+    sourceLinks?: ReservationSourceLink[];
     flightAirline?: string;
   }[];
   dayNotes: Record<string, string>;

@@ -44,7 +44,7 @@ type TimelineReservation = {
   flightArrivalTime?: string;
   flightDate?: string;
   checkOutDate?: string;
-  location?: string;
+  location: string;
   confirmationCode?: string;
   flightAirline?: string;
   notes?: string;

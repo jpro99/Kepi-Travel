@@ -243,6 +243,8 @@ export function NextUpCard({
         headline?: string;
         detail?: string;
         error?: string;
+        proactive_flag?: string;
+        action?: string;
       };
 
       if (data.error) {

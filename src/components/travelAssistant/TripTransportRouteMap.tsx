@@ -381,7 +381,7 @@ export function TripTransportRouteMap({
 
       const map = new maplibregl.Map({
         container: containerRef.current,
-        style: buildOsmRasterFallbackStyle(),
+        style: buildOsmRasterFallbackStyle() as unknown as import("maplibre-gl").StyleSpecification,
         center: [geoPoints[0]?.lon ?? 0, geoPoints[0]?.lat ?? 20],
         zoom: 3,
         maxZoom: 18,
@@ -501,7 +501,11 @@ export function TripTransportRouteMap({
     if (!map || !mapReady) return;
     const key = maptilerKey.trim();
     usingOsmFallbackRef.current = !key;
-    map.setStyle(key ? styleSpec : buildOsmRasterFallbackStyle());
+    map.setStyle(
+      (key ? styleSpec : buildOsmRasterFallbackStyle()) as unknown as
+        | string
+        | import("maplibre-gl").StyleSpecification,
+    );
     map.once("idle", () => {
       installRouteLayers(map);
       void renderAirportMarkers();

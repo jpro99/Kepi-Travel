@@ -153,7 +153,7 @@ export function FamilyMap({ members, locations, maptilerKey = "", height = 300, 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const marker = new (ml as any).Marker({ element: wrap, anchor: "bottom" })
           .setLngLat([loc.lon, loc.lat])
-          .addTo(map as Parameters<typeof marker.addTo>[0]);
+          .addTo(map);
         existing[member.id] = marker;
       });
 

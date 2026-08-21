@@ -28,7 +28,6 @@ const config: CapacitorConfig = {
     backgroundColor: "#F5F5F7",
     contentInset: "automatic",
     scrollEnabled: true,
-    overrideUserInterfaceStyle: "automatic",
     /**
      * Must stay false. App-bound-only kepitravel.com blocks Clerk
      * (clerk.accounts.dev) and the WKWebView paints blank.

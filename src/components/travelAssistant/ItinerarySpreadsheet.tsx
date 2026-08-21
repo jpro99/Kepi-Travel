@@ -282,7 +282,7 @@ function DayPlanOverlay({
 }) {
   if (!intent) return null;
 
-  const modes: Array<{ id: DayPlanMode; label: string; detail?: string; show: boolean }> = [
+  const allModes: Array<{ id: DayPlanMode; label: string; detail?: string; show: boolean }> = [
     { id: "flight", label: "Flight", show: intent.needsTransport },
     { id: "train", label: "Train", show: intent.needsTransport },
     { id: "bus", label: "Bus", show: intent.needsTransport },
@@ -293,7 +293,8 @@ function DayPlanOverlay({
       detail: stayCity ? `Search stays in ${stayCity} for this leg` : undefined,
       show: Boolean(stayCity) || intent.needsHotelCheckin,
     },
-  ].filter((mode) => mode.show);
+  ];
+  const modes = allModes.filter((mode) => mode.show);
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/40 p-4">

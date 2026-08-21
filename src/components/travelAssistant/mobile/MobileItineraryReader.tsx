@@ -475,15 +475,16 @@ export function MobileItineraryReader({
                 <div className="grid grid-cols-7 gap-1.5">
                   {monthGrid.map((cell, i) => {
                     if (!cell.dateKey) return <div key={`empty-${i}`} className="aspect-square" />;
-                    const day = dayByKey.get(cell.dateKey);
+                    const dateKey = cell.dateKey;
+                    const day = dayByKey.get(dateKey);
                     const active = Boolean(day);
-                    const isSelected = active && expandedDateKey === cell.dateKey;
+                    const isSelected = active && expandedDateKey === dateKey;
                     return (
                       <button
-                        key={cell.dateKey}
+                        key={dateKey}
                         type="button"
                         disabled={!active}
-                        onClick={() => active && toggleDay(cell.dateKey)}
+                        onClick={() => active && toggleDay(dateKey)}
                         className={`flex aspect-square flex-col items-center justify-center rounded-xl text-[20px] font-bold ring-2 ${
                           !active
                             ? "text-slate-300 ring-transparent dark:text-slate-700"
@@ -494,7 +495,7 @@ export function MobileItineraryReader({
                                 : "bg-white text-slate-900 ring-transparent dark:bg-slate-900 dark:text-white"
                         }`}
                       >
-                        {new Date(`${cell.dateKey}T12:00:00`).getDate()}
+                        {new Date(`${dateKey}T12:00:00`).getDate()}
                       </button>
                     );
                   })}

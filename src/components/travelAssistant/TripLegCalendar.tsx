@@ -6,7 +6,6 @@ import {
   buildTripLegCalendarModel,
   cellFillStyle,
   countNights,
-  formatLegChipRange,
   ribbonPositionForGridCell,
   ribbonRadiusClass,
   TRAVEL_LEG_COLOR,
@@ -127,11 +126,22 @@ function cellThirdLine(
   return { text: truncateLabel(walkthrough.summary, 32) };
 }
 
+/** Same date-range formatting as buildTripLegs.formatLegChipRange, for chip
+ * objects (LegendLegChip) which carry startDate/endDate but not the full
+ * BuiltTripLeg shape that function requires. */
+function formatChipDateRange(chip: Pick<LegendLegChip, "startDate" | "endDate">): string {
+  const fmt = (key: string) =>
+    new Date(`${key}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  if (chip.startDate === chip.endDate) return fmt(chip.startDate);
+  const endFmt = new Date(`${chip.endDate}T12:00:00`).toLocaleDateString("en-US", { day: "numeric" });
+  return `${fmt(chip.startDate)}–${endFmt}`;
+}
+
 function legendChipLabel(chip: LegendLegChip): string {
   if (chip.isTravel) {
     return chip.isReturn ? "✈ Return" : "✈ Travel";
   }
-  return `${chip.label} ${formatLegChipRange(chip)}`;
+  return `${chip.label} ${formatChipDateRange(chip)}`;
 }
 
 function CalendarCell({

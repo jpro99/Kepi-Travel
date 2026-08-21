@@ -25,6 +25,7 @@ import {
 import { computeJourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
 import { evaluateLoungeEligibility } from "@/lib/airportNav/loungeRules";
+import type { CardEnrollmentState } from "@/lib/points/benefitPlaybooks";
 import { buildPostBookingBriefing } from "@/lib/airportNav/postBookingBriefing";
 import {
   airportCheckInGuidance,
@@ -517,8 +518,14 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
     const credentials = {
       tsaPreCheck: Boolean(profile.tsa_precheck || profile.global_entry),
       clear: Boolean(profile.clear),
+      globalEntry: Boolean(profile.global_entry),
       paymentCards: profile.paymentCards,
-      cardEnrollments: profile.cardEnrollments,
+      // profile.cardEnrollments is validated server-side by the TravelProfile
+      // zod schema to this exact shape; the zod-inferred TS type here is
+      // overly generic (Record<PropertyKey, unknown>) so we narrow it back.
+      cardEnrollments: profile.cardEnrollments as
+        | Record<string, CardEnrollmentState>
+        | undefined,
     };
     const cardLoungeResults: LoungeEligibilityResult[] =
       apt && profile.paymentCards?.length
@@ -604,7 +611,6 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
           }
           hotelLabel={hotelLabel}
           flightDate={
-            arrived.flightDate?.trim() ||
             arrived.flightArrivalTime?.trim()?.slice(0, 10) ||
             arrived.localTime?.trim()?.slice(0, 10) ||
             null

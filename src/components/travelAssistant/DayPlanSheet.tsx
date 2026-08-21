@@ -2,7 +2,7 @@
 
 import type { ParsedDayIntent } from "@/lib/travelAssistant/parseDayIntent";
 
-export type DayPlanMode = "flight" | "train" | "bus" | "car" | "hotel";
+export type DayPlanMode = "flight" | "train" | "bus" | "car" | "hotel" | "activities";
 
 interface DayPlanSheetProps {
   open: boolean;

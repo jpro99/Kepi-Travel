@@ -229,7 +229,7 @@ export function PointsMilesLearnPanel({ onBack, onOpenCardWallet, compact = fals
             {ownedCards.slice(0, 4).map((owned) => {
               const catalog = CARD_CATALOG.find((c) => c.id === owned.cardId);
               const playbooks = playbooksForCard(owned.cardId);
-              const displayName = catalog?.name ?? owned.label?.trim() || "Your card";
+              const displayName = (catalog?.name ?? owned.label?.trim()) || "Your card";
               return (
                 <li key={owned.cardId} className="text-sm text-slate-700 dark:text-slate-200">
                   <span className="font-semibold">{displayName}</span>

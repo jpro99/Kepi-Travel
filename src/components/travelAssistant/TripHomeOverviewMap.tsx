@@ -70,7 +70,7 @@ function createAirportMarker(code: string, visitCount: number): HTMLDivElement {
   return wrap;
 }
 
-function createHotelMarker(label: string, booked: boolean, onClick: () => void): HTMLDivElement {
+function createHotelMarker(label: string, booked: boolean, onClick: () => void): HTMLButtonElement {
   const wrap = document.createElement("button");
   wrap.type = "button";
   wrap.className = "flex flex-col items-center border-0 bg-transparent p-0 cursor-pointer";
@@ -232,11 +232,16 @@ export function TripHomeOverviewMap({
       (map.getSource(ROUTE_SOURCE) as import("maplibre-gl").GeoJSONSource).setData(routeData);
     }
 
-    for (const [id, filter, paint] of [
-      ["trip-home-route-unbooked", ["all", ["any", ["!", ["get", "booked"]], ["get", "dashed"]], ["!=", ["get", "status"], "conflict"]], { "line-color": "#94a3b8", "line-width": 4, "line-opacity": 0.95, "line-dasharray": [2, 2] }],
-      ["trip-home-route-booked", ["all", ["get", "booked"], ["!", ["get", "dashed"]], ["!=", ["get", "status"], "conflict"]], { "line-color": ["get", "color"], "line-width": 3.5, "line-opacity": 0.95 }],
-      ["trip-home-route-conflict", ["==", ["get", "status"], "conflict"], { "line-color": "#ef4444", "line-width": 5, "line-opacity": 1, "line-dasharray": [1.5, 1.5] }],
-    ] as const) {
+    const routeLineLayers: Array<{
+      id: "trip-home-route-unbooked" | "trip-home-route-booked" | "trip-home-route-conflict";
+      filter: import("maplibre-gl").FilterSpecification;
+      paint: import("maplibre-gl").LineLayerSpecification["paint"];
+    }> = [
+      { id: "trip-home-route-unbooked", filter: ["all", ["any", ["!", ["get", "booked"]], ["get", "dashed"]], ["!=", ["get", "status"], "conflict"]], paint: { "line-color": "#94a3b8", "line-width": 4, "line-opacity": 0.95, "line-dasharray": [2, 2] } },
+      { id: "trip-home-route-booked", filter: ["all", ["get", "booked"], ["!", ["get", "dashed"]], ["!=", ["get", "status"], "conflict"]], paint: { "line-color": ["get", "color"], "line-width": 3.5, "line-opacity": 0.95 } },
+      { id: "trip-home-route-conflict", filter: ["==", ["get", "status"], "conflict"], paint: { "line-color": "#ef4444", "line-width": 5, "line-opacity": 1, "line-dasharray": [1.5, 1.5] } },
+    ];
+    for (const { id, filter, paint } of routeLineLayers) {
       if (!map.getLayer(id)) {
         map.addLayer({ id, type: "line", source: ROUTE_SOURCE, filter, paint });
       }
@@ -366,7 +371,7 @@ export function TripHomeOverviewMap({
       const seed = routePointsRef.current[0] ?? hotelPointsRef.current[0];
       const map = new maplibregl.Map({
         container: containerRef.current,
-        style: buildOsmRasterFallbackStyle(),
+        style: buildOsmRasterFallbackStyle() as unknown as import("maplibre-gl").StyleSpecification,
         center: [seed?.lon ?? 0, seed?.lat ?? 22],
         zoom: 2,
         maxZoom: 18,

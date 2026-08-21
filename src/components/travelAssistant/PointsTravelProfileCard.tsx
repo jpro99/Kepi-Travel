@@ -309,13 +309,14 @@ export function PointsTravelProfileCard({ onOpenLearn }: { onOpenLearn?: () => v
                         );
                       }
                       if (hint.key === "priorityPassEnrolled" || hint.key === "centurionDigitalReady") {
+                        const key = hint.key;
                         return (
-                          <label key={hint.key} className="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300">
+                          <label key={key} className="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300">
                             <input
                               type="checkbox"
                               className="mt-0.5"
-                              checked={enrollment[hint.key] ?? false}
-                              onChange={(e) => setEnrollmentBoolean(entry.cardId, hint.key, e.target.checked)}
+                              checked={enrollment[key] ?? false}
+                              onChange={(e) => setEnrollmentBoolean(entry.cardId, key, e.target.checked)}
                             />
                             <span>{hint.label}</span>
                           </label>
