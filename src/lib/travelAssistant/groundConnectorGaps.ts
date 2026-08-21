@@ -41,6 +41,8 @@ interface ConnectorReservation {
   flightDepartureAirport?: string;
   location?: string;
   checkOutDate?: string;
+  title?: string;
+  confirmationCode?: string;
 }
 
 /** Ground connectors are regional transfers — never cross-country legs. */
@@ -98,20 +100,20 @@ function isReasonableGroundDistance(
 }
 
 function buildBookedFlightHops(flights: ConnectorReservation[]): ItineraryPathSegment[] {
-  return flights
-    .map((flight) => {
-      const dep = flight.flightDepartureAirport?.trim().toUpperCase() ?? "";
-      const arr = flight.flightArrivalAirport?.trim().toUpperCase() ?? "";
-      if (!dep || !arr || dep === arr) return null;
-      const day = flightArrivalDay(flight);
-      return {
-        fromCode: dep,
-        toCode: arr,
-        booked: true,
-        departMs: day ? Date.parse(`${day}T12:00:00`) : null,
-      } satisfies ItineraryPathSegment;
-    })
-    .filter((hop): hop is ItineraryPathSegment => hop !== null);
+  const hops: ItineraryPathSegment[] = [];
+  for (const flight of flights) {
+    const dep = flight.flightDepartureAirport?.trim().toUpperCase() ?? "";
+    const arr = flight.flightArrivalAirport?.trim().toUpperCase() ?? "";
+    if (!dep || !arr || dep === arr) continue;
+    const day = flightArrivalDay(flight);
+    hops.push({
+      fromCode: dep,
+      toCode: arr,
+      booked: true,
+      departMs: day ? Date.parse(`${day}T12:00:00`) : null,
+    });
+  }
+  return hops;
 }
 
 function bookedFlightsConnectStayCities(
@@ -153,12 +155,15 @@ function flightsCoverHotelTransition(
   nextStartDate: string,
 ): boolean {
   const stubLeg = {
+    id: `connector-${fromCity}-${toCity}`,
     fromLabel: fromCity,
     toLabel: toCity,
     fromIata: iataForStayCity(fromCity) ?? "",
     toIata: iataForStayCity(toCity) ?? "",
     departureDate: travelDate,
     role: "connector" as const,
+    enabled: true,
+    optional: false,
   };
   if (coverHopWithBookedFacts(stubLeg, flights, []).covered) return true;
 
@@ -184,12 +189,15 @@ function hasGroundTransportBetween(
 ): boolean {
   const windowEnd = toDay > fromDay ? toDay : addDays(fromDay, 1);
   const stubLeg = {
+    id: `connector-${fromLabel}-${toLabel}`,
     fromLabel,
     toLabel,
     fromIata,
     toIata,
     departureDate: fromDay,
     role: "connector" as const,
+    enabled: true,
+    optional: false,
   };
   const transports = reservations.filter((reservation) => ["ride", "train"].includes(reservation.type));
   if (legCoveredByGroundTransport(stubLeg, transports).covered) {
