@@ -38,8 +38,13 @@ function roundUsd(value: number): number {
 }
 
 export function resolveHotelBookingStrategy(input: HotelBookingStrategyInput): HotelBookingStrategy {
-  const kepiBookable = hasKepiBookableLiveRate(input);
   const nights = Math.max(1, input.nights);
+  const kepiBookable = hasKepiBookableLiveRate({
+    bookOfferId: input.bookOfferId,
+    browseOnly: input.browseOnly,
+    // Derived — this input doesn't carry a nightly rate, only the total.
+    pricePerNight: input.totalPrice / nights,
+  });
   const kepiTotalUsd = roundUsd(input.verifiedTotalUsd ?? input.totalPrice);
   const referenceTotalUsd =
     typeof input.referenceTotalUsd === "number" && input.referenceTotalUsd > 0

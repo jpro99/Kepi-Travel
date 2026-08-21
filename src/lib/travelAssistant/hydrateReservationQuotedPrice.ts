@@ -14,7 +14,6 @@ import {
 
 export interface PricingPeerResolvable extends CashUsdResolvable {
   id?: string;
-  confirmationCode?: string | null;
   sourceEmailId?: string;
 }
 

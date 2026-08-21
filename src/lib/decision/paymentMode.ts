@@ -22,8 +22,7 @@ export function matchesPaymentMode(strategy: TravelStrategy, mode: PaymentMode):
     case "points":
       return (
         (strategy.kind === "reposition_award" || strategy.kind === "instrument_play") &&
-        miles >= 40_000 &&
-        strategy.kind !== "direct_cash"
+        miles >= 40_000
       );
     case "mix":
       return (

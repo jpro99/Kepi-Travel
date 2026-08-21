@@ -61,6 +61,8 @@ export function buildHotelsOnlyStrategy(intent: TripIntent, genome: TravelerGeno
       tvs: 82,
       bestCpp: 0,
       sortKey: trueOutOfPocket,
+      // Static per-market nightly estimate, not a live rate — moderate confidence.
+      confidence: 0.7,
     },
     instrumentsUsed: [],
     preCrimeWarnings: [],

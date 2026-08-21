@@ -95,7 +95,7 @@ export function resolveStayCityForDay(
   if (direct?.kind === "depart") return null;
   if (direct?.stayCity) return direct.stayCity;
   if (direct?.toCity && direct.kind === "move") return direct.toCity;
-  if (direct?.toCity && direct.kind !== "depart") return direct.toCity;
+  if (direct?.toCity) return direct.toCity;
 
   return null;
 }

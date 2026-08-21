@@ -1727,9 +1727,9 @@ function draftIdentityKey(draft: ForwardedReservationDraft): string {
   if (draft.type === "flight") {
     return [
       "flight",
-      draft.flightNumber.trim().toUpperCase(),
-      draft.departureAirport.trim().toUpperCase(),
-      draft.arrivalAirport.trim().toUpperCase(),
+      (draft.flightNumber ?? "").trim().toUpperCase(),
+      (draft.departureAirport ?? "").trim().toUpperCase(),
+      (draft.arrivalAirport ?? "").trim().toUpperCase(),
       draft.localTime.trim().toLowerCase(),
     ].join("|");
   }

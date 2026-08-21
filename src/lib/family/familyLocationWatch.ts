@@ -15,7 +15,7 @@ export const FAMILY_LOCATION_STALE_MS = 30 * 60_000;
 type LocationSender = (lat: number, lon: number, accuracy?: number) => void | Promise<void>;
 
 let watchId: number | null = null;
-let heartbeatId: ReturnType<typeof setInterval> | null = null;
+let heartbeatId: number | null = null;
 let sender: LocationSender | null = null;
 let sending = false;
 

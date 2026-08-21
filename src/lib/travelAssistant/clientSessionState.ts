@@ -69,7 +69,6 @@ export interface SessionReviewItem {
   hasPdfAttachment?: boolean;
   imageBasedEmail?: boolean;
   sourceEmailId?: string;
-  sourceEmailSubject?: string;
   manageUrl?: string;
   sourceLinks?: Array<{ label: string; url: string; kind: string }>;
   reviewStatus?: "pending" | "incomplete";

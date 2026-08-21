@@ -292,6 +292,7 @@ export function deriveTripStaySegments(input: DeriveTripStaySegmentsInput): Trip
 
       return {
         ...segment,
+        ...booking,
         nights,
         label: buildSegmentLabel(cityLabel, segment.checkIn, segment.checkOut, nights, classification.stopKind),
         stopKind: classification.stopKind,
@@ -301,7 +302,6 @@ export function deriveTripStaySegments(input: DeriveTripStaySegmentsInput): Trip
         connectionHours: classification.connectionHours,
         needsDecision,
         status,
-        ...booking,
       };
     });
 }

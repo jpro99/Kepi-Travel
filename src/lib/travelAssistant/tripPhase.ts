@@ -406,7 +406,14 @@ export function buildMissionControlSnapshot(
   const reservations = input.reservations ?? [];
   const phase = detectMissionPhase(input, nowMs);
   const todayKey = isoDayFromMs(nowMs);
-  const gaps = detectTripGaps(reservations, nowMs, {
+  const gapReservations = reservations.map((r) => ({
+    ...r,
+    provider: r.provider ?? "",
+    localTime: r.localTime ?? "",
+    location: r.location ?? "",
+    confirmationCode: r.confirmationCode ?? undefined,
+  }));
+  const gaps = detectTripGaps(gapReservations, nowMs, {
     stayDecisions: input.stayDecisions,
     tripStartDate: input.startDate,
     tripEndDate: input.endDate,
