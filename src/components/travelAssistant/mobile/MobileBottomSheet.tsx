@@ -29,15 +29,6 @@ export function MobileBottomSheet({
     }
   }, [open, initialSnap]);
 
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
-
   const handlePointerDown = useCallback((e: ReactPointerEvent) => {
     dragRef.current = { startY: e.clientY, startOffset: dragOffset };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -64,18 +55,18 @@ export function MobileBottomSheet({
 
   if (!open) return null;
 
-  const heightClass = snap === "full" ? "h-[92vh]" : "h-[58vh]";
+  const heightClass = snap === "full" ? "h-[92dvh]" : "h-[58dvh]";
 
   return (
-    <div className="fixed inset-0 z-[8000] flex flex-col justify-end pointer-events-auto">
+    <div className="fixed inset-0 z-[8000] flex flex-col justify-end pointer-events-auto overscroll-contain">
       <button
         type="button"
-        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+        className="absolute inset-0 bg-black/40 backdrop-blur-[2px] overscroll-contain"
         aria-label="Close sheet"
         onClick={onClose}
       />
       <section
-        className={`relative z-[8001] flex ${heightClass} max-h-[92vh] w-full flex-col rounded-t-[28px] border border-[var(--border-default)] bg-[var(--bg-base)] shadow-[0_-12px_48px_rgba(0,0,0,0.25)] transition-transform`}
+        className={`relative z-[8001] flex ${heightClass} max-h-[92dvh] w-full flex-col rounded-t-[28px] border border-[var(--border-default)] bg-[var(--bg-base)] shadow-[0_-12px_48px_rgba(0,0,0,0.25)] transition-transform`}
         style={{ transform: `translateY(${Math.max(0, dragOffset)}px)` }}
       >
         <div

@@ -77,15 +77,6 @@ export function HotelRefineSheet({
       .catch(() => {});
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, [open]);
-
   const handleApply = async (): Promise<void> => {
     setSaving(true);
     try {
@@ -118,11 +109,11 @@ export function HotelRefineSheet({
 
   return createPortal(
     <>
-      <button type="button" aria-label="Close refine" onClick={onClose} className="fixed inset-0 z-[94] bg-slate-950/40" />
+      <button type="button" aria-label="Close refine" onClick={onClose} className="fixed inset-0 z-[94] overscroll-contain bg-slate-950/40" />
       <div
         role="dialog"
         aria-modal="true"
-        className="fixed inset-x-3 bottom-3 z-[95] mx-auto flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-[#fafafa] shadow-2xl dark:bg-[#0b1f3a] sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2"
+        className="fixed inset-x-3 bottom-3 z-[95] mx-auto flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-[#fafafa] shadow-2xl dark:bg-[#0b1f3a] sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2"
       >
         <div className="px-6 py-5">
           <div className="flex items-start justify-between gap-3">
@@ -136,7 +127,7 @@ export function HotelRefineSheet({
           </div>
         </div>
 
-        <div className="flex-1 space-y-6 overflow-y-auto px-6 pb-4">
+        <div className="flex-1 space-y-6 overflow-y-auto overscroll-contain px-6 pb-4">
           <section>
             <p className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">Pay with</p>
             <div className="flex flex-wrap gap-2">

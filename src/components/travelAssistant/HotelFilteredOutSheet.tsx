@@ -29,24 +29,15 @@ export function HotelFilteredOutSheet({
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    if (!open) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, [open]);
-
   if (!mounted || !open) return null;
 
   return createPortal(
     <>
-      <button type="button" aria-label="Close hidden hotels" onClick={onClose} className="fixed inset-0 z-[94] bg-slate-950/50" />
+      <button type="button" aria-label="Close hidden hotels" onClick={onClose} className="fixed inset-0 z-[94] overscroll-contain bg-slate-950/50" />
       <div
         role="dialog"
         aria-modal="true"
-        className="fixed inset-x-3 bottom-3 z-[95] mx-auto flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-950 sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2"
+        className="fixed inset-x-3 bottom-3 z-[95] mx-auto flex max-h-[85dvh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-950 sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2"
       >
         <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
           <div className="flex items-start justify-between gap-3">
@@ -63,7 +54,7 @@ export function HotelFilteredOutSheet({
           <p className="mt-1 text-sm text-slate-500">Kepi hid these based on your budget and stay style.</p>
         </div>
 
-        <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+        <div className="flex-1 space-y-3 overflow-y-auto overscroll-contain px-5 py-4">
           {rows.length === 0 ? (
             <p className="text-sm text-slate-500">Every hotel in this search matches your filters.</p>
           ) : (
