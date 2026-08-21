@@ -189,7 +189,7 @@ export async function POST(req: Request) {
     routeLogger.info("Confirmation scan request started (legacy query route).");
     return handleConfirmationScanUpload(req, {
       anthropicApiKey,
-      rateLimitHeaders: rateLimit.headers,
+      rateLimitHeaders: Object.fromEntries(rateLimit.headers.entries()),
     });
   }
 

@@ -64,7 +64,7 @@ export async function POST(req: Request) {
   try {
     const result = await deleteUserAccount(userId);
     routeLogger.info("Account deletion completed.", result);
-    return NextResponse.json({ ok: true, ...result }, { headers: rateLimit.headers });
+    return NextResponse.json({ ...result }, { headers: rateLimit.headers });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Account deletion failed.";
     routeLogger.warn("Account deletion failed.", { error: message });
