@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import type { PlanFeature } from "@/lib/billing/plans";
@@ -169,6 +170,11 @@ function BillingPageContent() {
     const rawInputValue = inviteCodeInputRef.current?.value ?? "";
     const normalizedCode = normalizeRedeemCode(rawInputValue);
     if (!normalizedCode) return;
+    if (!userId) {
+      setInviteMessage(null);
+      setInviteError("Sign in to redeem a code.");
+      return;
+    }
     setInviteBusy(true);
     setInviteMessage(null);
     setInviteError(null);
@@ -216,13 +222,18 @@ function BillingPageContent() {
     } finally {
       setInviteBusy(false);
     }
-  }, [inviteBusy, refreshBillingStatus]);
+  }, [inviteBusy, refreshBillingStatus, userId]);
 
   const handleRedeemReferralCode = useCallback(async (): Promise<void> => {
     if (referralBusy) return;
     const rawInputValue = referralCodeInputRef.current?.value ?? "";
     const normalizedCode = normalizeRedeemCode(rawInputValue);
     if (!normalizedCode) return;
+    if (!userId) {
+      setReferralMessage(null);
+      setReferralError("Sign in to redeem a code.");
+      return;
+    }
     setReferralBusy(true);
     setReferralMessage(null);
     setReferralError(null);
@@ -261,7 +272,7 @@ function BillingPageContent() {
     } finally {
       setReferralBusy(false);
     }
-  }, [referralBusy, refreshBillingStatus]);
+  }, [referralBusy, refreshBillingStatus, userId]);
 
   const usageText = useMemo(() => {
     if (!status) {
@@ -296,6 +307,12 @@ function BillingPageContent() {
   const canShowUpgradeOptions = activePlan === "free" || activePlan === "trial";
   const canManageSubscription = activePlan === "pro" || activePlan === "concierge";
 
+  const signInHref = useMemo(() => {
+    const query = searchParams.toString();
+    const returnPath = query ? `/billing?${query}` : "/billing";
+    return `/sign-in?redirect_url=${encodeURIComponent(returnPath)}`;
+  }, [searchParams]);
+
   return (
     <main className="mx-auto min-h-screen w-full max-w-4xl space-y-6 px-4 py-8 text-slate-900 dark:text-slate-100">
       <header className="space-y-2">
@@ -306,21 +323,38 @@ function BillingPageContent() {
         </p>
       </header>
 
-      <section
-        className={`rounded-2xl border p-5 shadow-sm ${
-          lifetimePlanActive
-            ? "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-500/50 dark:bg-amber-500/15 dark:text-amber-50"
-            : trialPlanActive
-              ? "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-50"
-              : paidProPlanActive || conciergePlanActive
-                ? "border-cyan-200 bg-cyan-50 text-cyan-950 dark:border-cyan-500/40 dark:bg-cyan-500/15 dark:text-cyan-50"
-                : "border-slate-200 bg-white text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-        }`}
-      >
-        <p className="text-xs uppercase tracking-[0.2em] opacity-80">Plan status</p>
-        <h2 className="mt-1 text-lg font-semibold">{planStatusHeading}</h2>
-        <p className="mt-1 text-sm opacity-90">{planStatusDetail}</p>
-      </section>
+      {userId ? (
+        <section
+          className={`rounded-2xl border p-5 shadow-sm ${
+            lifetimePlanActive
+              ? "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-500/50 dark:bg-amber-500/15 dark:text-amber-50"
+              : trialPlanActive
+                ? "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-50"
+                : paidProPlanActive || conciergePlanActive
+                  ? "border-cyan-200 bg-cyan-50 text-cyan-950 dark:border-cyan-500/40 dark:bg-cyan-500/15 dark:text-cyan-50"
+                  : "border-slate-200 bg-white text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          }`}
+        >
+          <p className="text-xs uppercase tracking-[0.2em] opacity-80">Plan status</p>
+          <h2 className="mt-1 text-lg font-semibold">{planStatusHeading}</h2>
+          <p className="mt-1 text-sm opacity-90">{planStatusDetail}</p>
+        </section>
+      ) : (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Plan status</p>
+          <h2 className="mt-1 text-lg font-semibold">Sign in to see your plan and manage billing</h2>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+            You&apos;re not signed in, so this page can&apos;t show your real usage or plan. Sign in to view your usage,
+            manage your subscription, or redeem a code.
+          </p>
+          <Link
+            href={signInHref}
+            className="mt-3 inline-block rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
+          >
+            Sign in
+          </Link>
+        </section>
+      )}
 
       <section className="rounded-2xl border border-emerald-300 bg-emerald-50/80 p-5 shadow-sm dark:border-emerald-700/50 dark:bg-emerald-950/30">
         <h2 className="text-lg font-semibold text-emerald-900 dark:text-emerald-100">Code redemption</h2>
@@ -406,7 +440,31 @@ function BillingPageContent() {
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
-        {loading ? (
+        {!userId ? (
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Plans</p>
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                Compare plans below. Sign in to see your own usage and manage billing.
+              </p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {(["free", "pro", "concierge"] as const).map((planId) => {
+                const plan = BILLING_PLANS[planId];
+                return (
+                  <article
+                    key={plan.id}
+                    className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-700 dark:bg-slate-950/70"
+                  >
+                    <p className="font-semibold">{plan.name}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{formatPlanPrice(plan.monthlyPriceCents)}</p>
+                    <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{plan.tagline}</p>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        ) : loading ? (
           <p className="text-sm text-slate-500 dark:text-slate-400">Loading billing status...</p>
         ) : (
           <div className="space-y-4">
