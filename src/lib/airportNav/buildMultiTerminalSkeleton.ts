@@ -4,7 +4,7 @@
  * security is always ESTIMATE (M15/M32).
  */
 
-import type { AirportLayout, GraphEdge, GraphNode, PoiDefinition } from "../types";
+import type { AirportLayout, GraphEdge, GraphNode, PoiDefinition } from "./types";
 
 const EARTH_M_PER_DEG_LAT = 111_320;
 export function metersBetween(a: [number, number], b: [number, number]): number {

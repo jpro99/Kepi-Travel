@@ -103,8 +103,9 @@ function normalizeAvailability(payload: unknown, cabin: CabinClass): AwardOffer[
       const taxesRaw = record[`${wantedCabin}TotalTaxes`] ?? record[`${wantedCabin}TaxesCents`] ?? 0;
       const cashSurcharge = normalizeTaxesToCents(taxesRaw);
 
-      const origin = String(record.OriginAirport ?? record.Route?.OriginAirport ?? "");
-      const destination = String(record.DestinationAirport ?? record.Route?.DestinationAirport ?? "");
+      const route = record.Route as Record<string, unknown> | undefined;
+      const origin = String(record.OriginAirport ?? route?.OriginAirport ?? "");
+      const destination = String(record.DestinationAirport ?? route?.DestinationAirport ?? "");
       const date = String(record.Date ?? record.date ?? "");
 
       offers.push({

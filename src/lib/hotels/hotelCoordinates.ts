@@ -19,7 +19,11 @@ export interface MapBounds {
   west: number;
 }
 
-function isFiniteCoord(lat: unknown, lng: unknown): lat is number {
+function hasFiniteCoords(point: {
+  lat?: unknown;
+  lng?: unknown;
+}): point is { lat: number; lng: number } {
+  const { lat, lng } = point;
   return typeof lat === "number" && typeof lng === "number" && Number.isFinite(lat) && Number.isFinite(lng);
 }
 
@@ -109,7 +113,7 @@ export function resolveHotelMapPosition(input: {
 }): { lat: number; lng: number; usedProviderCoords: boolean } {
   const { hotel, index, total, center, searchCity } = input;
 
-  if (isFiniteCoord(hotel.lat, hotel.lng)) {
+  if (hasFiniteCoords(hotel)) {
     const fixed = fixPossibleLatLngSwap(hotel.lat, hotel.lng, center, searchCity);
     if (areCoordsTrusted(fixed.lat, fixed.lng, center, searchCity)) {
       return {
@@ -130,7 +134,7 @@ export function filterHotelsWithinRenderDistance<T extends HotelSearchResult>(
   searchCity = "",
 ): T[] {
   return hotels.filter((hotel) => {
-    if (!isFiniteCoord(hotel.lat, hotel.lng)) return true;
+    if (!hasFiniteCoords(hotel)) return true;
     const fixed = fixPossibleLatLngSwap(hotel.lat, hotel.lng, center, searchCity);
     return isWithinRenderDistance(fixed.lat, fixed.lng, center);
   });

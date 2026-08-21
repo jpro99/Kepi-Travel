@@ -66,7 +66,7 @@ export function formatHotelNightlyPriceCaption(
 }
 
 export function formatHotelTotalPrice(
-  hotel: Pick<RankedHotelSearchResult, "browseOnly" | "bookOfferId" | "totalPrice" | "nights">,
+  hotel: Pick<RankedHotelSearchResult, "browseOnly" | "bookOfferId" | "totalPrice" | "nights" | "pricePerNight">,
 ): string {
   if (hotel.browseOnly || !hasDisplayNightlyRate(hotel)) return "";
   const total = hotel.totalPrice;

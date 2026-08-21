@@ -232,7 +232,7 @@ export function deriveStopRangesFromDayNotes(
 
     const explicitCity =
       intent?.stayCity ??
-      (intent?.toCity && intent.kind !== "depart" ? intent.toCity : null) ??
+      (intent?.toCity ? intent.toCity : null) ??
       (note
         ? parseDayLines(note)
             .map((line) => {

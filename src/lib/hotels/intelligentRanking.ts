@@ -4,7 +4,7 @@ import type { TravelerGenome } from "@/lib/traveler/types";
 import type { LoyaltyBalance } from "@/lib/loyalty/optimizer";
 import { estimateHotelPointsOptions, resolvePointsCashBasis } from "@/lib/hotels/hotelPointsEstimate";
 import { matchHotelChain } from "@/lib/loyalty/chainRegistry";
-import { hotelInSearchCity, type SearchCityCenter } from "@/lib/hotels/hotelCityScope";
+import { hotelInSearchCity, type SearchCenter } from "@/lib/hotels/hotelCityScope";
 import type { HotelSearchResult, RankedHotelSearchResult } from "@/lib/hotels/types";
 
 function chainMatchScore(chainName: string | undefined, hotelName: string, priorities: string[]): number {
@@ -326,13 +326,13 @@ function rankHotelPool(input: {
 }
 
 export function rankHotelSearchResults(input: {
-  hotels: HotelSearchResult[];
+  hotels: Array<HotelSearchResult & { inSearchCity?: boolean }>;
   genome: TravelerGenome;
   memory: HotelStayMemory;
   loyaltyBalances: LoyaltyBalance[];
   stayProfile?: HotelStayProfile | null;
   searchCity?: string;
-  searchCenter?: SearchCityCenter;
+  searchCenter?: SearchCenter;
 }): RankedHotelSearchResult[] {
   const { hotels, genome, memory, loyaltyBalances, stayProfile, searchCity, searchCenter } = input;
   if (hotels.length === 0) return [];

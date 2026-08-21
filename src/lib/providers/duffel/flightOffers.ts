@@ -76,14 +76,14 @@ function bestOffer(offers: unknown[]): DuffelFlightQuote | null {
   }
   if (!best) return null;
   return {
-    offerId: typeof best.id === "string" ? best.id : undefined,
+    offerId: typeof best.id === "string" ? best.id : "",
     origin: "",
     destination: "",
     departureDate: "",
     cabinClass: "economy",
     totalAmountUsd: bestAmount,
     currency: typeof best.total_currency === "string" ? best.total_currency : "USD",
-    airline: extractAirline(best),
+    airline: extractAirline(best) ?? "",
     stops: countStops(best),
     flightNumber: extractFlightNumber(best),
   };
