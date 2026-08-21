@@ -13,9 +13,8 @@ function getAdminUserIds(): Set<string> {
       if (id) ids.add(id);
     }
   }
-  // Legacy dev / automated test fallbacks
-  ids.add("1");
-  if (isAutomatedTestRuntime()) {
+  // Legacy dev / automated test fallback — never in production.
+  if (isAutomatedTestRuntime() && process.env.VERCEL_ENV !== "production") {
     ids.add("test-user");
   }
   cachedAdminIds = ids;
