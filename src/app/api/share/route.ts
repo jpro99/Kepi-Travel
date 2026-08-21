@@ -1,26 +1,20 @@
 
 import { NextResponse } from 'next/server';
 
-// Mock data for a trip
-const MOCK_TRIP_DATA = {
-    "1": {
-        title: "Trip to Tokyo",
-        dateRange: "June 1, 2026 - June 10, 2026",
-        moments: [
-            { title: "Arrival in Shinjuku", description: "Landed at Narita and took the express train. The city lights were incredible." },
-            { title: "Exploring Shibuya Crossing", description: "Experienced the world's busiest intersection. It was a sea of people and neon." },
-            { title: "Day trip to Hakone", description: "Took a scenic trip to see Mount Fuji, but it was too cloudy. The hot springs were a nice consolation." },
-            { title: "Farewell Dinner", description: "Enjoyed a final sushi dinner in Ginza before heading home." },
-        ]
-    }
-};
-
+// This endpoint used to return a hardcoded "Trip to Tokyo" memory (fake moments in
+// Shinjuku/Shibuya/Hakone/Ginza) whenever tripId === "1", regardless of the requester's
+// actual trip. There is no real trip-memory generation behind this route (the live trip
+// photo/memory feature lives at /api/share/memories and /api/trips/memories instead), so
+// rather than fabricate content for one magic tripId we return an honest "not available"
+// response for every request.
+// TODO(product decision): either remove this route in favor of /api/share/memories, or
+// wire it to a real per-trip memory summary if this shape is still needed somewhere.
 export async function POST(request: Request) {
     const { tripId } = await request.json() as { tripId?: string };
+    void tripId;
 
-    if (tripId && tripId in MOCK_TRIP_DATA) {
-        return NextResponse.json({ memory: MOCK_TRIP_DATA[tripId as keyof typeof MOCK_TRIP_DATA] });
-    } else {
-        return NextResponse.json({ error: 'Trip not found' }, { status: 404 });
-    }
+    return NextResponse.json(
+        { error: 'Trip memories are not available yet.' },
+        { status: 501 },
+    );
 }
