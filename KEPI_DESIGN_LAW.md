@@ -206,6 +206,11 @@ Exchanges show `Total charges for air travel: USD $0.00` because nothing more is
 
 **Test:** `scripts/check-undefined-names.cjs` (prebuild gate)
 
+**G45 — A typed fare must clear Add price**  
+When the confirmation has no parseable cash (itinerary notes / fare-less forward), a plausible stored `quotedPriceUsd` from the reservation drawer counts. Do not keep saying “Add price” because notes or email exist. Email still wins when it has a real total. Award + $0 due still must not resurrect a ticket value stored as cash (G33/G43). Saving cash on one PNR leg stamps every flight on that confirmation.
+
+**Test:** `src/lib/travelAssistant/parseReservationCashUsd.test.ts`, `src/lib/travelAssistant/tripSpendSummary.test.ts`, `src/lib/travelAssistant/hydrateReservationQuotedPrice.test.ts`
+
 **M39 — Travel-day flight order + today focus + terminal coach**  
 All flight lists sort by canonical departure time (Ontario before Seattle on the same day). Travel day picks today’s earliest leg for Home, Map preview, and airport navigator. Schematic airports show “Terminal guide · pins approximate · follow airport signs.” Depart coach leads with airline + terminal when known (e.g. Alaska · Terminal 2 at ONT).
 
@@ -987,6 +992,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | G42 | `src/lib/travelAssistant/scannedDocumentPricing.test.ts` |
 | G43 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |
 | G44 | `scripts/check-undefined-names.cjs` (prebuild gate) |
+| G45 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts`, `src/lib/travelAssistant/tripSpendSummary.test.ts`, `src/lib/travelAssistant/hydrateReservationQuotedPrice.test.ts` |
 | M39 | `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |

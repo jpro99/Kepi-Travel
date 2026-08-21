@@ -221,6 +221,30 @@ test("G43: miles actually redeemed still suppress the ticket value", () => {
   assert.equal(resolveReservationCashUsd({ originalEmailText: text }), undefined);
 });
 
+test("G45: typed cash counts when itinerary notes have no fare", () => {
+  assert.equal(
+    resolveReservationCashUsd({
+      quotedPriceUsd: 150,
+      notes: "AZ 1616 BRI → FCO · confirmation Z84T4Z",
+      originalEmailText: "ITA Airways itinerary. Reservation code Z84T4Z. Please review this booking.",
+      confirmationCode: "Z84T4Z",
+    }),
+    150,
+  );
+});
+
+test("G45: award + $0 due still does not resurrect a ticket value stored as cash", () => {
+  const text =
+    "Award travel confirmation. You redeemed 60,000 miles. Total amount due: $0.00. New Ticket Value: $1,386.43";
+  assert.equal(
+    resolveReservationCashUsd({
+      quotedPriceUsd: 1386,
+      originalEmailText: text,
+    }),
+    undefined,
+  );
+});
+
 test("G38: New Ticket Value still parses when HTML leaves a wide gap", () => {
   const text = "New Ticket Value          passenger fare details          $1,386.43";
   assert.equal(parseCashUsdFromText(text), 1386);

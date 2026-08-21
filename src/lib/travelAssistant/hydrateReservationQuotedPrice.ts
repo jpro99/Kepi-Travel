@@ -245,6 +245,47 @@ export function hydrateReservationsPricing<T extends CashUsdResolvable & MilesRe
   return changed ? propagated : reservations;
 }
 
+/**
+ * G45: a traveler-entered fare on one PNR leg is the ticket total — copy cash/miles
+ * onto every flight that shares the confirmation.
+ */
+export function stampPnrGroupFromEditedLeg<
+  T extends CashUsdResolvable & MilesResolvable & PricingPeerResolvable & { type?: string },
+>(reservations: T[], edited: T): T[] {
+  const editedId = edited.id;
+  const code = edited.confirmationCode?.trim().toUpperCase();
+  if (!editedId) {
+    return reservations.map((reservation) => reservation);
+  }
+  if (!code) {
+    return reservations.map((reservation) =>
+      reservation.id === editedId ? edited : reservation,
+    );
+  }
+
+  return reservations.map((reservation) => {
+    if (reservation.id === editedId) return edited;
+    if (reservation.confirmationCode?.trim().toUpperCase() !== code) return reservation;
+    if ((reservation.type ?? "").trim().toLowerCase() !== "flight") return reservation;
+    return {
+      ...reservation,
+      quotedPriceUsd:
+        edited.quotedPriceUsd != null && edited.quotedPriceUsd > 0
+          ? edited.quotedPriceUsd
+          : reservation.quotedPriceUsd,
+      quotedPointsMiles:
+        edited.quotedPointsMiles != null && edited.quotedPointsMiles > 0
+          ? edited.quotedPointsMiles
+          : reservation.quotedPointsMiles,
+      quotedMilesEarned:
+        edited.quotedMilesEarned != null && edited.quotedMilesEarned > 0
+          ? edited.quotedMilesEarned
+          : reservation.quotedMilesEarned,
+      pointsProgram: edited.pointsProgram?.trim() || reservation.pointsProgram,
+    };
+  });
+}
+
 /** Parse email/notes and write one ticket total onto every leg in the PNR — no manual entry. */
 export function finalizeTripReservationPricing<T extends CashUsdResolvable & MilesResolvable & PricingPeerResolvable>(
   reservations: T[],

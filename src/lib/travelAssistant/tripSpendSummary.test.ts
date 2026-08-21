@@ -222,6 +222,42 @@ test("G36: multi-leg PNR collapses to one ledger row with one price", () => {
   assert.match(dpnnwg[0]?.label ?? "", /AS489 · SEA → ONT/);
 });
 
+test("G45: typing cash on one Z84T4Z leg clears Add price for the group", () => {
+  const reservations = [
+    {
+      id: "f5",
+      type: "flight",
+      title: "FCO-VCE",
+      confirmationCode: "Z84T4Z",
+      notes: "AZ 1467 FCO → VCE",
+      originalEmailText: "ITA Airways itinerary. Reservation code Z84T4Z.",
+      quotedPriceUsd: 150,
+    },
+    {
+      id: "f6",
+      type: "flight",
+      title: "BRI-FCO",
+      confirmationCode: "Z84T4Z",
+      notes: "AZ 1616 BRI → FCO",
+      originalEmailText: "ITA Airways itinerary. Reservation code Z84T4Z.",
+    },
+    {
+      id: "f7",
+      type: "flight",
+      title: "BRI-VCE",
+      confirmationCode: "Z84T4Z",
+      notes: "AZ 1616 / AZ 1467",
+      originalEmailText: "ITA Airways itinerary. Reservation code Z84T4Z.",
+    },
+  ];
+  const items = buildTripSpendLineItems(reservations);
+  const group = items.filter((item) => item.confirmationCode === "Z84T4Z");
+  assert.equal(group.length, 1);
+  assert.equal(group[0]?.needsPrice, false);
+  assert.equal(group[0]?.cashUsd, 150);
+  assert.equal(computeTripSpend(reservations).missingPriceCount, 0);
+});
+
 test("G36: missing price count is one per PNR group not per leg", () => {
   const reservations = [
     { id: "f1", type: "flight", title: "ONT-SEA", confirmationCode: "DPNNWG" },

@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-20 (G42/G43 drop a PDF, ticket value beats amount due)
+Last updated: 2026-08-21 (G45 typed fare on Z84T4Z must clear Add price)
+
+## Incident 2026-08-21 — Z84T4Z price stays in the drawer, ledger still says Add price (Jeff)
+
+Jeff opened Trip Accounting, tapped **Z84T4Z · 3 flights**, typed the cash, and the field kept the number — but “Add price” / “still need cash or miles” never cleared. Cause: `resolveReservationCashUsd` treated any notes/email as “has source text” and returned `undefined` when the ITA itinerary had no parseable fare, so a traveler-entered `quotedPriceUsd` was stored and then ignored. G45 honors a plausible stored amount when parse finds nothing; award + $0 due still does not resurrect ticket value (G43). Saving one PNR leg stamps cash/miles onto every flight on that confirmation.
 
 ## Incident 2026-08-20 — "You can read every number except the price" (Jeff)
 

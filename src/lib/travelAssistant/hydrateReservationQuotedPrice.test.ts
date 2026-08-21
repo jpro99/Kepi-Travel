@@ -7,6 +7,7 @@ import {
   finalizeTripReservationPricing,
   hydrateReservationsPricing,
   propagatePricingAcrossPeerGroups,
+  stampPnrGroupFromEditedLeg,
 } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import { reservationMissingPrice, computeTripSpend } from "@/lib/travelAssistant/tripSpendSummary";
 
@@ -197,4 +198,37 @@ test("G38: incoming receipt prices every DPNNWG leg even after itinerary-only si
   const priced = applyIncomingSourceToPnrGroup(legs, receipt, "DPNNWG");
   assert.equal(priced.every((leg) => leg.quotedPriceUsd === 1386), true);
   assert.equal(computeTripSpend(priced).missingPriceCount, 0);
+});
+
+test("G45: stamping a typed fare on one Z84T4Z leg prices every sibling", () => {
+  const legs = [
+    {
+      id: "f5",
+      type: "flight",
+      title: "FCO-VCE",
+      confirmationCode: "Z84T4Z",
+      notes: "AZ 1467",
+      quotedPriceUsd: 150,
+    },
+    {
+      id: "f6",
+      type: "flight",
+      title: "BRI-FCO",
+      confirmationCode: "Z84T4Z",
+      notes: "AZ 1616",
+      quotedPriceUsd: undefined as number | undefined,
+    },
+    {
+      id: "f7",
+      type: "flight",
+      title: "BRI-VCE",
+      confirmationCode: "Z84T4Z",
+      notes: "connection",
+      quotedPriceUsd: undefined as number | undefined,
+    },
+  ];
+  const stamped = stampPnrGroupFromEditedLeg(legs, legs[0]!);
+  assert.equal(stamped.every((leg) => leg.quotedPriceUsd === 150), true);
+  assert.equal(reservationMissingPrice(stamped[1]!, stamped), false);
+  assert.equal(computeTripSpend(stamped).missingPriceCount, 0);
 });
