@@ -1,15 +1,14 @@
 import { NextResponse } from 'next/server';
 
-// This is a mock API endpoint. In a real application, this would fetch data from a database.
+// There is no real expense storage backing this route yet. It used to return four
+// hardcoded 2024 expenses (e.g. "Dinner at Carbone", $654.32) for ANY tripId, silently
+// fabricating the user's expense history. Returning an honest empty list instead so the
+// UI shows "no expenses yet" rather than someone else's invented receipts.
+// TODO(product decision): wire this up to a real per-trip expense store (and to the OCR
+// route once that's implemented) before this feature is considered functional.
 export async function POST(request: Request) {
     const { tripId } = await request.json();
+    void tripId;
 
-    const expenses = [
-        { id: '1', date: '2024-07-10', category: 'Flights', description: 'SFO to JFK', amount: 543.21 },
-        { id: '2', date: '2024-07-10', category: 'Hotels', description: 'The Standard, High Line', amount: 1234.56 },
-        { id: '3', date: '2024-07-11', category: 'Taxis', description: 'JFK to The Standard', amount: 78.90 },
-        { id: '4', date: '2024-07-12', category: 'Meals', description: 'Dinner at Carbone', amount: 654.32 },
-    ];
-
-    return NextResponse.json({ expenses });
+    return NextResponse.json({ expenses: [] });
 }

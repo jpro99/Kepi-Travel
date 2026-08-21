@@ -30,7 +30,7 @@ export function ExpenseReport({ tripId }: ExpenseReportProps) {
                 body: JSON.stringify({ tripId }),
             });
             const data = await response.json();
-            setExpenses(data.expenses);
+            setExpenses(data.expenses ?? []);
         };
 
         fetchExpenses();

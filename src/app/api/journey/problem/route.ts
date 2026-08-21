@@ -1,23 +1,19 @@
 import { NextResponse } from 'next/server';
 
-// This is a mock of a powerful AI service that analyzes the user's situation.
-// In a real app, this would involve complex logic and multiple API calls.
-async function getProblemAnalysis(state: any, context: any) {
-    // For now, return a mock analysis
-    return {
-        title: "Gate Change Detected",
-        description: "It looks like your gate has changed. We're already working on finding the best path to your new gate.",
-        nextStep: {
-            title: "Proceed to Gate F8",
-            description: "Your new gate is F8. We've updated the map to guide you.",
-        }
-    };
-}
-
+// This route used to ignore the `state`/`context` it was given entirely and always return
+// the same fabricated situation ("Gate Change Detected" / "Proceed to Gate F8"), regardless
+// of what was actually happening on the user's trip. There is no real situation-analysis
+// implementation behind this route, so we return an honest "not available yet" response
+// instead of inventing a gate change that may not have happened.
+// TODO(product decision): a real implementation would need to analyze the actual `state`/
+// `context` (flight status, gate data, etc.) against a real disruption-detection source.
 export async function POST(request: Request) {
     const { state, context } = await request.json();
+    void state;
+    void context;
 
-    const analysis = await getProblemAnalysis(state, context);
-
-    return NextResponse.json(analysis);
+    return NextResponse.json(
+        { error: 'Situation analysis is not available yet.' },
+        { status: 501 },
+    );
 }
