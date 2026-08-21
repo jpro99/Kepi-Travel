@@ -49,8 +49,11 @@ export function buildFlightLegsFromIntent(
       toIata: toStop.iata.toUpperCase(),
       fromLabel: fromStop.name,
       toLabel: toStop.name,
-      enabled: true,
-      optional: false,
+      // Connectors are opt-in searches (see the function doc comment above):
+      // default to a ground-transport suggestion, not an enabled flight
+      // search, until the traveler explicitly toggles one on.
+      enabled: false,
+      optional: true,
       departureDate: range?.checkOut ?? intent.startDate,
     });
   }

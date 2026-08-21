@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { isStaleBundleError, recoverStaleClientBundle } from "@/lib/pwa/recoverStaleClientBundle";
+import { isNative } from "@/lib/native/platform";
 
 /**
  * Lives in the root layout so a Plan-tab render crash cannot skip the
@@ -17,6 +18,18 @@ export function DeployRefresh() {
     };
     window.addEventListener("error", onError);
     return () => window.removeEventListener("error", onError);
+  }, []);
+
+  // next-pwa's `register: true` auto-injection relies on a Pages Router
+  // _app/_document entry graph — it does not fire under the App Router, so
+  // the service worker was never actually registering despite next-pwa
+  // building it correctly. Register it here explicitly instead. Skip inside
+  // the Capacitor native wrapper (no SW there; disabled at build time too)
+  // and in dev (no /sw.js is emitted — see next.config.js's `disable`).
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+    if (process.env.NODE_ENV !== "production" || isNative()) return;
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => undefined);
   }, []);
 
   useEffect(() => {

@@ -47,7 +47,10 @@ test("alignment board includes outbound and return for open-jaw brief", () => {
   const legs = buildAlignmentBoard(briefWithLive, strategy);
   assert.ok(legs.some((leg) => leg.role === "outbound" && leg.status === "verified"));
   const outbound = legs.find((leg) => leg.role === "outbound");
-  assert.ok(outbound?.bookUrl?.includes("google.com/travel/flights"));
+  // F14 (honest Google handoff): prefer the airline's own booking site when
+  // it's confidently known (United here) — Google Flights is the fallback
+  // for airlines without a resolvable chain link (Lufthansa, below).
+  assert.ok(outbound?.bookUrl?.includes("united.com"));
   assert.match(outbound?.bookLabel ?? "", /412/);
   assert.ok(legs.some((leg) => leg.role === "return" && leg.bookUrl?.includes("google.com/travel/flights")));
   assert.ok(legs.some((leg) => leg.role === "ground"));
@@ -88,5 +91,11 @@ test("alignment board adds one hotel leg per selected stay", () => {
 
   const hotelLegs = legs.filter((leg) => leg.role === "hotel");
   assert.equal(hotelLegs.length, 2);
-  assert.ok(hotelLegs.every((leg) => leg.bookUrl?.includes("google.com/travel/hotels")));
+  // F14 (honest Google handoff): Marriott is a known chain — link directly
+  // to marriott.com. Lungarno isn't in the resolvable chain list, so it
+  // falls back to Google Hotels.
+  const danieli = hotelLegs.find((leg) => leg.label?.includes("Danieli"));
+  const portrait = hotelLegs.find((leg) => leg.label?.includes("Portrait"));
+  assert.ok(danieli?.bookUrl?.includes("marriott.com"));
+  assert.ok(portrait?.bookUrl?.includes("google.com/travel/hotels"));
 });
