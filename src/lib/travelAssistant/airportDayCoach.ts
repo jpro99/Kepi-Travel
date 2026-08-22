@@ -276,11 +276,17 @@ export function buildArrivalDayCoachPath(input: ArrivalDayCoachInput): DayCoachP
   ];
 
   if (intl) {
+    // Global Entry / Mobile Passport Control are U.S. CBP programs — only
+    // relevant when arriving INTO the U.S. Showing them for every
+    // international arrival (e.g. arriving in Italy) is wrong advice.
+    const arrivingInUs = resolveAirport(code)?.country?.toUpperCase() === "US";
     steps.push({
       id: "immigration",
       icon: "🛂",
       text: "Immigration / passport control",
-      detail: "Have passport ready. Use Global Entry / Mobile Passport if enrolled.",
+      detail: arrivingInUs
+        ? "Have passport ready. Use Global Entry / Mobile Passport Control if enrolled."
+        : "Have passport ready for passport control.",
     });
   }
 

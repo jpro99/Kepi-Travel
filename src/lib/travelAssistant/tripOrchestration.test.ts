@@ -46,6 +46,27 @@ test("G31: schedule collision detects dinner overlapping flight", () => {
   assert.match(collisions[0]?.title ?? "", /Boat tour/u);
 });
 
+// Regression: a hotel check-in the same day as a flight is normal travel,
+// not a scheduling conflict — used to false-positive as "Hotel overlaps
+// Flight" for any itinerary where the two times landed close together.
+test("G31: hotel check-in same day as a flight is never flagged as a collision", () => {
+  const collisions = detectScheduleCollisions([
+    {
+      id: "flight-1",
+      type: "flight",
+      title: "Flight BRI → FCO",
+      localTime: "2026-09-12 14:00",
+    },
+    {
+      id: "hotel-1",
+      type: "hotel",
+      title: "Cosy, Romantic & Stylish Studio",
+      localTime: "2026-09-12 15:00",
+    },
+  ]);
+  assert.equal(collisions.length, 0);
+});
+
 test("G31: readiness summary ready when nothing open", () => {
   const summary = buildTripReadinessSummary({
     tripLabel: "Italy",

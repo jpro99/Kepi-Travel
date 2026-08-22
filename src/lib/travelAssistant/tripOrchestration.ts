@@ -160,12 +160,24 @@ function labelReservation(reservation: TimedReservation): string {
   return reservation.title?.trim() || reservation.type.trim() || "Booking";
 }
 
-/** Overlapping timed bookings on the same day (dinner vs flight, etc.). */
+/**
+ * Overlapping timed bookings on the same day (dinner vs flight, etc.).
+ *
+ * Hotels are excluded from collision detection entirely: a check-in/out
+ * time is an open-ended arrival window, not a fixed appointment, so
+ * checking into a hotel the same day you fly somewhere (the single most
+ * common travel pattern there is) is normal, not a scheduling conflict.
+ * Comparing it against a flight's/train's/ride's fixed 60-120min window
+ * produced false "X overlaps Y" collisions for completely ordinary
+ * itineraries. Real timed-appointment conflicts (dinner vs flight, etc.)
+ * are unaffected.
+ */
 export function detectScheduleCollisions(
   reservations: readonly TimedReservation[],
   bufferMinutes = 15,
 ): ScheduleCollision[] {
   const timed = reservations
+    .filter((reservation) => reservation.type.trim().toLowerCase() !== "hotel")
     .map((reservation) => ({ reservation, window: parseReservationWindow(reservation) }))
     .filter((row): row is { reservation: TimedReservation; window: NonNullable<typeof row.window> } =>
       Boolean(row.window),

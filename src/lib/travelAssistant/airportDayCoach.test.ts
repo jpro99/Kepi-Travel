@@ -120,6 +120,29 @@ test("buildArrivalDayCoachPath includes immigration on international", () => {
   assert.ok(steps.some((s) => s.id === "customs"));
 });
 
+// Regression: Global Entry / Mobile Passport Control are U.S. CBP programs.
+// They used to show up for every international arrival, including landing
+// in Italy — wrong, confusing advice for a traveler who can't use them there.
+test("buildArrivalDayCoachPath only mentions Global Entry when arriving in the US", () => {
+  const arrivingInItaly = buildArrivalDayCoachPath({
+    iata: "FCO",
+    departureIata: "SEA",
+    flightNumber: "AS 180",
+  });
+  const immigrationInItaly = arrivingInItaly.find((s) => s.id === "immigration");
+  assert.ok(immigrationInItaly);
+  assert.doesNotMatch(immigrationInItaly.detail ?? "", /global entry/iu);
+
+  const arrivingInUs = buildArrivalDayCoachPath({
+    iata: "JFK",
+    departureIata: "LHR",
+    flightNumber: "BA 178",
+  });
+  const immigrationInUs = arrivingInUs.find((s) => s.id === "immigration");
+  assert.ok(immigrationInUs);
+  assert.match(immigrationInUs.detail ?? "", /global entry/iu);
+});
+
 test("buildArrivalDayCoachPath never invents carousel numbers without curated note", () => {
   const steps = buildArrivalDayCoachPath({
     iata: "MNL",
