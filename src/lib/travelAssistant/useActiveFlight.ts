@@ -49,6 +49,7 @@ export interface FlightReservation {
   confirmationCode?: string;
   flightNumber?: string;
   flightAirline?: string;
+  flightDate?: string;
   flightDepartureAirport?: string;
   flightArrivalAirport?: string;
   flightDepartureTime?: string;
