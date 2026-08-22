@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { logger } from "@/lib/logger";
 import { reminderLadder } from "@/inngest/functions/reminderLadder";
 import { emailScheduler } from "@/inngest/functions/emailScheduler";
+import { travelDayPushScheduler } from "@/inngest/functions/travelDayPushScheduler";
 import { proactiveMonitoringSweep } from "@/inngest/functions/proactiveMonitoringSweep";
 import { flightStatusSweep } from "@/inngest/functions/flightStatusSweep";
 import { travelUpdatePass } from "@/inngest/functions/travelUpdatePass";
@@ -12,7 +13,15 @@ import { generateId } from "@/lib/utils/generateId";
 
 const handlers = serve({
   client: inngest,
-  functions: [travelUpdatePass, flightStatusSweep, reminderLadder, emailScheduler, proactiveMonitoringSweep, trialExpirySweep],
+  functions: [
+    travelUpdatePass,
+    flightStatusSweep,
+    reminderLadder,
+    emailScheduler,
+    travelDayPushScheduler,
+    proactiveMonitoringSweep,
+    trialExpirySweep,
+  ],
 });
 
 export const GET = async (request: NextRequest, context: unknown): Promise<Response> => {
