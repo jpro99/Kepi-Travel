@@ -31,13 +31,18 @@
     "ios:fix": "bash scripts/ios-fix-capapp-spm.sh",
     "ios:reset": "bash scripts/ios-reset-spm.sh",
     "ios:open": "npx cap open ios",
-    "ios:run": "npx cap run ios"
+    "ios:run": "npx cap run ios",
+    "build:android": "CAPACITOR_BUILD=true next build",
+    "android:sync": "npx cap sync android",
+    "android:open": "npx cap open android",
+    "android:run": "npx cap run android"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.96.0",
-    "@capacitor/core": "^8.4.1",
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
     "@capacitor/haptics": "^8.0.2",
-    "@capacitor/ios": "^8.4.1",
+    "@capacitor/ios": "^8.5.0",
     "@capacitor/local-notifications": "^8.2.0",
     "@capacitor/push-notifications": "^8.1.1",
     "@capacitor/status-bar": "^8.0.3",
@@ -102,7 +107,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
-    "@capacitor/cli": "^8.4.1",
+    "@capacitor/cli": "^8.5.0",
     "@clerk/testing": "^2.1.5",
     "@next/bundle-analyzer": "^16.2.6",
     "@playwright/test": "^1.60.0",

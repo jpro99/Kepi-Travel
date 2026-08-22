@@ -35,6 +35,12 @@ const config: CapacitorConfig = {
     limitsNavigationsToAppBoundDomains: false,
   },
 
+  android: {
+    /** Light Apple chrome — matches iOS, no reason for a jarring platform difference. */
+    backgroundColor: "#F5F5F7",
+    allowMixedContent: false,
+  },
+
   experimental: {
     ios: {
       spm: {
