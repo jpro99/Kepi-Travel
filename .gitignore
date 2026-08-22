@@ -60,3 +60,7 @@ next-env.d.ts
 # clerk configuration (can include secrets)
 /.clerk/
 .gstack/
+
+# Android Studio project-local state (machine-specific: connected device
+# history, workspace layout, caches) — never shared between machines.
+android/.idea/
