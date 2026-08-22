@@ -5,7 +5,15 @@
 
 import { resolveAirport } from "@/lib/airports/lookup";
 import { getAirportNav } from "@/lib/travelAssistant/airportNavigation";
+import type { AirportLocationPhase } from "@/lib/travelAssistant/airportLocationPhase";
+import { departPhaseHomeTitle } from "@/lib/travelAssistant/airportLocationPhase";
+import type { HomeNextAction } from "@/lib/travelAssistant/homeNextAction";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
+import type {
+  ConnectionPlaybook,
+  ConnectionPlaybookStep,
+} from "@/lib/travelAssistant/connectionPlaybook";
+import { connectionRiskLabel } from "@/lib/travelAssistant/connectionPlaybook";
 
 export type AirportDayCoachMode = "depart" | "arrive";
 
@@ -45,16 +53,181 @@ export function departureTimeBudgetReassurance(minutesToDeparture: number): stri
 
 /**
  * Coach view shows current + next step; full-day shows all.
- * Without completion tracking, current = index 0.
+ * currentIndex advances from booked/observed facts (G46), not manual checkboxes.
  */
 export function selectDayCoachVisibleSteps<T>(
   steps: readonly T[],
   fullDayView: boolean,
-): { visible: T[]; hiddenCount: number } {
+  currentIndex = 0,
+): { visible: T[]; hiddenCount: number; currentIndex: number } {
+  const maxIdx = Math.max(0, steps.length - 1);
+  const idx = Math.min(Math.max(0, currentIndex), maxIdx);
   if (fullDayView || steps.length <= 2) {
-    return { visible: [...steps], hiddenCount: 0 };
+    return { visible: [...steps], hiddenCount: 0, currentIndex: idx };
   }
-  return { visible: steps.slice(0, 2) as T[], hiddenCount: steps.length - 2 };
+  const visible = steps.slice(idx, idx + 2) as T[];
+  const hiddenCount = Math.max(0, steps.length - (idx + visible.length));
+  return { visible, hiddenCount, currentIndex: idx };
+}
+
+/** Fact-driven arrival spotlight — never invents carousel or indoor position. */
+export function resolveArrivalSpotlightIndex(input: {
+  steps: readonly DayCoachPathStep[];
+  landedMinutesAgo?: number | null;
+  locationStatus?: string;
+  hasLiveBaggage?: boolean;
+}): number {
+  if (input.steps.length === 0) return 0;
+  const idx = (id: string) => input.steps.findIndex((s) => s.id === id);
+  const landed = input.landedMinutesAgo ?? 0;
+  const atAirport =
+    input.locationStatus === "at-airport" || input.locationStatus === "in-terminal";
+
+  const rideIdx = idx("ride");
+  if (rideIdx >= 0 && atAirport && landed >= 25) return rideIdx;
+
+  const postBagsIdx = idx("customs") >= 0 ? idx("customs") : idx("exit");
+  if (postBagsIdx >= 0 && landed >= 15 && atAirport) return postBagsIdx;
+
+  const bagsIdx = idx("bags");
+  if (bagsIdx >= 0 && (input.hasLiveBaggage || (atAirport && landed >= 5))) return bagsIdx;
+
+  const immIdx = idx("immigration");
+  if (immIdx >= 0 && landed >= 3) return immIdx;
+
+  return 0;
+}
+
+/** Depart spotlight from LocationPhase + tagged guide steps (unifies AirportMode). */
+export function resolveDepartSpotlightIndex(
+  steps: readonly DayCoachPathStep[],
+  phase: AirportLocationPhase,
+): number {
+  if (steps.length === 0) return 0;
+  const find = (id: string) => steps.findIndex((s) => s.id === id);
+
+  switch (phase) {
+    case "head-to-gate":
+    case "at-gate":
+    case "final-call": {
+      const gate = find("gate");
+      return gate >= 0 ? gate : steps.length - 1;
+    }
+    case "lounge": {
+      const lounge = steps.findIndex((s) => /lounge/i.test(s.text));
+      return lounge >= 0 ? lounge : find("security") >= 0 ? find("security") : 1;
+    }
+    case "security":
+      return find("security") >= 0 ? find("security") : 1;
+    case "check-in":
+      return find("check-in") >= 0 ? find("check-in") : 0;
+    case "leave-soon":
+    case "leave-now":
+    case "off":
+    default:
+      return 0;
+  }
+}
+
+/** Tag gate-instruction steps with stable ids for spotlight mapping. */
+export function tagDepartGuideSteps(
+  guideSteps: readonly { icon: string; text: string; detail?: string; minutes: number }[],
+): DayCoachPathStep[] {
+  return guideSteps.map((step, index) => {
+    let id = `guide-${index}`;
+    if (index === 0) id = "security";
+    else if (/gate/i.test(step.text)) id = "gate";
+    else if (/lounge/i.test(step.text)) id = "lounge";
+    return {
+      id,
+      icon: step.icon,
+      text: step.text,
+      detail: step.detail,
+      minutes: step.minutes > 0 ? step.minutes : undefined,
+    };
+  });
+}
+
+export interface AirportHomeSpotlightInput {
+  mode: AirportDayCoachMode;
+  steps: readonly DayCoachPathStep[];
+  currentIndex: number;
+  locationPhase?: AirportLocationPhase;
+  gateCode?: string | null;
+  minutesToDeparture?: number | null;
+  hotelLabel?: string | null;
+  connectionPlaybook?: ConnectionPlaybook | null;
+  connectionStep?: ConnectionPlaybookStep | null;
+}
+
+/** Specific Home / TripWalk line — replaces generic "Open Airport Mode" when known. */
+export function buildAirportHomeSpotlight(input: AirportHomeSpotlightInput): HomeNextAction | null {
+  if (input.connectionPlaybook && input.connectionStep) {
+    const risk = connectionRiskLabel(input.connectionPlaybook.risk);
+    return {
+      kind: "airport",
+      eyebrow: risk,
+      title: input.connectionStep.text,
+      detail:
+        input.connectionPlaybook.issueLine ??
+        input.connectionStep.detail ??
+        `${input.connectionPlaybook.hubIata} connection`,
+      ctaLabel: "Open connection guide",
+    };
+  }
+
+  const step = input.steps[input.currentIndex] ?? input.steps[0] ?? null;
+
+  if (input.mode === "arrive" && step) {
+    if (step.id === "ride" && input.hotelLabel?.trim()) {
+      return {
+        kind: "airport",
+        eyebrow: "Just landed",
+        title: `Ride to ${input.hotelLabel.trim()}`,
+        detail: step.detail ?? "Open Uber or your booked transfer once you are landside.",
+        ctaLabel: "Open Airport Mode",
+      };
+    }
+    return {
+      kind: "airport",
+      eyebrow: "Just landed",
+      title: step.text,
+      detail: step.detail,
+      ctaLabel: "Open Airport Mode",
+    };
+  }
+
+  if (input.mode === "depart") {
+    const phaseTitle = input.locationPhase ? departPhaseHomeTitle(input.locationPhase) : null;
+    if (phaseTitle) {
+      const gate = input.gateCode?.trim();
+      return {
+        kind: "airport",
+        eyebrow: "Next up",
+        title: phaseTitle,
+        detail: gate ? `Gate ${gate.toUpperCase()}` : undefined,
+        ctaLabel: "Open Airport Mode",
+      };
+    }
+    if (step) {
+      const gate = input.gateCode?.trim();
+      const mins = input.minutesToDeparture;
+      const timeSuffix =
+        mins != null && mins > 0 ? ` · ${Math.round(mins)}m to departure` : "";
+      const detailParts = [step.detail, gate ? `Gate ${gate.toUpperCase()}${timeSuffix}` : timeSuffix.trim()]
+        .filter(Boolean)
+        .join("");
+      return {
+        kind: "airport",
+        eyebrow: "Next up",
+        title: step.text,
+        detail: detailParts || undefined,
+        ctaLabel: "Open Airport Mode",
+      };
+    }
+  }
+
+  return null;
 }
 
 

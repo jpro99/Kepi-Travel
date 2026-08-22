@@ -206,6 +206,21 @@ Exchanges show `Total charges for air travel: USD $0.00` because nothing more is
 
 **Test:** `scripts/check-undefined-names.cjs` (prebuild gate)
 
+**G46 — Airport Day Coach advances from facts, not checkboxes**  
+The coach spotlight moves forward from booked/observed signals only: `just-landed` elapsed time, coarse GPS (`at-airport` / `in-terminal`), live baggage when the feed returns a real belt, and depart `LocationPhase` (time + geofence). Home TripWalk mirrors the same specific line — never generic “Open Airport Mode” when the next step is known. Optional manual “I’m through” is future; do not ship a frozen checklist.
+
+**Test:** `src/lib/travelAssistant/airportDayCoach.test.ts`, `src/lib/travelAssistant/homeNextAction.test.ts`, `src/lib/travelAssistant/tripWalk.test.ts`
+
+**G47 — Connection playbook from booked facts only**  
+Same-airport connections get a step list built from itinerary + passport rules (immigration, bags, re-security, terminal change) — never invented MCT or gate predictions. Tight/impossible connections surface on Home; normal connections get steps when at the hub.
+
+**Test:** `src/lib/travelAssistant/connectionPlaybook.test.ts`
+
+**G48 — Strong official maps stay primary at FCO/SEA**  
+When `wayfindingHonestyTier === strong` (SEA Atrius, FCO Digiport), the verified live indoor map is the primary gold CTA even if Kepi has a bundled schematic layout. Kepi checklist + flight context stay in-app; turn-by-turn walks hand off to the airport map.
+
+**Test:** `src/lib/airportNav/officialWayfinding.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts`
+
 **M39 — Travel-day flight order + today focus + terminal coach**  
 All flight lists sort by canonical departure time (Ontario before Seattle on the same day). Travel day picks today’s earliest leg for Home, Map preview, and airport navigator. Schematic airports show “Terminal guide · pins approximate · follow airport signs.” Depart coach leads with airline + terminal when known (e.g. Alaska · Terminal 2 at ONT).
 
@@ -391,7 +406,7 @@ A future flight at a curated airport must expose **Plan {IATA} airport** on the 
 **Test:** `app-sitter/airport-day-of-travel.spec.ts`
 
 **M12 — Airport wayfinding uses the best honest source**
-There is no universal downloadable live indoor airport map. Kepi must use a verified airport-owned live map when available (`supportsStepByStep: true` in `VERIFIED_AIRPORT_WAYFINDING`, e.g. SEA Atrius), a clearly labeled **orientation-only** official map when the airport has a map but not step-by-step, and a clearly labeled **weak Google venue-search fallback** otherwise — never dress the weak fallback up as confident indoor directions. When Kepi already has a layout for the airport, **Kepi's map is the primary tool**; the external link is secondary ("Extra reference · not step-by-step"), not a gold CTA that implies turn-by-turn. Honesty tiers live in `wayfindingHonestyTier` (`strong` | `official_static` | `weak`) and drive `OfficialAirportMapLink` + `AirportNavigatorFallback` presentation. Destination controls remain visible after selection; native position is labeled approximate with GPS accuracy. Security programs and checkpoint locations must defer to live airport signage (M32).
+There is no universal downloadable live indoor airport map. Kepi must use a verified airport-owned live map when available (`supportsStepByStep: true` in `VERIFIED_AIRPORT_WAYFINDING`, e.g. SEA Atrius, FCO Digiport), a clearly labeled **orientation-only** official map when the airport has a map but not step-by-step, and a clearly labeled **weak Google venue-search fallback** otherwise — never dress the weak fallback up as confident indoor directions. When `wayfindingHonestyTier === strong`, the airport's live map is always the primary gold CTA (G48) — even if Kepi has a bundled schematic. For other tiers where Kepi has a layout, **Kepi's map is the primary tool**; the external link is secondary ("Extra reference · not step-by-step"), not a gold CTA that implies turn-by-step. Honesty tiers live in `wayfindingHonestyTier` (`strong` | `official_static` | `weak`) and drive `OfficialAirportMapLink` + `AirportNavigatorFallback` presentation.
 
 **Test:** `src/lib/airportNav/officialWayfinding.test.ts`, `src/lib/airportNav/pathfinder.test.ts`, `app-sitter/airport-day-of-travel.spec.ts`
 
@@ -1004,6 +1019,9 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | G42 | `src/lib/travelAssistant/scannedDocumentPricing.test.ts` |
 | G43 | `src/lib/travelAssistant/parseReservationCashUsd.test.ts` |
 | G44 | `scripts/check-undefined-names.cjs` (prebuild gate) |
+| G46 | `src/lib/travelAssistant/airportDayCoach.test.ts`, `src/lib/travelAssistant/homeNextAction.test.ts` |
+| G47 | `src/lib/travelAssistant/connectionPlaybook.test.ts` |
+| G48 | `src/lib/airportNav/officialWayfinding.test.ts` |
 | M39 | `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |

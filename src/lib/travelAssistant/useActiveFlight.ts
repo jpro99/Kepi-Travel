@@ -27,6 +27,7 @@ import {
   deriveAirportDayCoachMode,
   type AirportDayCoachMode,
 } from "@/lib/travelAssistant/airportDayCoach";
+import { resolveArrivalHotelLabel } from "@/lib/travelAssistant/airportSpotlightContext";
 import { computeJourneyPhase, type JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
 import {
@@ -192,6 +193,16 @@ export function useActiveFlight(): {
     return activeFlight ?? previewFlight;
   }, [journeyPhase, activeFlight, previewFlight, nowMs]);
   const hotelLabel = useMemo(() => {
+    if (journeyPhase.kind === "just-landed") {
+      const f = journeyPhase.flight as FlightReservation;
+      const dateKey =
+        f.flightDate?.slice(0, 10) ??
+        f.flightArrivalTime?.slice(0, 10) ??
+        f.localTime?.slice(0, 10) ??
+        null;
+      const hotels = reservations.filter((r) => r.type === "hotel");
+      return resolveArrivalHotelLabel(hotels, dateKey);
+    }
     const hotel = reservations.find((r) => r.type === "hotel");
     if (!hotel) return null;
     const label = reservationPropertyName({
@@ -201,7 +212,7 @@ export function useActiveFlight(): {
       location: hotel.location,
     });
     return label.trim() || null;
-  }, [reservations]);
+  }, [reservations, journeyPhase]);
   const travelDayFlight = useMemo(
     () => selectTravelDayDepartureFlight(reservations, nowMs),
     [reservations, nowMs],

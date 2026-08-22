@@ -30,9 +30,11 @@ export function OfficialAirportMapLink({
 }: OfficialAirportMapLinkProps) {
   const resource = getAirportWayfindingResource(iata);
   if (!resource) return null;
-  const kepiPrimary = hasOfflineKepiLayout ?? hasAirportLayout(iata);
   const tier = wayfindingHonestyTier(resource);
   const code = resource.iata;
+  /** Strong verified maps (SEA Atrius, FCO Digiport) stay primary even when Kepi has a schematic layout (G48). */
+  const kepiPrimary =
+    tier === "strong" ? false : (hasOfflineKepiLayout ?? hasAirportLayout(iata));
 
   if (tier === "strong") {
     return (

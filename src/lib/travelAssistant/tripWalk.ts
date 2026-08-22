@@ -130,6 +130,8 @@ export function resolveTripWalk(input: {
   storedDepartureGate?: string | null;
   connectionCalm?: ConnectionCalmStatus;
   tripStatus?: ReadinessStatus;
+  /** G46 — specific airport line replaces generic Open Airport Mode. */
+  airportSpotlight?: HomeNextAction | null;
 }): TripWalk {
   const stored =
     input.storedDepartureGate ?? input.nextFlight?.flightDepartureGate ?? null;
@@ -159,6 +161,7 @@ export function resolveTripWalk(input: {
     prepMode: input.prepMode,
     unresolvedReviewCount: input.unresolvedReviewCount,
     nextFlight: input.nextFlight,
+    airportSpotlight: input.airportSpotlight,
   });
 
   const next = gateChange && !input.prepMode ? gateChangeNext(gateChange) : baseNext;

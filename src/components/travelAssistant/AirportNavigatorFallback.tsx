@@ -16,10 +16,14 @@ import {
   departureTimeBudgetReassurance,
   deriveAirportDayCoachMode,
   formatLiveBaggageCarouselNote,
+  resolveArrivalSpotlightIndex,
+  resolveDepartSpotlightIndex,
   selectDayCoachVisibleSteps,
+  tagDepartGuideSteps,
   type AirportDayCoachMode,
   type DayCoachPathStep,
 } from "@/lib/travelAssistant/airportDayCoach";
+import { resolveAirportLocationPhase } from "@/lib/travelAssistant/airportLocationPhase";
 import { buildRideFromAirportDeepLinks } from "@/lib/travelAssistant/groundTransportDeepLinks";
 
 interface AirportNavigatorFallbackProps {
@@ -176,13 +180,7 @@ export function AirportNavigatorFallback({
       flightNumber,
       departureTerminal,
     });
-    const fromGuide = guide.steps.map((step, index) => ({
-      id: `guide-${index}`,
-      icon: step.icon,
-      text: step.text,
-      detail: step.detail,
-      minutes: step.minutes > 0 ? step.minutes : undefined,
-    }));
+    const fromGuide = tagDepartGuideSteps(guide.steps);
     return [checkIn, ...fromGuide];
   }, [
     isArrive,
@@ -196,9 +194,37 @@ export function AirportNavigatorFallback({
     guide,
   ]);
 
+  const spotlightIndex = useMemo(() => {
+    if (isArrive) {
+      return resolveArrivalSpotlightIndex({
+        steps: pathSteps,
+        landedMinutesAgo,
+        locationStatus: proximityStatus || proximity.status,
+        hasLiveBaggage: Boolean(formatLiveBaggageCarouselNote(liveBaggageClaim)),
+      });
+    }
+    const deptUtc = Date.now() + minutesToDeparture * 60_000;
+    const phase = resolveAirportLocationPhase({
+      departureUtcMs: deptUtc,
+      nowMs: Date.now(),
+      locationStatus: proximityStatus || proximity.status,
+      hasLoungeAccess: (eligibleLoungeNames?.length ?? 0) > 0,
+    });
+    return resolveDepartSpotlightIndex(pathSteps, phase);
+  }, [
+    isArrive,
+    pathSteps,
+    landedMinutesAgo,
+    proximityStatus,
+    proximity.status,
+    liveBaggageClaim,
+    minutesToDeparture,
+    eligibleLoungeNames,
+  ]);
+
   const { visible: visiblePathSteps, hiddenCount } = useMemo(
-    () => selectDayCoachVisibleSteps(pathSteps, fullDayView),
-    [pathSteps, fullDayView],
+    () => selectDayCoachVisibleSteps(pathSteps, fullDayView, spotlightIndex),
+    [pathSteps, fullDayView, spotlightIndex],
   );
 
   const timeBudgetLine = isArrive ? null : departureTimeBudgetReassurance(minutesToDeparture);
@@ -361,8 +387,13 @@ export function AirportNavigatorFallback({
         <section>
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-200/80">Your path today</p>
           <ol className="mt-2 space-y-2">
-            {visiblePathSteps.map((step) => (
-              <li key={step.id} className="flex gap-3 rounded-xl bg-white/5 px-3 py-2.5">
+            {visiblePathSteps.map((step, index) => (
+              <li
+                key={step.id}
+                className={`flex gap-3 rounded-xl px-3 py-2.5 ${
+                  index === 0 && !fullDayView ? "bg-sky-500/20 ring-1 ring-sky-400/30" : "bg-white/5"
+                }`}
+              >
                 <span className="text-lg" aria-hidden>{step.icon}</span>
                 <div>
                   <p className="text-sm font-semibold">{step.text}</p>

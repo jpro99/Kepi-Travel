@@ -32,6 +32,10 @@ import {
   type ReadinessChecklistItem,
 } from "@/lib/travelAssistant/tripOrchestration";
 import { formatTravelDayFlightLabel } from "@/lib/travelAssistant/flightSort";
+import {
+  resolveAirportSpotlightForHome,
+  resolveArrivalHotelLabel,
+} from "@/lib/travelAssistant/airportSpotlightContext";
 
 export interface MissionControlLiveStatus {
   flightStatus?: string;
@@ -263,6 +267,45 @@ export function MissionControlView({
 
   const atAirport =
     locationStatus === "at-airport" || locationStatus === "in-terminal";
+
+  const arrivalHotelLabel = useMemo(() => {
+    if (journeyPhase?.kind !== "just-landed") return null;
+    const flight = journeyPhase.flight as MissionControlReservation;
+    const dateKey =
+      flight.flightDate?.slice(0, 10) ??
+      flight.flightArrivalTime?.slice(0, 10) ??
+      flight.localTime?.slice(0, 10) ??
+      null;
+    const hotels = reservations.filter((r) => r.type === "hotel");
+    return resolveArrivalHotelLabel(hotels, dateKey);
+  }, [journeyPhase, reservations]);
+
+  const airportSpotlight = useMemo(
+    () =>
+      resolveAirportSpotlightForHome({
+        journeyPhase,
+        locationStatus,
+        atAirport,
+        openAirportMode: snap.openAirportMode,
+        nextFlight: snap.nextFlight,
+        reservations,
+        liveDepartureGate: snap.nextFlight
+          ? liveStatus?.[snap.nextFlight.id]?.departureGate
+          : undefined,
+        hotelLabel: arrivalHotelLabel,
+      }),
+    [
+      journeyPhase,
+      locationStatus,
+      atAirport,
+      snap.openAirportMode,
+      snap.nextFlight,
+      reservations,
+      liveStatus,
+      arrivalHotelLabel,
+    ],
+  );
+
   const walk = useMemo(
     () =>
       resolveTripWalk({
@@ -281,6 +324,7 @@ export function MissionControlView({
           : undefined,
         storedDepartureGate: snap.nextFlight?.flightDepartureGate,
         connectionCalm,
+        airportSpotlight,
       }),
     [
       journeyPhase,
@@ -295,6 +339,7 @@ export function MissionControlView({
       unresolvedReviewCount,
       liveStatus,
       connectionCalm,
+      airportSpotlight,
     ],
   );
   const travelTakeover =
@@ -320,23 +365,26 @@ export function MissionControlView({
       title = `${(journeyPhase.onFlight as { flightDepartureAirport?: string }).flightDepartureAirport ?? ""} → ${journeyPhase.landingAt}`;
       detail = `Landing in ${journeyPhase.landingIn}`;
     } else if (journeyPhase?.kind === "just-landed") {
-      eyebrow = "Just landed";
-      title = "You're on the ground";
-      detail =
+      eyebrow = walk.next.eyebrow || "Just landed";
+      title = walk.next.title;
+      detail = walk.next.detail ?? (
         journeyPhase.landedMinutesAgo < 2
           ? "Just now"
-          : `${journeyPhase.landedMinutesAgo} minutes ago`;
+          : `${journeyPhase.landedMinutesAgo} minutes ago`
+      );
       tone = "green";
     } else if (walk.gateChange) {
       eyebrow = "Gate changed";
       title = `Gate changed to ${walk.gateChange.to}`;
       detail = `Was ${walk.gateChange.from}.`;
     } else if (atAirport) {
-      eyebrow = locationStatus === "in-terminal" ? "In the terminal" : "At the airport";
-      title = gate ? `Gate ${gate}` : "Open Airport Mode";
-      detail = snap.nextFlight
-        ? `${snap.nextFlight.flightNumber || "Flight"} · ${routeLabel}`
-        : "Your next steps are on the airport map";
+      eyebrow = walk.next.eyebrow || (locationStatus === "in-terminal" ? "In the terminal" : "At the airport");
+      title = walk.next.title;
+      detail =
+        walk.next.detail ??
+        (snap.nextFlight
+          ? `${snap.nextFlight.flightNumber || "Flight"} · ${routeLabel}`
+          : "Your next steps are on the airport map");
     } else if (snap.leaveByHint) {
       title = snap.leaveByHint;
       detail = gate
@@ -372,7 +420,7 @@ export function MissionControlView({
             className="mt-6 flex min-h-[56px] w-full items-center justify-center rounded-2xl bg-white text-[17px] font-semibold"
             style={{ color: ctaText }}
           >
-            Open Airport Mode
+            {walk.next.ctaLabel}
           </button>
         </article>
 

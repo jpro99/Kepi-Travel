@@ -41,7 +41,12 @@ export function pickHomeNextAction(input: {
   prepMode?: boolean;
   unresolvedReviewCount?: number;
   nextFlight?: MissionControlReservation | null;
+  /** When set, replaces generic airport CTA with a specific spotlight line (G46). */
+  airportSpotlight?: HomeNextAction | null;
 }): HomeNextAction {
+  if (input.airportSpotlight) {
+    return input.airportSpotlight;
+  }
   if (input.openAirportMode || input.atAirport) {
     return {
       kind: "airport",

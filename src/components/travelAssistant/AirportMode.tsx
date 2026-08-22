@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getAirportProximity, type UserAirportStatus } from "@/lib/travelAssistant/airportGeo";
 import {
+  resolveAirportLocationPhase,
+  type AirportLocationPhase,
+} from "@/lib/travelAssistant/airportLocationPhase";
+import {
   AIRLINE_PROGRAMS,
   HOTEL_PROGRAMS,
   CAR_RENTAL_PROGRAMS,
@@ -71,17 +75,7 @@ function fmtTime(ms: number): string {
 }
 
 /* ─── Location-aware phase ────────────────────────────────────── */
-type LocationPhase =
-  | "off"           // too far out
-  | "leave-soon"    // 90–180 min, not at airport
-  | "leave-now"     // 45–90 min, not at airport
-  | "check-in"      // at airport outer zone, before security
-  | "security"      // at airport, need to get through security
-  | "lounge"        // in terminal, lounge access available, time permits
-  | "head-to-gate"  // in terminal, should head to gate now
-  | "at-gate"       // boarding window, in terminal
-  | "final-call"    // <20 min
-  | "departed";
+type LocationPhase = AirportLocationPhase;
 
 interface PhaseConfig {
   label: string;
@@ -96,31 +90,14 @@ function getLocationPhase(
   nowMs: number,
   locationStatus: UserAirportStatus,
   hasLoungeAccess: boolean,
-  hasStatus: boolean,
+  _hasStatus: boolean,
 ): LocationPhase {
-  const min = (deptUtcMs - nowMs) / 60_000;
-
-  if (min > 180) return "off";
-  if (min < 0) return min > -60 ? "departed" : "off";
-  if (min < 20) return "final-call";
-
-  // User is in the terminal (past security)
-  if (locationStatus === "in-terminal") {
-    if (min > 60 && hasLoungeAccess) return "lounge";
-    if (min > 30) return "head-to-gate";
-    return "at-gate";
-  }
-
-  // User is at the airport (check-in/landside zone)
-  if (locationStatus === "at-airport") {
-    if (min < 45) return "security"; // cutting it close
-    return "check-in";
-  }
-
-  // User is away from airport
-  if (min < 45) return "leave-now";
-  if (min < 90) return "leave-now";
-  return "leave-soon";
+  return resolveAirportLocationPhase({
+    departureUtcMs: deptUtcMs,
+    nowMs,
+    locationStatus,
+    hasLoungeAccess,
+  });
 }
 
 const PHASE_CONFIG: Record<LocationPhase, PhaseConfig> = {

@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildArrivalDayCoachPath,
+  buildAirportHomeSpotlight,
   buildDepartCheckInCoachStep,
   departureTimeBudgetReassurance,
   deriveAirportDayCoachMode,
   formatLiveBaggageCarouselNote,
   isInternationalArrivalFlight,
+  resolveArrivalSpotlightIndex,
+  resolveDepartSpotlightIndex,
   selectDayCoachVisibleSteps,
 } from "./airportDayCoach";
 
@@ -21,11 +24,55 @@ test("departureTimeBudgetReassurance under 45m returns null", () => {
   assert.equal(departureTimeBudgetReassurance(30), null);
 });
 
-test("selectDayCoachVisibleSteps coach view keeps current + next", () => {
+test("selectDayCoachVisibleSteps coach view keeps current + next from spotlight index", () => {
   const steps = ["checkin", "security", "lounge", "gate"];
-  const { visible, hiddenCount } = selectDayCoachVisibleSteps(steps, false);
-  assert.deepEqual(visible, ["checkin", "security"]);
-  assert.equal(hiddenCount, 2);
+  const { visible, hiddenCount, currentIndex } = selectDayCoachVisibleSteps(steps, false, 1);
+  assert.deepEqual(visible, ["security", "lounge"]);
+  assert.equal(hiddenCount, 1);
+  assert.equal(currentIndex, 1);
+});
+
+test("resolveArrivalSpotlightIndex advances after landing time", () => {
+  const steps = buildArrivalDayCoachPath({
+    iata: "FCO",
+    departureIata: "SEA",
+    flightNumber: "AS 180",
+  });
+  assert.equal(
+    resolveArrivalSpotlightIndex({ steps, landedMinutesAgo: 0, locationStatus: "away" }),
+    0,
+  );
+  assert.equal(
+    resolveArrivalSpotlightIndex({ steps, landedMinutesAgo: 10, locationStatus: "at-airport" }),
+    steps.findIndex((s) => s.id === "bags"),
+  );
+});
+
+test("resolveDepartSpotlightIndex maps security phase to security step", () => {
+  const steps = [
+    { id: "check-in", icon: "🧳", text: "Check in" },
+    { id: "security", icon: "🛡", text: "TSA" },
+    { id: "gate", icon: "🚪", text: "Gate C12" },
+  ];
+  assert.equal(resolveDepartSpotlightIndex(steps, "security"), 1);
+  assert.equal(resolveDepartSpotlightIndex(steps, "at-gate"), 2);
+});
+
+test("buildAirportHomeSpotlight shows ride to booked hotel on arrival", () => {
+  const steps = buildArrivalDayCoachPath({
+    iata: "BRI",
+    departureIata: "FCO",
+    flightNumber: "AZ 123",
+    hotelLabel: "Monopoli",
+  });
+  const idx = steps.findIndex((s) => s.id === "ride");
+  const next = buildAirportHomeSpotlight({
+    mode: "arrive",
+    steps,
+    currentIndex: idx,
+    hotelLabel: "Monopoli",
+  });
+  assert.match(next?.title ?? "", /Monopoli/);
 });
 
 test("deriveAirportDayCoachMode uses just-landed only", () => {
