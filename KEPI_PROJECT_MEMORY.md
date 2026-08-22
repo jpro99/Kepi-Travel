@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-22 (arrivals demand tracked as its own curation dimension)
+Last updated: 2026-08-22 (airport spotlight G46–G48 shipped)
+
+## Decision 2026-08-22 — Airport spotlight + connection playbook (Jeff approved build)
+
+Shipped G46–G48: Day Coach advances from facts (landed time, coarse GPS, live baggage, shared `LocationPhase`); Home TripWalk shows specific next step (e.g. “Ride to Monopoli”, “Get through security · Gate C12”); connection playbook lite for same-airport hubs; FCO/SEA strong official maps stay primary gold CTA even when Kepi has schematic layout. Map expansion still frozen.
 
 ## Decision 2026-08-22 — Arrivals coverage is a second, demand-driven curation dimension
 
