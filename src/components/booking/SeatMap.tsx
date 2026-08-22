@@ -48,17 +48,17 @@ export function SeatMap({ offerId, onSelect, selectedSeat }: SeatMapProps) {
 
   if (loading) {
     return (
-      <div className="rounded-2xl border border-slate-700 bg-[#111e33] p-6 text-center animate-pulse">
-        <p className="text-slate-400 text-sm">Loading seat map…</p>
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-center animate-pulse">
+        <p className="text-slate-500 dark:text-slate-400 text-sm">Loading seat map…</p>
       </div>
     );
   }
 
   if (!seatMaps.length) {
     return (
-      <div className="rounded-2xl border border-slate-700 bg-[#111e33] px-4 py-5 text-center">
-        <p className="text-slate-400 text-sm">Seat selection not available for this flight.</p>
-        <p className="text-xs text-slate-500 mt-1">Seats will be assigned at check-in.</p>
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-5 text-center">
+        <p className="text-slate-500 dark:text-slate-400 text-sm">Seat selection not available for this flight.</p>
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Seats will be assigned at check-in.</p>
       </div>
     );
   }
@@ -77,7 +77,7 @@ export function SeatMap({ offerId, onSelect, selectedSeat }: SeatMapProps) {
         <div className="flex gap-2 overflow-x-auto">
           {seatMaps.map((sm, i) => (
             <button key={i} type="button" onClick={() => setActiveSegment(i)}
-              className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold border transition ${activeSegment === i ? "bg-[#f4c95d] border-[#f4c95d] text-[#0b1f3a]" : "border-slate-600 text-slate-400"}`}>
+              className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold border transition ${activeSegment === i ? "bg-[#007AFF] dark:bg-[#0A84FF] border-[#007AFF] dark:border-[#0A84FF] text-white" : "border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400"}`}>
               Flight {i + 1} · {sm.cabinClass}
             </button>
           ))}
@@ -85,18 +85,18 @@ export function SeatMap({ offerId, onSelect, selectedSeat }: SeatMapProps) {
       )}
 
       {/* Legend */}
-      <div className="flex gap-4 text-xs text-slate-400">
-        <span className="flex items-center gap-1.5"><span className="w-4 h-4 rounded bg-slate-700 border border-slate-600 inline-block" /> Available</span>
-        <span className="flex items-center gap-1.5"><span className="w-4 h-4 rounded bg-[#f4c95d] inline-block" /> Selected</span>
+      <div className="flex gap-4 text-xs text-slate-500 dark:text-slate-400">
+        <span className="flex items-center gap-1.5"><span className="w-4 h-4 rounded bg-slate-200 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 inline-block" /> Available</span>
+        <span className="flex items-center gap-1.5"><span className="w-4 h-4 rounded bg-[#007AFF] dark:bg-[#0A84FF] inline-block" /> Selected</span>
         {hasExtraLegroom && <span className="flex items-center gap-1.5"><span className="w-4 h-4 rounded bg-blue-600/60 border border-blue-500 inline-block" /> Extra legroom</span>}
-        <span className="flex items-center gap-1.5"><span className="w-4 h-4 rounded bg-slate-800 border border-slate-700 opacity-40 inline-block" /> Taken</span>
+        <span className="flex items-center gap-1.5"><span className="w-4 h-4 rounded bg-slate-300 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 opacity-40 inline-block" /> Taken</span>
       </div>
 
       {/* Seat map */}
-      <div className="rounded-2xl border border-slate-700 bg-[#111e33] overflow-hidden">
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
         {/* Nose indicator */}
-        <div className="text-center py-2 border-b border-slate-700/50">
-          <span className="text-[10px] text-slate-500 uppercase tracking-widest">✈ Front of aircraft</span>
+        <div className="text-center py-2 border-b border-slate-200 dark:border-slate-700/50">
+          <span className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest">✈ Front of aircraft</span>
         </div>
 
         <div className="overflow-y-auto max-h-80 py-2">
@@ -110,7 +110,7 @@ export function SeatMap({ offerId, onSelect, selectedSeat }: SeatMapProps) {
               return (
                 <div key={row.rowNumber} className="flex items-center gap-1 px-4 py-0.5">
                   {/* Row number */}
-                  <span className="w-6 text-[10px] text-slate-600 text-right shrink-0">{row.rowNumber}</span>
+                  <span className="w-6 text-[10px] text-slate-400 dark:text-slate-600 text-right shrink-0">{row.rowNumber}</span>
 
                   {/* Left seats */}
                   <div className="flex gap-1">
@@ -148,29 +148,29 @@ export function SeatMap({ offerId, onSelect, selectedSeat }: SeatMapProps) {
       </div>
 
       {selectedSeat && (
-        <div className="flex items-center justify-between rounded-2xl bg-[#f4c95d]/10 border border-[#f4c95d]/30 px-4 py-3">
+        <div className="flex items-center justify-between rounded-2xl bg-[#007AFF]/10 dark:bg-[#0A84FF]/10 border border-[#007AFF]/30 dark:border-[#0A84FF]/40 px-4 py-3">
           <div>
-            <p className="text-sm font-black text-white">Seat {selectedSeat} selected</p>
+            <p className="text-sm font-black text-slate-900 dark:text-white">Seat {selectedSeat} selected</p>
             {(() => {
               const seat = allSeats.find(s => s.designator === selectedSeat);
-              return seat?.isExtraLegroom ? <p className="text-xs text-blue-400">Extra legroom</p> :
-                seat?.isExit ? <p className="text-xs text-amber-400">Exit row</p> : null;
+              return seat?.isExtraLegroom ? <p className="text-xs text-blue-600 dark:text-blue-400">Extra legroom</p> :
+                seat?.isExit ? <p className="text-xs text-amber-600 dark:text-amber-400">Exit row</p> : null;
             })()}
           </div>
           <button type="button" onClick={() => onSelect(null)}
-            className="text-xs text-slate-400">Change</button>
+            className="text-xs text-slate-500 dark:text-slate-400">Change</button>
         </div>
       )}
 
       {!selectedSeat && (
         <button type="button" onClick={() => onSelect("skip")}
-          className="w-full text-xs text-slate-500 text-center py-2">
+          className="w-full text-xs text-slate-400 dark:text-slate-500 text-center py-2">
           Skip seat selection — assign at check-in
         </button>
       )}
 
       {hasPaidSeats && (
-        <p className="text-[10px] text-slate-600 text-center">
+        <p className="text-[10px] text-slate-400 dark:text-slate-600 text-center">
           Some seats have an upgrade fee charged separately at booking.
         </p>
       )}
@@ -191,11 +191,11 @@ function SeatButton({ seat, selected, onSelect }: { seat: Seat; selected: boolea
       onClick={() => onSelect(selected ? null : seat.designator)}
       title={`${seat.designator}${seat.isExtraLegroom ? " · Extra legroom" : ""}${seat.price > 0 ? ` · +$${seat.price}` : ""}`}
       className={`w-7 h-6 rounded text-[9px] font-bold transition relative ${
-        selected ? "bg-[#f4c95d] text-[#0b1f3a]" :
-        !seat.available ? "bg-slate-800 border border-slate-700 text-slate-700 cursor-not-allowed opacity-40" :
-        seat.isExtraLegroom ? "bg-blue-600/50 border border-blue-500/60 text-blue-200 hover:bg-blue-500/60" :
-        seat.isExit ? "bg-amber-600/40 border border-amber-500/50 text-amber-200 hover:bg-amber-500/50" :
-        "bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600"
+        selected ? "bg-[#007AFF] dark:bg-[#0A84FF] text-white" :
+        !seat.available ? "bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-400 dark:text-slate-700 cursor-not-allowed opacity-40" :
+        seat.isExtraLegroom ? "bg-blue-100 dark:bg-blue-600/50 border border-blue-400 dark:border-blue-500/60 text-blue-700 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-500/60" :
+        seat.isExit ? "bg-amber-100 dark:bg-amber-600/40 border border-amber-400 dark:border-amber-500/50 text-amber-700 dark:text-amber-200 hover:bg-amber-200 dark:hover:bg-amber-500/50" :
+        "bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
       }`}
     >
       {seat.designator}
