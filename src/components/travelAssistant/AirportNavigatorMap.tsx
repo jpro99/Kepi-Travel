@@ -95,6 +95,8 @@ interface AirportNavigatorMapProps {
   activeRally?: FamilyRally | null;
   /** Extra bottom offset when embedded above a fixed tab bar (e.g. /live-map). */
   shellBottomInset?: string;
+  /** Top offset when embedded under Live Map chrome (back + view toggle). */
+  shellTopInset?: string;
   /**
    * Admin click-to-place: when true, map clicks fire onPlaceCapture with real
    * lng/lat (no computation). Traveler UI never sets this.
@@ -292,6 +294,7 @@ interface AirportDestinationRailProps {
   /** Collapsed by default — the map is the primary surface. Expand to browse. */
   open: boolean;
   onToggle: () => void;
+  railTop?: string;
 }
 
 function AirportDestinationRail({
@@ -305,6 +308,7 @@ function AirportDestinationRail({
   onPoiClick,
   open,
   onToggle,
+  railTop = "9rem",
 }: AirportDestinationRailProps) {
   const [detailMode, setDetailMode] = useState<AirportDetailMode>("essentials");
   const hasAirlineCheckin = layout.pois.some((definition) =>
@@ -327,7 +331,8 @@ function AirportDestinationRail({
         onClick={onToggle}
         data-testid="airport-nav-where-to-chip"
         aria-label={selectedPoiId ? "Choose another stop" : "Where to?"}
-        className="absolute right-3 top-36 z-[25] flex items-center gap-1.5 rounded-full bg-black/55 px-4 py-2.5 text-[13px] font-bold text-white shadow-lg backdrop-blur-md active:scale-[0.98]"
+        className="absolute right-3 z-[25] flex items-center gap-1.5 rounded-full bg-black/55 px-4 py-2.5 text-[13px] font-bold text-white shadow-lg backdrop-blur-md active:scale-[0.98]"
+        style={{ top: railTop }}
       >
         <span aria-hidden>🔎</span>
         {selectedPoiId ? "Choose another stop" : "Where to?"}
@@ -338,7 +343,8 @@ function AirportDestinationRail({
   return (
     <section
       aria-label="Airport destinations"
-      className="absolute bottom-24 right-2 top-36 z-[25] flex w-[42%] max-w-[190px] flex-col overflow-hidden rounded-[22px] bg-white/95 p-2.5 shadow-2xl backdrop-blur-md sm:right-4 sm:w-52 sm:max-w-none"
+      className="absolute bottom-24 right-2 z-[25] flex w-[42%] max-w-[190px] flex-col overflow-hidden rounded-[22px] bg-white/95 p-2.5 shadow-2xl backdrop-blur-md sm:right-4 sm:w-52 sm:max-w-none"
+      style={{ top: railTop }}
     >
       <div>
         <div className="flex items-start justify-between gap-1">
@@ -860,6 +866,7 @@ export function AirportNavigatorMap({
   onFamilyPinTap,
   activeRally = null,
   shellBottomInset,
+  shellTopInset,
   placeMode = false,
   onPlaceCapture,
   layoutOverride = null,
@@ -872,6 +879,26 @@ export function AirportNavigatorMap({
   const bottomFamily = shellBottomInset
     ? `calc(${shellBottomInset} + 12rem)`
     : "max(5.5rem, calc(env(safe-area-inset-bottom) + 4.75rem))";
+  const embeddedInLiveMap = fill && Boolean(shellTopInset);
+  const hideEmbeddedFlightHero = embeddedInLiveMap && previewMode;
+  const contentTop =
+    shellTopInset ??
+    (expanded ? "max(0.75rem, env(safe-area-inset-top))" : "0.75rem");
+  const previewBannerTop = hideEmbeddedFlightHero
+    ? `calc(${contentTop} + 0.25rem)`
+    : fill
+      ? `max(4.5rem, calc(env(safe-area-inset-top) + 4rem))`
+      : "3.25rem";
+  const destinationRailTop = hideEmbeddedFlightHero
+    ? `calc(${contentTop} + 5.75rem)`
+    : fill
+      ? `calc(${contentTop} + 8.5rem)`
+      : "9rem";
+  const mapControlsTop = hideEmbeddedFlightHero
+    ? `calc(${contentTop} + 0.5rem)`
+    : fill
+      ? `calc(${contentTop} + 4.5rem)`
+      : "calc(env(safe-area-inset-top) + 5.5rem)";
   const mapEl = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
@@ -972,7 +999,7 @@ export function AirportNavigatorMap({
   // tap the card to come back — the map is always one tap away)
   const [expanded, setExpanded] = useState(false);
   const autoPoppedRef = useRef(false);
-  const [heroOpen, setHeroOpen] = useState(true);
+  const [heroOpen, setHeroOpen] = useState(!(fill && previewMode));
   // "Where to?" destinations rail — collapsed by default so the live map is
   // visible instead of being squeezed behind a permanently-docked side panel.
   const [railOpen, setRailOpen] = useState(false);
@@ -2493,7 +2520,7 @@ export function AirportNavigatorMap({
         ref={mapEl}
         className={`absolute inset-0 z-[2] transition-opacity ${mapReady ? "opacity-100" : "pointer-events-none opacity-0"}`}
       />
-      <style>{`.maplibregl-ctrl-top-left{margin-top:calc(env(safe-area-inset-top) + 5.5rem)}
+      <style>{`.maplibregl-ctrl-top-left{margin-top:${mapControlsTop}}
 .maplibregl-ctrl-top-left .maplibregl-ctrl{box-shadow:0 2px 8px rgba(15,23,42,0.25)}`}</style>
       {/* Vignette + top legibility gradient — concierge depth, not flat canvas */}
       <div
@@ -2520,12 +2547,17 @@ export function AirportNavigatorMap({
       {previewMode ? (
         <div
           className="pointer-events-none absolute left-3 right-3 z-20 rounded-2xl border border-sky-400/30 bg-sky-950/80 px-3 py-2 backdrop-blur-md"
-          /* fill mode renders under LiveMapPage's own Airport/Family pill toggle
-             (external, ~6.2rem tall including its top offset) — clear it, or
-             this banner's top line gets covered/cut off, as on the airport tab. */
-          style={{ top: fill ? "max(6.75rem, calc(env(safe-area-inset-top) + 6.25rem))" : "3.25rem" }}
+          style={{ top: previewBannerTop }}
         >
-          <p className="text-[11px] font-bold uppercase tracking-wide text-sky-200">Explore before you go</p>
+          {hideEmbeddedFlightHero ? (
+            <p className="truncate text-[13px] font-bold text-white">
+              {[airlineName, flightNumber].filter(Boolean).join(" ") || "Your flight"}
+              {arrivalAirport ? ` · ${iata} → ${arrivalAirport.toUpperCase()}` : ""}
+            </p>
+          ) : null}
+          <p className={`text-[11px] font-bold uppercase tracking-wide text-sky-200 ${hideEmbeddedFlightHero ? "mt-1" : ""}`}>
+            Explore before you go
+          </p>
           <p className="text-[11px] leading-snug text-sky-100/90">
             {gateCode
               ? `Tap Essentials, Lounges, or any label to explore ${iata}. Live directions start when you arrive.`
@@ -2540,10 +2572,7 @@ export function AirportNavigatorMap({
       ) : !preciseRouteEnabled && layout ? (
         <div
           className="pointer-events-none absolute left-3 right-3 z-20 rounded-2xl border border-amber-400/30 bg-amber-950/70 px-3 py-1.5 backdrop-blur-md"
-          /* fill mode renders under LiveMapPage's own Airport/Family pill toggle
-             (external, ~6.2rem tall including its top offset) — clear it, or
-             this banner's top line gets covered/cut off, as on the airport tab. */
-          style={{ top: fill ? "max(6.75rem, calc(env(safe-area-inset-top) + 6.25rem))" : "3.25rem" }}
+          style={{ top: previewBannerTop }}
         >
           <p className="text-[11px] leading-snug text-amber-100/90">
             Terminal guide · pins approximate · follow airport signs
@@ -2566,13 +2595,15 @@ export function AirportNavigatorMap({
             handlePoiTap(poiId);
             setRailOpen(false);
           }}
+          railTop={destinationRailTop}
         />
       ) : null}
 
-      {/* Flight hero card — everything glanceable: gate, flight, boarding, status */}
+      {/* Flight hero card — hidden in Live Map plan mode (flight lives in preview banner). */}
+      {!hideEmbeddedFlightHero ? (
       <div
         className="pointer-events-none absolute left-3 right-14 z-10 flex items-start justify-between gap-2"
-        style={{ top: expanded ? "max(0.75rem, env(safe-area-inset-top))" : "0.75rem" }}
+        style={{ top: expanded ? "max(0.75rem, env(safe-area-inset-top))" : contentTop }}
       >
         <div className="pointer-events-auto min-w-0">
           <button
@@ -2658,6 +2689,7 @@ export function AirportNavigatorMap({
           </button>
         </div>
       </div>
+      ) : null}
 
       {/* Loading */}
       {!layout && layoutStatus === "loading" && (

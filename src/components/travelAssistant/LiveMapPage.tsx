@@ -78,6 +78,8 @@ type MapStyleId = LiveMapStyleId;
 
 /** Bottom inset so map overlays clear the fixed mobile tab bar on /live-map. */
 const MOBILE_TAB_BAR_INSET = MOBILE_TAB_BAR_CLEARANCE;
+/** One-row Live Map chrome (back + Plan airport / Family) — map overlays start below this. */
+const AIRPORT_SHELL_TOP_INSET = "calc(max(0.75rem, env(safe-area-inset-top)) + 3.5rem)";
 
 const IOS_GEO_OPTIONS: PositionOptions = {
   enableHighAccuracy: true,
@@ -1016,10 +1018,8 @@ export function LiveMapPage() {
           className={`absolute inset-0 z-0 h-full w-full bg-[#dbeafe] ${mapView === "airport" ? "opacity-0 pointer-events-none" : ""}`}
         />
 
-        {/* No separate "Today" flight banner here — AirportNavigatorMap already
-            renders its own flight/gate hero card at the top of the map, and a
-            second copy at a higher z-index was stacking directly over it (and
-            over the back button below), duplicating the same info. */}
+        {/* No separate "Today" flight banner here — flight info lives in the map
+            preview banner (plan mode) or the flight hero (live mode). */}
 
         {/* Airport Navigator overlay — preview anytime; live navigation at geofence */}
         {mapView === "airport" && navFlight && (
@@ -1067,6 +1067,7 @@ export function LiveMapPage() {
               onFamilyPinTap={handleFamilyPinTap}
               activeRally={airportLiveMode && airportSync?.rally?.status === "active" ? airportSync.rally : null}
               shellBottomInset="0px"
+              shellTopInset={AIRPORT_SHELL_TOP_INSET}
             />
             {airportLiveMode && members.length >= 2 ? (
               <div
@@ -1091,36 +1092,44 @@ export function LiveMapPage() {
           </div>
         )}
 
-        {/* Airport ⇄ Family view pill — when trip has a mappable departure airport */}
-        {navFlight && (
-          <div
-            className="absolute left-1/2 z-50 flex -translate-x-1/2 overflow-hidden rounded-full border border-white/15 shadow-xl"
-            style={{ top: "max(3.6rem, calc(env(safe-area-inset-top) + 3.1rem))" }}
-          >
-            {([
-              ["airport", liveMapViewLabel("airport", airportPreviewMode)],
-              ["family", liveMapViewLabel("family", false)],
-            ] as ["airport" | "family", string][]).map(([viewId, viewLabel]) => (
-              <button
-                key={viewId}
-                type="button"
-                onClick={() => setMapView(viewId)}
-                className={`px-4 py-2.5 text-[15px] font-bold backdrop-blur-md transition-all ${
-                  mapView === viewId ? "bg-white text-slate-900" : "bg-black/45 text-white/90"
-                }`}
-              >
-                {viewLabel}
-              </button>
-            ))}
-          </div>
-        )}
-
         {/* Top scrim */}
         <div className="absolute top-0 left-0 right-0 z-20 pointer-events-none">
           <div className={`h-32 bg-gradient-to-b ${lightChrome ? "from-white/90 via-white/40" : "from-black/60 via-black/20"} to-transparent`} />
         </div>
 
-        {/* Mobile header */}
+        {/* Mobile header — airport mode uses a single compact row (no family chrome stack). */}
+        {mapView === "airport" && navFlight ? (
+          <div
+            className="absolute top-0 left-0 right-0 z-50 flex items-center gap-2 px-3 pb-2 md:hidden"
+            style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
+          >
+            <button
+              type="button"
+              onClick={() => leaveLiveMap("home")}
+              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-[22px] font-bold shadow-lg backdrop-blur-md border ${chromeBtnIdle}`}
+              aria-label="Back to trip home"
+            >
+              ←
+            </button>
+            <div className="flex min-w-0 flex-1 overflow-hidden rounded-full border border-white/15 shadow-xl">
+              {([
+                ["airport", liveMapViewLabel("airport", airportPreviewMode)],
+                ["family", liveMapViewLabel("family", false)],
+              ] as ["airport" | "family", string][]).map(([viewId, viewLabel]) => (
+                <button
+                  key={viewId}
+                  type="button"
+                  onClick={() => setMapView(viewId)}
+                  className={`min-h-[48px] flex-1 px-3 py-2.5 text-[15px] font-bold backdrop-blur-md transition-all ${
+                    mapView === viewId ? "bg-white text-slate-900" : "bg-black/45 text-white/90"
+                  }`}
+                >
+                  {viewLabel}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
         <div
           className="absolute top-0 left-0 right-0 z-30 flex flex-col gap-3 px-4 pb-2 md:hidden"
           style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
@@ -1168,17 +1177,37 @@ export function LiveMapPage() {
           </div>
           ) : null}
         </div>
+        )}
 
         {/* Desktop back + title + style toggle */}
         <div className="absolute top-0 left-0 right-0 z-30 hidden items-center gap-3 px-4 pb-2 pt-4 md:flex">
           <button
             type="button"
             onClick={() => router.back()}
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-xl text-white shadow-lg backdrop-blur-md"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black/40 text-xl text-white shadow-lg backdrop-blur-md"
             aria-label="Back"
           >
             ←
           </button>
+          {mapView === "airport" && navFlight ? (
+            <div className="flex min-w-0 flex-1 justify-center overflow-hidden rounded-full border border-white/15 shadow-xl">
+              {([
+                ["airport", liveMapViewLabel("airport", airportPreviewMode)],
+                ["family", liveMapViewLabel("family", false)],
+              ] as ["airport" | "family", string][]).map(([viewId, viewLabel]) => (
+                <button
+                  key={viewId}
+                  type="button"
+                  onClick={() => setMapView(viewId)}
+                  className={`min-h-[44px] px-5 py-2 text-[15px] font-bold backdrop-blur-md transition-all ${
+                    mapView === viewId ? "bg-white text-slate-900" : "bg-black/45 text-white/90"
+                  }`}
+                >
+                  {viewLabel}
+                </button>
+              ))}
+            </div>
+          ) : (
           <div className="min-w-0 flex-1">
             <p className="text-[18px] font-bold leading-tight tracking-tight text-white drop-shadow">
               {group?.name ?? "Family"}
@@ -1187,7 +1216,8 @@ export function LiveMapPage() {
               {liveCount > 0 ? `${liveCount} live · updates every 10s` : "No live locations"}
             </p>
           </div>
-          {!hideLiveMapStyleLab() ? (
+          )}
+          {mapView === "family" && !hideLiveMapStyleLab() ? (
           <div className="flex overflow-hidden rounded-full border border-white/10 shadow-lg">
             {([["dark", "Dark"], ["streets", "Map"], ["satellite", "Sat+"]] as [MapStyleId, string][]).map(([styleId, styleLabel]) => (
               <button
@@ -1201,7 +1231,7 @@ export function LiveMapPage() {
             ))}
           </div>
           ) : null}
-          {/* Heading-up toggle */}
+          {mapView === "family" ? (
           <button
             type="button"
             onClick={toggleHeadingUp}
@@ -1214,6 +1244,7 @@ export function LiveMapPage() {
           >
             {headingUp ? <Compass className="h-5 w-5" strokeWidth={2} aria-hidden /> : <ArrowUp className="h-5 w-5" strokeWidth={2} aria-hidden />}
           </button>
+          ) : null}
         </div>
 
         {/* Loading overlay */}
