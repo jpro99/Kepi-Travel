@@ -124,7 +124,6 @@ export function LiveMapPage() {
     coachMode,
     journeyPhase,
     hotelLabel,
-    travelDayFlightLabel,
   } = useActiveFlight();
   const [mapView, setMapView] = useState<"family" | "airport">(() => (preferAirportView ? "airport" : "family"));
   const mapEl = useRef<HTMLDivElement>(null);
@@ -1017,19 +1016,10 @@ export function LiveMapPage() {
           className={`absolute inset-0 z-0 h-full w-full bg-[#dbeafe] ${mapView === "airport" ? "opacity-0 pointer-events-none" : ""}`}
         />
 
-        {mapView === "airport" && navFlight && travelDayFlightLabel ? (
-          <div
-            className="pointer-events-none absolute inset-x-0 top-0 z-[45] px-3 pt-[max(0.5rem,env(safe-area-inset-top))]"
-          >
-            <div className="mx-auto max-w-lg rounded-2xl border border-white/20 bg-[#0b1f3a]/88 px-4 py-2.5 backdrop-blur-md shadow-lg">
-              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-sky-200/90">Today</p>
-              <p className="text-[15px] font-semibold text-white">{travelDayFlightLabel}</p>
-              <p className="text-[12px] text-sky-100/80">
-                {navIata ? `Airport guide · ${navIata}` : "Airport guide"}
-              </p>
-            </div>
-          </div>
-        ) : null}
+        {/* No separate "Today" flight banner here — AirportNavigatorMap already
+            renders its own flight/gate hero card at the top of the map, and a
+            second copy at a higher z-index was stacking directly over it (and
+            over the back button below), duplicating the same info. */}
 
         {/* Airport Navigator overlay — preview anytime; live navigation at geofence */}
         {mapView === "airport" && navFlight && (

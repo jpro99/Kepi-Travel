@@ -289,6 +289,9 @@ interface AirportDestinationRailProps {
   credentials: TravelerSecurityCredentials;
   hasApproximatePosition: boolean;
   onPoiClick: (poiId: string) => void;
+  /** Collapsed by default — the map is the primary surface. Expand to browse. */
+  open: boolean;
+  onToggle: () => void;
 }
 
 function AirportDestinationRail({
@@ -300,6 +303,8 @@ function AirportDestinationRail({
   credentials,
   hasApproximatePosition,
   onPoiClick,
+  open,
+  onToggle,
 }: AirportDestinationRailProps) {
   const [detailMode, setDetailMode] = useState<AirportDetailMode>("essentials");
   const hasAirlineCheckin = layout.pois.some((definition) =>
@@ -311,15 +316,44 @@ function AirportDestinationRail({
     airportPoiIsVisible(definition, detailMode, airlineName, gatePoiId, hasAirlineCheckin),
   );
 
+  // Collapsed: a single small chip. The full destinations list used to be
+  // permanently docked here, eating ~80% of screen height on every airport
+  // with a Kepi layout — that's why the map underneath was nearly invisible.
+  // Now it opens on demand and gives the map its space back by default.
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={onToggle}
+        data-testid="airport-nav-where-to-chip"
+        aria-label={selectedPoiId ? "Choose another stop" : "Where to?"}
+        className="absolute right-3 top-36 z-[25] flex items-center gap-1.5 rounded-full bg-black/55 px-4 py-2.5 text-[13px] font-bold text-white shadow-lg backdrop-blur-md active:scale-[0.98]"
+      >
+        <span aria-hidden>🔎</span>
+        {selectedPoiId ? "Choose another stop" : "Where to?"}
+      </button>
+    );
+  }
+
   return (
     <section
       aria-label="Airport destinations"
       className="absolute bottom-24 right-2 top-36 z-[25] flex w-[42%] max-w-[190px] flex-col overflow-hidden rounded-[22px] bg-white/95 p-2.5 shadow-2xl backdrop-blur-md sm:right-4 sm:w-52 sm:max-w-none"
     >
       <div>
-        <p className="text-[15px] font-black leading-tight text-[#0b1f3a]">
-          {selectedPoiId ? "Choose another stop" : "Where to?"}
-        </p>
+        <div className="flex items-start justify-between gap-1">
+          <p className="text-[15px] font-black leading-tight text-[#0b1f3a]">
+            {selectedPoiId ? "Choose another stop" : "Where to?"}
+          </p>
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-label="Close destinations"
+            className="-mr-1 -mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[13px] font-bold text-slate-600"
+          >
+            ✕
+          </button>
+        </div>
         <div className="mt-1.5 flex flex-wrap gap-1">
           <span className="rounded-full bg-sky-100 px-2 py-1 text-[9px] font-black text-sky-800">
             {credentials.known
@@ -939,6 +973,9 @@ export function AirportNavigatorMap({
   const [expanded, setExpanded] = useState(false);
   const autoPoppedRef = useRef(false);
   const [heroOpen, setHeroOpen] = useState(true);
+  // "Where to?" destinations rail — collapsed by default so the live map is
+  // visible instead of being squeezed behind a permanently-docked side panel.
+  const [railOpen, setRailOpen] = useState(false);
   useEffect(() => {
     if (previewMode && fill) {
       setExpanded(true);
@@ -2483,7 +2520,10 @@ export function AirportNavigatorMap({
       {previewMode ? (
         <div
           className="pointer-events-none absolute left-3 right-3 z-20 rounded-2xl border border-sky-400/30 bg-sky-950/80 px-3 py-2 backdrop-blur-md"
-          style={{ top: fill ? "max(4.5rem, calc(env(safe-area-inset-top) + 4rem))" : "3.25rem" }}
+          /* fill mode renders under LiveMapPage's own Airport/Family pill toggle
+             (external, ~6.2rem tall including its top offset) — clear it, or
+             this banner's top line gets covered/cut off, as on the airport tab. */
+          style={{ top: fill ? "max(6.75rem, calc(env(safe-area-inset-top) + 6.25rem))" : "3.25rem" }}
         >
           <p className="text-[11px] font-bold uppercase tracking-wide text-sky-200">Explore before you go</p>
           <p className="text-[11px] leading-snug text-sky-100/90">
@@ -2500,7 +2540,10 @@ export function AirportNavigatorMap({
       ) : !preciseRouteEnabled && layout ? (
         <div
           className="pointer-events-none absolute left-3 right-3 z-20 rounded-2xl border border-amber-400/30 bg-amber-950/70 px-3 py-1.5 backdrop-blur-md"
-          style={{ top: fill ? "max(4.5rem, calc(env(safe-area-inset-top) + 4rem))" : "3.25rem" }}
+          /* fill mode renders under LiveMapPage's own Airport/Family pill toggle
+             (external, ~6.2rem tall including its top offset) — clear it, or
+             this banner's top line gets covered/cut off, as on the airport tab. */
+          style={{ top: fill ? "max(6.75rem, calc(env(safe-area-inset-top) + 6.25rem))" : "3.25rem" }}
         >
           <p className="text-[11px] leading-snug text-amber-100/90">
             Terminal guide · pins approximate · follow airport signs
@@ -2517,7 +2560,12 @@ export function AirportNavigatorMap({
           selectedPoiId={selectedPoiId ?? pendingPoiId ?? activeRoute?.toPoiId ?? null}
           credentials={credentials}
           hasApproximatePosition={!previewMode && Boolean(snapped)}
-          onPoiClick={handlePoiTap}
+          open={railOpen}
+          onToggle={() => setRailOpen((wasOpen) => !wasOpen)}
+          onPoiClick={(poiId) => {
+            handlePoiTap(poiId);
+            setRailOpen(false);
+          }}
         />
       ) : null}
 
