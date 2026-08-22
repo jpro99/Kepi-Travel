@@ -6,10 +6,20 @@ import {
   sendOnlineCheckInAlert,
   sendPreFlightAlert,
   sendHotelCheckoutAlert,
+  sendNotNearAirportCheckIn,
+  sendArrivalLocationMismatchAlert,
 } from "@/lib/travelAssistant/pushNotificationService";
 import { getPackingCompletionPercent, getPackingList } from "@/lib/travelAssistant/packingStore";
-import { kvStoreSetNx } from "@/lib/travelAssistant/kvStore";
+import { kvStoreGet, kvStoreSetNx } from "@/lib/travelAssistant/kvStore";
 import { listTrips } from "@/lib/travelAssistant/tripStore";
+import { getAirportByIata, distanceKm } from "@/lib/travelAssistant/airportGeo";
+import { FAMILY_LOCATION_KEY, type StoredFamilyLocation } from "@/lib/family/persistFamilyLocation";
+
+const JOURNEY_CHECKINS_PREF_KEY = "journey-checkins";
+/** Location older than this is not trusted as "current" — never alert on stale data. */
+const LOCATION_FRESHNESS_MS = 45 * 60_000;
+/** Buffer beyond the airport's own outer geofence radius before flagging "not near". */
+const AIRPORT_PROXIMITY_BUFFER_KM = 10;
 
 const USER_NAMESPACE_KEY_PATTERN = /^kepi:([^:]+):/u;
 const DEFAULT_USER_SCAN_LIMIT = 1000;
@@ -71,20 +81,37 @@ export const travelDayPushScheduler = inngest.createFunction(
         status: "kv-unconfigured" as const,
         discoveredUsers: 0,
         packingReminderPushesSent: 0,
+        journeyCheckInPushesSent: 0,
       };
     }
 
     const userIds = await step.run("discover-users-with-trips", async () => discoverUsersWithTrips());
     if (userIds.length === 0) {
-      return { status: "idle" as const, discoveredUsers: 0, packingReminderPushesSent: 0 };
+      return {
+        status: "idle" as const,
+        discoveredUsers: 0,
+        packingReminderPushesSent: 0,
+        journeyCheckInPushesSent: 0,
+      };
     }
 
     const now = new Date();
 
     const summary = await step.run("dispatch-travel-day-pushes", async () => {
       let packingReminderPushesSent = 0;
+      let journeyCheckInPushesSent = 0;
 
       for (const userId of userIds) {
+        // Separate opt-in from family sharing — never run location checks
+        // for a user who hasn't explicitly turned this on.
+        const journeyCheckInsEnabled = (await kvStoreGet<boolean>(JOURNEY_CHECKINS_PREF_KEY, { userId })) === true;
+        const lastKnownLocation = journeyCheckInsEnabled
+          ? await kvStoreGet<StoredFamilyLocation>(FAMILY_LOCATION_KEY(userId), { userId })
+          : null;
+        const hasFreshLocation =
+          lastKnownLocation != null &&
+          now.getTime() - Date.parse(lastKnownLocation.updatedAt) <= LOCATION_FRESHNESS_MS;
+
         const trips = await listTrips(userId);
         for (const trip of trips) {
           const reservationDepartureCandidates = trip.reservations
@@ -166,6 +193,62 @@ export const travelDayPushScheduler = inngest.createFunction(
                 await sendOnlineCheckInAlert(userId, flightNum, depDate);
               }
             }
+
+            // Journey check-in: by 60-90 min before departure you should be
+            // AT the airport. Only fires on positive, fresh evidence you're
+            // not — never on missing/stale location (that's "we don't know,"
+            // not "something's wrong").
+            if (journeyCheckInsEnabled && hasFreshLocation && hoursUntilFlight > 1 && hoursUntilFlight <= 1.5) {
+              const departureAirport = getAirportByIata(flight.flightDepartureAirport);
+              if (departureAirport && lastKnownLocation) {
+                const km = distanceKm(
+                  lastKnownLocation.lat,
+                  lastKnownLocation.lon,
+                  departureAirport.lat,
+                  departureAirport.lon,
+                );
+                if (km > departureAirport.radiusKm + AIRPORT_PROXIMITY_BUFFER_KM) {
+                  const dedupeKey = `journey-checkin/not-near-airport/${flight.id}/${depDate}`;
+                  const firstSend = await kvStoreSetNx(dedupeKey, now.toISOString(), { userId });
+                  if (firstSend) {
+                    const sent = await sendNotNearAirportCheckIn(userId, flightNum, Math.round(hoursUntilFlight * 60));
+                    if (sent) journeyCheckInPushesSent += 1;
+                  }
+                }
+              }
+            }
+
+            // Journey check-in: well after scheduled landing, confirm we
+            // can see you near the arrival airport. Only runs when the
+            // parser actually captured a real arrival time — never
+            // estimated, per this app's "never invent" rule for arrival
+            // timing (see journeyPhase.ts).
+            const arrivalTimeRaw = flight.flightArrivalTime?.trim();
+            if (journeyCheckInsEnabled && hasFreshLocation && arrivalTimeRaw) {
+              const arrivalMs = Date.parse(arrivalTimeRaw.replace(" ", "T"));
+              if (!Number.isNaN(arrivalMs)) {
+                const hoursSinceArrival = (now.getTime() - arrivalMs) / 3_600_000;
+                if (hoursSinceArrival > 1.5 && hoursSinceArrival <= 3) {
+                  const arrivalAirport = getAirportByIata(flight.flightArrivalAirport);
+                  if (arrivalAirport && lastKnownLocation) {
+                    const km = distanceKm(
+                      lastKnownLocation.lat,
+                      lastKnownLocation.lon,
+                      arrivalAirport.lat,
+                      arrivalAirport.lon,
+                    );
+                    if (km > arrivalAirport.radiusKm + AIRPORT_PROXIMITY_BUFFER_KM * 3) {
+                      const dedupeKey = `journey-checkin/arrival-mismatch/${flight.id}`;
+                      const firstSend = await kvStoreSetNx(dedupeKey, now.toISOString(), { userId });
+                      if (firstSend) {
+                        const sent = await sendArrivalLocationMismatchAlert(userId, flightNum, arrivalAirport.name);
+                        if (sent) journeyCheckInPushesSent += 1;
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
 
           // Hotel checkout reminder — morning of checkout day
@@ -187,13 +270,14 @@ export const travelDayPushScheduler = inngest.createFunction(
         }
       }
 
-      return { packingReminderPushesSent };
+      return { packingReminderPushesSent, journeyCheckInPushesSent };
     });
 
     return {
       status: "dispatched" as const,
       discoveredUsers: userIds.length,
       packingReminderPushesSent: summary.packingReminderPushesSent,
+      journeyCheckInPushesSent: summary.journeyCheckInPushesSent,
     };
   },
 );

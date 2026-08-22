@@ -269,3 +269,34 @@ export async function sendHotelCheckoutAlert(
     url: "/travel-assistant",
   });
 }
+
+// ── Journey check-ins (opt-in, separate from family sharing) ───────────────
+// Only sent when we have positive, fresh location evidence of a mismatch —
+// never on missing/stale/no-permission data. See travelDayPushScheduler.ts.
+
+export async function sendNotNearAirportCheckIn(
+  userId: string,
+  flightNumber: string,
+  minutesUntilLeaveBy: number,
+): Promise<boolean> {
+  return sendPushNotification(userId, {
+    title: `You may be running late — ${flightNumber}`,
+    body:
+      minutesUntilLeaveBy > 0
+        ? `Your location doesn't look close to the airport and you should be leaving in about ${minutesUntilLeaveBy} minutes. All good?`
+        : `Your location doesn't look close to the airport and you should already be on your way. All good?`,
+    url: "/travel-assistant",
+  });
+}
+
+export async function sendArrivalLocationMismatchAlert(
+  userId: string,
+  flightNumber: string,
+  destinationLabel: string,
+): Promise<boolean> {
+  return sendPushNotification(userId, {
+    title: `Did you land OK? — ${flightNumber}`,
+    body: `We can't confirm your location near ${destinationLabel} yet, well after your scheduled landing. Open Kepi to update your status.`,
+    url: "/travel-assistant",
+  });
+}

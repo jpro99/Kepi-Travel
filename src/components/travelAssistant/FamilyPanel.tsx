@@ -37,6 +37,12 @@ import {
   ensureDefaultFamilySharingOn,
   isFamilySharingActive,
 } from "@/lib/family/locationSharingPrefs";
+import {
+  isJourneyCheckInActive,
+  setJourneyCheckInActive,
+  dispatchJourneyCheckInStarted,
+  dispatchJourneyCheckInStopped,
+} from "@/lib/family/journeyCheckInPrefs";
 
 function timeAgo(iso: string): string {
   const d = Math.floor((Date.now() - Date.parse(iso)) / 60_000);
@@ -97,6 +103,44 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
   const [sharingLocation, setSharingLocation] = useState(true);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [maptilerKey, setMaptilerKey] = useState("");
+
+  // ── Journey check-ins — separate opt-in, off by default, not shared with
+  // anyone. Lets Kepi compare your own location to your itinerary and nudge
+  // you (e.g. "you're not near the airport and should be leaving soon").
+  const [journeyCheckIns, setJourneyCheckIns] = useState(false);
+  const [journeyCheckInsBusy, setJourneyCheckInsBusy] = useState(false);
+
+  useEffect(() => {
+    setJourneyCheckIns(isJourneyCheckInActive());
+    void fetch("/api/preferences/journey-checkins", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { enabled?: boolean } | null) => {
+        if (data && typeof data.enabled === "boolean") {
+          setJourneyCheckIns(data.enabled);
+          setJourneyCheckInActive(data.enabled);
+        }
+      })
+      .catch(() => null);
+  }, []);
+
+  const toggleJourneyCheckIns = useCallback(() => {
+    const next = !journeyCheckIns;
+    setJourneyCheckIns(next);
+    setJourneyCheckInActive(next);
+    if (next) {
+      dispatchJourneyCheckInStarted();
+    } else {
+      dispatchJourneyCheckInStopped();
+    }
+    setJourneyCheckInsBusy(true);
+    void fetch("/api/preferences/journey-checkins", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: next }),
+    })
+      .catch(() => null)
+      .finally(() => setJourneyCheckInsBusy(false));
+  }, [journeyCheckIns]);
 
   useEffect(() => {
     void fetch("/api/config", { cache: "no-store" })
@@ -414,6 +458,41 @@ export function FamilyPanel({ isPremium, onUpgrade }: FamilyPanelProps) {
               <li>When asked, Allow → then Settings → Kepi Travel → Location → <strong>Always</strong> + <strong>Precise Location</strong></li>
               <li>Tap Start sharing once. She should not have to approve again.</li>
             </ul>
+          </div>
+        )}
+      </div>
+
+      {/* ── Journey check-ins — separate from family sharing, nobody else sees this ── */}
+      <div className="rounded-3xl bg-white dark:bg-slate-900 ring-1 ring-black/[0.06] dark:ring-white/[0.08] shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 gap-3">
+          <div>
+            <p className="font-bold text-base text-slate-900 dark:text-white">
+              🧭 Journey check-ins
+            </p>
+            <p className="text-xs mt-0.5 text-slate-500 dark:text-slate-400">
+              Kepi watches your own location against your itinerary — not shared with family or anyone else. Off by default.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={toggleJourneyCheckIns}
+            disabled={journeyCheckInsBusy}
+            className={`shrink-0 rounded-2xl px-4 py-2.5 text-sm font-bold transition disabled:opacity-60 ${
+              journeyCheckIns
+                ? "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white"
+                : "bg-[#007AFF] text-white"
+            }`}
+          >
+            {journeyCheckIns ? "Turn off" : "Turn on"}
+          </button>
+        </div>
+        {journeyCheckIns && (
+          <div className="mx-4 mb-4 rounded-2xl bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+            <p>
+              Nudges you if you&apos;re not near the airport when it&apos;s time to leave, or if we can&apos;t
+              confirm you&apos;ve actually arrived after landing. Only fires when your location clearly
+              disagrees with your plan — never guesses when location isn&apos;t available.
+            </p>
           </div>
         )}
       </div>

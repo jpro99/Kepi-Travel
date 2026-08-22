@@ -1,4 +1,5 @@
 import { isFamilySharingActive } from "@/lib/family/locationSharingPrefs";
+import { isJourneyCheckInActive } from "@/lib/family/journeyCheckInPrefs";
 import { isNative } from "@/lib/native/platform";
 
 type KepiLocationBridge = {
@@ -23,7 +24,10 @@ export function isNativeAlwaysLocationAvailable(): boolean {
 export async function syncNativeAlwaysLocation(): Promise<void> {
   const bridge = nativeBridge();
   if (!bridge) return;
-  if (!isFamilySharingActive()) {
+  // Either consent independently keeps the tracker running — sharing with
+  // family and self journey check-ins are separate opt-ins, and stopping
+  // one must not silently kill location for whichever one is still active.
+  if (!isFamilySharingActive() && !isJourneyCheckInActive()) {
     bridge.postMessage({ action: "stop" });
     return;
   }

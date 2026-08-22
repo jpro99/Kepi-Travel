@@ -2084,14 +2084,19 @@ export default function TravelAssistantPage() {
     // Persistent family sharing — default on until user explicitly stops
     if (isFamilySharingActive()) {
       startPersistentFamilyLocationWatch();
-      void syncNativeAlwaysLocation();
     }
+    // Native "always" tracker serves both family sharing AND journey
+    // check-ins — sync unconditionally so a journey-check-ins-only user
+    // (no family sharing) still gets it started on mount.
+    void syncNativeAlwaysLocation();
 
     // Burst a fresh GPS fix when returning from lock screen / background
     const onVisible = () => {
-      if (document.visibilityState === "visible" && isFamilySharingActive()) {
-        startPersistentFamilyLocationWatch();
-        burstFamilyLocationFix();
+      if (document.visibilityState === "visible") {
+        if (isFamilySharingActive()) {
+          startPersistentFamilyLocationWatch();
+          burstFamilyLocationFix();
+        }
         void syncNativeAlwaysLocation();
       }
     };
@@ -2108,11 +2113,24 @@ export default function TravelAssistantPage() {
     window.addEventListener("kepi:family-start-sharing", onStart);
     window.addEventListener("kepi:family-stop-sharing", onStop);
 
+    // Journey check-ins is a separate opt-in from family sharing (native
+    // "always" tracking only — see FamilyPanel's journeyCheckInPrefs
+    // toggle). Re-sync rather than force stop/start: syncNativeAlwaysLocation
+    // already ORs both consents, so toggling one off while the other is
+    // still on must not kill tracking either flag still wants running.
+    const onJourneyCheckInChange = () => {
+      void syncNativeAlwaysLocation();
+    };
+    window.addEventListener("kepi:journey-checkin-start", onJourneyCheckInChange);
+    window.addEventListener("kepi:journey-checkin-stop", onJourneyCheckInChange);
+
     return () => {
       setFamilyLocationSender(null);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("kepi:family-start-sharing", onStart);
       window.removeEventListener("kepi:family-stop-sharing", onStop);
+      window.removeEventListener("kepi:journey-checkin-start", onJourneyCheckInChange);
+      window.removeEventListener("kepi:journey-checkin-stop", onJourneyCheckInChange);
       if (guidanceGpsWatchRef.current !== null) {
         navigator.geolocation.clearWatch(guidanceGpsWatchRef.current);
         guidanceGpsWatchRef.current = null;
