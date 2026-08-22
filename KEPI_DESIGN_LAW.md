@@ -532,6 +532,18 @@ Arrivals (`customs` / `baggage_claim` / `ground_transport` — added 2026-08-21,
 
 **Test:** `src/lib/airportNav/journeyMachine.test.ts`, `src/lib/airportNav/layouts/laxNodeContainment.test.ts`, `src/lib/airportNav/pathfinder.test.ts`
 
+**M41 — Arrivals coverage is a demand-driven curation dimension, independent of departures**
+`AirportCurationRequest.arrivalsStatus`/`arrivalsDemandCount` track whether an airport has customs/
+baggage/ground-transport coverage (`hasArrivalsCoverage`) separately from its departure `status` —
+an airport (LAX) can be fully curated for departures and still show zero arrivals coverage; folding
+the two into one status would hide that gap. `GET /api/airport-nav/[iata]/layout` records arrivals
+demand whenever a real request resolves a layout missing those nodes, same 5-minute dedup as
+departure demand, never altering the response. This is a queue-entry signal only — it never
+fabricates coverage or auto-publishes; admin still moves `arrivalsStatus` through
+requested → draft → published by hand, same verify-first bar as everything else in this section.
+
+**Test:** `src/lib/airportNav/airportCurationQueue.test.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -1048,5 +1060,6 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | D21, M14 | `src/lib/airportNav/airportCurationQueue.test.ts` |
 | N1 | `src/lib/neuro/neuroLoop.test.ts` |
 | M40 | `src/lib/airportNav/journeyMachine.test.ts` |
+| M41 | `src/lib/airportNav/airportCurationQueue.test.ts` |
 
 New laws must add a row here when a test exists.

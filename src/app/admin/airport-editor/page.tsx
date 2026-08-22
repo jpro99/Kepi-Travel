@@ -21,6 +21,9 @@ interface AirportCurationRequest {
     airportName: string;
     status: 'requested' | 'draft' | 'published' | 'dismissed';
     demandCount: number;
+    /** Arrivals coverage, tracked independently from `status` (M40 follow-up). */
+    arrivalsStatus?: 'requested' | 'draft' | 'published' | 'dismissed';
+    arrivalsDemandCount?: number;
     firstRequestedAt: string;
     lastRequestedAt: string;
     officialMapUrl: string | null;
@@ -735,6 +738,14 @@ export default function AirportEditorPage() {
                                             ? ` · rev ${request.linkedPackageRevision}`
                                             : ''}
                                     </p>
+                                    {request.arrivalsStatus ? (
+                                        <p className="mt-1 text-xs font-bold text-purple-700">
+                                            Arrivals: {request.arrivalsStatus}
+                                            {typeof request.arrivalsDemandCount === 'number'
+                                                ? ` · demand ${request.arrivalsDemandCount}`
+                                                : ''}
+                                        </p>
+                                    ) : null}
                                     {request.needsReverification ? (
                                         <p className="mt-1 text-xs font-bold text-amber-700">
                                             Needs re-verification

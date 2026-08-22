@@ -3,12 +3,27 @@ import { getAirportNav } from "@/lib/travelAssistant/airportNavigation";
 import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 import { getStoredAirportLayoutPackage, bundledSource } from "@/lib/airportNav/airportLayoutStore";
 import { getAirportLayout } from "@/lib/airportNav/getLayout";
+import type { AirportLayout } from "@/lib/airportNav/types";
 import {
   isLayoutStale,
   layoutStalenessStatus,
   stalenessLabel,
   type LayoutStalenessStatus,
 } from "@/lib/airportNav/layoutStaleness";
+
+/**
+ * M40 follow-up (2026-08-21) — arrivals is a second, independently-tracked
+ * demand dimension, not folded into the existing departure `status`. LAX had
+ * departure curation for weeks before anyone could tell arrivals coverage was
+ * still missing; that gap is exactly what this catches, driven by real
+ * traveler/trip demand instead of picking airports speculatively.
+ */
+const ARRIVALS_NODE_KINDS = new Set(["customs", "baggage_claim", "ground_transport"]);
+
+/** True once a layout has ANY arrivals-side node — existence, not verification. */
+export function hasArrivalsCoverage(layout: Pick<AirportLayout, "nodes">): boolean {
+  return layout.nodes.some((node) => ARRIVALS_NODE_KINDS.has(node.kind));
+}
 
 const AIRPORT_LAYOUT_NAMESPACE = "__global_airport_layouts__";
 const CURATION_KEY_PREFIX = "airport-curation:v1:";
@@ -21,6 +36,17 @@ export interface AirportCurationRequest {
   airportName: string;
   status: AirportCurationStatus;
   demandCount: number;
+  /**
+   * Arrivals coverage (customs/baggage_claim/ground_transport), tracked
+   * independently from `status` (departures). Absent = never flagged missing
+   * — either the layout already has arrivals nodes, or no one has hit the
+   * gap yet. Same requested → draft → published → dismissed lifecycle,
+   * managed via `setArrivalsCurationStatus`.
+   */
+  arrivalsStatus?: AirportCurationStatus;
+  arrivalsDemandCount?: number;
+  arrivalsFirstRequestedAt?: string;
+  arrivalsLastRequestedAt?: string;
   firstRequestedAt: string;
   lastRequestedAt: string;
   officialMapUrl: string | null;
@@ -49,6 +75,8 @@ export function buildNextAirportCurationRequest(input: {
   existing?: AirportCurationRequest | null;
   now?: Date;
   detectedBy?: string;
+  /** True when the caller found a layout with no customs/baggage/ground-transport nodes. */
+  arrivalsMissing?: boolean;
 }): AirportCurationRequest {
   const iata = input.iata.trim().toUpperCase();
   if (!/^[A-Z]{3}$/.test(iata)) throw new Error("Invalid airport IATA code");
@@ -68,6 +96,22 @@ export function buildNextAirportCurationRequest(input: {
     ...(detectedBySource ? [detectedBySource] : []),
   ])].slice(0, MAX_DETECTED_BY_SOURCES);
 
+  // Arrivals dimension: same sticky-status + 5-minute-dedup shape as departures,
+  // but only tracked once something actually flags the gap (arrivalsMissing).
+  const arrivalsLastMs = existing?.arrivalsLastRequestedAt
+    ? Date.parse(existing.arrivalsLastRequestedAt)
+    : Number.NaN;
+  const arrivalsShouldIncrement =
+    !existing?.arrivalsLastRequestedAt
+    || !Number.isFinite(arrivalsLastMs)
+    || now.getTime() - arrivalsLastMs >= 5 * 60_000;
+  const arrivalsStatus =
+    existing?.arrivalsStatus === "draft" || existing?.arrivalsStatus === "published"
+      ? existing.arrivalsStatus
+      : input.arrivalsMissing
+        ? "requested"
+        : existing?.arrivalsStatus;
+
   return {
     iata,
     airportName: airport?.name ?? `${iata} Airport`,
@@ -76,6 +120,14 @@ export function buildNextAirportCurationRequest(input: {
         ? existing.status
         : "requested",
     demandCount: (existing?.demandCount ?? 0) + (shouldIncrement ? 1 : 0),
+    arrivalsStatus,
+    arrivalsDemandCount: input.arrivalsMissing
+      ? (existing?.arrivalsDemandCount ?? 0) + (arrivalsShouldIncrement ? 1 : 0)
+      : existing?.arrivalsDemandCount,
+    arrivalsFirstRequestedAt: input.arrivalsMissing
+      ? (existing?.arrivalsFirstRequestedAt ?? nowIso)
+      : existing?.arrivalsFirstRequestedAt,
+    arrivalsLastRequestedAt: input.arrivalsMissing ? nowIso : existing?.arrivalsLastRequestedAt,
     firstRequestedAt: existing?.firstRequestedAt ?? nowIso,
     lastRequestedAt: nowIso,
     officialMapUrl: officialMap?.url ?? null,
@@ -111,7 +163,7 @@ async function writeCurationRequest(request: AirportCurationRequest): Promise<vo
 
 export async function recordAirportCurationDemand(
   iata: string,
-  options?: { detectedBy?: string },
+  options?: { detectedBy?: string; arrivalsMissing?: boolean },
 ): Promise<AirportCurationRequest> {
   const code = iata.trim().toUpperCase();
   const existing = await readCurationRequest(code);
@@ -119,6 +171,7 @@ export async function recordAirportCurationDemand(
     iata: code,
     existing,
     detectedBy: options?.detectedBy ?? "layout-api",
+    arrivalsMissing: options?.arrivalsMissing,
   });
   await writeCurationRequest(next);
   return next;
@@ -138,6 +191,24 @@ export async function setAirportCurationStatus(
     ...(options?.linkedPackageRevision !== undefined
       ? { linkedPackageRevision: options.linkedPackageRevision }
       : {}),
+    ...(options?.notes !== undefined ? { notes: options.notes } : {}),
+  };
+  await writeCurationRequest(next);
+  return next;
+}
+
+/** Same admin lifecycle as setAirportCurationStatus, for the arrivals dimension. */
+export async function setArrivalsCurationStatus(
+  iata: string,
+  arrivalsStatus: AirportCurationStatus,
+  options?: { notes?: string },
+): Promise<AirportCurationRequest> {
+  const code = iata.trim().toUpperCase();
+  const existing = await readCurationRequest(code);
+  const base = existing ?? buildNextAirportCurationRequest({ iata: code, arrivalsMissing: true });
+  const next: AirportCurationRequest = {
+    ...base,
+    arrivalsStatus,
     ...(options?.notes !== undefined ? { notes: options.notes } : {}),
   };
   await writeCurationRequest(next);

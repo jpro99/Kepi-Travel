@@ -3,7 +3,29 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-21 (LAX arrivals nav pilot — draft, dormant pending coachMode wiring)
+Last updated: 2026-08-22 (arrivals demand tracked as its own curation dimension)
+
+## Decision 2026-08-22 — Arrivals coverage is a second, demand-driven curation dimension
+
+**Why Jeff asked:** after the LAX arrivals pilot, asked whether this scales to "all airports as
+people put in their travels." Answer: not by building every airport upfront — by extending the
+existing demand-driven queue (`airportCurationQueue.ts`, already live since 2026-07-13) to track
+arrivals coverage separately from departures, so real trip demand (not guesswork) decides which
+airport gets arrivals-curated next.
+
+**Shipped:** `AirportCurationRequest` gained `arrivalsStatus` / `arrivalsDemandCount` (same
+requested → draft → published → dismissed lifecycle as the existing departure `status`, tracked
+independently). `hasArrivalsCoverage(layout)` checks for any `customs` / `baggage_claim` /
+`ground_transport` node. Wired into `GET /api/airport-nav/[iata]/layout`: every time a real
+request resolves a layout that lacks arrivals nodes, it queues arrivals demand for that airport
+(`layout-api-arrivals-gap`) — same 5-minute dedup as departures, never fabricates coverage, never
+changes the response. Admin queue UI (`airport-editor`) surfaces an "Arrivals: requested · demand
+N" badge so the gap is visible, not silent. New `setArrivalsCurationStatus` lets admin move an
+airport's arrivals through the lifecycle independently of its departure status.
+
+**Still true, unchanged by this:** human verification before publish is still mandatory (2026-07-15
+narrow-scope decision) — this makes Kepi build the *right* airports in the *right order*, driven by
+real demand instead of speculation. It does not make curation automatic or remove the review step.
 
 ## Decision 2026-08-21 — Second live-nav pilot is LAX **arrivals-only**, not a full second airport
 

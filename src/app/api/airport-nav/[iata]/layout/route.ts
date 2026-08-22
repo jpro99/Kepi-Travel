@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { recordAirportCurationDemand } from "@/lib/airportNav/airportCurationQueue";
+import { hasArrivalsCoverage, recordAirportCurationDemand } from "@/lib/airportNav/airportCurationQueue";
 import { resolvePublishedAirportLayout } from "@/lib/airportNav/airportLayoutStore";
 
 type Params = { params: Promise<{ iata: string }> };
@@ -20,7 +20,8 @@ export async function GET(_request: Request, { params }: Params) {
   const resolved = await resolvePublishedAirportLayout(iata);
   const layout = resolved.layout;
   if (!layout) {
-    const curation = await recordAirportCurationDemand(iata);
+    // No layout at all — obviously no arrivals coverage either.
+    const curation = await recordAirportCurationDemand(iata, { arrivalsMissing: true });
     return NextResponse.json(
       {
         error: "No curated layout for this airport yet",
@@ -30,6 +31,18 @@ export async function GET(_request: Request, { params }: Params) {
       },
       { status: 404 },
     );
+  }
+
+  // Real trip demand for this airport just showed up (via this request) — if
+  // its layout has no customs/baggage/ground-transport nodes yet, that's a
+  // second, independent curation gap worth queuing (M40 follow-up). Doesn't
+  // change the response; the honest fallback for arrivals stays whatever it
+  // already is elsewhere.
+  if (!hasArrivalsCoverage(layout)) {
+    await recordAirportCurationDemand(iata, {
+      detectedBy: "layout-api-arrivals-gap",
+      arrivalsMissing: true,
+    });
   }
 
   return NextResponse.json(layout, {
