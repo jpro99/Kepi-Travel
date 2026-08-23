@@ -7,7 +7,8 @@ import {
   nextFlightShowsStatusChrome,
   shouldAutoCheckNextFlightStatus,
   showFlightSearchLauncherAtTop,
-  showNextFlightAirportMapCta,
+  showFlightArrivalAirportMapCta,
+  showFlightDepartureAirportMapCta,
 } from "@/lib/travelAssistant/flightBookLead";
 
 test("flightBookLeadMode prefers booked itinerary over search", () => {
@@ -25,17 +26,29 @@ test("showFlightSearchLauncherAtTop only when empty, never while search is open"
   assert.equal(showFlightSearchLauncherAtTop("itinerary", false), false);
 });
 
-test("showNextFlightAirportMapCta is one tap on the next departure, not 48h-gated", () => {
+test("showFlightDepartureAirportMapCta on any upcoming leg", () => {
   assert.equal(
-    showNextFlightAirportMapCta({ hasNextFlight: true, departureIata: "BRI" }),
+    showFlightDepartureAirportMapCta({ isPast: false, departureIata: "ONT" }),
+    true,
+  );
+  assert.equal(showFlightDepartureAirportMapCta({ isPast: true, departureIata: "ONT" }), false);
+});
+
+test("showFlightArrivalAirportMapCta when arrival differs from departure", () => {
+  assert.equal(
+    showFlightArrivalAirportMapCta({
+      isPast: false,
+      departureIata: "SEA",
+      arrivalIata: "FCO",
+    }),
     true,
   );
   assert.equal(
-    showNextFlightAirportMapCta({ hasNextFlight: true, departureIata: "  " }),
-    false,
-  );
-  assert.equal(
-    showNextFlightAirportMapCta({ hasNextFlight: false, departureIata: "SEA" }),
+    showFlightArrivalAirportMapCta({
+      isPast: false,
+      departureIata: "SEA",
+      arrivalIata: "SEA",
+    }),
     false,
   );
 });
