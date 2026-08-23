@@ -1650,6 +1650,8 @@ export function AirportNavigatorMap({
       throughSecurity,
       securityWaitSeconds: throughSecurity ? 0 : 12 * 60,
       currentStep,
+      arrivalAirport,
+      departureTimezone: flightTimezone,
     });
   }, [
     isArriveCoach,

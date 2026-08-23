@@ -296,6 +296,8 @@ export function AirportNavigatorFallback({
       throughSecurity: proximityStatus === "in-terminal",
       securityWaitSeconds: proximityStatus === "in-terminal" ? 0 : 12 * 60,
       currentStep,
+      arrivalAirport,
+      departureTimezone: flightTimezone,
     });
   }, [
     isArrive,
@@ -308,6 +310,7 @@ export function AirportNavigatorFallback({
     hotelLabel,
     minutesToDeparture,
     proximityStatus,
+    arrivalAirport,
   ]);
 
   const arrivalCoachCards = useMemo(() => {
