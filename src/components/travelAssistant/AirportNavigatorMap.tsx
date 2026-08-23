@@ -3025,7 +3025,7 @@ export function AirportNavigatorMap({
           style={{
             bottom: arrivalFirstMile ? `calc(${bottomPanel} + 4.75rem)` : bottomPanel,
           }}
-          className={`absolute inset-x-2 z-30 overflow-hidden rounded-[24px] bg-white/95 p-3 shadow-2xl backdrop-blur-md dark:bg-slate-900/95 sm:inset-x-3 ${
+          className={`absolute inset-x-2 z-[70] overflow-hidden rounded-[24px] bg-white/95 p-3 shadow-2xl backdrop-blur-md dark:bg-slate-900/95 sm:inset-x-3 ${
             showInstructions ? "max-h-[60dvh]" : "max-h-32"
           }`}
         >
