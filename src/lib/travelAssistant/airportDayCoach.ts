@@ -5,6 +5,7 @@
 
 import { resolveAirport } from "@/lib/airports/lookup";
 import { getAirportNav } from "@/lib/travelAssistant/airportNavigation";
+import { resolveArrivalTransportPresentation } from "@/lib/travelAssistant/arrivalTransportPresentation";
 import type { AirportLocationPhase } from "@/lib/travelAssistant/airportLocationPhase";
 import { departPhaseHomeTitle } from "@/lib/travelAssistant/airportLocationPhase";
 import type { HomeNextAction } from "@/lib/travelAssistant/homeNextAction";
@@ -74,21 +75,35 @@ export function selectDayCoachVisibleSteps<T>(
 export function resolveArrivalRideStep(input: {
   iata: string;
   hotelLabel?: string | null;
+  flightArrivalTime?: string | null;
+  flightTimezone?: string | null;
+  landedMinutesAgo?: number | null;
+  nowMs?: number;
   arrivalInfo?: {
     groundTransport?: string;
     rideStepTitle?: string;
     rideStepIcon?: string;
   } | null;
 }): Pick<DayCoachPathStep, "id" | "icon" | "text" | "detail"> {
+  const presentation = resolveArrivalTransportPresentation({
+    iata: input.iata,
+    flightArrivalTime: input.flightArrivalTime,
+    flightTimezone: input.flightTimezone,
+    landedMinutesAgo: input.landedMinutesAgo,
+    hotelLabel: input.hotelLabel,
+    nowMs: input.nowMs,
+  });
+
   const hotel = input.hotelLabel?.trim();
   const info = input.arrivalInfo;
   const defaultDetail =
+    presentation?.rideStepDetail ||
     info?.groundTransport ||
     "Open Uber or your booked transfer once you are landside.";
-  const icon = info?.rideStepIcon || "🚕";
-  const baseTitle = info?.rideStepTitle || (hotel ? `Ride / hotel — ${hotel}` : "Ride / hotel");
+  const icon = presentation?.rideStepIcon || info?.rideStepIcon || "🚕";
+  const baseTitle = presentation?.rideStepTitle || info?.rideStepTitle || (hotel ? `Ride / hotel — ${hotel}` : "Ride / hotel");
   const text =
-    hotel && info?.rideStepTitle
+    hotel && info?.rideStepTitle && !presentation?.rideStepTitle
       ? `${info.rideStepTitle}${hotel ? ` · then ${hotel}` : ""}`
       : baseTitle;
   return {
@@ -280,6 +295,10 @@ export interface ArrivalDayCoachInput {
   hotelLabel?: string | null;
   baggageCarouselNote?: string | null;
   baggageWalkMinutes?: number | null;
+  flightArrivalTime?: string | null;
+  flightTimezone?: string | null;
+  landedMinutesAgo?: number | null;
+  nowMs?: number;
 }
 
 /** Arrival path matching approved mockup (intl steps only when countries differ). */
@@ -348,6 +367,10 @@ export function buildArrivalDayCoachPath(input: ArrivalDayCoachInput): DayCoachP
     resolveArrivalRideStep({
       iata: code,
       hotelLabel: hotel,
+      flightArrivalTime: input.flightArrivalTime,
+      flightTimezone: input.flightTimezone,
+      landedMinutesAgo: input.landedMinutesAgo,
+      nowMs: input.nowMs,
       arrivalInfo: nav?.arrivalInfo,
     }),
   );

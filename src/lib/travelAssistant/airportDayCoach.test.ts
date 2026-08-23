@@ -180,6 +180,9 @@ test("FCO arrival ride step defaults to Leonardo Express, not Uber or metro", ()
     iata: "FCO",
     departureIata: "SEA",
     flightNumber: "AS 180",
+    flightArrivalTime: "2026-09-02T13:15:00",
+    landedMinutesAgo: 10,
+    nowMs: Date.parse("2026-09-02T11:25:00.000Z"),
   });
   const ride = steps.find((s) => s.id === "ride")!;
   assert.equal(ride.icon, "🚆");
@@ -198,6 +201,9 @@ test("resolveArrivalRideStep appends hotel after Leonardo default title", () => 
   const ride = resolveArrivalRideStep({
     iata: "FCO",
     hotelLabel: "Hotel de Russie",
+    flightArrivalTime: "2026-09-02T13:15:00",
+    landedMinutesAgo: 10,
+    nowMs: Date.parse("2026-09-02T11:25:00.000Z"),
     arrivalInfo: getAirportNav("FCO")?.arrivalInfo,
   });
   assert.match(ride.text, /Leonardo Express/i);

@@ -102,6 +102,8 @@ function buildCoachPathSteps(input: {
       arrivalTerminal: input.flight.flightArrivalTerminal,
       hotelLabel: input.hotelLabel,
       baggageCarouselNote: formatLiveBaggageCarouselNote(input.liveBaggage),
+      flightArrivalTime: input.flight.flightArrivalTime,
+      flightTimezone: input.flight.timezone,
     });
   }
 

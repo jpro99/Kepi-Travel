@@ -70,6 +70,8 @@ interface AirportNavigatorMapProps {
   hotelLabel?: string | null;
   hotelDropoff?: { label: string; lat: number; lon: number } | null;
   flightDate?: string | null;
+  flightArrivalTime?: string | null;
+  flightTimezone?: string | null;
   /** "in-terminal" auto-expands the map to full screen once (auto-pop). */
   proximityStatus?: string;
   /** Explore terminal layout before travel day — no live GPS routing. */
@@ -857,6 +859,8 @@ export function AirportNavigatorMap({
   hotelLabel = null,
   hotelDropoff = null,
   flightDate = null,
+  flightArrivalTime = null,
+  flightTimezone = null,
   proximityStatus = "away",
   previewMode = false,
   maptilerKey = "",
@@ -2464,6 +2468,8 @@ export function AirportNavigatorMap({
         hotelLabel={hotelLabel}
         hotelDropoff={hotelDropoff}
         flightDate={flightDate}
+        flightArrivalTime={flightArrivalTime}
+        flightTimezone={flightTimezone}
         proximityStatus={proximityStatus}
         userLat={userLat}
         userLon={userLon}

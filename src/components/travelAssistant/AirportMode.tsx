@@ -592,6 +592,8 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
             arrived.localTime?.trim()?.slice(0, 10) ||
             null
           }
+          flightArrivalTime={arrived.flightArrivalTime ?? null}
+          flightTimezone={arrived.timezone ?? null}
           flightStatusLabel="Landed"
           flightDelayed={false}
           proximityStatus={proximity.status}

@@ -6,12 +6,14 @@ interface ArrivalTransportOptionsCardProps {
   options: ArrivalTransportOption[];
   uberUrl?: string | null;
   hotelLabel?: string | null;
+  scheduleNote?: string | null;
 }
 
 export function ArrivalTransportOptionsCard({
   options,
   uberUrl,
   hotelLabel,
+  scheduleNote,
 }: ArrivalTransportOptionsCardProps) {
   if (options.length === 0) return null;
 
@@ -28,6 +30,14 @@ export function ArrivalTransportOptionsCard({
       </p>
       <p className="mt-1 text-lg font-black text-white">{primary.label}</p>
       <p className="mt-1 text-sm text-sky-100/85">{primary.detail}</p>
+      {scheduleNote ? (
+        <p
+          data-testid="arrival-transport-schedule-note"
+          className="mt-2 rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-100/90"
+        >
+          {scheduleNote}
+        </p>
+      ) : null}
       {primary.href ? (
         <a
           data-testid="arrival-transport-primary"
