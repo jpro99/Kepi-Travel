@@ -83,3 +83,43 @@ test("G19 Map tab leads with trip map; family is secondary; no emoji view chrome
   assert.doesNotMatch(live, /✈ Plan airport/);
   assert.doesNotMatch(desktopBar, /onMapTab/);
 });
+
+test("buildLiveAirportMapUrl pins trip and departure IATA for live-map deep links", () => {
+  const { buildLiveAirportMapUrl } = require("@/lib/travelAssistant/liveMapSession") as typeof import("@/lib/travelAssistant/liveMapSession");
+  const url = buildLiveAirportMapUrl({ tripId: "trip-europe", iata: "ont" });
+  assert.match(url, /view=airport/);
+  assert.match(url, /tripId=trip-europe/);
+  assert.match(url, /iata=ONT/);
+});
+
+test("selectFlightForDepartureIata prefers the pinned departure airport", () => {
+  const { selectFlightForDepartureIata } = require("@/lib/travelAssistant/useActiveFlight") as typeof import("@/lib/travelAssistant/useActiveFlight");
+  const now = Date.parse("2026-08-23T12:00:00Z");
+  const pick = selectFlightForDepartureIata(
+    [
+      {
+        id: "sea",
+        type: "flight",
+        title: "AS 180",
+        provider: "Alaska",
+        localTime: "2026-08-25 10:00",
+        location: "SEA",
+        flightDepartureAirport: "SEA",
+        flightArrivalAirport: "FCO",
+      },
+      {
+        id: "ont",
+        type: "flight",
+        title: "AS 123",
+        provider: "Alaska",
+        localTime: "2026-08-30 08:00",
+        location: "ONT",
+        flightDepartureAirport: "ONT",
+        flightArrivalAirport: "SEA",
+      },
+    ],
+    "ONT",
+    now,
+  );
+  assert.equal(pick?.f.flightDepartureAirport, "ONT");
+});

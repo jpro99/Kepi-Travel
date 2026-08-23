@@ -130,14 +130,44 @@ function isPlaceholderReservation(r: FlightReservation): boolean {
 }
 
 interface TripsResponse {
-  trips?: { reservations?: FlightReservation[] }[];
+  trips?: { id?: string; reservations?: FlightReservation[] }[];
+}
+
+export interface UseActiveFlightOptions {
+  /** Scope flight selection to one trip (live-map deep links). */
+  tripId?: string | null;
+  /** Prefer the departure airport from Map tab / flight CTA (e.g. ONT not SEA). */
+  preferredDepartureIata?: string | null;
+}
+
+/** Pick the best flight for a pinned departure IATA on this trip. */
+export function selectFlightForDepartureIata(
+  reservations: FlightReservation[],
+  iata: string,
+  nowMs: number,
+): ActiveFlight | null {
+  const code = iata.trim().toUpperCase();
+  if (!code) return null;
+  const graceMs = WINDOW_BEHIND_MIN * 60_000;
+  const candidates = reservations
+    .filter(
+      (r) =>
+        r.type === "flight" &&
+        r.flightDepartureAirport?.trim().toUpperCase() === code,
+    )
+    .map((f) => ({ f, utcMs: flightDepartureUtcMs(f) }))
+    .filter(({ utcMs }) => !isNaN(utcMs))
+    .sort((a, b) => a.utcMs - b.utcMs);
+  const upcoming =
+    candidates.find(({ utcMs }) => utcMs >= nowMs - graceMs) ?? candidates[0] ?? null;
+  return upcoming;
 }
 
 /**
  * Self-fetching active flight for surfaces without reservation props
  * (e.g. the Map page). Fetches once, re-selects every 30s.
  */
-export function useActiveFlight(): {
+export function useActiveFlight(options?: UseActiveFlightOptions): {
   activeFlight: ActiveFlight | null;
   previewFlight: ActiveFlight | null;
   /** Prefer just-landed flight for Airport Mode / navigator when journeyPhase says so. */
@@ -149,6 +179,8 @@ export function useActiveFlight(): {
   travelDayFlightLabel: string | null;
   loading: boolean;
 } {
+  const tripId = options?.tripId?.trim() ?? null;
+  const preferredDepartureIata = options?.preferredDepartureIata?.trim().toUpperCase() ?? null;
   const [reservations, setReservations] = useState<FlightReservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -159,7 +191,11 @@ export function useActiveFlight(): {
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
       .then((data: TripsResponse) => {
         if (cancelled) return;
-        const flat = (data.trips ?? [])
+        const scopedTrips =
+          tripId != null
+            ? (data.trips ?? []).filter((trip) => trip.id === tripId)
+            : (data.trips ?? []);
+        const flat = scopedTrips
           .flatMap((trip) => trip.reservations ?? [])
           .filter((r) => r && typeof r === "object" && !isPlaceholderReservation(r));
         setReservations(flat);
@@ -171,7 +207,7 @@ export function useActiveFlight(): {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [tripId]);
 
   useEffect(() => {
     const id = setInterval(() => setNowMs(Date.now()), 30_000);
@@ -185,14 +221,23 @@ export function useActiveFlight(): {
     [reservations, nowMs],
   );
   const coachMode = deriveAirportDayCoachMode(journeyPhase);
+  const pinnedDepartureFlight = useMemo(
+    () =>
+      preferredDepartureIata
+        ? selectFlightForDepartureIata(reservations, preferredDepartureIata, nowMs)
+        : null,
+    [preferredDepartureIata, reservations, nowMs],
+  );
+
   const navigatorFlight = useMemo(() => {
     if (journeyPhase.kind === "just-landed") {
       const f = journeyPhase.flight as FlightReservation;
       const utcMs = toUtcMs(f.flightArrivalTime ?? f.localTime, f.timezone);
       return { f, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
     }
+    if (pinnedDepartureFlight) return pinnedDepartureFlight;
     return activeFlight ?? previewFlight;
-  }, [journeyPhase, activeFlight, previewFlight, nowMs]);
+  }, [journeyPhase, pinnedDepartureFlight, activeFlight, previewFlight, nowMs]);
   const hotelLabel = useMemo(() => {
     if (journeyPhase.kind === "just-landed") {
       const f = journeyPhase.flight as FlightReservation;

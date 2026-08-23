@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { LiveMapLink } from "@/components/travelAssistant/LiveMapLink";
+import { buildLiveAirportMapUrl } from "@/lib/travelAssistant/liveMapSession";
 import {
   findPlannableAirportIata,
   mapTabLeadMode,
@@ -19,6 +20,7 @@ const TripHomeOverviewMap = dynamic(
 );
 
 interface MapTabViewProps {
+  tripId?: string | null;
   transportReservations: TransportRouteReservation[];
   hotelReservations: HotelStayMapReservation[];
   plannedFlightLegs?: PlannedFlightLeg[];
@@ -30,6 +32,7 @@ interface MapTabViewProps {
 }
 
 export function MapTabView({
+  tripId = null,
   transportReservations,
   hotelReservations,
   plannedFlightLegs = [],
@@ -70,7 +73,10 @@ export function MapTabView({
         {showAirport ? (
           <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-4 pb-4 pt-16">
             <LiveMapLink
-              href="/travel-assistant/live-map?view=airport"
+              href={buildLiveAirportMapUrl({
+                tripId,
+                iata: plannableAirport,
+              })}
               className="pointer-events-auto min-h-[48px] rounded-full bg-[#007AFF] px-5 py-3 text-[17px] font-bold text-white shadow-lg"
             >
               {atAirport ? "Airport mode" : `Plan ${plannableAirport} airport`}
