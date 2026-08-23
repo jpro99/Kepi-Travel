@@ -881,6 +881,9 @@ export function AirportNavigatorMap({
     : "max(5.5rem, calc(env(safe-area-inset-bottom) + 4.75rem))";
   const embeddedInLiveMap = fill && Boolean(shellTopInset);
   const hideEmbeddedFlightHero = embeddedInLiveMap && previewMode;
+  // Full-screen map (auto-pops once on entering the terminal; ✕ to leave,
+  // tap the card to come back — the map is always one tap away)
+  const [expanded, setExpanded] = useState(false);
   const contentTop =
     shellTopInset ??
     (expanded ? "max(0.75rem, env(safe-area-inset-top))" : "0.75rem");
@@ -995,9 +998,6 @@ export function AirportNavigatorMap({
     setSprint(on);
   }, []);
 
-  // Full-screen map (auto-pops once on entering the terminal; ✕ to leave,
-  // tap the card to come back — the map is always one tap away)
-  const [expanded, setExpanded] = useState(false);
   const autoPoppedRef = useRef(false);
   const [heroOpen, setHeroOpen] = useState(!(fill && previewMode));
   // "Where to?" destinations rail — collapsed by default so the live map is
