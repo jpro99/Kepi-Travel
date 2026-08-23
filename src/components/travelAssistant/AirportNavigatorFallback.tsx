@@ -24,6 +24,8 @@ import {
   type DayCoachPathStep,
 } from "@/lib/travelAssistant/airportDayCoach";
 import { resolveAirportLocationPhase } from "@/lib/travelAssistant/airportLocationPhase";
+import { ArrivalTransportOptionsCard } from "@/components/travelAssistant/ArrivalTransportOptionsCard";
+import { resolveArrivalTransportPresentation } from "@/lib/travelAssistant/arrivalTransportPresentation";
 import { buildRideFromAirportDeepLinks } from "@/lib/travelAssistant/groundTransportDeepLinks";
 
 interface AirportNavigatorFallbackProps {
@@ -46,6 +48,9 @@ interface AirportNavigatorFallbackProps {
   hotelDropoff?: { label: string; lat: number; lon: number } | null;
   /** YYYY-MM-DD for live baggage lookup on arrive. */
   flightDate?: string | null;
+  /** Scheduled arrival local time for first-mile schedule logic. */
+  flightArrivalTime?: string | null;
+  flightTimezone?: string | null;
   proximityStatus?: string;
   userLat: number | null;
   userLon: number | null;
@@ -87,6 +92,8 @@ export function AirportNavigatorFallback({
   hotelLabel = null,
   hotelDropoff = null,
   flightDate = null,
+  flightArrivalTime = null,
+  flightTimezone = null,
   proximityStatus = "away",
   userLat,
   userLon,
@@ -172,6 +179,9 @@ export function AirportNavigatorFallback({
         arrivalTerminal,
         hotelLabel,
         baggageCarouselNote: formatLiveBaggageCarouselNote(liveBaggageClaim),
+        flightArrivalTime,
+        flightTimezone,
+        landedMinutesAgo,
       });
     }
     const checkIn = buildDepartCheckInCoachStep({
@@ -191,6 +201,9 @@ export function AirportNavigatorFallback({
     arrivalTerminal,
     hotelLabel,
     liveBaggageClaim,
+    flightArrivalTime,
+    flightTimezone,
+    landedMinutesAgo,
     guide,
   ]);
 
@@ -232,6 +245,20 @@ export function AirportNavigatorFallback({
     () => (isArrive ? buildRideFromAirportDeepLinks(code, hotelDropoff) : null),
     [isArrive, code, hotelDropoff],
   );
+  const arrivalTransportPresentation = useMemo(
+    () =>
+      isArrive
+        ? resolveArrivalTransportPresentation({
+            iata: code,
+            flightArrivalTime,
+            flightTimezone,
+            landedMinutesAgo,
+            hotelLabel,
+          })
+        : null,
+    [isArrive, code, flightArrivalTime, flightTimezone, landedMinutesAgo, hotelLabel],
+  );
+  const arrivalTransportOptions = arrivalTransportPresentation?.transportOptions ?? nav?.arrivalInfo?.transportOptions ?? [];
   const nextUp = visiblePathSteps[0] ?? null;
 
   return (
@@ -436,7 +463,14 @@ export function AirportNavigatorFallback({
 
         {!strongOfficial ? <OfficialAirportMapLink iata={code} /> : null}
 
-        {isArrive && rideLinks ? (
+        {isArrive && arrivalTransportOptions.length > 0 ? (
+          <ArrivalTransportOptionsCard
+            options={arrivalTransportOptions}
+            uberUrl={rideLinks?.uberUrl}
+            hotelLabel={hotelLabel}
+            scheduleNote={arrivalTransportPresentation?.scheduleNote}
+          />
+        ) : isArrive && rideLinks ? (
           <a
             data-testid="airport-fallback-uber"
             href={rideLinks.uberUrl}

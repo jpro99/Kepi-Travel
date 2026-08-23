@@ -37,10 +37,25 @@ export interface BaggageCarousel {
   tips?: string[];
 }
 
+export interface ArrivalTransportOption {
+  id: string;
+  label: string;
+  detail: string;
+  href?: string;
+  /** Default first-mile pick when hotel destination is unknown. */
+  isDefault?: boolean;
+}
+
 export interface ArrivalInfo {
   baggageCarousels: BaggageCarousel[];
   exitDirections: string;        // "Follow green 'Exit/Ground Transport' signs past carousel"
   groundTransport?: string;      // rideshare, taxi, shuttle info
+  /** Structured first-mile options for arrival coach UI (rail-first airports). */
+  transportOptions?: ArrivalTransportOption[];
+  /** Overrides generic "Ride / hotel" coach step title. */
+  rideStepTitle?: string;
+  /** Overrides default 🚕 icon on the coach ride step. */
+  rideStepIcon?: string;
   connectingFlight?: string;     // if this is a connection hub, how to re-enter security
   customsTip?: string;           // international arrivals only
   generalTip?: string;
@@ -87,6 +102,26 @@ const AIRPORT_NAV: AirportNavigation[] = [
         totalMinutes: 6,
       },
     ],
+    arrivalInfo: {
+      baggageCarousels: [
+        {
+          carouselNote:
+            "International arrivals: follow Baggage Claim signs down from the gate level. Carousel number is on the arrivals screens — Kepi does not invent belt numbers.",
+          walkMinutes: 10,
+          tips: [
+            "If you connected through SEA, checked bags are usually through-checked to your final destination — confirm on your boarding pass.",
+          ],
+        },
+      ],
+      exitDirections:
+        "After bags, follow Exit / Ground Transportation only if this is your final stop. Connecting? Stay airside and follow Connecting Flights — do not exit to the street.",
+      connectingFlight:
+        "Connecting at SEA: after deplaning, follow Connecting Flights / Gates signs and stay airside. N gates require the underground N Concourse train from the C concourse (runs every 2–3 min). Re-clear security only if your itinerary requires it — through-checked bags stay on the plane.",
+      groundTransport:
+        "If SEA is your final stop: Link light rail (Angle Lake–UW) runs from the parking garage level; rideshare and taxis are at the arrivals curb. For a connection, you do not need ground transport — head to your next gate.",
+      generalTip:
+        "SEA connection tip: allow extra time for the N-gates train if your outbound gate starts with N.",
+    },
     generalNotes: "SEA has two main areas: the main terminal (A/B/C gates) and the North Satellite (N gates). They're connected by an underground train.",
   },
 
@@ -1343,6 +1378,50 @@ const AIRPORT_NAV: AirportNavigation[] = [
       { fromZone: "T3-security", toZone: "E", steps: [{ instruction: "Concourse E in T3 is for non-Schengen international — walk from main security through the terminal", mode: "walk", estimatedMinutes: 8 }], totalMinutes: 8 },
       { fromZone: "T1", toZone: "T3", steps: [{ instruction: "Walk from T1 through T2 to T3 — all connected by internal corridors", mode: "walk", estimatedMinutes: 10 }], totalMinutes: 10 },
     ],
+    arrivalInfo: {
+      baggageCarousels: [
+        {
+          terminal: "T3",
+          carouselNote:
+            "Most long-haul and US arrivals use Terminal 3. After passport control, follow Baggage Claim / Ritiro bagagli signs down to the arrivals hall. Your carousel number is on the overhead screens — Kepi does not invent belt numbers.",
+          walkMinutes: 12,
+          tips: [
+            "Terminal 5 (some non-Schengen) has its own baggage hall — if you landed at T5, follow signs inside that building.",
+            "Allow 15–25 min from touchdown to the carousel on busy days.",
+          ],
+        },
+      ],
+      customsTip:
+        "EU/EEA passport holders use the EU lane; everyone else uses All Passports. After immigration, customs is usually a green channel unless you have goods to declare. There is no metro from FCO — ignore any app that suggests one.",
+      exitDirections:
+        "After customs, follow Train / Treno signs toward the Fiumicino Aeroporto rail station (pedestrian area between terminals — use ADR Digiport below if you are unsure indoors). Leonardo Express gates are inside the station.",
+      groundTransport:
+        "Default to Leonardo Express: non-stop to Roma Termini in ~32 min (~€14). Buy and tap in at the Leonardo gates before boarding — one ticket per person. Metrebus and Roma Pass are NOT valid on Leonardo Express. FL1 is the cheaper regional train from the same station to Trastevere, Ostiense, or Tiburtina — it does NOT go to Termini. Official white taxis are a fixed €55 inside the Aurelian Walls — use only the signed official rank, not curbside touts. Uber/Lyft are a backup if you already have a car booked.",
+      transportOptions: [
+        {
+          id: "leonardo-express",
+          label: "Leonardo Express → Roma Termini",
+          detail: "~32 min non-stop · ~€14 · tap in at Leonardo gates · one ticket per person",
+          href: "https://www.trenitalia.com/en.html",
+          isDefault: true,
+        },
+        {
+          id: "fl1-regional",
+          label: "FL1 regional train (not Termini)",
+          detail: "Cheaper to Trastevere, Ostiense, or Tiburtina — does NOT reach Roma Termini",
+          href: "https://www.trenitalia.com/en.html",
+        },
+        {
+          id: "official-taxi",
+          label: "Official white taxi",
+          detail: "Fixed €55 inside the Aurelian Walls — signed rank only",
+        },
+      ],
+      rideStepTitle: "Leonardo Express → Roma Termini",
+      rideStepIcon: "🚆",
+      generalTip:
+        "Wrong-ticket guard: there is no metro from FCO. Roma Pass / Metrebus do not work on Leonardo Express. FL1 is not the Leonardo Express — it skips Termini.",
+    },
     generalNotes: "FCO T3 is the main terminal. Leonardo Express train connects FCO to Roma Termini in 32 min. Allow 90 min for international flights.",
   },
 

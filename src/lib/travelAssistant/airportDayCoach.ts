@@ -5,6 +5,7 @@
 
 import { resolveAirport } from "@/lib/airports/lookup";
 import { getAirportNav } from "@/lib/travelAssistant/airportNavigation";
+import { resolveArrivalTransportPresentation } from "@/lib/travelAssistant/arrivalTransportPresentation";
 import type { AirportLocationPhase } from "@/lib/travelAssistant/airportLocationPhase";
 import { departPhaseHomeTitle } from "@/lib/travelAssistant/airportLocationPhase";
 import type { HomeNextAction } from "@/lib/travelAssistant/homeNextAction";
@@ -68,6 +69,49 @@ export function selectDayCoachVisibleSteps<T>(
   const visible = steps.slice(idx, idx + 2) as T[];
   const hiddenCount = Math.max(0, steps.length - (idx + visible.length));
   return { visible, hiddenCount, currentIndex: idx };
+}
+
+/** Fact-driven arrival spotlight — never invents carousel or indoor position. */
+export function resolveArrivalRideStep(input: {
+  iata: string;
+  hotelLabel?: string | null;
+  flightArrivalTime?: string | null;
+  flightTimezone?: string | null;
+  landedMinutesAgo?: number | null;
+  nowMs?: number;
+  arrivalInfo?: {
+    groundTransport?: string;
+    rideStepTitle?: string;
+    rideStepIcon?: string;
+  } | null;
+}): Pick<DayCoachPathStep, "id" | "icon" | "text" | "detail"> {
+  const presentation = resolveArrivalTransportPresentation({
+    iata: input.iata,
+    flightArrivalTime: input.flightArrivalTime,
+    flightTimezone: input.flightTimezone,
+    landedMinutesAgo: input.landedMinutesAgo,
+    hotelLabel: input.hotelLabel,
+    nowMs: input.nowMs,
+  });
+
+  const hotel = input.hotelLabel?.trim();
+  const info = input.arrivalInfo;
+  const defaultDetail =
+    presentation?.rideStepDetail ||
+    info?.groundTransport ||
+    "Open Uber or your booked transfer once you are landside.";
+  const icon = presentation?.rideStepIcon || info?.rideStepIcon || "🚕";
+  const baseTitle = presentation?.rideStepTitle || info?.rideStepTitle || (hotel ? `Ride / hotel — ${hotel}` : "Ride / hotel");
+  const text =
+    hotel && info?.rideStepTitle && !presentation?.rideStepTitle
+      ? `${info.rideStepTitle}${hotel ? ` · then ${hotel}` : ""}`
+      : baseTitle;
+  return {
+    id: "ride",
+    icon,
+    text,
+    detail: defaultDetail,
+  };
 }
 
 /** Fact-driven arrival spotlight — never invents carousel or indoor position. */
@@ -179,7 +223,7 @@ export function buildAirportHomeSpotlight(input: AirportHomeSpotlightInput): Hom
   const step = input.steps[input.currentIndex] ?? input.steps[0] ?? null;
 
   if (input.mode === "arrive" && step) {
-    if (step.id === "ride" && input.hotelLabel?.trim()) {
+    if (step.id === "ride" && input.hotelLabel?.trim() && !/leonardo|train|express/i.test(step.text)) {
       return {
         kind: "airport",
         eyebrow: "Just landed",
@@ -251,6 +295,10 @@ export interface ArrivalDayCoachInput {
   hotelLabel?: string | null;
   baggageCarouselNote?: string | null;
   baggageWalkMinutes?: number | null;
+  flightArrivalTime?: string | null;
+  flightTimezone?: string | null;
+  landedMinutesAgo?: number | null;
+  nowMs?: number;
 }
 
 /** Arrival path matching approved mockup (intl steps only when countries differ). */
@@ -315,12 +363,17 @@ export function buildArrivalDayCoachPath(input: ArrivalDayCoachInput): DayCoachP
   }
 
   const hotel = input.hotelLabel?.trim();
-  steps.push({
-    id: "ride",
-    icon: "🚕",
-    text: hotel ? `Ride / hotel — ${hotel}` : "Ride / hotel",
-    detail: "Open Uber or your booked transfer once you are landside.",
-  });
+  steps.push(
+    resolveArrivalRideStep({
+      iata: code,
+      hotelLabel: hotel,
+      flightArrivalTime: input.flightArrivalTime,
+      flightTimezone: input.flightTimezone,
+      landedMinutesAgo: input.landedMinutesAgo,
+      nowMs: input.nowMs,
+      arrivalInfo: nav?.arrivalInfo,
+    }),
+  );
 
   return steps;
 }
