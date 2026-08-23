@@ -135,7 +135,8 @@ export function resolveHubConnection(
   const hub = hubIata.trim().toUpperCase();
   if (!hub || !outboundReservationId) return null;
 
-  const route = buildTripTransportRoute([...reservations]);
+  const mutableReservations = [...reservations];
+  const route = buildTripTransportRoute(mutableReservations);
   const flights = route.segments.filter((s) => s.kind === "flight" && s.booked);
   for (let i = 0; i < flights.length - 1; i++) {
     const inboundSeg = flights[i]!;
@@ -153,8 +154,8 @@ export function resolveHubConnection(
     if (outbound.departureUtcMs <= inbound.arrivalUtcMs) continue;
 
     const playbook =
-      connectionPlaybookForFlight(reservations, outboundReservationId, nowMs) ??
-      buildConnectionPlaybook(reservations, nowMs, { requireActiveWindow: false });
+      connectionPlaybookForFlight(mutableReservations, outboundReservationId, nowMs) ??
+      buildConnectionPlaybook(mutableReservations, nowMs, { requireActiveWindow: false });
     if (!playbook || playbook.hubIata !== hub) continue;
 
     const inboundCode = inboundRes.confirmationCode?.trim();
@@ -206,15 +207,15 @@ export function estimateSeaConnectionWalkMinutes(input: {
   };
 
   if (layout && input.arrivalGate?.trim() && input.departureGate?.trim()) {
-    const fromGate = resolveGateNode(layout, input.arrivalGate);
-    const toGate = resolveGateNode(layout, input.departureGate);
-    if (fromGate && toGate) {
-      const fromPoi = layout.pois.find((p) => p.nodeId === fromGate.id);
-      const toPoi = layout.pois.find((p) => p.nodeId === toGate.id);
+    const fromNodeId = resolveGateNode(layout, input.arrivalGate);
+    const toNodeId = resolveGateNode(layout, input.departureGate);
+    if (fromNodeId && toNodeId) {
+      const fromPoi = layout.pois.find((p) => p.nodeId === fromNodeId);
+      const toPoi = layout.pois.find((p) => p.nodeId === toNodeId);
       if (fromPoi && toPoi) {
         const route = computeRoute({
           layout,
-          fromNodeId: fromGate.id,
+          fromNodeId,
           toPoiId: toPoi.id,
           credentials: creds,
         });
@@ -287,7 +288,7 @@ export function buildSeaConnectionSteps(input: {
       id: "transfer",
       icon: "🚶",
       text: "Walk to international departures",
-      detail: nav?.connectingFlight ?? "Follow signs to international TSA",
+      detail: nav?.arrivalInfo?.connectingFlight ?? "Follow signs to international TSA",
       minutes: walkKnown ? walkMinutes : null,
     });
   } else if (walkKnown && walkMinutes != null) {
