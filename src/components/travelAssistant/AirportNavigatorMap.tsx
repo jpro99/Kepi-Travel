@@ -12,7 +12,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AirportLayout, ComputedRoute, GraphEdge, PoiDefinition, SnappedPosition, TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
-import { buildTripJourney, journeyPoiIds, preSecurityJourney, type JourneyStop, buildArrivalTripJourney, arrivalJourneyPoiIds, layoutSupportsArrivalFirstMile, type ArrivalJourneyStop } from "@/lib/airportNav/tripJourney";
+import { buildTripJourney, journeyPoiIds, preSecurityJourney, type JourneyStop, buildArrivalTripJourney, arrivalJourneyPoiIds, layoutSupportsArrivalFirstMile, resolveArrivalOriginNode, type ArrivalJourneyStop } from "@/lib/airportNav/tripJourney";
 import {
   buildArrivalDayCoachPath,
   isInternationalArrivalFlight,
@@ -1233,14 +1233,13 @@ export function AirportNavigatorMap({
     if (snapped && !previewMode) return snapped.nearestNodeId;
     if (!layout) return null;
     if (isArriveCoach && layoutSupportsArrivalFirstMile(layout)) {
-      const arrivalGate =
-        layout.nodes.find((node) => node.kind === "gate" && node.airside)?.id ?? null;
+      const arrivalGate = resolveArrivalOriginNode(layout, gateCode);
       if (arrivalGate) return arrivalGate;
     }
     return layout.nodes.find((node) => node.kind === "junction" && !node.airside)?.id
       ?? layout.nodes[0]?.id
       ?? null;
-  }, [snapped, layout, previewMode, isArriveCoach]);
+  }, [snapped, layout, previewMode, isArriveCoach, gateCode]);
 
   const gatePoi: PoiDefinition | null = useMemo(() => {
     if (!layout || !gateCode) return null;
@@ -2759,7 +2758,6 @@ export function AirportNavigatorMap({
           layout={layout}
           arrivalJourney={arrivalJourney}
           originNodeId={originNodeId}
-          credentials={credentials}
           pathSteps={arrivalDayCoachSteps}
           visiblePathSteps={visibleArrivalCoachSteps}
           hiddenCount={hiddenArrivalCoachSteps}
@@ -2768,12 +2766,17 @@ export function AirportNavigatorMap({
           nextUp={arrivalNextUp}
           selectedPoiId={selectedPoiId ?? pendingPoiId ?? activeRoute?.toPoiId ?? null}
           activeRoute={activeRoute}
+          activeDestName={activeDestName}
+          onEndRoute={endRoute}
           onPoiClick={handlePoiTap}
           bottomInset={bottomPanel}
           arrivalTransportOptions={arrivalTransportOptions}
           scheduleNote={arrivalTransportPresentation?.scheduleNote}
           uberUrl={arrivalRideLinks?.uberUrl}
           hotelLabel={hotelLabel}
+          previewMode={previewMode}
+          preciseRouteEnabled={preciseRouteEnabled}
+          iata={iata}
         />
       ) : null}
 
@@ -3019,7 +3022,7 @@ export function AirportNavigatorMap({
       )}
 
       {/* Active route card */}
-      {!securityQuestionOpen && !journeyPrompt && !quietMode && activeRoute && (
+      {!securityQuestionOpen && !journeyPrompt && !quietMode && activeRoute && !arrivalFirstMile && (
         <section
           aria-label="Route instructions"
           style={{

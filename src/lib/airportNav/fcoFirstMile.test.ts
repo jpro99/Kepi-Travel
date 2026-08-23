@@ -6,6 +6,7 @@ import {
   buildArrivalTripJourney,
   arrivalJourneyPoiIds,
   layoutSupportsArrivalFirstMile,
+  resolveArrivalOriginNode,
 } from "./tripJourney";
 import { computeRoute } from "./pathfinder";
 import { buildArrivalDayCoachPath } from "@/lib/travelAssistant/airportDayCoach";
@@ -66,6 +67,29 @@ test("FCO arrival journey POI ids cover passport, bags, customs, Leonardo chips"
   assert.ok(ids.size >= 4);
 });
 
+test("FCO arrival origin defaults to gate-e when gate is TBD (not gate-a)", () => {
+  assert.equal(resolveArrivalOriginNode(FCO_LAYOUT, null), "gate-e");
+  assert.equal(resolveArrivalOriginNode(FCO_LAYOUT, "E12"), "gate-e");
+});
+
+test("FCO gate-e routes to passport and baggage are computable for preview chips", () => {
+  const creds = { tsaPreCheck: false, clear: false, known: true };
+  const toPassport = computeRoute({
+    layout: FCO_LAYOUT,
+    fromNodeId: "gate-e",
+    toPoiId: "poi-passport-t3",
+    credentials: creds,
+  });
+  const toBags = computeRoute({
+    layout: FCO_LAYOUT,
+    fromNodeId: "gate-e",
+    toPoiId: "poi-baggage-t3",
+    credentials: creds,
+  });
+  assert.ok(toPassport && toPassport.totalSeconds > 0);
+  assert.ok(toBags && toBags.totalSeconds > 0);
+});
+
 test("FCO gate-e to Leonardo route is computable along arrival graph", () => {
   const route = computeRoute({
     layout: FCO_LAYOUT,
@@ -75,6 +99,11 @@ test("FCO gate-e to Leonardo route is computable along arrival graph", () => {
   });
   assert.ok(route);
   assert.ok(route!.totalSeconds > 0);
+});
+
+test("FCO arrival journey without gate code still starts at gate-e", () => {
+  const stops = buildArrivalTripJourney(FCO_LAYOUT);
+  assert.equal(stops[0]?.nodeId, "gate-e");
 });
 
 test("FCO arrive mode pins inbound AS180 when AZ1607 FCO→BRI is on the same trip", () => {
