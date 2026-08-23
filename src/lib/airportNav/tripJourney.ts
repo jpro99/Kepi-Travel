@@ -288,15 +288,48 @@ export function layoutSupportsArrivalFirstMile(layout: AirportLayout): boolean {
   return hasBaggage && hasPassportOrCustoms && hasGround;
 }
 
-function resolveArrivalGateNode(layout: AirportLayout, gateCode?: string | null): string | null {
+/**
+ * Deplane / route origin for arrival first mile. When gate is TBD, prefer the gate
+ * node wired into the arrival subgraph (FCO gate-e → passport-t3), not the first
+ * airside gate in the registry (FCO gate-a).
+ */
+export function resolveArrivalOriginNode(
+  layout: AirportLayout,
+  gateCode?: string | null,
+): string | null {
   if (gateCode) {
     const resolved = resolveGateNode(layout, gateCode);
     if (resolved) return resolved;
   }
-  const gateNode =
-    layout.nodes.find((node) => node.kind === "gate" && node.airside) ??
-    layout.nodes.find((node) => node.kind === "gate");
-  return gateNode?.id ?? null;
+  const passportTarget = layout.nodes.find(
+    (n) => n.id.includes("passport") || (n.kind === "customs" && n.airside),
+  );
+  if (passportTarget) {
+    const entry = layout.edges.find(
+      (e) =>
+        e.to === passportTarget.id &&
+        layout.nodes.some((n) => n.id === e.from && n.kind === "gate"),
+    );
+    if (entry) return entry.from;
+  }
+  const baggageTarget = layout.nodes.find((n) => n.kind === "baggage_claim");
+  if (baggageTarget) {
+    const entry = layout.edges.find(
+      (e) =>
+        e.to === baggageTarget.id &&
+        layout.nodes.some((n) => n.id === e.from && n.kind === "gate"),
+    );
+    if (entry) return entry.from;
+  }
+  return (
+    layout.nodes.find((node) => node.kind === "gate" && node.airside)?.id ??
+    layout.nodes.find((node) => node.kind === "gate")?.id ??
+    null
+  );
+}
+
+function resolveArrivalGateNode(layout: AirportLayout, gateCode?: string | null): string | null {
+  return resolveArrivalOriginNode(layout, gateCode);
 }
 
 /**
