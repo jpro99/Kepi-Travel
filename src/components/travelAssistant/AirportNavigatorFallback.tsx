@@ -24,8 +24,15 @@ import {
 } from "@/lib/travelAssistant/airportDayCoach";
 import { resolveAirportLocationPhase } from "@/lib/travelAssistant/airportLocationPhase";
 import { ArrivalTransportOptionsCard } from "@/components/travelAssistant/ArrivalTransportOptionsCard";
+import { GateConfidenceBar } from "@/components/travelAssistant/GateConfidenceBar";
+import { ArrivalCardStack } from "@/components/travelAssistant/ArrivalCardStack";
 import { resolveArrivalTransportPresentation } from "@/lib/travelAssistant/arrivalTransportPresentation";
 import { buildRideFromAirportDeepLinks } from "@/lib/travelAssistant/groundTransportDeepLinks";
+import {
+  buildArrivalCoachCards,
+  computeArrivalGateConfidence,
+  computeDepartGateConfidence,
+} from "@/lib/airportNav/gateConfidence";
 
 interface AirportNavigatorFallbackProps {
   iata: string;
@@ -266,6 +273,55 @@ export function AirportNavigatorFallback({
   const arrivalTransportOptions = arrivalTransportPresentation?.transportOptions ?? nav?.arrivalInfo?.transportOptions ?? [];
   const nextUp = visiblePathSteps[0] ?? null;
 
+  const gateConfidence = useMemo(() => {
+    const currentStep = pathSteps[spotlightIndex] ?? pathSteps[0] ?? null;
+    if (isArrive) {
+      const remainingWalk = pathSteps
+        .slice(spotlightIndex)
+        .reduce((sum, step) => sum + (step.minutes ?? 0), 0);
+      return computeArrivalGateConfidence({
+        iata: code,
+        flightArrivalTime,
+        flightTimezone,
+        landedMinutesAgo,
+        hotelLabel,
+        currentStep,
+        remainingWalkMinutes: remainingWalk,
+      });
+    }
+    return computeDepartGateConfidence({
+      iata: code,
+      minutesToDeparture,
+      walkToGateSeconds: null,
+      throughSecurity: proximityStatus === "in-terminal",
+      securityWaitSeconds: proximityStatus === "in-terminal" ? 0 : 12 * 60,
+      currentStep,
+    });
+  }, [
+    isArrive,
+    pathSteps,
+    spotlightIndex,
+    code,
+    flightArrivalTime,
+    flightTimezone,
+    landedMinutesAgo,
+    hotelLabel,
+    minutesToDeparture,
+    proximityStatus,
+  ]);
+
+  const arrivalCoachCards = useMemo(() => {
+    if (!isArrive) return [];
+    return buildArrivalCoachCards({
+      steps: pathSteps,
+      iata: code,
+      scheduleNote: arrivalTransportPresentation?.scheduleNote,
+      transportOptions: arrivalTransportPresentation?.transportOptions,
+    });
+  }, [isArrive, pathSteps, code, arrivalTransportPresentation]);
+
+  const flightCoachLabel = [airlineName, flightNumber].filter(Boolean).join(" ") || null;
+
   return (
     <div
       data-testid="airport-nav-fallback"
@@ -330,6 +386,23 @@ export function AirportNavigatorFallback({
         {/* Strong verified indoor maps go first; weak Google fallbacks go AFTER the checklist
             so they never look like the primary tool. */}
         {strongOfficial ? <OfficialAirportMapLink iata={code} /> : null}
+
+        {isArrive && arrivalCoachCards.length > 0 ? (
+          <ArrivalCardStack
+            cards={arrivalCoachCards}
+            activeIndex={spotlightIndex}
+            iata={code}
+            flightLabel={flightCoachLabel}
+            uberUrl={rideLinks?.uberUrl}
+            hotelLabel={hotelLabel}
+          />
+        ) : !isArrive ? (
+          <GateConfidenceBar
+            confidence={gateConfidence}
+            iata={code}
+            flightLabel={flightCoachLabel}
+          />
+        ) : null}
 
         <div className="rounded-2xl bg-black/35 px-4 py-3 backdrop-blur" data-testid={isArrive ? "airport-nav-fallback-arrive" : "airport-nav-fallback-depart"}>
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -405,7 +478,7 @@ export function AirportNavigatorFallback({
           ) : null}
         </div>
 
-        {nextUp ? (
+        {nextUp && !(isArrive && arrivalCoachCards.length > 0) ? (
           <section
             data-testid="airport-fallback-next-up"
             className="rounded-2xl border border-sky-400/25 bg-sky-500/10 px-4 py-3"
@@ -416,7 +489,7 @@ export function AirportNavigatorFallback({
           </section>
         ) : null}
 
-        <section>
+        <section className={isArrive && arrivalCoachCards.length > 0 ? "hidden" : undefined}>
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-200/80">Your path today</p>
           <ol className="mt-2 space-y-2">
             {visiblePathSteps.map((step, index) => (
@@ -468,7 +541,7 @@ export function AirportNavigatorFallback({
 
         {!strongOfficial ? <OfficialAirportMapLink iata={code} /> : null}
 
-        {isArrive && arrivalTransportOptions.length > 0 ? (
+        {isArrive && arrivalTransportOptions.length > 0 && arrivalCoachCards.length === 0 ? (
           <ArrivalTransportOptionsCard
             options={arrivalTransportOptions}
             uberUrl={rideLinks?.uberUrl}
