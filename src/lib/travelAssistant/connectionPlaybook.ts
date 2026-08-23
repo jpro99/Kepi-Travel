@@ -54,7 +54,9 @@ function isDomesticFlight(depIata: string, arrIata: string): boolean {
 export function buildConnectionPlaybook(
   reservations: ConnectionFlightReservation[],
   nowMs = Date.now(),
+  options?: { requireActiveWindow?: boolean },
 ): ConnectionPlaybook | null {
+  const requireActiveWindow = options?.requireActiveWindow ?? true;
   const route = buildTripTransportRoute(reservations);
   const flights = route.segments.filter((s) => s.kind === "flight" && s.booked);
   if (flights.length < 2) return null;
@@ -118,12 +120,17 @@ export function buildConnectionPlaybook(
       });
     }
 
-    if (intlInbound || !samePnr) {
+    if (intlInbound || !samePnr || (intlOutbound && !intlInbound)) {
       steps.push({
         id: "security",
         icon: "🛡",
-        text: "Security screening again",
-        detail: "Allow time for the checkpoint — follow airport signs.",
+        text: intlOutbound && !intlInbound
+          ? "International TSA — re-clear security"
+          : "Security screening again",
+        detail:
+          intlOutbound && !intlInbound
+            ? "Domestic arrival → international departure — allow time for TSA before your gate."
+            : "Allow time for the checkpoint — follow airport signs.",
       });
     }
 
@@ -163,7 +170,7 @@ export function buildConnectionPlaybook(
       nowMs >= arriveMs - 30 * 60_000 &&
       (departMs == null || nowMs <= departMs + 60 * 60_000);
 
-    if (!connectionActive && risk !== "impossible" && risk !== "tight") {
+    if (requireActiveWindow && !connectionActive && risk !== "impossible" && risk !== "tight") {
       continue;
     }
 
@@ -213,7 +220,7 @@ export function connectionPlaybookForFlight(
     const outbound = route.segments[i + 1]!;
     if (outbound.reservationId !== outboundFlightReservationId) continue;
     if (inbound.toCode !== outbound.fromCode) continue;
-    const playbook = buildConnectionPlaybook(reservations, nowMs);
+    const playbook = buildConnectionPlaybook(reservations, nowMs, { requireActiveWindow: false });
     if (playbook && playbook.hubIata === outbound.fromCode) return playbook;
   }
   return null;

@@ -33,6 +33,13 @@ import {
   computeArrivalGateConfidence,
   computeDepartGateConfidence,
 } from "@/lib/airportNav/gateConfidence";
+import {
+  computeConnectionGateConfidence,
+  estimateSeaConnectionWalkMinutes,
+  isHubConnectionActive,
+  resolveHubConnection,
+} from "@/lib/airportNav/connectionClock";
+import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 
 interface AirportNavigatorFallbackProps {
   iata: string;
@@ -71,6 +78,8 @@ interface AirportNavigatorFallbackProps {
   layoutLoadFailed?: boolean;
   familyPins?: FamilyAirportPin[];
   onFamilyPinTap?: (memberId: string) => void;
+  tripReservations?: readonly TransportRouteReservation[];
+  activeReservationId?: string | null;
 }
 
 function proximityLabel(status: string): string {
@@ -112,6 +121,8 @@ export function AirportNavigatorFallback({
   layoutLoadFailed = false,
   familyPins = [],
   onFamilyPinTap,
+  tripReservations,
+  activeReservationId = null,
 }: AirportNavigatorFallbackProps) {
   const code = iata.trim().toUpperCase();
   const isArrive = coachMode === "arrive";
@@ -275,6 +286,35 @@ export function AirportNavigatorFallback({
 
   const gateConfidence = useMemo(() => {
     const currentStep = pathSteps[spotlightIndex] ?? pathSteps[0] ?? null;
+    const connectionCtx =
+      tripReservations && activeReservationId
+        ? resolveHubConnection(tripReservations, code, activeReservationId)
+        : null;
+    const useConnectionClock =
+      connectionCtx &&
+      connectionCtx.hubIata === code &&
+      isHubConnectionActive(connectionCtx);
+
+    if (useConnectionClock && connectionCtx) {
+      const walk = estimateSeaConnectionWalkMinutes({
+        arrivalGate: connectionCtx.inbound.arrivalGate,
+        departureGate: connectionCtx.outbound.departureGate ?? gateCode,
+        arrivalTerminal: connectionCtx.inbound.arrivalTerminal,
+        departureTerminal: connectionCtx.outbound.departureTerminal ?? departureTerminal,
+        credentials: { tsaPreCheck: credentials.tsaPreCheck, clear: credentials.clear },
+      });
+      return computeConnectionGateConfidence({
+        ctx: connectionCtx,
+        minutesToOutboundDeparture: minutesToDeparture,
+        landedMinutesAgo,
+        locationStatus: proximityStatus,
+        throughSecurity: proximityStatus === "in-terminal",
+        credentials: { tsaPreCheck: credentials.tsaPreCheck, clear: credentials.clear },
+        walkMinutes: walk.minutes,
+        walkKnown: walk.known,
+      });
+    }
+
     if (isArrive) {
       const remainingWalk = pathSteps
         .slice(spotlightIndex)
@@ -304,6 +344,10 @@ export function AirportNavigatorFallback({
     pathSteps,
     spotlightIndex,
     code,
+    tripReservations,
+    activeReservationId,
+    gateCode,
+    departureTerminal,
     flightArrivalTime,
     flightTimezone,
     landedMinutesAgo,
@@ -311,6 +355,8 @@ export function AirportNavigatorFallback({
     minutesToDeparture,
     proximityStatus,
     arrivalAirport,
+    credentials.tsaPreCheck,
+    credentials.clear,
   ]);
 
   const arrivalCoachCards = useMemo(() => {

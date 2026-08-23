@@ -16,10 +16,20 @@ const STATE_STYLES: Record<
     clock: "text-amber-300",
     headline: "Start walking soon",
   },
+  tight: {
+    bar: "border-amber-400/35 bg-amber-950/85",
+    clock: "text-amber-300",
+    headline: "Tight connection",
+  },
   go_now: {
     bar: "border-orange-400/40 bg-orange-950/90",
     clock: "text-orange-200",
     headline: "Go now",
+  },
+  miss: {
+    bar: "border-red-400/40 bg-red-950/90",
+    clock: "text-red-200",
+    headline: "May miss",
   },
   recover: {
     bar: "border-red-400/40 bg-red-950/90",

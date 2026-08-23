@@ -134,6 +134,7 @@ export function LiveMapPage() {
     navigatorCoachMode,
     journeyPhase,
     hotelLabel,
+    reservations: tripReservations,
   } = useActiveFlight({
     tripId: urlTripId,
     preferredIata: urlAirportIata,
@@ -1093,6 +1094,8 @@ export function LiveMapPage() {
               activeRally={airportLiveMode && airportSync?.rally?.status === "active" ? airportSync.rally : null}
               shellBottomInset="0px"
               shellTopInset={AIRPORT_MAP_INNER_TOP_INSET}
+              tripReservations={tripReservations}
+              activeReservationId={navFlight.f.id}
             />
             {airportLiveMode && members.length >= 2 ? (
               <div

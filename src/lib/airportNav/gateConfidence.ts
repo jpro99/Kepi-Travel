@@ -16,7 +16,15 @@ import {
 import { getAirportNav } from "@/lib/travelAssistant/airportNavigation";
 import { timezoneForIata } from "@/lib/airports/lookup";
 
-export type GateCoachState = "fine" | "start_walking" | "go_now" | "recover";
+export type GateCoachState =
+  | "fine"
+  | "start_walking"
+  | "go_now"
+  | "recover"
+  /** Hub connection clock — tighter than fine, not yet go_now. */
+  | "tight"
+  /** Hub connection clock — may not make outbound boarding close. */
+  | "miss";
 
 export interface GateCoachCta {
   label: string;
