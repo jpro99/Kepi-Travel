@@ -12,14 +12,13 @@ import {
 } from "@/lib/airportNav/officialWayfinding";
 import {
   buildArrivalDayCoachPath,
-  buildDepartCheckInCoachStep,
+  buildDepartDayCoachPath,
   departureTimeBudgetReassurance,
   deriveAirportDayCoachMode,
   formatLiveBaggageCarouselNote,
   resolveArrivalSpotlightIndex,
   resolveDepartSpotlightIndex,
   selectDayCoachVisibleSteps,
-  tagDepartGuideSteps,
   type AirportDayCoachMode,
   type DayCoachPathStep,
 } from "@/lib/travelAssistant/airportDayCoach";
@@ -184,14 +183,15 @@ export function AirportNavigatorFallback({
         landedMinutesAgo,
       });
     }
-    const checkIn = buildDepartCheckInCoachStep({
+    return buildDepartDayCoachPath({
       iata: code,
       airlineName,
       flightNumber,
+      gateCode,
       departureTerminal,
+      credentials: { tsaPreCheck: credentials.tsaPreCheck, clear: credentials.clear },
+      eligibleLoungeNames,
     });
-    const fromGuide = tagDepartGuideSteps(guide.steps);
-    return [checkIn, ...fromGuide];
   }, [
     isArrive,
     code,
@@ -204,6 +204,11 @@ export function AirportNavigatorFallback({
     flightArrivalTime,
     flightTimezone,
     landedMinutesAgo,
+    gateCode,
+    departureTerminal,
+    credentials.tsaPreCheck,
+    credentials.clear,
+    eligibleLoungeNames,
     guide,
   ]);
 

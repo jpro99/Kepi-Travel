@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { buildTripJourney, journeyPoiIds, preSecurityJourney } from "./tripJourney";
 import { SEA_LAYOUT } from "./layouts/sea";
+import { ONT_LAYOUT } from "./layouts/ont";
 
 test("journey without a gate ends with a pending gate placeholder", () => {
   const stops = buildTripJourney(SEA_LAYOUT, { airlineName: "Alaska" });
@@ -85,4 +86,11 @@ test("preSecurityJourney returns the whole slice when there is no security stop"
     { role: "checkin", nodeId: "b", label: "Check-in", known: true },
   ]);
   assert.equal(stops.length, 2);
+});
+
+test("ONT Alaska journey uses dedicated check-in node (not curb junction)", () => {
+  const stops = buildTripJourney(ONT_LAYOUT, { airlineName: "Alaska", gateCode: "205" });
+  const checkin = stops.find((s) => s.role === "checkin");
+  assert.equal(checkin?.nodeId, "checkin-t2");
+  assert.notEqual(checkin?.nodeId, stops[0]?.nodeId);
 });

@@ -2,16 +2,14 @@
  * Builds Home TripWalk airport spotlight from booked + observed facts (G46/G47).
  */
 
-import { buildGateInstructions } from "@/lib/travelAssistant/airportNavigation";
 import {
   buildAirportHomeSpotlight,
   buildArrivalDayCoachPath,
-  buildDepartCheckInCoachStep,
+  buildDepartDayCoachPath,
   deriveAirportDayCoachMode,
   formatLiveBaggageCarouselNote,
   resolveArrivalSpotlightIndex,
   resolveDepartSpotlightIndex,
-  tagDepartGuideSteps,
   type DayCoachPathStep,
 } from "@/lib/travelAssistant/airportDayCoach";
 import { resolveAirportLocationPhase } from "@/lib/travelAssistant/airportLocationPhase";
@@ -107,21 +105,15 @@ function buildCoachPathSteps(input: {
     });
   }
 
-  const checkIn = buildDepartCheckInCoachStep({
+  return buildDepartDayCoachPath({
     iata: input.iata,
     airlineName: input.flight.flightAirline ?? input.flight.provider,
     flightNumber: input.flight.flightNumber,
+    gateCode: input.flight.flightDepartureGate,
     departureTerminal: input.flight.flightDepartureTerminal,
+    credentials: input.credentials,
+    eligibleLoungeNames: [],
   });
-  const guide = buildGateInstructions(
-    input.iata,
-    input.flight.flightDepartureGate ?? undefined,
-    input.flight.flightDepartureTerminal ?? undefined,
-    input.credentials.clear,
-    input.credentials.tsaPreCheck,
-    input.credentials.globalEntry,
-  );
-  return [checkIn, ...tagDepartGuideSteps(guide.steps)];
 }
 
 export function resolveAirportSpotlightForHome(input: {

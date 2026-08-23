@@ -4,6 +4,7 @@ import {
   buildArrivalDayCoachPath,
   buildAirportHomeSpotlight,
   buildDepartCheckInCoachStep,
+  buildDepartDayCoachPath,
   departureTimeBudgetReassurance,
   deriveAirportDayCoachMode,
   formatLiveBaggageCarouselNote,
@@ -93,6 +94,22 @@ test("M39: buildDepartCheckInCoachStep uses Alaska Terminal 2 at ONT", () => {
   assert.match(step.text, /Alaska/i);
   assert.match(step.text, /Terminal 2/i);
   assert.match(step.detail ?? "", /AS654/);
+});
+
+test("buildDepartDayCoachPath at ONT walks curb → Alaska check-in → TSA → gate", () => {
+  const steps = buildDepartDayCoachPath({
+    iata: "ONT",
+    airlineName: "Alaska Airlines",
+    flightNumber: "AS654",
+    gateCode: "205",
+    credentials: { tsaPreCheck: true },
+  });
+  assert.deepEqual(
+    steps.map((s) => s.id),
+    ["curb", "check-in", "security", "gate"],
+  );
+  assert.ok(steps.some((s) => s.id === "security" && /PreCheck/i.test(s.text)));
+  assert.ok(steps.some((s) => s.id === "gate" && /205/.test(s.text)));
 });
 
 test("isInternationalArrivalFlight compares countries", () => {
