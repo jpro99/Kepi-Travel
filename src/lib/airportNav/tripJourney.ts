@@ -22,6 +22,15 @@ import { resolveGateNode } from "./pathfinder";
 
 export type JourneyRole = "dropoff" | "checkin" | "security" | "lounge" | "gate";
 
+/** Arrival-first-mile roles — gate → passport → bags → customs → ground transport. */
+export type ArrivalJourneyRole =
+  | "deplane"
+  | "passport"
+  | "baggage"
+  | "customs"
+  | "exit"
+  | "ground_transport";
+
 export interface JourneyStop {
   role: JourneyRole;
   /** Graph node for this stop. Empty string when the stop is not yet known. */
@@ -245,6 +254,153 @@ export function buildTripJourney(
   }
 
   return stops;
+}
+
+export interface ArrivalJourneyStop {
+  role: ArrivalJourneyRole;
+  nodeId: string;
+  poiId?: string;
+  label: string;
+  detail?: string;
+  known: boolean;
+}
+
+export interface ArrivalJourneyContext {
+  gateCode?: string | null;
+  /** When false, skip passport (domestic / Schengen-only). */
+  includePassport?: boolean;
+  /** When false, skip customs (domestic). */
+  includeCustoms?: boolean;
+  /** Include Leonardo / train POI when layout has one. */
+  includeGroundTransport?: boolean;
+}
+
+/** True when a bundled layout has schematic arrival nodes for map + coach wiring. */
+export function layoutSupportsArrivalFirstMile(layout: AirportLayout): boolean {
+  const hasBaggage = layout.nodes.some((node) => node.kind === "baggage_claim");
+  const hasPassportOrCustoms = layout.pois.some(
+    (poi) =>
+      poi.category === "customs" || poi.category === "baggage",
+  );
+  const hasGround =
+    layout.pois.some((poi) => poi.category === "train") ||
+    layout.nodes.some((node) => node.kind === "ground_transport");
+  return hasBaggage && hasPassportOrCustoms && hasGround;
+}
+
+function resolveArrivalGateNode(layout: AirportLayout, gateCode?: string | null): string | null {
+  if (gateCode) {
+    const resolved = resolveGateNode(layout, gateCode);
+    if (resolved) return resolved;
+  }
+  const gateNode =
+    layout.nodes.find((node) => node.kind === "gate" && node.airside) ??
+    layout.nodes.find((node) => node.kind === "gate");
+  return gateNode?.id ?? null;
+}
+
+/**
+ * Arrival path for airports with first-mile graph nodes (FCO T3 pilot).
+ * Ordered: deplane → passport → baggage → customs → Leonardo / ground transport.
+ */
+export function buildArrivalTripJourney(
+  layout: AirportLayout,
+  ctx: ArrivalJourneyContext = {},
+): ArrivalJourneyStop[] {
+  if (!layoutSupportsArrivalFirstMile(layout)) return [];
+
+  const stops: ArrivalJourneyStop[] = [];
+  const gateNodeId = resolveArrivalGateNode(layout, ctx.gateCode);
+  const gatePoi = gateNodeId
+    ? layout.pois.find((poi) => poi.category === "gate" && poi.nodeId === gateNodeId)
+    : undefined;
+
+  if (gateNodeId) {
+    stops.push({
+      role: "deplane",
+      nodeId: gateNodeId,
+      poiId: gatePoi?.id,
+      label: ctx.gateCode ? `Gate ${ctx.gateCode.trim().toUpperCase()}` : "Arrivals gate",
+      detail: gatePoi?.name,
+      known: true,
+    });
+  }
+
+  const passportPoi = layout.pois.find(
+    (poi) => poi.id.includes("passport") || /passport/i.test(poi.name),
+  );
+  if (ctx.includePassport !== false && passportPoi) {
+    stops.push({
+      role: "passport",
+      nodeId: passportPoi.nodeId,
+      poiId: passportPoi.id,
+      label: passportPoi.name,
+      detail: passportPoi.notes,
+      known: true,
+    });
+  }
+
+  const baggagePoi = layout.pois.find((poi) => poi.category === "baggage");
+  if (baggagePoi) {
+    stops.push({
+      role: "baggage",
+      nodeId: baggagePoi.nodeId,
+      poiId: baggagePoi.id,
+      label: baggagePoi.name,
+      detail: baggagePoi.notes,
+      known: true,
+    });
+  }
+
+  const customsPoi = layout.pois.find(
+    (poi) => poi.category === "customs" && poi.id !== passportPoi?.id,
+  );
+  if (ctx.includeCustoms !== false && customsPoi) {
+    stops.push({
+      role: "customs",
+      nodeId: customsPoi.nodeId,
+      poiId: customsPoi.id,
+      label: customsPoi.name,
+      detail: customsPoi.notes,
+      known: true,
+    });
+  }
+
+  const exitNode =
+    layout.nodes.find((node) => node.id.startsWith("curb-") && !node.airside) ??
+    layout.nodes.find((node) => !node.airside && /arrival|exit/i.test(node.landmark ?? ""));
+  if (exitNode) {
+    stops.push({
+      role: "exit",
+      nodeId: exitNode.id,
+      label: "Exit to ground transport",
+      detail: exitNode.landmark,
+      known: true,
+    });
+  }
+
+  if (ctx.includeGroundTransport !== false) {
+    const trainPoi =
+      layout.pois.find((poi) => poi.category === "train") ??
+      layout.pois.find((poi) => poi.category === "ground_transport" && poi.id.includes("leonardo"));
+    if (trainPoi) {
+      stops.push({
+        role: "ground_transport",
+        nodeId: trainPoi.nodeId,
+        poiId: trainPoi.id,
+        label: trainPoi.name,
+        detail: trainPoi.notes,
+        known: true,
+      });
+    }
+  }
+
+  return stops;
+}
+
+/** POI ids on the arrival journey — for map emphasis. */
+export function arrivalJourneyPoiIds(stops: ArrivalJourneyStop[]): Set<string> {
+  return new Set(stops.map((stop) => stop.poiId).filter((id): id is string => Boolean(id)));
 }
 
 /** POI ids that are part of the journey — used to emphasise vs. fade markers. */

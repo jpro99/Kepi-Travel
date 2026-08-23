@@ -5,6 +5,7 @@ import {
   selectPreviewAirportFlight,
   selectFlightForDepartureIata,
   selectFlightForArrivalIata,
+  selectFlightForAirportIata,
   resolveCoachModeForPinnedAirport,
   toUtcMs,
   type FlightReservation,
@@ -127,6 +128,47 @@ test("selectFlightForDepartureIata pins ONT not earliest SEA leg", () => {
   assert.equal(fcoArrival?.f.id, "as180");
   assert.equal(
     resolveCoachModeForPinnedAirport(flights[0], "FCO"),
+    "arrive",
+  );
+});
+
+test("FCO arrive mode pins inbound AS180 — AZ1607 FCO→BRI cannot steal", () => {
+  const now = Date.parse("2026-08-23T12:00:00Z");
+  const flights: FlightReservation[] = [
+    {
+      id: "as180",
+      type: "flight",
+      title: "AS 180",
+      provider: "Alaska",
+      localTime: "2026-09-01 17:30",
+      location: "SEA",
+      flightNumber: "AS180",
+      flightDepartureAirport: "SEA",
+      flightArrivalAirport: "FCO",
+      flightDepartureTime: "2026-09-01 17:30",
+      flightArrivalTime: "2026-09-02 14:30",
+    },
+    {
+      id: "az1607",
+      type: "flight",
+      title: "AZ 1607",
+      provider: "ITA Airways",
+      localTime: "2026-09-05 10:00",
+      location: "FCO",
+      flightNumber: "AZ1607",
+      flightDepartureAirport: "FCO",
+      flightArrivalAirport: "BRI",
+      flightDepartureTime: "2026-09-05 10:00",
+      flightArrivalTime: "2026-09-05 11:00",
+    },
+  ];
+  const pinnedArrive = selectFlightForAirportIata(flights, "FCO", now, "arrive");
+  assert.equal(pinnedArrive?.f.id, "as180");
+  assert.equal(pinnedArrive?.f.flightArrivalAirport, "FCO");
+  const pinnedDefault = selectFlightForAirportIata(flights, "FCO", now, null);
+  assert.equal(pinnedDefault?.f.id, "as180", "earlier arrival leg wins over later FCO departure");
+  assert.equal(
+    resolveCoachModeForPinnedAirport(pinnedArrive!.f, "FCO", "arrive"),
     "arrive",
   );
 });

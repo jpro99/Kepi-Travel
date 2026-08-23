@@ -18,6 +18,7 @@
 import type { AirportLayout, GraphEdge, GraphNode, PoiDefinition } from "../types";
 import {
   buildMultiTerminalSkeleton,
+  lerpPos,
   metersBetween,
   schematicZoneRing,
   walkSecs,
@@ -50,6 +51,118 @@ const BUILT = buildMultiTerminalSkeleton({
     },
   ],
 });
+
+/**
+ * International arrivals first mile at T3 (schematic, M30/M32).
+ * Flow: E-gate cluster → passport → baggage → customs → arrivals hall → Leonardo.
+ * Passport→baggage crosses airside/landside via security_transition (M31), same
+ * pattern as LAX TBIT arrivals (2026-08-23).
+ */
+function appendFcoArrivalFirstMile(
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+  pois: PoiDefinition[],
+): void {
+  const gateEId = "gate-e";
+  const gateEPos: [number, number] = [12.245506, 41.796099]; // surveyed OSM E cluster
+  const t3CurbId = "curb-t3";
+  const t3CurbPos: [number, number] = [12.250329, 41.795574];
+
+  const passportPos = lerpPos(gateEPos, t3CurbPos, 0.22);
+  const baggagePos = lerpPos(gateEPos, t3CurbPos, 0.48);
+  const customsPos = lerpPos(gateEPos, t3CurbPos, 0.62);
+
+  nodes.push({
+    id: "passport-t3",
+    pos: passportPos,
+    kind: "customs",
+    airside: true,
+    landmark: "Passport control — Terminal 3 (Polizia di Frontiera)",
+  });
+  nodes.push({
+    id: "baggage-t3",
+    pos: baggagePos,
+    kind: "baggage_claim",
+    airside: false,
+    landmark: "Baggage claim — Terminal 3 arrivals hall",
+  });
+  nodes.push({
+    id: "customs-t3",
+    pos: customsPos,
+    kind: "customs",
+    airside: false,
+    landmark: "Customs — green channel / nothing to declare",
+  });
+
+  const gateToPassportM = metersBetween(gateEPos, passportPos);
+  edges.push({
+    id: "e-gate-e-passport",
+    from: gateEId,
+    to: "passport-t3",
+    kind: "walkway",
+    lengthM: Math.max(15, gateToPassportM),
+    traverseSeconds: walkSecs(Math.max(15, gateToPassportM)),
+    bidirectional: false,
+  });
+  edges.push({
+    id: "e-passport-baggage",
+    from: "passport-t3",
+    to: "baggage-t3",
+    kind: "security_transition",
+    lengthM: 40,
+    traverseSeconds: 12 * 60,
+    bidirectional: false,
+    laneType: "customs",
+  });
+  const baggageToCustomsM = metersBetween(baggagePos, customsPos);
+  edges.push({
+    id: "e-baggage-customs",
+    from: "baggage-t3",
+    to: "customs-t3",
+    kind: "walkway",
+    lengthM: Math.max(10, baggageToCustomsM),
+    traverseSeconds: walkSecs(Math.max(10, baggageToCustomsM)),
+    bidirectional: false,
+  });
+  const customsToCurbM = metersBetween(customsPos, t3CurbPos);
+  edges.push({
+    id: "e-customs-curb",
+    from: "customs-t3",
+    to: t3CurbId,
+    kind: "walkway",
+    lengthM: Math.max(10, customsToCurbM),
+    traverseSeconds: walkSecs(Math.max(10, customsToCurbM)),
+    bidirectional: false,
+  });
+
+  pois.push({
+    id: "poi-passport-t3",
+    nodeId: "passport-t3",
+    category: "customs",
+    name: "Passport control",
+    precision: "schematic",
+    notes:
+      "EU/EEA passport holders use the EU lane; everyone else uses All Passports. Have passport ready — pin is schematic between the E-gate cluster and baggage claim.",
+  });
+  pois.push({
+    id: "poi-baggage-t3",
+    nodeId: "baggage-t3",
+    category: "baggage",
+    name: "Baggage claim — Terminal 3",
+    precision: "schematic",
+    notes:
+      "Follow Baggage Claim / Ritiro bagagli signs. Carousel number is on the overhead screens — Kepi does not invent belt numbers.",
+  });
+  pois.push({
+    id: "poi-customs-t3",
+    nodeId: "customs-t3",
+    category: "customs",
+    name: "Customs → Exit",
+    precision: "schematic",
+    notes:
+      "Declare food/agriculture if required, then follow Exit / Ground Transport signs toward the rail station.",
+  });
+}
 
 /** Outdoor first-mile targets — no fabricated indoor geometry (M30/M32). */
 function appendFcoArrivalsGroundTransport(
@@ -131,12 +244,13 @@ function appendFcoArrivalsGroundTransport(
 const nodes = [...BUILT.nodes];
 const edges = [...BUILT.edges];
 const pois = [...BUILT.pois];
+appendFcoArrivalFirstMile(nodes, edges, pois);
 appendFcoArrivalsGroundTransport(nodes, edges, pois);
 
 export const FCO_LAYOUT: AirportLayout = {
   iata: "FCO",
   name: "Rome Fiumicino",
-  layoutVersion: "0.2.0-arrivals-ground",
+  layoutVersion: "0.3.0-arrival-first-mile",
   updatedAt: "2026-08-23",
   center: [12.250152, 41.795211],
   zones: [

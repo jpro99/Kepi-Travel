@@ -12,7 +12,8 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AirportLayout, ComputedRoute, GraphEdge, PoiDefinition, SnappedPosition, TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
-import { buildTripJourney, journeyPoiIds, preSecurityJourney, type JourneyStop } from "@/lib/airportNav/tripJourney";
+import { buildTripJourney, journeyPoiIds, preSecurityJourney, type JourneyStop, buildArrivalTripJourney, arrivalJourneyPoiIds, layoutSupportsArrivalFirstMile, type ArrivalJourneyStop } from "@/lib/airportNav/tripJourney";
+import { isInternationalArrivalFlight } from "@/lib/travelAssistant/airportDayCoach";
 import { poiMinZoom, airlineLogoAsset } from "@/lib/airportNav/poiDetail";
 import { SECURITY_APPROX_DISCLAIMER } from "@/lib/airportNav/securityDisclosure";
 import { poiLocationHonestyTag } from "@/lib/airportNav/poiPrecisionHonesty";
@@ -1194,13 +1195,21 @@ export function AirportNavigatorMap({
     return snapToGraph(layout, userLon, userLat, userAccuracyM);
   }, [layout, previewMode, confirmedNodeId, userLat, userLon, userAccuracyM]);
 
+  const isArriveCoach = coachMode === "arrive";
+  const arrivalFirstMile = Boolean(layout && isArriveCoach && layoutSupportsArrivalFirstMile(layout));
+
   const originNodeId = useMemo(() => {
     if (snapped && !previewMode) return snapped.nearestNodeId;
     if (!layout) return null;
+    if (isArriveCoach && layoutSupportsArrivalFirstMile(layout)) {
+      const arrivalGate =
+        layout.nodes.find((node) => node.kind === "gate" && node.airside)?.id ?? null;
+      if (arrivalGate) return arrivalGate;
+    }
     return layout.nodes.find((node) => node.kind === "junction" && !node.airside)?.id
       ?? layout.nodes[0]?.id
       ?? null;
-  }, [snapped, layout, previewMode]);
+  }, [snapped, layout, previewMode, isArriveCoach]);
 
   const gatePoi: PoiDefinition | null = useMemo(() => {
     if (!layout || !gateCode) return null;
@@ -1209,27 +1218,44 @@ export function AirportNavigatorMap({
     return layout.pois.find((poi) => poi.category === "gate" && poi.nodeId === gateNodeId) ?? null;
   }, [layout, gateCode]);
 
-  /* ── Trip-focused journey (drop-off → check-in → security → lounge → gate) ─ */
+  /* ── Trip-focused journey (depart or arrive first mile) ─ */
   const journey: JourneyStop[] = useMemo(() => {
-    if (!layout) return [];
+    if (!layout || isArriveCoach) return [];
     return buildTripJourney(layout, {
       airlineName,
       gateCode,
       eligibleLoungeNames,
     });
-  }, [layout, airlineName, gateCode, eligibleLoungeNames]);
+  }, [layout, isArriveCoach, airlineName, gateCode, eligibleLoungeNames]);
 
-  const journeyPoiIdSet = useMemo(() => journeyPoiIds(journey), [journey]);
+  const arrivalJourney: ArrivalJourneyStop[] = useMemo(() => {
+    if (!layout || !isArriveCoach) return [];
+    const intl = isInternationalArrivalFlight(departureAirport, iata);
+    return buildArrivalTripJourney(layout, {
+      gateCode,
+      includePassport: intl,
+      includeCustoms: intl,
+    });
+  }, [layout, isArriveCoach, departureAirport, iata, gateCode]);
+
+  const journeyPoiIdSet = useMemo(
+    () =>
+      isArriveCoach
+        ? arrivalJourneyPoiIds(arrivalJourney)
+        : journeyPoiIds(journey),
+    [isArriveCoach, arrivalJourney, journey],
+  );
 
   // The connected "here's your whole path" line: drop-off → check-in → security
   // → lounge → your gate, chained leg-by-leg along the real walkway graph. Stops
   // at the first unknown stop (e.g. gate not yet assigned).
   const journeyRoute = useMemo<{ coords: [number, number][]; nodeIds: string[] } | null>(() => {
     if (!layout) return null;
-    // In preview (pre-trip) draw only the get-through-the-door path
-    // (drop-off → check-in → security); the full airside line to lounge/gate is
-    // drawn at the airport / once the gate is assigned (M24).
-    const stops = previewMode ? preSecurityJourney(journey) : journey;
+    const stops = isArriveCoach
+      ? arrivalJourney
+      : previewMode
+        ? preSecurityJourney(journey)
+        : journey;
     if (stops.length < 2) return null;
     const startId = stops[0]?.nodeId;
     if (!startId) return null;
@@ -1254,7 +1280,7 @@ export function AirportNavigatorMap({
       nodeIds.push(...legNodes);
     }
     return coords.length > 1 ? { coords, nodeIds } : null;
-  }, [layout, journey, previewMode, credentials, navCalibration]);
+  }, [layout, journey, arrivalJourney, isArriveCoach, previewMode, credentials, navCalibration]);
 
   /* ── Routing ────────────────────────────────────────────────────────── */
   const startRoute = useCallback(
@@ -2453,8 +2479,13 @@ export function AirportNavigatorMap({
   }, [previewMode, activeRoute, snapped, userLon, userLat, deviceHeading, currentStepIdx, activeDestName]);
 
   /* ── Render ─────────────────────────────────────────────────────────── */
-  // Arrival coach always uses the honesty fallback (not departure-oriented indoor maps).
-  if (coachMode === "arrive" || layoutStatus === "unsupported" || layoutStatus === "error") {
+  // Arrival coach uses the indoor map when the layout has first-mile nodes; otherwise
+  // the honesty checklist fallback (no fabricated indoor geometry).
+  if (
+    (isArriveCoach && !arrivalFirstMile) ||
+    layoutStatus === "unsupported" ||
+    (layoutStatus === "error" && !isArriveCoach)
+  ) {
     return (
       <AirportNavigatorFallback
         iata={iata}
@@ -2566,16 +2597,22 @@ export function AirportNavigatorMap({
           {hideEmbeddedFlightHero ? (
             <p className="truncate text-[13px] font-bold text-white">
               {[airlineName, flightNumber].filter(Boolean).join(" ") || "Your flight"}
-              {arrivalAirport ? ` · ${iata} → ${arrivalAirport.toUpperCase()}` : ""}
+              {isArriveCoach && departureAirport
+                ? ` · ${departureAirport.toUpperCase()} → ${iata}`
+                : arrivalAirport
+                  ? ` · ${iata} → ${arrivalAirport.toUpperCase()}`
+                  : ""}
             </p>
           ) : null}
           <p className={`text-[11px] font-bold uppercase tracking-wide text-sky-200 ${hideEmbeddedFlightHero ? "mt-1" : ""}`}>
-            Explore before you go
+            {isArriveCoach ? "Arrival first mile" : "Explore before you go"}
           </p>
           <p className="text-[11px] leading-snug text-sky-100/90">
-            {gateCode
-              ? `Tap Essentials, Lounges, or any label to explore ${iata}. Live directions start when you arrive.`
-              : `Gate assignment pending. Explore check-in, security, trains, and lounges now — your gate will highlight when assigned.`}
+            {isArriveCoach
+              ? `Tap Where to? for passport, bags, customs, and Leonardo Express. Live directions start when you land.`
+              : gateCode
+                ? `Tap Essentials, Lounges, or any label to explore ${iata}. Live directions start when you arrive.`
+                : `Gate assignment pending. Explore check-in, security, trains, and lounges now — your gate will highlight when assigned.`}
           </p>
           {!preciseRouteEnabled ? (
             <p className="mt-1 text-[11px] leading-snug text-amber-200/90">

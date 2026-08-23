@@ -1048,7 +1048,11 @@ export function LiveMapPage() {
               previewMode={airportPreviewMode}
               maptilerKey={maptilerKey}
               iata={navIata}
-              gateCode={navFlight.f.flightDepartureGate ?? null}
+              gateCode={
+                navigatorCoachMode === "arrive"
+                  ? (navFlight.f.flightArrivalGate ?? navFlight.f.flightDepartureGate ?? null)
+                  : (navFlight.f.flightDepartureGate ?? null)
+              }
               airlineName={navFlight.f.flightAirline ?? navFlight.f.provider ?? null}
               flightNumber={navFlight.f.flightNumber ?? null}
               arrivalAirport={navFlight.f.flightArrivalAirport ?? null}

@@ -195,7 +195,7 @@ export function selectFlightForArrivalIata(
   return upcoming;
 }
 
-/** Match a pinned IATA to the correct leg — departure first unless mode forces arrival. */
+/** Match a pinned IATA to the correct leg — arrival when mode=arrive or when arrival is next at this airport. */
 export function selectFlightForAirportIata(
   reservations: FlightReservation[],
   iata: string,
@@ -208,9 +208,14 @@ export function selectFlightForAirportIata(
   if (mode === "depart") {
     return selectFlightForDepartureIata(reservations, iata, nowMs);
   }
+  const arrival = selectFlightForArrivalIata(reservations, iata, nowMs);
   const departure = selectFlightForDepartureIata(reservations, iata, nowMs);
-  if (departure) return departure;
-  return selectFlightForArrivalIata(reservations, iata, nowMs);
+  if (arrival && !departure) return arrival;
+  if (departure && !arrival) return departure;
+  if (!arrival || !departure) return null;
+  // FCO (and any hub with both inbound + outbound): pick the chronologically next
+  // event at this airport so AZ1607 FCO→BRI cannot steal AS180 SEA→FCO preview.
+  return arrival.utcMs <= departure.utcMs ? arrival : departure;
 }
 
 /** Coach surface for a pinned airport — arrival IATA opens first-mile arrive copy. */
@@ -310,12 +315,19 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
 
   const navigatorCoachMode = useMemo(() => {
     if (pinnedFlight && preferredIata) {
-      return resolveCoachModeForPinnedAirport(
+      const resolved = resolveCoachModeForPinnedAirport(
         pinnedFlight.f,
         preferredIata,
         preferredMode,
         coachMode,
       );
+      if (resolved === "arrive" || resolved === "depart") return resolved;
+      // Pinned flight is the arrival leg at this IATA — open first-mile arrive surface.
+      const code = preferredIata.trim().toUpperCase();
+      const dep = pinnedFlight.f.flightDepartureAirport?.trim().toUpperCase() ?? "";
+      const arr = pinnedFlight.f.flightArrivalAirport?.trim().toUpperCase() ?? "";
+      if (arr === code && dep !== code) return "arrive";
+      return coachMode;
     }
     return coachMode;
   }, [pinnedFlight, preferredIata, preferredMode, coachMode]);
