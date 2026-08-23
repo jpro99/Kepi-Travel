@@ -9271,27 +9271,47 @@ export default function TravelAssistantPage() {
   const openReadinessChecklistInMoreTab = useCallback((): void => {
     setPendingMoreScrollTarget("readiness-checklist");
     navigateToConsumerTab("more");
-    if (typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches) {
+    if (isCompactViewportClient()) {
       navigateMobilePrimaryTab("more");
+    }
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      params.set("readiness", "1");
+      const nextUrl = `${window.location.pathname}?${params.toString()}`;
+      window.history.replaceState({}, "", nextUrl);
     }
   }, [navigateToConsumerTab, navigateMobilePrimaryTab]);
 
   useEffect(() => {
-    const onMoreTab = isCompactViewport ? mobilePrimaryTab === "more" : consumerTab === "more";
+    const onMoreTab = isCompactViewportClient()
+      ? mobilePrimaryTab === "more"
+      : consumerTab === "more";
     if (!onMoreTab || pendingMoreScrollTarget !== "readiness-checklist") {
       return;
     }
-    const timeout = window.setTimeout(() => {
-      readinessChecklistSectionRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-      setPendingMoreScrollTarget(null);
-    }, 140);
+    let attempts = 0;
+    let cancelled = false;
+    const tryScroll = (): void => {
+      if (cancelled) return;
+      const section = readinessChecklistSectionRef.current;
+      if (section) {
+        section.scrollIntoView({ behavior: "smooth", block: "start" });
+        setPendingMoreScrollTarget(null);
+        return;
+      }
+      attempts += 1;
+      if (attempts < 10) {
+        window.setTimeout(tryScroll, 120);
+      } else {
+        setPendingMoreScrollTarget(null);
+      }
+    };
+    const timeout = window.setTimeout(tryScroll, 80);
     return () => {
+      cancelled = true;
       window.clearTimeout(timeout);
     };
-  }, [consumerTab, mobilePrimaryTab, pendingMoreScrollTarget, isCompactViewport]);
+  }, [consumerTab, mobilePrimaryTab, pendingMoreScrollTarget]);
 
   const readinessChecklistForHome = useMemo(
     () =>
@@ -10749,6 +10769,18 @@ export default function TravelAssistantPage() {
             </section>
           ) : (
             <section className="space-y-3">
+              {activeTrip && readinessItems.length > 0 ? (
+                <TripReadinessChecklistSection
+                  id="readiness-checklist-section"
+                  sectionRef={readinessChecklistSectionRef}
+                  title={tApp("moreReadinessTitle")}
+                  pendingLabel={tApp("moreReadinessPending", { count: unresolvedReadinessCount })}
+                  items={readinessItems}
+                  unresolvedCount={unresolvedReadinessCount}
+                  onToggle={handleChecklistToggle}
+                />
+              ) : null}
+
               <button
                 type="button"
                 onClick={() => setShowPointsLearn(true)}
@@ -10910,15 +10942,6 @@ export default function TravelAssistantPage() {
                 tripName={activeTrip?.name ?? "My Trip"}
                 isSharedWithMe={Boolean(activeTrip?.collaboration)}
                 onOpenShare={() => setShareModalOpen(true)}
-              />
-              <TripReadinessChecklistSection
-                id="readiness-checklist-section"
-                sectionRef={readinessChecklistSectionRef}
-                title={tApp("moreReadinessTitle")}
-                pendingLabel={tApp("moreReadinessPending", { count: unresolvedReadinessCount })}
-                items={readinessItems}
-                unresolvedCount={unresolvedReadinessCount}
-                onToggle={handleChecklistToggle}
               />
 
               <article className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm dark:border-emerald-500/40 dark:bg-emerald-500/10">

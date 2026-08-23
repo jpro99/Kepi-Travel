@@ -525,6 +525,10 @@ export function MissionControlView({
     }
     if (nextAction.kind === "attention" && nextAction.attention) {
       const item = nextAction.attention;
+      if (item.actionTab === "more" && onOpenReadiness) {
+        onOpenReadiness();
+        return;
+      }
       if (item.reservationId && onReservationTap) {
         onReservationTap(item.reservationId);
         return;

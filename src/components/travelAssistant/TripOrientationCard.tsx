@@ -51,10 +51,13 @@ export function TripOrientationCard({
         <button
           type="button"
           onClick={() => {
+            if (onNextAction) {
+              onNextAction();
+              return;
+            }
             if (actionTargetTab && onSwitchTab) {
               onSwitchTab(orientationTabToConsumerTab(actionTargetTab));
             }
-            onNextAction?.();
           }}
           className="mt-4 w-full rounded-2xl bg-slate-950 px-4 py-3 text-base font-semibold text-white shadow-sm hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200 sm:w-auto"
         >
