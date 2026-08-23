@@ -13,7 +13,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AirportLayout, ComputedRoute, GraphEdge, PoiDefinition, SnappedPosition, TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
 import { buildTripJourney, journeyPoiIds, preSecurityJourney, type JourneyStop, buildArrivalTripJourney, arrivalJourneyPoiIds, layoutSupportsArrivalFirstMile, type ArrivalJourneyStop } from "@/lib/airportNav/tripJourney";
-import { isInternationalArrivalFlight } from "@/lib/travelAssistant/airportDayCoach";
+import {
+  buildArrivalDayCoachPath,
+  isInternationalArrivalFlight,
+  resolveArrivalSpotlightIndex,
+  selectDayCoachVisibleSteps,
+} from "@/lib/travelAssistant/airportDayCoach";
+import { resolveArrivalTransportPresentation } from "@/lib/travelAssistant/arrivalTransportPresentation";
+import { buildRideFromAirportDeepLinks } from "@/lib/travelAssistant/groundTransportDeepLinks";
+import { getAirportNav } from "@/lib/travelAssistant/airportNavigation";
+import { AirportArrivalFirstMileChrome } from "@/components/travelAssistant/AirportArrivalFirstMileChrome";
 import { poiMinZoom, airlineLogoAsset } from "@/lib/airportNav/poiDetail";
 import { SECURITY_APPROX_DISCLAIMER } from "@/lib/airportNav/securityDisclosure";
 import { poiLocationHonestyTag } from "@/lib/airportNav/poiPrecisionHonesty";
@@ -267,7 +276,11 @@ function airportPoiIsVisible(
   gatePoiId: string | null,
   hasAirlineCheckin: boolean,
   zoom?: number,
+  arrivalJourneyPoiIds?: Set<string>,
 ): boolean {
+  if (arrivalJourneyPoiIds?.size) {
+    return arrivalJourneyPoiIds.has(definition.id);
+  }
   // Terminal curb drop-off POIs stay visible even when an airline counter exists elsewhere.
   if (definition.id.startsWith("poi-dropoff-")) {
     if (mode === "lounges") return false;
@@ -285,7 +298,11 @@ function airportPoiIsVisible(
   // in. Only applied when a live zoom value is supplied (the map); the static
   // rail/schematic lists pass no zoom and are unaffected.
   if (typeof zoom === "number" && zoom < poiMinZoom(definition)) return false;
-  if (mode === "essentials") return ["gate", "checkin", "security", "train"].includes(definition.category);
+  if (mode === "essentials") {
+    return ["gate", "checkin", "security", "train", "baggage", "customs", "ground_transport"].includes(
+      definition.category,
+    );
+  }
   if (mode === "lounges") return ["gate", "security", "train", "lounge"].includes(definition.category);
   return true;
 }
@@ -303,6 +320,8 @@ interface AirportDestinationRailProps {
   open: boolean;
   onToggle: () => void;
   railTop?: string;
+  /** When set, the rail lists only these journey POIs (arrival first mile). */
+  arrivalJourneyPoiIds?: Set<string>;
 }
 
 function AirportDestinationRail({
@@ -317,6 +336,7 @@ function AirportDestinationRail({
   open,
   onToggle,
   railTop = "9rem",
+  arrivalJourneyPoiIds,
 }: AirportDestinationRailProps) {
   const [detailMode, setDetailMode] = useState<AirportDetailMode>("essentials");
   const hasAirlineCheckin = layout.pois.some((definition) =>
@@ -325,8 +345,17 @@ function AirportDestinationRail({
     && Boolean(airlineName?.toLowerCase().includes(definition.airline!.toLowerCase())),
   );
   const visiblePois = layout.pois.filter((definition) =>
-    airportPoiIsVisible(definition, detailMode, airlineName, gatePoiId, hasAirlineCheckin),
+    airportPoiIsVisible(
+      definition,
+      detailMode,
+      airlineName,
+      gatePoiId,
+      hasAirlineCheckin,
+      undefined,
+      arrivalJourneyPoiIds,
+    ),
   );
+  const arrivalChipMode = Boolean(arrivalJourneyPoiIds?.size);
 
   // Collapsed: a single small chip. The full destinations list used to be
   // permanently docked here, eating ~80% of screen height on every airport
@@ -352,7 +381,7 @@ function AirportDestinationRail({
     <section
       aria-label="Airport destinations"
       className="pointer-events-auto absolute right-2 z-[60] flex w-[42%] max-w-[190px] flex-col overflow-hidden rounded-[22px] bg-white/95 p-2.5 shadow-2xl backdrop-blur-md sm:right-4 sm:w-52 sm:max-w-none"
-      style={{ top: railTop, maxHeight: `calc(100% - ${railTop} - 5.5rem)` }}
+      style={{ top: railTop, maxHeight: `calc(100% - ${railTop} - 5.5rem)`, minHeight: arrivalChipMode ? "12rem" : undefined }}
     >
       <div>
         <div className="flex items-start justify-between gap-1">
@@ -392,6 +421,7 @@ function AirportDestinationRail({
           </p>
         ) : null}
       </div>
+      {!arrivalChipMode ? (
       <div className="mt-2 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">
         {([
           ["essentials", "Main"],
@@ -411,7 +441,8 @@ function AirportDestinationRail({
           </button>
         ))}
       </div>
-      <div className="mt-2 min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain pr-0.5 touch-pan-y [-webkit-overflow-scrolling:touch]">
+      ) : null}
+      <div className="mt-2 min-h-[8rem] max-h-[min(42dvh,280px)] flex-1 space-y-1.5 overflow-y-auto overscroll-contain pr-0.5 touch-pan-y [-webkit-overflow-scrolling:touch]">
         {visiblePois.map((definition) => {
           const isGate = definition.id === gatePoiId;
           const selected = definition.id === selectedPoiId;
@@ -1246,6 +1277,72 @@ export function AirportNavigatorMap({
     [isArriveCoach, arrivalJourney, journey],
   );
 
+  const [coachFullDayView, setCoachFullDayView] = useState(false);
+
+  const arrivalDayCoachSteps = useMemo(() => {
+    if (!arrivalFirstMile) return [];
+    return buildArrivalDayCoachPath({
+      iata,
+      flightNumber,
+      airlineName,
+      departureIata: departureAirport,
+      arrivalTerminal,
+      arrivalGate: gateCode,
+      hotelLabel,
+      flightArrivalTime,
+      flightTimezone,
+      landedMinutesAgo,
+    });
+  }, [
+    arrivalFirstMile,
+    iata,
+    flightNumber,
+    airlineName,
+    departureAirport,
+    arrivalTerminal,
+    gateCode,
+    hotelLabel,
+    flightArrivalTime,
+    flightTimezone,
+    landedMinutesAgo,
+  ]);
+
+  const arrivalSpotlightIndex = useMemo(() => {
+    if (!arrivalFirstMile) return 0;
+    return resolveArrivalSpotlightIndex({
+      steps: arrivalDayCoachSteps,
+      landedMinutesAgo,
+      locationStatus: proximityStatus,
+      hasLiveBaggage: false,
+    });
+  }, [arrivalFirstMile, arrivalDayCoachSteps, landedMinutesAgo, proximityStatus]);
+
+  const { visible: visibleArrivalCoachSteps, hiddenCount: hiddenArrivalCoachSteps } = useMemo(
+    () => selectDayCoachVisibleSteps(arrivalDayCoachSteps, coachFullDayView, arrivalSpotlightIndex),
+    [arrivalDayCoachSteps, coachFullDayView, arrivalSpotlightIndex],
+  );
+
+  const arrivalNextUp = visibleArrivalCoachSteps[0] ?? null;
+
+  const arrivalTransportPresentation = useMemo(() => {
+    if (!arrivalFirstMile) return null;
+    return resolveArrivalTransportPresentation({
+      iata,
+      flightArrivalTime,
+      flightTimezone,
+      landedMinutesAgo,
+      hotelLabel,
+    });
+  }, [arrivalFirstMile, iata, flightArrivalTime, flightTimezone, landedMinutesAgo, hotelLabel]);
+
+  const arrivalRideLinks = useMemo(
+    () => (arrivalFirstMile ? buildRideFromAirportDeepLinks(iata, hotelDropoff) : null),
+    [arrivalFirstMile, iata, hotelDropoff],
+  );
+
+  const arrivalTransportOptions =
+    arrivalTransportPresentation?.transportOptions ?? getAirportNav(iata)?.arrivalInfo?.transportOptions ?? [];
+
   // The connected "here's your whole path" line: drop-off → check-in → security
   // → lounge → your gate, chained leg-by-leg along the real walkway graph. Stops
   // at the first unknown stop (e.g. gate not yet assigned).
@@ -1290,7 +1387,7 @@ export function AirportNavigatorMap({
       if (!targetPoi) return;
       // Highlight the tapped destination immediately, regardless of routing outcome.
       setSelectedPoiId(poiId);
-      if (isAirsidePoi(targetPoi) && !credentials.known && !journeyRef.current.throughSecurity) {
+      if (isAirsidePoi(targetPoi) && !isArriveCoach && !credentials.known && !journeyRef.current.throughSecurity) {
         setPendingPoiId(poiId);
         if (viaVoice) sayAndShow("Quick one — do you have TSA PreCheck, CLEAR, or both?");
         return;
@@ -1313,7 +1410,7 @@ export function AirportNavigatorMap({
         sayAndShow(`${targetPoi.name} — ${fmtMins(route.totalSeconds)}. ${first ? first.text : ""}`);
       }
     },
-    [layout, originNodeId, credentials, navCalibration, sayAndShow],
+    [layout, originNodeId, credentials, navCalibration, sayAndShow, isArriveCoach],
   );
 
   const endRoute = useCallback(() => {
@@ -2525,6 +2622,11 @@ export function AirportNavigatorMap({
 
   const nextInstruction = activeRoute?.instructions[Math.min(currentStepIdx, Math.max(0, (activeRoute?.instructions.length ?? 1) - 1))] ?? null;
   const securityQuestionOpen = pendingPoiId !== null && !credentials.known;
+  const arrivalChromeClearance = arrivalFirstMile
+    ? activeRoute
+      ? `calc(${bottomPanel} + 22rem)`
+      : `calc(${bottomPanel} + 14rem)`
+    : bottomPanel;
 
   return (
     <div
@@ -2631,7 +2733,7 @@ export function AirportNavigatorMap({
         </div>
       ) : null}
 
-      {layout ? (
+      {layout && !arrivalFirstMile ? (
         <div className="pointer-events-none absolute inset-0 z-[30]">
           <AirportDestinationRail
             layout={layout}
@@ -2650,6 +2752,29 @@ export function AirportNavigatorMap({
             railTop={destinationRailTop}
           />
         </div>
+      ) : null}
+
+      {layout && arrivalFirstMile ? (
+        <AirportArrivalFirstMileChrome
+          layout={layout}
+          arrivalJourney={arrivalJourney}
+          originNodeId={originNodeId}
+          credentials={credentials}
+          pathSteps={arrivalDayCoachSteps}
+          visiblePathSteps={visibleArrivalCoachSteps}
+          hiddenCount={hiddenArrivalCoachSteps}
+          fullDayView={coachFullDayView}
+          onToggleFullDayView={() => setCoachFullDayView((v) => !v)}
+          nextUp={arrivalNextUp}
+          selectedPoiId={selectedPoiId ?? pendingPoiId ?? activeRoute?.toPoiId ?? null}
+          activeRoute={activeRoute}
+          onPoiClick={handlePoiTap}
+          bottomInset={bottomPanel}
+          arrivalTransportOptions={arrivalTransportOptions}
+          scheduleNote={arrivalTransportPresentation?.scheduleNote}
+          uberUrl={arrivalRideLinks?.uberUrl}
+          hotelLabel={hotelLabel}
+        />
       ) : null}
 
       {/* Flight hero card — hidden in Live Map plan mode (flight lives in preview banner). */}
@@ -2780,7 +2905,7 @@ export function AirportNavigatorMap({
 
       {/* Journey prompt (e.g. "Are you through security yet?") */}
       {journeyPrompt && !securityQuestionOpen && !previewMode && (
-        <div style={{ bottom: bottomPanel }} className="absolute inset-x-3 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95">
+        <div style={{ bottom: arrivalChromeClearance }} className="absolute inset-x-3 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95">
           <p className="text-xs font-bold text-slate-900 dark:text-slate-100">{journeyPrompt.text}</p>
           <div className="mt-2 flex gap-1.5">
             {journeyPrompt.options.map((option) => (
@@ -2799,7 +2924,7 @@ export function AirportNavigatorMap({
 
       {/* Security credential question */}
       {securityQuestionOpen && (
-        <div style={{ bottom: bottomPanel }} className="absolute inset-x-3 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95">
+        <div style={{ bottom: arrivalChromeClearance }} className="absolute inset-x-3 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95">
           <p className="text-xs font-bold text-slate-900 dark:text-slate-100">
             Quick one — do you have TSA PreCheck or CLEAR?
           </p>
@@ -2897,8 +3022,10 @@ export function AirportNavigatorMap({
       {!securityQuestionOpen && !journeyPrompt && !quietMode && activeRoute && (
         <section
           aria-label="Route instructions"
-          style={{ bottom: bottomPanel }}
-          className={`absolute inset-x-2 z-30 overflow-hidden rounded-[24px] bg-white/95 p-3 shadow-2xl backdrop-blur-md dark:bg-slate-900/95 sm:inset-x-3 ${
+          style={{
+            bottom: arrivalFirstMile ? `calc(${bottomPanel} + 4.75rem)` : bottomPanel,
+          }}
+          className={`absolute inset-x-2 z-[70] overflow-hidden rounded-[24px] bg-white/95 p-3 shadow-2xl backdrop-blur-md dark:bg-slate-900/95 sm:inset-x-3 ${
             showInstructions ? "max-h-[60dvh]" : "max-h-32"
           }`}
         >

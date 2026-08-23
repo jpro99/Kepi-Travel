@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { FCO_LAYOUT } from "./layouts/fco";
 import {
   buildArrivalTripJourney,
+  arrivalJourneyPoiIds,
   layoutSupportsArrivalFirstMile,
 } from "./tripJourney";
 import { computeRoute } from "./pathfinder";
@@ -53,6 +54,16 @@ test("FCO arrival coach path includes walk minutes along the graph", () => {
   assert.ok((passport?.minutes ?? 0) >= 1, "passport leg has walk minutes");
   assert.ok((bags?.minutes ?? 0) >= 1, "baggage leg has walk minutes");
   assert.match(steps.find((s) => s.id === "ride")?.text ?? "", /Leonardo Express/i);
+});
+
+test("FCO arrival journey POI ids cover passport, bags, customs, Leonardo chips", () => {
+  const stops = buildArrivalTripJourney(FCO_LAYOUT, { gateCode: "E12" });
+  const ids = arrivalJourneyPoiIds(stops);
+  assert.ok(ids.has("poi-passport-t3"));
+  assert.ok(ids.has("poi-baggage-t3"));
+  assert.ok(ids.has("poi-customs-t3"));
+  assert.ok(ids.has("poi-leonardo-express"));
+  assert.ok(ids.size >= 4);
 });
 
 test("FCO gate-e to Leonardo route is computable along arrival graph", () => {

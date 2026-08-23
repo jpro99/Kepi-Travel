@@ -1069,6 +1069,8 @@ export function LiveMapPage() {
                 navFlight.f.localTime?.trim()?.slice(0, 10) ||
                 null
               }
+              flightArrivalTime={navFlight.f.flightArrivalTime ?? null}
+              flightTimezone={navFlight.f.timezone ?? null}
               flightStatusLabel={
                 navigatorCoachMode === "arrive"
                   ? "Landed"
@@ -1271,7 +1273,7 @@ export function LiveMapPage() {
         </div>
 
         {/* Loading overlay */}
-        {!isLoaded && !isError && (
+        {!isLoaded && !isError && mapView !== "airport" && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-slate-950/80">
             <div className="h-8 w-8 rounded-full border-2 border-sky-400 border-t-transparent animate-spin" />
             <p className="text-white/70 text-[15px]">Loading map…</p>
