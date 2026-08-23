@@ -80,6 +80,8 @@ type MapStyleId = LiveMapStyleId;
 const MOBILE_TAB_BAR_INSET = MOBILE_TAB_BAR_CLEARANCE;
 /** One-row Live Map chrome (back + Plan airport / Family) — map overlays start below this. */
 const AIRPORT_SHELL_TOP_INSET = "calc(max(0.75rem, env(safe-area-inset-top)) + 3.5rem)";
+/** Inner map chrome inset when the overlay is already clipped below the shell row. */
+const AIRPORT_MAP_INNER_TOP_INSET = "max(0.5rem, env(safe-area-inset-top))";
 
 const IOS_GEO_OPTIONS: PositionOptions = {
   enableHighAccuracy: true,
@@ -118,6 +120,7 @@ export function LiveMapPage() {
   const searchParams = useSearchParams();
   const urlTripId = searchParams.get("tripId");
   const urlView = searchParams.get("view");
+  const urlAirportIata = searchParams.get("iata")?.trim().toUpperCase() || null;
   const preferAirportView = urlView === "airport";
   const {
     activeFlight,
@@ -126,7 +129,10 @@ export function LiveMapPage() {
     coachMode,
     journeyPhase,
     hotelLabel,
-  } = useActiveFlight();
+  } = useActiveFlight({
+    tripId: urlTripId,
+    preferredDepartureIata: urlAirportIata,
+  });
   const [mapView, setMapView] = useState<"family" | "airport">(() => (preferAirportView ? "airport" : "family"));
   const mapEl = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1023,7 +1029,10 @@ export function LiveMapPage() {
 
         {/* Airport Navigator overlay — preview anytime; live navigation at geofence */}
         {mapView === "airport" && navFlight && (
-          <div className="absolute inset-0 z-40">
+          <div
+            className="absolute left-0 right-0 bottom-0 z-40"
+            style={{ top: AIRPORT_SHELL_TOP_INSET }}
+          >
             <AirportNavigatorMap
               fill
               previewMode={airportPreviewMode}
@@ -1067,7 +1076,7 @@ export function LiveMapPage() {
               onFamilyPinTap={handleFamilyPinTap}
               activeRally={airportLiveMode && airportSync?.rally?.status === "active" ? airportSync.rally : null}
               shellBottomInset="0px"
-              shellTopInset={AIRPORT_SHELL_TOP_INSET}
+              shellTopInset={AIRPORT_MAP_INNER_TOP_INSET}
             />
             {airportLiveMode && members.length >= 2 ? (
               <div
@@ -1100,7 +1109,7 @@ export function LiveMapPage() {
         {/* Mobile header — airport mode uses a single compact row (no family chrome stack). */}
         {mapView === "airport" && navFlight ? (
           <div
-            className="absolute top-0 left-0 right-0 z-50 flex items-center gap-2 px-3 pb-2 md:hidden"
+            className="absolute top-0 left-0 right-0 z-[60] flex items-center gap-2 px-3 pb-2 md:hidden"
             style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
           >
             <button
@@ -1180,7 +1189,7 @@ export function LiveMapPage() {
         )}
 
         {/* Desktop back + title + style toggle */}
-        <div className="absolute top-0 left-0 right-0 z-30 hidden items-center gap-3 px-4 pb-2 pt-4 md:flex">
+        <div className="absolute top-0 left-0 right-0 z-[60] hidden items-center gap-3 px-4 pb-2 pt-4 md:flex">
           <button
             type="button"
             onClick={() => router.back()}

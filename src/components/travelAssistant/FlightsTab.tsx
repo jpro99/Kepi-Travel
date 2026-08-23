@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { Plane, Trash2 } from "lucide-react";
 import { LiveMapLink } from "@/components/travelAssistant/LiveMapLink";
+import { buildLiveAirportMapUrl } from "@/lib/travelAssistant/liveMapSession";
 import { hasAirportLayout } from "@/lib/airportNav/getLayout";
 import { selectPreviewAirportFlight, toUtcMs as flightToUtcMs } from "@/lib/travelAssistant/useActiveFlight";
 import {
@@ -93,6 +94,7 @@ interface FlightsTabProps {
   enableBookSearch?: boolean;
   /** Mobile Trip tab — route map lives on Map/Home globe */
   hideRouteMap?: boolean;
+  tripId?: string | null;
 }
 
 /* ─── Helpers ────────────────────────────────────────────────── */
@@ -201,14 +203,16 @@ function StatusBadge({ r, live }: { r: Reservation; live?: LiveStatusResult }) {
 function AirportMapRow({
   iata,
   rich,
+  tripId,
 }: {
   iata: string;
   rich: boolean;
+  tripId?: string | null;
 }) {
   const t = useTranslations("FlightsTab");
   return (
     <LiveMapLink
-      href="/travel-assistant/live-map?view=airport"
+      href={buildLiveAirportMapUrl({ tripId, iata })}
       className="block w-full border-t border-[var(--border-default)] px-4 py-3 text-left transition active:opacity-80"
     >
       <p className="text-[15px] font-semibold text-[var(--text-primary)]">
@@ -245,6 +249,7 @@ export function FlightsTab({
   simplifiedMobile = false,
   enableBookSearch = false,
   hideRouteMap = false,
+  tripId = null,
 }: FlightsTabProps) {
   const t = useTranslations("FlightsTab");
   const showBookSearch = !simplifiedMobile || enableBookSearch;
@@ -583,7 +588,7 @@ export function FlightsTab({
                 </button>
 
                 {showAirportMap ? (
-                  <AirportMapRow iata={dep} rich={canExploreTerminal} />
+                  <AirportMapRow iata={dep} rich={canExploreTerminal} tripId={tripId} />
                 ) : null}
 
                 {(isOpen || r.confirmationCode || r.flightSeatNumber) && (
@@ -798,7 +803,7 @@ export function FlightsTab({
                 hasNextFlight: true,
                 departureIata: dep === "---" ? "" : dep,
               }) ? (
-                <AirportMapRow iata={dep} rich={canExploreTerminal} />
+                <AirportMapRow iata={dep} rich={canExploreTerminal} tripId={tripId} />
               ) : null}
             </div>
           );

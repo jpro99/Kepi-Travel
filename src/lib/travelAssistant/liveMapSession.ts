@@ -39,6 +39,20 @@ export function openLiveMapPath(): string {
   return "/travel-assistant/live-map";
 }
 
+/** Deep-link to airport plan/live mode for a specific trip leg. */
+export function buildLiveAirportMapUrl(input?: {
+  tripId?: string | null;
+  iata?: string | null;
+}): string {
+  const params = new URLSearchParams();
+  params.set("view", "airport");
+  const tripId = input?.tripId?.trim();
+  const iata = input?.iata?.trim().toUpperCase();
+  if (tripId) params.set("tripId", tripId);
+  if (iata) params.set("iata", iata);
+  return `/travel-assistant/live-map?${params.toString()}`;
+}
+
 /** Call before navigating to /travel-assistant/live-map. */
 export function openLiveMap(): void {
   markLiveMapSessionActive();

@@ -182,6 +182,7 @@ import { BookTabView } from "@/components/travelAssistant/BookTabView";
 import { MapTabView } from "@/components/travelAssistant/MapTabView";
 import { TripTimeline } from "@/components/travelAssistant/TripTimeline";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
+import { TripReadinessChecklistSection } from "@/components/travelAssistant/TripReadinessChecklistSection";
 import {
   applyAcceptedReservationPricing,
   finalizeTripReservationPricing,
@@ -251,7 +252,8 @@ import { buildFlightLegsFromIntent, defaultEnabledLegIds } from "@/lib/decision/
 import { DesktopTripHomeView } from "@/components/travelAssistant/DesktopTripHomeView";
 import { MobileMapForwardShell } from "@/components/travelAssistant/mobile/MobileMapForwardShell";
 import { computeJourneyPhase, defaultConsumerTabForPhase, type JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
-import { markLiveMapSessionActive } from "@/lib/travelAssistant/liveMapSession";
+import { markLiveMapSessionActive, buildLiveAirportMapUrl } from "@/lib/travelAssistant/liveMapSession";
+import { findPlannableAirportIata } from "@/lib/travelAssistant/mapTabLead";
 import { TripSearch, type TripSearchSelection } from "@/components/travelAssistant/TripSearch";
 import { TripSwitcher } from "@/components/travelAssistant/TripSwitcher";
 import { TripOrientationCard } from "@/components/travelAssistant/TripOrientationCard";
@@ -2462,8 +2464,10 @@ export default function TravelAssistantPage() {
   const tripListRowsWithSpend = useMemo<TripListRowInput[]>(() => {
     if (!myTripsModalOpen) return tripListRows;
     return trips.map((trip) => {
-      const spendReservations = trip.reservations.filter(
-        (reservation) => !isOnboardingPlaceholderReservation(reservation),
+      const spendReservations = dedupeConsumerReservations(
+        filterConsumerTimelineReservations(
+          trip.reservations.filter((reservation) => !isOnboardingPlaceholderReservation(reservation)),
+        ),
       );
       const summary = computeTripSpend(spendReservations);
       return {
@@ -4654,8 +4658,14 @@ export default function TravelAssistantPage() {
       // sessionStorage may be blocked — still attempt open once via ref below
     }
     markLiveMapSessionActive();
-    router.push("/travel-assistant/live-map?view=airport");
-  }, [guidanceLocationStatus, router]);
+    const iata = findPlannableAirportIata(consumerReservationsSorted);
+    router.push(
+      buildLiveAirportMapUrl({
+        tripId: activeTripId,
+        iata,
+      }),
+    );
+  }, [guidanceLocationStatus, router, activeTripId, consumerReservationsSorted]);
 
   const nextUpcomingFlight = useMemo(() => {
     const nowMs = new Date().getTime();
@@ -8093,6 +8103,16 @@ export default function TravelAssistantPage() {
             : null;
         const nextOnTime = typeof payload.onTime === "boolean" ? payload.onTime : null;
 
+        const hasLiveData =
+          Boolean(payload.flightStatus?.trim()) ||
+          Boolean(nextDepartureGate) ||
+          Boolean(nextDepartureTerminal) ||
+          typeof nextDelayMinutes === "number" ||
+          typeof nextOnTime === "boolean";
+        if (!hasLiveData) {
+          throw new Error("No live status available for this flight yet.");
+        }
+
         setFlightStatusCheckByReservationId((prev) => ({
           ...prev,
           [reservationId]: {
@@ -9251,10 +9271,14 @@ export default function TravelAssistantPage() {
   const openReadinessChecklistInMoreTab = useCallback((): void => {
     setPendingMoreScrollTarget("readiness-checklist");
     navigateToConsumerTab("more");
-  }, [navigateToConsumerTab]);
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches) {
+      navigateMobilePrimaryTab("more");
+    }
+  }, [navigateToConsumerTab, navigateMobilePrimaryTab]);
 
   useEffect(() => {
-    if (consumerTab !== "more" || pendingMoreScrollTarget !== "readiness-checklist") {
+    const onMoreTab = isCompactViewport ? mobilePrimaryTab === "more" : consumerTab === "more";
+    if (!onMoreTab || pendingMoreScrollTarget !== "readiness-checklist") {
       return;
     }
     const timeout = window.setTimeout(() => {
@@ -9267,7 +9291,7 @@ export default function TravelAssistantPage() {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [consumerTab, pendingMoreScrollTarget]);
+  }, [consumerTab, mobilePrimaryTab, pendingMoreScrollTarget, isCompactViewport]);
 
   const readinessChecklistForHome = useMemo(
     () =>
@@ -10124,9 +10148,13 @@ export default function TravelAssistantPage() {
         navigateToBook("hotels");
         return;
       }
+      if (tab === "more") {
+        openReadinessChecklistInMoreTab();
+        return;
+      }
       navigateToConsumerTab(orientationTabToConsumerTab(tab));
     },
-    [launchCustomHotelSearch, navigateToBook, navigateToConsumerTab],
+    [launchCustomHotelSearch, navigateToBook, navigateToConsumerTab, openReadinessChecklistInMoreTab],
   );
 
   const handleItineraryPlanHotel = useCallback(
@@ -10372,12 +10400,21 @@ export default function TravelAssistantPage() {
                 }}
                 onOpenAirportMode={() => {
                   markLiveMapSessionActive();
-                  router.push("/travel-assistant/live-map?view=airport");
+                  const iata = findPlannableAirportIata(consumerReservationsSorted);
+                  router.push(
+                    buildLiveAirportMapUrl({
+                      tripId: activeTripId,
+                      iata,
+                    }),
+                  );
                 }}
                 unresolvedReviewCount={unresolvedReviewCount}
                 onOpenReview={handleOpenConsumerReviewQueue}
                 readinessChecklist={readinessChecklistForHome}
                 onOpenReadiness={openReadinessChecklistInMoreTab}
+                readinessItems={readinessItems}
+                onToggleReadinessItem={handleChecklistToggle}
+                readinessChecklistSectionRef={readinessChecklistSectionRef}
                 bookSubTab={bookSubTab}
                 onBookSubTabChange={(subTab) => navigateToConsumerTab("book", { bookView: subTab })}
                 tripId={activeTripId}
@@ -10512,7 +10549,13 @@ export default function TravelAssistantPage() {
                 onOpenMap={() => navigateToConsumerTab("map")}
                 onOpenAirportMode={() => {
                   markLiveMapSessionActive();
-                  router.push("/travel-assistant/live-map?view=airport");
+                  const iata = findPlannableAirportIata(consumerReservationsSorted);
+                  router.push(
+                    buildLiveAirportMapUrl({
+                      tripId: activeTripId,
+                      iata,
+                    }),
+                  );
                 }}
                 onAddGroundTransport={openManualGroundTransport}
                 onStartNewTrip={handleStartNewTrip}
@@ -10867,47 +10910,15 @@ export default function TravelAssistantPage() {
                 isSharedWithMe={Boolean(activeTrip?.collaboration)}
                 onOpenShare={() => setShareModalOpen(true)}
               />
-              <section
+              <TripReadinessChecklistSection
                 id="readiness-checklist-section"
-                ref={readinessChecklistSectionRef}
-                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <h2 className="font-semibold">{tApp("moreReadinessTitle")}</h2>
-                  <span className="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900 dark:bg-amber-500/20 dark:text-amber-100">
-                    {tApp("moreReadinessPending", { count: unresolvedReadinessCount })}
-                  </span>
-                </div>
-                <div className="mt-3 space-y-2">
-                  {readinessItems.map((item) => (
-                    <div
-                      key={item.id}
-                      role="checkbox"
-                      aria-checked={item.complete}
-                      tabIndex={0}
-                      onClick={() => handleChecklistToggle(item.id)}
-                      onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); handleChecklistToggle(item.id); } }}
-                      className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 ${
-                        item.complete
-                          ? "border-emerald-500/40 bg-emerald-500/10"
-                          : "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-950/60"
-                      }`}
-                    >
-                      <div className={`mt-1 h-4 w-4 shrink-0 rounded border-2 flex items-center justify-center ${
-                        item.complete ? "border-emerald-500 bg-emerald-500" : "border-slate-400"
-                      }`}>
-                        {item.complete && <span className="text-white text-[10px] font-bold">✓</span>}
-                      </div>
-                      <span className="flex-1">
-                        <span className="block text-sm font-medium">{item.title}</span>
-                        <span className="text-xs text-slate-500 dark:text-slate-400">
-                          {item.category} {item.required ? "• Required" : "• Optional"}
-                        </span>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </section>
+                sectionRef={readinessChecklistSectionRef}
+                title={tApp("moreReadinessTitle")}
+                pendingLabel={tApp("moreReadinessPending", { count: unresolvedReadinessCount })}
+                items={readinessItems}
+                unresolvedCount={unresolvedReadinessCount}
+                onToggle={handleChecklistToggle}
+              />
 
               <article className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm dark:border-emerald-500/40 dark:bg-emerald-500/10">
                 <h2 className="font-semibold text-emerald-900 dark:text-emerald-100">Forward email address</h2>

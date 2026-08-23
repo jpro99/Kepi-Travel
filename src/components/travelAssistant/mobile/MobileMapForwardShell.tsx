@@ -2,7 +2,7 @@
 
 import { LiveMapLink } from "@/components/travelAssistant/LiveMapLink";
 import { MapTabView } from "@/components/travelAssistant/MapTabView";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type Ref } from "react";
 import { MissionControlView } from "@/components/travelAssistant/MissionControlView";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
 import { resolveNextCheckInHandoff } from "@/lib/travelAssistant/checkInHandoff";
@@ -33,6 +33,7 @@ import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 import type { TripSpendSummary } from "@/lib/travelAssistant/tripSpendSummary";
 import type { TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 import type { ReadinessChecklistItem } from "@/lib/travelAssistant/tripOrchestration";
+import { TripReadinessChecklistSection } from "@/components/travelAssistant/TripReadinessChecklistSection";
 import type { HotelStayMapReservation } from "@/lib/travelAssistant/tripHotelStayMap";
 
 type PlanSegment = "itinerary" | "notebook";
@@ -161,6 +162,9 @@ interface MobileMapForwardShellProps {
   onOpenReview?: () => void;
   readinessChecklist?: ReadinessChecklistItem[];
   onOpenReadiness?: () => void;
+  readinessItems?: TripReadinessChecklistSection["items"];
+  onToggleReadinessItem?: (id: string) => void;
+  readinessChecklistSectionRef?: Ref<HTMLElement>;
 }
 
 const juicyBtn =
@@ -260,6 +264,9 @@ export function MobileMapForwardShell({
   onOpenReview,
   readinessChecklist = [],
   onOpenReadiness,
+  readinessItems = [],
+  onToggleReadinessItem,
+  readinessChecklistSectionRef,
 }: MobileMapForwardShellProps) {
   const [planSegment, setPlanSegment] = useState<PlanSegment>("itinerary");
   const [showPointsLearn, setShowPointsLearn] = useState(false);
@@ -361,6 +368,7 @@ export function MobileMapForwardShell({
     return (
       <div className="kepi-mobile-shell kepi-mobile-tab-pad -mx-1 flex flex-col gap-3">
         <MapTabView
+          tripId={tripId}
           transportReservations={transportReservations}
           hotelReservations={hotelReservations}
           plannedFlightLegs={plannedFlightLegs}
@@ -558,6 +566,17 @@ export function MobileMapForwardShell({
         <h1 className="text-[2rem] font-bold tracking-tight text-[var(--text-primary)]">More</h1>
         <p className="mt-1 text-[19px] text-[var(--text-secondary)]">Settings & family</p>
       </header>
+
+      {hasActiveTrip && readinessItems.length > 0 && onToggleReadinessItem ? (
+        <TripReadinessChecklistSection
+          id="readiness-checklist-section"
+          sectionRef={readinessChecklistSectionRef}
+          title="Trip readiness"
+          items={readinessItems}
+          unresolvedCount={readinessItems.filter((item) => item.required && !item.complete).length}
+          onToggle={onToggleReadinessItem}
+        />
+      ) : null}
 
       <button
         type="button"
