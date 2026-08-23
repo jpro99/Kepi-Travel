@@ -6,7 +6,13 @@
 import { resolveAirport } from "@/lib/airports/lookup";
 import { getAirportLayout } from "@/lib/airportNav/getLayout";
 import { computeRoute } from "@/lib/airportNav/pathfinder";
-import { buildTripJourney, type JourneyRole } from "@/lib/airportNav/tripJourney";
+import {
+  buildArrivalTripJourney,
+  buildTripJourney,
+  layoutSupportsArrivalFirstMile,
+  type ArrivalJourneyRole,
+  type JourneyRole,
+} from "@/lib/airportNav/tripJourney";
 import { buildGateInstructions, getAirportNav } from "@/lib/travelAssistant/airportNavigation";
 import { resolveArrivalTransportPresentation } from "@/lib/travelAssistant/arrivalTransportPresentation";
 import type { AirportLocationPhase } from "@/lib/travelAssistant/airportLocationPhase";
@@ -295,6 +301,7 @@ export interface ArrivalDayCoachInput {
   airlineName?: string | null;
   departureIata?: string | null;
   arrivalTerminal?: string | null;
+  arrivalGate?: string | null;
   hotelLabel?: string | null;
   baggageCarouselNote?: string | null;
   baggageWalkMinutes?: number | null;
@@ -304,10 +311,102 @@ export interface ArrivalDayCoachInput {
   nowMs?: number;
 }
 
+const ARRIVAL_ROLE_ICON: Record<ArrivalJourneyRole, string> = {
+  deplane: "🛬",
+  passport: "🛂",
+  baggage: "🧳",
+  customs: "📄",
+  exit: "🚪",
+  ground_transport: "🚆",
+};
+
+const ARRIVAL_ROLE_ID: Record<ArrivalJourneyRole, string> = {
+  deplane: "deplane",
+  passport: "immigration",
+  baggage: "bags",
+  customs: "customs",
+  exit: "exit",
+  ground_transport: "ride",
+};
+
 /** Arrival path matching approved mockup (intl steps only when countries differ). */
 export function buildArrivalDayCoachPath(input: ArrivalDayCoachInput): DayCoachPathStep[] {
   const code = input.iata.trim().toUpperCase();
   const intl = isInternationalArrivalFlight(input.departureIata, code);
+  const layout = getAirportLayout(code);
+  const creds = { tsaPreCheck: false, clear: false, known: true };
+
+  if (layout && layoutSupportsArrivalFirstMile(layout)) {
+    const stops = buildArrivalTripJourney(layout, {
+      gateCode: input.arrivalGate,
+      includePassport: intl,
+      includeCustoms: intl,
+    });
+    if (stops.length > 0) {
+      const steps: DayCoachPathStep[] = [];
+      let fromNodeId = stops[0]?.nodeId ?? null;
+
+      for (const stop of stops) {
+        if (!stop.known || !stop.nodeId) continue;
+
+        let minutes: number | undefined;
+        if (fromNodeId && stop.poiId && fromNodeId !== stop.nodeId) {
+          const route = computeRoute({
+            layout,
+            fromNodeId,
+            toPoiId: stop.poiId,
+            credentials: creds,
+          });
+          if (route) minutes = Math.max(1, Math.round(route.totalSeconds / 60));
+        }
+        fromNodeId = stop.nodeId;
+
+        if (stop.role === "ground_transport") {
+          const ride = resolveArrivalRideStep({
+            iata: code,
+            hotelLabel: input.hotelLabel,
+            flightArrivalTime: input.flightArrivalTime,
+            flightTimezone: input.flightTimezone,
+            landedMinutesAgo: input.landedMinutesAgo,
+            nowMs: input.nowMs,
+            arrivalInfo: getAirportNav(code)?.arrivalInfo,
+          });
+          steps.push({ ...ride, minutes });
+          continue;
+        }
+
+        if (stop.role === "baggage") {
+          const flightLabel = input.flightNumber?.trim() || "your flight";
+          const curated =
+            input.baggageCarouselNote?.trim() ||
+            getAirportNav(code)?.arrivalInfo?.baggageCarousels?.[0]?.carouselNote ||
+            null;
+          steps.push({
+            id: "bags",
+            icon: "🧳",
+            text: `Bags — claim for ${flightLabel}`,
+            detail:
+              curated ||
+              stop.detail ||
+              "Carousel number is on the airport screens — Kepi does not invent belt numbers.",
+            minutes,
+          });
+          continue;
+        }
+
+        steps.push({
+          id: ARRIVAL_ROLE_ID[stop.role],
+          icon: ARRIVAL_ROLE_ICON[stop.role],
+          text: stop.label,
+          detail: stop.detail,
+          minutes,
+        });
+      }
+
+      if (steps.length > 0) return steps;
+    }
+  }
+
   const flightLabel = input.flightNumber?.trim() || "your flight";
   const nav = getAirportNav(code);
   const curated =
