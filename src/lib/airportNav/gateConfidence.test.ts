@@ -7,8 +7,59 @@ import {
   computeArrivalGateConfidence,
   computeDepartGateConfidence,
   resolveNextMoveFromCoachStep,
+  TRAVEL_DAY_PRESSURE_WINDOW_MIN,
 } from "./gateConfidence";
 import { buildArrivalDayCoachPath } from "@/lib/travelAssistant/airportDayCoach";
+
+test("computeDepartGateConfidence: far-future AS654-style ONT depart shows leave-by, not min early", () => {
+  const nowMs = Date.parse("2026-08-23T12:00:00.000Z");
+  const minutesToDeparture = TRAVEL_DAY_PRESSURE_WINDOW_MIN + 60; // >12h away
+  const result = computeDepartGateConfidence({
+    iata: "ONT",
+    arrivalAirport: "SEA",
+    minutesToDeparture,
+    walkToGateSeconds: null,
+    throughSecurity: false,
+    departureTimezone: "America/Los_Angeles",
+    nowMs,
+    currentStep: { id: "curb", text: "Get dropped off", detail: "Terminal 2 check-in & bag drop" },
+  });
+  assert.equal(result.state, "fine");
+  assert.match(result.clockLabel, /leave by/i);
+  assert.doesNotMatch(result.clockLabel, /min early/i);
+  assert.equal(result.spareMinutes, null);
+  assert.ok(result.honestyNote?.includes("unknown"));
+});
+
+test("computeDepartGateConfidence: week-out raw countdown never becomes 4-digit min early", () => {
+  const result = computeDepartGateConfidence({
+    iata: "ONT",
+    arrivalAirport: "SEA",
+    minutesToDeparture: 12705,
+    walkToGateSeconds: null,
+    throughSecurity: false,
+    departureTimezone: "America/Los_Angeles",
+    nowMs: Date.parse("2026-08-23T12:00:00.000Z"),
+    currentStep: { id: "curb", text: "Get dropped off", detail: "Terminal 2 check-in & bag drop" },
+  });
+  assert.match(result.clockLabel, /leave by/i);
+  assert.doesNotMatch(result.clockLabel, /\d{4,}/);
+  assert.doesNotMatch(result.clockLabel, /min early/i);
+});
+
+test("computeDepartGateConfidence: travel day clamps displayed spare minutes", () => {
+  const result = computeDepartGateConfidence({
+    iata: "ONT",
+    minutesToDeparture: 300,
+    walkToGateSeconds: 5 * 60,
+    throughSecurity: true,
+    currentStep: { id: "gate", text: "Gate 205", detail: "" },
+  });
+  assert.equal(result.state, "fine");
+  assert.match(result.clockLabel, /min early/i);
+  const shown = Number(result.clockLabel.match(/(\d+)/)?.[1] ?? "0");
+  assert.ok(shown <= 180, `expected clamped spare, got ${shown}`);
+});
 
 test("computeDepartGateConfidence: plenty of time → fine + min early", () => {
   const result = computeDepartGateConfidence({
