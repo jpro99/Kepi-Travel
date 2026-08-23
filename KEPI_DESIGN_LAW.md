@@ -807,8 +807,8 @@ A “Stay in Bari” / Hotel line on the trip plan is a booking fact, not a lock
 
 **Test:** `src/lib/travelAssistant/itineraryPlansHydrate.test.ts`
 
-**I56 — Plan TDZ red-screen must unload the stale bundle**  
-`Cannot access 'M' before initialization` on Plan must clear the PWA cache and reload once. Try again must not remount the same crashed JS. A Plan crash must not skip the service-worker update. Confirmations untouched.
+**I56 — Stale-bundle crashes must unload the old JS (TDZ + ChunkLoadError)**  
+`Cannot access 'M' before initialization` or `Loading chunk N failed` after a deploy must clear the PWA cache and reload once. Try again must not remount the same crashed JS. A Plan crash must not skip the service-worker update. Confirmations untouched.
 
 **Test:** `src/lib/pwa/recoverStaleClientBundle.test.ts`
 

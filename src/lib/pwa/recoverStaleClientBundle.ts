@@ -1,8 +1,15 @@
 export const TDZ_RELOAD_KEY = "kepi:tdz-bundle-reload";
 
-export function isStaleBundleError(error: { message?: string } | null | undefined): boolean {
+export function isStaleBundleError(error: { message?: string; name?: string } | null | undefined): boolean {
   const message = error?.message ?? "";
-  return /before initialization/i.test(message);
+  const name = error?.name ?? "";
+  if (/before initialization/i.test(message)) return true;
+  // Post-deploy: old JS asks for a chunk hash Vercel no longer serves (ChunkLoadError).
+  if (name === "ChunkLoadError") return true;
+  if (/loading chunk [\w-]+ failed/i.test(message)) return true;
+  if (/failed to fetch dynamically imported module/i.test(message)) return true;
+  if (/importing a module script failed/i.test(message)) return true;
+  return false;
 }
 
 export async function recoverStaleClientBundle(options?: {

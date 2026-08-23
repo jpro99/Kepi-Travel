@@ -20,6 +20,21 @@ test("I56: TDZ red-screen is a stale-bundle error", () => {
   assert.equal(isStaleBundleError({ message: "Network error" }), false);
 });
 
+test("I56: ChunkLoadError after deploy is a stale-bundle error", () => {
+  assert.equal(
+    isStaleBundleError({
+      name: "ChunkLoadError",
+      message:
+        "Loading chunk 8300 failed.\n(error: https://kepitravel.com/_next/static/chunks/8300.1801a0595542a367.js)",
+    }),
+    true,
+  );
+  assert.equal(
+    isStaleBundleError({ message: "Failed to fetch dynamically imported module: https://kepitravel.com/_next/static/chunks/foo.js" }),
+    true,
+  );
+});
+
 test("I56: first TDZ recover clears caches and reloads once", async () => {
   const storage = new Map<string, string>();
   const deleted: string[] = [];
@@ -88,7 +103,7 @@ test("I56: error page recovers a TDZ instead of remounting the same JS", () => {
   assert.match(src, /isStaleBundleError\(error\)/);
   assert.match(src, /recoverStaleClientBundle/);
   const sw = readFileSync(join(process.cwd(), "public/sw.js"), "utf8");
-  assert.match(sw, /kepi-pwa-v38/);
+  assert.match(sw, /kepi-pwa-v39/);
   const layout = readFileSync(join(process.cwd(), "src/app/layout.tsx"), "utf8");
   assert.match(layout, /<DeployRefresh/);
   const page = readFileSync(join(process.cwd(), "src/app/travel-assistant/page.tsx"), "utf8");

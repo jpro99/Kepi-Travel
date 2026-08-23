@@ -12,12 +12,26 @@ import { isNative } from "@/lib/native/platform";
 export function DeployRefresh() {
   useEffect(() => {
     const onError = (event: ErrorEvent): void => {
-      if (isStaleBundleError({ message: event.message })) {
+      if (isStaleBundleError({ message: event.message, name: event.error?.name })) {
+        void recoverStaleClientBundle();
+      }
+    };
+    const onRejection = (event: PromiseRejectionEvent): void => {
+      const reason = event.reason;
+      if (reason instanceof Error && isStaleBundleError(reason)) {
+        void recoverStaleClientBundle();
+        return;
+      }
+      if (isStaleBundleError({ message: String(reason ?? "") })) {
         void recoverStaleClientBundle();
       }
     };
     window.addEventListener("error", onError);
-    return () => window.removeEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
+    return () => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onRejection);
+    };
   }, []);
 
   // next-pwa's `register: true` auto-injection relies on a Pages Router
