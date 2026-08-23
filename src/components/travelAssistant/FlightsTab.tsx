@@ -14,7 +14,6 @@ import {
   showFlightSearchLauncherAtTop,
   showFlightArrivalAirportMapCta,
   showFlightDepartureAirportMapCta,
-  showNextFlightAirportMapCta,
 } from "@/lib/travelAssistant/flightBookLead";
 import { FlightSearchLauncher, type FlightSearchDefaults } from "@/components/travelAssistant/FlightSearchLauncher";
 import { ImportConfirmationDropzone } from "@/components/travelAssistant/ImportConfirmationDropzone";
