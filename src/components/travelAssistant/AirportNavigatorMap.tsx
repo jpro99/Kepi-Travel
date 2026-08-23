@@ -15,10 +15,13 @@ import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pat
 import { buildTripJourney, journeyPoiIds, preSecurityJourney, type JourneyStop, buildArrivalTripJourney, arrivalJourneyPoiIds, layoutSupportsArrivalFirstMile, type ArrivalJourneyStop } from "@/lib/airportNav/tripJourney";
 import {
   buildArrivalDayCoachPath,
+  buildDepartDayCoachPath,
   isInternationalArrivalFlight,
   resolveArrivalSpotlightIndex,
+  resolveDepartSpotlightIndex,
   selectDayCoachVisibleSteps,
 } from "@/lib/travelAssistant/airportDayCoach";
+import { resolveAirportLocationPhase } from "@/lib/travelAssistant/airportLocationPhase";
 import { resolveArrivalTransportPresentation } from "@/lib/travelAssistant/arrivalTransportPresentation";
 import { buildRideFromAirportDeepLinks } from "@/lib/travelAssistant/groundTransportDeepLinks";
 import { getAirportNav } from "@/lib/travelAssistant/airportNavigation";
@@ -50,6 +53,13 @@ import type { FamilyAirportPin } from "@/lib/family/familyAirportPins";
 import type { FamilyRally } from "@/lib/family/familyAirportSync";
 import { OfficialAirportMapLink } from "@/components/travelAssistant/OfficialAirportMapLink";
 import { MapHelperConfirmBar } from "@/components/travelAssistant/MapHelperConfirmBar";
+import { GateConfidenceBar } from "@/components/travelAssistant/GateConfidenceBar";
+import { ArrivalCardStack } from "@/components/travelAssistant/ArrivalCardStack";
+import {
+  buildArrivalCoachCards,
+  computeArrivalGateConfidence,
+  computeDepartGateConfidence,
+} from "@/lib/airportNav/gateConfidence";
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Kepi Airport Navigator — Phase 1 surface (spec §B/§C/§D4/§D5).
@@ -1006,6 +1016,7 @@ export function AirportNavigatorMap({
   const [journeyPhase, setJourneyPhase] = useState<JourneyPhaseId>("landside");
   /** Parent-owned coach vs full-day checklist for AirportNavigatorFallback. */
   const [fullDayView, setFullDayView] = useState(false);
+  const [coachMapExpanded, setCoachMapExpanded] = useState(false);
   const quietMode = !previewMode && journeyPhase === "security";
   // Honesty gate (KEPI_DESIGN_LAW M30): only draw a precise walking line when the
   // graph follows verified corridors. Schematic layouts (straight-line skeletons
@@ -1280,7 +1291,7 @@ export function AirportNavigatorMap({
   const [coachFullDayView, setCoachFullDayView] = useState(false);
 
   const arrivalDayCoachSteps = useMemo(() => {
-    if (!arrivalFirstMile) return [];
+    if (!isArriveCoach) return [];
     return buildArrivalDayCoachPath({
       iata,
       flightNumber,
@@ -1294,7 +1305,7 @@ export function AirportNavigatorMap({
       landedMinutesAgo,
     });
   }, [
-    arrivalFirstMile,
+    isArriveCoach,
     iata,
     flightNumber,
     airlineName,
@@ -1308,14 +1319,14 @@ export function AirportNavigatorMap({
   ]);
 
   const arrivalSpotlightIndex = useMemo(() => {
-    if (!arrivalFirstMile) return 0;
+    if (!isArriveCoach) return 0;
     return resolveArrivalSpotlightIndex({
       steps: arrivalDayCoachSteps,
       landedMinutesAgo,
       locationStatus: proximityStatus,
       hasLiveBaggage: false,
     });
-  }, [arrivalFirstMile, arrivalDayCoachSteps, landedMinutesAgo, proximityStatus]);
+  }, [isArriveCoach, arrivalDayCoachSteps, landedMinutesAgo, proximityStatus]);
 
   const { visible: visibleArrivalCoachSteps, hiddenCount: hiddenArrivalCoachSteps } = useMemo(
     () => selectDayCoachVisibleSteps(arrivalDayCoachSteps, coachFullDayView, arrivalSpotlightIndex),
@@ -1325,7 +1336,7 @@ export function AirportNavigatorMap({
   const arrivalNextUp = visibleArrivalCoachSteps[0] ?? null;
 
   const arrivalTransportPresentation = useMemo(() => {
-    if (!arrivalFirstMile) return null;
+    if (!isArriveCoach) return null;
     return resolveArrivalTransportPresentation({
       iata,
       flightArrivalTime,
@@ -1333,11 +1344,11 @@ export function AirportNavigatorMap({
       landedMinutesAgo,
       hotelLabel,
     });
-  }, [arrivalFirstMile, iata, flightArrivalTime, flightTimezone, landedMinutesAgo, hotelLabel]);
+  }, [isArriveCoach, iata, flightArrivalTime, flightTimezone, landedMinutesAgo, hotelLabel]);
 
   const arrivalRideLinks = useMemo(
-    () => (arrivalFirstMile ? buildRideFromAirportDeepLinks(iata, hotelDropoff) : null),
-    [arrivalFirstMile, iata, hotelDropoff],
+    () => (isArriveCoach ? buildRideFromAirportDeepLinks(iata, hotelDropoff) : null),
+    [isArriveCoach, iata, hotelDropoff],
   );
 
   const arrivalTransportOptions =
@@ -1558,6 +1569,111 @@ export function AirportNavigatorMap({
       throughSecurity: true,
     });
   }, [gateRoute, minutesRounded]);
+
+  const coachPathSteps = useMemo(() => {
+    if (isArriveCoach) return arrivalDayCoachSteps;
+    return buildDepartDayCoachPath({
+      iata,
+      airlineName,
+      flightNumber,
+      gateCode,
+      departureTerminal,
+      credentials: { tsaPreCheck: credentials.tsaPreCheck, clear: credentials.clear },
+      eligibleLoungeNames,
+    });
+  }, [
+    isArriveCoach,
+    arrivalDayCoachSteps,
+    iata,
+    airlineName,
+    flightNumber,
+    gateCode,
+    departureTerminal,
+    credentials.tsaPreCheck,
+    credentials.clear,
+    eligibleLoungeNames,
+  ]);
+
+  const coachSpotlightIndex = useMemo(() => {
+    if (isArriveCoach) return arrivalSpotlightIndex;
+    const deptUtc = Date.now() + minutesRounded * 60_000;
+    const phase = resolveAirportLocationPhase({
+      departureUtcMs: deptUtc,
+      nowMs: Date.now(),
+      locationStatus: proximityStatus,
+      hasLoungeAccess: eligibleLoungeNames.length > 0,
+    });
+    return resolveDepartSpotlightIndex(coachPathSteps, phase);
+  }, [
+    isArriveCoach,
+    arrivalSpotlightIndex,
+    coachPathSteps,
+    proximityStatus,
+    minutesRounded,
+    eligibleLoungeNames.length,
+  ]);
+
+  const arrivalCoachCards = useMemo(() => {
+    if (!isArriveCoach) return [];
+    return buildArrivalCoachCards({
+      steps: coachPathSteps,
+      iata,
+      scheduleNote: arrivalTransportPresentation?.scheduleNote,
+      transportOptions: arrivalTransportPresentation?.transportOptions,
+    });
+  }, [isArriveCoach, coachPathSteps, iata, arrivalTransportPresentation]);
+
+  const remainingArrivalWalkMinutes = useMemo(() => {
+    if (!isArriveCoach) return null;
+    return coachPathSteps
+      .slice(coachSpotlightIndex)
+      .reduce((sum, step) => sum + (step.minutes ?? 0), 0);
+  }, [isArriveCoach, coachPathSteps, coachSpotlightIndex]);
+
+  const gateConfidence = useMemo(() => {
+    const currentStep = coachPathSteps[coachSpotlightIndex] ?? coachPathSteps[0] ?? null;
+    if (isArriveCoach) {
+      return computeArrivalGateConfidence({
+        iata,
+        flightArrivalTime,
+        flightTimezone,
+        landedMinutesAgo,
+        hotelLabel,
+        currentStep,
+        remainingWalkMinutes: remainingArrivalWalkMinutes,
+      });
+    }
+    const throughSecurity = ["airside", "lounge", "at_gate", "boarding_soon"].includes(journeyPhase);
+    return computeDepartGateConfidence({
+      iata,
+      minutesToDeparture: minutesRounded,
+      walkToGateSeconds: gateRoute?.totalSeconds ?? null,
+      throughSecurity,
+      securityWaitSeconds: throughSecurity ? 0 : 12 * 60,
+      currentStep,
+    });
+  }, [
+    isArriveCoach,
+    coachPathSteps,
+    coachSpotlightIndex,
+    iata,
+    flightArrivalTime,
+    flightTimezone,
+    landedMinutesAgo,
+    hotelLabel,
+    remainingArrivalWalkMinutes,
+    minutesRounded,
+    gateRoute,
+    journeyPhase,
+  ]);
+
+  const rideLinks = arrivalRideLinks;
+
+  const flightCoachLabel = [airlineName, flightNumber].filter(Boolean).join(" ") || null;
+  const coachBarTop = `calc(${contentTop} + 0.25rem)`;
+  const arrivalCardStackTop = arrivalFirstMile
+    ? `calc(${contentTop} + 0.25rem)`
+    : coachBarTop;
 
   // Sprint self-suggestion — once, calmly (spec: calm urgency, never panic)
   useEffect(() => {
@@ -2730,6 +2846,46 @@ export function AirportNavigatorMap({
           <p className="text-[11px] leading-snug text-amber-100/90">
             Terminal guide · pins approximate · follow airport signs
           </p>
+        </div>
+      ) : null}
+
+      {/* You're-fine coach — one next move + honest clock (depart / connection). */}
+      {!isArriveCoach && gateConfidence ? (
+        <div className="pointer-events-none absolute left-3 right-3 z-[35]" style={{ top: coachBarTop }}>
+          <GateConfidenceBar
+            confidence={gateConfidence}
+            iata={iata}
+            flightLabel={flightCoachLabel}
+            mapVisible={coachMapExpanded || expanded}
+            onShowMap={() => {
+              setCoachMapExpanded(true);
+              setExpanded(true);
+              setRailOpen(true);
+            }}
+          />
+        </div>
+      ) : null}
+
+      {/* Arrival card stack — four swipe cards above PR #95 first-mile chrome. */}
+      {isArriveCoach && arrivalCoachCards.length > 0 ? (
+        <div
+          className="pointer-events-none absolute inset-x-3 z-[35]"
+          style={{ top: arrivalCardStackTop }}
+        >
+          <ArrivalCardStack
+            cards={arrivalCoachCards}
+            activeIndex={coachSpotlightIndex}
+            iata={iata}
+            flightLabel={flightCoachLabel}
+            uberUrl={rideLinks?.uberUrl}
+            hotelLabel={hotelLabel}
+            mapVisible={coachMapExpanded || expanded}
+            onShowMap={() => {
+              setCoachMapExpanded(true);
+              setExpanded(true);
+              setRailOpen(true);
+            }}
+          />
         </div>
       ) : null}
 
