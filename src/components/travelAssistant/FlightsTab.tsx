@@ -12,6 +12,8 @@ import {
   nextFlightShowsStatusChrome,
   shouldAutoCheckNextFlightStatus,
   showFlightSearchLauncherAtTop,
+  showFlightArrivalAirportMapCta,
+  showFlightDepartureAirportMapCta,
   showNextFlightAirportMapCta,
 } from "@/lib/travelAssistant/flightBookLead";
 import { FlightSearchLauncher, type FlightSearchDefaults } from "@/components/travelAssistant/FlightSearchLauncher";
@@ -75,6 +77,7 @@ interface FlightsTabProps {
   itinerarySelfCheck?: ItinerarySelfCheckResult;
   transportConflictIds?: Set<string>;
   tripName?: string | null;
+  tripId?: string | null;
   flightSearchDefaults?: FlightSearchDefaults;
   pendingForwardReview?: { id: string; reason: string; subject?: string } | null;
   onOpenForwardReview?: (reviewId: string) => void;
@@ -94,7 +97,6 @@ interface FlightsTabProps {
   enableBookSearch?: boolean;
   /** Mobile Trip tab — route map lives on Map/Home globe */
   hideRouteMap?: boolean;
-  tripId?: string | null;
 }
 
 /* ─── Helpers ────────────────────────────────────────────────── */
@@ -204,25 +206,40 @@ function AirportMapRow({
   iata,
   rich,
   tripId,
+  mode = "depart",
 }: {
   iata: string;
   rich: boolean;
   tripId?: string | null;
+  mode?: "depart" | "arrive";
 }) {
   const t = useTranslations("FlightsTab");
+  const href = buildLiveAirportMapUrl({ tripId, iata, mode });
   return (
     <LiveMapLink
-      href={buildLiveAirportMapUrl({ tripId, iata })}
+      href={href}
       className="block w-full border-t border-[var(--border-default)] px-4 py-3 text-left transition active:opacity-80"
     >
       <p className="text-[15px] font-semibold text-[var(--text-primary)]">
-        {rich ? t("exploreTerminalTitle", { iata }) : t("airportMapTitle", { iata })}
+        {mode === "arrive"
+          ? t("arrivalAirportMapTitle", { iata })
+          : rich
+            ? t("exploreTerminalTitle", { iata })
+            : t("airportMapTitle", { iata })}
       </p>
       <p className="mt-0.5 text-[13px] leading-snug text-[var(--text-secondary)]">
-        {rich ? t("exploreTerminalBody") : t("airportMapBody")}
+        {mode === "arrive"
+          ? t("arrivalAirportMapBody")
+          : rich
+            ? t("exploreTerminalBody")
+            : t("airportMapBody")}
       </p>
       <p className="mt-1 text-[15px] font-semibold text-[var(--accent)]">
-        {rich ? t("exploreTerminalCta") : t("airportMapCta")}
+        {mode === "arrive"
+          ? t("arrivalAirportMapCta")
+          : rich
+            ? t("exploreTerminalCta")
+            : t("airportMapCta")}
       </p>
     </LiveMapLink>
   );
@@ -237,6 +254,7 @@ export function FlightsTab({
   itinerarySelfCheck,
   transportConflictIds,
   tripName,
+  tripId = null,
   flightSearchDefaults,
   pendingForwardReview,
   onOpenForwardReview,
@@ -249,7 +267,6 @@ export function FlightsTab({
   simplifiedMobile = false,
   enableBookSearch = false,
   hideRouteMap = false,
-  tripId = null,
 }: FlightsTabProps) {
   const t = useTranslations("FlightsTab");
   const showBookSearch = !simplifiedMobile || enableBookSearch;
@@ -544,12 +561,15 @@ export function FlightsTab({
             const showStatusChrome = isNext
               ? nextFlightShowsStatusChrome({ isNextFlight: isNext, isPast })
               : !isPast;
-            const showAirportMap =
-              isNext &&
-              showNextFlightAirportMapCta({
-                hasNextFlight: true,
-                departureIata: dep === "---" ? "" : dep,
-              });
+            const showDepartureAirportMap = showFlightDepartureAirportMapCta({
+              isPast,
+              departureIata: dep === "---" ? "" : dep,
+            });
+            const showArrivalAirportMap = showFlightArrivalAirportMapCta({
+              isPast,
+              departureIata: dep === "---" ? "" : dep,
+              arrivalIata: arr === "---" ? "" : arr,
+            });
 
             return (
               <div
@@ -587,8 +607,15 @@ export function FlightsTab({
                   </div>
                 </button>
 
-                {showAirportMap ? (
-                  <AirportMapRow iata={dep} rich={canExploreTerminal} tripId={tripId} />
+                {showDepartureAirportMap ? (
+                  <AirportMapRow
+                    iata={dep}
+                    rich={canExploreTerminal && isNext}
+                    tripId={tripId}
+                  />
+                ) : null}
+                {showArrivalAirportMap ? (
+                  <AirportMapRow iata={arr} rich={false} tripId={tripId} mode="arrive" />
                 ) : null}
 
                 {(isOpen || r.confirmationCode || r.flightSeatNumber) && (
@@ -798,12 +825,22 @@ export function FlightsTab({
                   <Trash2 className="h-4 w-4" strokeWidth={1.85} aria-hidden />
                 </button>
               </div>
-              {isNext &&
-              showNextFlightAirportMapCta({
-                hasNextFlight: true,
+              {showFlightDepartureAirportMapCta({
+                isPast,
                 departureIata: dep === "---" ? "" : dep,
               }) ? (
-                <AirportMapRow iata={dep} rich={canExploreTerminal} tripId={tripId} />
+                <AirportMapRow
+                  iata={dep}
+                  rich={canExploreTerminal && isNext}
+                  tripId={tripId}
+                />
+              ) : null}
+              {showFlightArrivalAirportMapCta({
+                isPast,
+                departureIata: dep === "---" ? "" : dep,
+                arrivalIata: arr === "---" ? "" : arr,
+              }) ? (
+                <AirportMapRow iata={arr} rich={false} tripId={tripId} mode="arrive" />
               ) : null}
             </div>
           );

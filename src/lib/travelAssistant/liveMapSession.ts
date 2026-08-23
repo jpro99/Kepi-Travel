@@ -43,6 +43,8 @@ export function openLiveMapPath(): string {
 export function buildLiveAirportMapUrl(input?: {
   tripId?: string | null;
   iata?: string | null;
+  /** Arrival-first-mile (passport, bags, Leonardo Express) vs departure. */
+  mode?: "depart" | "arrive" | null;
 }): string {
   const params = new URLSearchParams();
   params.set("view", "airport");
@@ -50,6 +52,7 @@ export function buildLiveAirportMapUrl(input?: {
   const iata = input?.iata?.trim().toUpperCase();
   if (tripId) params.set("tripId", tripId);
   if (iata) params.set("iata", iata);
+  if (input?.mode === "arrive") params.set("mode", "arrive");
   return `/travel-assistant/live-map?${params.toString()}`;
 }
 

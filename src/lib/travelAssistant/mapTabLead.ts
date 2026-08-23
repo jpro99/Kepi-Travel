@@ -51,14 +51,28 @@ export function findPlannableAirportIata(
   nowMs = Date.now(),
 ): string | null {
   const gracePeriodStart = nowMs - 86_400_000;
-  for (const reservation of flights) {
-    if ((reservation.type ?? "flight") !== "flight") continue;
-    const iata = reservation.flightDepartureAirport?.trim().toUpperCase();
-    if (!iata) continue;
-    const departureValue =
-      reservation.flightDate ?? reservation.flightDepartureTime ?? reservation.localTime ?? "";
-    const departureAt = Date.parse(departureValue);
-    if (Number.isNaN(departureAt) || departureAt >= gracePeriodStart) return iata;
-  }
-  return null;
+  const candidates = flights
+    .filter((reservation) => (reservation.type ?? "flight") === "flight")
+    .map((reservation) => {
+      const iata = reservation.flightDepartureAirport?.trim().toUpperCase();
+      if (!iata) return null;
+      const departureValue =
+        reservation.flightDate ?? reservation.flightDepartureTime ?? reservation.localTime ?? "";
+      const departureAt = Date.parse(departureValue);
+      return { iata, departureAt };
+    })
+    .filter(
+      (entry): entry is { iata: string; departureAt: number } =>
+        entry != null &&
+        (Number.isNaN(entry.departureAt) || entry.departureAt >= gracePeriodStart),
+    );
+
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => {
+    if (Number.isNaN(a.departureAt)) return 1;
+    if (Number.isNaN(b.departureAt)) return -1;
+    return a.departureAt - b.departureAt;
+  });
+  return candidates[0].iata;
 }

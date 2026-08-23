@@ -27,8 +27,8 @@ import {
   deriveAirportDayCoachMode,
   type AirportDayCoachMode,
 } from "@/lib/travelAssistant/airportDayCoach";
-import { resolveArrivalHotelLabel } from "@/lib/travelAssistant/airportSpotlightContext";
 import { computeJourneyPhase, type JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
+import { resolveArrivalHotelLabel } from "@/lib/travelAssistant/airportSpotlightContext";
 import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
 import {
   flightDepartureUtcMs,
@@ -136,11 +136,20 @@ interface TripsResponse {
 export interface UseActiveFlightOptions {
   /** Scope flight selection to one trip (live-map deep links). */
   tripId?: string | null;
-  /** Prefer the departure airport from Map tab / flight CTA (e.g. ONT not SEA). */
-  preferredDepartureIata?: string | null;
+  /** Pin airport mode to this IATA (departure or arrival leg). */
+  preferredIata?: string | null;
+  /** When set, prefer arrival vs departure match for preferredIata. */
+  preferredMode?: "depart" | "arrive" | null;
 }
 
-/** Pick the best flight for a pinned departure IATA on this trip. */
+function flightArrivalUtcMs(f: FlightReservation): number {
+  const arrivalLocal =
+    f.flightArrivalTime?.trim() ||
+    canonicalFlightDepartureLocalTime(f);
+  return toUtcMs(arrivalLocal, f.timezone);
+}
+
+/** Pick the best flight for a pinned departure airport on this trip. */
 export function selectFlightForDepartureIata(
   reservations: FlightReservation[],
   iata: string,
@@ -163,6 +172,63 @@ export function selectFlightForDepartureIata(
   return upcoming;
 }
 
+/** Pick the best flight for a pinned arrival airport (FCO first-mile, etc.). */
+export function selectFlightForArrivalIata(
+  reservations: FlightReservation[],
+  iata: string,
+  nowMs: number,
+): ActiveFlight | null {
+  const code = iata.trim().toUpperCase();
+  if (!code) return null;
+  const graceMs = WINDOW_BEHIND_MIN * 60_000;
+  const candidates = reservations
+    .filter(
+      (r) =>
+        r.type === "flight" &&
+        r.flightArrivalAirport?.trim().toUpperCase() === code,
+    )
+    .map((f) => ({ f, utcMs: flightArrivalUtcMs(f) }))
+    .filter(({ utcMs }) => !isNaN(utcMs))
+    .sort((a, b) => a.utcMs - b.utcMs);
+  const upcoming =
+    candidates.find(({ utcMs }) => utcMs >= nowMs - graceMs) ?? candidates[0] ?? null;
+  return upcoming;
+}
+
+/** Match a pinned IATA to the correct leg — departure first unless mode forces arrival. */
+export function selectFlightForAirportIata(
+  reservations: FlightReservation[],
+  iata: string,
+  nowMs: number,
+  mode?: "depart" | "arrive" | null,
+): ActiveFlight | null {
+  if (mode === "arrive") {
+    return selectFlightForArrivalIata(reservations, iata, nowMs);
+  }
+  if (mode === "depart") {
+    return selectFlightForDepartureIata(reservations, iata, nowMs);
+  }
+  const departure = selectFlightForDepartureIata(reservations, iata, nowMs);
+  if (departure) return departure;
+  return selectFlightForArrivalIata(reservations, iata, nowMs);
+}
+
+/** Coach surface for a pinned airport — arrival IATA opens first-mile arrive copy. */
+export function resolveCoachModeForPinnedAirport(
+  flight: FlightReservation,
+  pinnedIata: string,
+  explicitMode?: "depart" | "arrive" | null,
+  journeyCoachMode: AirportDayCoachMode = "depart",
+): AirportDayCoachMode {
+  if (explicitMode === "arrive") return "arrive";
+  if (explicitMode === "depart") return "depart";
+  const code = pinnedIata.trim().toUpperCase();
+  const dep = flight.flightDepartureAirport?.trim().toUpperCase() ?? "";
+  const arr = flight.flightArrivalAirport?.trim().toUpperCase() ?? "";
+  if (arr === code && dep !== code) return "arrive";
+  return journeyCoachMode;
+}
+
 /**
  * Self-fetching active flight for surfaces without reservation props
  * (e.g. the Map page). Fetches once, re-selects every 30s.
@@ -174,13 +240,16 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
   navigatorFlight: ActiveFlight | null;
   journeyPhase: JourneyPhase;
   coachMode: AirportDayCoachMode;
+  /** Coach mode after URL / IATA pin (arrival vs departure surface). */
+  navigatorCoachMode: AirportDayCoachMode;
   hotelLabel: string | null;
   travelDayFlight: TravelDayFlightPick<FlightReservation> | null;
   travelDayFlightLabel: string | null;
   loading: boolean;
 } {
   const tripId = options?.tripId?.trim() ?? null;
-  const preferredDepartureIata = options?.preferredDepartureIata?.trim().toUpperCase() ?? null;
+  const preferredIata = options?.preferredIata?.trim().toUpperCase() ?? null;
+  const preferredMode = options?.preferredMode ?? null;
   const [reservations, setReservations] = useState<FlightReservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -221,23 +290,36 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
     [reservations, nowMs],
   );
   const coachMode = deriveAirportDayCoachMode(journeyPhase);
-  const pinnedDepartureFlight = useMemo(
+  const pinnedFlight = useMemo(
     () =>
-      preferredDepartureIata
-        ? selectFlightForDepartureIata(reservations, preferredDepartureIata, nowMs)
+      preferredIata
+        ? selectFlightForAirportIata(reservations, preferredIata, nowMs, preferredMode)
         : null,
-    [preferredDepartureIata, reservations, nowMs],
+    [preferredIata, preferredMode, reservations, nowMs],
   );
 
   const navigatorFlight = useMemo(() => {
-    if (journeyPhase.kind === "just-landed") {
+    if (journeyPhase.kind === "just-landed" && !pinnedFlight) {
       const f = journeyPhase.flight as FlightReservation;
       const utcMs = toUtcMs(f.flightArrivalTime ?? f.localTime, f.timezone);
       return { f, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
     }
-    if (pinnedDepartureFlight) return pinnedDepartureFlight;
+    if (pinnedFlight) return pinnedFlight;
     return activeFlight ?? previewFlight;
-  }, [journeyPhase, pinnedDepartureFlight, activeFlight, previewFlight, nowMs]);
+  }, [journeyPhase, pinnedFlight, activeFlight, previewFlight, nowMs]);
+
+  const navigatorCoachMode = useMemo(() => {
+    if (pinnedFlight && preferredIata) {
+      return resolveCoachModeForPinnedAirport(
+        pinnedFlight.f,
+        preferredIata,
+        preferredMode,
+        coachMode,
+      );
+    }
+    return coachMode;
+  }, [pinnedFlight, preferredIata, preferredMode, coachMode]);
+
   const hotelLabel = useMemo(() => {
     if (journeyPhase.kind === "just-landed") {
       const f = journeyPhase.flight as FlightReservation;
@@ -259,6 +341,7 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
     });
     return label.trim() || null;
   }, [reservations, journeyPhase]);
+
   const travelDayFlight = useMemo(
     () => selectTravelDayDepartureFlight(reservations, nowMs),
     [reservations, nowMs],
@@ -267,12 +350,14 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
     () => (travelDayFlight ? formatTravelDayFlightLabel(travelDayFlight.f) : null),
     [travelDayFlight],
   );
+
   return {
     activeFlight,
     previewFlight,
     navigatorFlight,
     journeyPhase,
     coachMode,
+    navigatorCoachMode,
     hotelLabel,
     travelDayFlight,
     travelDayFlightLabel,

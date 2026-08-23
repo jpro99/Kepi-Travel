@@ -120,18 +120,24 @@ export function LiveMapPage() {
   const searchParams = useSearchParams();
   const urlTripId = searchParams.get("tripId");
   const urlView = searchParams.get("view");
-  const urlAirportIata = searchParams.get("iata")?.trim().toUpperCase() || null;
+  const urlAirportIata =
+    searchParams.get("iata")?.trim().toUpperCase() ||
+    searchParams.get("airport")?.trim().toUpperCase() ||
+    null;
+  const urlAirportMode =
+    searchParams.get("mode")?.trim().toLowerCase() === "arrive" ? "arrive" : null;
   const preferAirportView = urlView === "airport";
   const {
     activeFlight,
     previewFlight,
     navigatorFlight,
-    coachMode,
+    navigatorCoachMode,
     journeyPhase,
     hotelLabel,
   } = useActiveFlight({
     tripId: urlTripId,
-    preferredDepartureIata: urlAirportIata,
+    preferredIata: urlAirportIata,
+    preferredMode: urlAirportMode,
   });
   const [mapView, setMapView] = useState<"family" | "airport">(() => (preferAirportView ? "airport" : "family"));
   const mapEl = useRef<HTMLDivElement>(null);
@@ -706,7 +712,7 @@ export function LiveMapPage() {
   }, []);
 
   const navIata =
-    coachMode === "arrive"
+    navigatorCoachMode === "arrive"
       ? (navFlight?.f.flightArrivalAirport ?? "")
       : (navFlight?.f.flightDepartureAirport ?? "");
 
@@ -719,16 +725,16 @@ export function LiveMapPage() {
     navProximity.status === "at-airport" || navProximity.status === "in-terminal";
 
   const airportLiveMode = Boolean(
-    coachMode === "arrive"
+    navigatorCoachMode === "arrive"
       ? journeyPhase.kind === "just-landed" && atNavAirport
       : activeFlight && atNavAirport,
   );
   const airportPreviewMode = Boolean(navFlight && !airportLiveMode);
 
   useEffect(() => {
-    if (!preferAirportView || !previewFlight) return;
+    if (!preferAirportView || !navigatorFlight) return;
     setMapView("airport");
-  }, [preferAirportView, previewFlight]);
+  }, [preferAirportView, navigatorFlight]);
 
   // Default map to the user's actual location (once), not world view or airport campus
   useEffect(() => {
@@ -765,13 +771,17 @@ export function LiveMapPage() {
 
   // Airport navigator: deep-link (?view=airport) or auto-switch when geofenced at departure airport
   useEffect(() => {
+    if (preferAirportView && navigatorFlight) {
+      setMapView("airport");
+      return;
+    }
     if (!activeFlight) {
       if (!preferAirportView) {
         setMapView((prev) => (prev === "airport" ? "family" : prev));
       }
       return;
     }
-    if (preferAirportView || atNavAirport) {
+    if (atNavAirport) {
       if (!autoAirportRef.current) {
         autoAirportRef.current = true;
         setMapView("airport");
@@ -782,7 +792,7 @@ export function LiveMapPage() {
     if (!preferAirportView) {
       setMapView((prev) => (prev === "airport" ? "family" : prev));
     }
-  }, [atNavAirport, activeFlight, preferAirportView]);
+  }, [atNavAirport, activeFlight, preferAirportView, navigatorFlight]);
 
   const navEligibleLounges = useMemo(
     () =>
@@ -1045,7 +1055,7 @@ export function LiveMapPage() {
               departureAirport={navFlight.f.flightDepartureAirport ?? null}
               departureTerminal={navFlight.f.flightDepartureTerminal ?? null}
               arrivalTerminal={navFlight.f.flightArrivalTerminal ?? null}
-              coachMode={coachMode}
+              coachMode={navigatorCoachMode}
               landedMinutesAgo={
                 journeyPhase.kind === "just-landed" ? journeyPhase.landedMinutesAgo : null
               }
@@ -1056,7 +1066,7 @@ export function LiveMapPage() {
                 null
               }
               flightStatusLabel={
-                coachMode === "arrive"
+                navigatorCoachMode === "arrive"
                   ? "Landed"
                   : (navFlight.f.flightDelayMinutes ?? 0) > 0
                     ? `Delayed +${navFlight.f.flightDelayMinutes}m`
@@ -1070,7 +1080,7 @@ export function LiveMapPage() {
               userAccuracyM={navAccuracyM}
               credentials={navCredentials}
               onCredentialsAnswer={saveCredentials}
-              eligibleLoungeNames={coachMode === "arrive" ? [] : navEligibleLounges}
+              eligibleLoungeNames={navigatorCoachMode === "arrive" ? [] : navEligibleLounges}
               onSwitchToFamilyView={() => setMapView("family")}
               familyPins={airportLiveMode ? familyAirportPins : []}
               onFamilyPinTap={handleFamilyPinTap}

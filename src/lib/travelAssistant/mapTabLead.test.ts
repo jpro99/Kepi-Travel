@@ -41,11 +41,16 @@ test("hideLiveMapStyleLab is on for the consumer path", () => {
   assert.equal(hideLiveMapStyleLab(), true);
 });
 
-test("findPlannableAirportIata returns the next departure IATA", () => {
+test("findPlannableAirportIata returns the earliest upcoming departure IATA", () => {
   const now = Date.parse("2026-08-12T12:00:00Z");
   assert.equal(
     findPlannableAirportIata(
       [
+        {
+          type: "flight",
+          flightDepartureAirport: "SEA",
+          flightDate: "2026-09-02",
+        },
         {
           type: "flight",
           flightDepartureAirport: "BRI",
@@ -54,8 +59,37 @@ test("findPlannableAirportIata returns the next departure IATA", () => {
       ],
       now,
     ),
-    "BRI",
+    "SEA",
   );
+  assert.equal(
+    findPlannableAirportIata(
+      [
+        {
+          type: "flight",
+          flightDepartureAirport: "ONT",
+          flightDate: "2026-09-01",
+        },
+        {
+          type: "flight",
+          flightDepartureAirport: "SEA",
+          flightDate: "2026-09-01",
+          flightDepartureTime: "2026-09-01 17:30",
+        },
+      ],
+      now,
+    ),
+    "ONT",
+  );
+});
+
+test("buildLiveAirportMapUrl pins trip and departure IATA for live-map deep links", () => {
+  const url = buildLiveAirportMapUrl({ tripId: "trip-europe", iata: "ont" });
+  assert.match(url, /view=airport/);
+  assert.match(url, /tripId=trip-europe/);
+  assert.match(url, /iata=ONT/);
+  const arrive = buildLiveAirportMapUrl({ tripId: "trip-europe", iata: "FCO", mode: "arrive" });
+  assert.match(arrive, /mode=arrive/);
+  assert.match(arrive, /iata=FCO/);
 });
 
 test("G19 Map tab leads with trip map; family is secondary; no emoji view chrome", () => {
@@ -84,13 +118,6 @@ test("G19 Map tab leads with trip map; family is secondary; no emoji view chrome
   assert.doesNotMatch(live, /👪/);
   assert.doesNotMatch(live, /✈ Plan airport/);
   assert.doesNotMatch(desktopBar, /onMapTab/);
-});
-
-test("buildLiveAirportMapUrl pins trip and departure IATA for live-map deep links", () => {
-  const url = buildLiveAirportMapUrl({ tripId: "trip-europe", iata: "ont" });
-  assert.match(url, /view=airport/);
-  assert.match(url, /tripId=trip-europe/);
-  assert.match(url, /iata=ONT/);
 });
 
 test("selectFlightForDepartureIata prefers the pinned departure airport", () => {

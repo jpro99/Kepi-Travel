@@ -223,6 +223,7 @@ export function BookTabView({
           itinerarySelfCheck={itinerarySelfCheck}
           transportConflictIds={transportConflictIds}
           tripName={tripName}
+          tripId={tripId}
           flightSearchDefaults={flightSearchDefaults}
           pendingForwardReview={pendingForwardReview}
           onOpenForwardReview={onOpenForwardReview}

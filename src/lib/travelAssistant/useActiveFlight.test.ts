@@ -3,6 +3,9 @@ import test from "node:test";
 import {
   selectActiveFlight,
   selectPreviewAirportFlight,
+  selectFlightForDepartureIata,
+  selectFlightForArrivalIata,
+  resolveCoachModeForPinnedAirport,
   toUtcMs,
   type FlightReservation,
 } from "@/lib/travelAssistant/useActiveFlight";
@@ -86,4 +89,44 @@ test("selectActiveFlight and preview agree inside the live window", () => {
   assert.ok(live);
   assert.ok(preview);
   assert.equal(live!.f.id, preview!.f.id);
+});
+
+test("selectFlightForDepartureIata pins ONT not earliest SEA leg", () => {
+  const now = Date.parse("2026-08-23T12:00:00Z");
+  const flights: FlightReservation[] = [
+    {
+      id: "as180",
+      type: "flight",
+      title: "AS 180",
+      provider: "Alaska",
+      localTime: "2026-09-01 17:30",
+      location: "SEA",
+      flightDepartureAirport: "SEA",
+      flightArrivalAirport: "FCO",
+      flightDepartureTime: "2026-09-01 17:30",
+      flightArrivalTime: "2026-09-02 11:15",
+    },
+    {
+      id: "as654",
+      type: "flight",
+      title: "AS 654",
+      provider: "Alaska",
+      localTime: "2026-09-01 12:00",
+      location: "ONT",
+      flightDepartureAirport: "ONT",
+      flightArrivalAirport: "SEA",
+      flightDepartureTime: "2026-09-01 12:00",
+    },
+  ];
+  const ont = selectFlightForDepartureIata(flights, "ONT", now);
+  assert.equal(ont?.f.flightDepartureAirport, "ONT");
+  const sea = selectFlightForDepartureIata(flights, "SEA", now);
+  assert.equal(sea?.f.id, "as180");
+  assert.equal(sea?.f.flightDepartureAirport, "SEA");
+  const fcoArrival = selectFlightForArrivalIata(flights, "FCO", now);
+  assert.equal(fcoArrival?.f.id, "as180");
+  assert.equal(
+    resolveCoachModeForPinnedAirport(flights[0], "FCO"),
+    "arrive",
+  );
 });

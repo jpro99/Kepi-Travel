@@ -10698,6 +10698,7 @@ export default function TravelAssistantPage() {
             />
           ) : consumerTab === "map" ? (
             <MapTabView
+              tripId={activeTripId}
               transportReservations={transportRouteReservations}
               hotelReservations={consumerReservationsSorted.filter(
                 (reservation) => reservation.type === "hotel",
