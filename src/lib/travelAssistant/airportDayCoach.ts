@@ -71,6 +71,35 @@ export function selectDayCoachVisibleSteps<T>(
 }
 
 /** Fact-driven arrival spotlight — never invents carousel or indoor position. */
+export function resolveArrivalRideStep(input: {
+  iata: string;
+  hotelLabel?: string | null;
+  arrivalInfo?: {
+    groundTransport?: string;
+    rideStepTitle?: string;
+    rideStepIcon?: string;
+  } | null;
+}): Pick<DayCoachPathStep, "id" | "icon" | "text" | "detail"> {
+  const hotel = input.hotelLabel?.trim();
+  const info = input.arrivalInfo;
+  const defaultDetail =
+    info?.groundTransport ||
+    "Open Uber or your booked transfer once you are landside.";
+  const icon = info?.rideStepIcon || "🚕";
+  const baseTitle = info?.rideStepTitle || (hotel ? `Ride / hotel — ${hotel}` : "Ride / hotel");
+  const text =
+    hotel && info?.rideStepTitle
+      ? `${info.rideStepTitle}${hotel ? ` · then ${hotel}` : ""}`
+      : baseTitle;
+  return {
+    id: "ride",
+    icon,
+    text,
+    detail: defaultDetail,
+  };
+}
+
+/** Fact-driven arrival spotlight — never invents carousel or indoor position. */
 export function resolveArrivalSpotlightIndex(input: {
   steps: readonly DayCoachPathStep[];
   landedMinutesAgo?: number | null;
@@ -179,7 +208,7 @@ export function buildAirportHomeSpotlight(input: AirportHomeSpotlightInput): Hom
   const step = input.steps[input.currentIndex] ?? input.steps[0] ?? null;
 
   if (input.mode === "arrive" && step) {
-    if (step.id === "ride" && input.hotelLabel?.trim()) {
+    if (step.id === "ride" && input.hotelLabel?.trim() && !/leonardo|train|express/i.test(step.text)) {
       return {
         kind: "airport",
         eyebrow: "Just landed",
@@ -315,12 +344,13 @@ export function buildArrivalDayCoachPath(input: ArrivalDayCoachInput): DayCoachP
   }
 
   const hotel = input.hotelLabel?.trim();
-  steps.push({
-    id: "ride",
-    icon: "🚕",
-    text: hotel ? `Ride / hotel — ${hotel}` : "Ride / hotel",
-    detail: "Open Uber or your booked transfer once you are landside.",
-  });
+  steps.push(
+    resolveArrivalRideStep({
+      iata: code,
+      hotelLabel: hotel,
+      arrivalInfo: nav?.arrivalInfo,
+    }),
+  );
 
   return steps;
 }

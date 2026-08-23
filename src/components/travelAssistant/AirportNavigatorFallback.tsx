@@ -24,6 +24,7 @@ import {
   type DayCoachPathStep,
 } from "@/lib/travelAssistant/airportDayCoach";
 import { resolveAirportLocationPhase } from "@/lib/travelAssistant/airportLocationPhase";
+import { ArrivalTransportOptionsCard } from "@/components/travelAssistant/ArrivalTransportOptionsCard";
 import { buildRideFromAirportDeepLinks } from "@/lib/travelAssistant/groundTransportDeepLinks";
 
 interface AirportNavigatorFallbackProps {
@@ -232,6 +233,7 @@ export function AirportNavigatorFallback({
     () => (isArrive ? buildRideFromAirportDeepLinks(code, hotelDropoff) : null),
     [isArrive, code, hotelDropoff],
   );
+  const arrivalTransportOptions = nav?.arrivalInfo?.transportOptions ?? [];
   const nextUp = visiblePathSteps[0] ?? null;
 
   return (
@@ -436,7 +438,13 @@ export function AirportNavigatorFallback({
 
         {!strongOfficial ? <OfficialAirportMapLink iata={code} /> : null}
 
-        {isArrive && rideLinks ? (
+        {isArrive && arrivalTransportOptions.length > 0 ? (
+          <ArrivalTransportOptionsCard
+            options={arrivalTransportOptions}
+            uberUrl={rideLinks?.uberUrl}
+            hotelLabel={hotelLabel}
+          />
+        ) : isArrive && rideLinks ? (
           <a
             data-testid="airport-fallback-uber"
             href={rideLinks.uberUrl}

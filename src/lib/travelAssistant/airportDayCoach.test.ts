@@ -8,10 +8,12 @@ import {
   deriveAirportDayCoachMode,
   formatLiveBaggageCarouselNote,
   isInternationalArrivalFlight,
+  resolveArrivalRideStep,
   resolveArrivalSpotlightIndex,
   resolveDepartSpotlightIndex,
   selectDayCoachVisibleSteps,
 } from "./airportDayCoach";
+import { getAirportNav } from "./airportNavigation";
 
 test("departureTimeBudgetReassurance at 90m shows plenty of time", () => {
   assert.equal(
@@ -171,5 +173,34 @@ test("buildArrivalDayCoachPath prefers live baggage note over screens fallback",
   const bags = steps.find((s) => s.id === "bags")!;
   assert.match(bags.detail ?? "", /Carousel 12/);
   assert.match(bags.detail ?? "", /live flight status/i);
+});
+
+test("FCO arrival ride step defaults to Leonardo Express, not Uber or metro", () => {
+  const steps = buildArrivalDayCoachPath({
+    iata: "FCO",
+    departureIata: "SEA",
+    flightNumber: "AS 180",
+  });
+  const ride = steps.find((s) => s.id === "ride")!;
+  assert.equal(ride.icon, "🚆");
+  assert.match(ride.text, /Leonardo Express/i);
+  assert.match(ride.text, /Termini/i);
+  assert.match(ride.detail ?? "", /Leonardo Express/i);
+  assert.match(ride.detail ?? "", /Roma Pass/i);
+  assert.doesNotMatch(ride.detail ?? "", /\bmetro\b/i);
+  assert.doesNotMatch(ride.detail ?? "", /Open Uber/i);
+
+  const nav = getAirportNav("FCO");
+  assert.ok(nav?.arrivalInfo?.transportOptions?.some((o) => o.isDefault));
+});
+
+test("resolveArrivalRideStep appends hotel after Leonardo default title", () => {
+  const ride = resolveArrivalRideStep({
+    iata: "FCO",
+    hotelLabel: "Hotel de Russie",
+    arrivalInfo: getAirportNav("FCO")?.arrivalInfo,
+  });
+  assert.match(ride.text, /Leonardo Express/i);
+  assert.match(ride.text, /Hotel de Russie/i);
 });
 
