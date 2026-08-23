@@ -231,6 +231,11 @@ All flight lists sort by canonical departure time (Ontario before Seattle on the
 
 **Test:** `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts`
 
+**M42 — Departure first-mile needs real check-in node kinds, not curb-only POIs**  
+Departures coach + journey machine only fire when the layout has distinct `checkin` graph nodes (not just a `checkin` POI hung on the curb junction). `buildDepartDayCoachPath` walks the bundled graph curb → check-in → security → gate with honest minutes; numeric gate refs (ONT 205) must resolve to the correct terminal zone in `getRouteToGate`.
+
+**Test:** `src/lib/airportNav/ontFirstMile.test.ts`, `src/lib/airportNav/tripJourney.test.ts`
+
 ---
 
 ## FLIGHTS LAWS
@@ -1085,5 +1090,6 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | N1 | `src/lib/neuro/neuroLoop.test.ts` |
 | M40 | `src/lib/airportNav/journeyMachine.test.ts` |
 | M41 | `src/lib/airportNav/airportCurationQueue.test.ts` |
+| M42 | `src/lib/airportNav/ontFirstMile.test.ts`, `src/lib/airportNav/tripJourney.test.ts` |
 
 New laws must add a row here when a test exists.

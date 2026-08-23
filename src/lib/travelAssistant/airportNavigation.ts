@@ -606,23 +606,73 @@ const AIRPORT_NAV: AirportNavigation[] = [
     iata: "ONT",
     name: "Ontario International",
     securityNotes: [
-      { instruction: "ONT has two small terminals — T2 is the main terminal for most flights, T4 is for some airlines", mode: "walk", estimatedMinutes: 0 },
+      {
+        instruction: "ONT has two small terminals side by side — Terminal 2 (gates 201–213) for Alaska, Southwest, American, and Delta; Terminal 4 (gates 401–414) for other carriers",
+        mode: "walk",
+        estimatedMinutes: 0,
+      },
     ],
     concourseRoutes: [
       {
-        fromZone: "T2-security", toZone: "T2",
-        steps: [{ instruction: "After security in T2 all gates are immediately ahead — small airport, nothing more than a 3-min walk", mode: "walk", estimatedMinutes: 3 }],
-        totalMinutes: 3,
-      },
-      {
-        fromZone: "T4-security", toZone: "T4",
-        steps: [{ instruction: "After T4 security all gates are directly ahead", mode: "walk", estimatedMinutes: 3 }],
-        totalMinutes: 3,
-      },
-      {
-        fromZone: "T2", toZone: "T4",
+        fromZone: "security",
+        toZone: "T2",
         steps: [
-          { instruction: "Exit T2 to the roadway and walk or take the free shuttle to T4", mode: "shuttle", estimatedMinutes: 8, landmark: "Shuttle stop is outside the T2 arrivals exit" },
+          {
+            instruction: "After T2 security all gates are immediately ahead — ONT is compact, nothing more than a 3-min walk to any gate",
+            mode: "walk",
+            estimatedMinutes: 3,
+            landmark: "Gates 201–213 are straight ahead past security",
+          },
+        ],
+        totalMinutes: 3,
+      },
+      {
+        fromZone: "security",
+        toZone: "2",
+        steps: [
+          {
+            instruction: "After T2 security all gates are immediately ahead — ONT is compact, nothing more than a 3-min walk to any gate",
+            mode: "walk",
+            estimatedMinutes: 3,
+            landmark: "Gates 201–213 are straight ahead past security",
+          },
+        ],
+        totalMinutes: 3,
+      },
+      {
+        fromZone: "security",
+        toZone: "T4",
+        steps: [
+          {
+            instruction: "After T4 security all gates are directly ahead",
+            mode: "walk",
+            estimatedMinutes: 3,
+          },
+        ],
+        totalMinutes: 3,
+      },
+      {
+        fromZone: "security",
+        toZone: "4",
+        steps: [
+          {
+            instruction: "After T4 security all gates are directly ahead",
+            mode: "walk",
+            estimatedMinutes: 3,
+          },
+        ],
+        totalMinutes: 3,
+      },
+      {
+        fromZone: "T2",
+        toZone: "T4",
+        steps: [
+          {
+            instruction: "Exit T2 to the roadway and walk or take the free shuttle to T4",
+            mode: "shuttle",
+            estimatedMinutes: 8,
+            landmark: "Shuttle stop is outside the T2 arrivals exit",
+          },
         ],
         totalMinutes: 8,
       },
@@ -1615,22 +1665,29 @@ export function getRouteToGate(
 ): ConcourseRoute | null {
   // Extract gate letter/concourse from gate number (e.g. "C14" → "C", "N6" → "N", "B22" → "B")
   const gatePrefix = gateOrTerminal.match(/^([A-Z]+)/)?.[1] ?? gateOrTerminal;
+  // Numeric terminals (ONT 205 → "2", 412 → "4") when no letter prefix exists.
+  const numericTerminal = /^\d/.test(gateOrTerminal) ? gateOrTerminal.match(/^(\d)/)?.[1] : undefined;
+  const zoneCandidates = [
+    gateOrTerminal.toUpperCase(),
+    gatePrefix.toUpperCase(),
+    ...(numericTerminal ? [numericTerminal, `T${numericTerminal}`] : []),
+  ];
 
-  // Look for exact toZone match first
-  const exact = nav.concourseRoutes.find(r =>
-    r.fromZone.toUpperCase() === fromZone.toUpperCase() &&
-    (r.toZone.toUpperCase() === gatePrefix.toUpperCase() ||
-     r.toZone.toUpperCase() === gateOrTerminal.toUpperCase())
+  const matchesZone = (route: ConcourseRoute) =>
+    zoneCandidates.some((zone) => route.toZone.toUpperCase() === zone);
+
+  // Look for exact fromZone match first
+  const exact = nav.concourseRoutes.find(
+    (route) => route.fromZone.toUpperCase() === fromZone.toUpperCase() && matchesZone(route),
   );
   if (exact) return exact;
 
   // Try fromZone as "security" fallback
-  const fromSecurity = nav.concourseRoutes.find(r =>
-    r.fromZone.toLowerCase() === "security" &&
-    (r.toZone.toUpperCase() === gatePrefix.toUpperCase() ||
-     r.toZone.toUpperCase() === gateOrTerminal.toUpperCase())
+  return (
+    nav.concourseRoutes.find(
+      (route) => route.fromZone.toLowerCase() === "security" && matchesZone(route),
+    ) ?? null
   );
-  return fromSecurity ?? null;
 }
 
 /**

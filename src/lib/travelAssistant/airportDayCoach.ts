@@ -4,7 +4,10 @@
  */
 
 import { resolveAirport } from "@/lib/airports/lookup";
-import { getAirportNav } from "@/lib/travelAssistant/airportNavigation";
+import { getAirportLayout } from "@/lib/airportNav/getLayout";
+import { computeRoute } from "@/lib/airportNav/pathfinder";
+import { buildTripJourney, type JourneyRole } from "@/lib/airportNav/tripJourney";
+import { buildGateInstructions, getAirportNav } from "@/lib/travelAssistant/airportNavigation";
 import { resolveArrivalTransportPresentation } from "@/lib/travelAssistant/arrivalTransportPresentation";
 import type { AirportLocationPhase } from "@/lib/travelAssistant/airportLocationPhase";
 import { departPhaseHomeTitle } from "@/lib/travelAssistant/airportLocationPhase";
@@ -419,4 +422,135 @@ export function buildDepartCheckInCoachStep(input: {
       ? `${flight} — airline app, kiosk, or counter`
       : "Airline app, kiosk, or counter · drop bags if needed",
   };
+}
+
+const DEPART_ROLE_ICON: Record<JourneyRole, string> = {
+  dropoff: "🚗",
+  checkin: "🧳",
+  security: "🛡",
+  lounge: "🛋",
+  gate: "🚪",
+};
+
+const DEPART_ROLE_ID: Record<JourneyRole, string> = {
+  dropoff: "curb",
+  checkin: "check-in",
+  security: "security",
+  lounge: "lounge",
+  gate: "gate",
+};
+
+export interface DepartDayCoachInput {
+  iata: string;
+  airlineName?: string | null;
+  flightNumber?: string | null;
+  gateCode?: string | null;
+  departureTerminal?: string | null;
+  credentials?: { tsaPreCheck?: boolean; clear?: boolean };
+  eligibleLoungeNames?: string[];
+}
+
+/**
+ * Departure first-mile coach path — curb → check-in → security → (lounge) → gate.
+ * Uses the bundled layout graph for honest walk minutes when available; falls back
+ * to buildGateInstructions text when no layout is published.
+ */
+export function buildDepartDayCoachPath(input: DepartDayCoachInput): DayCoachPathStep[] {
+  const code = input.iata.trim().toUpperCase();
+  const layout = getAirportLayout(code);
+  const creds = {
+    tsaPreCheck: Boolean(input.credentials?.tsaPreCheck),
+    clear: Boolean(input.credentials?.clear),
+    known: true,
+  };
+
+  const guide = buildGateInstructions(
+    code,
+    input.gateCode ?? undefined,
+    input.departureTerminal ?? undefined,
+    creds.clear,
+    creds.tsaPreCheck,
+    false,
+  );
+  const securityGuide = guide.steps[0];
+
+  if (layout) {
+    const stops = buildTripJourney(layout, {
+      airlineName: input.airlineName,
+      gateCode: input.gateCode,
+      eligibleLoungeNames: input.eligibleLoungeNames,
+    });
+
+    const steps: DayCoachPathStep[] = [];
+    let fromNodeId = stops[0]?.nodeId ?? null;
+
+    for (const stop of stops) {
+      if (!stop.known || !stop.nodeId) {
+        if (stop.role === "gate") {
+          steps.push({
+            id: "gate",
+            icon: "🚪",
+            text: stop.label,
+            detail: stop.detail,
+          });
+        }
+        continue;
+      }
+
+      let minutes: number | undefined;
+      if (fromNodeId && stop.poiId && fromNodeId !== stop.nodeId) {
+        const route = computeRoute({
+          layout,
+          fromNodeId,
+          toPoiId: stop.poiId,
+          credentials: creds,
+        });
+        if (route) minutes = Math.max(1, Math.round(route.totalSeconds / 60));
+      }
+      fromNodeId = stop.nodeId;
+
+      if (stop.role === "checkin") {
+        const checkIn = buildDepartCheckInCoachStep({
+          iata: code,
+          airlineName: input.airlineName,
+          flightNumber: input.flightNumber,
+          departureTerminal: input.departureTerminal,
+        });
+        steps.push({ ...checkIn, minutes });
+        continue;
+      }
+
+      if (stop.role === "security" && securityGuide) {
+        steps.push({
+          id: "security",
+          icon: securityGuide.icon,
+          text: securityGuide.text,
+          detail: securityGuide.detail,
+          minutes: securityGuide.minutes > 0 ? securityGuide.minutes : minutes,
+        });
+        continue;
+      }
+
+      steps.push({
+        id: DEPART_ROLE_ID[stop.role],
+        icon: DEPART_ROLE_ICON[stop.role],
+        text:
+          stop.role === "gate" && input.gateCode
+            ? `Gate ${input.gateCode.trim().toUpperCase()}`
+            : stop.label,
+        detail: stop.detail,
+        minutes,
+      });
+    }
+
+    if (steps.length > 0) return steps;
+  }
+
+  const checkIn = buildDepartCheckInCoachStep({
+    iata: code,
+    airlineName: input.airlineName,
+    flightNumber: input.flightNumber,
+    departureTerminal: input.departureTerminal,
+  });
+  return [checkIn, ...tagDepartGuideSteps(guide.steps)];
 }
