@@ -33,7 +33,10 @@ import type { TripStaySegment } from "@/lib/hotels/deriveTripStaySegments";
 import type { TripSpendSummary } from "@/lib/travelAssistant/tripSpendSummary";
 import type { TripGapNavigationAction } from "@/lib/travelAssistant/gapDetectionService";
 import type { ReadinessChecklistItem } from "@/lib/travelAssistant/tripOrchestration";
-import { TripReadinessChecklistSection } from "@/components/travelAssistant/TripReadinessChecklistSection";
+import {
+  TripReadinessChecklistSection,
+  type TripReadinessChecklistItem,
+} from "@/components/travelAssistant/TripReadinessChecklistSection";
 import type { HotelStayMapReservation } from "@/lib/travelAssistant/tripHotelStayMap";
 
 type PlanSegment = "itinerary" | "notebook";
@@ -162,7 +165,7 @@ interface MobileMapForwardShellProps {
   onOpenReview?: () => void;
   readinessChecklist?: ReadinessChecklistItem[];
   onOpenReadiness?: () => void;
-  readinessItems?: TripReadinessChecklistSection["items"];
+  readinessItems?: TripReadinessChecklistItem[];
   onToggleReadinessItem?: (id: string) => void;
   readinessChecklistSectionRef?: Ref<HTMLElement>;
 }

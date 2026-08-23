@@ -10,6 +10,8 @@ import {
   showFamilyLocationAsPrimaryCta,
   showMapTabAirportCta,
 } from "@/lib/travelAssistant/mapTabLead";
+import { buildLiveAirportMapUrl } from "@/lib/travelAssistant/liveMapSession";
+import { selectFlightForDepartureIata } from "@/lib/travelAssistant/useActiveFlight";
 
 test("mapTabLeadMode prefers trip geography over an empty map", () => {
   assert.equal(mapTabLeadMode({ stayCount: 2, upcomingFlightCount: 0 }), "trip");
@@ -85,7 +87,6 @@ test("G19 Map tab leads with trip map; family is secondary; no emoji view chrome
 });
 
 test("buildLiveAirportMapUrl pins trip and departure IATA for live-map deep links", () => {
-  const { buildLiveAirportMapUrl } = require("@/lib/travelAssistant/liveMapSession") as typeof import("@/lib/travelAssistant/liveMapSession");
   const url = buildLiveAirportMapUrl({ tripId: "trip-europe", iata: "ont" });
   assert.match(url, /view=airport/);
   assert.match(url, /tripId=trip-europe/);
@@ -93,7 +94,6 @@ test("buildLiveAirportMapUrl pins trip and departure IATA for live-map deep link
 });
 
 test("selectFlightForDepartureIata prefers the pinned departure airport", () => {
-  const { selectFlightForDepartureIata } = require("@/lib/travelAssistant/useActiveFlight") as typeof import("@/lib/travelAssistant/useActiveFlight");
   const now = Date.parse("2026-08-23T12:00:00Z");
   const pick = selectFlightForDepartureIata(
     [
