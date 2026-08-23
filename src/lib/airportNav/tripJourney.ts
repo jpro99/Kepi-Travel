@@ -54,6 +54,35 @@ function planarDist(a: [number, number], b: [number, number]): number {
   return dLng * dLng + dLat * dLat;
 }
 
+/** Gate cluster id → paired curb id for multi-terminal airports (ONT gate-t2 → curb-t2). */
+function curbNodeForGateCluster(gateNodeId: string | null): string | null {
+  if (!gateNodeId) return null;
+  const match = gateNodeId.match(/^gate-(.+)$/);
+  return match ? `curb-${match[1]}` : null;
+}
+
+function resolveDeparturesCurbNode(
+  layout: AirportLayout,
+  opts: { gateNodeId: string | null; checkinNodeId?: string | null },
+): GraphNode | undefined {
+  const pairedId = curbNodeForGateCluster(opts.gateNodeId);
+  if (pairedId) {
+    const paired = layout.nodes.find((node) => node.id === pairedId);
+    if (paired) return paired;
+  }
+  if (opts.checkinNodeId) {
+    const atCheckin = layout.nodes.find((node) => node.id === opts.checkinNodeId);
+    if (atCheckin && /curb|drop|depart/i.test(atCheckin.landmark ?? "")) return atCheckin;
+  }
+  return (
+    layout.nodes.find(
+      (node) => !node.airside && /drop|curb|entrance|departure/i.test(node.landmark ?? ""),
+    ) ??
+    layout.nodes.find((node) => node.kind === "junction" && !node.airside) ??
+    layout.nodes.find((node) => !node.airside)
+  );
+}
+
 function pickNearestPoi(
   pois: PoiDefinition[],
   toNodeId: string | null,
@@ -76,6 +105,13 @@ function pickNearestPoi(
   return best;
 }
 
+/** Gate cluster id → paired check-in node (ONT gate-t2 → checkin-t2). */
+function checkinNodeForGateCluster(gateNodeId: string | null): string | null {
+  if (!gateNodeId) return null;
+  const match = gateNodeId.match(/^gate-(.+)$/);
+  return match ? `checkin-${match[1]}` : null;
+}
+
 export function buildTripJourney(
   layout: AirportLayout,
   ctx: TripJourneyContext,
@@ -84,46 +120,57 @@ export function buildTripJourney(
   const airline = ctx.airlineName?.trim().toLowerCase() || null;
   const stops: JourneyStop[] = [];
 
-  // 1) Drop-off / entrance — landside. Prefer an explicit curb/entrance node.
-  const dropoff =
-    layout.nodes.find(
-      (node) => !node.airside && /drop|curb|entrance|departure/i.test(node.landmark ?? ""),
-    ) ??
-    layout.nodes.find((node) => node.kind === "junction" && !node.airside) ??
-    layout.nodes.find((node) => !node.airside);
+  const gateNodeId = ctx.gateCode ? resolveGateNode(layout, ctx.gateCode) : null;
+
+  // 1) Check-in — terminal paired to gate, then airline counter, else generic.
+  let checkin: PoiDefinition | undefined;
+  if (ctx.includeCheckin !== false) {
+    const checkins = layout.pois.filter(
+      (poi) => poi.category === "checkin" && !poi.id.startsWith("poi-dropoff-"),
+    );
+    const pairedCheckinId = checkinNodeForGateCluster(gateNodeId);
+    if (pairedCheckinId) {
+      checkin = checkins.find((poi) => poi.nodeId === pairedCheckinId);
+    }
+    if (!checkin && airline) {
+      checkin = checkins.find(
+        (poi) => poi.airline && airline.includes(poi.airline.toLowerCase()),
+      );
+    }
+    if (!checkin) checkin = checkins.find((poi) => !poi.airline) ?? checkins[0];
+  }
+
+  // 2) Drop-off / curb — terminal-paired when gate/check-in is known (ONT T2/T4).
+  const dropoff = resolveDeparturesCurbNode(layout, {
+    gateNodeId,
+    checkinNodeId: checkin?.nodeId ?? null,
+  });
   if (dropoff) {
+    const dropoffPoi =
+      layout.pois.find(
+        (poi) => poi.nodeId === dropoff.id && poi.id.startsWith("poi-dropoff-"),
+      ) ??
+      (checkin?.nodeId === dropoff.id ? checkin : undefined) ??
+      layout.pois.find((poi) => poi.nodeId === dropoff.id);
     stops.push({
       role: "dropoff",
       nodeId: dropoff.id,
+      poiId: dropoffPoi?.id,
       label: "Get dropped off",
       detail: dropoff.landmark,
       known: true,
     });
   }
 
-  // 2) Check-in — the traveler's airline if we can match it, else generic.
-  if (ctx.includeCheckin !== false) {
-    const checkins = layout.pois.filter((poi) => poi.category === "checkin");
-    let checkin: PoiDefinition | undefined;
-    if (airline) {
-      checkin = checkins.find(
-        (poi) => poi.airline && airline.includes(poi.airline.toLowerCase()),
-      );
-    }
-    if (!checkin) checkin = checkins.find((poi) => !poi.airline) ?? checkins[0];
-    if (checkin) {
-      stops.push({
-        role: "checkin",
-        nodeId: checkin.nodeId,
-        poiId: checkin.id,
-        label: checkin.name,
-        known: true,
-      });
-    }
+  if (checkin) {
+    stops.push({
+      role: "checkin",
+      nodeId: checkin.nodeId,
+      poiId: checkin.id,
+      label: checkin.name,
+      known: true,
+    });
   }
-
-  // Resolve the gate early — used to pick the closest security checkpoint.
-  const gateNodeId = ctx.gateCode ? resolveGateNode(layout, ctx.gateCode) : null;
 
   // 3) Security — the checkpoint closest to where they're headed.
   const securities = layout.pois.filter((poi) => poi.category === "security");

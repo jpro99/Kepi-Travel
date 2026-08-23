@@ -267,6 +267,11 @@ function airportPoiIsVisible(
   hasAirlineCheckin: boolean,
   zoom?: number,
 ): boolean {
+  // Terminal curb drop-off POIs stay visible even when an airline counter exists elsewhere.
+  if (definition.id.startsWith("poi-dropoff-")) {
+    if (mode === "lounges") return false;
+    return true;
+  }
   if (definition.category === "checkin") {
     if (definition.airline) {
       if (!airlineName?.toLowerCase().includes(definition.airline.toLowerCase())) return false;
@@ -333,7 +338,7 @@ function AirportDestinationRail({
         onClick={onToggle}
         data-testid="airport-nav-where-to-chip"
         aria-label={selectedPoiId ? "Choose another stop" : "Where to?"}
-        className="absolute right-3 z-[25] flex items-center gap-1.5 rounded-full bg-black/55 px-4 py-2.5 text-[13px] font-bold text-white shadow-lg backdrop-blur-md active:scale-[0.98]"
+        className="pointer-events-auto absolute right-3 z-[60] flex min-h-[44px] items-center gap-1.5 rounded-full bg-black/55 px-4 py-2.5 text-[13px] font-bold text-white shadow-lg backdrop-blur-md active:scale-[0.98]"
         style={{ top: railTop }}
       >
         <span aria-hidden>🔎</span>
@@ -345,8 +350,8 @@ function AirportDestinationRail({
   return (
     <section
       aria-label="Airport destinations"
-      className="absolute bottom-24 right-2 z-[25] flex w-[42%] max-w-[190px] flex-col overflow-hidden rounded-[22px] bg-white/95 p-2.5 shadow-2xl backdrop-blur-md sm:right-4 sm:w-52 sm:max-w-none"
-      style={{ top: railTop }}
+      className="pointer-events-auto absolute right-2 z-[60] flex w-[42%] max-w-[190px] flex-col overflow-hidden rounded-[22px] bg-white/95 p-2.5 shadow-2xl backdrop-blur-md sm:right-4 sm:w-52 sm:max-w-none"
+      style={{ top: railTop, maxHeight: `calc(100% - ${railTop} - 5.5rem)` }}
     >
       <div>
         <div className="flex items-start justify-between gap-1">
@@ -2069,6 +2074,7 @@ export function AirportNavigatorMap({
           "display:flex;align-items:center;gap:5px;",
           "background:transparent;border:none;padding:3px;cursor:pointer;",
           "font:700 11px system-ui,-apple-system,sans-serif;white-space:nowrap;",
+          "pointer-events:auto;touch-action:manipulation;",
           isSelected ? "z-index:6;" : isReference ? "z-index:1;opacity:0.72;" : "z-index:3;",
         ].join("");
 
@@ -2504,7 +2510,9 @@ export function AirportNavigatorMap({
     >
       <style>{`@keyframes kepiPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
 @keyframes kepiMicRing{0%{box-shadow:0 0 0 0 rgba(56,189,248,0.55)}100%{box-shadow:0 0 0 14px rgba(56,189,248,0)}}
-@keyframes kepiBeacon{0%{transform:scale(0.6);opacity:0.9}100%{transform:scale(1.9);opacity:0}}`}</style>
+@keyframes kepiBeacon{0%{transform:scale(0.6);opacity:0.9}100%{transform:scale(1.9);opacity:0}}
+.maplibregl-marker{pointer-events:auto!important;z-index:5;}
+.maplibregl-marker button{pointer-events:auto!important;min-height:28px;}`}</style>
       {/* Always-on light floor-plan base. The real OSM map fades in on top when
           ready; if tiles/WebGL ever fail, this stays visible so we never blank. */}
       {layout ? (
@@ -2587,22 +2595,24 @@ export function AirportNavigatorMap({
       ) : null}
 
       {layout ? (
-        <AirportDestinationRail
-          layout={layout}
-          airlineName={airlineName}
-          gatePoiId={gatePoi?.id ?? null}
-          gateCode={gateCode}
-          selectedPoiId={selectedPoiId ?? pendingPoiId ?? activeRoute?.toPoiId ?? null}
-          credentials={credentials}
-          hasApproximatePosition={!previewMode && Boolean(snapped)}
-          open={railOpen}
-          onToggle={() => setRailOpen((wasOpen) => !wasOpen)}
-          onPoiClick={(poiId) => {
-            handlePoiTap(poiId);
-            setRailOpen(false);
-          }}
-          railTop={destinationRailTop}
-        />
+        <div className="pointer-events-none absolute inset-0 z-[30]">
+          <AirportDestinationRail
+            layout={layout}
+            airlineName={airlineName}
+            gatePoiId={gatePoi?.id ?? null}
+            gateCode={gateCode}
+            selectedPoiId={selectedPoiId ?? pendingPoiId ?? activeRoute?.toPoiId ?? null}
+            credentials={credentials}
+            hasApproximatePosition={!previewMode && Boolean(snapped)}
+            open={railOpen}
+            onToggle={() => setRailOpen((wasOpen) => !wasOpen)}
+            onPoiClick={(poiId) => {
+              handlePoiTap(poiId);
+              setRailOpen(false);
+            }}
+            railTop={destinationRailTop}
+          />
+        </div>
       ) : null}
 
       {/* Flight hero card — hidden in Live Map plan mode (flight lives in preview banner). */}

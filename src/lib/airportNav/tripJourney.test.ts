@@ -94,3 +94,15 @@ test("ONT Alaska journey uses dedicated check-in node (not curb junction)", () =
   assert.equal(checkin?.nodeId, "checkin-t2");
   assert.notEqual(checkin?.nodeId, stops[0]?.nodeId);
 });
+
+test("ONT gate 401 pairs Terminal 4 curb + drop-off POI for journey emphasis", () => {
+  const stops = buildTripJourney(ONT_LAYOUT, {
+    gateCode: "401",
+  });
+  const dropoff = stops.find((s) => s.role === "dropoff")!;
+  const checkin = stops.find((s) => s.role === "checkin")!;
+  assert.equal(dropoff.nodeId, "curb-t4");
+  assert.equal(checkin.nodeId, "checkin-t4");
+  assert.equal(dropoff.poiId, "poi-dropoff-t4");
+  assert.ok(journeyPoiIds(stops).has("poi-dropoff-t4"));
+});

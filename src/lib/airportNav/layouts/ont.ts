@@ -163,6 +163,13 @@ function buildOnt(): { nodes: GraphNode[]; edges: GraphEdge[]; pois: PoiDefiniti
     });
 
     pois.push({
+      id: `poi-dropoff-${t.id}`,
+      nodeId: curbId(t.id),
+      category: "checkin",
+      name: `${t.name} drop-off`,
+      precision: "schematic",
+    });
+    pois.push({
       id: `poi-gate-${t.id}`,
       nodeId: gateId,
       category: "gate",
