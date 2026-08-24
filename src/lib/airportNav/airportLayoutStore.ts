@@ -240,16 +240,15 @@ export async function resolvePublishedAirportLayout(inputIata: string): Promise<
     // fix without a manual admin republish (KEPI_DESIGN_LAW M25). This is exactly
     // why the SEA check-in/security fix never reached the live map: the source
     // edit changed the bundle, but Redis kept serving the old seeded revision.
-    if (
-      bundled &&
-      isSeedOriginatedPackage(stored, iata) &&
-      stored.layout.layoutVersion !== bundled.layoutVersion
-    ) {
-      const reseeded = await saveAirportLayoutPackage(bundled, bundledSource(iata), {
-        status: "published",
-        previewConfirmation: { by: SEED_PREVIEW_CONFIRMER },
-      });
-      return { layout: reseeded.layout, package: reseeded, source: "bundled" };
+    if (bundled && isSeedOriginatedPackage(stored, iata)) {
+      if (stored.layout.layoutVersion !== bundled.layoutVersion) {
+        const reseeded = await saveAirportLayoutPackage(bundled, bundledSource(iata), {
+          status: "published",
+          previewConfirmation: { by: SEED_PREVIEW_CONFIRMER },
+        });
+        return { layout: reseeded.layout, package: reseeded, source: "bundled" };
+      }
+      return { layout: bundled, package: stored, source: "bundled" };
     }
     return { layout: stored.layout, package: stored, source: "database" };
   }

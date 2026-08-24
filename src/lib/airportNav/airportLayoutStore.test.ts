@@ -61,7 +61,7 @@ test("SEA resolves from the compiled seed with empty storage and missing env", a
   assert.equal(resolved.package?.previewConfirmedBy, SEED_PREVIEW_CONFIRMER);
 
   const again = await resolvePublishedAirportLayout("SEA");
-  assert.equal(again.source, "database");
+  assert.equal(again.source, "bundled");
 });
 
 test("publishing via the store requires visual preview confirmation", async () => {
