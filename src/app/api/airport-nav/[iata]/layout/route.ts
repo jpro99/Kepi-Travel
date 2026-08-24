@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { hasArrivalsCoverage, recordAirportCurationDemand } from "@/lib/airportNav/airportCurationQueue";
+import { buildAirportLayoutApiResponseHeaders } from "@/lib/airportNav/airportLayoutApiHeaders";
 import { resolvePublishedAirportLayout } from "@/lib/airportNav/airportLayoutStore";
+
+export const dynamic = "force-dynamic";
 
 type Params = { params: Promise<{ iata: string }> };
 
@@ -46,11 +49,13 @@ export async function GET(_request: Request, { params }: Params) {
   }
 
   return NextResponse.json(layout, {
-    headers: {
-      "Cache-Control": "public, max-age=60, s-maxage=300, stale-while-revalidate=86400",
-      "ETag": `"${iata}:${resolved.package?.revision ?? 0}:${layout.layoutVersion}"`,
-      "X-Kepi-Airport-Layout-Source": resolved.source,
-      "X-Kepi-Airport-Layout-Revision": String(resolved.package?.revision ?? 0),
-    },
+    headers: buildAirportLayoutApiResponseHeaders({
+      iata,
+      layoutVersion: layout.layoutVersion,
+      revision: resolved.package?.revision ?? 0,
+      source: resolved.source,
+      edgeCount: layout.edges.length,
+      nodeCount: layout.nodes.length,
+    }),
   });
 }
