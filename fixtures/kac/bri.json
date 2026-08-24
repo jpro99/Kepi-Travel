@@ -1,0 +1,345 @@
+{
+  "schemaVersion": 1,
+  "iata": "BRI",
+  "revision": 1,
+  "status": "draft",
+  "layout": {
+    "iata": "BRI",
+    "name": "Bari Karol Wojty\u0142a",
+    "layoutVersion": "kac-0.1.1-bri",
+    "updatedAt": "2026-08-24T00:00:00Z",
+    "center": [
+      16.764144,
+      41.134852
+    ],
+    "routeGrade": "schematic",
+    "invented": 0,
+    "compilerStage": "ceo-approved-overlay",
+    "cookbookClass": "departures-first-mile-stub",
+    "honesty": {
+      "gatePins": 0,
+      "gateTextStubs": 15,
+      "routeGrade": "schematic"
+    },
+    "gateTextStubs": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "A5",
+      "A6",
+      "A7",
+      "A8",
+      "A9",
+      "A10",
+      "A11",
+      "B1",
+      "B2",
+      "B3",
+      "B4"
+    ],
+    "zones": [
+      {
+        "id": "BRI:zone:terminal",
+        "name": "Main terminal (OSM way/24995995 hull)",
+        "ring": [
+          [
+            16.7626192,
+            41.1344552
+          ],
+          [
+            16.7627049,
+            41.134284
+          ],
+          [
+            16.7628868,
+            41.1343362
+          ],
+          [
+            16.7630905,
+            41.1339329
+          ],
+          [
+            16.7629543,
+            41.1338944
+          ],
+          [
+            16.7630201,
+            41.1337586
+          ],
+          [
+            16.7631583,
+            41.1337978
+          ],
+          [
+            16.7633349,
+            41.1338483
+          ],
+          [
+            16.7634225,
+            41.1338741
+          ],
+          [
+            16.7635555,
+            41.1339132
+          ],
+          [
+            16.764046,
+            41.1340524
+          ],
+          [
+            16.764272,
+            41.1341145
+          ],
+          [
+            16.7644396,
+            41.1341604
+          ],
+          [
+            16.7644486,
+            41.134163
+          ],
+          [
+            16.7645101,
+            41.1341809
+          ],
+          [
+            16.7645773,
+            41.1342001
+          ],
+          [
+            16.7645801,
+            41.1342007
+          ],
+          [
+            16.7645542,
+            41.134255
+          ],
+          [
+            16.7645247,
+            41.1343169
+          ],
+          [
+            16.7645147,
+            41.1343381
+          ],
+          [
+            16.7644393,
+            41.1343174
+          ],
+          [
+            16.7643822,
+            41.1343009
+          ],
+          [
+            16.764332,
+            41.1344
+          ],
+          [
+            16.764178,
+            41.1347041
+          ],
+          [
+            16.7642082,
+            41.1347114
+          ],
+          [
+            16.7642151,
+            41.1346967
+          ],
+          [
+            16.7642702,
+            41.1347104
+          ],
+          [
+            16.7642952,
+            41.1346628
+          ],
+          [
+            16.764567,
+            41.1347255
+          ],
+          [
+            16.7647993,
+            41.1347901
+          ],
+          [
+            16.7650562,
+            41.134881
+          ],
+          [
+            16.7652074,
+            41.1349411
+          ],
+          [
+            16.765598,
+            41.1350557
+          ],
+          [
+            16.7656389,
+            41.135067
+          ],
+          [
+            16.7657164,
+            41.135287
+          ],
+          [
+            16.7657188,
+            41.1352932
+          ],
+          [
+            16.7657404,
+            41.1353495
+          ],
+          [
+            16.7654769,
+            41.1352807
+          ],
+          [
+            16.765405,
+            41.1352582
+          ],
+          [
+            16.7653336,
+            41.1352379
+          ],
+          [
+            16.765304,
+            41.1352295
+          ],
+          [
+            16.7647984,
+            41.1350831
+          ],
+          [
+            16.7647713,
+            41.1350755
+          ],
+          [
+            16.7642649,
+            41.1349253
+          ],
+          [
+            16.7642405,
+            41.1349185
+          ],
+          [
+            16.7637294,
+            41.1347719
+          ],
+          [
+            16.763706,
+            41.1347652
+          ],
+          [
+            16.7631996,
+            41.1346216
+          ],
+          [
+            16.7631712,
+            41.1346135
+          ],
+          [
+            16.7626593,
+            41.1344675
+          ],
+          [
+            16.7626304,
+            41.1344592
+          ],
+          [
+            16.7626192,
+            41.1344552
+          ]
+        ],
+        "airside": false,
+        "heightM": 12
+      }
+    ],
+    "nodes": [
+      {
+        "id": "BRI:node:terminal",
+        "name": "Main terminal",
+        "kind": "junction",
+        "pos": [
+          16.7640014,
+          41.1344435
+        ],
+        "airside": false,
+        "precision": "surveyed",
+        "notes": "OSM terminal centroid \u2014 surveyed anchor"
+      },
+      {
+        "id": "BRI:node:curb",
+        "name": "Departures curb",
+        "kind": "junction",
+        "pos": [
+          16.7641809,
+          41.1342024
+        ],
+        "airside": false,
+        "precision": "surveyed"
+      },
+      {
+        "id": "BRI:node:checkin",
+        "name": "Check-in hall",
+        "kind": "checkin",
+        "pos": [
+          16.7641111,
+          41.1342962
+        ],
+        "airside": false,
+        "precision": "schematic"
+      },
+      {
+        "id": "BRI:node:security",
+        "name": "Security checkpoint",
+        "kind": "security_entry",
+        "pos": [
+          16.7640113,
+          41.1344301
+        ],
+        "airside": false,
+        "precision": "schematic",
+        "notes": "Approximate \u2014 follow airport signage (M15/M32)"
+      },
+      {
+        "id": "BRI:lounge:work",
+        "name": "Work Lounge \u00b7 approx",
+        "kind": "lounge",
+        "pos": [
+          16.7639265,
+          41.13454395000001
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "notes": "Airside mezzanine \u2014 schematic AREA pin; follow lounge signage"
+      }
+    ],
+    "edges": [
+      {
+        "id": "BRI:edge:curb-checkin",
+        "from": "BRI:node:curb",
+        "to": "BRI:node:checkin",
+        "kind": "walkway"
+      },
+      {
+        "id": "BRI:edge:checkin-security",
+        "from": "BRI:node:checkin",
+        "to": "BRI:node:security",
+        "kind": "walkway"
+      },
+      {
+        "id": "BRI:edge:security-lounge",
+        "from": "BRI:node:security",
+        "to": "BRI:lounge:work",
+        "kind": "security_transition",
+        "laneType": "standard"
+      }
+    ],
+    "gateNodeResolver": []
+  },
+  "precisionGrade": "schematic",
+  "createdAt": "2026-08-24T00:00:00Z",
+  "updatedAt": "2026-08-24T00:00:00Z"
+}
