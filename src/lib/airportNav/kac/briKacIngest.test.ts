@@ -31,7 +31,7 @@ test("fixtures/kac/bri.json is the canonical KAC compiler payload (no altered co
       layoutVersion: string;
       invented: number;
       nodes: Array<{ id: string; kind: string; pos: [number, number] }>;
-      edges: Array<{ id: string; kind?: string; lengthM?: number }>;
+      edges: Array<{ id: string; kind: string; lengthM?: number }>;
       zones: Array<{ id: string }>;
       gateTextStubs?: string[];
       gateNodeResolver: unknown[];

@@ -10,9 +10,10 @@ import type { AirportLayout } from "../types";
 import type { AirportLayoutPackage } from "../airportLayoutPackage";
 import { adaptKacCompilerJson } from "./adaptKacCompilerJson";
 import { applyBriKacOverlay } from "./applyBriKacOverlay";
+import type { KacCompilerPackage } from "./types";
 
 /** Canonical KAC compiler payload (fixtures/kac/bri.json). */
-export const BRI_KAC_COMPILER_JSON = briKacCompilerJson;
+export const BRI_KAC_COMPILER_JSON = briKacCompilerJson as unknown as KacCompilerPackage;
 
 export function ingestBriKacPackage(raw: unknown = BRI_KAC_COMPILER_JSON): AirportLayoutPackage {
   return adaptKacCompilerJson(raw);
