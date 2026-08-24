@@ -63,10 +63,31 @@ function planarDist(a: [number, number], b: [number, number]): number {
   return dLng * dLng + dLat * dLat;
 }
 
+/**
+ * Map individual KAC door-ref nodes back to curated cluster hubs for journey routing.
+ * Booked-gate highlight keeps the precise node; first-mile routing uses the hub.
+ */
+function gateClusterHubNodeId(gateNodeId: string | null): string | null {
+  if (!gateNodeId) return null;
+  if (/^gate-/.test(gateNodeId)) return gateNodeId;
+
+  const ont = gateNodeId.match(/^ONT:node:gate:(\d+)$/);
+  if (ont) {
+    if (ont[1].startsWith("2")) return "gate-t2";
+    if (ont[1].startsWith("4")) return "gate-t4";
+  }
+
+  const sea = gateNodeId.match(/^SEA:node:gate:([A-Z])/);
+  if (sea) return `gate-${sea[1]}`;
+
+  return gateNodeId;
+}
+
 /** Gate cluster id → paired curb id for multi-terminal airports (ONT gate-t2 → curb-t2). */
 function curbNodeForGateCluster(gateNodeId: string | null): string | null {
   if (!gateNodeId) return null;
-  const match = gateNodeId.match(/^gate-(.+)$/);
+  const hub = gateClusterHubNodeId(gateNodeId);
+  const match = hub?.match(/^gate-(.+)$/);
   return match ? `curb-${match[1]}` : null;
 }
 
@@ -117,7 +138,8 @@ function pickNearestPoi(
 /** Gate cluster id → paired check-in node (ONT gate-t2 → checkin-t2). */
 function checkinNodeForGateCluster(gateNodeId: string | null): string | null {
   if (!gateNodeId) return null;
-  const match = gateNodeId.match(/^gate-(.+)$/);
+  const hub = gateClusterHubNodeId(gateNodeId);
+  const match = hub?.match(/^gate-(.+)$/);
   return match ? `checkin-${match[1]}` : null;
 }
 
@@ -129,7 +151,8 @@ export function buildTripJourney(
   const airline = ctx.airlineName?.trim().toLowerCase() || null;
   const stops: JourneyStop[] = [];
 
-  const gateNodeId = ctx.gateCode ? resolveGateNode(layout, ctx.gateCode) : null;
+  const resolvedGateNodeId = ctx.gateCode ? resolveGateNode(layout, ctx.gateCode) : null;
+  const gateNodeId = gateClusterHubNodeId(resolvedGateNodeId);
 
   // 1) Check-in — terminal paired to gate, then airline counter, else generic.
   let checkin: PoiDefinition | undefined;

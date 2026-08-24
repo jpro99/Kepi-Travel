@@ -12,6 +12,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AirportLayout, ComputedRoute, GraphEdge, PoiDefinition, SnappedPosition, TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
+import { resolveBookedGateHighlight } from "@/lib/airportNav/kac/bookedGateHighlight";
 import { buildTripJourney, journeyPoiIds, preSecurityJourney, type JourneyStop, buildArrivalTripJourney, arrivalJourneyPoiIds, layoutSupportsArrivalFirstMile, resolveArrivalOriginNode, type ArrivalJourneyStop } from "@/lib/airportNav/tripJourney";
 import {
   buildArrivalDayCoachPath,
@@ -1266,12 +1267,14 @@ export function AirportNavigatorMap({
       ?? null;
   }, [snapped, layout, previewMode, isArriveCoach, gateCode]);
 
+  const bookedGate = useMemo(
+    () => resolveBookedGateHighlight(layout, gateCode, airlineName),
+    [layout, gateCode, airlineName],
+  );
+
   const gatePoi: PoiDefinition | null = useMemo(() => {
-    if (!layout || !gateCode) return null;
-    const gateNodeId = resolveGateNode(layout, gateCode);
-    if (!gateNodeId) return null;
-    return layout.pois.find((poi) => poi.category === "gate" && poi.nodeId === gateNodeId) ?? null;
-  }, [layout, gateCode]);
+    return bookedGate?.poi ?? null;
+  }, [bookedGate]);
 
   /* ── Trip-focused journey (depart or arrive first mile) ─ */
   const journey: JourneyStop[] = useMemo(() => {
@@ -2311,7 +2314,9 @@ export function AirportNavigatorMap({
         if (!pos) continue;
 
         const isSelected = selectedId !== null && poi.id === selectedId;
-        const isGateBubble = gatePoi !== null && poi.id === gatePoi.id;
+        const isGateBubble =
+          (gatePoi !== null && poi.id === gatePoi.id) ||
+          (bookedGate?.exactDoor && poi.nodeId === bookedGate.nodeId);
         const urgent = isGateBubble && minutesRounded <= 45;
         const critical = isGateBubble && minutesRounded <= 20;
         const isObjective =
@@ -2485,7 +2490,7 @@ export function AirportNavigatorMap({
       }
       poiMarkersRef.current = {};
     };
-  }, [mapReady, layout, gatePoi, gateCode, minutesRounded, airlineName, objective, eligibleLoungeNames, startRoute, selectedPoiId, activeRoute, journeyPoiIdSet]);
+  }, [mapReady, layout, gatePoi, gateCode, bookedGate, minutesRounded, airlineName, objective, eligibleLoungeNames, startRoute, selectedPoiId, activeRoute, journeyPoiIdSet]);
 
   /* ── Start marker: where the drawn line begins ──────────────────────── */
   // The route/journey line starts at the origin node — in planning mode that's
