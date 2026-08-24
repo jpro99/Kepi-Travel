@@ -1,0 +1,1251 @@
+{
+  "schemaVersion": 1,
+  "iata": "FCO",
+  "revision": 1,
+  "status": "draft",
+  "layout": {
+    "iata": "FCO",
+    "name": "Rome Fiumicino",
+    "layoutVersion": "kac-0.1.0-fco-arrivals-stub",
+    "updatedAt": "2026-08-23T23:45:00Z",
+    "center": [
+      12.2525841,
+      41.7947636
+    ],
+    "routeGrade": "schematic",
+    "zones": [
+      {
+        "id": "FCO:zone:t3",
+        "name": "Terminal 3 (OSM footprint; arrivals envelope)",
+        "ring": [
+          [
+            12.251327,
+            41.7964103
+          ],
+          [
+            12.2512264,
+            41.79646
+          ],
+          [
+            12.2512876,
+            41.7965355
+          ],
+          [
+            12.2513263,
+            41.7965554
+          ],
+          [
+            12.2513107,
+            41.7965625
+          ],
+          [
+            12.2514322,
+            41.796706
+          ],
+          [
+            12.2514483,
+            41.796698
+          ],
+          [
+            12.2516173,
+            41.7969059
+          ],
+          [
+            12.2517112,
+            41.7968679
+          ],
+          [
+            12.2517353,
+            41.7968979
+          ],
+          [
+            12.2518667,
+            41.7968403
+          ],
+          [
+            12.2518305,
+            41.7967819
+          ],
+          [
+            12.2518466,
+            41.7967759
+          ],
+          [
+            12.2517112,
+            41.796613
+          ],
+          [
+            12.2517179,
+            41.7965986
+          ],
+          [
+            12.2517514,
+            41.7965277
+          ],
+          [
+            12.2517871,
+            41.7964518
+          ],
+          [
+            12.2519512,
+            41.79649
+          ],
+          [
+            12.2521249,
+            41.7965224
+          ],
+          [
+            12.2522248,
+            41.796204
+          ],
+          [
+            12.252257,
+            41.79621
+          ],
+          [
+            12.2524141,
+            41.7957381
+          ],
+          [
+            12.252548,
+            41.7957536
+          ],
+          [
+            12.2526976,
+            41.7957611
+          ],
+          [
+            12.2527029,
+            41.7957003
+          ],
+          [
+            12.2526124,
+            41.7956961
+          ],
+          [
+            12.2525033,
+            41.7956862
+          ],
+          [
+            12.2523913,
+            41.7956701
+          ],
+          [
+            12.2524045,
+            41.7956061
+          ],
+          [
+            12.2522851,
+            41.7955869
+          ],
+          [
+            12.2522084,
+            41.7955647
+          ],
+          [
+            12.2521652,
+            41.7955522
+          ],
+          [
+            12.2521168,
+            41.7955344
+          ],
+          [
+            12.2519575,
+            41.7954757
+          ],
+          [
+            12.2518198,
+            41.795408
+          ],
+          [
+            12.2516029,
+            41.7952955
+          ],
+          [
+            12.2515033,
+            41.7954012
+          ],
+          [
+            12.2514827,
+            41.7953906
+          ],
+          [
+            12.2513928,
+            41.7953488
+          ],
+          [
+            12.2514538,
+            41.795284
+          ],
+          [
+            12.2505723,
+            41.7948098
+          ],
+          [
+            12.2495522,
+            41.7942565
+          ],
+          [
+            12.2495238,
+            41.7942424
+          ],
+          [
+            12.2494644,
+            41.7943009
+          ],
+          [
+            12.249142,
+            41.7946182
+          ],
+          [
+            12.24895,
+            41.7948072
+          ],
+          [
+            12.2488412,
+            41.7949143
+          ],
+          [
+            12.2485221,
+            41.7947394
+          ],
+          [
+            12.2481412,
+            41.7946663
+          ],
+          [
+            12.2483979,
+            41.7948029
+          ],
+          [
+            12.2483849,
+            41.7948156
+          ],
+          [
+            12.2483128,
+            41.7948423
+          ],
+          [
+            12.2482621,
+            41.7948656
+          ],
+          [
+            12.2481894,
+            41.7949163
+          ],
+          [
+            12.2481364,
+            41.7949825
+          ],
+          [
+            12.2480996,
+            41.7950007
+          ],
+          [
+            12.2480895,
+            41.7950272
+          ],
+          [
+            12.2480833,
+            41.7950642
+          ],
+          [
+            12.2479559,
+            41.79506
+          ],
+          [
+            12.2479548,
+            41.7951192
+          ],
+          [
+            12.2479704,
+            41.7951773
+          ],
+          [
+            12.24804,
+            41.7951676
+          ],
+          [
+            12.2480575,
+            41.7952066
+          ],
+          [
+            12.2480357,
+            41.795212
+          ],
+          [
+            12.2480907,
+            41.7952877
+          ],
+          [
+            12.2481626,
+            41.7953532
+          ],
+          [
+            12.2482534,
+            41.795399
+          ],
+          [
+            12.2483853,
+            41.7954389
+          ],
+          [
+            12.24853,
+            41.7954477
+          ],
+          [
+            12.2486588,
+            41.795426
+          ],
+          [
+            12.2486508,
+            41.7954042
+          ],
+          [
+            12.2487125,
+            41.7953842
+          ],
+          [
+            12.2487712,
+            41.7953553
+          ],
+          [
+            12.248857,
+            41.7954042
+          ],
+          [
+            12.2489706,
+            41.7952801
+          ],
+          [
+            12.2490056,
+            41.7952376
+          ],
+          [
+            12.2489648,
+            41.7952158
+          ],
+          [
+            12.2490151,
+            41.795164
+          ],
+          [
+            12.2490685,
+            41.7951925
+          ],
+          [
+            12.2490826,
+            41.7951785
+          ],
+          [
+            12.2491923,
+            41.795238
+          ],
+          [
+            12.2493093,
+            41.7953012
+          ],
+          [
+            12.2501593,
+            41.7957644
+          ],
+          [
+            12.2502737,
+            41.7958262
+          ],
+          [
+            12.2511436,
+            41.7962972
+          ],
+          [
+            12.2512566,
+            41.7963602
+          ],
+          [
+            12.2513075,
+            41.796384
+          ],
+          [
+            12.251327,
+            41.7964103
+          ]
+        ],
+        "airside": false,
+        "heightM": 12
+      },
+      {
+        "id": "FCO:zone:t1",
+        "name": "Terminal 1 (OSM footprint; landside only)",
+        "ring": [
+          [
+            12.25563,
+            41.7946557
+          ],
+          [
+            12.2557228,
+            41.7946053
+          ],
+          [
+            12.2556261,
+            41.7944838
+          ],
+          [
+            12.2559767,
+            41.7943257
+          ],
+          [
+            12.2561376,
+            41.7945239
+          ],
+          [
+            12.2561669,
+            41.7945111
+          ],
+          [
+            12.2563868,
+            41.7947773
+          ],
+          [
+            12.2563637,
+            41.7947886
+          ],
+          [
+            12.2564162,
+            41.7948482
+          ],
+          [
+            12.2562774,
+            41.7949095
+          ],
+          [
+            12.2564493,
+            41.7951082
+          ],
+          [
+            12.2566183,
+            41.7950322
+          ],
+          [
+            12.2566815,
+            41.7951301
+          ],
+          [
+            12.2568653,
+            41.7950481
+          ],
+          [
+            12.2569152,
+            41.7951285
+          ],
+          [
+            12.2567344,
+            41.7952092
+          ],
+          [
+            12.2568476,
+            41.7954022
+          ],
+          [
+            12.256912,
+            41.7955032
+          ],
+          [
+            12.2567688,
+            41.7955537
+          ],
+          [
+            12.2567014,
+            41.7954585
+          ],
+          [
+            12.2554785,
+            41.7958896
+          ],
+          [
+            12.2553149,
+            41.7959655
+          ],
+          [
+            12.255124,
+            41.796054
+          ],
+          [
+            12.2549531,
+            41.7958429
+          ],
+          [
+            12.2545704,
+            41.7960131
+          ],
+          [
+            12.2543934,
+            41.7960951
+          ],
+          [
+            12.2542271,
+            41.7958848
+          ],
+          [
+            12.2542472,
+            41.7958771
+          ],
+          [
+            12.254015,
+            41.7955913
+          ],
+          [
+            12.2539013,
+            41.7954586
+          ],
+          [
+            12.2538778,
+            41.7954695
+          ],
+          [
+            12.2538349,
+            41.7954181
+          ],
+          [
+            12.2537886,
+            41.7953628
+          ],
+          [
+            12.2555408,
+            41.794549
+          ],
+          [
+            12.25563,
+            41.7946557
+          ]
+        ],
+        "airside": false,
+        "heightM": 12
+      }
+    ],
+    "nodes": [
+      {
+        "id": "FCO:node:t3:arrivals-bag",
+        "name": "T3 arrivals / baggage (cluster)",
+        "kind": "baggage_claim",
+        "pos": [
+          12.2509293,
+          41.7954467
+        ],
+        "airside": false,
+        "precision": "schematic"
+      },
+      {
+        "id": "FCO:node:t3:exit",
+        "name": "T3 arrivals exit",
+        "kind": "door",
+        "pos": [
+          12.2516029,
+          41.7952955
+        ],
+        "airside": false,
+        "precision": "schematic"
+      },
+      {
+        "id": "FCO:node:gt:leonardo",
+        "name": "Fiumicino Aeroporto railway station (Leonardo Express)",
+        "kind": "ground_transport",
+        "pos": [
+          12.2518651,
+          41.7934437
+        ],
+        "airside": false,
+        "precision": "schematic"
+      },
+      {
+        "id": "FCO:node:gate:A31",
+        "name": "Gate A31",
+        "kind": "gate",
+        "pos": [
+          12.2552149,
+          41.796276
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A31"
+      },
+      {
+        "id": "FCO:node:gate:A32",
+        "name": "Gate A32",
+        "kind": "gate",
+        "pos": [
+          12.255362,
+          41.796525
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A32"
+      },
+      {
+        "id": "FCO:node:gate:A33",
+        "name": "Gate A33",
+        "kind": "gate",
+        "pos": [
+          12.2551474,
+          41.7968328
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A33"
+      },
+      {
+        "id": "FCO:node:gate:A34-A41",
+        "name": "Gate A34-A41",
+        "kind": "gate",
+        "pos": [
+          12.2554733,
+          41.7967301
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A34-A41"
+      },
+      {
+        "id": "FCO:node:gate:A42",
+        "name": "Gate A42",
+        "kind": "gate",
+        "pos": [
+          12.2555771,
+          41.7968927
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A42"
+      },
+      {
+        "id": "FCO:node:gate:A43",
+        "name": "Gate A43",
+        "kind": "gate",
+        "pos": [
+          12.2553765,
+          41.7971844
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A43"
+      },
+      {
+        "id": "FCO:node:gate:A44",
+        "name": "Gate A44",
+        "kind": "gate",
+        "pos": [
+          12.2557899,
+          41.7972436
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A44"
+      },
+      {
+        "id": "FCO:node:gate:A45",
+        "name": "Gate A45",
+        "kind": "gate",
+        "pos": [
+          12.2556199,
+          41.7975564
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A45"
+      },
+      {
+        "id": "FCO:node:gate:A46",
+        "name": "Gate A46",
+        "kind": "gate",
+        "pos": [
+          12.2560068,
+          41.7976337
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A46"
+      },
+      {
+        "id": "FCO:node:gate:A47",
+        "name": "Gate A47",
+        "kind": "gate",
+        "pos": [
+          12.256307,
+          41.797975
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A47"
+      },
+      {
+        "id": "FCO:node:gate:A48",
+        "name": "Gate A48",
+        "kind": "gate",
+        "pos": [
+          12.2557514,
+          41.7979437
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A48"
+      },
+      {
+        "id": "FCO:node:gate:A49",
+        "name": "Gate A49",
+        "kind": "gate",
+        "pos": [
+          12.2558528,
+          41.7981221
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A49"
+      },
+      {
+        "id": "FCO:node:gate:A50",
+        "name": "Gate A50",
+        "kind": "gate",
+        "pos": [
+          12.2559653,
+          41.7980867
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A50"
+      },
+      {
+        "id": "FCO:node:gate:A51-A52",
+        "name": "Gate A51-A52",
+        "kind": "gate",
+        "pos": [
+          12.2560738,
+          41.7980121
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A51-A52"
+      },
+      {
+        "id": "FCO:node:gate:A61",
+        "name": "Gate A61",
+        "kind": "gate",
+        "pos": [
+          12.2581709,
+          41.7950948
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A61"
+      },
+      {
+        "id": "FCO:node:gate:A62",
+        "name": "Gate A62",
+        "kind": "gate",
+        "pos": [
+          12.25803,
+          41.7955686
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A62"
+      },
+      {
+        "id": "FCO:node:gate:A63",
+        "name": "Gate A63",
+        "kind": "gate",
+        "pos": [
+          12.2583972,
+          41.7954374
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A63"
+      },
+      {
+        "id": "FCO:node:gate:A64",
+        "name": "Gate A64",
+        "kind": "gate",
+        "pos": [
+          12.2582481,
+          41.7959074
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A64"
+      },
+      {
+        "id": "FCO:node:gate:A65",
+        "name": "Gate A65",
+        "kind": "gate",
+        "pos": [
+          12.2586285,
+          41.7957846
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A65"
+      },
+      {
+        "id": "FCO:node:gate:A66",
+        "name": "Gate A66",
+        "kind": "gate",
+        "pos": [
+          12.2584506,
+          41.7962759
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A66"
+      },
+      {
+        "id": "FCO:node:gate:A67",
+        "name": "Gate A67",
+        "kind": "gate",
+        "pos": [
+          12.2588338,
+          41.7961485
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A67"
+      },
+      {
+        "id": "FCO:node:gate:A68",
+        "name": "Gate A68",
+        "kind": "gate",
+        "pos": [
+          12.2586958,
+          41.7966256
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A68"
+      },
+      {
+        "id": "FCO:node:gate:A69",
+        "name": "Gate A69",
+        "kind": "gate",
+        "pos": [
+          12.2590815,
+          41.796495
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A69"
+      },
+      {
+        "id": "FCO:node:gate:A70",
+        "name": "Gate A70",
+        "kind": "gate",
+        "pos": [
+          12.258909,
+          41.7969818
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A70"
+      },
+      {
+        "id": "FCO:node:gate:A71",
+        "name": "Gate A71",
+        "kind": "gate",
+        "pos": [
+          12.2592988,
+          41.7968583
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A71"
+      },
+      {
+        "id": "FCO:node:gate:A72",
+        "name": "Gate A72",
+        "kind": "gate",
+        "pos": [
+          12.2590664,
+          41.79709
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A72"
+      },
+      {
+        "id": "FCO:node:gate:A73",
+        "name": "Gate A73",
+        "kind": "gate",
+        "pos": [
+          12.2593444,
+          41.7969889
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A73"
+      },
+      {
+        "id": "FCO:node:gate:A74-83",
+        "name": "Gate A74-83",
+        "kind": "gate",
+        "pos": [
+          12.258461,
+          41.7958597
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "A74-83"
+      },
+      {
+        "id": "FCO:node:gate:E11",
+        "name": "Gate E11",
+        "kind": "gate",
+        "pos": [
+          12.2475021,
+          41.7959335
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E11"
+      },
+      {
+        "id": "FCO:node:gate:E12",
+        "name": "Gate E12",
+        "kind": "gate",
+        "pos": [
+          12.2481477,
+          41.7961053
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E12"
+      },
+      {
+        "id": "FCO:node:gate:E13",
+        "name": "Gate E13",
+        "kind": "gate",
+        "pos": [
+          12.2473089,
+          41.7962946
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E13"
+      },
+      {
+        "id": "FCO:node:gate:E14",
+        "name": "Gate E14",
+        "kind": "gate",
+        "pos": [
+          12.2479555,
+          41.7964723
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E14"
+      },
+      {
+        "id": "FCO:node:gate:E15",
+        "name": "Gate E15",
+        "kind": "gate",
+        "pos": [
+          12.2471356,
+          41.7966568
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E15"
+      },
+      {
+        "id": "FCO:node:gate:E16",
+        "name": "Gate E16",
+        "kind": "gate",
+        "pos": [
+          12.2477875,
+          41.7968386
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E16"
+      },
+      {
+        "id": "FCO:node:gate:E17",
+        "name": "Gate E17",
+        "kind": "gate",
+        "pos": [
+          12.2469657,
+          41.7970291
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E17"
+      },
+      {
+        "id": "FCO:node:gate:E18",
+        "name": "Gate E18",
+        "kind": "gate",
+        "pos": [
+          12.2475972,
+          41.7972053
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E18"
+      },
+      {
+        "id": "FCO:node:gate:E19",
+        "name": "Gate E19",
+        "kind": "gate",
+        "pos": [
+          12.2467867,
+          41.7973923
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E19"
+      },
+      {
+        "id": "FCO:node:gate:E20",
+        "name": "Gate E20",
+        "kind": "gate",
+        "pos": [
+          12.2474288,
+          41.7975689
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E20"
+      },
+      {
+        "id": "FCO:node:gate:E21",
+        "name": "Gate E21",
+        "kind": "gate",
+        "pos": [
+          12.2465842,
+          41.7977626
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E21"
+      },
+      {
+        "id": "FCO:node:gate:E22",
+        "name": "Gate E22",
+        "kind": "gate",
+        "pos": [
+          12.2467126,
+          41.7978841
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E22"
+      },
+      {
+        "id": "FCO:node:gate:E23",
+        "name": "Gate E23",
+        "kind": "gate",
+        "pos": [
+          12.2470414,
+          41.7979698
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E23"
+      },
+      {
+        "id": "FCO:node:gate:E24",
+        "name": "Gate E24",
+        "kind": "gate",
+        "pos": [
+          12.2472625,
+          41.7979659
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E24"
+      },
+      {
+        "id": "FCO:node:gate:E34",
+        "name": "Gate E34",
+        "kind": "gate",
+        "pos": [
+          12.2423503,
+          41.7955871
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E34"
+      },
+      {
+        "id": "FCO:node:gate:E36",
+        "name": "Gate E36",
+        "kind": "gate",
+        "pos": [
+          12.2420542,
+          41.7954409
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E36"
+      },
+      {
+        "id": "FCO:node:gate:E37",
+        "name": "Gate E37",
+        "kind": "gate",
+        "pos": [
+          12.2418314,
+          41.7954501
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E37"
+      },
+      {
+        "id": "FCO:node:gate:E38",
+        "name": "Gate E38",
+        "kind": "gate",
+        "pos": [
+          12.2416529,
+          41.7954945
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E38"
+      },
+      {
+        "id": "FCO:node:gate:E39",
+        "name": "Gate E39",
+        "kind": "gate",
+        "pos": [
+          12.2414715,
+          41.7956642
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E39"
+      },
+      {
+        "id": "FCO:node:gate:E40",
+        "name": "Gate E40",
+        "kind": "gate",
+        "pos": [
+          12.2414002,
+          41.7957917
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E40"
+      },
+      {
+        "id": "FCO:node:gate:E41",
+        "name": "Gate E41",
+        "kind": "gate",
+        "pos": [
+          12.2413962,
+          41.7960111
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E41"
+      },
+      {
+        "id": "FCO:node:gate:E42",
+        "name": "Gate E42",
+        "kind": "gate",
+        "pos": [
+          12.2414836,
+          41.7961402
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E42"
+      },
+      {
+        "id": "FCO:node:gate:E51",
+        "name": "Gate E51",
+        "kind": "gate",
+        "pos": [
+          12.2479849,
+          41.7945539
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E51"
+      },
+      {
+        "id": "FCO:node:gate:E52",
+        "name": "Gate E52",
+        "kind": "gate",
+        "pos": [
+          12.2478388,
+          41.7945261
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E52"
+      },
+      {
+        "id": "FCO:node:gate:E57",
+        "name": "Gate E57",
+        "kind": "gate",
+        "pos": [
+          12.2457665,
+          41.7944396
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E57"
+      },
+      {
+        "id": "FCO:node:gate:E59",
+        "name": "Gate E59",
+        "kind": "gate",
+        "pos": [
+          12.2453969,
+          41.7942914
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E59"
+      },
+      {
+        "id": "FCO:node:gate:E60",
+        "name": "Gate E60",
+        "kind": "gate",
+        "pos": [
+          12.2454515,
+          41.7941311
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E60"
+      },
+      {
+        "id": "FCO:node:gate:E61",
+        "name": "Gate E61",
+        "kind": "gate",
+        "pos": [
+          12.245881,
+          41.7941658
+        ],
+        "airside": true,
+        "precision": "schematic",
+        "doorLabel": "E61"
+      }
+    ],
+    "edges": [
+      {
+        "id": "FCO:edge:t3-bag-to-exit",
+        "from": "FCO:node:t3:arrivals-bag",
+        "to": "FCO:node:t3:exit",
+        "kind": "walkway"
+      },
+      {
+        "id": "FCO:edge:t3-exit-to-leonardo",
+        "from": "FCO:node:t3:exit",
+        "to": "FCO:node:gt:leonardo",
+        "kind": "walkway"
+      }
+    ]
+  },
+  "precisionGrade": "schematic",
+  "createdAt": "2026-08-23T23:45:00Z",
+  "updatedAt": "2026-08-23T23:45:00Z"
+}
