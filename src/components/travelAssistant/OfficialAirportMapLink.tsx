@@ -87,7 +87,7 @@ export function OfficialAirportMapLink({
         {!compact ? (
           <p className="mt-1 text-sm leading-snug text-slate-200/90">
             Kepi&apos;s map is your primary guide here. This opens{" "}
-            {tier === "official_static" ? "the airport&apos;s static/orientation map" : "a venue search"}{" "}
+            {tier === "official_static" ? "the airport's static/orientation map" : "a venue search"}{" "}
             for extra context — not verified indoor turn-by-turn.
           </p>
         ) : (

@@ -158,6 +158,22 @@ test("buildArrivalCoachCards: FCO international order Passport → Bags → Cust
   assert.match(cards[3]?.detail ?? "", /Leonardo Express.*Termini.*not FL1/i);
 });
 
+test("buildArrivalCoachCards: BRI arrival does not leak FCO Leonardo title", () => {
+  const steps = buildArrivalDayCoachPath({
+    iata: "BRI",
+    departureIata: "FCO",
+    flightNumber: "AZ 1607",
+    flightArrivalTime: "2026-09-02T15:00:00",
+    flightTimezone: "Europe/Rome",
+  });
+  const cards = buildArrivalCoachCards({ steps, iata: "BRI" });
+  assert.ok(cards.length > 0);
+  for (const card of cards) {
+    assert.doesNotMatch(card.title, /leonardo/i, `card ${card.id} leaked Leonardo in title`);
+    assert.doesNotMatch(card.detail ?? "", /Leonardo Express/i, `card ${card.id} leaked Leonardo Express`);
+  }
+});
+
 test("resolveNextMoveFromCoachStep prefers connection step at hub", () => {
   const next = resolveNextMoveFromCoachStep({
     iata: "SEA",

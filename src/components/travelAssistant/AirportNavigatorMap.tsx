@@ -34,6 +34,10 @@ import { computeDirectionArrow, confirmedSnappedPosition } from "@/lib/airportNa
 import { computeLayoutBounds, computeLandsideBounds } from "@/lib/airportNav/layoutBounds";
 import { buildAirportSchematicModel } from "@/lib/airportNav/schematic";
 import {
+  buildLandsideOverlayGeoJson,
+  extractLandsideOverlayGeometry,
+} from "@/lib/airportNav/landsideOverlay";
+import {
   buildLandsideAccessOverlayGeoJson,
   isPackageAccessWalkEdge,
   isPackageLandsideAccessZone,
@@ -224,8 +228,34 @@ function installAirportLayoutLayers(map: any): void {
     },
   });
 
-  // Package-derived landside access loops + curb walk-in (only when geometry exists).
+  // KAC terminal hull (e.g. BRI:zone:terminal) + package landside access geometry.
   const emptyFc = { type: "FeatureCollection", features: [] };
+
+  map.addSource("kepi-landside-terminal-hull", {
+    type: "geojson",
+    data: emptyFc,
+  });
+  map.addLayer({
+    id: "kepi-landside-terminal-hull-fill",
+    type: "fill",
+    source: "kepi-landside-terminal-hull",
+    paint: {
+      "fill-color": "#94a3b8",
+      "fill-opacity": 0.22,
+    },
+  });
+  map.addLayer({
+    id: "kepi-landside-terminal-hull-line",
+    type: "line",
+    source: "kepi-landside-terminal-hull",
+    layout: { "line-cap": "round", "line-join": "round" },
+    paint: {
+      "line-color": "#475569",
+      "line-width": 3,
+      "line-opacity": 0.85,
+    },
+  });
+
   map.addSource("kepi-landside-access-zones", { type: "geojson", data: emptyFc });
   map.addLayer({
     id: "kepi-landside-access-fill",
@@ -283,6 +313,7 @@ function installAirportLayoutLayers(map: any): void {
       "circle-color": "#16a34a",
       "circle-stroke-width": 2,
       "circle-stroke-color": "#ffffff",
+      "circle-opacity": 0.95,
     },
   });
 }
@@ -609,6 +640,7 @@ function AirportSchematicLayer({
   onPoiClick,
 }: AirportSchematicLayerProps) {
   const model = useMemo(() => buildAirportSchematicModel(layout), [layout]);
+  const landsideOverlay = useMemo(() => extractLandsideOverlayGeometry(layout), [layout]);
   const accessZoneIds = useMemo(
     () => new Set(layout.zones.filter(isPackageLandsideAccessZone).map((zone) => zone.id)),
     [layout],
@@ -670,6 +702,67 @@ function AirportSchematicLayer({
               filter="url(#kepi-terminal-shadow)"
             />
           </g>
+          );
+        })}
+
+        {/* OSM terminal building hulls from KAC packages (e.g. BRI:zone:terminal) */}
+        {landsideOverlay.terminalHulls.map((zone) => {
+          const points = zone.ring.map((coord) => model.project(coord));
+          return (
+            <g key={`terminal-hull-${zone.id}`} data-testid="airport-nav-landside-terminal-hull">
+              <polygon
+                points={points.map((point) => `${point.x},${point.y}`).join(" ")}
+                fill="#cbd5e1"
+                fillOpacity={0.35}
+                stroke="#475569"
+                strokeWidth="0.65"
+                strokeLinejoin="round"
+              />
+            </g>
+          );
+        })}
+
+        {/* OSM access loop — dashed ring when the KAC package carries one */}
+        {landsideOverlay.accessLoops.map((zone) => {
+          const points = zone.ring.map((coord) => model.project(coord));
+          return (
+            <polyline
+              key={`access-loop-${zone.id}`}
+              data-testid="airport-nav-landside-access-loop"
+              points={points.map((point) => `${point.x},${point.y}`).join(" ")}
+              fill="none"
+              stroke="#64748b"
+              strokeWidth="0.85"
+              strokeDasharray="1.6 1.1"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity="0.95"
+            />
+          );
+        })}
+
+        {/* Curb drop-off anchors from the KAC package (e.g. BRI:node:curb) */}
+        {landsideOverlay.curbNodes.map((node) => {
+          const point = model.project(node.pos);
+          const label = node.landmark ?? "Drop-off";
+          return (
+            <g
+              key={`curb-overlay-${node.id}`}
+              data-testid="airport-nav-landside-curb"
+              transform={`translate(${point.x} ${point.y})`}
+            >
+              <circle r="2.8" fill="#16a34a" stroke="#ffffff" strokeWidth="0.65" />
+              <text
+                x="0"
+                y="-4.2"
+                fill="#166534"
+                fontSize="1.8"
+                fontWeight="800"
+                textAnchor="middle"
+              >
+                {label}
+              </text>
+            </g>
           );
         })}
 
@@ -2297,19 +2390,22 @@ export function AirportNavigatorMap({
     });
   }, [fill, expanded, mapReady]);
 
-  /* ── Landside access loop + curb overlay (package geometry only) ───── */
+  /* ── Landside overlay (terminal hull + package access geometry) ─────── */
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady || !layout) return;
+    const hullSource = map.getSource("kepi-landside-terminal-hull") as { setData?: (d: unknown) => void } | undefined;
     const zoneSource = map.getSource("kepi-landside-access-zones") as { setData?: (d: unknown) => void } | undefined;
     const pathSource = map.getSource("kepi-landside-access-paths") as { setData?: (d: unknown) => void } | undefined;
     const curbSource = map.getSource("kepi-landside-curbs") as { setData?: (d: unknown) => void } | undefined;
-    if (!zoneSource?.setData || !pathSource?.setData || !curbSource?.setData) return;
-    const overlay = buildLandsideAccessOverlayGeoJson(layout);
-    zoneSource.setData(overlay.accessLoopZones);
-    pathSource.setData(overlay.accessPaths);
-    curbSource.setData(overlay.curbPoints);
-  }, [mapReady, layout]);
+    if (!hullSource?.setData || !zoneSource?.setData || !pathSource?.setData || !curbSource?.setData) return;
+    const hullGeo = buildLandsideOverlayGeoJson(layout);
+    const accessGeo = buildLandsideAccessOverlayGeoJson(layout);
+    hullSource.setData(hullGeo.terminalHull);
+    zoneSource.setData(accessGeo.accessLoopZones);
+    pathSource.setData(accessGeo.accessPaths);
+    curbSource.setData(accessGeo.curbPoints);
+  }, [layout, mapReady]);
 
   /* ── Route geometry + warmth gradient ───────────────────────────────── */
   useEffect(() => {
@@ -2996,7 +3092,9 @@ export function AirportNavigatorMap({
           </p>
           <p className="text-[11px] leading-snug text-sky-100/90">
             {isArriveCoach
-              ? `Tap Where to? for passport, bags, customs, and Leonardo Express. Live directions start when you land.`
+              ? iata.trim().toUpperCase() === "FCO"
+                ? "Tap Where to? for passport, bags, customs, and Leonardo Express. Live directions start when you land."
+                : "Tap Where to? for passport, bags, customs, and ground transport. Live directions start when you land."
               : gateCode
                 ? `Tap Essentials, Lounges, or any label to explore ${iata}. Live directions start when you arrive.`
                 : `Gate assignment pending. Explore check-in, security, trains, and lounges now — your gate will highlight when assigned.`}

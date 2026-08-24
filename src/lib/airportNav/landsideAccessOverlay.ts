@@ -28,7 +28,7 @@ export function isPackageLandsideAccessZone(zone: TerminalZonePolygon): boolean 
 
 /** KAC/OSM curb node ids shipped in the factory package or curated first-mile graph. */
 export function isPackageCurbNode(node: GraphNode): boolean {
-  if (/:node:curb:/.test(node.id)) return true;
+  if (/:node:curb(?::|$)/i.test(node.id)) return true;
   if (/^curb-/.test(node.id)) return true;
   return node.kind === "landmark" && /curb|drop.?off|departures/i.test(node.landmark ?? "");
 }

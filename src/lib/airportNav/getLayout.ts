@@ -9,9 +9,13 @@ import { LAX_LAYOUT } from "./layouts/lax";
 import { BRI_LAYOUT } from "./layouts/bri";
 import { VCE_LAYOUT } from "./layouts/vce";
 import { MUC_LAYOUT } from "./layouts/muc";
+import { buildBriLayoutWithKacOverlay } from "./kac/briKacIngest";
 import { buildFcoLayoutWithKacOverlay } from "./kac/fcoKacIngest";
 import { buildOntLayoutWithKacOverlay } from "./kac/ontKacIngest";
 import { buildSeaLayoutWithKacOverlay } from "./kac/seaKacIngest";
+
+/** Curated BRI + KAC draft overlay (OSM hull, schematic departures pins; curated graph preserved). */
+const BRI_LAYOUT_LIVE = buildBriLayoutWithKacOverlay();
 
 /** Curated FCO + KAC draft overlay (OSM rings, unrouted gate dots; first-mile preserved). */
 const FCO_LAYOUT_LIVE = buildFcoLayoutWithKacOverlay();
@@ -26,7 +30,7 @@ const LAYOUTS: Record<string, AirportLayout> = {
   SEA: SEA_LAYOUT_LIVE,
   LAX: LAX_LAYOUT,
   ONT: ONT_LAYOUT_LIVE,
-  BRI: BRI_LAYOUT,
+  BRI: BRI_LAYOUT_LIVE,
   FCO: FCO_LAYOUT_LIVE,
   VCE: VCE_LAYOUT,
   MUC: MUC_LAYOUT,
