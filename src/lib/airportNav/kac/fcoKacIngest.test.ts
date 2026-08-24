@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { parseAirportLayoutPackage } from "../airportLayoutPackage";
+import { resolvePublishedAirportLayout } from "../airportLayoutStore";
 import { getAirportLayout } from "../getLayout";
 import { adaptKacCompilerJson } from "./adaptKacCompilerJson";
 import {
@@ -20,6 +21,7 @@ import {
   layoutSupportsArrivalFirstMile,
   resolveArrivalOriginNode,
 } from "../tripJourney";
+import { buildArrivalDayCoachPath } from "@/lib/travelAssistant/airportDayCoach";
 import { computeRoute } from "../pathfinder";
 
 function loadFixture(): unknown {
@@ -106,7 +108,7 @@ test("KAC FCO overlay is additive and preserves curated first-mile graph", () =>
 
   assert.ok(stats.zonesAdded >= 2);
   assert.ok(stats.gateNodesAdded >= 50);
-  assert.ok(stats.edgesAdded >= 2);
+  assert.ok(stats.edgesAdded >= 1);
   assert.deepEqual(curatedFirstMileEdgeSnapshot(layout), beforeEdges);
   assert.deepEqual(curatedFirstMilePoiIds(layout), beforePois);
 
@@ -175,4 +177,57 @@ test("getAirportLayout(FCO) returns merged KAC overlay (client-safe, no fs)", ()
   assert.deepEqual(curatedFirstMilePoiIds(layout!), curatedFirstMilePoiIds(FCO_LAYOUT));
   assert.equal(resolveArrivalOriginNode(layout!, "E12"), "gate-e");
   assert.ok(layoutSupportsArrivalFirstMile(layout!));
+
+  assert.doesNotThrow(() => parseAirportLayoutPackage({
+    schemaVersion: 1,
+    iata: "FCO",
+    revision: 1,
+    status: "draft",
+    layout: layout!,
+    source: {
+      ownership: "kepi_original",
+      attribution: "test",
+      sourceUrls: ["https://www.openstreetmap.org"],
+      licenseNote: "test",
+      lastVerifiedAt: "2026-08-23",
+    },
+    precisionGrade: "schematic",
+    createdAt: "2026-08-23T23:45:00.000Z",
+    updatedAt: "2026-08-23T23:45:00.000Z",
+    publishedAt: null,
+  }));
+
+  const leonardoEdge = layout!.edges.find((e) => e.to === "FCO:node:gt:leonardo");
+  assert.equal(leonardoEdge, undefined, "dropped KAC edge to skipped Leonardo node");
+});
+
+test("resolvePublishedAirportLayout(FCO) seeds merged layout without 500-class validation errors", async () => {
+  const resolved = await resolvePublishedAirportLayout("FCO");
+  assert.ok(resolved.layout);
+  assert.equal(resolved.source, "bundled");
+  assert.ok(resolved.layout!.zones.some((z) => z.id === "FCO:zone:t3"));
+  assert.ok(resolved.layout!.nodes.some((n) => n.id === "FCO:node:gate:E12"));
+  assert.ok(resolved.layout!.nodes.some((n) => n.id === "passport-t3"));
+  assert.ok(resolved.layout!.nodes.some((n) => n.id === "baggage-t3"));
+  assert.ok(resolved.layout!.nodes.some((n) => n.id === "customs-t3"));
+  assert.ok(resolved.layout!.nodes.some((n) => n.id === "ground-leonardo"));
+});
+
+test("merged FCO layout yields walk minutes on passport, bags, and customs coach steps", () => {
+  const layout = getAirportLayout("FCO");
+  assert.ok(layout);
+  const steps = buildArrivalDayCoachPath({
+    iata: "FCO",
+    flightNumber: "AS180",
+    departureIata: "SEA",
+    arrivalGate: "E12",
+    flightArrivalTime: "2026-09-02 14:30",
+    flightTimezone: "Europe/Rome",
+  });
+  const passport = steps.find((s) => s.id === "immigration");
+  const bags = steps.find((s) => s.id === "bags");
+  const customs = steps.find((s) => s.id === "customs");
+  assert.ok((passport?.minutes ?? 0) >= 1, "passport walk minutes");
+  assert.ok((bags?.minutes ?? 0) >= 1, "baggage walk minutes");
+  assert.ok((customs?.minutes ?? 0) >= 1, "customs walk minutes");
 });

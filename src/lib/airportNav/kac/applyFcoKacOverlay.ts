@@ -85,7 +85,7 @@ export function applyFcoKacOverlay(
   });
 
   const { merged: nodes } = mergeById(curated.nodes, incomingNodes);
-  const mergedIncomingNodeIds = new Set(incomingNodes.map((n) => n.id));
+  const mergedNodeIds = new Set(nodes.map((n) => n.id));
   const gateNodesAdded = incomingNodes.filter((n) => n.kind === "gate").length;
   const schematicNodesAdded = incomingNodes.filter((n) => n.kind !== "gate").length;
 
@@ -105,6 +105,8 @@ export function applyFcoKacOverlay(
     ) {
       return false;
     }
+    // Drop KAC edges whose endpoints were not merged (e.g. duplicate Leonardo node).
+    if (!mergedNodeIds.has(edge.from) || !mergedNodeIds.has(edge.to)) return false;
     return true;
   });
 
@@ -114,7 +116,7 @@ export function applyFcoKacOverlay(
     .filter((poi) => {
       if (isFcoCuratedFirstMilePoiId(poi.id)) return false;
       if (isFcoCuratedFirstMileNodeId(poi.nodeId)) return false;
-      if (!mergedIncomingNodeIds.has(poi.nodeId)) return false;
+      if (!mergedNodeIds.has(poi.nodeId)) return false;
       const node = curatedNodeMap.get(poi.nodeId);
       if (node && hasNearbyCuratedGroundTransport(curatedNodeMap, node)) return false;
       return true;
