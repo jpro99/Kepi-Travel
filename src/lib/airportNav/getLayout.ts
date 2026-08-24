@@ -5,22 +5,27 @@
  */
 
 import type { AirportLayout } from "./types";
-import { SEA_LAYOUT } from "./layouts/sea";
 import { LAX_LAYOUT } from "./layouts/lax";
-import { ONT_LAYOUT } from "./layouts/ont";
 import { BRI_LAYOUT } from "./layouts/bri";
-import { FCO_LAYOUT } from "./layouts/fco";
 import { VCE_LAYOUT } from "./layouts/vce";
 import { MUC_LAYOUT } from "./layouts/muc";
 import { buildFcoLayoutWithKacOverlay } from "./kac/fcoKacIngest";
+import { buildOntLayoutWithKacOverlay } from "./kac/ontKacIngest";
+import { buildSeaLayoutWithKacOverlay } from "./kac/seaKacIngest";
 
 /** Curated FCO + KAC draft overlay (OSM rings, unrouted gate dots; first-mile preserved). */
 const FCO_LAYOUT_LIVE = buildFcoLayoutWithKacOverlay();
 
+/** Curated ONT + KAC draft overlay (OSM gate dots, Aspire AREA lounges; first-mile preserved). */
+const ONT_LAYOUT_LIVE = buildOntLayoutWithKacOverlay();
+
+/** Curated SEA + KAC draft overlay (OSM gate dots, Alaska AREA lounges; connection graph preserved). */
+const SEA_LAYOUT_LIVE = buildSeaLayoutWithKacOverlay();
+
 const LAYOUTS: Record<string, AirportLayout> = {
-  SEA: SEA_LAYOUT,
+  SEA: SEA_LAYOUT_LIVE,
   LAX: LAX_LAYOUT,
-  ONT: ONT_LAYOUT,
+  ONT: ONT_LAYOUT_LIVE,
   BRI: BRI_LAYOUT,
   FCO: FCO_LAYOUT_LIVE,
   VCE: VCE_LAYOUT,

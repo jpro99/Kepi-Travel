@@ -12,6 +12,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AirportLayout, ComputedRoute, GraphEdge, PoiDefinition, SnappedPosition, TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
+import { resolveBookedGateHighlight } from "@/lib/airportNav/kac/bookedGateHighlight";
 import { buildTripJourney, journeyPoiIds, preSecurityJourney, type JourneyStop, buildArrivalTripJourney, arrivalJourneyPoiIds, layoutSupportsArrivalFirstMile, resolveArrivalOriginNode, type ArrivalJourneyStop } from "@/lib/airportNav/tripJourney";
 import {
   buildArrivalDayCoachPath,
@@ -32,6 +33,11 @@ import { poiLocationHonestyTag } from "@/lib/airportNav/poiPrecisionHonesty";
 import { computeDirectionArrow, confirmedSnappedPosition } from "@/lib/airportNav/directionArrow";
 import { computeLayoutBounds, computeLandsideBounds } from "@/lib/airportNav/layoutBounds";
 import { buildAirportSchematicModel } from "@/lib/airportNav/schematic";
+import {
+  buildLandsideAccessOverlayGeoJson,
+  isPackageAccessWalkEdge,
+  isPackageLandsideAccessZone,
+} from "@/lib/airportNav/landsideAccessOverlay";
 import type { JourneyWaypointEvent, NavTimingCalibrationStore } from "@/lib/airportNav/navTimingCalibration";
 import { loadNavTimingCalibrationStore, recordJourneyWaypointPair } from "@/lib/airportNav/navJourneyTelemetry";
 import {
@@ -217,6 +223,68 @@ function installAirportLayoutLayers(map: any): void {
       "line-dasharray": [1.4, 1.1],
     },
   });
+
+  // Package-derived landside access loops + curb walk-in (only when geometry exists).
+  const emptyFc = { type: "FeatureCollection", features: [] };
+  map.addSource("kepi-landside-access-zones", { type: "geojson", data: emptyFc });
+  map.addLayer({
+    id: "kepi-landside-access-fill",
+    type: "fill",
+    source: "kepi-landside-access-zones",
+    paint: {
+      "fill-color": "#94a3b8",
+      "fill-opacity": 0.14,
+    },
+  });
+  map.addLayer({
+    id: "kepi-landside-access-outline",
+    type: "line",
+    source: "kepi-landside-access-zones",
+    layout: { "line-cap": "round", "line-join": "round" },
+    paint: {
+      "line-color": "#15803d",
+      "line-width": 2.5,
+      "line-opacity": 0.9,
+      "line-dasharray": [2, 1.2],
+    },
+  });
+
+  map.addSource("kepi-landside-access-paths", { type: "geojson", data: emptyFc });
+  map.addLayer({
+    id: "kepi-landside-access-paths-line",
+    type: "line",
+    source: "kepi-landside-access-paths",
+    layout: { "line-cap": "round", "line-join": "round" },
+    paint: {
+      "line-color": "#16a34a",
+      "line-width": 4,
+      "line-opacity": 0.88,
+    },
+  });
+
+  map.addSource("kepi-landside-curbs", { type: "geojson", data: emptyFc });
+  map.addLayer({
+    id: "kepi-landside-curbs-halo",
+    type: "circle",
+    source: "kepi-landside-curbs",
+    paint: {
+      "circle-radius": 12,
+      "circle-color": "#16a34a",
+      "circle-opacity": 0.18,
+      "circle-stroke-width": 0,
+    },
+  });
+  map.addLayer({
+    id: "kepi-landside-curbs-dot",
+    type: "circle",
+    source: "kepi-landside-curbs",
+    paint: {
+      "circle-radius": 6,
+      "circle-color": "#16a34a",
+      "circle-stroke-width": 2,
+      "circle-stroke-color": "#ffffff",
+    },
+  });
 }
 
 /**
@@ -283,6 +351,9 @@ const LIGHT_MAP = {
   buildingStroke: "#b7c1cd",
   zoneLabel: "#334155",
   corridor: "#c3ccd7",
+  accessLoopFill: "rgba(22,163,74,0.10)",
+  accessLoopStroke: "#15803d",
+  accessPath: "#16a34a",
   train: "#94a3b8",
   route: "#2563eb",
   routeGlow: "#93c5fd",
@@ -305,6 +376,10 @@ function airportPoiIsVisible(
   }
   // Terminal curb drop-off POIs stay visible even when an airline counter exists elsewhere.
   if (definition.id.startsWith("poi-dropoff-")) {
+    if (mode === "lounges") return false;
+    return true;
+  }
+  if (definition.id.includes(":node:curb:") || definition.nodeId.includes(":node:curb:")) {
     if (mode === "lounges") return false;
     return true;
   }
@@ -534,6 +609,16 @@ function AirportSchematicLayer({
   onPoiClick,
 }: AirportSchematicLayerProps) {
   const model = useMemo(() => buildAirportSchematicModel(layout), [layout]);
+  const accessZoneIds = useMemo(
+    () => new Set(layout.zones.filter(isPackageLandsideAccessZone).map((zone) => zone.id)),
+    [layout],
+  );
+  const accessEdgeIds = useMemo(() => {
+    const nodeById = new Map(layout.nodes.map((node) => [node.id, node]));
+    return new Set(
+      layout.edges.filter((edge) => isPackageAccessWalkEdge(edge, nodeById)).map((edge) => edge.id),
+    );
+  }, [layout]);
   const hasAirlineCheckin = model.pois.some(({ definition }) =>
     definition.category === "checkin"
     && Boolean(definition.airline)
@@ -571,18 +656,22 @@ function AirportSchematicLayer({
         </defs>
 
         {/* Terminal + concourse footprints — light floor-plan fills */}
-        {model.zones.map((zone) => (
+        {model.zones.map((zone) => {
+          const isAccessLoop = accessZoneIds.has(zone.id);
+          return (
           <g key={zone.id}>
             <polygon
               points={zone.points.map((point) => `${point.x},${point.y}`).join(" ")}
-              fill={zone.airside ? LIGHT_MAP.airsideFill : LIGHT_MAP.landsideFill}
-              stroke={LIGHT_MAP.buildingStroke}
-              strokeWidth="0.5"
+              fill={isAccessLoop ? LIGHT_MAP.accessLoopFill : zone.airside ? LIGHT_MAP.airsideFill : LIGHT_MAP.landsideFill}
+              stroke={isAccessLoop ? LIGHT_MAP.accessLoopStroke : LIGHT_MAP.buildingStroke}
+              strokeWidth={isAccessLoop ? "0.65" : "0.5"}
+              strokeDasharray={isAccessLoop ? "1.2 0.8" : undefined}
               strokeLinejoin="round"
               filter="url(#kepi-terminal-shadow)"
             />
           </g>
-        ))}
+          );
+        })}
 
         {/* Concourse names — dark text with a soft white halo for legibility */}
         {model.zones.map((zone) => (
@@ -604,20 +693,23 @@ function AirportSchematicLayer({
         ))}
 
         {/* Corridors / walkways */}
-        {model.walkways.map((walkway) => (
+        {model.walkways.map((walkway) => {
+          const isAccessPath = accessEdgeIds.has(walkway.id);
+          return (
           <line
             key={walkway.id}
             x1={walkway.from.x}
             y1={walkway.from.y}
             x2={walkway.to.x}
             y2={walkway.to.y}
-            stroke={walkway.train ? LIGHT_MAP.train : LIGHT_MAP.corridor}
-            strokeWidth={walkway.train ? "1" : "0.65"}
+            stroke={walkway.train ? LIGHT_MAP.train : isAccessPath ? LIGHT_MAP.accessPath : LIGHT_MAP.corridor}
+            strokeWidth={walkway.train ? "1" : isAccessPath ? "0.85" : "0.65"}
             strokeDasharray={walkway.train ? "1.5 1" : undefined}
             strokeLinecap="round"
-            opacity="0.9"
+            opacity={isAccessPath ? "1" : "0.9"}
           />
-        ))}
+          );
+        })}
 
         {routePoints ? (
           <g>
@@ -1266,12 +1358,14 @@ export function AirportNavigatorMap({
       ?? null;
   }, [snapped, layout, previewMode, isArriveCoach, gateCode]);
 
+  const bookedGate = useMemo(
+    () => resolveBookedGateHighlight(layout, gateCode, airlineName),
+    [layout, gateCode, airlineName],
+  );
+
   const gatePoi: PoiDefinition | null = useMemo(() => {
-    if (!layout || !gateCode) return null;
-    const gateNodeId = resolveGateNode(layout, gateCode);
-    if (!gateNodeId) return null;
-    return layout.pois.find((poi) => poi.category === "gate" && poi.nodeId === gateNodeId) ?? null;
-  }, [layout, gateCode]);
+    return bookedGate?.poi ?? null;
+  }, [bookedGate]);
 
   /* ── Trip-focused journey (depart or arrive first mile) ─ */
   const journey: JourneyStop[] = useMemo(() => {
@@ -2203,6 +2297,20 @@ export function AirportNavigatorMap({
     });
   }, [fill, expanded, mapReady]);
 
+  /* ── Landside access loop + curb overlay (package geometry only) ───── */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !layout) return;
+    const zoneSource = map.getSource("kepi-landside-access-zones") as { setData?: (d: unknown) => void } | undefined;
+    const pathSource = map.getSource("kepi-landside-access-paths") as { setData?: (d: unknown) => void } | undefined;
+    const curbSource = map.getSource("kepi-landside-curbs") as { setData?: (d: unknown) => void } | undefined;
+    if (!zoneSource?.setData || !pathSource?.setData || !curbSource?.setData) return;
+    const overlay = buildLandsideAccessOverlayGeoJson(layout);
+    zoneSource.setData(overlay.accessLoopZones);
+    pathSource.setData(overlay.accessPaths);
+    curbSource.setData(overlay.curbPoints);
+  }, [mapReady, layout]);
+
   /* ── Route geometry + warmth gradient ───────────────────────────────── */
   useEffect(() => {
     const map = mapRef.current;
@@ -2311,7 +2419,9 @@ export function AirportNavigatorMap({
         if (!pos) continue;
 
         const isSelected = selectedId !== null && poi.id === selectedId;
-        const isGateBubble = gatePoi !== null && poi.id === gatePoi.id;
+        const isGateBubble =
+          (gatePoi !== null && poi.id === gatePoi.id) ||
+          (bookedGate?.exactDoor && poi.nodeId === bookedGate.nodeId);
         const urgent = isGateBubble && minutesRounded <= 45;
         const critical = isGateBubble && minutesRounded <= 20;
         const isObjective =
@@ -2338,7 +2448,11 @@ export function AirportNavigatorMap({
         // a small grey reference dot so nobody has to hunt (owner: "don't need
         // all the gates — highlight the ones the person is going to use").
         const isJourney = journeyPoiIdSet.has(poi.id);
-        const emphatic = isSelected || isGateBubble || isObjective || isJourney || matchesAirline;
+        const isCurbDropoff =
+          poi.id.startsWith("poi-dropoff-") ||
+          poi.id.includes(":node:curb:") ||
+          poi.nodeId.includes(":node:curb:");
+        const emphatic = isSelected || isGateBubble || isObjective || isJourney || matchesAirline || isCurbDropoff;
         const isReference = !emphatic;
         // KEPI_DESIGN_LAW M32 — a security checkpoint has no public ground-truth
         // coordinate anywhere, so it must NOT render as a sharp dot implying an
@@ -2450,7 +2564,7 @@ export function AirportNavigatorMap({
         // Journey stops, the assigned gate, the selected POI and the traveler's
         // own airline counter are always visible regardless of zoom.
         bubble.dataset.minzoom = String(poiMinZoom(poi));
-        bubble.dataset.always = (isGateBubble || isSelected || isJourney || matchesAirline) ? "1" : "0";
+        bubble.dataset.always = (isGateBubble || isSelected || isJourney || matchesAirline || isCurbDropoff) ? "1" : "0";
 
         // Anchor "left" pins the dot exactly on the coordinate; the name reads to
         // its right like a real map label.
@@ -2485,7 +2599,7 @@ export function AirportNavigatorMap({
       }
       poiMarkersRef.current = {};
     };
-  }, [mapReady, layout, gatePoi, gateCode, minutesRounded, airlineName, objective, eligibleLoungeNames, startRoute, selectedPoiId, activeRoute, journeyPoiIdSet]);
+  }, [mapReady, layout, gatePoi, gateCode, bookedGate, minutesRounded, airlineName, objective, eligibleLoungeNames, startRoute, selectedPoiId, activeRoute, journeyPoiIdSet]);
 
   /* ── Start marker: where the drawn line begins ──────────────────────── */
   // The route/journey line starts at the origin node — in planning mode that's

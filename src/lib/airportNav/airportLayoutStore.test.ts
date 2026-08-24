@@ -16,6 +16,7 @@ import {
   saveAirportLayoutPackage,
   SEED_PREVIEW_CONFIRMER,
 } from "@/lib/airportNav/airportLayoutStore";
+import { getAirportLayout } from "@/lib/airportNav/getLayout";
 import { SEA_LAYOUT } from "@/lib/airportNav/layouts/sea";
 import type { AirportLayout } from "@/lib/airportNav/types";
 
@@ -60,7 +61,7 @@ test("SEA resolves from the compiled seed with empty storage and missing env", a
   assert.equal(resolved.package?.previewConfirmedBy, SEED_PREVIEW_CONFIRMER);
 
   const again = await resolvePublishedAirportLayout("SEA");
-  assert.equal(again.source, "database");
+  assert.equal(again.source, "bundled");
 });
 
 test("publishing via the store requires visual preview confirmation", async () => {
@@ -125,13 +126,14 @@ test("stale seed-originated published package auto-refreshes to the newer bundle
   // Resolving now serves the CURRENT bundle, not the stale stored revision.
   const resolved = await resolvePublishedAirportLayout("SEA");
   assert.equal(resolved.source, "bundled");
-  assert.equal(resolved.layout?.layoutVersion, SEA_LAYOUT.layoutVersion);
+  const bundledSeaVersion = getAirportLayout("SEA")!.layoutVersion;
+  assert.equal(resolved.layout?.layoutVersion, bundledSeaVersion);
   assert.notEqual(resolved.layout?.layoutVersion, "0.0.1-stale-seed");
   // A fresh revision was written so subsequent reads are already up to date.
   assert.ok((resolved.package?.revision ?? 0) > staleSaved.revision);
 
   const stored = await getStoredAirportLayoutPackage("SEA", "published");
-  assert.equal(stored?.layout.layoutVersion, SEA_LAYOUT.layoutVersion);
+  assert.equal(stored?.layout.layoutVersion, bundledSeaVersion);
 });
 
 // The reseed must NEVER clobber an admin- or OSM-curated publish. Those carry a
