@@ -5,7 +5,7 @@
  * Never invents loops; when the factory export lacks a landside ring, nothing is drawn.
  */
 
-import type { AirportLayout, GraphEdge, GraphNode, ZoneDefinition } from "./types";
+import type { AirportLayout, GraphEdge, GraphNode, TerminalZonePolygon } from "./types";
 
 export interface LandsideAccessOverlayGeoJson {
   /** Closed rings tagged as landside/access in the package (e.g. *:zone:*-landside). */
@@ -19,7 +19,7 @@ export interface LandsideAccessOverlayGeoJson {
 const EMPTY: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
 /** Package landside access loop — explicit `-landside` / `:landside` zone id, not terminal footprint. */
-export function isPackageLandsideAccessZone(zone: ZoneDefinition): boolean {
+export function isPackageLandsideAccessZone(zone: TerminalZonePolygon): boolean {
   if (zone.airside) return false;
   const id = zone.id.toLowerCase();
   if (id.includes("-landside") || id.endsWith(":landside")) return true;
@@ -103,7 +103,7 @@ export function buildLandsideAccessOverlayGeoJson(layout: AirportLayout): Landsi
             type: "Feature",
             properties: {
               id: node.id,
-              label: node.landmark ?? node.name ?? "Drop-off",
+              label: node.landmark ?? "Drop-off",
             },
             geometry: {
               type: "Point",
@@ -116,7 +116,7 @@ export function buildLandsideAccessOverlayGeoJson(layout: AirportLayout): Landsi
 }
 
 /** Zone ids in the raw KAC fixture that were dropped at overlay merge (invalid ring). */
-export function listMissingKacLandsideAccessZones(rawKacZones: ZoneDefinition[]): string[] {
+export function listMissingKacLandsideAccessZones(rawKacZones: TerminalZonePolygon[]): string[] {
   return rawKacZones
     .filter(isPackageLandsideAccessZone)
     .map((zone) => zone.id);
