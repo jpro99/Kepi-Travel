@@ -204,10 +204,7 @@ test("getAirportLayout(FCO) returns merged KAC overlay (client-safe, no fs)", ()
 test("resolvePublishedAirportLayout(FCO) seeds merged layout without 500-class validation errors", async () => {
   const resolved = await resolvePublishedAirportLayout("FCO");
   assert.ok(resolved.layout);
-  assert.ok(
-    resolved.source === "bundled" || resolved.source === "database",
-    `expected bundled or database, got ${resolved.source}`,
-  );
+  assert.equal(resolved.source, "bundled");
   assert.ok(resolved.layout!.zones.some((z) => z.id === "FCO:zone:t3"));
   assert.ok(resolved.layout!.nodes.some((n) => n.id === "FCO:node:gate:E12"));
   assert.ok(resolved.layout!.nodes.some((n) => n.id === "passport-t3"));

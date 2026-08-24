@@ -251,6 +251,12 @@ export async function resolvePublishedAirportLayout(inputIata: string): Promise<
       });
       return { layout: reseeded.layout, package: reseeded, source: "bundled" };
     }
+    if (bundled && isSeedOriginatedPackage(stored, iata)) {
+      // Seed-originated Redis records are bookkeeping only — live traffic must
+      // always read the compiled bundle (including KAC overlays) with source
+      // "bundled", even when layoutVersion already matches the stored revision.
+      return { layout: bundled, package: stored, source: "bundled" };
+    }
     return { layout: stored.layout, package: stored, source: "database" };
   }
 
