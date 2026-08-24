@@ -34,7 +34,7 @@ const SEA_LOUNGE_COORDS: Record<string, [number, number]> = {
 };
 
 test("fixtures/kac/ont.json is kac-1.0.2 with locked lounge coords", () => {
-  const raw = ONT_KAC_COMPILER_JSON as {
+  const raw = ONT_KAC_COMPILER_JSON as unknown as {
     layout: { layoutVersion: string; nodes: Array<{ id: string; pos: [number, number] }> };
   };
   assert.equal(raw.layout.layoutVersion, "kac-1.0.2-ont");
@@ -47,7 +47,7 @@ test("fixtures/kac/ont.json is kac-1.0.2 with locked lounge coords", () => {
 });
 
 test("fixtures/kac/sea.json is kac-1.0.2 with locked lounge coords", () => {
-  const raw = SEA_KAC_COMPILER_JSON as {
+  const raw = SEA_KAC_COMPILER_JSON as unknown as {
     layout: { layoutVersion: string; nodes: Array<{ id: string; pos: [number, number] }> };
   };
   assert.equal(raw.layout.layoutVersion, "kac-1.0.2-sea");
