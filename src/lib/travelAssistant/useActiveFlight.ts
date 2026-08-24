@@ -250,6 +250,7 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
   hotelLabel: string | null;
   travelDayFlight: TravelDayFlightPick<FlightReservation> | null;
   travelDayFlightLabel: string | null;
+  reservations: FlightReservation[];
   loading: boolean;
 } {
   const tripId = options?.tripId?.trim() ?? null;
@@ -373,6 +374,7 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
     hotelLabel,
     travelDayFlight,
     travelDayFlightLabel,
+    reservations,
     loading,
   };
 }

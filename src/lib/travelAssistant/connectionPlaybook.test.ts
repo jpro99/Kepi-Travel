@@ -41,6 +41,44 @@ test("buildConnectionPlaybook lists immigration for international inbound at hub
   assert.ok(playbook!.steps.some((s) => s.id === "gate"));
 });
 
+test("buildConnectionPlaybook: domestic inbound + intl outbound at SEA adds TSA re-clear", () => {
+  const playbook = buildConnectionPlaybook(
+    [
+      {
+        id: "in",
+        type: "flight",
+        localTime: "2026-09-02 06:30",
+        timezone: "America/Los_Angeles",
+        flightDepartureAirport: "ONT",
+        flightArrivalAirport: "SEA",
+        flightDepartureTime: "2026-09-02 06:30",
+        flightArrivalTime: "2026-09-02 08:45",
+        flightDate: "2026-09-02",
+        flightNumber: "AS654",
+        confirmationCode: "KEPI123",
+      },
+      {
+        id: "out",
+        type: "flight",
+        localTime: "2026-09-02 11:15",
+        timezone: "America/Los_Angeles",
+        flightDepartureAirport: "SEA",
+        flightArrivalAirport: "FCO",
+        flightDepartureTime: "2026-09-02 11:15",
+        flightArrivalTime: "2026-09-03 07:30",
+        flightDate: "2026-09-02",
+        flightNumber: "AS180",
+        confirmationCode: "KEPI123",
+      },
+    ],
+    Date.parse("2026-09-02T14:00:00.000Z"),
+    { requireActiveWindow: false },
+  );
+  assert.ok(playbook);
+  assert.equal(playbook!.hubIata, "SEA");
+  assert.ok(playbook!.steps.some((s) => s.id === "security" && /international TSA/i.test(s.text)));
+});
+
 test("buildConnectionPlaybook returns null when no same-airport connection", () => {
   const playbook = buildConnectionPlaybook([
     {

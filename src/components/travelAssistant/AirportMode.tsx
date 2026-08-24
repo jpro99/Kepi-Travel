@@ -23,6 +23,11 @@ import { AirportNavigatorMap } from "@/components/travelAssistant/AirportNavigat
 // guard never runs in the client bundle. Single source of truth for the schema.
 import type { TravelProfile } from "@/app/api/travel-profile/route";
 import { selectActiveFlight, type FlightReservation } from "@/lib/travelAssistant/useActiveFlight";
+import { flightDepartureUtcMs } from "@/lib/travelAssistant/flightSort";
+import {
+  isHubConnectionActive,
+  resolveHubConnection,
+} from "@/lib/airportNav/connectionClock";
 import {
   deriveAirportDayCoachMode,
 } from "@/lib/travelAssistant/airportDayCoach";
@@ -561,6 +566,19 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
     });
   }, [activeFlight, profile?.clear, cardLoungeEligibility, hasPrecheck, now]);
 
+  const hubConnectionAtArrival = useMemo(() => {
+    if (coachMode !== "arrive" || !navigatorFlight) return null;
+    const hub = navIata.trim().toUpperCase();
+    if (!hub) return null;
+    const route = reservations.filter((r) => r.type === "flight");
+    for (const candidate of route) {
+      if (candidate.flightDepartureAirport?.trim().toUpperCase() !== hub) continue;
+      const ctx = resolveHubConnection(route, hub, candidate.id, now);
+      if (ctx && ctx.inbound.reservationId === navigatorFlight.f.id) return ctx;
+    }
+    return null;
+  }, [coachMode, navigatorFlight, navIata, reservations, now]);
+
   // Arrival coach: journeyPhase just-landed — render navigator even when departure window closed.
   if (coachMode === "arrive" && navigatorFlight) {
     const arrived = navigatorFlight.f;
@@ -571,18 +589,45 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
         profile && (typeof profile.tsa_precheck === "boolean" || typeof profile.clear === "boolean"),
       ),
     };
+    const outboundAtHub = hubConnectionAtArrival?.outbound;
+    const outboundRes = outboundAtHub
+      ? reservations.find((r) => r.id === outboundAtHub.reservationId)
+      : null;
+    const outboundDeptMs = outboundRes ? flightDepartureUtcMs(outboundRes) : Number.NaN;
+    const connectionActive =
+      hubConnectionAtArrival && isHubConnectionActive(hubConnectionAtArrival, now);
     return (
       <div className="space-y-3" data-testid="airport-mode-arrive">
         <AirportNavigatorMap
           iata={navIata}
-          gateCode={arrived.flightArrivalGate ?? arrived.flightDepartureGate ?? null}
-          airlineName={arrived.flightAirline ?? arrived.provider ?? null}
-          flightNumber={arrived.flightNumber ?? null}
+          gateCode={
+            connectionActive && outboundRes
+              ? (outboundRes.flightDepartureGate ?? null)
+              : (arrived.flightArrivalGate ?? arrived.flightDepartureGate ?? null)
+          }
+          airlineName={
+            connectionActive && outboundRes
+              ? (outboundRes.flightAirline ?? outboundRes.provider ?? null)
+              : (arrived.flightAirline ?? arrived.provider ?? null)
+          }
+          flightNumber={
+            connectionActive && outboundRes
+              ? (outboundRes.flightNumber ?? null)
+              : (arrived.flightNumber ?? null)
+          }
           arrivalAirport={arrived.flightArrivalAirport ?? null}
-          departureAirport={arrived.flightDepartureAirport ?? null}
-          departureTerminal={arrived.flightDepartureTerminal ?? null}
+          departureAirport={
+            connectionActive && outboundRes
+              ? (outboundRes.flightDepartureAirport ?? null)
+              : (arrived.flightDepartureAirport ?? null)
+          }
+          departureTerminal={
+            connectionActive && outboundRes
+              ? (outboundRes.flightDepartureTerminal ?? null)
+              : (arrived.flightDepartureTerminal ?? null)
+          }
           arrivalTerminal={arrived.flightArrivalTerminal ?? null}
-          coachMode="arrive"
+          coachMode={connectionActive ? "depart" : "arrive"}
           landedMinutesAgo={
             journeyPhase.kind === "just-landed" ? journeyPhase.landedMinutesAgo : null
           }
@@ -597,13 +642,21 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
           flightStatusLabel="Landed"
           flightDelayed={false}
           proximityStatus={proximity.status}
-          minutesToDeparture={0}
+          minutesToDeparture={
+            connectionActive && !Number.isNaN(outboundDeptMs)
+              ? Math.max(0, (outboundDeptMs - now) / 60_000)
+              : 0
+          }
           userLat={userLat}
           userLon={userLon}
           userAccuracyM={userAccuracyM}
           credentials={navCredentialsArrive}
           onCredentialsAnswer={() => undefined}
           eligibleLoungeNames={[]}
+          tripReservations={reservations}
+          activeReservationId={
+            connectionActive && outboundRes ? outboundRes.id : arrived.id
+          }
         />
       </div>
     );
@@ -934,6 +987,8 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
             ...lounges.map((loungeInfo) => loungeInfo.name),
             ...cardLoungeEligibility.map((l) => l.loungeName ?? l.loungeId),
           ]}
+          tripReservations={reservations}
+          activeReservationId={f.id}
         />
       )}
 

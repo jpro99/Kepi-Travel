@@ -60,6 +60,14 @@ import {
   computeArrivalGateConfidence,
   computeDepartGateConfidence,
 } from "@/lib/airportNav/gateConfidence";
+import {
+  computeConnectionGateConfidence,
+  estimateSeaConnectionWalkMinutes,
+  isHubConnectionActive,
+  resolveHubConnection,
+  type HubConnectionContext,
+} from "@/lib/airportNav/connectionClock";
+import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Kepi Airport Navigator — Phase 1 surface (spec §B/§C/§D4/§D5).
@@ -132,6 +140,10 @@ interface AirportNavigatorMapProps {
    * asks `/api/map-helper/status` (admin-enabled helpers only).
    */
   mapHelperEnabled?: boolean;
+  /** Trip flight reservations — enables hub connection clock when hub + pair exist. */
+  tripReservations?: readonly TransportRouteReservation[];
+  /** Active flight reservation id (outbound leg at hub). */
+  activeReservationId?: string | null;
 }
 
 const PATH_DIM = "#c3ccd7";
@@ -922,6 +934,8 @@ export function AirportNavigatorMap({
   onPlaceCapture,
   layoutOverride = null,
   mapHelperEnabled: mapHelperEnabledProp,
+  tripReservations,
+  activeReservationId = null,
 }: AirportNavigatorMapProps) {
   const bottomPanel = shellBottomInset ?? "max(0.75rem, env(safe-area-inset-bottom))";
   const bottomMic = shellBottomInset
@@ -1631,6 +1645,36 @@ export function AirportNavigatorMap({
 
   const gateConfidence = useMemo(() => {
     const currentStep = coachPathSteps[coachSpotlightIndex] ?? coachPathSteps[0] ?? null;
+    const hubCode = iata.trim().toUpperCase();
+    const connectionCtx: HubConnectionContext | null =
+      tripReservations && activeReservationId
+        ? resolveHubConnection(tripReservations, hubCode, activeReservationId)
+        : null;
+    const useConnectionClock =
+      connectionCtx &&
+      connectionCtx.hubIata === hubCode &&
+      isHubConnectionActive(connectionCtx);
+
+    if (useConnectionClock && connectionCtx) {
+      const walk = estimateSeaConnectionWalkMinutes({
+        arrivalGate: connectionCtx.inbound.arrivalGate,
+        departureGate: connectionCtx.outbound.departureGate ?? gateCode,
+        arrivalTerminal: connectionCtx.inbound.arrivalTerminal,
+        departureTerminal: connectionCtx.outbound.departureTerminal ?? departureTerminal,
+        credentials: { tsaPreCheck: credentials.tsaPreCheck, clear: credentials.clear },
+      });
+      return computeConnectionGateConfidence({
+        ctx: connectionCtx,
+        minutesToOutboundDeparture: minutesRounded,
+        landedMinutesAgo,
+        locationStatus: proximityStatus,
+        throughSecurity: ["airside", "lounge", "at_gate", "boarding_soon"].includes(journeyPhase),
+        credentials: { tsaPreCheck: credentials.tsaPreCheck, clear: credentials.clear },
+        walkMinutes: walk.minutes,
+        walkKnown: walk.known,
+      });
+    }
+
     if (isArriveCoach) {
       return computeArrivalGateConfidence({
         iata,
@@ -1658,6 +1702,8 @@ export function AirportNavigatorMap({
     coachPathSteps,
     coachSpotlightIndex,
     iata,
+    tripReservations,
+    activeReservationId,
     flightArrivalTime,
     flightTimezone,
     landedMinutesAgo,
@@ -1666,6 +1712,12 @@ export function AirportNavigatorMap({
     minutesRounded,
     gateRoute,
     journeyPhase,
+    gateCode,
+    departureTerminal,
+    proximityStatus,
+    credentials.tsaPreCheck,
+    credentials.clear,
+    arrivalAirport,
   ]);
 
   const rideLinks = arrivalRideLinks;
@@ -2733,6 +2785,8 @@ export function AirportNavigatorMap({
         layoutLoadFailed={coachMode !== "arrive" && layoutStatus === "error"}
         familyPins={familyPins}
         onFamilyPinTap={onFamilyPinTap}
+        tripReservations={tripReservations}
+        activeReservationId={activeReservationId}
       />
     );
   }
