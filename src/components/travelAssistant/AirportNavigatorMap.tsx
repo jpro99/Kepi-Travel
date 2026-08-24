@@ -32,6 +32,10 @@ import { poiLocationHonestyTag } from "@/lib/airportNav/poiPrecisionHonesty";
 import { computeDirectionArrow, confirmedSnappedPosition } from "@/lib/airportNav/directionArrow";
 import { computeLayoutBounds, computeLandsideBounds } from "@/lib/airportNav/layoutBounds";
 import { buildAirportSchematicModel } from "@/lib/airportNav/schematic";
+import {
+  buildLandsideOverlayGeoJson,
+  extractLandsideOverlayGeometry,
+} from "@/lib/airportNav/landsideOverlay";
 import type { JourneyWaypointEvent, NavTimingCalibrationStore } from "@/lib/airportNav/navTimingCalibration";
 import { loadNavTimingCalibrationStore, recordJourneyWaypointPair } from "@/lib/airportNav/navJourneyTelemetry";
 import {
@@ -215,6 +219,42 @@ function installAirportLayoutLayers(map: any): void {
       "line-width": 7,
       "line-opacity": 0.95,
       "line-dasharray": [1.4, 1.1],
+    },
+  });
+
+  // Landside overlay — OSM access loop + curb drop-off when the KAC package
+  // carries them. Empty FeatureCollections when absent (no invented geometry).
+  map.addSource("kepi-landside-access-loop", {
+    type: "geojson",
+    data: { type: "FeatureCollection", features: [] },
+  });
+  map.addLayer({
+    id: "kepi-landside-access-loop-line",
+    type: "line",
+    source: "kepi-landside-access-loop",
+    layout: { "line-cap": "round", "line-join": "round" },
+    paint: {
+      "line-color": "#475569",
+      "line-width": 5,
+      "line-opacity": 0.9,
+      "line-dasharray": [2, 1.2],
+    },
+  });
+
+  map.addSource("kepi-landside-curb", {
+    type: "geojson",
+    data: { type: "FeatureCollection", features: [] },
+  });
+  map.addLayer({
+    id: "kepi-landside-curb-dot",
+    type: "circle",
+    source: "kepi-landside-curb",
+    paint: {
+      "circle-radius": 7,
+      "circle-color": "#16a34a",
+      "circle-stroke-width": 2,
+      "circle-stroke-color": "#ffffff",
+      "circle-opacity": 0.95,
     },
   });
 }
@@ -534,6 +574,7 @@ function AirportSchematicLayer({
   onPoiClick,
 }: AirportSchematicLayerProps) {
   const model = useMemo(() => buildAirportSchematicModel(layout), [layout]);
+  const landsideOverlay = useMemo(() => extractLandsideOverlayGeometry(layout), [layout]);
   const hasAirlineCheckin = model.pois.some(({ definition }) =>
     definition.category === "checkin"
     && Boolean(definition.airline)
@@ -583,6 +624,50 @@ function AirportSchematicLayer({
             />
           </g>
         ))}
+
+        {/* OSM access loop — dashed ring when the KAC package carries one */}
+        {landsideOverlay.accessLoops.map((zone) => {
+          const points = zone.ring.map((coord) => model.project(coord));
+          return (
+            <polyline
+              key={`access-loop-${zone.id}`}
+              data-testid="airport-nav-landside-access-loop"
+              points={points.map((point) => `${point.x},${point.y}`).join(" ")}
+              fill="none"
+              stroke="#64748b"
+              strokeWidth="0.85"
+              strokeDasharray="1.6 1.1"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity="0.95"
+            />
+          );
+        })}
+
+        {/* Curb drop-off anchors from the KAC package (e.g. BRI:node:curb) */}
+        {landsideOverlay.curbNodes.map((node) => {
+          const point = model.project(node.pos);
+          const label = node.landmark ?? "Drop-off";
+          return (
+            <g
+              key={`curb-overlay-${node.id}`}
+              data-testid="airport-nav-landside-curb"
+              transform={`translate(${point.x} ${point.y})`}
+            >
+              <circle r="2.8" fill="#16a34a" stroke="#ffffff" strokeWidth="0.65" />
+              <text
+                x="0"
+                y="-4.2"
+                fill="#166534"
+                fontSize="1.8"
+                fontWeight="800"
+                textAnchor="middle"
+              >
+                {label}
+              </text>
+            </g>
+          );
+        })}
 
         {/* Concourse names — dark text with a soft white halo for legibility */}
         {model.zones.map((zone) => (
@@ -2202,6 +2287,18 @@ export function AirportNavigatorMap({
       }
     });
   }, [fill, expanded, mapReady]);
+
+  /* ── Landside overlay (OSM access loop + curb when present in layout) ─ */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !layout) return;
+    const loopSource = map.getSource("kepi-landside-access-loop");
+    const curbSource = map.getSource("kepi-landside-curb");
+    if (!loopSource || !curbSource) return;
+    const geo = buildLandsideOverlayGeoJson(layout);
+    loopSource.setData(geo.accessLoop);
+    curbSource.setData(geo.curb);
+  }, [layout, mapReady]);
 
   /* ── Route geometry + warmth gradient ───────────────────────────────── */
   useEffect(() => {
