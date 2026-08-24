@@ -54,7 +54,16 @@ export const BRI_LAYOUT: AirportLayout = {
   ],
   nodes: BUILT.nodes,
   edges: BUILT.edges,
-  pois: BUILT.pois,
+  pois: BUILT.pois.map((poi) =>
+    poi.category === "gate"
+      ? {
+          ...poi,
+          precision: "schematic" as const,
+          notes:
+            "Gate cluster centroid from OSM — follow signs for your assigned gate (A1–A11 / B1–B4 are text refs, not door pins).",
+        }
+      : poi,
+  ),
   gateNodeResolver: BUILT.gateNodeResolver,
   routeGrade: "schematic",
 };

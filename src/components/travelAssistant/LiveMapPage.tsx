@@ -682,6 +682,7 @@ export function LiveMapPage() {
   const [navAccuracyM, setNavAccuracyM] = useState<number | null>(null);
   const navWatchRef = useRef<number | null>(null);
   const autoAirportRef = useRef(false);
+  const mapViewPinnedByUser = useRef(false);
 
   useEffect(() => {
     if (mapView !== "family" || !mapRef.current || !isLoaded) return;
@@ -734,7 +735,9 @@ export function LiveMapPage() {
 
   useEffect(() => {
     if (!preferAirportView || !navigatorFlight) return;
-    setMapView("airport");
+    if (!mapViewPinnedByUser.current) {
+      setMapView("airport");
+    }
   }, [preferAirportView, navigatorFlight]);
 
   // Default map to the user's actual location (once), not world view or airport campus
@@ -773,7 +776,9 @@ export function LiveMapPage() {
   // Airport navigator: deep-link (?view=airport) or auto-switch when geofenced at departure airport
   useEffect(() => {
     if (preferAirportView && navigatorFlight) {
-      setMapView("airport");
+      if (!mapViewPinnedByUser.current) {
+        setMapView("airport");
+      }
       return;
     }
     if (!activeFlight) {
@@ -1088,7 +1093,10 @@ export function LiveMapPage() {
               credentials={navCredentials}
               onCredentialsAnswer={saveCredentials}
               eligibleLoungeNames={navigatorCoachMode === "arrive" ? [] : navEligibleLounges}
-              onSwitchToFamilyView={() => setMapView("family")}
+              onSwitchToFamilyView={() => {
+                mapViewPinnedByUser.current = true;
+                setMapView("family");
+              }}
               familyPins={airportLiveMode ? familyAirportPins : []}
               onFamilyPinTap={handleFamilyPinTap}
               activeRally={airportLiveMode && airportSync?.rally?.status === "active" ? airportSync.rally : null}
@@ -1147,7 +1155,10 @@ export function LiveMapPage() {
                 <button
                   key={viewId}
                   type="button"
-                  onClick={() => setMapView(viewId)}
+                  onClick={() => {
+                    mapViewPinnedByUser.current = true;
+                    setMapView(viewId);
+                  }}
                   className={`min-h-[48px] flex-1 px-3 py-2.5 text-[15px] font-bold backdrop-blur-md transition-all ${
                     mapView === viewId ? "bg-white text-slate-900" : "bg-black/45 text-white/90"
                   }`}
@@ -1226,7 +1237,10 @@ export function LiveMapPage() {
                 <button
                   key={viewId}
                   type="button"
-                  onClick={() => setMapView(viewId)}
+                  onClick={() => {
+                    mapViewPinnedByUser.current = true;
+                    setMapView(viewId);
+                  }}
                   className={`min-h-[44px] px-5 py-2 text-[15px] font-bold backdrop-blur-md transition-all ${
                     mapView === viewId ? "bg-white text-slate-900" : "bg-black/45 text-white/90"
                   }`}

@@ -7,6 +7,7 @@
  */
 
 import type { AirportLayout, GraphEdge, GraphNode, PoiDefinition } from "../types";
+import { haversineMeters } from "../footwayGraph";
 import {
   BRI_CURATED_EDGE_IDS,
   BRI_CURATED_NODE_IDS,
@@ -68,7 +69,9 @@ export function applyBriKacOverlay(
     return true;
   });
 
-  const { merged: edges, added: edgesAdded } = mergeById(curated.edges, incomingEdges);
+  const { merged: mergedEdges, added: edgesAdded } = mergeById(curated.edges, incomingEdges);
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
+  const edges = appendBriLandsideBridgeEdges(mergedEdges, nodeById);
 
   const incomingPois = kacLayout.pois.filter((poi) => {
     if (isBriCuratedPoiId(poi.id)) return false;
@@ -98,10 +101,39 @@ export function applyBriKacOverlay(
     stats: {
       zonesAdded: kacZones.length,
       nodesAdded,
-      edgesAdded,
+      edgesAdded: edges.length - curated.edges.length,
       poisAdded,
     },
   };
+}
+
+const WALK_MPS = 1.25;
+
+/** Honest walkway links from curated curb-main into the KAC departures subgraph. */
+function appendBriLandsideBridgeEdges(
+  edges: GraphEdge[],
+  nodeById: Map<string, GraphNode>,
+): GraphEdge[] {
+  const out = [...edges];
+  const addWalk = (id: string, from: string, to: string) => {
+    if (out.some((edge) => edge.id === id)) return;
+    const a = nodeById.get(from);
+    const b = nodeById.get(to);
+    if (!a || !b) return;
+    const lengthM = Math.max(5, Math.round(haversineMeters(a.pos, b.pos)));
+    out.push({
+      id,
+      from,
+      to,
+      kind: "walkway",
+      lengthM: lengthM,
+      traverseSeconds: Math.max(5, Math.round(lengthM / WALK_MPS)),
+      bidirectional: true,
+    });
+  };
+  addWalk("BRI:edge:bridge-curb-main", "curb-main", "BRI:node:curb");
+  addWalk("BRI:edge:curb-terminal", "BRI:node:curb", "BRI:node:terminal");
+  return out;
 }
 
 function assertCuratedPreserved(before: AirportLayout, after: AirportLayout): void {

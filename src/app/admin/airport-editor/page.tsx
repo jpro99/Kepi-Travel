@@ -474,6 +474,10 @@ export default function AirportEditorPage() {
                                             <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">
                                                 {airport.errors} err
                                             </span>
+                                        ) : airport.warnings > 0 ? (
+                                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
+                                                {airport.warnings} warn
+                                            </span>
                                         ) : (
                                             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">
                                                 ✓ clean

@@ -8,12 +8,12 @@ import type { DayCoachPathStep } from "@/lib/travelAssistant/airportDayCoach";
 import { ArrivalTransportOptionsCard } from "@/components/travelAssistant/ArrivalTransportOptionsCard";
 import type { ArrivalTransportOption } from "@/lib/travelAssistant/airportNavigation";
 
-function chipLabel(stop: ArrivalJourneyStop): string {
+function chipLabel(stop: ArrivalJourneyStop, iata: string): string {
   if (stop.role === "passport") return "Passport";
   if (stop.role === "baggage") return "Bags";
   if (stop.role === "customs") return "Customs";
   if (stop.role === "ground_transport") {
-    return /leonardo/i.test(stop.label) ? "Leonardo" : stop.label;
+    return iata.trim().toUpperCase() === "FCO" && /leonardo/i.test(stop.label) ? "Leonardo" : stop.label;
   }
   return stop.label;
 }
@@ -253,7 +253,7 @@ export function AirportArrivalFirstMileChrome({
                     : "bg-black/65 text-white ring-1 ring-white/20 backdrop-blur-md"
                 }`}
               >
-                <span className="block text-[13px] font-bold leading-tight">{chipLabel(stop)}</span>
+                <span className="block text-[13px] font-bold leading-tight">{chipLabel(stop, iata)}</span>
                 {mins != null ? (
                   <span className="mt-0.5 block text-[10px] font-semibold opacity-85">
                     ~{mins} min

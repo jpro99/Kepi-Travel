@@ -56,8 +56,9 @@ export function extractLandsideOverlayGeometry(layout: AirportLayout): LandsideO
 export function buildLandsideOverlayGeoJson(layout: AirportLayout): {
   accessLoop: GeoJSON.FeatureCollection;
   curb: GeoJSON.FeatureCollection;
+  terminalHull: GeoJSON.FeatureCollection;
 } {
-  const { accessLoops, curbNodes } = extractLandsideOverlayGeometry(layout);
+  const { accessLoops, curbNodes, terminalHulls } = extractLandsideOverlayGeometry(layout);
   return {
     accessLoop: {
       type: "FeatureCollection",
@@ -73,6 +74,14 @@ export function buildLandsideOverlayGeoJson(layout: AirportLayout): {
         type: "Feature",
         properties: { id: node.id, name: node.landmark ?? node.id },
         geometry: { type: "Point", coordinates: node.pos },
+      })),
+    },
+    terminalHull: {
+      type: "FeatureCollection",
+      features: terminalHulls.map((zone) => ({
+        type: "Feature",
+        properties: { id: zone.id, name: zone.name },
+        geometry: { type: "Polygon", coordinates: [zone.ring] },
       })),
     },
   };

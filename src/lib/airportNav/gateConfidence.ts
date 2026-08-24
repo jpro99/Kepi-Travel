@@ -391,7 +391,6 @@ const ARRIVAL_CARD_TITLES: Record<string, string> = {
   immigration: "Passport",
   bags: "Bags",
   customs: "Customs",
-  ride: "Leonardo",
   exit: "Exit",
 };
 
@@ -410,7 +409,10 @@ export function buildArrivalCoachCards(input: {
     const step = byId.get(id);
     if (!step) continue;
     const landmark = landmarkForStep(code, step);
-    const title = ARRIVAL_CARD_TITLES[id] ?? step.text;
+    const title =
+      id === "ride" && code === "FCO"
+        ? "Leonardo"
+        : (ARRIVAL_CARD_TITLES[id] ?? step.text);
     cards.push({
       id,
       title,
@@ -419,7 +421,6 @@ export function buildArrivalCoachCards(input: {
       scheduleNote: id === "ride" ? input.scheduleNote : null,
       transportOptions: id === "ride" ? input.transportOptions : undefined,
     });
-    cards[cards.length - 1]!.title = id === "ride" && code === "FCO" ? "Leonardo" : title;
     cards[cards.length - 1]!.detail = landmark.move !== step.text ? `${landmark.move}${landmark.detail ? ` — ${landmark.detail}` : ""}` : cards[cards.length - 1]!.detail;
   }
 

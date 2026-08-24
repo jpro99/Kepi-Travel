@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { parseAirportLayoutPackage } from "../airportLayoutPackage";
 import { resolvePublishedAirportLayout } from "../airportLayoutStore";
+import { auditLayoutRouting } from "../layoutQuality";
 import { getAirportLayout } from "../getLayout";
 import { adaptKacCompilerJson } from "./adaptKacCompilerJson";
 import {
@@ -108,7 +109,7 @@ test("KAC BRI overlay is additive and preserves curated departures graph", () =>
 
   assert.equal(stats.zonesAdded, 1);
   assert.equal(stats.nodesAdded, 5);
-  assert.equal(stats.edgesAdded, 3);
+  assert.equal(stats.edgesAdded, 5, "3 KAC departures edges + 2 honest curb-main bridges");
   assert.ok(stats.poisAdded >= 1);
 
   assert.deepEqual(curatedBriEdgeSnapshot(layout), beforeEdges);
@@ -201,4 +202,13 @@ test("resolvePublishedAirportLayout(BRI) seeds merged layout without validation 
   assert.ok(resolved.layout!.zones.some((z) => z.id === "BRI:zone:terminal"));
   assert.ok(resolved.layout!.nodes.some((n) => n.id === "BRI:lounge:work"));
   assert.ok(resolved.layout!.nodes.some((n) => n.id === "curb-main"));
+});
+
+test("BRI KAC overlay bridges curb-main into departures subgraph — no unreachable contextual pins", () => {
+  const layout = buildBriLayoutWithKacOverlay();
+  assert.ok(layout.edges.some((e) => e.id === "BRI:edge:bridge-curb-main"));
+  assert.ok(layout.edges.some((e) => e.id === "BRI:edge:curb-terminal"));
+  const audit = auditLayoutRouting(layout);
+  assert.equal(audit.errors.length, 0, audit.errors.join("\n"));
+  assert.equal(audit.warnings.length, 0, audit.warnings.join("\n"));
 });

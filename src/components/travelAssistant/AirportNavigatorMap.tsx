@@ -222,8 +222,33 @@ function installAirportLayoutLayers(map: any): void {
     },
   });
 
-  // Landside overlay — OSM access loop + curb drop-off when the KAC package
+  // Landside overlay — OSM terminal hull + access loop + curb when the KAC package
   // carries them. Empty FeatureCollections when absent (no invented geometry).
+  map.addSource("kepi-landside-terminal-hull", {
+    type: "geojson",
+    data: { type: "FeatureCollection", features: [] },
+  });
+  map.addLayer({
+    id: "kepi-landside-terminal-hull-fill",
+    type: "fill",
+    source: "kepi-landside-terminal-hull",
+    paint: {
+      "fill-color": "#94a3b8",
+      "fill-opacity": 0.22,
+    },
+  });
+  map.addLayer({
+    id: "kepi-landside-terminal-hull-line",
+    type: "line",
+    source: "kepi-landside-terminal-hull",
+    layout: { "line-cap": "round", "line-join": "round" },
+    paint: {
+      "line-color": "#475569",
+      "line-width": 3,
+      "line-opacity": 0.85,
+    },
+  });
+
   map.addSource("kepi-landside-access-loop", {
     type: "geojson",
     data: { type: "FeatureCollection", features: [] },
@@ -624,6 +649,23 @@ function AirportSchematicLayer({
             />
           </g>
         ))}
+
+        {/* OSM terminal building hulls from KAC packages (e.g. BRI:zone:terminal) */}
+        {landsideOverlay.terminalHulls.map((zone) => {
+          const points = zone.ring.map((coord) => model.project(coord));
+          return (
+            <g key={`terminal-hull-${zone.id}`} data-testid="airport-nav-landside-terminal-hull">
+              <polygon
+                points={points.map((point) => `${point.x},${point.y}`).join(" ")}
+                fill="#cbd5e1"
+                fillOpacity={0.35}
+                stroke="#475569"
+                strokeWidth="0.65"
+                strokeLinejoin="round"
+              />
+            </g>
+          );
+        })}
 
         {/* OSM access loop — dashed ring when the KAC package carries one */}
         {landsideOverlay.accessLoops.map((zone) => {
@@ -2288,16 +2330,18 @@ export function AirportNavigatorMap({
     });
   }, [fill, expanded, mapReady]);
 
-  /* ── Landside overlay (OSM access loop + curb when present in layout) ─ */
+  /* ── Landside overlay (OSM terminal hull + access loop + curb when present) ─ */
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady || !layout) return;
     const loopSource = map.getSource("kepi-landside-access-loop");
     const curbSource = map.getSource("kepi-landside-curb");
-    if (!loopSource || !curbSource) return;
+    const hullSource = map.getSource("kepi-landside-terminal-hull");
+    if (!loopSource || !curbSource || !hullSource) return;
     const geo = buildLandsideOverlayGeoJson(layout);
     loopSource.setData(geo.accessLoop);
     curbSource.setData(geo.curb);
+    hullSource.setData(geo.terminalHull);
   }, [layout, mapReady]);
 
   /* ── Route geometry + warmth gradient ───────────────────────────────── */
@@ -2979,7 +3023,9 @@ export function AirportNavigatorMap({
           </p>
           <p className="text-[11px] leading-snug text-sky-100/90">
             {isArriveCoach
-              ? `Tap Where to? for passport, bags, customs, and Leonardo Express. Live directions start when you land.`
+              ? iata.trim().toUpperCase() === "FCO"
+                ? "Tap Where to? for passport, bags, customs, and Leonardo Express. Live directions start when you land."
+                : "Tap Where to? for passport, bags, customs, and ground transport. Live directions start when you land."
               : gateCode
                 ? `Tap Essentials, Lounges, or any label to explore ${iata}. Live directions start when you arrive.`
                 : `Gate assignment pending. Explore check-in, security, trains, and lounges now — your gate will highlight when assigned.`}

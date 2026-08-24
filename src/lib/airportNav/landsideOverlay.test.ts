@@ -24,6 +24,10 @@ test("BRI KAC package has curb anchor but no OSM access-loop zone", () => {
   const geo = buildLandsideOverlayGeoJson(layout);
   assert.equal(geo.accessLoop.features.length, 0);
   assert.ok(geo.curb.features.some((f) => f.properties?.id === "BRI:node:curb"));
+  assert.ok(
+    geo.terminalHull.features.some((f) => f.properties?.id === "BRI:zone:terminal"),
+    "terminal hull polygon must be emitted for MapLibre overlay",
+  );
 });
 
 test("access-loop zones are detected only by Cartographer id/name convention", () => {
