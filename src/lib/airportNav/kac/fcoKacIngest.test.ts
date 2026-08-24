@@ -25,6 +25,34 @@ function loadFixture(): unknown {
   return JSON.parse(readFileSync(FIXTURE, "utf8")) as unknown;
 }
 
+test("fixtures/kac/fco.json is the canonical KAC compiler payload (no altered coordinates)", () => {
+  const raw = loadFixture() as {
+    schemaVersion: number;
+    iata: string;
+    layout: {
+      layoutVersion: string;
+      nodes: Array<{ id: string; kind: string; pos: [number, number] }>;
+      edges: Array<{ id: string; lengthM?: number }>;
+      zones: Array<{ id: string }>;
+    };
+  };
+
+  assert.equal(raw.schemaVersion, 1);
+  assert.equal(raw.iata, "FCO");
+  assert.equal(raw.layout.layoutVersion, "kac-0.1.0-fco-arrivals-stub");
+  assert.equal(raw.layout.zones.length, 2);
+  assert.equal(raw.layout.nodes.length, 59);
+  assert.equal(raw.layout.nodes.filter((n) => n.kind === "gate").length, 56);
+  assert.equal(raw.layout.edges.length, 2);
+  assert.ok(raw.layout.edges.every((e) => e.lengthM === undefined), "raw fixture edges omit lengthM");
+
+  const leonardo = raw.layout.nodes.find((n) => n.id === "FCO:node:gt:leonardo");
+  assert.deepEqual(leonardo?.pos, [12.2518651, 41.7934437]);
+
+  const e12 = raw.layout.nodes.find((n) => n.id === "FCO:node:gate:E12");
+  assert.deepEqual(e12?.pos, [12.2481477, 41.7961053]);
+});
+
 test("KAC FCO fixture adapts to a valid AirportLayoutPackage", () => {
   const raw = loadFixture();
   const pkg = adaptKacCompilerJson(raw);
