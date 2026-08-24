@@ -1,9 +1,9 @@
 /**
- * FCO KAC ingest entry — load compiler JSON, adapt, overlay curated layout.
+ * FCO KAC ingest entry — adapt compiler JSON, overlay curated layout.
+ * Client-safe: fixture is bundled via JSON import (no fs).
  */
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import fcoKacCompilerJson from "../../../../fixtures/kac/fco.json";
 
 import { FCO_LAYOUT } from "../layouts/fco";
 import type { AirportLayout } from "../types";
@@ -11,16 +11,11 @@ import type { AirportLayoutPackage } from "../airportLayoutPackage";
 import { adaptKacCompilerJson } from "./adaptKacCompilerJson";
 import { applyFcoKacOverlay } from "./applyFcoKacOverlay";
 
-const DEFAULT_FIXTURE_PATH = join(process.cwd(), "fixtures/kac/fco.json");
+/** Canonical KAC compiler payload (fixtures/kac/fco.json). */
+export const FCO_KAC_COMPILER_JSON = fcoKacCompilerJson;
 
-export function loadFcoKacCompilerJson(fixturePath = DEFAULT_FIXTURE_PATH): unknown {
-  const raw = readFileSync(fixturePath, "utf8");
-  return JSON.parse(raw) as unknown;
-}
-
-export function ingestFcoKacPackage(raw?: unknown): AirportLayoutPackage {
-  const compilerJson = raw ?? loadFcoKacCompilerJson();
-  return adaptKacCompilerJson(compilerJson);
+export function ingestFcoKacPackage(raw: unknown = FCO_KAC_COMPILER_JSON): AirportLayoutPackage {
+  return adaptKacCompilerJson(raw);
 }
 
 /**
@@ -28,7 +23,7 @@ export function ingestFcoKacPackage(raw?: unknown): AirportLayoutPackage {
  */
 export function buildFcoLayoutWithKacOverlay(
   curated: AirportLayout = FCO_LAYOUT,
-  rawKac?: unknown,
+  rawKac: unknown = FCO_KAC_COMPILER_JSON,
 ): AirportLayout {
   const kacPackage = ingestFcoKacPackage(rawKac);
   return applyFcoKacOverlay(curated, kacPackage.layout).layout;

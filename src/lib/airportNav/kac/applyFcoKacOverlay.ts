@@ -85,6 +85,7 @@ export function applyFcoKacOverlay(
   });
 
   const { merged: nodes } = mergeById(curated.nodes, incomingNodes);
+  const mergedIncomingNodeIds = new Set(incomingNodes.map((n) => n.id));
   const gateNodesAdded = incomingNodes.filter((n) => n.kind === "gate").length;
   const schematicNodesAdded = incomingNodes.filter((n) => n.kind !== "gate").length;
 
@@ -109,16 +110,32 @@ export function applyFcoKacOverlay(
 
   const { merged: edges, added: edgesAdded } = mergeById(curated.edges, incomingEdges);
 
-  const incomingPois = kacLayout.pois.filter((poi) => {
-    if (isFcoCuratedFirstMilePoiId(poi.id)) return false;
-    if (isFcoCuratedFirstMileNodeId(poi.nodeId)) return false;
-    const node = curatedNodeMap.get(poi.nodeId);
-    if (node && hasNearbyCuratedGroundTransport(curatedNodeMap, node)) return false;
-    return true;
-  });
+  const incomingPois = kacLayout.pois
+    .filter((poi) => {
+      if (isFcoCuratedFirstMilePoiId(poi.id)) return false;
+      if (isFcoCuratedFirstMileNodeId(poi.nodeId)) return false;
+      if (!mergedIncomingNodeIds.has(poi.nodeId)) return false;
+      const node = curatedNodeMap.get(poi.nodeId);
+      if (node && hasNearbyCuratedGroundTransport(curatedNodeMap, node)) return false;
+      return true;
+    })
+    .map((poi): PoiDefinition => {
+      if (poi.category !== "gate" || !poi.id.startsWith("poi:FCO:node:gate:")) {
+        return poi;
+      }
+      // Unrouted OSM gate dots — contextual reference pins, not routable destinations.
+      return {
+        ...poi,
+        category: "amenity",
+        precision: poi.precision ?? "schematic",
+        minZoomToShow: poi.minZoomToShow ?? 17,
+        notes:
+          "Approximate OSM gate door-ref — unrouted reference pin. Follow signs; no indoor route.",
+      };
+    });
 
   const { merged: pois } = mergeById(curated.pois, incomingPois);
-  const gatePoisAdded = incomingPois.filter((p) => p.category === "gate").length;
+  const gatePoisAdded = incomingPois.filter((p) => p.id.startsWith("poi:FCO:node:gate:")).length;
 
   const layout: AirportLayout = {
     ...curated,

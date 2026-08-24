@@ -32,14 +32,6 @@ const DEFAULT_KAC_SOURCE: AirportLayoutPackageSource = {
   lastVerifiedAt: "2026-08-23",
 };
 
-const LAYOUT_STRIP_KEYS = new Set([
-  "cookbookClass",
-  "compilerStage",
-  "honesty",
-  "pois",
-  "gateNodeResolver",
-]);
-
 function walkSecs(lengthM: number): number {
   return Math.max(5, Math.round(lengthM / WALK_MPS));
 }

@@ -12,13 +12,17 @@ import { BRI_LAYOUT } from "./layouts/bri";
 import { FCO_LAYOUT } from "./layouts/fco";
 import { VCE_LAYOUT } from "./layouts/vce";
 import { MUC_LAYOUT } from "./layouts/muc";
+import { buildFcoLayoutWithKacOverlay } from "./kac/fcoKacIngest";
+
+/** Curated FCO + KAC draft overlay (OSM rings, unrouted gate dots; first-mile preserved). */
+const FCO_LAYOUT_LIVE = buildFcoLayoutWithKacOverlay();
 
 const LAYOUTS: Record<string, AirportLayout> = {
   SEA: SEA_LAYOUT,
   LAX: LAX_LAYOUT,
   ONT: ONT_LAYOUT,
   BRI: BRI_LAYOUT,
-  FCO: FCO_LAYOUT,
+  FCO: FCO_LAYOUT_LIVE,
   VCE: VCE_LAYOUT,
   MUC: MUC_LAYOUT,
 };

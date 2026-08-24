@@ -1,16 +1,19 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { test } from "node:test";
 
 import { parseAirportLayoutPackage } from "../airportLayoutPackage";
+import { getAirportLayout } from "../getLayout";
 import { adaptKacCompilerJson } from "./adaptKacCompilerJson";
 import {
   applyFcoKacOverlay,
   curatedFirstMileEdgeSnapshot,
   curatedFirstMilePoiIds,
 } from "./applyFcoKacOverlay";
-import { buildFcoLayoutWithKacOverlay, ingestFcoKacPackage } from "./fcoKacIngest";
+import {
+  buildFcoLayoutWithKacOverlay,
+  FCO_KAC_COMPILER_JSON,
+  ingestFcoKacPackage,
+} from "./fcoKacIngest";
 import { FCO_LAYOUT } from "../layouts/fco";
 import {
   buildArrivalTripJourney,
@@ -19,10 +22,8 @@ import {
 } from "../tripJourney";
 import { computeRoute } from "../pathfinder";
 
-const FIXTURE = join(process.cwd(), "fixtures/kac/fco.json");
-
 function loadFixture(): unknown {
-  return JSON.parse(readFileSync(FIXTURE, "utf8")) as unknown;
+  return FCO_KAC_COMPILER_JSON;
 }
 
 test("fixtures/kac/fco.json is the canonical KAC compiler payload (no altered coordinates)", () => {
@@ -152,4 +153,26 @@ test("FCO gate-e to Leonardo route remains computable after KAC overlay", () => 
   });
   assert.ok(route);
   assert.ok(route!.totalSeconds > 0);
+});
+
+test("getAirportLayout(FCO) returns merged KAC overlay (client-safe, no fs)", () => {
+  const layout = getAirportLayout("FCO");
+  assert.ok(layout);
+
+  assert.ok(layout!.zones.some((z) => z.id === "FCO:zone:t3"));
+  assert.ok(layout!.zones.some((z) => z.id === "FCO:zone:t1"));
+  assert.ok(layout!.nodes.some((n) => n.id === "FCO:node:gate:E12"));
+  assert.ok(layout!.nodes.filter((n) => n.kind === "gate").length >= 56);
+  assert.ok(layout!.nodes.some((n) => n.id === "passport-t3"));
+  assert.ok(layout!.nodes.some((n) => n.id === "baggage-t3"));
+  assert.ok(layout!.nodes.some((n) => n.id === "customs-t3"));
+  assert.ok(layout!.nodes.some((n) => n.id === "ground-leonardo"));
+
+  assert.deepEqual(
+    curatedFirstMileEdgeSnapshot(layout!),
+    curatedFirstMileEdgeSnapshot(FCO_LAYOUT),
+  );
+  assert.deepEqual(curatedFirstMilePoiIds(layout!), curatedFirstMilePoiIds(FCO_LAYOUT));
+  assert.equal(resolveArrivalOriginNode(layout!, "E12"), "gate-e");
+  assert.ok(layoutSupportsArrivalFirstMile(layout!));
 });
