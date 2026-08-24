@@ -85,7 +85,7 @@ test("ONT KAC overlay is additive and preserves curated first-mile graph", () =>
   assert.ok(stats.zonesAdded >= 1);
   assert.ok(stats.gateNodesAdded >= 20);
   assert.deepEqual(ontCuratedEdgeSnapshot(layout), before);
-  assert.ok(layout.nodes.some((n) => n.id === "ONT:node:gate:205"));
+  assert.ok(layout.nodes.some((n) => n.id === "ONT:node:gate:2-05"));
   assert.ok(layout.nodes.some((n) => n.id === "curb-t2"));
 });
 
@@ -97,7 +97,7 @@ test("KAC overlay drops dangling edges when endpoint node is not merged", () => 
       ...kac.layout.edges,
       {
         id: "ONT:edge:dangle-test",
-        from: "ONT:node:gate:205",
+        from: "ONT:node:gate:2-05",
         to: "ONT:node:gt:never-added",
         kind: "walkway" as const,
         lengthM: 50,
@@ -154,7 +154,7 @@ test("getAirportLayout ONT/SEA return merged KAC overlays", () => {
   const sea = getAirportLayout("SEA");
   assert.ok(ont);
   assert.ok(sea);
-  assert.ok(ont!.nodes.some((n) => n.id === "ONT:node:gate:205"));
+  assert.ok(ont!.nodes.some((n) => n.id === "ONT:node:gate:2-05"));
   assert.ok(ont!.nodes.some((n) => n.id === "curb-t2"));
   assert.ok(sea!.nodes.some((n) => n.id === "SEA:node:gate:N15"));
   assert.ok(sea!.nodes.some((n) => n.id === "gate-C"));
@@ -172,7 +172,7 @@ test("booked-gate: known string highlights door node; unknown falls back to airl
   const layout = buildOntLayoutWithKacOverlay();
   const exact = resolveBookedGateHighlight(layout, "205", "Alaska Airlines");
   assert.ok(exact);
-  assert.equal(exact!.nodeId, "ONT:node:gate:205");
+  assert.equal(exact!.nodeId, "ONT:node:gate:2-05");
   assert.equal(exact!.exactDoor, true);
 
   const invented = resolveBookedGateHighlight(layout, "999", "Alaska Airlines");

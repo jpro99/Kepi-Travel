@@ -71,6 +71,12 @@ function gateClusterHubNodeId(gateNodeId: string | null): string | null {
   if (!gateNodeId) return null;
   if (/^gate-/.test(gateNodeId)) return gateNodeId;
 
+  const ontFactory = gateNodeId.match(/^ONT:node:gate:(\d)-/);
+  if (ontFactory) {
+    if (ontFactory[1] === "2") return "gate-t2";
+    if (ontFactory[1] === "4") return "gate-t4";
+  }
+
   const ont = gateNodeId.match(/^ONT:node:gate:(\d+)$/);
   if (ont) {
     if (ont[1].startsWith("2")) return "gate-t2";

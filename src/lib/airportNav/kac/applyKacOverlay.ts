@@ -5,6 +5,7 @@
  * unrouted reference pins; AREA lounge dots have no routable edges.
  */
 
+import { kinks, polygon } from "@turf/turf";
 import { haversineMeters } from "../footwayGraph";
 import type { AirportLayout, GraphEdge, GraphNode, PoiDefinition } from "../types";
 import {
@@ -15,6 +16,18 @@ import {
 } from "./curatedGraphGuards";
 
 const DUPLICATE_GROUND_TRANSPORT_M = 8;
+
+function isSimpleClosedRing(ring: [number, number][]): boolean {
+  if (ring.length < 4) return false;
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  if (first[0] !== last[0] || first[1] !== last[1]) return false;
+  try {
+    return kinks(polygon([ring])).features.length === 0;
+  } catch {
+    return false;
+  }
+}
 
 export interface KacOverlayOptions {
   /** Merge KAC gate door-ref resolver entries (longest-prefix at query time). */
@@ -124,13 +137,29 @@ export function applyKacOverlay(
 
   const areaLoungeIds = new Set(options.areaLoungeNodeIds ?? []);
   const curatedNodeMap = new Map(curated.nodes.map((n) => [n.id, n]));
+  const kacIncidentNodeIds = new Set<string>();
+  for (const edge of kacLayout.edges) {
+    kacIncidentNodeIds.add(edge.from);
+    kacIncidentNodeIds.add(edge.to);
+  }
 
-  const kacZones = kacLayout.zones.filter((z) => !curated.zones.some((c) => c.id === z.id));
+  const kacZones = kacLayout.zones.filter(
+    (z) => !curated.zones.some((c) => c.id === z.id) && isSimpleClosedRing(z.ring),
+  );
   const zones = [...curated.zones, ...kacZones];
 
   const incomingNodes = kacLayout.nodes.filter((node) => {
     if (isCuratedNodeId(guards, node.id)) return false;
     if (hasNearbyCuratedGroundTransport(guards, curatedNodeMap, node)) return false;
+    // Orphan non-gate KAC reference pins (e.g. unconnected Link station dot) fail M29.
+    // Gate door-ref dots are intentionally unrouted and may have zero KAC edges.
+    if (
+      !kacIncidentNodeIds.has(node.id) &&
+      !areaLoungeIds.has(node.id) &&
+      node.kind !== "gate"
+    ) {
+      return false;
+    }
     return true;
   });
 
