@@ -40,6 +40,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** Cartographer drafts sometimes emit layoutVersion strings in revision. */
+function coerceKacRevision(value: unknown): number {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) return value;
+  if (typeof value === "string") {
+    const parsed = Number.parseInt(value, 10);
+    if (Number.isInteger(parsed) && parsed > 0) return parsed;
+  }
+  return 1;
+}
+
+/** Zod expects full ISO datetimes; KAC exports may be date-only or offset-local. */
+function coerceKacIsoDatetime(value: unknown, fallback: string): string {
+  if (typeof value !== "string" || !value.trim()) return fallback;
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return `${trimmed}T00:00:00.000Z`;
+  }
+  const ms = Date.parse(trimmed);
+  if (!Number.isFinite(ms)) return fallback;
+  return new Date(ms).toISOString();
+}
+
 function stripLayoutExtras(layout: KacCompilerLayout): Pick<
   KacCompilerLayout,
   "iata" | "name" | "layoutVersion" | "updatedAt" | "center" | "zones"
@@ -171,6 +193,21 @@ function buildGateNodeResolver(nodes: GraphNode[], rawNodes: KacCompilerNode[]):
   return resolver;
 }
 
+function mergeGateResolverEntries(
+  fromLabels: AirportLayout["gateNodeResolver"],
+  fromCompiler: AirportLayout["gateNodeResolver"] | undefined,
+): AirportLayout["gateNodeResolver"] {
+  const byPrefix = new Map<string, { prefix: string; nodeId: string }>();
+  for (const entry of fromCompiler ?? []) {
+    byPrefix.set(entry.prefix.toUpperCase(), { prefix: entry.prefix, nodeId: entry.nodeId });
+  }
+  for (const entry of fromLabels) {
+    const key = entry.prefix.toUpperCase();
+    if (!byPrefix.has(key)) byPrefix.set(key, entry);
+  }
+  return [...byPrefix.values()].sort((a, b) => b.prefix.length - a.prefix.length);
+}
+
 function adaptLayout(rawLayout: KacCompilerLayout): AirportLayout {
   const shell = stripLayoutExtras(rawLayout);
   const normalized = rawLayout.nodes.map(normalizeNode);
@@ -179,7 +216,10 @@ function adaptLayout(rawLayout: KacCompilerLayout): AirportLayout {
 
   const edges = rawLayout.edges.map((edge) => completeEdge(edge, nodeById));
   const pois = normalized.map(({ node, meta }) => buildPoiFromNode(node, meta));
-  const gateNodeResolver = buildGateNodeResolver(nodes, rawLayout.nodes);
+  const gateNodeResolver = mergeGateResolverEntries(
+    buildGateNodeResolver(nodes, rawLayout.nodes),
+    rawLayout.gateNodeResolver,
+  );
 
   return {
     iata: shell.iata,
@@ -212,17 +252,23 @@ export function adaptKacCompilerJson(raw: unknown): AirportLayoutPackage {
 
   const layout = adaptLayout(pkg.layout as KacCompilerLayout);
   const source = pkg.source ?? DEFAULT_KAC_SOURCE;
+  const layoutUpdatedAt = coerceKacIsoDatetime(
+    (pkg.layout as KacCompilerLayout).updatedAt,
+    "2026-08-23T00:00:00.000Z",
+  );
+  const createdAt = coerceKacIsoDatetime(pkg.createdAt, layoutUpdatedAt);
+  const updatedAt = coerceKacIsoDatetime(pkg.updatedAt, layoutUpdatedAt);
 
   return parseAirportLayoutPackage({
     schemaVersion: 1,
     iata: pkg.iata,
-    revision: pkg.revision,
+    revision: coerceKacRevision(pkg.revision),
     status: pkg.status ?? "draft",
     layout,
     source,
     precisionGrade: pkg.precisionGrade ?? "schematic",
-    createdAt: pkg.createdAt,
-    updatedAt: pkg.updatedAt,
+    createdAt,
+    updatedAt,
     publishedAt: pkg.publishedAt ?? null,
   });
 }
