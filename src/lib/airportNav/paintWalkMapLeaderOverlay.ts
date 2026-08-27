@@ -59,14 +59,23 @@ export function paintWalkMapLeaderOverlay(
   svg.style.cssText = "position:absolute;inset:0;pointer-events:none;overflow:visible;";
 
   for (const box of boxes) {
+    const pinDot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    pinDot.setAttribute("cx", String(box.pinX));
+    pinDot.setAttribute("cy", String(box.pinY));
+    pinDot.setAttribute("r", "3.5");
+    pinDot.setAttribute("fill", "#0f172a");
+    pinDot.setAttribute("stroke", "#ffffff");
+    pinDot.setAttribute("stroke-width", "1.25");
+    svg.appendChild(pinDot);
+
     const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
     line.setAttribute(
       "points",
       `${box.pinX},${box.pinY} ${box.elbowX},${box.elbowY} ${box.x + box.width / 2},${box.y + box.height / 2}`,
     );
     line.setAttribute("fill", "none");
-    line.setAttribute("stroke", box.strokeColor);
-    line.setAttribute("stroke-width", "2");
+    line.setAttribute("stroke", "#475569");
+    line.setAttribute("stroke-width", "1.25");
     line.setAttribute("stroke-linecap", "round");
     line.setAttribute("stroke-linejoin", "round");
     svg.appendChild(line);
@@ -76,19 +85,19 @@ export function paintWalkMapLeaderOverlay(
     fo.setAttribute("y", String(box.y));
     fo.setAttribute("width", String(box.width));
     fo.setAttribute("height", String(box.height));
-    const pill = document.createElement("div");
-    pill.textContent = box.text;
-    pill.style.cssText = [
+    const label = document.createElement("div");
+    label.textContent = box.text;
+    label.style.cssText = [
       "display:flex;align-items:center;justify-content:center;",
-      "width:100%;height:100%;padding:0 8px;",
-      "border-radius:9999px;background:#ffffff;",
-      "border:1.5px solid rgba(15,23,42,0.14);",
-      "box-shadow:0 2px 10px rgba(15,23,42,0.2);",
-      "font:700 11px system-ui,-apple-system,sans-serif;",
+      "width:100%;height:100%;padding:0 10px;",
+      "border-radius:4px;background:#f5f0e6;",
+      "border:1px solid rgba(71,85,105,0.35);",
+      "box-shadow:0 1px 4px rgba(15,23,42,0.12);",
+      "font:600 11px system-ui,-apple-system,sans-serif;",
       "color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
       "pointer-events:none;",
     ].join("");
-    fo.appendChild(pill);
+    fo.appendChild(label);
     svg.appendChild(fo);
   }
 

@@ -2518,9 +2518,10 @@ export function AirportNavigatorMap({
         if (!pos) continue;
 
         const isSelected = selectedId !== null && poi.id === selectedId;
-        const isGateBubble =
+        const isGateBubble = Boolean(
           (gatePoi !== null && poi.id === gatePoi.id) ||
-          (bookedGate?.exactDoor && poi.nodeId === bookedGate.nodeId);
+          (bookedGate?.exactDoor && poi.nodeId === bookedGate.nodeId),
+        );
         const isJourney = journeyPoiIdSet.has(poi.id);
         const isCurbDropoff =
           poi.id.startsWith("poi-dropoff-") ||
@@ -2630,9 +2631,10 @@ export function AirportNavigatorMap({
         if (!pos) continue;
 
         const isSelected = selectedId !== null && poi.id === selectedId;
-        const isGateBubble =
+        const isGateBubble = Boolean(
           (gatePoi !== null && poi.id === gatePoi.id) ||
-          (bookedGate?.exactDoor && poi.nodeId === bookedGate.nodeId);
+          (bookedGate?.exactDoor && poi.nodeId === bookedGate.nodeId),
+        );
         const isJourney = journeyPoiIdSet.has(poi.id);
         const isCurbDropoff =
           poi.id.startsWith("poi-dropoff-") ||
