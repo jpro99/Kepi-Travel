@@ -269,6 +269,7 @@ export function SupportChat() {
         </section>
       ) : null}
 
+      {!walkSheetOpen ? (
       <button
         type="button"
         aria-label={bubbleLabel}
@@ -276,9 +277,7 @@ export function SupportChat() {
           setUnreadCount(0);
           setIsOpen(true);
         }}
-        className={`fixed right-4 z-[110] kepi-fixed-above-tab-bar inline-flex h-14 w-14 items-center justify-center rounded-full bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-900/30 transition hover:bg-cyan-400 md:right-6 ${
-          walkSheetOpen ? "pointer-events-none translate-y-4 opacity-0" : ""
-        }`}
+        className="fixed right-4 z-[110] kepi-fixed-above-tab-bar inline-flex h-14 w-14 items-center justify-center rounded-full bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-900/30 transition hover:bg-cyan-400 md:right-6"
       >
         <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.8">
           <path d="M4 6.5C4 5.12 5.12 4 6.5 4h11C18.88 4 20 5.12 20 6.5v7c0 1.38-1.12 2.5-2.5 2.5H10l-4.2 3.6c-.66.56-1.8.1-1.8-.77V6.5Z" />
@@ -289,6 +288,7 @@ export function SupportChat() {
           </span>
         ) : null}
       </button>
+      ) : null}
     </>
   );
 }

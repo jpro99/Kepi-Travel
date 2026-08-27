@@ -91,6 +91,20 @@ function parseGateLabel(node: GraphNode): string | null {
   return null;
 }
 
+function parseSeaCompilerIdLabel(node: GraphNode): string | null {
+  const hub = node.id.match(/:hub:([A-Z])$/i);
+  if (hub) return `Concourse ${hub[1]!.toUpperCase()} cluster`;
+  const train = node.id.match(/:train:([A-Z])$/i);
+  if (train) return `${train[1]!.toUpperCase()} station — SEA Underground`;
+  if (/:node:curb:central/i.test(node.id)) return "Departures curb";
+  if (/:node:bag:domestic/i.test(node.id)) return "Domestic baggage claim";
+  if (/:node:iaf:customs/i.test(node.id)) return "International arrivals — passport";
+  if (/:node:iaf:exit/i.test(node.id)) return "IAF meeting point / exit";
+  if (/:node:iaf:hall/i.test(node.id)) return "International arrivals hall";
+  if (/:node:iaf:sterile/i.test(node.id)) return "International arrivals corridor";
+  return null;
+}
+
 /** Human label for a graph node (route instructions, landmarks). */
 export function resolveNodeDisplayName(node: GraphNode | undefined | null): string | null {
   if (!node) return null;
@@ -98,6 +112,8 @@ export function resolveNodeDisplayName(node: GraphNode | undefined | null): stri
   if (landmark && !isRawGraphLabel(landmark)) return landmark;
   const gate = parseGateLabel(node);
   if (gate) return gate;
+  const compiler = parseSeaCompilerIdLabel(node);
+  if (compiler) return compiler;
   return roleFallbackFromNode(node);
 }
 
@@ -119,8 +135,37 @@ export function resolvePoiDisplayName(
   const gate = node ? parseGateLabel(node) : null;
   if (gate) return gate;
 
+  const fromId = parseSeaCompilerIdLabel({
+    id: poi.nodeId,
+    pos: [0, 0],
+    kind: "junction",
+    airside: false,
+  });
+  if (fromId) return fromId;
+
   const fromRole = roleFallbackFromCategory(poi.category, poi.id);
   if (fromRole) return fromRole;
 
   return "Destination";
+}
+
+/**
+ * Belt-and-suspenders: fix POI names + node landmarks on any layout payload
+ * (bundled, Redis-published, or IndexedDB-cached) before traveler UI renders.
+ */
+export function normalizeTravelerFacingLabels(layout: AirportLayout): AirportLayout {
+  const nodes = layout.nodes.map((node) => {
+    const landmark = node.landmark?.trim();
+    if (landmark && !isRawGraphLabel(landmark)) return node;
+    const resolved = resolveNodeDisplayName(node);
+    return resolved ? { ...node, landmark: resolved } : node;
+  });
+
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const pois = layout.pois.map((poi) => ({
+    ...poi,
+    name: resolvePoiDisplayName(poi, { nodes }),
+  }));
+
+  return { ...layout, nodes, pois };
 }

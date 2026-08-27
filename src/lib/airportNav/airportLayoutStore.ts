@@ -14,6 +14,7 @@ import {
   type AirportLayoutPreviewConfirmation,
 } from "@/lib/airportNav/airportLayoutPackage";
 import type { AirportLayout } from "@/lib/airportNav/types";
+import { normalizeTravelerFacingLabels } from "@/lib/airportNav/poiDisplayName";
 import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 
 const AIRPORT_LAYOUT_NAMESPACE = "__global_airport_layouts__";
@@ -231,6 +232,7 @@ export async function resolvePublishedAirportLayout(inputIata: string): Promise<
   const iata = normalizeIata(inputIata);
   const stored = await getStoredAirportLayoutPackage(iata, "published");
   const bundled = getAirportLayout(iata);
+  const bundledNormalized = bundled ? normalizeTravelerFacingLabels(bundled) : null;
 
   if (stored) {
     // A published package our own seed path created must never pin outdated
@@ -240,36 +242,42 @@ export async function resolvePublishedAirportLayout(inputIata: string): Promise<
     // fix without a manual admin republish (KEPI_DESIGN_LAW M25). This is exactly
     // why the SEA check-in/security fix never reached the live map: the source
     // edit changed the bundle, but Redis kept serving the old seeded revision.
-    if (bundled && isSeedOriginatedPackage(stored, iata)) {
-      if (stored.layout.layoutVersion !== bundled.layoutVersion) {
-        const reseeded = await saveAirportLayoutPackage(bundled, bundledSource(iata), {
+    if (bundledNormalized && isSeedOriginatedPackage(stored, iata)) {
+      if (stored.layout.layoutVersion !== bundledNormalized.layoutVersion) {
+        const reseeded = await saveAirportLayoutPackage(bundledNormalized, bundledSource(iata), {
           status: "published",
           previewConfirmation: { by: SEED_PREVIEW_CONFIRMER },
         });
-        return { layout: reseeded.layout, package: reseeded, source: "bundled" };
+        return {
+          layout: normalizeTravelerFacingLabels(reseeded.layout),
+          package: reseeded,
+          source: "bundled",
+        };
       }
-      return { layout: bundled, package: stored, source: "bundled" };
+      return { layout: bundledNormalized, package: stored, source: "bundled" };
     }
-    if (bundled && isSeedOriginatedPackage(stored, iata)) {
-      // Seed-originated Redis records are bookkeeping only — live traffic must
-      // always read the compiled bundle (including KAC overlays) with source
-      // "bundled", even when layoutVersion already matches the stored revision.
-      return { layout: bundled, package: stored, source: "bundled" };
-    }
-    return { layout: stored.layout, package: stored, source: "database" };
+    return {
+      layout: normalizeTravelerFacingLabels(stored.layout),
+      package: stored,
+      source: "database",
+    };
   }
 
-  if (!bundled) return { layout: null, package: null, source: "none" };
+  if (!bundledNormalized) return { layout: null, package: null, source: "none" };
 
   const draft = await getStoredAirportLayoutPackage(iata, "draft");
   if (draft) {
-    return { layout: bundled, package: null, source: "bundled" };
+    return { layout: bundledNormalized, package: null, source: "bundled" };
   }
 
-  const seeded = await saveAirportLayoutPackage(bundled, bundledSource(iata), {
+  const seeded = await saveAirportLayoutPackage(bundledNormalized, bundledSource(iata), {
     status: "published",
     // Compiled seed layouts are human-reviewed in code; they self-confirm the preview gate.
     previewConfirmation: { by: SEED_PREVIEW_CONFIRMER },
   });
-  return { layout: seeded.layout, package: seeded, source: "bundled" };
+  return {
+    layout: normalizeTravelerFacingLabels(seeded.layout),
+    package: seeded,
+    source: "bundled",
+  };
 }

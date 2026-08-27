@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { isRawGraphLabel, resolveNodeDisplayName, resolvePoiDisplayName } from "./poiDisplayName";
+import { isRawGraphLabel, normalizeTravelerFacingLabels, resolveNodeDisplayName, resolvePoiDisplayName } from "./poiDisplayName";
 import type { GraphNode, PoiDefinition } from "./types";
 
 test("isRawGraphLabel flags internal ids Walker saw on SEA", () => {
@@ -97,13 +97,80 @@ test("resolveNodeDisplayName never returns raw graph ids", () => {
   assert.equal(resolveNodeDisplayName(node), "Domestic baggage claim");
 });
 
+test("normalizeTravelerFacingLabels repairs cached Redis/IndexedDB layouts with raw ids", () => {
+  const badLayout = {
+    iata: "SEA",
+    name: "SEA",
+    layoutVersion: "old",
+    updatedAt: "2026-08-27",
+    center: [-122.3018, 47.4434] as [number, number],
+    zones: [],
+    nodes: [
+      {
+        id: "SEA:node:hub:C",
+        pos: [-122.3038079, 47.4455391] as [number, number],
+        kind: "junction" as const,
+        airside: true,
+      },
+      {
+        id: "SEA:node:train:D",
+        pos: [-122.301144, 47.4449672] as [number, number],
+        kind: "train_platform" as const,
+        airside: true,
+      },
+      {
+        id: "SEA:node:curb:central",
+        pos: [-122.2975388, 47.4425006] as [number, number],
+        kind: "junction" as const,
+        airside: false,
+      },
+    ],
+    edges: [],
+    pois: [
+      {
+        id: "poi:SEA:node:hub:C",
+        nodeId: "SEA:node:hub:C",
+        category: "amenity" as const,
+        name: "SEA:node:hub:C",
+        precision: "schematic" as const,
+      },
+      {
+        id: "poi:SEA:node:bag:domestic",
+        nodeId: "SEA:node:bag:domestic",
+        category: "baggage" as const,
+        name: "SEA:node:bag:domestic",
+        precision: "schematic" as const,
+      },
+    ],
+    gateNodeResolver: [],
+    routeGrade: "schematic" as const,
+  };
+
+  const fixed = normalizeTravelerFacingLabels(badLayout);
+  assert.equal(fixed.pois.find((p) => p.nodeId === "SEA:node:hub:C")?.name, "Concourse C cluster");
+  assert.equal(fixed.pois.find((p) => p.nodeId === "SEA:node:bag:domestic")?.name, "Domestic baggage claim");
+  assert.ok(!fixed.pois.some((p) => isRawGraphLabel(p.name)));
+});
+
 test("resolvePoiDisplayName falls back to role words when landmark missing", () => {
-  const poi: PoiDefinition = {
+  const customsPoi: PoiDefinition = {
     id: "poi:SEA:node:iaf:customs",
     nodeId: "SEA:node:iaf:customs",
     category: "customs",
     name: "SEA:node:iaf:customs",
     precision: "schematic",
   };
-  assert.equal(resolvePoiDisplayName(poi, { nodes: [] }), "Passport control");
+  assert.equal(
+    resolvePoiDisplayName(customsPoi, { nodes: [] }),
+    "International arrivals — passport",
+  );
+
+  const genericPoi: PoiDefinition = {
+    id: "poi:customs-unknown",
+    nodeId: "customs-unknown",
+    category: "customs",
+    name: "customs-unknown",
+    precision: "schematic",
+  };
+  assert.equal(resolvePoiDisplayName(genericPoi, { nodes: [] }), "Customs");
 });

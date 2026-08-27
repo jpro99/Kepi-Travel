@@ -30,7 +30,7 @@ import { AirportArrivalFirstMileChrome } from "@/components/travelAssistant/Airp
 import { poiMinZoom, airlineLogoAsset } from "@/lib/airportNav/poiDetail";
 import { SECURITY_APPROX_DISCLAIMER } from "@/lib/airportNav/securityDisclosure";
 import { poiLocationHonestyTag } from "@/lib/airportNav/poiPrecisionHonesty";
-import { resolvePoiDisplayName } from "@/lib/airportNav/poiDisplayName";
+import { normalizeTravelerFacingLabels, resolvePoiDisplayName } from "@/lib/airportNav/poiDisplayName";
 import { setAirportWalkSheetOpen } from "@/lib/airportNav/airportWalkSheet";
 import { computeDirectionArrow, confirmedSnappedPosition } from "@/lib/airportNav/directionArrow";
 import { computeLayoutBounds, computeLandsideBounds } from "@/lib/airportNav/layoutBounds";
@@ -1390,7 +1390,7 @@ export function AirportNavigatorMap({
     let cancelled = false;
     // Admin verify / click-to-place: render the in-memory package, skip network.
     if (layoutOverride) {
-      setLayout(layoutOverride);
+      setLayout(normalizeTravelerFacingLabels(layoutOverride));
       setLayoutStatus("ready");
       return;
     }
@@ -1399,7 +1399,7 @@ export function AirportNavigatorMap({
     void (async () => {
       const cached = await loadCachedAirportLayout(iata);
       if (cached && !cancelled) {
-        setLayout(cached);
+        setLayout(normalizeTravelerFacingLabels(cached));
         setLayoutStatus("ready");
       }
       try {
@@ -1411,18 +1411,19 @@ export function AirportNavigatorMap({
         if (!res.ok) throw new Error(String(res.status));
         const data = (await res.json()) as AirportLayout;
         if (!cancelled) {
-          setLayout(data);
+          const normalized = normalizeTravelerFacingLabels(data);
+          setLayout(normalized);
           setLayoutStatus("ready");
           void saveAirportLayoutToOfflineCache({
             tripId: "airport-nav",
-            layout: data,
+            layout: normalized,
           });
         }
       } catch {
         const fallback = await loadCachedAirportLayout(iata);
         if (!cancelled) {
           if (fallback) {
-            setLayout(fallback);
+            setLayout(normalizeTravelerFacingLabels(fallback));
             setLayoutStatus("ready");
           } else {
             setLayoutStatus("error");
