@@ -3,10 +3,12 @@ import { test } from "node:test";
 
 import {
   isDirectoryClutterPoi,
+  isUnroutedGateReferencePoi,
   shouldRenderWalkMapPin,
   shouldShowLeaderLineLabel,
   type WalkMapPinContext,
 } from "./poiMapWalkPolicy";
+import { resolveLeaderLabelCollisions } from "./poiMapLeaderLine";
 import type { PoiDefinition } from "./types";
 
 const baseCtx = (overrides: Partial<WalkMapPinContext> = {}): WalkMapPinContext => ({
@@ -31,10 +33,10 @@ test("shop/food OSM directory POIs are clutter — never walk-map pins", () => {
     notes: "OSM node/123",
   };
   assert.ok(isDirectoryClutterPoi(starbucks));
-  assert.equal(shouldRenderWalkMapPin(starbucks), false);
+  assert.equal(shouldRenderWalkMapPin(starbucks, baseCtx()), false);
 });
 
-test("KAC gate reference pins are walk context, not directory clutter", () => {
+test("KAC gate reference pins are not directory clutter but do not render unless booked/selected", () => {
   const gate: PoiDefinition = {
     id: "SEA:poi:gate:C11",
     nodeId: "SEA:node:gate:C11",
@@ -43,13 +45,13 @@ test("KAC gate reference pins are walk context, not directory clutter", () => {
     precision: "schematic",
     notes: "Approximate OSM gate door-ref — unrouted reference pin.",
   };
-  assert.equal(isDirectoryClutterPoi(gate), false);
-  assert.equal(shouldRenderWalkMapPin(gate), true);
-  assert.equal(shouldShowLeaderLineLabel(gate, baseCtx()), false);
-  assert.equal(shouldShowLeaderLineLabel(gate, baseCtx({ isSelected: true })), true);
+  assert.ok(isUnroutedGateReferencePoi(gate));
+  assert.equal(shouldRenderWalkMapPin(gate, baseCtx()), false);
+  assert.equal(shouldRenderWalkMapPin(gate, baseCtx({ isGateBubble: true, isReference: false })), true);
+  assert.equal(shouldShowLeaderLineLabel(gate, baseCtx({ isGateBubble: true, isReference: false })), true);
 });
 
-test("emphatic journey stops get leader-line labels; reference dots do not", () => {
+test("journey security gets a leader label; idle security does not", () => {
   const security: PoiDefinition = {
     id: "poi-sec3",
     nodeId: "sec3-entry",
@@ -61,8 +63,41 @@ test("emphatic journey stops get leader-line labels; reference dots do not", () 
     shouldShowLeaderLineLabel(security, baseCtx({ isJourney: true, isReference: false, isSecurity: true })),
     true,
   );
-  assert.equal(
-    shouldShowLeaderLineLabel(security, baseCtx({ isReference: true, isSecurity: true })),
-    false,
+  assert.equal(shouldRenderWalkMapPin(security, baseCtx({ isReference: true, isSecurity: true })), false);
+});
+
+test("resolveLeaderLabelCollisions nudges overlapping labels apart", () => {
+  const boxes = resolveLeaderLabelCollisions(
+    [
+      {
+        id: "a",
+        priority: 90,
+        pinX: 100,
+        pinY: 100,
+        x: 120,
+        y: 80,
+        width: 80,
+        height: 28,
+        elbowX: 110,
+        elbowY: 95,
+      },
+      {
+        id: "b",
+        priority: 80,
+        pinX: 105,
+        pinY: 102,
+        x: 125,
+        y: 82,
+        width: 80,
+        height: 28,
+        elbowX: 115,
+        elbowY: 97,
+      },
+    ],
+    400,
+    400,
   );
+  const a = boxes.find((b) => b.id === "a")!;
+  const b = boxes.find((box) => box.id === "b")!;
+  assert.ok(Math.abs(a.y - b.y) > 8 || Math.abs(a.x - b.x) > 8, "labels should separate");
 });
