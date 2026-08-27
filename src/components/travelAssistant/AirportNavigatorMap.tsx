@@ -2911,9 +2911,13 @@ export function AirportNavigatorMap({
   const nextInstruction = activeRoute?.instructions[Math.min(currentStepIdx, Math.max(0, (activeRoute?.instructions.length ?? 1) - 1))] ?? null;
   const securityQuestionOpen = pendingPoiId !== null && !credentials.known;
   const arrivalChromeClearance = arrivalFirstMile
-    ? activeRoute
-      ? `calc(${bottomPanel} + 22rem)`
-      : `calc(${bottomPanel} + 14rem)`
+    ? embeddedInLiveMap
+      ? activeRoute
+        ? `calc(${bottomPanel} + 9rem)`
+        : `calc(${bottomPanel} + 4.5rem)`
+      : activeRoute
+        ? `calc(${bottomPanel} + 22rem)`
+        : `calc(${bottomPanel} + 14rem)`
     : bottomPanel;
 
   return (
@@ -3028,8 +3032,8 @@ export function AirportNavigatorMap({
         </div>
       ) : null}
 
-      {/* Arrival card stack — four swipe cards above PR #95 first-mile chrome. */}
-      {isArriveCoach && arrivalCoachCards.length > 0 ? (
+      {/* Arrival card stack stays off embedded Live Map — Passport/Next: Bags must not blanket runways. */}
+      {!embeddedInLiveMap && isArriveCoach && arrivalCoachCards.length > 0 ? (
         <div
           className="pointer-events-none absolute inset-x-3 z-[35]"
           style={{ top: arrivalCardStackTop }}
@@ -3096,6 +3100,7 @@ export function AirportNavigatorMap({
           previewMode={previewMode}
           preciseRouteEnabled={preciseRouteEnabled}
           iata={iata}
+          mapFirst={embeddedInLiveMap}
         />
       ) : null}
 

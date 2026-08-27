@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { resolvePoiDisplayName } from "@/lib/airportNav/poiDisplayName";
 import type { AirportLayout, ComputedRoute } from "@/lib/airportNav/types";
 import { computeRoute } from "@/lib/airportNav/pathfinder";
@@ -69,13 +69,14 @@ interface AirportArrivalFirstMileChromeProps {
   previewMode?: boolean;
   preciseRouteEnabled?: boolean;
   iata: string;
+  /** Live map shell: coach opens in a dismissible sheet so Leonardo rail stays visible. */
+  mapFirst?: boolean;
 }
 
 export function AirportArrivalFirstMileChrome({
   layout,
   arrivalJourney,
   originNodeId,
-  pathSteps,
   visiblePathSteps,
   hiddenCount,
   fullDayView,
@@ -94,7 +95,10 @@ export function AirportArrivalFirstMileChrome({
   previewMode = false,
   preciseRouteEnabled = false,
   iata,
+  mapFirst = false,
 }: AirportArrivalFirstMileChromeProps) {
+  const [coachOpen, setCoachOpen] = useState(false);
+
   const chipStops = useMemo(
     () =>
       arrivalJourney.filter(
@@ -116,87 +120,138 @@ export function AirportArrivalFirstMileChrome({
   }, [chipStops, layout, originNodeId]);
 
   const chipsBottom = `calc(${bottomInset} + 0.25rem)`;
-  const routeSheetBottom = `calc(${bottomInset} + 5.25rem)`;
+  const routeSheetBottom = mapFirst
+    ? `calc(${bottomInset} + 5.25rem)`
+    : activeRoute
+      ? `calc(${bottomInset} + 13.5rem)`
+      : `calc(${bottomInset} + 5.25rem)`;
   const coachBottom = activeRoute
     ? `calc(${bottomInset} + 13.5rem)`
     : `calc(${bottomInset} + 0.5rem)`;
+  const coachToggleBottom = activeRoute
+    ? `calc(${bottomInset} + 9.75rem)`
+    : `calc(${bottomInset} + 4.75rem)`;
+  const coachSheetBottom = activeRoute
+    ? `calc(${bottomInset} + 9.75rem)`
+    : `calc(${bottomInset} + 4.75rem)`;
+
+  const coachBody = (
+    <>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-sky-200">
+          Arrival coach
+        </p>
+        <button
+          type="button"
+          data-testid="airport-arrival-day-view-toggle"
+          onClick={onToggleFullDayView}
+          className="shrink-0 rounded-lg border border-sky-400/30 bg-transparent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-200/90 active:opacity-80"
+        >
+          {fullDayView ? "Coach view" : "Full day view"}
+        </button>
+      </div>
+
+      {nextUp ? (
+        <div className="mt-1.5" data-testid="airport-arrival-next-up">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-sky-300/90">Next up</p>
+          <p className="text-[15px] font-black leading-tight text-white">{nextUp.text}</p>
+          {nextUp.detail ? (
+            <p className="mt-0.5 text-[12px] leading-snug text-sky-100/85">{nextUp.detail}</p>
+          ) : null}
+          {nextUp.minutes != null && nextUp.minutes > 0 ? (
+            <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-300/80">
+              ~{nextUp.minutes} min walk
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      <ol className="mt-2 space-y-1.5">
+        {visiblePathSteps.map((step, index) => (
+          <li
+            key={step.id}
+            className={`flex gap-2 rounded-xl px-2.5 py-2 ${
+              index === 0 && !fullDayView ? "bg-sky-500/20 ring-1 ring-sky-400/25" : "bg-white/5"
+            }`}
+          >
+            <span className="text-base" aria-hidden>{step.icon}</span>
+            <div className="min-w-0">
+              <p className="text-[13px] font-semibold leading-snug text-white">{step.text}</p>
+              {step.detail ? (
+                <p className="text-[11px] leading-snug text-sky-100/75">{step.detail}</p>
+              ) : null}
+              {step.minutes != null && step.minutes > 0 ? (
+                <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-300/80">
+                  ~{step.minutes} min
+                </p>
+              ) : null}
+            </div>
+          </li>
+        ))}
+        {hiddenCount > 0 ? (
+          <li className="rounded-xl border border-sky-400/20 bg-sky-500/10 px-2.5 py-2 text-[11px] font-semibold text-sky-100/85">
+            {hiddenCount} more step{hiddenCount === 1 ? "" : "s"} · tap Full day view
+          </li>
+        ) : null}
+      </ol>
+
+      {arrivalTransportOptions.length > 0 ? (
+        <div className="mt-2 [&_section]:border-0 [&_section]:bg-transparent [&_section]:px-0 [&_section]:py-0">
+          <ArrivalTransportOptionsCard
+            options={arrivalTransportOptions}
+            uberUrl={uberUrl}
+            hotelLabel={hotelLabel}
+            scheduleNote={scheduleNote}
+          />
+        </div>
+      ) : null}
+    </>
+  );
 
   return (
     <>
-      <div
-        data-testid="airport-arrival-first-mile-coach"
-        className="pointer-events-auto absolute inset-x-3 z-[55] max-h-[38dvh] overflow-y-auto overscroll-contain rounded-2xl border border-sky-400/30 bg-sky-950/88 px-3 py-2.5 shadow-2xl backdrop-blur-md touch-pan-y [-webkit-overflow-scrolling:touch]"
-        style={{ bottom: coachBottom }}
-      >
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-sky-200">
-            Arrival coach
-          </p>
+      {mapFirst ? (
+        coachOpen ? (
+          <div
+            data-testid="airport-arrival-first-mile-coach"
+            className="pointer-events-auto absolute inset-x-3 z-[55] max-h-[32dvh] overflow-y-auto overscroll-contain rounded-2xl border border-sky-400/30 bg-sky-950/92 px-3 py-2.5 shadow-2xl backdrop-blur-md touch-pan-y [-webkit-overflow-scrolling:touch]"
+            style={{ bottom: coachSheetBottom }}
+          >
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-sky-200/90">
+                Arrival steps &amp; rail
+              </p>
+              <button
+                type="button"
+                data-testid="airport-arrival-coach-close"
+                onClick={() => setCoachOpen(false)}
+                className="min-h-[44px] shrink-0 rounded-2xl bg-white/10 px-3 text-[13px] font-bold text-white"
+              >
+                Close
+              </button>
+            </div>
+            {coachBody}
+          </div>
+        ) : (
           <button
             type="button"
-            data-testid="airport-arrival-day-view-toggle"
-            onClick={onToggleFullDayView}
-            className="shrink-0 rounded-lg border border-sky-400/30 bg-transparent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-200/90 active:opacity-80"
+            data-testid="airport-arrival-coach-open"
+            onClick={() => setCoachOpen(true)}
+            className="pointer-events-auto absolute left-3 z-[55] min-h-[44px] rounded-full bg-black/60 px-4 py-2.5 text-[13px] font-bold text-white shadow-lg backdrop-blur-md ring-1 ring-white/15 active:scale-[0.98]"
+            style={{ bottom: coachToggleBottom }}
           >
-            {fullDayView ? "Coach view" : "Full day view"}
+            Arrival coach
           </button>
+        )
+      ) : (
+        <div
+          data-testid="airport-arrival-first-mile-coach"
+          className="pointer-events-auto absolute inset-x-3 z-[55] max-h-[38dvh] overflow-y-auto overscroll-contain rounded-2xl border border-sky-400/30 bg-sky-950/88 px-3 py-2.5 shadow-2xl backdrop-blur-md touch-pan-y [-webkit-overflow-scrolling:touch]"
+          style={{ bottom: coachBottom }}
+        >
+          {coachBody}
         </div>
-
-        {nextUp ? (
-          <div className="mt-1.5" data-testid="airport-arrival-next-up">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-sky-300/90">Next up</p>
-            <p className="text-[15px] font-black leading-tight text-white">{nextUp.text}</p>
-            {nextUp.detail ? (
-              <p className="mt-0.5 text-[12px] leading-snug text-sky-100/85">{nextUp.detail}</p>
-            ) : null}
-            {nextUp.minutes != null && nextUp.minutes > 0 ? (
-              <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-300/80">
-                ~{nextUp.minutes} min walk
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-
-        <ol className="mt-2 space-y-1.5">
-          {visiblePathSteps.map((step, index) => (
-            <li
-              key={step.id}
-              className={`flex gap-2 rounded-xl px-2.5 py-2 ${
-                index === 0 && !fullDayView ? "bg-sky-500/20 ring-1 ring-sky-400/25" : "bg-white/5"
-              }`}
-            >
-              <span className="text-base" aria-hidden>{step.icon}</span>
-              <div className="min-w-0">
-                <p className="text-[13px] font-semibold leading-snug text-white">{step.text}</p>
-                {step.detail ? (
-                  <p className="text-[11px] leading-snug text-sky-100/75">{step.detail}</p>
-                ) : null}
-                {step.minutes != null && step.minutes > 0 ? (
-                  <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-300/80">
-                    ~{step.minutes} min
-                  </p>
-                ) : null}
-              </div>
-            </li>
-          ))}
-          {hiddenCount > 0 ? (
-            <li className="rounded-xl border border-sky-400/20 bg-sky-500/10 px-2.5 py-2 text-[11px] font-semibold text-sky-100/85">
-              {hiddenCount} more step{hiddenCount === 1 ? "" : "s"} · tap Full day view
-            </li>
-          ) : null}
-        </ol>
-
-        {arrivalTransportOptions.length > 0 ? (
-          <div className="mt-2 [&_section]:border-0 [&_section]:bg-transparent [&_section]:px-0 [&_section]:py-0">
-            <ArrivalTransportOptionsCard
-              options={arrivalTransportOptions}
-              uberUrl={uberUrl}
-              hotelLabel={hotelLabel}
-              scheduleNote={scheduleNote}
-            />
-          </div>
-        ) : null}
-      </div>
+      )}
 
       {activeRoute && activeDestName ? (
         <section

@@ -25,10 +25,7 @@ export function ArrivalTransportOptionsCard({
       data-testid="arrival-transport-options"
       className="rounded-2xl border border-sky-400/25 bg-sky-500/10 px-4 py-3"
     >
-      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-200">
-        First mile · {hotelLabel?.trim() ? `then ${hotelLabel.trim()}` : "city center"}
-      </p>
-      <p className="mt-1 text-lg font-black text-white">{primary.label}</p>
+      <p className="text-lg font-black text-white">{primary.label}</p>
       <p className="mt-1 text-sm text-sky-100/85">{primary.detail}</p>
       {scheduleNote ? (
         <p
