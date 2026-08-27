@@ -21,12 +21,12 @@ test("AirportNavigatorMap does not mount GateConfidenceBar on the live map", () 
   );
   assert.match(
     src,
-    /!embeddedInLiveMap && isArriveCoach && arrivalCoachCards/s,
+    /!embeddedInLiveMap && isArriveCoach && arrivalCoachCards/,
     "Arrival Passport/Next: Bags card stack must stay off embedded Live Map.",
   );
   assert.match(
     src,
-    /arrivalFirstMile \|\| embeddedInLiveMap/s,
+    /arrivalFirstMile \|\| embeddedInLiveMap/,
     "Live FCO arrival must use top/side destination rail instead of bottom chip deck.",
   );
   assert.match(src, /hideWhereToRail=\{embeddedInLiveMap\}/, "Bottom Where-to rail must hide on Live Map");
