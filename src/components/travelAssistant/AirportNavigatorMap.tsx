@@ -31,6 +31,8 @@ import { poiMinZoom, airlineLogoAsset } from "@/lib/airportNav/poiDetail";
 import { SECURITY_APPROX_DISCLAIMER } from "@/lib/airportNav/securityDisclosure";
 import { poiLocationHonestyTag } from "@/lib/airportNav/poiPrecisionHonesty";
 import { normalizeTravelerFacingLabels, resolvePoiDisplayName } from "@/lib/airportNav/poiDisplayName";
+import { isDirectoryClutterPoi, shouldRenderWalkMapPin, shouldShowLeaderLineLabel } from "@/lib/airportNav/poiMapWalkPolicy";
+import { computeLeaderLineLayout } from "@/lib/airportNav/poiMapLeaderLine";
 import { setAirportWalkSheetOpen } from "@/lib/airportNav/airportWalkSheet";
 import { computeDirectionArrow, confirmedSnappedPosition } from "@/lib/airportNav/directionArrow";
 import { computeLayoutBounds, computeLandsideBounds } from "@/lib/airportNav/layoutBounds";
@@ -404,6 +406,7 @@ function airportPoiIsVisible(
   zoom?: number,
   arrivalJourneyPoiIds?: Set<string>,
 ): boolean {
+  if (isDirectoryClutterPoi(definition)) return false;
   if (arrivalJourneyPoiIds?.size) {
     return arrivalJourneyPoiIds.has(definition.id);
   }
@@ -2513,8 +2516,11 @@ export function AirportNavigatorMap({
       poiMarkersRef.current = {};
 
       const nodePos = new Map(layout.nodes.map((node) => [node.id, node.pos]));
+      const hullZones = layout.zones.filter((zone) => zone.ring.length >= 4);
       const selectedId = selectedPoiId ?? activeRoute?.toPoiId ?? null;
+      const canvas = map.getCanvas();
       for (const poi of layout.pois) {
+        if (!shouldRenderWalkMapPin(poi)) continue;
         // Other airlines' check-in counters are NOT hidden — they are kept as
         // zoom-gated reference detail (M22) so zooming into the check-in hall
         // reveals every counter (Atrius-style), while the traveler's own counter
@@ -2562,13 +2568,20 @@ export function AirportNavigatorMap({
           poi.id.startsWith("poi-dropoff-") ||
           poi.id.includes(":node:curb:") ||
           poi.nodeId.includes(":node:curb:");
+        const isSecurity = poi.category === "security";
         const emphatic = isSelected || isGateBubble || isObjective || isJourney || matchesAirline || isCurbDropoff;
         const isReference = !emphatic;
-        // KEPI_DESIGN_LAW M32 — a security checkpoint has no public ground-truth
-        // coordinate anywhere, so it must NOT render as a sharp dot implying an
-        // exact spot. Draw a soft, fuzzy "approximate area" instead (same rule for
-        // every airport), and always keep its label so the "approx." tag shows.
-        const isSecurity = poi.category === "security";
+        const walkCtx = {
+          isSelected,
+          isGateBubble,
+          isJourney,
+          isObjective,
+          matchesAirline,
+          isCurbDropoff,
+          isReference,
+          isSecurity,
+        };
+        const showLeaderLabel = shouldShowLeaderLineLabel(poi, walkCtx);
 
         const dotColor = critical
           ? "#dc2626"
@@ -2582,26 +2595,27 @@ export function AirportNavigatorMap({
           ? "#9aa7b8"
           : POI_COLOR[poi.category];
         const dotSize = isSelected ? 15 : isReference ? 7 : 13;
+        const doorSuffix = poi.doorLabel ? ` · ${poi.doorLabel}` : "";
+        const honesty = poiLocationHonestyTag(poi);
+        const approxSuffix = honesty ? ` · ${honesty}` : "";
+        const displayText = `${gateLabel}${countdown}${accessMark}${laneSummary ? ` · ${laneSummary}` : ""}${doorSuffix}${approxSuffix}`;
 
         const bubble = document.createElement("button");
         bubble.type = "button";
         bubble.setAttribute("aria-label", `Navigate to ${resolvePoiDisplayName(poi, layout)}`);
         bubble.style.cssText = [
-          "display:flex;align-items:center;gap:5px;",
-          "background:transparent;border:none;padding:3px;cursor:pointer;",
-          "font:700 11px system-ui,-apple-system,sans-serif;white-space:nowrap;",
+          "position:relative;overflow:visible;border:none;padding:0;cursor:pointer;",
           "pointer-events:auto;touch-action:manipulation;",
+          showLeaderLabel ? "width:0;height:0;" : "display:flex;align-items:center;justify-content:center;",
           isSelected ? "z-index:6;" : isReference ? "z-index:1;opacity:0.72;" : "z-index:3;",
         ].join("");
 
         const dot = document.createElement("span");
         if (isSecurity) {
-          // Soft radial zone: point sits at the fuzzy area's left edge (anchor
-          // "left"), dashed ring + gradient fade communicate "approximate", never
-          // an exact pin. No pulse — this is a place to head toward, not a countdown.
           const zoneSize = isSelected ? 42 : isReference ? 28 : 36;
           dot.style.cssText = [
             `width:${zoneSize}px;height:${zoneSize}px;flex:none;border-radius:9999px;`,
+            showLeaderLabel ? "position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);" : "",
             "background:radial-gradient(circle,rgba(225,29,72,0.42) 0%,rgba(225,29,72,0.20) 52%,rgba(225,29,72,0) 78%);",
             "border:1.5px dashed rgba(225,29,72,0.7);",
             isSelected ? "outline:2px solid rgba(56,189,248,0.9);outline-offset:2px;" : "",
@@ -2609,76 +2623,82 @@ export function AirportNavigatorMap({
         } else {
           dot.style.cssText = [
             `width:${dotSize}px;height:${dotSize}px;flex:none;border-radius:9999px;`,
+            showLeaderLabel ? "position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);" : "",
             `background:${dotColor};border:2px solid #ffffff;`,
             isReference ? "box-shadow:0 1px 2px rgba(15,23,42,0.25);" : "box-shadow:0 1px 4px rgba(15,23,42,0.55);",
             isSelected ? "outline:3px solid rgba(56,189,248,0.95);outline-offset:1px;" : "",
             critical || urgent ? "animation:kepiPulse 1.6s ease-in-out infinite;" : "",
           ].join("");
         }
-
-        // De-clutter: reference POIs show a dot only, EXCEPT reference gates keep
-        // a faint concourse letter, and check-in counters + amenities always keep
-        // their name/logo — they're zoom-gated (M22) so they only appear once
-        // you're zoomed into the hall, and at that point the whole point is to
-        // read which airline / what amenity each counter is (owner: "put all of
-        // them on there"). Without this, every non-your-airline counter collapsed
-        // to a nameless grey dot and looked like nothing was there.
-        const labelledReference = poi.category === "gate" || poi.category === "checkin" || poi.category === "amenity";
-        // Security always keeps its label so the "· approx. area" tag (M32) is
-        // visible even when it's only a reference pin.
-        const showLabel = !isReference || labelledReference || isSecurity;
-        const showBrand = !isReference || poi.category === "checkin";
         bubble.appendChild(dot);
-        if (showLabel) {
-          // Airline branding on a real counter (M22): Duffel's brand-compliant
-          // logo (customer-licensed, resolved by IATA code), with a graceful
-          // onerror swap to a Kepi-generated IATA code chip so a logo Duffel
-          // lacks never shows a broken image or blocks the render.
+
+        if (showLeaderLabel) {
+          const projected = map.project(pos as [number, number]);
+          const leader = computeLeaderLineLayout(
+            canvas.width,
+            canvas.height,
+            projected,
+            displayText,
+            pos as [number, number],
+            hullZones,
+          );
+          const labelCx = leader.labelPx.x + leader.labelWidthPx / 2;
+          const labelCy = leader.labelPx.y + leader.labelHeightPx / 2;
+          const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          svg.setAttribute("width", "1");
+          svg.setAttribute("height", "1");
+          svg.style.cssText = "position:absolute;left:0;top:0;overflow:visible;pointer-events:none;";
+          const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+          line.setAttribute(
+            "points",
+            `0,0 ${leader.elbowPx.x},${leader.elbowPx.y} ${labelCx},${labelCy}`,
+          );
+          line.setAttribute("fill", "none");
+          line.setAttribute("stroke", dotColor);
+          line.setAttribute("stroke-width", "1.5");
+          line.setAttribute("stroke-linecap", "round");
+          line.setAttribute("stroke-linejoin", "round");
+          svg.appendChild(line);
+          bubble.appendChild(svg);
+
+          const labelBox = document.createElement("div");
+          labelBox.style.cssText = [
+            `position:absolute;left:${leader.labelPx.x}px;top:${leader.labelPx.y}px;`,
+            `width:${leader.labelWidthPx}px;height:${leader.labelHeightPx}px;`,
+            "display:flex;align-items:center;gap:4px;padding:2px 6px;",
+            "border-radius:9999px;background:#ffffff;border:1.5px solid rgba(15,23,42,0.12);",
+            "box-shadow:0 2px 8px rgba(15,23,42,0.18);",
+            "font:700 10px system-ui,-apple-system,sans-serif;white-space:nowrap;",
+            emphatic ? "color:#0f172a;font-weight:800;" : "color:#1f2937;font-weight:700;",
+          ].join("");
           const logoSrc = airlineLogoAsset(poi);
           const iataChip = poi.airlineIataCode?.toUpperCase();
-          const makeIataChip = () => {
-            const chip = document.createElement("span");
-            chip.textContent = iataChip ?? "";
-            chip.style.cssText = "flex:none;padding:1px 4px;border-radius:4px;background:#1d4ed8;color:#fff;font:800 9px system-ui,-apple-system,sans-serif;letter-spacing:0.3px;box-shadow:0 1px 3px rgba(15,23,42,0.35);";
-            return chip;
-          };
-          if (showBrand && logoSrc) {
+          if (poi.category === "checkin" && logoSrc) {
             const img = document.createElement("img");
             img.src = logoSrc;
             img.alt = poi.airline ? `${poi.airline} logo` : "airline logo";
-            img.style.cssText = "height:15px;width:auto;max-width:46px;flex:none;border-radius:3px;background:#fff;padding:1px;box-shadow:0 1px 3px rgba(15,23,42,0.35);";
-            img.addEventListener("error", () => {
-              if (iataChip) img.replaceWith(makeIataChip());
-              else img.remove();
-            });
-            bubble.appendChild(img);
-          } else if (showBrand && iataChip) {
-            bubble.appendChild(makeIataChip());
+            img.style.cssText = "height:14px;width:auto;max-width:40px;flex:none;border-radius:2px;";
+            img.addEventListener("error", () => img.remove());
+            labelBox.appendChild(img);
+          } else if (poi.category === "checkin" && iataChip) {
+            const chip = document.createElement("span");
+            chip.textContent = iataChip;
+            chip.style.cssText = "flex:none;padding:1px 4px;border-radius:4px;background:#1d4ed8;color:#fff;font:800 9px system-ui,sans-serif;";
+            labelBox.appendChild(chip);
           }
-          const doorSuffix = poi.doorLabel ? ` · ${poi.doorLabel}` : "";
-          const honesty = poiLocationHonestyTag(poi);
-          const approxSuffix = honesty ? ` · ${honesty}` : "";
           const label = document.createElement("span");
-          label.textContent = `${gateLabel}${countdown}${accessMark}${laneSummary ? ` · ${laneSummary}` : ""}${doorSuffix}${approxSuffix}`;
-          label.style.cssText = [
-            isReference
-              ? "color:#64748b;font-weight:600;font-size:10px;"
-              : emphatic ? "color:#0f172a;font-weight:800;" : "color:#1f2937;font-weight:700;",
-            "text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff,0 1px 2px #fff,0 -1px 2px #fff,1px 0 2px #fff,-1px 0 2px #fff;",
-          ].join("");
-          bubble.appendChild(label);
+          label.textContent = displayText;
+          label.style.cssText = "overflow:hidden;text-overflow:ellipsis;";
+          labelBox.appendChild(label);
+          bubble.appendChild(labelBox);
         }
+
         bubble.addEventListener("click", () => handlePoiTap(poi.id));
 
-        // Zoom-tiered detail (M22): the tier at/above which this marker shows.
-        // Journey stops, the assigned gate, the selected POI and the traveler's
-        // own airline counter are always visible regardless of zoom.
         bubble.dataset.minzoom = String(poiMinZoom(poi));
         bubble.dataset.always = (isGateBubble || isSelected || isJourney || matchesAirline || isCurbDropoff) ? "1" : "0";
 
-        // Anchor "left" pins the dot exactly on the coordinate; the name reads to
-        // its right like a real map label.
-        const marker = new ml.Marker({ element: bubble, anchor: "left" })
+        const marker = new ml.Marker({ element: bubble, anchor: showLeaderLabel ? "center" : "center" })
           .setLngLat(pos as [number, number])
           .addTo(map);
         poiMarkersRef.current[poi.id] = marker;

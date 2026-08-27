@@ -569,6 +569,11 @@ requested → draft → published by hand, same verify-first bar as everything e
 
 **Test:** `src/lib/airportNav/airportCurationQueue.test.ts`
 
+**M43 — Walk map serves the trip, not a mall directory (ONT basemap model)**
+Live airport maps render **walk-only pins**: gate/check-in/security/train/baggage/customs/ground-transport/lounge stops as dots; shop/food OSM directory POIs never appear on the map or in Where to. Emphatic/selected stops get a **leader-line label outside the terminal hull** — never stacked inline labels inside the building footprint. OSM shop data may remain in `seaOsmAmenities.ts` for import drafts only; it must not ship on the published walk layout.
+
+**Test:** `src/lib/airportNav/poiMapWalkPolicy.test.ts`, `src/lib/airportNav/layouts/seaTicketingHall.test.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -1090,6 +1095,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | N1 | `src/lib/neuro/neuroLoop.test.ts` |
 | M40 | `src/lib/airportNav/journeyMachine.test.ts` |
 | M41 | `src/lib/airportNav/airportCurationQueue.test.ts` |
+| M43 | `src/lib/airportNav/poiMapWalkPolicy.test.ts`, `src/lib/airportNav/layouts/seaTicketingHall.test.ts` |
 | M42 | `src/lib/airportNav/ontFirstMile.test.ts`, `src/lib/airportNav/tripJourney.test.ts` |
 
 New laws must add a row here when a test exists.
