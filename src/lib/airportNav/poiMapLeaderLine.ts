@@ -32,7 +32,7 @@ const MIN_OUTSIDE_OFFSET = 96;
 const HULL_OUTSIDE_OFFSET = 132;
 
 function labelWidthForText(text: string): number {
-  return Math.min(184, Math.max(76, text.length * 6.4 + LABEL_PAD_X));
+  return Math.min(280, Math.max(88, text.length * 6.5 + LABEL_PAD_X));
 }
 
 function hullContaining(

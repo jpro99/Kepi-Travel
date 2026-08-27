@@ -69,8 +69,12 @@ interface AirportArrivalFirstMileChromeProps {
   previewMode?: boolean;
   preciseRouteEnabled?: boolean;
   iata: string;
-  /** Live map shell: coach opens in a dismissible sheet so Leonardo rail stays visible. */
+  /** Live map shell: coach opens in a top sheet; destinations live in the side rail. */
   mapFirst?: boolean;
+  /** Hide bottom Where-to? chip rail — Live Map uses AirportDestinationRail instead. */
+  hideWhereToRail?: boolean;
+  /** Top offset for map-first coach chip/sheet (below shell row). */
+  chromeTop?: string;
 }
 
 export function AirportArrivalFirstMileChrome({
@@ -96,6 +100,8 @@ export function AirportArrivalFirstMileChrome({
   preciseRouteEnabled = false,
   iata,
   mapFirst = false,
+  hideWhereToRail = false,
+  chromeTop = "0.75rem",
 }: AirportArrivalFirstMileChromeProps) {
   const [coachOpen, setCoachOpen] = useState(false);
 
@@ -121,19 +127,15 @@ export function AirportArrivalFirstMileChrome({
 
   const chipsBottom = `calc(${bottomInset} + 0.25rem)`;
   const routeSheetBottom = mapFirst
-    ? `calc(${bottomInset} + 5.25rem)`
+    ? `calc(${bottomInset} + 0.5rem)`
     : activeRoute
       ? `calc(${bottomInset} + 13.5rem)`
       : `calc(${bottomInset} + 5.25rem)`;
   const coachBottom = activeRoute
     ? `calc(${bottomInset} + 13.5rem)`
     : `calc(${bottomInset} + 0.5rem)`;
-  const coachToggleBottom = activeRoute
-    ? `calc(${bottomInset} + 9.75rem)`
-    : `calc(${bottomInset} + 4.75rem)`;
-  const coachSheetBottom = activeRoute
-    ? `calc(${bottomInset} + 9.75rem)`
-    : `calc(${bottomInset} + 4.75rem)`;
+  const coachSheetTop = `calc(${chromeTop} + 3.25rem)`;
+  const coachToggleTop = chromeTop;
 
   const coachBody = (
     <>
@@ -214,8 +216,8 @@ export function AirportArrivalFirstMileChrome({
         coachOpen ? (
           <div
             data-testid="airport-arrival-first-mile-coach"
-            className="pointer-events-auto absolute inset-x-3 z-[55] max-h-[32dvh] overflow-y-auto overscroll-contain rounded-2xl border border-sky-400/30 bg-sky-950/92 px-3 py-2.5 shadow-2xl backdrop-blur-md touch-pan-y [-webkit-overflow-scrolling:touch]"
-            style={{ bottom: coachSheetBottom }}
+            className="pointer-events-auto absolute inset-x-3 z-[55] max-h-[28dvh] overflow-y-auto overscroll-contain rounded-2xl border border-sky-400/30 bg-sky-950/92 px-3 py-2.5 shadow-2xl backdrop-blur-md touch-pan-y [-webkit-overflow-scrolling:touch]"
+            style={{ top: coachSheetTop }}
           >
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-sky-200/90">
@@ -238,7 +240,7 @@ export function AirportArrivalFirstMileChrome({
             data-testid="airport-arrival-coach-open"
             onClick={() => setCoachOpen(true)}
             className="pointer-events-auto absolute left-3 z-[55] min-h-[44px] rounded-full bg-black/60 px-4 py-2.5 text-[13px] font-bold text-white shadow-lg backdrop-blur-md ring-1 ring-white/15 active:scale-[0.98]"
-            style={{ bottom: coachToggleBottom }}
+            style={{ top: coachToggleTop }}
           >
             Arrival coach
           </button>
@@ -289,43 +291,45 @@ export function AirportArrivalFirstMileChrome({
         </section>
       ) : null}
 
-      <div
-        data-testid="airport-arrival-where-to-rail"
-        className="pointer-events-auto absolute inset-x-3 z-[60] flex flex-col gap-1"
-        style={{ bottom: chipsBottom }}
-      >
-        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/80 drop-shadow">
-          Where to?
-        </p>
-        <div className="flex gap-2 overflow-x-auto pb-1 touch-pan-x [-webkit-overflow-scrolling:touch]">
-          {chipStops.map((stop) => {
-            const poiId = stop.poiId!;
-            const selected = selectedPoiId === poiId || activeRoute?.toPoiId === poiId;
-            const mins = chipMinutes.get(poiId);
-            return (
-              <button
-                key={poiId}
-                type="button"
-                data-testid={`airport-nav-destination-${poiId}`}
-                aria-pressed={selected}
-                onClick={() => onPoiClick(poiId)}
-                className={`shrink-0 min-h-[48px] rounded-2xl px-3.5 py-2 text-left shadow-lg active:scale-[0.98] ${
-                  selected
-                    ? "bg-[#f4c95d] text-[#0b1f3a] ring-2 ring-[#f4c95d]/80"
-                    : "bg-black/65 text-white ring-1 ring-white/20 backdrop-blur-md"
-                }`}
-              >
-                <span className="block text-[13px] font-bold leading-tight">{chipLabel(stop, iata, layout)}</span>
-                {mins != null ? (
-                  <span className="mt-0.5 block text-[10px] font-semibold opacity-85">
-                    ~{mins} min
-                  </span>
-                ) : null}
-              </button>
-            );
-          })}
+      {!hideWhereToRail ? (
+        <div
+          data-testid="airport-arrival-where-to-rail"
+          className="pointer-events-auto absolute inset-x-3 z-[60] flex flex-col gap-1"
+          style={{ bottom: chipsBottom }}
+        >
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/80 drop-shadow">
+            Where to?
+          </p>
+          <div className="flex gap-2 overflow-x-auto pb-1 touch-pan-x [-webkit-overflow-scrolling:touch]">
+            {chipStops.map((stop) => {
+              const poiId = stop.poiId!;
+              const selected = selectedPoiId === poiId || activeRoute?.toPoiId === poiId;
+              const mins = chipMinutes.get(poiId);
+              return (
+                <button
+                  key={poiId}
+                  type="button"
+                  data-testid={`airport-nav-destination-${poiId}`}
+                  aria-pressed={selected}
+                  onClick={() => onPoiClick(poiId)}
+                  className={`shrink-0 min-h-[48px] rounded-2xl px-3.5 py-2 text-left shadow-lg active:scale-[0.98] ${
+                    selected
+                      ? "bg-[#f4c95d] text-[#0b1f3a] ring-2 ring-[#f4c95d]/80"
+                      : "bg-black/65 text-white ring-1 ring-white/20 backdrop-blur-md"
+                  }`}
+                >
+                  <span className="block text-[13px] font-bold leading-tight">{chipLabel(stop, iata, layout)}</span>
+                  {mins != null ? (
+                    <span className="mt-0.5 block text-[10px] font-semibold opacity-85">
+                      ~{mins} min
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      ) : null}
     </>
   );
 }

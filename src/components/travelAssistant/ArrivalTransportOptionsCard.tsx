@@ -1,6 +1,7 @@
 "use client";
 
 import type { ArrivalTransportOption } from "@/lib/travelAssistant/airportNavigation";
+import { sanitizeArrivalHotelLabelForUi } from "@/lib/travelAssistant/arrivalTransportPresentation";
 
 interface ArrivalTransportOptionsCardProps {
   options: ArrivalTransportOption[];
@@ -19,6 +20,7 @@ export function ArrivalTransportOptionsCard({
 
   const primary = options.find((option) => option.isDefault) ?? options[0]!;
   const secondary = options.filter((option) => option.id !== primary.id);
+  const rideHotelLabel = sanitizeArrivalHotelLabelForUi(hotelLabel);
 
   return (
     <section
@@ -78,7 +80,7 @@ export function ArrivalTransportOptionsCard({
           rel="noopener noreferrer"
           className="mt-3 block text-center text-xs font-semibold text-sky-200/80 underline decoration-sky-400/40 underline-offset-2"
         >
-          Uber backup{hotelLabel?.trim() ? ` to ${hotelLabel.trim()}` : ""}
+          {rideHotelLabel ? `Uber backup to ${rideHotelLabel}` : "Uber backup"}
         </a>
       ) : null}
     </section>

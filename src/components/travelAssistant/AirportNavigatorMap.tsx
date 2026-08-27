@@ -3055,7 +3055,7 @@ export function AirportNavigatorMap({
         </div>
       ) : null}
 
-      {layout && !arrivalFirstMile ? (
+      {layout && (!arrivalFirstMile || embeddedInLiveMap) ? (
         <div className="pointer-events-none absolute inset-0 z-[30]">
           <AirportDestinationRail
             layout={layout}
@@ -3072,6 +3072,7 @@ export function AirportNavigatorMap({
               setRailOpen(false);
             }}
             railTop={destinationRailTop}
+            arrivalJourneyPoiIds={arrivalFirstMile ? journeyPoiIdSet : undefined}
           />
         </div>
       ) : null}
@@ -3101,6 +3102,8 @@ export function AirportNavigatorMap({
           preciseRouteEnabled={preciseRouteEnabled}
           iata={iata}
           mapFirst={embeddedInLiveMap}
+          hideWhereToRail={embeddedInLiveMap}
+          chromeTop={contentTop}
         />
       ) : null}
 

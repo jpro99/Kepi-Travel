@@ -94,7 +94,7 @@ export function paintWalkMapLeaderOverlay(
       "border:1px solid rgba(71,85,105,0.35);",
       "box-shadow:0 1px 4px rgba(15,23,42,0.12);",
       "font:600 11px system-ui,-apple-system,sans-serif;",
-      "color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
+      "color:#0f172a;white-space:nowrap;",
       "pointer-events:none;",
     ].join("");
     fo.appendChild(label);
