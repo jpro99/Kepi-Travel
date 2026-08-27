@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Logo } from "@/components/ui/Logo";
 import { buildSupportChatApiMessages } from "@/lib/support/buildSupportChatApiMessages";
 import { BugReportModal } from "@/components/support/BugReportModal";
+import { AIRPORT_WALK_SHEET_EVENT } from "@/lib/airportNav/airportWalkSheet";
 
 const SUPPORT_OPEN_EVENT = "kepi:support-chat-open";
 const BUG_REPORT_OPEN_EVENT = "kepi:bug-report-open";
@@ -42,6 +43,7 @@ export function SupportChat() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [walkSheetOpen, setWalkSheetOpen] = useState(false);
   const panelScrollRef = useRef<HTMLDivElement | null>(null);
   const isOpenRef = useRef(isOpen);
 
@@ -74,6 +76,15 @@ export function SupportChat() {
     const onBugReport = (): void => setBugReportOpen(true);
     window.addEventListener(BUG_REPORT_OPEN_EVENT, onBugReport);
     return () => window.removeEventListener(BUG_REPORT_OPEN_EVENT, onBugReport);
+  }, []);
+
+  useEffect(() => {
+    const onWalkSheet = (event: Event): void => {
+      const detail = (event as CustomEvent<{ open?: boolean }>).detail;
+      setWalkSheetOpen(Boolean(detail?.open));
+    };
+    window.addEventListener(AIRPORT_WALK_SHEET_EVENT, onWalkSheet);
+    return () => window.removeEventListener(AIRPORT_WALK_SHEET_EVENT, onWalkSheet);
   }, []);
 
   useEffect(() => {
@@ -265,7 +276,9 @@ export function SupportChat() {
           setUnreadCount(0);
           setIsOpen(true);
         }}
-        className="fixed right-4 z-[110] kepi-fixed-above-tab-bar inline-flex h-14 w-14 items-center justify-center rounded-full bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-900/30 transition hover:bg-cyan-400 md:right-6"
+        className={`fixed right-4 z-[110] kepi-fixed-above-tab-bar inline-flex h-14 w-14 items-center justify-center rounded-full bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-900/30 transition hover:bg-cyan-400 md:right-6 ${
+          walkSheetOpen ? "pointer-events-none translate-y-4 opacity-0" : ""
+        }`}
       >
         <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.8">
           <path d="M4 6.5C4 5.12 5.12 4 6.5 4h11C18.88 4 20 5.12 20 6.5v7c0 1.38-1.12 2.5-2.5 2.5H10l-4.2 3.6c-.66.56-1.8.1-1.8-.77V6.5Z" />

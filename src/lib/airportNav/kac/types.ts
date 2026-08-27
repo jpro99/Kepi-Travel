@@ -13,6 +13,8 @@ export interface KacCompilerNode {
   airside: boolean;
   /** Compiler-only; mapped to landmark on GraphNode or POI name. */
   name?: string;
+  /** KAC compiler node label (preferred over id when name is absent). */
+  landmark?: string;
   precision?: "surveyed" | "schematic" | "extrapolated";
   doorLabel?: string;
   notes?: string;

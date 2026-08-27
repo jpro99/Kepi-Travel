@@ -30,6 +30,8 @@ import { AirportArrivalFirstMileChrome } from "@/components/travelAssistant/Airp
 import { poiMinZoom, airlineLogoAsset } from "@/lib/airportNav/poiDetail";
 import { SECURITY_APPROX_DISCLAIMER } from "@/lib/airportNav/securityDisclosure";
 import { poiLocationHonestyTag } from "@/lib/airportNav/poiPrecisionHonesty";
+import { resolvePoiDisplayName } from "@/lib/airportNav/poiDisplayName";
+import { setAirportWalkSheetOpen } from "@/lib/airportNav/airportWalkSheet";
 import { computeDirectionArrow, confirmedSnappedPosition } from "@/lib/airportNav/directionArrow";
 import { computeLayoutBounds, computeLandsideBounds } from "@/lib/airportNav/layoutBounds";
 import { buildAirportSchematicModel } from "@/lib/airportNav/schematic";
@@ -574,7 +576,9 @@ function AirportDestinationRail({
         {visiblePois.map((definition) => {
           const isGate = definition.id === gatePoiId;
           const selected = definition.id === selectedPoiId;
-          const label = isGate && gateCode ? `Gate ${gateCode.toUpperCase()}` : definition.name;
+          const label = isGate && gateCode
+            ? `Gate ${gateCode.toUpperCase()}`
+            : resolvePoiDisplayName(definition, layout);
           const laneSummary = definition.category === "security"
             ? definition.lanes
                 ?.filter((lane) => lane !== "standard")
@@ -880,7 +884,7 @@ function AirportSchematicLayer({
               onClick={() => onPoiClick(definition.id)}
               style={{ cursor: "pointer" }}
             >
-              <title>{definition.name}</title>
+              <title>{resolvePoiDisplayName(definition, layout)}</title>
               <circle r={3.4} fill="transparent" />
               <circle
                 r={r}
@@ -905,7 +909,9 @@ function AirportSchematicLayer({
         {selectedPoi ? (() => {
           const { definition, point } = selectedPoi;
           const isGate = definition.id === gatePoiId;
-          const label = isGate && gateCode ? `Gate ${gateCode.toUpperCase()}` : definition.name;
+          const label = isGate && gateCode
+            ? `Gate ${gateCode.toUpperCase()}`
+            : resolvePoiDisplayName(definition, layout);
           const countdown = isGate && minutesToDeparture > 0 && minutesToDeparture < 600
             ? ` · ${Math.max(1, Math.round(minutesToDeparture))}m`
             : "";
@@ -1323,6 +1329,11 @@ export function AirportNavigatorMap({
     activeRouteRef.current = activeRoute;
   }, [activeRoute]);
 
+  useEffect(() => {
+    setAirportWalkSheetOpen(Boolean(activeRoute));
+    return () => setAirportWalkSheetOpen(false);
+  }, [activeRoute]);
+
   /* ── Journey event processing ───────────────────────────────────────── */
   const processJourneyEvent = useCallback(
     (event: JourneyEvent) => {
@@ -1612,13 +1623,13 @@ export function AirportNavigatorMap({
         profile: sprintRef.current ? "sprint" : "default",
       });
       setActiveRoute(route);
-      setActiveDestName(route ? targetPoi.name : null);
+      setActiveDestName(route ? resolvePoiDisplayName(targetPoi, layout) : null);
       setShowInstructions(false);
       lastInstructionIdxRef.current = -1;
       setCurrentStepIdx(0);
       if (route && viaVoice) {
         const first = route.instructions[0];
-        sayAndShow(`${targetPoi.name} — ${fmtMins(route.totalSeconds)}. ${first ? first.text : ""}`);
+        sayAndShow(`${resolvePoiDisplayName(targetPoi, layout)} — ${fmtMins(route.totalSeconds)}. ${first ? first.text : ""}`);
       }
     },
     [layout, originNodeId, credentials, navCalibration, sayAndShow, isArriveCoach],
@@ -1675,7 +1686,7 @@ export function AirportNavigatorMap({
       calibration: navCalibration ?? undefined,
     });
     setActiveRoute(route);
-    setActiveDestName(route ? targetPoi.name : null);
+    setActiveDestName(route ? resolvePoiDisplayName(targetPoi, layout) : null);
     lastInstructionIdxRef.current = -1;
     setCurrentStepIdx(0);
   }, [credentials, pendingPoiId, layout, originNodeId, navCalibration]);
@@ -2527,7 +2538,9 @@ export function AirportNavigatorMap({
           (objective === "lounge" && poi.category === "lounge");
         const eligibleLounge = poi.category === "lounge" && loungeIsEligible(poi.name, eligibleLoungeNames);
 
-        const gateLabel = isGateBubble && gateCode ? `Gate ${gateCode.toUpperCase()}` : poi.name;
+        const gateLabel = isGateBubble && gateCode
+          ? `Gate ${gateCode.toUpperCase()}`
+          : resolvePoiDisplayName(poi, layout);
         const countdown = isGateBubble && minutesRounded > 0 && minutesRounded < 600 ? ` · ${minutesRounded}m` : "";
         const accessMark = eligibleLounge ? " ✓" : "";
         const laneSummary = poi.category === "security"
@@ -2571,7 +2584,7 @@ export function AirportNavigatorMap({
 
         const bubble = document.createElement("button");
         bubble.type = "button";
-        bubble.setAttribute("aria-label", `Navigate to ${poi.name}`);
+        bubble.setAttribute("aria-label", `Navigate to ${resolvePoiDisplayName(poi, layout)}`);
         bubble.style.cssText = [
           "display:flex;align-items:center;gap:5px;",
           "background:transparent;border:none;padding:3px;cursor:pointer;",
@@ -3452,7 +3465,7 @@ export function AirportNavigatorMap({
           style={{
             bottom: arrivalFirstMile ? `calc(${bottomPanel} + 4.75rem)` : bottomPanel,
           }}
-          className={`absolute inset-x-2 z-[70] overflow-hidden rounded-[24px] bg-white/95 p-3 shadow-2xl backdrop-blur-md dark:bg-slate-900/95 sm:inset-x-3 ${
+          className={`absolute inset-x-2 z-[125] overflow-hidden rounded-[24px] bg-white/95 p-3 pr-16 shadow-2xl backdrop-blur-md dark:bg-slate-900/95 sm:inset-x-3 ${
             showInstructions ? "max-h-[60dvh]" : "max-h-32"
           }`}
         >

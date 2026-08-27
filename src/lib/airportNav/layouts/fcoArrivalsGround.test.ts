@@ -16,6 +16,18 @@ test("FCO layout ground_transport nodes are landside and reachable from T3 curb"
   assert.ok(leonardoNode);
   assert.equal(leonardoNode.airside, false);
   assert.ok(FCO_LAYOUT.edges.some((edge) => edge.from === "curb-t3" && edge.to === "ground-leonardo"));
+
+  const terminiNode = FCO_LAYOUT.nodes.find((node) => node.id === "ground-roma-termini");
+  assert.ok(terminiNode);
+  assert.equal(terminiNode?.landmark, "Roma Termini");
+  assert.ok(
+    FCO_LAYOUT.edges.some(
+      (edge) => edge.from === "ground-leonardo" && edge.to === "ground-roma-termini" && edge.kind === "train",
+    ),
+  );
+  const terminiPoi = FCO_LAYOUT.pois.find((poi) => poi.id === "poi-roma-termini");
+  assert.ok(terminiPoi);
+  assert.equal(terminiPoi?.name, "Roma Termini");
 });
 
 test("FCO arrival graph chains gate-e through passport and baggage to Leonardo", () => {
@@ -25,5 +37,5 @@ test("FCO arrival graph chains gate-e through passport and baggage to Leonardo",
       (e) => e.from === "passport-t3" && e.to === "baggage-t3" && e.kind === "security_transition",
     ),
   );
-  assert.equal(FCO_LAYOUT.layoutVersion, "0.3.0-arrival-first-mile");
+  assert.equal(FCO_LAYOUT.layoutVersion, "0.3.1-roma-termini");
 });

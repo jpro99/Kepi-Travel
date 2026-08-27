@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { resolvePoiDisplayName } from "@/lib/airportNav/poiDisplayName";
 import type { AirportLayout, ComputedRoute } from "@/lib/airportNav/types";
 import { computeRoute } from "@/lib/airportNav/pathfinder";
 import type { ArrivalJourneyStop } from "@/lib/airportNav/tripJourney";
@@ -8,13 +9,19 @@ import type { DayCoachPathStep } from "@/lib/travelAssistant/airportDayCoach";
 import { ArrivalTransportOptionsCard } from "@/components/travelAssistant/ArrivalTransportOptionsCard";
 import type { ArrivalTransportOption } from "@/lib/travelAssistant/airportNavigation";
 
-function chipLabel(stop: ArrivalJourneyStop, iata: string): string {
+function chipLabel(stop: ArrivalJourneyStop, iata: string, layout: AirportLayout): string {
   if (stop.role === "passport") return "Passport";
   if (stop.role === "baggage") return "Bags";
   if (stop.role === "customs") return "Customs";
   if (stop.role === "ground_transport") {
-    return iata.trim().toUpperCase() === "FCO" && /leonardo/i.test(stop.label) ? "Leonardo" : stop.label;
+    if (iata.trim().toUpperCase() === "FCO" && /leonardo/i.test(stop.label)) return "Leonardo";
+    if (/termini/i.test(stop.label)) return "Termini";
+    const poi = stop.poiId ? layout.pois.find((entry) => entry.id === stop.poiId) : undefined;
+    if (poi) return resolvePoiDisplayName(poi, layout);
+    return stop.label;
   }
+  const poi = stop.poiId ? layout.pois.find((entry) => entry.id === stop.poiId) : undefined;
+  if (poi) return resolvePoiDisplayName(poi, layout);
   return stop.label;
 }
 
@@ -195,7 +202,7 @@ export function AirportArrivalFirstMileChrome({
         <section
           data-testid="airport-nav-route-sheet"
           aria-label="Route instructions"
-          className="pointer-events-auto absolute inset-x-3 z-[65] overflow-hidden rounded-[24px] bg-white/95 p-3 shadow-2xl backdrop-blur-md dark:bg-slate-900/95 max-h-32"
+          className="pointer-events-auto absolute inset-x-3 z-[125] overflow-hidden rounded-[24px] bg-white/95 p-3 pr-16 shadow-2xl backdrop-blur-md dark:bg-slate-900/95 max-h-32"
           style={{ bottom: routeSheetBottom }}
         >
           <div className="flex items-start justify-between gap-3">
@@ -253,7 +260,7 @@ export function AirportArrivalFirstMileChrome({
                     : "bg-black/65 text-white ring-1 ring-white/20 backdrop-blur-md"
                 }`}
               >
-                <span className="block text-[13px] font-bold leading-tight">{chipLabel(stop, iata)}</span>
+                <span className="block text-[13px] font-bold leading-tight">{chipLabel(stop, iata, layout)}</span>
                 {mins != null ? (
                   <span className="mt-0.5 block text-[10px] font-semibold opacity-85">
                     ~{mins} min

@@ -140,6 +140,23 @@ export const MIN_BACKTRACK_METERS = 120;
 /** A node this far from the layout center is almost certainly a wrong/guessed coord. */
 export const MAX_NODE_DISTANCE_FROM_CENTER_M = 15_000;
 
+/** Train terminii off-airport (e.g. Roma Termini) may exceed the airport bbox. */
+function offAirportTrainDestinationNodeIds(layout: AirportLayout): Set<string> {
+  const center = layout.center;
+  const nodeById = new Map(layout.nodes.map((node) => [node.id, node]));
+  const exempt = new Set<string>();
+  for (const edge of layout.edges) {
+    if (edge.kind !== "train") continue;
+    const from = nodeById.get(edge.from);
+    const to = nodeById.get(edge.to);
+    if (!from || !to) continue;
+    const fromNear = metersBetween(from.pos, center) <= MAX_NODE_DISTANCE_FROM_CENTER_M;
+    const toFar = metersBetween(to.pos, center) > MAX_NODE_DISTANCE_FROM_CENTER_M;
+    if (fromNear && toFar) exempt.add(to.id);
+  }
+  return exempt;
+}
+
 export interface LayoutQualityReport {
   iata: string;
   errors: string[];
@@ -165,7 +182,9 @@ export function auditLayoutRouting(layout: AirportLayout): LayoutQualityReport {
 
   // 1) Gross coordinate sanity — catches wrong-city / ocean / typo coordinates.
   const center = layout.center;
+  const offAirportTrainNodes = offAirportTrainDestinationNodeIds(layout);
   for (const node of layout.nodes) {
+    if (offAirportTrainNodes.has(node.id)) continue;
     const d = metersBetween(node.pos, center);
     if (d > MAX_NODE_DISTANCE_FROM_CENTER_M) {
       errors.push(

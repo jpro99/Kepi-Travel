@@ -126,11 +126,12 @@ test("FCO layout with KAC overlay still supports arrival first mile", () => {
   const stops = buildArrivalTripJourney(layout, { gateCode: "E12" });
   assert.deepEqual(
     stops.map((s) => s.role),
-    ["deplane", "passport", "baggage", "customs", "exit", "ground_transport"],
+    ["deplane", "passport", "baggage", "customs", "exit", "ground_transport", "ground_transport"],
   );
   assert.equal(stops[0]?.nodeId, "gate-e");
   assert.equal(stops[1]?.poiId, "poi-passport-t3");
   assert.equal(stops[5]?.poiId, "poi-leonardo-express");
+  assert.equal(stops[6]?.poiId, "poi-roma-termini");
   assert.equal(resolveArrivalOriginNode(layout, null), "gate-e");
 });
 

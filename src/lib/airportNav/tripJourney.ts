@@ -19,6 +19,7 @@
 
 import type { AirportLayout, GraphNode, PoiDefinition } from "./types";
 import { resolveGateNode } from "./pathfinder";
+import { resolvePoiDisplayName } from "./poiDisplayName";
 
 export type JourneyRole = "dropoff" | "checkin" | "security" | "lounge" | "gate";
 
@@ -396,7 +397,7 @@ export function buildArrivalTripJourney(
       role: "passport",
       nodeId: passportPoi.nodeId,
       poiId: passportPoi.id,
-      label: passportPoi.name,
+      label: resolvePoiDisplayName(passportPoi, layout),
       detail: passportPoi.notes,
       known: true,
     });
@@ -408,7 +409,7 @@ export function buildArrivalTripJourney(
       role: "baggage",
       nodeId: baggagePoi.nodeId,
       poiId: baggagePoi.id,
-      label: baggagePoi.name,
+      label: resolvePoiDisplayName(baggagePoi, layout),
       detail: baggagePoi.notes,
       known: true,
     });
@@ -422,7 +423,7 @@ export function buildArrivalTripJourney(
       role: "customs",
       nodeId: customsPoi.nodeId,
       poiId: customsPoi.id,
-      label: customsPoi.name,
+      label: resolvePoiDisplayName(customsPoi, layout),
       detail: customsPoi.notes,
       known: true,
     });
@@ -450,8 +451,20 @@ export function buildArrivalTripJourney(
         role: "ground_transport",
         nodeId: trainPoi.nodeId,
         poiId: trainPoi.id,
-        label: trainPoi.name,
+        label: resolvePoiDisplayName(trainPoi, layout),
         detail: trainPoi.notes,
+        known: true,
+      });
+    }
+
+    const terminiPoi = layout.pois.find((poi) => poi.id === "poi-roma-termini");
+    if (terminiPoi) {
+      stops.push({
+        role: "ground_transport",
+        nodeId: terminiPoi.nodeId,
+        poiId: terminiPoi.id,
+        label: resolvePoiDisplayName(terminiPoi, layout),
+        detail: terminiPoi.notes ?? "Leonardo Express terminus",
         known: true,
       });
     }

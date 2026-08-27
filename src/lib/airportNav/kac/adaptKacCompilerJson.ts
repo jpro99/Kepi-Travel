@@ -12,6 +12,7 @@ import {
   type AirportLayoutPackageSource,
 } from "../airportLayoutPackage";
 import { haversineMeters } from "../footwayGraph";
+import { resolvePoiDisplayName } from "../poiDisplayName";
 import type {
   AirportLayout,
   GraphEdge,
@@ -76,8 +77,16 @@ function stripLayoutExtras(layout: KacCompilerLayout): Pick<
   };
 }
 
+function readKacNodeLabel(raw: KacCompilerNode): string | undefined {
+  if (typeof raw.name === "string" && raw.name.trim()) return raw.name.trim();
+  // KAC compiler exports use `landmark` on nodes; older drafts used `name` only.
+  const landmark = raw.landmark;
+  if (typeof landmark === "string" && landmark.trim()) return landmark.trim();
+  return undefined;
+}
+
 function normalizeNode(raw: KacCompilerNode): { node: GraphNode; meta: { name?: string; precision?: PoiDefinition["precision"]; doorLabel?: string } } {
-  const landmark = typeof raw.name === "string" ? raw.name.trim() : undefined;
+  const landmark = readKacNodeLabel(raw);
   const node: GraphNode = {
     id: raw.id,
     pos: raw.pos,
@@ -116,7 +125,6 @@ function buildPoiFromNode(
   node: GraphNode,
   meta: { name?: string; precision?: PoiDefinition["precision"]; doorLabel?: string },
 ): PoiDefinition {
-  const name = meta.name ?? node.landmark ?? node.id;
   const category = poiCategoryForNode(node.kind);
   const precision = meta.precision ?? "schematic";
   const notes =
@@ -124,16 +132,17 @@ function buildPoiFromNode(
       ? "Approximate gate position from OSM door-ref — follow signs; no indoor route."
       : "Approximate pin — follow airport signage.";
 
-  return {
+  const draft: PoiDefinition = {
     id: `poi:${node.id}`,
     nodeId: node.id,
     category,
-    name,
+    name: meta.name ?? node.landmark ?? node.id,
     precision,
     notes,
     ...(meta.doorLabel ? { doorLabel: meta.doorLabel } : {}),
     ...(node.kind === "gate" ? { minZoomToShow: 17 } : {}),
   };
+  return { ...draft, name: resolvePoiDisplayName(draft, { nodes: [node] }) };
 }
 
 function completeEdge(
@@ -208,6 +217,60 @@ function mergeGateResolverEntries(
   return [...byPrefix.values()].sort((a, b) => b.prefix.length - a.prefix.length);
 }
 
+function parseExplicitKacPoi(raw: unknown, nodeById: Map<string, GraphNode>): PoiDefinition | null {
+  if (!isRecord(raw)) return null;
+  const id = typeof raw.id === "string" ? raw.id.trim() : "";
+  const nodeId = typeof raw.nodeId === "string" ? raw.nodeId.trim() : "";
+  const name = typeof raw.name === "string" ? raw.name.trim() : "";
+  const category = typeof raw.category === "string" ? (raw.category as PoiDefinition["category"]) : null;
+  if (!id || !nodeId || !name || !category || !nodeById.has(nodeId)) return null;
+
+  const precision =
+    raw.precision === "surveyed" || raw.precision === "schematic" || raw.precision === "extrapolated"
+      ? raw.precision
+      : "schematic";
+
+  const poi: PoiDefinition = {
+    id,
+    nodeId,
+    category,
+    name,
+    precision,
+    ...(typeof raw.notes === "string" && raw.notes.trim() ? { notes: raw.notes.trim() } : {}),
+    ...(typeof raw.doorLabel === "string" && raw.doorLabel.trim() ? { doorLabel: raw.doorLabel.trim() } : {}),
+    ...(Array.isArray(raw.lanes) ? { lanes: raw.lanes as PoiDefinition["lanes"] } : {}),
+    ...(typeof raw.airline === "string" && raw.airline.trim() ? { airline: raw.airline.trim() } : {}),
+    ...(typeof raw.minZoomToShow === "number" ? { minZoomToShow: raw.minZoomToShow } : {}),
+  };
+  return poi;
+}
+
+function buildPoisFromLayout(
+  rawLayout: KacCompilerLayout,
+  normalized: Array<{ node: GraphNode; meta: { name?: string; precision?: PoiDefinition["precision"]; doorLabel?: string } }>,
+): PoiDefinition[] {
+  const nodes = normalized.map((entry) => entry.node);
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const explicitRaw = Array.isArray(rawLayout.pois) ? rawLayout.pois : [];
+  const explicit = explicitRaw
+    .map((entry) => parseExplicitKacPoi(entry, nodeById))
+    .filter((poi): poi is PoiDefinition => poi !== null);
+
+  if (explicit.length > 0) {
+    const coveredNodeIds = new Set(explicit.map((poi) => poi.nodeId));
+    const synthesized = normalized
+      .filter(({ node }) => !coveredNodeIds.has(node.id))
+      .map(({ node, meta }) => buildPoiFromNode(node, meta));
+    const byId = new Map<string, PoiDefinition>();
+    for (const poi of [...synthesized, ...explicit]) {
+      byId.set(poi.id, poi);
+    }
+    return [...byId.values()];
+  }
+
+  return normalized.map(({ node, meta }) => buildPoiFromNode(node, meta));
+}
+
 function adaptLayout(rawLayout: KacCompilerLayout): AirportLayout {
   const shell = stripLayoutExtras(rawLayout);
   const normalized = rawLayout.nodes.map(normalizeNode);
@@ -215,7 +278,7 @@ function adaptLayout(rawLayout: KacCompilerLayout): AirportLayout {
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
 
   const edges = rawLayout.edges.map((edge) => completeEdge(edge, nodeById));
-  const pois = normalized.map(({ node, meta }) => buildPoiFromNode(node, meta));
+  const pois = buildPoisFromLayout(rawLayout, normalized);
   const gateNodeResolver = mergeGateResolverEntries(
     buildGateNodeResolver(nodes, rawLayout.nodes),
     rawLayout.gateNodeResolver,

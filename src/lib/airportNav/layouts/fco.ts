@@ -176,12 +176,23 @@ function appendFcoArrivalsGroundTransport(
   const stationPos: [number, number] = [12.2518651, 41.7934437];
   const taxiPos: [number, number] = [12.2508, 41.7948];
 
+  // OSM node 251904108 — Roma Termini (Overpass 2026-08-27); official Leonardo Express terminus
+  const terminiPos: [number, number] = [12.5025272, 41.9005815];
+  const leonardoToTerminiM = metersBetween(stationPos, terminiPos);
+
   nodes.push({
     id: "ground-leonardo",
     pos: stationPos,
     kind: "ground_transport",
     airside: false,
     landmark: "Leonardo Express — Fiumicino Aeroporto station",
+  });
+  nodes.push({
+    id: "ground-roma-termini",
+    pos: terminiPos,
+    kind: "ground_transport",
+    airside: false,
+    landmark: "Roma Termini",
   });
   nodes.push({
     id: "ground-taxi-fco",
@@ -212,6 +223,16 @@ function appendFcoArrivalsGroundTransport(
     bidirectional: true,
   });
 
+  edges.push({
+    id: "e-leonardo-termini",
+    from: "ground-leonardo",
+    to: "ground-roma-termini",
+    kind: "train",
+    lengthM: Math.max(1000, leonardoToTerminiM),
+    traverseSeconds: 32 * 60,
+    bidirectional: false,
+  });
+
   pois.push({
     id: "poi-leonardo-express",
     nodeId: "ground-leonardo",
@@ -220,6 +241,15 @@ function appendFcoArrivalsGroundTransport(
     precision: "surveyed",
     notes:
       "Non-stop ~32 min to Roma Termini (~€14). Buy and tap in at Leonardo gates — one ticket per person. Metrebus / Roma Pass NOT valid. There is no metro from FCO.",
+  });
+  pois.push({
+    id: "poi-roma-termini",
+    nodeId: "ground-roma-termini",
+    category: "train",
+    name: "Roma Termini",
+    precision: "surveyed",
+    notes:
+      "Leonardo Express terminus — non-stop ~32 min from Fiumicino Aeroporto (Trenitalia/FS official service). OSM node 251904108, Overpass 2026-08-27.",
   });
   pois.push({
     id: "poi-fl1-regional",
@@ -250,7 +280,7 @@ appendFcoArrivalsGroundTransport(nodes, edges, pois);
 export const FCO_LAYOUT: AirportLayout = {
   iata: "FCO",
   name: "Rome Fiumicino",
-  layoutVersion: "0.3.0-arrival-first-mile",
+  layoutVersion: "0.3.1-roma-termini",
   updatedAt: "2026-08-23",
   center: [12.250152, 41.795211],
   zones: [
