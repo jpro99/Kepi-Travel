@@ -11,15 +11,13 @@
  * Southwest is not listed on that PDF — Door 17 WN is an ESTIMATE pending
  * live signage confirmation. Treat door numbers within a cluster as approximate.
  *
- * Amenities: named shop/food/bank/ATM/charging from live OSM (`seaOsmAmenities.ts`,
- * Overpass 2026-07-15) at exact coordinates, precision surveyed. Elevators/
- * escalators omitted from the traveler map (destination clutter); still promoted
- * on OSM import drafts.
+ * Amenities: named shop/food/bank/ATM/charging live in `seaOsmAmenities.ts` for
+ * OSM import / admin drafts only — NOT merged into the traveler walk map (M22:
+ * map serves the walk, not a mall directory; ONT basemap model, Walker 2026-08-27).
  */
 
 import type { GraphEdge, GraphNode, PoiDefinition } from "../types";
 import { interpolateDoorPosition, type DoorAnchor } from "../doorCurve";
-import { SEA_OSM_AMENITIES } from "./seaOsmAmenities";
 
 /**
  * REAL OSM entrance `ref` nodes — south→north door numbers that also increase
@@ -83,7 +81,7 @@ const DOOR_AIRLINES: DoorAirlines[] = [
   { door: 22, existingNodeId: "checkin-north", airlines: [{ name: "Alaska", iata: "AS" }] },
 ];
 
-// Named amenities come from SEA_OSM_AMENITIES (exact OSM coords, 2026-07-15).
+// Named shop/food OSM amenities stay in seaOsmAmenities.ts for import drafts — not on walk map.
 
 function haversineM(a: [number, number], b: [number, number]): number {
   const R = 6371000;
@@ -143,19 +141,6 @@ export function buildSeaTicketingHall(): SeaTicketingHall {
         precision: grade,
       });
     }
-  }
-
-  for (const a of SEA_OSM_AMENITIES) {
-    nodes.push({ id: a.id, pos: [a.lng, a.lat], kind: "landmark", airside: true, landmark: a.name });
-    pois.push({
-      id: `poi-${a.id}`,
-      nodeId: a.id,
-      category: a.kind === "baggage" ? "baggage" : "amenity",
-      name: a.name,
-      minZoomToShow: 15.5,
-      precision: "surveyed",
-      notes: `OSM ${a.osm}`,
-    });
   }
 
   return { nodes, edges, pois };

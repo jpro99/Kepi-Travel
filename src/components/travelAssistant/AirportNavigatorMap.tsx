@@ -30,6 +30,10 @@ import { AirportArrivalFirstMileChrome } from "@/components/travelAssistant/Airp
 import { poiMinZoom, airlineLogoAsset } from "@/lib/airportNav/poiDetail";
 import { SECURITY_APPROX_DISCLAIMER } from "@/lib/airportNav/securityDisclosure";
 import { poiLocationHonestyTag } from "@/lib/airportNav/poiPrecisionHonesty";
+import { normalizeTravelerFacingLabels, resolvePoiDisplayName } from "@/lib/airportNav/poiDisplayName";
+import { isDirectoryClutterPoi, isUnroutedGateReferencePoi, shouldRenderWalkMapPin, shouldShowLeaderLineLabel, walkMapLabelPriority } from "@/lib/airportNav/poiMapWalkPolicy";
+import { buildResolvedLeaderBoxes, paintWalkMapLeaderOverlay, type WalkMapLeaderCandidate } from "@/lib/airportNav/paintWalkMapLeaderOverlay";
+import { setAirportWalkSheetOpen } from "@/lib/airportNav/airportWalkSheet";
 import { computeDirectionArrow, confirmedSnappedPosition } from "@/lib/airportNav/directionArrow";
 import { computeLayoutBounds, computeLandsideBounds } from "@/lib/airportNav/layoutBounds";
 import { buildAirportSchematicModel } from "@/lib/airportNav/schematic";
@@ -402,6 +406,8 @@ function airportPoiIsVisible(
   zoom?: number,
   arrivalJourneyPoiIds?: Set<string>,
 ): boolean {
+  if (isDirectoryClutterPoi(definition)) return false;
+  if (isUnroutedGateReferencePoi(definition) && definition.id !== gatePoiId) return false;
   if (arrivalJourneyPoiIds?.size) {
     return arrivalJourneyPoiIds.has(definition.id);
   }
@@ -574,7 +580,9 @@ function AirportDestinationRail({
         {visiblePois.map((definition) => {
           const isGate = definition.id === gatePoiId;
           const selected = definition.id === selectedPoiId;
-          const label = isGate && gateCode ? `Gate ${gateCode.toUpperCase()}` : definition.name;
+          const label = isGate && gateCode
+            ? `Gate ${gateCode.toUpperCase()}`
+            : resolvePoiDisplayName(definition, layout);
           const laneSummary = definition.category === "security"
             ? definition.lanes
                 ?.filter((lane) => lane !== "standard")
@@ -658,7 +666,8 @@ function AirportSchematicLayer({
   );
   const visiblePois = useMemo(
     () => model.pois.filter(({ definition }) =>
-      airportPoiIsVisible(definition, "all", airlineName, gatePoiId, hasAirlineCheckin),
+      airportPoiIsVisible(definition, "all", airlineName, gatePoiId, hasAirlineCheckin)
+      && !isUnroutedGateReferencePoi(definition),
     ),
     [airlineName, gatePoiId, hasAirlineCheckin, model.pois],
   );
@@ -766,24 +775,7 @@ function AirportSchematicLayer({
           );
         })}
 
-        {/* Concourse names — dark text with a soft white halo for legibility */}
-        {model.zones.map((zone) => (
-          <text
-            key={`${zone.id}-label`}
-            x={zone.label.x}
-            y={zone.label.y}
-            fill={LIGHT_MAP.zoneLabel}
-            fontSize="2.1"
-            fontWeight="700"
-            textAnchor="middle"
-            dominantBaseline="middle"
-            stroke="#ffffff"
-            strokeWidth="0.7"
-            style={{ paintOrder: "stroke" }}
-          >
-            {zone.name}
-          </text>
-        ))}
+        {/* Concourse zone fills only — names render outside the hull on the live basemap */}
 
         {/* Corridors / walkways */}
         {model.walkways.map((walkway) => {
@@ -880,7 +872,7 @@ function AirportSchematicLayer({
               onClick={() => onPoiClick(definition.id)}
               style={{ cursor: "pointer" }}
             >
-              <title>{definition.name}</title>
+              <title>{resolvePoiDisplayName(definition, layout)}</title>
               <circle r={3.4} fill="transparent" />
               <circle
                 r={r}
@@ -905,7 +897,9 @@ function AirportSchematicLayer({
         {selectedPoi ? (() => {
           const { definition, point } = selectedPoi;
           const isGate = definition.id === gatePoiId;
-          const label = isGate && gateCode ? `Gate ${gateCode.toUpperCase()}` : definition.name;
+          const label = isGate && gateCode
+            ? `Gate ${gateCode.toUpperCase()}`
+            : resolvePoiDisplayName(definition, layout);
           const countdown = isGate && minutesToDeparture > 0 && minutesToDeparture < 600
             ? ` · ${Math.max(1, Math.round(minutesToDeparture))}m`
             : "";
@@ -1157,7 +1151,7 @@ export function AirportNavigatorMap({
   const mapRef = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const poiMarkersRef = useRef<Record<string, any>>({});
-  const zoomTierHandlerRef = useRef<(() => void) | null>(null);
+  const leaderOverlayRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const originMarkerRef = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1323,6 +1317,11 @@ export function AirportNavigatorMap({
     activeRouteRef.current = activeRoute;
   }, [activeRoute]);
 
+  useEffect(() => {
+    setAirportWalkSheetOpen(Boolean(activeRoute));
+    return () => setAirportWalkSheetOpen(false);
+  }, [activeRoute]);
+
   /* ── Journey event processing ───────────────────────────────────────── */
   const processJourneyEvent = useCallback(
     (event: JourneyEvent) => {
@@ -1379,7 +1378,7 @@ export function AirportNavigatorMap({
     let cancelled = false;
     // Admin verify / click-to-place: render the in-memory package, skip network.
     if (layoutOverride) {
-      setLayout(layoutOverride);
+      setLayout(normalizeTravelerFacingLabels(layoutOverride));
       setLayoutStatus("ready");
       return;
     }
@@ -1388,7 +1387,7 @@ export function AirportNavigatorMap({
     void (async () => {
       const cached = await loadCachedAirportLayout(iata);
       if (cached && !cancelled) {
-        setLayout(cached);
+        setLayout(normalizeTravelerFacingLabels(cached));
         setLayoutStatus("ready");
       }
       try {
@@ -1400,18 +1399,19 @@ export function AirportNavigatorMap({
         if (!res.ok) throw new Error(String(res.status));
         const data = (await res.json()) as AirportLayout;
         if (!cancelled) {
-          setLayout(data);
+          const normalized = normalizeTravelerFacingLabels(data);
+          setLayout(normalized);
           setLayoutStatus("ready");
           void saveAirportLayoutToOfflineCache({
             tripId: "airport-nav",
-            layout: data,
+            layout: normalized,
           });
         }
       } catch {
         const fallback = await loadCachedAirportLayout(iata);
         if (!cancelled) {
           if (fallback) {
-            setLayout(fallback);
+            setLayout(normalizeTravelerFacingLabels(fallback));
             setLayoutStatus("ready");
           } else {
             setLayoutStatus("error");
@@ -1487,6 +1487,12 @@ export function AirportNavigatorMap({
         : journeyPoiIds(journey),
     [isArriveCoach, arrivalJourney, journey],
   );
+
+  const journeyPoiOrder = useMemo(() => {
+    const stops = isArriveCoach ? arrivalJourney : journey;
+    const ids = stops.map((stop) => stop.poiId).filter((id): id is string => Boolean(id));
+    return new Map(ids.map((id, index) => [id, index]));
+  }, [isArriveCoach, arrivalJourney, journey]);
 
   const [coachFullDayView, setCoachFullDayView] = useState(false);
 
@@ -1612,13 +1618,13 @@ export function AirportNavigatorMap({
         profile: sprintRef.current ? "sprint" : "default",
       });
       setActiveRoute(route);
-      setActiveDestName(route ? targetPoi.name : null);
+      setActiveDestName(route ? resolvePoiDisplayName(targetPoi, layout) : null);
       setShowInstructions(false);
       lastInstructionIdxRef.current = -1;
       setCurrentStepIdx(0);
       if (route && viaVoice) {
         const first = route.instructions[0];
-        sayAndShow(`${targetPoi.name} — ${fmtMins(route.totalSeconds)}. ${first ? first.text : ""}`);
+        sayAndShow(`${resolvePoiDisplayName(targetPoi, layout)} — ${fmtMins(route.totalSeconds)}. ${first ? first.text : ""}`);
       }
     },
     [layout, originNodeId, credentials, navCalibration, sayAndShow, isArriveCoach],
@@ -1675,7 +1681,7 @@ export function AirportNavigatorMap({
       calibration: navCalibration ?? undefined,
     });
     setActiveRoute(route);
-    setActiveDestName(route ? targetPoi.name : null);
+    setActiveDestName(route ? resolvePoiDisplayName(targetPoi, layout) : null);
     lastInstructionIdxRef.current = -1;
     setCurrentStepIdx(0);
   }, [credentials, pendingPoiId, layout, originNodeId, navCalibration]);
@@ -2502,11 +2508,8 @@ export function AirportNavigatorMap({
 
       const nodePos = new Map(layout.nodes.map((node) => [node.id, node.pos]));
       const selectedId = selectedPoiId ?? activeRoute?.toPoiId ?? null;
+
       for (const poi of layout.pois) {
-        // Other airlines' check-in counters are NOT hidden — they are kept as
-        // zoom-gated reference detail (M22) so zooming into the check-in hall
-        // reveals every counter (Atrius-style), while the traveler's own counter
-        // stays emphasised via the journey set below.
         const isAirlineCheckin = poi.category === "checkin" && Boolean(poi.airline);
         const matchesAirline = isAirlineCheckin && airlineName
           ? airlineName.toLowerCase().includes(poi.airline!.toLowerCase())
@@ -2515,47 +2518,37 @@ export function AirportNavigatorMap({
         if (!pos) continue;
 
         const isSelected = selectedId !== null && poi.id === selectedId;
-        const isGateBubble =
+        const isGateBubble = Boolean(
           (gatePoi !== null && poi.id === gatePoi.id) ||
-          (bookedGate?.exactDoor && poi.nodeId === bookedGate.nodeId);
-        const urgent = isGateBubble && minutesRounded <= 45;
-        const critical = isGateBubble && minutesRounded <= 20;
-        const isObjective =
-          (objective === "gate" && isGateBubble) ||
-          (objective === "security" && poi.category === "security") ||
-          (objective === "checkin" && poi.category === "checkin") ||
-          (objective === "lounge" && poi.category === "lounge");
-        const eligibleLounge = poi.category === "lounge" && loungeIsEligible(poi.name, eligibleLoungeNames);
-
-        const gateLabel = isGateBubble && gateCode ? `Gate ${gateCode.toUpperCase()}` : poi.name;
-        const countdown = isGateBubble && minutesRounded > 0 && minutesRounded < 600 ? ` · ${minutesRounded}m` : "";
-        const accessMark = eligibleLounge ? " ✓" : "";
-        const laneSummary = poi.category === "security"
-          ? poi.lanes
-              ?.filter((lane) => lane !== "standard")
-              .map((lane) => lane === "precheck" ? "PreCheck" : lane === "clear" ? "CLEAR" : lane)
-              .join(" · ")
-          : "";
-
-        // Precise map label: a colored dot ON the exact coordinate + the name in
-        // haloed text (no box). Dot color encodes category / urgency.
-        // Trip-focused emphasis: the stops on THIS traveler's journey (their
-        // check-in, security, lounge, gate) stand out; everything else fades to
-        // a small grey reference dot so nobody has to hunt (owner: "don't need
-        // all the gates — highlight the ones the person is going to use").
+          (bookedGate?.exactDoor && poi.nodeId === bookedGate.nodeId),
+        );
         const isJourney = journeyPoiIdSet.has(poi.id);
         const isCurbDropoff =
           poi.id.startsWith("poi-dropoff-") ||
           poi.id.includes(":node:curb:") ||
           poi.nodeId.includes(":node:curb:");
-        const emphatic = isSelected || isGateBubble || isObjective || isJourney || matchesAirline || isCurbDropoff;
-        const isReference = !emphatic;
-        // KEPI_DESIGN_LAW M32 — a security checkpoint has no public ground-truth
-        // coordinate anywhere, so it must NOT render as a sharp dot implying an
-        // exact spot. Draw a soft, fuzzy "approximate area" instead (same rule for
-        // every airport), and always keep its label so the "approx." tag shows.
         const isSecurity = poi.category === "security";
+        const isObjective =
+          (objective === "gate" && isGateBubble) ||
+          (objective === "security" && poi.category === "security") ||
+          (objective === "checkin" && poi.category === "checkin") ||
+          (objective === "lounge" && poi.category === "lounge");
+        const emphatic = isSelected || isGateBubble || isObjective || isJourney || matchesAirline || isCurbDropoff;
+        const walkCtx = {
+          isSelected,
+          isGateBubble,
+          isJourney,
+          isObjective,
+          matchesAirline,
+          isCurbDropoff,
+          isReference: !emphatic,
+          isSecurity,
+        };
+        if (!shouldRenderWalkMapPin(poi, walkCtx)) continue;
 
+        const urgent = isGateBubble && minutesRounded <= 45;
+        const critical = isGateBubble && minutesRounded <= 20;
+        const eligibleLounge = poi.category === "lounge" && loungeIsEligible(poi.name, eligibleLoungeNames);
         const dotColor = critical
           ? "#dc2626"
           : urgent
@@ -2564,138 +2557,181 @@ export function AirportNavigatorMap({
           ? "#d97706"
           : eligibleLounge
           ? "#059669"
-          : isReference
-          ? "#9aa7b8"
           : POI_COLOR[poi.category];
-        const dotSize = isSelected ? 15 : isReference ? 7 : 13;
+        const dotSize = isSelected ? 11 : isSecurity ? 10 : 8;
 
         const bubble = document.createElement("button");
         bubble.type = "button";
-        bubble.setAttribute("aria-label", `Navigate to ${poi.name}`);
+        bubble.setAttribute("aria-label", `Navigate to ${resolvePoiDisplayName(poi, layout)}`);
         bubble.style.cssText = [
-          "display:flex;align-items:center;gap:5px;",
-          "background:transparent;border:none;padding:3px;cursor:pointer;",
-          "font:700 11px system-ui,-apple-system,sans-serif;white-space:nowrap;",
+          "display:flex;align-items:center;justify-content:center;",
+          "background:transparent;border:none;padding:0;cursor:pointer;",
           "pointer-events:auto;touch-action:manipulation;",
-          isSelected ? "z-index:6;" : isReference ? "z-index:1;opacity:0.72;" : "z-index:3;",
+          isSelected ? "z-index:6;" : "z-index:3;",
         ].join("");
 
         const dot = document.createElement("span");
         if (isSecurity) {
-          // Soft radial zone: point sits at the fuzzy area's left edge (anchor
-          // "left"), dashed ring + gradient fade communicate "approximate", never
-          // an exact pin. No pulse — this is a place to head toward, not a countdown.
-          const zoneSize = isSelected ? 42 : isReference ? 28 : 36;
           dot.style.cssText = [
-            `width:${zoneSize}px;height:${zoneSize}px;flex:none;border-radius:9999px;`,
-            "background:radial-gradient(circle,rgba(225,29,72,0.42) 0%,rgba(225,29,72,0.20) 52%,rgba(225,29,72,0) 78%);",
-            "border:1.5px dashed rgba(225,29,72,0.7);",
-            isSelected ? "outline:2px solid rgba(56,189,248,0.9);outline-offset:2px;" : "",
+            `width:${dotSize + 10}px;height:${dotSize + 10}px;flex:none;border-radius:9999px;`,
+            "background:radial-gradient(circle,rgba(225,29,72,0.38) 0%,rgba(225,29,72,0.16) 55%,rgba(225,29,72,0) 78%);",
+            "border:1.5px dashed rgba(225,29,72,0.65);",
+            isSelected ? "outline:2px solid rgba(56,189,248,0.9);outline-offset:1px;" : "",
           ].join("");
         } else {
           dot.style.cssText = [
             `width:${dotSize}px;height:${dotSize}px;flex:none;border-radius:9999px;`,
             `background:${dotColor};border:2px solid #ffffff;`,
-            isReference ? "box-shadow:0 1px 2px rgba(15,23,42,0.25);" : "box-shadow:0 1px 4px rgba(15,23,42,0.55);",
-            isSelected ? "outline:3px solid rgba(56,189,248,0.95);outline-offset:1px;" : "",
+            "box-shadow:0 1px 4px rgba(15,23,42,0.45);",
+            isSelected ? "outline:2px solid rgba(56,189,248,0.95);outline-offset:1px;" : "",
             critical || urgent ? "animation:kepiPulse 1.6s ease-in-out infinite;" : "",
           ].join("");
         }
-
-        // De-clutter: reference POIs show a dot only, EXCEPT reference gates keep
-        // a faint concourse letter, and check-in counters + amenities always keep
-        // their name/logo — they're zoom-gated (M22) so they only appear once
-        // you're zoomed into the hall, and at that point the whole point is to
-        // read which airline / what amenity each counter is (owner: "put all of
-        // them on there"). Without this, every non-your-airline counter collapsed
-        // to a nameless grey dot and looked like nothing was there.
-        const labelledReference = poi.category === "gate" || poi.category === "checkin" || poi.category === "amenity";
-        // Security always keeps its label so the "· approx. area" tag (M32) is
-        // visible even when it's only a reference pin.
-        const showLabel = !isReference || labelledReference || isSecurity;
-        const showBrand = !isReference || poi.category === "checkin";
         bubble.appendChild(dot);
-        if (showLabel) {
-          // Airline branding on a real counter (M22): Duffel's brand-compliant
-          // logo (customer-licensed, resolved by IATA code), with a graceful
-          // onerror swap to a Kepi-generated IATA code chip so a logo Duffel
-          // lacks never shows a broken image or blocks the render.
-          const logoSrc = airlineLogoAsset(poi);
-          const iataChip = poi.airlineIataCode?.toUpperCase();
-          const makeIataChip = () => {
-            const chip = document.createElement("span");
-            chip.textContent = iataChip ?? "";
-            chip.style.cssText = "flex:none;padding:1px 4px;border-radius:4px;background:#1d4ed8;color:#fff;font:800 9px system-ui,-apple-system,sans-serif;letter-spacing:0.3px;box-shadow:0 1px 3px rgba(15,23,42,0.35);";
-            return chip;
-          };
-          if (showBrand && logoSrc) {
-            const img = document.createElement("img");
-            img.src = logoSrc;
-            img.alt = poi.airline ? `${poi.airline} logo` : "airline logo";
-            img.style.cssText = "height:15px;width:auto;max-width:46px;flex:none;border-radius:3px;background:#fff;padding:1px;box-shadow:0 1px 3px rgba(15,23,42,0.35);";
-            img.addEventListener("error", () => {
-              if (iataChip) img.replaceWith(makeIataChip());
-              else img.remove();
-            });
-            bubble.appendChild(img);
-          } else if (showBrand && iataChip) {
-            bubble.appendChild(makeIataChip());
-          }
-          const doorSuffix = poi.doorLabel ? ` · ${poi.doorLabel}` : "";
-          const honesty = poiLocationHonestyTag(poi);
-          const approxSuffix = honesty ? ` · ${honesty}` : "";
-          const label = document.createElement("span");
-          label.textContent = `${gateLabel}${countdown}${accessMark}${laneSummary ? ` · ${laneSummary}` : ""}${doorSuffix}${approxSuffix}`;
-          label.style.cssText = [
-            isReference
-              ? "color:#64748b;font-weight:600;font-size:10px;"
-              : emphatic ? "color:#0f172a;font-weight:800;" : "color:#1f2937;font-weight:700;",
-            "text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff,0 1px 2px #fff,0 -1px 2px #fff,1px 0 2px #fff,-1px 0 2px #fff;",
-          ].join("");
-          bubble.appendChild(label);
-        }
         bubble.addEventListener("click", () => handlePoiTap(poi.id));
+        bubble.dataset.always = "1";
 
-        // Zoom-tiered detail (M22): the tier at/above which this marker shows.
-        // Journey stops, the assigned gate, the selected POI and the traveler's
-        // own airline counter are always visible regardless of zoom.
-        bubble.dataset.minzoom = String(poiMinZoom(poi));
-        bubble.dataset.always = (isGateBubble || isSelected || isJourney || matchesAirline || isCurbDropoff) ? "1" : "0";
-
-        // Anchor "left" pins the dot exactly on the coordinate; the name reads to
-        // its right like a real map label.
-        const marker = new ml.Marker({ element: bubble, anchor: "left" })
+        const marker = new ml.Marker({ element: bubble, anchor: "center" })
           .setLngLat(pos as [number, number])
           .addTo(map);
         poiMarkersRef.current[poi.id] = marker;
       }
-
-      // Apply zoom tiers now and whenever the user zooms — reveal counter-level
-      // detail up close, hide it when zoomed out (real airport-map behavior).
-      const applyZoomTiers = () => {
-        const z = map.getZoom();
-        for (const key of Object.keys(poiMarkersRef.current)) {
-          const el = poiMarkersRef.current[key].getElement() as HTMLElement;
-          const always = el.dataset.always === "1";
-          const mz = Number(el.dataset.minzoom ?? "0");
-          el.style.visibility = always || z >= mz ? "visible" : "hidden";
-        }
-      };
-      zoomTierHandlerRef.current = applyZoomTiers;
-      map.on("zoom", applyZoomTiers);
-      applyZoomTiers();
     });
     return () => {
-      if (zoomTierHandlerRef.current) {
-        try { mapRef.current?.off("zoom", zoomTierHandlerRef.current); } catch { /* map gone */ }
-        zoomTierHandlerRef.current = null;
-      }
       for (const key of Object.keys(poiMarkersRef.current)) {
         poiMarkersRef.current[key].remove();
       }
       poiMarkersRef.current = {};
     };
-  }, [mapReady, layout, gatePoi, gateCode, bookedGate, minutesRounded, airlineName, objective, eligibleLoungeNames, startRoute, selectedPoiId, activeRoute, journeyPoiIdSet]);
+  }, [mapReady, layout, gatePoi, gateCode, bookedGate, minutesRounded, airlineName, objective, eligibleLoungeNames, selectedPoiId, activeRoute, journeyPoiIdSet]);
+
+  /* ── Walk-map leader-line labels (outside hull, collision-safe) ─────── */
+  useEffect(() => {
+    const map = mapRef.current;
+    const overlay = leaderOverlayRef.current;
+    if (!map || !overlay || !mapReady || !layout) {
+      if (overlay) overlay.replaceChildren();
+      return;
+    }
+
+    const hullZones = layout.zones.filter((zone) => zone.ring.length >= 4);
+    const nodePos = new Map(layout.nodes.map((node) => [node.id, node.pos]));
+    const selectedId = selectedPoiId ?? activeRoute?.toPoiId ?? null;
+
+    const paint = () => {
+      const canvas = map.getCanvas();
+      const candidates: WalkMapLeaderCandidate[] = [];
+
+      for (const poi of layout.pois) {
+        const isAirlineCheckin = poi.category === "checkin" && Boolean(poi.airline);
+        const matchesAirline = isAirlineCheckin && airlineName
+          ? airlineName.toLowerCase().includes(poi.airline!.toLowerCase())
+          : false;
+        const pos = nodePos.get(poi.nodeId);
+        if (!pos) continue;
+
+        const isSelected = selectedId !== null && poi.id === selectedId;
+        const isGateBubble = Boolean(
+          (gatePoi !== null && poi.id === gatePoi.id) ||
+          (bookedGate?.exactDoor && poi.nodeId === bookedGate.nodeId),
+        );
+        const isJourney = journeyPoiIdSet.has(poi.id);
+        const isCurbDropoff =
+          poi.id.startsWith("poi-dropoff-") ||
+          poi.id.includes(":node:curb:") ||
+          poi.nodeId.includes(":node:curb:");
+        const isSecurity = poi.category === "security";
+        const isObjective =
+          (objective === "gate" && isGateBubble) ||
+          (objective === "security" && poi.category === "security") ||
+          (objective === "checkin" && poi.category === "checkin") ||
+          (objective === "lounge" && poi.category === "lounge");
+        const emphatic = isSelected || isGateBubble || isObjective || isJourney || matchesAirline || isCurbDropoff;
+        const walkCtx = {
+          isSelected,
+          isGateBubble,
+          isJourney,
+          isObjective,
+          matchesAirline,
+          isCurbDropoff,
+          isReference: !emphatic,
+          isSecurity,
+        };
+        if (!shouldShowLeaderLineLabel(poi, walkCtx)) continue;
+
+        const gateLabel = isGateBubble && gateCode
+          ? `Gate ${gateCode.toUpperCase()}`
+          : resolvePoiDisplayName(poi, layout);
+        const countdown = isGateBubble && minutesRounded > 0 && minutesRounded < 600 ? ` · ${minutesRounded}m` : "";
+        const eligibleLounge = poi.category === "lounge" && loungeIsEligible(poi.name, eligibleLoungeNames);
+        const accessMark = eligibleLounge ? " ✓" : "";
+        const laneSummary = poi.category === "security"
+          ? poi.lanes
+              ?.filter((lane) => lane !== "standard")
+              .map((lane) => (lane === "precheck" ? "PreCheck" : lane === "clear" ? "CLEAR" : lane))
+              .join(" · ")
+          : "";
+        const doorSuffix = poi.doorLabel ? ` · ${poi.doorLabel}` : "";
+        const honesty = poiLocationHonestyTag(poi);
+        const approxSuffix = honesty ? ` · ${honesty}` : "";
+        const urgent = isGateBubble && minutesRounded <= 45;
+        const critical = isGateBubble && minutesRounded <= 20;
+        const strokeColor = critical
+          ? "#dc2626"
+          : urgent
+          ? "#f59e0b"
+          : isGateBubble
+          ? "#d97706"
+          : eligibleLounge
+          ? "#059669"
+          : POI_COLOR[poi.category];
+
+        candidates.push({
+          id: poi.id,
+          text: `${gateLabel}${countdown}${accessMark}${laneSummary ? ` · ${laneSummary}` : ""}${doorSuffix}${approxSuffix}`,
+          lngLat: pos as [number, number],
+          priority: walkMapLabelPriority(walkCtx, journeyPoiOrder.get(poi.id) ?? 99),
+          strokeColor,
+        });
+      }
+
+      const boxes = buildResolvedLeaderBoxes(
+        candidates,
+        hullZones,
+        canvas.width,
+        canvas.height,
+        (lngLat) => map.project(lngLat),
+      );
+      paintWalkMapLeaderOverlay(overlay, boxes, canvas.width, canvas.height);
+    };
+
+    paint();
+    map.on("move", paint);
+    map.on("zoom", paint);
+    return () => {
+      try {
+        map.off("move", paint);
+        map.off("zoom", paint);
+      } catch {
+        /* map gone */
+      }
+      overlay.replaceChildren();
+    };
+  }, [
+    mapReady,
+    layout,
+    gatePoi,
+    gateCode,
+    bookedGate,
+    minutesRounded,
+    airlineName,
+    objective,
+    eligibleLoungeNames,
+    selectedPoiId,
+    activeRoute,
+    journeyPoiIdSet,
+    journeyPoiOrder,
+  ]);
 
   /* ── Start marker: where the drawn line begins ──────────────────────── */
   // The route/journey line starts at the origin node — in planning mode that's
@@ -2721,15 +2757,11 @@ export function AirportNavigatorMap({
       removeMarker();
       const wrap = document.createElement("div");
       wrap.setAttribute("aria-label", "Route start");
-      wrap.style.cssText = "display:flex;align-items:center;gap:5px;font:800 11px system-ui,-apple-system,sans-serif;white-space:nowrap;z-index:5;";
+      wrap.style.cssText = "display:flex;align-items:center;justify-content:center;z-index:5;";
       const dot = document.createElement("span");
-      dot.style.cssText = "width:15px;height:15px;flex:none;border-radius:9999px;background:#16a34a;border:3px solid #fff;box-shadow:0 1px 5px rgba(15,23,42,0.5);";
-      const label = document.createElement("span");
-      label.textContent = `Start · ${origin.landmark ?? "Departures drop-off"}`;
-      label.style.cssText = "color:#166534;text-shadow:0 0 3px #fff,0 0 3px #fff,0 1px 2px #fff,1px 0 2px #fff,-1px 0 2px #fff;";
+      dot.style.cssText = "width:10px;height:10px;border-radius:9999px;background:#16a34a;border:2px solid #fff;box-shadow:0 1px 4px rgba(15,23,42,0.45);";
       wrap.appendChild(dot);
-      wrap.appendChild(label);
-      originMarkerRef.current = new ml.Marker({ element: wrap, anchor: "left" })
+      originMarkerRef.current = new ml.Marker({ element: wrap, anchor: "center" })
         .setLngLat(origin.pos as [number, number])
         .addTo(map);
     });
@@ -2880,33 +2912,7 @@ export function AirportNavigatorMap({
     };
   }, [mapReady, activeRoute]);
 
-  /* ── Zone ground labels + destination beacon (DOM markers) ──────────── */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const zoneMarkersRef = useRef<any[]>([]);
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !mapReady || !layout) return;
-    void import("maplibre-gl").then((ml) => {
-      for (const marker of zoneMarkersRef.current) marker.remove();
-      zoneMarkersRef.current = [];
-      for (const zone of layout.zones) {
-        const ring = zone.ring;
-        const cLng = ring.reduce((sum, pt) => sum + pt[0], 0) / ring.length;
-        const cLat = ring.reduce((sum, pt) => sum + pt[1], 0) / ring.length;
-        const label = document.createElement("div");
-        label.textContent = zone.name.toUpperCase();
-        label.style.cssText =
-          "pointer-events:none;font:700 8px system-ui,-apple-system,sans-serif;letter-spacing:0.14em;color:rgba(255,255,255,0.38);text-shadow:0 1px 4px rgba(0,0,0,0.6);white-space:nowrap;";
-        zoneMarkersRef.current.push(
-          new ml.Marker({ element: label, anchor: "center" }).setLngLat([cLng, cLat]).addTo(map),
-        );
-      }
-    });
-    return () => {
-      for (const marker of zoneMarkersRef.current) marker.remove();
-      zoneMarkersRef.current = [];
-    };
-  }, [mapReady, layout]);
+  /* ── Zone ground labels removed — names render outside hull via leader overlay ─ */
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const beaconMarkerRef = useRef<any>(null);
@@ -3047,6 +3053,11 @@ export function AirportNavigatorMap({
       <div
         ref={mapEl}
         className={`absolute inset-0 z-[2] transition-opacity ${mapReady ? "opacity-100" : "pointer-events-none opacity-0"}`}
+      />
+      <div
+        ref={leaderOverlayRef}
+        data-testid="airport-walk-leader-overlay"
+        className="pointer-events-none absolute inset-0 z-[4]"
       />
       <style>{`.maplibregl-ctrl-top-left{margin-top:${mapControlsTop}}
 .maplibregl-ctrl-top-left .maplibregl-ctrl{box-shadow:0 2px 8px rgba(15,23,42,0.25)}`}</style>
@@ -3452,7 +3463,7 @@ export function AirportNavigatorMap({
           style={{
             bottom: arrivalFirstMile ? `calc(${bottomPanel} + 4.75rem)` : bottomPanel,
           }}
-          className={`absolute inset-x-2 z-[70] overflow-hidden rounded-[24px] bg-white/95 p-3 shadow-2xl backdrop-blur-md dark:bg-slate-900/95 sm:inset-x-3 ${
+          className={`absolute inset-x-2 z-[125] overflow-hidden rounded-[24px] bg-white/95 p-3 pr-16 shadow-2xl backdrop-blur-md dark:bg-slate-900/95 sm:inset-x-3 ${
             showInstructions ? "max-h-[60dvh]" : "max-h-32"
           }`}
         >

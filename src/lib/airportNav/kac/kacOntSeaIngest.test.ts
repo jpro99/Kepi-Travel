@@ -189,3 +189,19 @@ test("booked-gate: SEA C11 resolves to individual OSM gate node", () => {
   assert.equal(hit!.nodeId, "SEA:node:gate:C11");
   assert.equal(hit!.exactDoor, true);
 });
+
+test("SEA KAC overlay keeps human POI names — no raw graph ids on screen", () => {
+  const layout = buildSeaLayoutWithKacOverlay();
+  const bag = layout.pois.find((poi) => poi.nodeId === "SEA:node:bag:domestic");
+  const customs = layout.pois.find((poi) => poi.nodeId === "SEA:node:iaf:customs");
+  const curb = layout.pois.find((poi) => poi.nodeId === "SEA:node:curb:central");
+  assert.ok(bag);
+  assert.equal(bag!.name, "Domestic baggage claim");
+  assert.ok(customs);
+  assert.match(customs!.name, /passport/i);
+  assert.ok(curb);
+  assert.match(curb!.name, /curb/i);
+  for (const poi of [bag!, customs!, curb!]) {
+    assert.ok(!/^SEA:node:/.test(poi.name), `raw id leaked: ${poi.name}`);
+  }
+});

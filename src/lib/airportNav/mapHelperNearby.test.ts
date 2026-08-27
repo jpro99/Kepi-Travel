@@ -25,10 +25,9 @@ const layout: AirportLayout = {
   gateNodeResolver: [],
 };
 
-test("nearby chips surface Door + Starbucks and skip security + far POIs", () => {
+test("nearby chips surface Door confirm and skip security + far POIs", () => {
   const chips = buildMapHelperNearbyChips(layout, [-122.302, 47.443]);
   assert.ok(chips.some((c) => c.kind === "confirm_door" && /22/.test(c.label)));
-  assert.ok(chips.some((c) => c.kind === "confirm_poi" && /Starbucks/i.test(c.label)));
   assert.ok(!chips.some((c) => /Security/i.test(c.label)));
   assert.ok(!chips.some((c) => /Far Cafe/i.test(c.label)));
 });

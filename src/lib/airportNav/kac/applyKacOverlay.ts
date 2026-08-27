@@ -111,15 +111,37 @@ function toAreaLoungePoi(poi: PoiDefinition): PoiDefinition {
   };
 }
 
-function toUnroutedGatePoi(poi: PoiDefinition): PoiDefinition {
+const UNROUTED_KAC_REFERENCE_CATEGORIES = new Set<PoiDefinition["category"]>([
+  "checkin",
+  "security",
+  "train",
+  "lounge",
+]);
+
+function toUnroutedReferencePoi(poi: PoiDefinition, note: string): PoiDefinition {
   return {
     ...poi,
     category: "amenity",
     precision: poi.precision ?? "schematic",
-    minZoomToShow: poi.minZoomToShow ?? 17,
-    notes:
-      "Approximate OSM gate door-ref — unrouted reference pin. Follow signs; no indoor route.",
+    minZoomToShow: poi.minZoomToShow ?? 16,
+    notes: poi.notes ?? note,
   };
+}
+
+function toUnroutedGatePoi(poi: PoiDefinition): PoiDefinition {
+  return toUnroutedReferencePoi(
+    poi,
+    "Approximate OSM gate door-ref — unrouted reference pin. Follow signs; no indoor route.",
+  );
+}
+
+function isUnroutedKacReferencePoi(poi: PoiDefinition, gatePrefix?: string): boolean {
+  if (poi.category === "gate") {
+    if (gatePrefix && poi.id.startsWith(gatePrefix)) return true;
+    if (/:poi:gate:/i.test(poi.id) || /:node:gate:/i.test(poi.nodeId)) return true;
+    return false;
+  }
+  return UNROUTED_KAC_REFERENCE_CATEGORIES.has(poi.category);
 }
 
 /**
@@ -190,7 +212,7 @@ export function applyKacOverlay(
   const { merged: edges, added: edgesAdded } = mergeById(curated.edges, incomingEdges);
 
   const gatePrefix = options.unroutedGatePoiIdPrefix;
-  const incomingPois = kacLayout.pois
+  const incomingPoiCandidates = kacLayout.pois
     .filter((poi) => {
       if (isCuratedPoiId(guards, poi.id)) return false;
       if (isCuratedNodeId(guards, poi.nodeId)) return false;
@@ -199,19 +221,22 @@ export function applyKacOverlay(
       const node = curatedNodeMap.get(poi.nodeId);
       if (node && hasNearbyCuratedGroundTransport(guards, curatedNodeMap, node)) return false;
       return true;
-    })
+    });
+  const gatePoisAdded = incomingPoiCandidates.filter(
+    (p) => p.category === "gate" && isUnroutedKacReferencePoi(p, gatePrefix),
+  ).length;
+  const incomingPois = incomingPoiCandidates
     .map((poi): PoiDefinition => {
       if (areaLoungeIds.has(poi.nodeId)) return toAreaLoungePoi(poi);
-      if (gatePrefix && poi.id.startsWith(gatePrefix) && poi.category === "gate") {
-        return toUnroutedGatePoi(poi);
-      }
-      return poi;
+      if (!isUnroutedKacReferencePoi(poi, gatePrefix)) return poi;
+      if (poi.category === "gate") return toUnroutedGatePoi(poi);
+      return toUnroutedReferencePoi(
+        poi,
+        "KAC schematic reference pin — follow signs; no indoor turn-by-turn route.",
+      );
     });
 
   const { merged: pois } = mergeById(curated.pois, incomingPois);
-  const gatePoisAdded = gatePrefix
-    ? incomingPois.filter((p) => p.id.startsWith(gatePrefix)).length
-    : 0;
   const areaLoungePoisAdded = incomingPois.filter((p) => areaLoungeIds.has(p.nodeId)).length;
 
   const layout: AirportLayout = {

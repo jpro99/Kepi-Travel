@@ -76,20 +76,9 @@ test("generated door node positions match the curve fit from the real anchors", 
   assert.deepEqual(node!.pos, fit.pos);
 });
 
-test("OSM amenities are surveyed, cited, and cover known traveler brands", () => {
-  const amenityPois = SEA_LAYOUT.pois.filter((p) => p.category === "amenity" || p.category === "baggage");
-  assert.ok(amenityPois.length >= 100, `expected ≥100 OSM amenities, got ${amenityPois.length}`);
-  for (const poi of amenityPois) {
-    assert.equal(poi.precision, "surveyed", `${poi.id} must be surveyed`);
-    assert.ok(poi.notes?.startsWith("OSM "), `${poi.id} must cite OSM element in notes`);
-  }
-  // Spot-check brands rematched from Overpass 2026-07-15 (verify-first).
-  for (const name of ["Alki Bakery", "McDonald's", "Qdoba", "Lucky Louie Fish Shack", "Hudson"]) {
-    assert.ok(
-      amenityPois.some((p) => p.name === name || p.name.startsWith(name)),
-      `missing OSM amenity ${name}`,
-    );
-  }
+test("OSM shop/food amenities are not on the traveler walk layout (mall directory stays in seaOsmAmenities.ts)", () => {
+  const shopPois = SEA_LAYOUT.pois.filter((p) => p.id.startsWith("poi-amenity-"));
+  assert.equal(shopPois.length, 0, "walk map must not carry shop/food directory POIs");
 });
 
 test("buildSeaTicketingHall wires every new door node into the walkway graph", () => {

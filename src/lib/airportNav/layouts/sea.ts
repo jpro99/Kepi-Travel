@@ -269,7 +269,7 @@ const POIS: PoiDefinition[] = [
 const SEA_LAYOUT_BASE: AirportLayout = {
   iata: "SEA",
   name: "Seattle–Tacoma International",
-  layoutVersion: "0.9.1-osm-amenities",
+  layoutVersion: "0.9.3-walk-map-pins",
   updatedAt: "2026-07-15",
   center: [-122.30209, 47.44328],
   zones: ZONES,

@@ -22,6 +22,7 @@ import type {
 } from "./types";
 import type { NavTimingCalibrationStore } from "./navTimingCalibration";
 import { resolveTraverseSeconds } from "./navTimingCalibration";
+import { resolveNodeDisplayName, resolvePoiDisplayName } from "./poiDisplayName";
 
 // ── Geometry helpers ────────────────────────────────────────────────────────
 
@@ -236,7 +237,7 @@ export function computeRoute(options: ComputeRouteOptions): ComputedRoute | null
     0,
   );
   const laneUsed = edgesUsed.find((edge) => edge.kind === "security_transition")?.laneType;
-  const instructions = buildInstructions(nodeIds, edgesUsed, nodeById, poi.name);
+  const instructions = buildInstructions(nodeIds, edgesUsed, nodeById, resolvePoiDisplayName(poi, layout));
 
   return { fromNodeId, toPoiId, nodeIds, coordinates, totalMeters, totalSeconds, instructions, laneUsed };
 }
@@ -279,15 +280,15 @@ function buildInstructions(
         text,
         maneuver: "security",
         atMeters: metersSoFar,
-        landmark: fromNode.landmark,
+        landmark: resolveNodeDisplayName(fromNode) ?? undefined,
       });
       previousBearing = null; // orientation resets after security/customs
     } else if (edge.kind === "train") {
       instructions.push({
-        text: `Board the train toward ${toNode.landmark ?? "your concourse"}`,
+        text: `Board the train toward ${resolveNodeDisplayName(toNode) ?? "your concourse"}`,
         maneuver: "train_board",
         atMeters: metersSoFar,
-        landmark: fromNode.landmark,
+        landmark: resolveNodeDisplayName(fromNode) ?? undefined,
       });
       instructions.push({
         text: "Exit the train and follow signs to your gate",
@@ -299,20 +300,21 @@ function buildInstructions(
       const segBearing = bearingDeg(fromNode.pos, toNode.pos);
       const turn = previousBearing === null ? "straight" : turnWord(segBearing - previousBearing);
       const distanceFt = Math.round((edge.lengthM * 3.28084) / 10) * 10;
-      const toward = toNode.landmark ? ` toward ${toNode.landmark}` : "";
+      const towardLabel = resolveNodeDisplayName(toNode);
+      const toward = towardLabel ? ` toward ${towardLabel}` : "";
       if (turn === "straight") {
         instructions.push({
           text: `Continue straight ${distanceFt} ft${toward}`,
           maneuver: "straight",
           atMeters: metersSoFar,
-          landmark: toNode.landmark,
+          landmark: towardLabel ?? undefined,
         });
       } else {
         instructions.push({
           text: `Turn ${turn.toUpperCase()}${toward} (${distanceFt} ft)`,
           maneuver: turn,
           atMeters: metersSoFar,
-          landmark: toNode.landmark,
+          landmark: towardLabel ?? undefined,
         });
       }
       previousBearing = segBearing;

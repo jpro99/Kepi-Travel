@@ -24,16 +24,18 @@ test("FCO layout supports arrival first mile with passport, bags, customs, Leona
   assert.ok(FCO_LAYOUT.pois.some((p) => p.id === "poi-leonardo-express"));
 });
 
-test("FCO arrival journey walks gate → passport → bags → customs → Leonardo", () => {
+test("FCO arrival journey walks gate → passport → bags → customs → Leonardo → Roma Termini", () => {
   const stops = buildArrivalTripJourney(FCO_LAYOUT, { gateCode: "E12" });
   assert.deepEqual(
     stops.map((s) => s.role),
-    ["deplane", "passport", "baggage", "customs", "exit", "ground_transport"],
+    ["deplane", "passport", "baggage", "customs", "exit", "ground_transport", "ground_transport"],
   );
   assert.equal(stops[0]?.nodeId, "gate-e");
   assert.equal(stops[1]?.poiId, "poi-passport-t3");
   assert.equal(stops[2]?.poiId, "poi-baggage-t3");
   assert.equal(stops[5]?.poiId, "poi-leonardo-express");
+  assert.equal(stops[6]?.poiId, "poi-roma-termini");
+  assert.equal(stops[6]?.label, "Roma Termini");
 });
 
 test("FCO arrival coach path includes walk minutes along the graph", () => {
@@ -57,14 +59,15 @@ test("FCO arrival coach path includes walk minutes along the graph", () => {
   assert.match(steps.find((s) => s.id === "ride")?.text ?? "", /Leonardo Express/i);
 });
 
-test("FCO arrival journey POI ids cover passport, bags, customs, Leonardo chips", () => {
+test("FCO arrival journey POI ids cover passport, bags, customs, Leonardo, Termini chips", () => {
   const stops = buildArrivalTripJourney(FCO_LAYOUT, { gateCode: "E12" });
   const ids = arrivalJourneyPoiIds(stops);
   assert.ok(ids.has("poi-passport-t3"));
   assert.ok(ids.has("poi-baggage-t3"));
   assert.ok(ids.has("poi-customs-t3"));
   assert.ok(ids.has("poi-leonardo-express"));
-  assert.ok(ids.size >= 4);
+  assert.ok(ids.has("poi-roma-termini"));
+  assert.ok(ids.size >= 5);
 });
 
 test("FCO arrival origin defaults to gate-e when gate is TBD (not gate-a)", () => {
@@ -90,15 +93,16 @@ test("FCO gate-e routes to passport and baggage are computable for preview chips
   assert.ok(toBags && toBags.totalSeconds > 0);
 });
 
-test("FCO gate-e to Leonardo route is computable along arrival graph", () => {
+test("FCO gate-e to Roma Termini route uses Leonardo train edge", () => {
   const route = computeRoute({
     layout: FCO_LAYOUT,
     fromNodeId: "gate-e",
-    toPoiId: "poi-leonardo-express",
+    toPoiId: "poi-roma-termini",
     credentials: { tsaPreCheck: false, clear: false, known: true },
   });
   assert.ok(route);
-  assert.ok(route!.totalSeconds > 0);
+  assert.ok(route!.totalSeconds > 32 * 60);
+  assert.ok(route!.instructions.some((step) => step.maneuver === "train_board"));
 });
 
 test("FCO arrival journey without gate code still starts at gate-e", () => {
