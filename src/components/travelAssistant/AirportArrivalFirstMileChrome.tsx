@@ -240,7 +240,7 @@ export function AirportArrivalFirstMileChrome({
             data-testid="airport-arrival-coach-open"
             onClick={() => setCoachOpen(true)}
             className="pointer-events-auto absolute left-3 z-[55] min-h-[44px] rounded-full bg-black/60 px-4 py-2.5 text-[13px] font-bold text-white shadow-lg backdrop-blur-md ring-1 ring-white/15 active:scale-[0.98]"
-            style={{ top: coachToggleTop }}
+            style={activeRoute ? { top: coachToggleTop } : { bottom: coachBottom }}
           >
             Arrival coach
           </button>

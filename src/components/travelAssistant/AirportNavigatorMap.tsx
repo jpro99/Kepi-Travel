@@ -35,7 +35,12 @@ import { isDirectoryClutterPoi, isUnroutedGateReferencePoi, shouldRenderWalkMapP
 import { buildResolvedLeaderBoxes, paintWalkMapLeaderOverlay, type WalkMapLeaderCandidate } from "@/lib/airportNav/paintWalkMapLeaderOverlay";
 import { setAirportWalkSheetOpen } from "@/lib/airportNav/airportWalkSheet";
 import { computeDirectionArrow, confirmedSnappedPosition } from "@/lib/airportNav/directionArrow";
-import { computeLayoutBounds, computeLandsideBounds } from "@/lib/airportNav/layoutBounds";
+import {
+  computeLayoutBounds,
+  computeLandsideBounds,
+  computeRegionalRailBounds,
+  trainEdgeSegmentsFromLayout,
+} from "@/lib/airportNav/layoutBounds";
 import { buildAirportSchematicModel } from "@/lib/airportNav/schematic";
 import {
   buildLandsideOverlayGeoJson,
@@ -1112,7 +1117,9 @@ export function AirportNavigatorMap({
     ? `calc(${shellBottomInset} + 12rem)`
     : "max(5.5rem, calc(env(safe-area-inset-bottom) + 4.75rem))";
   const embeddedInLiveMap = fill && Boolean(shellTopInset);
-  const hideEmbeddedFlightHero = embeddedInLiveMap && previewMode;
+  /** Live Map tab shell — map-first: no cards on the field; rail line must stay readable. */
+  const mapFirstLive = embeddedInLiveMap;
+  const hideEmbeddedFlightHero = mapFirstLive;
   // Full-screen map (auto-pops once on entering the terminal; ✕ to leave,
   // tap the card to come back — the map is always one tap away)
   const [expanded, setExpanded] = useState(false);
@@ -1124,11 +1131,13 @@ export function AirportNavigatorMap({
     : fill
       ? `max(4.5rem, calc(env(safe-area-inset-top) + 4rem))`
       : "3.25rem";
-  const destinationRailTop = hideEmbeddedFlightHero
-    ? `calc(${contentTop} + 5.75rem)`
-    : fill
-      ? `calc(${contentTop} + 8.5rem)`
-      : "9rem";
+  const destinationRailTop = mapFirstLive
+    ? `calc(${contentTop} + 0.5rem)`
+    : hideEmbeddedFlightHero
+      ? `calc(${contentTop} + 5.75rem)`
+      : fill
+        ? `calc(${contentTop} + 8.5rem)`
+        : "9rem";
   const mapControlsTop = hideEmbeddedFlightHero
     ? `calc(${contentTop} + 0.5rem)`
     : fill
@@ -1842,14 +1851,16 @@ export function AirportNavigatorMap({
   }, [pressure, gatePoi, setSprintMode, startRoute, showSubtitle]);
 
   // Auto-start gate walk once when layout + gate are ready (after PreCheck answer if needed).
+  // Live Map shell stays map-first — no auto bottom walk sheet covering Leonardo rail.
   const autoGateStartedRef = useRef(false);
   useEffect(() => {
     if (autoGateStartedRef.current) return;
+    if (mapFirstLive) return;
     if (!layout || !gatePoi || activeRoute || quietMode) return;
     if (!credentials.known) return;
     autoGateStartedRef.current = true;
     startRoute(gatePoi.id, true);
-  }, [layout, gatePoi, activeRoute, quietMode, credentials.known, startRoute]);
+  }, [mapFirstLive, layout, gatePoi, activeRoute, quietMode, credentials.known, startRoute]);
 
 
   /* ── Voice co-pilot ─────────────────────────────────────────────────── */
@@ -2162,16 +2173,28 @@ export function AirportNavigatorMap({
         // irregular and off-centre, so a fixed center+zoom crops them (M17). In
         // preview, frame just the main (landside) terminal where check-in +
         // security are, not the whole airfield incl. satellites (M24).
-        const bounds = previewMode ? computeLandsideBounds(layout) : computeLayoutBounds(layout);
+        const regionalRailBounds =
+          mapFirstLive && arrivalFirstMile ? computeRegionalRailBounds(layout) : null;
+        const bounds = previewMode
+          ? computeLandsideBounds(layout)
+          : regionalRailBounds ?? computeLayoutBounds(layout);
+        const fitPadding =
+          mapFirstLive && arrivalFirstMile
+            ? activeRoute
+              ? { top: 56, bottom: 108, left: 36, right: 36 }
+              : { top: 52, bottom: 72, left: 40, right: 40 }
+            : previewMode
+              ? { top: 96, bottom: 160, left: 48, right: 48 }
+              : { top: 96, bottom: 160, left: 48, right: 48 };
         window.requestAnimationFrame(() => {
           try {
             map.resize();
             if (bounds) {
               map.fitBounds(bounds, {
-                padding: { top: 96, bottom: 160, left: 48, right: 48 },
+                padding: fitPadding,
                 pitch: 0,
                 bearing: 0,
-                maxZoom: 17,
+                maxZoom: regionalRailBounds ? 12 : 17,
                 duration: 0,
               });
             }
@@ -2326,28 +2349,34 @@ export function AirportNavigatorMap({
     // lounge → gate) without having to guess.
     const line = activeRoute?.coordinates ?? journeyRoute?.coords ?? null;
     const routeNodeIds = activeRoute?.nodeIds ?? journeyRoute?.nodeIds ?? [];
-    // Schematic layouts: never paint the straight-line skeleton (it visibly cuts
-    // through terminals/roads). Pins + the time estimate carry the guidance.
-    if (!preciseRouteEnabled || !line || line.length < 2) {
-      source.setData({ type: "FeatureCollection", features: [] });
-      trainSource?.setData({ type: "FeatureCollection", features: [] });
-      return;
-    }
-    source.setData({
-      type: "Feature",
-      properties: {},
-      geometry: { type: "LineString", coordinates: line },
-    });
-    // Overlay the train hops distinctly (dashed violet) so a straight cross-field
-    // segment reads as the people-mover ride, not a walk.
+    const mapFirstArrivalRail = mapFirstLive && arrivalFirstMile;
+    // Schematic layouts: never paint the straight-line walking skeleton (M30).
+    // Live arrival first mile still paints surveyed regional rail (Leonardo→Termini).
+    const showWalkLine = preciseRouteEnabled && line && line.length >= 2;
+    source.setData(
+      showWalkLine
+        ? {
+            type: "Feature",
+            properties: {},
+            geometry: { type: "LineString", coordinates: line },
+          }
+        : { type: "FeatureCollection", features: [] },
+    );
+    // Overlay train hops distinctly (dashed violet) — regional rail on live FCO map-first,
+    // or route-following train legs when surveyed corridors are enabled.
     if (trainSource && layout) {
-      const trainSegs = trainSegmentsFromNodeIds(layout, routeNodeIds);
+      const trainSegs = mapFirstArrivalRail
+        ? trainEdgeSegmentsFromLayout(layout)
+        : preciseRouteEnabled
+          ? trainSegmentsFromNodeIds(layout, routeNodeIds)
+          : [];
       trainSource.setData(
         trainSegs.length > 0
           ? { type: "Feature", properties: {}, geometry: { type: "MultiLineString", coordinates: trainSegs } }
           : { type: "FeatureCollection", features: [] },
       );
     }
+    if (!showWalkLine) return;
 
     let progress = 0;
     if (activeRoute && snapped) {
@@ -2375,7 +2404,7 @@ export function AirportNavigatorMap({
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRoute, journeyRoute, mapReady, snapped?.nearestNodeId, layout]);
+  }, [activeRoute, journeyRoute, mapReady, snapped?.nearestNodeId, layout, mapFirstLive, arrivalFirstMile, preciseRouteEnabled]);
 
   /* ── Admin click-to-place (capture real lng/lat on basemap click) ───── */
   useEffect(() => {
@@ -3021,7 +3050,7 @@ export function AirportNavigatorMap({
             </p>
           ) : null}
         </div>
-      ) : !preciseRouteEnabled && layout ? (
+      ) : !preciseRouteEnabled && layout && !mapFirstLive ? (
         <div
           className="pointer-events-none absolute left-3 right-3 z-20 rounded-2xl border border-amber-400/30 bg-amber-950/70 px-3 py-1.5 backdrop-blur-md"
           style={{ top: previewBannerTop }}
@@ -3420,7 +3449,8 @@ export function AirportNavigatorMap({
       )}
 
       {/* Guide-me CTA when idle */}
-      {!securityQuestionOpen && !journeyPrompt && !quietMode && !activeRoute && layout && gatePoi && (
+      {!securityQuestionOpen && !journeyPrompt && !quietMode && !activeRoute && layout && gatePoi
+        && !(mapFirstLive && (arrivalFirstMile || isArriveCoach)) ? (
         <div style={{ bottom: bottomPanel }} className="absolute inset-x-3">
           <button
             type="button"
@@ -3430,7 +3460,7 @@ export function AirportNavigatorMap({
             🧭 Guide me to {gateCode ? `Gate ${gateCode.toUpperCase()}` : "my gate"}
           </button>
         </div>
-      )}
+      ) : null}
 
       {activeRally?.status === "active" ? (
         <div

@@ -31,6 +31,11 @@ test("AirportNavigatorMap does not mount GateConfidenceBar on the live map", () 
   );
   assert.match(src, /hideWhereToRail=\{embeddedInLiveMap\}/, "Bottom Where-to rail must hide on Live Map");
   assert.match(src, /mapFirst=\{embeddedInLiveMap\}/, "Arrival first-mile chrome must receive mapFirst");
+  assert.match(src, /mapFirstLive = embeddedInLiveMap/, "Live map shell must use mapFirstLive gate");
+  assert.match(src, /hideEmbeddedFlightHero = mapFirstLive/, "Flight hero must hide on live map-first arrive");
+  assert.match(src, /if \(mapFirstLive\) return;/, "Live map must not auto-open bottom walk sheet");
+  assert.match(src, /trainEdgeSegmentsFromLayout\(layout\)/, "Live arrival must paint regional rail train edges");
+  assert.match(src, /computeRegionalRailBounds\(layout\)/, "Live FCO arrival must frame Leonardo→Termini rail bounds");
   assert.ok(
     src.includes("Estimated walk"),
     "Estimated Walk sheet copy must remain on the live map.",
@@ -52,6 +57,7 @@ test("AirportArrivalFirstMileChrome keeps coach in a top sheet when mapFirst", (
   assert.match(src, /data-testid="airport-arrival-coach-close"/, "Coach close control required");
   assert.match(src, /style=\{\{ top: coachSheetTop \}\}/, "Coach sheet must anchor from top, not bottom rail");
   assert.match(src, /max-h-\[28dvh\]/, "Coach sheet must cap height so Leonardo rail stays readable");
+  assert.match(src, /bottom: coachBottom/, "Map-first coach toggle sits on bottom rail when idle");
 });
 
 test("Walk leader labels render full words without ellipsis clipping", () => {

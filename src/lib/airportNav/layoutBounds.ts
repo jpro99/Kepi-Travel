@@ -8,6 +8,57 @@ import type { AirportLayout } from "./types";
 
 export type LngLatBounds = [[number, number], [number, number]];
 
+/** Every `train` edge as a coordinate pair — regional rail hops (e.g. FCO Leonardo → Roma Termini). */
+export function trainEdgeSegmentsFromLayout(layout: AirportLayout): [number, number][][] {
+  const pos = new Map(layout.nodes.map((node) => [node.id, node.pos]));
+  const segments: [number, number][][] = [];
+  for (const edge of layout.edges) {
+    if (edge.kind !== "train") continue;
+    const a = pos.get(edge.from);
+    const b = pos.get(edge.to);
+    if (a && b) segments.push([a, b]);
+  }
+  return segments;
+}
+
+/**
+ * Camera bounds for arrival first mile when a layout includes regional rail.
+ * Frames both airport terminal context and the surveyed train terminus (FCO→Termini).
+ */
+export function computeRegionalRailBounds(layout: AirportLayout): LngLatBounds | null {
+  const trainSegments = trainEdgeSegmentsFromLayout(layout);
+  if (trainSegments.length === 0) return null;
+
+  let west = Infinity;
+  let south = Infinity;
+  let east = -Infinity;
+  let north = -Infinity;
+
+  const consider = (lng: number, lat: number) => {
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
+    if (lng < west) west = lng;
+    if (lng > east) east = lng;
+    if (lat < south) south = lat;
+    if (lat > north) north = lat;
+  };
+
+  for (const segment of trainSegments) {
+    for (const [lng, lat] of segment) consider(lng, lat);
+  }
+
+  const terminal = computeLayoutBounds(layout);
+  if (terminal) {
+    consider(terminal[0][0], terminal[0][1]);
+    consider(terminal[1][0], terminal[1][1]);
+  }
+
+  if (west === Infinity) return null;
+  return [
+    [west, south],
+    [east, north],
+  ];
+}
+
 /** [[west, south], [east, north]] covering every zone ring (nodes as fallback). */
 export function computeLayoutBounds(layout: AirportLayout): LngLatBounds | null {
   let west = Infinity;
