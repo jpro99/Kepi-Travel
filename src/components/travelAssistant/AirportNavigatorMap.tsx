@@ -67,20 +67,8 @@ import type { FamilyAirportPin } from "@/lib/family/familyAirportPins";
 import type { FamilyRally } from "@/lib/family/familyAirportSync";
 import { OfficialAirportMapLink } from "@/components/travelAssistant/OfficialAirportMapLink";
 import { MapHelperConfirmBar } from "@/components/travelAssistant/MapHelperConfirmBar";
-import { GateConfidenceBar } from "@/components/travelAssistant/GateConfidenceBar";
 import { ArrivalCardStack } from "@/components/travelAssistant/ArrivalCardStack";
-import {
-  buildArrivalCoachCards,
-  computeArrivalGateConfidence,
-  computeDepartGateConfidence,
-} from "@/lib/airportNav/gateConfidence";
-import {
-  computeConnectionGateConfidence,
-  estimateSeaConnectionWalkMinutes,
-  isHubConnectionActive,
-  resolveHubConnection,
-  type HubConnectionContext,
-} from "@/lib/airportNav/connectionClock";
+import { buildArrivalCoachCards } from "@/lib/airportNav/gateConfidence";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -1829,97 +1817,10 @@ export function AirportNavigatorMap({
     });
   }, [isArriveCoach, coachPathSteps, iata, arrivalTransportPresentation]);
 
-  const remainingArrivalWalkMinutes = useMemo(() => {
-    if (!isArriveCoach) return null;
-    return coachPathSteps
-      .slice(coachSpotlightIndex)
-      .reduce((sum, step) => sum + (step.minutes ?? 0), 0);
-  }, [isArriveCoach, coachPathSteps, coachSpotlightIndex]);
-
-  const gateConfidence = useMemo(() => {
-    const currentStep = coachPathSteps[coachSpotlightIndex] ?? coachPathSteps[0] ?? null;
-    const hubCode = iata.trim().toUpperCase();
-    const connectionCtx: HubConnectionContext | null =
-      tripReservations && activeReservationId
-        ? resolveHubConnection(tripReservations, hubCode, activeReservationId)
-        : null;
-    const useConnectionClock =
-      connectionCtx &&
-      connectionCtx.hubIata === hubCode &&
-      isHubConnectionActive(connectionCtx);
-
-    if (useConnectionClock && connectionCtx) {
-      const walk = estimateSeaConnectionWalkMinutes({
-        arrivalGate: connectionCtx.inbound.arrivalGate,
-        departureGate: connectionCtx.outbound.departureGate ?? gateCode,
-        arrivalTerminal: connectionCtx.inbound.arrivalTerminal,
-        departureTerminal: connectionCtx.outbound.departureTerminal ?? departureTerminal,
-        credentials: { tsaPreCheck: credentials.tsaPreCheck, clear: credentials.clear },
-      });
-      return computeConnectionGateConfidence({
-        ctx: connectionCtx,
-        minutesToOutboundDeparture: minutesRounded,
-        landedMinutesAgo,
-        locationStatus: proximityStatus,
-        throughSecurity: ["airside", "lounge", "at_gate", "boarding_soon"].includes(journeyPhase),
-        credentials: { tsaPreCheck: credentials.tsaPreCheck, clear: credentials.clear },
-        walkMinutes: walk.minutes,
-        walkKnown: walk.known,
-      });
-    }
-
-    if (isArriveCoach) {
-      return computeArrivalGateConfidence({
-        iata,
-        flightArrivalTime,
-        flightTimezone,
-        landedMinutesAgo,
-        hotelLabel,
-        currentStep,
-        remainingWalkMinutes: remainingArrivalWalkMinutes,
-      });
-    }
-    const throughSecurity = ["airside", "lounge", "at_gate", "boarding_soon"].includes(journeyPhase);
-    return computeDepartGateConfidence({
-      iata,
-      minutesToDeparture: minutesRounded,
-      walkToGateSeconds: gateRoute?.totalSeconds ?? null,
-      throughSecurity,
-      securityWaitSeconds: throughSecurity ? 0 : 12 * 60,
-      currentStep,
-      arrivalAirport,
-      departureTimezone: flightTimezone,
-    });
-  }, [
-    isArriveCoach,
-    coachPathSteps,
-    coachSpotlightIndex,
-    iata,
-    tripReservations,
-    activeReservationId,
-    flightArrivalTime,
-    flightTimezone,
-    landedMinutesAgo,
-    hotelLabel,
-    remainingArrivalWalkMinutes,
-    minutesRounded,
-    gateRoute,
-    journeyPhase,
-    gateCode,
-    departureTerminal,
-    proximityStatus,
-    credentials.tsaPreCheck,
-    credentials.clear,
-    arrivalAirport,
-  ]);
-
   const rideLinks = arrivalRideLinks;
 
   const flightCoachLabel = [airlineName, flightNumber].filter(Boolean).join(" ") || null;
-  const coachBarTop = `calc(${contentTop} + 0.25rem)`;
-  const arrivalCardStackTop = arrivalFirstMile
-    ? `calc(${contentTop} + 0.25rem)`
-    : coachBarTop;
+  const arrivalCardStackTop = `calc(${contentTop} + 0.25rem)`;
 
   // Sprint self-suggestion — once, calmly (spec: calm urgency, never panic)
   useEffect(() => {
@@ -3124,23 +3025,6 @@ export function AirportNavigatorMap({
           <p className="text-[11px] leading-snug text-amber-100/90">
             Terminal guide · pins approximate · follow airport signs
           </p>
-        </div>
-      ) : null}
-
-      {/* You're-fine coach — one next move + honest clock (depart / connection). */}
-      {!isArriveCoach && gateConfidence ? (
-        <div className="pointer-events-none absolute left-3 right-3 z-[35]" style={{ top: coachBarTop }}>
-          <GateConfidenceBar
-            confidence={gateConfidence}
-            iata={iata}
-            flightLabel={flightCoachLabel}
-            mapVisible={coachMapExpanded || expanded}
-            onShowMap={() => {
-              setCoachMapExpanded(true);
-              setExpanded(true);
-              setRailOpen(true);
-            }}
-          />
         </div>
       ) : null}
 
