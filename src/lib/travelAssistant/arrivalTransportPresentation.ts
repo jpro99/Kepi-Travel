@@ -13,6 +13,15 @@ export interface ArrivalTransportPresentation {
   rideStepDetail?: string;
 }
 
+export function sanitizeArrivalHotelLabelForUi(hotelLabel?: string | null): string | null {
+  const raw = hotelLabel?.trim();
+  if (!raw) return null;
+  if (/property\s+address|arnaria\s+str/i.test(raw)) return null;
+  if (raw.length > 40) return null;
+  if (raw.split(/\s+/u).length > 6) return null;
+  return raw;
+}
+
 export function resolveArrivalTransportPresentation(input: {
   iata: string;
   flightArrivalTime?: string | null;

@@ -35,7 +35,13 @@ import { isDirectoryClutterPoi, isUnroutedGateReferencePoi, shouldRenderWalkMapP
 import { buildResolvedLeaderBoxes, paintWalkMapLeaderOverlay, type WalkMapLeaderCandidate } from "@/lib/airportNav/paintWalkMapLeaderOverlay";
 import { setAirportWalkSheetOpen } from "@/lib/airportNav/airportWalkSheet";
 import { computeDirectionArrow, confirmedSnappedPosition } from "@/lib/airportNav/directionArrow";
-import { computeLayoutBounds, computeLandsideBounds } from "@/lib/airportNav/layoutBounds";
+import {
+  computeLayoutBounds,
+  computeLandsideBounds,
+  computeRegionalRailBounds,
+  regionalRailLineStringsFromLayout,
+  trainEdgeSegmentsFromLayout,
+} from "@/lib/airportNav/layoutBounds";
 import { buildAirportSchematicModel } from "@/lib/airportNav/schematic";
 import {
   buildLandsideOverlayGeoJson,
@@ -67,20 +73,8 @@ import type { FamilyAirportPin } from "@/lib/family/familyAirportPins";
 import type { FamilyRally } from "@/lib/family/familyAirportSync";
 import { OfficialAirportMapLink } from "@/components/travelAssistant/OfficialAirportMapLink";
 import { MapHelperConfirmBar } from "@/components/travelAssistant/MapHelperConfirmBar";
-import { GateConfidenceBar } from "@/components/travelAssistant/GateConfidenceBar";
 import { ArrivalCardStack } from "@/components/travelAssistant/ArrivalCardStack";
-import {
-  buildArrivalCoachCards,
-  computeArrivalGateConfidence,
-  computeDepartGateConfidence,
-} from "@/lib/airportNav/gateConfidence";
-import {
-  computeConnectionGateConfidence,
-  estimateSeaConnectionWalkMinutes,
-  isHubConnectionActive,
-  resolveHubConnection,
-  type HubConnectionContext,
-} from "@/lib/airportNav/connectionClock";
+import { buildArrivalCoachCards } from "@/lib/airportNav/gateConfidence";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -1124,7 +1118,9 @@ export function AirportNavigatorMap({
     ? `calc(${shellBottomInset} + 12rem)`
     : "max(5.5rem, calc(env(safe-area-inset-bottom) + 4.75rem))";
   const embeddedInLiveMap = fill && Boolean(shellTopInset);
-  const hideEmbeddedFlightHero = embeddedInLiveMap && previewMode;
+  /** Live Map tab shell — map-first: no cards on the field; rail line must stay readable. */
+  const mapFirstLive = embeddedInLiveMap;
+  const hideEmbeddedFlightHero = mapFirstLive;
   // Full-screen map (auto-pops once on entering the terminal; ✕ to leave,
   // tap the card to come back — the map is always one tap away)
   const [expanded, setExpanded] = useState(false);
@@ -1136,11 +1132,13 @@ export function AirportNavigatorMap({
     : fill
       ? `max(4.5rem, calc(env(safe-area-inset-top) + 4rem))`
       : "3.25rem";
-  const destinationRailTop = hideEmbeddedFlightHero
-    ? `calc(${contentTop} + 5.75rem)`
-    : fill
-      ? `calc(${contentTop} + 8.5rem)`
-      : "9rem";
+  const destinationRailTop = mapFirstLive
+    ? `calc(${contentTop} + 0.5rem)`
+    : hideEmbeddedFlightHero
+      ? `calc(${contentTop} + 5.75rem)`
+      : fill
+        ? `calc(${contentTop} + 8.5rem)`
+        : "9rem";
   const mapControlsTop = hideEmbeddedFlightHero
     ? `calc(${contentTop} + 0.5rem)`
     : fill
@@ -1829,97 +1827,10 @@ export function AirportNavigatorMap({
     });
   }, [isArriveCoach, coachPathSteps, iata, arrivalTransportPresentation]);
 
-  const remainingArrivalWalkMinutes = useMemo(() => {
-    if (!isArriveCoach) return null;
-    return coachPathSteps
-      .slice(coachSpotlightIndex)
-      .reduce((sum, step) => sum + (step.minutes ?? 0), 0);
-  }, [isArriveCoach, coachPathSteps, coachSpotlightIndex]);
-
-  const gateConfidence = useMemo(() => {
-    const currentStep = coachPathSteps[coachSpotlightIndex] ?? coachPathSteps[0] ?? null;
-    const hubCode = iata.trim().toUpperCase();
-    const connectionCtx: HubConnectionContext | null =
-      tripReservations && activeReservationId
-        ? resolveHubConnection(tripReservations, hubCode, activeReservationId)
-        : null;
-    const useConnectionClock =
-      connectionCtx &&
-      connectionCtx.hubIata === hubCode &&
-      isHubConnectionActive(connectionCtx);
-
-    if (useConnectionClock && connectionCtx) {
-      const walk = estimateSeaConnectionWalkMinutes({
-        arrivalGate: connectionCtx.inbound.arrivalGate,
-        departureGate: connectionCtx.outbound.departureGate ?? gateCode,
-        arrivalTerminal: connectionCtx.inbound.arrivalTerminal,
-        departureTerminal: connectionCtx.outbound.departureTerminal ?? departureTerminal,
-        credentials: { tsaPreCheck: credentials.tsaPreCheck, clear: credentials.clear },
-      });
-      return computeConnectionGateConfidence({
-        ctx: connectionCtx,
-        minutesToOutboundDeparture: minutesRounded,
-        landedMinutesAgo,
-        locationStatus: proximityStatus,
-        throughSecurity: ["airside", "lounge", "at_gate", "boarding_soon"].includes(journeyPhase),
-        credentials: { tsaPreCheck: credentials.tsaPreCheck, clear: credentials.clear },
-        walkMinutes: walk.minutes,
-        walkKnown: walk.known,
-      });
-    }
-
-    if (isArriveCoach) {
-      return computeArrivalGateConfidence({
-        iata,
-        flightArrivalTime,
-        flightTimezone,
-        landedMinutesAgo,
-        hotelLabel,
-        currentStep,
-        remainingWalkMinutes: remainingArrivalWalkMinutes,
-      });
-    }
-    const throughSecurity = ["airside", "lounge", "at_gate", "boarding_soon"].includes(journeyPhase);
-    return computeDepartGateConfidence({
-      iata,
-      minutesToDeparture: minutesRounded,
-      walkToGateSeconds: gateRoute?.totalSeconds ?? null,
-      throughSecurity,
-      securityWaitSeconds: throughSecurity ? 0 : 12 * 60,
-      currentStep,
-      arrivalAirport,
-      departureTimezone: flightTimezone,
-    });
-  }, [
-    isArriveCoach,
-    coachPathSteps,
-    coachSpotlightIndex,
-    iata,
-    tripReservations,
-    activeReservationId,
-    flightArrivalTime,
-    flightTimezone,
-    landedMinutesAgo,
-    hotelLabel,
-    remainingArrivalWalkMinutes,
-    minutesRounded,
-    gateRoute,
-    journeyPhase,
-    gateCode,
-    departureTerminal,
-    proximityStatus,
-    credentials.tsaPreCheck,
-    credentials.clear,
-    arrivalAirport,
-  ]);
-
   const rideLinks = arrivalRideLinks;
 
   const flightCoachLabel = [airlineName, flightNumber].filter(Boolean).join(" ") || null;
-  const coachBarTop = `calc(${contentTop} + 0.25rem)`;
-  const arrivalCardStackTop = arrivalFirstMile
-    ? `calc(${contentTop} + 0.25rem)`
-    : coachBarTop;
+  const arrivalCardStackTop = `calc(${contentTop} + 0.25rem)`;
 
   // Sprint self-suggestion — once, calmly (spec: calm urgency, never panic)
   useEffect(() => {
@@ -1941,14 +1852,16 @@ export function AirportNavigatorMap({
   }, [pressure, gatePoi, setSprintMode, startRoute, showSubtitle]);
 
   // Auto-start gate walk once when layout + gate are ready (after PreCheck answer if needed).
+  // Live Map shell stays map-first — no auto bottom walk sheet covering Leonardo rail.
   const autoGateStartedRef = useRef(false);
   useEffect(() => {
     if (autoGateStartedRef.current) return;
+    if (mapFirstLive) return;
     if (!layout || !gatePoi || activeRoute || quietMode) return;
     if (!credentials.known) return;
     autoGateStartedRef.current = true;
     startRoute(gatePoi.id, true);
-  }, [layout, gatePoi, activeRoute, quietMode, credentials.known, startRoute]);
+  }, [mapFirstLive, layout, gatePoi, activeRoute, quietMode, credentials.known, startRoute]);
 
 
   /* ── Voice co-pilot ─────────────────────────────────────────────────── */
@@ -2261,16 +2174,28 @@ export function AirportNavigatorMap({
         // irregular and off-centre, so a fixed center+zoom crops them (M17). In
         // preview, frame just the main (landside) terminal where check-in +
         // security are, not the whole airfield incl. satellites (M24).
-        const bounds = previewMode ? computeLandsideBounds(layout) : computeLayoutBounds(layout);
+        const regionalRailBounds =
+          mapFirstLive && arrivalFirstMile ? computeRegionalRailBounds(layout) : null;
+        const bounds = previewMode
+          ? computeLandsideBounds(layout)
+          : regionalRailBounds ?? computeLayoutBounds(layout);
+        const fitPadding =
+          mapFirstLive && arrivalFirstMile
+            ? activeRoute
+              ? { top: 56, bottom: 108, left: 36, right: 36 }
+              : { top: 44, bottom: 64, left: 44, right: 44 }
+            : previewMode
+              ? { top: 96, bottom: 160, left: 48, right: 48 }
+              : { top: 96, bottom: 160, left: 48, right: 48 };
         window.requestAnimationFrame(() => {
           try {
             map.resize();
             if (bounds) {
               map.fitBounds(bounds, {
-                padding: { top: 96, bottom: 160, left: 48, right: 48 },
+                padding: fitPadding,
                 pitch: 0,
                 bearing: 0,
-                maxZoom: 17,
+                maxZoom: regionalRailBounds ? 11.5 : 17,
                 duration: 0,
               });
             }
@@ -2425,28 +2350,34 @@ export function AirportNavigatorMap({
     // lounge → gate) without having to guess.
     const line = activeRoute?.coordinates ?? journeyRoute?.coords ?? null;
     const routeNodeIds = activeRoute?.nodeIds ?? journeyRoute?.nodeIds ?? [];
-    // Schematic layouts: never paint the straight-line skeleton (it visibly cuts
-    // through terminals/roads). Pins + the time estimate carry the guidance.
-    if (!preciseRouteEnabled || !line || line.length < 2) {
-      source.setData({ type: "FeatureCollection", features: [] });
-      trainSource?.setData({ type: "FeatureCollection", features: [] });
-      return;
-    }
-    source.setData({
-      type: "Feature",
-      properties: {},
-      geometry: { type: "LineString", coordinates: line },
-    });
-    // Overlay the train hops distinctly (dashed violet) so a straight cross-field
-    // segment reads as the people-mover ride, not a walk.
+    const mapFirstArrivalRail = mapFirstLive && arrivalFirstMile;
+    // Schematic layouts: never paint the straight-line walking skeleton (M30).
+    // Live arrival first mile still paints surveyed regional rail (Leonardo→Termini).
+    const showWalkLine = preciseRouteEnabled && line && line.length >= 2;
+    source.setData(
+      showWalkLine
+        ? {
+            type: "Feature",
+            properties: {},
+            geometry: { type: "LineString", coordinates: line },
+          }
+        : { type: "FeatureCollection", features: [] },
+    );
+    // Overlay train hops distinctly (dashed violet) — regional rail on live FCO map-first,
+    // or route-following train legs when surveyed corridors are enabled.
     if (trainSource && layout) {
-      const trainSegs = trainSegmentsFromNodeIds(layout, routeNodeIds);
+      const trainSegs = mapFirstArrivalRail
+        ? regionalRailLineStringsFromLayout(layout)
+        : preciseRouteEnabled
+          ? trainSegmentsFromNodeIds(layout, routeNodeIds)
+          : [];
       trainSource.setData(
         trainSegs.length > 0
           ? { type: "Feature", properties: {}, geometry: { type: "MultiLineString", coordinates: trainSegs } }
           : { type: "FeatureCollection", features: [] },
       );
     }
+    if (!showWalkLine) return;
 
     let progress = 0;
     if (activeRoute && snapped) {
@@ -2474,7 +2405,7 @@ export function AirportNavigatorMap({
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRoute, journeyRoute, mapReady, snapped?.nearestNodeId, layout]);
+  }, [activeRoute, journeyRoute, mapReady, snapped?.nearestNodeId, layout, mapFirstLive, arrivalFirstMile, preciseRouteEnabled]);
 
   /* ── Admin click-to-place (capture real lng/lat on basemap click) ───── */
   useEffect(() => {
@@ -3010,9 +2941,13 @@ export function AirportNavigatorMap({
   const nextInstruction = activeRoute?.instructions[Math.min(currentStepIdx, Math.max(0, (activeRoute?.instructions.length ?? 1) - 1))] ?? null;
   const securityQuestionOpen = pendingPoiId !== null && !credentials.known;
   const arrivalChromeClearance = arrivalFirstMile
-    ? activeRoute
-      ? `calc(${bottomPanel} + 22rem)`
-      : `calc(${bottomPanel} + 14rem)`
+    ? embeddedInLiveMap
+      ? activeRoute
+        ? `calc(${bottomPanel} + 9rem)`
+        : `calc(${bottomPanel} + 4.5rem)`
+      : activeRoute
+        ? `calc(${bottomPanel} + 22rem)`
+        : `calc(${bottomPanel} + 14rem)`
     : bottomPanel;
 
   return (
@@ -3082,8 +3017,8 @@ export function AirportNavigatorMap({
       </button>
       )}
 
-      {/* Preview banner — plan lounges, check-in, and gate before travel day */}
-      {previewMode ? (
+      {/* Preview banner — hidden on embedded Live Map; coach/Where-to chips only (map-first). */}
+      {previewMode && !mapFirstLive ? (
         <div
           className="pointer-events-none absolute left-3 right-3 z-20 rounded-2xl border border-sky-400/30 bg-sky-950/80 px-3 py-2 backdrop-blur-md"
           style={{ top: previewBannerTop }}
@@ -3116,7 +3051,7 @@ export function AirportNavigatorMap({
             </p>
           ) : null}
         </div>
-      ) : !preciseRouteEnabled && layout ? (
+      ) : !preciseRouteEnabled && layout && !mapFirstLive ? (
         <div
           className="pointer-events-none absolute left-3 right-3 z-20 rounded-2xl border border-amber-400/30 bg-amber-950/70 px-3 py-1.5 backdrop-blur-md"
           style={{ top: previewBannerTop }}
@@ -3127,25 +3062,8 @@ export function AirportNavigatorMap({
         </div>
       ) : null}
 
-      {/* You're-fine coach — one next move + honest clock (depart / connection). */}
-      {!isArriveCoach && gateConfidence ? (
-        <div className="pointer-events-none absolute left-3 right-3 z-[35]" style={{ top: coachBarTop }}>
-          <GateConfidenceBar
-            confidence={gateConfidence}
-            iata={iata}
-            flightLabel={flightCoachLabel}
-            mapVisible={coachMapExpanded || expanded}
-            onShowMap={() => {
-              setCoachMapExpanded(true);
-              setExpanded(true);
-              setRailOpen(true);
-            }}
-          />
-        </div>
-      ) : null}
-
-      {/* Arrival card stack — four swipe cards above PR #95 first-mile chrome. */}
-      {isArriveCoach && arrivalCoachCards.length > 0 ? (
+      {/* Arrival card stack stays off embedded Live Map — Passport/Next: Bags must not blanket runways. */}
+      {!embeddedInLiveMap && isArriveCoach && arrivalCoachCards.length > 0 ? (
         <div
           className="pointer-events-none absolute inset-x-3 z-[35]"
           style={{ top: arrivalCardStackTop }}
@@ -3167,7 +3085,7 @@ export function AirportNavigatorMap({
         </div>
       ) : null}
 
-      {layout && !arrivalFirstMile ? (
+      {layout && (!arrivalFirstMile || embeddedInLiveMap) ? (
         <div className="pointer-events-none absolute inset-0 z-[30]">
           <AirportDestinationRail
             layout={layout}
@@ -3184,6 +3102,7 @@ export function AirportNavigatorMap({
               setRailOpen(false);
             }}
             railTop={destinationRailTop}
+            arrivalJourneyPoiIds={arrivalFirstMile ? journeyPoiIdSet : undefined}
           />
         </div>
       ) : null}
@@ -3212,6 +3131,9 @@ export function AirportNavigatorMap({
           previewMode={previewMode}
           preciseRouteEnabled={preciseRouteEnabled}
           iata={iata}
+          mapFirst={embeddedInLiveMap}
+          hideWhereToRail={embeddedInLiveMap}
+          chromeTop={contentTop}
         />
       ) : null}
 
@@ -3528,7 +3450,8 @@ export function AirportNavigatorMap({
       )}
 
       {/* Guide-me CTA when idle */}
-      {!securityQuestionOpen && !journeyPrompt && !quietMode && !activeRoute && layout && gatePoi && (
+      {!securityQuestionOpen && !journeyPrompt && !quietMode && !activeRoute && layout && gatePoi
+        && !(mapFirstLive && (arrivalFirstMile || isArriveCoach)) ? (
         <div style={{ bottom: bottomPanel }} className="absolute inset-x-3">
           <button
             type="button"
@@ -3538,7 +3461,7 @@ export function AirportNavigatorMap({
             🧭 Guide me to {gateCode ? `Gate ${gateCode.toUpperCase()}` : "my gate"}
           </button>
         </div>
-      )}
+      ) : null}
 
       {activeRally?.status === "active" ? (
         <div

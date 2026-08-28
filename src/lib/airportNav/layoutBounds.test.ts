@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { computeLayoutBounds, computeLandsideBounds, layoutSpanMeters } from "./layoutBounds";
+import { computeLayoutBounds, computeLandsideBounds, computeRegionalRailBounds, layoutSpanMeters, regionalRailLineStringsFromLayout, trainEdgeSegmentsFromLayout } from "./layoutBounds";
+import { FCO_LAYOUT } from "./layouts/fco";
+import { FCO_LEONARDO_EXPRESS_RAIL } from "./layouts/fcoLeonardoExpressRail";
 import type { AirportLayout } from "./types";
 
 function layout(overrides: Partial<AirportLayout> = {}): AirportLayout {
@@ -134,4 +136,38 @@ test("layoutSpanMeters reports a plausible terminal-scale span", () => {
   ]);
   // ~2.2 km north-south at this latitude — sane order of magnitude.
   assert.ok(span > 1500 && span < 3000, `span was ${span}`);
+});
+
+test("trainEdgeSegmentsFromLayout returns Leonardo→Termini hop for FCO", () => {
+  const segments = trainEdgeSegmentsFromLayout(FCO_LAYOUT);
+  assert.equal(segments.length, 1);
+  assert.ok(segments[0]![0]![0] < 12.26, "Leonardo station west of Roma Termini");
+  assert.ok(segments[0]![1]![0] > 12.49, "Roma Termini east of Leonardo station");
+});
+
+test("regionalRailLineStringsFromLayout uses OSM corridor polylines, not crow-flies chords", () => {
+  const lines = regionalRailLineStringsFromLayout(FCO_LAYOUT);
+  assert.equal(lines.length, 1);
+  assert.ok(lines[0]!.length > 100, "OSM Leonardo corridor has hundreds of vertices");
+  const chord = trainEdgeSegmentsFromLayout(FCO_LAYOUT)[0]!;
+  assert.notEqual(lines[0]!.length, 2, "must not be a two-point straight line");
+  const mid = lines[0]![Math.floor(lines[0]!.length / 2)]!;
+  const chordMid: [number, number] = [
+    (chord[0]![0] + chord[1]![0]) / 2,
+    (chord[0]![1] + chord[1]![1]) / 2,
+  ];
+  const dx = (mid[0] - chordMid[0]) * 85000;
+  const dy = (mid[1] - chordMid[1]) * 111320;
+  assert.ok(Math.hypot(dx, dy) > 800, "mid-corridor point deviates from crow-flies chord");
+  assert.ok(FCO_LEONARDO_EXPRESS_RAIL.source.includes("OpenStreetMap"));
+});
+
+test("computeRegionalRailBounds frames FCO terminal and Roma Termini terminus", () => {
+  const bounds = computeRegionalRailBounds(FCO_LAYOUT)!;
+  const [[west, south], [east, north]] = bounds;
+  assert.ok(west < 12.25, "includes FCO terminal west edge");
+  assert.ok(east > 12.5, "includes Roma Termini east edge");
+  assert.ok(north > 41.9, "includes Roma Termini latitude");
+  const span = layoutSpanMeters(bounds);
+  assert.ok(span > 20_000, "regional rail span is tens of km, not terminal-only");
 });

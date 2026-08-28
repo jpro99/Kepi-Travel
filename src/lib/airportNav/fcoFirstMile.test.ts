@@ -70,6 +70,15 @@ test("FCO arrival journey POI ids cover passport, bags, customs, Leonardo, Termi
   assert.ok(ids.size >= 5);
 });
 
+test("FCO Leonardo POI is station-only label; Roma Termini is separate at Termini", () => {
+  const leonardo = FCO_LAYOUT.pois.find((p) => p.id === "poi-leonardo-express");
+  const termini = FCO_LAYOUT.pois.find((p) => p.id === "poi-roma-termini");
+  assert.equal(leonardo?.name, "Leonardo Express");
+  assert.doesNotMatch(leonardo?.name ?? "", /Termini/i);
+  assert.equal(termini?.name, "Roma Termini");
+  assert.equal(termini?.nodeId, "ground-roma-termini");
+});
+
 test("FCO arrival origin defaults to gate-e when gate is TBD (not gate-a)", () => {
   assert.equal(resolveArrivalOriginNode(FCO_LAYOUT, null), "gate-e");
   assert.equal(resolveArrivalOriginNode(FCO_LAYOUT, "E12"), "gate-e");

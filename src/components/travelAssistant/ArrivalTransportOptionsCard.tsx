@@ -1,6 +1,7 @@
 "use client";
 
 import type { ArrivalTransportOption } from "@/lib/travelAssistant/airportNavigation";
+import { sanitizeArrivalHotelLabelForUi } from "@/lib/travelAssistant/arrivalTransportPresentation";
 
 interface ArrivalTransportOptionsCardProps {
   options: ArrivalTransportOption[];
@@ -19,16 +20,14 @@ export function ArrivalTransportOptionsCard({
 
   const primary = options.find((option) => option.isDefault) ?? options[0]!;
   const secondary = options.filter((option) => option.id !== primary.id);
+  const rideHotelLabel = sanitizeArrivalHotelLabelForUi(hotelLabel);
 
   return (
     <section
       data-testid="arrival-transport-options"
       className="rounded-2xl border border-sky-400/25 bg-sky-500/10 px-4 py-3"
     >
-      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-200">
-        First mile · {hotelLabel?.trim() ? `then ${hotelLabel.trim()}` : "city center"}
-      </p>
-      <p className="mt-1 text-lg font-black text-white">{primary.label}</p>
+      <p className="text-lg font-black text-white">{primary.label}</p>
       <p className="mt-1 text-sm text-sky-100/85">{primary.detail}</p>
       {scheduleNote ? (
         <p
@@ -81,7 +80,7 @@ export function ArrivalTransportOptionsCard({
           rel="noopener noreferrer"
           className="mt-3 block text-center text-xs font-semibold text-sky-200/80 underline decoration-sky-400/40 underline-offset-2"
         >
-          Uber backup{hotelLabel?.trim() ? ` to ${hotelLabel.trim()}` : ""}
+          {rideHotelLabel ? `Uber backup to ${rideHotelLabel}` : "Uber backup"}
         </a>
       ) : null}
     </section>
