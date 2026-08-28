@@ -5,6 +5,7 @@ import {
   BOOKING_HOOK_SENDER_HEADER,
   buildBookingHookEvents,
   dispatchBookingHookForNewlyPaid,
+  extractOfficialStationsFromReservation,
   isPaidBookingReservation,
   postBookingHookEvent,
 } from "./bookingHook";
@@ -137,6 +138,102 @@ describe("bookingHook", () => {
       timestamp: (posts[0] as { timestamp: string }).timestamp,
     });
     assert.equal(headerValue, "test-sender-key");
+  });
+
+  it("paid FCO→BRI POSTs BRI only (kac-0.1.1-bri is not a live sign)", async () => {
+    const posts: unknown[] = [];
+    globalThis.fetch = mock.fn(async (_url, init) => {
+      posts.push(JSON.parse(String(init?.body)));
+      return new Response(null, { status: 200 });
+    }) as typeof fetch;
+
+    const paidBri = flightReservation({
+      id: "res-fco-bri",
+      flightDepartureAirport: "FCO",
+      flightArrivalAirport: "BRI",
+      location: "FCO → BRI",
+      title: "AZ 1607 FCO → BRI",
+    });
+
+    await dispatchBookingHookForNewlyPaid([], [paidBri]);
+    assert.equal(posts.length, 1);
+    assert.deepEqual(posts[0], {
+      paid: true,
+      iata: "BRI",
+      booking_id: "res-fco-bri",
+      timestamp: (posts[0] as { timestamp: string }).timestamp,
+    });
+  });
+
+  it("paid VCE and MUC fire when official IATA fields are set", async () => {
+    const posts: unknown[] = [];
+    globalThis.fetch = mock.fn(async (_url, init) => {
+      posts.push(JSON.parse(String(init?.body)));
+      return new Response(null, { status: 200 });
+    }) as typeof fetch;
+
+    const paidVce = flightReservation({
+      id: "res-vce",
+      flightDepartureAirport: "FCO",
+      flightArrivalAirport: "VCE",
+      location: "FCO → VCE",
+    });
+
+    const paidMuc = flightReservation({
+      id: "res-muc",
+      flightDepartureAirport: "MUC",
+      flightArrivalAirport: "FCO",
+      location: "MUC → FCO",
+    });
+
+    await dispatchBookingHookForNewlyPaid([], [paidVce]);
+    await dispatchBookingHookForNewlyPaid([], [paidMuc]);
+
+    assert.equal(posts.length, 2);
+    assert.deepEqual(
+      (posts as Array<{ iata?: string; booking_id: string }>).map((p) => ({
+        iata: p.iata,
+        booking_id: p.booking_id,
+      })),
+      [
+        { iata: "VCE", booking_id: "res-vce" },
+        { iata: "MUC", booking_id: "res-muc" },
+      ],
+    );
+  });
+
+  it("does not parse train stations from title or location free text", () => {
+    const train = trainReservation({
+      id: "res-venice",
+      title: "Frecciarossa to Venezia S. Lucia",
+      location: "Roma Termini → Venezia S. Lucia",
+    });
+
+    assert.equal(extractOfficialStationsFromReservation(train).length, 0);
+    assert.equal(buildBookingHookEvents(train).length, 0);
+  });
+
+  it("signed Leonardo Express and Roma Termini skip; Fiumicino Aeroporto still fires", async () => {
+    const posts: unknown[] = [];
+    globalThis.fetch = mock.fn(async (_url, init) => {
+      posts.push(JSON.parse(String(init?.body)));
+      return new Response(null, { status: 200 });
+    }) as typeof fetch;
+
+    const leonardo = trainReservation({
+      id: "res-le",
+      trainDepartureStation: "Fiumicino Aeroporto",
+      trainArrivalStation: "Roma Termini",
+    });
+
+    await dispatchBookingHookForNewlyPaid([], [leonardo]);
+    assert.equal(posts.length, 1);
+    assert.deepEqual(posts[0], {
+      paid: true,
+      station: "Fiumicino Aeroporto",
+      booking_id: "res-le",
+      timestamp: (posts[0] as { timestamp: string }).timestamp,
+    });
   });
 
   it("drops bus legs", async () => {

@@ -12,19 +12,13 @@ import { logger } from "@/lib/logger";
 /** Header name for BOOKING_HOOK_SENDER_KEY — document in .env.example. */
 export const BOOKING_HOOK_SENDER_HEADER = "X-Booking-Hook-Sender-Key";
 
-/** KAC/factory packages already compiled — no compile restart. */
-const SIGNED_IATAS = new Set(["ONT", "SEA", "FCO", "BRI"]);
+/** Live-signed airports — compiled KAC drafts are not live signs. */
+const SIGNED_IATAS = new Set(["ONT", "SEA", "FCO"]);
 
-/** Rail stations already compiled — no compile restart. */
-const SIGNED_STATION_KEYS = new Set([
-  "leonardo express",
-  "fiumicino aeroporto",
-  "roma termini",
-]);
+/** Rail corridors already live-signed — skip re-compile. */
+const SIGNED_STATION_KEYS = new Set(["leonardo express", "roma termini"]);
 
 const OFFICIAL_IATA_RE = /^[A-Z]{3}$/u;
-const LOCATION_IATA_ARROW_RE = /\b([A-Z]{3})\s*→\s*([A-Z]{3})\b/u;
-const STATION_ARROW_RE = /^(.+?)\s*(?:→|->|—|–)\s*(.+)$/u;
 const BUS_LEG_RE = /\b(?:bus|autobus|replacement\s+bus|coach\s+service)\b/iu;
 
 export interface BookingHookPayload {
@@ -73,17 +67,6 @@ export function isSignedIata(iata: string): boolean {
   return SIGNED_IATAS.has(iata.trim().toUpperCase());
 }
 
-function collectStationNamesFromText(text: string): string[] {
-  const trimmed = text.trim();
-  if (!trimmed) return [];
-  const arrow = trimmed.match(STATION_ARROW_RE);
-  if (arrow?.[1] && arrow[2]) {
-    return [arrow[1].trim(), arrow[2].trim()].filter((name) => name.length >= 3);
-  }
-  if (trimmed.length >= 3) return [trimmed];
-  return [];
-}
-
 export function extractOfficialIatasFromReservation(reservation: SessionReservation): string[] {
   if (reservation.type !== "flight") return [];
   const codes = new Set<string>();
@@ -91,21 +74,17 @@ export function extractOfficialIatasFromReservation(reservation: SessionReservat
   const arr = reservation.flightArrivalAirport?.trim().toUpperCase() ?? "";
   if (OFFICIAL_IATA_RE.test(dep)) codes.add(dep);
   if (OFFICIAL_IATA_RE.test(arr)) codes.add(arr);
-  const locMatch = reservation.location?.match(LOCATION_IATA_ARROW_RE);
-  if (locMatch?.[1] && OFFICIAL_IATA_RE.test(locMatch[1])) codes.add(locMatch[1]);
-  if (locMatch?.[2] && OFFICIAL_IATA_RE.test(locMatch[2])) codes.add(locMatch[2]);
   return [...codes];
 }
 
 export function extractOfficialStationsFromReservation(reservation: SessionReservation): string[] {
   if (reservation.type !== "train") return [];
-  const names = new Set<string>();
-  for (const text of [reservation.location, reservation.title]) {
-    for (const name of collectStationNamesFromText(text ?? "")) {
-      names.add(name);
-    }
-  }
-  return [...names];
+  const names: string[] = [];
+  const dep = reservation.trainDepartureStation?.trim();
+  const arr = reservation.trainArrivalStation?.trim();
+  if (dep && dep.length >= 3) names.push(dep);
+  if (arr && arr.length >= 3) names.push(arr);
+  return names;
 }
 
 export function buildBookingHookEvents(reservation: SessionReservation): BookingHookPayload[] {
