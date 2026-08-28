@@ -9,6 +9,7 @@ import {
   type LeaderLabelBox,
 } from "./poiMapLeaderLine";
 import type { TerminalZonePolygon } from "./types";
+import { booleanPointInPolygon, point, polygon } from "@turf/turf";
 
 export interface WalkMapLeaderCandidate {
   id: string;
@@ -25,8 +26,23 @@ export function buildResolvedLeaderBoxes(
   mapHeight: number,
   project: (lngLat: [number, number]) => { x: number; y: number },
 ): Array<LeaderLabelBox & { text: string; strokeColor: string }> {
+  const hullSpread = new Map<string, number>();
   const boxes = candidates.map((candidate) => {
     const pin = project(candidate.lngLat);
+    let spreadIndex = 0;
+    for (const zone of hulls) {
+      if (zone.ring.length < 4) continue;
+      try {
+        if (booleanPointInPolygon(point(candidate.lngLat), polygon([zone.ring]))) {
+          const key = zone.id;
+          spreadIndex = hullSpread.get(key) ?? 0;
+          hullSpread.set(key, spreadIndex + 1);
+          break;
+        }
+      } catch {
+        /* invalid ring */
+      }
+    }
     const layout = computeLeaderLineScreenLayout(
       pin,
       candidate.text,
@@ -35,6 +51,7 @@ export function buildResolvedLeaderBoxes(
       project,
       mapWidth,
       mapHeight,
+      spreadIndex,
     );
     const box = layoutToLabelBox(candidate.id, candidate.priority, layout);
     return { ...box, text: candidate.text, strokeColor: candidate.strokeColor };
@@ -89,12 +106,13 @@ export function paintWalkMapLeaderOverlay(
     label.textContent = box.text;
     label.style.cssText = [
       "display:flex;align-items:center;justify-content:center;",
-      "width:100%;height:100%;padding:0 10px;",
+      "width:100%;min-height:100%;padding:4px 10px;",
       "border-radius:4px;background:#f5f0e6;",
       "border:1px solid rgba(71,85,105,0.35);",
       "box-shadow:0 1px 4px rgba(15,23,42,0.12);",
-      "font:600 11px system-ui,-apple-system,sans-serif;",
-      "color:#0f172a;white-space:nowrap;",
+      "font:600 11px/1.25 system-ui,-apple-system,sans-serif;",
+      "color:#0f172a;white-space:normal;text-align:center;",
+      "overflow:visible;word-break:normal;",
       "pointer-events:none;",
     ].join("");
     fo.appendChild(label);

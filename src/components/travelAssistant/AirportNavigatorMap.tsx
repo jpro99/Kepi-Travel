@@ -39,6 +39,7 @@ import {
   computeLayoutBounds,
   computeLandsideBounds,
   computeRegionalRailBounds,
+  regionalRailLineStringsFromLayout,
   trainEdgeSegmentsFromLayout,
 } from "@/lib/airportNav/layoutBounds";
 import { buildAirportSchematicModel } from "@/lib/airportNav/schematic";
@@ -2182,7 +2183,7 @@ export function AirportNavigatorMap({
           mapFirstLive && arrivalFirstMile
             ? activeRoute
               ? { top: 56, bottom: 108, left: 36, right: 36 }
-              : { top: 52, bottom: 72, left: 40, right: 40 }
+              : { top: 44, bottom: 64, left: 44, right: 44 }
             : previewMode
               ? { top: 96, bottom: 160, left: 48, right: 48 }
               : { top: 96, bottom: 160, left: 48, right: 48 };
@@ -2194,7 +2195,7 @@ export function AirportNavigatorMap({
                 padding: fitPadding,
                 pitch: 0,
                 bearing: 0,
-                maxZoom: regionalRailBounds ? 12 : 17,
+                maxZoom: regionalRailBounds ? 11.5 : 17,
                 duration: 0,
               });
             }
@@ -2366,7 +2367,7 @@ export function AirportNavigatorMap({
     // or route-following train legs when surveyed corridors are enabled.
     if (trainSource && layout) {
       const trainSegs = mapFirstArrivalRail
-        ? trainEdgeSegmentsFromLayout(layout)
+        ? regionalRailLineStringsFromLayout(layout)
         : preciseRouteEnabled
           ? trainSegmentsFromNodeIds(layout, routeNodeIds)
           : [];
@@ -3016,8 +3017,8 @@ export function AirportNavigatorMap({
       </button>
       )}
 
-      {/* Preview banner — plan lounges, check-in, and gate before travel day */}
-      {previewMode ? (
+      {/* Preview banner — hidden on embedded Live Map; coach/Where-to chips only (map-first). */}
+      {previewMode && !mapFirstLive ? (
         <div
           className="pointer-events-none absolute left-3 right-3 z-20 rounded-2xl border border-sky-400/30 bg-sky-950/80 px-3 py-2 backdrop-blur-md"
           style={{ top: previewBannerTop }}

@@ -16,6 +16,7 @@
  */
 
 import type { AirportLayout, GraphEdge, GraphNode, PoiDefinition } from "../types";
+import { FCO_LEONARDO_EXPRESS_RAIL } from "./fcoLeonardoExpressRail";
 import {
   buildMultiTerminalSkeleton,
   lerpPos,
@@ -237,7 +238,7 @@ function appendFcoArrivalsGroundTransport(
     id: "poi-leonardo-express",
     nodeId: "ground-leonardo",
     category: "train",
-    name: "Leonardo Express → Roma Termini",
+    name: "Leonardo Express",
     precision: "surveyed",
     notes:
       "Non-stop ~32 min to Roma Termini (~€14). Buy and tap in at Leonardo gates — one ticket per person. Metrebus / Roma Pass NOT valid. There is no metro from FCO.",
@@ -280,8 +281,9 @@ appendFcoArrivalsGroundTransport(nodes, edges, pois);
 export const FCO_LAYOUT: AirportLayout = {
   iata: "FCO",
   name: "Rome Fiumicino",
-  layoutVersion: "0.3.1-roma-termini",
-  updatedAt: "2026-08-23",
+  layoutVersion: "0.3.2-osm-rail-corridor",
+  updatedAt: "2026-08-28",
+  regionalRailPolylines: [FCO_LEONARDO_EXPRESS_RAIL],
   center: [12.250152, 41.795211],
   zones: [
     {

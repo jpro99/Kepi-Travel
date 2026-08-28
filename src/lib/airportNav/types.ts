@@ -134,6 +134,21 @@ export interface AirportLayout {
    * "surveyed" once the graph is built from real OSM footways/corridors.
    */
   routeGrade?: "surveyed" | "schematic";
+  /**
+   * Surveyed regional rail polylines (OSM railway ways) — drawn instead of straight
+   * train-edge chords when present (e.g. FCO Leonardo Express → Roma Termini).
+   */
+  regionalRailPolylines?: RegionalRailPolyline[];
+}
+
+/** OSM-derived rail corridor geometry for map overlay (not routing graph edges). */
+export interface RegionalRailPolyline {
+  id: string;
+  name: string;
+  /** Provenance string — must cite OSM / official source (verify-first). */
+  source: string;
+  /** [lng, lat][] along surveyed railway ways */
+  coordinates: [number, number][];
 }
 
 export interface TravelerSecurityCredentials {

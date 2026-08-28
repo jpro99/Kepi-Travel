@@ -30,9 +30,16 @@ const LABEL_HEIGHT = 28;
 const LABEL_PAD_X = 24;
 const MIN_OUTSIDE_OFFSET = 96;
 const HULL_OUTSIDE_OFFSET = 132;
+const REGIONAL_RAIL_OFFSET = 168;
 
 function labelWidthForText(text: string): number {
-  return Math.min(280, Math.max(88, text.length * 6.5 + LABEL_PAD_X));
+  return Math.min(340, Math.max(96, text.length * 6.2 + LABEL_PAD_X));
+}
+
+function labelHeightForText(text: string, widthPx: number): number {
+  const charsPerLine = Math.max(18, Math.floor((widthPx - LABEL_PAD_X) / 6.2));
+  const lines = Math.min(3, Math.ceil(text.length / charsPerLine));
+  return LABEL_HEIGHT + (lines - 1) * 14;
 }
 
 function hullContaining(
@@ -72,9 +79,10 @@ export function computeLeaderLineScreenLayout(
   project: (lngLat: [number, number]) => { x: number; y: number },
   mapWidth: number,
   mapHeight: number,
+  spreadIndex = 0,
 ): LeaderLineLayout {
   const labelWidthPx = labelWidthForText(labelText);
-  const labelHeightPx = LABEL_HEIGHT;
+  const labelHeightPx = labelHeightForText(labelText, labelWidthPx);
   const hull = hullContaining(lngLat, hulls);
   let dx = 1;
   let dy = -0.35;
@@ -82,14 +90,25 @@ export function computeLeaderLineScreenLayout(
     const c = hullCentroidScreen(hull, project);
     dx = pinScreen.x - c.x;
     dy = pinScreen.y - c.y;
+    if (spreadIndex > 0) {
+      const angle = (spreadIndex * 52 * Math.PI) / 180;
+      const baseLen = Math.hypot(dx, dy) || 1;
+      const bx = dx / baseLen;
+      const by = dy / baseLen;
+      dx = bx * Math.cos(angle) - by * Math.sin(angle);
+      dy = bx * Math.sin(angle) + by * Math.cos(angle);
+    }
   } else if (pinScreen.x > mapWidth * 0.52) {
     dx = -1;
     dy = -0.25;
+  } else if (pinScreen.y < mapHeight * 0.35) {
+    dx = 0.35;
+    dy = 1;
   }
   const len = Math.hypot(dx, dy) || 1;
   dx /= len;
   dy /= len;
-  const offset = hull ? HULL_OUTSIDE_OFFSET : MIN_OUTSIDE_OFFSET;
+  const offset = hull ? HULL_OUTSIDE_OFFSET + spreadIndex * 28 : REGIONAL_RAIL_OFFSET;
   const labelCx = pinScreen.x + dx * offset;
   const labelCy = pinScreen.y + dy * offset;
   const labelPx = {
@@ -141,15 +160,12 @@ export function resolveLeaderLabelCollisions(
     const box = { ...candidate };
     clampBoxToViewport(box, mapWidth, mapHeight);
 
-    for (let attempt = 0; attempt < 24; attempt += 1) {
+    for (let attempt = 0; attempt < 36; attempt += 1) {
       const hit = placed.find((other) => boxesOverlap(box, other));
       if (!hit) break;
-      // Alternate vertical / horizontal nudge away from the pin.
-      if (attempt % 2 === 0) {
-        box.y += box.pinY < hit.y + hit.height / 2 ? -30 : 30;
-      } else {
-        box.x += box.pinX < hit.x + hit.width / 2 ? -36 : 36;
-      }
+      const angle = (attempt * 38 * Math.PI) / 180;
+      box.x += Math.cos(angle) * 34;
+      box.y += Math.sin(angle) * 28;
       clampBoxToViewport(box, mapWidth, mapHeight);
     }
     placed.push(box);

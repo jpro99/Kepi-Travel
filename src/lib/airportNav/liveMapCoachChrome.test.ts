@@ -34,8 +34,9 @@ test("AirportNavigatorMap does not mount GateConfidenceBar on the live map", () 
   assert.match(src, /mapFirstLive = embeddedInLiveMap/, "Live map shell must use mapFirstLive gate");
   assert.match(src, /hideEmbeddedFlightHero = mapFirstLive/, "Flight hero must hide on live map-first arrive");
   assert.match(src, /if \(mapFirstLive\) return;/, "Live map must not auto-open bottom walk sheet");
-  assert.match(src, /trainEdgeSegmentsFromLayout\(layout\)/, "Live arrival must paint regional rail train edges");
+  assert.match(src, /regionalRailLineStringsFromLayout\(layout\)/, "Live arrival must paint OSM regional rail polylines");
   assert.match(src, /computeRegionalRailBounds\(layout\)/, "Live FCO arrival must frame Leonardo→Termini rail bounds");
+  assert.match(src, /previewMode && !mapFirstLive/, "Arrival first-mile header bar must stay off embedded Live Map");
   assert.ok(
     src.includes("Estimated walk"),
     "Estimated Walk sheet copy must remain on the live map.",
@@ -70,7 +71,7 @@ test("Walk leader labels render full words without ellipsis clipping", () => {
     fileURLToPath(new URL("./poiMapLeaderLine.ts", import.meta.url)),
     "utf8",
   );
-  assert.match(leader, /Math\.min\(280/, "Leader label width must fit passport/customs copy");
+  assert.match(leader, /Math\.min\(340/, "Leader label width must fit full passport/baggage copy");
 });
 
 test("ArrivalTransportOptionsCard does not render the First mile debug header", () => {

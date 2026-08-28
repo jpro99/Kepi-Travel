@@ -8,7 +8,7 @@ import type { AirportLayout } from "./types";
 
 export type LngLatBounds = [[number, number], [number, number]];
 
-/** Every `train` edge as a coordinate pair — regional rail hops (e.g. FCO Leonardo → Roma Termini). */
+/** Every `train` edge as a coordinate pair — straight chords (satellite people-movers only). */
 export function trainEdgeSegmentsFromLayout(layout: AirportLayout): [number, number][][] {
   const pos = new Map(layout.nodes.map((node) => [node.id, node.pos]));
   const segments: [number, number][][] = [];
@@ -22,12 +22,25 @@ export function trainEdgeSegmentsFromLayout(layout: AirportLayout): [number, num
 }
 
 /**
+ * Regional rail corridors from surveyed OSM polylines — replaces crow-flies train edges
+ * on the live map (FCO Leonardo Express → Roma Termini).
+ */
+export function regionalRailLineStringsFromLayout(layout: AirportLayout): [number, number][][] {
+  if (layout.regionalRailPolylines?.length) {
+    return layout.regionalRailPolylines
+      .filter((poly) => poly.coordinates.length >= 2)
+      .map((poly) => poly.coordinates);
+  }
+  return trainEdgeSegmentsFromLayout(layout);
+}
+
+/**
  * Camera bounds for arrival first mile when a layout includes regional rail.
- * Frames both airport terminal context and the surveyed train terminus (FCO→Termini).
+ * Frames airport terminal context and every surveyed rail vertex (FCO→Termini corridor).
  */
 export function computeRegionalRailBounds(layout: AirportLayout): LngLatBounds | null {
-  const trainSegments = trainEdgeSegmentsFromLayout(layout);
-  if (trainSegments.length === 0) return null;
+  const lineStrings = regionalRailLineStringsFromLayout(layout);
+  if (lineStrings.length === 0) return null;
 
   let west = Infinity;
   let south = Infinity;
@@ -42,8 +55,8 @@ export function computeRegionalRailBounds(layout: AirportLayout): LngLatBounds |
     if (lat > north) north = lat;
   };
 
-  for (const segment of trainSegments) {
-    for (const [lng, lat] of segment) consider(lng, lat);
+  for (const line of lineStrings) {
+    for (const [lng, lat] of line) consider(lng, lat);
   }
 
   const terminal = computeLayoutBounds(layout);
