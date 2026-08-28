@@ -21,6 +21,14 @@
       "gateTextStubs": 15,
       "routeGrade": "schematic"
     },
+    "facts": {
+      "terminalLevels": "Ground floor (arrivals); first floor (departures). ADR Bari accessibility 2026-08-28.",
+      "parkingP1": "P1 SHORT STAY curb drop at departures level. ADR Bari parcheggi 2026-08-28.",
+      "checkInIsles": "Check-in counters on first floor (departures). Schematic isole A/B and C/D zones — follow overhead monitors for your desk.",
+      "security": "Security checks after check-in. ADR ecommerce Work Lounge / Fast Track 2026-08-28.",
+      "arrivalsGroundFloor": "Ground floor arrivals — baggage reclaim. ADR Bari accessibility 2026-08-28.",
+      "workLounge": "Work Lounge airside mezzanine after security checks. ADR ecommerce 2026-08-28."
+    },
     "gateTextStubs": [
       "A1",
       "A2",
@@ -41,7 +49,10 @@
     "zones": [
       {
         "id": "BRI:zone:terminal",
-        "name": "Main terminal (OSM way/24995995 hull)",
+        "name": "Main terminal",
+        "source": "osm",
+        "osmId": "way/24995995",
+        "notes": "OSM aeroway=terminal footprint. © OpenStreetMap contributors ODbL. osmId internal — never on traveler map.",
         "ring": [
           [
             16.7626192,
@@ -267,33 +278,44 @@
         ],
         "airside": false,
         "precision": "surveyed",
-        "notes": "OSM terminal centroid \u2014 surveyed anchor"
+        "notes": "OSM terminal centroid — surveyed anchor"
       },
       {
         "id": "BRI:node:curb",
-        "name": "Departures curb",
-        "kind": "junction",
+        "name": "P1 short-stay curb",
+        "kind": "door",
         "pos": [
           16.7641809,
           41.1342024
         ],
         "airside": false,
-        "precision": "surveyed"
+        "precision": "schematic"
       },
       {
-        "id": "BRI:node:checkin",
-        "name": "Check-in hall",
+        "id": "BRI:node:checkin-ab",
         "kind": "checkin",
+        "name": "Check-in isole A/B",
         "pos": [
-          16.7641111,
-          41.1342962
+          16.76378,
+          41.13429
+        ],
+        "airside": false,
+        "precision": "schematic"
+      },
+      {
+        "id": "BRI:node:checkin-cd",
+        "kind": "checkin",
+        "name": "Check-in isole C/D",
+        "pos": [
+          16.76438,
+          41.13429
         ],
         "airside": false,
         "precision": "schematic"
       },
       {
         "id": "BRI:node:security",
-        "name": "Security checkpoint",
+        "name": "Security checks",
         "kind": "security_entry",
         "pos": [
           16.7640113,
@@ -301,11 +323,22 @@
         ],
         "airside": false,
         "precision": "schematic",
-        "notes": "Approximate \u2014 follow airport signage (M15/M32)"
+        "notes": "Approximate — follow airport signage (M15/M32)"
+      },
+      {
+        "id": "BRI:node:baggage",
+        "name": "Baggage claim · arrivals ground floor",
+        "kind": "baggage_claim",
+        "pos": [
+          16.76405,
+          41.13462
+        ],
+        "airside": false,
+        "precision": "schematic"
       },
       {
         "id": "BRI:lounge:work",
-        "name": "Work Lounge \u00b7 approx",
+        "name": "Work Lounge",
         "kind": "lounge",
         "pos": [
           16.7639265,
@@ -313,19 +346,25 @@
         ],
         "airside": true,
         "precision": "schematic",
-        "notes": "Airside mezzanine \u2014 schematic AREA pin; follow lounge signage"
+        "notes": "Airside mezzanine after security — schematic AREA pin; ADR ecommerce 2026-08-28"
       }
     ],
     "edges": [
       {
-        "id": "BRI:edge:curb-checkin",
+        "id": "BRI:edge:curb-checkin-ab",
         "from": "BRI:node:curb",
-        "to": "BRI:node:checkin",
+        "to": "BRI:node:checkin-ab",
         "kind": "walkway"
       },
       {
-        "id": "BRI:edge:checkin-security",
-        "from": "BRI:node:checkin",
+        "id": "BRI:edge:checkin-ab-cd",
+        "from": "BRI:node:checkin-ab",
+        "to": "BRI:node:checkin-cd",
+        "kind": "walkway"
+      },
+      {
+        "id": "BRI:edge:checkin-cd-security",
+        "from": "BRI:node:checkin-cd",
         "to": "BRI:node:security",
         "kind": "walkway"
       },
@@ -335,6 +374,62 @@
         "to": "BRI:lounge:work",
         "kind": "security_transition",
         "laneType": "standard"
+      },
+      {
+        "id": "BRI:edge:terminal-baggage",
+        "from": "BRI:node:terminal",
+        "to": "BRI:node:baggage",
+        "kind": "walkway"
+      }
+    ],
+    "pois": [
+      {
+        "id": "BRI:poi:curb-p1",
+        "nodeId": "BRI:node:curb",
+        "category": "ground_transport",
+        "name": "P1 short-stay curb",
+        "precision": "schematic",
+        "notes": "P1 SHORT STAY — ADR Bari parcheggi 2026-08-28. Departures curb drop."
+      },
+      {
+        "id": "BRI:poi:checkin-ab",
+        "nodeId": "BRI:node:checkin-ab",
+        "category": "checkin",
+        "name": "Check-in isole A/B",
+        "precision": "schematic",
+        "notes": "First floor departures check-in zone. ADR accessibility 2026-08-28."
+      },
+      {
+        "id": "BRI:poi:checkin-cd",
+        "nodeId": "BRI:node:checkin-cd",
+        "category": "checkin",
+        "name": "Check-in isole C/D",
+        "precision": "schematic",
+        "notes": "First floor departures check-in zone. ADR accessibility 2026-08-28."
+      },
+      {
+        "id": "BRI:poi:security",
+        "nodeId": "BRI:node:security",
+        "category": "security",
+        "name": "Security checks",
+        "precision": "schematic",
+        "notes": "After check-in. ADR ecommerce security checkpoints 2026-08-28."
+      },
+      {
+        "id": "BRI:poi:baggage",
+        "nodeId": "BRI:node:baggage",
+        "category": "baggage",
+        "name": "Baggage claim · arrivals ground floor",
+        "precision": "schematic",
+        "notes": "Ground floor arrivals. ADR Bari accessibility 2026-08-28."
+      },
+      {
+        "id": "BRI:poi:lounge-work",
+        "nodeId": "BRI:lounge:work",
+        "category": "lounge",
+        "name": "Work Lounge",
+        "precision": "schematic",
+        "notes": "Airside mezzanine after security. ADR ecommerce Work Lounge 2026-08-28."
       }
     ],
     "gateNodeResolver": []

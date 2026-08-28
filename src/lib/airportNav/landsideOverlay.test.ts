@@ -40,7 +40,7 @@ test("access-loop zones are detected only by Cartographer id/name convention", (
   }));
   assert.ok(!isAccessLoopZone({
     id: "BRI:zone:terminal",
-    name: "Main terminal (OSM way/24995995 hull)",
+    name: "Main terminal",
     ring: [[0, 0], [1, 0], [1, 1], [0, 0]],
     airside: false,
     heightM: 12,
