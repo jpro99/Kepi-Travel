@@ -8,6 +8,7 @@
 
 import type { AirportLayout, GraphEdge, GraphNode, PoiDefinition } from "../types";
 import { haversineMeters } from "../footwayGraph";
+import briKacCompilerJson from "../../../../fixtures/kac/bri.json";
 import {
   BRI_CURATED_EDGE_IDS,
   BRI_CURATED_NODE_IDS,
@@ -41,6 +42,31 @@ function mergeById<T extends { id: string }>(
     added += 1;
   }
   return { merged: [...byId.values()], added };
+}
+
+/** Gate text stubs → cluster DOT only (gate-a / gate-b). Longest prefix wins at resolve. */
+function mergeBriGateTextStubResolver(
+  curated: AirportLayout["gateNodeResolver"],
+  stubs: string[] | undefined,
+): AirportLayout["gateNodeResolver"] {
+  if (!stubs?.length) return curated;
+  const byPrefix = new Map(curated.map((entry) => [entry.prefix.toUpperCase(), entry]));
+  for (const stub of stubs) {
+    const code = stub.trim().toUpperCase();
+    if (!/^A\d+$|^B\d+$/.test(code)) continue;
+    const nodeId = code.startsWith("A") ? "gate-a" : "gate-b";
+    if (!byPrefix.has(code)) {
+      byPrefix.set(code, { prefix: code, nodeId });
+    }
+  }
+  return [...byPrefix.values()].sort((a, b) => b.prefix.length - a.prefix.length);
+}
+
+function readBriGateTextStubs(): string[] {
+  const raw = briKacCompilerJson as {
+    layout?: { gateTextStubs?: string[] };
+  };
+  return raw.layout?.gateTextStubs ?? [];
 }
 
 /**
@@ -90,7 +116,10 @@ export function applyBriKacOverlay(
     nodes,
     edges,
     pois,
-    gateNodeResolver: curated.gateNodeResolver,
+    gateNodeResolver: mergeBriGateTextStubResolver(
+      curated.gateNodeResolver,
+      readBriGateTextStubs(),
+    ),
     routeGrade: "schematic",
   };
 

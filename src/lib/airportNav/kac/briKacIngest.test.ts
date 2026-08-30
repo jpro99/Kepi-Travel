@@ -5,6 +5,7 @@ import { parseAirportLayoutPackage } from "../airportLayoutPackage";
 import { resolvePublishedAirportLayout } from "../airportLayoutStore";
 import { auditLayoutRouting } from "../layoutQuality";
 import { getAirportLayout } from "../getLayout";
+import { resolveGateNode } from "../pathfinder";
 import { adaptKacCompilerJson } from "./adaptKacCompilerJson";
 import {
   applyBriKacOverlay,
@@ -216,4 +217,14 @@ test("BRI KAC overlay bridges curb-main into departures subgraph — no unreacha
   const audit = auditLayoutRouting(layout);
   assert.equal(audit.errors.length, 0, audit.errors.join("\n"));
   assert.equal(audit.warnings.length, 0, audit.warnings.join("\n"));
+});
+
+test("BRI gate text stubs join gateNodeResolver without inventing door pins", () => {
+  const layout = buildBriLayoutWithKacOverlay();
+  assert.ok(layout.gateNodeResolver.some((e) => e.prefix === "A11" && e.nodeId === "gate-a"));
+  assert.ok(layout.gateNodeResolver.some((e) => e.prefix === "B4" && e.nodeId === "gate-b"));
+  assert.equal(resolveGateNode(layout, "A11"), "gate-a");
+  assert.equal(resolveGateNode(layout, "B2"), "gate-b");
+  assert.equal(resolveGateNode(layout, "Z9"), null);
+  assert.equal(layout.nodes.filter((n) => n.kind === "gate" && n.id.startsWith("BRI:")).length, 0);
 });
