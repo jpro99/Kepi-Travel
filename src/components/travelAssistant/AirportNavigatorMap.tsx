@@ -5,12 +5,10 @@ import "@/lib/maplibreCspWorker";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import {
   applyAirportNavigatorPlanetBasemap,
-  resolveAirportNavigatorBasemapStyleUrl,
-} from "@/lib/map/airportNavigatorBasemap";
-import {
   attachMapStyleErrorFallback,
   buildOsmRasterFallbackStyle,
   directMaptilerTransformRequest,
+  maptilerStyleUrl,
 } from "@/lib/map/maptilerClient";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AirportLayout, ComputedRoute, GraphEdge, PoiDefinition, SnappedPosition, TravelerSecurityCredentials } from "@/lib/airportNav/types";
@@ -2219,11 +2217,11 @@ export function AirportNavigatorMap({
         // context-limit blank). The SVG floor plan stays underneath regardless.
         if (disposed || !mapEl.current || mapRef.current) return;
         try {
-          // Planet streets-v2 basemap (BRAIN A1): real airfield aviation layers on
-          // schematic pins — never Hybrid/satellite. Without a key, raster OSM fallback.
+          // Planet openstreetmap basemap (BRAIN A1): aviation style layers on schematic
+          // pins — never Hybrid/satellite. Without a key, raster OSM fallback.
           const usingOsmFallback = { current: !key };
           const basemapStyle: string | import("maplibre-gl").StyleSpecification = key
-            ? resolveAirportNavigatorBasemapStyleUrl(key)
+            ? maptilerStyleUrl("openstreetmap", key)
             : (buildOsmRasterFallbackStyle() as unknown as import("maplibre-gl").StyleSpecification);
           const map = new ml.Map({
             container: mapEl.current,

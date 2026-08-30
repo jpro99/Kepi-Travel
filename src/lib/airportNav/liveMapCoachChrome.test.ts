@@ -35,7 +35,7 @@ test("AirportNavigatorMap does not mount GateConfidenceBar on the live map", () 
   assert.match(src, /hideEmbeddedFlightHero = mapFirstLive/, "Flight hero must hide on live map-first arrive");
   assert.match(src, /if \(mapFirstLive\) return;/, "Live map must not auto-open bottom walk sheet");
   assert.match(src, /applyAirportNavigatorPlanetBasemap/, "Planet aviation basemap tuning required");
-  assert.match(src, /streets-v2|resolveAirportNavigatorBasemapStyleUrl/, "Planet streets basemap required");
+  assert.match(src, /maptilerStyleUrl\("openstreetmap"/, "Planet openstreetmap basemap required");
   assert.match(src, /computeRegionalRailBounds\(layout\)/, "Live FCO arrival must frame Leonardo→Termini rail bounds");
   assert.match(src, /previewMode && !mapFirstLive/, "Arrival first-mile header bar must stay off embedded Live Map");
   assert.ok(
