@@ -37,6 +37,9 @@ export interface TravelVaultData {
   hotelLoyaltyNumbers: VaultLoyaltyEntry[];
   driverLicenseNumber: string;
   travelInsurancePolicyNumber: string;
+  travelInsuranceProvider: string;
+  travelInsuranceEmergencyPhone: string;
+  travelInsuranceValidThrough: string;
   emergencyContactName: string;
   emergencyContactPhone: string;
   creditCardTravelBenefitsNotes: string;
@@ -63,6 +66,9 @@ function emptyVault(): TravelVaultData {
     hotelLoyaltyNumbers: [],
     driverLicenseNumber: "",
     travelInsurancePolicyNumber: "",
+    travelInsuranceProvider: "",
+    travelInsuranceEmergencyPhone: "",
+    travelInsuranceValidThrough: "",
     emergencyContactName: "",
     emergencyContactPhone: "",
     creditCardTravelBenefitsNotes: "",
@@ -132,6 +138,18 @@ function sanitizeVaultData(raw: unknown): TravelVaultData {
     travelInsurancePolicyNumber:
       typeof candidate.travelInsurancePolicyNumber === "string"
         ? candidate.travelInsurancePolicyNumber.trim().slice(0, 120)
+        : "",
+    travelInsuranceProvider:
+      typeof candidate.travelInsuranceProvider === "string"
+        ? candidate.travelInsuranceProvider.trim().slice(0, 120)
+        : "",
+    travelInsuranceEmergencyPhone:
+      typeof candidate.travelInsuranceEmergencyPhone === "string"
+        ? candidate.travelInsuranceEmergencyPhone.trim().slice(0, 60)
+        : "",
+    travelInsuranceValidThrough:
+      typeof candidate.travelInsuranceValidThrough === "string"
+        ? candidate.travelInsuranceValidThrough.trim().slice(0, 40)
         : "",
     emergencyContactName:
       typeof candidate.emergencyContactName === "string" ? candidate.emergencyContactName.trim().slice(0, 120) : "",

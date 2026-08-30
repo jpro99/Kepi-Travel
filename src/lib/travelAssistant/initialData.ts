@@ -12,6 +12,7 @@ export const BASE_CHECKLIST: ReadinessItem[] = [
   { id: "ready-checkin", category: "Check-in timing", title: "Online check-in reminders set", complete: false, required: true },
   { id: "ready-arrival", category: "Arrival transfer", title: "Pickup location pinned", complete: false, required: true },
   { id: "ready-essentials", category: "Essentials", title: "Medication and chargers packed", complete: false, required: false },
+  { id: "ready-coverage", category: "Emergency", title: "Trip protection policy saved for emergencies", complete: false, required: false },
   { id: "ready-night", category: "First-night", title: "First meal and sleep plan prepared", complete: false, required: false },
 ];
 
