@@ -21,7 +21,7 @@ import { FlightSearchModal } from "@/components/travelAssistant/FlightSearchModa
 import type { FlightSearchPlan, PlannedFlightLeg } from "@/lib/travelAssistant/tripPlanBooking";
 import type { InterCityTransportGap } from "@/lib/travelAssistant/interCityTransport";
 import type { QuickGroundMode } from "@/lib/travelAssistant/quickGroundTransport";
-import { sortFlightsByDeparture } from "@/lib/travelAssistant/flightSort";
+import { sortFlightsByDeparture, flightDepartureUtcMs, selectNextRemainingFlight } from "@/lib/travelAssistant/flightSort";
 import { canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
 import { shouldShowTerminalExplorePromo } from "@/lib/travelAssistant/homeDayTruth";
 import {
@@ -156,18 +156,14 @@ function isCompleted(r: Reservation): boolean {
     const arrMs = parseFlightTimeMs(r.flightArrivalTime, r.timezone);
     if (!isNaN(arrMs)) return Date.now() - arrMs > 3600_000; // 1h after arrival
   }
-  // Fall back to departure + generous buffer
-  // Parse with timezone if available — critical for Japan flights shown in Hawaii time
-  const depStr = r.flightDepartureTime ?? r.localTime ?? "";
-  const depMs = parseFlightTimeMs(depStr, r.timezone);
-  if (!isNaN(depMs)) return Date.now() - depMs > 18 * 3600_000;
+  const depMs = flightDepartureUtcMs(r);
+  if (!Number.isNaN(depMs)) return Date.now() - depMs > 18 * 3600_000;
   return false;
 }
 
 function minsUntilDep(r: Reservation): number {
-  const depStr = r.flightDepartureTime ?? r.localTime ?? "";
-  const ms = parseFlightTimeMs(depStr, r.timezone);
-  return isNaN(ms) ? Infinity : (ms - Date.now()) / 60_000;
+  const ms = flightDepartureUtcMs(r);
+  return Number.isNaN(ms) ? Infinity : (ms - Date.now()) / 60_000;
 }
 
 /* ─── Live status badge ──────────────────────────────────────── */
@@ -302,8 +298,7 @@ export function FlightsTab({
     });
     const up = sortFlightsByDeparture(deduped.filter(r => !isCompleted(r)));
     const pa = sortFlightsByDeparture(deduped.filter(r => isCompleted(r)).reverse());
-    // Next flight = earliest upcoming by departure time
-    const next = [...up].sort((a,b) => minsUntilDep(a) - minsUntilDep(b))[0] ?? null;
+    const next = selectNextRemainingFlight(up);
     return { upcoming: up, past: pa, nextFlight: next };
   }, [reservations]);
 

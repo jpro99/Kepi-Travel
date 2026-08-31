@@ -1,8 +1,9 @@
 /**
  * Shared flight departure ordering — Flights tab, day sheets, airport navigator.
- * Uses canonical departure time + timezone (never raw storage order).
+ * Uses canonical departure time + departure-airport timezone (never raw storage order).
  */
 
+import { timezoneForIata } from "@/lib/airports/lookup";
 import {
   canonicalFlightDepartureDay,
   canonicalFlightDepartureLocalTime,
@@ -12,6 +13,19 @@ import {
 export interface FlightSortFields extends CanonicalFlightScheduleFields {
   timezone?: string;
   type?: string;
+  flightDepartureAirport?: string;
+  plannedOnly?: boolean;
+}
+
+/** Departure clock timezone — fix Etc/UTC bleed; otherwise honor stored flight.timezone (F15). */
+export function departureTimezoneForFlight(flight: FlightSortFields): string | undefined {
+  const stored = flight.timezone?.trim();
+  const depIata = flight.flightDepartureAirport?.trim().toUpperCase();
+  const iataTz = depIata ? timezoneForIata(depIata) : undefined;
+  if (stored === "Etc/UTC" || stored === "UTC") {
+    return iataTz ?? stored;
+  }
+  return stored;
 }
 
 /** Local "YYYY-MM-DD HH:MM" + IANA timezone → UTC ms (Intl offset method). */
@@ -22,7 +36,7 @@ export function flightDepartureUtcMs(flight: FlightSortFields): number {
   const m = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}))?$/.exec(s);
   if (!m) return Number.NaN;
   const approxUtc = Date.UTC(+m[1], +m[2] - 1, +m[3], +(m[4] ?? 0), +(m[5] ?? 0));
-  const timezone = flight.timezone?.trim();
+  const timezone = departureTimezoneForFlight(flight);
   if (!timezone) return approxUtc;
   try {
     const fmt = new Intl.DateTimeFormat("en-US", {
@@ -108,4 +122,26 @@ export function formatTravelDayFlightLabel(f: {
   const fn = f.flightNumber?.trim();
   if (fn && route) return `${fn} · ${route}`;
   return fn || route || "Your flight today";
+}
+
+const NEXT_REMAINING_BEHIND_GRACE_MS = 2 * 60 * 60_000;
+
+/**
+ * Next remaining flight = earliest booked segment whose departure is still ahead
+ * in clock time (timezone-aware). Storage order and long-haul role are ignored (F15).
+ */
+export function selectNextRemainingFlight<T extends FlightSortFields>(
+  reservations: readonly T[],
+  nowMs: number = Date.now(),
+): T | null {
+  const flights = sortFlightsByDeparture(
+    reservations.filter(
+      (r) => (r.type ?? "flight").toLowerCase() === "flight" && r.plannedOnly !== true,
+    ),
+  );
+  const timed = flights
+    .map((f) => ({ f, utcMs: flightDepartureUtcMs(f) }))
+    .filter((row) => Number.isFinite(row.utcMs));
+  const upcoming = timed.find((row) => row.utcMs >= nowMs - NEXT_REMAINING_BEHIND_GRACE_MS);
+  return upcoming?.f ?? timed[0]?.f ?? null;
 }

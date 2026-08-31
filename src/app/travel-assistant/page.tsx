@@ -37,6 +37,7 @@ import {
   reconcileTripWindowDates,
 } from "@/lib/travelAssistant/tripWindowRepair";
 import { canonicalFlightDepartureDay, canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
+import { flightDepartureUtcMs, selectNextRemainingFlight } from "@/lib/travelAssistant/flightSort";
 import {
   nearestUpcomingFlightDepartureUtcMs,
   resolveFlightStatusPollIntervalMs,
@@ -4529,37 +4530,18 @@ export default function TravelAssistantPage() {
   );
 
   const consumerReservationsSorted = useMemo(() => {
-    // Convert local departure time + timezone to UTC ms for correct ordering.
-    // Without this, HND 21:20 JST sorts after HNL 13:41 HST even though
-    // the Tokyo flight actually departs first in real time.
-    const toUtcMs = (r: { localTime?: string; timezone?: string }): number => {
-      const local = r.localTime?.trim() ?? "";
-      const tz = r.timezone?.trim() ?? "Etc/UTC";
-      if (!local) return Number.NaN;
-      try {
-        // Parse the local time string as if it were in the given timezone
-        const [datePart, timePart = "00:00"] = local.split(" ");
-        const [year, month, day] = (datePart ?? "").split("-").map(Number);
-        const [hour, minute] = (timePart ?? "").split(":").map(Number);
-        if (!year || !month || !day) return Number.NaN;
-        // Use Intl to find UTC offset for this timezone at this moment
-        const localDate = new Date(year, (month ?? 1) - 1, day, hour ?? 0, minute ?? 0);
-        const formatter = new Intl.DateTimeFormat("en-US", {
-          timeZone: tz,
-          year: "numeric", month: "2-digit", day: "2-digit",
-          hour: "2-digit", minute: "2-digit", hour12: false,
-        });
-        const parts = Object.fromEntries(formatter.formatToParts(localDate).map(p => [p.type, p.value]));
-        const tzDate = new Date(`${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:00Z`);
-        const offsetMs = tzDate.getTime() - localDate.getTime();
-        return localDate.getTime() - offsetMs;
-      } catch {
-        return parseDateInput(local);
+    const reservationSortMs = (r: SessionReservation): number => {
+      if (r.type === "flight") {
+        const ms = flightDepartureUtcMs(r);
+        if (Number.isFinite(ms)) return ms;
       }
+      const local = r.localTime?.trim() ?? "";
+      if (!local) return Number.NaN;
+      return parseDateInput(local);
     };
     return [...consumerDisplayReservations].sort((left, right) => {
-      const leftMs = toUtcMs(left);
-      const rightMs = toUtcMs(right);
+      const leftMs = reservationSortMs(left);
+      const rightMs = reservationSortMs(right);
       if (Number.isNaN(leftMs) && Number.isNaN(rightMs)) return 0;
       if (Number.isNaN(leftMs)) return 1;
       if (Number.isNaN(rightMs)) return -1;
@@ -4667,14 +4649,10 @@ export default function TravelAssistantPage() {
     );
   }, [guidanceLocationStatus, router, activeTripId, consumerReservationsSorted]);
 
-  const nextUpcomingFlight = useMemo(() => {
-    const nowMs = new Date().getTime();
-    return consumerReservationsSorted.find((r) => {
-      if (r.type !== "flight") return false;
-      const depMs = parseDateInput(canonicalFlightDepartureLocalTime(r));
-      return !Number.isNaN(depMs) && depMs > nowMs - 4 * 3_600_000;
-    }) ?? null;
-  }, [consumerReservationsSorted]);
+  const nextUpcomingFlight = useMemo(
+    () => selectNextRemainingFlight(consumerReservationsSorted),
+    [consumerReservationsSorted],
+  );
 
 
 

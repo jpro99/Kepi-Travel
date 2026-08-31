@@ -7,10 +7,9 @@ import { CheckInHandoffCard } from "@/components/travelAssistant/CheckInHandoffC
 import { NextUpCard } from "@/components/travelAssistant/NextUpCard";
 import {
   buildCheckInHandoffContent,
-  parseDepartureUtcMs,
 } from "@/lib/travelAssistant/checkInHandoff";
 import { resolveBoardingPassUrl, type ReservationSourceLink } from "@/lib/travelAssistant/reservationLinks";
-import { canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
+import { selectNextRemainingFlight, flightDepartureUtcMs } from "@/lib/travelAssistant/flightSort";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 
 interface Reservation {
@@ -60,24 +59,9 @@ export function MobileAssistView({
 }: MobileAssistViewProps) {
   const t = useTranslations("HomeAssist");
   const checkInHandoff = useMemo(() => {
-    const nextFlight = [...reservations]
-      .filter((reservation) => reservation.type === "flight")
-      .sort((left, right) => {
-        const leftMs = parseDepartureUtcMs(
-          canonicalFlightDepartureLocalTime(left),
-          left.timezone,
-        ) ?? Number.POSITIVE_INFINITY;
-        const rightMs = parseDepartureUtcMs(
-          canonicalFlightDepartureLocalTime(right),
-          right.timezone,
-        ) ?? Number.POSITIVE_INFINITY;
-        return leftMs - rightMs;
-      })[0];
+    const nextFlight = selectNextRemainingFlight(reservations);
     if (!nextFlight) return null;
-    const departureUtcMs = parseDepartureUtcMs(
-      canonicalFlightDepartureLocalTime(nextFlight),
-      nextFlight.timezone,
-    );
+    const departureUtcMs = flightDepartureUtcMs(nextFlight);
     return buildCheckInHandoffContent({
       id: nextFlight.id,
       flightNumber: nextFlight.flightNumber,

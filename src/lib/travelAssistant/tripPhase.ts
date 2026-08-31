@@ -16,7 +16,12 @@ import {
   reservationPrimaryDate,
 } from "@/lib/travelAssistant/tripWindow";
 import { toUtcMs } from "@/lib/travelAssistant/journeyPhase";
-import { selectTravelDayDepartureFlight, sortFlightsByDeparture } from "@/lib/travelAssistant/flightSort";
+import {
+  flightDepartureUtcMs,
+  selectNextRemainingFlight,
+  selectTravelDayDepartureFlight,
+  sortFlightsByDeparture,
+} from "@/lib/travelAssistant/flightSort";
 import { disruptionCalmHomeCopy } from "@/lib/travelAssistant/disruptionCalm";
 
 export type MissionControlPhase =
@@ -131,12 +136,7 @@ function flightDepDay(r: MissionControlReservation): string {
 }
 
 function flightDepUtcMs(r: MissionControlReservation): number {
-  const local =
-    r.flightDepartureTime?.trim() ||
-    (hasTime(r.localTime) ? r.localTime!.trim() : "") ||
-    (r.flightDate ? `${r.flightDate.slice(0, 10)} 12:00` : "");
-  if (!local) return Number.NaN;
-  return toUtcMs(local.slice(0, 16).replace("T", " "), r.timezone);
+  return flightDepartureUtcMs(r);
 }
 
 function hasTime(localTime: string | undefined | null): boolean {
@@ -266,13 +266,7 @@ function firstOutboundFlight(
   reservations: MissionControlReservation[],
   nowMs: number,
 ): MissionControlReservation | null {
-  const flights = reservations
-    .filter(isBookedFlight)
-    .map((f) => ({ f, ms: flightDepUtcMs(f) }))
-    .filter((row) => Number.isFinite(row.ms))
-    .sort((a, b) => a.ms - b.ms);
-  const upcoming = flights.find((row) => row.ms >= nowMs - 2 * 60 * 60_000);
-  return upcoming?.f ?? flights[0]?.f ?? null;
+  return selectNextRemainingFlight(reservations, nowMs);
 }
 
 function lastReturnFlight(reservations: MissionControlReservation[]): MissionControlReservation | null {

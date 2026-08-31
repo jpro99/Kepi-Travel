@@ -7,6 +7,7 @@ import {
   canonicalFlightDepartureLocalTime,
 } from "@/lib/travelAssistant/tripWindow";
 import { timezoneForIata } from "@/lib/airports/lookup";
+import { flightDepartureUtcMs as sharedFlightDepartureUtcMs } from "@/lib/travelAssistant/flightSort";
 
 export interface JourneyReservation {
   id: string;
@@ -97,12 +98,7 @@ export function toUtcMs(localTime: string, timezone?: string): number {
 }
 
 function flightDepartureUtcMs(flight: JourneyReservation): number {
-  const canonical = canonicalFlightDepartureLocalTime(flight);
-  if (canonical?.trim()) {
-    const ms = toUtcMs(canonical, flight.timezone);
-    if (!Number.isNaN(ms)) return ms;
-  }
-  return Number.NaN;
+  return sharedFlightDepartureUtcMs(flight);
 }
 
 function flightArrivalUtcMs(flight: JourneyReservation): number {

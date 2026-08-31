@@ -240,6 +240,11 @@ Departures coach + journey machine only fire when the layout has distinct `check
 
 ## FLIGHTS LAWS
 
+**F15 — Next flight is earliest remaining departure, not storage order**  
+Home, Airport Mode, Book → Flights, and check-in handoff must pick the chronologically next booked segment (timezone-aware departure clock), including domestic connectors. Storage array order and long-haul role never override clock time — ONT→SEA before SEA→FCO on the same travel day.
+
+**Test:** `src/lib/travelAssistant/flightSort.test.ts`
+
 **F1 — No alarmist connection language**  
 Never headline "illegal", "impossible", or "rebook immediately" for through-tickets. Present factual options (make connection vs protect with insurance/time buffer).
 
@@ -988,6 +993,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | M36 | `src/lib/airportNav/doorMonotonicity.test.ts` |
 | M37 | `src/lib/airportNav/footwayGraph.test.ts`, `src/lib/airportNav/routeGradeHonesty.test.ts` |
 | M38 | `src/lib/airportNav/mapHelperNearby.test.ts` |
+| F15 | `src/lib/travelAssistant/flightSort.test.ts` |
 | F3 | `src/lib/travelAssistant/tripTransportRoute.test.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |
 | F7 | `src/lib/travelAssistant/itinerarySelfCheck.test.ts` |
