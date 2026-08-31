@@ -33,6 +33,7 @@ import { reservationPropertyName } from "@/lib/travelAssistant/reservationDispla
 import {
   flightDepartureUtcMs,
   formatTravelDayFlightLabel,
+  selectNextRemainingFlight,
   selectTravelDayDepartureFlight,
   type TravelDayFlightPick,
 } from "@/lib/travelAssistant/flightSort";
@@ -112,14 +113,10 @@ export function selectPreviewAirportFlight(
     return { f: todayPick.f as FlightReservation, utcMs: todayPick.utcMs };
   }
 
-  const graceMs = WINDOW_BEHIND_MIN * 60_000;
-  return (
-    reservations
-      .filter((r) => r.type === "flight" && r.flightDepartureAirport)
-      .map((f) => ({ f, utcMs: flightDepartureUtcMs(f) }))
-      .filter(({ utcMs }) => !isNaN(utcMs) && utcMs > nowMs - graceMs)
-      .sort((a, b) => a.utcMs - b.utcMs)[0] ?? null
-  );
+  const next = selectNextRemainingFlight(reservations, nowMs);
+  if (!next) return null;
+  const utcMs = flightDepartureUtcMs(next);
+  return { f: next as FlightReservation, utcMs };
 }
 
 /** Mirrors page.tsx's onboarding-placeholder rule (provider/notes markers). */

@@ -92,6 +92,47 @@ test("selectActiveFlight and preview agree inside the live window", () => {
   assert.equal(live!.f.id, preview!.f.id);
 });
 
+test("F15: Aug 31 morning — active null (>12h), preview picks ONT not storage-order SEA", () => {
+  const nowMs = Date.parse("2026-08-31T15:00:00Z"); // 8am PDT
+  const flights: FlightReservation[] = [
+    {
+      id: "as180",
+      type: "flight",
+      title: "SEA → FCO",
+      provider: "Alaska Airlines",
+      localTime: "2026-09-01 17:30",
+      timezone: "Etc/UTC",
+      location: "SEA",
+      confirmationCode: "DPNNWG",
+      flightNumber: "AS180",
+      flightDepartureAirport: "SEA",
+      flightArrivalAirport: "FCO",
+      flightDepartureTime: "2026-09-01 17:30",
+      flightDate: "2026-09-01",
+    },
+    {
+      id: "as654",
+      type: "flight",
+      title: "ONT → SEA",
+      provider: "Alaska Airlines",
+      localTime: "2026-09-01 12:00",
+      timezone: "America/Los_Angeles",
+      location: "ONT",
+      confirmationCode: "DPNNWG",
+      flightNumber: "AS654",
+      flightDepartureAirport: "ONT",
+      flightArrivalAirport: "SEA",
+      flightDepartureTime: "2026-09-01 12:00",
+      flightDate: "2026-09-01",
+    },
+  ];
+  assert.equal(selectActiveFlight(flights, nowMs), null, "Sep 1 departures are >12h out on Aug 31 morning");
+  const preview = selectPreviewAirportFlight(flights, nowMs);
+  assert.ok(preview);
+  assert.equal(preview!.f.id, "as654");
+  assert.equal(preview!.f.flightDepartureAirport, "ONT");
+});
+
 test("selectFlightForDepartureIata pins ONT not earliest SEA leg", () => {
   const now = Date.parse("2026-08-23T12:00:00Z");
   const flights: FlightReservation[] = [
