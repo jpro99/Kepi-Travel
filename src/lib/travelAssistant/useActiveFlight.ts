@@ -220,6 +220,55 @@ export function selectFlightForAirportIata(
   return arrival.utcMs <= departure.utcMs ? arrival : departure;
 }
 
+/** True when a reservation clearly involves this airport (IATA fields or title/location). */
+export function flightTouchesAirportIata(f: FlightReservation, iata: string): boolean {
+  const code = iata.trim().toUpperCase();
+  if (!code) return false;
+  if (f.flightDepartureAirport?.trim().toUpperCase() === code) return true;
+  if (f.flightArrivalAirport?.trim().toUpperCase() === code) return true;
+  const title = f.title?.trim().toUpperCase() ?? "";
+  if (
+    title.includes(`${code} →`)
+    || title.includes(`→ ${code}`)
+    || title.includes(`${code}-`)
+    || title.includes(`${code} –`)
+  ) {
+    return true;
+  }
+  const loc = f.location?.trim().toUpperCase() ?? "";
+  if (
+    loc === code
+    || loc.startsWith(`${code} `)
+    || loc.includes(`→${code}`)
+    || loc.includes(`→ ${code}`)
+    || loc.includes(`${code}→`)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Best leg at a physical airport campus — strict IATA match first, then title/location.
+ */
+export function selectFlightForAirportCampus(
+  reservations: FlightReservation[],
+  iata: string,
+  nowMs: number,
+  mode?: "depart" | "arrive" | null,
+): ActiveFlight | null {
+  const strict = selectFlightForAirportIata(reservations, iata, nowMs, mode);
+  if (strict) return strict;
+  const code = iata.trim().toUpperCase();
+  const graceMs = WINDOW_BEHIND_MIN * 60_000;
+  const loose = reservations
+    .filter((r) => r.type === "flight" && flightTouchesAirportIata(r, code))
+    .map((f) => ({ f, utcMs: flightDepartureUtcMs(f) }))
+    .filter(({ utcMs }) => !isNaN(utcMs))
+    .sort((a, b) => a.utcMs - b.utcMs);
+  return loose.find(({ utcMs }) => utcMs >= nowMs - graceMs) ?? loose[0] ?? null;
+}
+
 /** Coach surface for a pinned airport — arrival IATA opens first-mile arrive copy. */
 export function resolveCoachModeForPinnedAirport(
   flight: FlightReservation,
@@ -306,7 +355,7 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
       // Physical GPS airport: pick the best leg at this field — ignore URL mode
       // that might still say ONT from a stale deep link.
       const mode = physicalAirportIata ? null : preferredMode;
-      return selectFlightForAirportIata(reservations, pinIata, nowMs, mode);
+      return selectFlightForAirportCampus(reservations, pinIata, nowMs, mode);
     },
     [physicalAirportIata, preferredIata, preferredMode, reservations, nowMs],
   );
@@ -314,6 +363,12 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
   const navigatorFlight = useMemo(() => {
     if (physicalAirportIata) {
       if (pinnedFlight) return pinnedFlight;
+      const touchesField = (f: FlightReservation) =>
+        flightTouchesAirportIata(f, physicalAirportIata);
+      if (activeFlight && touchesField(activeFlight.f)) return activeFlight;
+      if (previewFlight && touchesField(previewFlight.f)) return previewFlight;
+      const campus = selectFlightForAirportCampus(reservations, physicalAirportIata, nowMs);
+      if (campus) return campus;
       // At an airport with no matching trip leg — map still opens on IATA;
       // never fall back to preview for a different airport.
       return null;
@@ -329,7 +384,7 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
     }
     if (pinnedFlight) return pinnedFlight;
     return activeFlight ?? previewFlight;
-  }, [physicalAirportIata, journeyPhase, pinnedFlight, activeFlight, previewFlight, nowMs]);
+  }, [physicalAirportIata, journeyPhase, pinnedFlight, activeFlight, previewFlight, reservations, nowMs]);
 
   const navigatorCoachMode = useMemo(() => {
     const pinIata = physicalAirportIata ?? preferredIata;

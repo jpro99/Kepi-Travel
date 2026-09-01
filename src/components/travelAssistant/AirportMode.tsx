@@ -22,7 +22,7 @@ import { AirportNavigatorMap } from "@/components/travelAssistant/AirportNavigat
 // Type-only import — fully erased at compile time, so the route's "server-only"
 // guard never runs in the client bundle. Single source of truth for the schema.
 import type { TravelProfile } from "@/app/api/travel-profile/route";
-import { selectActiveFlight, selectFlightForAirportIata, type FlightReservation } from "@/lib/travelAssistant/useActiveFlight";
+import { selectActiveFlight, selectFlightForAirportCampus, type FlightReservation } from "@/lib/travelAssistant/useActiveFlight";
 import { flightDepartureUtcMs } from "@/lib/travelAssistant/flightSort";
 import {
   isHubConnectionActive,
@@ -450,7 +450,7 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
   );
   const activeFlight = useMemo(() => {
     if (physicalIata) {
-      const atField = selectFlightForAirportIata(reservations, physicalIata, now);
+      const atField = selectFlightForAirportCampus(reservations, physicalIata, now);
       if (atField) return atField;
     }
     return selectActiveFlight(reservations, now);

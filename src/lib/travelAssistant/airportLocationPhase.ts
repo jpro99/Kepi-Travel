@@ -27,21 +27,25 @@ export function resolveAirportLocationPhase(input: {
   const status = input.locationStatus;
   const hasLounge = input.hasLoungeAccess ?? false;
 
-  if (min > 180) return "off";
   if (min < 0) return min > -60 ? "departed" : "off";
-  if (min < 20) return "final-call";
 
+  // Physically on campus — never hide as "off" for international early arrival (>3h).
   if (status === "in-terminal") {
+    if (min < 20) return "final-call";
     if (min > 60 && hasLounge) return "lounge";
     if (min > 30) return "head-to-gate";
     return "at-gate";
   }
 
   if (status === "at-airport") {
+    if (min < 20) return "final-call";
     if (min < 45) return "security";
     return "check-in";
   }
 
+  // Away from the airport — only surface coach inside ~3h of departure.
+  if (min > 180) return "off";
+  if (min < 20) return "final-call";
   if (min < 90) return "leave-now";
   return "leave-soon";
 }

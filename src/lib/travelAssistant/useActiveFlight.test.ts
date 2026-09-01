@@ -6,6 +6,7 @@ import {
   selectFlightForDepartureIata,
   selectFlightForArrivalIata,
   selectFlightForAirportIata,
+  selectFlightForAirportCampus,
   resolveCoachModeForPinnedAirport,
   toUtcMs,
   type FlightReservation,
@@ -225,6 +226,25 @@ test("physical airport SEA selects SEA leg — not ONT preview (F15 reload bug)"
   assert.ok(
     seaPin?.f.flightArrivalAirport === "SEA" || seaPin?.f.flightDepartureAirport === "SEA",
   );
+});
+
+test("selectFlightForAirportCampus matches SEA → FCO title when IATA fields missing", () => {
+  const nowMs = Date.parse("2026-09-01T20:00:00.000Z");
+  const flights: FlightReservation[] = [
+    {
+      id: "as180-loose",
+      type: "flight",
+      title: "SEA → FCO",
+      provider: "Alaska Airlines",
+      localTime: "2026-09-01 17:30",
+      timezone: "America/Los_Angeles",
+      location: "SEA",
+      flightNumber: "AS180",
+      flightDepartureTime: "2026-09-01 17:30",
+    },
+  ];
+  const campus = selectFlightForAirportCampus(flights, "SEA", nowMs);
+  assert.equal(campus?.f.id, "as180-loose");
 });
 
 test("FCO arrive mode pins inbound AS180 — AZ1607 FCO→BRI cannot steal", () => {

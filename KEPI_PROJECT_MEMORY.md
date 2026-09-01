@@ -11,7 +11,7 @@ After landing on the runway, indoor graph snap was pinning the puck to the neare
 
 ## Fix 2026-09-01 — GPS airport wins over stale ONT deep link at SEA (Jeff)
 
-Reloading Live Map with `?iata=ONT` (or preview picking earliest departure) showed Ontario + old gate while physically at SEA. **GPS-first everywhere:** `resolveLiveMapAirportIata` / `resolveOpenAirportIata` wait for GPS and physical campus wins; AirportMode + Map open links use physical IATA (not `findPlannableAirportIata` alone); flight status polls **one** leg at the physical airport (not every trip flight); gate display uses `resolveDisplayGateCode` so empty live polls don't flicker; AirportMode tick 30s not 1s.
+Reloading Live Map with `?iata=ONT` (or preview picking earliest departure) showed Ontario + old gate while physically at SEA. **GPS-first everywhere:** `resolveLiveMapAirportIata` / `resolveOpenAirportIata` wait for GPS and physical campus wins; AirportMode + Map open links use physical IATA (not `findPlannableAirportIata` alone); flight status polls **one** leg at the physical airport; gate display uses `resolveDisplayGateCode`. **At SEA for SEA→FCO:** `resolveAirportLocationPhase` no longer returns `off` when physically on campus >3h before depart; `selectFlightForAirportCampus` matches SEA→Rome even when IATA fields are only in title/location.
 
 ## Incident 2026-08-21 — Z84T4Z price stays in the drawer, ledger still says Add price (Jeff)
 
