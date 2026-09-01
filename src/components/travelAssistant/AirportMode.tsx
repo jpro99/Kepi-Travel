@@ -127,11 +127,11 @@ function calcLeaveByMs(
   hasLoungeAccess: boolean,
 ): { leaveByMs: number; reason: string } {
   // Time at airport before departure:
-  // Standard: 90 min domestic, 120 min international (simplified: 90)
+  // Standard: 120 min domestic (2h at airport — I62); intl callers may raise further
   // Priority security: saves ~20 min
   // Precheck/GE: saves another 15 min
   // Lounge: add 30 min buffer to enjoy it
-  let bufferMin = 90;
+  let bufferMin = 120; // I62: 2h domestic arrive-by
   if (hasPrioritySecurity || hasPrecheck) bufferMin -= 20;
   if (hasLoungeAccess) bufferMin += 30;
   bufferMin = Math.max(40, bufferMin);

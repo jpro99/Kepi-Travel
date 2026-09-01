@@ -956,6 +956,10 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 
 ---
 
+
+**I62 — Domestic leave-by is 2 hours at the airport; corner traffic countdown is honest**  
+Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. Leave-by never invents drive time (I32). When a real OSRM/genome drive ETA exists, Map/Airport depart coach shows a **corner countdown** (leave-in + drive ~Xm labeled route/not live traffic). Map helpers (admin opt-in) can one-tap confirm **gates and airline counters** ("Gate C11?", "Alaska here?") — reports never auto-publish (M38).
+
 ## Test index
 
 | Law | Test file |
@@ -1091,6 +1095,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | I58 | `src/lib/travelAssistant/railTicketExtract.test.ts` |
 | I59 | `src/lib/travelAssistant/activityTicketExtract.test.ts` |
 | I60 | `src/lib/travelAssistant/travelAssistantPageAnalytics.test.ts` |
+| I62 | `src/lib/travelAssistant/departLeaveTiming.test.ts`, `src/lib/travelAssistant/leaveCountdownBadge.test.ts`, `src/lib/airportNav/mapHelperNearby.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |

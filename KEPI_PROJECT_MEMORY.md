@@ -968,3 +968,5 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 | 2026-07-06 | **Weekly Audit:** skill + Week 1 ingestion report; Week 3 includes points/card/lounge; rotation in conductor.md |
 | 2026-06-15 | Screenshot triage rule + Polignano offshore pin fix (`isLikelyOffshorePin`) |
 | 2026-06-15 | Created memory file; documented Duffel emails sent, LiteAPI key set, Travelpayouts Drive skipped, domain bot skills |
+
+- **2026-09-01 — Domestic airport buffer 2h + corner leave countdown (I62):** Leave-by default is 120 min domestic (was 90). Depart coach corner badge shows leave-in countdown + OSRM drive minutes labeled not-live-traffic. Admin Make-helper chips now ask gate/airline confirms ("Gate C11?", "Alaska here?") — Jeff can enable just himself in Admin → Users → Make helper.
