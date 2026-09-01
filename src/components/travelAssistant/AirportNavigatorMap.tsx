@@ -43,6 +43,8 @@ import {
   gateArrivalBanner,
   gateChangeBanner,
   isAtBookedGate,
+  shouldPersistGateWalk,
+  shouldStartGateWalkNow,
 } from "@/lib/airportNav/gatePresence";
 import { resolveConfirmSpotFromLngLat } from "@/lib/airportNav/confirmTravelerSpot";
 import {
@@ -1492,6 +1494,15 @@ export function AirportNavigatorMap({
     [travelerPos, gateNodePos],
   );
   const atBookedGate = isAtBookedGate(gateDistanceM);
+  const persistGateWalk = shouldPersistGateWalk({
+    previewMode,
+    isArriveCoach,
+    mapFirstLiveArrivalFirstMile: mapFirstLive && arrivalFirstMile,
+    atGate: atBookedGate,
+    gateAssigned: Boolean(gatePoi && gateCode?.trim()),
+  });
+  const activeRouteToGate = Boolean(activeRoute && gatePoi && activeRoute.toPoiId === gatePoi.id);
+  const routingElsewhere = Boolean(activeRoute && gatePoi && activeRoute.toPoiId !== gatePoi.id);
   const atGateBanner = useMemo(
     () =>
       gateArrivalBanner({
@@ -1917,17 +1928,72 @@ export function AirportNavigatorMap({
     showSubtitle(pressure.breakdown);
   }, [pressure, gatePoi, setSprintMode, startRoute, showSubtitle]);
 
-  // Auto-start gate walk once when layout + gate are ready (after PreCheck answer if needed).
-  // Arrival Live Map stays map-first (Leonardo / first-mile rail). Departures walk to the gate.
-  const autoGateStartedRef = useRef(false);
+  // Persistent walk-to-gate — stays on through security and position updates until at the gate.
+  const prevQuietModeRef = useRef(quietMode);
   useEffect(() => {
-    if (autoGateStartedRef.current) return;
-    if (mapFirstLive && (arrivalFirstMile || isArriveCoach)) return;
-    if (!layout || !gatePoi || activeRoute || quietMode) return;
-    if (!credentials.known) return;
-    autoGateStartedRef.current = true;
-    startRoute(gatePoi.id, true);
-  }, [mapFirstLive, arrivalFirstMile, isArriveCoach, layout, gatePoi, activeRoute, quietMode, credentials.known, startRoute]);
+    if (!persistGateWalk || !gatePoi || credentials.known) return;
+    if (pendingPoiId === gatePoi.id) return;
+    setPendingPoiId(gatePoi.id);
+  }, [persistGateWalk, gatePoi, credentials.known, pendingPoiId]);
+
+  useEffect(() => {
+    if (
+      !shouldStartGateWalkNow({
+        persist: persistGateWalk,
+        quietMode,
+        confirmMode,
+        credentialsKnown: credentials.known,
+        hasOrigin: Boolean(originNodeId),
+        activeRouteToGate,
+        routingElsewhere,
+      })
+      || !gatePoi
+    ) {
+      return;
+    }
+    startRoute(gatePoi.id, false);
+  }, [
+    persistGateWalk,
+    quietMode,
+    confirmMode,
+    credentials.known,
+    originNodeId,
+    activeRouteToGate,
+    routingElsewhere,
+    gatePoi,
+    startRoute,
+  ]);
+
+  useEffect(() => {
+    const exitedSecurity = prevQuietModeRef.current && !quietMode;
+    prevQuietModeRef.current = quietMode;
+    if (
+      !exitedSecurity
+      || !persistGateWalk
+      || !gatePoi
+      || !credentials.known
+      || atBookedGate
+      || activeRouteToGate
+      || routingElsewhere
+      || confirmMode
+    ) {
+      return;
+    }
+    startRoute(gatePoi.id, false);
+    showSubtitle(`Continue to ${gateCode ? `Gate ${gateCode.toUpperCase()}` : "your gate"}`);
+  }, [
+    quietMode,
+    persistGateWalk,
+    gatePoi,
+    credentials.known,
+    atBookedGate,
+    activeRouteToGate,
+    routingElsewhere,
+    confirmMode,
+    gateCode,
+    startRoute,
+    showSubtitle,
+  ]);
 
 
   /* ── Voice co-pilot ─────────────────────────────────────────────────── */
@@ -3463,6 +3529,14 @@ export function AirportNavigatorMap({
             </p>
             {atGateBanner ? (
               <p className="mt-1 text-[12px] font-bold leading-snug">{atGateBanner.label}</p>
+            ) : activeRouteToGate && activeRoute ? (
+              <p className="mt-1 text-[12px] font-bold leading-snug text-sky-200">
+                Walking · {fmtMins(activeRoute.totalSeconds)} to gate
+              </p>
+            ) : gateRoute && persistGateWalk ? (
+              <p className="mt-1 text-[11px] font-semibold text-sky-200/90">
+                ~{fmtMins(gateRoute.totalSeconds)} walk when you start
+              </p>
             ) : flightDelayed ? (
               <p className="mt-1 text-[11px] font-semibold text-amber-200">Flight delayed</p>
             ) : null}

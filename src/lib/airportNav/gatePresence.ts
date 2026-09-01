@@ -53,3 +53,36 @@ export function gateChangeBanner(
   if (!prev) return `Gate assigned · ${next}`;
   return `Gate changed · ${prev} → ${next}`;
 }
+
+/**
+ * Departures: keep walk-to-gate guidance on until the traveler reaches the gate.
+ * Arrival first-mile (Leonardo rail, etc.) stays map-first — no auto gate walk.
+ */
+export function shouldPersistGateWalk(input: {
+  previewMode: boolean;
+  isArriveCoach: boolean;
+  mapFirstLiveArrivalFirstMile: boolean;
+  atGate: boolean;
+  gateAssigned: boolean;
+}): boolean {
+  if (input.previewMode || input.isArriveCoach || input.atGate || !input.gateAssigned) return false;
+  if (input.mapFirstLiveArrivalFirstMile) return false;
+  return true;
+}
+
+/** True when we should (re)start routing to the booked gate now. */
+export function shouldStartGateWalkNow(input: {
+  persist: boolean;
+  quietMode: boolean;
+  confirmMode: boolean;
+  credentialsKnown: boolean;
+  hasOrigin: boolean;
+  activeRouteToGate: boolean;
+  routingElsewhere: boolean;
+}): boolean {
+  if (!input.persist || !input.hasOrigin) return false;
+  if (input.quietMode || input.confirmMode) return false;
+  if (!input.credentialsKnown) return false;
+  if (input.activeRouteToGate || input.routingElsewhere) return false;
+  return true;
+}

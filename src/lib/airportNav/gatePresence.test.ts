@@ -6,6 +6,8 @@ import {
   gateArrivalBanner,
   gateChangeBanner,
   isAtBookedGate,
+  shouldPersistGateWalk,
+  shouldStartGateWalkNow,
 } from "./gatePresence";
 
 test("distanceToGateMeters returns null without positions", () => {
@@ -42,4 +44,64 @@ test("gateChangeBanner covers assign and change", () => {
   assert.equal(gateChangeBanner("C11", "C11"), null);
   assert.equal(gateChangeBanner(null, "C15"), "Gate assigned · C15");
   assert.equal(gateChangeBanner("C11", "C15"), "Gate changed · C11 → C15");
+});
+
+test("shouldPersistGateWalk — departures at airport, not arrivals first mile", () => {
+  assert.equal(
+    shouldPersistGateWalk({
+      previewMode: false,
+      isArriveCoach: false,
+      mapFirstLiveArrivalFirstMile: false,
+      atGate: false,
+      gateAssigned: true,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldPersistGateWalk({
+      previewMode: true,
+      isArriveCoach: false,
+      mapFirstLiveArrivalFirstMile: false,
+      atGate: false,
+      gateAssigned: true,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldPersistGateWalk({
+      previewMode: false,
+      isArriveCoach: true,
+      mapFirstLiveArrivalFirstMile: false,
+      atGate: false,
+      gateAssigned: true,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldPersistGateWalk({
+      previewMode: false,
+      isArriveCoach: false,
+      mapFirstLiveArrivalFirstMile: true,
+      atGate: false,
+      gateAssigned: true,
+    }),
+    false,
+  );
+});
+
+test("shouldStartGateWalkNow respects quiet mode and active routes", () => {
+  const base = {
+    persist: true,
+    quietMode: false,
+    confirmMode: false,
+    credentialsKnown: true,
+    hasOrigin: true,
+    activeRouteToGate: false,
+    routingElsewhere: false,
+  };
+  assert.equal(shouldStartGateWalkNow(base), true);
+  assert.equal(shouldStartGateWalkNow({ ...base, quietMode: true }), false);
+  assert.equal(shouldStartGateWalkNow({ ...base, activeRouteToGate: true }), false);
+  assert.equal(shouldStartGateWalkNow({ ...base, routingElsewhere: true }), false);
+  assert.equal(shouldStartGateWalkNow({ ...base, credentialsKnown: false }), false);
 });
