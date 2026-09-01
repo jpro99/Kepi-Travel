@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-09-01 (M16 apron GPS — map puck follows raw GPS off-graph)
+Last updated: 2026-09-01 (M62 SEA live map — Kepi primary, not flysea handoff)
+
+## Fix 2026-09-01 — SEA live map felt like dead picture + flysea handoff (Jeff)
+
+At SEA on campus, the map showed a static floor plan and pushed the gold **flysea** CTA as primary — felt like switching to another app with no walk-through. **M62:** when `at-airport`/`in-terminal` with a bundled layout, Kepi map stays primary (`shouldKepiMapBePrimary`); flysea demoted to secondary reference. Bundled layout hydrates from `getAirportLayout` immediately; schematic stays tappable until MapLibre ready; dashed approx journey line on schematic when `routeGrade` is schematic.
 
 ## Fix 2026-09-01 — Runway / apron: map shows real GPS, not nearest gate snap (Jeff)
 

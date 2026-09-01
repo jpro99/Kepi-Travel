@@ -176,3 +176,19 @@ export function hasVerifiedAirportWayfinding(iata: string | null | undefined): b
   const code = iata?.trim().toUpperCase();
   return Boolean(code && VERIFIED_AIRPORT_WAYFINDING[code]);
 }
+
+/**
+ * M62 — when the traveler is physically on campus and Kepi has a bundled layout,
+ * Kepi's live map is primary even for strong official tiers (SEA Atrius / flysea).
+ * Plan/preview keeps G48: strong official maps stay primary before arrival.
+ */
+export function shouldKepiMapBePrimary(opts: {
+  tier: WayfindingHonestyTier;
+  hasKepiLayout: boolean;
+  liveAtAirport: boolean;
+}): boolean {
+  const { tier, hasKepiLayout, liveAtAirport } = opts;
+  if (liveAtAirport && hasKepiLayout) return true;
+  if (tier === "strong") return false;
+  return hasKepiLayout;
+}

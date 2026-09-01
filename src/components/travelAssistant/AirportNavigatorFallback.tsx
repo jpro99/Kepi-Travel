@@ -8,8 +8,10 @@ import type { FamilyAirportPin } from "@/lib/family/familyAirportPins";
 import { OfficialAirportMapLink } from "@/components/travelAssistant/OfficialAirportMapLink";
 import {
   getAirportWayfindingResource,
+  shouldKepiMapBePrimary,
   wayfindingHonestyTier,
 } from "@/lib/airportNav/officialWayfinding";
+import { hasAirportLayout } from "@/lib/airportNav/getLayout";
 import {
   buildArrivalDayCoachPath,
   buildDepartDayCoachPath,
@@ -78,6 +80,8 @@ interface AirportNavigatorFallbackProps {
   onToggleFullDayView?: () => void;
   /** True when layout API failed (not merely unsupported). */
   layoutLoadFailed?: boolean;
+  /** Physically on this airport campus — Kepi map wins over flysea (M62). */
+  liveAtAirport?: boolean;
   familyPins?: FamilyAirportPin[];
   onFamilyPinTap?: (memberId: string) => void;
   tripReservations?: readonly TransportRouteReservation[];
@@ -121,6 +125,7 @@ export function AirportNavigatorFallback({
   fullDayView = false,
   onToggleFullDayView,
   layoutLoadFailed = false,
+  liveAtAirport: liveAtAirportProp,
   familyPins = [],
   onFamilyPinTap,
   tripReservations,
@@ -170,7 +175,16 @@ export function AirportNavigatorFallback({
   }, [isArrive, flightNumber, flightDate, airlineName]);
   const officialWayfinding = getAirportWayfindingResource(code);
   const wayfindingTier = wayfindingHonestyTier(officialWayfinding);
-  const strongOfficial = wayfindingTier === "strong";
+  const liveAtAirport =
+    liveAtAirportProp
+    ?? (proximityStatus === "at-airport" || proximityStatus === "in-terminal");
+  const hasKepiLayout = hasAirportLayout(code);
+  const kepiPrimary = shouldKepiMapBePrimary({
+    tier: wayfindingTier,
+    hasKepiLayout,
+    liveAtAirport,
+  });
+  const strongOfficialPrimary = wayfindingTier === "strong" && !kepiPrimary;
 
   const proximity = useMemo(
     () => getAirportProximity(userLat, userLon, code),
@@ -512,7 +526,7 @@ export function AirportNavigatorFallback({
               ? "Just landed · arrival coach"
               : layoutLoadFailed
                 ? "Kepi terminal map temporarily unavailable"
-                : strongOfficial
+                : strongOfficialPrimary
                   ? "Kepi checklist · official live map below"
                   : "Your guide for this airport"}
           </p>
@@ -527,10 +541,15 @@ export function AirportNavigatorFallback({
                 We couldn&apos;t load Kepi&apos;s terminal map for <span className="font-bold">{code}</span> right now.
                 Use the checklist below — we&apos;ll retry when you reopen the map.
               </>
-            ) : strongOfficial ? (
+            ) : strongOfficialPrimary ? (
               <>
                 Kepi keeps your trip context for <span className="font-bold">{code}</span>. Open the verified
                 live indoor map below for turn-by-turn inside the terminal.
+              </>
+            ) : liveAtAirport && hasKepiLayout ? (
+              <>
+                You&apos;re at <span className="font-bold">{code}</span>. Use the checklist and tap destinations —
+                Kepi&apos;s terminal map is your primary guide here. The official airport map is optional reference only.
               </>
             ) : (
               <>
@@ -544,7 +563,9 @@ export function AirportNavigatorFallback({
 
         {/* Strong verified indoor maps go first; weak Google fallbacks go AFTER the checklist
             so they never look like the primary tool. */}
-        {strongOfficial ? <OfficialAirportMapLink iata={code} /> : null}
+        {strongOfficialPrimary ? (
+          <OfficialAirportMapLink iata={code} liveAtAirport={liveAtAirport} hasOfflineKepiLayout={hasKepiLayout} />
+        ) : null}
 
         {isArrive && arrivalCoachCards.length > 0 ? (
           <ArrivalCardStack
@@ -717,7 +738,9 @@ export function AirportNavigatorFallback({
           ) : null}
         </section>
 
-        {!strongOfficial ? <OfficialAirportMapLink iata={code} /> : null}
+        {!strongOfficialPrimary ? (
+          <OfficialAirportMapLink iata={code} liveAtAirport={liveAtAirport} hasOfflineKepiLayout={hasKepiLayout} />
+        ) : null}
 
         {isArrive && arrivalTransportOptions.length > 0 && arrivalCoachCards.length === 0 ? (
           <ArrivalTransportOptionsCard
@@ -802,9 +825,11 @@ export function AirportNavigatorFallback({
         <p className="text-center text-[10px] leading-relaxed text-slate-500">
           {isArrive
             ? `Arrival coach for ${code} — not a Kepi indoor walk line. Follow signs and the official map.`
-            : strongOfficial
+            : strongOfficialPrimary
               ? `Kepi keeps the trip context; ${officialWayfinding?.provider} provides the verified live airport map.`
-              : `Kepi GPS geofencing is active. No verified indoor step-by-step map is registered for ${code} — follow airport signs and staff.`}
+              : liveAtAirport && hasKepiLayout
+                ? `You're on campus at ${code} — Kepi's terminal map is primary; external links are orientation only.`
+                : `Kepi GPS geofencing is active. No verified indoor step-by-step map is registered for ${code} — follow airport signs and staff.`}
         </p>
       </div>
     </div>

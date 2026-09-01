@@ -2,6 +2,7 @@
 
 import {
   getAirportWayfindingResource,
+  shouldKepiMapBePrimary,
   wayfindingHonestyTier,
 } from "@/lib/airportNav/officialWayfinding";
 import { hasAirportLayout } from "@/lib/airportNav/getLayout";
@@ -12,6 +13,8 @@ interface OfficialAirportMapLinkProps {
   className?: string;
   /** When true, Kepi already has a layout for this airport — that map is primary. */
   hasOfflineKepiLayout?: boolean;
+  /** Physically at this airport campus — Kepi live map wins over flysea handoff (M62). */
+  liveAtAirport?: boolean;
 }
 
 /**
@@ -27,16 +30,16 @@ export function OfficialAirportMapLink({
   compact = false,
   className = "",
   hasOfflineKepiLayout,
+  liveAtAirport = false,
 }: OfficialAirportMapLinkProps) {
   const resource = getAirportWayfindingResource(iata);
   if (!resource) return null;
   const tier = wayfindingHonestyTier(resource);
   const code = resource.iata;
-  /** Strong verified maps (SEA Atrius, FCO Digiport) stay primary even when Kepi has a schematic layout (G48). */
-  const kepiPrimary =
-    tier === "strong" ? false : (hasOfflineKepiLayout ?? hasAirportLayout(iata));
+  const hasKepiLayout = hasOfflineKepiLayout ?? hasAirportLayout(iata);
+  const kepiPrimary = shouldKepiMapBePrimary({ tier, hasKepiLayout, liveAtAirport });
 
-  if (tier === "strong") {
+  if (tier === "strong" && !kepiPrimary) {
     return (
       <section
         data-testid="official-airport-map-link"

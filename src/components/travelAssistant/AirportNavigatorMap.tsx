@@ -82,6 +82,7 @@ import {
   loadCachedAirportLayout,
   saveAirportLayoutToOfflineCache,
 } from "@/lib/travelAssistant/syncItineraryOfflineAssets";
+import { getAirportLayout } from "@/lib/airportNav/getLayout";
 import { AirportNavigatorFallback } from "@/components/travelAssistant/AirportNavigatorFallback";
 import {
   initialJourneyState,
@@ -475,6 +476,8 @@ interface AirportDestinationRailProps {
   railTop?: string;
   /** When set, the rail lists only these journey POIs (arrival first mile). */
   arrivalJourneyPoiIds?: Set<string>;
+  /** On-campus live — demote flysea handoff to secondary reference (M62). */
+  liveAtAirport?: boolean;
 }
 
 function AirportDestinationRail({
@@ -491,6 +494,7 @@ function AirportDestinationRail({
   onToggle,
   railTop = "9rem",
   arrivalJourneyPoiIds,
+  liveAtAirport = false,
 }: AirportDestinationRailProps) {
   const [detailMode, setDetailMode] = useState<AirportDetailMode>("essentials");
   const hasAirlineCheckin = layout.pois.some((definition) =>
@@ -638,6 +642,7 @@ function AirportDestinationRail({
         iata={layout.iata}
         compact
         hasOfflineKepiLayout
+        liveAtAirport={liveAtAirport}
         className="mt-2 shrink-0"
       />
     </section>
@@ -647,6 +652,8 @@ function AirportDestinationRail({
 interface AirportSchematicLayerProps {
   layout: AirportLayout;
   activeRoute: ComputedRoute | null;
+  /** Dashed approximate path when routeGrade is schematic but traveler is live on campus. */
+  approxRouteCoords: [number, number][] | null;
   selectedPoiId: string | null;
   userDisplayPos: [number, number] | null;
   userAccuracyM: number | null;
@@ -658,11 +665,14 @@ interface AirportSchematicLayerProps {
   atBookedGate: boolean;
   atGateChipLines: { primary: string; secondary: string } | null;
   onPoiClick: (poiId: string) => void;
+  /** MapLibre still booting — keep schematic tappable underneath. */
+  interactive: boolean;
 }
 
 function AirportSchematicLayer({
   layout,
   activeRoute,
+  approxRouteCoords,
   selectedPoiId,
   userDisplayPos,
   userAccuracyM,
@@ -674,6 +684,7 @@ function AirportSchematicLayer({
   atBookedGate,
   atGateChipLines,
   onPoiClick,
+  interactive,
 }: AirportSchematicLayerProps) {
   const model = useMemo(() => buildAirportSchematicModel(layout), [layout]);
   const landsideOverlay = useMemo(() => extractLandsideOverlayGeometry(layout), [layout]);
@@ -704,12 +715,18 @@ function AirportSchematicLayer({
     .map((coordinate) => model.project(coordinate))
     .map((point) => `${point.x},${point.y}`)
     .join(" ");
+  const approxRoutePoints = !activeRoute && approxRouteCoords?.length
+    ? approxRouteCoords
+        .map((coordinate) => model.project(coordinate))
+        .map((point) => `${point.x},${point.y}`)
+        .join(" ")
+    : null;
 
   return (
     <div
       data-testid="airport-nav-schematic"
       data-zone-count={model.zones.length}
-      className="absolute inset-0 z-[1] overflow-hidden"
+      className={`absolute inset-0 z-[1] overflow-hidden ${interactive ? "pointer-events-auto" : ""}`}
       style={{ backgroundColor: LIGHT_MAP.canvas }}
     >
       <svg
@@ -845,6 +862,18 @@ function AirportSchematicLayer({
               strokeLinejoin="round"
             />
           </g>
+        ) : approxRoutePoints ? (
+          <polyline
+            data-testid="airport-nav-schematic-approx-route"
+            points={approxRoutePoints}
+            fill="none"
+            stroke={LIGHT_MAP.route}
+            strokeWidth="2"
+            strokeDasharray="2.2 1.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity="0.85"
+          />
         ) : null}
 
         {userDisplayPos ? (() => {
@@ -1466,7 +1495,7 @@ export function AirportNavigatorMap({
     [iata, layout, sayAndShow],
   );
 
-  /* ── Load curated layout (IndexedDB cache first, then API) ──────────── */
+  /* ── Load curated layout (bundled sync → IndexedDB cache → API) ───── */
   useEffect(() => {
     let cancelled = false;
     // Admin verify / click-to-place: render the in-memory package, skip network.
@@ -1475,8 +1504,14 @@ export function AirportNavigatorMap({
       setLayoutStatus("ready");
       return;
     }
-    setLayout(null);
-    setLayoutStatus("loading");
+    const bundled = getAirportLayout(iata);
+    if (bundled) {
+      setLayout(normalizeTravelerFacingLabels(bundled));
+      setLayoutStatus("ready");
+    } else {
+      setLayout(null);
+      setLayoutStatus("loading");
+    }
     void (async () => {
       const cached = await loadCachedAirportLayout(iata);
       if (cached && !cancelled) {
@@ -1486,7 +1521,7 @@ export function AirportNavigatorMap({
       try {
         const res = await fetch(`/api/airport-nav/${encodeURIComponent(iata)}/layout`);
         if (res.status === 404) {
-          if (!cancelled && !cached) setLayoutStatus("unsupported");
+          if (!cancelled && !bundled && !cached) setLayoutStatus("unsupported");
           return;
         }
         if (!res.ok) throw new Error(String(res.status));
@@ -1501,7 +1536,7 @@ export function AirportNavigatorMap({
           });
         }
       } catch {
-        const fallback = await loadCachedAirportLayout(iata);
+        const fallback = bundled ?? (await loadCachedAirportLayout(iata));
         if (!cancelled) {
           if (fallback) {
             setLayout(normalizeTravelerFacingLabels(fallback));
@@ -3352,6 +3387,13 @@ export function AirportNavigatorMap({
     });
   }, [previewMode, activeRoute, hasLivePosition, originNodeId, userDisplayPos, deviceHeading, currentStepIdx, activeDestName]);
 
+  const liveAtAirport =
+    !previewMode && (proximityStatus === "at-airport" || proximityStatus === "in-terminal");
+  const approxRouteCoords =
+    !preciseRouteEnabled && journeyRoute && journeyRoute.coords.length > 1
+      ? journeyRoute.coords
+      : null;
+
   /* ── Render ─────────────────────────────────────────────────────────── */
   // Arrival coach uses the indoor map when the layout has first-mile nodes; otherwise
   // the honesty checklist fallback (no fabricated indoor geometry).
@@ -3391,6 +3433,7 @@ export function AirportNavigatorMap({
         fullDayView={fullDayView}
         onToggleFullDayView={() => setFullDayView((prev) => !prev)}
         layoutLoadFailed={coachMode !== "arrive" && layoutStatus === "error"}
+        liveAtAirport={liveAtAirport}
         familyPins={familyPins}
         onFamilyPinTap={onFamilyPinTap}
         tripReservations={tripReservations}
@@ -3435,6 +3478,7 @@ export function AirportNavigatorMap({
         <AirportSchematicLayer
           layout={layout}
           activeRoute={preciseRouteEnabled ? activeRoute : null}
+          approxRouteCoords={approxRouteCoords}
           selectedPoiId={selectedPoiId ?? pendingPoiId ?? activeRoute?.toPoiId ?? null}
           userDisplayPos={previewMode ? null : userDisplayPos}
           userAccuracyM={userAccuracyM}
@@ -3446,6 +3490,7 @@ export function AirportNavigatorMap({
           atBookedGate={atBookedGate}
           atGateChipLines={atGateChipLines}
           onPoiClick={handlePoiTap}
+          interactive={!mapReady && !previewMode}
         />
       ) : null}
       {!mapReady && !previewMode && layout ? (
@@ -3455,7 +3500,7 @@ export function AirportNavigatorMap({
           style={{ top: mapControlsTop }}
         >
           <p className="rounded-full bg-black/55 px-3 py-1.5 text-[12px] font-semibold text-white backdrop-blur">
-            Loading live map… your GPS dot appears when ready
+            Tap Where to? or any pin — live map tiles loading
           </p>
         </div>
       ) : null}
@@ -3578,6 +3623,7 @@ export function AirportNavigatorMap({
             }}
             railTop={destinationRailTop}
             arrivalJourneyPoiIds={arrivalFirstMile ? journeyPoiIdSet : undefined}
+            liveAtAirport={liveAtAirport}
           />
         </div>
       ) : null}

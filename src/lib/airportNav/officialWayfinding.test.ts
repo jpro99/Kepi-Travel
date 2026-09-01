@@ -4,6 +4,7 @@ import {
   getAirportWayfindingResource,
   hasVerifiedAirportWayfinding,
   listVerifiedAirportWayfindingResources,
+  shouldKepiMapBePrimary,
   wayfindingHonestyTier,
 } from "@/lib/airportNav/officialWayfinding";
 
@@ -54,4 +55,28 @@ test("verified registry never claims third-party maps are offline downloads", ()
   for (const resource of listVerifiedAirportWayfindingResources()) {
     assert.equal(resource.availableOffline, false, `${resource.iata} must remain online-only`);
   }
+});
+
+test("M62 — live on campus with bundled layout makes Kepi primary even at SEA (strong tier)", () => {
+  const sea = getAirportWayfindingResource("SEA");
+  assert.equal(wayfindingHonestyTier(sea), "strong");
+  assert.equal(
+    shouldKepiMapBePrimary({ tier: "strong", hasKepiLayout: true, liveAtAirport: true }),
+    true,
+  );
+  assert.equal(
+    shouldKepiMapBePrimary({ tier: "strong", hasKepiLayout: true, liveAtAirport: false }),
+    false,
+  );
+});
+
+test("M62 — plan/preview keeps G48 strong official primary when not live on campus", () => {
+  assert.equal(
+    shouldKepiMapBePrimary({ tier: "strong", hasKepiLayout: false, liveAtAirport: false }),
+    false,
+  );
+  assert.equal(
+    shouldKepiMapBePrimary({ tier: "weak", hasKepiLayout: true, liveAtAirport: false }),
+    true,
+  );
 });
