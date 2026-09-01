@@ -246,8 +246,8 @@ Departures coach + journey machine only fire when the layout has distinct `check
 
 ## FLIGHTS LAWS
 
-**F16 — Airborne hero requires verified live status**  
-Schedule math alone must never show **In the air** or **Landing in Xm** on Home TODAY. Those claims require a successful live lookup whose status is en-route (`active`, `enroute`, `departed`, `approach`, etc.). Lookup failure, empty response, or `scheduled`-only success falls back to booked copy (route label, scheduled arrival when known, or the lookup error). Toast may still say no data; the hero must not pretend live radar.
+**F16 — Airborne hero requires verified live status for landing countdown**  
+Schedule-airborne windows may show **In the air** and the booked route (e.g. ONT→SEA) from `journeyPhase` — do not change the remaining-flight picker. **Landing in Xm** is live-radar copy only: require a successful en-route lookup (`active`, `enroute`, `departed`, `approach`, etc.). Lookup failure or empty response keeps the route headline and surfaces the error or scheduled arrival — never a fake landing countdown.
 
 **Test:** `src/lib/travelAssistant/airborneLiveClaim.test.ts`
 

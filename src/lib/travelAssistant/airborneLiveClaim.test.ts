@@ -24,7 +24,7 @@ const airbornePhase: Extract<JourneyPhase, { kind: "airborne" }> = {
   landingIn: "1h 49m",
 };
 
-test("F16: lookup failure must not show live In the air / Landing in copy", () => {
+test("F16: lookup failure keeps In the air ONT→SEA but pulls live landing countdown", () => {
   const copy = resolveAirborneHeroCopy(airbornePhase, {
     flightStatus: "",
     error: "No flight data found for that number and date.",
@@ -32,16 +32,17 @@ test("F16: lookup failure must not show live In the air / Landing in copy", () =
     busy: false,
   });
   assert.equal(copy.isLiveClaim, false);
-  assert.notEqual(copy.eyebrow, "In the air");
+  assert.equal(copy.eyebrow, "In the air");
+  assert.equal(copy.title, "ONT → SEA");
   assert.doesNotMatch(copy.detail ?? "", /Landing in/i);
   assert.match(copy.detail ?? "", /No flight data found/i);
-  assert.match(copy.title, /ONT.*SEA/);
 });
 
-test("F16: unchecked status must not claim live landing countdown", () => {
+test("F16: unchecked status keeps route, no live landing countdown", () => {
   const copy = resolveAirborneHeroCopy(airbornePhase, undefined);
   assert.equal(copy.isLiveClaim, false);
-  assert.notEqual(copy.eyebrow, "In the air");
+  assert.equal(copy.eyebrow, "In the air");
+  assert.equal(copy.title, "ONT → SEA");
   assert.doesNotMatch(copy.detail ?? "", /Landing in/i);
 });
 

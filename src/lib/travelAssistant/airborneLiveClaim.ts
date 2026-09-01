@@ -5,7 +5,6 @@
 
 import type { JourneyPhase, JourneyReservation } from "@/lib/travelAssistant/journeyPhase";
 import { formatFlightStatusTrustLine } from "@/lib/travelAssistant/flightStatusTrustLine";
-import { formatTravelDayFlightLabel } from "@/lib/travelAssistant/flightSort";
 
 export type AirborneLiveStatusInput = {
   flightStatus?: string;
@@ -46,7 +45,7 @@ function formatBookedArrivalDetail(flight: JourneyReservation): string | null {
 
 /**
  * Resolve Home TODAY hero copy for schedule-airborne windows.
- * Live "In the air / Landing in Xm" only when lookup succeeded with en-route status.
+ * Keep booked "In the air" + route; live landing countdown only when lookup succeeded en-route.
  */
 export function resolveAirborneHeroCopy(
   journeyPhase: Extract<JourneyPhase, { kind: "airborne" }>,
@@ -55,12 +54,11 @@ export function resolveAirborneHeroCopy(
 ): AirborneHeroCopy {
   const flight = journeyPhase.onFlight;
   const routeTitle = `${flight.flightDepartureAirport ?? ""} → ${journeyPhase.landingAt}`.trim();
-  const bookedTitle = formatTravelDayFlightLabel(flight) || routeTitle || "Your flight today";
 
   if (liveStatus?.busy) {
     return {
-      eyebrow: "Today",
-      title: bookedTitle,
+      eyebrow: "In the air",
+      title: routeTitle,
       detail: "Checking live status…",
       isLiveClaim: false,
     };
@@ -83,8 +81,8 @@ export function resolveAirborneHeroCopy(
     bookedArrival;
 
   return {
-    eyebrow: "Today",
-    title: bookedTitle,
+    eyebrow: "In the air",
+    title: routeTitle,
     detail,
     isLiveClaim: false,
   };

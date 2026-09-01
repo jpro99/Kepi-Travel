@@ -90,22 +90,9 @@ export function MobileAssistView({
             journeyPhase,
             liveStatus?.[journeyPhase.onFlight.id],
           );
-          if (airborneCopy.isLiveClaim) {
-            return (
-              <div className="rounded-3xl overflow-hidden bg-[var(--bg-card)] p-5 shadow-lg ring-1 ring-[var(--border-default)]">
-                <p className="text-xs font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400">{t("inFlight")}</p>
-                <p className="mt-2 text-2xl font-black text-[var(--text-primary)] leading-tight">
-                  {airborneCopy.title}
-                </p>
-                <p className="mt-2 text-sm text-[var(--text-muted)]">
-                  {t("landingIn", { time: journeyPhase.landingIn })}
-                </p>
-              </div>
-            );
-          }
           return (
             <div className="rounded-3xl overflow-hidden bg-[var(--bg-card)] p-5 shadow-lg ring-1 ring-[var(--border-default)]">
-              <p className="text-xs font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400">Today</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400">{t("inFlight")}</p>
               <p className="mt-2 text-2xl font-black text-[var(--text-primary)] leading-tight">
                 {airborneCopy.title}
               </p>
