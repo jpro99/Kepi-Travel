@@ -833,6 +833,13 @@ A “Stay in Bari” / Hotel line on the trip plan is a booking fact, not a lock
 
 **Test:** `src/lib/pwa/recoverStaleClientBundle.test.ts`
 
+
+**I61 — PWA must not cache failed JS chunks; one reload owner**  
+After a deploy, the service worker must never `cache.put` a non-OK `/_next/static` response — a stored 404 blanks the home-screen app until caches are cleared. Bump `CACHE_VERSION` when SW behavior changes. Only `<DeployRefresh />` in the root layout may reload on `controllerchange`; the travel-assistant page must not also reload (double-reload = blank hang). Throttle `registration.update()` so tab focus does not storm `skipWaiting`. Successful boots clear the stale-bundle recovery flag so a later poison can still self-heal. Confirmations untouched.
+
+**Test:** `src/lib/pwa/recoverStaleClientBundle.test.ts`
+
+
 **I57 — Booked transport is hop truth; Search flights is last resort**  
 A hotel-city move (Lecce → Venice) is covered when a booked flight arrives at the destination (VCE / Venice) or a train/ride sits in that date window — including Trenitalia “Venezia S. Lucia” and messy PDF titles. Do not invent a BDS→VCE shopping search. A truly empty window must still nag. Confirmations untouched.
 
@@ -1091,6 +1098,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | I58 | `src/lib/travelAssistant/railTicketExtract.test.ts` |
 | I59 | `src/lib/travelAssistant/activityTicketExtract.test.ts` |
 | I60 | `src/lib/travelAssistant/travelAssistantPageAnalytics.test.ts` |
+| I61 | `src/lib/pwa/recoverStaleClientBundle.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |
