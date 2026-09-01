@@ -1567,6 +1567,13 @@ export function AirportNavigatorMap({
     [atGateBanner],
   );
   const hasLivePosition = Boolean(snapped && !previewMode);
+  const confirmedSpotLabel = useMemo(() => {
+    if (!layout || !confirmedNodeId) return null;
+    const poi = layout.pois.find((entry) => entry.nodeId === confirmedNodeId);
+    if (poi) return resolvePoiDisplayName(poi, layout);
+    const node = layout.nodes.find((entry) => entry.id === confirmedNodeId);
+    return node?.landmark?.trim() || null;
+  }, [layout, confirmedNodeId]);
 
   useEffect(() => {
     const next = gateCode?.trim().toUpperCase() || null;
@@ -3528,7 +3535,7 @@ export function AirportNavigatorMap({
         </div>
       )}
 
-      {/* Voice subtitle */}
+      {/* Voice subtitle — short toast; persistent chip below when spot is pinned */}
       {subtitle && (
         <div className="pointer-events-none absolute inset-x-10 bottom-20 flex justify-center">
           <p className="max-w-full truncate rounded-xl bg-black/65 px-3 py-1.5 text-[11px] font-semibold text-white backdrop-blur">
@@ -3536,6 +3543,25 @@ export function AirportNavigatorMap({
           </p>
         </div>
       )}
+
+      {/* Gentle "you're here" reassurance — stays until you move on or reach the gate */}
+      {confirmedSpotLabel && !atBookedGate && !previewMode && !confirmMode ? (
+        <div
+          data-testid="airport-nav-here-reassurance"
+          className="pointer-events-none absolute inset-x-3 z-[45] flex justify-center"
+          style={{
+            bottom: activeRoute
+              ? `calc(${bottomPanel} + ${quietMode && activeRouteToGate ? "11.5rem" : "9.5rem"})`
+              : quietMode
+                ? `calc(${bottomPanel} + 4.5rem)`
+                : `calc(${bottomPanel} + 3.25rem)`,
+          }}
+        >
+          <p className="max-w-md rounded-full bg-black/60 px-4 py-2 text-center text-[12px] font-semibold leading-snug text-emerald-100 backdrop-blur-md">
+            You&apos;re here · {confirmedSpotLabel}
+          </p>
+        </div>
+      ) : null}
 
       {/* Mic — press and hold, thumb zone (live mode only) */}
       {layout && !previewMode && (
