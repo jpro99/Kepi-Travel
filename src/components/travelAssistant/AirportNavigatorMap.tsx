@@ -33,8 +33,12 @@ import { poiLocationHonestyTag } from "@/lib/airportNav/poiPrecisionHonesty";
 import { normalizeTravelerFacingLabels, resolvePoiDisplayName } from "@/lib/airportNav/poiDisplayName";
 import { isDirectoryClutterPoi, isUnroutedGateReferencePoi, shouldRenderWalkMapPin, shouldShowLeaderLineLabel, walkMapLabelPriority } from "@/lib/airportNav/poiMapWalkPolicy";
 import { buildResolvedLeaderBoxes, paintWalkMapLeaderOverlay, type WalkMapLeaderCandidate } from "@/lib/airportNav/paintWalkMapLeaderOverlay";
-import { setAirportWalkSheetOpen } from "@/lib/airportNav/airportWalkSheet";
+import {
+  setAirportConfirmSpotOpen,
+  setAirportWalkSheetOpen,
+} from "@/lib/airportNav/airportWalkSheet";
 import { computeDirectionArrow, confirmedSnappedPosition } from "@/lib/airportNav/directionArrow";
+import { resolveConfirmSpotFromLngLat } from "@/lib/airportNav/confirmTravelerSpot";
 import {
   computeLayoutBounds,
   computeLandsideBounds,
@@ -1320,6 +1324,11 @@ export function AirportNavigatorMap({
     return () => setAirportWalkSheetOpen(false);
   }, [activeRoute]);
 
+  useEffect(() => {
+    setAirportConfirmSpotOpen(confirmMode);
+    return () => setAirportConfirmSpotOpen(false);
+  }, [confirmMode]);
+
   /* ── Journey event processing ───────────────────────────────────────── */
   const processJourneyEvent = useCallback(
     (event: JourneyEvent) => {
@@ -1643,19 +1652,26 @@ export function AirportNavigatorMap({
   useEffect(() => {
     confirmModeRef.current = confirmMode;
   }, [confirmMode]);
+  const applyConfirmedSpot = useCallback(
+    (nodeId: string, label: string) => {
+      setConfirmedNodeId(nodeId);
+      setConfirmMode(false);
+      showSubtitle(`Got it — you're at ${label}`);
+    },
+    [showSubtitle],
+  );
   const handlePoiTap = useCallback(
     (poiId: string) => {
       if (confirmModeRef.current && layout) {
         const poi = layout.pois.find((entry) => entry.id === poiId);
         if (poi) {
-          setConfirmedNodeId(poi.nodeId);
-          setConfirmMode(false);
+          applyConfirmedSpot(poi.nodeId, resolvePoiDisplayName(poi, layout));
         }
         return;
       }
       startRoute(poiId);
     },
-    [layout, startRoute],
+    [layout, startRoute, applyConfirmedSpot],
   );
 
   const answerCredentials = useCallback(
@@ -2427,6 +2443,31 @@ export function AirportNavigatorMap({
     };
   }, [mapReady, placeMode, onPlaceCapture]);
 
+  /* ── Traveler "I'm here": tap anywhere on the map to lock position (M16) ─ */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !confirmMode || !layout || placeMode) return;
+    const canvas = map.getCanvas?.() as HTMLCanvasElement | undefined;
+    const prevCursor = canvas?.style.cursor ?? "";
+    if (canvas) canvas.style.cursor = "crosshair";
+    const onClick = (e: { lngLat?: { lng: number; lat: number } }) => {
+      const lng = e.lngLat?.lng;
+      const lat = e.lngLat?.lat;
+      if (typeof lng !== "number" || typeof lat !== "number") return;
+      const spot = resolveConfirmSpotFromLngLat(layout, lng, lat);
+      if (!spot) {
+        showSubtitle("Tap closer to the terminal — that spot is off the map");
+        return;
+      }
+      applyConfirmedSpot(spot.nodeId, spot.label);
+    };
+    map.on("click", onClick);
+    return () => {
+      try { map.off("click", onClick); } catch { /* map gone */ }
+      if (canvas) canvas.style.cursor = prevCursor;
+    };
+  }, [mapReady, confirmMode, layout, placeMode, applyConfirmedSpot, showSubtitle]);
+
   /* ── POI bubble markers ─────────────────────────────────────────────── */
   useEffect(() => {
     const map = mapRef.current;
@@ -2515,7 +2556,7 @@ export function AirportNavigatorMap({
             `background:${dotColor};border:2px solid #ffffff;`,
             "box-shadow:0 1px 4px rgba(15,23,42,0.45);",
             isSelected ? "outline:2px solid rgba(56,189,248,0.95);outline-offset:1px;" : "",
-            critical || urgent ? "animation:kepiPulse 1.6s ease-in-out infinite;" : "",
+            critical || isGateBubble ? "animation:kepiPulse 1.6s ease-in-out infinite;" : "",
           ].join("");
         }
         bubble.appendChild(dot);
@@ -3263,9 +3304,12 @@ export function AirportNavigatorMap({
         </button>
       )}
 
-      {/* Journey prompt (e.g. "Are you through security yet?") */}
-      {journeyPrompt && !securityQuestionOpen && !previewMode && (
-        <div style={{ bottom: arrivalChromeClearance }} className="absolute inset-x-3 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95">
+      {/* Journey prompt (e.g. "Are you through security yet?") — pause while pinning "I'm here" */}
+      {journeyPrompt && !securityQuestionOpen && !previewMode && !confirmMode && (
+        <div
+          style={{ bottom: arrivalChromeClearance }}
+          className="absolute inset-x-3 z-20 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95"
+        >
           <p className="text-xs font-bold text-slate-900 dark:text-slate-100">{journeyPrompt.text}</p>
           <div className="mt-2 flex gap-1.5">
             {journeyPrompt.options.map((option) => (
@@ -3282,9 +3326,12 @@ export function AirportNavigatorMap({
         </div>
       )}
 
-      {/* Security credential question */}
-      {securityQuestionOpen && (
-        <div style={{ bottom: arrivalChromeClearance }} className="absolute inset-x-3 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95">
+      {/* Security credential question — pause while pinning location */}
+      {securityQuestionOpen && !confirmMode && (
+        <div
+          style={{ bottom: arrivalChromeClearance }}
+          className="absolute inset-x-3 z-20 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95"
+        >
           <p className="text-xs font-bold text-slate-900 dark:text-slate-100">
             Quick one — do you have TSA PreCheck or CLEAR?
           </p>
@@ -3344,28 +3391,48 @@ export function AirportNavigatorMap({
         </div>
       )}
 
-      {/* Tap-to-confirm "I'm here" — lock position when GPS is unsure indoors */}
-      {!securityQuestionOpen && !journeyPrompt && !quietMode && !previewMode && layout && (
+      {/* Confirm mode: top banner — instruction must not sit under the support chat FAB */}
+      {confirmMode && !quietMode && !previewMode && layout ? (
         <div
-          className="pointer-events-auto absolute right-3 z-30"
-          style={{ bottom: `calc(${bottomPanel} + ${activeRoute ? "9.5rem" : "3rem"})` }}
+          className="pointer-events-none absolute inset-x-3 z-[55] flex justify-center"
+          style={{ top: `calc(${mapControlsTop} + 0.25rem)` }}
+          data-testid="airport-nav-confirm-banner"
+        >
+          <p className="max-w-md rounded-2xl bg-[#f4c95d] px-4 py-2.5 text-center text-[14px] font-bold leading-snug text-[#0b1f3a] shadow-xl">
+            Tap the map where you are — not this button
+          </p>
+        </div>
+      ) : null}
+
+      {/* Tap-to-confirm "I'm here" — bottom-left so support chat FAB stays clear on the right */}
+      {!quietMode && !previewMode && layout && (
+        <div
+          className="pointer-events-auto absolute left-3 z-50"
+          style={{
+            bottom:
+              confirmMode
+                ? `calc(${arrivalChromeClearance} + 1.25rem)`
+                : journeyPrompt || securityQuestionOpen
+                  ? `calc(${arrivalChromeClearance} + 5.75rem)`
+                  : `calc(${bottomPanel} + ${activeRoute ? "9.5rem" : "3rem"})`,
+          }}
         >
           <button
             type="button"
             data-testid="airport-nav-confirm-location"
             aria-pressed={confirmMode}
             onClick={() => setConfirmMode((on) => !on)}
-            className={`rounded-full px-3 py-2 text-[11px] font-bold shadow-lg backdrop-blur ${
-              confirmMode ? "bg-[#f4c95d] text-[#0b1f3a]" : "bg-black/55 text-white"
+            className={`min-h-[44px] rounded-full px-3 py-2 text-[12px] font-bold shadow-lg backdrop-blur ${
+              confirmMode ? "bg-black/55 text-white" : "bg-black/55 text-white"
             }`}
           >
-            {confirmMode ? "Tap where you are" : confirmedNodeId ? "📍 Update my spot" : "📍 I'm here"}
+            {confirmMode ? "Cancel" : confirmedNodeId ? "📍 Update my spot" : "📍 I'm here"}
           </button>
         </div>
       )}
 
       {/* Map helpers (admin-enabled): one-tap Door / Starbucks confirms — no typing */}
-      {mapHelperEnabled && !securityQuestionOpen && !journeyPrompt && !quietMode && !previewMode && !placeMode && layout && (
+      {mapHelperEnabled && !securityQuestionOpen && !journeyPrompt && !quietMode && !previewMode && !placeMode && !confirmMode && layout && (
         <MapHelperConfirmBar
           iata={iata}
           layout={layout}
@@ -3449,12 +3516,21 @@ export function AirportNavigatorMap({
         </section>
       )}
 
-      {/* Guide-me CTA when idle */}
-      {!securityQuestionOpen && !journeyPrompt && !quietMode && !activeRoute && layout && gatePoi
+      {/* Guide-me CTA when idle — stays above PreCheck / journey question sheets */}
+      {!quietMode && !activeRoute && layout && gatePoi && !confirmMode
         && !(mapFirstLive && (arrivalFirstMile || isArriveCoach)) ? (
-        <div style={{ bottom: bottomPanel }} className="absolute inset-x-3">
+        <div
+          style={{
+            bottom:
+              journeyPrompt || securityQuestionOpen
+                ? `calc(${arrivalChromeClearance} + 5.5rem)`
+                : bottomPanel,
+          }}
+          className="absolute inset-x-3 z-40"
+        >
           <button
             type="button"
+            data-testid="airport-nav-guide-to-gate"
             onClick={() => startRoute(gatePoi.id)}
             className="w-full rounded-2xl bg-sky-600 py-2.5 text-sm font-bold text-white shadow-xl"
           >

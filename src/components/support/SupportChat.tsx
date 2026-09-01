@@ -6,7 +6,10 @@ import { useTranslations } from "next-intl";
 import { Logo } from "@/components/ui/Logo";
 import { buildSupportChatApiMessages } from "@/lib/support/buildSupportChatApiMessages";
 import { BugReportModal } from "@/components/support/BugReportModal";
-import { AIRPORT_WALK_SHEET_EVENT } from "@/lib/airportNav/airportWalkSheet";
+import {
+  AIRPORT_CONFIRM_SPOT_EVENT,
+  AIRPORT_WALK_SHEET_EVENT,
+} from "@/lib/airportNav/airportWalkSheet";
 
 const SUPPORT_OPEN_EVENT = "kepi:support-chat-open";
 const BUG_REPORT_OPEN_EVENT = "kepi:bug-report-open";
@@ -44,6 +47,7 @@ export function SupportChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [walkSheetOpen, setWalkSheetOpen] = useState(false);
+  const [confirmSpotOpen, setConfirmSpotOpen] = useState(false);
   const panelScrollRef = useRef<HTMLDivElement | null>(null);
   const isOpenRef = useRef(isOpen);
 
@@ -83,8 +87,16 @@ export function SupportChat() {
       const detail = (event as CustomEvent<{ open?: boolean }>).detail;
       setWalkSheetOpen(Boolean(detail?.open));
     };
+    const onConfirmSpot = (event: Event): void => {
+      const detail = (event as CustomEvent<{ open?: boolean }>).detail;
+      setConfirmSpotOpen(Boolean(detail?.open));
+    };
     window.addEventListener(AIRPORT_WALK_SHEET_EVENT, onWalkSheet);
-    return () => window.removeEventListener(AIRPORT_WALK_SHEET_EVENT, onWalkSheet);
+    window.addEventListener(AIRPORT_CONFIRM_SPOT_EVENT, onConfirmSpot);
+    return () => {
+      window.removeEventListener(AIRPORT_WALK_SHEET_EVENT, onWalkSheet);
+      window.removeEventListener(AIRPORT_CONFIRM_SPOT_EVENT, onConfirmSpot);
+    };
   }, []);
 
   useEffect(() => {
@@ -269,7 +281,7 @@ export function SupportChat() {
         </section>
       ) : null}
 
-      {!walkSheetOpen ? (
+      {!walkSheetOpen && !confirmSpotOpen ? (
       <button
         type="button"
         aria-label={bubbleLabel}
