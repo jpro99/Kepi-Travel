@@ -5,6 +5,7 @@ import { parseAirportLayoutPackage } from "../airportLayoutPackage";
 import { resolvePublishedAirportLayout } from "../airportLayoutStore";
 import { auditLayoutRouting } from "../layoutQuality";
 import { getAirportLayout } from "../getLayout";
+import { resolveGateNode } from "../pathfinder";
 import { adaptKacCompilerJson } from "./adaptKacCompilerJson";
 import {
   applyBriKacOverlay,
@@ -45,9 +46,9 @@ test("fixtures/kac/bri.json is the canonical KAC compiler payload (no altered co
   assert.equal(raw.layout.layoutVersion, "kac-0.1.1-bri");
   assert.equal(raw.layout.invented, 0);
   assert.equal(raw.layout.zones.length, 1);
-  assert.equal(raw.layout.nodes.length, 5);
-  assert.equal(raw.layout.edges.length, 3);
-  assert.equal(raw.layout.edges.filter((e) => e.kind === "walkway").length, 2);
+  assert.equal(raw.layout.nodes.length, 7);
+  assert.equal(raw.layout.edges.length, 5);
+  assert.equal(raw.layout.edges.filter((e) => e.kind === "walkway").length, 4);
   assert.ok(raw.layout.edges.some((e) => e.id === "BRI:edge:security-lounge" && e.kind === "security_transition"));
   assert.equal(raw.layout.gateNodeResolver.length, 0);
   assert.ok(raw.layout.edges.every((e) => e.lengthM === undefined), "raw fixture edges omit lengthM");
@@ -57,6 +58,11 @@ test("fixtures/kac/bri.json is the canonical KAC compiler payload (no altered co
 
   const lounge = raw.layout.nodes.find((n) => n.id === "BRI:lounge:work");
   assert.deepEqual(lounge?.pos, [16.7639265, 41.13454395000001]);
+
+  const checkinAb = raw.layout.nodes.find((n) => n.id === "BRI:node:checkin-ab");
+  assert.ok(checkinAb);
+  const baggage = raw.layout.nodes.find((n) => n.id === "BRI:node:baggage");
+  assert.ok(baggage);
 
   assert.ok(raw.layout.gateTextStubs?.includes("A1"));
   assert.ok(raw.layout.gateTextStubs?.includes("A11"));
@@ -75,9 +81,9 @@ test("KAC BRI fixture adapts to a valid AirportLayoutPackage", () => {
 
   assert.doesNotThrow(() => parseAirportLayoutPackage(pkg));
 
-  assert.equal(pkg.layout.nodes.length, 5);
+  assert.equal(pkg.layout.nodes.length, 7);
   assert.equal(pkg.layout.nodes.filter((n) => n.kind === "gate").length, 0);
-  assert.equal(pkg.layout.edges.length, 3);
+  assert.equal(pkg.layout.edges.length, 5);
   assert.ok(pkg.layout.edges.every((e) => e.lengthM > 0));
   assert.ok(pkg.layout.edges.every((e) => e.traverseSeconds > 0));
   assert.equal(typeof pkg.layout.edges[0]?.bidirectional, "boolean");
@@ -93,7 +99,7 @@ test("KAC BRI fixture adapts to a valid AirportLayoutPackage", () => {
 
 test("KAC adapter fills edge lengthM from haversine between node coordinates", () => {
   const pkg = adaptKacCompilerJson(loadFixture());
-  const curbToCheckin = pkg.layout.edges.find((e) => e.id === "BRI:edge:curb-checkin");
+  const curbToCheckin = pkg.layout.edges.find((e) => e.id === "BRI:edge:curb-checkin-ab");
   assert.ok(curbToCheckin);
   assert.ok(curbToCheckin!.lengthM >= 5);
   assert.ok(curbToCheckin!.traverseSeconds >= 5);
@@ -108,9 +114,9 @@ test("KAC BRI overlay is additive and preserves curated departures graph", () =>
   const { layout, stats } = applyBriKacOverlay(BRI_LAYOUT, kac.layout);
 
   assert.equal(stats.zonesAdded, 1);
-  assert.equal(stats.nodesAdded, 5);
-  assert.equal(stats.edgesAdded, 5, "3 KAC departures edges + 2 honest curb-main bridges");
-  assert.ok(stats.poisAdded >= 1);
+  assert.equal(stats.nodesAdded, 7);
+  assert.equal(stats.edgesAdded, 7, "5 KAC departures edges + 2 honest curb-main bridges");
+  assert.ok(stats.poisAdded >= 6);
 
   assert.deepEqual(curatedBriEdgeSnapshot(layout), beforeEdges);
   assert.deepEqual(curatedBriPoiIds(layout), beforePois);
@@ -128,7 +134,7 @@ test("BRI KAC overlay does not add invented A/B gate door pins", () => {
   const gateDoors = layout.nodes.filter(
     (n) =>
       n.kind === "gate" ||
-      n.kind === "door" ||
+      (n.kind === "door" && !n.id.startsWith("BRI:")) ||
       n.id.startsWith("BRI:node:gate:"),
   );
   // Curated cluster gates only — no KAC door pins.
@@ -211,4 +217,14 @@ test("BRI KAC overlay bridges curb-main into departures subgraph — no unreacha
   const audit = auditLayoutRouting(layout);
   assert.equal(audit.errors.length, 0, audit.errors.join("\n"));
   assert.equal(audit.warnings.length, 0, audit.warnings.join("\n"));
+});
+
+test("BRI gate text stubs join gateNodeResolver without inventing door pins", () => {
+  const layout = buildBriLayoutWithKacOverlay();
+  assert.ok(layout.gateNodeResolver.some((e) => e.prefix === "A11" && e.nodeId === "gate-a"));
+  assert.ok(layout.gateNodeResolver.some((e) => e.prefix === "B4" && e.nodeId === "gate-b"));
+  assert.equal(resolveGateNode(layout, "A11"), "gate-a");
+  assert.equal(resolveGateNode(layout, "B2"), "gate-b");
+  assert.equal(resolveGateNode(layout, "Z9"), null);
+  assert.equal(layout.nodes.filter((n) => n.kind === "gate" && n.id.startsWith("BRI:")).length, 0);
 });

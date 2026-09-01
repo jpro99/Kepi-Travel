@@ -11,6 +11,7 @@ import {
   type ItineraryPlansData,
 } from "@/lib/travelAssistant/itineraryDayPlan";
 import type { TripFlowStage } from "@/lib/travelAssistant/tripFlowControls";
+import { queueBookingHookDispatch } from "@/lib/travelAssistant/bookingHook";
 import { kvStoreDel, kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 import { generateId } from "@/lib/utils/generateId";
 
@@ -283,6 +284,9 @@ export async function updateTrip(
   const nextTrips = [...trips];
   nextTrips[index] = updated;
   await writeTrips(nextTrips, userId);
+  if (patch.reservations) {
+    queueBookingHookDispatch(existing.reservations, updated.reservations);
+  }
   return updated;
 }
 

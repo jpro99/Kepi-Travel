@@ -4,6 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "@/lib/maplibreCspWorker";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
 import {
+  applyAirportNavigatorPlanetBasemap,
   attachMapStyleErrorFallback,
   buildOsmRasterFallbackStyle,
   directMaptilerTransformRequest,
@@ -2216,12 +2217,8 @@ export function AirportNavigatorMap({
         // context-limit blank). The SVG floor plan stays underneath regardless.
         if (disposed || !mapEl.current || mapRef.current) return;
         try {
-          // Real OpenStreetMap basemap — "the map from that site" (M17). When a
-          // MapTiler key is present we use the VECTOR OpenStreetMap style, whose
-          // road/place labels are real MapLibre text (crisp at any zoom, and we
-          // control size) instead of the raster fallback's baked-in pixel labels.
-          // Without a key we keep the free raster tiles. Either way the SVG floor
-          // plan underneath guarantees the screen never blanks.
+          // Planet openstreetmap basemap (BRAIN A1): aviation style layers on schematic
+          // pins — never Hybrid/satellite. Without a key, raster OSM fallback.
           const usingOsmFallback = { current: !key };
           const basemapStyle: string | import("maplibre-gl").StyleSpecification = key
             ? maptilerStyleUrl("openstreetmap", key)
@@ -2271,9 +2268,21 @@ export function AirportNavigatorMap({
             /* controls are best-effort */
           }
 
-          map.on("load", () => finalizeMap(map));
-          map.on("styledata", () => finalizeMap(map));
-          if (map.isStyleLoaded()) finalizeMap(map);
+          const tunePlanetBasemap = () => {
+            if (key) applyAirportNavigatorPlanetBasemap(map);
+          };
+          map.on("load", () => {
+            tunePlanetBasemap();
+            finalizeMap(map);
+          });
+          map.on("styledata", () => {
+            tunePlanetBasemap();
+            finalizeMap(map);
+          });
+          if (map.isStyleLoaded()) {
+            tunePlanetBasemap();
+            finalizeMap(map);
+          }
 
           loadRetryTimer = window.setInterval(() => {
             if (!disposed && !layersInstalled) finalizeMap(map);

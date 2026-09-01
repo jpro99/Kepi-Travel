@@ -24,6 +24,10 @@ import type {
   ConnectionPlaybookStep,
 } from "@/lib/travelAssistant/connectionPlaybook";
 import { connectionRiskLabel } from "@/lib/travelAssistant/connectionPlaybook";
+import {
+  FCO_EES_ARRIVAL_COACH_DETAIL,
+  seaPortCheckpointWaitCoachDetail,
+} from "@/lib/airportNav/airportCoachOverlay";
 
 export type AirportDayCoachMode = "depart" | "arrive";
 
@@ -394,6 +398,22 @@ export function buildArrivalDayCoachPath(input: ArrivalDayCoachInput): DayCoachP
           continue;
         }
 
+        if (stop.role === "passport") {
+          const baseDetail = stop.detail ?? "Have passport ready for passport control.";
+          const detail =
+            code === "FCO"
+              ? `${baseDetail} ${FCO_EES_ARRIVAL_COACH_DETAIL}`
+              : baseDetail;
+          steps.push({
+            id: ARRIVAL_ROLE_ID[stop.role],
+            icon: ARRIVAL_ROLE_ICON[stop.role],
+            text: stop.label,
+            detail,
+            minutes,
+          });
+          continue;
+        }
+
         steps.push({
           id: ARRIVAL_ROLE_ID[stop.role],
           icon: ARRIVAL_ROLE_ICON[stop.role],
@@ -434,9 +454,12 @@ export function buildArrivalDayCoachPath(input: ArrivalDayCoachInput): DayCoachP
       id: "immigration",
       icon: "🛂",
       text: "Immigration / passport control",
-      detail: arrivingInUs
-        ? "Have passport ready. Use Global Entry / Mobile Passport Control if enrolled."
-        : "Have passport ready for passport control.",
+      detail:
+        code === "FCO"
+          ? `Have passport ready for passport control. ${FCO_EES_ARRIVAL_COACH_DETAIL}`
+          : arrivingInUs
+            ? "Have passport ready. Use Global Entry / Mobile Passport Control if enrolled."
+            : "Have passport ready for passport control.",
     });
   }
 
@@ -547,6 +570,8 @@ export interface DepartDayCoachInput {
   departureTerminal?: string | null;
   credentials?: { tsaPreCheck?: boolean; clear?: boolean };
   eligibleLoungeNames?: string[];
+  /** Official Port of Seattle checkpoint wait text when already on the booking — never parsed. */
+  seaPortCheckpointWaitText?: string | null;
 }
 
 /**
@@ -620,11 +645,15 @@ export function buildDepartDayCoachPath(input: DepartDayCoachInput): DayCoachPat
       }
 
       if (stop.role === "security" && securityGuide) {
+        const seaWait = code === "SEA" ? seaPortCheckpointWaitCoachDetail(input.seaPortCheckpointWaitText) : undefined;
+        const detail = seaWait
+          ? `${securityGuide.detail ?? ""} ${seaWait}`.trim()
+          : securityGuide.detail;
         steps.push({
           id: "security",
           icon: securityGuide.icon,
           text: securityGuide.text,
-          detail: securityGuide.detail,
+          detail,
           minutes: securityGuide.minutes > 0 ? securityGuide.minutes : minutes,
         });
         continue;

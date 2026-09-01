@@ -227,3 +227,32 @@ test("resolveArrivalRideStep appends hotel after Leonardo default title", () => 
   assert.match(ride.text, /Hotel de Russie/i);
 });
 
+test("FCO arrival coach includes EES border minutes coach text", () => {
+  const steps = buildArrivalDayCoachPath({
+    iata: "FCO",
+    departureIata: "SEA",
+    flightNumber: "AZ1607",
+  });
+  const immigration = steps.find((s) => s.id === "immigration");
+  assert.ok(immigration);
+  assert.match(immigration!.detail ?? "", /EES/i);
+  assert.match(immigration!.detail ?? "", /not a kiosk pin/i);
+});
+
+test("SEA depart coach appends Port checkpoint wait only when official text provided", () => {
+  const without = buildDepartDayCoachPath({ iata: "SEA", airlineName: "Alaska" });
+  const secWithout = without.find((s) => s.id === "security");
+  assert.ok(secWithout);
+  assert.doesNotMatch(secWithout!.detail ?? "", /Port of Seattle/i);
+
+  const withWait = buildDepartDayCoachPath({
+    iata: "SEA",
+    airlineName: "Alaska",
+    seaPortCheckpointWaitText: "Checkpoint 3 · ~12 min",
+  });
+  const secWith = withWait.find((s) => s.id === "security");
+  assert.ok(secWith);
+  assert.match(secWith!.detail ?? "", /Checkpoint 3/);
+  assert.match(secWith!.detail ?? "", /Port of Seattle/i);
+});
+
