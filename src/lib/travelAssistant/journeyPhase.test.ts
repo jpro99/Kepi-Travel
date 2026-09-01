@@ -189,3 +189,48 @@ test("LAX->FCO WITHOUT a stated arrival time keeps the existing +4h fallback beh
   });
   assert.equal(phasePastFallback.kind, "just-landed");
 });
+
+test("G49: mangled arrival before departure never claims just-landed", () => {
+  // AS654 ONT→SEA still hours from departure, but arrival clock is impossible (≤ dep).
+  const flight = {
+    id: "as654",
+    type: "flight",
+    localTime: "2026-08-31 07:00",
+    timezone: "America/Los_Angeles",
+    flightDate: "2026-08-31",
+    flightDepartureTime: "2026-08-31 07:00",
+    // Same clock as departure — impossible as a real arrival; must not mean "already landed".
+    flightArrivalTime: "2026-08-31 07:00",
+    flightDepartureAirport: "ONT",
+    flightArrivalAirport: "SEA",
+    flightNumber: "AS654",
+    provider: "Alaska",
+  };
+  const nowMs = Date.parse("2026-08-31T10:00:00Z"); // 3:00 AM PDT — before 7:00 AM dep
+  const phase = computeJourneyPhase({ reservations: [flight], nowMs });
+  assert.equal(phase.kind, "pre-trip");
+  if (phase.kind === "pre-trip") {
+    assert.equal(phase.nextFlight.id, "as654");
+  }
+});
+
+test("G49: before departure always pre-trip even if arrival string looks past in wrong zone", () => {
+  const flight = {
+    id: "as654",
+    type: "flight",
+    localTime: "2026-08-31 07:00",
+    timezone: "America/Los_Angeles",
+    flightDate: "2026-08-31",
+    flightDepartureTime: "2026-08-31 07:00",
+    // SEA-local afternoon written without zone; if misread as PDT it can look hours ago.
+    flightArrivalTime: "2026-08-30 09:00",
+    flightDepartureAirport: "ONT",
+    flightArrivalAirport: "SEA",
+    flightNumber: "AS654",
+  };
+  const nowMs = Date.parse("2026-08-31T10:00:00Z"); // still before ONT 7:00 AM dep
+  const phase = computeJourneyPhase({ reservations: [flight], nowMs });
+  assert.notEqual(phase.kind, "just-landed");
+  assert.notEqual(phase.kind, "airborne");
+  assert.equal(phase.kind, "pre-trip");
+});

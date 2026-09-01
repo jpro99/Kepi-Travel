@@ -224,6 +224,12 @@ Same-airport connections get a step list built from itinerary + passport rules (
 **G48 — Strong official maps stay primary at FCO/SEA**  
 When `wayfindingHonestyTier === strong` (SEA Atrius, FCO Digiport), the verified live indoor map is the primary gold CTA even if Kepi has a bundled schematic layout. Kepi checklist + flight context stay in-app; turn-by-turn walks hand off to the airport map.
 
+**G49 — Never claim landed before departure; depart coach tells leave-by + real drive ETA**  
+A mangled arrival timestamp must never produce "Landed Xm ago" while the departure clock is still in the future (AS654 ONT→SEA false landed). `computeJourneyPhase` skips airborne/just-landed when `now < dep`. Impossible arrival ≤ departure falls back to dep+4h. Depart Map/Airport coach shows leave-by (airport buffer only — I32) plus optional OSRM drive minutes labeled as route estimate, not live traffic — so "leave now → at terminal around X" is honest. Hotel Uber labels stay arrive-only (never the first Italy hotel while departing ONT).
+
+**Test:** `src/lib/travelAssistant/journeyPhase.test.ts`, `src/lib/travelAssistant/departLeaveTiming.test.ts`
+
+
 **Test:** `src/lib/airportNav/officialWayfinding.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts`
 
 **M39 — Travel-day flight order + today focus + terminal coach**  
@@ -1044,6 +1050,7 @@ The neuro loop measures taps only when the UI was truthful (`metadata.honest !==
 | G46 | `src/lib/travelAssistant/airportDayCoach.test.ts`, `src/lib/travelAssistant/homeNextAction.test.ts` |
 | G47 | `src/lib/travelAssistant/connectionPlaybook.test.ts` |
 | G48 | `src/lib/airportNav/officialWayfinding.test.ts` |
+| G49 | `src/lib/travelAssistant/journeyPhase.test.ts`, `src/lib/travelAssistant/departLeaveTiming.test.ts` |
 | M39 | `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
