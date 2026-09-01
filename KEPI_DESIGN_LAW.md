@@ -241,7 +241,7 @@ Departures coach + journey machine only fire when the layout has distinct `check
 ## FLIGHTS LAWS
 
 **F15 — Next flight is earliest remaining departure, not storage order**  
-Home, Airport Mode, Book → Flights, and check-in handoff must pick the chronologically next booked segment (timezone-aware departure clock), including domestic connectors. Storage array order and long-haul role never override clock time — ONT→SEA before SEA→FCO on the same travel day. When `localTime` and `flightDepartureTime` disagree on the same day, use the later booked clock for sorting (live status may pull `localTime` earlier; delay updates push it later). Home TODAY uses `selectNextRemainingFlight` — not a separate travel-day picker.
+Home, Airport Mode, Book → Flights, and check-in handoff must pick the chronologically next booked segment (timezone-aware departure clock), including domestic connectors. Storage array order and long-haul role never override clock time — ONT→SEA before SEA→FCO on the same travel day. When `localTime` and `flightDepartureTime` disagree on the same day, use the later booked clock for sorting (live status may pull `localTime` earlier; delay updates push it later). Departure UTC conversion must use the **departure-airport IATA timezone**, not stored `flight.timezone` when it bleeds (e.g. `Europe/Rome` on a SEA departure would sort as 8:30 AM Pacific). Home TODAY uses `selectNextRemainingFlight` + `getLeaveByHint` on that pick — not a separate travel-day picker; leave-by labels render in departure-airport local time.
 
 **Test:** `src/lib/travelAssistant/flightSort.test.ts`
 

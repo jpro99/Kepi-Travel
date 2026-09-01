@@ -74,6 +74,56 @@ test("F15: mission control nextFlight uses departure clock not storage order", (
   assert.equal(snap.nextFlight?.flightDepartureAirport, "ONT");
 });
 
+test("F15: Europe/Rome timezone bleed on SEA departure does not steal TODAY from ONT connector", () => {
+  const nowMs = Date.parse("2026-09-01T15:00:00Z"); // ~8am Pacific Sep 1
+  const reservations = [
+    {
+      id: "as180",
+      type: "flight",
+      title: "Alaska AS 180",
+      provider: "Alaska Airlines",
+      localTime: "2026-09-01 17:30",
+      timezone: "Europe/Rome",
+      confirmationCode: "DPNNWG",
+      flightDepartureAirport: "SEA",
+      flightArrivalAirport: "FCO",
+      flightDepartureTime: "2026-09-01 17:30",
+      flightArrivalTime: "2026-09-02 11:15",
+      flightDate: "2026-09-01",
+      flightNumber: "AS180",
+    },
+    {
+      id: "as654",
+      type: "flight",
+      title: "Alaska AS 654",
+      provider: "Alaska Airlines",
+      localTime: "2026-09-01 12:00",
+      timezone: "America/Los_Angeles",
+      confirmationCode: "DPNNWG",
+      flightDepartureAirport: "ONT",
+      flightArrivalAirport: "SEA",
+      flightDepartureTime: "2026-09-01 12:00",
+      flightArrivalTime: "",
+      flightDate: "2026-09-01",
+      flightNumber: "AS654",
+    },
+  ] as const;
+
+  const next = selectNextRemainingFlight([...reservations], nowMs);
+  assert.equal(next?.id, "as654");
+  assert.equal(next?.flightDepartureAirport, "ONT");
+
+  const snap = buildMissionControlSnapshot(
+    { name: "Europe 2026", startDate: "2026-09-01", reservations: [...reservations] },
+    nowMs,
+  );
+  assert.equal(snap.nextFlight?.id, "as654");
+  assert.equal(snap.nextFlight?.flightNumber, "AS654");
+  assert.ok(snap.leaveByHint);
+  assert.match(snap.leaveByHint!, /12:00/);
+  assert.doesNotMatch(snap.leaveByHint!, /8:30/);
+});
+
 test("F15: TODAY/Home keeps ONT first when live status shifted AS180 localTime earlier", () => {
   const nowMs = Date.parse("2026-09-01T15:00:00Z"); // morning Pacific Sep 1
   const reservations = [
@@ -123,6 +173,9 @@ test("F15: TODAY/Home keeps ONT first when live status shifted AS180 localTime e
   assert.equal(snap.phase, "departure_day");
   assert.equal(snap.nextFlight?.id, "as654");
   assert.equal(snap.nextFlight?.flightNumber, "AS654");
+  assert.ok(snap.leaveByHint);
+  assert.match(snap.leaveByHint!, /12:00/);
+  assert.doesNotMatch(snap.leaveByHint!, /8:30/);
 });
 
 test("M39: sortFlightsByDeparture orders ONT before SEA on same day", () => {

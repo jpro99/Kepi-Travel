@@ -3,7 +3,7 @@
  * Kepi does not render scannable boarding passes — it routes to the airline or Wallet.
  */
 
-import { canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
+import { flightDepartureUtcMs } from "@/lib/travelAssistant/flightSort";
 import {
   resolveBoardingPassUrl,
   type ReservationSourceLink,
@@ -208,11 +208,11 @@ export function resolveNextCheckInHandoff(
   const flights = reservations
     .filter((r) => (r.type ?? "").toLowerCase() === "flight" && !r.plannedOnly)
     .map((flight) => {
-      const departureUtcMs = parseDepartureUtcMs(
-        canonicalFlightDepartureLocalTime(flight),
-        flight.timezone,
-      );
-      return { flight, departureUtcMs };
+      const departureUtcMs = flightDepartureUtcMs(flight);
+      return {
+        flight,
+        departureUtcMs: Number.isFinite(departureUtcMs) ? departureUtcMs : null,
+      };
     })
     .filter((row) => row.departureUtcMs != null && row.departureUtcMs > nowMs - 60 * 60_000)
     .sort((a, b) => (a.departureUtcMs ?? 0) - (b.departureUtcMs ?? 0));
