@@ -6,6 +6,7 @@ import {
   hasTrustworthyLiveGraphPosition,
   isOffGraphGpsDisplay,
   isTrustworthyGraphSnap,
+  needsManualPinBeforeRouting,
   resolveRoutingOriginNodeId,
   resolveTravelerDisplayPosition,
 } from "./travelerPosition";
@@ -116,6 +117,21 @@ test("hasTrustworthyLiveGraphPosition and isOffGraphGpsDisplay for apron GPS", (
       snapped: runwaySnap,
       accuracyM: 45,
     }),
+    false,
+  );
+});
+
+test("needsManualPinBeforeRouting when off-graph with no origin", () => {
+  assert.equal(
+    needsManualPinBeforeRouting({ originNodeId: null, offGraphGps: true, previewMode: false }),
+    true,
+  );
+  assert.equal(
+    needsManualPinBeforeRouting({ originNodeId: "gate-a", offGraphGps: true, previewMode: false }),
+    false,
+  );
+  assert.equal(
+    needsManualPinBeforeRouting({ originNodeId: null, offGraphGps: true, previewMode: true }),
     false,
   );
 });

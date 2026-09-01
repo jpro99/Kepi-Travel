@@ -11,7 +11,7 @@ After landing on the runway, indoor graph snap was pinning the puck to the neare
 
 ## Fix 2026-09-01 — GPS airport wins over stale ONT deep link at SEA (Jeff)
 
-Reloading Live Map with `?iata=ONT` (or preview picking earliest departure) showed Ontario + old gate while physically at SEA. **GPS-first geofence:** `resolveLiveMapAirportIata` waits for GPS (no stale ONT layout while locating); physical campus wins over URL/preview; `useActiveFlight` ignores `preferredIata` until GPS confirms away; Live Map shows "Finding your location…" instead of wrong airport; URL rewrites to detected IATA; gate labels only when flight matches map airport.
+Reloading Live Map with `?iata=ONT` (or preview picking earliest departure) showed Ontario + old gate while physically at SEA. **GPS-first geofence:** `resolveLiveMapAirportIata` waits for GPS (no stale ONT layout while locating); physical campus wins over URL/preview; `useActiveFlight` ignores `preferredIata` until GPS confirms away; Live Map shows "Finding your location…" instead of wrong airport; URL rewrites to detected IATA; gate labels only when flight matches map airport. **Stuck on apron/runway:** off-graph banner has **Pin my spot (no snap)**; tapping Guide me / a POI queues the destination and opens pin mode; confirmed pin persists in sessionStorage per IATA for reload.
 
 ## Incident 2026-08-21 — Z84T4Z price stays in the drawer, ledger still says Add price (Jeff)
 

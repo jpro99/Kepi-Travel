@@ -78,4 +78,22 @@ export function isOffGraphGpsDisplay(input: {
 }
 
 export const OFF_GRAPH_GPS_BANNER =
-  "Showing your GPS on the airfield — use the map to orient. Directions start inside the terminal (tap I'm here when you're there).";
+  "GPS on the airfield — map shows your real position, not a gate snap.";
+
+/** Shown when routing needs a manual pin because graph snap is untrustworthy. */
+export const MANUAL_PIN_ROUTE_HINT =
+  "Tap the map where you are — then we'll guide you there.";
+
+export function airportPinSessionKey(iata: string): string {
+  return `kepi:airport-pin:${iata.trim().toUpperCase()}`;
+}
+
+/** True when live routing must wait for a traveler "I'm here" pin (runway / bad snap). */
+export function needsManualPinBeforeRouting(input: {
+  originNodeId: string | null;
+  offGraphGps: boolean;
+  previewMode: boolean;
+}): boolean {
+  if (input.previewMode || input.originNodeId) return false;
+  return input.offGraphGps;
+}

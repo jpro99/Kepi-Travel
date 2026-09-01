@@ -49,8 +49,11 @@ import {
   shouldStartGateWalkNow,
 } from "@/lib/airportNav/gatePresence";
 import {
+  airportPinSessionKey,
   hasTrustworthyLiveGraphPosition,
   isOffGraphGpsDisplay,
+  MANUAL_PIN_ROUTE_HINT,
+  needsManualPinBeforeRouting,
   OFF_GRAPH_GPS_BANNER,
   resolveRoutingOriginNodeId,
   resolveTravelerDisplayPosition,
@@ -1786,10 +1789,31 @@ export function AirportNavigatorMap({
     return coords.length > 1 ? { coords, nodeIds } : null;
   }, [layout, journey, arrivalJourney, isArriveCoach, previewMode, credentials, navCalibration]);
 
+  const requestManualPinForRoute = useCallback(
+    (poiId: string, hint = MANUAL_PIN_ROUTE_HINT) => {
+      setSelectedPoiId(poiId);
+      setPendingPoiId(poiId);
+      setConfirmMode(true);
+      showSubtitle(hint);
+    },
+    [showSubtitle],
+  );
+
   /* ── Routing ────────────────────────────────────────────────────────── */
   const startRoute = useCallback(
     (poiId: string, viaVoice = false) => {
-      if (!layout || !originNodeId) return;
+      if (!layout) return;
+      if (
+        needsManualPinBeforeRouting({
+          originNodeId,
+          offGraphGps,
+          previewMode,
+        })
+      ) {
+        requestManualPinForRoute(poiId);
+        return;
+      }
+      if (!originNodeId) return;
       const targetPoi = layout.pois.find((poi) => poi.id === poiId);
       if (!targetPoi) return;
       // Highlight the tapped destination immediately, regardless of routing outcome.
@@ -1817,7 +1841,7 @@ export function AirportNavigatorMap({
         sayAndShow(`${resolvePoiDisplayName(targetPoi, layout)} — ${fmtMins(route.totalSeconds)}. ${first ? first.text : ""}`);
       }
     },
-    [layout, originNodeId, credentials, navCalibration, sayAndShow, isArriveCoach],
+    [layout, originNodeId, offGraphGps, previewMode, requestManualPinForRoute, credentials, navCalibration, sayAndShow, isArriveCoach],
   );
 
   const endRoute = useCallback(() => {
@@ -1839,10 +1863,27 @@ export function AirportNavigatorMap({
     (nodeId: string, label: string) => {
       setConfirmedNodeId(nodeId);
       setConfirmMode(false);
+      try {
+        sessionStorage.setItem(airportPinSessionKey(iata), nodeId);
+      } catch {
+        /* sessionStorage may be blocked */
+      }
       showSubtitle(`Got it — you're at ${label}`);
     },
-    [showSubtitle],
+    [showSubtitle, iata],
   );
+
+  useEffect(() => {
+    if (previewMode || !layout) return;
+    try {
+      const saved = sessionStorage.getItem(airportPinSessionKey(iata));
+      if (!saved || !layout.nodes.some((entry) => entry.id === saved)) return;
+      setConfirmedNodeId(saved);
+    } catch {
+      /* sessionStorage may be blocked */
+    }
+  }, [previewMode, layout, iata]);
+
   const handlePoiTap = useCallback(
     (poiId: string) => {
       if (confirmModeRef.current && layout) {
@@ -1852,9 +1893,19 @@ export function AirportNavigatorMap({
         }
         return;
       }
+      if (
+        needsManualPinBeforeRouting({
+          originNodeId,
+          offGraphGps,
+          previewMode,
+        })
+      ) {
+        requestManualPinForRoute(poiId);
+        return;
+      }
       startRoute(poiId);
     },
-    [layout, startRoute, applyConfirmedSpot],
+    [layout, originNodeId, offGraphGps, previewMode, requestManualPinForRoute, startRoute, applyConfirmedSpot],
   );
 
   const answerCredentials = useCallback(
@@ -1882,6 +1933,12 @@ export function AirportNavigatorMap({
     lastInstructionIdxRef.current = -1;
     setCurrentStepIdx(0);
   }, [credentials, pendingPoiId, layout, originNodeId, navCalibration]);
+
+  // Off-graph manual pin: resume gate/POI routing (security prompt if needed).
+  useEffect(() => {
+    if (!pendingPoiId || !originNodeId || confirmMode || credentials.known) return;
+    startRoute(pendingPoiId);
+  }, [pendingPoiId, originNodeId, confirmMode, credentials.known, startRoute]);
 
   // Re-route from new position as the traveler moves
   useEffect(() => {
@@ -4000,12 +4057,22 @@ export function AirportNavigatorMap({
       {offGraphGps ? (
         <div
           data-testid="airport-off-graph-banner"
-          className="pointer-events-none absolute inset-x-3 z-[55] flex justify-center"
+          className="pointer-events-auto absolute inset-x-3 z-[55] flex justify-center"
           style={{ top: "max(4.75rem, calc(env(safe-area-inset-top) + 4.25rem))" }}
         >
-          <p className="max-w-md rounded-2xl bg-amber-500/95 px-3 py-2 text-center text-[13px] font-bold leading-snug text-amber-950 shadow-lg">
-            {OFF_GRAPH_GPS_BANNER}
-          </p>
+          <div className="flex max-w-md flex-col items-stretch gap-2 rounded-2xl bg-amber-500/95 px-3 py-2.5 text-center shadow-lg">
+            <p className="text-[13px] font-bold leading-snug text-amber-950">
+              {OFF_GRAPH_GPS_BANNER}
+            </p>
+            <button
+              type="button"
+              data-testid="airport-off-graph-pin"
+              onClick={() => setConfirmMode(true)}
+              className="min-h-[44px] rounded-xl bg-amber-950 px-3 py-2 text-[14px] font-bold text-amber-50"
+            >
+              Pin my spot (no snap)
+            </button>
+          </div>
         </div>
       ) : null}
 
