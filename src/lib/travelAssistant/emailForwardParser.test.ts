@@ -117,9 +117,13 @@ test("extractFlightLegsFromEmailBody finds every flight leg in a multi-segment i
     ["AS654", "AS832", "HA11", "HA12"],
   );
   assert.equal(legs.find((leg) => leg.flightNumber === "AS654")?.localTime, "2026-09-14 08:45");
+  assert.equal(legs.find((leg) => leg.flightNumber === "AS654")?.arrivalTime, "2026-09-14 11:20");
   assert.equal(legs.find((leg) => leg.flightNumber === "AS832")?.localTime, "2026-09-14 13:05");
+  assert.equal(legs.find((leg) => leg.flightNumber === "AS832")?.arrivalTime, "2026-09-14 16:30");
   assert.equal(legs.find((leg) => leg.flightNumber === "HA12")?.localTime, "2026-09-21 10:15");
+  assert.equal(legs.find((leg) => leg.flightNumber === "HA12")?.arrivalTime, "2026-09-22 14:40");
   assert.equal(legs.find((leg) => leg.flightNumber === "HA11")?.localTime, "2026-10-05 17:30");
+  assert.equal(legs.find((leg) => leg.flightNumber === "HA11")?.arrivalTime, "2026-10-05 06:45");
   assert.equal(legs.find((leg) => leg.flightNumber === "HA12")?.departureAirport, "HNL");
   assert.equal(legs.find((leg) => leg.flightNumber === "HA12")?.arrivalAirport, "HND");
 });
@@ -141,6 +145,10 @@ test("parseForwardedEmail returns separate drafts for each flight leg without AI
     assert.equal(
       result.drafts.find((draft) => draft.flightNumber === "AS654")?.localTime,
       "2026-09-14 08:45",
+    );
+    assert.equal(
+      result.drafts.find((draft) => draft.flightNumber === "AS654")?.arrivalTime,
+      "2026-09-14 11:20",
     );
     assert.equal(
       result.drafts.find((draft) => draft.flightNumber === "HA12")?.localTime,
@@ -691,4 +699,104 @@ test("arrivalTime is left empty when the AI does not return one (never invented)
   // Missing arrivalTime must never block auto-parsed status — it isn't a required field.
   assert.equal(draft.departureAirport, "SEA");
   assert.equal(draft.arrivalAirport, "HNL");
+});
+
+/** Mirrors email-forward receive route: parser draft arrivalTime → SessionReservation.flightArrivalTime */
+function mapParserDraftToFlightArrivalTime(draft: { type: string; arrivalTime?: string }): string {
+  const parserArrivalTime = typeof draft.arrivalTime === "string" ? draft.arrivalTime.trim() : "";
+  return draft.type === "flight" && parserArrivalTime ? parserArrivalTime : "";
+}
+
+const DPNNWG_EUROPE_ITINERARY = `
+Your Alaska Airlines itinerary
+Confirmation code: DPNNWG
+
+Flight AS654
+Departure ONT Ontario
+September 1, 2026
+12:00 PM
+Arrival SEA Seattle
+September 1, 2026
+2:30 PM
+
+Flight AS180
+Departure SEA Seattle
+September 1, 2026
+5:30 PM
+Arrival FCO Rome
+September 2, 2026
+11:15 AM
+`;
+
+test("F17: DPNNWG AS654 ONT→SEA regex parser extracts explicit Alaska arrivalTime", async () => {
+  const previousKey = process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  try {
+    const legs = extractFlightLegsFromEmailBody(DPNNWG_EUROPE_ITINERARY);
+    const as654 = legs.find((leg) => leg.flightNumber === "AS654");
+    assert.equal(as654?.localTime, "2026-09-01 12:00");
+    assert.equal(as654?.arrivalTime, "2026-09-01 14:30");
+    assert.equal(as654?.departureAirport, "ONT");
+    assert.equal(as654?.arrivalAirport, "SEA");
+
+    const result = await parseForwardedEmail({
+      subject: "Fwd: Your Alaska Airlines itinerary",
+      from: "no-reply@alaskaair.com",
+      text: DPNNWG_EUROPE_ITINERARY,
+      html: "",
+      attachments: [],
+    });
+    const draft = result.drafts.find((entry) => entry.flightNumber === "AS654");
+    assert.ok(draft);
+    assert.equal(draft?.confirmationCode, "DPNNWG");
+    assert.equal(draft?.localTime, "2026-09-01 12:00");
+    assert.equal(draft?.arrivalTime, "2026-09-01 14:30");
+    assert.equal(mapParserDraftToFlightArrivalTime(draft!), "2026-09-01 14:30");
+  } finally {
+    if (previousKey === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = previousKey;
+    }
+  }
+});
+
+test("F17: compact Alaska leg without Arrival block leaves arrivalTime empty (never invented)", () => {
+  const compact = `
+Your trip confirmation DPNNWG
+Outbound
+AS654
+ONT - SEA
+September 1, 2026
+12:00 PM
+`;
+  const legs = extractFlightLegsFromEmailBody(compact);
+  const as654 = legs.find((leg) => leg.flightNumber === "AS654");
+  assert.ok(as654, "compact itinerary still extracts departure leg");
+  assert.equal(as654?.localTime, "2026-09-01 12:00");
+  assert.equal(as654?.arrivalTime, "");
+});
+
+test("F17: itinerary-only marketing stub has no arrival clock to parse", async () => {
+  const previousKey = process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  try {
+    const result = await parseForwardedEmail({
+      subject: "Your trip",
+      from: "no-reply@alaskaair.com",
+      text:
+        "Your trip AS654 ONT to SEA. Confirmation code: DPNNWG. Check in 24 hours before departure and arrive early for airport security screening.",
+      html: "",
+      attachments: [],
+    });
+    const draft = result.drafts.find((entry) => entry.flightNumber === "AS654") ?? result.draft;
+    assert.equal(draft.arrivalTime, "");
+    assert.equal(mapParserDraftToFlightArrivalTime(draft), "");
+  } finally {
+    if (previousKey === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = previousKey;
+    }
+  }
 });

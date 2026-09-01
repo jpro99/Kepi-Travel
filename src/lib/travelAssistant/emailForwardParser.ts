@@ -660,6 +660,45 @@ function extractLegDepartureTime(window: string): { localTime: string; confidenc
   return extractBestLocalTimeCandidate(window, "flight");
 }
 
+function extractLegArrivalTime(window: string): { localTime: string; confidence: number } | null {
+  const lines = window.split("\n");
+  let collecting = false;
+  const arrLines: string[] = [];
+  for (const line of lines) {
+    if (/\b(?:Arrival|Arrive(?:s)?)\b/iu.test(line) && !/\b(?:Departure|Depart(?:s|ure)?|From)\b/iu.test(line)) {
+      collecting = true;
+      arrLines.push(line);
+      continue;
+    }
+    if (collecting) {
+      const trimmedLine = line.trim();
+      if (/^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/iu.test(trimmedLine)) {
+        arrLines.push(line);
+        continue;
+      }
+      if (/^\s*(?:Flight\s*)?[A-Z]{2}\s*\d{1,4}\b/u.test(trimmedLine)) break;
+      if (/\b(?:Departure|Depart(?:s|ure)?|From)\b/iu.test(line)) break;
+      arrLines.push(line);
+    }
+  }
+  if (arrLines.length > 0) {
+    const arrBlock = arrLines.join("\n");
+    const inlineDateTimeMatch = arrBlock.match(
+      /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})\s+at\s+(\d{1,2}:\d{2}\s*(?:AM|PM))\b/iu,
+    );
+    if (inlineDateTimeMatch?.[1] && inlineDateTimeMatch[2]) {
+      const parsedDate = parseDateCandidate(inlineDateTimeMatch[1]);
+      const parsedTime = parseTimeTo24Hour(inlineDateTimeMatch[2]);
+      if (parsedDate && parsedTime) {
+        return { localTime: `${parsedDate} ${parsedTime}`, confidence: 0.82 };
+      }
+    }
+    const fromArrival = extractBestLocalTimeCandidate(arrBlock, "flight");
+    if (fromArrival) return fromArrival;
+  }
+  return null;
+}
+
 /** Resolve the best travel date/time from a raw or forwarded email body. */
 export function extractBestLocalTimeFromEmailBody(
   rawText: string,
@@ -1098,6 +1137,7 @@ function extractFlightLegsFromRegex(lineAwareText: string, sharedFields: Candida
 
     const { dep, arr } = extractAirportsFromWindow(window);
     const localTimeResult = extractLegDepartureTime(window);
+    const arrivalTimeResult = extractLegArrivalTime(window);
     const leg: CandidateMap = {
       type: { value: "flight", confidence: 0.88, source: "regex" },
       flightNumber: { value: flightNumber, confidence: 0.92, source: "regex" },
@@ -1106,6 +1146,13 @@ function extractFlightLegsFromRegex(lineAwareText: string, sharedFields: Candida
     if (arr) leg.arrivalAirport = { value: arr, confidence: 0.86, source: "regex" };
     if (localTimeResult) {
       leg.localTime = { value: localTimeResult.localTime, confidence: localTimeResult.confidence, source: "regex" };
+    }
+    if (arrivalTimeResult) {
+      leg.arrivalTime = {
+        value: arrivalTimeResult.localTime,
+        confidence: arrivalTimeResult.confidence,
+        source: "regex",
+      };
     }
     if (sharedFields.confirmationCode?.value) leg.confirmationCode = sharedFields.confirmationCode;
     if (sharedFields.provider?.value) leg.provider = sharedFields.provider;
@@ -1227,6 +1274,7 @@ function candidateMapsToDrafts(
 export function extractFlightLegsFromEmailBody(rawText: string): Array<{
   flightNumber: string;
   localTime: string;
+  arrivalTime: string;
   departureAirport: string;
   arrivalAirport: string;
 }> {
@@ -1241,6 +1289,7 @@ export function extractFlightLegsFromEmailBody(rawText: string): Array<{
   return extractFlightLegsFromRegex(prepared.lineAware, shared).map((leg) => ({
     flightNumber: leg.flightNumber?.value ?? "",
     localTime: leg.localTime?.value ?? "",
+    arrivalTime: leg.arrivalTime?.value ?? "",
     departureAirport: leg.departureAirport?.value ?? "",
     arrivalAirport: leg.arrivalAirport?.value ?? "",
   }));
