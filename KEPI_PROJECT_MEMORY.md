@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-22 (G45 typed fare + airport spotlight G46–G48 shipped)
+Last updated: 2026-09-01 (M16 apron GPS — map puck follows raw GPS off-graph)
+
+## Fix 2026-09-01 — Runway / apron: map shows real GPS, not nearest gate snap (Jeff)
+
+After landing on the runway, indoor graph snap was pinning the puck to the nearest gate/building and auto-starting a ~13 min walk. **M16 extension:** raw GPS drives the map puck whenever the traveler is >45 m off the walk graph (`travelerPosition.ts`); walk routing and auto gate-walk only when snap is trustworthy or user taps **I'm here** inside the terminal. Banner: "Showing your GPS on the airfield…"
 
 ## Incident 2026-08-21 — Z84T4Z price stays in the drawer, ledger still says Add price (Jeff)
 
