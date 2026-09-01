@@ -1592,24 +1592,6 @@ export function AirportNavigatorMap({
     return () => window.clearTimeout(timer);
   }, [gateCode, showSubtitle]);
 
-  useEffect(() => {
-    const nextId = gatePoi?.id ?? null;
-    const prevId = prevGatePoiIdRef.current;
-    prevGatePoiIdRef.current = nextId;
-    if (!prevId || !nextId || prevId === nextId) return;
-    if (!persistGateWalk || !credentials.known || !hasLivePosition) return;
-    if (!activeRouteToGate && activeRoute?.toPoiId !== prevId) return;
-    startRoute(nextId, false);
-  }, [
-    gatePoi?.id,
-    persistGateWalk,
-    credentials.known,
-    hasLivePosition,
-    activeRouteToGate,
-    activeRoute,
-    startRoute,
-  ]);
-
   /* ── Trip-focused journey (depart or arrive first mile) ─ */
   const journey: JourneyStop[] = useMemo(() => {
     if (!layout || isArriveCoach) return [];
@@ -2106,6 +2088,24 @@ export function AirportNavigatorMap({
     gateCode,
     startRoute,
     showSubtitle,
+  ]);
+
+  useEffect(() => {
+    const nextId = gatePoi?.id ?? null;
+    const prevId = prevGatePoiIdRef.current;
+    prevGatePoiIdRef.current = nextId;
+    if (!prevId || !nextId || prevId === nextId) return;
+    if (!persistGateWalk || !credentials.known || !hasLivePosition) return;
+    if (!activeRouteToGate && activeRoute?.toPoiId !== prevId) return;
+    startRoute(nextId, false);
+  }, [
+    gatePoi?.id,
+    persistGateWalk,
+    credentials.known,
+    hasLivePosition,
+    activeRouteToGate,
+    activeRoute,
+    startRoute,
   ]);
 
 
