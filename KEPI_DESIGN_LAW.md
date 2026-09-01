@@ -989,7 +989,7 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | M13 | `src/lib/airportNav/airportLayoutPackage.test.ts`, `app-sitter/airport-day-of-travel.spec.ts` |
 | M14 | `src/lib/airportNav/airportCurationQueue.test.ts`, `app-sitter/airport-day-of-travel.spec.ts` |
 | M15 | `src/lib/airportNav/osmImport.test.ts` |
-| M16 | `src/lib/airportNav/directionArrow.test.ts`, `src/lib/airportNav/confirmTravelerSpot.test.ts`, `src/lib/airportNav/gatePresence.test.ts` |
+| M16 | `src/lib/airportNav/directionArrow.test.ts`, `src/lib/airportNav/confirmTravelerSpot.test.ts`, `src/lib/airportNav/gatePresence.test.ts`, `src/lib/airportNav/airportNavigatorMap.tdz.test.ts` |
 | M17 | `src/lib/airportNav/layoutBounds.test.ts` |
 | M18 | `src/lib/airportNav/layouts/seaLayout.test.ts` |
 | M19 | `src/lib/airportNav/schematic.test.ts` |

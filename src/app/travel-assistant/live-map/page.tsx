@@ -3,6 +3,7 @@
 import { Component, Suspense, type ErrorInfo, type ReactNode } from "react";
 import { LiveMapPage } from "@/components/travelAssistant/LiveMapPage";
 import { leaveLiveMap } from "@/lib/travelAssistant/liveMapSession";
+import { isStaleBundleError, recoverStaleClientBundle } from "@/lib/pwa/recoverStaleClientBundle";
 
 function LiveMapLoading() {
   return (
@@ -30,10 +31,15 @@ class LiveMapErrorBoundary extends Component<{ children: ReactNode }, LiveMapErr
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error("[LiveMap]", error, info.componentStack);
+    if (isStaleBundleError(error)) {
+      void recoverStaleClientBundle();
+    }
   }
 
   render() {
     if (!this.state.hasError) return this.props.children;
+
+    const staleBundle = isStaleBundleError({ message: this.state.detail ?? undefined });
 
     return (
       <div
@@ -42,17 +48,25 @@ class LiveMapErrorBoundary extends Component<{ children: ReactNode }, LiveMapErr
       >
         <p className="text-[20px] font-bold text-slate-900">Map could not load</p>
         <p className="max-w-sm text-[16px] leading-relaxed text-slate-600">
-          This can happen on older iPhones or when WebGL is disabled. Try closing other tabs, then reopen Kepi.
+          {staleBundle
+            ? "An old app version is blocking the map. Reloading once with a fresh copy…"
+            : "This can happen on older iPhones or when WebGL is disabled. Try closing other tabs, then reopen Kepi."}
         </p>
         {this.state.detail ? (
           <p className="max-w-sm text-xs leading-relaxed text-slate-500">{this.state.detail}</p>
         ) : null}
         <button
           type="button"
-          onClick={() => leaveLiveMap("home")}
+          onClick={() => {
+            if (staleBundle) {
+              void recoverStaleClientBundle();
+              return;
+            }
+            leaveLiveMap("home");
+          }}
           className="min-h-[48px] rounded-2xl bg-[#007AFF] px-6 py-3 text-[17px] font-bold text-white shadow-lg"
         >
-          Back to trip home
+          {staleBundle ? "Reload map" : "Back to trip home"}
         </button>
       </div>
     );
