@@ -1,1 +1,225 @@
-!function(){try{var t="undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof globalThis?globalThis:"undefined"!=typeof self?self:{},e=(new t.Error).stack;e&&(t._sentryDebugIds=t._sentryDebugIds||{},t._sentryDebugIds[e]="9e005ee7-1530-4364-89a0-8cdaa747f074",t._sentryDebugIdIdentifier="sentry-dbid-9e005ee7-1530-4364-89a0-8cdaa747f074")}catch(t){}}(),function(){let t="kepi-pwa-v40",e="".concat(t,"-app-shell"),a="".concat(t,"-api"),n="".concat(t,"-static"),i=["/","/travel-assistant","/offline-kit"],s=([{'revision':'6e97aed116079e72ba77da3c9cd38bb0','url':'/_next/app-build-manifest.json'},{'revision':'b7e952a6aba48c0d670ac94c53af85b0','url':'/_next/static/Y8tiVs8EZtPDZpePCMcA0/_buildManifest.js'},{'revision':'b6652df95db52feb4daf4eca35380933','url':'/_next/static/Y8tiVs8EZtPDZpePCMcA0/_ssgManifest.js'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/05f6971a-dd978a28f370b667.js'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/1089-537b2d6d8a9e4188.js'},{'revision':'3bf3b3f6bb0a3588cae63e4164ed83c9','url':'/_next/static/chunks/1089-537b2d6d8a9e4188.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/1289-d36d22b991f5ae0c.js'},{'revision':'f2b9d1f9be7460c2535ec79cee810ac8','url':'/_next/static/chunks/1289-d36d22b991f5ae0c.js.map'},{'revision':'d378f2760d46b3bb','url':'/_next/static/chunks/1298.d378f2760d46b3bb.js'},{'revision':'f4e4c66f7fb75f02946757779c912ead','url':'/_next/static/chunks/1298.d378f2760d46b3bb.js.map'},{'revision':'56d2662c50735940','url':'/_next/static/chunks/1306.56d2662c50735940.js'},{'revision':'3ebe00c18d09fa358d36d2b20e11be74','url':'/_next/static/chunks/1306.56d2662c50735940.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/136-7b946d05a5127670.js'},{'revision':'d1c39b65b151451b211798d0ffd95f0a','url':'/_next/static/chunks/136-7b946d05a5127670.js.map'},{'revision':'b001dc5d0cd40a0b','url':'/_next/static/chunks/1886.b001dc5d0cd40a0b.js'},{'revision':'bc63fd0104a57aa87cf852e6fcbb64c2','url':'/_next/static/chunks/1886.b001dc5d0cd40a0b.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/1964-473012149b8409b3.js'},{'revision':'4e57df6b6d27014e05576e8c3b047431','url':'/_next/static/chunks/1964-473012149b8409b3.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/2434-c710bdad2790d9fa.js'},{'revision':'62124d0806b96bcc02a777cdc037d44c','url':'/_next/static/chunks/2434-c710bdad2790d9fa.js.map'},{'revision':'64085c5b21c597d0','url':'/_next/static/chunks/2503.64085c5b21c597d0.js'},{'revision':'8189012b91762b2038872f480ec29982','url':'/_next/static/chunks/2503.64085c5b21c597d0.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/2972-435794b4d83ed374.js'},{'revision':'adfc640885c1961f42afb30e9435e9f5','url':'/_next/static/chunks/2972-435794b4d83ed374.js.map'},{'revision':'89d7b69e6f88ced8','url':'/_next/static/chunks/3868.89d7b69e6f88ced8.js'},{'revision':'ed119beb464f5c109435a3d4d2f14a58','url':'/_next/static/chunks/3868.89d7b69e6f88ced8.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/4387-88b4e614c163db82.js'},{'revision':'c5cda80f5eb84db7048ecb39b25a7e5a','url':'/_next/static/chunks/4387-88b4e614c163db82.js.map'},{'revision':'0ac9c3799bc5cb4a','url':'/_next/static/chunks/4454.0ac9c3799bc5cb4a.js'},{'revision':'bc4956f31a6bcb973198e628f7486285','url':'/_next/static/chunks/4454.0ac9c3799bc5cb4a.js.map'},{'revision':'8cd2338cae7e573a','url':'/_next/static/chunks/4485.8cd2338cae7e573a.js'},{'revision':'8aad95eedf8fd4b162aa8a042a508f3f','url':'/_next/static/chunks/4485.8cd2338cae7e573a.js.map'},{'revision':'19f48d58b7de540b','url':'/_next/static/chunks/5050.19f48d58b7de540b.js'},{'revision':'6cb1ab227dcae054c3779ef5b833584e','url':'/_next/static/chunks/5050.19f48d58b7de540b.js.map'},{'revision':'2521eb232b510ba9','url':'/_next/static/chunks/5151.2521eb232b510ba9.js'},{'revision':'37ef1659b2bd405d854d9295fe34a7e6','url':'/_next/static/chunks/5151.2521eb232b510ba9.js.map'},{'revision':'a5ee4addc360abd9','url':'/_next/static/chunks/5321.a5ee4addc360abd9.js'},{'revision':'e6cca1b0726968edf9bf8b8bb62e15f2','url':'/_next/static/chunks/5321.a5ee4addc360abd9.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/5452-8e7921ed3c9293f3.js'},{'revision':'59d0984ac99d837323ca570087adf0ab','url':'/_next/static/chunks/5452-8e7921ed3c9293f3.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/5475-67e14525a82d4dad.js'},{'revision':'7fdd19c60a8c2d4f575c64ed1f798e00','url':'/_next/static/chunks/5475-67e14525a82d4dad.js.map'},{'revision':'f2d82441aa2256e0','url':'/_next/static/chunks/5854.f2d82441aa2256e0.js'},{'revision':'23772e19719cba311d8d21ed49722fbf','url':'/_next/static/chunks/5854.f2d82441aa2256e0.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/6228-34674b5aa10f041d.js'},{'revision':'3279fdc52fb599adfe140d764aa7f769','url':'/_next/static/chunks/6228-34674b5aa10f041d.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/6689-f26902cf186c4340.js'},{'revision':'4ac268a8eae78b072cf7dce558bdd80b','url':'/_next/static/chunks/6689-f26902cf186c4340.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/7140-833b03a00f8a11f0.js'},{'revision':'a59ca37e8ce97ca7694319eda8fc8978','url':'/_next/static/chunks/7140-833b03a00f8a11f0.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/7424-89d9c6d9ea6a8271.js'},{'revision':'3eaa67ef43dab30a9e10d2ddf20f8ac0','url':'/_next/static/chunks/7424-89d9c6d9ea6a8271.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/7456-10e65e53b30f638c.js'},{'revision':'4ac113172a7eaa3054ad81444d4f6de7','url':'/_next/static/chunks/7456-10e65e53b30f638c.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/7666-5f814e923c94bb85.js'},{'revision':'1c633efdc83d19c1be4e5aa22c31ffac','url':'/_next/static/chunks/7666-5f814e923c94bb85.js.map'},{'revision':'f1e2a00263a0695b','url':'/_next/static/chunks/7667.f1e2a00263a0695b.js'},{'revision':'6f5b4b665f5778ce','url':'/_next/static/chunks/809.6f5b4b665f5778ce.js'},{'revision':'0ba0ee5f3854387d4ccbee8ca9a52958','url':'/_next/static/chunks/809.6f5b4b665f5778ce.js.map'},{'revision':'78445a5c4d6fbf4d','url':'/_next/static/chunks/8096.78445a5c4d6fbf4d.js'},{'revision':'92ab7f8f846542c9b372b1a89101b18e','url':'/_next/static/chunks/8096.78445a5c4d6fbf4d.js.map'},{'revision':'f8087fb86ac84c46','url':'/_next/static/chunks/8140.f8087fb86ac84c46.js'},{'revision':'a893a9a6574fce5983dc65d05cb7c6cf','url':'/_next/static/chunks/8140.f8087fb86ac84c46.js.map'},{'revision':'f7d38d48553cb5f5','url':'/_next/static/chunks/8300.f7d38d48553cb5f5.js'},{'revision':'6ea11a1561e0135d0d2b1a1fab95c3d8','url':'/_next/static/chunks/8300.f7d38d48553cb5f5.js.map'},{'revision':'243d9aeb2e460c3d','url':'/_next/static/chunks/8518.243d9aeb2e460c3d.js'},{'revision':'166ed40e4f882fa7146eed2ec8e2dced','url':'/_next/static/chunks/8518.243d9aeb2e460c3d.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/8706-501affd89a4b83b0.js'},{'revision':'214f74c80ebf62136148bf1921146b30','url':'/_next/static/chunks/8706-501affd89a4b83b0.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/9628-084f92626512c8d1.js'},{'revision':'569460db90b14b8b8c2e64c6814f8418','url':'/_next/static/chunks/9628-084f92626512c8d1.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/9748-8d334b0092d1f036.js'},{'revision':'8e2b8c48dac28593c1abf75902682a8c','url':'/_next/static/chunks/9748-8d334b0092d1f036.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/9da6db1e-f442e63a6b34d66b.js'},{'revision':'dc4991027118744fb412754876e03130','url':'/_next/static/chunks/9da6db1e-f442e63a6b34d66b.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/_not-found/page-0d3688dc6e65e6c6.js'},{'revision':'8eeb5f8c768bd5c6f34802eeace4bae9','url':'/_next/static/chunks/app/_not-found/page-0d3688dc6e65e6c6.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/admin/airport-editor/page-6154d88ac514e7d1.js'},{'revision':'003d7f130a3d99bdf95bff2333d9953a','url':'/_next/static/chunks/app/admin/airport-editor/page-6154d88ac514e7d1.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/admin/bots/page-d1c5190e85b388aa.js'},{'revision':'28d34aed4275b6191f1fd0d6ddb8e06d','url':'/_next/static/chunks/app/admin/bots/page-d1c5190e85b388aa.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/admin/kepi-pass/page-99ca48ac894dddf9.js'},{'revision':'228ed850baba61d671ae315a8babb534','url':'/_next/static/chunks/app/admin/kepi-pass/page-99ca48ac894dddf9.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/admin/page-663ba9e895a39b21.js'},{'revision':'41915c1b36f2a1e977b6efd4aa01eda2','url':'/_next/static/chunks/app/admin/page-663ba9e895a39b21.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/billing/layout-a96f41396dbac56f.js'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/billing/page-5a44689f9fe381a3.js'},{'revision':'cf65503de3961608a043ae723123aff6','url':'/_next/static/chunks/app/billing/page-5a44689f9fe381a3.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/book/page-75b32e9c8cf8c1af.js'},{'revision':'3e61bed1aa928229580c2a977f48a7c1','url':'/_next/static/chunks/app/book/page-75b32e9c8cf8c1af.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/city/%5BcityId%5D/page-41571772663d6ee5.js'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/create/layout-a48a215a73e49442.js'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/create/page-43e5c84fb3d93398.js'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/debug/trace/page-b04da80a5c7c8e83.js'},{'revision':'bac14ff5996ba002a5b7f0532392e730','url':'/_next/static/chunks/app/debug/trace/page-b04da80a5c7c8e83.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/dreamcaster/page-f99237d21c99a233.js'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/error-808561df2d8c0ffb.js'},{'revision':'a2d18ef539e9360f3a83e2ea0e0a5e96','url':'/_next/static/chunks/app/error-808561df2d8c0ffb.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/expenses/page-d9a4b563e75878ea.js'},{'revision':'1add5078206144ce2de8f522411d1e0f','url':'/_next/static/chunks/app/expenses/page-d9a4b563e75878ea.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/join-family/page-b5fde5b591505633.js'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/layout-4b265ce8815d8d52.js'},{'revision':'8b9ec143dacb23ec3e8243b0806d44fa','url':'/_next/static/chunks/app/layout-4b265ce8815d8d52.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/offline-kit/page-0052cacc8b8354e9.js'},{'revision':'2bc40c1f36fc8d936d0a5ca2993be82a','url':'/_next/static/chunks/app/offline-kit/page-0052cacc8b8354e9.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/page-d8c9488e0c1351ce.js'},{'revision':'2c1e10f7897e34108118a49634272de2','url':'/_next/static/chunks/app/page-d8c9488e0c1351ce.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/privacy/page-6c9497b91cea5528.js'},{'revision':'d68e8de92fa24cddface93de510f520d','url':'/_next/static/chunks/app/privacy/page-6c9497b91cea5528.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/recovery/%5BtripId%5D/page-c09d07a155812f39.js'},{'revision':'936597601d587c439307916e94105625','url':'/_next/static/chunks/app/recovery/%5BtripId%5D/page-c09d07a155812f39.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/redeem-pass/%5BpassId%5D/page-827efffcee0b89f3.js'},{'revision':'67eadf2cb36d2cda9f4b123f06a57282','url':'/_next/static/chunks/app/redeem-pass/%5BpassId%5D/page-827efffcee0b89f3.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/redeem/page-75836e89c6857ea9.js'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/refer/%5Bcode%5D/page-b7cfb41b27b6bf05.js'},{'revision':'a5a392fca4df4f6e3b4b57ce9c805bcd','url':'/_next/static/chunks/app/refer/%5Bcode%5D/page-b7cfb41b27b6bf05.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/reset-trip/page-9fd520671473be30.js'},{'revision':'b8478f68eec5468f0261e92afb857af3','url':'/_next/static/chunks/app/reset-trip/page-9fd520671473be30.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/settings/biometrics/page-5267c308495c9c87.js'},{'revision':'7bdabd161a8771e6b6590844d7a2fb78','url':'/_next/static/chunks/app/settings/biometrics/page-5267c308495c9c87.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/settings/finance/page-539b863b038c5e27.js'},{'revision':'1307175df143cb12123c403bf146d049','url':'/_next/static/chunks/app/settings/finance/page-539b863b038c5e27.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/settings/security/page-6a51b62ab17f3b5a.js'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/settings/sovereign/page-d7bb76a362cec1c5.js'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/settings/travel-profile/page-b05895fbcd78c84d.js'},{'revision':'d5b731bbc1efca05b72fe74c721f7a9d','url':'/_next/static/chunks/app/settings/travel-profile/page-b05895fbcd78c84d.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/share/%5Btoken%5D/page-3ad26155e6f69937.js'},{'revision':'8e4ad98d116d18b4f39aa2aa2d4feff5','url':'/_next/static/chunks/app/share/%5Btoken%5D/page-3ad26155e6f69937.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/sign-in/%5B%5B...sign-in%5D%5D/page-56983eba323f56aa.js'},{'revision':'2831399623230a7fa0c7c2c84fd17eed','url':'/_next/static/chunks/app/sign-in/%5B%5B...sign-in%5D%5D/page-56983eba323f56aa.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/sign-up/%5B%5B...sign-up%5D%5D/page-c93a1c9f6b4c6fcc.js'},{'revision':'0a2aa0bc07768d9d0c603b2bc4a21807','url':'/_next/static/chunks/app/sign-up/%5B%5B...sign-up%5D%5D/page-c93a1c9f6b4c6fcc.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/sso-callback/page-0ea25dcad27f8047.js'},{'revision':'62d24cdf7a0f115ee946bea9826e97de','url':'/_next/static/chunks/app/sso-callback/page-0ea25dcad27f8047.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/support/page-aa9b58b4cc18b4ec.js'},{'revision':'c0bbb972a0fbb83314c18f448260c2ce','url':'/_next/static/chunks/app/support/page-aa9b58b4cc18b4ec.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/terms/page-8cde575040c8078a.js'},{'revision':'fb407d949a371d4f7fbbf67a6d3430b1','url':'/_next/static/chunks/app/terms/page-8cde575040c8078a.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/travel-assistant/layout-505cff0263f1fbd0.js'},{'revision':'9d064db92ea2cb4fb7044c457e92ba72','url':'/_next/static/chunks/app/travel-assistant/layout-505cff0263f1fbd0.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/travel-assistant/live-map/page-335f31f7e978d0e1.js'},{'revision':'5c787e1fec31ab3be9f241313bd1c259','url':'/_next/static/chunks/app/travel-assistant/live-map/page-335f31f7e978d0e1.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/travel-assistant/loading-5fe07aa9036bfb5d.js'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/travel-assistant/page-1e0409364c0f27bb.js'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/app/workspace/page-73226f5cc077b5bc.js'},{'revision':'d5f403ed6f324866','url':'/_next/static/chunks/e99863e0.d5f403ed6f324866.js'},{'revision':'26f0f3ced08f9433cfde6633c6cf6042','url':'/_next/static/chunks/e99863e0.d5f403ed6f324866.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/fd9d1056-703079238cc733b6.js'},{'revision':'e143c80b7e9c64205e2b9f9cd30b0028','url':'/_next/static/chunks/fd9d1056-703079238cc733b6.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/framework-5da83e2d00096efc.js'},{'revision':'d25189a4832c0e8174c45c448dd66d98','url':'/_next/static/chunks/framework-5da83e2d00096efc.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/main-app-b693af0b1fc5dded.js'},{'revision':'1efa5b1625f7b5dff081f73fdfc4dbd1','url':'/_next/static/chunks/main-app-b693af0b1fc5dded.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/main-db9244a4532377ec.js'},{'revision':'409bd49d768f1550f28c800be50e641d','url':'/_next/static/chunks/main-db9244a4532377ec.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/pages/_app-9505a324b27e29a2.js'},{'revision':'a8341b9dfe22ada242c0868c79d81e9d','url':'/_next/static/chunks/pages/_app-9505a324b27e29a2.js.map'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/pages/_error-daa80f5b4d0fe27d.js'},{'revision':'eb2fcc07cb995a955a9dd6753a28b996','url':'/_next/static/chunks/pages/_error-daa80f5b4d0fe27d.js.map'},{'revision':'846118c33b2c0e922d7b3a7676f81f6f','url':'/_next/static/chunks/polyfills-42372ed130431b0a.js'},{'revision':'Y8tiVs8EZtPDZpePCMcA0','url':'/_next/static/chunks/webpack-dab16bf0c16dc32e.js'},{'revision':'7d05a3a2d693c420e588112fc0380caa','url':'/_next/static/chunks/webpack-dab16bf0c16dc32e.js.map'},{'revision':'3f242702e073c409','url':'/_next/static/css/3f242702e073c409.css'},{'revision':'9c967ed7af2f790b509e07a8593ab403','url':'/_next/static/css/3f242702e073c409.css.map'},{'revision':'475a730778726714','url':'/_next/static/css/475a730778726714.css'},{'revision':'a707f1e64f9ac9618929cab739362b23','url':'/_next/static/css/475a730778726714.css.map'},{'revision':'7dfd643b849ac952','url':'/_next/static/css/7dfd643b849ac952.css'},{'revision':'e22ea0e67d0487163574f9b874880456','url':'/_next/static/css/7dfd643b849ac952.css.map'},{'revision':'1098c23c03a62071db29441cf9680284','url':'/_next/static/media/39a5c75b28bf49bc.p.woff2'},{'revision':'56edecbfa9f4849b7ca0f07e52b3c340','url':'/_next/static/media/b5bb120f6fcabcb4-s.p.woff2'},{'revision':'a82bf06bc5e4a7462b47f83ae612dced','url':'/apple-touch-icon.png'},{'revision':'a5483ebc081f924c51a210c9b3d7895a','url':'/favicon.ico'},{'revision':'d09f95206c3fa0bb9bd9fefabfd0ea71','url':'/file.svg'},{'revision':'2aaafa6a49b6563925fe440891e32717','url':'/globe.svg'},{'revision':'a82bf06bc5e4a7462b47f83ae612dced','url':'/icons/icon-192.png'},{'revision':'c96821b38cf6a19f56b53bb1f2583914','url':'/icons/icon-512.png'},{'revision':'5dff4356cd5b979828641358c287ff78','url':'/manifest.json'},{'revision':'571ce8777aad8e5af863af4157bc568e','url':'/maplibre-gl-csp-worker.js'},{'revision':'8e061864f388b47f33a1c3780831193e','url':'/next.svg'},{'revision':'92e759d13e67c2eb6a5f0d24305f5e2b','url':'/og-image.png'},{'revision':'19328260de4d8aa97ea956f181e28062','url':'/sw.js'},{'revision':'5b4f8ad097c4f1c62bddf70e9e2049dc','url':'/sw.js.map'},{'revision':'5998cda031bd8957fed1665a0eaf7576','url':'/up-arrow-blue.svg'},{'revision':'c0af2f507b369b085b35ef4bbe3bcf1e','url':'/vercel.svg'},{'revision':'a2760511c65806022ad20adf74370ff3','url':'/window.svg'}]||[]).map(t=>"string"==typeof t?t:null==t?void 0:t.url).filter(t=>"string"==typeof t);function l(t){return t.pathname.startsWith("/_next/static/")}function o(t,e,a){a&&a.ok&&t.put(e,a.clone())}self.addEventListener("install",t=>{t.waitUntil((async()=>{let t=await caches.open(e);if(await t.addAll(i),s.length>0){let t=await caches.open(n);await t.addAll(s)}self.skipWaiting()})())}),self.addEventListener("activate",t=>{t.waitUntil((async()=>{let t=new Set([e,a,n]),i=await caches.keys();await Promise.all(i.map(e=>t.has(e)?Promise.resolve():caches.delete(e))),await self.clients.claim()})())}),self.addEventListener("message",t=>{"CLEAR_ALL_CACHES"===t.data&&t.waitUntil(caches.keys().then(t=>Promise.all(t.map(t=>caches.delete(t)))).then(()=>{self.clients.matchAll().then(t=>t.forEach(t=>t.postMessage("CACHES_CLEARED")))})),"SKIP_WAITING"===t.data&&self.skipWaiting(),t.data&&"object"==typeof t.data&&"CACHE_OFFLINE_KIT_ROUTE"===t.data.type&&t.waitUntil(caches.open(e).then(t=>t.add("/offline-kit").catch(()=>void 0)))}),self.addEventListener("fetch",t=>{let{request:i}=t;if("GET"!==i.method)return;let s=new URL(i.url);if(s.origin===self.location.origin){if(s.pathname.startsWith("/api/")){if("/api/config"===s.pathname){t.respondWith(fetch(i));return}t.respondWith((async()=>{let t=await caches.open(a);try{let e=await fetch(i);return o(t,i,e),e}catch(a){let e=await t.match(i);if(e)return e;return new Response(JSON.stringify({error:"Offline and no cached API response available."}),{status:503,headers:{"Content-Type":"application/json"}})}})());return}if("navigate"===i.mode){t.respondWith((async()=>{try{let t=await fetch(i);return t.ok&&(await caches.open(e)).put(i,t.clone()),t}catch(a){let t=await caches.open(e);return await t.match(i)||await t.match("/travel-assistant")||await t.match("/")||Response.error()}})());return}(l(s)||s.pathname.startsWith("/icons/")||"/manifest.json"===s.pathname||/\.(?:css|js|png|jpg|jpeg|gif|svg|webp|avif|ico|woff|woff2|ttf)$/u.test(s.pathname))&&t.respondWith((async()=>{let t=await caches.open(n);try{let e=await fetch(i);return o(t,i,e),e}catch(a){if(l(s)){let e=await t.match(i);if(e&&e.ok)return e;return Response.error()}let e=await t.match(i);if(e)return e;return Response.error()}})())}}),self.addEventListener("push",t=>{let e={title:"Kepi travel update",body:"You have a new travel alert.",url:"/travel-assistant"};if(t.data)try{let a=t.data.json();e={...e,...a}}catch(t){}t.waitUntil(self.registration.showNotification(e.title,{body:e.body,data:{url:e.url||"/travel-assistant"},icon:"/icons/icon-192.png",badge:"/icons/icon-192.png"}))}),self.addEventListener("notificationclick",t=>{var e,a;t.notification.close();let n=(null===(a=t.notification)||void 0===a?void 0:null===(e=a.data)||void 0===e?void 0:e.url)||"/travel-assistant";t.waitUntil(clients.matchAll({type:"window",includeUncontrolled:!0}).then(t=>{let e=t.find(t=>"focus"in t);return e?(e.navigate(n),e.focus()):clients.openWindow(n)}))})}();
+// I61: bump on every SW behavior change so poisoned caches (cached 404 chunks) drop.
+const CACHE_VERSION = "kepi-pwa-v40";
+const APP_SHELL_CACHE = `${CACHE_VERSION}-app-shell`;
+const API_CACHE = `${CACHE_VERSION}-api`;
+const STATIC_CACHE = `${CACHE_VERSION}-static`;
+const APP_SHELL_ROUTES = ["/", "/travel-assistant", "/offline-kit"];
+const PRECACHE_MANIFEST = self.__WB_MANIFEST || [];
+const PRECACHE_URLS = PRECACHE_MANIFEST
+  .map((entry) => (typeof entry === "string" ? entry : entry?.url))
+  .filter((url) => typeof url === "string");
+
+function isApiRequest(url) {
+  return url.pathname.startsWith("/api/");
+}
+
+function isNextStaticAsset(url) {
+  return url.pathname.startsWith("/_next/static/");
+}
+
+function isStaticAsset(url) {
+  return (
+    isNextStaticAsset(url) ||
+    url.pathname.startsWith("/icons/") ||
+    url.pathname === "/manifest.json" ||
+    /\.(?:css|js|png|jpg|jpeg|gif|svg|webp|avif|ico|woff|woff2|ttf)$/u.test(url.pathname)
+  );
+}
+
+/** Never poison the cache with 404/5xx — a cached failed chunk blanks the app after deploy. */
+function cacheIfOk(cache, request, response) {
+  if (response && response.ok) {
+    cache.put(request, response.clone());
+  }
+}
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    (async () => {
+      const shellCache = await caches.open(APP_SHELL_CACHE);
+      await shellCache.addAll(APP_SHELL_ROUTES);
+      if (PRECACHE_URLS.length > 0) {
+        const staticCache = await caches.open(STATIC_CACHE);
+        await staticCache.addAll(PRECACHE_URLS);
+      }
+      self.skipWaiting();
+    })(),
+  );
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    (async () => {
+      const expectedCaches = new Set([APP_SHELL_CACHE, API_CACHE, STATIC_CACHE]);
+      const cacheNames = await caches.keys();
+      await Promise.all(
+        cacheNames.map((cacheName) => {
+          if (!expectedCaches.has(cacheName)) {
+            return caches.delete(cacheName);
+          }
+          return Promise.resolve();
+        }),
+      );
+      await self.clients.claim();
+    })(),
+  );
+});
+
+// Allow app to trigger a full cache clear (e.g. from Settings button)
+self.addEventListener("message", (event) => {
+  if (event.data === "CLEAR_ALL_CACHES") {
+    event.waitUntil(
+      caches
+        .keys()
+        .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+        .then(() => {
+          self.clients.matchAll().then((clients) =>
+            clients.forEach((c) => c.postMessage("CACHES_CLEARED")),
+          );
+        }),
+    );
+  }
+  if (event.data === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+  if (event.data && typeof event.data === "object" && event.data.type === "CACHE_OFFLINE_KIT_ROUTE") {
+    event.waitUntil(
+      caches.open(APP_SHELL_CACHE).then((cache) => cache.add("/offline-kit").catch(() => undefined)),
+    );
+  }
+});
+
+self.addEventListener("fetch", (event) => {
+  const { request } = event;
+  if (request.method !== "GET") {
+    return;
+  }
+
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) {
+    return;
+  }
+
+  if (isApiRequest(url)) {
+    // Never cache /api/config — it contains the map key which must always be fresh
+    if (url.pathname === "/api/config") {
+      event.respondWith(fetch(request));
+      return;
+    }
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(API_CACHE);
+        try {
+          const networkResponse = await fetch(request);
+          cacheIfOk(cache, request, networkResponse);
+          return networkResponse;
+        } catch {
+          const cached = await cache.match(request);
+          if (cached) {
+            return cached;
+          }
+          return new Response(JSON.stringify({ error: "Offline and no cached API response available." }), {
+            status: 503,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      })(),
+    );
+    return;
+  }
+
+  if (request.mode === "navigate") {
+    event.respondWith(
+      (async () => {
+        try {
+          const response = await fetch(request);
+          if (response.ok) {
+            const shellCache = await caches.open(APP_SHELL_CACHE);
+            shellCache.put(request, response.clone());
+          }
+          return response;
+        } catch {
+          const shellCache = await caches.open(APP_SHELL_CACHE);
+          return (
+            (await shellCache.match(request)) ||
+            (await shellCache.match("/travel-assistant")) ||
+            (await shellCache.match("/")) ||
+            Response.error()
+          );
+        }
+      })(),
+    );
+    return;
+  }
+
+  if (isStaticAsset(url)) {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(STATIC_CACHE);
+        try {
+          const response = await fetch(request);
+          // I61: never cache failed /_next/static chunk responses — a stored 404
+          // after deploy paints a blank screen until the PWA cache is cleared.
+          cacheIfOk(cache, request, response);
+          return response;
+        } catch {
+          // Hashed Next assets are immutable; only fall back to a prior *ok* cache.
+          if (isNextStaticAsset(url)) {
+            const cached = await cache.match(request);
+            if (cached && cached.ok) return cached;
+            return Response.error();
+          }
+          const cached = await cache.match(request);
+          if (cached) {
+            return cached;
+          }
+          return Response.error();
+        }
+      })(),
+    );
+  }
+});
+
+self.addEventListener("push", (event) => {
+  let payload = {
+    title: "Kepi travel update",
+    body: "You have a new travel alert.",
+    url: "/travel-assistant",
+  };
+
+  if (event.data) {
+    try {
+      const parsed = event.data.json();
+      payload = {
+        ...payload,
+        ...parsed,
+      };
+    } catch {
+      // Ignore malformed payloads and use defaults.
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      data: { url: payload.url || "/travel-assistant" },
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification?.data?.url || "/travel-assistant";
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      const existingClient = clientList.find((client) => "focus" in client);
+      if (existingClient) {
+        existingClient.navigate(url);
+        return existingClient.focus();
+      }
+      return clients.openWindow(url);
+    }),
+  );
+});
