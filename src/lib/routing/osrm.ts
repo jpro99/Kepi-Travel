@@ -1,9 +1,10 @@
-export async function osrmFootRoute(
+async function osrmRoute(
+  profile: "foot" | "driving",
   from: { lng: number; lat: number },
   to: { lng: number; lat: number },
 ): Promise<{ distanceM: number; durationS: number } | null> {
   const coords = `${from.lng},${from.lat};${to.lng},${to.lat}`;
-  const url = `https://router.project-osrm.org/route/v1/foot/${coords}?overview=false`;
+  const url = `https://router.project-osrm.org/route/v1/${profile}/${coords}?overview=false`;
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), 10_000);
   try {
@@ -27,4 +28,19 @@ export async function osrmFootRoute(
   } finally {
     clearTimeout(t);
   }
+}
+
+export async function osrmFootRoute(
+  from: { lng: number; lat: number },
+  to: { lng: number; lat: number },
+): Promise<{ distanceM: number; durationS: number } | null> {
+  return osrmRoute("foot", from, to);
+}
+
+/** Driving duration for leave-now ETA. Route estimate — not live traffic congestion. */
+export async function osrmDrivingRoute(
+  from: { lng: number; lat: number },
+  to: { lng: number; lat: number },
+): Promise<{ distanceM: number; durationS: number } | null> {
+  return osrmRoute("driving", from, to);
 }
