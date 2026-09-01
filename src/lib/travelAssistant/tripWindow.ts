@@ -41,6 +41,59 @@ export function canonicalFlightDepartureDay(reservation: CanonicalFlightSchedule
   return dateOnly(reservation.flightDate) || dateOnly(reservation.flightDepartureTime) || localDay;
 }
 
+function normalizeScheduleClock(value: string | undefined | null): string {
+  return value?.trim().replace("T", " ").slice(0, 16) ?? "";
+}
+
+function clockMinutesFromMidnight(localTimeStr: string): number | null {
+  const normalized = normalizeScheduleClock(localTimeStr);
+  const match = /^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})$/u.exec(normalized);
+  if (!match) return null;
+  return Number.parseInt(match[2] ?? "", 10) * 60 + Number.parseInt(match[3] ?? "", 10);
+}
+
+/**
+ * When localTime and flightDepartureTime disagree on the same day, prefer the later
+ * booked clock. Live status / TZ bleed can pull localTime earlier; delay updates push
+ * localTime later — max clock is the honest booked schedule (F15).
+ */
+export function resolveBookedDepartureLocalTime(reservation: CanonicalFlightScheduleFields): string {
+  const local = normalizeScheduleClock(reservation.localTime);
+  const departure = normalizeScheduleClock(reservation.flightDepartureTime);
+  const localComplete = hasCompleteFlightLocalTime(local);
+  const departureComplete = hasCompleteFlightLocalTime(departure);
+
+  if (!localComplete && departureComplete) return departure;
+  if (localComplete && !departureComplete) return local;
+  if (!localComplete && !departureComplete) {
+    return canonicalFlightDepartureLocalTime(reservation);
+  }
+
+  const localDay = dateOnly(local);
+  const flightDay = dateOnly(reservation.flightDate);
+  const departureDay = dateOnly(reservation.flightDepartureTime);
+  if ((flightDay && flightDay !== localDay) || (departureDay && departureDay !== localDay)) {
+    return local;
+  }
+
+  const departureDayFromField = dateOnly(departure);
+  if (departureDayFromField && departureDayFromField !== localDay) {
+    return departure;
+  }
+
+  const localMins = clockMinutesFromMidnight(local);
+  const departureMins = clockMinutesFromMidnight(departure);
+  if (
+    localMins != null &&
+    departureMins != null &&
+    Math.abs(localMins - departureMins) > 30
+  ) {
+    return localMins >= departureMins ? local : departure;
+  }
+
+  return local;
+}
+
 /** Best local departure timestamp for sorting, countdowns, and journey phase. */
 export function canonicalFlightDepartureLocalTime(reservation: CanonicalFlightScheduleFields): string {
   const local = reservation.localTime?.trim() ?? "";
@@ -50,6 +103,10 @@ export function canonicalFlightDepartureLocalTime(reservation: CanonicalFlightSc
     const departureDay = dateOnly(reservation.flightDepartureTime);
     if ((flightDay && flightDay !== localDay) || (departureDay && departureDay !== localDay)) {
       return local;
+    }
+    const departure = normalizeScheduleClock(reservation.flightDepartureTime);
+    if (hasCompleteFlightLocalTime(departure)) {
+      return resolveBookedDepartureLocalTime(reservation);
     }
     return local;
   }

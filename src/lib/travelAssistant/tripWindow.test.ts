@@ -8,6 +8,7 @@ import {
   canonicalFlightDepartureLocalTime,
   clampMinutesToDeparture,
   computeMinutesToDeparture,
+  resolveBookedDepartureLocalTime,
 } from "./tripWindow";
 
 describe("tripWindow", () => {
@@ -37,6 +38,25 @@ describe("tripWindow", () => {
     };
     assert.equal(canonicalFlightDepartureDay(reservation), "2026-09-01");
     assert.equal(canonicalFlightDepartureLocalTime(reservation), "2026-09-01 18:00");
+  });
+
+  it("prefers later booked clock when live status pulls localTime earlier (F15)", () => {
+    const reservation = {
+      localTime: "2026-09-01 08:30",
+      flightDate: "2026-09-01",
+      flightDepartureTime: "2026-09-01 17:30",
+    };
+    assert.equal(canonicalFlightDepartureLocalTime(reservation), "2026-09-01 17:30");
+    assert.equal(resolveBookedDepartureLocalTime(reservation), "2026-09-01 17:30");
+  });
+
+  it("keeps later localTime when delay update pushed departure forward", () => {
+    const reservation = {
+      localTime: "2026-09-01 18:30",
+      flightDate: "2026-09-01",
+      flightDepartureTime: "2026-09-01 17:30",
+    };
+    assert.equal(canonicalFlightDepartureLocalTime(reservation), "2026-09-01 18:30");
   });
 
   it("counts down to September departure in July, not stale May date", () => {
