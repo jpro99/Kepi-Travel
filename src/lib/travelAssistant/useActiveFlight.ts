@@ -27,9 +27,9 @@ import {
   deriveAirportDayCoachMode,
   type AirportDayCoachMode,
 } from "@/lib/travelAssistant/airportDayCoach";
+import { timezoneForIata } from "@/lib/airports/lookup";
 import { computeJourneyPhase, type JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 import { resolveArrivalHotelLabel } from "@/lib/travelAssistant/airportSpotlightContext";
-import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
 import {
   flightDepartureUtcMs,
   formatTravelDayFlightLabel,
@@ -304,7 +304,11 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
   const navigatorFlight = useMemo(() => {
     if (journeyPhase.kind === "just-landed" && !pinnedFlight) {
       const f = journeyPhase.flight as FlightReservation;
-      const utcMs = toUtcMs(f.flightArrivalTime ?? f.localTime, f.timezone);
+      // Arrival clock must use ARRIVAL airport TZ — departure TZ on a mangled
+      // arrival string is what produced false "Landed 339m ago" for AS654.
+      const arrivalTz =
+        timezoneForIata(f.flightArrivalAirport ?? "") ?? f.timezone;
+      const utcMs = toUtcMs(f.flightArrivalTime ?? f.localTime, arrivalTz);
       return { f, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
     }
     if (pinnedFlight) return pinnedFlight;
@@ -331,25 +335,17 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
   }, [pinnedFlight, preferredIata, preferredMode, coachMode]);
 
   const hotelLabel = useMemo(() => {
-    if (journeyPhase.kind === "just-landed") {
-      const f = journeyPhase.flight as FlightReservation;
-      const dateKey =
-        f.flightDate?.slice(0, 10) ??
-        f.flightArrivalTime?.slice(0, 10) ??
-        f.localTime?.slice(0, 10) ??
-        null;
-      const hotels = reservations.filter((r) => r.type === "hotel");
-      return resolveArrivalHotelLabel(hotels, dateKey);
-    }
-    const hotel = reservations.find((r) => r.type === "hotel");
-    if (!hotel) return null;
-    const label = reservationPropertyName({
-      type: hotel.type,
-      title: hotel.title,
-      provider: hotel.provider,
-      location: hotel.location,
-    });
-    return label.trim() || null;
+    // Arrive coach only — never feed the first trip hotel (e.g. Polignano) into
+    // a depart surface at ONT as an Uber dropoff.
+    if (journeyPhase.kind !== "just-landed") return null;
+    const f = journeyPhase.flight as FlightReservation;
+    const dateKey =
+      f.flightDate?.slice(0, 10) ??
+      f.flightArrivalTime?.slice(0, 10) ??
+      f.localTime?.slice(0, 10) ??
+      null;
+    const hotels = reservations.filter((r) => r.type === "hotel");
+    return resolveArrivalHotelLabel(hotels, dateKey);
   }, [reservations, journeyPhase]);
 
   const travelDayFlight = useMemo(

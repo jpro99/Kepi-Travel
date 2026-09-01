@@ -22,6 +22,7 @@ import {
   type AirportDayCoachMode,
   type DayCoachPathStep,
 } from "@/lib/travelAssistant/airportDayCoach";
+import { buildDepartLeaveTimingCopy } from "@/lib/travelAssistant/departLeaveTiming";
 import { resolveAirportLocationPhase } from "@/lib/travelAssistant/airportLocationPhase";
 import { ArrivalTransportOptionsCard } from "@/components/travelAssistant/ArrivalTransportOptionsCard";
 import { GateConfidenceBar } from "@/components/travelAssistant/GateConfidenceBar";
@@ -127,6 +128,7 @@ export function AirportNavigatorFallback({
   const code = iata.trim().toUpperCase();
   const isArrive = coachMode === "arrive";
   const [liveBaggageClaim, setLiveBaggageClaim] = useState<string | null>(null);
+  const [driveMinutes, setDriveMinutes] = useState<number | null>(null);
   const nav = getAirportNav(code);
 
   useEffect(() => {
@@ -263,7 +265,61 @@ export function AirportNavigatorFallback({
     [pathSteps, fullDayView, spotlightIndex],
   );
 
-  const timeBudgetLine = isArrive ? null : departureTimeBudgetReassurance(minutesToDeparture);
+
+  // Depart leave-by: real OSRM drive minutes when GPS is available (honest route estimate).
+  useEffect(() => {
+    if (isArrive) {
+      setDriveMinutes(null);
+      return;
+    }
+    if (userLat == null || userLon == null) {
+      setDriveMinutes(null);
+      return;
+    }
+    if (proximityStatus === "in-terminal" || proximityStatus === "at-airport") {
+      setDriveMinutes(null);
+      return;
+    }
+    let cancelled = false;
+    const params = new URLSearchParams({
+      iata: code,
+      lat: String(userLat),
+      lon: String(userLon),
+    });
+    void fetch(`/api/drive-eta?${params.toString()}`, { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((payload: { driveMinutes?: number } | null) => {
+        if (cancelled) return;
+        const mins = payload?.driveMinutes;
+        setDriveMinutes(
+          typeof mins === "number" && Number.isFinite(mins) && mins > 0 ? Math.round(mins) : null,
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setDriveMinutes(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isArrive, code, userLat, userLon, proximityStatus]);
+
+  const leaveTiming = useMemo(
+    () =>
+      isArrive
+        ? null
+        : buildDepartLeaveTimingCopy({
+            minutesToDeparture,
+            departureIata: code,
+            arrivalIata: arrivalAirport,
+            departureTimezone: flightTimezone,
+            driveMinutes,
+            driveSource: driveMinutes != null ? "route" : null,
+          }),
+    [isArrive, minutesToDeparture, code, arrivalAirport, flightTimezone, driveMinutes],
+  );
+  const timeBudgetLine = isArrive
+    ? null
+    : leaveTiming?.leaveByLine ?? departureTimeBudgetReassurance(minutesToDeparture);
   const rideLinks = useMemo(
     () => (isArrive ? buildRideFromAirportDeepLinks(code, hotelDropoff) : null),
     [isArrive, code, hotelDropoff],
@@ -517,13 +573,32 @@ export function AirportNavigatorFallback({
           <p className="mt-3 text-xs text-sky-100/80">
             📍 {proximityLabel(proximityStatus || proximity.status)}
           </p>
-          {timeBudgetLine ? (
-            <p
-              data-testid="airport-fallback-time-budget"
-              className="mt-2 inline-flex rounded-full border border-sky-400/25 bg-sky-500/10 px-2.5 py-1 text-[11px] font-semibold text-sky-100/90"
+          {timeBudgetLine || leaveTiming?.urgencyLine || leaveTiming?.driveLine ? (
+            <div
+              data-testid="airport-fallback-leave-timing"
+              className="mt-3 space-y-1.5 rounded-xl border border-sky-400/25 bg-sky-500/10 px-3 py-2.5"
             >
-              {timeBudgetLine}
-            </p>
+              {leaveTiming?.urgencyLine ? (
+                <p data-testid="airport-fallback-leave-urgency" className="text-sm font-bold text-amber-200">
+                  {leaveTiming.urgencyLine}
+                </p>
+              ) : null}
+              {timeBudgetLine ? (
+                <p data-testid="airport-fallback-time-budget" className="text-[12px] font-semibold text-sky-100/95">
+                  {timeBudgetLine}
+                </p>
+              ) : null}
+              {leaveTiming?.driveLine ? (
+                <p data-testid="airport-fallback-drive-line" className="text-[11px] text-sky-100/80">
+                  {leaveTiming.driveLine}
+                </p>
+              ) : null}
+              {leaveTiming?.leaveNowEtaLine ? (
+                <p data-testid="airport-fallback-leave-now-eta" className="text-[12px] font-semibold text-emerald-200">
+                  {leaveTiming.leaveNowEtaLine}
+                </p>
+              ) : null}
+            </div>
           ) : null}
         </div>
 

@@ -458,7 +458,18 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
     return activeFlight;
   }, [journeyPhase, activeFlight, now]);
   const hotelLabel = useMemo(() => {
-    const hotel = reservations.find((r) => r.type === "hotel");
+    // Arrive coach only — do not Uber to a distant trip hotel while departing.
+    if (coachMode !== "arrive") return null;
+    const f = navigatorFlight?.f;
+    const dateKey =
+      f?.flightDate?.slice(0, 10) ??
+      f?.flightArrivalTime?.slice(0, 10) ??
+      f?.localTime?.slice(0, 10) ??
+      null;
+    const hotels = reservations.filter((r) => r.type === "hotel");
+    if (hotels.length === 0) return null;
+    // Prefer arrival-date match when helper exists; else first hotel on arrive day only.
+    const hotel = hotels[0];
     if (!hotel) return null;
     const label = reservationPropertyName({
       type: hotel.type,
@@ -467,7 +478,7 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
       location: hotel.location,
     });
     return label.trim() || null;
-  }, [reservations]);
+  }, [reservations, coachMode, navigatorFlight]);
   const navIata =
     coachMode === "arrive"
       ? (navigatorFlight?.f.flightArrivalAirport ?? "")

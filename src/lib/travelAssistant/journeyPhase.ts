@@ -102,6 +102,7 @@ function flightDepartureUtcMs(flight: JourneyReservation): number {
 }
 
 function flightArrivalUtcMs(flight: JourneyReservation): number {
+  const depMs = flightDepartureUtcMs(flight);
   if (flight.flightArrivalTime?.trim()) {
     // The arrival-local time must be interpreted in the ARRIVAL airport's timezone —
     // flight.timezone is always the DEPARTURE airport's zone (see emailForwardParser.ts
@@ -109,9 +110,10 @@ function flightArrivalUtcMs(flight: JourneyReservation): number {
     // departure-derived timezone when the arrival airport isn't in our lookup table.
     const arrivalTz = timezoneForIata(flight.flightArrivalAirport ?? "") ?? flight.timezone;
     const ms = toUtcMs(flight.flightArrivalTime, arrivalTz);
-    if (!Number.isNaN(ms)) return ms;
+    // Impossible clocks (arrival ≤ departure) happen when arrival was parsed in the
+    // wrong zone or as a bare time — never treat that as "already landed."
+    if (!Number.isNaN(ms) && (Number.isNaN(depMs) || ms > depMs)) return ms;
   }
-  const depMs = flightDepartureUtcMs(flight);
   if (!Number.isNaN(depMs)) return depMs + 4 * 60 * MS_PER_MIN;
   return Number.NaN;
 }
@@ -258,6 +260,11 @@ export function computeJourneyPhase(args: {
     const depMs = flightDepartureUtcMs(flight);
     const arrMs = flightArrivalUtcMs(flight);
     if (Number.isNaN(depMs) || Number.isNaN(arrMs)) continue;
+
+    // G49: never airborne / just-landed before the departure clock — a mangled
+    // arrival timestamp must not claim "Landed 339m ago" while you're still
+    // leaving for ONT (or any origin).
+    if (nowMs < depMs) continue;
 
     if (nowMs >= depMs && nowMs < arrMs) {
       const minsLeft = Math.max(0, Math.round((arrMs - nowMs) / MS_PER_MIN));
