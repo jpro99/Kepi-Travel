@@ -5,6 +5,10 @@
 
 Last updated: 2026-09-01 (M62 SEA live map — Kepi primary, not flysea handoff)
 
+## Fix 2026-09-01 — False check-in at SEA after landing (Jeff)
+
+Deplaning / short connection at SEA showed depart **check-in** coach because `journeyPhase` was `airborne` or `pre-trip` for the outbound Rome leg while GPS was already on campus. **G63:** `resolveCampusCoachMode` — inbound-at-hub wins until ~60m before outbound; `AirportMode` + Live Map `useActiveFlight` use it.
+
 ## Fix 2026-09-01 — SEA live map felt like dead picture + flysea handoff (Jeff)
 
 At SEA on campus, the map showed a static floor plan and pushed the gold **flysea** CTA as primary — felt like switching to another app with no walk-through. **M62:** when `at-airport`/`in-terminal` with a bundled layout, Kepi map stays primary (`shouldKepiMapBePrimary`); flysea demoted to secondary reference. Bundled layout hydrates from `getAirportLayout` immediately; schematic stays tappable until MapLibre ready; dashed approx journey line on schematic when `routeGrade` is schematic.

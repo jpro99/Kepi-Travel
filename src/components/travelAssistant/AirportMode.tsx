@@ -29,7 +29,7 @@ import {
   resolveHubConnection,
 } from "@/lib/airportNav/connectionClock";
 import {
-  deriveAirportDayCoachMode,
+  resolveCampusCoachMode,
 } from "@/lib/travelAssistant/airportDayCoach";
 import { computeJourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
@@ -459,14 +459,32 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
     () => computeJourneyPhase({ reservations, nowMs: now }),
     [reservations, now],
   );
-  const coachMode = deriveAirportDayCoachMode(journeyPhase);
+  // Airport proximity — unbiased geofence when physically on a campus.
+  const proximity = useMemo(
+    () =>
+      physicalIata
+        ? getAirportProximity(userLat, userLon, undefined)
+        : getAirportProximity(userLat, userLon, activeFlight?.f.flightDepartureAirport),
+    [userLat, userLon, physicalIata, activeFlight],
+  );
+  const coachMode = resolveCampusCoachMode({
+    journeyPhase,
+    physicalIata: physicalIata ?? undefined,
+    proximityStatus: proximity.status,
+    reservations,
+    nowMs: now,
+  });
   const navigatorFlight = useMemo(() => {
     if (journeyPhase.kind === "just-landed") {
       const f = journeyPhase.flight as FlightReservation;
       return { f, utcMs: now };
     }
+    if (coachMode === "arrive" && physicalIata) {
+      const inbound = selectFlightForAirportCampus(reservations, physicalIata, now, "arrive");
+      if (inbound) return inbound;
+    }
     return activeFlight;
-  }, [journeyPhase, activeFlight, now]);
+  }, [journeyPhase, coachMode, physicalIata, reservations, now, activeFlight]);
   const hotelLabel = useMemo(() => {
     // Arrive coach only — do not Uber to a distant trip hotel while departing.
     if (coachMode !== "arrive") return null;
@@ -498,11 +516,16 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
   /** Map + gate props must follow physical campus (SEA), not earliest trip leg (ONT). */
   const navigatorMapFlight = useMemo(() => {
     if (physicalIata) {
-      const campus = selectFlightForAirportCampus(reservations, physicalIata, now);
+      const campus = selectFlightForAirportCampus(
+        reservations,
+        physicalIata,
+        now,
+        coachMode === "arrive" ? "arrive" : undefined,
+      );
       if (campus) return campus;
     }
     return activeFlight;
-  }, [physicalIata, reservations, now, activeFlight]);
+  }, [physicalIata, coachMode, reservations, now, activeFlight]);
 
   const [maptilerKey, setMaptilerKey] = useState("");
   useEffect(() => {
@@ -513,15 +536,6 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
       })
       .catch(() => null);
   }, []);
-
-  // Airport proximity — unbiased geofence when physically on a campus.
-  const proximity = useMemo(
-    () =>
-      physicalIata
-        ? getAirportProximity(userLat, userLon, undefined)
-        : getAirportProximity(userLat, userLon, navIata || activeFlight?.f.flightDepartureAirport),
-    [userLat, userLon, physicalIata, navIata, activeFlight],
-  );
 
   // Resolve status for this flight's airline (matched, not just first entry)
   const { program, tier, lounges, cardLoungeEligibility, checkInTip, cardBenefitLines } = useMemo(() => {
@@ -881,7 +895,7 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
         </div>
 
         {/* Check-in guidance */}
-        {checkInTip && (phase === "check-in" || phase === "leave-now" || phase === "leave-soon" || proximity.status === "at-airport") && (
+        {checkInTip && coachMode !== "arrive" && (phase === "check-in" || phase === "leave-now" || phase === "leave-soon" || proximity.status === "at-airport") && (
           <div className="mt-3 rounded-2xl border border-emerald-300/40 bg-emerald-500/20 p-3 flex items-start gap-2">
             <span className="text-lg shrink-0">🎫</span>
             <p className="text-white text-sm font-medium leading-snug">{checkInTip}</p>
@@ -932,14 +946,18 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
               {proximity.status === "in-terminal"
                 ? `You're airside at ${proximity.airport?.name ?? "the airport"}`
                 : proximity.status === "at-airport"
-                ? `You're at ${proximity.airport?.name ?? "the airport"}`
+                ? coachMode === "arrive"
+                  ? `You're at ${proximity.airport?.name ?? "the airport"} — follow arrival signs`
+                  : `You're at ${proximity.airport?.name ?? "the airport"}`
                 : `${proximity.airport ? `${(proximity.distanceKm ?? 0).toFixed(1)} km from ${proximity.airport.name}` : "Location tracked"}`}
             </p>
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
               {proximity.status === "in-terminal"
                 ? "GPS shows you inside the terminal"
                 : proximity.status === "at-airport"
-                ? "GPS shows you at the airport — head to security"
+                ? coachMode === "arrive"
+                  ? "Deplaning or connecting — not check-in"
+                  : "GPS shows you at the airport — head to security"
                 : "Not yet at the airport"}
             </p>
           </div>

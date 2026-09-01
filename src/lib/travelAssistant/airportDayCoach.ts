@@ -18,7 +18,9 @@ import { resolveArrivalTransportPresentation } from "@/lib/travelAssistant/arriv
 import type { AirportLocationPhase } from "@/lib/travelAssistant/airportLocationPhase";
 import { departPhaseHomeTitle } from "@/lib/travelAssistant/airportLocationPhase";
 import type { HomeNextAction } from "@/lib/travelAssistant/homeNextAction";
-import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
+import type { JourneyPhase, JourneyReservation } from "@/lib/travelAssistant/journeyPhase";
+import { flightArrivalUtcMs } from "@/lib/travelAssistant/journeyPhase";
+import { flightDepartureUtcMs } from "@/lib/travelAssistant/flightSort";
 import type {
   ConnectionPlaybook,
   ConnectionPlaybookStep,
@@ -40,6 +42,74 @@ export function deriveAirportDayCoachMode(
   phase: Pick<JourneyPhase, "kind"> | null | undefined,
 ): AirportDayCoachMode {
   return phase?.kind === "just-landed" ? "arrive" : "depart";
+}
+
+/** Taxi / deplaning window before scheduled arrival — still arrival coach, not outbound check-in. */
+const ON_RUNWAY_BEFORE_ARRIVAL_MS = 45 * 60_000;
+/** Stay in arrival/connection coach until this close to the outbound departure. */
+const CONNECTION_DEPART_BUFFER_MS = 60 * 60_000;
+
+/**
+ * G63 — Physical campus + inbound leg wins over outbound check-in coach.
+ * A traveler deplaning at SEA (or on a short connection) must not see depart
+ * check-in copy while journeyPhase is still airborne or pre-trip for the outbound.
+ */
+export function resolveCampusCoachMode(input: {
+  journeyPhase: JourneyPhase;
+  physicalIata?: string | null;
+  proximityStatus?: string;
+  reservations?: readonly JourneyReservation[];
+  nowMs?: number;
+}): AirportDayCoachMode {
+  const base = deriveAirportDayCoachMode(input.journeyPhase);
+  if (base === "arrive") return "arrive";
+
+  const code = input.physicalIata?.trim().toUpperCase();
+  if (!code) return base;
+
+  if (input.journeyPhase.kind === "airborne") {
+    const landing = input.journeyPhase.onFlight.flightArrivalAirport?.trim().toUpperCase();
+    if (landing === code) return "arrive";
+  }
+
+  const onCampus =
+    input.proximityStatus === "at-airport"
+    || input.proximityStatus === "in-terminal"
+    || Boolean(input.physicalIata?.trim());
+  if (!onCampus || !input.reservations?.length) return base;
+
+  const nowMs = input.nowMs ?? Date.now();
+  const flights = input.reservations.filter((r) => r.type === "flight");
+
+  const inbounds = flights
+    .filter((f) => f.flightArrivalAirport?.trim().toUpperCase() === code)
+    .map((f) => ({
+      f,
+      arrMs: flightArrivalUtcMs(f),
+      depMs: flightDepartureUtcMs(f),
+    }))
+    .filter(({ arrMs }) => !Number.isNaN(arrMs))
+    .sort((a, b) => a.arrMs - b.arrMs);
+
+  const outbounds = flights
+    .filter((f) => f.flightDepartureAirport?.trim().toUpperCase() === code)
+    .map((f) => ({ f, depMs: flightDepartureUtcMs(f) }))
+    .filter(({ depMs }) => !Number.isNaN(depMs))
+    .sort((a, b) => a.depMs - b.depMs);
+
+  const recentInbound = [...inbounds].reverse().find(({ arrMs, depMs }) => {
+    if (Number.isNaN(depMs) || nowMs < depMs) return false;
+    return nowMs >= arrMs - ON_RUNWAY_BEFORE_ARRIVAL_MS;
+  });
+
+  if (!recentInbound) return base;
+
+  const nextOutbound =
+    outbounds.find(({ depMs }) => depMs >= nowMs - 30 * 60_000) ?? null;
+  if (!nextOutbound) return "arrive";
+  if (nowMs < nextOutbound.depMs - CONNECTION_DEPART_BUFFER_MS) return "arrive";
+
+  return base;
 }
 
 /** True when dep/arr countries differ; unknown codes -> treat as international (safer checklist). */

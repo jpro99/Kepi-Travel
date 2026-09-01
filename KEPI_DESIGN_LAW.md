@@ -589,7 +589,12 @@ Live airport maps keep the **real OSM basemap** (runways, terminal hull) with **
 **M62 — Live on campus: Kepi map is primary; flysea is reference only**
 When the traveler is physically at an airport (`proximityStatus` is `at-airport` or `in-terminal`) and Kepi has a bundled layout for that IATA, **stay in-app** — `OfficialAirportMapLink` and `AirportNavigatorFallback` must not present the airport's strong official map (SEA Atrius / flysea) as the gold primary CTA that replaces Kepi. G48 still applies in plan/preview before arrival. The bundled layout must hydrate synchronously from `getAirportLayout` on mount (never blank waiting on API). While MapLibre boots, the SVG schematic stays **tappable** (`interactive` until `mapReady`) and shows a dashed approximate journey line when `routeGrade` is schematic.
 
-**Test:** `src/lib/airportNav/officialWayfinding.test.ts`
+**Test:** `src/lib/travelAssistant/airportDayCoach.test.ts`
+
+**G63 — Arrival campus beats outbound check-in coach**
+When GPS places the traveler on an airport campus and an inbound leg has already departed for that hub (including airborne final approach and short connections), Kepi must use **arrival** coach — deplane, bags, connection — not depart check-in copy for the outbound leg. Outbound depart coach only takes over inside ~60 minutes of that departure. `resolveCampusCoachMode` implements this; `AirportMode` and `useActiveFlight` must use it instead of `deriveAirportDayCoachMode` alone.
+
+**Test:** `src/lib/travelAssistant/airportDayCoach.test.ts`
 
 ---
 
@@ -1129,6 +1134,7 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | M41 | `src/lib/airportNav/airportCurationQueue.test.ts` |
 | M43 | `src/lib/airportNav/poiMapWalkPolicy.test.ts`, `src/lib/airportNav/layouts/seaTicketingHall.test.ts`, `src/lib/airportNav/paintWalkMapLeaderOverlay.ts` |
 | M62 | `src/lib/airportNav/officialWayfinding.test.ts` |
+| G63 | `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | M42 | `src/lib/airportNav/ontFirstMile.test.ts`, `src/lib/airportNav/tripJourney.test.ts` |
 
 New laws must add a row here when a test exists.

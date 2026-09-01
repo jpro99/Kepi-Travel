@@ -25,6 +25,7 @@ import { evaluateLoungeEligibility, listLoungesForAirport } from "@/lib/airportN
 import { matchAirlineStatusForFlight } from "@/lib/travelAssistant/syncTravelBenefits";
 import {
   deriveAirportDayCoachMode,
+  resolveCampusCoachMode,
   type AirportDayCoachMode,
 } from "@/lib/travelAssistant/airportDayCoach";
 import { timezoneForIata } from "@/lib/airports/lookup";
@@ -348,20 +349,40 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
     [reservations, nowMs],
   );
   const coachMode = deriveAirportDayCoachMode(journeyPhase);
+  const navigatorCoachMode = useMemo(() => {
+    const pinIata = physicalAirportIata ?? preferredIata;
+    return resolveCampusCoachMode({
+      journeyPhase,
+      physicalIata: physicalAirportIata ?? pinIata,
+      reservations,
+      nowMs,
+    });
+  }, [journeyPhase, physicalAirportIata, preferredIata, reservations, nowMs]);
   const pinnedFlight = useMemo(
     () => {
       const pinIata = physicalAirportIata ?? preferredIata;
       if (!pinIata) return null;
       // Physical GPS airport: pick the best leg at this field — ignore URL mode
       // that might still say ONT from a stale deep link.
-      const mode = physicalAirportIata ? null : preferredMode;
+      const mode = physicalAirportIata
+        ? (navigatorCoachMode === "arrive" ? "arrive" : null)
+        : preferredMode;
       return selectFlightForAirportCampus(reservations, pinIata, nowMs, mode);
     },
-    [physicalAirportIata, preferredIata, preferredMode, reservations, nowMs],
+    [physicalAirportIata, preferredIata, preferredMode, navigatorCoachMode, reservations, nowMs],
   );
 
   const navigatorFlight = useMemo(() => {
     if (physicalAirportIata) {
+      if (navigatorCoachMode === "arrive") {
+        const inbound = selectFlightForAirportCampus(
+          reservations,
+          physicalAirportIata,
+          nowMs,
+          "arrive",
+        );
+        if (inbound) return inbound;
+      }
       if (pinnedFlight) return pinnedFlight;
       const touchesField = (f: FlightReservation) =>
         flightTouchesAirportIata(f, physicalAirportIata);
@@ -384,26 +405,7 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
     }
     if (pinnedFlight) return pinnedFlight;
     return activeFlight ?? previewFlight;
-  }, [physicalAirportIata, journeyPhase, pinnedFlight, activeFlight, previewFlight, reservations, nowMs]);
-
-  const navigatorCoachMode = useMemo(() => {
-    const pinIata = physicalAirportIata ?? preferredIata;
-    if (pinnedFlight && pinIata) {
-      const resolved = resolveCoachModeForPinnedAirport(
-        pinnedFlight.f,
-        pinIata,
-        physicalAirportIata ? null : preferredMode,
-        coachMode,
-      );
-      if (resolved === "arrive" || resolved === "depart") return resolved;
-      const code = pinIata.trim().toUpperCase();
-      const dep = pinnedFlight.f.flightDepartureAirport?.trim().toUpperCase() ?? "";
-      const arr = pinnedFlight.f.flightArrivalAirport?.trim().toUpperCase() ?? "";
-      if (arr === code && dep !== code) return "arrive";
-      return coachMode;
-    }
-    return coachMode;
-  }, [pinnedFlight, physicalAirportIata, preferredIata, preferredMode, coachMode]);
+  }, [physicalAirportIata, navigatorCoachMode, journeyPhase, pinnedFlight, activeFlight, previewFlight, reservations, nowMs]);
 
   const hotelLabel = useMemo(() => {
     // Arrive coach only — never feed the first trip hotel (e.g. Polignano) into

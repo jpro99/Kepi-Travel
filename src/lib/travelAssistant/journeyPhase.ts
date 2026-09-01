@@ -101,7 +101,7 @@ function flightDepartureUtcMs(flight: JourneyReservation): number {
   return sharedFlightDepartureUtcMs(flight);
 }
 
-function flightArrivalUtcMs(flight: JourneyReservation): number {
+export function flightArrivalUtcMs(flight: JourneyReservation): number {
   const depMs = flightDepartureUtcMs(flight);
   if (flight.flightArrivalTime?.trim()) {
     // The arrival-local time must be interpreted in the ARRIVAL airport's timezone —

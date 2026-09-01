@@ -7,6 +7,7 @@ import {
   buildDepartDayCoachPath,
   departureTimeBudgetReassurance,
   deriveAirportDayCoachMode,
+  resolveCampusCoachMode,
   formatLiveBaggageCarouselNote,
   isInternationalArrivalFlight,
   resolveArrivalRideStep,
@@ -80,9 +81,86 @@ test("buildAirportHomeSpotlight shows ride to booked hotel on arrival", () => {
 
 test("deriveAirportDayCoachMode uses just-landed only", () => {
   assert.equal(deriveAirportDayCoachMode({ kind: "just-landed" }), "arrive");
-  assert.equal(deriveAirportDayCoachMode({ kind: "airborne" }), "depart");
   assert.equal(deriveAirportDayCoachMode({ kind: "pre-trip" }), "depart");
-  assert.equal(deriveAirportDayCoachMode(null), "depart");
+  assert.equal(deriveAirportDayCoachMode({ kind: "airborne" }), "depart");
+});
+
+test("G63 resolveCampusCoachMode: airborne landing at SEA is arrive not outbound check-in", () => {
+  const nowMs = Date.parse("2026-09-01T18:30:00Z");
+  const reservations = [
+    {
+      id: "in",
+      type: "flight",
+      localTime: "2026-09-01 10:00",
+      timezone: "America/Los_Angeles",
+      flightDepartureTime: "2026-09-01 10:00",
+      flightArrivalTime: "2026-09-01 12:30",
+      flightDepartureAirport: "ONT",
+      flightArrivalAirport: "SEA",
+      flightNumber: "AS654",
+    },
+    {
+      id: "out",
+      type: "flight",
+      localTime: "2026-09-01 16:00",
+      timezone: "America/Los_Angeles",
+      flightDepartureTime: "2026-09-01 16:00",
+      flightArrivalTime: "2026-09-02 10:00",
+      flightDepartureAirport: "SEA",
+      flightArrivalAirport: "FCO",
+      flightNumber: "AS180",
+    },
+  ];
+  assert.equal(
+    resolveCampusCoachMode({
+      journeyPhase: {
+        kind: "airborne",
+        onFlight: reservations[0],
+        landingAt: "SEA",
+        landingIn: "12 min",
+      },
+      physicalIata: "SEA",
+      reservations,
+      nowMs,
+    }),
+    "arrive",
+  );
+});
+
+test("G63 resolveCampusCoachMode: short SEA connection stays arrive until 60m before outbound", () => {
+  const nowMs = Date.parse("2026-09-01T20:00:00Z");
+  const reservations = [
+    {
+      id: "in",
+      type: "flight",
+      localTime: "2026-09-01 10:00",
+      timezone: "America/Los_Angeles",
+      flightDepartureTime: "2026-09-01 10:00",
+      flightArrivalTime: "2026-09-01 12:30",
+      flightDepartureAirport: "ONT",
+      flightArrivalAirport: "SEA",
+    },
+    {
+      id: "out",
+      type: "flight",
+      localTime: "2026-09-01 16:00",
+      timezone: "America/Los_Angeles",
+      flightDepartureTime: "2026-09-01 16:00",
+      flightArrivalTime: "2026-09-02 10:00",
+      flightDepartureAirport: "SEA",
+      flightArrivalAirport: "FCO",
+    },
+  ];
+  assert.equal(
+    resolveCampusCoachMode({
+      journeyPhase: { kind: "pre-trip", daysUntil: 0, nextFlight: reservations[1] },
+      physicalIata: "SEA",
+      proximityStatus: "at-airport",
+      reservations,
+      nowMs,
+    }),
+    "arrive",
+  );
 });
 
 test("M39: buildDepartCheckInCoachStep uses Alaska Terminal 2 at ONT", () => {
