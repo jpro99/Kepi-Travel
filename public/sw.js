@@ -1,4 +1,5 @@
-const CACHE_VERSION = "kepi-pwa-v39";
+// I61: bump on every SW behavior change so poisoned caches (cached 404 chunks) drop.
+const CACHE_VERSION = "kepi-pwa-v40";
 const APP_SHELL_CACHE = `${CACHE_VERSION}-app-shell`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
@@ -12,13 +13,24 @@ function isApiRequest(url) {
   return url.pathname.startsWith("/api/");
 }
 
+function isNextStaticAsset(url) {
+  return url.pathname.startsWith("/_next/static/");
+}
+
 function isStaticAsset(url) {
   return (
-    url.pathname.startsWith("/_next/static/") ||
+    isNextStaticAsset(url) ||
     url.pathname.startsWith("/icons/") ||
     url.pathname === "/manifest.json" ||
     /\.(?:css|js|png|jpg|jpeg|gif|svg|webp|avif|ico|woff|woff2|ttf)$/u.test(url.pathname)
   );
+}
+
+/** Never poison the cache with 404/5xx — a cached failed chunk blanks the app after deploy. */
+function cacheIfOk(cache, request, response) {
+  if (response && response.ok) {
+    cache.put(request, response.clone());
+  }
 }
 
 self.addEventListener("install", (event) => {
@@ -57,13 +69,14 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("message", (event) => {
   if (event.data === "CLEAR_ALL_CACHES") {
     event.waitUntil(
-      caches.keys().then((keys) =>
-        Promise.all(keys.map((k) => caches.delete(k)))
-      ).then(() => {
-        self.clients.matchAll().then((clients) =>
-          clients.forEach((c) => c.postMessage("CACHES_CLEARED"))
-        );
-      })
+      caches
+        .keys()
+        .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+        .then(() => {
+          self.clients.matchAll().then((clients) =>
+            clients.forEach((c) => c.postMessage("CACHES_CLEARED")),
+          );
+        }),
     );
   }
   if (event.data === "SKIP_WAITING") {
@@ -98,7 +111,7 @@ self.addEventListener("fetch", (event) => {
         const cache = await caches.open(API_CACHE);
         try {
           const networkResponse = await fetch(request);
-          cache.put(request, networkResponse.clone());
+          cacheIfOk(cache, request, networkResponse);
           return networkResponse;
         } catch {
           const cached = await cache.match(request);
@@ -145,9 +158,17 @@ self.addEventListener("fetch", (event) => {
         const cache = await caches.open(STATIC_CACHE);
         try {
           const response = await fetch(request);
-          cache.put(request, response.clone());
+          // I61: never cache failed /_next/static chunk responses — a stored 404
+          // after deploy paints a blank screen until the PWA cache is cleared.
+          cacheIfOk(cache, request, response);
           return response;
         } catch {
+          // Hashed Next assets are immutable; only fall back to a prior *ok* cache.
+          if (isNextStaticAsset(url)) {
+            const cached = await cache.match(request);
+            if (cached && cached.ok) return cached;
+            return Response.error();
+          }
           const cached = await cache.match(request);
           if (cached) {
             return cached;

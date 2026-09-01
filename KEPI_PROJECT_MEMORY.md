@@ -969,3 +969,5 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 | 2026-07-06 | **Weekly Audit:** skill + Week 1 ingestion report; Week 3 includes points/card/lounge; rotation in conductor.md |
 | 2026-06-15 | Screenshot triage rule + Polignano offshore pin fix (`isLikelyOffshorePin`) |
 | 2026-06-15 | Created memory file; documented Duffel emails sent, LiteAPI key set, Travelpayouts Drive skipped, domain bot skills |
+
+- **2026-09-01 — Blank screen / hang on open (I61):** Root cause was PWA SW caching failed `/_next/static` responses after deploy + double `controllerchange` reload (page + DeployRefresh). Fixed: `cacheIfOk` only stores OK responses, CACHE_VERSION v40, DeployRefresh sole reload owner, throttle update checks. After ship: hard-refresh once or Settings → clear cache if still blank.
