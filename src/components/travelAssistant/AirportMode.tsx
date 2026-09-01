@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getAirportProximity, type UserAirportStatus } from "@/lib/travelAssistant/airportGeo";
+import { getAirportProximity, resolvePhysicalAirportIata, type UserAirportStatus } from "@/lib/travelAssistant/airportGeo";
 import {
   resolveAirportLocationPhase,
   type AirportLocationPhase,
@@ -22,7 +22,7 @@ import { AirportNavigatorMap } from "@/components/travelAssistant/AirportNavigat
 // Type-only import — fully erased at compile time, so the route's "server-only"
 // guard never runs in the client bundle. Single source of truth for the schema.
 import type { TravelProfile } from "@/app/api/travel-profile/route";
-import { selectActiveFlight, type FlightReservation } from "@/lib/travelAssistant/useActiveFlight";
+import { selectActiveFlight, selectFlightForAirportIata, type FlightReservation } from "@/lib/travelAssistant/useActiveFlight";
 import { flightDepartureUtcMs } from "@/lib/travelAssistant/flightSort";
 import {
   isHubConnectionActive,
@@ -411,9 +411,9 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
 
-  // Tick every second
+  // Phase refresh — 30s (1s was freezing airport mode on device).
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    const id = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(id);
   }, []);
 
@@ -443,8 +443,18 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
     return () => { if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current); };
   }, []);
 
-  // Find active flight — shared selector (single source of truth with Map page)
-  const activeFlight = useMemo(() => selectActiveFlight(reservations, now), [reservations, now]);
+  // Find active flight — physical airport wins over a different-airport preview (ONT at SEA).
+  const physicalIata = useMemo(
+    () => resolvePhysicalAirportIata(userLat, userLon),
+    [userLat, userLon],
+  );
+  const activeFlight = useMemo(() => {
+    if (physicalIata) {
+      const atField = selectFlightForAirportIata(reservations, physicalIata, now);
+      if (atField) return atField;
+    }
+    return selectActiveFlight(reservations, now);
+  }, [reservations, now, physicalIata]);
   const journeyPhase = useMemo(
     () => computeJourneyPhase({ reservations, nowMs: now }),
     [reservations, now],
@@ -480,14 +490,18 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
     return label.trim() || null;
   }, [reservations, coachMode, navigatorFlight]);
   const navIata =
-    coachMode === "arrive"
+    physicalIata ??
+    (coachMode === "arrive"
       ? (navigatorFlight?.f.flightArrivalAirport ?? "")
-      : (navigatorFlight?.f.flightDepartureAirport ?? "");
+      : (activeFlight?.f.flightDepartureAirport ?? ""));
 
-  // Airport proximity
-  const proximity = useMemo(() =>
-    getAirportProximity(userLat, userLon, navIata || activeFlight?.f.flightDepartureAirport),
-    [userLat, userLon, navIata, activeFlight]
+  // Airport proximity — unbiased geofence when physically on a campus.
+  const proximity = useMemo(
+    () =>
+      physicalIata
+        ? getAirportProximity(userLat, userLon, undefined)
+        : getAirportProximity(userLat, userLon, navIata || activeFlight?.f.flightDepartureAirport),
+    [userLat, userLon, physicalIata, navIata, activeFlight],
   );
 
   // Resolve status for this flight's airline (matched, not just first entry)
@@ -721,7 +735,9 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
       body: JSON.stringify(updated),
     }).catch(() => null); // fail-safe: local state already updated
   };
-  const showNavigatorMap = proximity.status !== "away" && Boolean(f.flightDepartureAirport);
+  const showNavigatorMap = physicalIata
+    ? Boolean(navIata.trim())
+    : proximity.status !== "away" && Boolean(f.flightDepartureAirport);
 
   return (
     <div className="space-y-3">

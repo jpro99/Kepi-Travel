@@ -5,6 +5,7 @@ import {
   getAirportByIata,
   getAirportProximity,
   resolveLiveMapAirportIata,
+  resolveOpenAirportIata,
   resolvePhysicalAirportIata,
 } from "@/lib/travelAssistant/airportGeo";
 
@@ -92,4 +93,24 @@ test("resolveLiveMapAirportIata allows URL preview only when GPS confirms away",
   assert.equal(downtown.iata, "ONT");
   assert.equal(downtown.physical, false);
   assert.equal(downtown.waitingForGps, false);
+});
+
+test("resolveOpenAirportIata waits for GPS before trip preview", () => {
+  const pending = resolveOpenAirportIata({
+    userLat: null,
+    userLon: null,
+    tripFlights: [{ type: "flight", flightDepartureAirport: "ONT", localTime: "2026-09-15T10:00" }],
+  });
+  assert.equal(pending.iata, null);
+  assert.equal(pending.waitingForGps, true);
+});
+
+test("resolveOpenAirportIata uses SEA on campus not ONT preview", () => {
+  const atSea = resolveOpenAirportIata({
+    userLat: SEA.lat,
+    userLon: SEA.lon,
+    tripFlights: [{ type: "flight", flightDepartureAirport: "ONT", localTime: "2026-09-15T10:00" }],
+  });
+  assert.equal(atSea.iata, "SEA");
+  assert.equal(atSea.physical, true);
 });

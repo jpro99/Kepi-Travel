@@ -85,3 +85,52 @@ export function nearestUpcomingFlightDepartureUtcMs(
   }
   return nearest;
 }
+
+type PollableFlight = {
+  type?: string;
+  id?: string;
+  localTime?: string;
+  flightDepartureTime?: string;
+  flightDepartureAirport?: string;
+  flightArrivalAirport?: string;
+};
+
+/** Poll one flight — at the physical airport first, else chronologically next. */
+export function resolveFlightForStatusPoll<T extends PollableFlight>(
+  flights: ReadonlyArray<T>,
+  userLat: number | null,
+  userLon: number | null,
+  nowMs = Date.now(),
+  resolvePhysicalIata: (lat: number | null, lon: number | null) => string | null,
+): T | null {
+  const upcoming = flights.filter((r) => {
+    if ((r.type ?? "flight") !== "flight") return false;
+    const local = (r.flightDepartureTime ?? r.localTime ?? "").trim();
+    if (!local) return false;
+    const depMs = Date.parse(local.replace("T", " ").slice(0, 16));
+    if (Number.isNaN(depMs)) return false;
+    return shouldPollFlightStatus(depMs, nowMs);
+  });
+  if (!upcoming.length) return null;
+
+  const physical = resolvePhysicalIata(userLat, userLon);
+  if (physical) {
+    const atField =
+      upcoming.find(
+        (f) =>
+          f.flightDepartureAirport?.trim().toUpperCase() === physical ||
+          f.flightArrivalAirport?.trim().toUpperCase() === physical,
+      ) ?? null;
+    if (atField) return atField;
+  }
+
+  const nearestDep = nearestUpcomingFlightDepartureUtcMs(upcoming, nowMs);
+  if (nearestDep === null) return upcoming[0] ?? null;
+  return (
+    upcoming.find((r) => {
+      const local = (r.flightDepartureTime ?? r.localTime ?? "").trim();
+      const depMs = Date.parse(local.replace("T", " ").slice(0, 16));
+      return depMs === nearestDep;
+    }) ?? upcoming[0] ?? null
+  );
+}

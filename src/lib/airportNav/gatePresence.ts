@@ -66,6 +66,21 @@ export function gateChangeBanner(
 }
 
 /**
+ * Prefer booked gate; accept live board gate only when non-empty (never flicker to null).
+ */
+export function resolveDisplayGateCode(input: {
+  bookedGate: string | null | undefined;
+  liveGate: string | null | undefined;
+  lastStableLiveGate: string | null;
+}): { gate: string | null; stableLiveGate: string | null } {
+  const booked = input.bookedGate?.trim().toUpperCase() || null;
+  const live = input.liveGate?.trim().toUpperCase() || null;
+  const stableLive = live ?? input.lastStableLiveGate;
+  if (stableLive) return { gate: stableLive, stableLiveGate: stableLive };
+  return { gate: booked, stableLiveGate: input.lastStableLiveGate };
+}
+
+/**
  * Departures: keep walk-to-gate guidance on until the traveler reaches the gate.
  * Arrival first-mile (Leonardo rail, etc.) stays map-first — no auto gate walk.
  */

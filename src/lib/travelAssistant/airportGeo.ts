@@ -4,6 +4,7 @@
  * radiusKm is the rough radius of the airport boundary.
  * "security" radius is the inner zone (past check-in, inside terminal).
  */
+import { findPlannableAirportIata } from "@/lib/travelAssistant/mapTabLead";
 export interface AirportGeo {
   iata: string;
   name: string;
@@ -208,5 +209,36 @@ export function resolveLiveMapAirportIata(input: {
     return { iata: proximity.airport?.iata ?? null, waitingForGps: false, physical: true };
   }
   const plan = input.urlIata?.trim().toUpperCase() || input.flightIata?.trim().toUpperCase() || null;
+  return { iata: plan, waitingForGps: false, physical: false };
+}
+
+type PlannableFlight = {
+  type?: string;
+  flightDepartureAirport?: string;
+  flightArrivalAirport?: string;
+  flightDate?: string;
+  flightDepartureTime?: string;
+  localTime?: string;
+};
+
+/**
+ * Open-map / airport-mode IATA — physical campus always wins over trip preview (ONT).
+ * Returns null while GPS is still pending (never guess ONT from the trip).
+ */
+export function resolveOpenAirportIata(input: {
+  userLat: number | null;
+  userLon: number | null;
+  tripFlights: PlannableFlight[];
+  nowMs?: number;
+}): { iata: string | null; waitingForGps: boolean; physical: boolean } {
+  const physical = resolvePhysicalAirportIata(input.userLat, input.userLon);
+  if (physical) {
+    return { iata: physical, waitingForGps: false, physical: true };
+  }
+  const hasGps = input.userLat != null && input.userLon != null;
+  if (!hasGps) {
+    return { iata: null, waitingForGps: true, physical: false };
+  }
+  const plan = findPlannableAirportIata(input.tripFlights, input.nowMs);
   return { iata: plan, waitingForGps: false, physical: false };
 }

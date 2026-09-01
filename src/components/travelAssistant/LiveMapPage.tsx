@@ -35,6 +35,7 @@ import { isAppleMobile } from "@/lib/ui/isStandaloneApp";
 import { leaveLiveMap, isLiveMapSessionActive, markLiveMapSessionActive } from "@/lib/travelAssistant/liveMapSession";
 import { hideLiveMapStyleLab, liveMapViewLabel } from "@/lib/travelAssistant/mapTabLead";
 import { ArrowUp, Compass } from "lucide-react";
+import { resolveDisplayGateCode } from "@/lib/airportNav/gatePresence";
 import { MOBILE_TAB_BAR_CLEARANCE } from "@/components/travelAssistant/mobile/mobileShellTypes";
 import { MobileTabBarNav } from "@/components/travelAssistant/mobile/useMobileTabNavigation";
 
@@ -148,6 +149,19 @@ export function LiveMapPage() {
   // GPS for airport geofence — start on mount; never bias to a stale URL IATA.
   useEffect(() => {
     if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setNavLat(pos.coords.latitude);
+        setNavLon(pos.coords.longitude);
+        setNavAccuracyM(Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : null);
+      },
+      () => null,
+      {
+        enableHighAccuracy: true,
+        maximumAge: 60_000,
+        timeout: liveMapGeoOptions().timeout ?? 12_000,
+      },
+    );
     if (navWatchRef.current !== null) {
       navigator.geolocation.clearWatch(navWatchRef.current);
       navWatchRef.current = null;
@@ -794,10 +808,32 @@ export function LiveMapPage() {
   const airportPreviewMode = !atPhysicalAirport && Boolean(mapAirportIata && !airportLiveMode);
 
   const liveFlightStatus = useAtAirportFlightStatusPoll({
-    flight: navFlight?.f ?? null,
+    flight: navFlightMatchesMap ? (navFlight?.f ?? null) : null,
     proximity: navProximity.status === "unknown" ? "away" : navProximity.status,
-    enabled: airportLiveMode && mapView === "airport",
+    enabled: airportLiveMode && mapView === "airport" && navFlightMatchesMap,
   });
+
+  const [stableLiveGate, setStableLiveGate] = useState<string | null>(null);
+  useEffect(() => {
+    const live = liveFlightStatus?.departureGate?.trim().toUpperCase();
+    if (live) setStableLiveGate(live);
+  }, [liveFlightStatus?.departureGate]);
+  useEffect(() => {
+    setStableLiveGate(null);
+  }, [navFlight?.f.id, mapAirportIata]);
+
+  const navigatorGateCode = useMemo(() => {
+    if (!navFlightMatchesMap || !navFlight) return null;
+    const booked =
+      navigatorCoachMode === "arrive"
+        ? (navFlight.f.flightArrivalGate ?? navFlight.f.flightDepartureGate ?? null)
+        : (navFlight.f.flightDepartureGate ?? null);
+    return resolveDisplayGateCode({
+      bookedGate: booked,
+      liveGate: stableLiveGate,
+      lastStableLiveGate: stableLiveGate,
+    }).gate;
+  }, [navFlightMatchesMap, navFlight, navigatorCoachMode, stableLiveGate]);
 
   useEffect(() => {
     if (!preferAirportView || locatingAirport) return;
@@ -1005,6 +1041,17 @@ export function LiveMapPage() {
 
   useEffect(() => () => stopLocalLocationWatch(), [stopLocalLocationWatch]);
 
+  // Family location sharing can arrive before geolocation watch — use it for airport detect.
+  useEffect(() => {
+    if (navLat != null && navLon != null) return;
+    const id = myMemberId ?? myMemberIdRef.current;
+    if (!id) return;
+    const loc = locations[id];
+    if (!loc) return;
+    setNavLat(loc.lat);
+    setNavLon(loc.lon);
+  }, [navLat, navLon, myMemberId, locations]);
+
   /* ── Derived ── */
   const members = group?.members ?? [];
   const liveCount = members.filter(m => locations[m.id] && !isStale(locations[m.id].updatedAt)).length;
@@ -1142,16 +1189,7 @@ export function LiveMapPage() {
               previewMode={airportPreviewMode}
               maptilerKey={maptilerKey}
               iata={mapAirportIata}
-              gateCode={
-                navFlightMatchesMap && navFlight
-                  ? navigatorCoachMode === "arrive"
-                    ? (liveFlightStatus?.departureGate
-                      ?? navFlight.f.flightArrivalGate
-                      ?? navFlight.f.flightDepartureGate
-                      ?? null)
-                    : (liveFlightStatus?.departureGate ?? navFlight.f.flightDepartureGate ?? null)
-                  : null
-              }
+              gateCode={navigatorGateCode}
               airlineName={navFlight?.f.flightAirline ?? navFlight?.f.provider ?? null}
               flightNumber={navFlight?.f.flightNumber ?? null}
               arrivalAirport={navFlight?.f.flightArrivalAirport ?? null}

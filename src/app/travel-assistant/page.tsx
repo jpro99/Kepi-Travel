@@ -40,6 +40,7 @@ import { canonicalFlightDepartureDay, canonicalFlightDepartureLocalTime } from "
 import { flightDepartureUtcMs, selectNextRemainingFlight } from "@/lib/travelAssistant/flightSort";
 import {
   nearestUpcomingFlightDepartureUtcMs,
+  resolveFlightForStatusPoll,
   resolveFlightStatusPollIntervalMs,
   type FlightStatusPollProximity,
 } from "@/lib/travelAssistant/flightStatusCadence";
@@ -255,7 +256,6 @@ import { DesktopTripHomeView } from "@/components/travelAssistant/DesktopTripHom
 import { MobileMapForwardShell } from "@/components/travelAssistant/mobile/MobileMapForwardShell";
 import { computeJourneyPhase, defaultConsumerTabForPhase, type JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 import { markLiveMapSessionActive, buildLiveAirportMapUrl } from "@/lib/travelAssistant/liveMapSession";
-import { findPlannableAirportIata } from "@/lib/travelAssistant/mapTabLead";
 import { TripSearch, type TripSearchSelection } from "@/components/travelAssistant/TripSearch";
 import { TripSwitcher } from "@/components/travelAssistant/TripSwitcher";
 import { TripOrientationCard } from "@/components/travelAssistant/TripOrientationCard";
@@ -306,7 +306,7 @@ import { AdvancedModeToggle } from "@/components/ui/AdvancedModeToggle";
 import { Logo } from "@/components/ui/Logo";
 import { JourneyFlowPanel } from "./components/JourneyFlowPanel";
 import { TravelAssistantTopControls } from "./components/TravelAssistantTopControls";
-import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
+import { getAirportProximity, resolveOpenAirportIata } from "@/lib/travelAssistant/airportGeo";
 import { ConsumerDesktopTabBar } from "@/components/travelAssistant/ConsumerDesktopTabBar";
 import {
   normalizeConsumerTabParam,
@@ -3178,6 +3178,11 @@ export default function TravelAssistantPage() {
 
   const flightStatusPollProximity = useMemo((): FlightStatusPollProximity => {
     if (!activeTripId || !reservations.length) return "away";
+    const gpsProximity = getAirportProximity(guidanceUserLat, guidanceUserLon, undefined);
+    if (gpsProximity.status === "at-airport" || gpsProximity.status === "in-terminal") {
+      return gpsProximity.status;
+    }
+    if (gpsProximity.status === "unknown") return "unknown";
     const nowMs = Date.now();
     const upcomingFlights = reservations.filter((r) => {
       if (r.type !== "flight") return false;
@@ -3199,7 +3204,7 @@ export default function TravelAssistantPage() {
     return status === "unknown" ? "away" : status;
   }, [activeTripId, reservations, guidanceUserLat, guidanceUserLon]);
 
-  // Auto-poll flight status for upcoming flights within 24h (4m at airport, 90s inside 6h, 5m otherwise)
+  // Auto-poll flight status for the one relevant flight (physical airport wins — not every leg).
   useEffect(() => {
     if (!activeTripId || !reservations.length) return;
     const nowMs = Date.now();
@@ -3212,26 +3217,38 @@ export default function TravelAssistantPage() {
       return hoursUntil > -1 && hoursUntil < 24;
     });
     if (!upcomingFlights.length) return;
-    const nearestDep = nearestUpcomingFlightDepartureUtcMs(upcomingFlights, nowMs);
+    const flightToPoll = resolveFlightForStatusPoll(
+      upcomingFlights,
+      guidanceUserLat,
+      guidanceUserLon,
+      nowMs,
+      (lat, lon) => {
+        const p = getAirportProximity(lat, lon, undefined);
+        if (p.status === "at-airport" || p.status === "in-terminal") {
+          return p.airport?.iata ?? null;
+        }
+        return null;
+      },
+    );
+    if (!flightToPoll?.id) return;
+    const nearestDep = flightDepartureUtcMs(flightToPoll);
     const pollIntervalMs = resolveFlightStatusPollIntervalMs(
       nearestDep,
       nowMs,
       flightStatusPollProximity,
     );
     const pollFlight = async () => {
-      for (const flight of upcomingFlights) {
-        try {
-          await handleCheckFlightStatusRef.current(flight.id);
-        } catch {
-          // Fail silently
-        }
+      try {
+        await handleCheckFlightStatusRef.current(flightToPoll.id);
+      } catch {
+        // Fail silently
       }
     };
     void pollFlight();
     const interval = window.setInterval(() => { void pollFlight(); }, pollIntervalMs);
     return () => window.clearInterval(interval);
   // handleCheckFlightStatusRef is a stable ref — intentionally omitted from deps
-  }, [activeTripId, reservations, flightStatusPollProximity]);
+  }, [activeTripId, reservations, flightStatusPollProximity, guidanceUserLat, guidanceUserLon]);
 
   useEffect(() => {
     if (!tripsHydratedRef.current) return;
@@ -10396,11 +10413,16 @@ export default function TravelAssistantPage() {
                 }}
                 onOpenAirportMode={() => {
                   markLiveMapSessionActive();
-                  const iata = findPlannableAirportIata(consumerReservationsSorted);
+                  const open = resolveOpenAirportIata({
+                    userLat: guidanceUserLat,
+                    userLon: guidanceUserLon,
+                    tripFlights: consumerReservationsSorted,
+                  });
+                  if (!open.iata) return;
                   router.push(
                     buildLiveAirportMapUrl({
                       tripId: activeTripId,
-                      iata,
+                      iata: open.iata,
                     }),
                   );
                 }}
@@ -10545,11 +10567,16 @@ export default function TravelAssistantPage() {
                 onOpenMap={() => navigateToConsumerTab("map")}
                 onOpenAirportMode={() => {
                   markLiveMapSessionActive();
-                  const iata = findPlannableAirportIata(consumerReservationsSorted);
+                  const open = resolveOpenAirportIata({
+                    userLat: guidanceUserLat,
+                    userLon: guidanceUserLon,
+                    tripFlights: consumerReservationsSorted,
+                  });
+                  if (!open.iata) return;
                   router.push(
                     buildLiveAirportMapUrl({
                       tripId: activeTripId,
-                      iata,
+                      iata: open.iata,
                     }),
                   );
                 }}

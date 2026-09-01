@@ -7,6 +7,7 @@ import {
   gateArrivalBanner,
   gateChangeBanner,
   isAtBookedGate,
+  resolveDisplayGateCode,
   shouldPersistGateWalk,
   shouldRestartGateWalk,
   shouldStartGateWalkNow,
@@ -136,4 +137,29 @@ test("atGateMapChipLines splits You're here from on-time status", () => {
     }),
     { primary: "You're here", secondary: "Flight delayed" },
   );
+});
+
+test("resolveDisplayGateCode keeps booked gate when live poll is empty", () => {
+  const stable = resolveDisplayGateCode({
+    bookedGate: "C10",
+    liveGate: null,
+    lastStableLiveGate: null,
+  });
+  assert.equal(stable.gate, "C10");
+  assert.equal(stable.stableLiveGate, null);
+
+  const withLive = resolveDisplayGateCode({
+    bookedGate: "C10",
+    liveGate: "C12",
+    lastStableLiveGate: null,
+  });
+  assert.equal(withLive.gate, "C12");
+  assert.equal(withLive.stableLiveGate, "C12");
+
+  const flicker = resolveDisplayGateCode({
+    bookedGate: "C10",
+    liveGate: null,
+    lastStableLiveGate: "C12",
+  });
+  assert.equal(flicker.gate, "C12");
 });
