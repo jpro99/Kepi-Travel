@@ -118,7 +118,7 @@ export function MapHelperConfirmBar({
           <p className="mt-2 px-1 text-[13px] font-medium text-emerald-200">{toast}</p>
         ) : (
           <p className="mt-2 px-1 text-[12px] leading-snug text-white/55">
-            Admin/helpers only (turn on in Admin → Make helper). Confirms never auto-publish.
+            Just for helpers (Admin → Turn on for me only). Confirms never auto-publish.
           </p>
         )}
       </div>
