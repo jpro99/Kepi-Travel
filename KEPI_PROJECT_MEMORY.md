@@ -9,6 +9,10 @@ Last updated: 2026-09-01 (M16 apron GPS — map puck follows raw GPS off-graph)
 
 After landing on the runway, indoor graph snap was pinning the puck to the nearest gate/building and auto-starting a ~13 min walk. **M16 extension:** raw GPS drives the map puck whenever the traveler is >45 m off the walk graph (`travelerPosition.ts`); walk routing and auto gate-walk only when snap is trustworthy or user taps **I'm here** inside the terminal. Banner: "Showing your GPS on the airfield…"
 
+## Fix 2026-09-01 — GPS airport wins over stale ONT deep link at SEA (Jeff)
+
+Reloading Live Map with `?iata=ONT` (or preview picking earliest departure) showed Ontario + old gate while physically at SEA. **GPS-first geofence:** `resolveLiveMapAirportIata` waits for GPS (no stale ONT layout while locating); physical campus wins over URL/preview; `useActiveFlight` ignores `preferredIata` until GPS confirms away; Live Map shows "Finding your location…" instead of wrong airport; URL rewrites to detected IATA; gate labels only when flight matches map airport.
+
 ## Incident 2026-08-21 — Z84T4Z price stays in the drawer, ledger still says Add price (Jeff)
 
 Jeff opened Trip Accounting, tapped **Z84T4Z · 3 flights**, typed the cash, and the field kept the number — but “Add price” / “still need cash or miles” never cleared. Cause: `resolveReservationCashUsd` treated any notes/email as “has source text” and returned `undefined` when the ITA itinerary had no parseable fare, so a traveler-entered `quotedPriceUsd` was stored and then ignored. G45 honors a plausible stored amount when parse finds nothing; award + $0 due still does not resurrect ticket value (G43). Saving one PNR leg stamps cash/miles onto every flight on that confirmation.

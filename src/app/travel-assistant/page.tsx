@@ -4638,13 +4638,11 @@ export default function TravelAssistantPage() {
       // sessionStorage may be blocked — still attempt open once via ref below
     }
     markLiveMapSessionActive();
-    const iata =
-      guidanceNearestAirport ||
-      findPlannableAirportIata(consumerReservationsSorted);
+    if (!guidanceNearestAirport) return;
     router.push(
       buildLiveAirportMapUrl({
         tripId: activeTripId,
-        iata,
+        iata: guidanceNearestAirport,
       }),
     );
   }, [guidanceLocationStatus, guidanceNearestAirport, router, activeTripId, consumerReservationsSorted]);

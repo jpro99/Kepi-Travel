@@ -180,3 +180,33 @@ export function resolvePhysicalAirportIata(
   }
   return proximity.airport?.iata ?? null;
 }
+
+export function isPhysicallyAtAirport(proximity: AirportProximity): boolean {
+  return proximity.status === "at-airport" || proximity.status === "in-terminal";
+}
+
+/**
+ * Live Map airport IATA — physical GPS campus wins; never show a stale URL/preview
+ * airport (e.g. ONT) while GPS is still pending or user is at SEA.
+ */
+export function resolveLiveMapAirportIata(input: {
+  userLat: number | null;
+  userLon: number | null;
+  urlIata: string | null;
+  flightIata: string | null;
+}): { iata: string | null; waitingForGps: boolean; physical: boolean } {
+  const physical = resolvePhysicalAirportIata(input.userLat, input.userLon);
+  if (physical) {
+    return { iata: physical, waitingForGps: false, physical: true };
+  }
+  const hasGps = input.userLat != null && input.userLon != null;
+  if (!hasGps) {
+    return { iata: null, waitingForGps: true, physical: false };
+  }
+  const proximity = getAirportProximity(input.userLat, input.userLon, undefined);
+  if (isPhysicallyAtAirport(proximity)) {
+    return { iata: proximity.airport?.iata ?? null, waitingForGps: false, physical: true };
+  }
+  const plan = input.urlIata?.trim().toUpperCase() || input.flightIata?.trim().toUpperCase() || null;
+  return { iata: plan, waitingForGps: false, physical: false };
+}

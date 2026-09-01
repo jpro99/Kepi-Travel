@@ -4,6 +4,7 @@ import {
   distanceKm,
   getAirportByIata,
   getAirportProximity,
+  resolveLiveMapAirportIata,
   resolvePhysicalAirportIata,
 } from "@/lib/travelAssistant/airportGeo";
 
@@ -55,4 +56,40 @@ test("resolvePhysicalAirportIata ignores a mismatched departure pin", () => {
 
 test("distanceKm is roughly zero for identical points", () => {
   assert.ok(distanceKm(SEA.lat, SEA.lon, SEA.lat, SEA.lon) < 0.01);
+});
+
+test("resolveLiveMapAirportIata waits for GPS — no stale ONT URL while locating", () => {
+  const pending = resolveLiveMapAirportIata({
+    userLat: null,
+    userLon: null,
+    urlIata: "ONT",
+    flightIata: "ONT",
+  });
+  assert.equal(pending.iata, null);
+  assert.equal(pending.waitingForGps, true);
+  assert.equal(pending.physical, false);
+});
+
+test("resolveLiveMapAirportIata picks SEA on campus — ignores ONT URL", () => {
+  const atSea = resolveLiveMapAirportIata({
+    userLat: SEA.lat,
+    userLon: SEA.lon,
+    urlIata: "ONT",
+    flightIata: "ONT",
+  });
+  assert.equal(atSea.iata, "SEA");
+  assert.equal(atSea.physical, true);
+  assert.equal(atSea.waitingForGps, false);
+});
+
+test("resolveLiveMapAirportIata allows URL preview only when GPS confirms away", () => {
+  const downtown = resolveLiveMapAirportIata({
+    userLat: DOWNTOWN_SEA.lat,
+    userLon: DOWNTOWN_SEA.lon,
+    urlIata: "ONT",
+    flightIata: null,
+  });
+  assert.equal(downtown.iata, "ONT");
+  assert.equal(downtown.physical, false);
+  assert.equal(downtown.waitingForGps, false);
 });
