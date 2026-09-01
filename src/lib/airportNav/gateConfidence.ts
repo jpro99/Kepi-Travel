@@ -112,7 +112,8 @@ export const TRAVEL_DAY_PRESSURE_WINDOW_MIN = 12 * 60;
 /** Cap displayed spare on travel day — never show multi-hour "min early" from raw countdown. */
 const MAX_DISPLAY_SPARE_MIN = 180;
 const MIN_DISPLAY_SPARE_MIN = -120;
-const DOMESTIC_LEAVE_BUFFER_MIN = 90;
+/** I62: domestic arrive-by is 2h before departure (not 90m). */
+const DOMESTIC_LEAVE_BUFFER_MIN = 120;
 const INTERNATIONAL_LEAVE_BUFFER_MIN = 180;
 
 const US_DOMESTIC_IATA =

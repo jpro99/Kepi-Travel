@@ -186,7 +186,8 @@ export function getLeaveByHint(flight: MissionControlReservation, nowMs = Date.n
   const depMs = flightDepUtcMs(flight);
   if (!Number.isFinite(depMs) || depMs <= nowMs) return null;
   if (!hasTime(flight.flightDepartureTime) && !hasTime(flight.localTime)) return null;
-  const bufferMin = isInternationalFlight(flight) ? 180 : 90;
+  // I62: domestic arrive-by is 2h (120), not 90.
+  const bufferMin = isInternationalFlight(flight) ? 180 : 120;
   const leaveMs = depMs - bufferMin * 60_000;
   const depTz = departureTimezoneForFlight(flight);
   const leaveLabel = formatShortTimeInTimezone(leaveMs, depTz);

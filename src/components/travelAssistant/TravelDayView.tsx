@@ -232,7 +232,7 @@ export function TravelDayView({
   timeline.push({
     icon: transportOpt.icon, title: "Leave for airport",
     time: fmtMs(effectiveLeaveMs, deptTz), timeMinutes: effectiveLeaveMs,
-    detail: `~${transportOpt.driveMin} min to airport · ${isIntl ? "3 hr" : "90 min"} check-in time`,
+    detail: `~${transportOpt.driveMin} min to airport · ${isIntl ? "3 hr" : "2 hr"} check-in time`,
     type: "highlight",
     countdown: msUntilLeave,
   });
@@ -242,7 +242,7 @@ export function TravelDayView({
     time: fmtMs(arriveAirportMs, deptTz), timeMinutes: arriveAirportMs,
     detail: isIntl
       ? "International: 3 hrs early · Passport + docs · Check bag"
-      : "Domestic: 90 min early · Online check-in saves time",
+      : "Domestic: 2 hr early · Online check-in saves time",
     type: "highlight",
   });
 

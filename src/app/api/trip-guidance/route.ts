@@ -108,7 +108,7 @@ FLIGHT TIMING RULES:
 Always calculate exact times for EACH leg separately:
 - Leg 1: International departure — 3 hours early, name specific terminal
 - Connection cities: calculate if time allows for customs/immigration/re-check if international→domestic
-- Final leg: standard domestic 90 min recommended
+- Final leg: standard domestic 2 hours (120 min) recommended
 
 GROUND TRANSPORT:
 Tokyo Haneda (HND): Keikyu Airport Line 30 min to city, Monorail 20 min to Hamamatsucho. Evening rush 5-8 PM.

@@ -129,7 +129,7 @@ test("I32: problem overrides when flight cancelled", () => {
   assert.equal(phase, "problem");
 });
 
-test("I32: leave-by uses airport buffer without inventing drive time", () => {
+test("I32/I62: leave-by uses 2h domestic airport buffer without inventing drive time", () => {
   const hint = getLeaveByHint(
     flight({
       id: "f1",
@@ -142,6 +142,7 @@ test("I32: leave-by uses airport buffer without inventing drive time", () => {
   );
   assert.ok(hint);
   assert.match(hint!, /Leave for the airport/iu);
+  assert.match(hint!, /120 min before/iu);
   assert.match(hint!, /drive time not included/iu);
 });
 
