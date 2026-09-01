@@ -15,11 +15,9 @@ import {
   dateOnly,
   reservationPrimaryDate,
 } from "@/lib/travelAssistant/tripWindow";
-import { toUtcMs } from "@/lib/travelAssistant/journeyPhase";
 import {
   flightDepartureUtcMs,
   selectNextRemainingFlight,
-  selectTravelDayDepartureFlight,
   sortFlightsByDeparture,
 } from "@/lib/travelAssistant/flightSort";
 import { disruptionCalmHomeCopy } from "@/lib/travelAssistant/disruptionCalm";
@@ -472,16 +470,8 @@ export function buildMissionControlSnapshot(
   let tripStatus: ReadinessStatus = statusFromGaps(gaps);
   if (problem) tripStatus = "problem";
 
-  const nextFlight = (() => {
-    if (phase === "departure_day" || phase === "return_day") {
-      const todayPick = selectTravelDayDepartureFlight(
-        reservations.filter(isBookedFlight),
-        nowMs,
-      );
-      if (todayPick) return todayPick.f;
-    }
-    return firstOutboundFlight(reservations, nowMs);
-  })();
+  // F15 — one picker for Home TODAY / leave-by / check-in: earliest remaining booked segment.
+  const nextFlight = selectNextRemainingFlight(reservations.filter(isBookedFlight), nowMs);
   const leaveByHint =
     phase === "departure_day" || phase === "return_day" || phase === "countdown"
       ? nextFlight
