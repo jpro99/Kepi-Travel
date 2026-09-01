@@ -48,6 +48,13 @@ import {
   shouldRestartGateWalk,
   shouldStartGateWalkNow,
 } from "@/lib/airportNav/gatePresence";
+import {
+  hasTrustworthyLiveGraphPosition,
+  isOffGraphGpsDisplay,
+  OFF_GRAPH_GPS_BANNER,
+  resolveRoutingOriginNodeId,
+  resolveTravelerDisplayPosition,
+} from "@/lib/airportNav/travelerPosition";
 import { resolveConfirmSpotFromLngLat } from "@/lib/airportNav/confirmTravelerSpot";
 import {
   computeLayoutBounds,
@@ -457,6 +464,7 @@ interface AirportDestinationRailProps {
   selectedPoiId: string | null;
   credentials: TravelerSecurityCredentials;
   hasApproximatePosition: boolean;
+  hasGpsOnAirfield?: boolean;
   onPoiClick: (poiId: string) => void;
   /** Collapsed by default — the map is the primary surface. Expand to browse. */
   open: boolean;
@@ -474,6 +482,7 @@ function AirportDestinationRail({
   selectedPoiId,
   credentials,
   hasApproximatePosition,
+  hasGpsOnAirfield = false,
   onPoiClick,
   open,
   onToggle,
@@ -547,7 +556,11 @@ function AirportDestinationRail({
                   .join(" + ") || "Standard security"
               : "Security profile not set"}
           </span>
-          {hasApproximatePosition ? (
+          {hasGpsOnAirfield ? (
+            <span className="rounded-full bg-amber-500 px-2 py-1 text-[9px] font-black text-white">
+              ● You · GPS on airfield
+            </span>
+          ) : hasApproximatePosition ? (
             <span className="rounded-full bg-sky-600 px-2 py-1 text-[9px] font-black text-white">
               ● You · approximate
             </span>
@@ -632,7 +645,7 @@ interface AirportSchematicLayerProps {
   layout: AirportLayout;
   activeRoute: ComputedRoute | null;
   selectedPoiId: string | null;
-  snapped: SnappedPosition | null;
+  userDisplayPos: [number, number] | null;
   userAccuracyM: number | null;
   familyPins: FamilyAirportPin[];
   airlineName: string | null;
@@ -648,7 +661,7 @@ function AirportSchematicLayer({
   layout,
   activeRoute,
   selectedPoiId,
-  snapped,
+  userDisplayPos,
   userAccuracyM,
   familyPins,
   airlineName,
@@ -831,8 +844,8 @@ function AirportSchematicLayer({
           </g>
         ) : null}
 
-        {snapped ? (() => {
-          const point = model.project(snapped.pos);
+        {userDisplayPos ? (() => {
+          const point = model.project(userDisplayPos);
           const pulseStyle = { animation: "kepiPulse 1.6s ease-in-out infinite" };
           return (
           <g data-testid="airport-nav-schematic-user">
@@ -1513,11 +1526,34 @@ export function AirportNavigatorMap({
     return snapToGraph(layout, userLon, userLat, userAccuracyM);
   }, [layout, previewMode, confirmedNodeId, userLat, userLon, userAccuracyM]);
 
+  const userDisplayPos = useMemo(
+    () =>
+      resolveTravelerDisplayPosition({
+        userLon,
+        userLat,
+        snapped,
+        confirmedNodeId,
+      }),
+    [userLon, userLat, snapped, confirmedNodeId],
+  );
+
+  const offGraphGps = useMemo(
+    () =>
+      isOffGraphGpsDisplay({
+        previewMode,
+        confirmedNodeId,
+        userLon,
+        userLat,
+        snapped,
+        accuracyM: userAccuracyM,
+      }),
+    [previewMode, confirmedNodeId, userLon, userLat, snapped, userAccuracyM],
+  );
+
   const isArriveCoach = coachMode === "arrive";
   const arrivalFirstMile = Boolean(layout && isArriveCoach && layoutSupportsArrivalFirstMile(layout));
 
-  const originNodeId = useMemo(() => {
-    if (snapped && !previewMode) return snapped.nearestNodeId;
+  const schematicOriginNodeId = useMemo(() => {
     if (!layout) return null;
     if (isArriveCoach && layoutSupportsArrivalFirstMile(layout)) {
       const arrivalGate = resolveArrivalOriginNode(layout, gateCode);
@@ -1526,7 +1562,19 @@ export function AirportNavigatorMap({
     return layout.nodes.find((node) => node.kind === "junction" && !node.airside)?.id
       ?? layout.nodes[0]?.id
       ?? null;
-  }, [snapped, layout, previewMode, isArriveCoach, gateCode]);
+  }, [layout, isArriveCoach, gateCode]);
+
+  const originNodeId = useMemo(
+    () =>
+      resolveRoutingOriginNodeId({
+        previewMode,
+        confirmedNodeId,
+        snapped,
+        accuracyM: userAccuracyM,
+        schematicFallbackNodeId: schematicOriginNodeId,
+      }),
+    [previewMode, confirmedNodeId, snapped, userAccuracyM, schematicOriginNodeId],
+  );
 
   const bookedGate = useMemo(
     () => resolveBookedGateHighlight(layout, gateCode, airlineName),
@@ -1543,11 +1591,7 @@ export function AirportNavigatorMap({
     return node?.pos ?? null;
   }, [layout, bookedGate]);
 
-  const travelerPos = useMemo((): [number, number] | null => {
-    if (snapped?.pos) return snapped.pos;
-    if (userLon != null && userLat != null) return [userLon, userLat];
-    return null;
-  }, [snapped, userLon, userLat]);
+  const travelerPos = useMemo((): [number, number] | null => userDisplayPos, [userDisplayPos]);
 
   const gateDistanceM = useMemo(
     () => distanceToGateMeters(travelerPos, gateNodePos),
@@ -1576,7 +1620,12 @@ export function AirportNavigatorMap({
     () => atGateMapChipLines(atGateBanner),
     [atGateBanner],
   );
-  const hasLivePosition = Boolean(snapped && !previewMode);
+  const hasLivePosition = hasTrustworthyLiveGraphPosition({
+    previewMode,
+    confirmedNodeId,
+    snapped,
+    accuracyM: userAccuracyM,
+  });
   const confirmedSpotLabel = useMemo(() => {
     if (!layout || !confirmedNodeId) return null;
     const poi = layout.pois.find((entry) => entry.nodeId === confirmedNodeId);
@@ -1849,16 +1898,44 @@ export function AirportNavigatorMap({
     if (route) setActiveRoute(route);
   }, [originNodeId, activeRoute, layout, credentials, navCalibration, sprint]);
 
+  // Apron / runway: never keep a walk route that was started from a misleading graph snap.
+  useEffect(() => {
+    if (previewMode || confirmedNodeId || !activeRoute) return;
+    if (hasLivePosition) return;
+    endRoute();
+  }, [previewMode, confirmedNodeId, activeRoute, hasLivePosition, endRoute]);
+
+  const lastOffGraphCenterRef = useRef<[number, number] | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || previewMode || !offGraphGps || userLon == null || userLat == null) return;
+    const next: [number, number] = [userLon, userLat];
+    const prev = lastOffGraphCenterRef.current;
+    if (prev) {
+      const mPerDegLng = 111_320 * Math.cos((next[1] * Math.PI) / 180);
+      const dx = (next[0] - prev[0]) * mPerDegLng;
+      const dy = (next[1] - prev[1]) * 111_320;
+      if (Math.hypot(dx, dy) < 40) return;
+    }
+    lastOffGraphCenterRef.current = next;
+    map.easeTo({
+      center: next,
+      zoom: Math.max(map.getZoom(), 15.5),
+      duration: 800,
+      essential: true,
+    });
+  }, [mapReady, previewMode, offGraphGps, userLon, userLat]);
+
   /* ── Journey: position + clock events ───────────────────────────────── */
   useEffect(() => {
-    if (!snapped || previewMode) return;
+    if (!hasLivePosition || !snapped || previewMode) return;
     processJourneyEvent({
       type: "position",
       nodeId: snapped.nearestNodeId,
       confidence: snapped.confidence,
       at: Date.now(),
     });
-  }, [snapped?.nearestNodeId, snapped?.confidence, previewMode, processJourneyEvent]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hasLivePosition, snapped?.nearestNodeId, snapped?.confidence, previewMode, processJourneyEvent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!layout) return;
@@ -1867,12 +1944,12 @@ export function AirportNavigatorMap({
 
   /* ── Instruction progress → haptics + spoken turns + arrival ────────── */
   useEffect(() => {
-    if (!activeRoute || !snapped) return;
-    const along = metersAlongRoute(activeRoute, snapped.nearestNodeId);
+    if (!activeRoute || !hasLivePosition || !originNodeId) return;
+    const along = metersAlongRoute(activeRoute, originNodeId);
     if (along === null) return;
 
     // Arrival: snapped onto the final route node
-    if (snapped.nearestNodeId === activeRoute.nodeIds[activeRoute.nodeIds.length - 1]) {
+    if (originNodeId === activeRoute.nodeIds[activeRoute.nodeIds.length - 1]) {
       const targetPoi = layout?.pois.find((poi) => poi.id === activeRoute.toPoiId);
       const walkingToBookedGate = Boolean(
         persistGateWalk && gatePoi && activeRoute.toPoiId === gatePoi.id,
@@ -1904,7 +1981,7 @@ export function AirportNavigatorMap({
         sayAndShow(instruction.text);
       }
     }
-  }, [snapped?.nearestNodeId, activeRoute, layout, activeDestName, persistGateWalk, gatePoi, atBookedGate, haptic, sayAndShow, processJourneyEvent, endRoute]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [originNodeId, activeRoute, layout, activeDestName, persistGateWalk, gatePoi, atBookedGate, hasLivePosition, haptic, sayAndShow, processJourneyEvent, endRoute]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Gate route + Boarding Pressure Index (spec §L.1) ───────────────── */
   const gateRoute = useMemo(() => {
@@ -2634,8 +2711,8 @@ export function AirportNavigatorMap({
     if (!showWalkLine) return;
 
     let progress = 0;
-    if (activeRoute && snapped) {
-      const idx = activeRoute.nodeIds.indexOf(snapped.nearestNodeId);
+    if (activeRoute && originNodeId) {
+      const idx = activeRoute.nodeIds.indexOf(originNodeId);
       if (idx > 0) progress = idx / Math.max(1, activeRoute.nodeIds.length - 1);
     }
     const fadeStart = Math.min(0.96, Math.max(0.001, progress));
@@ -2659,7 +2736,7 @@ export function AirportNavigatorMap({
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRoute, journeyRoute, mapReady, snapped?.nearestNodeId, layout, mapFirstLive, arrivalFirstMile, preciseRouteEnabled]);
+  }, [activeRoute, journeyRoute, mapReady, originNodeId, layout, mapFirstLive, arrivalFirstMile, preciseRouteEnabled]);
 
   /* ── Admin click-to-place (capture real lng/lat on basemap click) ───── */
   useEffect(() => {
@@ -2982,7 +3059,7 @@ export function AirportNavigatorMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
-    if (!snapped) {
+    if (!userDisplayPos) {
       if (userMarkerRef.current) {
         userMarkerRef.current.remove();
         userMarkerRef.current = null;
@@ -3000,7 +3077,9 @@ export function AirportNavigatorMap({
       wrap.dataset.testid = "airport-nav-live-user";
       wrap.setAttribute(
         "aria-label",
-        atGate
+        offGraphGps
+          ? `Your GPS on the airfield${userAccuracyM ? `, within about ${Math.round(userAccuracyM)} meters` : ""}`
+          : atGate
           ? `${atGateChipLines.primary} — ${atGateChipLines.secondary}`
           : `Your approximate location${userAccuracyM ? `, within about ${Math.round(userAccuracyM)} meters` : ""}`,
       );
@@ -3031,18 +3110,18 @@ export function AirportNavigatorMap({
 
       const dot = document.createElement("div");
       dot.style.cssText = `width:20px;height:20px;border-radius:50%;background:${
-        atGate ? "#34C759" : "#38bdf8"
+        atGate ? "#34C759" : offGraphGps ? "#f59e0b" : "#38bdf8"
       };border:3px solid #fff;box-shadow:0 0 12px ${
-        atGate ? "rgba(52,199,89,0.9)" : "rgba(56,189,248,0.9)"
+        atGate ? "rgba(52,199,89,0.9)" : offGraphGps ? "rgba(245,158,11,0.9)" : "rgba(56,189,248,0.9)"
       };position:relative;z-index:1;${atGate ? "animation:kepiPulse 1.4s ease-in-out infinite;" : ""}`;
 
       wrap.appendChild(halo);
       wrap.appendChild(dot);
       userMarkerRef.current = new ml.Marker({ element: wrap, anchor: "center" })
-        .setLngLat(snapped.pos as [number, number])
+        .setLngLat(userDisplayPos as [number, number])
         .addTo(map);
     });
-  }, [mapReady, snapped, userAccuracyM, atBookedGate, atGateChipLines]);
+  }, [mapReady, userDisplayPos, userAccuracyM, atBookedGate, atGateChipLines, offGraphGps]);
 
   /* ── Family pins snapped to terminal graph (honest GPS — may be approximate) ─ */
   const familySnapped = useMemo(() => {
@@ -3184,19 +3263,17 @@ export function AirportNavigatorMap({
   const { heading: deviceHeading, needsPermission: headingNeedsPermission, requestPermission: requestHeading } =
     useDeviceHeading(!previewMode && Boolean(activeRoute));
   const directionArrow = useMemo(() => {
-    if (previewMode || !activeRoute || !snapped) return null;
-    const userPos: [number, number] =
-      userLon !== null && userLat !== null ? [userLon, userLat] : snapped.pos;
+    if (previewMode || !activeRoute || !hasLivePosition || !originNodeId || !userDisplayPos) return null;
     const stepIdx = Math.min(currentStepIdx, Math.max(0, activeRoute.instructions.length - 1));
     const landmark = activeRoute.instructions[stepIdx]?.landmark ?? activeDestName;
     return computeDirectionArrow({
-      userPos,
+      userPos: userDisplayPos,
       route: activeRoute,
-      currentNodeId: snapped.nearestNodeId,
+      currentNodeId: originNodeId,
       headingDeg: deviceHeading,
       targetLandmark: landmark,
     });
-  }, [previewMode, activeRoute, snapped, userLon, userLat, deviceHeading, currentStepIdx, activeDestName]);
+  }, [previewMode, activeRoute, hasLivePosition, originNodeId, userDisplayPos, deviceHeading, currentStepIdx, activeDestName]);
 
   /* ── Render ─────────────────────────────────────────────────────────── */
   // Arrival coach uses the indoor map when the layout has first-mile nodes; otherwise
@@ -3282,7 +3359,7 @@ export function AirportNavigatorMap({
           layout={layout}
           activeRoute={preciseRouteEnabled ? activeRoute : null}
           selectedPoiId={selectedPoiId ?? pendingPoiId ?? activeRoute?.toPoiId ?? null}
-          snapped={previewMode ? null : snapped}
+          userDisplayPos={previewMode ? null : userDisplayPos}
           userAccuracyM={userAccuracyM}
           familyPins={familyPins}
           airlineName={airlineName}
@@ -3403,7 +3480,8 @@ export function AirportNavigatorMap({
             gateCode={gateCode}
             selectedPoiId={selectedPoiId ?? pendingPoiId ?? activeRoute?.toPoiId ?? null}
             credentials={credentials}
-            hasApproximatePosition={!previewMode && Boolean(snapped)}
+            hasApproximatePosition={hasLivePosition}
+            hasGpsOnAirfield={offGraphGps}
             open={railOpen}
             onToggle={() => setRailOpen((wasOpen) => !wasOpen)}
             onPoiClick={(poiId) => {
@@ -3491,7 +3569,9 @@ export function AirportNavigatorMap({
                   <span className="block truncate text-[9px] text-sky-200/70">
                     {previewMode
                       ? "Planning mode — browse the terminal layout"
-                      : `${statusLine ?? phaseStatusLine(journeyPhase, gateCode)}${snapped ? ` · position ${Math.round(snapped.confidence * 100)}%` : " · locating…"}`}
+                      : offGraphGps
+                      ? "GPS on airfield — use the map to orient"
+                      : `${statusLine ?? phaseStatusLine(journeyPhase, gateCode)}${hasLivePosition && snapped ? ` · position ${Math.round(snapped.confidence * 100)}%` : userDisplayPos ? " · locating terminal…" : " · locating…"}`}
                   </span>
                 </span>
               </span>
@@ -3814,10 +3894,7 @@ export function AirportNavigatorMap({
         <MapHelperConfirmBar
           iata={iata}
           layout={layout}
-          pos={
-            snapped?.pos
-            ?? (userLon != null && userLat != null ? [userLon, userLat] : null)
-          }
+          pos={userDisplayPos}
           accuracyM={userAccuracyM}
           bottomOffset={`calc(${bottomPanel} + ${activeRoute ? "11.5rem" : "5.25rem"})`}
         />
@@ -3917,6 +3994,18 @@ export function AirportNavigatorMap({
           >
             🧭 Guide me to {gateCode ? `Gate ${gateCode.toUpperCase()}` : "my gate"}
           </button>
+        </div>
+      ) : null}
+
+      {offGraphGps ? (
+        <div
+          data-testid="airport-off-graph-banner"
+          className="pointer-events-none absolute inset-x-3 z-[55] flex justify-center"
+          style={{ top: "max(4.75rem, calc(env(safe-area-inset-top) + 4.25rem))" }}
+        >
+          <p className="max-w-md rounded-2xl bg-amber-500/95 px-3 py-2 text-center text-[13px] font-bold leading-snug text-amber-950 shadow-lg">
+            {OFF_GRAPH_GPS_BANNER}
+          </p>
         </div>
       ) : null}
 
