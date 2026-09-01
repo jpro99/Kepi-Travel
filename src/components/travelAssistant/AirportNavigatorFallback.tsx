@@ -288,20 +288,26 @@ export function AirportNavigatorFallback({
       lat: String(userLat),
       lon: String(userLon),
     });
-    void fetch(`/api/drive-eta?${params.toString()}`, { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((payload: { driveMinutes?: number } | null) => {
-        if (cancelled) return;
-        const mins = payload?.driveMinutes;
-        setDriveMinutes(
-          typeof mins === "number" && Number.isFinite(mins) && mins > 0 ? Math.round(mins) : null,
-        );
-      })
-      .catch(() => {
-        if (!cancelled) setDriveMinutes(null);
-      });
+    const refreshDriveEta = () => {
+      void fetch(`/api/drive-eta?${params.toString()}`, { cache: "no-store" })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((payload: { driveMinutes?: number } | null) => {
+          if (cancelled) return;
+          const mins = payload?.driveMinutes;
+          setDriveMinutes(
+            typeof mins === "number" && Number.isFinite(mins) && mins > 0 ? Math.round(mins) : null,
+          );
+        })
+        .catch(() => {
+          if (!cancelled) setDriveMinutes(null);
+        });
+    };
+    refreshDriveEta();
+    // Re-check route ETA every 2 min so the corner traffic timer stays current.
+    const intervalId = window.setInterval(refreshDriveEta, 120_000);
     return () => {
       cancelled = true;
+      window.clearInterval(intervalId);
     };
   }, [isArrive, code, userLat, userLon, proximityStatus]);
 
@@ -463,15 +469,30 @@ export function AirportNavigatorFallback({
       {leaveCountdown.visible ? (
         <div
           data-testid="depart-leave-countdown-badge"
-          className="pointer-events-none absolute right-3 top-3 z-30 max-w-[11.5rem] rounded-2xl border border-amber-300/40 bg-amber-500/95 px-3 py-2 text-right shadow-lg shadow-amber-950/30"
+          className="pointer-events-none absolute right-3 top-3 z-30 max-w-[12.5rem] rounded-2xl border border-amber-300/40 bg-amber-500/95 px-3 py-2.5 text-right shadow-lg shadow-amber-950/30"
+          aria-live="polite"
         >
-          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-950/80">Leave by</p>
-          <p className="text-sm font-black tabular-nums leading-tight text-amber-950">
-            {leaveCountdown.leaveHeadline}
+          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-950/80">
+            {leaveCountdown.eyebrow}
           </p>
-          {leaveCountdown.driveSubline ? (
-            <p className="mt-1 text-[10px] font-semibold leading-snug text-amber-950/85">
-              {leaveCountdown.driveSubline}
+          <p className="text-sm font-black tabular-nums leading-tight text-amber-950">
+            {leaveCountdown.primaryLine}
+          </p>
+          {leaveCountdown.secondaryLine ? (
+            <p className="mt-1 text-[12px] font-bold tabular-nums leading-snug text-amber-950">
+              {leaveCountdown.secondaryLine}
+            </p>
+          ) : null}
+          {leaveCountdown.honestyLine ? (
+            <p className="mt-0.5 text-[9px] font-semibold leading-snug text-amber-950/70">
+              {leaveCountdown.honestyLine}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+          {leaveCountdown.honestyLine ? (
+            <p className="mt-0.5 text-[9px] font-semibold leading-snug text-amber-950/70">
+              {leaveCountdown.honestyLine}
             </p>
           ) : null}
         </div>

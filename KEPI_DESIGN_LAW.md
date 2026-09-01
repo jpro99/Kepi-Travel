@@ -963,7 +963,7 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 ## Test index
 
 | Law | Test file |
-|-----|-----------|
+|-----|-----------| Corner badge leads with **Traffic ~Xm to airport** when OSRM has a route, and counts down to **leave-home** (airport arrive-by − drive) — never invents traffic.
 | H1, M1 | `src/lib/hotels/__tests__/hotelDistance.test.ts` |
 | H2, H5 | `src/lib/hotels/__tests__/hotelSearchFilters.test.ts` |
 | H3, H4 | `src/lib/hotels/__tests__/hotelCardDisplay.test.ts` |

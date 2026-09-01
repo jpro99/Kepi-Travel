@@ -1,21 +1,47 @@
 /**
- * Corner traffic + leave-by countdown for Map / Airport depart coach (I62).
+ * Corner traffic + leave-home countdown for Map / Airport depart coach (I62).
  * Drive minutes only when a real OSRM/genome source is present — never invent traffic.
+ *
+ * leaveByUtcMs = be-at-airport time (airport buffer only, I32).
+ * When driveMinutes is known, the countdown targets leave-home =
+ * leaveByUtcMs − driveMinutes so traffic is included honestly.
  */
 
 export type LeaveCountdownBadgeModel = {
-  /** Short headline, e.g. "Leave in 42 min" or "Leave now" */
-  leaveHeadline: string;
-  /** Drive honesty line, e.g. "Drive ~45 min (route — not live traffic)" */
-  driveSubline: string | null;
-  /** Minutes until leave-by (negative = already past). */
+  /** Top eyebrow, e.g. "Traffic" or "Leave by" */
+  eyebrow: string;
+  /** Primary line — traffic duration when known, else leave countdown */
+  primaryLine: string;
+  /** Secondary line — leave-home countdown when traffic known, else null */
+  secondaryLine: string | null;
+  /** Honesty footnote when traffic/drive is shown */
+  honestyLine: string | null;
+  /** Minutes until leave-home (or airport leave-by when no drive). Negative = past. */
   minsUntilLeave: number | null;
   /** True when the badge should render (depart + away + leave-by known). */
   visible: boolean;
 };
 
+function formatCountdown(minsUntil: number): string {
+  if (minsUntil <= 0) return "Leave now";
+  if (minsUntil < 60) return `Leave in ${minsUntil} min`;
+  const h = Math.floor(minsUntil / 60);
+  const m = minsUntil % 60;
+  return m === 0 ? `Leave in ${h}h` : `Leave in ${h}h ${m}m`;
+}
+
+function formatDriveMinutes(driveMinutes: number): string {
+  if (driveMinutes < 60) return `~${driveMinutes} min to airport`;
+  const h = Math.floor(driveMinutes / 60);
+  const m = driveMinutes % 60;
+  if (m === 0) return `~${h}h to airport`;
+  return `~${h}h ${m}m to airport`;
+}
+
 export function buildLeaveCountdownBadge(input: {
+  /** Be-at-airport UTC (airport buffer only — I32). */
   leaveByUtcMs: number | null | undefined;
+  /** Real OSRM/genome drive minutes; never invent. */
   driveMinutes?: number | null;
   nowMs?: number;
   /** Hide when already at/inside airport. */
@@ -29,33 +55,13 @@ export function buildLeaveCountdownBadge(input: {
     !Number.isFinite(leaveByUtcMs)
   ) {
     return {
-      leaveHeadline: "",
-      driveSubline: null,
+      eyebrow: "",
+      primaryLine: "",
+      secondaryLine: null,
+      honestyLine: null,
       minsUntilLeave: null,
       visible: false,
     };
-  }
-
-  const minsUntilLeave = Math.round((leaveByUtcMs - nowMs) / 60_000);
-  // Show from 8h out through a short grace after leave-by.
-  if (minsUntilLeave > 8 * 60 || minsUntilLeave < -30) {
-    return {
-      leaveHeadline: "",
-      driveSubline: null,
-      minsUntilLeave,
-      visible: false,
-    };
-  }
-
-  let leaveHeadline: string;
-  if (minsUntilLeave <= 0) {
-    leaveHeadline = "Leave now";
-  } else if (minsUntilLeave < 60) {
-    leaveHeadline = `Leave in ${minsUntilLeave} min`;
-  } else {
-    const h = Math.floor(minsUntilLeave / 60);
-    const m = minsUntilLeave % 60;
-    leaveHeadline = m === 0 ? `Leave in ${h}h` : `Leave in ${h}h ${m}m`;
   }
 
   const driveRaw = input.driveMinutes;
@@ -63,14 +69,40 @@ export function buildLeaveCountdownBadge(input: {
     typeof driveRaw === "number" && Number.isFinite(driveRaw) && driveRaw > 0
       ? Math.round(driveRaw)
       : null;
-  const driveSubline =
-    driveMinutes != null
-      ? `Drive ~${driveMinutes} min (route — not live traffic)`
-      : null;
+
+  // When we have a real drive ETA, count down to leave-home (airport arrive-by − drive).
+  const leaveHomeUtcMs =
+    driveMinutes != null ? leaveByUtcMs - driveMinutes * 60_000 : leaveByUtcMs;
+  const minsUntilLeave = Math.round((leaveHomeUtcMs - nowMs) / 60_000);
+
+  // Show from 8h out through a short grace after leave-home.
+  if (minsUntilLeave > 8 * 60 || minsUntilLeave < -30) {
+    return {
+      eyebrow: "",
+      primaryLine: "",
+      secondaryLine: null,
+      honestyLine: null,
+      minsUntilLeave,
+      visible: false,
+    };
+  }
+
+  if (driveMinutes != null) {
+    return {
+      eyebrow: "Traffic",
+      primaryLine: formatDriveMinutes(driveMinutes),
+      secondaryLine: formatCountdown(minsUntilLeave),
+      honestyLine: "Route estimate — not live traffic",
+      minsUntilLeave,
+      visible: true,
+    };
+  }
 
   return {
-    leaveHeadline,
-    driveSubline,
+    eyebrow: "Leave by",
+    primaryLine: formatCountdown(minsUntilLeave),
+    secondaryLine: "Drive time not included yet",
+    honestyLine: null,
     minsUntilLeave,
     visible: true,
   };

@@ -969,5 +969,6 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 | 2026-06-15 | Screenshot triage rule + Polignano offshore pin fix (`isLikelyOffshorePin`) |
 | 2026-06-15 | Created memory file; documented Duffel emails sent, LiteAPI key set, Travelpayouts Drive skipped, domain bot skills |
 
+- **2026-09-01 — Corner traffic timer (I62):** Depart Map/Airport corner badge shows “Traffic ~45 min to airport” from OSRM + leave-home countdown (arrive-by − drive). Refreshes every 2 min. No GPS → leave-by only, labeled drive not included.
 - **2026-09-01 — Map helper just-for-me (I62):** Admins can self-enable via Admin → Users → “Turn on for me only”, or the amber “Turn on map helper (just me)” chip in Airport Mode. One-tap Gate / Alaska / Door confirms; never auto-publishes.
 - **2026-09-01 — Domestic airport buffer 2h + corner leave countdown (I62):** Leave-by default is 120 min domestic (was 90). Depart coach corner badge shows leave-in countdown + OSRM drive minutes labeled not-live-traffic. Admin Make-helper chips now ask gate/airline confirms ("Gate C11?", "Alaska here?") — Jeff can enable just himself in Admin → Users → Make helper.
