@@ -246,6 +246,11 @@ Departures coach + journey machine only fire when the layout has distinct `check
 
 ## FLIGHTS LAWS
 
+**F16 — Airborne hero requires verified live status for landing countdown**  
+Schedule-airborne windows may show **In the air** and the booked route (e.g. ONT→SEA) from `journeyPhase` — do not change the remaining-flight picker. **Landing in Xm** is live-radar copy only: require a successful en-route lookup (`active`, `enroute`, `departed`, `approach`, etc.). Lookup failure or unverified live status: detail is **booked scheduled arrival only** — never `liveStatus.error`, never the lookup toast/API string on Home. Missing arrival stays null. Toast may still show the error; the TODAY card must not.
+
+**Test:** `src/lib/travelAssistant/airborneLiveClaim.test.ts`
+
 **F15 — Next flight is earliest remaining departure, not storage order**  
 Home, Airport Mode, Book → Flights, and check-in handoff must pick the chronologically next booked segment (timezone-aware departure clock), including domestic connectors. Storage array order and long-haul role never override clock time — ONT→SEA before SEA→FCO on the same travel day. When `localTime` and `flightDepartureTime` disagree on the same day, use the later booked clock for sorting (live status may pull `localTime` earlier; delay updates push it later). Departure UTC conversion must use the **departure-airport IATA timezone**, not stored `flight.timezone` when it bleeds (e.g. `Europe/Rome` on a SEA departure would sort as 8:30 AM Pacific). Home TODAY uses `selectNextRemainingFlight` + `getLeaveByHint` on that pick — not a separate travel-day picker; leave-by labels render in departure-airport local time.
 
@@ -1011,6 +1016,7 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | M36 | `src/lib/airportNav/doorMonotonicity.test.ts` |
 | M37 | `src/lib/airportNav/footwayGraph.test.ts`, `src/lib/airportNav/routeGradeHonesty.test.ts` |
 | M38 | `src/lib/airportNav/mapHelperNearby.test.ts` |
+| F16 | `src/lib/travelAssistant/airborneLiveClaim.test.ts` |
 | F15 | `src/lib/travelAssistant/flightSort.test.ts` |
 | F3 | `src/lib/travelAssistant/tripTransportRoute.test.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |

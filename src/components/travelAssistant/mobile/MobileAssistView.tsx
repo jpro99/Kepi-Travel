@@ -10,6 +10,7 @@ import {
 } from "@/lib/travelAssistant/checkInHandoff";
 import { resolveBoardingPassUrl, type ReservationSourceLink } from "@/lib/travelAssistant/reservationLinks";
 import { selectNextRemainingFlight, flightDepartureUtcMs } from "@/lib/travelAssistant/flightSort";
+import { resolveAirborneHeroCopy } from "@/lib/travelAssistant/airborneLiveClaim";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 
 interface Reservation {
@@ -45,6 +46,9 @@ interface MobileAssistViewProps {
     departureGate: string;
     departureTerminal: string;
     onTime: boolean | null;
+    checkedAt?: string;
+    busy?: boolean;
+    error?: string | null;
   }>;
 }
 
@@ -81,16 +85,23 @@ export function MobileAssistView({
   return (
     <section className="space-y-4">
       {journeyPhase.kind === "airborne" ? (
-        <div className="rounded-3xl overflow-hidden bg-[var(--bg-card)] p-5 shadow-lg ring-1 ring-[var(--border-default)]">
-          <p className="text-xs font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400">{t("inFlight")}</p>
-          <p className="mt-2 text-2xl font-black text-[var(--text-primary)] leading-tight">
-            {(journeyPhase.onFlight as Reservation & { flightDepartureAirport?: string }).flightDepartureAirport ?? ""} →{" "}
-            {journeyPhase.landingAt}
-          </p>
-          <p className="mt-2 text-sm text-[var(--text-muted)]">
-            {t("landingIn", { time: journeyPhase.landingIn })}
-          </p>
-        </div>
+        (() => {
+          const airborneCopy = resolveAirborneHeroCopy(
+            journeyPhase,
+            liveStatus?.[journeyPhase.onFlight.id],
+          );
+          return (
+            <div className="rounded-3xl overflow-hidden bg-[var(--bg-card)] p-5 shadow-lg ring-1 ring-[var(--border-default)]">
+              <p className="text-xs font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400">{t("inFlight")}</p>
+              <p className="mt-2 text-2xl font-black text-[var(--text-primary)] leading-tight">
+                {airborneCopy.title}
+              </p>
+              {airborneCopy.detail ? (
+                <p className="mt-2 text-sm text-[var(--text-muted)]">{airborneCopy.detail}</p>
+              ) : null}
+            </div>
+          );
+        })()
       ) : journeyPhase.kind === "just-landed" ? (
         <div className="rounded-3xl overflow-hidden bg-[var(--bg-card)] p-5 shadow-lg ring-1 ring-[var(--border-default)]">
           <p className="text-xs font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">{t("landedLabel")}</p>
