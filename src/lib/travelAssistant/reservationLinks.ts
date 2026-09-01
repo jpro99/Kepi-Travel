@@ -145,7 +145,7 @@ function airlineManageUrl(airline: string, confirmationCode: string): string | n
   if (lower.includes("american") || lower === "aa") return `https://www.aa.com/checkin/`;
   if (lower.includes("delta")) return `https://www.delta.com/my-trips/search`;
   if (lower.includes("southwest")) return `https://www.southwest.com/air/check-in/`;
-  if (lower.includes("jetblue")) return `https://www.jetblue.com/check-in`;
+  if (lower.includes("jetblue")) return `https://www.jetblue.com/checkin`;
   if (lower.includes("hawaiian")) return `https://www.hawaiianairlines.com/my-trip/login`;
   return null;
 }

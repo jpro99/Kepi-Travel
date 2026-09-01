@@ -1,6 +1,9 @@
 /**
  * Check-in window detection and honest airline / wallet handoff URLs.
  * Kepi does not render scannable boarding passes — it routes to the airline or Wallet.
+ *
+ * Airline URLs verified 2026-09-01 via live HEAD/GET (AS `/check-in` soft-404s;
+ * working path is `/checkin` → reservations.alaskaair.com/checkin).
  */
 
 import { flightDepartureUtcMs } from "@/lib/travelAssistant/flightSort";
@@ -35,14 +38,18 @@ export interface CheckInHandoffContent {
   honestyNote: string;
 }
 
+/** Live check-in entry points — never ship a soft-404 / relative path (F10). */
 const AIRLINE_CHECKIN_BY_PREFIX: Record<string, string> = {
-  AS: "https://www.alaskaair.com/check-in",
-  HA: "https://www.hawaiianairlines.com/check-in",
+  // Verified 2026-09-01: /check-in → page-not-found; /checkin → reservations.alaskaair.com/checkin
+  AS: "https://www.alaskaair.com/checkin",
+  // Verified 2026-09-01: /check-in → homepage; manage/check-in is the real flow
+  HA: "https://www.hawaiianairlines.com/manage/check-in",
   UA: "https://www.united.com/en/us/checkin",
   DL: "https://www.delta.com/check-in",
   AA: "https://www.aa.com/check-in",
   WN: "https://www.southwest.com/air/check-in/",
-  B6: "https://www.jetblue.com/check-in",
+  // Verified 2026-09-01: /check-in 404s; /checkin → checkin.jetblue.com
+  B6: "https://www.jetblue.com/checkin",
   NK: "https://www.spirit.com/check-in",
   F9: "https://www.flyfrontier.com/travel/my-trips/check-in",
   AC: "https://www.aircanada.com/ca/en/aco/home/check-in.html",
@@ -55,9 +62,26 @@ const AIRLINE_CHECKIN_BY_PREFIX: Record<string, string> = {
   QR: "https://www.qatarairways.com/en/manage-booking.html",
 };
 
+const FALLBACK_CHECKIN_SEARCH = "https://www.google.com/search?q=airline+online+check+in";
+
 function extractAirlinePrefix(flightNumber: string | undefined): string | null {
   const match = /^([A-Z0-9]{2})/u.exec((flightNumber ?? "").replace(/\s+/gu, "").toUpperCase());
   return match?.[1] ?? null;
+}
+
+/**
+ * Handoff links must be absolute https. Relative paths open on kepitravel.com
+ * (Clerk catch-all → "Sorry, we got lost") instead of the airline.
+ */
+export function isSafeExternalHttpsUrl(url: string): boolean {
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 export function computeCheckInOpenUtcMs(departureUtcMs: number): number {
@@ -135,13 +159,17 @@ export function buildCheckInHandoffContent(
     return null;
   }
   const checkInOpen = isCheckInWindowOpen(flight.departureUtcMs, nowMs);
-  const boardingPassUrl = flight.boardingPassUrl?.trim() ?? "";
+  const rawPassUrl = flight.boardingPassUrl?.trim() ?? "";
+  // Relative / non-https pass links must not become in-app navigations (Clerk "got lost").
+  const boardingPassUrl = isSafeExternalHttpsUrl(rawPassUrl) ? rawPassUrl : "";
   const holdsBoardingPass = Boolean(boardingPassUrl);
-  const airlineCheckInUrl = resolveAirlineCheckInUrl({
+  const rawAirlineUrl = resolveAirlineCheckInUrl({
     flightNumber: flight.flightNumber,
     airlineName: flight.flightAirline ?? flight.provider,
     confirmationCode: flight.confirmationCode,
   });
+  const airlineCheckInUrl =
+    rawAirlineUrl && isSafeExternalHttpsUrl(rawAirlineUrl) ? rawAirlineUrl : null;
 
   if (!checkInOpen && !holdsBoardingPass) {
     return null;
@@ -169,7 +197,7 @@ export function buildCheckInHandoffContent(
 
   if (!checkInOpen) return null;
 
-  const primaryActionUrl = airlineCheckInUrl ?? "https://www.google.com/search?q=airline+online+check+in";
+  const primaryActionUrl = airlineCheckInUrl ?? FALLBACK_CHECKIN_SEARCH;
   return {
     flightId: flight.id,
     headline: "Check-in is open",
@@ -218,20 +246,24 @@ export function resolveNextCheckInHandoff(
     .sort((a, b) => (a.departureUtcMs ?? 0) - (b.departureUtcMs ?? 0));
 
   for (const row of flights) {
-    const content = buildCheckInHandoffContent({
-      id: row.flight.id,
-      flightNumber: row.flight.flightNumber,
-      flightAirline: row.flight.flightAirline,
-      provider: row.flight.provider,
-      confirmationCode: row.flight.confirmationCode,
-      flightDepartureAirport: row.flight.flightDepartureAirport,
-      departureUtcMs: row.departureUtcMs,
-      boardingPassUrl: resolveBoardingPassUrl({
-        boardingPassUrl: row.flight.boardingPassUrl,
-        sourceLinks: row.flight.sourceLinks,
-        originalEmailText: row.flight.originalEmailText,
-      }) ?? undefined,
-    }, nowMs);
+    const content = buildCheckInHandoffContent(
+      {
+        id: row.flight.id,
+        flightNumber: row.flight.flightNumber,
+        flightAirline: row.flight.flightAirline,
+        provider: row.flight.provider,
+        confirmationCode: row.flight.confirmationCode,
+        flightDepartureAirport: row.flight.flightDepartureAirport,
+        departureUtcMs: row.departureUtcMs,
+        boardingPassUrl:
+          resolveBoardingPassUrl({
+            boardingPassUrl: row.flight.boardingPassUrl,
+            sourceLinks: row.flight.sourceLinks,
+            originalEmailText: row.flight.originalEmailText,
+          }) ?? undefined,
+      },
+      nowMs,
+    );
     if (content) return content;
   }
   return null;

@@ -943,6 +943,7 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 
 | Date | Note |
 |------|------|
+| 2026-09-01 | **Check-in handoff (AS/HA/B6):** Alaska `/check-in` soft-404ed (Clerk-looking dead end when relative); fixed to live `/checkin` → reservations.alaskaair.com; Hawaiian manage/check-in; JetBlue `/checkin`; absolute-https-only handoff (F10). |
 | 2026-08-16 | **G27 Review bookings sheet:** dead Home CTA was a session flag with no UI. Apple inbox: Add / Already on trip / Not mine. |
 | 2026-08-16 | **N1 neuro feedback loop:** honest-only scoring, Search flights locked last, weekly digest GET, Demand Generator prompt. Confirmations untouched. |
 | 2026-07-14 | **"Nothing changed after deploy" = PWA service worker, not a code/deploy failure.** This app is `next-pwa` (`public/sw.js`, `register:true`, `skipWaiting`). The SW is network-first for `/_next/static/` + navigations, so online users DO get fresh code — but the *already-open page* keeps running the old JS bundle until reloaded. Before blaming the fix, verify: commits on `origin/main` (`git log origin/main`) + the **Deploy** workflow ran `--prod` and succeeded (`gh run list --branch main`). Fixed durably: `src/app/travel-assistant/page.tsx` now auto-reloads once on SW `controllerchange` (guarded vs. loops + first-install) and polls `registration.update()` on load/tab-refocus, so future deploys appear without a manual clear. Immediate see-it-now: Settings → 🔄 Clear cache, or hard-reload. |

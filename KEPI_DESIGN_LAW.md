@@ -292,7 +292,8 @@ Background and interactive gate/delay pushes must key status snapshots by the fl
 **Test:** `src/lib/travelAssistant/resolvePushFlightDate.test.ts`, `src/lib/travelAssistant/flightStatusPushBridge.test.ts`, `src/lib/travelAssistant/flightStatusTrustLine.test.ts`
 
 **F10 — Check-in handoff is honest**  
-Check-in prompts open at **24h before departure**. Kepi may deep-link to airline check-in or a stored Wallet/pass URL — never render a scannable barcode it does not hold. UI must state where the boarding pass actually lives.
+Check-in prompts open at **24h before departure**. Kepi may deep-link to airline check-in or a stored Wallet/pass URL — never render a scannable barcode it does not hold. UI must state where the boarding pass actually lives.  
+Handoff `href`s must be **absolute `https://` only** (relative paths open on kepitravel.com and hit Clerk’s “got lost” page). Airline check-in URLs must be live entry points — never ship soft-404s (Alaska is `/checkin`, not `/check-in`; JetBlue `/checkin`; Hawaiian `/manage/check-in`).
 
 **Test:** `src/lib/travelAssistant/checkInHandoff.test.ts`
 
