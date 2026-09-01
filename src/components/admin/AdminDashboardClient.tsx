@@ -450,6 +450,7 @@ export function AdminDashboardClient() {
       ) : activeTab === "airports" ? (
         <AdminAirportsVerifyPanel />
       ) : activeTab === "users" ? (
+        <>
         <section className="space-y-3 rounded-2xl border border-emerald-300/50 bg-emerald-50/80 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
@@ -619,6 +620,7 @@ export function AdminDashboardClient() {
           {usersError ? <p className="text-xs text-rose-600 dark:text-rose-300">{usersError}</p> : null}
           {adminMessage ? <p className="text-xs text-cyan-700 dark:text-cyan-300">{adminMessage}</p> : null}
         </section>
+        </>
       ) : (
         <section className="space-y-3 rounded-2xl border border-slate-200 bg-white/90 p-4 dark:border-slate-700 dark:bg-slate-900/70">
           <div className="flex flex-wrap items-end justify-between gap-3">

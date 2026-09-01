@@ -490,13 +490,6 @@ export function AirportNavigatorFallback({
           ) : null}
         </div>
       ) : null}
-          {leaveCountdown.honestyLine ? (
-            <p className="mt-0.5 text-[9px] font-semibold leading-snug text-amber-950/70">
-              {leaveCountdown.honestyLine}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
 
       <div className="space-y-4 p-4 sm:p-5">
         <div className="relative rounded-2xl border border-sky-400/25 bg-sky-500/10 px-4 py-3">
