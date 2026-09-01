@@ -970,6 +970,7 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 | 2026-06-15 | Screenshot triage rule + Polignano offshore pin fix (`isLikelyOffshorePin`) |
 | 2026-06-15 | Created memory file; documented Duffel emails sent, LiteAPI key set, Travelpayouts Drive skipped, domain bot skills |
 
+- **2026-09-01 — Airport gate poll slowed to 4 min (F9):** 1–2s client polling at airport was freezing the app (API + GPS + effect restarts on every fix). Now 4 min at-airport/in-terminal; poll interval only resets when proximity *bucket* changes, not every GPS tick.
 - **2026-09-01 — Blank screen / hang on open (I61):** Root cause was PWA SW caching failed `/_next/static` responses after deploy + double `controllerchange` reload (page + DeployRefresh). Fixed: `cacheIfOk` only stores OK responses, CACHE_VERSION v40, DeployRefresh sole reload owner, throttle update checks. After ship: hard-refresh once or Settings → clear cache if still blank.
 - **2026-09-01 — Corner traffic timer (I62):** Depart Map/Airport corner badge shows “Traffic ~45 min to airport” from OSRM + leave-home countdown (arrive-by − drive). Refreshes every 2 min. No GPS → leave-by only, labeled drive not included.
 - **2026-09-01 — Map helper just-for-me (I62):** Admins can self-enable via Admin → Users → “Turn on for me only”, or the amber “Turn on map helper (just me)” chip in Airport Mode. One-tap Gate / Alaska / Door confirms; never auto-publishes.
