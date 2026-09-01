@@ -11,6 +11,7 @@ import {
   useNavigatorCredentials,
 } from "@/lib/travelAssistant/useActiveFlight";
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
+import { useAtAirportFlightStatusPoll } from "@/lib/travelAssistant/useAtAirportFlightStatusPoll";
 import { buildOsmRasterFallbackStyle, directMaptilerTransformRequest, resolveLiveMapStyle, scheduleMapLoadFallback, attachMapStyleErrorFallback, type LiveMapStyleId } from "@/lib/map/maptilerClient";
 import { buildOfflineCityMapStyle } from "@/lib/map/offlineCityMapBundle";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
@@ -695,24 +696,6 @@ export function LiveMapPage() {
     });
   }, [mapView, isLoaded, drawerOpen]);
 
-  // Passive GPS for map centering + departure-airport geofence (device-only until shared)
-  useEffect(() => {
-    if (!navigator.geolocation) return;
-    navWatchRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        setNavLat(pos.coords.latitude);
-        setNavLon(pos.coords.longitude);
-        setNavAccuracyM(Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : null);
-      },
-      () => null,
-      { enableHighAccuracy: true, maximumAge: 10_000, timeout: liveMapGeoOptions().timeout ?? 15_000 },
-    );
-    return () => {
-      if (navWatchRef.current !== null) navigator.geolocation.clearWatch(navWatchRef.current);
-      navWatchRef.current = null;
-    };
-  }, []);
-
   const navIata =
     navigatorCoachMode === "arrive"
       ? (navFlight?.f.flightArrivalAirport ?? "")
@@ -723,6 +706,39 @@ export function LiveMapPage() {
     [navLat, navLon, navIata],
   );
 
+  // Passive GPS — tighten refresh when geofenced at the airport (map pin + gate walk).
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    if (navWatchRef.current !== null) {
+      navigator.geolocation.clearWatch(navWatchRef.current);
+      navWatchRef.current = null;
+    }
+    const atAirport =
+      navProximity.status === "at-airport" || navProximity.status === "in-terminal";
+    const maximumAge = atAirport
+      ? navProximity.status === "in-terminal"
+        ? 0
+        : 1_000
+      : 10_000;
+    navWatchRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        setNavLat(pos.coords.latitude);
+        setNavLon(pos.coords.longitude);
+        setNavAccuracyM(Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : null);
+      },
+      () => null,
+      {
+        enableHighAccuracy: true,
+        maximumAge,
+        timeout: liveMapGeoOptions().timeout ?? 15_000,
+      },
+    );
+    return () => {
+      if (navWatchRef.current !== null) navigator.geolocation.clearWatch(navWatchRef.current);
+      navWatchRef.current = null;
+    };
+  }, [navProximity.status]);
+
   const atNavAirport =
     navProximity.status === "at-airport" || navProximity.status === "in-terminal";
 
@@ -732,6 +748,12 @@ export function LiveMapPage() {
       : activeFlight && atNavAirport,
   );
   const airportPreviewMode = Boolean(navFlight && !airportLiveMode);
+
+  const liveFlightStatus = useAtAirportFlightStatusPoll({
+    flight: navFlight?.f ?? null,
+    proximity: navProximity.status === "unknown" ? "away" : navProximity.status,
+    enabled: airportLiveMode && mapView === "airport",
+  });
 
   useEffect(() => {
     if (!preferAirportView || !navigatorFlight) return;
@@ -1056,14 +1078,19 @@ export function LiveMapPage() {
               iata={navIata}
               gateCode={
                 navigatorCoachMode === "arrive"
-                  ? (navFlight.f.flightArrivalGate ?? navFlight.f.flightDepartureGate ?? null)
-                  : (navFlight.f.flightDepartureGate ?? null)
+                  ? (liveFlightStatus?.departureGate
+                    ?? navFlight.f.flightArrivalGate
+                    ?? navFlight.f.flightDepartureGate
+                    ?? null)
+                  : (liveFlightStatus?.departureGate ?? navFlight.f.flightDepartureGate ?? null)
               }
               airlineName={navFlight.f.flightAirline ?? navFlight.f.provider ?? null}
               flightNumber={navFlight.f.flightNumber ?? null}
               arrivalAirport={navFlight.f.flightArrivalAirport ?? null}
               departureAirport={navFlight.f.flightDepartureAirport ?? null}
-              departureTerminal={navFlight.f.flightDepartureTerminal ?? null}
+              departureTerminal={
+                liveFlightStatus?.departureTerminal ?? navFlight.f.flightDepartureTerminal ?? null
+              }
               arrivalTerminal={navFlight.f.flightArrivalTerminal ?? null}
               coachMode={navigatorCoachMode}
               landedMinutesAgo={
@@ -1080,11 +1107,16 @@ export function LiveMapPage() {
               flightStatusLabel={
                 navigatorCoachMode === "arrive"
                   ? "Landed"
-                  : (navFlight.f.flightDelayMinutes ?? 0) > 0
-                    ? `Delayed +${navFlight.f.flightDelayMinutes}m`
-                    : navFlight.f.flightStatus ?? (navFlight.f.flightOnTime === false ? "Delayed" : "On time")
+                  : liveFlightStatus?.flightStatus
+                    ?? ((liveFlightStatus?.delayMinutes ?? navFlight.f.flightDelayMinutes ?? 0) > 0
+                      ? `Delayed +${liveFlightStatus?.delayMinutes ?? navFlight.f.flightDelayMinutes}m`
+                      : navFlight.f.flightStatus ?? (navFlight.f.flightOnTime === false ? "Delayed" : "On time"))
               }
-              flightDelayed={(navFlight.f.flightDelayMinutes ?? 0) > 0 || navFlight.f.flightOnTime === false}
+              flightDelayed={
+                (liveFlightStatus?.delayMinutes ?? navFlight.f.flightDelayMinutes ?? 0) > 0
+                || liveFlightStatus?.onTime === false
+                || navFlight.f.flightOnTime === false
+              }
               proximityStatus={airportLiveMode ? navProximity.status : "preview"}
               minutesToDeparture={navMinutesToDeparture}
               userLat={navLat}

@@ -1,13 +1,25 @@
 /**
  * Phase-aware flight status polling cadence.
  * Within 6h of departure we poll aggressively; farther out we conserve API credits.
+ * At the airport (GPS geofence) we poll continuously so gate changes land in seconds.
  */
 
 export const FLIGHT_STATUS_POLL_OUTSIDE_HOURS = 24;
 export const FLIGHT_STATUS_POLL_CRITICAL_HOURS = 6;
 export const FLIGHT_STATUS_POLL_INTERVAL_FAR_MS = 5 * 60_000;
 export const FLIGHT_STATUS_POLL_INTERVAL_NEAR_MS = 90_000;
+/** At airport campus — gate/departure board changes matter now. */
+export const FLIGHT_STATUS_POLL_INTERVAL_AT_AIRPORT_MS = 2_000;
+/** Inside the terminal — fastest client cadence (still provider-rate-limited server-side). */
+export const FLIGHT_STATUS_POLL_INTERVAL_IN_TERMINAL_MS = 1_000;
 export const FLIGHT_STATUS_SERVER_SWEEP_INTERVAL_MINUTES = 2;
+
+export type FlightStatusPollProximity =
+  | "away"
+  | "at-airport"
+  | "in-terminal"
+  | "airborne"
+  | "unknown";
 
 export function hoursUntilDeparture(departureUtcMs: number, nowMs = Date.now()): number {
   return (departureUtcMs - nowMs) / 3_600_000;
@@ -21,14 +33,21 @@ export function shouldPollFlightStatus(departureUtcMs: number, nowMs = Date.now(
 export function resolveFlightStatusPollIntervalMs(
   nearestDepartureUtcMs: number | null,
   nowMs = Date.now(),
+  proximity: FlightStatusPollProximity = "away",
 ): number {
   if (nearestDepartureUtcMs === null || !Number.isFinite(nearestDepartureUtcMs)) {
     return FLIGHT_STATUS_POLL_INTERVAL_FAR_MS;
   }
-  const hours = hoursUntilDeparture(nearestDepartureUtcMs, nowMs);
   if (!shouldPollFlightStatus(nearestDepartureUtcMs, nowMs)) {
     return FLIGHT_STATUS_POLL_INTERVAL_FAR_MS;
   }
+  if (proximity === "in-terminal") {
+    return FLIGHT_STATUS_POLL_INTERVAL_IN_TERMINAL_MS;
+  }
+  if (proximity === "at-airport") {
+    return FLIGHT_STATUS_POLL_INTERVAL_AT_AIRPORT_MS;
+  }
+  const hours = hoursUntilDeparture(nearestDepartureUtcMs, nowMs);
   if (hours <= FLIGHT_STATUS_POLL_CRITICAL_HOURS) {
     return FLIGHT_STATUS_POLL_INTERVAL_NEAR_MS;
   }
@@ -39,11 +58,12 @@ export function isFlightStatusStale(
   checkedAtIso: string | undefined | null,
   departureUtcMs: number,
   nowMs = Date.now(),
+  proximity: FlightStatusPollProximity = "away",
 ): boolean {
   if (!checkedAtIso) return true;
   const checkedAtMs = Date.parse(checkedAtIso);
   if (Number.isNaN(checkedAtMs)) return true;
-  const intervalMs = resolveFlightStatusPollIntervalMs(departureUtcMs, nowMs);
+  const intervalMs = resolveFlightStatusPollIntervalMs(departureUtcMs, nowMs, proximity);
   return nowMs - checkedAtMs >= intervalMs;
 }
 

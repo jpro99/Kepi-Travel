@@ -1380,9 +1380,10 @@ export function AirportNavigatorMap({
   }, [activeRoute]);
 
   useEffect(() => {
+    if (mapFirstLive) return;
     setAirportWalkSheetOpen(Boolean(activeRoute));
     return () => setAirportWalkSheetOpen(false);
-  }, [activeRoute]);
+  }, [activeRoute, mapFirstLive]);
 
   useEffect(() => {
     setAirportConfirmSpotOpen(confirmMode);
@@ -3853,7 +3854,7 @@ export function AirportNavigatorMap({
             </ol>
           )}
         </section>
-      )}
+      ) : null}
 
       {/* Guide-me CTA when idle — hidden while after-questions are up so they never cover pin/guide */}
       {!quietMode && !activeRoute && layout && gatePoi && !confirmMode
