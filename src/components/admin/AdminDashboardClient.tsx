@@ -64,6 +64,9 @@ export function AdminDashboardClient() {
   const [inviteCodesError, setInviteCodesError] = useState<string | null>(null);
   const [adminBusy, setAdminBusy] = useState(false);
   const [adminMessage, setAdminMessage] = useState<string | null>(null);
+  const [helperForMeEnabled, setHelperForMeEnabled] = useState(false);
+  const [helperForMeBusy, setHelperForMeBusy] = useState(false);
+  const [helperForMeKnown, setHelperForMeKnown] = useState(false);
   const [inviteNote, setInviteNote] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteSendResult, setInviteSendResult] = useState<{ code: string; redeemUrl: string; emailSent: boolean; warning?: string; resent?: boolean } | null>(null);
@@ -100,6 +103,21 @@ export function AdminDashboardClient() {
       setStatsError(error instanceof Error ? error.message : "Unknown admin stats error.");
     } finally {
       setLoadingStats(false);
+    }
+  }, []);
+
+
+  const loadHelperForMe = useCallback(async (): Promise<void> => {
+    try {
+      const res = await fetch("/api/map-helper/status", { cache: "no-store" });
+      if (!res.ok) return;
+      const payload = (await res.json()) as { enabled?: boolean; canSelfEnable?: boolean };
+      if (payload.canSelfEnable) {
+        setHelperForMeEnabled(Boolean(payload.enabled));
+        setHelperForMeKnown(true);
+      }
+    } catch {
+      /* ignore */
     }
   }, []);
 
@@ -310,6 +328,12 @@ export function AdminDashboardClient() {
     [adminBusy, loadInviteCodes, loadUsers],
   );
 
+
+  useEffect(() => {
+    if (activeTab !== "users") return;
+    void loadHelperForMe();
+  }, [activeTab, loadHelperForMe]);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -426,6 +450,59 @@ export function AdminDashboardClient() {
       ) : activeTab === "airports" ? (
         <AdminAirportsVerifyPanel />
       ) : activeTab === "users" ? (
+        <section className="space-y-3 rounded-2xl border border-emerald-300/50 bg-emerald-50/80 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold text-emerald-950 dark:text-emerald-100">Airport map helper — just for you</h2>
+              <p className="mt-1 text-xs text-emerald-900/80 dark:text-emerald-100/75">
+                Turn this on for your account only. In Airport Mode you&apos;ll get one-tap questions like
+                &ldquo;Gate C11 here?&rdquo; / &ldquo;Alaska here?&rdquo;. Answers go to the admin inbox — never auto-publish.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={helperForMeBusy || !helperForMeKnown}
+              onClick={() => {
+                void (async () => {
+                  setHelperForMeBusy(true);
+                  setAdminMessage(null);
+                  try {
+                    const res = await fetch("/api/map-helper/self", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ enabled: !helperForMeEnabled }),
+                    });
+                    const payload = (await res.json()) as { error?: string; enabled?: boolean };
+                    if (!res.ok) throw new Error(payload.error ?? `HTTP ${res.status}`);
+                    setHelperForMeEnabled(Boolean(payload.enabled));
+                    void loadUsers();
+                    setAdminMessage(
+                      payload.enabled
+                        ? "Map helper on for you — open Airport Mode and tap Gate / Alaska confirms."
+                        : "Map helper off for your account.",
+                    );
+                  } catch (err) {
+                    setAdminMessage(err instanceof Error ? err.message : "Could not toggle helper for you");
+                  } finally {
+                    setHelperForMeBusy(false);
+                  }
+                })();
+              }}
+              className={`rounded-xl px-4 py-2.5 text-sm font-bold disabled:opacity-40 ${
+                helperForMeEnabled
+                  ? "bg-emerald-600 text-white"
+                  : "border border-emerald-600/40 bg-white text-emerald-900 dark:bg-slate-900 dark:text-emerald-100"
+              }`}
+            >
+              {helperForMeBusy
+                ? "…"
+                : helperForMeEnabled
+                  ? "Helper on — tap to turn off"
+                  : "Turn on for me only"}
+            </button>
+          </div>
+        </section>
+
         <section className="space-y-3 rounded-2xl border border-slate-200 bg-white/90 p-4 dark:border-slate-700 dark:bg-slate-900/70">
           <div className="flex items-center justify-between gap-3">
             <div>

@@ -71,7 +71,7 @@ test("resolveTripWalk treats gate change as one Home event without walking-delta
     storedDepartureGate: "C12",
     liveDepartureGate: "B4",
     prepMode: false,
-    leaveByHint: "Leave for the airport by 6:30 AM (90 min before 8:00 AM departure — drive time not included)",
+    leaveByHint: "Leave for the airport by 6:00 AM (120 min before 8:00 AM departure — drive time not included)",
   });
   assert.equal(walk.phase, "disruption");
   assert.deepEqual(walk.gateChange, { from: "C12", to: "B4" });

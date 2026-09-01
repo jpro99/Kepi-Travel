@@ -23,6 +23,7 @@ import {
   type DayCoachPathStep,
 } from "@/lib/travelAssistant/airportDayCoach";
 import { buildDepartLeaveTimingCopy } from "@/lib/travelAssistant/departLeaveTiming";
+import { buildLeaveCountdownBadge } from "@/lib/travelAssistant/leaveCountdownBadge";
 import { resolveAirportLocationPhase } from "@/lib/travelAssistant/airportLocationPhase";
 import { ArrivalTransportOptionsCard } from "@/components/travelAssistant/ArrivalTransportOptionsCard";
 import { GateConfidenceBar } from "@/components/travelAssistant/GateConfidenceBar";
@@ -129,6 +130,7 @@ export function AirportNavigatorFallback({
   const isArrive = coachMode === "arrive";
   const [liveBaggageClaim, setLiveBaggageClaim] = useState<string | null>(null);
   const [driveMinutes, setDriveMinutes] = useState<number | null>(null);
+  const [countdownNowMs, setCountdownNowMs] = useState(() => Date.now());
   const nav = getAirportNav(code);
 
   useEffect(() => {
@@ -286,20 +288,26 @@ export function AirportNavigatorFallback({
       lat: String(userLat),
       lon: String(userLon),
     });
-    void fetch(`/api/drive-eta?${params.toString()}`, { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((payload: { driveMinutes?: number } | null) => {
-        if (cancelled) return;
-        const mins = payload?.driveMinutes;
-        setDriveMinutes(
-          typeof mins === "number" && Number.isFinite(mins) && mins > 0 ? Math.round(mins) : null,
-        );
-      })
-      .catch(() => {
-        if (!cancelled) setDriveMinutes(null);
-      });
+    const refreshDriveEta = () => {
+      void fetch(`/api/drive-eta?${params.toString()}`, { cache: "no-store" })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((payload: { driveMinutes?: number } | null) => {
+          if (cancelled) return;
+          const mins = payload?.driveMinutes;
+          setDriveMinutes(
+            typeof mins === "number" && Number.isFinite(mins) && mins > 0 ? Math.round(mins) : null,
+          );
+        })
+        .catch(() => {
+          if (!cancelled) setDriveMinutes(null);
+        });
+    };
+    refreshDriveEta();
+    // Re-check route ETA every 2 min so the corner traffic timer stays current.
+    const intervalId = window.setInterval(refreshDriveEta, 120_000);
     return () => {
       cancelled = true;
+      window.clearInterval(intervalId);
     };
   }, [isArrive, code, userLat, userLon, proximityStatus]);
 
@@ -317,6 +325,27 @@ export function AirportNavigatorFallback({
           }),
     [isArrive, minutesToDeparture, code, arrivalAirport, flightTimezone, driveMinutes],
   );
+  useEffect(() => {
+    if (isArrive) return;
+    setCountdownNowMs(Date.now());
+    const id = window.setInterval(() => setCountdownNowMs(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, [isArrive, leaveTiming?.leaveByUtcMs]);
+
+  const leaveCountdown = useMemo(() => {
+    const atAirport =
+      proximityStatus === "in-terminal" ||
+      proximityStatus === "at-airport" ||
+      proximity.status === "in-terminal" ||
+      proximity.status === "at-airport";
+    return buildLeaveCountdownBadge({
+      leaveByUtcMs: leaveTiming?.leaveByUtcMs,
+      driveMinutes,
+      nowMs: countdownNowMs,
+      atAirport,
+    });
+  }, [leaveTiming?.leaveByUtcMs, driveMinutes, countdownNowMs, proximityStatus, proximity.status]);
+
   const timeBudgetLine = isArrive
     ? null
     : leaveTiming?.leaveByLine ?? departureTimeBudgetReassurance(minutesToDeparture);
@@ -437,6 +466,38 @@ export function AirportNavigatorFallback({
       }
       style={fill ? undefined : { maxHeight: 520 }}
     >
+      {leaveCountdown.visible ? (
+        <div
+          data-testid="depart-leave-countdown-badge"
+          className="pointer-events-none absolute right-3 top-3 z-30 max-w-[12.5rem] rounded-2xl border border-amber-300/40 bg-amber-500/95 px-3 py-2.5 text-right shadow-lg shadow-amber-950/30"
+          aria-live="polite"
+        >
+          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-950/80">
+            {leaveCountdown.eyebrow}
+          </p>
+          <p className="text-sm font-black tabular-nums leading-tight text-amber-950">
+            {leaveCountdown.primaryLine}
+          </p>
+          {leaveCountdown.secondaryLine ? (
+            <p className="mt-1 text-[12px] font-bold tabular-nums leading-snug text-amber-950">
+              {leaveCountdown.secondaryLine}
+            </p>
+          ) : null}
+          {leaveCountdown.honestyLine ? (
+            <p className="mt-0.5 text-[9px] font-semibold leading-snug text-amber-950/70">
+              {leaveCountdown.honestyLine}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+          {leaveCountdown.honestyLine ? (
+            <p className="mt-0.5 text-[9px] font-semibold leading-snug text-amber-950/70">
+              {leaveCountdown.honestyLine}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="space-y-4 p-4 sm:p-5">
         <div className="relative rounded-2xl border border-sky-400/25 bg-sky-500/10 px-4 py-3">
           {onToggleFullDayView ? (

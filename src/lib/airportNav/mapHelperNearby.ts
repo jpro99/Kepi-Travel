@@ -32,7 +32,8 @@ function haversineMeters(a: [number, number], b: [number, number]): number {
 
 const DOOR_RADIUS_M = 55;
 const AMENITY_RADIUS_M = 40;
-const MAX_CHIPS = 6;
+const GATE_RADIUS_M = 50;
+const MAX_CHIPS = 8;
 
 const TAP_CATEGORIES = new Set<PoiDefinition["category"]>([
   "amenity",
@@ -40,6 +41,7 @@ const TAP_CATEGORIES = new Set<PoiDefinition["category"]>([
   "lounge",
   "checkin",
   "baggage",
+  "gate",
 ]);
 
 function nodePos(layout: AirportLayout, nodeId: string): [number, number] | null {
@@ -91,17 +93,27 @@ export function buildMapHelperNearbyChips(
     }
 
     if (!TAP_CATEGORIES.has(poi.category)) continue;
-    if (dist > AMENITY_RADIUS_M) continue;
-
     const name = (poi.name ?? "").trim();
     if (!name || name.length < 2) continue;
     // Generic bag-drop is covered by Door chips; keep named airline counters.
     if (poi.category === "checkin" && !poi.airline && !poi.airlineIataCode) continue;
 
+    const radius = poi.category === "gate" ? GATE_RADIUS_M : AMENITY_RADIUS_M;
+    if (dist > radius) continue;
+
+    let label = name.length > 28 ? `${name.slice(0, 26)}…` : name;
+    if (poi.category === "gate") {
+      label = /gate/i.test(name) ? `${name}?` : `Gate ${name}?`;
+    } else if (poi.category === "checkin" && (poi.airline || poi.airlineIataCode)) {
+      const carrier = (poi.airline || poi.airlineIataCode || "").trim();
+      label = carrier ? `${carrier} here?` : label;
+      if (label.length > 28) label = `${label.slice(0, 26)}…`;
+    }
+
     poiChips.push({
       id: `poi:${poi.id}`,
       kind: "confirm_poi",
-      label: name.length > 28 ? `${name.slice(0, 26)}…` : name,
+      label,
       poiId: poi.id,
       poiName: name,
       poiCategory: poi.category,

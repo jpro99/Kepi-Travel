@@ -1239,24 +1239,33 @@ export function AirportNavigatorMap({
   const [mapHelperEnabled, setMapHelperEnabled] = useState(Boolean(mapHelperEnabledProp));
   const prevGateCodeRef = useRef<string | null>(null);
   const prevGatePoiIdRef = useRef<string | null>(null);
+  const [canSelfEnableHelper, setCanSelfEnableHelper] = useState(false);
+  const [selfHelperBusy, setSelfHelperBusy] = useState(false);
 
   useEffect(() => {
     if (typeof mapHelperEnabledProp === "boolean") {
       setMapHelperEnabled(mapHelperEnabledProp);
+      setCanSelfEnableHelper(false);
       return;
     }
     if (previewMode || placeMode) {
       setMapHelperEnabled(false);
+      setCanSelfEnableHelper(false);
       return;
     }
     let cancelled = false;
     void fetch("/api/map-helper/status", { cache: "no-store" })
       .then((res) => res.json())
-      .then((payload: { canSubmit?: boolean }) => {
-        if (!cancelled) setMapHelperEnabled(Boolean(payload.canSubmit));
+      .then((payload: { canSubmit?: boolean; enabled?: boolean; canSelfEnable?: boolean }) => {
+        if (cancelled) return;
+        setMapHelperEnabled(Boolean(payload.canSubmit ?? payload.enabled));
+        setCanSelfEnableHelper(Boolean(payload.canSelfEnable));
       })
       .catch(() => {
-        if (!cancelled) setMapHelperEnabled(false);
+        if (!cancelled) {
+          setMapHelperEnabled(false);
+          setCanSelfEnableHelper(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -3760,6 +3769,42 @@ export function AirportNavigatorMap({
             className="min-h-[44px] rounded-full bg-black/55 px-3 py-2 text-[12px] font-bold text-white shadow-lg backdrop-blur"
           >
             {confirmMode ? "Cancel" : confirmedNodeId ? "📍 Update my spot" : "📍 I'm here"}
+          </button>
+        </div>
+      )}
+
+      {/* Admin self-enable: turn on helper chips for this account only */}
+      {!mapHelperEnabled && canSelfEnableHelper && !securityQuestionOpen && !journeyPrompt && !quietMode && !previewMode && !placeMode && layout && (
+        <div
+          className="absolute inset-x-3 z-[126] flex justify-center"
+          style={{ bottom: `calc(${bottomPanel} + ${activeRoute ? "11.5rem" : "5.25rem"})` }}
+          data-testid="map-helper-self-enable"
+        >
+          <button
+            type="button"
+            disabled={selfHelperBusy}
+            onClick={() => {
+              void (async () => {
+                setSelfHelperBusy(true);
+                try {
+                  const res = await fetch("/api/map-helper/self", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ enabled: true }),
+                  });
+                  const payload = (await res.json().catch(() => ({}))) as { enabled?: boolean; error?: string };
+                  if (!res.ok) throw new Error(payload.error ?? "Could not enable helper");
+                  setMapHelperEnabled(Boolean(payload.enabled ?? true));
+                } catch {
+                  /* keep off; user can retry from Admin */
+                } finally {
+                  setSelfHelperBusy(false);
+                }
+              })();
+            }}
+            className="min-h-[48px] rounded-2xl border border-amber-300/50 bg-amber-500/95 px-4 text-[15px] font-bold text-amber-950 shadow-lg disabled:opacity-60"
+          >
+            {selfHelperBusy ? "…" : "Turn on map helper (just me)"}
           </button>
         </div>
       )}

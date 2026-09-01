@@ -88,7 +88,7 @@ export function MapHelperConfirmBar({
           Help improve the map
         </p>
         <p className="mt-0.5 px-1 text-[15px] font-semibold leading-snug text-white">
-          Tap where you are — one button is enough
+          Is this the gate? Is Alaska here? Tap yes — one button is enough
         </p>
         <div className="mt-2.5 flex gap-2 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
           {chips.map((chip) => {
@@ -118,7 +118,7 @@ export function MapHelperConfirmBar({
           <p className="mt-2 px-1 text-[13px] font-medium text-emerald-200">{toast}</p>
         ) : (
           <p className="mt-2 px-1 text-[12px] leading-snug text-white/55">
-            Only for helpers Jeff invited. Nothing publishes until he reviews it.
+            Just for helpers (Admin → Turn on for me only). Confirms never auto-publish.
           </p>
         )}
       </div>

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
+import { isAdminUserId, resolveAuthenticatedUserId } from "@/lib/admin/adminAccess";
 import { isMapHelperEnabled } from "@/lib/airportNav/mapHelperStore";
 
 export const runtime = "nodejs";
@@ -9,8 +9,18 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const userId = await resolveAuthenticatedUserId();
   if (!userId) {
-    return NextResponse.json({ enabled: false, canSubmit: false });
+    return NextResponse.json({
+      enabled: false,
+      canSubmit: false,
+      canSelfEnable: false,
+    });
   }
   const enabled = await isMapHelperEnabled(userId);
-  return NextResponse.json({ enabled, canSubmit: enabled, userId });
+  const canSelfEnable = isAdminUserId(userId);
+  return NextResponse.json({
+    enabled,
+    canSubmit: enabled,
+    canSelfEnable,
+    userId,
+  });
 }

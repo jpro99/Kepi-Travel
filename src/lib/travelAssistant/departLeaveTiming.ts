@@ -15,7 +15,7 @@ export type DepartLeaveTimingInput = {
   departureIata?: string | null;
   /** Arrival airport IATA — international buffer when countries differ is caller's job via bufferMinutes. */
   arrivalIata?: string | null;
-  /** Override buffer; default domestic 90 / intl 180 when arrival looks abroad. */
+  /** Override buffer; default domestic 120 (2h) / intl 180 when arrival looks abroad. */
   bufferMinutes?: number;
   /** Departure-airport IANA zone; falls back to IATA lookup. */
   departureTimezone?: string | null;
@@ -27,7 +27,7 @@ export type DepartLeaveTimingInput = {
 };
 
 export type DepartLeaveTimingCopy = {
-  /** e.g. "Leave for ONT by 5:30 AM (90 min before 7:00 AM — drive not included)" */
+  /** e.g. "Leave for ONT by 5:00 AM (120 min before 7:00 AM — drive not included)" */
   leaveByLine: string | null;
   /** e.g. "About 35 min drive right now (route estimate — not live traffic)" */
   driveLine: string | null;
@@ -69,7 +69,8 @@ export function defaultDepartBufferMinutes(
   departureIata?: string | null,
   arrivalIata?: string | null,
 ): number {
-  return isLikelyInternational(departureIata, arrivalIata) ? 180 : 90;
+  // I62: domestic arrive-by is 2h before departure (not 90m).
+  return isLikelyInternational(departureIata, arrivalIata) ? 180 : 120;
 }
 
 /**
