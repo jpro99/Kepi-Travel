@@ -24,6 +24,7 @@ import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransp
 import { addIsoDays, buildTripCompleteness } from "@/lib/travelAssistant/tripNightCoverage";
 import { TripCompletenessBar } from "@/components/travelAssistant/TripCompletenessBar";
 import { FreePlanSoftBanner } from "@/components/billing/FreePlanSoftBanner";
+import { resolveAirborneHeroCopy } from "@/lib/travelAssistant/airborneLiveClaim";
 import { formatFlightStatusTrustLine } from "@/lib/travelAssistant/flightStatusTrustLine";
 import { resolveTripWalk } from "@/lib/travelAssistant/tripWalk";
 import {
@@ -361,9 +362,11 @@ export function MissionControlView({
     let tone: "blue" | "green" = "blue";
 
     if (journeyPhase?.kind === "airborne") {
-      eyebrow = "In the air";
-      title = `${(journeyPhase.onFlight as { flightDepartureAirport?: string }).flightDepartureAirport ?? ""} → ${journeyPhase.landingAt}`;
-      detail = `Landing in ${journeyPhase.landingIn}`;
+      const airborneLive = liveStatus?.[journeyPhase.onFlight.id];
+      const airborneCopy = resolveAirborneHeroCopy(journeyPhase, airborneLive);
+      eyebrow = airborneCopy.eyebrow;
+      title = airborneCopy.title;
+      detail = airborneCopy.detail;
     } else if (journeyPhase?.kind === "just-landed") {
       eyebrow = walk.next.eyebrow || "Just landed";
       title = walk.next.title;
