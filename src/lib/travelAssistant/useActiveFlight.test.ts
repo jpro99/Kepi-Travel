@@ -11,11 +11,19 @@ import {
   type FlightReservation,
 } from "@/lib/travelAssistant/useActiveFlight";
 
-function localInHours(hoursFromNow: number): string {
+function localInHours(hoursFromNow: number, timezone = "America/Los_Angeles"): string {
   const ms = Date.now() + hoursFromNow * 3_600_000;
-  const d = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(new Date(ms)).map((p) => [p.type, p.value]));
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
 }
 
 const baseFlight: FlightReservation = {
@@ -40,6 +48,7 @@ test("selectActiveFlight includes flights up to 12 hours ahead (early airport ar
     title: "SEA → FCO",
     provider: "Delta",
     localTime: localInHours(8),
+    timezone: "America/Los_Angeles",
     location: "SEA",
     flightDepartureAirport: "SEA",
   };
@@ -56,6 +65,7 @@ test("selectActiveFlight ignores flights more than 12 hours ahead", () => {
     title: "SEA → FCO",
     provider: "Delta",
     localTime: localInHours(20),
+    timezone: "America/Los_Angeles",
     location: "SEA",
     flightDepartureAirport: "SEA",
   };

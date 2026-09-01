@@ -16,6 +16,7 @@ import {
   reservationPrimaryDate,
 } from "@/lib/travelAssistant/tripWindow";
 import {
+  departureTimezoneForFlight,
   flightDepartureUtcMs,
   selectNextRemainingFlight,
   sortFlightsByDeparture,
@@ -156,12 +157,20 @@ function hotelCoversDay(hotel: MissionControlReservation, dateKey: string): bool
   return start <= dateKey && dateKey < end;
 }
 
-function formatShortTime(ms: number): string {
+function formatShortTimeInTimezone(ms: number, timezone?: string): string {
   if (!Number.isFinite(ms)) return "";
-  return new Date(ms).toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  try {
+    return new Date(ms).toLocaleTimeString("en-US", {
+      timeZone: timezone,
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return new Date(ms).toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
 }
 
 function isInternationalFlight(r: MissionControlReservation): boolean {
@@ -179,8 +188,9 @@ export function getLeaveByHint(flight: MissionControlReservation, nowMs = Date.n
   if (!hasTime(flight.flightDepartureTime) && !hasTime(flight.localTime)) return null;
   const bufferMin = isInternationalFlight(flight) ? 180 : 90;
   const leaveMs = depMs - bufferMin * 60_000;
-  const leaveLabel = formatShortTime(leaveMs);
-  const depLabel = formatShortTime(depMs);
+  const depTz = departureTimezoneForFlight(flight);
+  const leaveLabel = formatShortTimeInTimezone(leaveMs, depTz);
+  const depLabel = formatShortTimeInTimezone(depMs, depTz);
   if (!leaveLabel || !depLabel) return null;
   return `Leave for the airport by ${leaveLabel} (${bufferMin} min before ${depLabel} departure — drive time not included)`;
 }

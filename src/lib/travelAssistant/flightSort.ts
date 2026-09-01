@@ -17,14 +17,17 @@ export interface FlightSortFields extends CanonicalFlightScheduleFields {
   plannedOnly?: boolean;
 }
 
-/** Departure clock timezone — fix Etc/UTC bleed; otherwise honor stored flight.timezone (F15). */
+/**
+ * Departure clock timezone — always prefer departure-airport IATA zone (F15).
+ * Stored flight.timezone can bleed to arrival/Europe on multi-leg trips; the
+ * departure clock for sorting and leave-by must stay in the origin airport zone.
+ */
 export function departureTimezoneForFlight(flight: FlightSortFields): string | undefined {
-  const stored = flight.timezone?.trim();
   const depIata = flight.flightDepartureAirport?.trim().toUpperCase();
   const iataTz = depIata ? timezoneForIata(depIata) : undefined;
-  if (stored === "Etc/UTC" || stored === "UTC") {
-    return iataTz ?? stored;
-  }
+  if (iataTz) return iataTz;
+  const stored = flight.timezone?.trim();
+  if (!stored || stored === "Etc/UTC" || stored === "UTC") return undefined;
   return stored;
 }
 
