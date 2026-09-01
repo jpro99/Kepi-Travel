@@ -14,6 +14,7 @@ import type { QuickGroundMode } from "@/lib/travelAssistant/quickGroundTransport
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import type { HotelStayMapReservation } from "@/lib/travelAssistant/tripHotelStayMap";
 import { TripHomeTransportSection } from "@/components/travelAssistant/TripHomeTransportSection";
+import { EmergencyCoverageQuickCard } from "@/components/travelAssistant/EmergencyCoverageQuickCard";
 import { isTravelDayTakeover } from "@/lib/travelAssistant/homeDayTruth";
 import { buildMissionControlSnapshot } from "@/lib/travelAssistant/tripPhase";
 import type { TravelStyleMode } from "@/lib/traveler/types";
@@ -92,6 +93,7 @@ interface DesktopTripHomeViewProps {
   onOpenReview?: () => void;
   readinessChecklist?: ReadinessChecklistItem[];
   onOpenReadiness?: () => void;
+  onOpenEmergencyRecord?: () => void;
   travelerType?: TravelStyleMode | null;
 }
 
@@ -128,6 +130,7 @@ export function DesktopTripHomeView({
   onOpenReview,
   readinessChecklist = [],
   onOpenReadiness,
+  onOpenEmergencyRecord,
   travelerType = null,
 }: DesktopTripHomeViewProps) {
   const transportReservations =
@@ -186,6 +189,10 @@ export function DesktopTripHomeView({
         readinessChecklist={readinessChecklist}
         onOpenReadiness={onOpenReadiness}
       />
+
+      {hasTrip ? (
+        <EmergencyCoverageQuickCard onOpenFullRecord={onOpenEmergencyRecord} />
+      ) : null}
 
       {/* I36: on travel day, Home is the takeover screen only — no map/transport chrome. */}
       {hasTrip && !travelTakeover ? (

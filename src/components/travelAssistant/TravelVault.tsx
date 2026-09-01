@@ -22,6 +22,9 @@ interface TravelVaultData {
   hotelLoyaltyNumbers: VaultLoyaltyEntry[];
   driverLicenseNumber: string;
   travelInsurancePolicyNumber: string;
+  travelInsuranceProvider: string;
+  travelInsuranceEmergencyPhone: string;
+  travelInsuranceValidThrough: string;
   emergencyContactName: string;
   emergencyContactPhone: string;
   creditCardTravelBenefitsNotes: string;
@@ -56,6 +59,9 @@ function createEmptyVault(): TravelVaultData {
     hotelLoyaltyNumbers: [],
     driverLicenseNumber: "",
     travelInsurancePolicyNumber: "",
+    travelInsuranceProvider: "",
+    travelInsuranceEmergencyPhone: "",
+    travelInsuranceValidThrough: "",
     emergencyContactName: "",
     emergencyContactPhone: "",
     creditCardTravelBenefitsNotes: "",
@@ -277,7 +283,10 @@ export function TravelVault() {
         { key: "passportNumber", label: "Passport number", value: vault.passportNumber },
         { key: "passportExpiryDate", label: "Passport expiry date", value: vault.passportExpiryDate, inputType: "date" as const },
         { key: "driverLicenseNumber", label: "Driver license number", value: vault.driverLicenseNumber },
-        { key: "travelInsurancePolicyNumber", label: "Travel insurance policy number", value: vault.travelInsurancePolicyNumber },
+        { key: "travelInsuranceProvider", label: "Trip protection provider", value: vault.travelInsuranceProvider },
+        { key: "travelInsurancePolicyNumber", label: "Trip protection policy number", value: vault.travelInsurancePolicyNumber },
+        { key: "travelInsuranceEmergencyPhone", label: "24/7 assistance phone", value: vault.travelInsuranceEmergencyPhone },
+        { key: "travelInsuranceValidThrough", label: "Coverage valid through", value: vault.travelInsuranceValidThrough, inputType: "date" as const },
         { key: "emergencyContactName", label: "Emergency contact name", value: vault.emergencyContactName },
         { key: "emergencyContactPhone", label: "Emergency contact phone", value: vault.emergencyContactPhone },
         {

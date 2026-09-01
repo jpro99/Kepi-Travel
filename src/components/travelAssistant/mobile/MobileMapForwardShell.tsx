@@ -17,6 +17,7 @@ import { TravelFitCard } from "@/components/travelAssistant/TravelFitCard";
 import { TravelStyleBadge } from "@/components/travelAssistant/TravelStyleQuiz";
 import { LoyaltyWalletSection } from "@/components/loyalty/LoyaltyWalletSection";
 import { ShareTripCard } from "@/components/travelAssistant/ShareTripCard";
+import { EmergencyCoverageQuickCard } from "@/components/travelAssistant/EmergencyCoverageQuickCard";
 import type { TravelStyleProfile } from "@/lib/traveler/types";
 import { MobileTripShellHeader } from "@/components/travelAssistant/mobile/MobileTripShellHeader";
 import { MobileTripsView } from "@/components/travelAssistant/mobile/MobileTripsView";
@@ -165,6 +166,7 @@ interface MobileMapForwardShellProps {
   onOpenReview?: () => void;
   readinessChecklist?: ReadinessChecklistItem[];
   onOpenReadiness?: () => void;
+  onOpenEmergencyRecord?: () => void;
   readinessItems?: TripReadinessChecklistItem[];
   onToggleReadinessItem?: (id: string) => void;
   readinessChecklistSectionRef?: Ref<HTMLElement>;
@@ -267,6 +269,7 @@ export function MobileMapForwardShell({
   onOpenReview,
   readinessChecklist = [],
   onOpenReadiness,
+  onOpenEmergencyRecord,
   readinessItems = [],
   onToggleReadinessItem,
   readinessChecklistSectionRef,
@@ -340,6 +343,10 @@ export function MobileMapForwardShell({
           readinessChecklist={readinessChecklist}
           onOpenReadiness={onOpenReadiness}
         />
+
+        {hasActiveTrip ? (
+          <EmergencyCoverageQuickCard onOpenFullRecord={onOpenEmergencyRecord} />
+        ) : null}
 
         {hasActiveTrip && tripSpendSummary ? (
           <TripSpendBadge

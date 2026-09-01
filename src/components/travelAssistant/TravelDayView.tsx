@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { EmergencyCoverageTravelDayStrip } from "@/components/travelAssistant/EmergencyCoverageTravelDayStrip";
 import { GroundTransportDeepLinkCard } from "@/components/travelAssistant/GroundTransportDeepLinkCard";
 import { buildRideToAirportDeepLinks } from "@/lib/travelAssistant/groundTransportDeepLinks";
 
@@ -407,6 +408,8 @@ export function TravelDayView({
           </div>
         </div>
       </div>
+
+      <EmergencyCoverageTravelDayStrip />
 
       {/* Scrollable body */}
       <div className="flex-1 overflow-y-auto">

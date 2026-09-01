@@ -265,6 +265,8 @@ import type { FlightSearchDefaults } from "@/components/travelAssistant/FlightSe
 import { ShareTripCard } from "@/components/travelAssistant/ShareTripCard";
 import { TripMemoriesPanel } from "@/components/travelAssistant/TripMemoriesPanel";
 import { TravelDayView } from "@/components/travelAssistant/TravelDayView";
+import { EmergencyCoveragePanel } from "@/components/travelAssistant/EmergencyCoveragePanel";
+import { EmergencyCoverageQuickCard } from "@/components/travelAssistant/EmergencyCoverageQuickCard";
 import { ShareModal } from "@/components/travelAssistant/ShareModal";
 import { SmartPackingList } from "@/components/travelAssistant/SmartPackingList";
 import { LoyaltyWalletSection } from "@/components/loyalty/LoyaltyWalletSection";
@@ -861,6 +863,7 @@ const BASE_CHECKLIST: ReadinessItem[] = [
   { id: "ready-checkin", category: "Check-in timing", title: "Online check-in reminders set", complete: false, required: true },
   { id: "ready-arrival", category: "Arrival transfer", title: "Pickup location pinned", complete: false, required: true },
   { id: "ready-essentials", category: "Essentials", title: "Medication and chargers packed", complete: false, required: false },
+  { id: "ready-coverage", category: "Emergency", title: "Trip protection policy saved for emergencies", complete: false, required: false },
   { id: "ready-night", category: "First-night", title: "First meal and sleep plan prepared", complete: false, required: false },
 ];
 
@@ -1986,7 +1989,9 @@ export default function TravelAssistantPage() {
   const [travelStyleProfile, setTravelStyleProfile] = useState<TravelStyleProfile | null>(null);
   const [travelStyleQuizOpen, setTravelStyleQuizOpen] = useState(false);
   const travelStyleFetchedRef = useRef(false);
-  const [pendingMoreScrollTarget, setPendingMoreScrollTarget] = useState<"readiness-checklist" | null>(null);
+  const [pendingMoreScrollTarget, setPendingMoreScrollTarget] = useState<
+    "readiness-checklist" | "emergency-coverage" | null
+  >(null);
   const [emailForwardAddress, setEmailForwardAddress] = useState<string | null>(() => {
     const handle = getEmailHandleFromCookie();
     return handle ? composeForwardAddress(handle) : null;
@@ -9260,18 +9265,33 @@ export default function TravelAssistantPage() {
     }
   }, [navigateToConsumerTab, navigateMobilePrimaryTab]);
 
+  const openEmergencyCoverageInMoreTab = useCallback((): void => {
+    setPendingMoreScrollTarget("emergency-coverage");
+    navigateToConsumerTab("more");
+    if (isCompactViewportClient()) {
+      navigateMobilePrimaryTab("more");
+    }
+  }, [navigateToConsumerTab, navigateMobilePrimaryTab]);
+
   useEffect(() => {
     const onMoreTab = isCompactViewportClient()
       ? mobilePrimaryTab === "more"
       : consumerTab === "more";
-    if (!onMoreTab || pendingMoreScrollTarget !== "readiness-checklist") {
+    if (!onMoreTab || !pendingMoreScrollTarget) {
       return;
     }
+    const targetId =
+      pendingMoreScrollTarget === "readiness-checklist"
+        ? "readiness-checklist-section"
+        : "emergency-coverage-section";
     let attempts = 0;
     let cancelled = false;
     const tryScroll = (): void => {
       if (cancelled) return;
-      const section = readinessChecklistSectionRef.current;
+      const section =
+        pendingMoreScrollTarget === "readiness-checklist"
+          ? readinessChecklistSectionRef.current
+          : document.getElementById(targetId);
       if (section) {
         section.scrollIntoView({ behavior: "smooth", block: "start" });
         setPendingMoreScrollTarget(null);
@@ -10410,6 +10430,7 @@ export default function TravelAssistantPage() {
                 onOpenReview={handleOpenConsumerReviewQueue}
                 readinessChecklist={readinessChecklistForHome}
                 onOpenReadiness={openReadinessChecklistInMoreTab}
+                onOpenEmergencyRecord={openEmergencyCoverageInMoreTab}
                 readinessItems={readinessItems}
                 onToggleReadinessItem={handleChecklistToggle}
                 readinessChecklistSectionRef={readinessChecklistSectionRef}
@@ -10576,6 +10597,7 @@ export default function TravelAssistantPage() {
                 onOpenReview={handleOpenConsumerReviewQueue}
                 readinessChecklist={readinessChecklistForHome}
                 onOpenReadiness={openReadinessChecklistInMoreTab}
+                onOpenEmergencyRecord={openEmergencyCoverageInMoreTab}
                 travelerType={neuroTravelerType}
               />
             )
@@ -10747,6 +10769,8 @@ export default function TravelAssistantPage() {
             </section>
           ) : (
             <section className="space-y-3">
+              <EmergencyCoveragePanel />
+
               {activeTrip && readinessItems.length > 0 ? (
                 <TripReadinessChecklistSection
                   id="readiness-checklist-section"
