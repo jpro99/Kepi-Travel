@@ -4,7 +4,6 @@
  */
 
 import type { JourneyPhase, JourneyReservation } from "@/lib/travelAssistant/journeyPhase";
-import { formatFlightStatusTrustLine } from "@/lib/travelAssistant/flightStatusTrustLine";
 
 export type AirborneLiveStatusInput = {
   flightStatus?: string;
@@ -50,16 +49,16 @@ function formatBookedArrivalDetail(flight: JourneyReservation): string | null {
 export function resolveAirborneHeroCopy(
   journeyPhase: Extract<JourneyPhase, { kind: "airborne" }>,
   liveStatus: AirborneLiveStatusInput | undefined,
-  now: Date = new Date(),
 ): AirborneHeroCopy {
   const flight = journeyPhase.onFlight;
   const routeTitle = `${flight.flightDepartureAirport ?? ""} → ${journeyPhase.landingAt}`.trim();
+  const bookedArrival = formatBookedArrivalDetail(flight);
 
   if (liveStatus?.busy) {
     return {
       eyebrow: "In the air",
       title: routeTitle,
-      detail: "Checking live status…",
+      detail: bookedArrival,
       isLiveClaim: false,
     };
   }
@@ -73,17 +72,10 @@ export function resolveAirborneHeroCopy(
     };
   }
 
-  const trustLine = formatFlightStatusTrustLine(liveStatus, now);
-  const bookedArrival = formatBookedArrivalDetail(flight);
-  const detail =
-    liveStatus?.error?.trim() ||
-    (trustLine && !/not checked yet/i.test(trustLine) ? trustLine : null) ||
-    bookedArrival;
-
   return {
     eyebrow: "In the air",
     title: routeTitle,
-    detail,
+    detail: bookedArrival,
     isLiveClaim: false,
   };
 }
