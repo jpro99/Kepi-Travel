@@ -38,6 +38,12 @@ import {
   setAirportWalkSheetOpen,
 } from "@/lib/airportNav/airportWalkSheet";
 import { computeDirectionArrow, confirmedSnappedPosition } from "@/lib/airportNav/directionArrow";
+import {
+  distanceToGateMeters,
+  gateArrivalBanner,
+  gateChangeBanner,
+  isAtBookedGate,
+} from "@/lib/airportNav/gatePresence";
 import { resolveConfirmSpotFromLngLat } from "@/lib/airportNav/confirmTravelerSpot";
 import {
   computeLayoutBounds,
@@ -1178,7 +1184,9 @@ export function AirportNavigatorMap({
   // grants user_confirmed the top confidence grade — this is the UI gesture).
   const [confirmMode, setConfirmMode] = useState(false);
   const [confirmedNodeId, setConfirmedNodeId] = useState<string | null>(null);
+  const [gateChangeNotice, setGateChangeNotice] = useState<string | null>(null);
   const [mapHelperEnabled, setMapHelperEnabled] = useState(Boolean(mapHelperEnabledProp));
+  const prevGateCodeRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (typeof mapHelperEnabledProp === "boolean") {
@@ -1466,6 +1474,48 @@ export function AirportNavigatorMap({
   const gatePoi: PoiDefinition | null = useMemo(() => {
     return bookedGate?.poi ?? null;
   }, [bookedGate]);
+
+  const gateNodePos = useMemo((): [number, number] | null => {
+    if (!layout || !bookedGate) return null;
+    const node = layout.nodes.find((entry) => entry.id === bookedGate.nodeId);
+    return node?.pos ?? null;
+  }, [layout, bookedGate]);
+
+  const travelerPos = useMemo((): [number, number] | null => {
+    if (snapped?.pos) return snapped.pos;
+    if (userLon != null && userLat != null) return [userLon, userLat];
+    return null;
+  }, [snapped, userLon, userLat]);
+
+  const gateDistanceM = useMemo(
+    () => distanceToGateMeters(travelerPos, gateNodePos),
+    [travelerPos, gateNodePos],
+  );
+  const atBookedGate = isAtBookedGate(gateDistanceM);
+  const atGateBanner = useMemo(
+    () =>
+      gateArrivalBanner({
+        atGate: atBookedGate,
+        gateCode,
+        delayed: flightDelayed,
+      }),
+    [atBookedGate, gateCode, flightDelayed],
+  );
+
+  useEffect(() => {
+    const next = gateCode?.trim().toUpperCase() || null;
+    const prev = prevGateCodeRef.current;
+    if (prev === null) {
+      prevGateCodeRef.current = next;
+      return;
+    }
+    const notice = gateChangeBanner(prev, next);
+    prevGateCodeRef.current = next;
+    if (!notice) return;
+    setGateChangeNotice(notice);
+    const timer = window.setTimeout(() => setGateChangeNotice(null), 10_000);
+    return () => window.clearTimeout(timer);
+  }, [gateCode]);
 
   /* ── Trip-focused journey (depart or arrive first mile) ─ */
   const journey: JourneyStop[] = useMemo(() => {
@@ -1868,16 +1918,16 @@ export function AirportNavigatorMap({
   }, [pressure, gatePoi, setSprintMode, startRoute, showSubtitle]);
 
   // Auto-start gate walk once when layout + gate are ready (after PreCheck answer if needed).
-  // Live Map shell stays map-first — no auto bottom walk sheet covering Leonardo rail.
+  // Arrival Live Map stays map-first (Leonardo / first-mile rail). Departures walk to the gate.
   const autoGateStartedRef = useRef(false);
   useEffect(() => {
     if (autoGateStartedRef.current) return;
-    if (mapFirstLive) return;
+    if (mapFirstLive && (arrivalFirstMile || isArriveCoach)) return;
     if (!layout || !gatePoi || activeRoute || quietMode) return;
     if (!credentials.known) return;
     autoGateStartedRef.current = true;
     startRoute(gatePoi.id, true);
-  }, [mapFirstLive, layout, gatePoi, activeRoute, quietMode, credentials.known, startRoute]);
+  }, [mapFirstLive, arrivalFirstMile, isArriveCoach, layout, gatePoi, activeRoute, quietMode, credentials.known, startRoute]);
 
 
   /* ── Voice co-pilot ─────────────────────────────────────────────────── */
@@ -3391,11 +3441,48 @@ export function AirportNavigatorMap({
         </div>
       )}
 
+      {/* Always-on Gate HUD — readable even when the embedded flight hero is hidden */}
+      {layout && !quietMode && !previewMode ? (
+        <div
+          data-testid="airport-nav-gate-hud"
+          className="pointer-events-none absolute left-3 z-[52] max-w-[min(100%-1.5rem,16rem)]"
+          style={{ top: `calc(${mapControlsTop} + 0.15rem)` }}
+        >
+          <div
+            className={`rounded-2xl px-3 py-2 shadow-xl backdrop-blur-md ${
+              atGateBanner
+                ? atGateBanner.kind === "at_gate_on_time"
+                  ? "animate-pulse bg-emerald-500/95 text-white"
+                  : "animate-pulse bg-amber-500/95 text-slate-950"
+                : "bg-black/70 text-white"
+            }`}
+          >
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] opacity-80">Your gate</p>
+            <p className="text-[28px] font-black leading-none tracking-tight">
+              {gateCode?.toUpperCase() ?? "TBD"}
+            </p>
+            {atGateBanner ? (
+              <p className="mt-1 text-[12px] font-bold leading-snug">{atGateBanner.label}</p>
+            ) : flightDelayed ? (
+              <p className="mt-1 text-[11px] font-semibold text-amber-200">Flight delayed</p>
+            ) : null}
+            {gateChangeNotice ? (
+              <p
+                data-testid="airport-nav-gate-change"
+                className="mt-1 rounded-lg bg-amber-400/95 px-2 py-1 text-[11px] font-bold text-slate-950"
+              >
+                {gateChangeNotice}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       {/* Confirm mode: top banner — instruction must not sit under the support chat FAB */}
       {confirmMode && !quietMode && !previewMode && layout ? (
         <div
           className="pointer-events-none absolute inset-x-3 z-[55] flex justify-center"
-          style={{ top: `calc(${mapControlsTop} + 0.25rem)` }}
+          style={{ top: `calc(${mapControlsTop} + 5.75rem)` }}
           data-testid="airport-nav-confirm-banner"
         >
           <p className="max-w-md rounded-2xl bg-[#f4c95d] px-4 py-2.5 text-center text-[14px] font-bold leading-snug text-[#0b1f3a] shadow-xl">
@@ -3404,27 +3491,30 @@ export function AirportNavigatorMap({
         </div>
       ) : null}
 
-      {/* Tap-to-confirm "I'm here" — bottom-left so support chat FAB stays clear on the right */}
+      {/* Tap-to-confirm "I'm here" — moves to top when after-questions cover the bottom */}
       {!quietMode && !previewMode && layout && (
         <div
-          className="pointer-events-auto absolute left-3 z-50"
-          style={{
-            bottom:
-              confirmMode
-                ? `calc(${arrivalChromeClearance} + 1.25rem)`
-                : journeyPrompt || securityQuestionOpen
-                  ? `calc(${arrivalChromeClearance} + 5.75rem)`
-                  : `calc(${bottomPanel} + ${activeRoute ? "9.5rem" : "3rem"})`,
-          }}
+          className="pointer-events-auto absolute z-[60]"
+          style={
+            (journeyPrompt || securityQuestionOpen) && !confirmMode
+              ? {
+                  top: `calc(${mapControlsTop} + 5.75rem)`,
+                  left: "0.75rem",
+                }
+              : {
+                  left: "0.75rem",
+                  bottom: confirmMode
+                    ? `calc(${arrivalChromeClearance} + 1.25rem)`
+                    : `calc(${bottomPanel} + ${activeRoute ? "9.5rem" : "3rem"})`,
+                }
+          }
         >
           <button
             type="button"
             data-testid="airport-nav-confirm-location"
             aria-pressed={confirmMode}
             onClick={() => setConfirmMode((on) => !on)}
-            className={`min-h-[44px] rounded-full px-3 py-2 text-[12px] font-bold shadow-lg backdrop-blur ${
-              confirmMode ? "bg-black/55 text-white" : "bg-black/55 text-white"
-            }`}
+            className="min-h-[44px] rounded-full bg-black/55 px-3 py-2 text-[12px] font-bold text-white shadow-lg backdrop-blur"
           >
             {confirmMode ? "Cancel" : confirmedNodeId ? "📍 Update my spot" : "📍 I'm here"}
           </button>
@@ -3516,16 +3606,12 @@ export function AirportNavigatorMap({
         </section>
       )}
 
-      {/* Guide-me CTA when idle — stays above PreCheck / journey question sheets */}
+      {/* Guide-me CTA when idle — hidden while after-questions are up so they never cover pin/guide */}
       {!quietMode && !activeRoute && layout && gatePoi && !confirmMode
+        && !journeyPrompt && !securityQuestionOpen
         && !(mapFirstLive && (arrivalFirstMile || isArriveCoach)) ? (
         <div
-          style={{
-            bottom:
-              journeyPrompt || securityQuestionOpen
-                ? `calc(${arrivalChromeClearance} + 5.5rem)`
-                : bottomPanel,
-          }}
+          style={{ bottom: bottomPanel }}
           className="absolute inset-x-3 z-40"
         >
           <button
