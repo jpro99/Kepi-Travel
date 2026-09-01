@@ -2587,6 +2587,16 @@ export function AirportNavigatorMap({
                 duration: 0,
               });
             }
+            // Live at the airport: center on real GPS so the puck is on-screen
+            // (SEA apron / satellite can sit outside a terminal-only fitBounds).
+            if (!previewMode && userLon != null && userLat != null) {
+              map.easeTo({
+                center: [userLon, userLat],
+                zoom: Math.max(map.getZoom(), 15.6),
+                duration: 0,
+                essential: true,
+              });
+            }
           } catch {
             /* ignore */
           }
@@ -2597,11 +2607,9 @@ export function AirportNavigatorMap({
       }
     };
 
-    void import("maplibre-gl")
-      .then((ml) => {
-        // Defer one frame so the parent /live-map family basemap finishes its
-        // teardown before we claim a WebGL context (avoids the old family→airport
-        // context-limit blank). The SVG floor plan stays underneath regardless.
+    const bootMap = (ml: typeof import("maplibre-gl")) => {
+        // Defer so the parent /live-map family basemap finishes teardown before
+        // we claim a WebGL context (avoids context-limit blank on SEA-sized maps).
         if (disposed || !mapEl.current || mapRef.current) return;
         try {
           // Real OpenStreetMap basemap — "the map from that site" (M17). When a
@@ -2676,6 +2684,17 @@ export function AirportNavigatorMap({
           console.error("[AirportNavigatorMap] Map init failed", error);
           if (!disposed) setLayoutStatus("error");
         }
+    };
+
+    let embedBootTimer: number | null = null;
+    void import("maplibre-gl")
+      .then((ml) => {
+        const delayMs = fill ? 320 : 0;
+        if (delayMs > 0) {
+          embedBootTimer = window.setTimeout(() => bootMap(ml), delayMs);
+        } else {
+          window.requestAnimationFrame(() => bootMap(ml));
+        }
       })
       .catch((error) => {
         console.error("[AirportNavigatorMap] MapLibre load failed", error);
@@ -2683,6 +2702,7 @@ export function AirportNavigatorMap({
       });
     return () => {
       disposed = true;
+      if (embedBootTimer !== null) window.clearTimeout(embedBootTimer);
       if (loadRetryTimer !== null) window.clearInterval(loadRetryTimer);
       mapCanvas?.removeEventListener("webglcontextlost", handleContextLost);
       unbindResize?.();
@@ -3427,6 +3447,17 @@ export function AirportNavigatorMap({
           atGateChipLines={atGateChipLines}
           onPoiClick={handlePoiTap}
         />
+      ) : null}
+      {!mapReady && !previewMode && layout ? (
+        <div
+          data-testid="airport-map-booting"
+          className="pointer-events-none absolute inset-x-3 z-[3] flex justify-center"
+          style={{ top: mapControlsTop }}
+        >
+          <p className="rounded-full bg-black/55 px-3 py-1.5 text-[12px] font-semibold text-white backdrop-blur">
+            Loading live map… your GPS dot appears when ready
+          </p>
+        </div>
       ) : null}
       <div
         ref={mapEl}

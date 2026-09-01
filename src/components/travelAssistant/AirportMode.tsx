@@ -495,6 +495,25 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
       ? (navigatorFlight?.f.flightArrivalAirport ?? "")
       : (activeFlight?.f.flightDepartureAirport ?? ""));
 
+  /** Map + gate props must follow physical campus (SEA), not earliest trip leg (ONT). */
+  const navigatorMapFlight = useMemo(() => {
+    if (physicalIata) {
+      const campus = selectFlightForAirportCampus(reservations, physicalIata, now);
+      if (campus) return campus;
+    }
+    return activeFlight;
+  }, [physicalIata, reservations, now, activeFlight]);
+
+  const [maptilerKey, setMaptilerKey] = useState("");
+  useEffect(() => {
+    void fetch("/api/config", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((d: { maptilerKey?: string } | null) => {
+        if (d?.maptilerKey) setMaptilerKey(d.maptilerKey);
+      })
+      .catch(() => null);
+  }, []);
+
   // Airport proximity — unbiased geofence when physically on a campus.
   const proximity = useMemo(
     () =>
@@ -1013,26 +1032,31 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
       )}
 
       {/* Airport Navigator — 3D terminal map (curated airports; renders nothing otherwise) */}
-      {showNavigatorMap && (
+      {showNavigatorMap && navigatorMapFlight && (
         <AirportNavigatorMap
-          iata={f.flightDepartureAirport ?? ""}
-          gateCode={f.flightDepartureGate ?? null}
-          airlineName={f.flightAirline ?? f.provider ?? null}
-          flightNumber={f.flightNumber ?? null}
-          arrivalAirport={f.flightArrivalAirport ?? null}
-          departureAirport={f.flightDepartureAirport ?? null}
-          departureTerminal={f.flightDepartureTerminal ?? null}
-          arrivalTerminal={f.flightArrivalTerminal ?? null}
+          iata={navIata}
+          maptilerKey={maptilerKey}
+          gateCode={navigatorMapFlight.f.flightDepartureGate ?? null}
+          airlineName={navigatorMapFlight.f.flightAirline ?? navigatorMapFlight.f.provider ?? null}
+          flightNumber={navigatorMapFlight.f.flightNumber ?? null}
+          arrivalAirport={navigatorMapFlight.f.flightArrivalAirport ?? null}
+          departureAirport={navigatorMapFlight.f.flightDepartureAirport ?? null}
+          departureTerminal={navigatorMapFlight.f.flightDepartureTerminal ?? null}
+          arrivalTerminal={navigatorMapFlight.f.flightArrivalTerminal ?? null}
           coachMode="depart"
-          departureClockLabel={fmtTime(deptUtcMs)}
+          departureClockLabel={fmtTime(navigatorMapFlight.utcMs)}
           flightStatusLabel={
-            isDelayed
-              ? `Delayed +${f.flightDelayMinutes}m`
-              : f.flightStatus ?? (f.flightOnTime === false ? "Delayed" : "On time")
+            (navigatorMapFlight.f.flightDelayMinutes ?? 0) > 0
+              ? `Delayed +${navigatorMapFlight.f.flightDelayMinutes}m`
+              : navigatorMapFlight.f.flightStatus
+                ?? (navigatorMapFlight.f.flightOnTime === false ? "Delayed" : "On time")
           }
-          flightDelayed={isDelayed || f.flightOnTime === false}
+          flightDelayed={
+            (navigatorMapFlight.f.flightDelayMinutes ?? 0) > 0
+            || navigatorMapFlight.f.flightOnTime === false
+          }
           proximityStatus={proximity.status}
-          minutesToDeparture={msUntilDept / 60_000}
+          minutesToDeparture={(navigatorMapFlight.utcMs - now) / 60_000}
           userLat={userLat}
           userLon={userLon}
           userAccuracyM={userAccuracyM}
@@ -1043,7 +1067,7 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
             ...cardLoungeEligibility.map((l) => l.loungeName ?? l.loungeId),
           ]}
           tripReservations={reservations}
-          activeReservationId={f.id}
+          activeReservationId={navigatorMapFlight.f.id}
         />
       )}
 
