@@ -42,6 +42,17 @@ export function gateArrivalBanner(args: {
   return { kind: "at_gate_on_time", label: `You're here · ${gateBit} · on time` };
 }
 
+/** Short lines for the flashing map puck chip at the booked gate. */
+export function atGateMapChipLines(
+  banner: GateArrivalBanner,
+): { primary: string; secondary: string } | null {
+  if (!banner) return null;
+  return {
+    primary: "You're here",
+    secondary: banner.kind === "at_gate_on_time" ? "On time" : "Flight delayed",
+  };
+}
+
 /** Human copy when the booked gate assignment changes. */
 export function gateChangeBanner(
   previousGate: string | null | undefined,
@@ -70,19 +81,36 @@ export function shouldPersistGateWalk(input: {
   return true;
 }
 
-/** True when we should (re)start routing to the booked gate now. */
+/**
+ * True when we should (re)start routing to the booked gate now.
+ * Requires a live snapped position (Wi‑Fi/GPS) — never auto-start from a
+ * schematic default junction before we know where the traveler is.
+ */
 export function shouldStartGateWalkNow(input: {
   persist: boolean;
-  quietMode: boolean;
   confirmMode: boolean;
   credentialsKnown: boolean;
-  hasOrigin: boolean;
+  hasLivePosition: boolean;
   activeRouteToGate: boolean;
   routingElsewhere: boolean;
 }): boolean {
-  if (!input.persist || !input.hasOrigin) return false;
-  if (input.quietMode || input.confirmMode) return false;
+  if (!input.persist || !input.hasLivePosition) return false;
+  if (input.confirmMode) return false;
   if (!input.credentialsKnown) return false;
   if (input.activeRouteToGate || input.routingElsewhere) return false;
+  return true;
+}
+
+/** Gate walk was dismissed but we should keep guiding to the assigned gate. */
+export function shouldRestartGateWalk(input: {
+  persist: boolean;
+  hasLivePosition: boolean;
+  credentialsKnown: boolean;
+  confirmMode: boolean;
+  atGate: boolean;
+  activeRoute: boolean;
+}): boolean {
+  if (!input.persist || !input.hasLivePosition || input.atGate) return false;
+  if (input.confirmMode || !input.credentialsKnown || input.activeRoute) return false;
   return true;
 }

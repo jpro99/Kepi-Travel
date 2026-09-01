@@ -39,11 +39,13 @@ import {
 } from "@/lib/airportNav/airportWalkSheet";
 import { computeDirectionArrow, confirmedSnappedPosition } from "@/lib/airportNav/directionArrow";
 import {
+  atGateMapChipLines,
   distanceToGateMeters,
   gateArrivalBanner,
   gateChangeBanner,
   isAtBookedGate,
   shouldPersistGateWalk,
+  shouldRestartGateWalk,
   shouldStartGateWalkNow,
 } from "@/lib/airportNav/gatePresence";
 import { resolveConfirmSpotFromLngLat } from "@/lib/airportNav/confirmTravelerSpot";
@@ -637,6 +639,8 @@ interface AirportSchematicLayerProps {
   gatePoiId: string | null;
   gateCode: string | null;
   minutesToDeparture: number;
+  atBookedGate: boolean;
+  atGateChipLines: { primary: string; secondary: string } | null;
   onPoiClick: (poiId: string) => void;
 }
 
@@ -651,6 +655,8 @@ function AirportSchematicLayer({
   gatePoiId,
   gateCode,
   minutesToDeparture,
+  atBookedGate,
+  atGateChipLines,
   onPoiClick,
 }: AirportSchematicLayerProps) {
   const model = useMemo(() => buildAirportSchematicModel(layout), [layout]);
@@ -825,29 +831,72 @@ function AirportSchematicLayer({
           </g>
         ) : null}
 
-        {snapped ? (
+        {snapped ? (() => {
+          const point = model.project(snapped.pos);
+          const pulseStyle = { animation: "kepiPulse 1.6s ease-in-out infinite" };
+          return (
           <g data-testid="airport-nav-schematic-user">
             <title>
-              {`Your approximate location${userAccuracyM ? `, GPS accuracy about ${Math.round(userAccuracyM)} meters` : ""}`}
+              {atGateChipLines
+                ? `${atGateChipLines.primary} · ${atGateChipLines.secondary}`
+                : `Your approximate location${userAccuracyM ? `, GPS accuracy about ${Math.round(userAccuracyM)} meters` : ""}`}
             </title>
+            {atBookedGate && atGateChipLines ? (
+              <>
+                <rect
+                  x={point.x - 14}
+                  y={point.y - 11}
+                  width="28"
+                  height="7.5"
+                  rx="3.75"
+                  fill="#f4c95d"
+                  stroke="#0b1f3a"
+                  strokeWidth="0.35"
+                  style={pulseStyle}
+                />
+                <text
+                  x={point.x}
+                  y={point.y - 6.2}
+                  fill="#0b1f3a"
+                  fontSize="2.4"
+                  fontWeight="800"
+                  textAnchor="middle"
+                >
+                  {atGateChipLines.primary}
+                </text>
+                <text
+                  x={point.x}
+                  y={point.y - 13}
+                  fill="#166534"
+                  fontSize="2.1"
+                  fontWeight="800"
+                  textAnchor="middle"
+                >
+                  {atGateChipLines.secondary}
+                </text>
+              </>
+            ) : null}
             <circle
-              cx={model.project(snapped.pos).x}
-              cy={model.project(snapped.pos).y}
-              r={Math.min(8, Math.max(4.5, (userAccuracyM ?? 35) / 12))}
-              fill="rgba(37,99,235,0.14)"
-              stroke="rgba(37,99,235,0.5)"
+              cx={point.x}
+              cy={point.y}
+              r={atBookedGate ? 5.5 : Math.min(8, Math.max(4.5, (userAccuracyM ?? 35) / 12))}
+              fill={atBookedGate ? "rgba(16,185,129,0.22)" : "rgba(37,99,235,0.14)"}
+              stroke={atBookedGate ? "rgba(16,185,129,0.75)" : "rgba(37,99,235,0.5)"}
               strokeWidth="0.4"
+              style={atBookedGate ? pulseStyle : undefined}
             />
             <circle
-              cx={model.project(snapped.pos).x}
-              cy={model.project(snapped.pos).y}
-              r="2.3"
-              fill={LIGHT_MAP.user}
+              cx={point.x}
+              cy={point.y}
+              r={atBookedGate ? 3 : 2.3}
+              fill={atBookedGate ? "#10b981" : LIGHT_MAP.user}
               stroke="#ffffff"
               strokeWidth="0.9"
+              style={atBookedGate ? pulseStyle : undefined}
             />
           </g>
-        ) : null}
+          );
+        })() : null}
 
         {familyPins.map((pin) => {
           const point = model.project([pin.lon, pin.lat]);
@@ -1189,6 +1238,7 @@ export function AirportNavigatorMap({
   const [gateChangeNotice, setGateChangeNotice] = useState<string | null>(null);
   const [mapHelperEnabled, setMapHelperEnabled] = useState(Boolean(mapHelperEnabledProp));
   const prevGateCodeRef = useRef<string | null>(null);
+  const prevGatePoiIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (typeof mapHelperEnabledProp === "boolean") {
@@ -1512,6 +1562,11 @@ export function AirportNavigatorMap({
       }),
     [atBookedGate, gateCode, flightDelayed],
   );
+  const atGateChipLines = useMemo(
+    () => atGateMapChipLines(atGateBanner),
+    [atGateBanner],
+  );
+  const hasLivePosition = Boolean(snapped && !previewMode);
 
   useEffect(() => {
     const next = gateCode?.trim().toUpperCase() || null;
@@ -1524,9 +1579,28 @@ export function AirportNavigatorMap({
     prevGateCodeRef.current = next;
     if (!notice) return;
     setGateChangeNotice(notice);
-    const timer = window.setTimeout(() => setGateChangeNotice(null), 10_000);
+    showSubtitle(notice);
+    const timer = window.setTimeout(() => setGateChangeNotice(null), 12_000);
     return () => window.clearTimeout(timer);
-  }, [gateCode]);
+  }, [gateCode, showSubtitle]);
+
+  useEffect(() => {
+    const nextId = gatePoi?.id ?? null;
+    const prevId = prevGatePoiIdRef.current;
+    prevGatePoiIdRef.current = nextId;
+    if (!prevId || !nextId || prevId === nextId) return;
+    if (!persistGateWalk || !credentials.known || !hasLivePosition) return;
+    if (!activeRouteToGate && activeRoute?.toPoiId !== prevId) return;
+    startRoute(nextId, false);
+  }, [
+    gatePoi?.id,
+    persistGateWalk,
+    credentials.known,
+    hasLivePosition,
+    activeRouteToGate,
+    activeRoute,
+    startRoute,
+  ]);
 
   /* ── Trip-focused journey (depart or arrive first mile) ─ */
   const journey: JourneyStop[] = useMemo(() => {
@@ -1801,6 +1875,13 @@ export function AirportNavigatorMap({
     // Arrival: snapped onto the final route node
     if (snapped.nearestNodeId === activeRoute.nodeIds[activeRoute.nodeIds.length - 1]) {
       const targetPoi = layout?.pois.find((poi) => poi.id === activeRoute.toPoiId);
+      const walkingToBookedGate = Boolean(
+        persistGateWalk && gatePoi && activeRoute.toPoiId === gatePoi.id,
+      );
+      if (walkingToBookedGate && !atBookedGate) {
+        // GPS can lag behind graph snap — keep gate walk alive until we're truly there.
+        return;
+      }
       haptic();
       sayAndShow(`You've arrived — ${activeDestName ?? "destination"}.`);
       if (targetPoi && targetPoi.category !== "amenity") {
@@ -1824,7 +1905,7 @@ export function AirportNavigatorMap({
         sayAndShow(instruction.text);
       }
     }
-  }, [snapped?.nearestNodeId, activeRoute, layout, activeDestName, haptic, sayAndShow, processJourneyEvent, endRoute]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [snapped?.nearestNodeId, activeRoute, layout, activeDestName, persistGateWalk, gatePoi, atBookedGate, haptic, sayAndShow, processJourneyEvent, endRoute]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Gate route + Boarding Pressure Index (spec §L.1) ───────────────── */
   const gateRoute = useMemo(() => {
@@ -1940,10 +2021,9 @@ export function AirportNavigatorMap({
     if (
       !shouldStartGateWalkNow({
         persist: persistGateWalk,
-        quietMode,
         confirmMode,
         credentialsKnown: credentials.known,
-        hasOrigin: Boolean(originNodeId),
+        hasLivePosition,
         activeRouteToGate,
         routingElsewhere,
       })
@@ -1954,12 +2034,37 @@ export function AirportNavigatorMap({
     startRoute(gatePoi.id, false);
   }, [
     persistGateWalk,
-    quietMode,
     confirmMode,
     credentials.known,
-    originNodeId,
+    hasLivePosition,
     activeRouteToGate,
     routingElsewhere,
+    gatePoi,
+    startRoute,
+  ]);
+
+  useEffect(() => {
+    if (
+      !shouldRestartGateWalk({
+        persist: persistGateWalk,
+        hasLivePosition,
+        credentialsKnown: credentials.known,
+        confirmMode,
+        atGate: atBookedGate,
+        activeRoute: Boolean(activeRoute),
+      })
+      || !gatePoi
+    ) {
+      return;
+    }
+    startRoute(gatePoi.id, false);
+  }, [
+    persistGateWalk,
+    hasLivePosition,
+    credentials.known,
+    confirmMode,
+    atBookedGate,
+    activeRoute,
     gatePoi,
     startRoute,
   ]);
@@ -2869,30 +2974,58 @@ export function AirportNavigatorMap({
     }
     void import("maplibre-gl").then((ml) => {
       const haloPx = Math.round(Math.min(110, Math.max(34, (userAccuracyM ?? 35) * 1.2)));
-      if (!userMarkerRef.current) {
-        const wrap = document.createElement("div");
-        wrap.dataset.testid = "airport-nav-live-user";
-        wrap.setAttribute("aria-label", `Your approximate location${userAccuracyM ? `, within about ${Math.round(userAccuracyM)} meters` : ""}`);
-        wrap.style.cssText = "position:relative;display:flex;align-items:center;justify-content:center;";
-        const halo = document.createElement("div");
-        halo.dataset.role = "halo";
-        const dot = document.createElement("div");
-        dot.style.cssText =
-          "width:20px;height:20px;border-radius:50%;background:#38bdf8;border:3px solid #fff;box-shadow:0 0 12px rgba(56,189,248,0.9);position:relative;z-index:1;";
-        wrap.appendChild(halo);
-        wrap.appendChild(dot);
-        userMarkerRef.current = new ml.Marker({ element: wrap, anchor: "center" })
-          .setLngLat(snapped.pos as [number, number])
-          .addTo(map);
-      } else {
-        userMarkerRef.current.setLngLat(snapped.pos as [number, number]);
+      const atGate = atBookedGate && atGateChipLines;
+      if (userMarkerRef.current) {
+        userMarkerRef.current.remove();
+        userMarkerRef.current = null;
       }
-      const haloEl = userMarkerRef.current.getElement().querySelector('[data-role="halo"]') as HTMLDivElement | null;
-      if (haloEl) {
-        haloEl.style.cssText = `position:absolute;width:${haloPx}px;height:${haloPx}px;border-radius:50%;background:rgba(56,189,248,0.18);border:1px solid rgba(56,189,248,0.35);`;
+      const wrap = document.createElement("div");
+      wrap.dataset.testid = "airport-nav-live-user";
+      wrap.setAttribute(
+        "aria-label",
+        atGate
+          ? `${atGateChipLines.primary} — ${atGateChipLines.secondary}`
+          : `Your approximate location${userAccuracyM ? `, within about ${Math.round(userAccuracyM)} meters` : ""}`,
+      );
+      wrap.style.cssText =
+        "position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none;";
+
+      if (atGate) {
+        const chip = document.createElement("div");
+        chip.dataset.testid = "airport-nav-at-gate-chip";
+        chip.style.cssText =
+          "display:flex;flex-direction:column;align-items:center;padding:6px 10px;border-radius:12px;background:rgba(52,199,89,0.96);border:2px solid rgba(255,255,255,0.95);box-shadow:0 4px 14px rgba(0,0,0,0.28);animation:kepiPulse 1.4s ease-in-out infinite;white-space:nowrap;";
+        const primary = document.createElement("div");
+        primary.textContent = atGateChipLines.primary;
+        primary.style.cssText = "font-size:13px;font-weight:800;color:#fff;line-height:1.15;";
+        const secondary = document.createElement("div");
+        secondary.textContent = atGateChipLines.secondary;
+        secondary.style.cssText = "font-size:11px;font-weight:700;color:rgba(255,255,255,0.95);line-height:1.15;";
+        chip.appendChild(primary);
+        chip.appendChild(secondary);
+        wrap.appendChild(chip);
       }
+
+      const halo = document.createElement("div");
+      halo.dataset.role = "halo";
+      halo.style.cssText = `position:absolute;width:${haloPx}px;height:${haloPx}px;border-radius:50%;background:${
+        atGate ? "rgba(52,199,89,0.18)" : "rgba(56,189,248,0.18)"
+      };border:1px solid ${atGate ? "rgba(52,199,89,0.35)" : "rgba(56,189,248,0.35)"};`;
+
+      const dot = document.createElement("div");
+      dot.style.cssText = `width:20px;height:20px;border-radius:50%;background:${
+        atGate ? "#34C759" : "#38bdf8"
+      };border:3px solid #fff;box-shadow:0 0 12px ${
+        atGate ? "rgba(52,199,89,0.9)" : "rgba(56,189,248,0.9)"
+      };position:relative;z-index:1;${atGate ? "animation:kepiPulse 1.4s ease-in-out infinite;" : ""}`;
+
+      wrap.appendChild(halo);
+      wrap.appendChild(dot);
+      userMarkerRef.current = new ml.Marker({ element: wrap, anchor: "center" })
+        .setLngLat(snapped.pos as [number, number])
+        .addTo(map);
     });
-  }, [mapReady, snapped, userAccuracyM]);
+  }, [mapReady, snapped, userAccuracyM, atBookedGate, atGateChipLines]);
 
   /* ── Family pins snapped to terminal graph (honest GPS — may be approximate) ─ */
   const familySnapped = useMemo(() => {
@@ -3139,6 +3272,8 @@ export function AirportNavigatorMap({
           gatePoiId={gatePoi?.id ?? null}
           gateCode={gateCode}
           minutesToDeparture={minutesRounded}
+          atBookedGate={atBookedGate}
+          atGateChipLines={atGateChipLines}
           onPoiClick={handlePoiTap}
         />
       ) : null}
@@ -3461,8 +3596,8 @@ export function AirportNavigatorMap({
         </div>
       )}
 
-      {/* Quiet Mode at security — no nagging while hands are full */}
-      {quietMode && !journeyPrompt && !securityQuestionOpen && (
+      {/* Quiet Mode at security — gate walk stays on; no nagging while hands are full */}
+      {quietMode && !journeyPrompt && !securityQuestionOpen && !activeRouteToGate && (
         <div style={{ bottom: bottomPanel }} className="absolute inset-x-3 rounded-2xl bg-black/55 p-3 text-center backdrop-blur">
           <p className="text-[11px] font-semibold text-sky-100">
             We&apos;ll pick up on the other side.
@@ -3508,10 +3643,12 @@ export function AirportNavigatorMap({
       )}
 
       {/* Always-on Gate HUD — readable even when the embedded flight hero is hidden */}
-      {layout && !quietMode && !previewMode ? (
+      {layout && !previewMode && gateCode ? (
         <div
           data-testid="airport-nav-gate-hud"
-          className="pointer-events-none absolute left-3 z-[52] max-w-[min(100%-1.5rem,16rem)]"
+          className={`pointer-events-none absolute z-[52] max-w-[min(100%-1.5rem,18rem)] ${
+            mapFirstLive ? "left-1/2 -translate-x-1/2 text-center" : "left-3"
+          }`}
           style={{ top: `calc(${mapControlsTop} + 0.15rem)` }}
         >
           <div
@@ -3523,9 +3660,14 @@ export function AirportNavigatorMap({
                 : "bg-black/70 text-white"
             }`}
           >
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] opacity-80">Your gate</p>
-            <p className="text-[28px] font-black leading-none tracking-tight">
-              {gateCode?.toUpperCase() ?? "TBD"}
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] opacity-80">
+              {atGateBanner ? "You're here" : "Your gate"}
+            </p>
+            <p
+              data-testid="airport-nav-gate-code"
+              className={`font-black leading-none tracking-tight ${mapFirstLive ? "text-[36px]" : "text-[28px]"}`}
+            >
+              {gateCode.toUpperCase()}
             </p>
             {atGateBanner ? (
               <p className="mt-1 text-[12px] font-bold leading-snug">{atGateBanner.label}</p>
@@ -3609,8 +3751,9 @@ export function AirportNavigatorMap({
         />
       )}
 
-      {/* Active route card */}
-      {!securityQuestionOpen && !journeyPrompt && !quietMode && activeRoute && !arrivalFirstMile && (
+      {/* Active route card — stays visible through security when walking to the booked gate */}
+      {!securityQuestionOpen && !journeyPrompt && activeRoute && !arrivalFirstMile
+        && (!quietMode || activeRouteToGate) ? (
         <section
           aria-label="Route instructions"
           style={{
@@ -3639,6 +3782,10 @@ export function AirportNavigatorMap({
                 </p>
               ) : previewMode ? (
                 <p className="mt-1 text-[12px] text-slate-500">Live step-by-step guidance starts when you arrive at {iata}.</p>
+              ) : quietMode && activeRouteToGate ? (
+                <p className="mt-1 text-[12px] leading-snug text-slate-500">
+                  Hands full at security — route stays on. We&apos;ll keep updating your walk to {gateCode ? `Gate ${gateCode.toUpperCase()}` : "your gate"} on the other side.
+                </p>
               ) : null}
               {/* KEPI_DESIGN_LAW M32 — mandatory, un-buried security disclaimer wherever
                   a checkpoint is the destination. Same copy for every airport. */}
@@ -3658,13 +3805,15 @@ export function AirportNavigatorMap({
                   {showInstructions ? "Hide" : "Steps"}
                 </button>
               )}
-              <button
-                type="button"
-                onClick={endRoute}
-                className="min-h-[48px] rounded-2xl bg-slate-100 px-3 text-[13px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200"
-              >
-                Close
-              </button>
+              {!(persistGateWalk && activeRouteToGate) ? (
+                <button
+                  type="button"
+                  onClick={endRoute}
+                  className="min-h-[48px] rounded-2xl bg-slate-100 px-3 text-[13px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                >
+                  Close
+                </button>
+              ) : null}
             </div>
           </div>
           {preciseRouteEnabled && showInstructions && (

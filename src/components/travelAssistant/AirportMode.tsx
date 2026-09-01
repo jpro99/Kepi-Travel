@@ -801,11 +801,39 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
           </div>
         </div>
 
-        {/* Gate / terminal / status */}
-        <div className="mt-3 grid grid-cols-3 gap-2">
+        {/* Hero gate — always readable at a glance */}
+        {f.flightDepartureGate ? (
+          <div
+            data-testid="airport-mode-gate-hero"
+            className={`mt-3 rounded-2xl border p-4 text-center ${
+              phase === "at-gate"
+                ? "border-white/40 bg-emerald-500/25 animate-pulse"
+                : "border-white/20 bg-white/15"
+            }`}
+          >
+            <p className="text-white/70 text-[10px] font-bold uppercase tracking-[0.2em]">
+              {phase === "at-gate" ? "You're here" : "Your gate"}
+            </p>
+            <p className="mt-1 text-white text-[40px] font-black leading-none tracking-tight">
+              {f.flightDepartureGate}
+            </p>
+            {f.flightDepartureTerminal ? (
+              <p className="mt-1 text-white/80 text-sm font-semibold">
+                Terminal {f.flightDepartureTerminal}
+              </p>
+            ) : null}
+            {phase === "at-gate" ? (
+              <p className="mt-2 text-emerald-100 text-sm font-bold">
+                {isDelayed ? "At gate · flight delayed" : "At gate · on time"}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* Terminal / status strip */}
+        <div className="mt-3 grid grid-cols-2 gap-2">
           {[
             { label: "Terminal", value: f.flightDepartureTerminal },
-            { label: "Gate",     value: f.flightDepartureGate },
             { label: "Status",   value: f.flightStatus ?? (f.flightOnTime === false ? "Delayed" : "On time"), color: f.flightOnTime === false ? "text-amber-300" : "text-emerald-300" },
           ].map(({ label, value, color }) => (
             <div key={label} className="rounded-xl bg-white/10 p-2 text-center">

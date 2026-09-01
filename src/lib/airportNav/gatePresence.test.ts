@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   AT_GATE_METERS,
+  atGateMapChipLines,
   distanceToGateMeters,
   gateArrivalBanner,
   gateChangeBanner,
   isAtBookedGate,
   shouldPersistGateWalk,
+  shouldRestartGateWalk,
   shouldStartGateWalkNow,
 } from "./gatePresence";
 
@@ -89,19 +91,49 @@ test("shouldPersistGateWalk — departures at airport, not arrivals first mile",
   );
 });
 
-test("shouldStartGateWalkNow respects quiet mode and active routes", () => {
+test("shouldStartGateWalkNow requires live position and blocks duplicate routes", () => {
   const base = {
     persist: true,
-    quietMode: false,
     confirmMode: false,
     credentialsKnown: true,
-    hasOrigin: true,
+    hasLivePosition: true,
     activeRouteToGate: false,
     routingElsewhere: false,
   };
   assert.equal(shouldStartGateWalkNow(base), true);
-  assert.equal(shouldStartGateWalkNow({ ...base, quietMode: true }), false);
+  assert.equal(shouldStartGateWalkNow({ ...base, hasLivePosition: false }), false);
   assert.equal(shouldStartGateWalkNow({ ...base, activeRouteToGate: true }), false);
   assert.equal(shouldStartGateWalkNow({ ...base, routingElsewhere: true }), false);
   assert.equal(shouldStartGateWalkNow({ ...base, credentialsKnown: false }), false);
+});
+
+test("shouldRestartGateWalk after manual dismiss while still en route to gate", () => {
+  const base = {
+    persist: true,
+    hasLivePosition: true,
+    credentialsKnown: true,
+    confirmMode: false,
+    atGate: false,
+    activeRoute: false,
+  };
+  assert.equal(shouldRestartGateWalk(base), true);
+  assert.equal(shouldRestartGateWalk({ ...base, activeRoute: true }), false);
+  assert.equal(shouldRestartGateWalk({ ...base, atGate: true }), false);
+});
+
+test("atGateMapChipLines splits You're here from on-time status", () => {
+  assert.deepEqual(
+    atGateMapChipLines({
+      kind: "at_gate_on_time",
+      label: "You're here · Gate C11 · on time",
+    }),
+    { primary: "You're here", secondary: "On time" },
+  );
+  assert.deepEqual(
+    atGateMapChipLines({
+      kind: "at_gate_delayed",
+      label: "You're here · Gate C11 · flight delayed",
+    }),
+    { primary: "You're here", secondary: "Flight delayed" },
+  );
 });
