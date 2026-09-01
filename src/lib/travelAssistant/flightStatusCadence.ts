@@ -1,17 +1,18 @@
 /**
  * Phase-aware flight status polling cadence.
  * Within 6h of departure we poll aggressively; farther out we conserve API credits.
- * At the airport (GPS geofence) we poll continuously so gate changes land in seconds.
+ * At the airport we poll every 4 minutes — fast enough for gate changes without
+ * starving the UI (sub-second polling was freezing the app on airport Wi‑Fi).
  */
 
 export const FLIGHT_STATUS_POLL_OUTSIDE_HOURS = 24;
 export const FLIGHT_STATUS_POLL_CRITICAL_HOURS = 6;
 export const FLIGHT_STATUS_POLL_INTERVAL_FAR_MS = 5 * 60_000;
 export const FLIGHT_STATUS_POLL_INTERVAL_NEAR_MS = 90_000;
-/** At airport campus — gate/departure board changes matter now. */
-export const FLIGHT_STATUS_POLL_INTERVAL_AT_AIRPORT_MS = 2_000;
-/** Inside the terminal — fastest client cadence (still provider-rate-limited server-side). */
-export const FLIGHT_STATUS_POLL_INTERVAL_IN_TERMINAL_MS = 1_000;
+/** At airport campus — gate board refresh; keep light for perf (F9). */
+export const FLIGHT_STATUS_POLL_INTERVAL_AT_AIRPORT_MS = 4 * 60_000;
+/** Inside the terminal — same cadence as campus (F9). */
+export const FLIGHT_STATUS_POLL_INTERVAL_IN_TERMINAL_MS = 4 * 60_000;
 export const FLIGHT_STATUS_SERVER_SWEEP_INTERVAL_MINUTES = 2;
 
 export type FlightStatusPollProximity =

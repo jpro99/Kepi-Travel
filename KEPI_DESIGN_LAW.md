@@ -272,7 +272,7 @@ When flights change, hotel stay segments recompute via shared trip modules (`der
 Auto flight-status polling only for flights within 24h; must not spam or crash when provider is down.
 
 **F9 — Flight status freshness is phase-aware**  
-Within **6 hours** of departure, client and server polls must run at least every **90 seconds** when the app is open or a background sweep is active. Between 6–24 hours, **5 minutes** is acceptable. When GPS geofence says **at-airport**, poll every **2 seconds**; **in-terminal**, every **1 second** (gate/board changes must land immediately). Away from the airport, never poll faster than the phase tiers above. **FlightAware AeroAPI** is preferred when configured (`authorityRank` higher); **AeroDataBox** co-sources. Either key enables live mode. Discrepancies are logged, never silently discarded.
+Within **6 hours** of departure, client and server polls must run at least every **90 seconds** when the app is open or a background sweep is active. Between 6–24 hours, **5 minutes** is acceptable. When GPS geofence says **at-airport** or **in-terminal**, poll every **4 minutes** — enough for gate changes without freezing the app (never sub-minute client loops on airport Wi‑Fi). Away from the airport, never poll faster than the phase tiers above. **FlightAware AeroAPI** is preferred when configured (`authorityRank` higher); **AeroDataBox** co-sources. Either key enables live mode. Discrepancies are logged, never silently discarded.
 
 **Test:** `src/lib/travelAssistant/flightStatusCadence.test.ts`, `src/lib/travelAssistant/flightStatusMerge.test.ts`
 

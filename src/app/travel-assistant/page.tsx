@@ -41,6 +41,7 @@ import { flightDepartureUtcMs, selectNextRemainingFlight } from "@/lib/travelAss
 import {
   nearestUpcomingFlightDepartureUtcMs,
   resolveFlightStatusPollIntervalMs,
+  type FlightStatusPollProximity,
 } from "@/lib/travelAssistant/flightStatusCadence";
 import { isDuplicateReservation } from "@/lib/travelAssistant/reservationDuplicates";
 import { countRescannableReservations } from "@/lib/travelAssistant/rescanTripImportsShared";
@@ -3175,7 +3176,30 @@ export default function TravelAssistantPage() {
     };
   }, [refreshTripsFromServer, tripsLoading]);
 
-  // Auto-poll flight status for upcoming flights within 24h (2s at airport, 90s inside 6h, 5m otherwise)
+  const flightStatusPollProximity = useMemo((): FlightStatusPollProximity => {
+    if (!activeTripId || !reservations.length) return "away";
+    const nowMs = Date.now();
+    const upcomingFlights = reservations.filter((r) => {
+      if (r.type !== "flight") return false;
+      const local = canonicalFlightDepartureLocalTime(r);
+      if (!local) return false;
+      const depMs = Date.parse(local.replace("T", " ").slice(0, 16));
+      const hoursUntil = (depMs - nowMs) / 3_600_000;
+      return hoursUntil > -1 && hoursUntil < 24;
+    });
+    if (!upcomingFlights.length) return "away";
+    const nearestDep = nearestUpcomingFlightDepartureUtcMs(upcomingFlights, nowMs);
+    const deptIata = (upcomingFlights.find((r) => {
+      const local = canonicalFlightDepartureLocalTime(r);
+      if (!local) return false;
+      const depMs = Date.parse(local.replace("T", " ").slice(0, 16));
+      return depMs === nearestDep;
+    }) as { flightDepartureAirport?: string } | undefined)?.flightDepartureAirport;
+    const status = getAirportProximity(guidanceUserLat, guidanceUserLon, deptIata).status;
+    return status === "unknown" ? "away" : status;
+  }, [activeTripId, reservations, guidanceUserLat, guidanceUserLon]);
+
+  // Auto-poll flight status for upcoming flights within 24h (4m at airport, 90s inside 6h, 5m otherwise)
   useEffect(() => {
     if (!activeTripId || !reservations.length) return;
     const nowMs = Date.now();
@@ -3189,17 +3213,10 @@ export default function TravelAssistantPage() {
     });
     if (!upcomingFlights.length) return;
     const nearestDep = nearestUpcomingFlightDepartureUtcMs(upcomingFlights, nowMs);
-    const deptIata = (upcomingFlights.find((r) => {
-      const local = canonicalFlightDepartureLocalTime(r);
-      if (!local) return false;
-      const depMs = Date.parse(local.replace("T", " ").slice(0, 16));
-      return depMs === nearestDep;
-    }) as { flightDepartureAirport?: string } | undefined)?.flightDepartureAirport;
-    const proximityStatus = getAirportProximity(guidanceUserLat, guidanceUserLon, deptIata).status;
     const pollIntervalMs = resolveFlightStatusPollIntervalMs(
       nearestDep,
       nowMs,
-      proximityStatus === "unknown" ? "away" : proximityStatus,
+      flightStatusPollProximity,
     );
     const pollFlight = async () => {
       for (const flight of upcomingFlights) {
@@ -3214,7 +3231,7 @@ export default function TravelAssistantPage() {
     const interval = window.setInterval(() => { void pollFlight(); }, pollIntervalMs);
     return () => window.clearInterval(interval);
   // handleCheckFlightStatusRef is a stable ref — intentionally omitted from deps
-  }, [activeTripId, reservations, guidanceUserLat, guidanceUserLon]);
+  }, [activeTripId, reservations, flightStatusPollProximity]);
 
   useEffect(() => {
     if (!tripsHydratedRef.current) return;

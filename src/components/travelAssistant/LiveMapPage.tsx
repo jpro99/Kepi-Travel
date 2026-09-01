@@ -706,7 +706,7 @@ export function LiveMapPage() {
     [navLat, navLon, navIata],
   );
 
-  // Passive GPS — tighten refresh when geofenced at the airport (map pin + gate walk).
+  // Passive GPS — steady refresh at the airport (map pin + gate walk); avoid 0ms maximumAge loops.
   useEffect(() => {
     if (!navigator.geolocation) return;
     if (navWatchRef.current !== null) {
@@ -715,11 +715,7 @@ export function LiveMapPage() {
     }
     const atAirport =
       navProximity.status === "at-airport" || navProximity.status === "in-terminal";
-    const maximumAge = atAirport
-      ? navProximity.status === "in-terminal"
-        ? 0
-        : 1_000
-      : 10_000;
+    const maximumAge = atAirport ? 15_000 : 10_000;
     navWatchRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         setNavLat(pos.coords.latitude);

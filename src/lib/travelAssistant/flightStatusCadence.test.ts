@@ -22,7 +22,7 @@ test("resolveFlightStatusPollIntervalMs uses 5m between 6h and 24h", () => {
   assert.equal(resolveFlightStatusPollIntervalMs(depMs, nowMs), FLIGHT_STATUS_POLL_INTERVAL_FAR_MS);
 });
 
-test("resolveFlightStatusPollIntervalMs uses 2s at airport and 1s in terminal", () => {
+test("resolveFlightStatusPollIntervalMs uses 4m at airport and in terminal", () => {
   const nowMs = Date.parse("2026-09-01T10:00:00Z");
   const depMs = nowMs + 12 * 60 * 60_000;
   assert.equal(
