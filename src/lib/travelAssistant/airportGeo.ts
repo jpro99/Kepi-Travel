@@ -168,3 +168,15 @@ export function getAirportProximity(
 
   return { status, airport: closest, distanceKm: closestDist };
 }
+
+/** IATA when GPS places the traveler inside an airport geofence — no flight bias. */
+export function resolvePhysicalAirportIata(
+  userLat: number | null,
+  userLon: number | null,
+): string | null {
+  const proximity = getAirportProximity(userLat, userLon, undefined);
+  if (proximity.status !== "at-airport" && proximity.status !== "in-terminal") {
+    return null;
+  }
+  return proximity.airport?.iata ?? null;
+}

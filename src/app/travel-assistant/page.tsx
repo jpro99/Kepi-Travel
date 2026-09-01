@@ -4599,8 +4599,13 @@ export default function TravelAssistantPage() {
     });
     if (airborne) return "airborne";
 
-    // GPS-based airport proximity
-    // Prefer the next departure within 12h so early airport arrival still geofences correctly
+    // GPS-first: physical airport geofence beats a stale "next flight" IATA (e.g. ONT preview while at SEA).
+    const gpsProximity = getAirportProximity(guidanceUserLat, guidanceUserLon, undefined);
+    if (gpsProximity.status === "at-airport" || gpsProximity.status === "in-terminal") {
+      return gpsProximity.status;
+    }
+
+    // Flight-based fallback when away from any airport campus.
     const nextFlight = consumerReservationsSorted.find((r) => {
       if (r.type !== "flight") return false;
       const local = (r as unknown as Record<string, string>).localTime ?? "";
@@ -4633,14 +4638,16 @@ export default function TravelAssistantPage() {
       // sessionStorage may be blocked — still attempt open once via ref below
     }
     markLiveMapSessionActive();
-    const iata = findPlannableAirportIata(consumerReservationsSorted);
+    const iata =
+      guidanceNearestAirport ||
+      findPlannableAirportIata(consumerReservationsSorted);
     router.push(
       buildLiveAirportMapUrl({
         tripId: activeTripId,
         iata,
       }),
     );
-  }, [guidanceLocationStatus, router, activeTripId, consumerReservationsSorted]);
+  }, [guidanceLocationStatus, guidanceNearestAirport, router, activeTripId, consumerReservationsSorted]);
 
   const nextUpcomingFlight = useMemo(
     () => selectNextRemainingFlight(consumerReservationsSorted),

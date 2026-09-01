@@ -4,6 +4,7 @@ import {
   distanceKm,
   getAirportByIata,
   getAirportProximity,
+  resolvePhysicalAirportIata,
 } from "@/lib/travelAssistant/airportGeo";
 
 const SEA = { lat: 47.4502, lon: -122.3088 };
@@ -38,6 +39,18 @@ test("getAirportProximity prefers departure airport when provided", () => {
 
   const awayFromFco = getAirportProximity(SEA.lat, SEA.lon, "FCO");
   assert.equal(awayFromFco.status, "away");
+});
+
+test("resolvePhysicalAirportIata returns SEA on campus, null downtown", () => {
+  assert.equal(resolvePhysicalAirportIata(SEA.lat, SEA.lon), "SEA");
+  assert.equal(resolvePhysicalAirportIata(DOWNTOWN_SEA.lat, DOWNTOWN_SEA.lon), null);
+  assert.equal(resolvePhysicalAirportIata(null, null), null);
+});
+
+test("resolvePhysicalAirportIata ignores a mismatched departure pin", () => {
+  assert.equal(resolvePhysicalAirportIata(SEA.lat, SEA.lon), "SEA");
+  const biased = getAirportProximity(SEA.lat, SEA.lon, "ONT");
+  assert.equal(biased.status, "away");
 });
 
 test("distanceKm is roughly zero for identical points", () => {

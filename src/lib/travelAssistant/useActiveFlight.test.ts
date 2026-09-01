@@ -10,6 +10,7 @@ import {
   toUtcMs,
   type FlightReservation,
 } from "@/lib/travelAssistant/useActiveFlight";
+import { resolvePhysicalAirportIata } from "@/lib/travelAssistant/airportGeo";
 
 function localInHours(hoursFromNow: number, timezone = "America/Los_Angeles"): string {
   const ms = Date.now() + hoursFromNow * 3_600_000;
@@ -180,6 +181,49 @@ test("selectFlightForDepartureIata pins ONT not earliest SEA leg", () => {
   assert.equal(
     resolveCoachModeForPinnedAirport(flights[0], "FCO"),
     "arrive",
+  );
+});
+
+test("physical airport SEA selects SEA leg — not ONT preview (F15 reload bug)", () => {
+  const nowMs = Date.parse("2026-08-31T15:00:00Z");
+  const flights: FlightReservation[] = [
+    {
+      id: "as180",
+      type: "flight",
+      title: "SEA → FCO",
+      provider: "Alaska Airlines",
+      localTime: "2026-09-01 17:30",
+      timezone: "Etc/UTC",
+      location: "SEA",
+      flightNumber: "AS180",
+      flightDepartureAirport: "SEA",
+      flightArrivalAirport: "FCO",
+      flightDepartureTime: "2026-09-01 17:30",
+      flightDate: "2026-09-01",
+    },
+    {
+      id: "as654",
+      type: "flight",
+      title: "ONT → SEA",
+      provider: "Alaska Airlines",
+      localTime: "2026-09-01 12:00",
+      timezone: "America/Los_Angeles",
+      location: "ONT",
+      flightNumber: "AS654",
+      flightDepartureAirport: "ONT",
+      flightArrivalAirport: "SEA",
+      flightDepartureTime: "2026-09-01 12:00",
+      flightDate: "2026-09-01",
+    },
+  ];
+  const preview = selectPreviewAirportFlight(flights, nowMs);
+  assert.equal(preview?.f.flightDepartureAirport, "ONT");
+  assert.equal(resolvePhysicalAirportIata(47.4502, -122.3088), "SEA");
+  const ontPin = selectFlightForAirportIata(flights, "ONT", nowMs);
+  const seaPin = selectFlightForAirportIata(flights, "SEA", nowMs);
+  assert.equal(ontPin?.f.flightDepartureAirport, "ONT");
+  assert.ok(
+    seaPin?.f.flightArrivalAirport === "SEA" || seaPin?.f.flightDepartureAirport === "SEA",
   );
 });
 
