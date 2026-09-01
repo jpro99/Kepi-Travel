@@ -5,6 +5,10 @@
 
 Last updated: 2026-09-01 (M62 SEA live map — Kepi primary, not flysea handoff)
 
+## Fix 2026-09-01 — SEA connection: no baggage claim on ONT→SEA→FCO (Jeff)
+
+Connecting to Rome on one ticket — app wrongly sent user to baggage claim at SEA. **G64:** `buildHubConnectionCoachPath` / `resolveHubConnectionForInbound` — connection coach (deplane → intl TSA → gate); bags checked through on same PNR.
+
 ## Fix 2026-09-01 — False check-in at SEA after landing (Jeff)
 
 Deplaning / short connection at SEA showed depart **check-in** coach because `journeyPhase` was `airborne` or `pre-trip` for the outbound Rome leg while GPS was already on campus. **G63:** `resolveCampusCoachMode` — inbound-at-hub wins until ~60m before outbound; `AirportMode` + Live Map `useActiveFlight` use it.

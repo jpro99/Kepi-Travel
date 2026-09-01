@@ -17,6 +17,7 @@ import { buildTripJourney, journeyPoiIds, preSecurityJourney, type JourneyStop, 
 import {
   buildArrivalDayCoachPath,
   buildDepartDayCoachPath,
+  buildHubConnectionCoachPath,
   isInternationalArrivalFlight,
   resolveArrivalSpotlightIndex,
   resolveDepartSpotlightIndex,
@@ -101,6 +102,13 @@ import { MapHelperConfirmBar } from "@/components/travelAssistant/MapHelperConfi
 import { ArrivalCardStack } from "@/components/travelAssistant/ArrivalCardStack";
 import { buildArrivalCoachCards } from "@/lib/airportNav/gateConfidence";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
+import {
+  isHubConnectionActive,
+  resolveHubConnection,
+  resolveHubConnectionForInbound,
+  type HubConnectionContext,
+} from "@/lib/airportNav/connectionClock";
+import { resolveConnectionSpotlightIndex } from "@/lib/travelAssistant/connectionPlaybook";
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Kepi Airport Navigator — Phase 1 surface (spec §B/§C/§D4/§D5).
@@ -177,6 +185,8 @@ interface AirportNavigatorMapProps {
   tripReservations?: readonly TransportRouteReservation[];
   /** Active flight reservation id (outbound leg at hub). */
   activeReservationId?: string | null;
+  /** Resolved hub connection (inbound + outbound at this IATA). */
+  hubConnection?: HubConnectionContext | null;
 }
 
 const PATH_DIM = "#c3ccd7";
@@ -1215,6 +1225,7 @@ export function AirportNavigatorMap({
   mapHelperEnabled: mapHelperEnabledProp,
   tripReservations,
   activeReservationId = null,
+  hubConnection: hubConnectionProp = null,
 }: AirportNavigatorMapProps) {
   const bottomPanel = shellBottomInset ?? "max(0.75rem, env(safe-area-inset-bottom))";
   const bottomMic = shellBottomInset
@@ -1589,7 +1600,27 @@ export function AirportNavigatorMap({
   );
 
   const isArriveCoach = coachMode === "arrive";
-  const arrivalFirstMile = Boolean(layout && isArriveCoach && layoutSupportsArrivalFirstMile(layout));
+  const hubConnection = useMemo(() => {
+    if (hubConnectionProp) return hubConnectionProp;
+    if (!tripReservations?.length) return null;
+    const code = iata.trim().toUpperCase();
+    if (activeReservationId) {
+      const byOutbound = resolveHubConnection(tripReservations, code, activeReservationId);
+      if (byOutbound) return byOutbound;
+      const byInbound = resolveHubConnectionForInbound(
+        tripReservations,
+        code,
+        activeReservationId,
+      );
+      if (byInbound) return byInbound;
+    }
+    return null;
+  }, [hubConnectionProp, tripReservations, iata, activeReservationId]);
+  const connectionAtHub = Boolean(
+    hubConnection && isHubConnectionActive(hubConnection),
+  );
+  const useConnectionCoach = isArriveCoach && connectionAtHub;
+  const arrivalFirstMile = Boolean(layout && (isArriveCoach || useConnectionCoach) && layoutSupportsArrivalFirstMile(layout));
 
   const schematicOriginNodeId = useMemo(() => {
     if (!layout) return null;
@@ -1699,14 +1730,17 @@ export function AirportNavigatorMap({
   }, [layout, isArriveCoach, airlineName, gateCode, eligibleLoungeNames]);
 
   const arrivalJourney: ArrivalJourneyStop[] = useMemo(() => {
-    if (!layout || !isArriveCoach) return [];
+    if (!layout || !(isArriveCoach || useConnectionCoach)) return [];
     const intl = isInternationalArrivalFlight(departureAirport, iata);
     return buildArrivalTripJourney(layout, {
       gateCode,
-      includePassport: intl,
-      includeCustoms: intl,
+      includePassport: intl && !useConnectionCoach,
+      includeCustoms: intl && !useConnectionCoach,
+      includeBaggage: !useConnectionCoach,
+      includeExit: !useConnectionCoach,
+      includeGroundTransport: !useConnectionCoach,
     });
-  }, [layout, isArriveCoach, departureAirport, iata, gateCode]);
+  }, [layout, isArriveCoach, useConnectionCoach, departureAirport, iata, gateCode]);
 
   const journeyPoiIdSet = useMemo(
     () =>
@@ -1725,7 +1759,16 @@ export function AirportNavigatorMap({
   const [coachFullDayView, setCoachFullDayView] = useState(false);
 
   const arrivalDayCoachSteps = useMemo(() => {
-    if (!isArriveCoach) return [];
+    if (!isArriveCoach && !useConnectionCoach) return [];
+    if (useConnectionCoach && hubConnection) {
+      return buildHubConnectionCoachPath({
+        hubConnection,
+        credentials: {
+          tsaPreCheck: credentials.tsaPreCheck,
+          clear: credentials.clear,
+        },
+      });
+    }
     return buildArrivalDayCoachPath({
       iata,
       flightNumber,
@@ -1737,9 +1780,14 @@ export function AirportNavigatorMap({
       flightArrivalTime,
       flightTimezone,
       landedMinutesAgo,
+      hubConnection,
+      skipBaggageClaim: connectionAtHub,
     });
   }, [
     isArriveCoach,
+    useConnectionCoach,
+    hubConnection,
+    connectionAtHub,
     iata,
     flightNumber,
     airlineName,
@@ -1750,17 +1798,32 @@ export function AirportNavigatorMap({
     flightArrivalTime,
     flightTimezone,
     landedMinutesAgo,
+    credentials.tsaPreCheck,
+    credentials.clear,
   ]);
 
   const arrivalSpotlightIndex = useMemo(() => {
-    if (!isArriveCoach) return 0;
+    if (!isArriveCoach && !useConnectionCoach) return 0;
+    if (useConnectionCoach && hubConnection) {
+      return resolveConnectionSpotlightIndex(hubConnection.playbook, {
+        locationStatus: proximityStatus,
+        minutesSinceLanding: landedMinutesAgo,
+      });
+    }
     return resolveArrivalSpotlightIndex({
       steps: arrivalDayCoachSteps,
       landedMinutesAgo,
       locationStatus: proximityStatus,
       hasLiveBaggage: false,
     });
-  }, [isArriveCoach, arrivalDayCoachSteps, landedMinutesAgo, proximityStatus]);
+  }, [
+    isArriveCoach,
+    useConnectionCoach,
+    hubConnection,
+    arrivalDayCoachSteps,
+    landedMinutesAgo,
+    proximityStatus,
+  ]);
 
   const { visible: visibleArrivalCoachSteps, hiddenCount: hiddenArrivalCoachSteps } = useMemo(
     () => selectDayCoachVisibleSteps(arrivalDayCoachSteps, coachFullDayView, arrivalSpotlightIndex),

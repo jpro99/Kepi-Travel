@@ -167,6 +167,25 @@ export function resolveHubConnection(
   return null;
 }
 
+/** Find hub connection when the traveler is on the inbound leg (arrival coach). */
+export function resolveHubConnectionForInbound(
+  reservations: readonly TransportRouteReservation[],
+  hubIata: string,
+  inboundReservationId: string | null | undefined,
+  nowMs = Date.now(),
+): HubConnectionContext | null {
+  const hub = hubIata.trim().toUpperCase();
+  const inboundId = inboundReservationId?.trim();
+  if (!hub || !inboundId) return null;
+  for (const candidate of reservations) {
+    if (candidate.type !== "flight") continue;
+    if (candidate.flightDepartureAirport?.trim().toUpperCase() !== hub) continue;
+    const ctx = resolveHubConnection(reservations, hub, candidate.id, nowMs);
+    if (ctx?.inbound.reservationId === inboundId) return ctx;
+  }
+  return null;
+}
+
 /** True when hub has inbound arrival + later outbound on the same trip. */
 export function isHubConnectionActive(
   ctx: HubConnectionContext,

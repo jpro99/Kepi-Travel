@@ -7,6 +7,7 @@ import {
   computeConnectionGateConfidence,
   estimateSeaConnectionWalkMinutes,
   resolveHubConnection,
+  resolveHubConnectionForInbound,
 } from "@/lib/airportNav/connectionClock";
 
 const ONT_SEA_FCO_TRIP = [
@@ -54,6 +55,14 @@ test("resolveHubConnection: ONT→SEA→FCO same-ticket connection at SEA", () =
   assert.equal(ctx.inbound.flightNumber, "AS654");
   assert.equal(ctx.outbound.flightNumber, "AS180");
   assert.equal(ctx.bagsCheckedThrough, true);
+});
+
+test("resolveHubConnectionForInbound finds ONT→SEA inbound when outbound id known", () => {
+  const nowMs = Date.parse("2026-09-02T16:00:00.000Z");
+  const ctx = resolveHubConnectionForInbound(ONT_SEA_FCO_TRIP, "SEA", "as654", nowMs);
+  assert.ok(ctx);
+  assert.equal(ctx!.outbound.flightNumber, "AS180");
+  assert.equal(ctx!.bagsCheckedThrough, true);
 });
 
 test("computeConnectionGateConfidence: on-time inbound → fine with spare minutes", () => {

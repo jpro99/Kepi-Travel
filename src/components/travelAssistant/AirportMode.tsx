@@ -685,7 +685,8 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
               : (arrived.flightDepartureTerminal ?? null)
           }
           arrivalTerminal={arrived.flightArrivalTerminal ?? null}
-          coachMode={connectionActive ? "depart" : "arrive"}
+          coachMode="arrive"
+          hubConnection={hubConnectionAtArrival}
           landedMinutesAgo={
             journeyPhase.kind === "just-landed" ? journeyPhase.landedMinutesAgo : null
           }

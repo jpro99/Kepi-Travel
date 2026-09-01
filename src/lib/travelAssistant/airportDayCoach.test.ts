@@ -15,6 +15,7 @@ import {
   resolveDepartSpotlightIndex,
   selectDayCoachVisibleSteps,
 } from "./airportDayCoach";
+import { resolveHubConnection } from "@/lib/airportNav/connectionClock";
 import { getAirportNav } from "./airportNavigation";
 
 test("departureTimeBudgetReassurance at 90m shows plenty of time", () => {
@@ -161,6 +162,51 @@ test("G63 resolveCampusCoachMode: short SEA connection stays arrive until 60m be
     }),
     "arrive",
   );
+});
+
+test("G64 buildArrivalDayCoachPath at SEA connection skips baggage claim (ONT→SEA→FCO)", () => {
+  const trip = [
+    {
+      id: "as654",
+      type: "flight",
+      localTime: "2026-09-02 06:30",
+      timezone: "America/Los_Angeles",
+      flightDepartureAirport: "ONT",
+      flightArrivalAirport: "SEA",
+      flightDepartureTime: "2026-09-02 06:30",
+      flightArrivalTime: "2026-09-02 08:45",
+      flightNumber: "AS654",
+      confirmationCode: "KEPI123",
+      flightArrivalGate: "C10",
+    },
+    {
+      id: "as180",
+      type: "flight",
+      localTime: "2026-09-02 11:15",
+      timezone: "America/Los_Angeles",
+      flightDepartureAirport: "SEA",
+      flightArrivalAirport: "FCO",
+      flightDepartureTime: "2026-09-02 11:15",
+      flightArrivalTime: "2026-09-03 07:30",
+      flightNumber: "AS180",
+      confirmationCode: "KEPI123",
+      flightDepartureGate: "S12",
+    },
+  ];
+  const nowMs = Date.parse("2026-09-02T16:00:00.000Z");
+  const hubConnection = resolveHubConnection(trip, "SEA", "as180", nowMs);
+  assert.ok(hubConnection);
+  const steps = buildArrivalDayCoachPath({
+    iata: "SEA",
+    flightNumber: "AS654",
+    departureIata: "ONT",
+    hubConnection,
+    nowMs,
+  });
+  assert.ok(steps.some((s) => s.id === "deplane"));
+  assert.ok(steps.some((s) => s.id === "security" || s.id === "transfer"));
+  assert.equal(steps.find((s) => s.id === "bags"), undefined);
+  assert.ok(steps.some((s) => /checked through|Connections/i.test(s.text + (s.detail ?? ""))));
 });
 
 test("M39: buildDepartCheckInCoachStep uses Alaska Terminal 2 at ONT", () => {

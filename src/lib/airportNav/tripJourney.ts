@@ -301,6 +301,10 @@ export interface ArrivalJourneyContext {
   includePassport?: boolean;
   /** When false, skip customs (domestic). */
   includeCustoms?: boolean;
+  /** When false, skip baggage claim (hub connection — bags checked through). */
+  includeBaggage?: boolean;
+  /** When false, skip exit-to-curb stop (connecting travelers stay airside). */
+  includeExit?: boolean;
   /** Include Leonardo / train POI when layout has one. */
   includeGroundTransport?: boolean;
 }
@@ -404,7 +408,7 @@ export function buildArrivalTripJourney(
   }
 
   const baggagePoi = layout.pois.find((poi) => poi.category === "baggage");
-  if (baggagePoi) {
+  if (ctx.includeBaggage !== false && baggagePoi) {
     stops.push({
       role: "baggage",
       nodeId: baggagePoi.nodeId,
@@ -432,7 +436,7 @@ export function buildArrivalTripJourney(
   const exitNode =
     layout.nodes.find((node) => node.id.startsWith("curb-") && !node.airside) ??
     layout.nodes.find((node) => !node.airside && /arrival|exit/i.test(node.landmark ?? ""));
-  if (exitNode) {
+  if (ctx.includeExit !== false && exitNode) {
     stops.push({
       role: "exit",
       nodeId: exitNode.id,

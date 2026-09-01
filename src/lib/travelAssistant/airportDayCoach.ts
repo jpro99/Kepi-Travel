@@ -26,6 +26,12 @@ import type {
   ConnectionPlaybookStep,
 } from "@/lib/travelAssistant/connectionPlaybook";
 import { connectionRiskLabel } from "@/lib/travelAssistant/connectionPlaybook";
+import {
+  estimateSeaConnectionWalkMinutes,
+  isHubConnectionActive,
+  type HubConnectionContext,
+} from "@/lib/airportNav/connectionClock";
+import { buildSeaConnectionSteps } from "@/lib/airportNav/connectionClock";
 
 export type AirportDayCoachMode = "depart" | "arrive";
 
@@ -379,8 +385,53 @@ export interface ArrivalDayCoachInput {
   flightTimezone?: string | null;
   landedMinutesAgo?: number | null;
   nowMs?: number;
+  /** Active hub connection — skips baggage claim; uses connection coach instead. */
+  hubConnection?: HubConnectionContext | null;
+  skipBaggageClaim?: boolean;
 }
 
+/** Connection coach at a hub (e.g. ONT→SEA→FCO) — no baggage claim when bags check through. */
+export function buildHubConnectionCoachPath(input: {
+  hubConnection: HubConnectionContext;
+  credentials?: { tsaPreCheck?: boolean; clear?: boolean };
+  nowMs?: number;
+}): DayCoachPathStep[] {
+  const { hubConnection: ctx } = input;
+  const hub = ctx.hubIata.trim().toUpperCase();
+  const creds = input.credentials ?? { tsaPreCheck: false, clear: false };
+
+  if (hub === "SEA") {
+    const walk = estimateSeaConnectionWalkMinutes({
+      arrivalGate: ctx.inbound.arrivalGate,
+      departureGate: ctx.outbound.departureGate,
+      arrivalTerminal: ctx.inbound.arrivalTerminal,
+      departureTerminal: ctx.outbound.departureTerminal,
+      credentials: creds,
+    });
+    return buildSeaConnectionSteps({
+      ctx,
+      walkMinutes: walk.minutes,
+      walkKnown: walk.known,
+      throughSecurity: false,
+      credentials: creds,
+    }).map((step) => ({
+      id: step.id,
+      icon: step.icon,
+      text: step.text,
+      detail: step.detail,
+      minutes: step.minutes ?? undefined,
+    }));
+  }
+
+  return ctx.playbook.steps
+    .filter((step) => !(step.id === "bags" && ctx.bagsCheckedThrough))
+    .map((step) => ({
+      id: step.id,
+      icon: step.icon,
+      text: step.text,
+      detail: step.detail,
+    }));
+}
 const ARRIVAL_ROLE_ICON: Record<ArrivalJourneyRole, string> = {
   deplane: "🛬",
   passport: "🛂",
@@ -402,6 +453,16 @@ const ARRIVAL_ROLE_ID: Record<ArrivalJourneyRole, string> = {
 /** Arrival path matching approved mockup (intl steps only when countries differ). */
 export function buildArrivalDayCoachPath(input: ArrivalDayCoachInput): DayCoachPathStep[] {
   const code = input.iata.trim().toUpperCase();
+  const nowMs = input.nowMs ?? Date.now();
+  const hubCtx = input.hubConnection;
+  if (hubCtx && isHubConnectionActive(hubCtx, nowMs)) {
+    return buildHubConnectionCoachPath({
+      hubConnection: hubCtx,
+      nowMs,
+    });
+  }
+
+  const skipBags = input.skipBaggageClaim === true;
   const intl = isInternationalArrivalFlight(input.departureIata, code);
   const layout = getAirportLayout(code);
   const creds = { tsaPreCheck: false, clear: false, known: true };
@@ -411,6 +472,9 @@ export function buildArrivalDayCoachPath(input: ArrivalDayCoachInput): DayCoachP
       gateCode: input.arrivalGate,
       includePassport: intl,
       includeCustoms: intl,
+      includeBaggage: !skipBags,
+      includeExit: !skipBags,
+      includeGroundTransport: !skipBags,
     });
     if (stops.length > 0) {
       const steps: DayCoachPathStep[] = [];
@@ -491,7 +555,9 @@ export function buildArrivalDayCoachPath(input: ArrivalDayCoachInput): DayCoachP
       id: "deplane",
       icon: "🛬",
       text: "Leave aircraft → Arrivals",
-      detail: "Follow Arrivals signs — stay inside until baggage claim",
+      detail: skipBags
+        ? "Follow Connections signs — bags usually stay checked through"
+        : "Follow Arrivals signs — stay inside until baggage claim",
     },
   ];
 
@@ -510,13 +576,15 @@ export function buildArrivalDayCoachPath(input: ArrivalDayCoachInput): DayCoachP
     });
   }
 
-  steps.push({
-    id: "bags",
-    icon: "🧳",
-    text: `Bags — claim for ${flightLabel}`,
-    detail: curated || "Carousel number is on the airport screens — Kepi does not invent belt numbers.",
-    minutes: walk && walk > 0 ? walk : undefined,
-  });
+  if (!skipBags) {
+    steps.push({
+      id: "bags",
+      icon: "🧳",
+      text: `Bags — claim for ${flightLabel}`,
+      detail: curated || "Carousel number is on the airport screens — Kepi does not invent belt numbers.",
+      minutes: walk && walk > 0 ? walk : undefined,
+    });
+  }
 
   if (intl) {
     steps.push({
@@ -525,7 +593,7 @@ export function buildArrivalDayCoachPath(input: ArrivalDayCoachInput): DayCoachP
       text: "Customs → Exit",
       detail: nav?.arrivalInfo?.customsTip || "Declare food/agriculture as required, then follow Exit / Ground Transport signs.",
     });
-  } else {
+  } else if (!skipBags) {
     steps.push({
       id: "exit",
       icon: "🚪",
@@ -534,6 +602,7 @@ export function buildArrivalDayCoachPath(input: ArrivalDayCoachInput): DayCoachP
     });
   }
 
+  if (!skipBags) {
   const hotel = input.hotelLabel?.trim();
   steps.push(
     resolveArrivalRideStep({
@@ -546,6 +615,7 @@ export function buildArrivalDayCoachPath(input: ArrivalDayCoachInput): DayCoachP
       arrivalInfo: nav?.arrivalInfo,
     }),
   );
+  }
 
   return steps;
 }

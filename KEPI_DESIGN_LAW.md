@@ -596,6 +596,11 @@ When GPS places the traveler on an airport campus and an inbound leg has already
 
 **Test:** `src/lib/travelAssistant/airportDayCoach.test.ts`
 
+**G64 — Hub connections skip baggage claim when bags check through**
+When the traveler has a same-airport connection on one ticket (e.g. ONT→SEA→FCO), arrival coach at the hub must use **connection** steps (deplane → international TSA → gate) — never send them to baggage claim. `resolveHubConnection` + `buildHubConnectionCoachPath` / `buildSeaConnectionSteps` at SEA; `buildArrivalTripJourney` honors `includeBaggage: false`.
+
+**Test:** `src/lib/travelAssistant/airportDayCoach.test.ts`, `src/lib/airportNav/connectionClock.test.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -1135,6 +1140,7 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | M43 | `src/lib/airportNav/poiMapWalkPolicy.test.ts`, `src/lib/airportNav/layouts/seaTicketingHall.test.ts`, `src/lib/airportNav/paintWalkMapLeaderOverlay.ts` |
 | M62 | `src/lib/airportNav/officialWayfinding.test.ts` |
 | G63 | `src/lib/travelAssistant/airportDayCoach.test.ts` |
+| G64 | `src/lib/travelAssistant/airportDayCoach.test.ts`, `src/lib/airportNav/connectionClock.test.ts` |
 | M42 | `src/lib/airportNav/ontFirstMile.test.ts`, `src/lib/airportNav/tripJourney.test.ts` |
 
 New laws must add a row here when a test exists.
