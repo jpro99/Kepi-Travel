@@ -112,7 +112,7 @@ export async function buildSupportContext(userId: string): Promise<string> {
           ].filter(Boolean).join(" ")
         : null,
       reservation.type === "train"
-        ? `train=${reservation.trainNumber ?? reservation.title}`
+        ? `train=${reservation.title}`
         : null,
       reservation.type === "hotel" && reservation.checkOutDate
         ? `checkout=${reservation.checkOutDate}`
