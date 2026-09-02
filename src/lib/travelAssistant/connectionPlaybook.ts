@@ -7,6 +7,7 @@ import { resolveAirport } from "@/lib/airports/lookup";
 import { isInternationalArrivalFlight } from "@/lib/travelAssistant/airportDayCoach";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import { buildTripTransportRoute } from "@/lib/travelAssistant/tripTransportRoute";
+import { inferBagsCheckedThrough } from "@/lib/airportNav/hubConnectionUtils";
 
 type ConnectionFlightReservation = TransportRouteReservation & {
   flightDepartureGate?: string;
@@ -85,9 +86,8 @@ export function buildConnectionPlaybook(
 
     const intlInbound = isInternationalArrivalFlight(inboundDep, hub);
     const intlOutbound = !isDomesticFlight(hub, outboundArr) && outboundArr.length === 3;
-    const samePnr =
-      Boolean(inboundRes?.confirmationCode?.trim()) &&
-      inboundRes?.confirmationCode?.trim() === outboundRes?.confirmationCode?.trim();
+    const bagsCheckedThrough = inferBagsCheckedThrough(inboundRes, outboundRes);
+    const samePnr = bagsCheckedThrough;
 
     const steps: ConnectionPlaybookStep[] = [
       {
@@ -109,14 +109,31 @@ export function buildConnectionPlaybook(
       });
     }
 
-    if (intlInbound || (intlInbound && !samePnr)) {
+    if (intlInbound && !bagsCheckedThrough) {
       steps.push({
         id: "bags",
         icon: "🧳",
-        text: samePnr ? "Confirm bags are checked through" : "Claim and re-check bags",
-        detail: samePnr
-          ? "Same ticket — bags usually transfer; confirm on the baggage tag."
-          : "Separate tickets — you must collect and re-check before security.",
+        text: "Claim your bags at baggage claim",
+        detail:
+          "Separate ticket or airline switch — collect bags on the carousel screens, then re-check with your outbound airline.",
+      });
+      const outboundAirline =
+        outboundRes?.flightAirline?.trim() || outboundRes?.provider?.trim() || "your airline";
+      const outboundFlight = outboundRes?.flightNumber?.trim();
+      steps.push({
+        id: "check-in",
+        icon: "🎫",
+        text: `${outboundAirline} check-in counter`,
+        detail: outboundFlight
+          ? `${outboundFlight} — get boarding pass and drop re-checked bags at the airline desk.`
+          : "Get boarding pass and drop re-checked bags at the airline desk.",
+      });
+    } else if (intlInbound && bagsCheckedThrough) {
+      steps.push({
+        id: "bags",
+        icon: "🧳",
+        text: "Confirm bags are checked through",
+        detail: "Same ticket — bags usually transfer; confirm on the baggage tag.",
       });
     }
 
@@ -202,7 +219,8 @@ export function resolveConnectionSpotlightIndex(
     return idx("gate");
   }
   if (idx("security") >= 0 && landed >= 12) return idx("security");
-  if (idx("bags") >= 0 && landed >= 8) return idx("bags");
+  if (idx("check-in") >= 0 && landed >= 10) return idx("check-in");
+  if (idx("bags") >= 0 && landed >= 6) return idx("bags");
   if (idx("immigration") >= 0 && landed >= 3) return idx("immigration");
   return 0;
 }

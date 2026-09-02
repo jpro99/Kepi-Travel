@@ -6,9 +6,11 @@ import {
   buildSeaConnectionSteps,
   computeConnectionGateConfidence,
   estimateSeaConnectionWalkMinutes,
+  resolveArrivalHubConnection,
   resolveHubConnection,
   resolveHubConnectionForInbound,
 } from "@/lib/airportNav/connectionClock";
+import { buildHubConnectionCoachPath } from "@/lib/travelAssistant/airportDayCoach";
 
 const ONT_SEA_FCO_TRIP = [
   {
@@ -151,4 +153,47 @@ test("estimateSeaConnectionWalkMinutes: unknown gates returns null + not known",
   });
   assert.equal(walk.minutes, null);
   assert.equal(walk.known, false);
+});
+
+test("G66: FCO self-transfer Alaska inbound + United outbound — bags + United check-in", () => {
+  const trip = [
+    {
+      id: "as180",
+      type: "flight",
+      localTime: "2026-09-10 08:00",
+      timezone: "Europe/Rome",
+      flightDepartureAirport: "SEA",
+      flightArrivalAirport: "FCO",
+      flightDepartureTime: "2026-09-09 11:15",
+      flightArrivalTime: "2026-09-10 08:00",
+      flightNumber: "AS180",
+      flightAirline: "Alaska",
+      confirmationCode: "ALASKA1",
+      flightArrivalTerminal: "3",
+    },
+    {
+      id: "ua123",
+      type: "flight",
+      localTime: "2026-09-10 14:30",
+      timezone: "Europe/Rome",
+      flightDepartureAirport: "FCO",
+      flightArrivalAirport: "ORD",
+      flightDepartureTime: "2026-09-10 14:30",
+      flightArrivalTime: "2026-09-10 18:00",
+      flightNumber: "UA123",
+      flightAirline: "United",
+      confirmationCode: "UNITED2",
+    },
+  ];
+  const nowMs = Date.parse("2026-09-10T08:30:00.000Z");
+  const ctx = resolveArrivalHubConnection(trip, "FCO", "as180", nowMs);
+  assert.ok(ctx);
+  assert.equal(ctx!.selfTransfer, true);
+  assert.equal(ctx!.bagsCheckedThrough, false);
+  assert.equal(ctx!.outbound.flightNumber, "UA123");
+
+  const steps = buildHubConnectionCoachPath({ hubConnection: ctx! });
+  assert.ok(steps.some((s) => s.id === "bags" && /baggage claim/i.test(s.text)));
+  assert.ok(steps.some((s) => s.id === "check-in" && /United/i.test(s.text)));
+  assert.ok(steps.some((s) => s.id === "check-in" && /Terminal 3/i.test(s.text)));
 });

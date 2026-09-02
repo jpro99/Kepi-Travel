@@ -105,7 +105,7 @@ import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransp
 import {
   isHubConnectionActive,
   resolveHubConnection,
-  resolveHubConnectionForInbound,
+  resolveArrivalHubConnection,
   type HubConnectionContext,
 } from "@/lib/airportNav/connectionClock";
 import { resolveConnectionSpotlightIndex } from "@/lib/travelAssistant/connectionPlaybook";
@@ -1607,7 +1607,7 @@ export function AirportNavigatorMap({
     if (activeReservationId) {
       const byOutbound = resolveHubConnection(tripReservations, code, activeReservationId);
       if (byOutbound) return byOutbound;
-      const byInbound = resolveHubConnectionForInbound(
+      const byInbound = resolveArrivalHubConnection(
         tripReservations,
         code,
         activeReservationId,
@@ -1781,7 +1781,7 @@ export function AirportNavigatorMap({
       flightTimezone,
       landedMinutesAgo,
       hubConnection,
-      skipBaggageClaim: connectionAtHub,
+      skipBaggageClaim: connectionAtHub && hubConnection?.bagsCheckedThrough === true,
     });
   }, [
     isArriveCoach,

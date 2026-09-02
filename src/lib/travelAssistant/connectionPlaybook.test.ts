@@ -79,6 +79,46 @@ test("buildConnectionPlaybook: domestic inbound + intl outbound at SEA adds TSA 
   assert.ok(playbook!.steps.some((s) => s.id === "security" && /international TSA/i.test(s.text)));
 });
 
+test("buildConnectionPlaybook: separate PNR at FCO adds check-in counter step", () => {
+  const playbook = buildConnectionPlaybook(
+    [
+      {
+        id: "in",
+        type: "flight",
+        localTime: "2026-09-10 08:00",
+        timezone: "Europe/Rome",
+        flightDepartureAirport: "SEA",
+        flightArrivalAirport: "FCO",
+        flightDepartureTime: "2026-09-09 11:15",
+        flightArrivalTime: "2026-09-10 08:00",
+        flightDate: "2026-09-10",
+        flightNumber: "AS180",
+        flightAirline: "Alaska",
+        confirmationCode: "ALASKA1",
+      },
+      {
+        id: "out",
+        type: "flight",
+        localTime: "2026-09-10 14:30",
+        timezone: "Europe/Rome",
+        flightDepartureAirport: "FCO",
+        flightArrivalAirport: "ORD",
+        flightDepartureTime: "2026-09-10 14:30",
+        flightArrivalTime: "2026-09-10 18:00",
+        flightDate: "2026-09-10",
+        flightNumber: "UA123",
+        flightAirline: "United",
+        confirmationCode: "UNITED2",
+      },
+    ],
+    Date.parse("2026-09-10T08:30:00.000Z"),
+    { requireActiveWindow: false },
+  );
+  assert.ok(playbook);
+  assert.ok(playbook!.steps.some((s) => s.id === "bags" && /claim/i.test(s.text)));
+  assert.ok(playbook!.steps.some((s) => s.id === "check-in" && /United/i.test(s.text)));
+});
+
 test("buildConnectionPlaybook returns null when no same-airport connection", () => {
   const playbook = buildConnectionPlaybook([
     {

@@ -606,6 +606,11 @@ When GPS resolves a known airport campus (`physicalAirportIata`), `computeJourne
 
 **Test:** `src/lib/travelAssistant/journeyPhase.test.ts`
 
+**G66 — Self-transfer at hub: bags + outbound airline counter**
+When inbound and outbound at the same hub are **not** the same through-ticket (`inferBagsCheckedThrough` — different confirmation or airline switch), arrival coach must show **baggage claim** then **outbound airline check-in** (e.g. United · Terminal 3 at FCO per ADR), not connection-only "bags checked through." `resolveArrivalHubConnection` picks self-transfer outbounds; `buildFcoSelfTransferConnectionSteps` at FCO.
+
+**Test:** `src/lib/airportNav/hubConnectionUtils.test.ts`, `src/lib/airportNav/connectionClock.test.ts`, `src/lib/travelAssistant/connectionPlaybook.test.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -1147,6 +1152,7 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | G63 | `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | G64 | `src/lib/travelAssistant/airportDayCoach.test.ts`, `src/lib/airportNav/connectionClock.test.ts` |
 | G65 | `src/lib/travelAssistant/journeyPhase.test.ts` |
+| G66 | `src/lib/airportNav/hubConnectionUtils.test.ts`, `src/lib/airportNav/connectionClock.test.ts`, `src/lib/travelAssistant/connectionPlaybook.test.ts` |
 | M42 | `src/lib/airportNav/ontFirstMile.test.ts`, `src/lib/airportNav/tripJourney.test.ts` |
 
 New laws must add a row here when a test exists.

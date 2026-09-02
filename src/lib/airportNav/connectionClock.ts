@@ -25,6 +25,9 @@ import {
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import { buildTripTransportRoute } from "@/lib/travelAssistant/tripTransportRoute";
 import { toUtcMs } from "@/lib/travelAssistant/journeyPhase";
+import {
+  inferBagsCheckedThrough,
+} from "@/lib/airportNav/hubConnectionUtils";
 
 export type ConnectionCoachState = "fine" | "tight" | "go_now" | "miss" | "recover";
 
@@ -48,8 +51,10 @@ export interface HubConnectionContext {
   inbound: HubConnectionLeg;
   outbound: HubConnectionLeg;
   playbook: ConnectionPlaybook;
-  /** Same PNR — bags usually checked through. */
+  /** Same PNR + same carrier — bags usually checked through. */
   bagsCheckedThrough: boolean;
+  /** Separate ticket or airline switch — claim bags + outbound check-in counter. */
+  selfTransfer: boolean;
 }
 
 export interface SeaConnectionStep {
@@ -125,6 +130,35 @@ function reservationToLeg(
   };
 }
 
+function buildHubConnectionContext(
+  reservations: readonly TransportRouteReservation[],
+  hub: string,
+  inboundRes: TransportRouteReservation,
+  outboundRes: TransportRouteReservation,
+  nowMs: number,
+): HubConnectionContext | null {
+  const inbound = reservationToLeg(inboundRes, "inbound");
+  const outbound = reservationToLeg(outboundRes, "outbound");
+  if (!inbound || !outbound) return null;
+  if (outbound.departureUtcMs <= inbound.arrivalUtcMs) return null;
+
+  const mutableReservations = [...reservations];
+  const playbook =
+    connectionPlaybookForFlight(mutableReservations, outboundRes.id, nowMs) ??
+    buildConnectionPlaybook(mutableReservations, nowMs, { requireActiveWindow: false });
+  if (!playbook || playbook.hubIata !== hub) return null;
+
+  const bagsCheckedThrough = inferBagsCheckedThrough(inboundRes, outboundRes);
+  return {
+    hubIata: hub,
+    inbound,
+    outbound,
+    playbook,
+    bagsCheckedThrough,
+    selfTransfer: !bagsCheckedThrough,
+  };
+}
+
 /** Find same-airport connection at hub when outbound reservation is known. */
 export function resolveHubConnection(
   reservations: readonly TransportRouteReservation[],
@@ -148,21 +182,54 @@ export function resolveHubConnection(
     const outboundRes = reservations.find((r) => r.id === outboundSeg.reservationId);
     if (!inboundRes || !outboundRes) continue;
 
-    const inbound = reservationToLeg(inboundRes, "inbound");
-    const outbound = reservationToLeg(outboundRes, "outbound");
-    if (!inbound || !outbound) continue;
-    if (outbound.departureUtcMs <= inbound.arrivalUtcMs) continue;
+    const ctx = buildHubConnectionContext(reservations, hub, inboundRes, outboundRes, nowMs);
+    if (ctx) return ctx;
+  }
+  return null;
+}
 
-    const playbook =
-      connectionPlaybookForFlight(mutableReservations, outboundReservationId, nowMs) ??
-      buildConnectionPlaybook(mutableReservations, nowMs, { requireActiveWindow: false });
-    if (!playbook || playbook.hubIata !== hub) continue;
+/**
+ * G66 — Arrival at a hub: prefer self-transfer outbound (separate PNR / airline)
+ * when the traveler must claim bags and check in again.
+ */
+export function resolveArrivalHubConnection(
+  reservations: readonly TransportRouteReservation[],
+  hubIata: string,
+  inboundReservationId: string | null | undefined,
+  nowMs = Date.now(),
+): HubConnectionContext | null {
+  const hub = hubIata.trim().toUpperCase();
+  const inboundId = inboundReservationId?.trim();
+  if (!hub || !inboundId) return null;
 
-    const inboundCode = inboundRes.confirmationCode?.trim();
-    const outboundCode = outboundRes.confirmationCode?.trim();
-    const bagsCheckedThrough = Boolean(inboundCode && inboundCode === outboundCode);
+  const inboundRes = reservations.find((r) => r.id === inboundId);
+  if (!inboundRes || inboundRes.type !== "flight") return null;
+  const inboundLeg = reservationToLeg(inboundRes, "inbound");
+  if (!inboundLeg) return null;
 
-    return { hubIata: hub, inbound, outbound, playbook, bagsCheckedThrough };
+  const windowStart = inboundLeg.arrivalUtcMs - 30 * 60_000;
+  const windowEnd = inboundLeg.arrivalUtcMs + 48 * 60 * 60_000;
+
+  const outboundCandidates = reservations
+    .filter((r) => r.type === "flight" && r.id !== inboundId)
+    .filter((r) => r.flightDepartureAirport?.trim().toUpperCase() === hub)
+    .map((r) => ({ r, leg: reservationToLeg(r, "outbound") }))
+    .filter(
+      (entry): entry is { r: TransportRouteReservation; leg: HubConnectionLeg } =>
+        entry.leg != null
+        && entry.leg.departureUtcMs >= windowStart
+        && entry.leg.departureUtcMs <= windowEnd,
+    )
+    .sort((a, b) => a.leg.departureUtcMs - b.leg.departureUtcMs);
+
+  const selfTransferCandidates = outboundCandidates.filter(
+    ({ r }) => !inferBagsCheckedThrough(inboundRes, r),
+  );
+
+  const pickFrom = selfTransferCandidates.length > 0 ? selfTransferCandidates : outboundCandidates;
+  for (const { r } of pickFrom) {
+    const ctx = buildHubConnectionContext(reservations, hub, inboundRes, r, nowMs);
+    if (ctx) return ctx;
   }
   return null;
 }
@@ -174,16 +241,7 @@ export function resolveHubConnectionForInbound(
   inboundReservationId: string | null | undefined,
   nowMs = Date.now(),
 ): HubConnectionContext | null {
-  const hub = hubIata.trim().toUpperCase();
-  const inboundId = inboundReservationId?.trim();
-  if (!hub || !inboundId) return null;
-  for (const candidate of reservations) {
-    if (candidate.type !== "flight") continue;
-    if (candidate.flightDepartureAirport?.trim().toUpperCase() !== hub) continue;
-    const ctx = resolveHubConnection(reservations, hub, candidate.id, nowMs);
-    if (ctx?.inbound.reservationId === inboundId) return ctx;
-  }
-  return null;
+  return resolveArrivalHubConnection(reservations, hubIata, inboundReservationId, nowMs);
 }
 
 /** True when hub has inbound arrival + later outbound on the same trip. */

@@ -26,7 +26,7 @@ import { selectActiveFlight, selectFlightForAirportCampus, type FlightReservatio
 import { flightDepartureUtcMs } from "@/lib/travelAssistant/flightSort";
 import {
   isHubConnectionActive,
-  resolveHubConnection,
+  resolveArrivalHubConnection,
 } from "@/lib/airportNav/connectionClock";
 import {
   resolveCampusCoachMode,
@@ -637,12 +637,7 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
     const hub = navIata.trim().toUpperCase();
     if (!hub) return null;
     const route = reservations.filter((r) => r.type === "flight");
-    for (const candidate of route) {
-      if (candidate.flightDepartureAirport?.trim().toUpperCase() !== hub) continue;
-      const ctx = resolveHubConnection(route, hub, candidate.id, now);
-      if (ctx && ctx.inbound.reservationId === navigatorFlight.f.id) return ctx;
-    }
-    return null;
+    return resolveArrivalHubConnection(route, hub, navigatorFlight.f.id, now);
   }, [coachMode, navigatorFlight, navIata, reservations, now]);
 
   // Arrival coach: journeyPhase just-landed — render navigator even when departure window closed.

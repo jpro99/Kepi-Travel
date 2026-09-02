@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-09-01 (G65 — no false BRI landing while at SEA)
+Last updated: 2026-09-02 (G66 — FCO self-transfer bags + United counter)
+
+## Fix 2026-09-02 — FCO self-transfer: bags + United check-in (Jeff)
+
+Landed Rome on one ticket, outbound United on a separate ticket — app did not say where to claim bags or find the United counter. **G66:** `inferBagsCheckedThrough` (PNR + airline), `resolveArrivalHubConnection` prefers self-transfer outbounds, FCO coach path shows Terminal 3 baggage claim + United check-in counter before security.
 
 ## Fix 2026-09-01 — "Landed at BRI" while still at SEA (Jeff)
 

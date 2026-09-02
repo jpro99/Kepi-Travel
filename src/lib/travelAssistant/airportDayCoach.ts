@@ -423,6 +423,10 @@ export function buildHubConnectionCoachPath(input: {
     }));
   }
 
+  if (hub === "FCO" && ctx.selfTransfer) {
+    return buildFcoSelfTransferConnectionSteps(ctx);
+  }
+
   return ctx.playbook.steps
     .filter((step) => !(step.id === "bags" && ctx.bagsCheckedThrough))
     .map((step) => ({
@@ -431,6 +435,72 @@ export function buildHubConnectionCoachPath(input: {
       text: step.text,
       detail: step.detail,
     }));
+}
+
+/** G66 — FCO separate-ticket connection: bags + outbound airline counter (ADR T3). */
+function buildFcoSelfTransferConnectionSteps(ctx: HubConnectionContext): DayCoachPathStep[] {
+  const nav = getAirportNav("FCO");
+  const baggage = nav?.arrivalInfo?.baggageCarousels?.[0];
+  const inboundLabel = ctx.inbound.flightNumber?.trim() || "inbound flight";
+  const terminal =
+    ctx.outbound.departureTerminal?.trim()
+    || inferTerminalHint("FCO", ctx.outbound.airline ?? "")
+    || "3";
+  const checkIn = buildDepartCheckInCoachStep({
+    iata: "FCO",
+    airlineName: ctx.outbound.airline,
+    flightNumber: ctx.outbound.flightNumber,
+    departureTerminal: terminal,
+  });
+
+  const steps: DayCoachPathStep[] = [
+    {
+      id: "deplane",
+      icon: "🛬",
+      text: "Deplane → follow Arrivals / Arrivi signs",
+      detail: "Separate ticket — you must collect bags before your next flight.",
+    },
+    {
+      id: "immigration",
+      icon: "🛂",
+      text: "Passport control",
+      detail:
+        "EU/EEA use the EU lane; everyone else All Passports. Have passport ready.",
+    },
+    {
+      id: "bags",
+      icon: "🧳",
+      text: `Baggage claim — Terminal ${ctx.inbound.arrivalTerminal?.trim() || "3"}`,
+      detail:
+        baggage?.carouselNote
+        || `Claim bags for ${inboundLabel}. Carousel number is on the overhead screens — Kepi does not invent belt numbers.`,
+      minutes: baggage?.walkMinutes && baggage.walkMinutes > 0 ? baggage.walkMinutes : 15,
+    },
+    {
+      ...checkIn,
+      id: "check-in",
+      detail: `${checkIn.detail ?? ""} Separate ticket — check in and drop re-checked bags here.`.trim(),
+    },
+    {
+      id: "security",
+      icon: "🛡",
+      text: "Security screening again",
+      detail:
+        "After check-in, clear security for your outbound gate — allow 15–25 min at FCO.",
+      minutes: 18,
+    },
+    {
+      id: "gate",
+      icon: "🚪",
+      text: ctx.outbound.departureGate?.trim()
+        ? `Gate ${ctx.outbound.departureGate.trim()} · ${ctx.outbound.flightNumber ?? "outbound"}`
+        : `Board ${ctx.outbound.flightNumber ?? "your outbound flight"}`,
+      detail: ctx.outbound.departureGate?.trim()
+        ? "Confirm on airport boards — gate can change."
+        : "Gate posts after check-in — watch the departure boards.",
+    },
+  ];
+  return steps;
 }
 const ARRIVAL_ROLE_ICON: Record<ArrivalJourneyRole, string> = {
   deplane: "🛬",
@@ -623,6 +693,17 @@ export function buildArrivalDayCoachPath(input: ArrivalDayCoachInput): DayCoachP
 /** Known airline → terminal hints when booking lacks terminal (curated, honest). */
 const AIRLINE_TERMINAL_HINTS: Record<string, Record<string, string>> = {
   ONT: { AS: "2", Alaska: "2" },
+  // ADR: T3 main international/intercontinental — United departs T3 (verify on boarding pass).
+  FCO: {
+    UA: "3",
+    United: "3",
+    AS: "3",
+    Alaska: "3",
+    AZ: "3",
+    ITA: "3",
+    LH: "3",
+    BA: "3",
+  },
 };
 
 function inferTerminalHint(iata: string, airlineName: string): string | null {
