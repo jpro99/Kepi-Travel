@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-09-01 (M62 SEA live map — Kepi primary, not flysea handoff)
+Last updated: 2026-09-01 (G65 — no false BRI landing while at SEA)
+
+## Fix 2026-09-01 — "Landed at BRI" while still at SEA (Jeff)
+
+Multi-leg Europe trip: app claimed **Just landed · BRI · 88m ago** while GPS was on SEA campus connecting to Rome. **G65:** `computeJourneyPhase` accepts `physicalAirportIata` and vetoes airborne/just-landed on legs whose arrival airport ≠ physical campus; wired from Airport Mode, Live Map `useActiveFlight`, and travel-assistant shell GPS.
 
 ## Fix 2026-09-01 — SEA connection: no baggage claim on ONT→SEA→FCO (Jeff)
 

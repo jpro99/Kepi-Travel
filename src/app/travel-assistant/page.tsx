@@ -306,7 +306,7 @@ import { AdvancedModeToggle } from "@/components/ui/AdvancedModeToggle";
 import { Logo } from "@/components/ui/Logo";
 import { JourneyFlowPanel } from "./components/JourneyFlowPanel";
 import { TravelAssistantTopControls } from "./components/TravelAssistantTopControls";
-import { getAirportProximity, resolveOpenAirportIata } from "@/lib/travelAssistant/airportGeo";
+import { getAirportProximity, resolveOpenAirportIata, resolvePhysicalAirportIata } from "@/lib/travelAssistant/airportGeo";
 import { ConsumerDesktopTabBar } from "@/components/travelAssistant/ConsumerDesktopTabBar";
 import {
   normalizeConsumerTabParam,
@@ -5235,6 +5235,11 @@ export default function TravelAssistantPage() {
     ],
   );
 
+  const guidancePhysicalAirport = useMemo(
+    () => resolvePhysicalAirportIata(guidanceUserLat, guidanceUserLon),
+    [guidanceUserLat, guidanceUserLon],
+  );
+
   // ── Single source of truth: where is the user right now in their journey? ──
   const journeyPhase = useMemo((): JourneyPhase => {
     return computeJourneyPhase({
@@ -5253,16 +5258,18 @@ export default function TravelAssistantPage() {
         checkOutDate: reservation.checkOutDate,
       })),
       tripDestination: consumerTripDestination ?? activeTrip?.destination ?? null,
+      physicalAirportIata: guidancePhysicalAirport,
     });
-  }, [consumerReservationsSorted, consumerTripDestination, activeTrip?.destination]);
+  }, [consumerReservationsSorted, consumerTripDestination, activeTrip?.destination, guidancePhysicalAirport]);
 
   const mobileJourneyPhase = useMemo(
     () =>
       computeJourneyPhase({
         reservations: consumerReservationsSorted,
         tripDestination: consumerTripDestination ?? activeTrip?.destination ?? null,
+        physicalAirportIata: guidancePhysicalAirport,
       }),
-    [consumerReservationsSorted, consumerTripDestination, activeTrip?.destination],
+    [consumerReservationsSorted, consumerTripDestination, activeTrip?.destination, guidancePhysicalAirport],
   );
 
   useEffect(() => {

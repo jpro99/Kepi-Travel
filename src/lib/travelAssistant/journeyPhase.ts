@@ -209,12 +209,45 @@ export function shouldPromptAirportTransport(
   return hoursUntil <= 36;
 }
 
+function normalizeCampusIata(code: string | null | undefined): string | null {
+  const v = code?.trim().toUpperCase();
+  return v || null;
+}
+
+/**
+ * G65 — When GPS places the traveler on a known airport campus, airborne / just-landed
+ * must only attach to a leg that matches that field (arrival for landed; not still
+ * standing at the departure gate while the clock says "airborne").
+ */
+export function flightPhaseMatchesPhysicalCampus(
+  flight: JourneyReservation,
+  phaseKind: "airborne" | "just-landed",
+  physicalIata: string,
+): boolean {
+  const campus = normalizeCampusIata(physicalIata);
+  if (!campus) return true;
+
+  const arr = normalizeCampusIata(flight.flightArrivalAirport);
+  const dep = normalizeCampusIata(flight.flightDepartureAirport);
+
+  if (phaseKind === "just-landed") {
+    return arr === campus;
+  }
+
+  // On campus at the departure airport — not airborne on that leg.
+  if (dep === campus) return false;
+  return arr === campus;
+}
+
 export function computeJourneyPhase(args: {
   reservations: JourneyReservation[];
   nowMs?: number;
   tripDestination?: string | null;
+  /** GPS-resolved airport campus — vetoes wrong-airport landed/airborne claims. */
+  physicalAirportIata?: string | null;
 }): JourneyPhase {
   const nowMs = args.nowMs ?? Date.now();
+  const physicalIata = normalizeCampusIata(args.physicalAirportIata);
   const flights = sortFlights(args.reservations.filter((r) => r.type === "flight"));
   const hotels = args.reservations.filter((r) => r.type === "hotel");
 
@@ -267,6 +300,9 @@ export function computeJourneyPhase(args: {
     if (nowMs < depMs) continue;
 
     if (nowMs >= depMs && nowMs < arrMs) {
+      if (physicalIata && !flightPhaseMatchesPhysicalCampus(flight, "airborne", physicalIata)) {
+        continue;
+      }
       const minsLeft = Math.max(0, Math.round((arrMs - nowMs) / MS_PER_MIN));
       return {
         kind: "airborne",
@@ -277,6 +313,9 @@ export function computeJourneyPhase(args: {
     }
 
     if (nowMs >= arrMs && nowMs < arrMs + POST_ARRIVAL_ACTIVE_MS) {
+      if (physicalIata && !flightPhaseMatchesPhysicalCampus(flight, "just-landed", physicalIata)) {
+        continue;
+      }
       const landedMinutesAgo = Math.max(0, Math.round((nowMs - arrMs) / MS_PER_MIN));
       return { kind: "just-landed", flight, landedMinutesAgo };
     }

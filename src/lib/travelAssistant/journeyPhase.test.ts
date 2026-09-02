@@ -234,3 +234,86 @@ test("G49: before departure always pre-trip even if arrival string looks past in
   assert.notEqual(phase.kind, "airborne");
   assert.equal(phase.kind, "pre-trip");
 });
+
+test("G65: physical SEA campus vetoes false just-landed at BRI during hub connection", () => {
+  const flights = [
+    {
+      id: "ont-sea",
+      type: "flight",
+      localTime: "2026-09-01 06:00",
+      timezone: "America/Los_Angeles",
+      flightDepartureTime: "2026-09-01 06:00",
+      flightArrivalTime: "2026-09-01 08:30",
+      flightDepartureAirport: "ONT",
+      flightArrivalAirport: "SEA",
+      flightNumber: "AS654",
+    },
+    {
+      id: "sea-fco",
+      type: "flight",
+      localTime: "2026-09-01 11:30",
+      timezone: "America/Los_Angeles",
+      flightDepartureTime: "2026-09-01 11:30",
+      flightArrivalTime: "2026-09-02 07:00",
+      flightDepartureAirport: "SEA",
+      flightArrivalAirport: "FCO",
+      flightNumber: "AZ614",
+    },
+    {
+      id: "fco-bri",
+      type: "flight",
+      localTime: "2026-09-01 08:00",
+      timezone: "Europe/Rome",
+      flightDepartureTime: "2026-09-01 08:00",
+      // Mangled arrival clock — looks hours ago while traveler is still at SEA.
+      flightArrivalTime: "2026-09-01 14:00",
+      flightDepartureAirport: "FCO",
+      flightArrivalAirport: "BRI",
+      flightNumber: "AZ1234",
+    },
+  ];
+  // ~10:00 AM PDT at SEA — inbound landed ~90m ago, outbound not yet departed.
+  const nowMs = Date.parse("2026-09-01T17:00:00Z");
+
+  const withoutGps = computeJourneyPhase({ reservations: flights, nowMs });
+  assert.equal(withoutGps.kind, "just-landed");
+  if (withoutGps.kind === "just-landed") {
+    assert.equal(withoutGps.flight.id, "fco-bri");
+  }
+
+  const atSea = computeJourneyPhase({
+    reservations: flights,
+    nowMs,
+    physicalAirportIata: "SEA",
+  });
+  assert.equal(atSea.kind, "just-landed");
+  if (atSea.kind === "just-landed") {
+    assert.equal(atSea.flight.id, "ont-sea");
+    assert.notEqual(atSea.flight.flightArrivalAirport, "BRI");
+  }
+});
+
+test("G65: just-landed at physical campus still works for inbound hub leg", () => {
+  const flight = {
+    id: "ont-sea",
+    type: "flight",
+    localTime: "2026-09-01 06:00",
+    timezone: "America/Los_Angeles",
+    flightDepartureTime: "2026-09-01 06:00",
+    flightArrivalTime: "2026-09-01 08:30",
+    flightDepartureAirport: "ONT",
+    flightArrivalAirport: "SEA",
+    flightNumber: "AS654",
+  };
+  const nowMs = Date.parse("2026-09-01T16:00:00Z"); // ~30m after SEA arrival
+  const phase = computeJourneyPhase({
+    reservations: [flight],
+    nowMs,
+    physicalAirportIata: "SEA",
+  });
+  assert.equal(phase.kind, "just-landed");
+  if (phase.kind === "just-landed") {
+    assert.equal(phase.flight.id, "ont-sea");
+    assert.equal(phase.landedMinutesAgo, 30);
+  }
+});

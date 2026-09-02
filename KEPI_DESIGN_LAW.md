@@ -601,6 +601,11 @@ When the traveler has a same-airport connection on one ticket (e.g. ONT→SEA→
 
 **Test:** `src/lib/travelAssistant/airportDayCoach.test.ts`, `src/lib/airportNav/connectionClock.test.ts`
 
+**G65 — Physical campus vetoes wrong-airport landed / airborne**
+When GPS resolves a known airport campus (`physicalAirportIata`), `computeJourneyPhase` must never claim **just-landed** or **airborne** on a leg whose arrival airport differs (e.g. "Landed at BRI 88m ago" while physically at SEA on ONT→SEA→FCO→BRI). Standing on campus at the departure airport also vetoes **airborne** on that outbound leg. Pass `physicalAirportIata` from Airport Mode, Live Map, and travel-assistant shell.
+
+**Test:** `src/lib/travelAssistant/journeyPhase.test.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -1141,6 +1146,7 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | M62 | `src/lib/airportNav/officialWayfinding.test.ts` |
 | G63 | `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | G64 | `src/lib/travelAssistant/airportDayCoach.test.ts`, `src/lib/airportNav/connectionClock.test.ts` |
+| G65 | `src/lib/travelAssistant/journeyPhase.test.ts` |
 | M42 | `src/lib/airportNav/ontFirstMile.test.ts`, `src/lib/airportNav/tripJourney.test.ts` |
 
 New laws must add a row here when a test exists.

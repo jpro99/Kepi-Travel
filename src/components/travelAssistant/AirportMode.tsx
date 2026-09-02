@@ -456,8 +456,13 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
     return selectActiveFlight(reservations, now);
   }, [reservations, now, physicalIata]);
   const journeyPhase = useMemo(
-    () => computeJourneyPhase({ reservations, nowMs: now }),
-    [reservations, now],
+    () =>
+      computeJourneyPhase({
+        reservations,
+        nowMs: now,
+        physicalAirportIata: physicalIata,
+      }),
+    [reservations, now, physicalIata],
   );
   // Airport proximity — unbiased geofence when physically on a campus.
   const proximity = useMemo(
@@ -477,7 +482,10 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
   const navigatorFlight = useMemo(() => {
     if (journeyPhase.kind === "just-landed") {
       const f = journeyPhase.flight as FlightReservation;
-      return { f, utcMs: now };
+      const arr = f.flightArrivalAirport?.trim().toUpperCase() ?? "";
+      if (!physicalIata || arr === physicalIata) {
+        return { f, utcMs: now };
+      }
     }
     if (coachMode === "arrive" && physicalIata) {
       const inbound = selectFlightForAirportCampus(reservations, physicalIata, now, "arrive");

@@ -345,8 +345,13 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
   const activeFlight = useMemo(() => selectActiveFlight(reservations, nowMs), [reservations, nowMs]);
   const previewFlight = useMemo(() => selectPreviewAirportFlight(reservations, nowMs), [reservations, nowMs]);
   const journeyPhase = useMemo(
-    () => computeJourneyPhase({ reservations, nowMs }),
-    [reservations, nowMs],
+    () =>
+      computeJourneyPhase({
+        reservations,
+        nowMs,
+        physicalAirportIata,
+      }),
+    [reservations, nowMs, physicalAirportIata],
   );
   const coachMode = deriveAirportDayCoachMode(journeyPhase);
   const navigatorCoachMode = useMemo(() => {
@@ -396,12 +401,17 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
     }
     if (journeyPhase.kind === "just-landed" && !pinnedFlight) {
       const f = journeyPhase.flight as FlightReservation;
+      const arr = f.flightArrivalAirport?.trim().toUpperCase() ?? "";
+      if (physicalAirportIata && arr !== physicalAirportIata) {
+        // G65 — wrong-airport landed claim; fall through to campus pin.
+      } else {
       // Arrival clock must use ARRIVAL airport TZ — departure TZ on a mangled
       // arrival string is what produced false "Landed 339m ago" for AS654.
       const arrivalTz =
         timezoneForIata(f.flightArrivalAirport ?? "") ?? f.timezone;
       const utcMs = toUtcMs(f.flightArrivalTime ?? f.localTime, arrivalTz);
       return { f, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
+      }
     }
     if (pinnedFlight) return pinnedFlight;
     return activeFlight ?? previewFlight;
