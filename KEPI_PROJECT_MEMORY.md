@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-09-02 (G66 — FCO self-transfer bags + United counter)
+Last updated: 2026-09-02 (G67 — Kepi Support live airport concierge)
+
+## Fix 2026-09-02 — Kepi Support: baggage, train, connection answers (Jeff)
+
+Support FAB was hidden during Airport Mode walk sheets and chat had no live coach/trip context — felt dead for "how do I get to my train?" **G67:** FAB always visible (`z-[135]`); quick prompts; client `setSupportLiveContext` from travel shell + `AirportNavigatorMap` coach steps; server merges trip + airport baggage/train hints; concierge system prompt.
 
 ## Fix 2026-09-02 — FCO self-transfer: bags + United check-in (Jeff)
 
