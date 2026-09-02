@@ -717,7 +717,7 @@ Every trip leg that exists in the itinerary must appear in both the calendar AND
 **I22 — Stay cities come from hotels, not flight arrivals**  
 Timeline stay chapters, night counts, and calendar labels must derive from **booked hotel cities and dates**. Landing at BRI does not imply "staying in Bari" when hotels are in Monopoli/Polignano. Flight arrival is a transport event only.
 
-**Test:** `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`
+**Test:** `src/lib/travelAssistant/hotelAnchoredTimeline.test.ts`, `src/lib/travelAssistant/dayNoteStopRanges.test.ts`
 
 **I23 — Plan notes reconcile with reservations**  
 User plan notes ("Leave", "not staying in X", "staying elsewhere") must parse and reconcile against booked hotels — updating `dayPlans` and timeline legs. Decorative notes that ignore hotel truth are banned.

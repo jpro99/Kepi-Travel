@@ -2,6 +2,10 @@ import type { StopDateRange } from "@/lib/decision/stopDates";
 import type { TripStop } from "@/lib/decision/types";
 import { normalizeHotelDestinationQuery } from "@/lib/hotels/destinationAliases";
 import { formatHotelSearchCityLabel } from "@/lib/hotels/tripSearchContext";
+import {
+  buildHotelStaySpans,
+  type HotelStayLegInput,
+} from "@/lib/travelAssistant/hotelAnchoredStayLegs";
 import { parseDayIntentFromLines, parseDayLines } from "@/lib/travelAssistant/dayPlanLines";
 import { normalizeDayPlanCity, stripTrailingDateNoise } from "@/lib/travelAssistant/normalizeDayPlanCity";
 import { buildFullTripDayKeys } from "@/lib/travelAssistant/tripTimelinePlanning";
@@ -264,26 +268,89 @@ export function deriveStopRangesFromDayNotes(
   return mergeStopRanges(ranges);
 }
 
+/** Booked hotel confirmations → calendar stay blocks (H2). */
+export function stopRangesFromBookedHotels(
+  hotels: HotelStayLegInput[],
+  tripStartDate: string | null | undefined,
+  tripEndDate: string | null | undefined,
+): StopDateRange[] {
+  const start = tripStartDate?.slice(0, 10);
+  const end = tripEndDate?.slice(0, 10);
+  if (!start || !end || start > end) return [];
+
+  const spans = buildHotelStaySpans(hotels, start, end);
+  return spans.map((span) => ({
+    stop: enrichStop(span.city),
+    checkIn: span.startDate,
+    checkOut: span.endDate,
+    nights: nightsBetween(span.startDate, span.endDate),
+  }));
+}
+
+/** Booked hotels win over talk-to-plan intent for overlapping nights. */
+export function overlayBookedHotelsOnStopRanges(
+  base: StopDateRange[],
+  hotelRanges: StopDateRange[],
+): StopDateRange[] {
+  if (hotelRanges.length === 0) return base;
+  let result = [...base];
+  for (const hotel of [...hotelRanges].sort((a, b) => a.checkIn.localeCompare(b.checkIn))) {
+    const next: StopDateRange[] = [];
+    for (const range of result) {
+      if (hotel.checkOut <= range.checkIn || hotel.checkIn >= range.checkOut) {
+        next.push(range);
+        continue;
+      }
+      if (range.checkIn < hotel.checkIn) {
+        next.push({
+          ...range,
+          checkOut: hotel.checkIn,
+          nights: nightsBetween(range.checkIn, hotel.checkIn),
+        });
+      }
+      if (range.checkOut > hotel.checkOut) {
+        next.push({
+          ...range,
+          checkIn: hotel.checkOut,
+          checkOut: range.checkOut,
+          nights: nightsBetween(hotel.checkOut, range.checkOut),
+        });
+      }
+    }
+    next.push(hotel);
+    result = next;
+  }
+  return mergeStopRanges(result).sort((a, b) => a.checkIn.localeCompare(b.checkIn));
+}
+
 /**
  * Hotel stay blocks — one box per city stay, using dates the user actually planned.
- * Priority: explicit arrive/leave notes → talk-to-plan intent → careful day-note inference.
+ * Priority: booked hotel (overlapping nights) → explicit arrive/leave notes → talk-to-plan intent → day-note inference.
  */
 export function resolveEffectiveStopRanges(
   intentRanges: StopDateRange[],
   tripStartDate: string | null | undefined,
   tripEndDate: string | null | undefined,
   dayNotes: Record<string, string>,
+  hotels: HotelStayLegInput[] = [],
 ): StopDateRange[] {
   const explicit = pickPrimaryStayPerCity(
     extractExplicitStayWindows(tripStartDate, tripEndDate, dayNotes),
   );
-  if (explicit.length > 0) return explicit;
-
-  if (intentRanges.length > 0) {
-    return pickPrimaryStayPerCity(mergeStopRanges(intentRanges));
+  let base: StopDateRange[];
+  if (explicit.length > 0) {
+    base = explicit;
+  } else if (intentRanges.length > 0) {
+    base = pickPrimaryStayPerCity(mergeStopRanges(intentRanges));
+  } else {
+    base = pickPrimaryStayPerCity(
+      deriveStopRangesFromDayNotes(tripStartDate, tripEndDate, dayNotes),
+    );
   }
 
-  return pickPrimaryStayPerCity(
-    deriveStopRangesFromDayNotes(tripStartDate, tripEndDate, dayNotes),
-  );
+  const hotelRanges = stopRangesFromBookedHotels(hotels, tripStartDate, tripEndDate);
+  if (hotelRanges.length === 0) return base;
+  if (base.length === 0) return hotelRanges;
+
+  return overlayBookedHotelsOnStopRanges(base, hotelRanges);
 }

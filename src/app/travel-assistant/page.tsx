@@ -4882,6 +4882,7 @@ export default function TravelAssistantPage() {
         consumerTripStartDate ?? activeTrip?.startDate,
         activeTrip?.endDate,
         itineraryPrefs.dayNotes,
+        tripTabHotelReservations,
       ),
     [
       activeTrip?.endDate,
@@ -4889,6 +4890,7 @@ export default function TravelAssistantPage() {
       consumerTripStartDate,
       itineraryPrefs.dayNotes,
       itineraryStopRanges,
+      tripTabHotelReservations,
     ],
   );
 
@@ -10404,7 +10406,7 @@ export default function TravelAssistantPage() {
                 locationStatus={guidanceLocationStatus}
                 nearestAirport={guidanceNearestAirport}
                 dayNotes={itineraryPrefs.dayNotes}
-                stopRanges={itineraryStopRanges}
+                stopRanges={effectiveStopRanges}
                 hotelNotebookNote={itineraryPrefs.hotelNotebookNote}
                 onDayNoteChange={itineraryPrefs.updateDayNote}
                 onHotelNotebookChange={itineraryPrefs.updateHotelNotebookNote}

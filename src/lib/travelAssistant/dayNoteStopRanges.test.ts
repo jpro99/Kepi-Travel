@@ -74,6 +74,44 @@ test("resolveEffectiveStopRanges uses explicit arrive/leave note over intent", (
   assert.equal(effective[0]?.checkOut, "2026-09-05");
 });
 
+test("resolveEffectiveStopRanges: booked Lecce hotel overrides Monopoli intent Sep 8–12 (I22)", () => {
+  const intentRanges = [
+    {
+      stop: { name: "Monopoli, Italy" },
+      checkIn: "2026-09-05",
+      checkOut: "2026-09-13",
+      nights: 8,
+    },
+  ];
+  const hotels = [
+    {
+      id: "lecce-hotel",
+      type: "hotel",
+      title: "Palazzo BN",
+      provider: "Booking.com",
+      location: "Lecce, Italy",
+      localTime: "2026-09-08",
+      checkOutDate: "2026-09-12",
+      confirmationCode: "LECCE1",
+    },
+  ];
+  const effective = resolveEffectiveStopRanges(
+    intentRanges,
+    "2026-09-01",
+    "2026-09-25",
+    {},
+    hotels,
+  );
+  const lecce = effective.find((row) => /lecce/i.test(row.stop.name));
+  const monopoli = effective.find((row) => /monopoli/i.test(row.stop.name));
+  assert.ok(lecce, "expected Lecce stay block from booked hotel");
+  assert.equal(lecce?.checkIn, "2026-09-08");
+  assert.equal(lecce?.checkOut, "2026-09-12");
+  assert.ok(monopoli, "Monopoli should remain before Lecce check-in");
+  assert.equal(monopoli?.checkIn, "2026-09-05");
+  assert.equal(monopoli?.checkOut, "2026-09-08");
+});
+
 test("pickPrimaryStayPerCity keeps one block per city with the longest stay", () => {
   const picked = pickPrimaryStayPerCity([
     { stop: { name: "Polignano a Mare" }, checkIn: "2026-09-01", checkOut: "2026-09-05", nights: 4 },
