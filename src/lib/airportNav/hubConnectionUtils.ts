@@ -30,14 +30,19 @@ export function airlineIataFromReservation(
   return null;
 }
 
+export type BagsCheckReservation = Pick<
+  TransportRouteReservation,
+  "confirmationCode" | "flightNumber" | "flightAirline" | "provider"
+>;
+
 /**
  * Bags stay checked through only on the same confirmation AND same operating
  * carrier family — separate tickets / airline switches always require claim +
  * re-check at the outbound counter.
  */
 export function inferBagsCheckedThrough(
-  inbound: TransportRouteReservation,
-  outbound: TransportRouteReservation,
+  inbound: BagsCheckReservation,
+  outbound: BagsCheckReservation,
 ): boolean {
   const inCode = inbound.confirmationCode?.trim();
   const outCode = outbound.confirmationCode?.trim();

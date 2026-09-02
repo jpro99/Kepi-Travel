@@ -86,7 +86,10 @@ export function buildConnectionPlaybook(
 
     const intlInbound = isInternationalArrivalFlight(inboundDep, hub);
     const intlOutbound = !isDomesticFlight(hub, outboundArr) && outboundArr.length === 3;
-    const bagsCheckedThrough = inferBagsCheckedThrough(inboundRes, outboundRes);
+    const bagsCheckedThrough =
+      inboundRes && outboundRes
+        ? inferBagsCheckedThrough(inboundRes, outboundRes)
+        : false;
     const samePnr = bagsCheckedThrough;
 
     const steps: ConnectionPlaybookStep[] = [
