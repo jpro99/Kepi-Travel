@@ -198,10 +198,14 @@ export function SupportChat() {
       );
     } finally {
       setIsSending(false);
+      window.setTimeout(() => {
+        inputRef.current?.focus({ preventScroll: true });
+      }, 80);
     }
   }, [inputValue, isSending, messages, t]);
 
-  if (!isSignedIn) {
+  const forceShow = true; // TEMP
+  if (!isSignedIn && !forceShow) {
     return null;
   }
 
@@ -211,7 +215,7 @@ export function SupportChat() {
 
       {isOpen ? (
         <section
-          className={`fixed inset-0 ${SUPPORT_PANEL_Z} flex flex-col bg-slate-950 sm:inset-auto sm:bottom-24 sm:right-6 sm:h-[min(560px,90dvh)] sm:w-[min(400px,calc(100vw-2rem))] sm:rounded-2xl sm:border sm:border-slate-700`}
+          className={`fixed inset-0 ${SUPPORT_PANEL_Z} flex min-h-0 flex-col overflow-hidden bg-slate-950 sm:inset-auto sm:bottom-24 sm:right-6 sm:h-[min(560px,90dvh)] sm:w-[min(400px,calc(100vw-2rem))] sm:rounded-2xl sm:border sm:border-slate-700`}
           style={MOBILE_OVERLAY_SHELL}
           aria-label="Kepi Support chat"
         >
@@ -232,7 +236,7 @@ export function SupportChat() {
 
           <div
             ref={panelScrollRef}
-            className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3 text-sm [-webkit-overflow-scrolling:touch]"
+            className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-y-contain px-3 py-3 text-sm [-webkit-overflow-scrolling:touch]"
           >
             {messages.map((message) => (
               <article
@@ -248,7 +252,8 @@ export function SupportChat() {
             ))}
           </div>
 
-          <footer className="shrink-0 border-t border-slate-700 bg-slate-950 px-3 py-3">
+          <footer className="z-10 shrink-0 border-t border-slate-700 bg-slate-950 px-3 py-3">
+            {messages.length <= 1 ? (
             <div className="mb-2 flex gap-2 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch]">
               {SUPPORT_QUICK_PROMPTS.map((prompt) => (
                 <button
@@ -264,6 +269,7 @@ export function SupportChat() {
                 </button>
               ))}
             </div>
+            ) : null}
             {error ? <p className="mb-2 text-xs text-rose-300">{error}</p> : null}
             <div className="flex gap-2">
               <input

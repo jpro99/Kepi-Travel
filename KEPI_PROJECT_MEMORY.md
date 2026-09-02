@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-09-02 (M70 — FCO numbered check-in desks on map)
+Last updated: 2026-09-02 (G70 — Support input stays visible after long reply)
+
+## Fix 2026-09-02 — Support: input vanishes after long answer (Jeff)
+
+After one question + long reply, the text field scrolled off-screen — whole panel grew instead of only the message list. **G70:** panel `overflow-hidden`; messages area alone scrolls; footer pinned; quick prompts hide after first exchange.
 
 ## Fix 2026-09-02 — FCO numbered ticket counters on map + you → desk (Jeff)
 

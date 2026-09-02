@@ -631,6 +631,11 @@ When a trip touches Italy or a flight shows standby/cancel/delay status, support
 
 **Test:** manual — open support on phone; type field visible above tab bar.
 
+**G70 — Long support replies must not push the input off-screen**
+The chat panel is `overflow-hidden` with a bounded `100dvh` shell; only the message list scrolls (`flex-1 min-h-0 overflow-y-auto`). Footer stays pinned (`shrink-0`). Quick prompts hide after the first exchange to reclaim footer height.
+
+**Test:** manual — ask a long question; scroll messages; input + Send remain visible at bottom.
+
 ---
 
 ## ITINERARY LAWS
