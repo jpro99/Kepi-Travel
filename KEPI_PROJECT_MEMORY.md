@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-09-02 (G68 — Support standby / Italy EU261 playbook)
+Last updated: 2026-09-02 (G69 — Support input above tab bar)
+
+## Fix 2026-09-02 — Support chat: no place to type (Jeff)
+
+Support panel was `z-[140]` but mobile tab bar is `z-[99999]` — footer/input hidden behind tabs. **G69:** panel `z-[100010]`, flex `min-h-0` scroller, `shrink-0` footer, horizontal quick prompts, 48px `text-base` input.
 
 ## Fix 2026-09-02 — Support: standby + no flights in Italy (Jeff)
 
