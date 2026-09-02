@@ -86,6 +86,22 @@ test("resolvePoiDisplayName maps leaked SEA ids to human labels", () => {
   }
 });
 
+test("resolvePoiDisplayName includes desk number for numbered check-in counters", () => {
+  assert.equal(
+    resolvePoiDisplayName(
+      {
+        id: "poi-checkin-t3-desk-410",
+        nodeId: "checkin-t3-desk-410",
+        category: "checkin",
+        name: "United check-in",
+        doorLabel: "410",
+      },
+      { nodes: [] },
+    ),
+    "United check-in · Desk 410",
+  );
+});
+
 test("resolveNodeDisplayName never returns raw graph ids", () => {
   const node: GraphNode = {
     id: "SEA:node:bag:domestic",

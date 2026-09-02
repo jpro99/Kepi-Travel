@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-09-02 (G69 — Support input above tab bar)
+Last updated: 2026-09-02 (M70 — FCO numbered check-in desks on map)
+
+## Fix 2026-09-02 — FCO numbered ticket counters on map + you → desk (Jeff)
+
+At FCO T3, check-in desks are numbered (401, 405, 410 United, etc.) but the map did not show desk numbers or distance from the traveler. **M70:** schematic numbered check-in POIs along the T3 hall (`fcoT3NumberedCheckin.ts`); United/UA resolves to desk 410; map banner `You · Desk 410 is ~Xm away`; labels `United check-in · Desk 410`. Desk numbers from ADR signage; positions schematic — verify today's assignment on airport screens.
 
 ## Fix 2026-09-02 — Support chat: no place to type (Jeff)
 

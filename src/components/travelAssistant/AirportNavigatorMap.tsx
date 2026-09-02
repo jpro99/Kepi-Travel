@@ -13,6 +13,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AirportLayout, ComputedRoute, GraphEdge, PoiDefinition, SnappedPosition, TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
 import { resolveBookedGateHighlight } from "@/lib/airportNav/kac/bookedGateHighlight";
+import {
+  distanceToCheckinCounterMeters,
+  formatCheckinCounterDistance,
+  resolveAirlineCheckinCounter,
+} from "@/lib/airportNav/checkinCounterHighlight";
 import { buildTripJourney, journeyPoiIds, preSecurityJourney, type JourneyStop, buildArrivalTripJourney, arrivalJourneyPoiIds, layoutSupportsArrivalFirstMile, resolveArrivalOriginNode, type ArrivalJourneyStop } from "@/lib/airportNav/tripJourney";
 import {
   buildArrivalDayCoachPath,
@@ -451,6 +456,10 @@ function airportPoiIsVisible(
     return true;
   }
   if (definition.category === "checkin") {
+    if (definition.doorLabel?.trim()) {
+      if (mode === "lounges") return false;
+      return true;
+    }
     if (definition.airline) {
       if (!airlineName?.toLowerCase().includes(definition.airline.toLowerCase())) return false;
     } else if (hasAirlineCheckin) {
@@ -1651,6 +1660,11 @@ export function AirportNavigatorMap({
     [layout, gateCode, airlineName],
   );
 
+  const bookedCheckin = useMemo(
+    () => resolveAirlineCheckinCounter(layout, airlineName, flightNumber),
+    [layout, airlineName, flightNumber],
+  );
+
   const gatePoi: PoiDefinition | null = useMemo(() => {
     return bookedGate?.poi ?? null;
   }, [bookedGate]);
@@ -1662,6 +1676,17 @@ export function AirportNavigatorMap({
   }, [layout, bookedGate]);
 
   const travelerPos = useMemo((): [number, number] | null => userDisplayPos, [userDisplayPos]);
+
+  const checkinCounterGuidance = useMemo(() => {
+    if (!bookedCheckin) return null;
+    const meters = distanceToCheckinCounterMeters(travelerPos, bookedCheckin.pos);
+    const distance = formatCheckinCounterDistance(meters);
+    const desk = bookedCheckin.deskLabel;
+    if (!distance) {
+      return `Your counter · Desk ${desk}`;
+    }
+    return `You · Desk ${desk} is ${distance}`;
+  }, [bookedCheckin, travelerPos]);
 
   const gateDistanceM = useMemo(
     () => distanceToGateMeters(travelerPos, gateNodePos),
@@ -2995,9 +3020,11 @@ export function AirportNavigatorMap({
 
       for (const poi of layout.pois) {
         const isAirlineCheckin = poi.category === "checkin" && Boolean(poi.airline);
-        const matchesAirline = isAirlineCheckin && airlineName
-          ? airlineName.toLowerCase().includes(poi.airline!.toLowerCase())
-          : false;
+        const matchesAirline =
+          bookedCheckin?.poi.id === poi.id ||
+          (isAirlineCheckin && airlineName
+            ? airlineName.toLowerCase().includes(poi.airline!.toLowerCase())
+            : false);
         const pos = nodePos.get(poi.nodeId);
         if (!pos) continue;
 
@@ -3087,7 +3114,7 @@ export function AirportNavigatorMap({
       }
       poiMarkersRef.current = {};
     };
-  }, [mapReady, layout, gatePoi, gateCode, bookedGate, minutesRounded, airlineName, objective, eligibleLoungeNames, selectedPoiId, activeRoute, journeyPoiIdSet]);
+  }, [mapReady, layout, gatePoi, gateCode, bookedGate, bookedCheckin, minutesRounded, airlineName, objective, eligibleLoungeNames, selectedPoiId, activeRoute, journeyPoiIdSet]);
 
   /* ── Walk-map leader-line labels (outside hull, collision-safe) ─────── */
   useEffect(() => {
@@ -3108,9 +3135,11 @@ export function AirportNavigatorMap({
 
       for (const poi of layout.pois) {
         const isAirlineCheckin = poi.category === "checkin" && Boolean(poi.airline);
-        const matchesAirline = isAirlineCheckin && airlineName
-          ? airlineName.toLowerCase().includes(poi.airline!.toLowerCase())
-          : false;
+        const matchesAirline =
+          bookedCheckin?.poi.id === poi.id ||
+          (isAirlineCheckin && airlineName
+            ? airlineName.toLowerCase().includes(poi.airline!.toLowerCase())
+            : false);
         const pos = nodePos.get(poi.nodeId);
         if (!pos) continue;
 
@@ -3215,6 +3244,7 @@ export function AirportNavigatorMap({
     activeRoute,
     journeyPoiIdSet,
     journeyPoiOrder,
+    bookedCheckin,
   ]);
 
   /* ── Start marker: where the drawn line begins ──────────────────────── */
@@ -3620,6 +3650,21 @@ export function AirportNavigatorMap({
         {expanded ? "✕" : "⤢"}
       </button>
       )}
+
+      {checkinCounterGuidance && !previewMode ? (
+        <div
+          data-testid="airport-nav-checkin-counter-guidance"
+          className="pointer-events-none absolute inset-x-3 z-20 flex justify-center"
+          style={{ top: `calc(${contentTop} + 2.5rem)` }}
+        >
+          <p className="max-w-md rounded-full bg-sky-950/90 px-4 py-2 text-center text-[12px] font-semibold leading-snug text-sky-100 backdrop-blur-md">
+            {checkinCounterGuidance}
+            <span className="block text-[10px] font-medium text-sky-200/80">
+              Numbered desks on map · verify today&apos;s assignment on airport screens
+            </span>
+          </p>
+        </div>
+      ) : null}
 
       {/* Preview banner — hidden on embedded Live Map; coach/Where-to chips only (map-first). */}
       {previewMode && !mapFirstLive ? (

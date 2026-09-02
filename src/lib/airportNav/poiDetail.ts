@@ -21,7 +21,7 @@ export const POI_ZOOM_TIER: Record<PoiCategory, number> = {
   lounge: 14,
   baggage: 14,
   ground_transport: 14,
-  checkin: 14.4,
+  checkin: 13.6,
   restroom: 15.5,
   amenity: 15,
 };

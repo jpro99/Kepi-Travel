@@ -591,6 +591,11 @@ When the traveler is physically at an airport (`proximityStatus` is `at-airport`
 
 **Test:** `src/lib/travelAssistant/airportDayCoach.test.ts`
 
+**M70 — Numbered check-in counters on the map + you → desk distance**
+When an airport uses fixed numbered ticket desks (e.g. FCO T3), layout POIs carry `doorLabel` (desk number) at schematic positions along the ticketing hall. Map shows all numbered desks at zoom ≥13; airline match highlights the traveler's counter (e.g. United · Desk 410). Live GPS puck + banner: `You · Desk 410 is ~120 m away`. Positions are schematic — never claim surveyed unless verified; always note airport screens may reassign desks.
+
+**Test:** `src/lib/airportNav/checkinCounterHighlight.test.ts`, `src/lib/airportNav/poiDisplayName.test.ts`
+
 **G63 — Arrival campus beats outbound check-in coach**
 When GPS places the traveler on an airport campus and an inbound leg has already departed for that hub (including airborne final approach and short connections), Kepi must use **arrival** coach — deplane, bags, connection — not depart check-in copy for the outbound leg. Outbound depart coach only takes over inside ~60 minutes of that departure. `resolveCampusCoachMode` implements this; `AirportMode` and `useActiveFlight` must use it instead of `deriveAirportDayCoachMode` alone.
 
@@ -1164,6 +1169,7 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | M41 | `src/lib/airportNav/airportCurationQueue.test.ts` |
 | M43 | `src/lib/airportNav/poiMapWalkPolicy.test.ts`, `src/lib/airportNav/layouts/seaTicketingHall.test.ts`, `src/lib/airportNav/paintWalkMapLeaderOverlay.ts` |
 | M62 | `src/lib/airportNav/officialWayfinding.test.ts` |
+| M70 | `src/lib/airportNav/checkinCounterHighlight.test.ts`, `src/lib/airportNav/poiDisplayName.test.ts` |
 | G63 | `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | G64 | `src/lib/travelAssistant/airportDayCoach.test.ts`, `src/lib/airportNav/connectionClock.test.ts` |
 | G65 | `src/lib/travelAssistant/journeyPhase.test.ts` |

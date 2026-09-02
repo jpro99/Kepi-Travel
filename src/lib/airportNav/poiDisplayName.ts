@@ -126,6 +126,14 @@ export function resolvePoiDisplayName(
   layout?: Pick<AirportLayout, "nodes"> | null,
 ): string {
   const name = poi.name?.trim();
+  const desk = poi.doorLabel?.trim();
+  if (poi.category === "checkin" && desk) {
+    const base =
+      name && !isRawGraphLabel(name) && !/^check-in desk \d+$/i.test(name)
+        ? name
+        : "Check-in";
+    return `${base} · Desk ${desk}`;
+  }
   if (name && !isRawGraphLabel(name)) return name;
 
   const node = layout?.nodes.find((entry) => entry.id === poi.nodeId);

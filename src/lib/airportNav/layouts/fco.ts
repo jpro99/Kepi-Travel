@@ -24,6 +24,7 @@ import {
   schematicZoneRing,
   walkSecs,
 } from "../buildMultiTerminalSkeleton";
+import { appendFcoT3NumberedCheckinCounters } from "./fcoT3NumberedCheckin";
 
 const BUILT = buildMultiTerminalSkeleton({
   securityNote:
@@ -275,14 +276,15 @@ function appendFcoArrivalsGroundTransport(
 const nodes = [...BUILT.nodes];
 const edges = [...BUILT.edges];
 const pois = [...BUILT.pois];
+appendFcoT3NumberedCheckinCounters({ nodes, edges, pois });
 appendFcoArrivalFirstMile(nodes, edges, pois);
 appendFcoArrivalsGroundTransport(nodes, edges, pois);
 
 export const FCO_LAYOUT: AirportLayout = {
   iata: "FCO",
   name: "Rome Fiumicino",
-  layoutVersion: "0.3.2-osm-rail-corridor",
-  updatedAt: "2026-08-28",
+  layoutVersion: "0.3.3-t3-numbered-checkin",
+  updatedAt: "2026-09-02",
   regionalRailPolylines: [FCO_LEONARDO_EXPRESS_RAIL],
   center: [12.250152, 41.795211],
   zones: [
