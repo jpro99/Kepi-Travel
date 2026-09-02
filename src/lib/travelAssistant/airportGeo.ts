@@ -168,3 +168,21 @@ export function getAirportProximity(
 
   return { status, airport: closest, distanceKm: closestDist };
 }
+
+/**
+ * Lenient campus check for the airport map the user is viewing.
+ * Indoor GPS often drifts outside the strict geofence — slack keeps live
+ * position + "I'm here" without claiming surveyed turn-by-turn routing.
+ */
+export function isNearAirportIata(
+  userLat: number | null,
+  userLon: number | null,
+  iata: string | null | undefined,
+  slack = 1.35,
+): boolean {
+  if (userLat == null || userLon == null) return false;
+  const apt = getAirportByIata(iata);
+  if (!apt) return false;
+  const d = distanceKm(userLat, userLon, apt.lat, apt.lon);
+  return d <= apt.radiusKm * slack;
+}
