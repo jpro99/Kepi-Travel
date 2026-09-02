@@ -287,6 +287,9 @@ import { WeatherCard } from "@/components/travelAssistant/WeatherCard";
 import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntelligencePanel";
 import { useTranslations } from "next-intl";
 import { openSupportChat } from "@/components/support/SupportChat";
+import { SUPPORT_TICKET_SCAN_EVENT } from "@/lib/support/supportChatEvents";
+import { setSupportLiveContext } from "@/lib/support/clientSupportContext";
+import { reservationLooksDisrupted } from "@/lib/support/standbyPlaybook";
 import { ConciergePanel } from "@/components/travelAssistant/ConciergePanel";
 import {
   formatCalendarSyncSummary,
@@ -5254,6 +5257,36 @@ export default function TravelAssistantPage() {
   }, [journeyPhase, navigateToConsumerTab]);
 
   useEffect(() => {
+    const disruptedFlights = consumerReservationsSorted.filter(
+      (reservation) => reservation.type === "flight" && reservationLooksDisrupted(reservation),
+    );
+    const disruptionNote =
+      disruptedFlights.length > 0
+        ? disruptedFlights
+            .map((reservation) => {
+              const label = reservation.flightNumber ?? reservation.title ?? "Flight";
+              const status = reservation.flightStatus?.trim() || "disrupted";
+              return `${label}: ${status}`;
+            })
+            .join("; ")
+        : null;
+
+    setSupportLiveContext({
+      tripId: activeTrip?.id ?? null,
+      tripName: activeTrip?.name ?? null,
+      journeyPhase: journeyPhase.kind,
+      physicalAirportIata: guidanceNearestAirport || null,
+      disruptionNote,
+    });
+  }, [
+    activeTrip?.id,
+    activeTrip?.name,
+    journeyPhase.kind,
+    guidanceNearestAirport,
+    consumerReservationsSorted,
+  ]);
+
+  useEffect(() => {
     if (!tripsHydratedRef.current) return;
     if (!activeTripId) return;
     if (!earliestFlightReservation) return;
@@ -7096,6 +7129,17 @@ export default function TravelAssistantPage() {
     },
     [handleTicketScanUpload],
   );
+
+  useEffect(() => {
+    const onSupportTicketScan = (event: Event): void => {
+      const file = (event as CustomEvent<{ file?: File }>).detail?.file;
+      if (file) {
+        void handleTicketScanUpload(file);
+      }
+    };
+    window.addEventListener(SUPPORT_TICKET_SCAN_EVENT, onSupportTicketScan);
+    return () => window.removeEventListener(SUPPORT_TICKET_SCAN_EVENT, onSupportTicketScan);
+  }, [handleTicketScanUpload]);
 
   const openTicketScanPicker = useCallback((): void => {
     if (ticketScanBusy) {
