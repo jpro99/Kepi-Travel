@@ -10,7 +10,7 @@ import {
   useActiveFlight,
   useNavigatorCredentials,
 } from "@/lib/travelAssistant/useActiveFlight";
-import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
+import { getAirportProximity, isNearAirportIata } from "@/lib/travelAssistant/airportGeo";
 import { useAtAirportFlightStatusPoll } from "@/lib/travelAssistant/useAtAirportFlightStatusPoll";
 import { buildOsmRasterFallbackStyle, directMaptilerTransformRequest, resolveLiveMapStyle, scheduleMapLoadFallback, attachMapStyleErrorFallback, type LiveMapStyleId } from "@/lib/map/maptilerClient";
 import { buildOfflineCityMapStyle } from "@/lib/map/offlineCityMapBundle";
@@ -736,12 +736,14 @@ export function LiveMapPage() {
   }, [navProximity.status]);
 
   const atNavAirport =
-    navProximity.status === "at-airport" || navProximity.status === "in-terminal";
+    navProximity.status === "at-airport"
+    || navProximity.status === "in-terminal"
+    || isNearAirportIata(navLat, navLon, navIata);
 
   const airportLiveMode = Boolean(
     navigatorCoachMode === "arrive"
       ? journeyPhase.kind === "just-landed" && atNavAirport
-      : activeFlight && atNavAirport,
+      : (activeFlight || navFlight) && atNavAirport,
   );
   const airportPreviewMode = Boolean(navFlight && !airportLiveMode);
 

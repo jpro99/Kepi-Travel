@@ -50,6 +50,10 @@ import {
 } from "@/lib/airportNav/gatePresence";
 import { resolveConfirmSpotFromLngLat } from "@/lib/airportNav/confirmTravelerSpot";
 import {
+  isOffGraphGpsDisplay,
+  resolveTravelerDisplayPosition,
+} from "@/lib/airportNav/travelerPosition";
+import {
   computeLayoutBounds,
   computeLandsideBounds,
   computeRegionalRailBounds,
@@ -1288,6 +1292,7 @@ export function AirportNavigatorMap({
   // never a confident route we cannot stand behind.
   const preciseRouteEnabled = layout?.routeGrade === "surveyed";
   const [journeyPrompt, setJourneyPrompt] = useState<JourneyPrompt | null>(null);
+  const [journeyReply, setJourneyReply] = useState("");
   const [statusLine, setStatusLine] = useState<string | null>(null);
   const [objective, setObjective] = useState<"checkin" | "security" | "gate" | "lounge" | null>(null);
 
@@ -1450,6 +1455,16 @@ export function AirportNavigatorMap({
     [iata, layout, sayAndShow],
   );
 
+  const dismissJourneyPrompt = useCallback(() => {
+    journeyRef.current = {
+      ...journeyRef.current,
+      openPromptId: null,
+      lastSecurityAskAt: Date.now(),
+    };
+    setJourneyPrompt(null);
+    setJourneyReply("");
+  }, []);
+
   /* ── Load curated layout (IndexedDB cache first, then API) ──────────── */
   useEffect(() => {
     let cancelled = false;
@@ -1502,16 +1517,57 @@ export function AirportNavigatorMap({
   }, [iata, layoutOverride]);
 
   /* ── Snapped traveler position ──────────────────────────────────────── */
+  const hasGpsCoords = userLat !== null && userLon !== null;
+  const showTravelerOnMap = hasGpsCoords || Boolean(confirmedNodeId);
+
   const snapped: SnappedPosition | null = useMemo(() => {
-    if (!layout || previewMode) return null;
+    if (!layout) return null;
     // A user-confirmed "I'm here" tap wins over noisy indoor GPS.
     if (confirmedNodeId) {
       const node = layout.nodes.find((entry) => entry.id === confirmedNodeId);
       if (node) return confirmedSnappedPosition(node);
     }
-    if (userLat === null || userLon === null) return null;
-    return snapToGraph(layout, userLon, userLat, userAccuracyM);
-  }, [layout, previewMode, confirmedNodeId, userLat, userLon, userAccuracyM]);
+    if (!hasGpsCoords) return null;
+    return snapToGraph(layout, userLon!, userLat!, userAccuracyM);
+  }, [layout, confirmedNodeId, hasGpsCoords, userLat, userLon, userAccuracyM]);
+
+  const travelerDisplayPos = useMemo(
+    () =>
+      resolveTravelerDisplayPosition({
+        userLon,
+        userLat,
+        snapped,
+        confirmedNodeId,
+      }),
+    [userLon, userLat, snapped, confirmedNodeId],
+  );
+
+  const offGraphGps = useMemo(
+    () =>
+      isOffGraphGpsDisplay({
+        previewMode,
+        confirmedNodeId,
+        userLon,
+        userLat,
+        snapped,
+        accuracyM: userAccuracyM,
+      }),
+    [previewMode, confirmedNodeId, userLon, userLat, snapped, userAccuracyM],
+  );
+
+  const schematicSnapped = useMemo((): SnappedPosition | null => {
+    if (previewMode && !showTravelerOnMap) return null;
+    if (snapped) return snapped;
+    if (travelerDisplayPos) {
+      return {
+        pos: travelerDisplayPos,
+        nearestNodeId: "",
+        offGraphMeters: 999,
+        confidence: 0,
+      };
+    }
+    return null;
+  }, [previewMode, showTravelerOnMap, snapped, travelerDisplayPos]);
 
   const isArriveCoach = coachMode === "arrive";
   const arrivalFirstMile = Boolean(layout && isArriveCoach && layoutSupportsArrivalFirstMile(layout));
@@ -1543,11 +1599,7 @@ export function AirportNavigatorMap({
     return node?.pos ?? null;
   }, [layout, bookedGate]);
 
-  const travelerPos = useMemo((): [number, number] | null => {
-    if (snapped?.pos) return snapped.pos;
-    if (userLon != null && userLat != null) return [userLon, userLat];
-    return null;
-  }, [snapped, userLon, userLat]);
+  const travelerPos = useMemo((): [number, number] | null => travelerDisplayPos, [travelerDisplayPos]);
 
   const gateDistanceM = useMemo(
     () => distanceToGateMeters(travelerPos, gateNodePos),
@@ -1851,14 +1903,14 @@ export function AirportNavigatorMap({
 
   /* ── Journey: position + clock events ───────────────────────────────── */
   useEffect(() => {
-    if (!snapped || previewMode) return;
+    if (!snapped || (previewMode && !showTravelerOnMap)) return;
     processJourneyEvent({
       type: "position",
       nodeId: snapped.nearestNodeId,
       confidence: snapped.confidence,
       at: Date.now(),
     });
-  }, [snapped?.nearestNodeId, snapped?.confidence, previewMode, processJourneyEvent]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [snapped?.nearestNodeId, snapped?.confidence, previewMode, showTravelerOnMap, processJourneyEvent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!layout) return;
@@ -2982,7 +3034,7 @@ export function AirportNavigatorMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
-    if (!snapped) {
+    if (!travelerDisplayPos) {
       if (userMarkerRef.current) {
         userMarkerRef.current.remove();
         userMarkerRef.current = null;
@@ -3000,7 +3052,9 @@ export function AirportNavigatorMap({
       wrap.dataset.testid = "airport-nav-live-user";
       wrap.setAttribute(
         "aria-label",
-        atGate
+        offGraphGps
+          ? `Your GPS position${userAccuracyM ? `, within about ${Math.round(userAccuracyM)} meters` : ""}`
+          : atGate
           ? `${atGateChipLines.primary} — ${atGateChipLines.secondary}`
           : `Your approximate location${userAccuracyM ? `, within about ${Math.round(userAccuracyM)} meters` : ""}`,
       );
@@ -3031,18 +3085,18 @@ export function AirportNavigatorMap({
 
       const dot = document.createElement("div");
       dot.style.cssText = `width:20px;height:20px;border-radius:50%;background:${
-        atGate ? "#34C759" : "#38bdf8"
+        atGate ? "#34C759" : offGraphGps ? "#f59e0b" : "#38bdf8"
       };border:3px solid #fff;box-shadow:0 0 12px ${
-        atGate ? "rgba(52,199,89,0.9)" : "rgba(56,189,248,0.9)"
+        atGate ? "rgba(52,199,89,0.9)" : offGraphGps ? "rgba(245,158,11,0.9)" : "rgba(56,189,248,0.9)"
       };position:relative;z-index:1;${atGate ? "animation:kepiPulse 1.4s ease-in-out infinite;" : ""}`;
 
       wrap.appendChild(halo);
       wrap.appendChild(dot);
       userMarkerRef.current = new ml.Marker({ element: wrap, anchor: "center" })
-        .setLngLat(snapped.pos as [number, number])
+        .setLngLat(travelerDisplayPos as [number, number])
         .addTo(map);
     });
-  }, [mapReady, snapped, userAccuracyM, atBookedGate, atGateChipLines]);
+  }, [mapReady, travelerDisplayPos, userAccuracyM, atBookedGate, atGateChipLines, offGraphGps]);
 
   /* ── Family pins snapped to terminal graph (honest GPS — may be approximate) ─ */
   const familySnapped = useMemo(() => {
@@ -3282,7 +3336,7 @@ export function AirportNavigatorMap({
           layout={layout}
           activeRoute={preciseRouteEnabled ? activeRoute : null}
           selectedPoiId={selectedPoiId ?? pendingPoiId ?? activeRoute?.toPoiId ?? null}
-          snapped={previewMode ? null : snapped}
+          snapped={schematicSnapped}
           userAccuracyM={userAccuracyM}
           familyPins={familyPins}
           airlineName={airlineName}
@@ -3555,7 +3609,7 @@ export function AirportNavigatorMap({
       )}
 
       {/* Gentle "you're here" reassurance — stays until you move on or reach the gate */}
-      {confirmedSpotLabel && !atBookedGate && !previewMode && !confirmMode ? (
+      {confirmedSpotLabel && !atBookedGate && !confirmMode && (showTravelerOnMap || !previewMode) ? (
         <div
           data-testid="airport-nav-here-reassurance"
           className="pointer-events-none absolute inset-x-3 z-[45] flex justify-center"
@@ -3573,8 +3627,8 @@ export function AirportNavigatorMap({
         </div>
       ) : null}
 
-      {/* Mic — press and hold, thumb zone (live mode only) */}
-      {layout && !previewMode && (
+      {/* Mic — press and hold, thumb zone (live mode or GPS at airport) */}
+      {layout && (showTravelerOnMap || !previewMode) && (
         <button
           type="button"
           aria-label="Hold to talk to Kepi"
@@ -3592,10 +3646,11 @@ export function AirportNavigatorMap({
       )}
 
       {/* Journey prompt (e.g. "Are you through security yet?") — pause while pinning "I'm here" */}
-      {journeyPrompt && !securityQuestionOpen && !previewMode && !confirmMode && (
+      {journeyPrompt && !securityQuestionOpen && !confirmMode && (showTravelerOnMap || !previewMode) && (
         <div
           style={{ bottom: arrivalChromeClearance }}
           className="absolute inset-x-3 z-20 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95"
+          data-testid="airport-nav-journey-prompt"
         >
           <p className="text-xs font-bold text-slate-900 dark:text-slate-100">{journeyPrompt.text}</p>
           <div className="mt-2 flex gap-1.5">
@@ -3610,6 +3665,41 @@ export function AirportNavigatorMap({
               </button>
             ))}
           </div>
+          <form
+            className="mt-2 flex gap-1.5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const text = journeyReply.trim();
+              if (!text) return;
+              handleUtterance(text);
+              setJourneyReply("");
+              dismissJourneyPrompt();
+            }}
+          >
+            <input
+              type="text"
+              value={journeyReply}
+              onChange={(event) => setJourneyReply(event.target.value)}
+              placeholder="Type where you are…"
+              aria-label="Tell Kepi where you are"
+              className="min-h-[40px] flex-1 rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+              enterKeyHint="send"
+              autoComplete="off"
+            />
+            <button
+              type="submit"
+              className="rounded-lg bg-slate-800 px-3 py-1.5 text-[11px] font-bold text-white dark:bg-slate-200 dark:text-slate-900"
+            >
+              Send
+            </button>
+          </form>
+          <button
+            type="button"
+            onClick={dismissJourneyPrompt}
+            className="mt-2 w-full rounded-lg py-1 text-[10px] font-semibold text-slate-500"
+          >
+            Skip for now
+          </button>
         </div>
       )}
 
@@ -3618,17 +3708,45 @@ export function AirportNavigatorMap({
         <div
           style={{ bottom: arrivalChromeClearance }}
           className="absolute inset-x-3 z-20 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur dark:bg-slate-900/95"
+          data-testid="airport-nav-security-question"
         >
           <p className="text-xs font-bold text-slate-900 dark:text-slate-100">
             Quick one — do you have TSA PreCheck or CLEAR?
           </p>
-          <p className="mt-0.5 text-[10px] text-slate-500">Kepi routes you to the correct security lane. Asked once — or just say it.</p>
+          <p className="mt-0.5 text-[10px] text-slate-500">Tap a lane, type it below, or hold the mic.</p>
           <div className="mt-2 grid grid-cols-4 gap-1.5">
             <button type="button" onClick={() => answerCredentials(true, false)} className="rounded-lg bg-sky-600 py-1.5 text-[10px] font-bold text-white">PreCheck</button>
             <button type="button" onClick={() => answerCredentials(false, true)} className="rounded-lg bg-sky-600 py-1.5 text-[10px] font-bold text-white">CLEAR</button>
             <button type="button" onClick={() => answerCredentials(true, true)} className="rounded-lg bg-sky-600 py-1.5 text-[10px] font-bold text-white">Both</button>
             <button type="button" onClick={() => answerCredentials(false, false)} className="rounded-lg bg-slate-200 py-1.5 text-[10px] font-bold text-slate-700 dark:bg-slate-700 dark:text-slate-200">Neither</button>
           </div>
+          <form
+            className="mt-2 flex gap-1.5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const text = journeyReply.trim();
+              if (!text) return;
+              handleUtterance(text);
+              setJourneyReply("");
+            }}
+          >
+            <input
+              type="text"
+              value={journeyReply}
+              onChange={(event) => setJourneyReply(event.target.value)}
+              placeholder="Type PreCheck, CLEAR, both…"
+              aria-label="Security lane preference"
+              className="min-h-[40px] flex-1 rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+              enterKeyHint="done"
+              autoComplete="off"
+            />
+            <button
+              type="submit"
+              className="rounded-lg bg-slate-800 px-3 py-1.5 text-[11px] font-bold text-white dark:bg-slate-200 dark:text-slate-900"
+            >
+              OK
+            </button>
+          </form>
         </div>
       )}
 
@@ -3731,7 +3849,7 @@ export function AirportNavigatorMap({
       ) : null}
 
       {/* Confirm mode: top banner — instruction must not sit under the support chat FAB */}
-      {confirmMode && !quietMode && !previewMode && layout ? (
+      {confirmMode && !quietMode && layout ? (
         <div
           className="pointer-events-none absolute inset-x-3 z-[55] flex justify-center"
           style={{ top: `calc(${mapControlsTop} + 5.75rem)` }}
@@ -3743,8 +3861,8 @@ export function AirportNavigatorMap({
         </div>
       ) : null}
 
-      {/* Tap-to-confirm "I'm here" — moves to top when after-questions cover the bottom */}
-      {!quietMode && !previewMode && layout && (
+      {/* Tap-to-confirm "I'm here" — pin lounge/club when GPS is noisy indoors */}
+      {!quietMode && layout && (showTravelerOnMap || !previewMode) && (
         <div
           className="pointer-events-auto absolute z-[60]"
           style={
@@ -3774,7 +3892,7 @@ export function AirportNavigatorMap({
       )}
 
       {/* Admin self-enable: turn on helper chips for this account only */}
-      {!mapHelperEnabled && canSelfEnableHelper && !securityQuestionOpen && !journeyPrompt && !quietMode && !previewMode && !placeMode && layout && (
+      {!mapHelperEnabled && canSelfEnableHelper && !securityQuestionOpen && !journeyPrompt && !quietMode && (showTravelerOnMap || !previewMode) && !placeMode && layout && (
         <div
           className="absolute inset-x-3 z-[126] flex justify-center"
           style={{ bottom: `calc(${bottomPanel} + ${activeRoute ? "11.5rem" : "5.25rem"})` }}
@@ -3810,14 +3928,11 @@ export function AirportNavigatorMap({
       )}
 
       {/* Map helpers (admin-enabled): one-tap Door / Starbucks confirms — no typing */}
-      {mapHelperEnabled && !securityQuestionOpen && !journeyPrompt && !quietMode && !previewMode && !placeMode && !confirmMode && layout && (
+      {mapHelperEnabled && !securityQuestionOpen && !journeyPrompt && !quietMode && (showTravelerOnMap || !previewMode) && !placeMode && !confirmMode && layout && (
         <MapHelperConfirmBar
           iata={iata}
           layout={layout}
-          pos={
-            snapped?.pos
-            ?? (userLon != null && userLat != null ? [userLon, userLat] : null)
-          }
+          pos={travelerDisplayPos}
           accuracyM={userAccuracyM}
           bottomOffset={`calc(${bottomPanel} + ${activeRoute ? "11.5rem" : "5.25rem"})`}
         />

@@ -3,9 +3,22 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-22 (G45 typed fare + airport spotlight G46–G48 shipped)
+Last updated: 2026-09-02 (Europe 2026 live trip — map + plan truth fixes; see `EUROPE_2026_TRIP_FIX_LOG.md`)
 
-## Incident 2026-08-21 — Z84T4Z price stays in the drawer, ledger still says Add price (Jeff)
+## Europe 2026 live trip — Sep 2026 fix rollup (Jeff)
+
+**Master log:** `EUROPE_2026_TRIP_FIX_LOG.md` — every fix from this trip with **cross-airport code vs per-IATA data** split and a map-update checklist for BRI/FCO/VCE/MUC/SEA/ONT.
+
+**Shipped / in PR this session:**
+- **I22** — Booked **Lecce** hotel Sep 8–12 overrides talk-to-plan **Monopoli** on Plan calendar (`dayNoteStopRanges.ts`).
+- **G27/G65** — Forwarded-flight banner opens review editor; GPS at **FCO** wins over stale BRI preview; next-flight pick uses `physicalAirportIata`.
+- **M71** — Indoor airport GPS shows puck on **all** maps; **I'm here** + typed Kepi questions; `isNearAirportIata` slack for live mode (PR #120).
+- **M70** (branch #117) — FCO Terminal 3 **numbered check-in desks** on map + you-to-desk distance — **pattern to replicate** at BRI/VCE/MUC.
+- **G69–G71** — Support chat keyboard + multi-turn (not map, but Jeff used it at airport).
+
+**Map rollout rule:** Code fixes (M71, M16, M30) apply to every bundled airport automatically. **Data fixes** (M70 desks, lounge POIs, footways) must be done **per IATA** using the checklist in `EUROPE_2026_TRIP_FIX_LOG.md`.
+
+---
 
 Jeff opened Trip Accounting, tapped **Z84T4Z · 3 flights**, typed the cash, and the field kept the number — but “Add price” / “still need cash or miles” never cleared. Cause: `resolveReservationCashUsd` treated any notes/email as “has source text” and returned `undefined` when the ITA itinerary had no parseable fare, so a traveler-entered `quotedPriceUsd` was stored and then ignored. G45 honors a plausible stored amount when parse finds nothing; award + $0 due still does not resurrect ticket value (G43). Saving one PNR leg stamps cash/miles onto every flight on that confirmation.
 
@@ -943,6 +956,10 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 
 | Date | Note |
 |------|------|
+| 2026-09-02 | **M71 airport GPS (all maps):** Puck from raw GPS even when graph snap fails; preview mode no longer hides position; **I'm here** + typed journey/security replies; `isNearAirportIata` 1.35× slack. See `EUROPE_2026_TRIP_FIX_LOG.md`. PR #120. |
+| 2026-09-02 | **Calendar stay city (I22):** Booked Lecce hotel Sep 8–12 overrides talk-to-plan Monopoli — `resolveEffectiveStopRanges` overlays hotel confirmations. PR #119. |
+| 2026-09-02 | **Forwarded flight + FCO location (G27/G65):** 0-confidence forwards open review editor; physical GPS campus wins; Book counts real reservations. PR #119. |
+| 2026-09-02 | **M70 FCO check-in desks:** Numbered ADR T3 desks on map + distance guidance — replicate pattern at other hubs. Branch `cursor/runway-gps-honest-position-6c89` PR #117. |
 | 2026-09-01 | **Check-in handoff (AS/HA/B6):** Alaska `/check-in` soft-404ed (Clerk-looking dead end when relative); fixed to live `/checkin` → reservations.alaskaair.com; Hawaiian manage/check-in; JetBlue `/checkin`; absolute-https-only handoff (F10). |
 | 2026-08-16 | **G27 Review bookings sheet:** dead Home CTA was a session flag with no UI. Apple inbox: Add / Already on trip / Not mine. |
 | 2026-08-16 | **N1 neuro feedback loop:** honest-only scoring, Search flights locked last, weekly digest GET, Demand Generator prompt. Confirmations untouched. |
