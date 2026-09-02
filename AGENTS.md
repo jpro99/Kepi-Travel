@@ -95,6 +95,7 @@ For each finding:
 ## Project memory (agents)
 
 - Read and update `KEPI_PROJECT_MEMORY.md` for durable facts (provider status, completed setup, do-not-repeat advice).
+- **Europe 2026 live trip:** When updating airport maps or replaying trip fixes, read `EUROPE_2026_TRIP_FIX_LOG.md` first — cross-airport code vs per-IATA data checklist.
 - Rule: `.cursor/rules/30-project-memory.mdc` (always apply).
 
 ## Kepi Design Law
@@ -120,6 +121,14 @@ For each finding:
 These are agent playbooks, not autonomous runtime bots. Jeff instructs the conductor; conductor routes to domain skills.
 
 ## Fix log
+
+### 2026-09-02 (Session — Europe 2026 live trip: plan truth + all-airport GPS)
+- **Trip rollup doc:** `EUROPE_2026_TRIP_FIX_LOG.md` — every Sep 2026 fix with map rollout checklist for BRI/FCO/VCE/MUC/SEA/ONT.
+- **I22 Lecce calendar:** booked Lecce hotel overrides talk-to-plan Monopoli Sep 8–12 (`dayNoteStopRanges.ts`, `resolveEffectiveStopRanges`).
+- **G27/G65 forwarded flight + FCO location:** banner opens review editor; GPS physical campus wins; `selectNextRemainingFlight({ physicalAirportIata })`.
+- **M71 all-airport GPS:** raw GPS puck in preview/indoor; **I'm here** + typed journey prompts; `isNearAirportIata` slack — applies to every bundled layout without per-IATA code.
+- **M70 FCO desks (PR #117):** numbered T3 check-in desks — **replicate data pattern** at other hubs.
+- **G69–G71:** Support chat keyboard-safe (parallel to airport typing fixes).
 
 ### 2026-07-17 (Session — Europe trip airports: BRI, FCO, VCE, MUC)
 - Bundled indoor layouts for **BRI, FCO, VCE, MUC** (Jeff Europe trip) via shared `buildMultiTerminalSkeleton` + Overpass 2026-07-17 gate/terminal centroids. Schematic `routeGrade` (honest). FCO OSM gap: A+E only (no B/C/D fabricated). MUC satellite airside-only via train from T2. Containment tests pin surveyed coords.

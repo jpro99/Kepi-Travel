@@ -27,6 +27,9 @@ Do not skip it. Do not rebuild from memory of a prior chat.
 
 Then read: `KEPI_DESIGN_LAW.md` (M15/M22/M26–M33), `CLAUDE.md`, `AGENTS.md`.
 
+**Europe 2026 live trip (Sep 2026):** Before curating lounges/desks/footways on BRI/FCO/VCE/MUC, read
+`EUROPE_2026_TRIP_FIX_LOG.md` — separates code shipped for all airports (M71) from per-IATA data work (M70 desks, M34 lounges).
+
 ## Key files
 
 - `CURSOR_PROMPT_MASTER_airport_maps_all_airports.md` — **master map spec (read first)**
