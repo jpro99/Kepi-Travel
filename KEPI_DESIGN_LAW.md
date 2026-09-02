@@ -621,6 +621,11 @@ When a trip touches Italy or a flight shows standby/cancel/delay status, support
 
 **Test:** `src/lib/support/standbyPlaybook.test.ts`
 
+**G69 — Support chat input must stay above mobile tab bar**
+`SupportChat` open panel uses `z-[100010]` (above `MobileTabBar` `z-[99999]`). Footer is `shrink-0` with `min-h-0` message scroller so the text field is never pushed off-screen. Input is `text-base` (16px) for iOS focus.
+
+**Test:** manual — open support on phone; type field visible above tab bar.
+
 ---
 
 ## ITINERARY LAWS
