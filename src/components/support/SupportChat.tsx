@@ -5,13 +5,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Logo } from "@/components/ui/Logo";
 import { buildSupportChatApiMessages } from "@/lib/support/buildSupportChatApiMessages";
+import { formatClientSupportContext } from "@/lib/support/clientSupportContext";
 import { BugReportModal } from "@/components/support/BugReportModal";
-import {
-  AIRPORT_CONFIRM_SPOT_EVENT,
-  AIRPORT_WALK_SHEET_EVENT,
-} from "@/lib/airportNav/airportWalkSheet";
 
-const SUPPORT_OPEN_EVENT = "kepi:support-chat-open";
+const SUPPORT_OPEN_EVENT = "kepi:support-open";
+const SUPPORT_QUICK_PROMPTS = [
+  "Where do I claim my bags?",
+  "How do I get to my train?",
+  "Where is the airline check-in counter?",
+  "Help with my connection",
+] as const;
 const BUG_REPORT_OPEN_EVENT = "kepi:bug-report-open";
 
 type ChatRole = "user" | "assistant";
@@ -46,8 +49,6 @@ export function SupportChat() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [walkSheetOpen, setWalkSheetOpen] = useState(false);
-  const [confirmSpotOpen, setConfirmSpotOpen] = useState(false);
   const panelScrollRef = useRef<HTMLDivElement | null>(null);
   const isOpenRef = useRef(isOpen);
 
@@ -83,23 +84,6 @@ export function SupportChat() {
   }, []);
 
   useEffect(() => {
-    const onWalkSheet = (event: Event): void => {
-      const detail = (event as CustomEvent<{ open?: boolean }>).detail;
-      setWalkSheetOpen(Boolean(detail?.open));
-    };
-    const onConfirmSpot = (event: Event): void => {
-      const detail = (event as CustomEvent<{ open?: boolean }>).detail;
-      setConfirmSpotOpen(Boolean(detail?.open));
-    };
-    window.addEventListener(AIRPORT_WALK_SHEET_EVENT, onWalkSheet);
-    window.addEventListener(AIRPORT_CONFIRM_SPOT_EVENT, onConfirmSpot);
-    return () => {
-      window.removeEventListener(AIRPORT_WALK_SHEET_EVENT, onWalkSheet);
-      window.removeEventListener(AIRPORT_CONFIRM_SPOT_EVENT, onConfirmSpot);
-    };
-  }, []);
-
-  useEffect(() => {
     const scroller = panelScrollRef.current;
     if (!scroller) return;
     scroller.scrollTop = scroller.scrollHeight;
@@ -112,8 +96,8 @@ export function SupportChat() {
     return t("bubbleLabelUnread", { count: unreadCount });
   }, [unreadCount, t]);
 
-  const sendMessage = useCallback(async (): Promise<void> => {
-    const trimmed = inputValue.trim();
+  const sendMessage = useCallback(async (textOverride?: string): Promise<void> => {
+    const trimmed = (textOverride ?? inputValue).trim();
     if (!trimmed || isSending) {
       return;
     }
@@ -138,11 +122,15 @@ export function SupportChat() {
     const historyForApi = buildSupportChatApiMessages(messages, outgoingMessage);
 
     try {
+      const clientContext = formatClientSupportContext();
       const response = await fetch("/api/support/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ messages: historyForApi }),
+        body: JSON.stringify({
+          messages: historyForApi,
+          ...(clientContext ? { tripContext: clientContext } : {}),
+        }),
       });
       if (!response.ok || !response.body) {
         const payload = (await response.json().catch(() => ({ error: "" }))) as { error?: string };
@@ -210,7 +198,7 @@ export function SupportChat() {
       <BugReportModal open={bugReportOpen} onClose={() => setBugReportOpen(false)} />
 
       {isOpen ? (
-        <section className="fixed inset-0 z-[120] flex bg-slate-950/75 sm:inset-auto sm:bottom-24 sm:right-6 sm:h-[480px] sm:w-[320px] sm:rounded-2xl sm:border sm:border-slate-700 sm:bg-slate-950/95">
+        <section className="fixed inset-0 z-[140] flex bg-slate-950/75 sm:inset-auto sm:bottom-24 sm:right-6 sm:h-[min(520px,85dvh)] sm:w-[min(360px,calc(100vw-2rem))] sm:rounded-2xl sm:border sm:border-slate-700 sm:bg-slate-950/95">
           <div className="flex h-full w-full flex-col">
             <header className="flex items-center justify-between border-b border-slate-700 px-4 py-3">
               <div>
@@ -243,6 +231,21 @@ export function SupportChat() {
             </div>
 
             <footer className="border-t border-slate-700 px-3 py-3">
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {SUPPORT_QUICK_PROMPTS.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    disabled={isSending}
+                    onClick={() => {
+                      void sendMessage(prompt);
+                    }}
+                    className="rounded-full border border-slate-600 bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
               {error ? <p className="mb-2 text-xs text-rose-300">{error}</p> : null}
               <div className="flex gap-2">
                 <input
@@ -281,7 +284,6 @@ export function SupportChat() {
         </section>
       ) : null}
 
-      {!walkSheetOpen && !confirmSpotOpen ? (
       <button
         type="button"
         aria-label={bubbleLabel}
@@ -289,7 +291,7 @@ export function SupportChat() {
           setUnreadCount(0);
           setIsOpen(true);
         }}
-        className="fixed right-4 z-[110] kepi-fixed-above-tab-bar inline-flex h-14 w-14 items-center justify-center rounded-full bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-900/30 transition hover:bg-cyan-400 md:right-6"
+        className="fixed right-4 z-[135] kepi-fixed-above-tab-bar inline-flex h-14 w-14 items-center justify-center rounded-full bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-900/30 transition hover:bg-cyan-400 md:right-6"
       >
         <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.8">
           <path d="M4 6.5C4 5.12 5.12 4 6.5 4h11C18.88 4 20 5.12 20 6.5v7c0 1.38-1.12 2.5-2.5 2.5H10l-4.2 3.6c-.66.56-1.8.1-1.8-.77V6.5Z" />
@@ -300,7 +302,6 @@ export function SupportChat() {
           </span>
         ) : null}
       </button>
-      ) : null}
     </>
   );
 }

@@ -27,6 +27,7 @@ import { resolveAirportLocationPhase } from "@/lib/travelAssistant/airportLocati
 import { resolveArrivalTransportPresentation } from "@/lib/travelAssistant/arrivalTransportPresentation";
 import { buildRideFromAirportDeepLinks } from "@/lib/travelAssistant/groundTransportDeepLinks";
 import { getAirportNav } from "@/lib/travelAssistant/airportNavigation";
+import { setSupportLiveContext } from "@/lib/support/clientSupportContext";
 import { AirportArrivalFirstMileChrome } from "@/components/travelAssistant/AirportArrivalFirstMileChrome";
 import { poiMinZoom, airlineLogoAsset } from "@/lib/airportNav/poiDetail";
 import { SECURITY_APPROX_DISCLAIMER } from "@/lib/airportNav/securityDisclosure";
@@ -2204,6 +2205,27 @@ export function AirportNavigatorMap({
     proximityStatus,
     minutesRounded,
     eligibleLoungeNames.length,
+  ]);
+
+  useEffect(() => {
+    const coachSteps = coachPathSteps.map((step) => {
+      const detail = step.detail?.trim();
+      return detail ? `${step.text} — ${detail}` : step.text;
+    });
+    const spotlightStep = coachPathSteps[coachSpotlightIndex];
+    setSupportLiveContext({
+      airportIata: iata.trim().toUpperCase() || null,
+      coachMode: isArriveCoach ? "arrive" : "depart",
+      coachHeadline: spotlightStep?.text ?? null,
+      coachSteps: coachSteps.length > 0 ? coachSteps : undefined,
+      landedMinutesAgo: landedMinutesAgo ?? null,
+    });
+  }, [
+    iata,
+    isArriveCoach,
+    coachPathSteps,
+    coachSpotlightIndex,
+    landedMinutesAgo,
   ]);
 
   const arrivalCoachCards = useMemo(() => {

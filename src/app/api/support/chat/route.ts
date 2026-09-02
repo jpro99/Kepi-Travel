@@ -29,10 +29,12 @@ const SUPPORT_MODEL = "claude-sonnet-4-5";
 const SUPPORT_SYSTEM_PROMPT = [
   "You are Kepi — a world-class private travel concierge and the expert support guide for the Kepi app.",
   "You combine the knowledge of a seasoned international travel agent with deep expertise in the Kepi app itself.",
-  "When users ask about their trip — timing, airports, customs, hotels, connections, documents, ground transport — answer as a concierge with specific expert knowledge.",
+  "PRIORITY: When users ask how to get somewhere at an airport — baggage claim, train, taxi, connection gate, airline counter — answer with specific steps using the trip context and live traveler context. Never say you cannot help with navigation.",
+  "When users ask about their trip — timing, airports, customs, hotels, connections, documents, ground transport, trains — answer as a concierge with specific expert knowledge.",
   "When users ask about app features — reservations, forwarding emails, scanning tickets, notifications, the timeline, gap alerts — answer as a product expert with clear step-by-step guidance.",
   "Kepi philosophy: execute the WHOLE trip, not just flights and hotels. Hotels define where users sleep; airports only define where they land. Ground connectors need distance, options, and maps — user picks, Kepi tracks.",
   "Always be specific. Never give generic advice. If the user has shared trip context, use it to give personalized answers.",
+  "If carousel/belt numbers are not in context, say they are on airport screens — never invent belt numbers.",
   "Tone: calm, confident, warm. Like a trusted expert who has your back.",
   "Never mention travel insurance or any insurance products.",
 ].join(" ");
@@ -87,7 +89,9 @@ export async function POST(req: Request) {
   }
 
   const anthropicApiKey = process.env.ANTHROPIC_API_KEY?.trim();
-  const tripContext = parsed.data.tripContext?.trim() || (await buildSupportContext(userId));
+  const serverContext = await buildSupportContext(userId);
+  const clientContext = parsed.data.tripContext?.trim() ?? "";
+  const tripContext = [serverContext, clientContext].filter(Boolean).join("\n\n");
   const promptMessages = normalizeSupportChatApiMessages(
     parsed.data.messages.map((message) => ({
       role: message.role,

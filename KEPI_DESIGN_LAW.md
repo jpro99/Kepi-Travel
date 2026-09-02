@@ -611,6 +611,11 @@ When inbound and outbound at the same hub are **not** the same through-ticket (`
 
 **Test:** `src/lib/airportNav/hubConnectionUtils.test.ts`, `src/lib/airportNav/connectionClock.test.ts`, `src/lib/travelAssistant/connectionPlaybook.test.ts`
 
+**G67 — Kepi Support answers live airport questions**
+Support chat must stay visible during Airport Mode (never hide the FAB behind walk sheets). Client sends live traveler context (`setSupportLiveContext` from travel shell + `AirportNavigatorMap` coach steps); server merges trip reservations + airport baggage/train hints. System prompt prioritizes baggage, train, connection, and counter answers from context — never "I can't help with navigation."
+
+**Test:** `src/lib/support/clientSupportContext.test.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -1153,6 +1158,7 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | G64 | `src/lib/travelAssistant/airportDayCoach.test.ts`, `src/lib/airportNav/connectionClock.test.ts` |
 | G65 | `src/lib/travelAssistant/journeyPhase.test.ts` |
 | G66 | `src/lib/airportNav/hubConnectionUtils.test.ts`, `src/lib/airportNav/connectionClock.test.ts`, `src/lib/travelAssistant/connectionPlaybook.test.ts` |
+| G67 | `src/lib/support/clientSupportContext.test.ts` |
 | M42 | `src/lib/airportNav/ontFirstMile.test.ts`, `src/lib/airportNav/tripJourney.test.ts` |
 
 New laws must add a row here when a test exists.

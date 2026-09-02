@@ -287,6 +287,7 @@ import { WeatherCard } from "@/components/travelAssistant/WeatherCard";
 import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntelligencePanel";
 import { useTranslations } from "next-intl";
 import { openSupportChat } from "@/components/support/SupportChat";
+import { setSupportLiveContext } from "@/lib/support/clientSupportContext";
 import { ConciergePanel } from "@/components/travelAssistant/ConciergePanel";
 import {
   formatCalendarSyncSummary,
@@ -5261,6 +5262,15 @@ export default function TravelAssistantPage() {
       physicalAirportIata: guidancePhysicalAirport,
     });
   }, [consumerReservationsSorted, consumerTripDestination, activeTrip?.destination, guidancePhysicalAirport]);
+
+  useEffect(() => {
+    setSupportLiveContext({
+      tripId: activeTrip?.id ?? null,
+      tripName: activeTrip?.name ?? null,
+      journeyPhase: journeyPhase.kind,
+      physicalAirportIata: guidancePhysicalAirport,
+    });
+  }, [activeTrip?.id, activeTrip?.name, journeyPhase.kind, guidancePhysicalAirport]);
 
   const mobileJourneyPhase = useMemo(
     () =>
