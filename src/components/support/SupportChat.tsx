@@ -10,6 +10,7 @@ import { BugReportModal } from "@/components/support/BugReportModal";
 
 const SUPPORT_OPEN_EVENT = "kepi:support-open";
 const SUPPORT_QUICK_PROMPTS = [
+  "We're on standby — what are our rights?",
   "Where do I claim my bags?",
   "How do I get to my train?",
   "Where is the airline check-in counter?",

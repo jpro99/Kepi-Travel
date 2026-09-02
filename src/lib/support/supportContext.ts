@@ -7,6 +7,7 @@ import {
 } from "@/lib/travelAssistant/tripNightCoverage";
 import { getAirportNav } from "@/lib/travelAssistant/airportNavigation";
 import { resolveArrivalHubConnection } from "@/lib/airportNav/connectionClock";
+import { buildStandbySupportPlaybook } from "@/lib/support/standbyPlaybook";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 
 function truncate(text: string, maxLength: number): string {
@@ -109,6 +110,11 @@ export async function buildSupportContext(userId: string): Promise<string> {
             reservation.flightNumber ? `flight=${reservation.flightNumber}` : null,
             reservation.flightDepartureTime ? `dep=${reservation.flightDepartureTime}` : null,
             reservation.flightArrivalTime ? `arr=${reservation.flightArrivalTime}` : null,
+            reservation.flightStatus ? `status=${reservation.flightStatus}` : null,
+            reservation.flightOnTime === false ? "onTime=false" : null,
+            typeof reservation.flightDelayMinutes === "number" && reservation.flightDelayMinutes > 0
+              ? `delayMin=${reservation.flightDelayMinutes}`
+              : null,
           ].filter(Boolean).join(" ")
         : null,
       reservation.type === "train"
@@ -124,6 +130,7 @@ export async function buildSupportContext(userId: string): Promise<string> {
 
   const airportHints = buildAirportTravelHints(reservations);
   const connectionHints = buildConnectionHints(reservations);
+  const standbyPlaybook = buildStandbySupportPlaybook(reservations);
 
   return [
     "Current trip context:",
@@ -144,7 +151,11 @@ export async function buildSupportContext(userId: string): Promise<string> {
     airportHints.length > 0 ? airportHints.join("\n") : "None for airports on this trip.",
     `- Connection / self-transfer hints:`,
     connectionHints.length > 0 ? connectionHints.join("\n") : "No same-airport connections detected.",
+    standbyPlaybook ? `- Standby / denied boarding / no-flight playbook:\n${standbyPlaybook}` : null,
     "RULE: Never claim accommodations are complete if stay holes are listed above.",
     "RULE: Answer baggage, train, and airport wayfinding from hints + reservations — be specific.",
-  ].join("\n");
+    "RULE: For standby, denied boarding, or airline has no seats — use the standby playbook; explain EU261 rights calmly.",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }

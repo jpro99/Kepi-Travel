@@ -288,6 +288,7 @@ import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntell
 import { useTranslations } from "next-intl";
 import { openSupportChat } from "@/components/support/SupportChat";
 import { setSupportLiveContext } from "@/lib/support/clientSupportContext";
+import { reservationLooksDisrupted } from "@/lib/support/standbyPlaybook";
 import { ConciergePanel } from "@/components/travelAssistant/ConciergePanel";
 import {
   formatCalendarSyncSummary,
@@ -5264,13 +5265,34 @@ export default function TravelAssistantPage() {
   }, [consumerReservationsSorted, consumerTripDestination, activeTrip?.destination, guidancePhysicalAirport]);
 
   useEffect(() => {
+    const disruptedFlights = consumerReservationsSorted.filter(
+      (reservation) => reservation.type === "flight" && reservationLooksDisrupted(reservation),
+    );
+    const disruptionNote =
+      disruptedFlights.length > 0
+        ? disruptedFlights
+            .map((reservation) => {
+              const label = reservation.flightNumber ?? reservation.title ?? "Flight";
+              const status = reservation.flightStatus?.trim() || "disrupted";
+              return `${label}: ${status}`;
+            })
+            .join("; ")
+        : null;
+
     setSupportLiveContext({
       tripId: activeTrip?.id ?? null,
       tripName: activeTrip?.name ?? null,
       journeyPhase: journeyPhase.kind,
       physicalAirportIata: guidancePhysicalAirport,
+      disruptionNote,
     });
-  }, [activeTrip?.id, activeTrip?.name, journeyPhase.kind, guidancePhysicalAirport]);
+  }, [
+    activeTrip?.id,
+    activeTrip?.name,
+    journeyPhase.kind,
+    guidancePhysicalAirport,
+    consumerReservationsSorted,
+  ]);
 
   const mobileJourneyPhase = useMemo(
     () =>

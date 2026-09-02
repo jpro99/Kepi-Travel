@@ -616,6 +616,11 @@ Support chat must stay visible during Airport Mode (never hide the FAB behind wa
 
 **Test:** `src/lib/support/clientSupportContext.test.ts`
 
+**G68 — Standby / no-seat / Italy EU261 playbook in Support**
+When a trip touches Italy or a flight shows standby/cancel/delay status, support context must attach the curated EU261 + ENAC playbook (`standbyPlaybook.ts`). Explain confirmed vs standby, desk steps, re-routing/refund/care rights, and whole-trip impact on hotels/trains — calmly, without inventing airline offers.
+
+**Test:** `src/lib/support/standbyPlaybook.test.ts`
+
 ---
 
 ## ITINERARY LAWS
@@ -1159,6 +1164,7 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | G65 | `src/lib/travelAssistant/journeyPhase.test.ts` |
 | G66 | `src/lib/airportNav/hubConnectionUtils.test.ts`, `src/lib/airportNav/connectionClock.test.ts`, `src/lib/travelAssistant/connectionPlaybook.test.ts` |
 | G67 | `src/lib/support/clientSupportContext.test.ts` |
+| G68 | `src/lib/support/standbyPlaybook.test.ts` |
 | M42 | `src/lib/airportNav/ontFirstMile.test.ts`, `src/lib/airportNav/tripJourney.test.ts` |
 
 New laws must add a row here when a test exists.

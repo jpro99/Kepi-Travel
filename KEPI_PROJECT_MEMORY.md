@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-09-02 (G67 — Kepi Support live airport concierge)
+Last updated: 2026-09-02 (G68 — Support standby / Italy EU261 playbook)
+
+## Fix 2026-09-02 — Support: standby + no flights in Italy (Jeff)
+
+Travelers on standby with no airline seats need a calm EU261 explainer — rights at the desk, re-routing/refund, care, ENAC complaints, whole-trip impact. **G68:** `standbyPlaybook.ts` wired into support context + concierge prompt; quick prompt "We're on standby — what are our rights?"
 
 ## Fix 2026-09-02 — Kepi Support: baggage, train, connection answers (Jeff)
 

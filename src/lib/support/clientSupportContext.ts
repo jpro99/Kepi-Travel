@@ -13,6 +13,7 @@ export type SupportLiveContext = {
   coachHeadline?: string | null;
   coachSteps?: string[];
   landedMinutesAgo?: number | null;
+  disruptionNote?: string | null;
 };
 
 const STORAGE_KEY = "kepi:support-live-context";
@@ -70,6 +71,9 @@ export function formatClientSupportContext(): string {
     ctx.coachSteps.forEach((step, index) => {
       lines.push(`  ${index + 1}. ${step}`);
     });
+  }
+  if (ctx.disruptionNote?.trim()) {
+    lines.push(`Traveler disruption note: ${ctx.disruptionNote.trim()}`);
   }
 
   if (lines.length === 0) return "";

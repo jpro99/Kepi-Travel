@@ -170,12 +170,12 @@
     "signOut": "Sign out"
   },
   "SupportChat": {
-    "welcome": "Hi! I'm Kepi — your travel concierge. Ask about baggage claim, trains, connections, gates, hotels, or anything in the app.",
+    "welcome": "Hi! I'm Kepi — your travel concierge. Ask about standby, delays, baggage, trains, connections, or anything in the app.",
     "emptyFallback": "I can help with airport wayfinding, connections, baggage, trains, and Kepi app workflows. What do you need?",
     "errorFallback": "I couldn't complete that response right now. Please try again, or contact human support.",
     "bubbleLabel": "Kepi Support",
     "bubbleLabelUnread": "Kepi Support ({count} unread)",
-    "subtitle": "Baggage, trains, connections, and trip help",
+    "subtitle": "Standby, baggage, trains, connections, and trip help",
     "close": "Close",
     "thinking": "Thinking...",
     "inputPlaceholder": "Ask Kepi support...",
