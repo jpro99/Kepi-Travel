@@ -124,7 +124,7 @@ export function BugReportModal({ open, initialCategory = "crash", onClose }: Bug
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[130] flex items-end bg-slate-950/80 sm:items-center sm:justify-center sm:p-6">
+    <div className="fixed inset-0 z-[100020] flex items-end bg-slate-950/80 sm:items-center sm:justify-center sm:p-6">
       <section
         role="dialog"
         aria-modal="true"

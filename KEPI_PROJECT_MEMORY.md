@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-09-02 (G70 — Support input stays visible after long reply)
+Last updated: 2026-09-02 (G71 — Support multi-turn + photo attach)
+
+## Fix 2026-09-02 — Support: can't type after first answer + no photo/flight update (Jeff)
+
+Support input vanished after long replies (keyboard + scroll). **G70/G71:** grid layout + `visualViewport` keyboard inset; multi-line textarea; 📷 photo/PDF attach → ticket scan → **Apply to my trip**; quick prompt "My flight changed — help me update my trip"; bug report z above support panel.
 
 ## Fix 2026-09-02 — Support: input vanishes after long answer (Jeff)
 

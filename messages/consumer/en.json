@@ -170,17 +170,27 @@
     "signOut": "Sign out"
   },
   "SupportChat": {
-    "welcome": "Hi! I'm Kepi — your travel concierge. Ask about standby, delays, baggage, trains, connections, or anything in the app.",
-    "emptyFallback": "I can help with airport wayfinding, connections, baggage, trains, and Kepi app workflows. What do you need?",
+    "welcome": "Hi! I'm Kepi — your travel concierge. Ask me anything, send photos of tickets or problems, and keep the conversation going.",
+    "emptyFallback": "I can help with flight changes, airport wayfinding, connections, baggage, trains, and Kepi app workflows. What do you need?",
     "errorFallback": "I couldn't complete that response right now. Please try again, or contact human support.",
     "bubbleLabel": "Kepi Support",
     "bubbleLabelUnread": "Kepi Support ({count} unread)",
-    "subtitle": "Standby, baggage, trains, connections, and trip help",
+    "subtitle": "Conversation · photos · flight updates · trip help",
     "close": "Close",
     "thinking": "Thinking...",
-    "inputPlaceholder": "Ask Kepi support...",
+    "inputPlaceholder": "Ask a follow-up question...",
     "sending": "Sending...",
-    "send": "Send"
+    "send": "Send",
+    "attachPhoto": "Add photo or PDF",
+    "attachSent": "📎 Sent {name}",
+    "attachErrorType": "Use a photo, screenshot, or PDF confirmation.",
+    "scanReading": "Reading your ticket or screenshot...",
+    "scanFound": "I found this on your document:\n{summary}\n\nTap below to update your trip. You can also keep asking questions here.",
+    "scanApplyCta": "Apply to my trip",
+    "scanApplied": "Applying this to your trip now — check Book → Flights in a moment.",
+    "scanFailed": "Could not read that file.",
+    "scanFailedHelp": "I couldn't read that image ({error}). Try a clearer screenshot of the confirmation email or boarding pass, or type your new flight details here.",
+    "reportProblem": "Report a bug with screenshot"
   },
   "TravelAssistant": {
     "defaultTripName": "Your trip",

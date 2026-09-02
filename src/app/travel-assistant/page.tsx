@@ -287,6 +287,7 @@ import { WeatherCard } from "@/components/travelAssistant/WeatherCard";
 import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntelligencePanel";
 import { useTranslations } from "next-intl";
 import { openSupportChat } from "@/components/support/SupportChat";
+import { SUPPORT_TICKET_SCAN_EVENT } from "@/lib/support/supportChatEvents";
 import { setSupportLiveContext } from "@/lib/support/clientSupportContext";
 import { reservationLooksDisrupted } from "@/lib/support/standbyPlaybook";
 import { ConciergePanel } from "@/components/travelAssistant/ConciergePanel";
@@ -7095,6 +7096,17 @@ export default function TravelAssistantPage() {
     },
     [activeTripId, commitScannedReservationsToTrip, setToast, ticketScanBusy, trips],
   );
+
+  useEffect(() => {
+    const onSupportTicketScan = (event: Event): void => {
+      const file = (event as CustomEvent<{ file?: File }>).detail?.file;
+      if (file) {
+        void handleTicketScanUpload(file);
+      }
+    };
+    window.addEventListener(SUPPORT_TICKET_SCAN_EVENT, onSupportTicketScan);
+    return () => window.removeEventListener(SUPPORT_TICKET_SCAN_EVENT, onSupportTicketScan);
+  }, [handleTicketScanUpload]);
 
   const handleImportTripPickerClose = useCallback((): void => {
     if (importTripPickerBusy) return;

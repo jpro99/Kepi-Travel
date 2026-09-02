@@ -636,6 +636,11 @@ The chat panel is `overflow-hidden` with a bounded `100dvh` shell; only the mess
 
 **Test:** manual — ask a long question; scroll messages; input + Send remain visible at bottom.
 
+**G71 — Support chat is a multi-turn conversation with photo/PDF attach**
+Support panel uses CSS grid + `visualViewport` keyboard inset so the textarea stays above the mobile keyboard. Users can send multiple questions (history up to 30 turns). 📷 attaches a confirmation screenshot/PDF → ticket-scan → **Apply to my trip** dispatches `kepi:support-ticket-scan` to import on the travel shell. Flight-change quick prompt included.
+
+**Test:** `src/lib/support/supportChatEvents.test.ts`; manual — ask 3 questions; attach photo; Apply updates Flights.
+
 ---
 
 ## ITINERARY LAWS

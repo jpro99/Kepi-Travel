@@ -180,7 +180,17 @@
     "thinking": "Pensando...",
     "inputPlaceholder": "Pregunta a Soporte Kepi...",
     "sending": "Enviando...",
-    "send": "Enviar"
+    "send": "Enviar",
+    "attachPhoto": "Añadir foto o PDF",
+    "attachSent": "📎 Enviado {name}",
+    "attachErrorType": "Usa una foto, captura o PDF de confirmación.",
+    "scanReading": "Leyendo tu billete o captura...",
+    "scanFound": "Encontré esto en tu documento:\n{summary}\n\nToca abajo para actualizar tu viaje.",
+    "scanApplyCta": "Aplicar a mi viaje",
+    "scanApplied": "Aplicando a tu viaje — revisa Reservar → Vuelos en un momento.",
+    "scanFailed": "No pude leer ese archivo.",
+    "scanFailedHelp": "No pude leer esa imagen ({error}). Prueba una captura más clara o escribe los datos del vuelo aquí.",
+    "reportProblem": "Reportar problema con captura"
   },
   "TravelAssistant": {
     "defaultTripName": "Tu viaje",
