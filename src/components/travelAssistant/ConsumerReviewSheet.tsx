@@ -65,7 +65,7 @@ export function ConsumerReviewSheet({
   if (presented?.autoResolve) {
     return (
       <div
-        className="fixed inset-0 z-[120] flex items-center justify-center bg-[#F5F5F7]"
+        className="fixed inset-0 z-[100100] flex items-center justify-center bg-[#F5F5F7]"
         style={{ height: "100dvh" }}
         aria-hidden="true"
       />
@@ -74,7 +74,7 @@ export function ConsumerReviewSheet({
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex flex-col bg-[#F5F5F7]"
+      className="fixed inset-0 z-[100100] flex flex-col bg-[#F5F5F7]"
       style={{
         height: "100dvh",
         fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif',

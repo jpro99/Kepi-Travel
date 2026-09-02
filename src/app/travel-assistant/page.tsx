@@ -249,6 +249,7 @@ import {
   type PostBookingConfirmationData,
 } from "@/components/travelAssistant/PostBookingConfirmation";
 import { resolveEffectiveStopRanges } from "@/lib/travelAssistant/dayNoteStopRanges";
+import { forwardedFlightReviewNeedsEditor } from "@/lib/travelAssistant/forwardedReviewOpen";
 import { allocateStopDates } from "@/lib/decision/stopDates";
 import { resolveStayCityForDay } from "@/lib/travelAssistant/dayPlanLines";
 import { buildFlightLegsFromIntent, defaultEnabledLegIds } from "@/lib/decision/flightLegPlanner";
@@ -4504,20 +4505,6 @@ export default function TravelAssistantPage() {
     () => updateFeed.find((entry) => entry.kind === "gate-change") ?? null,
     [updateFeed],
   );
-  const wizardFlightCount = useMemo(
-    () =>
-      tripPlanningWizardIntent === "create"
-        ? 0
-        : consumerDisplayReservations.filter((reservation) => reservation.type === "flight").length,
-    [consumerDisplayReservations, tripPlanningWizardIntent],
-  );
-  const wizardHotelCount = useMemo(
-    () =>
-      tripPlanningWizardIntent === "create"
-        ? 0
-        : consumerDisplayReservations.filter((reservation) => reservation.type === "hotel").length,
-    [consumerDisplayReservations, tripPlanningWizardIntent],
-  );
   const delayedFlight = useMemo(
     () =>
       reservations.find(
@@ -4668,8 +4655,11 @@ export default function TravelAssistantPage() {
   }, [guidanceLocationStatus, guidanceNearestAirport, router, activeTripId, consumerReservationsSorted]);
 
   const nextUpcomingFlight = useMemo(
-    () => selectNextRemainingFlight(consumerReservationsSorted),
-    [consumerReservationsSorted],
+    () =>
+      selectNextRemainingFlight(consumerReservationsSorted, Date.now(), {
+        physicalAirportIata: resolvePhysicalAirportIata(guidanceUserLat, guidanceUserLon),
+      }),
+    [consumerReservationsSorted, guidanceUserLat, guidanceUserLon],
   );
 
 
@@ -4716,6 +4706,14 @@ export default function TravelAssistantPage() {
   const pendingHotelReservations = useMemo(
     () => pendingForwardedReservations.filter((reservation) => reservation.type === "hotel"),
     [pendingForwardedReservations],
+  );
+  const wizardFlightCount = useMemo(
+    () => tripTabFlightReservations.length,
+    [tripTabFlightReservations],
+  );
+  const wizardHotelCount = useMemo(
+    () => tripTabHotelReservations.length,
+    [tripTabHotelReservations],
   );
   const hasDetectedFlight = tripTabFlightReservations.length > 0 || pendingFlightReservations.length > 0;
   const hasDetectedHotel = tripTabHotelReservations.length > 0 || pendingHotelReservations.length > 0;
@@ -7354,33 +7352,35 @@ export default function TravelAssistantPage() {
         }
       } else {
         const reviewItem = reviewQueue.find((item) => item.id === id);
-        if (reviewItem) {
-          const prepared = enrichReservationForAutoImport(
-            prepareReviewDraftForAccept({
-              ...reviewItem.draft,
-              type: reviewItem.draft.type,
-              title: reviewItem.draft.title,
-              provider: reviewItem.draft.provider,
-              localTime: reviewItem.draft.localTime,
-              timezone: reviewItem.draft.timezone,
-              location: reviewItem.draft.location,
-              confirmationCode: reviewItem.draft.confirmationCode,
-              flightNumber: reviewItem.draft.flightNumber,
-              flightAirline: reviewItem.draft.flightAirline,
-              flightDate: reviewItem.draft.flightDate,
-              flightDepartureAirport: reviewItem.draft.flightDepartureAirport,
-              flightArrivalAirport: reviewItem.draft.flightArrivalAirport,
-              flightDepartureTime: reviewItem.draft.flightDepartureTime,
-            }),
-          );
-          setDrawerDraft(prepared);
+        if (!reviewItem) {
+          setToast("That forward was already handled — check your flights below.");
+          return;
         }
+        const prepared = enrichReservationForAutoImport(
+          prepareReviewDraftForAccept({
+            ...reviewItem.draft,
+            type: reviewItem.draft.type,
+            title: reviewItem.draft.title,
+            provider: reviewItem.draft.provider,
+            localTime: reviewItem.draft.localTime,
+            timezone: reviewItem.draft.timezone,
+            location: reviewItem.draft.location,
+            confirmationCode: reviewItem.draft.confirmationCode,
+            flightNumber: reviewItem.draft.flightNumber,
+            flightAirline: reviewItem.draft.flightAirline,
+            flightDate: reviewItem.draft.flightDate,
+            flightDepartureAirport: reviewItem.draft.flightDepartureAirport,
+            flightArrivalAirport: reviewItem.draft.flightArrivalAirport,
+            flightDepartureTime: reviewItem.draft.flightDepartureTime,
+          }),
+        );
+        setDrawerDraft(prepared);
       }
       setFlightLookupError(null);
       setFlightLookupBusy(false);
       setActiveDrawer({ kind, id });
     },
-    [reservations, reviewQueue],
+    [reservations, reviewQueue, setToast],
   );
 
   const handleTripSearchSelection = useCallback(
@@ -7747,6 +7747,44 @@ export default function TravelAssistantPage() {
         });
     },
     [activeTripId, setToast, trips],
+  );
+
+  const handleOpenForwardedReview = useCallback(
+    (reviewId: string): void => {
+      const reviewItem = reviewQueue.find((item) => item.id === reviewId);
+      if (!reviewItem) {
+        setToast("That forward was already handled — check your flights below.");
+        return;
+      }
+
+      if (
+        forwardedFlightReviewNeedsEditor({
+          draft: reviewItem.draft,
+          parsingStatus: reviewItem.parsingStatus,
+          parseConfidenceScore: reviewItem.parseConfidenceScore,
+          reasons: reviewItem.reasons,
+        })
+      ) {
+        openDrawer("review", reviewId);
+        return;
+      }
+
+      const index = reviewQueue.findIndex((item) => item.id === reviewId);
+      const ordered =
+        index > 0
+          ? [reviewItem, ...reviewQueue.filter((item) => item.id !== reviewId)]
+          : reviewQueue;
+      if (index > 0) {
+        setReviewQueue(ordered);
+        persistReviewQueueToTrip(ordered, { reviewId, source: "review-reorder" });
+      }
+      setConsumerReviewQueueSession({
+        open: true,
+        processed: 0,
+        total: ordered.length,
+      });
+    },
+    [openDrawer, persistReviewQueueToTrip, reviewQueue, setToast],
   );
 
   const persistTripReservationsAndReviewQueue = useCallback(
@@ -9561,7 +9599,7 @@ export default function TravelAssistantPage() {
     activeDrawer && drawerPortalReady
       ? createPortal(
           <div
-            className="fixed inset-0 z-[10050] flex items-end justify-center bg-black/80 p-0 md:items-end md:justify-end md:p-6"
+            className="fixed inset-0 z-[100100] flex items-end justify-center bg-black/80 p-0 md:items-end md:justify-end md:p-6"
             onMouseDown={(event) => {
               if (event.target === event.currentTarget) {
                 closeDrawer();
@@ -10524,7 +10562,7 @@ export default function TravelAssistantPage() {
                 onAddCityStay={handleAddCityStay}
                 onSetStayIntent={handleSetStayIntent}
                 pendingForwardReview={firstForwardedFlightReview}
-                onOpenForwardReview={(reviewId) => openDrawer("review", reviewId)}
+                onOpenForwardReview={handleOpenForwardedReview}
                 onImportConfirmation={(file) => void handleTicketScanUpload(file)}
                 importConfirmationBusy={ticketScanBusy}
                 travelFitReservations={travelFitReservations}
@@ -10721,7 +10759,7 @@ export default function TravelAssistantPage() {
               tripId={activeTripId}
               flightSearchDefaults={flightSearchDefaults}
               pendingForwardReview={firstForwardedFlightReview}
-              onOpenForwardReview={(reviewId) => openDrawer("review", reviewId)}
+              onOpenForwardReview={handleOpenForwardedReview}
               onImportConfirmation={(file) => void handleTicketScanUpload(file)}
               importConfirmationBusy={ticketScanBusy}
               liveStatus={flightStatusCheckByReservationId}

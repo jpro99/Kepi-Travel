@@ -995,7 +995,7 @@ Rule file: `.cursor/rules/40-screenshot-triage.mdc` (always apply).
 
 | Date | Note |
 |------|------|
-| 2026-09-02 | **Calendar stay city (I22):** Booked Lecce hotel Sep 8–12 now overrides talk-to-plan Monopoli on Plan calendar — `resolveEffectiveStopRanges` overlays hotel confirmations on intent ranges. |
+| 2026-09-02 | **Forwarded flight banner (G27):** 0-confidence flight forwards open the review editor drawer; Book header shows real flight/hotel counts; at FCO GPS prefers FCO-departing legs over stale BRI preview. |
 | 2026-09-01 | **Check-in handoff (AS/HA/B6):** Alaska `/check-in` soft-404ed (Clerk-looking dead end when relative); fixed to live `/checkin` → reservations.alaskaair.com; Hawaiian manage/check-in; JetBlue `/checkin`; absolute-https-only handoff (F10). |
 | 2026-08-16 | **G27 Review bookings sheet:** dead Home CTA was a session flag with no UI. Apple inbox: Add / Already on trip / Not mine. |
 | 2026-08-16 | **N1 neuro feedback loop:** honest-only scoring, Search flights locked last, weekly digest GET, Demand Generator prompt. Confirmations untouched. |

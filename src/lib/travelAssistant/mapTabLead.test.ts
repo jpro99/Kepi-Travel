@@ -41,6 +41,10 @@ test("hideLiveMapStyleLab is on for the consumer path", () => {
   assert.equal(hideLiveMapStyleLab(), true);
 });
 
+test("findPlannableAirportIata returns physical campus when GPS is on airport", () => {
+  assert.equal(findPlannableAirportIata([], Date.now(), "FCO"), "FCO");
+});
+
 test("findPlannableAirportIata returns the earliest upcoming departure IATA", () => {
   const now = Date.parse("2026-08-12T12:00:00Z");
   assert.equal(

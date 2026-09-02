@@ -257,7 +257,7 @@ export function FlightsTab({
   importConfirmationBusy = false,
   liveStatus = {},
   locationStatus: _locationStatus = "unknown",
-  nearestAirport: _nearestAirport = "",
+  nearestAirport = "",
   onReservationTap, onCheckStatus, onDelete, onAdd,
   simplifiedMobile = false,
   enableBookSearch = false,
@@ -298,9 +298,11 @@ export function FlightsTab({
     });
     const up = sortFlightsByDeparture(deduped.filter(r => !isCompleted(r)));
     const pa = sortFlightsByDeparture(deduped.filter(r => isCompleted(r)).reverse());
-    const next = selectNextRemainingFlight(up);
+    const next = selectNextRemainingFlight(up, Date.now(), {
+      physicalAirportIata: nearestAirport || null,
+    });
     return { upcoming: up, past: pa, nextFlight: next };
-  }, [reservations]);
+  }, [reservations, nearestAirport]);
 
   const shown = showPast ? [...upcoming, ...past] : upcoming;
   const lead = flightBookLeadMode({ upcomingFlightCount: upcoming.length });

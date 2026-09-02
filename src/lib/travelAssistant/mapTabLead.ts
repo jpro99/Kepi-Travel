@@ -49,7 +49,11 @@ export function findPlannableAirportIata(
     localTime?: string;
   }>,
   nowMs = Date.now(),
+  physicalAirportIata?: string | null,
 ): string | null {
+  const campus = physicalAirportIata?.trim().toUpperCase();
+  if (campus) return campus;
+
   const gracePeriodStart = nowMs - 86_400_000;
   const candidates = flights
     .filter((reservation) => (reservation.type ?? "flight") === "flight")

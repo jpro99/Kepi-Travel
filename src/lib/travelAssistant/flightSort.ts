@@ -129,6 +129,11 @@ export function formatTravelDayFlightLabel(f: {
 
 const NEXT_REMAINING_BEHIND_GRACE_MS = 2 * 60 * 60_000;
 
+export interface SelectNextRemainingFlightOptions {
+  /** G65 — when GPS places traveler on a campus, prefer departures from that airport. */
+  physicalAirportIata?: string | null;
+}
+
 /**
  * Next remaining flight = earliest booked segment whose departure is still ahead
  * in clock time (timezone-aware). Storage order and long-haul role are ignored (F15).
@@ -136,6 +141,7 @@ const NEXT_REMAINING_BEHIND_GRACE_MS = 2 * 60 * 60_000;
 export function selectNextRemainingFlight<T extends FlightSortFields>(
   reservations: readonly T[],
   nowMs: number = Date.now(),
+  options?: SelectNextRemainingFlightOptions,
 ): T | null {
   const flights = sortFlightsByDeparture(
     reservations.filter(
@@ -145,6 +151,15 @@ export function selectNextRemainingFlight<T extends FlightSortFields>(
   const timed = flights
     .map((f) => ({ f, utcMs: flightDepartureUtcMs(f) }))
     .filter((row) => Number.isFinite(row.utcMs));
-  const upcoming = timed.find((row) => row.utcMs >= nowMs - NEXT_REMAINING_BEHIND_GRACE_MS);
-  return upcoming?.f ?? timed[0]?.f ?? null;
+  const upcoming = timed.filter((row) => row.utcMs >= nowMs - NEXT_REMAINING_BEHIND_GRACE_MS);
+
+  const campus = options?.physicalAirportIata?.trim().toUpperCase();
+  if (campus && upcoming.length > 0) {
+    const departsFromCampus = upcoming.find(
+      (row) => row.f.flightDepartureAirport?.trim().toUpperCase() === campus,
+    );
+    if (departsFromCampus) return departsFromCampus.f;
+  }
+
+  return upcoming[0]?.f ?? timed[0]?.f ?? null;
 }
