@@ -16,13 +16,13 @@ import { gateCoachCopy, resolveBookedGateDot } from "@/lib/travelAssistant/booke
 import {
   evaluateImHereGnssFix,
   resolveLastOutdoorCurbNode,
+  shouldPaintGnssAccuracyRing,
   terminalHullRings,
 } from "@/lib/airportNav/imHereGnssPolicy";
-import { buildTripJourney, journeyPoiIds, preSecurityJourney, type JourneyStop, buildArrivalTripJourney, arrivalJourneyPoiIds, layoutSupportsArrivalFirstMile, resolveArrivalOriginNode, type ArrivalJourneyStop } from "@/lib/airportNav/tripJourney";
+import { buildTripJourney, journeyPoiIds, preSecurityJourney, type JourneyStop, buildArrivalTripJourney, arrivalJourneyPoiIds, layoutSupportsArrivalFirstMile, resolveArrivalFirstMileIntl, resolveArrivalOriginNode, type ArrivalJourneyStop } from "@/lib/airportNav/tripJourney";
 import {
   buildArrivalDayCoachPath,
   buildDepartDayCoachPath,
-  isInternationalArrivalFlight,
   resolveArrivalSpotlightIndex,
   resolveDepartSpotlightIndex,
   selectDayCoachVisibleSteps,
@@ -639,6 +639,7 @@ interface AirportSchematicLayerProps {
   selectedPoiId: string | null;
   snapped: SnappedPosition | null;
   userAccuracyM: number | null;
+  showGnssAccuracyRing: boolean;
   familyPins: FamilyAirportPin[];
   airlineName: string | null;
   gatePoiId: string | null;
@@ -655,6 +656,7 @@ function AirportSchematicLayer({
   selectedPoiId,
   snapped,
   userAccuracyM,
+  showGnssAccuracyRing,
   familyPins,
   airlineName,
   gatePoiId,
@@ -884,9 +886,9 @@ function AirportSchematicLayer({
             <circle
               cx={point.x}
               cy={point.y}
-              r={atBookedGate ? 5.5 : Math.min(8, Math.max(4.5, (userAccuracyM ?? 35) / 12))}
-              fill={atBookedGate ? "rgba(16,185,129,0.22)" : "rgba(37,99,235,0.14)"}
-              stroke={atBookedGate ? "rgba(16,185,129,0.75)" : "rgba(37,99,235,0.5)"}
+              r={atBookedGate ? 5.5 : showGnssAccuracyRing ? Math.min(8, Math.max(4.5, (userAccuracyM ?? 35) / 12)) : 4.5}
+              fill={atBookedGate ? "rgba(16,185,129,0.22)" : showGnssAccuracyRing ? "rgba(37,99,235,0.14)" : "rgba(37,99,235,0.08)"}
+              stroke={atBookedGate ? "rgba(16,185,129,0.75)" : showGnssAccuracyRing ? "rgba(37,99,235,0.5)" : "rgba(37,99,235,0.25)"}
               strokeWidth="0.4"
               style={atBookedGate ? pulseStyle : undefined}
             />
@@ -1508,6 +1510,29 @@ export function AirportNavigatorMap({
 
   const hullRings = useMemo(() => (layout ? terminalHullRings(layout) : []), [layout]);
 
+  const imHereGnssEvaluation = useMemo(() => {
+    if (!layout || previewMode || confirmedNodeId) return null;
+    if (userLat === null || userLon === null) return null;
+    return evaluateImHereGnssFix({
+      lng: userLon,
+      lat: userLat,
+      accuracyM: userAccuracyM,
+      fixAgeMs: 0,
+      hullRings,
+    });
+  }, [layout, previewMode, confirmedNodeId, userLat, userLon, userAccuracyM, hullRings]);
+
+  const showGnssAccuracyRing = useMemo(
+    () =>
+      imHereGnssEvaluation
+        ? shouldPaintGnssAccuracyRing({
+            evaluation: imHereGnssEvaluation,
+            confirmedNodeId,
+          })
+        : false,
+    [imHereGnssEvaluation, confirmedNodeId],
+  );
+
   /* ── Snapped traveler position ──────────────────────────────────────── */
   const snapped: SnappedPosition | null = useMemo(() => {
     if (!layout || previewMode) return null;
@@ -1516,13 +1541,8 @@ export function AirportNavigatorMap({
       if (node) return confirmedSnappedPosition(node);
     }
     if (userLat === null || userLon === null) return null;
-    const gnss = evaluateImHereGnssFix({
-      lng: userLon,
-      lat: userLat,
-      accuracyM: userAccuracyM,
-      fixAgeMs: 0,
-      hullRings,
-    });
+    const gnss = imHereGnssEvaluation;
+    if (!gnss) return null;
     if (!gnss.accepted) {
       const curb = resolveLastOutdoorCurbNode(layout, userLon, userLat);
       if (curb) {
@@ -1536,7 +1556,7 @@ export function AirportNavigatorMap({
       return null;
     }
     return snapToGraph(layout, userLon, userLat, userAccuracyM);
-  }, [layout, previewMode, confirmedNodeId, userLat, userLon, userAccuracyM, hullRings]);
+  }, [layout, previewMode, confirmedNodeId, userLat, userLon, userAccuracyM, imHereGnssEvaluation]);
 
   const isArriveCoach = coachMode === "arrive";
   const arrivalFirstMile = Boolean(layout && isArriveCoach && layoutSupportsArrivalFirstMile(layout));
@@ -1647,11 +1667,11 @@ export function AirportNavigatorMap({
 
   const arrivalJourney: ArrivalJourneyStop[] = useMemo(() => {
     if (!layout || !isArriveCoach) return [];
-    const intl = isInternationalArrivalFlight(departureAirport, iata);
+    const { includePassport, includeCustoms } = resolveArrivalFirstMileIntl(iata, departureAirport);
     return buildArrivalTripJourney(layout, {
       gateCode,
-      includePassport: intl,
-      includeCustoms: intl,
+      includePassport,
+      includeCustoms,
     });
   }, [layout, isArriveCoach, departureAirport, iata, gateCode]);
 
@@ -3024,7 +3044,10 @@ export function AirportNavigatorMap({
       return;
     }
     void import("maplibre-gl").then((ml) => {
-      const haloPx = Math.round(Math.min(110, Math.max(34, (userAccuracyM ?? 35) * 1.2)));
+      const haloPx = showGnssAccuracyRing
+        ? Math.round(Math.min(110, Math.max(34, (userAccuracyM ?? 35) * 1.2)))
+        : 0;
+
       const atGate = atBookedGate && atGateChipLines;
       if (userMarkerRef.current) {
         userMarkerRef.current.remove();
@@ -3059,9 +3082,13 @@ export function AirportNavigatorMap({
 
       const halo = document.createElement("div");
       halo.dataset.role = "halo";
-      halo.style.cssText = `position:absolute;width:${haloPx}px;height:${haloPx}px;border-radius:50%;background:${
-        atGate ? "rgba(52,199,89,0.18)" : "rgba(56,189,248,0.18)"
-      };border:1px solid ${atGate ? "rgba(52,199,89,0.35)" : "rgba(56,189,248,0.35)"};`;
+      if (haloPx > 0) {
+        halo.style.cssText = `position:absolute;width:${haloPx}px;height:${haloPx}px;border-radius:50%;background:${
+          atGate ? "rgba(52,199,89,0.18)" : "rgba(56,189,248,0.18)"
+        };border:1px solid ${atGate ? "rgba(52,199,89,0.35)" : "rgba(56,189,248,0.35)"};`;
+      } else {
+        halo.style.cssText = "display:none;";
+      }
 
       const dot = document.createElement("div");
       dot.style.cssText = `width:20px;height:20px;border-radius:50%;background:${
@@ -3076,7 +3103,7 @@ export function AirportNavigatorMap({
         .setLngLat(snapped.pos as [number, number])
         .addTo(map);
     });
-  }, [mapReady, snapped, userAccuracyM, atBookedGate, atGateChipLines]);
+  }, [mapReady, snapped, userAccuracyM, showGnssAccuracyRing, atBookedGate, atGateChipLines]);
 
   /* ── Family pins snapped to terminal graph (honest GPS — may be approximate) ─ */
   const familySnapped = useMemo(() => {
@@ -3318,6 +3345,7 @@ export function AirportNavigatorMap({
           selectedPoiId={selectedPoiId ?? pendingPoiId ?? activeRoute?.toPoiId ?? null}
           snapped={previewMode ? null : snapped}
           userAccuracyM={userAccuracyM}
+          showGnssAccuracyRing={showGnssAccuracyRing}
           familyPins={familyPins}
           airlineName={airlineName}
           gatePoiId={gatePoi?.id ?? null}
@@ -3475,7 +3503,7 @@ export function AirportNavigatorMap({
           preciseRouteEnabled={preciseRouteEnabled}
           iata={iata}
           mapFirst={embeddedInLiveMap}
-          hideWhereToRail={embeddedInLiveMap}
+          hideWhereToRail={embeddedInLiveMap && !(mapFirstLive && arrivalFirstMile)}
           chromeTop={contentTop}
         />
       ) : null}

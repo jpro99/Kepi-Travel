@@ -29,7 +29,7 @@ test("AirportNavigatorMap does not mount GateConfidenceBar on the live map", () 
     /arrivalFirstMile \|\| embeddedInLiveMap/,
     "Live FCO arrival must use top/side destination rail instead of bottom chip deck.",
   );
-  assert.match(src, /hideWhereToRail=\{embeddedInLiveMap\}/, "Bottom Where-to rail must hide on Live Map");
+  assert.match(src, /hideWhereToRail=\{embeddedInLiveMap && !\(mapFirstLive && arrivalFirstMile\)\}/, "Live FCO arrival must show bottom walk chips");
   assert.match(src, /mapFirst=\{embeddedInLiveMap\}/, "Arrival first-mile chrome must receive mapFirst");
   assert.match(src, /mapFirstLive = embeddedInLiveMap/, "Live map shell must use mapFirstLive gate");
   assert.match(src, /hideEmbeddedFlightHero = mapFirstLive/, "Flight hero must hide on live map-first arrive");
