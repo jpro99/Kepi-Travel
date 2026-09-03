@@ -705,16 +705,9 @@ export function LiveMapPage() {
     [navLat, navLon, navIata],
   );
 
-  // Passive GPS — steady refresh at the airport (map pin + gate walk); avoid 0ms maximumAge loops.
+  // Passive GPS — one steady watch for map pin + gate walk (no proximity-bucket restarts).
   useEffect(() => {
     if (!navigator.geolocation) return;
-    if (navWatchRef.current !== null) {
-      navigator.geolocation.clearWatch(navWatchRef.current);
-      navWatchRef.current = null;
-    }
-    const atAirport =
-      navProximity.status === "at-airport" || navProximity.status === "in-terminal";
-    const maximumAge = atAirport ? 15_000 : 10_000;
     navWatchRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         setNavLat(pos.coords.latitude);
@@ -724,7 +717,7 @@ export function LiveMapPage() {
       () => null,
       {
         enableHighAccuracy: true,
-        maximumAge,
+        maximumAge: 15_000,
         timeout: liveMapGeoOptions().timeout ?? 15_000,
       },
     );
@@ -732,7 +725,7 @@ export function LiveMapPage() {
       if (navWatchRef.current !== null) navigator.geolocation.clearWatch(navWatchRef.current);
       navWatchRef.current = null;
     };
-  }, [navProximity.status]);
+  }, []);
 
   const atNavAirport =
     navProximity.status === "at-airport" || navProximity.status === "in-terminal";

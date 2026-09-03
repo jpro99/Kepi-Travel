@@ -7,6 +7,7 @@ import {
   IM_HERE_MAX_STALE_MS,
   isInsideTerminalHull,
   listOfficialConfirmNodeIds,
+  shouldPaintGnssAccuracyRing,
   terminalHullRings,
 } from "@/lib/airportNav/imHereGnssPolicy";
 import { resolveConfirmSpotFromLngLat } from "@/lib/airportNav/confirmTravelerSpot";
@@ -58,6 +59,44 @@ test("Sunday A3 refuses indoor GNSS inside hull with poor accuracy", () => {
   if (!evalResult.accepted) {
     assert.ok(["indoor_gnss", "inside_hull", "accuracy_swallows_hull"].includes(evalResult.reason));
   }
+});
+
+test("Sunday A3 suppresses GNSS accuracy ring for refused indoor fixes and I'm-here pins", () => {
+  const hullRings = terminalHullRings(FCO_LAYOUT);
+  const passport = FCO_LAYOUT.nodes.find((n) => n.id === "passport-t3");
+  assert.ok(passport);
+  const [lng, lat] = passport!.pos;
+  const refused = evaluateImHereGnssFix({
+    lng,
+    lat,
+    accuracyM: 45,
+    fixAgeMs: 1_000,
+    hullRings,
+  });
+  assert.equal(
+    shouldPaintGnssAccuracyRing({ evaluation: refused, confirmedNodeId: null }),
+    false,
+  );
+  const curb = FCO_LAYOUT.nodes.find((n) => n.id === "curb-t3");
+  assert.ok(curb);
+  const acceptedLng = curb!.pos[0];
+  const acceptedLat = curb!.pos[1] + 0.006;
+  const accepted = evaluateImHereGnssFix({
+    lng: acceptedLng,
+    lat: acceptedLat,
+    accuracyM: 15,
+    fixAgeMs: 1_000,
+    hullRings,
+  });
+  assert.equal(accepted.accepted, true);
+  assert.equal(
+    shouldPaintGnssAccuracyRing({ evaluation: accepted, confirmedNodeId: null }),
+    true,
+  );
+  assert.equal(
+    shouldPaintGnssAccuracyRing({ evaluation: accepted, confirmedNodeId: "baggage-t3" }),
+    false,
+  );
 });
 
 test("I'm-here confirm snaps only to official layout nodes", () => {

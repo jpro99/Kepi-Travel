@@ -10,6 +10,7 @@ import {
   buildArrivalTripJourney,
   buildTripJourney,
   layoutSupportsArrivalFirstMile,
+  resolveArrivalFirstMileIntl,
   type ArrivalJourneyRole,
   type JourneyRole,
 } from "@/lib/airportNav/tripJourney";
@@ -332,15 +333,18 @@ const ARRIVAL_ROLE_ID: Record<ArrivalJourneyRole, string> = {
 /** Arrival path matching approved mockup (intl steps only when countries differ). */
 export function buildArrivalDayCoachPath(input: ArrivalDayCoachInput): DayCoachPathStep[] {
   const code = input.iata.trim().toUpperCase();
-  const intl = isInternationalArrivalFlight(input.departureIata, code);
+  const { includePassport, includeCustoms } = resolveArrivalFirstMileIntl(
+    code,
+    input.departureIata,
+  );
   const layout = getAirportLayout(code);
   const creds = { tsaPreCheck: false, clear: false, known: true };
 
   if (layout && layoutSupportsArrivalFirstMile(layout)) {
     const stops = buildArrivalTripJourney(layout, {
       gateCode: input.arrivalGate,
-      includePassport: intl,
-      includeCustoms: intl,
+      includePassport,
+      includeCustoms,
     });
     if (stops.length > 0) {
       const steps: DayCoachPathStep[] = [];
@@ -425,7 +429,7 @@ export function buildArrivalDayCoachPath(input: ArrivalDayCoachInput): DayCoachP
     },
   ];
 
-  if (intl) {
+  if (includePassport) {
     // Global Entry / Mobile Passport Control are U.S. CBP programs — only
     // relevant when arriving INTO the U.S. Showing them for every
     // international arrival (e.g. arriving in Italy) is wrong advice.
@@ -448,7 +452,7 @@ export function buildArrivalDayCoachPath(input: ArrivalDayCoachInput): DayCoachP
     minutes: walk && walk > 0 ? walk : undefined,
   });
 
-  if (intl) {
+  if (includeCustoms) {
     steps.push({
       id: "customs",
       icon: "📄",

@@ -100,6 +100,15 @@ export function evaluateImHereGnssFix(input: {
   return { accepted: true, outsideHull: true };
 }
 
+/** Sunday A3 — never paint a GNSS accuracy halo for refused indoor fixes or I'm-here pins. */
+export function shouldPaintGnssAccuracyRing(input: {
+  evaluation: ImHereGnssEvaluation;
+  confirmedNodeId?: string | null;
+}): boolean {
+  if (input.confirmedNodeId) return false;
+  return input.evaluation.accepted;
+}
+
 /** Last outdoor curb node — official `:node:curb` anchors only. */
 export function resolveLastOutdoorCurbNode(
   layout: AirportLayout,

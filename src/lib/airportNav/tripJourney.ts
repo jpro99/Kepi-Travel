@@ -17,6 +17,7 @@
  * reference, per owner intent.
  */
 
+import { resolveAirport } from "@/lib/airports/lookup";
 import type { AirportLayout, GraphNode, PoiDefinition } from "./types";
 import { resolveGateNode } from "./pathfinder";
 import { resolvePoiDisplayName } from "./poiDisplayName";
@@ -303,6 +304,32 @@ export interface ArrivalJourneyContext {
   includeCustoms?: boolean;
   /** Include Leonardo / train POI when layout has one. */
   includeGroundTransport?: boolean;
+}
+
+function isInternationalArrivalByAirportCountry(
+  departureIata: string | null | undefined,
+  arrivalIata: string,
+): boolean {
+  const dep = resolveAirport((departureIata ?? "").trim());
+  const arr = resolveAirport(arrivalIata.trim());
+  if (!dep?.country || !arr?.country) return true;
+  return dep.country.toUpperCase() !== arr.country.toUpperCase();
+}
+
+/**
+ * Passport/customs inclusion for arrival first mile.
+ * FCO T3 always walks passport → bags → customs (Schengen domestic legs share the corridor).
+ */
+export function resolveArrivalFirstMileIntl(
+  arrivalIata: string,
+  departureIata: string | null | undefined,
+): { includePassport: boolean; includeCustoms: boolean } {
+  const code = arrivalIata.trim().toUpperCase();
+  if (code === "FCO") {
+    return { includePassport: true, includeCustoms: true };
+  }
+  const intl = isInternationalArrivalByAirportCountry(departureIata, code);
+  return { includePassport: intl, includeCustoms: intl };
 }
 
 /** True when a bundled layout has schematic arrival nodes for map + coach wiring. */

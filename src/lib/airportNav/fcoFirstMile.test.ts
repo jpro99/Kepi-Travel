@@ -6,6 +6,7 @@ import {
   buildArrivalTripJourney,
   arrivalJourneyPoiIds,
   layoutSupportsArrivalFirstMile,
+  resolveArrivalFirstMileIntl,
   resolveArrivalOriginNode,
 } from "./tripJourney";
 import { computeRoute } from "./pathfinder";
@@ -15,6 +16,19 @@ import {
   selectFlightForAirportIata,
   type FlightReservation,
 } from "@/lib/travelAssistant/useActiveFlight";
+
+test("FCO Schengen domestic (BRI→FCO / AZ1616) still walks passport → bags → customs → Leonardo → Termini", () => {
+  const flags = resolveArrivalFirstMileIntl("FCO", "BRI");
+  assert.equal(flags.includePassport, true);
+  assert.equal(flags.includeCustoms, true);
+  const stops = buildArrivalTripJourney(FCO_LAYOUT, { gateCode: "E12", ...flags });
+  const poiIds = arrivalJourneyPoiIds(stops);
+  assert.ok(poiIds.has("poi-passport-t3"));
+  assert.ok(poiIds.has("poi-baggage-t3"));
+  assert.ok(poiIds.has("poi-customs-t3"));
+  assert.ok(poiIds.has("poi-leonardo-express"));
+  assert.ok(poiIds.has("poi-roma-termini"));
+});
 
 test("FCO layout supports arrival first mile with passport, bags, customs, Leonardo", () => {
   assert.ok(layoutSupportsArrivalFirstMile(FCO_LAYOUT));
