@@ -37,6 +37,10 @@ import {
   selectTravelDayDepartureFlight,
   type TravelDayFlightPick,
 } from "@/lib/travelAssistant/flightSort";
+import {
+  selectActiveArrivalFlight,
+  selectRemainingJourneyFlight,
+} from "@/lib/travelAssistant/remainingJourneyFlight";
 import { canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
 
 export interface FlightReservation {
@@ -301,19 +305,43 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
     [preferredIata, preferredMode, reservations, nowMs],
   );
 
+  const remainingJourneyFlight = useMemo(
+    () => selectRemainingJourneyFlight(reservations, nowMs),
+    [reservations, nowMs],
+  );
+
   const navigatorFlight = useMemo(() => {
+    const arrivalRemaining = selectActiveArrivalFlight(reservations, nowMs);
+    if (arrivalRemaining && !pinnedFlight && arrivalRemaining.flightArrivalTime?.trim()) {
+      const arrivalTz =
+        timezoneForIata(arrivalRemaining.flightArrivalAirport ?? "") ?? arrivalRemaining.timezone;
+      const utcMs = toUtcMs(arrivalRemaining.flightArrivalTime.trim(), arrivalTz);
+      return { f: arrivalRemaining, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
+    }
     if (journeyPhase.kind === "just-landed" && !pinnedFlight) {
       const f = journeyPhase.flight as FlightReservation;
-      // Arrival clock must use ARRIVAL airport TZ — departure TZ on a mangled
-      // arrival string is what produced false "Landed 339m ago" for AS654.
-      const arrivalTz =
-        timezoneForIata(f.flightArrivalAirport ?? "") ?? f.timezone;
-      const utcMs = toUtcMs(f.flightArrivalTime ?? f.localTime, arrivalTz);
-      return { f, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
+      const arrivalLocal = f.flightArrivalTime?.trim();
+      if (arrivalLocal) {
+        const arrivalTz = timezoneForIata(f.flightArrivalAirport ?? "") ?? f.timezone;
+        const utcMs = toUtcMs(arrivalLocal, arrivalTz);
+        return { f, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
+      }
     }
     if (pinnedFlight) return pinnedFlight;
+    if (remainingJourneyFlight) {
+      const utcMs = flightDepartureUtcMs(remainingJourneyFlight);
+      return { f: remainingJourneyFlight, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
+    }
     return activeFlight ?? previewFlight;
-  }, [journeyPhase, pinnedFlight, activeFlight, previewFlight, nowMs]);
+  }, [
+    journeyPhase,
+    pinnedFlight,
+    activeFlight,
+    previewFlight,
+    remainingJourneyFlight,
+    reservations,
+    nowMs,
+  ]);
 
   const navigatorCoachMode = useMemo(() => {
     if (pinnedFlight && preferredIata) {

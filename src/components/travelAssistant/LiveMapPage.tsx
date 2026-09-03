@@ -11,7 +11,6 @@ import {
   useNavigatorCredentials,
 } from "@/lib/travelAssistant/useActiveFlight";
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
-import { useAtAirportFlightStatusPoll } from "@/lib/travelAssistant/useAtAirportFlightStatusPoll";
 import { buildOsmRasterFallbackStyle, directMaptilerTransformRequest, resolveLiveMapStyle, scheduleMapLoadFallback, attachMapStyleErrorFallback, type LiveMapStyleId } from "@/lib/map/maptilerClient";
 import { buildOfflineCityMapStyle } from "@/lib/map/offlineCityMapBundle";
 import { bindMapResize, getMapPixelRatio } from "@/lib/map/maplibreInit";
@@ -745,11 +744,19 @@ export function LiveMapPage() {
   );
   const airportPreviewMode = Boolean(navFlight && !airportLiveMode);
 
-  const liveFlightStatus = useAtAirportFlightStatusPoll({
-    flight: navFlight?.f ?? null,
-    proximity: navProximity.status === "unknown" ? "away" : navProximity.status,
-    enabled: airportLiveMode && mapView === "airport",
-  });
+  const storedGateCode =
+    navigatorCoachMode === "arrive"
+      ? (navFlight?.f.flightArrivalGate ?? navFlight?.f.flightDepartureGate ?? null)
+      : (navFlight?.f.flightDepartureGate ?? null);
+  const storedFlightStatusLabel =
+    navigatorCoachMode === "arrive"
+      ? "Landed"
+      : (navFlight?.f.flightStatus
+        ?? ((navFlight?.f.flightDelayMinutes ?? 0) > 0
+          ? `Delayed +${navFlight?.f.flightDelayMinutes}m`
+          : navFlight?.f.flightOnTime === false
+            ? "Delayed"
+            : "On time"));
 
   useEffect(() => {
     if (!preferAirportView || !navigatorFlight) return;
@@ -1072,21 +1079,12 @@ export function LiveMapPage() {
               previewMode={airportPreviewMode}
               maptilerKey={maptilerKey}
               iata={navIata}
-              gateCode={
-                navigatorCoachMode === "arrive"
-                  ? (liveFlightStatus?.departureGate
-                    ?? navFlight.f.flightArrivalGate
-                    ?? navFlight.f.flightDepartureGate
-                    ?? null)
-                  : (liveFlightStatus?.departureGate ?? navFlight.f.flightDepartureGate ?? null)
-              }
+              gateCode={storedGateCode}
               airlineName={navFlight.f.flightAirline ?? navFlight.f.provider ?? null}
               flightNumber={navFlight.f.flightNumber ?? null}
               arrivalAirport={navFlight.f.flightArrivalAirport ?? null}
               departureAirport={navFlight.f.flightDepartureAirport ?? null}
-              departureTerminal={
-                liveFlightStatus?.departureTerminal ?? navFlight.f.flightDepartureTerminal ?? null
-              }
+              departureTerminal={navFlight.f.flightDepartureTerminal ?? null}
               arrivalTerminal={navFlight.f.flightArrivalTerminal ?? null}
               coachMode={navigatorCoachMode}
               landedMinutesAgo={
@@ -1100,17 +1098,9 @@ export function LiveMapPage() {
               }
               flightArrivalTime={navFlight.f.flightArrivalTime ?? null}
               flightTimezone={navFlight.f.timezone ?? null}
-              flightStatusLabel={
-                navigatorCoachMode === "arrive"
-                  ? "Landed"
-                  : liveFlightStatus?.flightStatus
-                    ?? ((liveFlightStatus?.delayMinutes ?? navFlight.f.flightDelayMinutes ?? 0) > 0
-                      ? `Delayed +${liveFlightStatus?.delayMinutes ?? navFlight.f.flightDelayMinutes}m`
-                      : navFlight.f.flightStatus ?? (navFlight.f.flightOnTime === false ? "Delayed" : "On time"))
-              }
+              flightStatusLabel={storedFlightStatusLabel}
               flightDelayed={
-                (liveFlightStatus?.delayMinutes ?? navFlight.f.flightDelayMinutes ?? 0) > 0
-                || liveFlightStatus?.onTime === false
+                (navFlight.f.flightDelayMinutes ?? 0) > 0
                 || navFlight.f.flightOnTime === false
               }
               proximityStatus={airportLiveMode ? navProximity.status : "preview"}

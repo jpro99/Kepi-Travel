@@ -169,27 +169,49 @@ export function AirportArrivalFirstMileChrome({
       ) : null}
 
       <ol className="mt-2 space-y-1.5">
-        {visiblePathSteps.map((step, index) => (
-          <li
-            key={step.id}
-            className={`flex gap-2 rounded-xl px-2.5 py-2 ${
-              index === 0 && !fullDayView ? "bg-sky-500/20 ring-1 ring-sky-400/25" : "bg-white/5"
-            }`}
-          >
-            <span className="text-base" aria-hidden>{step.icon}</span>
-            <div className="min-w-0">
-              <p className="text-[13px] font-semibold leading-snug text-white">{step.text}</p>
-              {step.detail ? (
-                <p className="text-[11px] leading-snug text-sky-100/75">{step.detail}</p>
-              ) : null}
-              {step.minutes != null && step.minutes > 0 ? (
-                <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-300/80">
-                  ~{step.minutes} min
-                </p>
-              ) : null}
-            </div>
-          </li>
-        ))}
+        {visiblePathSteps.map((step, index) => {
+          const bagsPoiId =
+            step.id === "bags"
+              ? arrivalJourney.find((stop) => stop.role === "baggage")?.poiId ?? null
+              : null;
+          const stepBody = (
+            <>
+              <span className="text-base" aria-hidden>{step.icon}</span>
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold leading-snug text-white">{step.text}</p>
+                {step.detail ? (
+                  <p className="text-[11px] leading-snug text-sky-100/75">{step.detail}</p>
+                ) : null}
+                {step.minutes != null && step.minutes > 0 ? (
+                  <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-300/80">
+                    ~{step.minutes} min
+                  </p>
+                ) : null}
+              </div>
+            </>
+          );
+          return (
+            <li
+              key={step.id}
+              className={`flex gap-2 rounded-xl px-2.5 py-2 ${
+                index === 0 && !fullDayView ? "bg-sky-500/20 ring-1 ring-sky-400/25" : "bg-white/5"
+              }`}
+            >
+              {bagsPoiId ? (
+                <button
+                  type="button"
+                  data-testid="airport-arrival-coach-bags"
+                  onClick={() => onPoiClick(bagsPoiId)}
+                  className="flex w-full gap-2 text-left active:opacity-90"
+                >
+                  {stepBody}
+                </button>
+              ) : (
+                <div className="flex gap-2">{stepBody}</div>
+              )}
+            </li>
+          );
+        })}
         {hiddenCount > 0 ? (
           <li className="rounded-xl border border-sky-400/20 bg-sky-500/10 px-2.5 py-2 text-[11px] font-semibold text-sky-100/85">
             {hiddenCount} more step{hiddenCount === 1 ? "" : "s"} · tap Full day view

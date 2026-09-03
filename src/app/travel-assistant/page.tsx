@@ -38,6 +38,7 @@ import {
 } from "@/lib/travelAssistant/tripWindowRepair";
 import { canonicalFlightDepartureDay, canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
 import { flightDepartureUtcMs, selectNextRemainingFlight } from "@/lib/travelAssistant/flightSort";
+import { selectRemainingJourneyFlight } from "@/lib/travelAssistant/remainingJourneyFlight";
 import {
   nearestUpcomingFlightDepartureUtcMs,
   resolveFlightStatusPollIntervalMs,
@@ -3199,32 +3200,28 @@ export default function TravelAssistantPage() {
     return status === "unknown" ? "away" : status;
   }, [activeTripId, reservations, guidanceUserLat, guidanceUserLon]);
 
-  // Auto-poll flight status for upcoming flights within 24h (4m at airport, 90s inside 6h, 5m otherwise)
+  // Auto-poll flight status for the booked remaining flight within 24h (gate station — not map)
   useEffect(() => {
     if (!activeTripId || !reservations.length) return;
     const nowMs = Date.now();
-    const upcomingFlights = reservations.filter((r) => {
-      if (r.type !== "flight") return false;
-      const local = canonicalFlightDepartureLocalTime(r);
-      if (!local) return false;
-      const depMs = Date.parse(local.replace("T", " ").slice(0, 16));
-      const hoursUntil = (depMs - nowMs) / 3_600_000;
-      return hoursUntil > -1 && hoursUntil < 24;
-    });
-    if (!upcomingFlights.length) return;
-    const nearestDep = nearestUpcomingFlightDepartureUtcMs(upcomingFlights, nowMs);
+    const remaining = selectRemainingJourneyFlight(reservations, nowMs);
+    if (!remaining) return;
+    const local = canonicalFlightDepartureLocalTime(remaining);
+    if (!local) return;
+    const depMs = Date.parse(local.replace("T", " ").slice(0, 16));
+    const hoursUntil = (depMs - nowMs) / 3_600_000;
+    if (!(hoursUntil > -1 && hoursUntil < 24)) return;
+
     const pollIntervalMs = resolveFlightStatusPollIntervalMs(
-      nearestDep,
+      depMs,
       nowMs,
       flightStatusPollProximity,
     );
     const pollFlight = async () => {
-      for (const flight of upcomingFlights) {
-        try {
-          await handleCheckFlightStatusRef.current(flight.id);
-        } catch {
-          // Fail silently
-        }
+      try {
+        await handleCheckFlightStatusRef.current(remaining.id);
+      } catch {
+        // Fail silently
       }
     };
     void pollFlight();

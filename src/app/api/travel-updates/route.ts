@@ -10,6 +10,9 @@ import { persistTravelRuntimeState } from "@/lib/travelAssistant/updateRuntimeSt
 import type { TravelUpdateEvent } from "@/lib/travelAssistant/travelUpdateTypes";
 import { generateId } from "@/lib/utils/generateId";
 import { maybeSendFlightStatusPushAlerts } from "@/lib/travelAssistant/flightStatusPushBridge";
+import { matchesRemainingGateStation } from "@/lib/travelAssistant/bookedRemainingGateStation";
+import { listTrips } from "@/lib/travelAssistant/tripStore";
+import { runWithKvUserContext } from "@/lib/travelAssistant/kvUserContext";
 import { handleConfirmationScanUpload } from "@/lib/travelAssistant/confirmationScanHandler";
 import {
   fetchMergedFlightStatusSnapshot,
@@ -138,15 +141,27 @@ export async function GET(req: Request) {
 
     const responseBody = mergedSnapshotToFlightLookupResponse(merged, parsed.data.airline);
     routeLogger.info("Merged flight lookup response.", { responseBody });
-    const pushResult = await maybeSendFlightStatusPushAlerts(userId, {
+    let pushAlertsSent = 0;
+    const reservations = await runWithKvUserContext(userId, async () => {
+      const trips = await listTrips(userId);
+      return trips.flatMap((trip) => trip.reservations ?? []);
+    });
+    const isRemaining = matchesRemainingGateStation(reservations, {
       flightNumber: responseBody.flightNumber,
       flightDate: responseBody.flightDate,
-      departureGate: responseBody.departureGate,
-      delayMinutes: responseBody.delayMinutes,
-      flightStatus: responseBody.flightStatus,
     });
+    if (isRemaining) {
+      const pushResult = await maybeSendFlightStatusPushAlerts(userId, {
+        flightNumber: responseBody.flightNumber,
+        flightDate: responseBody.flightDate,
+        departureGate: responseBody.departureGate,
+        delayMinutes: responseBody.delayMinutes,
+        flightStatus: responseBody.flightStatus,
+      });
+      pushAlertsSent = pushResult.sent;
+    }
     return NextResponse.json(
-      { ...responseBody, pushAlertsSent: pushResult.sent },
+      { ...responseBody, pushAlertsSent },
       { headers: rateLimit.headers },
     );
   } catch (error) {
