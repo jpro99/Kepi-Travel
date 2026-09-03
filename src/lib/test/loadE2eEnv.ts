@@ -37,3 +37,25 @@ export function buildE2eWebServerEnv(): Record<string, string> {
 
   return env;
 }
+
+/** Fail fast when Clerk setup or session bootstrap wedges (no product/middleware changes). */
+export async function withE2eSetupTimeout<T>(
+  label: string,
+  ms: number,
+  fn: () => Promise<T>,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      fn(),
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`[e2e] ${label} timed out after ${ms}ms`)),
+          ms,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
