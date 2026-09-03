@@ -41,7 +41,8 @@ export function isInsideTerminalHull(
   for (const ring of hullRings) {
     if (ring.length < 3) continue;
     try {
-      if (booleanPointInPolygon(pt, polygon([ring]))) return true;
+      const mutableRing: [number, number][] = ring.map((c) => [c[0], c[1]]);
+      if (booleanPointInPolygon(pt, polygon([mutableRing]))) return true;
     } catch {
       /* invalid ring — skip */
     }

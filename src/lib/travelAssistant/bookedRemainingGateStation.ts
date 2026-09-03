@@ -10,8 +10,8 @@ import {
   isBookedRemainingFlightLookup,
   normalizeFlightNumber,
   selectRemainingJourneyFlight,
-  type FlightSortFields,
 } from "@/lib/travelAssistant/remainingJourneyFlight";
+import type { FlightSortFields } from "@/lib/travelAssistant/flightSort";
 import { shouldPollFlightStatus } from "@/lib/travelAssistant/flightStatusCadence";
 import { flightDepartureUtcMs } from "@/lib/travelAssistant/flightSort";
 
