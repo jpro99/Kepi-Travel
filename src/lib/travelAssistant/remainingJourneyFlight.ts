@@ -51,7 +51,7 @@ function toUtcMs(localTime: string, timezone?: string): number {
   }
 }
 
-function flightArrivalUtcMs(f: FlightSortFields & { flightArrivalAirport?: string | null }): number {
+function flightArrivalUtcMs(f: FlightSortFields): number {
   const arrivalLocal = f.flightArrivalTime?.trim();
   if (!arrivalLocal) return Number.NaN;
   const depMs = flightDepartureUtcMs(f);

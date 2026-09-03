@@ -13,7 +13,10 @@ import {
 export interface FlightSortFields extends CanonicalFlightScheduleFields {
   timezone?: string;
   type?: string;
+  flightNumber?: string;
   flightDepartureAirport?: string;
+  flightArrivalAirport?: string | null;
+  flightArrivalTime?: string;
   plannedOnly?: boolean;
 }
 
