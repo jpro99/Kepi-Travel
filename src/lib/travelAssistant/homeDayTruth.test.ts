@@ -10,6 +10,9 @@ import {
   TERMINAL_EXPLORE_WINDOW_MS,
 } from "@/lib/travelAssistant/homeDayTruth";
 
+/** Europe trip travel morning — pins calm-connection tests (not calendar-flaky). */
+const EUROPE_TRAVEL_MORNING_MS = Date.parse("2026-09-01T15:00:00Z");
+
 test("terminal explore promo only within 48h of departure", () => {
   const now = Date.parse("2026-08-31T12:00:00Z");
   const inWindow = now + 24 * 60 * 60_000;
@@ -47,7 +50,7 @@ test("F3: blank inbound arrival is incomplete, not CONNECTION ISSUE", () => {
       flightDate: "2026-09-01",
       flightNumber: "AS180",
     },
-  ]);
+  ], EUROPE_TRAVEL_MORNING_MS);
   assert.equal(status.kind, "incomplete");
   assert.match(status.line ?? "", /SEA connection/iu);
   assert.doesNotMatch(status.line ?? "", /needs a quick look/iu);
@@ -81,7 +84,7 @@ test("real layover times produce calm OK line", () => {
       flightDate: "2026-09-01",
       flightNumber: "AS180",
     },
-  ]);
+  ], EUROPE_TRAVEL_MORNING_MS);
   assert.equal(status.kind, "ok");
   assert.match(status.line ?? "", /SEA connection looks fine/iu);
 });
