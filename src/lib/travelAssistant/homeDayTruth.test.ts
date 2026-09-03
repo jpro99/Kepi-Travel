@@ -20,6 +20,7 @@ test("terminal explore promo only within 48h of departure", () => {
 });
 
 test("F3: blank inbound arrival is incomplete, not CONNECTION ISSUE", () => {
+  const nowMs = Date.parse("2026-09-01T20:00:00Z"); // during SEA layover — not wall-clock Date.now()
   const status = buildConnectionCalmStatus([
     {
       id: "as654",
@@ -47,13 +48,14 @@ test("F3: blank inbound arrival is incomplete, not CONNECTION ISSUE", () => {
       flightDate: "2026-09-01",
       flightNumber: "AS180",
     },
-  ]);
+  ], nowMs);
   assert.equal(status.kind, "incomplete");
   assert.match(status.line ?? "", /SEA connection/iu);
   assert.doesNotMatch(status.line ?? "", /needs a quick look/iu);
 });
 
 test("real layover times produce calm OK line", () => {
+  const nowMs = Date.parse("2026-09-01T20:00:00Z");
   const status = buildConnectionCalmStatus([
     {
       id: "as654",
@@ -81,7 +83,7 @@ test("real layover times produce calm OK line", () => {
       flightDate: "2026-09-01",
       flightNumber: "AS180",
     },
-  ]);
+  ], nowMs);
   assert.equal(status.kind, "ok");
   assert.match(status.line ?? "", /SEA connection looks fine/iu);
 });
