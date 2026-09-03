@@ -12,7 +12,12 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AirportLayout, ComputedRoute, GraphEdge, PoiDefinition, SnappedPosition, TravelerSecurityCredentials } from "@/lib/airportNav/types";
 import { computeRoute, resolveGateNode, snapToGraph } from "@/lib/airportNav/pathfinder";
-import { resolveBookedGateHighlight } from "@/lib/airportNav/kac/bookedGateHighlight";
+import { gateCoachCopy, resolveBookedGateDot } from "@/lib/travelAssistant/bookedRemainingGateStation";
+import {
+  evaluateImHereGnssFix,
+  resolveLastOutdoorCurbNode,
+  terminalHullRings,
+} from "@/lib/airportNav/imHereGnssPolicy";
 import { buildTripJourney, journeyPoiIds, preSecurityJourney, type JourneyStop, buildArrivalTripJourney, arrivalJourneyPoiIds, layoutSupportsArrivalFirstMile, resolveArrivalOriginNode, type ArrivalJourneyStop } from "@/lib/airportNav/tripJourney";
 import {
   buildArrivalDayCoachPath,
@@ -1501,17 +1506,37 @@ export function AirportNavigatorMap({
     };
   }, [iata, layoutOverride]);
 
+  const hullRings = useMemo(() => (layout ? terminalHullRings(layout) : []), [layout]);
+
   /* ── Snapped traveler position ──────────────────────────────────────── */
   const snapped: SnappedPosition | null = useMemo(() => {
     if (!layout || previewMode) return null;
-    // A user-confirmed "I'm here" tap wins over noisy indoor GPS.
     if (confirmedNodeId) {
       const node = layout.nodes.find((entry) => entry.id === confirmedNodeId);
       if (node) return confirmedSnappedPosition(node);
     }
     if (userLat === null || userLon === null) return null;
+    const gnss = evaluateImHereGnssFix({
+      lng: userLon,
+      lat: userLat,
+      accuracyM: userAccuracyM,
+      fixAgeMs: 0,
+      hullRings,
+    });
+    if (!gnss.accepted) {
+      const curb = resolveLastOutdoorCurbNode(layout, userLon, userLat);
+      if (curb) {
+        return {
+          pos: curb.pos,
+          nearestNodeId: curb.id,
+          offGraphMeters: 0,
+          confidence: 0.72,
+        };
+      }
+      return null;
+    }
     return snapToGraph(layout, userLon, userLat, userAccuracyM);
-  }, [layout, previewMode, confirmedNodeId, userLat, userLon, userAccuracyM]);
+  }, [layout, previewMode, confirmedNodeId, userLat, userLon, userAccuracyM, hullRings]);
 
   const isArriveCoach = coachMode === "arrive";
   const arrivalFirstMile = Boolean(layout && isArriveCoach && layoutSupportsArrivalFirstMile(layout));
@@ -1528,20 +1553,29 @@ export function AirportNavigatorMap({
       ?? null;
   }, [snapped, layout, previewMode, isArriveCoach, gateCode]);
 
-  const bookedGate = useMemo(
-    () => resolveBookedGateHighlight(layout, gateCode, airlineName),
-    [layout, gateCode, airlineName],
+  const bookedGateDot = useMemo(
+    () => resolveBookedGateDot(layout, gateCode),
+    [layout, gateCode],
+  );
+  const bookedGateCoachCopy = useMemo(
+    () => gateCoachCopy(gateCode, layout),
+    [gateCode, layout],
   );
 
   const gatePoi: PoiDefinition | null = useMemo(() => {
-    return bookedGate?.poi ?? null;
-  }, [bookedGate]);
+    if (!layout || !bookedGateDot) return null;
+    return (
+      layout.pois.find((entry) => entry.nodeId === bookedGateDot.nodeId && entry.category === "gate") ??
+      layout.pois.find((entry) => entry.nodeId === bookedGateDot.nodeId) ??
+      null
+    );
+  }, [layout, bookedGateDot]);
 
   const gateNodePos = useMemo((): [number, number] | null => {
-    if (!layout || !bookedGate) return null;
-    const node = layout.nodes.find((entry) => entry.id === bookedGate.nodeId);
+    if (!layout || !bookedGateDot) return null;
+    const node = layout.nodes.find((entry) => entry.id === bookedGateDot.nodeId);
     return node?.pos ?? null;
-  }, [layout, bookedGate]);
+  }, [layout, bookedGateDot]);
 
   const travelerPos = useMemo((): [number, number] | null => {
     if (snapped?.pos) return snapped.pos;
@@ -2730,7 +2764,7 @@ export function AirportNavigatorMap({
         const isSelected = selectedId !== null && poi.id === selectedId;
         const isGateBubble = Boolean(
           (gatePoi !== null && poi.id === gatePoi.id) ||
-          (bookedGate?.exactDoor && poi.nodeId === bookedGate.nodeId),
+          (bookedGateDot !== null && poi.nodeId === bookedGateDot.nodeId),
         );
         const isJourney = journeyPoiIdSet.has(poi.id);
         const isCurbDropoff =
@@ -2813,7 +2847,7 @@ export function AirportNavigatorMap({
       }
       poiMarkersRef.current = {};
     };
-  }, [mapReady, layout, gatePoi, gateCode, bookedGate, minutesRounded, airlineName, objective, eligibleLoungeNames, selectedPoiId, activeRoute, journeyPoiIdSet]);
+  }, [mapReady, layout, gatePoi, gateCode, bookedGateDot, minutesRounded, airlineName, objective, eligibleLoungeNames, selectedPoiId, activeRoute, journeyPoiIdSet]);
 
   /* ── Walk-map leader-line labels (outside hull, collision-safe) ─────── */
   useEffect(() => {
@@ -2843,7 +2877,7 @@ export function AirportNavigatorMap({
         const isSelected = selectedId !== null && poi.id === selectedId;
         const isGateBubble = Boolean(
           (gatePoi !== null && poi.id === gatePoi.id) ||
-          (bookedGate?.exactDoor && poi.nodeId === bookedGate.nodeId),
+          (bookedGateDot !== null && poi.nodeId === bookedGateDot.nodeId),
         );
         const isJourney = journeyPoiIdSet.has(poi.id);
         const isCurbDropoff =
@@ -2932,7 +2966,7 @@ export function AirportNavigatorMap({
     layout,
     gatePoi,
     gateCode,
-    bookedGate,
+    bookedGateDot,
     minutesRounded,
     airlineName,
     objective,
@@ -3724,6 +3758,14 @@ export function AirportNavigatorMap({
                 className="mt-1 rounded-lg bg-amber-400/95 px-2 py-1 text-[11px] font-bold text-slate-950"
               >
                 {gateChangeNotice}
+              </p>
+            ) : null}
+            {bookedGateCoachCopy ? (
+              <p
+                data-testid="airport-nav-gate-coach"
+                className="mt-1 rounded-lg bg-slate-800/90 px-2 py-1 text-[11px] font-semibold text-sky-100"
+              >
+                {bookedGateCoachCopy}
               </p>
             ) : null}
           </div>
