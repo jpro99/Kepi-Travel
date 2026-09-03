@@ -59,6 +59,34 @@ test("FCO arrive window pins AS180 even when AZ1607 is stored later", () => {
   assert.ok(isFcoArriveRemainingJourney(remaining));
 });
 
+test("empty flightArrivalTime never opens synthetic arrive window (AS654)", () => {
+  const as654 = {
+    ...EUROPE[0],
+    flightArrivalTime: "",
+  };
+  const afterWouldBeFakeLanding = Date.parse("2026-09-02T01:00:00Z");
+  assert.equal(selectActiveArrivalFlight([as654], afterWouldBeFakeLanding), null);
+  assert.equal(selectRemainingJourneyFlight([as654], afterWouldBeFakeLanding)?.id, "as654");
+  assert.equal(as654.flightArrivalTime, "");
+});
+
+test("flightArrivalUtcMs path rejects impossible arrival clock (arrival ≤ departure)", () => {
+  const badClock = {
+    id: "bad",
+    type: "flight",
+    localTime: "2026-09-01 17:30",
+    timezone: "America/Los_Angeles",
+    flightDepartureAirport: "SEA",
+    flightArrivalAirport: "FCO",
+    flightDepartureTime: "2026-09-01 17:30",
+    flightArrivalTime: "2026-09-01 08:00",
+    flightNumber: "AS180",
+    flightDate: "2026-09-01",
+  };
+  const duringBad = Date.parse("2026-09-01T20:00:00Z");
+  assert.equal(selectActiveArrivalFlight([badClock], duringBad), null);
+});
+
 test("after FCO arrive window, remaining-pick returns next departure not stale arrival", () => {
   const afterArrive = Date.parse("2026-09-02T22:00:00Z");
   const remaining = selectRemainingJourneyFlight([...EUROPE], afterArrive);

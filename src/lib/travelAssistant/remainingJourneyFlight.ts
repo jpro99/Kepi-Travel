@@ -52,14 +52,14 @@ function toUtcMs(localTime: string, timezone?: string): number {
 }
 
 function flightArrivalUtcMs(f: FlightSortFields & { flightArrivalAirport?: string | null }): number {
+  const arrivalLocal = f.flightArrivalTime?.trim();
+  if (!arrivalLocal) return Number.NaN;
   const depMs = flightDepartureUtcMs(f);
-  if (f.flightArrivalTime?.trim()) {
-    const arrivalTz = timezoneForIata(f.flightArrivalAirport ?? "") ?? f.timezone;
-    const ms = toUtcMs(f.flightArrivalTime, arrivalTz);
-    if (!Number.isNaN(ms) && (Number.isNaN(depMs) || ms > depMs)) return ms;
-  }
-  if (!Number.isNaN(depMs)) return depMs + 4 * 60 * MS_PER_MIN;
-  return Number.NaN;
+  const arrivalTz = timezoneForIata(f.flightArrivalAirport ?? "") ?? f.timezone;
+  const ms = toUtcMs(arrivalLocal, arrivalTz);
+  if (Number.isNaN(ms)) return Number.NaN;
+  if (!Number.isNaN(depMs) && ms <= depMs) return Number.NaN;
+  return ms;
 }
 
 function isBookedFlight<T extends FlightSortFields>(r: T): boolean {

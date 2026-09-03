@@ -312,18 +312,20 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
 
   const navigatorFlight = useMemo(() => {
     const arrivalRemaining = selectActiveArrivalFlight(reservations, nowMs);
-    if (arrivalRemaining && !pinnedFlight) {
+    if (arrivalRemaining && !pinnedFlight && arrivalRemaining.flightArrivalTime?.trim()) {
       const arrivalTz =
         timezoneForIata(arrivalRemaining.flightArrivalAirport ?? "") ?? arrivalRemaining.timezone;
-      const utcMs = toUtcMs(arrivalRemaining.flightArrivalTime ?? arrivalRemaining.localTime, arrivalTz);
+      const utcMs = toUtcMs(arrivalRemaining.flightArrivalTime.trim(), arrivalTz);
       return { f: arrivalRemaining, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
     }
     if (journeyPhase.kind === "just-landed" && !pinnedFlight) {
       const f = journeyPhase.flight as FlightReservation;
-      const arrivalTz =
-        timezoneForIata(f.flightArrivalAirport ?? "") ?? f.timezone;
-      const utcMs = toUtcMs(f.flightArrivalTime ?? f.localTime, arrivalTz);
-      return { f, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
+      const arrivalLocal = f.flightArrivalTime?.trim();
+      if (arrivalLocal) {
+        const arrivalTz = timezoneForIata(f.flightArrivalAirport ?? "") ?? f.timezone;
+        const utcMs = toUtcMs(arrivalLocal, arrivalTz);
+        return { f, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
+      }
     }
     if (pinnedFlight) return pinnedFlight;
     if (remainingJourneyFlight) {
