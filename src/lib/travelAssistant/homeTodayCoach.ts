@@ -288,7 +288,7 @@ export function homeTodayCoachNextAction(coach: HomeTodayCoach): HomeNextAction 
       kind: coach.transferHref ? "prep" : "ready",
       eyebrow: coach.tomorrowTitle ?? "Tomorrow",
       title: coach.tomorrowDetail,
-      detail: coach.transferHint,
+      detail: coach.transferHint ?? undefined,
       ctaLabel: coach.transferHref ? "Search trains" : "Open Plan",
       prepHref: coach.transferHref ?? undefined,
     };
