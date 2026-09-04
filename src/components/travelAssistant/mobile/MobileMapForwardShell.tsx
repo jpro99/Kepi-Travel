@@ -168,6 +168,9 @@ interface MobileMapForwardShellProps {
   readinessItems?: TripReadinessChecklistItem[];
   onToggleReadinessItem?: (id: string) => void;
   readinessChecklistSectionRef?: Ref<HTMLElement>;
+  /** G49 — stop ranges for today-first Home coach. */
+  effectiveStopRanges?: StopDateRange[];
+  travelerTimezone?: string | null;
 }
 
 const juicyBtn =
@@ -270,6 +273,8 @@ export function MobileMapForwardShell({
   readinessItems = [],
   onToggleReadinessItem,
   readinessChecklistSectionRef,
+  effectiveStopRanges,
+  travelerTimezone = null,
 }: MobileMapForwardShellProps) {
   const [planSegment, setPlanSegment] = useState<PlanSegment>("itinerary");
   const [showPointsLearn, setShowPointsLearn] = useState(false);
@@ -339,6 +344,8 @@ export function MobileMapForwardShell({
           onOpenReview={onOpenReview ?? (() => onNavigateTab("plan"))}
           readinessChecklist={readinessChecklist}
           onOpenReadiness={onOpenReadiness}
+          stopRanges={effectiveStopRanges ?? stopRanges}
+          travelerTimezone={travelerTimezone}
         />
 
         {hasActiveTrip && tripSpendSummary ? (

@@ -22,6 +22,11 @@ import {
   sortFlightsByDeparture,
 } from "@/lib/travelAssistant/flightSort";
 import { disruptionCalmHomeCopy } from "@/lib/travelAssistant/disruptionCalm";
+import type { StopDateRange } from "@/lib/decision/stopDates";
+import {
+  resolveActiveHotelForDay,
+  travelerTodayKey,
+} from "@/lib/travelAssistant/homeTodayCoach";
 
 export type MissionControlPhase =
   | "no_trip"
@@ -79,6 +84,10 @@ export interface MissionControlTripInput {
   hasActiveTrip?: boolean;
   /** G31 — passport checklist item complete (More → readiness). */
   passportComplete?: boolean;
+  /** G49 — plan stop ranges for active-stay city truth on Home. */
+  stopRanges?: StopDateRange[];
+  /** IANA timezone for calendar-today while at destination (e.g. Europe/Rome). */
+  travelerTimezone?: string | null;
 }
 
 export interface AttentionItem {
@@ -410,7 +419,12 @@ export function buildMissionControlSnapshot(
 ): MissionControlSnapshot {
   const reservations = input.reservations ?? [];
   const phase = detectMissionPhase(input, nowMs);
-  const todayKey = isoDayFromMs(nowMs);
+  const stopRanges = input.stopRanges ?? [];
+  const travelerTimezone = input.travelerTimezone ?? null;
+  const todayKey =
+    phase === "at_destination" && travelerTimezone
+      ? travelerTodayKey(nowMs, travelerTimezone)
+      : isoDayFromMs(nowMs);
   const gapReservations = reservations.map((r) => ({
     ...r,
     provider: r.provider ?? "",
@@ -491,7 +505,11 @@ export function buildMissionControlSnapshot(
       : null;
 
   const tonightHotel =
-    reservations.filter(isBookedHotel).find((h) => hotelCoversDay(h, todayKey)) ?? null;
+    resolveActiveHotelForDay(
+      reservations.filter(isBookedHotel),
+      todayKey,
+      stopRanges,
+    ) ?? null;
 
   const tripName = input.name?.trim() || input.destination?.trim() || "Your trip";
 

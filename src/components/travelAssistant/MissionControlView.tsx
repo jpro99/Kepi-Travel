@@ -37,6 +37,11 @@ import {
   resolveAirportSpotlightForHome,
   resolveArrivalHotelLabel,
 } from "@/lib/travelAssistant/airportSpotlightContext";
+import type { StopDateRange } from "@/lib/decision/stopDates";
+import {
+  buildHomeTodayCoach,
+  homeTodayCoachNextAction,
+} from "@/lib/travelAssistant/homeTodayCoach";
 
 export interface MissionControlLiveStatus {
   flightStatus?: string;
@@ -84,6 +89,10 @@ export interface MissionControlViewProps {
   /** G31 — persisted readiness checklist (More tab). */
   readinessChecklist?: ReadinessChecklistItem[];
   onOpenReadiness?: () => void;
+  /** G49 — booked stop ranges for today-first stay coach. */
+  stopRanges?: StopDateRange[];
+  /** IANA timezone for calendar-today while traveling (e.g. Europe/Rome). */
+  travelerTimezone?: string | null;
 }
 
 function statusColor(status: ReadinessStatus): string {
@@ -159,6 +168,8 @@ export function MissionControlView({
   onOpenReview,
   readinessChecklist = [],
   onOpenReadiness,
+  stopRanges = [],
+  travelerTimezone = null,
 }: MissionControlViewProps) {
   const passportComplete = readinessChecklist.find((item) => item.id === "ready-passport")?.complete ?? false;
 
@@ -174,6 +185,8 @@ export function MissionControlView({
         liveStatusByReservationId: liveStatus,
         hasActiveTrip,
         passportComplete,
+        stopRanges,
+        travelerTimezone,
       }),
     [
       tripName,
@@ -185,6 +198,8 @@ export function MissionControlView({
       liveStatus,
       hasActiveTrip,
       passportComplete,
+      stopRanges,
+      travelerTimezone,
     ],
   );
 
@@ -198,7 +213,8 @@ export function MissionControlView({
   useEffect(() => {
     if (zoomTouched) return;
     if (prepMode) setZoom("trip");
-  }, [prepMode, zoomTouched]);
+    else if (showTravelOps && snap.phase === "at_destination") setZoom("today");
+  }, [prepMode, zoomTouched, showTravelOps, snap.phase]);
 
   const connectionCalm: ConnectionCalmStatus = useMemo(
     () =>
@@ -307,6 +323,29 @@ export function MissionControlView({
     ],
   );
 
+  const todayCoach = useMemo(() => {
+    if (!showTravelOps || snap.phase !== "at_destination") return null;
+    if (journeyPhase?.kind === "airborne" || journeyPhase?.kind === "just-landed") return null;
+    return buildHomeTodayCoach({
+      reservations,
+      stopRanges,
+      timezone: travelerTimezone ?? snap.tonightHotel?.timezone ?? null,
+    });
+  }, [
+    showTravelOps,
+    snap.phase,
+    journeyPhase?.kind,
+    reservations,
+    stopRanges,
+    travelerTimezone,
+    snap.tonightHotel,
+  ]);
+
+  const todayCoachAction = useMemo(
+    () => (todayCoach ? homeTodayCoachNextAction(todayCoach) : null),
+    [todayCoach],
+  );
+
   const walk = useMemo(
     () =>
       resolveTripWalk({
@@ -326,6 +365,7 @@ export function MissionControlView({
         storedDepartureGate: snap.nextFlight?.flightDepartureGate,
         connectionCalm,
         airportSpotlight,
+        todayCoach: todayCoachAction,
       }),
     [
       journeyPhase,
@@ -341,6 +381,7 @@ export function MissionControlView({
       liveStatus,
       connectionCalm,
       airportSpotlight,
+      todayCoachAction,
     ],
   );
   const travelTakeover =
@@ -486,14 +527,23 @@ export function MissionControlView({
 
   const activeStatus =
     zoom === "today" ? snap.today.status : zoom === "week" ? weekStatus(snap.week) : snap.tripStatus;
-  const activeSummary = prepMode
-    ? prepWatchItems[0]?.detail ??
-      "Prep mode — documents, stays, and pricing. Connection checks show closer to departure."
-    : zoom === "today"
-      ? snap.today.summary
-      : zoom === "week"
-        ? weekSummary(snap.week)
-        : snap.tripSummary;
+  const stayCoachLead = todayCoach && zoom === "today" && showTravelOps && !prepMode;
+  const activeSummary = stayCoachLead
+    ? [
+        todayCoach.leadDetail,
+        todayCoach.tomorrowDetail,
+        todayCoach.transferHint,
+      ]
+        .filter(Boolean)
+        .join(" ")
+    : prepMode
+      ? prepWatchItems[0]?.detail ??
+        "Prep mode — documents, stays, and pricing. Connection checks show closer to departure."
+      : zoom === "today"
+        ? snap.today.summary
+        : zoom === "week"
+          ? weekSummary(snap.week)
+          : snap.tripSummary;
   const heroAttention = prepMode
     ? []
     : zoom === "today"
@@ -621,11 +671,13 @@ export function MissionControlView({
           {statusLabel(activeStatus)}
         </p>
         <h2 className="mt-1 text-[22px] font-semibold tracking-tight text-[#1D1D1F]">
-          {heroTitle(activeStatus, zoom, {
-            day: snap.today,
-            daysUntil: snap.daysUntilDeparture,
-            prepMode,
-          })}
+          {stayCoachLead
+            ? todayCoach.leadTitle
+            : heroTitle(activeStatus, zoom, {
+                day: snap.today,
+                daysUntil: snap.daysUntilDeparture,
+                prepMode,
+              })}
         </h2>
         <p className="mt-1 text-[15px] leading-relaxed text-[#6E6E73]">{activeSummary}</p>
 
@@ -700,13 +752,15 @@ export function MissionControlView({
           </p>
         ) : null}
 
-        {showTravelOps && snap.nextFlight && (zoom === "today" || snap.phase === "departure_day") ? (
+        {showTravelOps && snap.nextFlight && (zoom === "today" || snap.phase === "departure_day" || stayCoachLead) ? (
           <button
             type="button"
             onClick={() => onReservationTap?.(snap.nextFlight!.id)}
             className="mt-3 w-full rounded-xl bg-white px-3 py-3 text-left"
           >
-            <p className="text-[13px] font-semibold text-[#6E6E73]">Next flight</p>
+            <p className="text-[13px] font-semibold text-[#6E6E73]">
+              {stayCoachLead ? "Next flight" : "Next flight"}
+            </p>
             <p className="mt-0.5 text-[16px] font-semibold text-[#1D1D1F]">
               {snap.nextFlight.flightNumber || "Flight"} ·{" "}
               {snap.nextFlight.flightDepartureAirport} → {snap.nextFlight.flightArrivalAirport}
