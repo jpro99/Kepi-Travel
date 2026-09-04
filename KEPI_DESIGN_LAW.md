@@ -227,6 +227,9 @@ When `wayfindingHonestyTier === strong` (SEA Atrius, FCO Digiport), the verified
 **G49 — Never claim landed before departure; depart coach tells leave-by + real drive ETA**  
 A mangled arrival timestamp must never produce "Landed Xm ago" while the departure clock is still in the future (AS654 ONT→SEA false landed). `computeJourneyPhase` skips airborne/just-landed when `now < dep`. Impossible arrival ≤ departure falls back to dep+4h. Depart Map/Airport coach shows leave-by (airport buffer only — I32) plus optional OSRM drive minutes labeled as route estimate, not live traffic — so "leave now → at terminal around X" is honest. Hotel Uber labels stay arrive-only (never the first Italy hotel while departing ONT).
 
+**G50 — Home today-first stay coach beats trip-start replay**  
+On a mid-stay calendar day, Home leads with the active booked stay (`resolveActiveHotelForDay` — not first hotel in storage order; Polignano wins over Bari proxy). Tomorrow checkout/move copy only when the next stay is on the itinerary (booked hotel or stop range — never invent Monopoli). Local hops use verified short-hop facts (Polignano↔Monopoli ~5 min train) without invented fares. `selectNextRemainingFlight` never replays Day 1 when all legs have departed; remaining BRI→FCO stays a secondary "Next flight" card, not the primary headline. Calendar today uses traveler stay timezone when at destination.
+
 **Test:** `src/lib/travelAssistant/journeyPhase.test.ts`, `src/lib/travelAssistant/departLeaveTiming.test.ts`
 
 

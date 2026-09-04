@@ -132,6 +132,8 @@ export function resolveTripWalk(input: {
   tripStatus?: ReadinessStatus;
   /** G46 — specific airport line replaces generic Open Airport Mode. */
   airportSpotlight?: HomeNextAction | null;
+  /** G49 — stay coach beats remaining-flight headline mid-trip. */
+  todayCoach?: HomeNextAction | null;
 }): TripWalk {
   const stored =
     input.storedDepartureGate ?? input.nextFlight?.flightDepartureGate ?? null;
@@ -162,6 +164,7 @@ export function resolveTripWalk(input: {
     unresolvedReviewCount: input.unresolvedReviewCount,
     nextFlight: input.nextFlight,
     airportSpotlight: input.airportSpotlight,
+    todayCoach: input.todayCoach,
   });
 
   const next = gateChange && !input.prepMode ? gateChangeNext(gateChange) : baseNext;
