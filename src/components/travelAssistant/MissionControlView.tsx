@@ -873,6 +873,7 @@ export function MissionControlView({
           </div>
         ) : null}
 
+        {!(stayCoachLead && todayCoach?.nextTravelMove) ? (
         <div
           className={`mt-4 rounded-2xl px-4 py-4 ${
             nextAction.kind === "ready"
@@ -899,6 +900,7 @@ export function MissionControlView({
             {nextAction.ctaLabel}
           </button>
         </div>
+        ) : null}
 
         {alsoAttention.length > 0 ? (
           <div className="mt-3">
