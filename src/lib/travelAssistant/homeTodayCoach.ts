@@ -28,6 +28,7 @@ export interface HomeStayReservation {
   flightArrivalAirport?: string;
   flightNumber?: string;
   flightDate?: string;
+  flightDepartureTime?: string;
 }
 
 export interface HomeNextTravelMove {

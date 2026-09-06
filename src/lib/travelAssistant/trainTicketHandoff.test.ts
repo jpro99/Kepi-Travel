@@ -18,7 +18,6 @@ const SEP_8_MON_LECCE: import("@/lib/travelAssistant/trainTicketHandoff").TrainT
   localTime: "2026-09-08 09:42",
   location: "Monopoli → Lecce",
   confirmationCode: "ABC123",
-  timezone: "Europe/Rome",
 };
 
 test("isBookedTrainReservation accepts confirmed train, rejects planned", () => {

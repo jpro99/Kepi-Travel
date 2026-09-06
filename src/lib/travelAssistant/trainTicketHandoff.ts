@@ -15,13 +15,8 @@ import {
 
 export interface TrainTicketSourceReservation extends ReservationLinkInput {
   id: string;
-  type?: string;
   title?: string;
-  provider?: string;
   trainNumber?: string;
-  localTime?: string;
-  location?: string;
-  confirmationCode?: string | null;
   plannedOnly?: boolean;
   boardingPassUrl?: string;
 }
