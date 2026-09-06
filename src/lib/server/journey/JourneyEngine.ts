@@ -1,8 +1,8 @@
 import { getOptimalTransport } from "../../transport/advisor";
 import { runOracle } from '../../oracle';
-import { pushLiveActivityUpdate } from '../../ambient/liveActivities';
+import { pushProvenanceChargeLiveActivity } from '../../ambient/liveActivities';
 import type { JourneyState, JourneyContext, AutonomousAction, Opportunity, ProactiveIntervention, NextStep } from '../../journey/types';
-import type { LiveActivityData } from "../../ambient/types";
+import { buildProvenanceChargeFromDayOfFields } from "@/lib/travelAssistant/provenanceChargeLiveActivity";
 
 // The "Silent Oracle" Engine
 
@@ -104,38 +104,40 @@ export class JourneyEngine {
         return null; // No intervention found
     }
 
-    private static async updateAmbientInterfaces(userId: string, nextStep: NextStep, state: JourneyState) {
-        // In a real app, you would get the user's push token from a database.
+    private static async updateAmbientInterfaces(userId: string, nextStep: NextStep, state: JourneyState, context: JourneyContext) {
         if (!userId) return;
 
-        const progressMapping = {
-            PRE_TRIP: 0.1,
-            EN_ROUTE_TO_AIRPORT: 0.2,
-            AT_AIRPORT_PRE_SECURITY: 0.3,
-            AT_AIRPORT_POST_SECURITY: 0.4,
-            AT_GATE: 0.5,
-            IN_FLIGHT: 0.6,
-            LANDED: 0.7,
-            AT_BAGGAGE_CLAIM: 0.8,
-            EN_ROUTE_TO_HOTEL: 0.9,
-            AT_HOTEL: 1.0,
-            POST_TRIP: 1.0,
-            BAGGAGE_ISSUE: 0.8,
-        };
+        const flight = context.flightStatus;
+        const disruptionType = context.disruption?.type;
+        const disruptionReason =
+            disruptionType === "flight-cancellation"
+                ? "cancel"
+                : disruptionType === "flight-delay"
+                  ? "delay"
+                  : null;
 
-        // Create a concise summary for the ambient display
-        let secondary = nextStep.description.substring(0, 40);
-        if (nextStep.description.length > 40) secondary += "...";
+        const payload = buildProvenanceChargeFromDayOfFields({
+            bookedGate: flight?.departure?.gate ?? null,
+            liveGate: flight?.departure?.gate ?? null,
+            bookedStatus: flight?.status ?? null,
+            liveStatus: flight?.status ?? null,
+            liveCheckedAt: flight?.lastUpdated ?? null,
+            departureIata: flight?.departure?.airport?.iata ?? null,
+            disruptionReason,
+        });
 
-        const liveActivityData: LiveActivityData = {
-            primary: nextStep.title,
-            secondary,
-            tertiary: nextStep.fortification ? "Itinerary Fortified" : (nextStep.autonomousAction ? "Action Required" : "On Track"),
-            progress: progressMapping[state] || 0,
-            journeyState: state,
-        };
+        // Overlay journey step when provenance is red — never invent countdown.
+        if (!payload.showCountdown) {
+            payload.primary = nextStep.title;
+            payload.secondary = nextStep.description.substring(0, 60);
+            payload.tertiary = nextStep.fortification
+                ? "Itinerary Fortified"
+                : nextStep.autonomousAction
+                  ? "Action Required"
+                  : payload.tertiary;
+        }
 
-        await pushLiveActivityUpdate(userId, liveActivityData);
+        await pushProvenanceChargeLiveActivity(userId, payload, state);
     }
 
     /**
@@ -240,7 +242,7 @@ export class JourneyEngine {
 
         // --- AMBIENT ITINERARY --- 
         // Finally, push the determined step to ambient interfaces.
-        await this.updateAmbientInterfaces(context.userId, nextStep, state);
+        await this.updateAmbientInterfaces(context.userId, nextStep, state, context);
 
         return nextStep;
     }

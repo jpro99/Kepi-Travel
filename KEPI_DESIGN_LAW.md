@@ -262,6 +262,16 @@ When booked departure has passed and coarse GPS still shows `at-airport` or `in-
 
 **Test:** `src/lib/travelAssistant/strandedFlightDetector.test.ts`, `src/lib/travelAssistant/ec261Coach.test.ts`, `src/lib/travelAssistant/dayOfDoorProvenance.test.ts`, `src/lib/travelAssistant/strandedRebookIngest.test.ts`
 
+**F18 — Provenance Charge Live Activity + Undying Rights Shell**  
+ActivityKit / Dynamic Island updates only when day-of provenance is green (`SCHEDULED_ITINERARY` | `AIRPORT_FIDS_TEXT` | `ALERT_PUSH_STRING`). `UNVERIFIED` and `TRAVELER_OBSERVED` must **never** drive Island countdown. Disruption EC261 rights walk ships as cached official primary-text coach (EUR-Lex + Your Europe; date-stamped 2026 amendment note; no invented € calculator). Native iOS uses `kepiLiveActivity` WK bridge; web shows honest fallback — no fake Island. On-device Vision/@Generable extract uses null discipline — missing gate stays missing.
+
+**Test:** `src/lib/travelAssistant/provenanceChargeLiveActivity.test.ts`, `src/lib/airportNav/gateVisionExtract.test.ts`, `src/lib/native/iosNativeShell.test.ts`
+
+**F19 — Corroborated Gate Harvest (v1)**  
+Local-first capture outbox survives kill/offline (aligned with Fix belt replay). Pins stay `TRAVELER_OBSERVED` until N≥2 independent corroborations in a 50 m spatial geofence OR official STRING match — then eligible for Facts promotion (never invent doors). Bare floor taps rejected; placard/gate-sign pin notes accepted. v1: same-user re-pass counts as independent corroboration.
+
+**Test:** `src/lib/airportNav/gateHarvestCorroboration.test.ts`, `src/lib/airportNav/travelerCapture.test.ts`
+
 **F15 — Next flight is earliest remaining departure, not storage order**  
 Home, Airport Mode, Book → Flights, and check-in handoff must pick the chronologically next booked segment (timezone-aware departure clock), including domestic connectors. Storage array order and long-haul role never override clock time — ONT→SEA before SEA→FCO on the same travel day. When `localTime` and `flightDepartureTime` disagree on the same day, use the later booked clock for sorting (live status may pull `localTime` earlier; delay updates push it later). Departure UTC conversion must use the **departure-airport IATA timezone**, not stored `flight.timezone` when it bleeds (e.g. `Europe/Rome` on a SEA departure would sort as 8:30 AM Pacific). Home TODAY uses `selectNextRemainingFlight` + `getLeaveByHint` on that pick — not a separate travel-day picker; leave-by labels render in departure-airport local time.
 
@@ -1028,6 +1038,8 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | M37 | `src/lib/airportNav/footwayGraph.test.ts`, `src/lib/airportNav/routeGradeHonesty.test.ts` |
 | M38 | `src/lib/airportNav/mapHelperNearby.test.ts` |
 | F16 | `src/lib/travelAssistant/airborneLiveClaim.test.ts` |
+| F18 | `src/lib/travelAssistant/provenanceChargeLiveActivity.test.ts`, `src/lib/airportNav/gateVisionExtract.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
+| F19 | `src/lib/airportNav/gateHarvestCorroboration.test.ts`, `src/lib/airportNav/travelerCapture.test.ts` |
 | F15 | `src/lib/travelAssistant/flightSort.test.ts` |
 | F3 | `src/lib/travelAssistant/tripTransportRoute.test.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |

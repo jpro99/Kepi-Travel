@@ -6,6 +6,7 @@ import {
   IOS_BUNDLE_ID,
   IOS_CAPACITOR_SPM_GIT,
   IOS_DISPLAY_NAME,
+  IOS_LIVE_ACTIVITY_HANDLER,
   IOS_SPM_TOOLS_VERSION,
   IOS_NATIVE_LOCATION_URL,
   IOS_PRODUCTION_URL,
@@ -148,4 +149,18 @@ test("G23 native WKWebView is not app-bound to kepitravel.com only", () => {
   assert.match(cap, /limitsNavigationsToAppBoundDomains:\s*false/);
   assert.match(cap, /https:\/\/kepitravel\.com/);
   assert.match(cap, /clerk\.accounts\.dev/);
+});
+
+test("F18 ActivityKit Live Activity bridge ships in iOS shell", () => {
+  const vc = readSrc("ios/App/App/KepiBridgeViewController.swift");
+  const liveBridge = readSrc("ios/App/App/KepiLiveActivityBridge.swift");
+  const webBridge = readSrc("src/lib/native/liveActivityBridge.ts");
+  const shell = readSrc("src/lib/native/iosNativeShell.ts");
+  assert.match(shell, /IOS_LIVE_ACTIVITY_HANDLER = "kepiLiveActivity"/);
+  assert.match(vc, /kepiLiveActivity/);
+  assert.match(vc, /KepiLiveActivityBridge/);
+  assert.match(liveBridge, /ActivityKit/);
+  assert.match(liveBridge, /showCountdown/);
+  assert.match(webBridge, /web-honest-fallback/);
+  assert.match(webBridge, /provenance-skip/);
 });

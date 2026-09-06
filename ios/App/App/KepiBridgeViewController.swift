@@ -49,6 +49,8 @@ final class KepiBridgeViewController: CAPBridgeViewController {
         guard let controller = webView?.configuration.userContentController else { return }
         controller.removeScriptMessageHandler(forName: "kepiLocation")
         controller.add(KepiLocationBridge.shared, name: "kepiLocation")
+        controller.removeScriptMessageHandler(forName: "kepiLiveActivity")
+        controller.add(KepiLiveActivityBridge.shared, name: "kepiLiveActivity")
     }
 
     private func showLoadingChrome() {
