@@ -288,6 +288,21 @@ import { WeatherCard } from "@/components/travelAssistant/WeatherCard";
 import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntelligencePanel";
 import { useTranslations } from "next-intl";
 import { openSupportChat } from "@/components/support/SupportChat";
+import { setSupportLiveContext } from "@/lib/support/clientSupportContext";
+import {
+  resolveSnapshotApplyOptions,
+  shouldShowTripShellSkeleton,
+} from "@/lib/travelAssistant/softTripRefresh";
+import { formatTravelerCaptureFactsLine } from "@/lib/airportNav/travelerCapture";
+import {
+  listLocalTravelerCaptures,
+  syncPendingTravelerCaptures,
+} from "@/lib/airportNav/travelerCaptureLocal";
+import {
+  getPersistedCaptureTripId,
+  persistCaptureTripId,
+} from "@/lib/airportNav/travelerCaptureSession";
+import { AirportTravelerCapture } from "@/components/travelAssistant/AirportTravelerCapture";
 import { ConciergePanel } from "@/components/travelAssistant/ConciergePanel";
 import {
   formatCalendarSyncSummary,
@@ -1815,6 +1830,8 @@ export default function TravelAssistantPage() {
   const [trips, setTrips] = useState<ManagedTrip[]>([]);
   const [activeTripId, setActiveTripId] = useState<string | null>(null);
   const [tripsLoading, setTripsLoading] = useState(true);
+  const [tripsHydrated, setTripsHydrated] = useState(false);
+  const [travelerCaptureTick, setTravelerCaptureTick] = useState(0);
   const [upgradeModalGate, setUpgradeModalGate] = useState<UpgradeModalGateContext | null>(null);
   const [highlightedReservationId, setHighlightedReservationId] = useState<string | null>(null);
   const [tripStage, setTripStage] = useState<TripStage>("readiness");
@@ -2980,12 +2997,15 @@ export default function TravelAssistantPage() {
   }, []);
 
   const applyServerTripsSnapshot = useCallback(
-    (payload: {
-      trips?: unknown[];
-      activeTripId?: string | null;
-      activeTrip?: unknown;
-      trip?: unknown;
-    }): number => {
+    (
+      payload: {
+        trips?: unknown[];
+        activeTripId?: string | null;
+        activeTrip?: unknown;
+        trip?: unknown;
+      },
+      options?: { silent?: boolean },
+    ): number => {
       const parsedTrips = Array.isArray(payload.trips)
         ? payload.trips.map((trip) => normalizeManagedTrip(trip)).filter((trip): trip is ManagedTrip => trip !== null)
         : [];
@@ -3008,7 +3028,7 @@ export default function TravelAssistantPage() {
       }
 
       if (resolvedActiveTrip) {
-        applyManagedTripToState(resolvedActiveTrip, { resetHighlight: true });
+        applyManagedTripToState(resolvedActiveTrip, { resetHighlight: !options?.silent });
       } else {
         applyingTripStateRef.current = true;
         setReservations([]);
@@ -3027,13 +3047,14 @@ export default function TravelAssistantPage() {
       }
 
       tripsHydratedRef.current = true;
+      setTripsHydrated(true);
       setTripsLoading(false);
       return parsedTrips.length;
     },
     [applyManagedTripToState],
   );
 
-  const refreshTripsFromServer = useCallback(async (): Promise<number> => {
+  const refreshTripsFromServer = useCallback(async (options?: { background?: boolean }): Promise<number> => {
     const maxAttempts = 3;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const response = await fetch(TRIP_API_ROUTE, {
@@ -3073,10 +3094,21 @@ export default function TravelAssistantPage() {
         continue;
       }
 
-      return applyServerTripsSnapshot(payload);
+      const applyOptions = resolveSnapshotApplyOptions({
+        background: options?.background,
+        tripsHydrated: tripsHydratedRef.current,
+      });
+      return applyServerTripsSnapshot(payload, { silent: applyOptions.silent });
     }
 
-    return applyServerTripsSnapshot({ trips: [], activeTripId: null, activeTrip: null });
+    const applyOptions = resolveSnapshotApplyOptions({
+      background: options?.background,
+      tripsHydrated: tripsHydratedRef.current,
+    });
+    return applyServerTripsSnapshot(
+      { trips: [], activeTripId: null, activeTrip: null },
+      { silent: applyOptions.silent },
+    );
   }, [applyServerTripsSnapshot]);
 
   const openUpgradeModal = useCallback((feature: PlanFeature, detail?: string): void => {
@@ -3155,11 +3187,14 @@ export default function TravelAssistantPage() {
     // type is spelled out explicitly here rather than derived.
     let timer: number | null = null;
     const pollTrips = () => {
-      if (tripsLoading || document.visibilityState === "hidden") {
+      if (!tripsHydratedRef.current || document.visibilityState === "hidden") {
         return;
       }
-      void refreshTripsFromServer().catch(() => {
+      void refreshTripsFromServer({ background: true }).catch(() => {
         // Background polling should fail silently and retry on next interval.
+      });
+      void syncPendingTravelerCaptures().then((count) => {
+        if (count > 0) setTravelerCaptureTick((value) => value + 1);
       });
     };
     timer = window.setInterval(pollTrips, 120_000);
@@ -3168,14 +3203,17 @@ export default function TravelAssistantPage() {
         pollTrips();
       }
     };
+    const handleOnline = () => pollTrips();
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("online", handleOnline);
     return () => {
       if (timer) {
         window.clearInterval(timer);
       }
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("online", handleOnline);
     };
-  }, [refreshTripsFromServer, tripsLoading]);
+  }, [refreshTripsFromServer]);
 
   const flightStatusPollProximity = useMemo((): FlightStatusPollProximity => {
     if (!activeTripId || !reservations.length) return "away";
@@ -5248,6 +5286,69 @@ export default function TravelAssistantPage() {
     [consumerReservationsSorted, consumerTripDestination, activeTrip?.destination],
   );
 
+  const showTripShellSkeleton = shouldShowTripShellSkeleton({
+    tripsInitialLoading: tripsLoading,
+    tripsHydrated,
+  });
+
+  useEffect(() => {
+    if (activeTripId) persistCaptureTripId(activeTripId);
+  }, [activeTripId]);
+
+  const travelerCaptureFactsLine = useMemo(() => {
+    const tripId =
+      activeTripId ?? getPersistedCaptureTripId() ?? searchParams.get("tripId")?.trim() ?? null;
+    if (!tripId) return null;
+    const captures = listLocalTravelerCaptures(tripId);
+    return formatTravelerCaptureFactsLine(captures[0] ?? null);
+  }, [activeTripId, travelerCaptureTick, searchParams]);
+
+  useEffect(() => {
+    if (!activeTripId) return;
+    const todayKey = new Date().toISOString().slice(0, 10);
+    setSupportLiveContext({
+      tripId: activeTripId,
+      tripName: activeTrip?.name ?? null,
+      destination: consumerTripDestination ?? activeTrip?.destination ?? null,
+      journeyPhase: journeyPhase.kind,
+      locationStatus: guidanceLocationStatus,
+      todayKey,
+      reservationsJson: JSON.stringify(
+        consumerReservationsSorted.map((reservation) => ({
+          id: reservation.id,
+          type: reservation.type,
+          title: reservation.title,
+          provider: reservation.provider,
+          location: reservation.location,
+          hotelSearchCity: reservation.hotelSearchCity,
+          localTime: reservation.localTime,
+          checkOutDate: reservation.checkOutDate,
+          timezone: reservation.timezone,
+          trainNumber: reservation.trainNumber,
+          confirmationCode: reservation.confirmationCode,
+          flightNumber: reservation.flightNumber,
+          flightDepartureAirport: reservation.flightDepartureAirport,
+          flightArrivalAirport: reservation.flightArrivalAirport,
+          flightDepartureTime: reservation.flightDepartureTime,
+          flightDate: reservation.flightDate,
+          hasPdfAttachment: reservation.hasPdfAttachment,
+          originalEmailText: reservation.originalEmailText,
+          notes: reservation.notes,
+        })),
+      ),
+      travelerObservedFacts: travelerCaptureFactsLine,
+    });
+  }, [
+    activeTrip?.destination,
+    activeTrip?.name,
+    activeTripId,
+    consumerReservationsSorted,
+    consumerTripDestination,
+    guidanceLocationStatus,
+    journeyPhase.kind,
+    travelerCaptureFactsLine,
+  ]);
+
   useEffect(() => {
     if (consumerTabInitRef.current) return;
     if (!tripsHydratedRef.current) return;
@@ -5796,6 +5897,9 @@ export default function TravelAssistantPage() {
     }
     const appliedFromQueue = drainQueuedProviderUpdates(true, "manual sync");
     const replayedActions = replayPendingOutbox("manual sync");
+    void syncPendingTravelerCaptures().then((count) => {
+      if (count > 0) setTravelerCaptureTick((value) => value + 1);
+    });
     setLastSyncAt(new Date().toISOString());
     setToast(
       appliedFromQueue > 0 || replayedActions > 0
@@ -10316,7 +10420,7 @@ export default function TravelAssistantPage() {
           ) : null}
 
           {isCompactViewport ? (
-            tripsLoading ? (
+            showTripShellSkeleton ? (
               <section className="space-y-4">
                 <div className="h-48 rounded-3xl bg-[var(--bg-card)] shadow-sm ring-1 ring-[var(--border-default)]" />
                 <div className="h-28 rounded-2xl bg-[var(--bg-card)] shadow-sm ring-1 ring-[var(--border-default)]" />
@@ -10463,7 +10567,7 @@ export default function TravelAssistantPage() {
             )
           ) : null}
 
-          {!isCompactViewport && (tripsLoading ? (
+          {!isCompactViewport && (showTripShellSkeleton ? (
             <section className="space-y-4">
               <div className="h-48 rounded-3xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800" />
               <div className="grid gap-3 sm:grid-cols-2">
@@ -12154,6 +12258,17 @@ export default function TravelAssistantPage() {
       {!tripsLoading && trips.length === 0 ? (
         <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
       ) : null}
+      <AirportTravelerCapture
+        locationStatus={guidanceLocationStatus}
+        nearestAirport={guidanceNearestAirport}
+        plannableIata={findPlannableAirportIata(consumerReservationsSorted)}
+        activeTripId={activeTripId}
+        urlTripId={searchParams.get("tripId")}
+        reservationId={nextUpcomingFlight?.id ?? null}
+        userLat={guidanceUserLat}
+        userLon={guidanceUserLon}
+        userAccuracyM={null}
+      />
     </main>
   );
 }

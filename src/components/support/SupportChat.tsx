@@ -5,6 +5,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Logo } from "@/components/ui/Logo";
 import { buildSupportChatApiMessages } from "@/lib/support/buildSupportChatApiMessages";
+import { formatClientSupportContext } from "@/lib/support/clientSupportContext";
+import {
+  buildTripHelpContextFromLiveStorage,
+  tryAnswerTripQuestion,
+} from "@/lib/support/tripHelpAnswer";
 import { BugReportModal } from "@/components/support/BugReportModal";
 import {
   AIRPORT_CONFIRM_SPOT_EVENT,
@@ -12,6 +17,12 @@ import {
 } from "@/lib/airportNav/airportWalkSheet";
 
 const SUPPORT_OPEN_EVENT = "kepi:support-chat-open";
+const SUPPORT_QUICK_PROMPTS = [
+  "Where am I?",
+  "What's my next travel day?",
+  "What time is my train?",
+  "What are my EU passenger rights (EC 261)?",
+] as const;
 const BUG_REPORT_OPEN_EVENT = "kepi:bug-report-open";
 
 type ChatRole = "user" | "assistant";
@@ -112,8 +123,8 @@ export function SupportChat() {
     return t("bubbleLabelUnread", { count: unreadCount });
   }, [unreadCount, t]);
 
-  const sendMessage = useCallback(async (): Promise<void> => {
-    const trimmed = inputValue.trim();
+  const sendMessage = useCallback(async (textOverride?: string): Promise<void> => {
+    const trimmed = (textOverride ?? inputValue).trim();
     if (!trimmed || isSending) {
       return;
     }
@@ -135,14 +146,40 @@ export function SupportChat() {
     setInputValue("");
     setMessages((previous) => [...previous, outgoingMessage, assistantPlaceholder]);
 
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const helpContext =
+      buildTripHelpContextFromLiveStorage({ todayKey }) ?? {
+        todayKey,
+        reservations: [],
+      };
+    const factualAnswer = tryAnswerTripQuestion(trimmed, helpContext);
+    if (factualAnswer) {
+      setMessages((previous) =>
+        previous.map((message) =>
+          message.id === assistantPlaceholderId
+            ? { ...message, content: factualAnswer }
+            : message,
+        ),
+      );
+      setIsSending(false);
+      if (!isOpenRef.current) {
+        setUnreadCount((count) => count + 1);
+      }
+      return;
+    }
+
     const historyForApi = buildSupportChatApiMessages(messages, outgoingMessage);
 
     try {
+      const clientContext = formatClientSupportContext();
       const response = await fetch("/api/support/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ messages: historyForApi }),
+        body: JSON.stringify({
+          messages: historyForApi,
+          ...(clientContext ? { tripContext: clientContext } : {}),
+        }),
       });
       if (!response.ok || !response.body) {
         const payload = (await response.json().catch(() => ({ error: "" }))) as { error?: string };
@@ -228,6 +265,23 @@ export function SupportChat() {
             </header>
 
             <div ref={panelScrollRef} className="flex-1 space-y-3 overflow-y-auto px-3 py-3 text-sm">
+              {messages.length <= 1 ? (
+                <div className="flex flex-wrap gap-2">
+                  {SUPPORT_QUICK_PROMPTS.map((prompt) => (
+                    <button
+                      key={prompt}
+                      type="button"
+                      onClick={() => {
+                        void sendMessage(prompt);
+                      }}
+                      disabled={isSending}
+                      className="rounded-full border border-slate-600 bg-slate-900 px-3 py-1.5 text-left text-xs text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               {messages.map((message) => (
                 <article
                   key={message.id}
