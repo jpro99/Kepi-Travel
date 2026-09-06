@@ -87,7 +87,11 @@ export async function POST(req: Request) {
   }
 
   const anthropicApiKey = process.env.ANTHROPIC_API_KEY?.trim();
-  const tripContext = parsed.data.tripContext?.trim() || (await buildSupportContext(userId));
+  const serverTripContext = await buildSupportContext(userId);
+  const clientTripContext = parsed.data.tripContext?.trim() ?? "";
+  const tripContext = clientTripContext
+    ? `${clientTripContext}\n\n${serverTripContext}`
+    : serverTripContext;
   const promptMessages = normalizeSupportChatApiMessages(
     parsed.data.messages.map((message) => ({
       role: message.role,

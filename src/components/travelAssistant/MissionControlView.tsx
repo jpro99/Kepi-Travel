@@ -84,6 +84,8 @@ export interface MissionControlViewProps {
   /** G31 — persisted readiness checklist (More tab). */
   readinessChecklist?: ReadinessChecklistItem[];
   onOpenReadiness?: () => void;
+  /** Traveler-observed gate line — never mixed with official FIDS. */
+  travelerObservedGateLine?: string | null;
 }
 
 function statusColor(status: ReadinessStatus): string {
@@ -159,6 +161,7 @@ export function MissionControlView({
   onOpenReview,
   readinessChecklist = [],
   onOpenReadiness,
+  travelerObservedGateLine = null,
 }: MissionControlViewProps) {
   const passportComplete = readinessChecklist.find((item) => item.id === "ready-passport")?.complete ?? false;
 
@@ -714,6 +717,9 @@ export function MissionControlView({
             <p className="mt-1 text-[14px] text-[#007AFF]">
               {formatFlightStatusTrustLine(liveStatus?.[snap.nextFlight.id])}
             </p>
+            {travelerObservedGateLine ? (
+              <p className="mt-1 text-[13px] font-medium text-[#6E6E73]">{travelerObservedGateLine}</p>
+            ) : null}
           </button>
         ) : null}
 

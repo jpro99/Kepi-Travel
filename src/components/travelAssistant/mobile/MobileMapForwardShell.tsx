@@ -165,6 +165,7 @@ interface MobileMapForwardShellProps {
   onOpenReview?: () => void;
   readinessChecklist?: ReadinessChecklistItem[];
   onOpenReadiness?: () => void;
+  travelerObservedGateLine?: string | null;
   readinessItems?: TripReadinessChecklistItem[];
   onToggleReadinessItem?: (id: string) => void;
   readinessChecklistSectionRef?: Ref<HTMLElement>;
@@ -267,6 +268,7 @@ export function MobileMapForwardShell({
   onOpenReview,
   readinessChecklist = [],
   onOpenReadiness,
+  travelerObservedGateLine = null,
   readinessItems = [],
   onToggleReadinessItem,
   readinessChecklistSectionRef,
@@ -339,6 +341,7 @@ export function MobileMapForwardShell({
           onOpenReview={onOpenReview ?? (() => onNavigateTab("plan"))}
           readinessChecklist={readinessChecklist}
           onOpenReadiness={onOpenReadiness}
+          travelerObservedGateLine={travelerObservedGateLine}
         />
 
         {hasActiveTrip && tripSpendSummary ? (

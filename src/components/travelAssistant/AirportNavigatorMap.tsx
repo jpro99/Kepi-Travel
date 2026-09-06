@@ -92,6 +92,8 @@ import type { FamilyAirportPin } from "@/lib/family/familyAirportPins";
 import type { FamilyRally } from "@/lib/family/familyAirportSync";
 import { OfficialAirportMapLink } from "@/components/travelAssistant/OfficialAirportMapLink";
 import { MapHelperConfirmBar } from "@/components/travelAssistant/MapHelperConfirmBar";
+import { AirportCaptureSheet } from "@/components/travelAssistant/AirportCaptureSheet";
+import { getSupportLiveContext } from "@/lib/support/clientSupportContext";
 import { ArrivalCardStack } from "@/components/travelAssistant/ArrivalCardStack";
 import { buildArrivalCoachCards } from "@/lib/airportNav/gateConfidence";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
@@ -171,6 +173,8 @@ interface AirportNavigatorMapProps {
   tripReservations?: readonly TransportRouteReservation[];
   /** Active flight reservation id (outbound leg at hub). */
   activeReservationId?: string | null;
+  /** Trip id for traveler-observed capture sync. */
+  tripId?: string | null;
 }
 
 const PATH_DIM = "#c3ccd7";
@@ -1175,6 +1179,7 @@ export function AirportNavigatorMap({
   mapHelperEnabled: mapHelperEnabledProp,
   tripReservations,
   activeReservationId = null,
+  tripId = null,
 }: AirportNavigatorMapProps) {
   const bottomPanel = shellBottomInset ?? "max(0.75rem, env(safe-area-inset-bottom))";
   const bottomMic = shellBottomInset
@@ -1239,6 +1244,7 @@ export function AirportNavigatorMap({
   // Tap-to-confirm "I'm here": when set, overrides GPS snapping (positionFusion
   // grants user_confirmed the top confidence grade — this is the UI gesture).
   const [confirmMode, setConfirmMode] = useState(false);
+  const [captureOpen, setCaptureOpen] = useState(false);
   const [confirmedNodeId, setConfirmedNodeId] = useState<string | null>(null);
   const [gateChangeNotice, setGateChangeNotice] = useState<string | null>(null);
   const [mapHelperEnabled, setMapHelperEnabled] = useState(Boolean(mapHelperEnabledProp));
@@ -3785,10 +3791,9 @@ export function AirportNavigatorMap({
         </div>
       ) : null}
 
-      {/* Tap-to-confirm "I'm here" — moves to top when after-questions cover the bottom */}
       {!quietMode && !previewMode && layout && (
         <div
-          className="pointer-events-auto absolute z-[60]"
+          className="pointer-events-auto absolute z-[60] flex flex-col gap-2"
           style={
             (journeyPrompt || securityQuestionOpen) && !confirmMode
               ? {
@@ -3812,8 +3817,36 @@ export function AirportNavigatorMap({
           >
             {confirmMode ? "Cancel" : confirmedNodeId ? "📍 Update my spot" : "📍 I'm here"}
           </button>
+          <button
+            type="button"
+            data-testid="airport-nav-capture-open"
+            onClick={() => setCaptureOpen(true)}
+            className="min-h-[44px] rounded-full bg-amber-500/95 px-3 py-2 text-[12px] font-bold text-[#0b1f3a] shadow-lg backdrop-blur"
+          >
+            Capture gate / note
+          </button>
         </div>
       )}
+
+      <AirportCaptureSheet
+        open={captureOpen}
+        tripId={tripId ?? getSupportLiveContext().tripId ?? ""}
+        reservationId={activeReservationId}
+        iata={iata}
+        mapMark={
+          snapped?.pos
+            ? {
+                lng: snapped.pos[0],
+                lat: snapped.pos[1],
+                nodeId: snapped.nearestNodeId,
+                accuracyM: userAccuracyM,
+              }
+            : userLon != null && userLat != null
+              ? { lng: userLon, lat: userLat, accuracyM: userAccuracyM }
+              : null
+        }
+        onClose={() => setCaptureOpen(false)}
+      />
 
       {/* Admin self-enable: turn on helper chips for this account only */}
       {!mapHelperEnabled && canSelfEnableHelper && !securityQuestionOpen && !journeyPrompt && !quietMode && !previewMode && !placeMode && layout && (

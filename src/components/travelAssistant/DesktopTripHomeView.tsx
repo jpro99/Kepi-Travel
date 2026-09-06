@@ -93,6 +93,7 @@ interface DesktopTripHomeViewProps {
   readinessChecklist?: ReadinessChecklistItem[];
   onOpenReadiness?: () => void;
   travelerType?: TravelStyleMode | null;
+  travelerObservedGateLine?: string | null;
 }
 
 export function DesktopTripHomeView({
@@ -129,6 +130,7 @@ export function DesktopTripHomeView({
   readinessChecklist = [],
   onOpenReadiness,
   travelerType = null,
+  travelerObservedGateLine = null,
 }: DesktopTripHomeViewProps) {
   const transportReservations =
     transportReservationsProp ??
@@ -185,6 +187,7 @@ export function DesktopTripHomeView({
         onOpenReview={onOpenReview}
         readinessChecklist={readinessChecklist}
         onOpenReadiness={onOpenReadiness}
+        travelerObservedGateLine={travelerObservedGateLine}
       />
 
       {/* I36: on travel day, Home is the takeover screen only — no map/transport chrome. */}
