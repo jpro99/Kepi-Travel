@@ -1,0 +1,82 @@
+{
+  "//": "Lombera-Remote tailnet policy fragments. Merge into Access controls HuJSON — not a full policy file.",
+  "//apply": "BLOCKED_ON_JEFF_TAILSCALE_ADMIN",
+  "//service_slug": "Must match PAM service name created in admin console (Step 5 RUNBOOK)",
+  "tagOwners": {
+    "tag:lombera-admin": ["autogroup:admin"],
+    "tag:lombera-pam-connector": ["autogroup:admin"],
+    "tag:lombera-rdp-target": ["autogroup:admin"]
+  },
+  "acls": [
+    {
+      "action": "accept",
+      "src": ["tag:lombera-pam-connector"],
+      "dst": ["tag:lombera-rdp-target:3389"],
+      "comment": "PAM connector → Windows RDP upstream"
+    },
+    {
+      "action": "accept",
+      "src": ["tag:lombera-admin"],
+      "dst": ["tag:lombera-pam-connector:22"],
+      "comment": "Optional: admin SSH to connector for maintenance only"
+    }
+  ],
+  "grants": [
+    {
+      "id": "grant-jeff-rdp-connect",
+      "comment": "Jeff one-tap Connect to Lombera Office PC — production",
+      "src": ["jeff@lomberalaw.com"],
+      "dst": ["svc:lombera-office-pc"],
+      "ip": ["*"],
+      "app": {
+        "tailscale.com/cap/pam": [
+          {
+            "version": "v1",
+            "permissions": {
+              "rdp": {}
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "grant-admin-break-glass",
+      "comment": "Optional: all admins — remove if Jeff-only is sufficient",
+      "src": ["autogroup:admin"],
+      "dst": ["svc:lombera-office-pc"],
+      "ip": ["*"],
+      "app": {
+        "tailscale.com/cap/pam": [
+          {
+            "version": "v1",
+            "permissions": {
+              "rdp": {}
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "grant-REMOVE-broad-rdp",
+      "comment": "DELETE this pattern if present after PAM enable — too broad for production",
+      "_example_only_do_not_use": {
+        "src": ["*"],
+        "dst": ["*"],
+        "ip": ["*"],
+        "app": {
+          "tailscale.com/cap/pam": [
+            {
+              "version": "v1",
+              "permissions": {
+                "rdp": {}
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "autoApprovers": {
+    "comment": "PAM enable adds tag:border0-managed rules — keep unless replacing entire PAM integration"
+  }
+}
