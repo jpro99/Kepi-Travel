@@ -24,12 +24,13 @@ test("formatFlightStatusTrustLine shows gate + status + freshness", () => {
   assert.match(line ?? "", /Updated 10 min ago/);
 });
 
-test("formatFlightStatusTrustLine surfaces errors honestly", () => {
+test("formatFlightStatusTrustLine surfaces errors honestly when unverified", () => {
   const line = formatFlightStatusTrustLine({
     flightStatus: "",
     error: "Flight lookup unavailable",
     checkedAt: new Date().toISOString(),
     busy: false,
+    departureIata: "FCO",
   });
-  assert.equal(line, "Flight lookup unavailable");
+  assert.match(line ?? "", /unavailable|unknown|FCO/i);
 });

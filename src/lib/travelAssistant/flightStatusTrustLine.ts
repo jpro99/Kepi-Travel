@@ -1,6 +1,14 @@
 /**
  * Honest status line for Home next-flight card (Batch 1 / F13 trust).
+ * F17 — provenance-aware; UNVERIFIED prompts official link, not fake live copy.
  */
+
+import {
+  formatDayOfDoorHonestLine,
+  resolveFlightStatusDoor,
+  resolveGateDoor,
+  type FlightFactProvenance,
+} from "@/lib/travelAssistant/dayOfDoorProvenance";
 
 export type FlightStatusTrustInput = {
   flightStatus?: string;
@@ -9,7 +17,27 @@ export type FlightStatusTrustInput = {
   checkedAt?: string;
   busy?: boolean;
   error?: string | null;
+  bookedStatus?: string;
+  bookedGate?: string;
+  pushStatus?: string;
+  pushGate?: string;
+  departureIata?: string;
 };
+
+export function flightStatusProvenance(
+  status: FlightStatusTrustInput | undefined,
+): FlightFactProvenance {
+  if (!status) return "UNVERIFIED";
+  const door = resolveFlightStatusDoor({
+    bookedStatus: status.bookedStatus ?? status.flightStatus,
+    liveStatus: status.flightStatus,
+    liveCheckedAt: status.checkedAt,
+    liveError: status.error,
+    pushAlertStatus: status.pushStatus,
+    departureIata: status.departureIata,
+  });
+  return door.provenance;
+}
 
 export function formatFlightStatusTrustLine(
   status: FlightStatusTrustInput | undefined,
@@ -21,19 +49,46 @@ export function formatFlightStatusTrustLine(
   if (status.busy) {
     return "Checking live status…";
   }
-  if (status.error?.trim()) {
-    return status.error.trim();
+
+  const statusDoor = resolveFlightStatusDoor({
+    bookedStatus: status.bookedStatus,
+    liveStatus: status.flightStatus,
+    liveCheckedAt: status.checkedAt,
+    liveError: status.error,
+    pushAlertStatus: status.pushStatus,
+    departureIata: status.departureIata,
+  });
+
+  if (status.error?.trim() && statusDoor.provenance === "UNVERIFIED") {
+    const gateDoor = resolveGateDoor({
+      bookedGate: status.bookedGate,
+      liveGate: status.departureGate,
+      pushGate: status.pushGate,
+      departureIata: status.departureIata,
+    });
+    if (gateDoor.provenance === "UNVERIFIED") {
+      return `Live status unavailable — ${gateDoor.officialLabel ?? "check airline or airport boards"}`;
+    }
   }
 
   const parts: string[] = [];
-  const gate = status.departureGate?.trim();
-  if (gate) parts.push(`Gate ${gate}`);
 
-  const raw = (status.flightStatus ?? "").trim();
-  if (raw) {
-    parts.push(raw);
-  } else if (!gate) {
-    parts.push("No live status yet");
+  const gateDoor = resolveGateDoor({
+    bookedGate: status.bookedGate,
+    liveGate: status.departureGate,
+    pushGate: status.pushGate,
+    departureIata: status.departureIata,
+  });
+  if (gateDoor.line && gateDoor.provenance !== "UNVERIFIED") {
+    parts.push(gateDoor.line);
+  } else if (gateDoor.provenance === "UNVERIFIED" && status.departureIata) {
+    parts.push("Gate unknown");
+  }
+
+  if (statusDoor.provenance !== "UNVERIFIED" && statusDoor.line) {
+    parts.push(statusDoor.line);
+  } else if (statusDoor.provenance === "UNVERIFIED") {
+    parts.push(formatDayOfDoorHonestLine(statusDoor));
   }
 
   if (typeof status.delayMinutes === "number" && status.delayMinutes > 0) {
@@ -41,7 +96,7 @@ export function formatFlightStatusTrustLine(
   }
 
   const checkedAt = status.checkedAt?.trim();
-  if (checkedAt) {
+  if (checkedAt && statusDoor.provenance === "AIRPORT_FIDS_TEXT") {
     const ms = Date.parse(checkedAt);
     if (!Number.isNaN(ms)) {
       const minutesAgo = Math.max(0, Math.round((now.getTime() - ms) / 60_000));
@@ -51,5 +106,5 @@ export function formatFlightStatusTrustLine(
     }
   }
 
-  return parts.join(" · ");
+  return parts.length > 0 ? parts.join(" · ") : formatDayOfDoorHonestLine(statusDoor);
 }

@@ -24,6 +24,11 @@ import type {
   ConnectionPlaybookStep,
 } from "@/lib/travelAssistant/connectionPlaybook";
 import { connectionRiskLabel } from "@/lib/travelAssistant/connectionPlaybook";
+import {
+  formatDayOfCountdownSuffix,
+  resolveGateDoor,
+  resolveFlightStatusDoor,
+} from "@/lib/travelAssistant/dayOfDoorProvenance";
 
 export type AirportDayCoachMode = "depart" | "arrive";
 
@@ -207,6 +212,11 @@ export interface AirportHomeSpotlightInput {
   currentIndex: number;
   locationPhase?: AirportLocationPhase;
   gateCode?: string | null;
+  bookedGateCode?: string | null;
+  liveGateCode?: string | null;
+  liveFlightStatus?: string | null;
+  liveStatusCheckedAt?: string | null;
+  departureIata?: string | null;
   minutesToDeparture?: number | null;
   hotelLabel?: string | null;
   connectionPlaybook?: ConnectionPlaybook | null;
@@ -251,25 +261,40 @@ export function buildAirportHomeSpotlight(input: AirportHomeSpotlightInput): Hom
   }
 
   if (input.mode === "depart") {
+    const iata = input.departureIata?.trim() ?? "";
+    const gateTruth = resolveGateDoor({
+      bookedGate: input.bookedGateCode ?? input.gateCode,
+      liveGate: input.liveGateCode ?? input.gateCode,
+      departureIata: iata,
+    });
+    const statusTruth = resolveFlightStatusDoor({
+      liveStatus: input.liveFlightStatus,
+      liveCheckedAt: input.liveStatusCheckedAt,
+      departureIata: iata,
+    });
+    const countdownSuffix = formatDayOfCountdownSuffix(
+      input.minutesToDeparture,
+      gateTruth,
+      statusTruth,
+    );
+    const gateDetail =
+      gateTruth.provenance === "UNVERIFIED"
+        ? gateTruth.line
+        : gateTruth.line?.replace(/^Gate /u, "Gate ");
+
     const phaseTitle = input.locationPhase ? departPhaseHomeTitle(input.locationPhase) : null;
     if (phaseTitle) {
-      const gate = input.gateCode?.trim();
+      const detailParts = [gateDetail, countdownSuffix].filter(Boolean).join(" · ");
       return {
         kind: "airport",
         eyebrow: "Next up",
         title: phaseTitle,
-        detail: gate ? `Gate ${gate.toUpperCase()}` : undefined,
+        detail: detailParts || undefined,
         ctaLabel: "Open Airport Mode",
       };
     }
     if (step) {
-      const gate = input.gateCode?.trim();
-      const mins = input.minutesToDeparture;
-      const timeSuffix =
-        mins != null && mins > 0 ? ` · ${Math.round(mins)}m to departure` : "";
-      const detailParts = [step.detail, gate ? `Gate ${gate.toUpperCase()}${timeSuffix}` : timeSuffix.trim()]
-        .filter(Boolean)
-        .join("");
+      const detailParts = [step.detail, gateDetail, countdownSuffix].filter(Boolean).join(" · ");
       return {
         kind: "airport",
         eyebrow: "Next up",

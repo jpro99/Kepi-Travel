@@ -25,7 +25,10 @@ import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransp
 import { addIsoDays, buildTripCompleteness } from "@/lib/travelAssistant/tripNightCoverage";
 import { TripCompletenessBar } from "@/components/travelAssistant/TripCompletenessBar";
 import { FreePlanSoftBanner } from "@/components/billing/FreePlanSoftBanner";
-import { resolveAirborneHeroCopy } from "@/lib/travelAssistant/airborneLiveClaim";
+import {
+  hasVerifiedLiveAirborneStatus,
+  resolveAirborneHeroCopy,
+} from "@/lib/travelAssistant/airborneLiveClaim";
 import { formatFlightStatusTrustLine } from "@/lib/travelAssistant/flightStatusTrustLine";
 import { resolveTripWalk } from "@/lib/travelAssistant/tripWalk";
 import {
@@ -38,6 +41,13 @@ import {
   resolveAirportSpotlightForHome,
   resolveArrivalHotelLabel,
 } from "@/lib/travelAssistant/airportSpotlightContext";
+import {
+  detectStrandedAtAirport,
+  type StrandedDisruptionReason,
+  type StrandedFlightState,
+} from "@/lib/travelAssistant/strandedFlightDetector";
+import { shouldClearStrandedOnRebook } from "@/lib/travelAssistant/strandedRebookIngest";
+import { StrandedFlightPromptCard } from "@/components/travelAssistant/StrandedFlightPromptCard";
 import type { StopDateRange } from "@/lib/decision/stopDates";
 import {
   buildHomeTodayCoach,
@@ -95,6 +105,10 @@ export interface MissionControlViewProps {
   /** G31 — persisted readiness checklist (More tab). */
   readinessChecklist?: ReadinessChecklistItem[];
   onOpenReadiness?: () => void;
+  /** F17 — day-of doors: gate/status/bags/clubs provenance (UNVERIFIED hides countdown). */
+  strandedFlight?: StrandedFlightState | null;
+  onStrandedFlightChange?: (state: StrandedFlightState | null) => void;
+  onForwardRebook?: () => void;
   /** G49 — booked stop ranges for today-first stay coach. */
   stopRanges?: StopDateRange[];
   /** IANA timezone for calendar-today while traveling (e.g. Europe/Rome). */
@@ -176,6 +190,9 @@ export function MissionControlView({
   onOpenReview,
   readinessChecklist = [],
   onOpenReadiness,
+  strandedFlight = null,
+  onStrandedFlightChange,
+  onForwardRebook,
   stopRanges = [],
   travelerTimezone = null,
   tripId = null,
@@ -218,6 +235,35 @@ export function MissionControlView({
   const [zoom, setZoom] = useState<MissionControlZoom>("today");
   const [zoomTouched, setZoomTouched] = useState(false);
   const [selectedDay, setSelectedDay] = useState<DayReadiness | null>(null);
+  const [localStranded, setLocalStranded] = useState<StrandedFlightState | null>(null);
+
+  useEffect(() => {
+    if (strandedFlight != null) return;
+    try {
+      const raw = localStorage.getItem(`kepi-stranded:${tripName}`);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as StrandedFlightState;
+      if (parsed?.reservationId) setLocalStranded(parsed);
+    } catch {
+      /* ignore corrupt storage */
+    }
+  }, [tripName, strandedFlight]);
+
+  const effectiveStranded = strandedFlight ?? localStranded;
+  const persistStranded = (state: StrandedFlightState | null) => {
+    if (onStrandedFlightChange) {
+      onStrandedFlightChange(state);
+      return;
+    }
+    setLocalStranded(state);
+    try {
+      const key = `kepi-stranded:${tripName}`;
+      if (state) localStorage.setItem(key, JSON.stringify(state));
+      else localStorage.removeItem(key);
+    } catch {
+      /* storage full / private mode */
+    }
+  };
 
   useEffect(() => {
     if (zoomTouched) return;
@@ -294,6 +340,57 @@ export function MissionControlView({
   const atAirport =
     locationStatus === "at-airport" || locationStatus === "in-terminal";
 
+  const nextFlightLive = snap.nextFlight ? liveStatus?.[snap.nextFlight.id] : undefined;
+
+  const strandedDetection = useMemo(() => {
+    if (!snap.nextFlight || journeyPhase?.kind === "airborne") {
+      return { shouldPrompt: false, prompt: null as ReturnType<typeof detectStrandedAtAirport>["prompt"] };
+    }
+    const liveEnRoute = hasVerifiedLiveAirborneStatus(nextFlightLive);
+    return detectStrandedAtAirport({
+      flight: snap.nextFlight,
+      locationStatus: locationStatus === "airborne" ? "away" : locationStatus,
+      journeyAirborneForThisFlight: false,
+      liveEnRoute,
+      existingState: effectiveStranded,
+    });
+  }, [snap.nextFlight, journeyPhase, locationStatus, nextFlightLive, effectiveStranded]);
+
+  useEffect(() => {
+    if (!effectiveStranded) return;
+    if (
+      shouldClearStrandedOnRebook({
+        stranded: effectiveStranded,
+        reservations: reservations,
+      })
+    ) {
+      persistStranded(null);
+    }
+  }, [reservations, effectiveStranded]);
+
+  const handleStrandedConfirm = (reason: StrandedDisruptionReason) => {
+    if (!strandedDetection.prompt) return;
+    persistStranded({
+      reservationId: strandedDetection.prompt.reservationId,
+      detectedAt: effectiveStranded?.detectedAt ?? new Date().toISOString(),
+      confirmed: true,
+      reason,
+    });
+  };
+
+  const handleStrandedDismiss = () => {
+    if (!strandedDetection.prompt) return;
+    persistStranded({
+      reservationId: strandedDetection.prompt.reservationId,
+      detectedAt: effectiveStranded?.detectedAt ?? new Date().toISOString(),
+      dismissedAt: new Date().toISOString(),
+    });
+  };
+
+  const handleStrandedMadeFlight = () => {
+    persistStranded(null);
+  };
+
   const arrivalHotelLabel = useMemo(() => {
     if (journeyPhase?.kind !== "just-landed") return null;
     const flight = journeyPhase.flight as MissionControlReservation;
@@ -331,6 +428,9 @@ export function MissionControlView({
       arrivalHotelLabel,
     ],
   );
+
+  const showStrandedCard =
+    strandedDetection.shouldPrompt && strandedDetection.prompt != null;
 
   const todayCoach = useMemo(() => {
     if (!showTravelOps || snap.phase !== "at_destination") return null;
@@ -398,6 +498,7 @@ export function MissionControlView({
         storedDepartureGate: snap.nextFlight?.flightDepartureGate,
         connectionCalm,
         airportSpotlight,
+        strandedPrompt: showStrandedCard ? strandedDetection.prompt : null,
         todayCoach: todayCoachAction,
         stayLeaveCue: todayCoach?.leaveCue ?? null,
       }),
@@ -415,6 +516,8 @@ export function MissionControlView({
       liveStatus,
       connectionCalm,
       airportSpotlight,
+      showStrandedCard,
+      strandedDetection.prompt,
       todayCoachAction,
       todayCoach?.leaveCue,
     ],
@@ -481,6 +584,17 @@ export function MissionControlView({
         className="space-y-3"
         style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif' }}
       >
+        {showStrandedCard && strandedDetection.prompt ? (
+          <StrandedFlightPromptCard
+            prompt={strandedDetection.prompt}
+            state={effectiveStranded}
+            onConfirmMissed={handleStrandedConfirm}
+            onDismiss={handleStrandedDismiss}
+            onForwardRebook={() => onForwardRebook?.() ?? onOpenPlan()}
+            onMadeFlight={handleStrandedMadeFlight}
+          />
+        ) : null}
+
         <article
           className="rounded-3xl px-5 py-8 text-white shadow-[0_1px_3px_rgba(0,0,0,0.12)]"
           style={{ background: heroBg }}
