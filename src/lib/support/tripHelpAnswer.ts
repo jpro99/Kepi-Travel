@@ -42,6 +42,7 @@ const EC261_PATTERN =
 const WHERE_AM_I_PATTERN = /\b(where\s+am\s+i|what\s+city\s+am\s+i\s+in|where\s+are\s+we)\b/iu;
 const NEXT_TRAVEL_DAY_PATTERN =
   /\b(next\s+travel\s+day|when\s+do\s+i\s+leave|what'?s\s+next|next\s+move|checkout|check\s*out)\b/iu;
+const PLAN_CITY_DAY_PATTERN = /\b(plan\s+(?:a\s+)?city\s+day|plan\s+city|city\s+day\s+plan)\b/iu;
 const TRAIN_TIME_PATTERN =
   /\b(train|rail|trenitalia|platform|depart|departure\s+time)\b/iu;
 
@@ -222,6 +223,15 @@ function answerTrainQuestion(ctx: TripHelpContext): string | null {
   return formatTrainLine(target);
 }
 
+function answerPlanCityDay(ctx: TripHelpContext): string {
+  const stay = resolveActiveStay(ctx.reservations, ctx.todayKey);
+  const city = stay ? stayCityLabel(stay) : ctx.destination?.trim() ?? "";
+  if (city) {
+    return `Open Plan City for ${city} — pick sourced stops (OSM + official lists), set your pace, and save onto your trip day plan. Tap Plan a city day again to open it.`;
+  }
+  return "Open Plan City from the Plan tab — pick a stay city on your trip or search any city. Every stop needs provenance; we never invent gelato spots.";
+}
+
 function answerEc261(): string {
   return [
     "EU Regulation (EC) No 261/2004 covers denied boarding, cancellation, and long delays on many flights to/from the EU.",
@@ -241,6 +251,9 @@ export function tryAnswerTripQuestion(question: string, ctx: TripHelpContext): s
 
   if (EC261_PATTERN.test(normalized)) {
     return answerEc261();
+  }
+  if (PLAN_CITY_DAY_PATTERN.test(normalized)) {
+    return answerPlanCityDay(ctx);
   }
   if (WHERE_AM_I_PATTERN.test(normalized)) {
     return answerWhereAmI(ctx);

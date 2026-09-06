@@ -17,10 +17,12 @@ import {
 } from "@/lib/airportNav/airportWalkSheet";
 
 const SUPPORT_OPEN_EVENT = "kepi:support-chat-open";
+const PLAN_CITY_OPEN_EVENT = "kepi:plan-city-open";
 const SUPPORT_QUICK_PROMPTS = [
   "Where am I?",
   "What's my next travel day?",
   "What time is my train?",
+  "Plan a city day",
   "What are my EU passenger rights (EC 261)?",
 ] as const;
 const BUG_REPORT_OPEN_EVENT = "kepi:bug-report-open";
@@ -40,6 +42,11 @@ function nextMessageId(prefix: string): string {
 export function openSupportChat(): void {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new Event(SUPPORT_OPEN_EVENT));
+}
+
+export function openPlanCityFromHelp(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(PLAN_CITY_OPEN_EVENT));
 }
 
 export function openBugReport(): void {
@@ -272,6 +279,11 @@ export function SupportChat() {
                       key={prompt}
                       type="button"
                       onClick={() => {
+                        if (prompt === "Plan a city day") {
+                          setIsOpen(false);
+                          openPlanCityFromHelp();
+                          return;
+                        }
                         void sendMessage(prompt);
                       }}
                       disabled={isSending}

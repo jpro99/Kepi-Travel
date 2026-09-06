@@ -8,9 +8,15 @@ interface TripHotelCityPickerProps {
   cities: PlannedStayCity[];
   tripName?: string | null;
   onPickCity: (city: PlannedStayCity) => void;
+  onPlanCity?: (city: PlannedStayCity) => void;
 }
 
-export function TripHotelCityPicker({ cities, tripName, onPickCity }: TripHotelCityPickerProps) {
+export function TripHotelCityPicker({
+  cities,
+  tripName,
+  onPickCity,
+  onPlanCity,
+}: TripHotelCityPickerProps) {
   const needed = cities.filter((city) => city.status === "needed");
   const booked = cities.filter((city) => city.status === "booked");
 
@@ -59,7 +65,21 @@ export function TripHotelCityPicker({ cities, tripName, onPickCity }: TripHotelC
                 {city.nights > 0 ? ` · ${city.nights} night${city.nights === 1 ? "" : "s"}` : ""}
               </p>
             </div>
-            <span className="shrink-0 text-[13px] font-semibold text-[var(--accent)]">Find</span>
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              <span className="text-[13px] font-semibold text-[var(--accent)]">Find</span>
+              {onPlanCity ? (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onPlanCity(city);
+                  }}
+                  className="text-[12px] font-semibold text-[var(--text-secondary)] underline-offset-2 hover:underline"
+                >
+                  Plan city
+                </button>
+              ) : null}
+            </div>
           </button>
         ))}
       </div>

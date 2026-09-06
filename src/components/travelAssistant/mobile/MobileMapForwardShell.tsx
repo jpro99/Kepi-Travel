@@ -145,6 +145,7 @@ interface MobileMapForwardShellProps {
   hotelSearchMapPreview?: { city: string; lat: number; lng: number } | null;
   onSearchSegment?: (segment: TripStaySegment) => void;
   onPickPlannedCity?: (city: PlannedStayCity) => void;
+  onPlanCity?: (city: PlannedStayCity) => void;
   onAddCityStay?: (input: { city: string; checkIn: string; checkOut: string }) => void;
   onSetStayIntent?: (segment: TripStaySegment, intent: "needs_hotel" | "skip") => void | Promise<void>;
   pendingForwardReview?: { id: string; reason: string; subject?: string } | null;
@@ -250,6 +251,7 @@ export function MobileMapForwardShell({
   hotelSearchMapPreview,
   onSearchSegment,
   onPickPlannedCity,
+  onPlanCity,
   onAddCityStay,
   onSetStayIntent,
   pendingForwardReview,
@@ -465,6 +467,7 @@ export function MobileMapForwardShell({
           mapPreviewCenter={hotelSearchMapPreview}
           onSearchSegment={onSearchSegment}
           onPickPlannedCity={onPickPlannedCity}
+          onPlanCity={onPlanCity}
           onAddCityStay={onAddCityStay}
           onSetStayIntent={onSetStayIntent}
           pendingForwardReview={pendingForwardReview}

@@ -288,6 +288,14 @@ import { WeatherCard } from "@/components/travelAssistant/WeatherCard";
 import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntelligencePanel";
 import { useTranslations } from "next-intl";
 import { openSupportChat } from "@/components/support/SupportChat";
+import { PlanCityView } from "@/components/planCity/PlanCityView";
+import type { PlanCityCatalog } from "@/lib/planCity/types";
+import {
+  derivePlanCityOffersFromReservation,
+  derivePlanCityOffersFromReservations,
+} from "@/lib/planCity/derivePlanCityOffers";
+import { dateKeysForStayCity } from "@/lib/planCity/planCityNavigation";
+import { displayPlanCityLabel } from "@/lib/planCity/resolveCityKey";
 import { setSupportLiveContext } from "@/lib/support/clientSupportContext";
 import {
   resolveSnapshotApplyOptions,
@@ -2053,6 +2061,9 @@ export default function TravelAssistantPage() {
   const [hotelSearchGeneration, setHotelSearchGeneration] = useState(0);
   const [hotelSearchSegment, setHotelSearchSegment] = useState<TripStaySegment | null>(null);
   const [postBookingConfirmation, setPostBookingConfirmation] = useState<PostBookingConfirmationData | null>(null);
+  const [planCityOverlay, setPlanCityOverlay] = useState<{ city: string; dateKeys: string[] } | null>(null);
+  const [planCityCatalog, setPlanCityCatalog] = useState<PlanCityCatalog | null>(null);
+  const [planCityCatalogLoading, setPlanCityCatalogLoading] = useState(false);
   const [manualStaySegmentsByTrip, setManualStaySegmentsByTrip] = useState<Record<string, TripStaySegmentInput[]>>({});
   const [tripStayDecisionsByTrip, setTripStayDecisionsByTrip] = useState<
     Record<string, Record<string, "needs_hotel" | "skip">>
@@ -2993,6 +3004,12 @@ export default function TravelAssistantPage() {
             ? "Added to your trip from a forwarded email."
             : `${drained.promoted.length} bookings from forwarded email are now on your trip.`,
         syncedToTrip: true,
+        planCityCities: derivePlanCityOffersFromReservations(
+          drained.promoted.map((row) => ({
+            type: row.type,
+            title: row.title,
+          })),
+        ),
       });
       setToast(`Added to your trip: ${first.title}${more}`);
     }
@@ -4997,6 +5014,95 @@ export default function TravelAssistantPage() {
     ],
   );
 
+  const openPlanCity = useCallback(
+    (rawCity: string, dateKey?: string): void => {
+      const city = displayPlanCityLabel(rawCity);
+      const keysFromRange = dateKeysForStayCity(city, effectiveStopRanges);
+      const dateKeys =
+        keysFromRange.length > 0 ? keysFromRange : dateKey ? [dateKey] : [];
+      setPlanCityOverlay({ city, dateKeys });
+      navigateToConsumerTab("itinerary");
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        url.searchParams.set("tab", "itinerary");
+        url.searchParams.set("planCity", city);
+        if (dateKey) url.searchParams.set("planCityDate", dateKey);
+        else url.searchParams.delete("planCityDate");
+        window.history.replaceState({}, "", url.toString());
+      }
+    },
+    [effectiveStopRanges, navigateToConsumerTab],
+  );
+
+  const openPlanCityForPlannedCity = useCallback(
+    (city: PlannedStayCity): void => {
+      openPlanCity(city.city, city.checkIn);
+    },
+    [openPlanCity],
+  );
+
+  const closePlanCity = useCallback((): void => {
+    setPlanCityOverlay(null);
+    setPlanCityCatalog(null);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("planCity");
+      url.searchParams.delete("planCityDate");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
+
+  useEffect(() => {
+    const cityParam = searchParams.get("planCity")?.trim();
+    if (!cityParam) return;
+    const dateKey = searchParams.get("planCityDate")?.trim() || undefined;
+    const city = displayPlanCityLabel(cityParam);
+    const keysFromRange = dateKeysForStayCity(city, effectiveStopRanges);
+    const dateKeys =
+      keysFromRange.length > 0 ? keysFromRange : dateKey ? [dateKey] : [];
+    setPlanCityOverlay({ city, dateKeys });
+  }, [effectiveStopRanges, searchParams]);
+
+  useEffect(() => {
+    const onHelpPlanCity = (): void => {
+      const fromStay =
+        plannedStayCities[0]?.city ??
+        effectiveStopRanges[0]?.stop.name ??
+        activeTrip?.destination ??
+        "Lecce, Italy";
+      openPlanCity(fromStay);
+    };
+    window.addEventListener("kepi:plan-city-open", onHelpPlanCity);
+    return () => window.removeEventListener("kepi:plan-city-open", onHelpPlanCity);
+  }, [activeTrip?.destination, effectiveStopRanges, openPlanCity, plannedStayCities]);
+
+  useEffect(() => {
+    if (!planCityOverlay) {
+      setPlanCityCatalog(null);
+      return;
+    }
+    let cancelled = false;
+    setPlanCityCatalogLoading(true);
+    void fetch(`/api/plan-city/catalog?city=${encodeURIComponent(planCityOverlay.city)}`)
+      .then(async (res) => {
+        if (!res.ok) return null;
+        return (await res.json()) as { catalog?: PlanCityCatalog | null };
+      })
+      .then((payload) => {
+        if (cancelled) return;
+        setPlanCityCatalog(payload?.catalog ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setPlanCityCatalog(null);
+      })
+      .finally(() => {
+        if (!cancelled) setPlanCityCatalogLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [planCityOverlay]);
+
   const flightSearchDefaults = useMemo((): FlightSearchDefaults | undefined => {
     const needed = plannedFlightLegs.filter((leg) => leg.status === "needed");
     const outbound = needed.find((leg) => leg.role === "outbound") ?? needed[0];
@@ -6201,6 +6307,14 @@ export default function TravelAssistantPage() {
               : reservation.provider || reservation.title || "Reservation"
           } is on your timeline.`,
           syncedToTrip: true,
+          planCityCities: derivePlanCityOffersFromReservation({
+            type: reservation.type,
+            title: reservation.title,
+            location: reservation.location,
+            hotelSearchCity: reservation.hotelSearchCity,
+            flightArrivalAirport: reservation.flightArrivalAirport,
+            flightDepartureAirport: reservation.flightDepartureAirport,
+          }),
         });
       } else {
         setToast("Reservation added ✓");
@@ -6539,6 +6653,12 @@ export default function TravelAssistantPage() {
         title: `${hotel.name} added to your trip`,
         detail: `Check-in ${hotel.checkIn} · ${searchCity}. Find it under Book → Hotels.`,
         syncedToTrip: true,
+        planCityCities: derivePlanCityOffersFromReservation({
+          type: "hotel",
+          title: hotel.name,
+          location: searchCity,
+          hotelSearchCity: searchCity,
+        }),
       });
       closeHotelSearch();
     },
@@ -10574,6 +10694,7 @@ export default function TravelAssistantPage() {
                 hotelSearchMapPreview={hotelSearchMapPreview}
                 onSearchSegment={openHotelSearchForSegment}
                 onPickPlannedCity={openHotelSearchForPlannedCity}
+                onPlanCity={openPlanCityForPlannedCity}
                 onAddCityStay={handleAddCityStay}
                 onSetStayIntent={handleSetStayIntent}
                 pendingForwardReview={firstForwardedFlightReview}
@@ -10754,6 +10875,7 @@ export default function TravelAssistantPage() {
               travelerType={neuroTravelerType}
               unresolvedReviewCount={unresolvedReviewCount}
               onOpenReview={handleOpenConsumerReviewQueue}
+              onPlanCity={openPlanCity}
               // Note: ItineraryTabView has no readiness-checklist UI (unlike the home views
               // above) — readinessChecklist/onOpenReadiness intentionally omitted here.
             />
@@ -10791,6 +10913,7 @@ export default function TravelAssistantPage() {
               staySegments={tripStaySegments}
               plannedStayCities={plannedStayCities}
               onPickPlannedCity={openHotelSearchForPlannedCity}
+              onPlanCity={openPlanCityForPlannedCity}
               hotelSearchDefaults={{
                 city: hotelSearchDefaults.city,
                 cityIata: hotelSearchDefaults.cityIata,
@@ -12272,7 +12395,20 @@ export default function TravelAssistantPage() {
           }
           navigateToConsumerTab("trip");
         }}
+        onPlanCity={(city) => openPlanCity(city)}
       />
+      {planCityOverlay ? (
+        <PlanCityView
+          cityLabel={planCityOverlay.city}
+          catalog={planCityCatalog}
+          catalogLoading={planCityCatalogLoading}
+          dateKeys={planCityOverlay.dateKeys}
+          getDayPlan={itineraryPrefs.getDayPlan}
+          onSaveDayPlan={itineraryPrefs.saveDayPlan}
+          onClose={closePlanCity}
+          onSearchCity={(query) => openPlanCity(query)}
+        />
+      ) : null}
       {travelStyleQuizOpen ? (
         <TravelStyleQuiz onComplete={handleTravelStyleComplete} onSkip={handleTravelStyleSkip} />
       ) : null}
